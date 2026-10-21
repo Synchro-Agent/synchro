@@ -1,0 +1,244 @@
+/* ===== Liquid Glass ===== */
+/* Layers: ::before = material (blur + tint + inner shine), ::after = specular rim, element = shadow.
+   Only the bezel refracts (see glass.tsx); content beneath stays visible and moves under the glass. */
+
+
+:root{
+  --gl-blur:4px;--gl-sat:1.7;--gl-bright:1.04;
+  --gl-fill:rgba(255,255,255,.34);
+  --gl-fill-small:rgba(255,255,255,.5);
+  --gl-fill-thick:rgba(255,255,255,.7);
+  --gl-hair:rgba(40,40,70,.10);
+  --gl-shadow:0 10px 30px rgba(40,40,80,.14),0 2px 6px rgba(40,40,80,.08);
+  --gl-shadow-small:0 3px 10px rgba(40,40,80,.10),0 1px 2px rgba(40,40,80,.08);
+  --gl-shine:.95;
+  --gl-spring:cubic-bezier(.2,.9,.25,1.12);
+}
+[data-theme="dark"]{
+  --gl-fill:rgba(44,44,52,.40);
+  --gl-fill-small:rgba(255,255,255,.09);
+  --gl-fill-thick:rgba(32,32,38,.68);
+  --gl-hair:rgba(255,255,255,.06);
+  --gl-shadow:0 14px 38px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
+  --gl-shadow-small:0 4px 14px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
+  --gl-shine:.4;
+}
+
+/* ambient colour so the glass has something to bend */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(38vw 38vw at 78% 12%,rgba(47,123,246,.24),transparent 70%),radial-gradient(42vw 42vw at 12% 88%,rgba(98,140,255,.20),transparent 70%),radial-gradient(30vw 30vw at 60% 80%,rgba(190,120,255,.12),transparent 70%)}
+[data-theme="dark"] body::before{background:radial-gradient(38vw 38vw at 78% 12%,rgba(47,123,246,.18),transparent 70%),radial-gradient(42vw 42vw at 12% 88%,rgba(70,110,255,.18),transparent 70%),radial-gradient(30vw 30vw at 60% 80%,rgba(160,90,255,.10),transparent 70%)}
+.app{background:transparent}
+
+/* ---- structure ---- */
+.dock{position:absolute;left:0;right:0;bottom:0;padding:0 24px 16px;pointer-events:none;z-index:6}
+.dock>*{pointer-events:auto}
+.dock::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 34px,#000 66px);mask-image:linear-gradient(to bottom,transparent 34px,#000 66px);
+  background:linear-gradient(to bottom,transparent 34px,color-mix(in srgb,var(--bg) 60%,transparent) 72px)}
+.thread{padding-bottom:140px;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 14px);mask-image:linear-gradient(to bottom,transparent 0,#000 14px)}
+.scroll-down{left:calc(50% - 17px);transform:none}
+.sidebar{margin:10px 0 10px 10px;height:calc(100% - 20px);border-radius:26px;padding-left:0;border:0}
+.sidebar.closed{margin-left:-330px;margin-right:40px}
+.dock .composer{border-radius:16px}
+.composer{animation-fill-mode:backwards}
+.overlay{background:rgba(10,10,25,.16);backdrop-filter:none;-webkit-backdrop-filter:none}
+[data-theme="dark"] .overlay{background:rgba(0,0,0,.38)}
+
+/* ---- the glass material ---- */
+html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn){
+  background:transparent;border:0;
+  box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow-small);
+  transition:scale .5s var(--gl-spring),box-shadow .35s var(--gl-ease,ease),color .2s;
+}
+html body :is(.sidebar,.dock .composer,.hero .composer,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.modal,.dock .composer,.hero .composer,.send):not(.menu){position:relative}
+
+html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn)::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
+  background:var(--gl-fill);
+  -webkit-backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
+  backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
+  box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.55)),inset -1px -1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.35)),inset 0 0 10px -2px rgba(255,255,255,calc(var(--gl-shine)*.08));
+}
+html[data-lens] body :is(.dock .composer,.send,.scroll-down)::before{
+  -webkit-backdrop-filter:var(--lens,) blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
+  backdrop-filter:var(--lens,) blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
+}
+/* specular rim: bright at top-left and bottom-right like a lit edge */
+html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn):not([data-tip])::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;padding:.75px;opacity:.55;transition:opacity .3s;
+  background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+}
+[data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn):not([data-tip])::after{
+  background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(255,255,255,.12) 22%,rgba(255,255,255,.02) 45%,rgba(255,255,255,.02) 58%,rgba(255,255,255,.2) 80%,rgba(255,255,255,.55))}
+
+/* sizes: small controls are brighter, large panes are thicker so text stays readable */
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.scroll-down){--gl-fill:var(--gl-fill-small);--gl-blur:2px}
+html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){--gl-fill:var(--gl-fill-thick);--gl-blur:22px;--gl-sat:1.9}
+html body .sidebar{--gl-blur:16px;--gl-fill:color-mix(in srgb,var(--gl-fill) 80%,transparent)}
+html body .hero .composer{--gl-blur:14px}
+[data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn){--text-2:#d2d2ce;--text-3:#a7a7a3}
+
+/* ---- interaction: light up on hover, grow slightly while pressed, spring back ---- */
+html body :is(.send,.scroll-down,.chip,.btn:not(.dark):not(.danger),.topbar .icon-btn)[data-press]{scale:1.07;transform:none}
+html body :is(.dock .composer,.hero .composer)[data-press]{scale:1.004}
+html body :is(.chip,.btn,.topbar .icon-btn,.send,.scroll-down,.mic-wrap):is(:active,:hover){transform:none}
+html body :is(.dock .composer,.hero .composer):focus-within::after{opacity:1}
+/* shadow deepens when content scrolls beneath the dock */
+html body .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0 16px 44px rgba(20,20,50,.22),0 2px 6px rgba(20,20,50,.14)}
+[data-theme="dark"] .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0 18px 48px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.5)}
+
+/* ---- non-glass pieces that sit on glass ---- */
+.nav-item.active,.chat-item.active{background:rgba(255,255,255,.55);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.7),0 1px 3px rgba(40,40,80,.08)}
+[data-theme="dark"] .nav-item.active,[data-theme="dark"] .chat-item.active{background:rgba(255,255,255,.10);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14)}
+.nav-item,.chat-item{border-radius:14px}
+.seg,.seg button{border-radius:999px}
+.chip{border-radius:999px}.btn{border-radius:999px}
+.btn.dark{background:color-mix(in srgb,var(--btn-dark) 88%,transparent);color:var(--btn-dark-text);box-shadow:var(--gl-shadow-small)}
+.btn.dark:hover{background:var(--btn-dark)}
+.btn.danger{background:rgba(198,66,47,.9);color:#fff;box-shadow:var(--gl-shadow-small)}
+.send{color:#fff}
+html body button.send.send{--gl-fill:rgba(47,123,246,.78);color:#fff}
+[data-theme="dark"] body button.send.send{--gl-fill:rgba(47,123,246,.6)}
+.dock .send:disabled{opacity:.45}
+
+/* ---- accessibility (Apple: honour reduce transparency / reduce motion) ---- */
+@media (prefers-reduced-transparency:reduce){
+  html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn)::before{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html body :is(.send,.scroll-down,.chip,.btn,.topbar .icon-btn,.dock .composer)[data-press]{scale:1}
+}
+
+html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.sidebar,.dock .composer,.hero .composer){isolation:isolate;z-index:20}
+html body .sidebar{z-index:5}html body :is(.dock .composer,.hero .composer){z-index:6}
+html body :is(.menu,.modal,.toast){animation-fill-mode:backwards}
+
+/* ---- enter/exit: never animate opacity on an ancestor of a backdrop-filter ---- */
+@keyframes gPanelIn{from{transform:scale(.95) translateY(6px)}}
+@keyframes gPanelOut{to{transform:scale(.95) translateY(6px)}}
+@keyframes gFadeIn{from{opacity:0}}
+@keyframes gFadeOut{to{opacity:0}}
+@keyframes gHoldOut{0%,75%{opacity:1}100%{opacity:0}}
+@keyframes gOverlayIn{from{background-color:transparent}}
+@keyframes gOverlayOut{to{background-color:transparent}}
+html body :is(.menu,.modal,.toast){animation:gPanelIn .26s var(--gl-spring) backwards}
+html body :is(.menu,.modal,.toast)>*{animation:gFadeIn .2s .05s ease-out backwards}
+html body .menu.out,html body .toast.out,html body .closing .modal{animation:gPanelOut .12s ease-in both}
+html body .menu.out::before,html body .menu.out::after,html body .toast.out::before,html body .toast.out::after,html body .closing .modal::before,html body .closing .modal::after{animation:gHoldOut .12s linear both}
+html body .menu.out>*,html body .toast.out>*,html body .closing .modal>*{animation:gFadeOut .12s ease-in both}
+html body .overlay{animation:gOverlayIn .25s ease-out backwards}
+html body .closing .overlay{animation:gOverlayOut .16s ease-in both}
+html body .modal>*{animation:none}
+html body .modal{animation-duration:.3s}
+
+/* ---- segmented control: sliding thumb ---- */
+.seg{position:relative;isolation:auto}
+.seg button{position:relative;z-index:1;background:transparent!important;box-shadow:none!important;transition:color .25s}
+.seg .thumb{position:absolute;top:2px;bottom:2px;left:0;width:var(--w,0);transform:translateX(var(--x,0));border-radius:999px;z-index:0;
+  background:rgba(255,255,255,.75);box-shadow:0 1px 4px rgba(40,40,80,.16),inset 0 0 0 .5px rgba(255,255,255,.9);pointer-events:none;opacity:0}
+[data-theme="dark"] .seg .thumb{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}
+.seg .thumb[data-ready]{opacity:1;transition:transform .38s var(--gl-spring),width .38s var(--gl-spring)}
+.seg:active .thumb{scale:.97 1.04}
+.seg button.on{color:var(--text)}
+.seg button:not(.on):hover{color:var(--text)}
+
+/* ---- mic split button ---- */
+.mic-wrap{position:relative;display:flex;align-items:center;border-radius:10px;padding:0 2px 0 0;box-shadow:inset 0 0 0 .5px transparent;transition:box-shadow .2s}
+.mic-wrap:hover,.mic-wrap[data-open="1"]{box-shadow:inset 0 0 0 .5px var(--border-strong)}
+.mic-wrap .icon-btn{border-radius:8px}
+.mic-wrap .chev{width:22px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--text-3);transition:background-color .18s,color .18s}
+.mic-wrap .chev:hover,.mic-wrap[data-open="1"] .chev{background:var(--hover);color:var(--text)}
+.mic-wrap .chev svg{transition:transform .25s var(--gl-spring)}
+.mic-wrap[data-open="1"] .chev svg{transform:rotate(180deg)}
+.mic-wrap .icon-btn:hover{background:var(--hover)}
+.mic-wrap .menu{transform-origin:bottom right}
+.mic-menu{padding:6px}
+.mic-meter{display:flex;align-items:center;gap:10px;padding:8px 10px 10px;color:var(--text-3)}
+.mic-meter .bar{flex:1;height:6px;border-radius:3px;background:var(--hover);overflow:hidden}
+.mic-meter .bar i{display:block;height:100%;width:100%;transform-origin:left;background:#2f6fdc;border-radius:3px;transition:transform .06s linear}
+.mic-item{height:38px}
+.mic-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:250px}
+.mic-empty{padding:10px;font-size:13px;color:var(--text-3)}
+.model .icon-btn{border-radius:10px;transition:background-color .2s,color .2s}
+.model>.icon-btn:hover{background:var(--hover)}
+
+/* ---- press feedback (visible on light glass too) ---- */
+:root{--row-hover:rgba(40,40,70,.065);--row-press:rgba(40,40,70,.13);--row-active:rgba(40,40,70,.10)}
+[data-theme="dark"]{--row-hover:rgba(255,255,255,.07);--row-press:rgba(255,255,255,.14);--row-active:rgba(255,255,255,.10)}
+html body :is(.nav-item,.chat-item,.menu-item,.icon-btn,.chev,.seg button,.chip,.btn:not(.dark):not(.danger)){transition:background-color .16s,color .16s,scale .22s var(--gl-spring),box-shadow .2s}
+html body :is(.nav-item,.chat-item,.menu-item):hover{background:var(--row-hover)}
+html body :is(.nav-item,.chat-item,.menu-item):active{background:var(--row-press);scale:.975}
+html body :is(.nav-item,.chat-item).active{background:var(--row-active);box-shadow:none}
+html body :is(.icon-btn,.chev):hover{background:var(--row-hover)}
+html body :is(.icon-btn,.chev):active{background:var(--row-press);scale:.92}
+html body .chat-wrap:hover .chat-item{background:var(--row-hover)}
+html body .chat-wrap:active .chat-item{background:var(--row-press)}
+html body :is(.topbar .icon-btn,.chip,.btn:not(.dark):not(.danger)):active{scale:1.0}
+html body .btn.dark:active,html body .btn.danger:active{scale:.96;filter:brightness(.92)}
+html body .seg button:not(.on):active{color:var(--text);scale:.96}
+html body :is(.menu-item.del):hover{background:#c6422f}
+
+/* ---- collapsed sidebar toggle: a round glass bubble ---- */
+html body .topbar .icon-btn.side-toggle{width:40px;height:40px;border-radius:50%;margin-left:-4px;margin-top:2px;
+  animation:gBubbleIn .42s var(--gl-spring) backwards}
+html body .topbar .icon-btn.side-toggle::before{animation:gFadeIn .25s ease-out backwards}
+html body .topbar .icon-btn.side-toggle svg{transition:transform .3s var(--gl-spring)}
+html body .topbar .icon-btn.side-toggle:hover svg{transform:translateX(1px)}
+html body .topbar .icon-btn.side-toggle:active{scale:.92}
+html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
+@keyframes gBubbleIn{from{transform:scale(.4) translateX(-14px)}}
+
+.mprov .sc .dot{width:6px;height:6px;border-radius:50%;background:var(--toggle-on,#3b82f6)}
+.model-sub .mrow{min-height:50px}
+
+/* Pinned / collapsible sidebar sections */
+.chat-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+.chat-scroll .chat-list{flex:none}
+.sec-toggle{margin-top:14px}
+.sec-btn{display:flex;align-items:center;gap:2px;color:inherit;font:inherit;height:24px;padding:0}
+.sec-chev{display:inline-flex;opacity:0;transition:opacity .15s,transform .25s var(--gl-spring);transform:rotate(-90deg)}
+.sec-chev.open{transform:rotate(0)}
+.sec-toggle:hover .sec-chev,.sec-btn:focus-visible .sec-chev{opacity:1}
+.fold{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.3,.9,.3,1)}
+.fold.open{grid-template-rows:1fr}
+.chat-scroll .fold>*{min-height:0;overflow:hidden}
+.chat-scroll .fold.open>*{overflow:visible}
+.chat-wrap{animation:gRowIn .32s var(--gl-spring) backwards}
+@keyframes gRowIn{from{opacity:0;transform:translateY(-6px) scale(.98)}}
+.chat-scroll .fold:not(.open)>*{padding-block:0}
+.chat-scroll .fold>*{transition:padding .28s}
+
+/* "Mới" plus bubble */
+html body .nav-item .plus{position:relative;background:transparent;isolation:isolate;box-shadow:0 0 0 .5px rgba(255,255,255,.25),0 2px 6px rgba(30,80,200,.3)}
+html body .nav-item .plus::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:-1;background:rgba(47,123,246,.72);-webkit-backdrop-filter:blur(2px) saturate(1.7);backdrop-filter:blur(2px) saturate(1.7);box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,.6),inset -1px -1.5px 2px -1px rgba(255,255,255,.35),inset 0 0 8px -2px rgba(255,255,255,.15)}
+html body .nav-item .plus::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;padding:.75px;opacity:.7;background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(255,255,255,.1) 30%,rgba(255,255,255,.05) 60%,rgba(255,255,255,.7));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+html body .nav-item:hover .plus{scale:1.08}
+html body .nav-item:active .plus{scale:.94}
+html body .nav-item .plus{transition:scale .35s var(--gl-spring)}
+
+/* light theme: clearer selected state in segmented control */
+:root:not([data-theme="dark"]) .seg{--gl-fill:rgba(60,60,90,.09)}
+:root:not([data-theme="dark"]) .seg .thumb{background:#fff;box-shadow:0 0 0 .5px rgba(30,30,60,.18),0 2px 6px rgba(30,30,70,.18),inset 0 1px 0 #fff}
+:root:not([data-theme="dark"]) .seg button{color:var(--text-3)}
+:root:not([data-theme="dark"]) .seg button.on{color:#111;font-weight:500}
+:root:not([data-theme="dark"]) .seg button:not(.on):hover{color:var(--text-2)}
+:root:not([data-theme="dark"]) .seg button:not(.on):active{color:var(--text-2)}
+
+/* ===== Liquid glass buttons (SVG displacement + layered inset shadows) ===== */
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{
+  -webkit-backdrop-filter:url(#container-glass)!important;backdrop-filter:url(#container-glass)!important;
+  box-shadow:0 0 6px rgba(0,0,0,.03),0 2px 6px rgba(0,0,0,.08),inset 2px 2px .5px -2.5px rgba(0,0,0,.28),inset -2px -2px .5px -2.5px rgba(0,0,0,.26),inset 1px 1px 1px -.5px rgba(0,0,0,.16),inset -1px -1px 1px -.5px rgba(0,0,0,.16),inset 0 0 6px 6px rgba(0,0,0,.04),inset 0 0 2px 2px rgba(0,0,0,.02),0 0 12px rgba(255,255,255,.15)!important}
+html[data-theme="dark"] body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{
+  box-shadow:0 0 8px rgba(0,0,0,.03),0 2px 6px rgba(0,0,0,.08),inset 3px 3px .5px -3.5px rgba(255,255,255,.09),inset -3px -3px .5px -3.5px rgba(255,255,255,.85),inset 1px 1px 1px -.5px rgba(255,255,255,.6),inset -1px -1px 1px -.5px rgba(255,255,255,.6),inset 0 0 6px 6px rgba(255,255,255,.12),inset 0 0 2px 2px rgba(255,255,255,.06),0 0 12px rgba(0,0,0,.15)!important}
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{display:none!important}
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down):not(:disabled):hover{scale:1.05}
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down){transition:scale .3s ease,box-shadow .35s,color .2s}
+
+/* Nút liquid glass: bật/tắt tức thì theo con trỏ, không có độ trễ chuyển tiếp */
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i),
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before,
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{transition:none!important}

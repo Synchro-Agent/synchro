@@ -1,0 +1,223 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
+import * as I from "./icons";
+import { tr } from "./i18n";
+
+function Inline({ t }: { t: string }) {
+  const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith("**") && p.endsWith("**") && p.length > 4 ? <strong key={i}>{p.slice(2, -2)}</strong>
+        : p.startsWith("`") && p.endsWith("`") && p.length > 2 ? <code key={i} className="ic">{p.slice(1, -1)}</code>
+        : <span key={i}>{p.split(/(\s+)/).map((w, k) => (/^\s*$/.test(w) ? w : <span key={k} className="w">{w}</span>))}</span>
+      )}
+    </>
+  );
+}
+
+export type DevBlock = { lang: string; code: string };
+export type DevCtx = { prev?: DevBlock[]; onPanel: (b: { lang: string; code: string; name: string; run?: boolean }) => void; files?: { name: string; text: string }[]; onAccept?: (name: string, code: string) => void; onExpand?: (name: string, code: string) => void };
+
+const EXT: Record<string, string> = { typescript: "ts", ts: "ts", tsx: "tsx", javascript: "js", js: "js", jsx: "jsx", python: "py", py: "py", html: "html", css: "css", json: "json", go: "go", rust: "rs", bash: "sh", sh: "sh", sql: "sql", java: "java", yaml: "yml", md: "md" };
+export function fileNameFor(lang: string, code: string): string {
+  const m = code.split("\n", 1)[0].match(/^(?:\/\/|#|<!--|\/\*)\s*([\w./\\-]+\.[a-z]{1,5})\b/i);
+  if (m) return m[1];
+  return "code." + (EXT[lang.toLowerCase()] ?? (lang.toLowerCase() || "txt"));
+}
+
+export function diffLines(a: string, b: string): { t: "+" | "-" | " "; s: string }[] {
+  const x = a.split("\n"), y = b.split("\n");
+  const n = x.length, m = y.length;
+  const L: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out: { t: "+" | "-" | " "; s: string }[] = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (x[i] === y[j]) { out.push({ t: " ", s: x[i] }); i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) out.push({ t: "-", s: x[i++] });
+    else out.push({ t: "+", s: y[j++] });
+  }
+  while (i < n) out.push({ t: "-", s: x[i++] });
+  while (j < m) out.push({ t: "+", s: y[j++] });
+  return out;
+}
+
+const RUNNABLE = /^(html|js|javascript|py|python)$/i;
+
+function Code({ lang, code, say, dev, idx }: { lang: string; code: string; say: (m: string) => void; dev?: DevCtx; idx: number }) {
+  const [ok, setOk] = useState(false);
+  const [diff, setDiff] = useState(false);
+  const raw0 = code;
+  const fp = filepathOf(raw0);
+  const orig = fp ? dev?.files?.find((f) => f.name === fp || f.name.endsWith("/" + fp))?.text : undefined;
+  const merged = dev ? autoMerge(unredact(raw0), orig) : null;
+  const hidden = !!dev && merged === null && hasHidden(raw0);
+  code = merged ?? unredact(raw0);
+  const [verdict, setVerdict] = useState<"" | "ok" | "no">("");
+  const name = fp ?? fileNameFor(lang, code);
+  const prevAll = (dev?.prev ?? []).filter((p) => p.lang.toLowerCase() === lang.toLowerCase());
+  const prev = dev?.prev?.[idx]?.lang.toLowerCase() === lang.toLowerCase() ? dev.prev[idx] : prevAll[prevAll.length - 1];
+  const rows = diff && prev && !verdict ? diffLines(prev.code, code) : null;
+  const add = rows?.filter((r) => r.t === "+").length ?? 0, del = rows?.filter((r) => r.t === "-").length ?? 0;
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([code], { type: "text/plain" }));
+    const a = document.createElement("a"); a.href = url; a.download = name.split("/").pop() || name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 500); say("Đã tải " + name);
+  };
+  return (
+    <div className="codeblock" data-cb>
+      <div className="cb-head"><span className="cb-name">{dev ? name : lang || "text"}</span>
+        <div className="cb-tools">
+          {dev && <>
+            <button className={diff ? "on" : ""} disabled={!prev} title={prev ? "So sánh với phiên bản trước" : "Chưa có phiên bản trước để so sánh"} onClick={() => setDiff(!diff)}><b className="cb-pm">±</b>Diff{rows && <i className="cb-cnt"><em className="a">+{add}</em><em className="d">−{del}</em></i>}</button>
+            {RUNNABLE.test(lang) && <button title="Chạy thử" onClick={() => dev.onPanel({ lang, code, name, run: true })}><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z" /></svg>Chạy</button>}
+            <button title="Mở trong khung soạn thảo" onClick={() => dev.onPanel({ lang, code, name })}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="3" width="12" height="10" rx="2" /><path d="M9.5 3v10" /></svg>Mở</button>
+            <button title="Tải về" onClick={download}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" /></svg></button>
+            <button title="Sao chép đường dẫn" onClick={() => { navigator.clipboard?.writeText(name); say("Đã sao chép đường dẫn: " + name); }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.1 2.1 0 013 3l-1 1M9 11.5l-1 1a2.1 2.1 0 01-3-3l1-1" /></svg></button>
+          </>}
+          <button onClick={() => { navigator.clipboard?.writeText(code); setOk(true); say("Đã sao chép mã"); setTimeout(() => setOk(false), 1500); }}>{ok ? <I.Check size={14} /> : <I.Copy size={14} />}{ok ? "Đã chép" : "Sao chép"}</button>
+        </div>
+      </div>
+      {merged !== null && <div className="cb-note">⚡ Đã tự ghép với tệp gốc · 0 token</div>}
+      {hidden && <div className="cb-note warn">Một số đoạn code đã được ẩn.<button onClick={() => dev?.onExpand?.(name, code)}>⚡ Bung đoạn code bị ẩn</button></div>}
+      {rows && <div className="cb-note"><button className="ok" onClick={() => { setVerdict("ok"); dev?.onAccept?.(name, code); say("Đã chấp nhận thay đổi " + name); }}>✓ Chấp nhận</button><button onClick={() => { setVerdict("no"); setDiff(false); }}>✕ Từ chối</button></div>}
+      {verdict && <div className="cb-note">{verdict === "ok" ? "Đã chấp nhận thay đổi" : "Đã từ chối thay đổi"}</div>}
+      {rows ? <pre className="cb-diff">{rows.map((r, i) => <div key={i} className={r.t === "+" ? "ad" : r.t === "-" ? "dl" : ""}><span>{r.t === " " ? "" : r.t}</span>{r.s || " "}</div>)}</pre> : <pre>{code}</pre>}
+      {dev && <Widgets lang={lang} code={code} />}
+    </div>
+  );
+}
+
+function PkgBadge({ p }: { p: Pkg }) {
+  const [st, setSt] = useState<string>("...");
+  useEffect(() => { let on = true; const t = setTimeout(() => checkPkg(p).then((r) => on && setSt(r)), 900); return () => { on = false; clearTimeout(t); }; }, [p.eco, p.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m: Record<string, [string, string]> = { "...": ["⏳", "đang kiểm tra"], ok: ["🟢", "đã xác minh"], deprecated: ["🟡", "đã lỗi thời"], missing: ["🔴", "không tồn tại — có thể AI bịa ra"], unknown: ["⚪", "không kiểm tra được"] };
+  return <span className={`cb-pkg s-${st}`} title={p.eco}>{m[st][0]} {p.name}<em>{m[st][1]}</em></span>;
+}
+
+function MermaidView({ code }: { code: string }) {
+  const [svg, setSvg] = useState("");
+  const [err, setErr] = useState("");
+  const [open, setOpen] = useState(false);
+  const [z, setZ] = useState(1);
+  const draw = async () => {
+    setOpen(true); setErr("");
+    try {
+      const mm = (await import("mermaid")).default;
+      mm.initialize({ startOnLoad: false, securityLevel: "strict", theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default" });
+      const r = await mm.render("mm" + Date.now(), code);
+      setSvg(r.svg);
+    } catch (e) { setErr(String((e as Error).message ?? e).slice(0, 200)); }
+  };
+  const save = (kind: "svg" | "png") => {
+    const dl = (url: string, ext: string) => { const a = document.createElement("a"); a.href = url; a.download = "so-do." + ext; a.click(); };
+    if (kind === "svg") { const u = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })); dl(u, "svg"); setTimeout(() => URL.revokeObjectURL(u), 500); return; }
+    const el = document.createElement("div"); el.innerHTML = svg;
+    const s = el.querySelector("svg"); if (!s) return;
+    const vb = s.viewBox.baseVal; const w = (vb?.width || 800) * 2, h = (vb?.height || 600) * 2;
+    s.setAttribute("width", String(w)); s.setAttribute("height", String(h));
+    const img = new Image();
+    img.onload = () => { const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0); dl(c.toDataURL("image/png"), "png"); };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(s));
+  };
+  return (
+    <div className="cb-w col">
+      {!open ? <button className="cb-btn" onClick={draw}>📊 Vẽ sơ đồ</button> : (
+        <>
+          <div className="cb-w"><b>Sơ đồ</b><button className="cb-btn" onClick={() => setZ((x) => Math.max(0.4, x - 0.2))}>−</button><span>{Math.round(z * 100)}%</span><button className="cb-btn" onClick={() => setZ((x) => Math.min(3, x + 0.2))}>+</button><button className="cb-btn" onClick={() => setZ(1)}>Đặt lại</button><button className="cb-btn" onClick={() => save("svg")}>SVG</button><button className="cb-btn" onClick={() => save("png")}>PNG</button></div>
+          {err ? <em>Không vẽ được: {err}</em> : <div className="cb-mm"><div style={{ transform: `scale(${z})`, transformOrigin: "top left" }} dangerouslySetInnerHTML={{ __html: svg }} /></div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Widgets({ lang, code }: { lang: string; code: string }) {
+  const pk = /^(bash|sh|shell|zsh|console|)$/i.test(lang) ? parsePackages(code) : [];
+  const cron = findCron(code);
+  const ci = cron ? cronInfo(cron) : null;
+  const [rx, setRx] = useState("");
+  const [sample, setSample] = useState("");
+  const isRx = /^(regex|regexp)$/i.test(lang);
+  let hits: string[] = [], bad = false;
+  if (isRx && rx.trim()) { try { const src = rx.trim().match(/^\/(.*)\/([a-z]*)$/); const r = new RegExp(src ? src[1] : rx.trim(), (src ? src[2] : "g").includes("g") ? src?.[2] ?? "g" : (src?.[2] ?? "") + "g"); hits = Array.from(sample.matchAll(r)).map((m) => m[0]); } catch { bad = true; } }
+  const isMm = /^mermaid$/i.test(lang);
+  if (!pk.length && !ci && !isRx && !isMm) return null;
+  return (
+    <div className="cb-widgets">
+      {isMm && <MermaidView code={code} />}
+      {pk.length > 0 && <div className="cb-w"><b>Kiểm tra gói</b>{pk.map((p) => <PkgBadge key={p.eco + p.name} p={p} />)}</div>}
+      {ci && <div className="cb-w"><b>Cron</b><span>{ci.text}</span><em>Lần chạy kế: {ci.next.map((d) => d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })).join(" · ")}</em></div>}
+      {isRx && <div className="cb-w col"><b>Thử regex</b><input value={rx} placeholder={code.trim().split("\n")[0]} onChange={(e) => setRx(e.target.value)} /><input value={sample} placeholder="Chuỗi mẫu để kiểm tra…" onChange={(e) => setSample(e.target.value)} />{bad ? <em>Regex không hợp lệ</em> : sample && <em>{hits.length} kết quả{hits.length ? ": " + hits.slice(0, 8).join(" · ") : ""}</em>}</div>}
+    </div>
+  );
+}
+
+export function Markdown({ text: text0, say, dev }: { text: string; say: (m: string) => void; dev?: DevCtx }) {
+  let cbi = 0;
+  const { text, meta } = dev ? splitMeta(text0) : { text: text0, meta: null };
+  const segs = text.split(/(```[\s\S]*?(?:```|$))/g);
+  return (
+    <>
+      {segs.map((s, i) => {
+        if (s.startsWith("```")) {
+          const body = s.replace(/^```/, "").replace(/```$/, "");
+          const nl = body.indexOf("\n");
+          const lang = nl === -1 ? body : body.slice(0, nl);
+          return <Code key={i} lang={lang.trim()} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} say={say} dev={dev} idx={cbi++} />;
+        }
+        const lines = s.split("\n");
+        const out: React.ReactNode[] = [];
+        let list: string[] = [];
+        let ord = false;
+        const flush = () => {
+          if (!list.length) return;
+          const items = list.map((l, k) => <li key={k}><Inline t={l} /></li>);
+          out.push(ord ? <ol key={out.length}>{items}</ol> : <ul key={out.length}>{items}</ul>);
+          list = [];
+        };
+        let tbl: string[] = [];
+        const cells = (r: string) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        const flushT = () => {
+          if (!tbl.length) return;
+          const hasSep = tbl.length > 1 && /^[\s|:-]+$/.test(tbl[1]);
+          const head = cells(tbl[0]), rows = tbl.slice(hasSep ? 2 : 1).map(cells);
+          out.push(<div key={out.length} className="md-tbl"><table><thead><tr>{head.map((c, k) => <th key={k}><Inline t={c} /></th>)}</tr></thead><tbody>{rows.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j}><Inline t={c} /></td>)}</tr>)}</tbody></table></div>);
+          tbl = [];
+        };
+        lines.forEach((l) => {
+          if (/^\s*\|.*\|\s*$/.test(l)) { flush(); tbl.push(l); return; }
+          flushT();
+          const b = l.match(/^\s*[-*]\s+(.*)/);
+          const n = l.match(/^\s*\d+\.\s+(.*)/);
+          const h = l.match(/^#{1,3}\s+(.*)/);
+          if (b || n) { const o = !!n; if (list.length && o !== ord) flush(); ord = o; list.push((b || n)![1]); return; }
+          flush();
+          if (h) out.push(<h3 key={out.length}><Inline t={h[1]} /></h3>);
+          else if (l.trim()) out.push(<p key={out.length}><Inline t={l} /></p>);
+        });
+        flush(); flushT();
+        return <div key={i}>{out}</div>;
+      })}
+      {meta && <div className="cb-cx"><span>⏱ Time {meta.time}</span><span>▤ Space {meta.space}</span>{meta.canOptimize && <span className="opt">Có thể tối ưu thêm</span>}</div>}
+    </>
+  );
+}
+
+export function makeReply(q: string): string {
+  return tr(makeViReply(q));
+}
+
+function makeViReply(q: string): string {
+  const s = q.toLowerCase();
+  if (/code|lập trình|python|javascript|js|hàm|function|react|bug|program/.test(s))
+    return "Dưới đây là một ví dụ ngắn bạn có thể bắt đầu:\n\n```python\ndef chao(ten: str) -> str:\n    return f\"Xin chào, {ten}!\"\n\nprint(chao(\"Synchro\"))\n```\n\nHàm trên nhận một **chuỗi** và trả về lời chào. Bạn muốn tôi:\n\n- giải thích từng dòng\n- thêm kiểm thử đơn vị\n- chuyển sang `TypeScript`";
+  if (/viết|email|thư|bài|write|draft|letter/.test(s))
+    return "Tất nhiên rồi! Để viết tốt hơn, tôi cần biết thêm vài điều:\n\n1. **Mục đích** của nội dung là gì?\n2. **Người đọc** là ai?\n3. Giọng văn bạn muốn: trang trọng hay thân mật?\n\nHãy cho tôi biết và tôi sẽ soạn bản nháp đầu tiên ngay.";
+  if (/học|giải thích|là gì|learn|explain|what is|how/.test(s))
+    return "Câu hỏi hay! Tôi sẽ giải thích theo từng bước:\n\n- Bắt đầu từ **khái niệm cốt lõi**\n- Sau đó là một ví dụ đơn giản\n- Cuối cùng là bài tập nhỏ để bạn luyện tập\n\nBạn muốn tôi bắt đầu từ đâu?";
+  return "Đây là câu trả lời giả lập. Hãy nối API AI thật vào hàm `streamReply` để nhận phản hồi streaming từ mô hình.\n\nTrong lúc này, bạn có thể thử hỏi về **code**, **viết** hoặc **học tập** để xem các kiểu hiển thị khác nhau.";
+}

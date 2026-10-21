@@ -1,0 +1,6 @@
+markitdown[all]
+rapidocr-onnxruntime
+pypdfium2
+pdfplumber
+python-docx
+python-pptx
