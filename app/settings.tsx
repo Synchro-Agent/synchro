@@ -8,7 +8,7 @@ import * as I from "./icons";
 import { MODES, PRESETS } from "./codeview";
 import { SkillsPanel, SKILLS_UPLOAD } from "./skillsui";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
-import type { AuthUser } from "./auth";
+import { OCCUPATIONS, type AuthUser } from "./auth";
 
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -137,13 +137,23 @@ function Account() {
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   const pwOk = !!pw && pw.next.length >= 8 && pw.again.length >= 8 && (!me?.hasPassword || pw.cur.length > 0);
+  const [dob, setDob] = useState(me?.profile.birthDate ? me.profile.birthDate.split("-").reverse().join("/") : "");
+  // Lưu một trường hồ sơ lên máy chủ (gọi khi rời ô nhập / chọn xong).
+  const saveProfile = (patch: Record<string, string>) => api<{ user: AuthUser }>("POST", "/api/auth/profile", patch).then((r) => { app.setMe(r.user); app.say("Profile saved"); }).catch((e) => app.say(e.message));
+  const saveDob = () => {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dob);
+    if (!m) { if (dob) app.say("Please enter a valid date of birth (DD/MM/YYYY)."); return; }
+    const iso = `${m[3]}-${m[2]}-${m[1]}`;
+    if (iso !== me?.profile.birthDate) saveProfile({ birthDate: iso });
+  };
   return (
     <>
       <H first>Profile</H>
       <Row t="Profile photo" d="PNG or JPG up to 10MB." top><AvatarButton name={name} /></Row>
-      <Row t="Full name"><input className="field" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} /></Row>
-      <Row t="What should Synchro call you?"><input className="field" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} /></Row>
-      <Row t="What best describes your work?"><Select width={200} value={work} onChange={setWork} options={["Product management", "Engineering", "Human resources", "Finance", "Marketing", "Sales", "Operations", "Data science", "Design", "Legal", "Other"]} /></Row>
+      <Row t="Full name"><input className="field" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
+      <Row t="What should Synchro call you?"><input className="field" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
+      <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
+      <Row t="What best describes your work?"><Select width={200} value={work} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Synchro will keep these in mind for this and any of your associated accounts across chats and Cowork within <A>Anthropic&apos;s guidelines</A>. <A>Learn more</A></p>
       <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I primarily code in Python (not a coding beginner)" />

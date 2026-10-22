@@ -209,6 +209,13 @@ export const VI2EN: Record<string, string> = {
   "Không xác thực được với nhà cung cấp đăng nhập. Vui lòng thử lại.": "Couldn't verify with the sign-in provider. Please try again.",
   "Phản hồi từ Apple không hợp lệ.": "Invalid response from Apple.",
   "Không hỗ trợ cách đăng nhập này.": "This sign-in method isn't supported.",
+  // Hồ sơ
+  "Họ và tên cần từ 2 đến 80 ký tự.": "Full name must be 2 to 80 characters.",
+  "Tên gọi tối đa 40 ký tự.": "Nickname can be at most 40 characters.",
+  "Ngày sinh không hợp lệ.": "Invalid date of birth.",
+  "Bạn cần từ 13 tuổi trở lên để dùng Synchro.": "You need to be 13 or older to use Synchro.",
+  "Công việc tối đa 60 ký tự.": "Occupation can be at most 60 characters.",
+  "Hãy điền họ tên và ngày sinh.": "Please fill in your full name and date of birth.",
 };
 
 // Chuỗi gốc tiếng Anh (Cài đặt, Skills…) → tiếng Việt
@@ -466,6 +473,27 @@ export const EN2VI: Record<string, string> = {
   "Confirm new password": "Xác nhận mật khẩu mới",
   "Your account, sign-in methods and sessions will be permanently removed, and chats stored in this browser will be erased. This can't be undone.": "Tài khoản, các cách đăng nhập và các phiên của bạn sẽ bị xóa vĩnh viễn; các đoạn chat lưu trên trình duyệt này cũng bị xóa. Không thể hoàn tác.",
   "Enter your password to confirm": "Nhập mật khẩu để xác nhận",
+  // Hồ sơ & trạng thái đăng nhập
+  "Signing you in…": "Đang đăng nhập…",
+  "Creating your account…": "Đang tạo tài khoản…",
+  "Securing your password…": "Đang bảo mật mật khẩu…",
+  "Personalising Synchro for you…": "Đang cá nhân hóa Synchro cho bạn…",
+  "Saving your profile…": "Đang lưu hồ sơ…",
+  "Welcome back,": "Chào mừng trở lại,",
+  "Welcome to Synchro,": "Chào mừng đến với Synchro,",
+  "Tell us about you": "Giới thiệu về bạn",
+  "Synchro uses this to make your experience feel personal.": "Synchro dùng những thông tin này để trải nghiệm mang dấu ấn riêng của bạn.",
+  "Signed in as": "Đang đăng nhập với",
+  "Date of birth": "Ngày sinh",
+  "Date of birth (DD/MM/YYYY)": "Ngày sinh (DD/MM/YYYY)",
+  "(optional)": "(không bắt buộc)",
+  "Student": "Học sinh / Sinh viên",
+  "Create account": "Tạo tài khoản",
+  "Use a different account": "Dùng tài khoản khác",
+  "Please enter your full name.": "Hãy nhập họ và tên của bạn.",
+  "Please enter a valid date of birth (DD/MM/YYYY).": "Hãy nhập ngày sinh hợp lệ (DD/MM/YYYY).",
+  "Profile saved": "Đã lưu hồ sơ",
+  "Occupation": "Công việc",
 };
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [

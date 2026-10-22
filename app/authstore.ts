@@ -22,6 +22,7 @@ export class AuthError extends Error {
 export type UserRow = {
   id: string; email: string; name: string; avatar: string | null; password_hash: string | null; email_verified: number;
   status: "active" | "suspended"; created_at: number; last_login_at: number | null; last_seen_at: number | null;
+  full_name: string | null; nickname: string | null; birth_date: string | null; occupation: string | null;
 };
 export type SessionRow = { id: string; user_id: string; method: string; created_at: number; last_seen_at: number; expires_at: number; ip: string | null; user_agent: string | null };
 
@@ -34,6 +35,9 @@ export function db() {
   d.pragma("foreign_keys = ON");
   d.pragma("busy_timeout = 5000");
   d.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
+  // Bảng tạo từ bản cũ chưa có các cột hồ sơ: thêm vào (CREATE IF NOT EXISTS không tự làm việc này).
+  const cols = new Set((d.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name));
+  for (const c of ["full_name", "nickname", "birth_date", "occupation"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
   return (g.__synchroDb = d);
 }
 
@@ -133,7 +137,67 @@ export function createUser(o: { email: string; name: string; passwordHash?: stri
 }
 
 export function publicUser(u: UserRow) {
-  return { id: u.id, email: u.email, name: u.name, avatar: u.avatar, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at };
+  return {
+    id: u.id, email: u.email, name: u.name, avatar: u.avatar, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
+    profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation },
+    needsProfile: !u.full_name || !u.birth_date,
+  };
+}
+
+// ---- hồ sơ cá nhân ----
+type ProfileIn = { fullName?: unknown; nickname?: unknown; birthDate?: unknown; occupation?: unknown };
+type ProfileCols = Partial<Pick<UserRow, "full_name" | "nickname" | "birth_date" | "occupation">>;
+const oneLine = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").replace(/\s+/g, " ").trim() : "");
+
+// Kiểm tra các trường được gửi lên; trường không gửi thì bỏ qua (cho phép cập nhật từng phần).
+export function cleanProfile(p: ProfileIn): ProfileCols {
+  const out: ProfileCols = {};
+  if (p.fullName !== undefined) {
+    const v = oneLine(p.fullName);
+    if (v.length < 2 || v.length > 80) throw new AuthError("Họ và tên cần từ 2 đến 80 ký tự.");
+    out.full_name = v;
+  }
+  if (p.nickname !== undefined) {
+    const v = oneLine(p.nickname);
+    if (v.length > 40) throw new AuthError("Tên gọi tối đa 40 ký tự.");
+    out.nickname = v || null;
+  }
+  if (p.birthDate !== undefined) {
+    const v = oneLine(p.birthDate);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+    if (!m || !d || d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]) throw new AuthError("Ngày sinh không hợp lệ.");
+    const now = new Date();
+    let age = now.getUTCFullYear() - d.getUTCFullYear();
+    if (now.getUTCMonth() < d.getUTCMonth() || (now.getUTCMonth() === d.getUTCMonth() && now.getUTCDate() < d.getUTCDate())) age--;
+    if (age < 13) throw new AuthError("Bạn cần từ 13 tuổi trở lên để dùng Synchro.");
+    if (age > 120) throw new AuthError("Ngày sinh không hợp lệ.");
+    out.birth_date = v;
+  }
+  if (p.occupation !== undefined) {
+    const v = oneLine(p.occupation);
+    if (v.length > 60) throw new AuthError("Công việc tối đa 60 ký tự.");
+    out.occupation = v || null;
+  }
+  return out;
+}
+
+function writeProfile(id: string, c: ProfileCols) {
+  const keys = Object.keys(c) as (keyof ProfileCols)[];
+  if (!keys.length) return;
+  const sets = keys.map((k) => `${k} = ?`);
+  const vals: unknown[] = keys.map((k) => c[k]);
+  // name là tên hiển thị trong quản trị: theo họ tên khi có.
+  if (c.full_name) { sets.push("name = ?"); vals.push(c.full_name); }
+  db().prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...vals, id);
+}
+
+export function updateProfile(req: Request, u: UserRow, p: ProfileIn) {
+  limit("profile:" + u.id, 30, 15 * MIN);
+  const c = cleanProfile(p);
+  writeProfile(u.id, c);
+  if (Object.keys(c).length) audit("profile_updated", { actor: u, ip: clientIp(req) });
+  return getUser(u.id)!;
 }
 export type PublicUser = ReturnType<typeof publicUser>;
 
@@ -206,7 +270,7 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   return { user: u, cookie: createSession(u, req, "password") };
 }
 
-export async function signup(req: Request, email0: unknown, pw0: unknown) {
+export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}) {
   const ip = clientIp(req);
   limit("signup:" + ip, 10, 60 * MIN);
   const email = normEmail(email0);
@@ -214,7 +278,23 @@ export async function signup(req: Request, email0: unknown, pw0: unknown) {
   if (ADMIN_EMAILS.has(email)) throw new AuthError("Email này được dành riêng. Hãy đăng nhập bằng Google hoặc liên hệ quản trị viên.", 403);
   if (!signupOpen()) throw new AuthError("Synchro hiện tạm ngừng nhận đăng ký mới.", 403);
   if (findByEmail(email)) throw new AuthError("Email này đã có tài khoản. Hãy đăng nhập.", 409);
-  const u = createUser({ email, name: email.split("@")[0], passwordHash: await hashPassword(pw), verified: false });
+  if (profile.fullName === undefined || profile.birthDate === undefined) throw new AuthError("Hãy điền họ tên và ngày sinh.");
+  const prof = cleanProfile(profile);
+  const hash = await hashPassword(pw);
+  // Tạo tài khoản và hồ sơ trong cùng một transaction: lỗi giữa chừng không để lại tài khoản dở.
+  let id: string;
+  try {
+    id = db().transaction(() => {
+      const c = createUser({ email, name: email.split("@")[0], passwordHash: hash, verified: false });
+      writeProfile(c.id, prof);
+      return c.id;
+    })();
+  } catch (e) {
+    // Hai yêu cầu đăng ký cùng email chạy song song: cái sau vướng ràng buộc UNIQUE.
+    if ((e as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") throw new AuthError("Email này đã có tài khoản. Hãy đăng nhập.", 409);
+    throw e;
+  }
+  const u = getUser(id)!;
   audit("signup", { actor: u, ip, detail: "password" });
   return { user: u, cookie: createSession(u, req, "password") };
 }

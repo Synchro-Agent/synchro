@@ -1223,3 +1223,52 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .legal-upd{font-size:13px;color:var(--text-3)!important;margin:6px 0 24px}
 .legal-nav{display:flex;flex-wrap:wrap;gap:16px;margin-top:40px;padding-top:16px;border-top:.5px solid var(--border);font-size:13px}
 .legal-nav a{color:var(--text-2)}
+
+/* ---- Đăng nhập: trạng thái đang xử lý / thành công / lỗi ---- */
+@property --orb-a{syntax:"<angle>";inherits:false;initial-value:0deg}
+.auth-stage{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;gap:30px;padding:16px;text-align:center}
+.auth-orb{position:relative;width:92px;height:92px;border-radius:50%;display:grid;place-items:center;color:var(--foreground);isolation:isolate;
+  background:radial-gradient(circle at 32% 24%,oklch(from var(--background) l c h / 85%),transparent 52%),linear-gradient(165deg,oklch(from var(--background) l c h / 42%),oklch(from var(--background) l c h / 8%));
+  backdrop-filter:blur(14px) saturate(170%);-webkit-backdrop-filter:blur(14px) saturate(170%);
+  box-shadow:inset 0 1px 0 oklch(from var(--background) l c h / 90%),inset 0 -14px 22px -14px oklch(from var(--foreground) l c h / 22%),inset 0 0 0 .5px oklch(from var(--foreground) l c h / 10%),0 18px 40px -18px oklch(from var(--foreground) l c h / 45%),0 2px 6px -2px oklch(from var(--foreground) l c h / 18%)}
+.auth-orb::after{content:"";position:absolute;inset:-1px;border-radius:50%;padding:1px;pointer-events:none;
+  background:conic-gradient(from var(--orb-a),oklch(from var(--foreground) l c h / 55%) 0%,transparent 10% 40%,oklch(from var(--foreground) l c h / 30%) 50%,transparent 60% 90%,oklch(from var(--foreground) l c h / 55%) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;animation:auth-rim 3.2s linear infinite}
+.auth-orb.success::after,.auth-orb.error::after{animation-duration:9s}
+.auth-orb-glow{position:absolute;inset:-34px;border-radius:50%;z-index:-1;pointer-events:none;background:radial-gradient(circle,oklch(0.68 0.15 255 / 28%),transparent 66%);animation:auth-breathe 2.6s ease-in-out infinite}
+.auth-orb.success .auth-orb-glow{background:radial-gradient(circle,oklch(0.72 0.15 160 / 30%),transparent 66%)}
+.auth-orb.error .auth-orb-glow{background:radial-gradient(circle,oklch(0.65 0.2 25 / 26%),transparent 66%);animation:none}
+.auth-orb-ring{position:absolute;inset:0;border-radius:50%;pointer-events:none;box-shadow:0 0 0 1.5px oklch(from var(--foreground) l c h / 30%),0 0 24px 2px oklch(0.72 0.15 160 / 22%)}
+.auth-spark{width:42px;height:42px;fill:currentColor;animation:auth-spin 10s linear infinite}
+.auth-spark rect{animation:auth-ray 1.2s linear infinite}
+.auth-check{width:44px;height:44px;stroke:currentColor}
+.auth-alert{width:42px;height:42px;stroke:#e5484d;fill:#e5484d}
+.auth-stage-text{min-height:96px;display:flex;align-items:flex-start;justify-content:center}
+.auth-status p{margin:0;font-size:15px;font-weight:500;letter-spacing:-.01em}
+.auth-shimmer{background:linear-gradient(100deg,oklch(from var(--foreground) l c h / 42%) 30%,var(--foreground) 50%,oklch(from var(--foreground) l c h / 42%) 70%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:auth-shine 1.8s linear infinite}
+.auth-welcome{display:flex;flex-direction:column;align-items:center;gap:2px}
+.auth-welcome-pre{margin:0;font-size:15px;color:var(--muted-foreground)}
+.auth-welcome-name{margin:0;font-family:var(--font-serif);font-weight:300;font-size:46px;line-height:1.15;letter-spacing:-.02em;color:var(--foreground);white-space:nowrap}
+.auth-welcome-name span{display:inline-block}
+.auth-error{display:flex;flex-direction:column;align-items:center;gap:18px;max-width:320px}
+.auth-error-msg{margin:0;font-size:15px;line-height:1.5;color:var(--foreground)}
+.auth-mini-spin{width:16px;height:16px;border-radius:50%;border:2px solid oklch(from var(--foreground) l c h / 20%);border-top-color:var(--foreground);display:inline-block;animation:auth-spin .7s linear infinite}
+.auth-signed-as{margin:0;font-size:12px;color:var(--muted-foreground)}
+.auth-signed-as b{font-weight:500;color:var(--foreground)}
+.auth-chips-label{margin:0 0 10px 4px;font-size:12px;font-weight:600;color:var(--muted-foreground)}
+.auth-chips-label span{font-weight:400;opacity:.8}
+.auth-chips{display:flex;flex-wrap:wrap;gap:6px}
+.auth-chip{font:inherit;font-size:12.5px;line-height:1;padding:8px 12px;border-radius:999px;color:var(--foreground);cursor:pointer;border:0;
+  background:linear-gradient(-75deg,oklch(from var(--background) l c h / 10%),oklch(from var(--background) l c h / 35%),oklch(from var(--background) l c h / 10%));
+  box-shadow:inset 0 1px 1px oklch(from var(--background) l c h / 70%),inset 0 -1px 1px oklch(from var(--foreground) l c h / 6%),0 0 0 .5px oklch(from var(--foreground) l c h / 16%),0 2px 4px -2px oklch(from var(--foreground) l c h / 18%);
+  transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s,background .25s,color .25s}
+.auth-chip:hover{transform:translateY(-1px)}
+.auth-chip:active{transform:scale(.96)}
+.auth-chip.on{color:var(--background);background:var(--foreground);box-shadow:0 0 0 .5px var(--foreground),0 6px 14px -6px oklch(from var(--foreground) l c h / 55%)}
+.auth-field-err{margin:0 0 10px 4px;font-size:12.5px;color:#e5484d}
+@keyframes auth-rim{to{--orb-a:360deg}}
+@keyframes auth-spin{to{transform:rotate(360deg)}}
+@keyframes auth-ray{0%{opacity:1}100%{opacity:.16}}
+@keyframes auth-breathe{0%,100%{opacity:.65;transform:scale(.94)}50%{opacity:1;transform:scale(1.04)}}
+@keyframes auth-shine{0%{background-position:120% 0}100%{background-position:-120% 0}}
+@media (prefers-reduced-motion:reduce){.auth-spark,.auth-orb::after,.auth-orb-glow,.auth-shimmer,.auth-mini-spin{animation-duration:0s!important;animation-iteration-count:1!important}.auth-spark rect{animation:none}}

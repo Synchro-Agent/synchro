@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 
 export const POST = handle(async (req) => {
   sameOrigin(req);
-  const { email, password } = await req.json();
-  const { user, cookie } = await signup(req, email, password);
+  const { email, password, profile } = await req.json();
+  const { user, cookie } = await signup(req, email, password, profile ?? {});
   return withCookies(Response.json({ user: publicUser(user) }), cookie);
 });

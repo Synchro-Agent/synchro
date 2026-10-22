@@ -147,6 +147,9 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
                       <div>
                         <h4>Account</h4>
                         <div className="adm-kv"><span>Joined</span><b data-notr>{fmtDate(u.createdAt)}</b></div>
+                        <div className="adm-kv"><span>Full name</span><b data-notr>{u.profile.fullName ?? "—"}</b></div>
+                        <div className="adm-kv"><span>Date of birth</span><b data-notr>{u.profile.birthDate ? u.profile.birthDate.split("-").reverse().join("/") : "—"}</b></div>
+                        <div className="adm-kv"><span>Occupation</span><b>{u.profile.occupation ?? "—"}</b></div>
                         <div className="adm-kv"><span>Email verified</span><b>{u.verified ? "Yes" : "No"}</b></div>
                         <div className="adm-kv"><span>Last sign-in</span><b data-notr>{fmtDate(u.lastLogin)}</b></div>
                         <div className="adm-kv"><span>User ID</span><b className="adm-id" data-notr title={u.id}>{u.id}</b></div>

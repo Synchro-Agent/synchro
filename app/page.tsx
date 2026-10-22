@@ -359,8 +359,9 @@ function Toast({ text }: { text: string }) {
 
 export default function Home() {
   const [name, setName] = usePref("name", "Lâm Tùng");
-  const [acct, setAcct] = usePref("acct", "");
-  const [call] = usePref("call", "Lâm Tùng");
+  const [, setAcct] = usePref("acct", "");
+  const [call, setCall] = usePref("call", "Lâm Tùng");
+  const [, setWork] = usePref("work", "Data science");
   const [ins] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
   const [font] = usePref("font", "Anthropic Sans");
@@ -429,10 +430,19 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
   const [providers, setProviders] = useState<Providers>();
+  const [authLeaving, setAuthLeaving] = useState(false);
+  // Hồ sơ trên máy chủ là nguồn chính; các ô trong Cài đặt → Tài khoản đọc từ đây.
+  const syncProfile = (u: AuthUser) => {
+    setAcct(u.email);
+    if (u.profile.fullName) setName(u.profile.fullName);
+    const c = u.profile.nickname || u.profile.fullName?.trim().split(/\s+/).pop();
+    if (c) setCall(c);
+    if (u.profile.occupation) setWork(u.profile.occupation);
+  };
   useEffect(() => {
     localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
-    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); setMe(j.user); }).catch(() => setMe(null));
-  }, []);
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); if (j.user) syncProfile(j.user); setMe(j.user); }).catch(() => setMe(null));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -696,9 +706,15 @@ export default function Home() {
   };
 
   if (me === undefined) return <div style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />;
-  if (!me) return <AuthComponent brandName="Synchro" logo={null} providers={providers} onDone={(u) => { if (acct !== u.email) { setName(u.name); setAcct(u.email); } setMe(u); }} />;
+  // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
+  const needProfile = !!me?.needsProfile;
+  const authEl = !me || needProfile || authLeaving ? (
+    <AuthComponent key="auth" brandName="Synchro" logo={null} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
+      onDone={(u) => { syncProfile(u); setMe(u); if (!u.needsProfile) setAuthLeaving(true); }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
+  ) : null;
+  if (!me || needProfile) return <>{null}{authEl}</>;
 
-  return (
+  return (<>
     <AppCtx.Provider value={api}>
     <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><ShaderMetal metal="chrome" color="#a5aebf" ribbons={3} speed={0.3} iridescence={0.2} interactive /></div>}
@@ -985,5 +1001,6 @@ export default function Home() {
       <Fade show={!!gc}><Confirm title={gc?.title ?? ""} text={gc?.text ?? ""} ok={gc?.ok ?? ""} onCancel={() => setGc(null)} onOk={() => { gc?.fn(); setGc(null); }} /></Fade>
     </div>
     </AppCtx.Provider>
-  );
+    {authEl}
+  </>);
 }

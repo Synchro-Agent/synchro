@@ -9,7 +9,11 @@ CREATE TABLE IF NOT EXISTS users (
   status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
   created_at     INTEGER NOT NULL,
   last_login_at  INTEGER,
-  last_seen_at   INTEGER
+  last_seen_at   INTEGER,
+  full_name      TEXT,
+  nickname       TEXT,
+  birth_date     TEXT,
+  occupation     TEXT
 );
 
 -- Tài khoản liên kết từ Google / GitHub / Apple

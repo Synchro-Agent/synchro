@@ -1,79 +1,12 @@
 "use client";
 import { cn } from "./cn";
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle, useMemo, useCallback, createContext, Children } from "react";
+import React, { useState, useRef, useEffect } from "react";
 // Importing class-variance-authority for the built-in button component
 import { cva, type VariantProps } from "class-variance-authority";
 // Importing icons from lucide-react
-import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, X, AlertCircle, PartyPopper, Loader } from "lucide-react";
+import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, CalendarDays } from "lucide-react";
 // Importing animation components from framer-motion
-import { AnimatePresence, motion, Variants, Transition } from "framer-motion";
-
-// --- CONFETTI LOGIC ---
-import type { ReactNode } from "react"
-import type { GlobalOptions as ConfettiGlobalOptions, CreateTypes as ConfettiInstance, Options as ConfettiOptions } from "canvas-confetti"
-import confetti from "canvas-confetti"
-
-type Api = { fire: (options?: ConfettiOptions) => void }
-export type ConfettiRef = Api | null
-const ConfettiContext = createContext<Api>({} as Api)
-
-const Confetti = forwardRef<ConfettiRef, React.ComponentPropsWithRef<"canvas"> & { options?: ConfettiOptions; globalOptions?: ConfettiGlobalOptions; manualstart?: boolean }>((props, ref) => {
-  const { options, globalOptions = { resize: true, useWorker: true }, manualstart = false, ...rest } = props
-  const instanceRef = useRef<ConfettiInstance | null>(null)
-  const canvasRef = useCallback((node: HTMLCanvasElement) => {
-    if (node !== null) {
-      if (instanceRef.current) return
-      instanceRef.current = confetti.create(node, { ...globalOptions, resize: true })
-    } else {
-      if (instanceRef.current) {
-        instanceRef.current.reset()
-        instanceRef.current = null
-      }
-    }
-  }, [globalOptions])
-  const fire = useCallback((opts = {}) => instanceRef.current?.({ ...options, ...opts }), [options])
-  const api = useMemo(() => ({ fire }), [fire])
-  useImperativeHandle(ref, () => api, [api])
-  useEffect(() => { if (!manualstart) fire() }, [manualstart, fire])
-  return <canvas ref={canvasRef} {...rest} />
-})
-Confetti.displayName = "Confetti";
-
-// --- TEXT LOOP ANIMATION COMPONENT ---
-type TextLoopProps = { children: React.ReactNode[]; className?: string; interval?: number; transition?: Transition; variants?: Variants; onIndexChange?: (index: number) => void; stopOnEnd?: boolean; };
-export function TextLoop({ children, className, interval = 2, transition = { duration: 0.3 }, variants, onIndexChange, stopOnEnd = false }: TextLoopProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const items = Children.toArray(children);
-  useEffect(() => {
-    const intervalMs = interval * 1000;
-    const timer = setInterval(() => {
-      setCurrentIndex((current) => {
-        if (stopOnEnd && current === items.length - 1) {
-          clearInterval(timer);
-          return current;
-        }
-        const next = (current + 1) % items.length;
-        onIndexChange?.(next);
-        return next;
-      });
-    }, intervalMs);
-    return () => clearInterval(timer);
-  }, [items.length, interval, onIndexChange, stopOnEnd]);
-  const motionVariants: Variants = {
-    initial: { y: 20, opacity: 0 },
-    animate: { y: 0, opacity: 1 },
-    exit: { y: -20, opacity: 0 },
-  };
-  return (
-    <div className={cn('relative inline-block whitespace-nowrap', className)}>
-      <AnimatePresence mode='popLayout' initial={false}>
-        <motion.div key={currentIndex} initial='initial' animate='animate' exit='exit' transition={transition} variants={variants || motionVariants}>
-          {items[currentIndex]}
-        </motion.div>
-      </AnimatePresence>
-    </div>
-  );
-}
+import { AnimatePresence, motion, Variants } from "framer-motion";
 
 // --- NHỊP ANIMATION CHUNG ---
 // Mọi lớp trong một bước dùng cùng easing và thời lượng, chỉ lệch nhau STEP giây, và đều bắt đầu
@@ -104,8 +37,10 @@ export interface GlassButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
 const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(
   ({ className, children, size, contentClassName, onClick, ...props }, ref) => {
     const handleWrapperClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      // Chỉ "bấm hộ" khi người dùng bấm vào phần viền/bóng bên ngoài nút; bấm vào chữ bên trong nút
+      // đã kích hoạt nút rồi, bấm hộ thêm sẽ gửi form hai lần.
       const button = e.currentTarget.querySelector('button');
-      if (button && e.target !== button) button.click();
+      if (button && !button.contains(e.target as Node)) button.click();
     };
     return (
       <div className={cn("glass-button-wrap cursor-pointer rounded-full relative", className)} onClick={handleWrapperClick}>
@@ -134,24 +69,26 @@ const GitHubIcon = (props: React.SVGProps<SVGSVGElement>) => ( <svg {...props} x
 
 const AppleIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" viewBox="-143 -50 1100 1100" className="w-6 h-6" aria-hidden> <path fill="currentColor" d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/> </svg> );
 
-const signupSteps = ["Creating your account...", "Setting things up...", "Finalizing..."];
-const loginSteps = ["Signing you in..."];
-const TEXT_LOOP_INTERVAL = 0.9;
 const PW_MIN = 8;
+const SUCCESS_HOLD = 1900; // thời gian giữ màn hình chúc mừng trước khi vào app
 
 const DefaultLogo = () => ( <div className="bg-primary text-primary-foreground rounded-md p-1.5"> <Gem className="h-4 w-4" /> </div> );
 
-// --- MAIN COMPONENT ---
-export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number };
+// --- TYPES + API ---
+export type AuthProfile = { fullName: string | null; nickname: string | null; birthDate: string | null; occupation: string | null };
+export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean };
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;
+// Cùng danh sách với Cài đặt → Tài khoản để hai nơi hiển thị khớp nhau.
+export const OCCUPATIONS = ["Student", "Engineering", "Design", "Product management", "Data science", "Marketing", "Sales", "Finance", "Operations", "Human resources", "Legal", "Other"];
 
-interface AuthComponentProps {
-  logo?: React.ReactNode;
-  brandName?: string;
-  providers?: Providers;
-  onDone?: (user: AuthUser) => void;
-}
+type Kind = "login" | "signup" | "profile";
+type Stage = "form" | "loading" | "success" | "error";
+const STATUS: Record<Kind, string[]> = {
+  login: ["Signing you in…"],
+  signup: ["Creating your account…", "Securing your password…", "Personalising Synchro for you…"],
+  profile: ["Saving your profile…"],
+};
 
 async function post<T>(url: string, body: unknown): Promise<T> {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -161,18 +98,157 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 }
 const wait = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 
-export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, onDone }: AuthComponentProps) => {
+// Tên gọi mặc định: tên cuối trong họ tên Việt ("Nguyễn Hữu Lâm Tùng" → "Tùng").
+const lastWord = (s: string) => s.trim().split(/\s+/).pop() ?? "";
+const callName = (u: AuthUser | null, fallback = "") => u?.profile.nickname || lastWord(u?.profile.fullName ?? "") || u?.name || fallback;
+// "DD/MM/YYYY" ↔ "YYYY-MM-DD"
+function maskDob(raw: string) {
+  const d = raw.replace(/\D/g, "").slice(0, 8);
+  return [d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/");
+}
+function dobToIso(s: string) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const d = new Date(Date.UTC(+yyyy, +mm - 1, +dd));
+  return d.getUTCFullYear() === +yyyy && d.getUTCMonth() === +mm - 1 && d.getUTCDate() === +dd ? `${yyyy}-${mm}-${dd}` : null;
+}
+const isoToDob = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.split("-").reverse().join("/") : "");
+
+// --- STAGE: quả cầu kính cho đang xử lý / thành công / lỗi ---
+function Orb({ stage }: { stage: Stage }) {
+  return (
+    <motion.div className={`auth-orb ${stage}`} initial={{ scale: 0.5, opacity: 0, filter: "blur(10px)" }} animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }} transition={{ duration: 0.6, ease: EASE }}>
+      <span className="auth-orb-glow" aria-hidden />
+      <AnimatePresence>
+        {stage === "success" && <motion.span key="ring" className="auth-orb-ring" initial={{ scale: 1, opacity: 0.6 }} animate={{ scale: 2.6, opacity: 0 }} transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1] }} />}
+        {stage === "success" && <motion.span key="ring2" className="auth-orb-ring" initial={{ scale: 1, opacity: 0.35 }} animate={{ scale: 1.9, opacity: 0 }} transition={{ duration: 1.3, delay: 0.18, ease: [0.16, 1, 0.3, 1] }} />}
+      </AnimatePresence>
+      <AnimatePresence mode="wait">
+        {stage === "loading" && (
+          <motion.svg key="spark" className="auth-spark" viewBox="0 0 40 40" aria-hidden exit={{ scale: 0.15, opacity: 0, rotate: 120, transition: { duration: 0.32, ease: "easeIn" } }}>
+            {Array.from({ length: 12 }, (_, i) => <rect key={i} x="18.5" y="3.5" width="3" height="10.5" rx="1.5" transform={`rotate(${i * 30} 20 20)`} style={{ animationDelay: `${(i - 12) * 0.1}s` }} />)}
+          </motion.svg>
+        )}
+        {stage === "success" && (
+          <motion.svg key="check" className="auth-check" viewBox="0 0 40 40" aria-hidden initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.35, ease: EASE }}>
+            <motion.path d="M11.5 20.8l5.7 5.7L28.8 14.6" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.55, delay: 0.1, ease: EASE }} />
+          </motion.svg>
+        )}
+        {stage === "error" && (
+          <motion.svg key="err" className="auth-alert" viewBox="0 0 40 40" aria-hidden initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1, x: [0, -6, 6, -3, 3, 0] }} transition={{ duration: 0.5, ease: "easeOut" }}>
+            <path d="M20 11.5v10.5" fill="none" strokeWidth="3" strokeLinecap="round" /><circle cx="20" cy="28.2" r="1.9" stroke="none" />
+          </motion.svg>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Các dòng trạng thái lần lượt thay nhau, chữ có vệt sáng chạy qua.
+function StatusLines({ lines }: { lines: string[] }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (lines.length < 2) return;
+    const t = setInterval(() => setI((x) => Math.min(x + 1, lines.length - 1)), 1150);
+    return () => clearInterval(t);
+  }, [lines]);
+  return (
+    <div className="auth-status" role="status" aria-live="polite">
+      <AnimatePresence mode="wait">
+        <motion.p key={i} className="auth-shimmer" initial={{ opacity: 0, y: 6, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -6, filter: "blur(4px)" }} transition={{ duration: 0.32, ease: EASE }}>{lines[i]}</motion.p>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Lời chào: dòng đầu mờ dần lên, tên hiện từng chữ.
+function Welcome({ kind, name }: { kind: Kind; name: string }) {
+  return (
+    <div className="auth-welcome" role="status">
+      <motion.p className="auth-welcome-pre" initial={{ opacity: 0, y: 8, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 0.5, delay: 0.2, ease: EASE }}>{kind === "login" ? "Welcome back," : "Welcome to Synchro,"}</motion.p>
+      <p className="auth-welcome-name" data-notr aria-label={name}>
+        {Array.from(name).map((ch, i) => (
+          <motion.span key={i} aria-hidden initial={{ opacity: 0, y: 16, filter: "blur(8px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 0.6, delay: 0.42 + i * 0.035, ease: EASE }}>{ch === " " ? " " : ch}</motion.span>
+        ))}
+      </p>
+    </div>
+  );
+}
+
+function AuthStage({ stage, kind, user, fallbackName, error, onRetry }: { stage: Stage; kind: Kind; user: AuthUser | null; fallbackName: string; error: string; onRetry: () => void }) {
+  return (
+    <motion.div key="stage" className="auth-stage" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)", transition: { duration: 0.25 } }}>
+      <Orb stage={stage} />
+      <div className="auth-stage-text">
+        <AnimatePresence mode="wait">
+          {stage === "loading" && <motion.div key="l" exit={{ opacity: 0, filter: "blur(4px)", transition: { duration: 0.2 } }}><StatusLines lines={STATUS[kind]} /></motion.div>}
+          {stage === "success" && <motion.div key="s"><Welcome kind={kind} name={callName(user, fallbackName)} /></motion.div>}
+          {stage === "error" && (
+            <motion.div key="e" className="auth-error" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE }}>
+              <p className="auth-error-msg" role="alert">{error}</p>
+              <GlassButton type="button" onClick={onRetry} size="sm">Try Again</GlassButton>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
+// Ô nhập kính có nhãn nổi phía trên khi đã có nội dung.
+function GlassField({ icon, label, show, children }: { icon: React.ReactNode; label: string; show: boolean; children: React.ReactNode }) {
+  return (
+    <div className="relative w-full">
+      <AnimatePresence>
+        {show && <motion.div initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { duration: DUR * 0.7, ease: EASE } }} exit={{ opacity: 0, transition: { duration: OUT } }} className="absolute -top-6 left-4 z-10"><label className="text-xs text-muted-foreground font-semibold">{label}</label></motion.div>}
+      </AnimatePresence>
+      <div className="glass-input-wrap w-full"><div className="glass-input">
+        <span className="glass-input-text-area"></span>
+        <div className="relative z-10 flex-shrink-0 flex items-center justify-center w-10 pl-2 text-foreground/80">{icon}</div>
+        {children}
+      </div></div>
+    </div>
+  );
+}
+const fieldInput = "relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none pr-3";
+
+// --- MAIN COMPONENT ---
+interface AuthComponentProps {
+  logo?: React.ReactNode;
+  brandName?: string;
+  providers?: Providers;
+  // "profile": người đã đăng nhập (thường qua Google/GitHub) nhưng chưa điền hồ sơ
+  mode?: "auth" | "profile";
+  user?: AuthUser | null;
+  // true: app đã sẵn sàng phía dưới, màn hình này tan dần rồi gọi onLeft
+  leaving?: boolean;
+  onDone?: (user: AuthUser) => void;
+  onLeft?: () => void;
+  onSignOut?: () => void;
+}
+
+export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onDone, onLeft, onSignOut }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [authStep, setAuthStep] = useState("email");
+  const [authStep, setAuthStep] = useState(mode === "profile" ? "profile" : "email");
   const [checking, setChecking] = useState(false);
-  const [modalStatus, setModalStatus] = useState<'closed' | 'loading' | 'error' | 'success'>('closed');
-  const [modalErrorMessage, setModalErrorMessage] = useState('');
-  const confettiRef = useRef<ConfettiRef>(null);
+  const [stage, setStage] = useState<Stage>("form");
+  const [kind, setKind] = useState<Kind>("login");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [doneUser, setDoneUser] = useState<AuthUser | null>(null);
+  // hồ sơ
+  const initialName = user?.profile.fullName || (user && user.name !== user.email.split("@")[0] ? user.name : "");
+  const [fullName, setFullName] = useState(initialName);
+  const [nickname, setNickname] = useState(user?.profile.nickname || lastWord(initialName));
+  const [nickTouched, setNickTouched] = useState(!!user?.profile.nickname);
+  const [dob, setDob] = useState(isoToDob(user?.profile.birthDate ?? null));
+  const [occupation, setOccupation] = useState(user?.profile.occupation || "");
+  const [profileErr, setProfileErr] = useState("");
 
   const isEmailValid = /\S+@\S+\.\S+/.test(email);
   const isPasswordValid = isLogin ? password.length > 0 : password.length >= PW_MIN;
@@ -180,143 +256,131 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const confirmPasswordInputRef = useRef<HTMLInputElement>(null);
+  const fullNameRef = useRef<HTMLInputElement>(null);
 
-  const fireSideCanons = () => {
-    const fire = confettiRef.current?.fire;
-    if (fire) {
-        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
-        const particleCount = 50;
-        fire({ ...defaults, particleCount, origin: { x: 0, y: 1 }, angle: 60 });
-        fire({ ...defaults, particleCount, origin: { x: 1, y: 1 }, angle: 120 });
-    }
-  };
+  const fail = (msg: string) => { setErrorMsg(msg); setStage("error"); };
+  const busy = useRef(false); // chặn gửi trùng khi state chưa kịp cập nhật
 
-  const fail = (msg: string) => { setModalErrorMessage(msg); setModalStatus('error'); };
-
-  // Gọi API; giữ hộp "đang xử lý" ít nhất minMs để các dòng chữ kịp chạy hết rồi mới báo thành công.
-  const run = async (url: string, body: unknown, minMs: number) => {
-    setModalStatus('loading');
+  // Gọi API; giữ trạng thái đang xử lý ít nhất minMs cho mượt, rồi chúc mừng và vào app.
+  const run = async (k: Kind, url: string, body: unknown, minMs: number) => {
+    if (busy.current) return;
+    busy.current = true;
+    setKind(k);
+    setStage("loading");
     const t0 = Date.now();
     try {
-        const { user } = await post<{ user: AuthUser }>(url, body);
-        await wait(minMs - (Date.now() - t0));
-        setModalStatus('success');
-        setTimeout(() => onDone?.(user), 1100);
-    } catch (e) { fail((e as Error).message); }
+      const { user: u } = await post<{ user: AuthUser }>(url, body);
+      await wait(minMs - (Date.now() - t0));
+      // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
+      if (u.needsProfile) { busy.current = false; onDone?.(u); return; }
+      setDoneUser(u);
+      setStage("success");
+      setTimeout(() => onDone?.(u), SUCCESS_HOLD);
+    } catch (e) { busy.current = false; fail((e as Error).message); }
+  };
+
+  const submitProfile = async () => {
+    const name = fullName.replace(/\s+/g, " ").trim();
+    const iso = dobToIso(dob);
+    if (name.length < 2) { setProfileErr("Please enter your full name."); return; }
+    if (!iso) { setProfileErr("Please enter a valid date of birth (DD/MM/YYYY)."); return; }
+    setProfileErr("");
+    const profile = { fullName: name, nickname: nickname.trim() || lastWord(name), birthDate: iso, occupation };
+    if (mode === "profile") await run("profile", "/api/auth/profile", profile, 900);
+    else await run("signup", "/api/auth/signup", { email, password, profile }, STATUS.signup.length * 1150);
   };
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (modalStatus !== 'closed') return;
-    if (authStep === 'password' && isLogin) {
-        if (isPasswordValid) await run("/api/auth/login", { email, password }, 700);
-        return;
+    if (stage !== "form") return;
+    if (authStep === "password" && isLogin) {
+      if (isPasswordValid) await run("login", "/api/auth/login", { email, password }, 900);
+      return;
     }
-    if (authStep !== 'confirmPassword') return;
-    if (password !== confirmPassword) fail("Passwords do not match!");
-    else await run("/api/auth/signup", { email, password }, signupSteps.length * TEXT_LOOP_INTERVAL * 1000);
+    if (authStep === "confirmPassword") {
+      if (password !== confirmPassword) fail("Passwords do not match!");
+      else setAuthStep("profile");
+      return;
+    }
+    if (authStep === "profile") await submitProfile();
   };
 
   const handleProgressStep = async () => {
-    if (authStep === 'email') {
-        if (!isEmailValid || checking) return;
-        setChecking(true);
-        try {
-            const r = await post<{ exists: boolean; hasPassword: boolean; methods: (keyof Providers)[]; reserved: boolean }>("/api/auth/check", { email });
-            if (r.reserved) { fail("This email is reserved for the administrator. Sign in with Google, or create the admin account on the server."); return; }
-            if (r.exists && !r.hasPassword) { fail(`This account signs in with ${r.methods.map((m) => PROVIDER_NAMES[m] ?? m).join(", ")}. Use that button above.`); return; }
-            setIsLogin(r.exists);
-            setAuthStep("password");
-        } catch (e) { fail((e as Error).message); }
-        finally { setChecking(false); }
-    } else if (authStep === 'password') {
-        if (isPasswordValid && !isLogin) setAuthStep("confirmPassword");
+    if (authStep === "email") {
+      if (!isEmailValid || checking) return;
+      setChecking(true);
+      try {
+        const r = await post<{ exists: boolean; hasPassword: boolean; methods: (keyof Providers)[]; reserved: boolean }>("/api/auth/check", { email });
+        if (r.reserved) { fail("This email is reserved for the administrator. Sign in with Google, or create the admin account on the server."); return; }
+        if (r.exists && !r.hasPassword) { fail(`This account signs in with ${r.methods.map((m) => PROVIDER_NAMES[m] ?? m).join(", ")}. Use that button above.`); return; }
+        setIsLogin(r.exists);
+        setAuthStep("password");
+      } catch (e) { fail((e as Error).message); }
+      finally { setChecking(false); }
+    } else if (authStep === "password") {
+      if (isPasswordValid && !isLogin) setAuthStep("confirmPassword");
     }
   };
 
   const social = (p: keyof Providers) => {
-    if (modalStatus !== 'closed') return;
+    if (stage !== "form") return;
     if (!providers?.[p]) { fail(`${PROVIDER_NAMES[p]} sign-in isn't set up on the server yet.`); return; }
     window.location.href = `/api/auth/oauth/${p}`;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        handleProgressStep();
-    }
+    if (e.key === "Enter") { e.preventDefault(); handleProgressStep(); }
   };
 
   const handleGoBack = () => {
-    if (authStep === 'confirmPassword') {
-        setAuthStep('password');
-        setConfirmPassword('');
+    if (authStep === "profile") setAuthStep("confirmPassword");
+    else if (authStep === "confirmPassword") { setAuthStep("password"); setConfirmPassword(""); }
+    else if (authStep === "password") { setAuthStep("email"); setPassword(""); }
+  };
+
+  // Trang cha đổi mode: vào bước hồ sơ (đã đăng nhập nhưng thiếu hồ sơ) hoặc quay về từ đầu (đăng xuất).
+  const prevMode = useRef(mode);
+  useEffect(() => {
+    const prev = prevMode.current;
+    prevMode.current = mode;
+    if (mode === "profile" && prev !== "profile" && user) {
+      const n = user.profile.fullName || (user.name !== user.email.split("@")[0] ? user.name : "");
+      setFullName(n); setNickname(user.profile.nickname || lastWord(n)); setNickTouched(!!user.profile.nickname);
+      setDob(isoToDob(user.profile.birthDate)); setOccupation(user.profile.occupation || "");
+      setAuthStep("profile"); setStage("form");
+    } else if (mode === "auth" && prev === "profile" && !user) {
+      setAuthStep("email"); setPassword(""); setConfirmPassword(""); setStage("form");
     }
-    else if (authStep === 'password') { setAuthStep('email'); setPassword(''); }
-  };
+  }, [mode, user]);
 
-  const closeModal = () => {
-    setModalStatus('closed');
-    setModalErrorMessage('');
-  };
-
-// Lỗi từ đăng nhập Google/GitHub/Apple được máy chủ trả về qua ?auth_error=
-useEffect(() => {
+  // Lỗi từ đăng nhập Google/GitHub/Apple được máy chủ trả về qua ?auth_error=
+  useEffect(() => {
     const u = new URL(window.location.href);
     const err = u.searchParams.get("auth_error");
     if (!err) return;
     fail(err);
     u.searchParams.delete("auth_error");
     window.history.replaceState(null, "", u.pathname + u.search + u.hash);
-}, []);
+  }, []);
 
-useEffect(() => {
+  useEffect(() => {
+    if (stage !== "form") return;
     const ms = Math.round((OUT + 2 * STEP + DUR * 0.6) * 1000);
-    if (authStep === 'password') { const t = setTimeout(() => passwordInputRef.current?.focus(), ms); return () => clearTimeout(t); }
-    if (authStep === 'confirmPassword') { const t = setTimeout(() => confirmPasswordInputRef.current?.focus(), ms); return () => clearTimeout(t); }
-}, [authStep]);
+    const el = authStep === "password" ? passwordInputRef.current : authStep === "confirmPassword" ? confirmPasswordInputRef.current : authStep === "profile" && !fullName ? fullNameRef.current : null;
+    if (!el) return;
+    const t = setTimeout(() => el.focus(), ms);
+    return () => clearTimeout(t);
+  }, [authStep, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-useEffect(() => {
-    if (modalStatus === 'success') {
-        fireSideCanons();
-    }
-}, [modalStatus]);
-
-  const Modal = () => (
-    <AnimatePresence>
-        {modalStatus !== 'closed' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-card/90 border border-border shadow-2xl rounded-2xl p-8 w-full max-w-sm flex flex-col items-center gap-4 mx-2">
-                    {(modalStatus === 'error' || modalStatus === 'success') && <button onClick={closeModal} className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-foreground transition-colors"><X className="w-5 h-5" /></button>}
-                    {modalStatus === 'error' && <>
-                        <AlertCircle className="w-12 h-12 text-destructive" />
-                        <p className="text-lg font-medium text-foreground text-center">{modalErrorMessage}</p>
-                        <GlassButton onClick={closeModal} size="sm" className="mt-4">Try Again</GlassButton>
-                    </>}
-                    {modalStatus === 'loading' &&
-                        <TextLoop interval={TEXT_LOOP_INTERVAL} stopOnEnd={true}>
-                            {(isLogin ? loginSteps : signupSteps).map((message, i) =>
-                                <div key={i} className="flex flex-col items-center gap-4">
-                                    <Loader className="w-12 h-12 text-primary animate-spin" />
-                                    <p className="text-lg font-medium text-foreground">{message}</p>
-                                </div>
-                            )}
-                        </TextLoop>
-                    }
-                    {modalStatus === 'success' &&
-                        <div className="flex flex-col items-center gap-4">
-                            <PartyPopper className="w-12 h-12 text-green-500" />
-                            <p className="text-lg font-medium text-foreground">Welcome to Synchro!</p>
-                        </div>
-                    }
-                </motion.div>
-            </motion.div>
-        )}
-    </AnimatePresence>
-  );
+  const titles: Record<string, [string, string]> = {
+    email: ["Get started", "Continue with"],
+    password: [isLogin ? "Welcome back" : "Create your password", isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."],
+    confirmPassword: ["One last step", "Confirm your password to continue"],
+    profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
+  };
 
   return (
-    <div className="auth-root bg-background min-h-screen w-screen flex flex-col fixed inset-0 z-[300]">
+    <motion.div className="auth-root bg-background min-h-screen w-screen flex flex-col fixed inset-0 z-[300]" initial={false} animate={leaving ? { opacity: 0, scale: 1.04, filter: "blur(14px)" } : { opacity: 1, scale: 1, filter: "blur(0px)" }} transition={{ duration: 0.75, ease: EASE }} onAnimationComplete={() => { if (leaving) onLeft?.(); }} style={{ pointerEvents: leaving ? "none" : undefined }}>
         <style>{`
             input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none !important; } input[type="password"]::-webkit-credentials-auto-fill-button, input[type="password"]::-webkit-strong-password-auto-fill-button { display: none !important; } input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active { -webkit-box-shadow: 0 0 0 30px transparent inset !important; -webkit-text-fill-color: var(--foreground) !important; background-color: transparent !important; background-clip: content-box !important; transition: background-color 5000s ease-in-out 0s !important; color: var(--foreground) !important; caret-color: var(--foreground) !important; } input:autofill { background-color: transparent !important; background-clip: content-box !important; -webkit-text-fill-color: var(--foreground) !important; color: var(--foreground) !important; } input:-internal-autofill-selected { background-color: transparent !important; background-image: none !important; color: var(--foreground) !important; -webkit-text-fill-color: var(--foreground) !important; } input:-webkit-autofill::first-line { color: var(--foreground) !important; -webkit-text-fill-color: var(--foreground) !important; }
             @property --angle-1 { syntax: "<angle>"; inherits: false; initial-value: -75deg; } @property --angle-2 { syntax: "<angle>"; inherits: false; initial-value: -45deg; }
@@ -325,9 +389,6 @@ useEffect(() => {
             .glass-input-wrap { position: relative; z-index: 2; transform-style: preserve-3d; border-radius: 9999px; } .glass-input { display: flex; position: relative; width: 100%; align-items: center; gap: 0.5rem; border-radius: 9999px; padding: 0.25rem; -webkit-tap-highlight-color: transparent; backdrop-filter: blur(clamp(1px, 0.125em, 4px)); transition: all 400ms cubic-bezier(0.25, 1, 0.5, 1); background: linear-gradient(-75deg, oklch(from var(--background) l c h / 5%), oklch(from var(--background) l c h / 20%), oklch(from var(--background) l c h / 5%)); box-shadow: inset 0 0.125em 0.125em oklch(from var(--foreground) l c h / 5%), inset 0 -0.125em 0.125em oklch(from var(--background) l c h / 50%), 0 0.25em 0.125em -0.125em oklch(from var(--foreground) l c h / 20%), 0 0 0.1em 0.25em inset oklch(from var(--background) l c h / 20%), 0 0 0 0 oklch(from var(--background) l c h); } .glass-input-wrap:focus-within .glass-input { backdrop-filter: blur(0.01em); box-shadow: inset 0 0.125em 0.125em oklch(from var(--foreground) l c h / 5%), inset 0 -0.125em 0.125em oklch(from var(--background) l c h / 50%), 0 0.15em 0.05em -0.1em oklch(from var(--foreground) l c h / 25%), 0 0 0.05em 0.1em inset oklch(from var(--background) l c h / 50%), 0 0 0 0 oklch(from var(--background) l c h); } .glass-input::after { content: ""; position: absolute; z-index: 1; inset: 0; border-radius: 9999px; width: calc(100% + clamp(1px, 0.0625em, 4px)); height: calc(100% + clamp(1px, 0.0625em, 4px)); top: calc(0% - clamp(1px, 0.0625em, 4px) / 2); left: calc(0% - clamp(1px, 0.0625em, 4px) / 2); padding: clamp(1px, 0.0625em, 4px); box-sizing: border-box; background: conic-gradient(from var(--angle-1) at 50% 50%, oklch(from var(--foreground) l c h / 50%) 0%, transparent 5% 40%, oklch(from var(--foreground) l c h / 50%) 50%, transparent 60% 95%, oklch(from var(--foreground) l c h / 50%) 100%), linear-gradient(180deg, oklch(from var(--background) l c h / 50%), oklch(from var(--background) l c h / 50%)); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; transition: all 400ms cubic-bezier(0.25, 1, 0.5, 1), --angle-1 500ms ease; box-shadow: inset 0 0 0 calc(clamp(1px, 0.0625em, 4px) / 2) oklch(from var(--background) l c h / 50%); pointer-events: none; } .glass-input-wrap:focus-within .glass-input::after { --angle-1: -125deg; } .glass-input-text-area { position: absolute; inset: 0; border-radius: 9999px; pointer-events: none; } .glass-input-text-area::after { content: ""; display: block; position: absolute; width: calc(100% - clamp(1px, 0.0625em, 4px)); height: calc(100% - clamp(1px, 0.0625em, 4px)); top: calc(0% + clamp(1px, 0.0625em, 4px) / 2); left: calc(0% + clamp(1px, 0.0625em, 4px) / 2); box-sizing: border-box; border-radius: 9999px; overflow: clip; background: linear-gradient(var(--angle-2), transparent 0%, oklch(from var(--background) l c h / 50%) 40% 50%, transparent 55%); z-index: 3; mix-blend-mode: screen; pointer-events: none; background-size: 200% 200%; background-position: 0% 50%; transition: background-position calc(400ms * 1.25) cubic-bezier(0.25, 1, 0.5, 1), --angle-2 calc(400ms * 1.25) cubic-bezier(0.25, 1, 0.5, 1); } .glass-input-wrap:focus-within .glass-input-text-area::after { background-position: 25% 50%; }
         `}</style>
 
-        <Confetti ref={confettiRef} manualstart className="fixed top-0 left-0 w-full h-full pointer-events-none z-[999]" />
-        <Modal />
-
         <div className={cn( "fixed top-4 left-4 z-20 flex items-center gap-2", "md:left-1/2 md:-translate-x-1/2" )}>
             {logo}
             <h1 className="logo text-foreground" style={{ fontWeight: 400 }}>{brandName}</h1>
@@ -335,11 +396,13 @@ useEffect(() => {
 
         <div className={cn("flex w-full flex-1 h-full items-center justify-center bg-card", "relative overflow-hidden")}>
             <div className="absolute inset-0 z-0"><GradientBackground /></div>
-            <fieldset disabled={modalStatus !== 'closed'} className="relative z-10 flex flex-col items-center gap-8 w-[280px] mx-auto p-4">
+            <AnimatePresence mode="wait">
+            {stage === "form" ? (
+            <motion.fieldset key="form" exit={{ opacity: 0, scale: 0.96, filter: "blur(10px)", transition: { duration: 0.35, ease: EASE } }} className="relative z-10 flex flex-col items-center gap-8 w-[280px] mx-auto p-4">
                 <AnimatePresence mode="wait" initial={true}>
                     {authStep === "email" && <motion.div key="email-content" exit={stepExit} className="w-full flex flex-col items-center gap-4">
-                        <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground whitespace-nowrap">Get started</p></div></BlurFade>
-                        <BlurFade delay={BASE + STEP}><p className="text-sm font-medium text-muted-foreground">Continue with</p></BlurFade>
+                        <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground whitespace-nowrap">{titles.email[0]}</p></div></BlurFade>
+                        <BlurFade delay={BASE + STEP}><p className="text-sm font-medium text-muted-foreground">{titles.email[1]}</p></BlurFade>
                         <BlurFade delay={BASE + STEP * 2}><div className="flex items-center justify-center gap-3 w-full">
                             <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>
                             <GlassButton type="button" onClick={() => social("github")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GitHubIcon /><span className="font-semibold text-foreground">GitHub</span></GlassButton>
@@ -347,29 +410,26 @@ useEffect(() => {
                         </div></BlurFade>
                         <BlurFade delay={BASE + STEP * 3} className="w-[300px]"><div className="flex items-center w-full gap-2 py-2"><hr className="w-full border-border"/><span className="text-xs font-semibold text-muted-foreground">OR</span><hr className="w-full border-border"/></div></BlurFade>
                     </motion.div>}
-                    {authStep === "password" && <motion.div key="password-title" exit={stepExit} className="w-full flex flex-col items-center text-center gap-4">
-                        <BlurFade className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl tracking-tight text-foreground whitespace-nowrap">{isLogin ? "Welcome back" : "Create your password"}</p></div></BlurFade>
-                        <BlurFade delay={STEP}><p className="text-sm font-medium text-muted-foreground">{isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."}</p></BlurFade>
-                    </motion.div>}
-                     {authStep === "confirmPassword" && <motion.div key="confirm-title" exit={stepExit} className="w-full flex flex-col items-center text-center gap-4">
-                         <BlurFade className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl tracking-tight text-foreground whitespace-nowrap">One last step</p></div></BlurFade>
-                         <BlurFade delay={STEP}><p className="text-sm font-medium text-muted-foreground">Confirm your password to continue</p></BlurFade>
+                    {authStep !== "email" && <motion.div key={`${authStep}-title`} exit={stepExit} className="w-full flex flex-col items-center text-center gap-4">
+                        <BlurFade className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl tracking-tight text-foreground whitespace-nowrap">{titles[authStep][0]}</p></div></BlurFade>
+                        <BlurFade delay={STEP}><p className="text-sm font-medium text-muted-foreground">{titles[authStep][1]}</p></BlurFade>
+                        {mode === "profile" && user && <BlurFade delay={STEP * 2}><p className="auth-signed-as"><span>Signed in as</span> <b data-notr>{user.email}</b></p></BlurFade>}
                     </motion.div>}
                 </AnimatePresence>
 
                 <motion.form layout transition={{ layout: { duration: DUR, ease: EASE } }} onSubmit={handleFinalSubmit} className="w-[300px] space-y-6">
                      <AnimatePresence>
-                        {authStep !== 'confirmPassword' && <motion.div key="email-password-fields" exit={stepExit} className="w-full space-y-6">
-                            <BlurFade delay={authStep === 'email' ? BASE + STEP * 4 : 0} className="w-full">
+                        {(authStep === "email" || authStep === "password") && <motion.div key="email-password-fields" exit={stepExit} className="w-full space-y-6">
+                            <BlurFade delay={authStep === "email" ? BASE + STEP * 4 : 0} className="w-full">
                                 <div className="relative w-full">
                                     <AnimatePresence>
                                         {authStep === "password" && <motion.div initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { delay: OUT + STEP * 2, duration: DUR, ease: EASE } }} exit={{ opacity: 0, transition: { duration: OUT } }} className="absolute -top-6 left-4 z-10"><label className="text-xs text-muted-foreground font-semibold">Email</label></motion.div>}
                                     </AnimatePresence>
                                     <div className="glass-input-wrap w-full"><div className="glass-input">
                                         <span className="glass-input-text-area"></span>
-                                        <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === 'email' ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
-                                        <input type="email" autoComplete="email" readOnly={authStep !== 'email'} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === 'email' ? "pr-2" : "pr-0")} />
-                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === 'email' ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" contentClassName="text-foreground/80 hover:text-foreground">{checking ? <Loader className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
+                                        <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
+                                        <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
+                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" contentClassName="text-foreground/80 hover:text-foreground">{checking ? <span className="auth-mini-spin" aria-hidden /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
                                     </div></div>
                                 </div>
                             </BlurFade>
@@ -394,7 +454,7 @@ useEffect(() => {
                         </motion.div>}
                     </AnimatePresence>
                     <AnimatePresence>
-                        {authStep === 'confirmPassword' && <BlurFade key="confirm-password-field" delay={OUT + STEP * 2} className="w-full">
+                        {authStep === "confirmPassword" && <BlurFade key="confirm-password-field" delay={OUT + STEP * 2} className="w-full">
                             <div className="relative w-full">
                                 <AnimatePresence>
                                     {confirmPassword.length > 0 && <motion.div initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { duration: DUR * 0.7, ease: EASE } }} exit={{ opacity: 0, transition: { duration: OUT } }} className="absolute -top-6 left-4 z-10"><label className="text-xs text-muted-foreground font-semibold">Confirm Password</label></motion.div>}
@@ -405,15 +465,51 @@ useEffect(() => {
                                         {isConfirmPasswordValid ? <button type="button" aria-label="Toggle confirm password visibility" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="text-foreground/80 hover:text-foreground transition-colors p-2 rounded-full">{showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button> : <Lock className="h-5 w-5 text-foreground/80 flex-shrink-0" />}
                                     </div>
                                     <input ref={confirmPasswordInputRef} type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none" />
-                                    <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isConfirmPasswordValid ? "w-10 pr-1" : "w-0" )}><GlassButton type="submit" size="icon" aria-label="Finish sign-up" contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
+                                    <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isConfirmPasswordValid ? "w-10 pr-1" : "w-0" )}><GlassButton type="submit" size="icon" aria-label="Continue" contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                 </div></div>
                             </div>
                             <BlurFade delay={OUT + STEP * 3}><button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button></BlurFade>
                         </BlurFade>}
                     </AnimatePresence>
+                    <AnimatePresence>
+                        {authStep === "profile" && <motion.div key="profile-fields" exit={stepExit} className="w-full space-y-7 pt-1">
+                            <BlurFade delay={OUT + STEP * 2} className="w-full">
+                                <GlassField icon={<User className="h-5 w-5" />} label="Full name" show={fullName.length > 0}>
+                                    <input ref={fullNameRef} autoComplete="name" placeholder="Full name" value={fullName} maxLength={80} onChange={(e) => { const v = e.target.value; setFullName(v); if (!nickTouched) setNickname(lastWord(v)); }} className={fieldInput} />
+                                </GlassField>
+                            </BlurFade>
+                            <BlurFade delay={OUT + STEP * 3} className="w-full">
+                                <GlassField icon={<Smile className="h-5 w-5" />} label="What should Synchro call you?" show={nickname.length > 0}>
+                                    <input autoComplete="nickname" placeholder="What should Synchro call you?" value={nickname} maxLength={40} onChange={(e) => { setNickname(e.target.value); setNickTouched(true); }} className={fieldInput} />
+                                </GlassField>
+                            </BlurFade>
+                            <BlurFade delay={OUT + STEP * 4} className="w-full">
+                                <GlassField icon={<CalendarDays className="h-5 w-5" />} label="Date of birth" show={dob.length > 0}>
+                                    <input inputMode="numeric" autoComplete="bday" placeholder="Date of birth (DD/MM/YYYY)" value={dob} onChange={(e) => setDob(maskDob(e.target.value))} className={fieldInput} />
+                                </GlassField>
+                            </BlurFade>
+                            <BlurFade delay={OUT + STEP * 5} className="w-full">
+                                <p className="auth-chips-label">What best describes your work? <span>(optional)</span></p>
+                                <div className="auth-chips">
+                                    {OCCUPATIONS.map((o) => <button key={o} type="button" className={cn("auth-chip", occupation === o && "on")} aria-pressed={occupation === o} onClick={() => setOccupation(occupation === o ? "" : o)}>{o}</button>)}
+                                </div>
+                            </BlurFade>
+                            <BlurFade delay={OUT + STEP * 6} className="w-full">
+                                <AnimatePresence>{profileErr && <motion.p key="perr" className="auth-field-err" role="alert" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>{profileErr}</motion.p>}</AnimatePresence>
+                                <GlassButton type="submit" className="w-full [&>button]:w-full" contentClassName="flex items-center justify-center gap-2 w-full"><span className="font-semibold text-foreground">{mode === "profile" ? "Continue" : "Create account"}</span><ArrowRight className="w-4 h-4" /></GlassButton>
+                                {mode === "profile"
+                                  ? <button type="button" onClick={onSignOut} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Use a different account</button>
+                                  : <button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button>}
+                            </BlurFade>
+                        </motion.div>}
+                    </AnimatePresence>
                 </motion.form>
-            </fieldset>
+            </motion.fieldset>
+            ) : (
+              <AuthStage key="stage" stage={stage} kind={kind} user={doneUser} fallbackName={email.split("@")[0]} error={errorMsg} onRetry={() => setStage("form")} />
+            )}
+            </AnimatePresence>
         </div>
-    </div>
+    </motion.div>
   );
 };
