@@ -1,10 +1,12 @@
 import { processFile } from "../../fileproc";
 import { FileError } from "../../fileproc/types";
+import { authGate } from "../../authstore";
 
 export const runtime = "nodejs";
 
 // POST multipart (field "file") -> { id, name, kind, tokens, large, preview, images }
 export async function POST(req: Request) {
+  const denied = authGate(req); if (denied) return denied;
   const form = await req.formData().catch(() => null);
   const f = form?.get("file");
   if (!(f instanceof File)) return Response.json({ error: "Thiếu tệp" }, { status: 400 });

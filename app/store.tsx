@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import type { AuthUser } from "./auth";
 
 export type Msg = { role: "user" | "ai"; text: string; done?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[] };
 export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean };
@@ -53,9 +54,13 @@ export type AppApi = {
   exportData: () => void;
   wipe: (what: "all" | "chats") => void;
   close: () => void;
+  me: AuthUser | null;
+  setMe: (u: AuthUser | null) => void;
+  logout: () => void;
 };
 export const AppCtx = createContext<AppApi>({
   say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, chats: [], unshare: () => {}, exportData: () => {}, wipe: () => {}, close: () => {},
+  me: null, setMe: () => {}, logout: () => {},
 });
 export const useApp = () => useContext(AppCtx);
 

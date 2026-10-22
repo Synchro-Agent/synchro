@@ -10,7 +10,7 @@ import { Fade, Menu, Thinking } from "./ui";
 import { Directory } from "./settings";
 import { ShaderMetal } from "./shader-metal";
 import { CodeView } from "./codeview";
-import { AuthComponent } from "./auth";
+import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
 import { callLLM, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
@@ -358,7 +358,8 @@ function Toast({ text }: { text: string }) {
 }
 
 export default function Home() {
-  const [name] = usePref("name", "Lâm Tùng");
+  const [name, setName] = usePref("name", "Lâm Tùng");
+  const [acct, setAcct] = usePref("acct", "");
   const [call] = usePref("call", "Lâm Tùng");
   const [ins] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
@@ -426,8 +427,12 @@ export default function Home() {
   const [copied, setCopied] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [session, setSession] = useState<string | null | undefined>(undefined);
-  useEffect(() => { setSession(localStorage.getItem("session")); }, []);
+  const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
+  const [providers, setProviders] = useState<Providers>();
+  useEffect(() => {
+    localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); setMe(j.user); }).catch(() => setMe(null));
+  }, []);
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -672,6 +677,12 @@ export default function Home() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     say("Đã xuất dữ liệu");
   };
+  // Xóa phiên trên máy chủ và dữ liệu chat cục bộ của trình duyệt này.
+  const logout = () => {
+    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    ["chats", "projects", "model", "banner"].forEach((k) => localStorage.removeItem(k));
+    setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
+  };
   const api = {
     say, chats, exportData,
     upgrade: () => setModal("upgrade"),
@@ -681,10 +692,11 @@ export default function Home() {
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
     unshare: (id: number) => { setChats((cs) => cs.map((c) => (c.id === id ? { ...c, shared: false } : c))); say("Đã dừng chia sẻ"); },
     wipe: () => { ["chats", "projects", "model", "banner"].forEach((k) => localStorage.removeItem(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
+    me: me ?? null, setMe, logout,
   };
 
-  if (session === undefined) return <div style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />;
-  if (!session) return <AuthComponent brandName="Synchro" logo={null} onDone={(em) => { localStorage.setItem("session", em); setSession(em); }} />;
+  if (me === undefined) return <div style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />;
+  if (!me) return <AuthComponent brandName="Synchro" logo={null} providers={providers} onDone={(u) => { if (acct !== u.email) { setName(u.name); setAcct(u.email); } setMe(u); }} />;
 
   return (
     <AppCtx.Provider value={api}>
@@ -811,7 +823,7 @@ export default function Home() {
               <Avatar name={name} /><span>{name} <span className="muted">· Free</span></span><span style={{ marginLeft: "auto" }} className="muted"><I.Chevron size={14} /></span>
             </button>
               <Menu open={!!(userMenu)} style={{ bottom: 44, left: 0, width: 300 }} className="usermenu">
-                <div className="muted" style={{ fontSize: 13, padding: "6px 10px" }}>{session}</div>
+                <div className="muted" style={{ fontSize: 13, padding: "6px 10px" }}>{me.email}</div>
                 <button className="menu-item" onClick={() => { setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
                 <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
                 <hr />
@@ -965,7 +977,7 @@ export default function Home() {
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => [...o, f.name]); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? (bản demo: dữ liệu cục bộ sẽ được xóa)" ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { ["chats", "projects", "model", "banner", "session"].forEach((k) => localStorage.removeItem(k)); setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setSession(null); }} /></Fade>
+      <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Các đoạn chat lưu trên trình duyệt này sẽ bị xóa." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
       <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Bạn có chắc chắn muốn xóa đoạn chat này không?" ok="Xóa" onCancel={() => setDelId(null)} onOk={() => { if (delId !== null) removeChat(delId); setDelId(null); say("Đã xóa đoạn chat"); }} /></Fade>
       <Fade show={!!(delProj !== null)}><Confirm title="Xóa dự án?" text="Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại." ok="Xóa" onCancel={() => setDelProj(null)} onOk={() => { setProjects((ps) => ps.filter((x) => x.id !== delProj)); setChats((cs) => cs.map((c) => (c.project === delProj ? { ...c, project: undefined } : c))); setDelProj(null); say("Đã xóa dự án"); }} /></Fade>
       <Fade show={!!(modal === "proj")}><ProjectModal onClose={() => setModal(null)} onCreate={(n, d) => { const id = Date.now(); setProjects([{ id, name: n, desc: d, upd: id, pinned: true }, ...projects]); setModal(null); setCurProj(id); setView("project"); say("Đã tạo dự án"); }} /></Fade>

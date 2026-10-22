@@ -7,6 +7,8 @@ import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { MODES, PRESETS } from "./codeview";
 import { SkillsPanel, SKILLS_UPLOAD } from "./skillsui";
+import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
+import type { AuthUser } from "./auth";
 
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -105,20 +107,36 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
   );
 }
 
+type Sess = { id: string; current: boolean; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
+
 function Account() {
   const app = useApp();
+  const me = app.me;
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [call, setCall] = usePref("call", "Lâm Tùng");
   const [work, setWork] = usePref("work", "Data science");
   const [saved0, setSaved0] = usePref("ins", "");
   const [ins, setIns] = useState(saved0);
   const [saved, setSaved] = useState("");
-  const [menu, setMenu] = useState<number | null>(null);
-  const [sessions, setSessions] = usePref("sessions", [
-    { d: "Synchro Desktop (Mac O…", cur: false, c: "Oct 17, 2026, 11:07 AM", u: "Oct 17, 2026, 5:13 PM" },
-    { d: "Chrome (Ma…", cur: true, c: "Oct 17, 2026, 11:01 AM", u: "Oct 17, 2026, 9:10 PM" },
-  ]);
-  const ref = useAway(() => setMenu(null));
+  const [sessions, setSessions] = useState<Sess[] | null>(null);
+  const [pw, setPw] = useState<null | { cur: string; next: string; again: string }>(null);
+  const [del, setDel] = useState<null | string>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ sessions: Sess[] }>("GET", "/api/auth/sessions").then((r) => setSessions(r.sessions)).catch(() => setSessions([])); }, []);
+  const endSessions = (body: object, ok: string) => api<{ sessions: Sess[] }>("DELETE", "/api/auth/sessions", body).then((r) => { setSessions(r.sessions); app.say(ok); }).catch((e) => app.say(e.message));
+  const savePw = async () => {
+    if (!pw || !me) return;
+    if (pw.next !== pw.again) { app.say("Passwords do not match!"); return; }
+    setBusy(true);
+    try { const r = await api<{ user: AuthUser }>("POST", "/api/auth/password", { current: pw.cur, password: pw.next }); app.setMe(r.user); setPw(null); app.say("Password saved"); }
+    catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
+  };
+  const deleteAccount = async () => {
+    setBusy(true);
+    try { await api("DELETE", "/api/auth/account", { password: del }); setDel(null); app.wipe("all"); resetPrefs(); app.logout(); }
+    catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
+  };
+  const pwOk = !!pw && pw.next.length >= 8 && pw.again.length >= 8 && (!me?.hasPassword || pw.cur.length > 0);
   return (
     <>
       <H first>Profile</H>
@@ -136,28 +154,50 @@ function Account() {
         </div>
       )}
       <H>Account</H>
-      <Row t="Log out of all devices" top><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => { setSessions((s) => s.filter((x) => x.cur)); app.say("Signed out of other devices"); })}>Log out</button></Row>
-      <Row t="Delete your account"><button className="btn" onClick={() => app.confirm("Delete your account?", "All chats, projects and settings stored in this demo will be permanently erased.", "Delete account", () => { app.wipe("all"); resetPrefs(); app.say("Account data deleted"); })}>Delete account</button></Row>
-      <Row t="Organization ID"><span className="mono">7048e36f-8c98-4b29-a05f-6b6a8cb1c388</span></Row>
+      <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span></Row>
+      <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."}><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
+      <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
+      <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>
+      <Row t="Account ID"><span className="mono" data-notr>{me?.id}</span></Row>
       <H>Trusted devices</H>
       <p className="d" style={{ marginTop: -6 }}>Devices that can control your local machine through remote sessions.</p>
       <p className="d" style={{ margin: "16px 0 0" }}>No trusted devices.</p>
       <H>Active sessions</H>
-      <table className="tbl" ref={ref as never}>
+      <table className="tbl">
         <thead><tr><th>Device</th><th>Location</th><th>Created</th><th>Updated</th><th /></tr></thead>
         <tbody>
-          {sessions.map((s, i) => (
-            <tr key={i}>
-              <td>{s.d} {s.cur && <span className="new-tag">Current</span>}</td><td>Hanoi, Hanoi, VN</td><td>{s.c}</td><td>{s.u}</td>
-              <td style={{ position: "relative", width: 30 }}>
-                <button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setMenu(menu === i ? null : i)}>⋮</button>
-                {menu === i && <button className="btn danger" style={{ position: "absolute", right: 0, top: 26, zIndex: 5 }} onClick={() => { setSessions(sessions.filter((_, j) => j !== i)); setMenu(null); }}>Terminate</button>}
-              </td>
+          {(sessions ?? []).map((s) => (
+            <tr key={s.id}>
+              <td><span data-notr>{s.device}</span> {s.current && <span className="new-tag">Current</span>}</td><td data-notr>{s.ip ?? "—"}</td><td data-notr>{fmtDate(s.createdAt)}</td><td data-notr>{fmtDate(s.lastSeen)}</td>
+              <td style={{ width: 80, textAlign: "right" }}>{!s.current && <button className="btn" style={{ height: 26 }} onClick={() => endSessions({ id: s.id }, "Session ended")}>Terminate</button>}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <Toasts msg={saved} />
+      <Fade show={!!pw}>
+        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
+          <div className="modal sm" style={{ width: 400 }}>
+            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
+            <h2 style={{ fontSize: 16 }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
+            {me?.hasPassword && <input className="field" type="password" autoComplete="current-password" placeholder="Current password" value={pw?.cur ?? ""} onChange={(e) => setPw((o) => o && { ...o, cur: e.target.value })} />}
+            <input className="field" type="password" autoComplete="new-password" placeholder="New password (at least 8 characters)" value={pw?.next ?? ""} onChange={(e) => setPw((o) => o && { ...o, next: e.target.value })} />
+            <input className="field" type="password" autoComplete="new-password" placeholder="Confirm new password" value={pw?.again ?? ""} onChange={(e) => setPw((o) => o && { ...o, again: e.target.value })} onKeyDown={(e) => e.key === "Enter" && pwOk && savePw()} />
+            <div className="modal-foot"><button className="btn" onClick={() => setPw(null)}>Cancel</button><button className="btn dark" disabled={!pwOk || busy} style={!pwOk ? { opacity: 0.4 } : undefined} onClick={savePw}>Save</button></div>
+          </div>
+        </div>
+      </Fade>
+      <Fade show={del !== null}>
+        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
+          <div className="modal sm" style={{ width: 400 }}>
+            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
+            <h2 style={{ fontSize: 16 }}>Delete your account?</h2>
+            <p className="d" style={{ margin: "0 0 12px" }}>Your account, sign-in methods and sessions will be permanently removed, and chats stored in this browser will be erased. This can&apos;t be undone.</p>
+            {me?.hasPassword && <input className="field" type="password" autoFocus autoComplete="current-password" placeholder="Enter your password to confirm" value={del ?? ""} onChange={(e) => setDel(e.target.value)} />}
+            <div className="modal-foot"><button className="btn" onClick={() => setDel(null)}>Cancel</button><button className="btn danger" disabled={busy || (!!me?.hasPassword && !del)} onClick={deleteAccount}>Delete account</button></div>
+          </div>
+        </div>
+      </Fade>
     </>
   );
 }
@@ -586,6 +626,7 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
 export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme: string; setTheme: (t: string) => void; go: (t: string) => void }) {
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
+    case "Administrator": return <AdminPanel Toggle={Toggle} />;
     case "Account": return <Account />;
     case "Privacy": return <Privacy go={go} />;
     case "Billing": return <Billing />;

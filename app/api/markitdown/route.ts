@@ -4,12 +4,14 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { authGate } from "../../authstore";
 
 export const runtime = "nodejs";
 const run = promisify(execFile);
 const MAX = 50 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  const denied = authGate(req); if (denied) return denied;
   const bin = process.env.MARKITDOWN_BIN || path.join(process.cwd(), ".mkvenv", "bin", "markitdown");
   if (!existsSync(bin) && !process.env.MARKITDOWN_BIN)
     return Response.json({ error: "Chưa cài MarkItDown. Chạy: python3 -m venv .mkvenv && .mkvenv/bin/pip install 'markitdown[all]'" }, { status: 501 });

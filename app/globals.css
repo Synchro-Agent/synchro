@@ -1162,3 +1162,51 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .auth-root button{font-family:inherit}
 .auth-root .glass-button,.auth-root .glass-input{backdrop-filter:none}
 .auth-root .glass-button-text::after{mix-blend-mode:normal;opacity:.5}
+
+/* ---- Quản trị viên ---- */
+.adm-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:20px}
+.adm-badge{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--hover);color:var(--text);box-shadow:inset 0 0 0 .5px var(--border-strong)}
+.adm-owner{display:inline-flex;align-items:center;gap:6px;max-width:100%;margin-top:10px;font-size:12px;color:var(--text-2);padding:3px 10px 3px 9px;border-radius:999px;background:var(--hover);white-space:nowrap}
+.adm-owner .em{color:var(--text-3);overflow:hidden;text-overflow:ellipsis}
+.adm-owner i{width:6px;height:6px;border-radius:50%;background:#2f9e5b;box-shadow:0 0 0 3px rgba(47,158,91,.18)}
+.adm-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:6px}
+.adm-stat{border:.5px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--card)}
+.adm-stat b{display:block;font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
+.adm-stat span{font-size:12px;color:var(--text-3)}
+.adm-stat.warn b{color:#c6422f}
+.adm-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 6px}
+.adm-bar .s-search{flex:1 1 180px;margin:0;height:30px}
+.adm-bar .group{flex:none}
+.adm-bar .icon-btn{margin-left:auto}
+.adm-tbl{table-layout:fixed}
+.adm-tbl td{vertical-align:middle;overflow:hidden}
+.adm-id{font-family:var(--font-mono,ui-monospace,monospace);font-size:11px}
+.adm-tbl .adm-row{cursor:pointer}
+.adm-tbl .adm-row td{transition:background .12s}
+.adm-tbl .adm-row:hover td,.adm-tbl .adm-row.on td{background:var(--hover)}
+.adm-tbl .adm-row td:first-child{padding-left:8px;border-radius:8px 0 0 8px}
+.adm-tbl th:first-child{padding-left:8px}
+.adm-tbl .adm-row td:last-child{border-radius:0 8px 8px 0}
+.adm-user{display:flex;align-items:center;gap:10px;min-width:0}
+.adm-user .nm{display:flex;align-items:center;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-user .em{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-chip{display:inline-block;font-size:11px;line-height:16px;padding:1px 7px;border-radius:999px;background:var(--hover);color:var(--text-2);margin:1px 4px 1px 0;white-space:nowrap}
+.adm-st{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
+.adm-st i{width:7px;height:7px;border-radius:50%;background:#2f9e5b}
+.adm-st.off i{background:#c6422f}
+.adm-detail>td{border-top:0!important;padding:4px 0 14px!important}
+.adm-detail>td>*{animation:adm-in .22s cubic-bezier(.22,1,.36,1)}
+.adm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px 20px;padding:14px 16px;border-radius:12px;border:.5px solid var(--border);background:var(--card)}
+.adm-grid h4{margin:0 0 8px;font-size:12px;font-weight:500;color:var(--text-3)}
+.adm-kv{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:5px 0;border-top:.5px solid var(--border)}
+.adm-kv span{color:var(--text-3)}
+.adm-kv b{font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm-sess{display:flex;align-items:center;gap:10px;font-size:12px;line-height:1.5;padding:6px 0;border-top:.5px solid var(--border)}
+.adm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.adm-log{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:9px 0;border-top:.5px solid var(--border);font-size:12px;line-height:1.5}
+.adm-log .tm{color:var(--text-3);font-variant-numeric:tabular-nums}
+.adm-log .ip{color:var(--text-3);font-family:var(--font-mono,ui-monospace,monospace);font-size:11px}
+.adm-log .bad{color:#c6422f}
+.adm-log .adm{color:var(--accent-deep,#2f7bf6)}
+@keyframes adm-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (max-width:640px){.adm-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.adm-log{grid-template-columns:1fr auto}.adm-log .tm{grid-column:1/-1}}

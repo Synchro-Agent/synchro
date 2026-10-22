@@ -1,8 +1,10 @@
 import { getSkill, readSkillFile, SkillError } from "../../../../skillstore";
+import { authGate } from "../../../../authstore";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request, { params }: { params: Promise<{ name: string }> }) {
+  const denied = authGate(req); if (denied) return denied;
   try {
     const s = await getSkill((await params).name);
     if (!s) return Response.json({ error: "Không có skill này" }, { status: 404 });

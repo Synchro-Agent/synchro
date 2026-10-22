@@ -1,14 +1,17 @@
 import { listSkills, previewSkill, publicSkill, saveSkill, SkillError } from "../../skillstore";
+import { authGate } from "../../authstore";
 
 export const runtime = "nodejs";
 const err = (e: unknown) => e instanceof SkillError ? Response.json({ error: e.message }, { status: e.status }) : Response.json({ error: "Lỗi máy chủ khi xử lý skill" }, { status: 500 });
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = authGate(req); if (denied) return denied;
   return Response.json({ skills: (await listSkills()).map(publicSkill) });
 }
 
 // multipart: file (.zip hoặc SKILL.md); dry=1 chỉ kiểm tra + xem trước, không lưu.
 export async function POST(req: Request) {
+  const denied = authGate(req); if (denied) return denied;
   try {
     const fd = await req.formData();
     const f = fd.get("file");

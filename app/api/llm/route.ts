@@ -1,5 +1,6 @@
 import { enabledSkills } from "../../skillstore";
 import { MAX_STEPS, SKILL_TOOLS, runSkillTool, skillsPrompt, type ToolRun } from "../../skillruntime";
+import { authGate } from "../../authstore";
 
 // Cổng duy nhất tới model (tương đương call_llm trong app.py). Đổi nhà cung cấp chỉ sửa ở đây.
 const PROVIDER = process.env.LLM_PROVIDER ?? "anthropic";
@@ -116,6 +117,7 @@ async function skillLoop(ad: Adapter, msgs: unknown[]) {
 }
 
 export async function POST(req: Request) {
+  const denied = authGate(req); if (denied) return denied;
   if (!API_KEY && PROVIDER !== "mock") return Response.json({ error: "Chưa cấu hình LLM_API_KEY" }, { status: 500 });
   const { system, messages, max_tokens = 1500, route, skills } = await req.json();
   const model = pickModel(route);

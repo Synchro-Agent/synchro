@@ -1,0 +1,10 @@
+import { handle, login, publicUser, sameOrigin, withCookies } from "../../../authstore";
+
+export const runtime = "nodejs";
+
+export const POST = handle(async (req) => {
+  sameOrigin(req);
+  const { email, password } = await req.json();
+  const { user, cookie } = await login(req, email, password);
+  return withCookies(Response.json({ user: publicUser(user) }), cookie);
+});

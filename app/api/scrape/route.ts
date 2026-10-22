@@ -1,5 +1,7 @@
+import { authGate } from "../../authstore";
 // Cào tài liệu từ URL thành markdown: Firecrawl nếu có FIRECRAWL_API_KEY, không thì Jina Reader (miễn phí).
 export async function POST(req: Request) {
+  const denied = authGate(req); if (denied) return denied;
   const { url } = await req.json();
   if (typeof url !== "string" || !/^https?:\/\//.test(url)) return Response.json({ error: "URL không hợp lệ" }, { status: 400 });
   try {

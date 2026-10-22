@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { SettingsBody } from "./settings";
-import { usePref } from "./store";
+import { usePref, useApp } from "./store";
 import type { Lang } from "./i18n";
 import { createPortal } from "react-dom";
 
@@ -211,8 +211,9 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
 export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
   const [tab, setTab] = useState(initial);
   const [q, setQ] = useState("");
+  const admin = useApp().me?.isAdmin;
   const items: [string, React.ReactNode][] = [
-    ["General", <I.Gear key="g" />], ["Account", <I.User key="a" />], ["Privacy", <I.Shield key="p" />],
+    ["General", <I.Gear key="g" />], ...(admin ? [["Administrator", <I.Admin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.User key="a" />], ["Privacy", <I.Shield key="p" />],
     ["Capabilities", <I.Sliders key="c" />], ["Memory", <I.History key="m" />],
     ["Synchro Code", <I.Code key="cc" />],
   ];
