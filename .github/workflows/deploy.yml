@@ -31,4 +31,4 @@ jobs:
       - name: Build và khởi động lại
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'chown -R synchro:synchro /var/www/synchro && su - synchro -c "cd /var/www/synchro && npm ci && .mkvenv/bin/pip install -q -r requirements.txt && rm -rf .next/cache && NODE_OPTIONS=--max-old-space-size=2048 npx next build && pm2 restart synchro --update-env"'
+            'chown -R synchro:synchro /var/www/synchro && su - synchro -c "cd /var/www/synchro && npm ci && .mkvenv/bin/pip install -q -r requirements.txt && rm -rf .next/cache && NODE_OPTIONS=--max-old-space-size=2048 npx next build && rm -rf .next/server/route-cache && pm2 restart synchro --update-env"'

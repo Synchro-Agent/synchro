@@ -375,6 +375,7 @@ export const EN2VI: Record<string, string> = {
   "Administrator": "Quản trị viên",
   "Manage accounts, sessions and sign-in for Synchro. Every action here is recorded in the audit log.": "Quản lý tài khoản, phiên đăng nhập và cách đăng nhập của Synchro. Mọi thao tác ở đây đều được ghi vào nhật ký.",
   "Owner": "Chủ sở hữu",
+  "This email is reserved for the administrator. Sign in with Google, or create the admin account on the server.": "Email này dành riêng cho quản trị viên. Hãy đăng nhập bằng Google, hoặc tạo tài khoản quản trị trên máy chủ.",
   "Server script": "Script máy chủ",
   "Users": "Người dùng",
   "Active in last 7 days": "Hoạt động trong 7 ngày",

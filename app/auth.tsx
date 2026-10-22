@@ -222,7 +222,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
         if (!isEmailValid || checking) return;
         setChecking(true);
         try {
-            const r = await post<{ exists: boolean; hasPassword: boolean; methods: (keyof Providers)[] }>("/api/auth/check", { email });
+            const r = await post<{ exists: boolean; hasPassword: boolean; methods: (keyof Providers)[]; reserved: boolean }>("/api/auth/check", { email });
+            if (r.reserved) { fail("This email is reserved for the administrator. Sign in with Google, or create the admin account on the server."); return; }
             if (r.exists && !r.hasPassword) { fail(`This account signs in with ${r.methods.map((m) => PROVIDER_NAMES[m] ?? m).join(", ")}. Use that button above.`); return; }
             setIsLogin(r.exists);
             setAuthStep("password");

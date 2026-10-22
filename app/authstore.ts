@@ -188,8 +188,9 @@ export const sessionsOf = (userId: string) => db().prepare("SELECT * FROM sessio
 // ---- đăng ký / đăng nhập bằng email ----
 export function lookup(req: Request, email: string) {
   limit("check:" + clientIp(req), 60, 10 * MIN);
-  const u = findByEmail(normEmail(email));
-  return { exists: !!u, hasPassword: !!u?.password_hash, methods: u ? methodsOf(u).filter((m) => m !== "password") : [] };
+  const em = normEmail(email);
+  const u = findByEmail(em);
+  return { exists: !!u, hasPassword: !!u?.password_hash, methods: u ? methodsOf(u).filter((m) => m !== "password") : [], reserved: !u && ADMIN_EMAILS.has(em) };
 }
 
 export async function login(req: Request, email0: unknown, pw: unknown) {
