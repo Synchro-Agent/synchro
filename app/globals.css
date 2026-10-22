@@ -1210,3 +1210,16 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .adm-log .adm{color:var(--accent-deep,#2f7bf6)}
 @keyframes adm-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @media (max-width:640px){.adm-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.adm-log{grid-template-columns:1fr auto}.adm-log .tm{grid-column:1/-1}}
+
+/* ---- Trang pháp lý (/privacy, /terms) ---- */
+.legal{max-width:720px;margin:0 auto;padding:48px 20px 80px;color:var(--text);font-size:15px;line-height:1.7}
+.legal-brand{display:inline-block;margin-bottom:36px;color:var(--text);text-decoration:none}
+.legal h1{font-family:var(--font-serif);font-weight:400;font-size:34px;letter-spacing:-.02em;margin:0}
+.legal h2{font-size:16px;font-weight:600;margin:28px 0 6px}
+.legal p,.legal li{color:var(--text-2)}
+.legal ul{list-style:disc;padding-left:20px;margin:6px 0}
+.legal li{margin:4px 0}
+.legal b{color:var(--text);font-weight:600}
+.legal-upd{font-size:13px;color:var(--text-3)!important;margin:6px 0 24px}
+.legal-nav{display:flex;flex-wrap:wrap;gap:16px;margin-top:40px;padding-top:16px;border-top:.5px solid var(--border);font-size:13px}
+.legal-nav a{color:var(--text-2)}
