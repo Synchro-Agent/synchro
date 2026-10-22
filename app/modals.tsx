@@ -213,8 +213,8 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   const [q, setQ] = useState("");
   const items: [string, React.ReactNode][] = [
     ["General", <I.Gear key="g" />], ["Account", <I.User key="a" />], ["Privacy", <I.Shield key="p" />],
-    ["Billing", <I.Card key="b" />], ["Capabilities", <I.Sliders key="c" />], ["Memory", <I.History key="m" />],
-    ["Reflect", <I.Bell key="r" />], ["Time and focus", <I.Moon key="t" />], ["Synchro Code", <I.Code key="cc" />],
+    ["Capabilities", <I.Sliders key="c" />], ["Memory", <I.History key="m" />],
+    ["Synchro Code", <I.Code key="cc" />],
   ];
   const custom: [string, React.ReactNode][] = [
     ["Skills", <I.Layers key="s" />], ["Connectors", <I.Grid key="c" />], ["Plugins", <I.Plug key="p" />],
@@ -227,9 +227,9 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
         <div className="s-nav">
           <div className="s-search"><I.Search size={16} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <div className="s-group">Settings</div>
-          {f(items).map(([n, ic]) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)}>{ic}{n}</button>)}
+          {f(items).map(([n, ic]) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>)}
           <div className="s-group" style={{ marginTop: 20 }}>Customize</div>
-          {f(custom).map(([n, ic]) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)}>{ic}{n}</button>)}
+          {f(custom).map(([n, ic]) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>)}
         </div>
         <div className="s-body" key={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></div>
       </div>

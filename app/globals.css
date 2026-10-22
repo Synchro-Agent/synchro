@@ -1087,3 +1087,78 @@ html body .cv-card,html[data-theme=dark] body .cv-card{background:var(--gl-fill)
 .cv-pills .cv-pill{margin-top:6px;display:inline-flex}
 .cv-pills .cv-attach{width:100%;min-width:0;box-sizing:border-box}
 .cv-pills{min-width:0;max-width:100%;width:100%;box-sizing:border-box}.cv-composer>*{min-width:0}
+
+/* Mũi tên xuống: căn giữa theo trục dọc, không lệch */
+.btn:has(> svg),.cv-modebtn,.model-btn,.sel{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn > svg{flex:none;position:relative;top:.5px}
+.dd-lbl{display:flex;align-items:center;gap:6px}
+
+/* Nhãn mục Cài đặt: một dòng, dài quá thì cắt "…" */
+.s-item svg{flex:none}
+.s-item .s-lbl{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-nav{width:224px}
+
+/* Nút Sao chép nằm dưới nội dung, không đè chữ, không xuống dòng */
+.cb-copy{padding-bottom:42px}
+.cb-btn{position:absolute;right:8px;bottom:8px;height:26px;white-space:nowrap;padding:0 12px}
+html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!important;bottom:8px!important;top:auto!important;left:auto!important}
+
+/* Cài đặt Synchro Code */
+.s-badge{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--hover);color:var(--text-2);white-space:nowrap;flex:none}
+.s-badge.ok{background:rgba(47,123,246,.14);color:var(--accent-deep)}
+.cb-theme{cursor:pointer;border:1px solid var(--border-strong);outline:0;transition:box-shadow .15s}
+.cb-theme.on{box-shadow:0 0 0 2px var(--accent)}
+.cv .codeblock pre{font-family:var(--cv-font,ui-monospace,Menlo,monospace);font-size:var(--cv-fs,13px)}
+
+/* Skill đang được dùng trong chat */
+.skill-used{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.skill-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;color:var(--text-2);background:var(--hover);border:1px solid var(--border,rgba(0,0,0,.08))}
+.skill-chip svg{flex:none}
+
+/* Trang quản lý skill */
+.sk-drop{display:flex;align-items:center;gap:14px;padding:16px 18px;border:1.5px dashed var(--border-strong);border-radius:14px;background:var(--hover);transition:background .15s,border-color .15s}
+.sk-drop.drag{border-color:var(--accent,#2f7bf6);background:rgba(47,123,246,.08)}
+.sk-drop svg{flex:none;color:var(--text-2)}
+.sk-err{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;padding:8px 12px;border-radius:10px;font-size:13px;background:rgba(200,50,50,.1);color:#b3261e}
+.sk-row .sk-desc{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sk-warn{margin-left:8px;font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(214,150,0,.15);color:#9a6b00}
+.sk-mask{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}
+.sk-modal{width:min(640px,92vw);max-height:84vh;overflow:auto;padding:20px;border-radius:16px;background:var(--bg,#fff);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.sk-mh{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:6px}
+.sk-note{font-size:12px;padding:8px 12px;border-radius:10px;background:rgba(214,150,0,.12);color:var(--text-2)}
+.sk-wl{margin:8px 0 0;padding-left:18px;font-size:12px;color:#9a6b00}
+.sk-pre{margin:0;padding:12px;max-height:220px;overflow:auto;border-radius:10px;background:var(--hover);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono,ui-monospace,monospace)}
+.sk-files{border:.5px solid var(--border);border-radius:10px;max-height:150px;overflow:auto;font-size:12px}
+.sk-files>div{display:flex;justify-content:space-between;gap:12px;padding:6px 12px;border-top:.5px solid var(--border)}
+.sk-files>div:first-child{border-top:0}
+.sk-files .clk{cursor:pointer}.sk-files .clk:hover{background:var(--hover)}
+.sk-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* ---- Login screen (same palette as the main app) ---- */
+@theme {
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--auth-border);
+  --color-primary: #2f7bf6;
+  --color-primary-foreground: #fff;
+  --color-destructive: #ef4444;
+}
+.auth-root{--foreground:var(--text);--background:var(--bg);--card:var(--bg);--muted-foreground:var(--muted);--auth-border:var(--border-strong);--color-border:var(--border-strong);font-family:var(--font-sans);background:var(--bg)}
+.auth-bg{position:absolute;inset:0;overflow:hidden;contain:strict}
+.auth-bg i{position:absolute;border-radius:50%;will-change:transform;transform:translateZ(0)}
+.auth-bg .b1{width:60vmax;height:60vmax;left:-20vmax;bottom:-28vmax;background:radial-gradient(closest-side,rgba(47,123,246,.22),rgba(47,123,246,0));animation:ab1 22s ease-in-out infinite}
+.auth-bg .b2{width:55vmax;height:55vmax;right:-18vmax;top:-22vmax;background:radial-gradient(closest-side,rgba(130,110,246,.16),rgba(130,110,246,0));animation:ab2 28s ease-in-out infinite}
+.auth-bg .b3{width:40vmax;height:40vmax;left:35%;bottom:-18vmax;background:radial-gradient(closest-side,rgba(150,190,255,.16),rgba(150,190,255,0));animation:ab1 34s ease-in-out infinite reverse}
+[data-theme="dark"] .auth-bg .b1{background:radial-gradient(closest-side,rgba(47,123,246,.30),rgba(47,123,246,0))}
+[data-theme="dark"] .auth-bg .b2{background:radial-gradient(closest-side,rgba(120,90,230,.20),rgba(120,90,230,0))}
+[data-theme="dark"] .auth-bg .b3{background:radial-gradient(closest-side,rgba(47,123,246,.14),rgba(47,123,246,0))}
+@keyframes ab1{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(6vmax,-4vmax,0)}}
+@keyframes ab2{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-6vmax,5vmax,0)}}
+@media (prefers-reduced-motion:reduce){.auth-bg i{animation:none}}
+.auth-root input{border:0;font:inherit;font-size:15px;padding:0 4px}
+.auth-root .glass-input{min-height:48px}
+.auth-root button{font-family:inherit}
+.auth-root .glass-button,.auth-root .glass-input{backdrop-filter:none}
+.auth-root .glass-button-text::after{mix-blend-mode:normal;opacity:.5}

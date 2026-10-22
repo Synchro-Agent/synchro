@@ -43,3 +43,6 @@ next-env.d.ts
 # local env / cache
 .mkvenv/
 .cache/
+
+# dữ liệu skill do người dùng tải lên
+/data/

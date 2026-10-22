@@ -23,7 +23,7 @@ type Ctx = { id: number; name: string; text: string; size: number; kind: "file" 
 type Say = (m: string) => void;
 
 const MAX_TOK = 128_000;
-const MODES = [
+export const MODES = [
   { k: "plan", label: "Architect / Plan", short: "Plan", desc: "Chỉ phân tích cấu trúc và lập kế hoạch, không viết code dài." },
   { k: "code", label: "Write / Code", short: "Code", desc: "Tập trung sinh code hoàn chỉnh, sẵn sàng chạy ngay." },
   { k: "debug", label: "Debug", short: "Debug", desc: "Đọc lỗi, truy nguyên nhân gốc và đề xuất cách sửa." },
@@ -49,7 +49,7 @@ const RULES_SYS = [
   "Các giá trị dạng <REDACTED_KEY_N> là bí mật đã được che; giữ nguyên chúng trong code, không đoán giá trị.",
 ].join("\n");
 const STRICT_SYS = "CHỈ trả về code block, không giải thích, không lời dẫn.";
-const PRESETS = [
+export const PRESETS = [
   { k: "next", label: "Next.js + Tailwind + TypeScript", rule: "Dùng Next.js App Router, Tailwind CSS và TypeScript strict. Ưu tiên Server Components, đặt tên file kebab-case." },
   { k: "vite", label: "React + Vite + TypeScript", rule: "Dùng React 19 function components + hooks, Vite, TypeScript strict, CSS Modules." },
   { k: "fastapi", label: "Python + FastAPI", rule: "Dùng Python 3.12, FastAPI, Pydantic v2, type hints đầy đủ, async/await." },
@@ -168,6 +168,8 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   const [ctx, setCtx] = useState<Ctx[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mode, setMode] = usePref("codeMode", "code");
+  const [cf] = usePref("codeFont", "");
+  const [csz] = usePref("codeSize", "13");
   const [rules, setRules] = usePref("codeRules", { preset: "next", custom: "" });
   const [busy, setBusy] = useState(false);
   const [v, setV] = useState("");
@@ -654,7 +656,7 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
 
   return (
-    <div className="cv" onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
+    <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
       <div className="cv-col">
         <div className="cv-bar">
           <div className="cv-title"><I.Code size={16} />Synchro Code</div>
@@ -1003,7 +1005,10 @@ function SidePanel({ panel, setPanel, say, onFix }: { panel: Panel; setPanel: (p
   const [running, setRunning] = useState(false);
   const isPy = /^(py|python)$/i.test(panel.lang);
   const tier: Tier = isPy ? "pyodide" : /^(html)$/i.test(panel.lang) ? "frame" : nodeNeedsContainer(code) ? "webcontainer" : "frame";
-  const dark = typeof document !== "undefined" && document.documentElement.dataset.theme === "dark";
+  const [edTheme] = usePref("codeEdTheme", "Auto");
+  const [edFont] = usePref("codeFont", "");
+  const [edSize] = usePref("codeSize", "13");
+  const dark = edTheme === "Dark" || (edTheme === "Auto" && typeof document !== "undefined" && document.documentElement.dataset.theme === "dark");
 
   useEffect(() => {
     const h = (e: MessageEvent) => { if (e.data?.nx === "err") setErr((x) => x || String(e.data.m).slice(0, 400)); };
@@ -1067,7 +1072,7 @@ function SidePanel({ panel, setPanel, say, onFix }: { panel: Panel; setPanel: (p
         )
       ) : (
         <div className="cv-ed mon">
-          <Monaco height="100%" theme={dark ? "vs-dark" : "light"} language={MONACO_LANG[panel.lang.toLowerCase()] ?? "plaintext"} value={code} onChange={(v) => setCode(v ?? "")} options={{ minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: "on", padding: { top: 10 } }} />
+          <Monaco height="100%" theme={dark ? "vs-dark" : "light"} language={MONACO_LANG[panel.lang.toLowerCase()] ?? "plaintext"} value={code} onChange={(v) => setCode(v ?? "")} options={{ minimap: { enabled: false }, fontSize: Number(edSize) || 13, fontFamily: edFont ? `${edFont}, ui-monospace, Menlo, monospace` : undefined, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: "on", padding: { top: 10 } }} />
         </div>
       )}
       <div className="cv-pf"><span>{panel.lang || "text"} · {lines} dòng{panel.runnable && tier !== "frame" ? ` · ${tier === "pyodide" ? "Pyodide" : "WebContainer"}` : ""}</span><span>{code !== panel.code ? "Đã chỉnh sửa" : "Có thể chỉnh sửa trực tiếp"}</span></div>

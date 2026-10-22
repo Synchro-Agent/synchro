@@ -24,7 +24,13 @@ export const hasLLM = !!LLM_ENDPOINT;
  * Endpoint nhận POST { system, messages, max_tokens } và trả về { text }.
  * (Có thể là một route Next.js `/api/llm` hoặc backend riêng.)
  */
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }): Promise<string> {
+export type SkillUse = { kind: "skill" | "file"; name: string; path?: string };
+let lastSkills: SkillUse[] = [];
+/** Skill mà model vừa dùng ở lần callLLM gần nhất (chỉ đọc một lần). */
+export const takeSkillsUsed = () => { const u = lastSkills; lastSkills = []; return u; };
+
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false): Promise<string> {
+  lastSkills = [];
   if (!hasLLM) {
     // Chưa có model: trả lời giả lập từ câu hỏi cuối.
     const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
@@ -33,10 +39,11 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   const r = await fetch(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route }),
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills }),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}`);
   const j = await r.json();
+  lastSkills = Array.isArray(j.skills) ? j.skills : [];
   return String(j.text ?? j.reply ?? "");
 }
 

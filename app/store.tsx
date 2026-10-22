@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 
-export type Msg = { role: "user" | "ai"; text: string; done?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string };
+export type Msg = { role: "user" | "ai"; text: string; done?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[] };
 export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };
 
@@ -45,6 +45,7 @@ export function resetPrefs() {
 export type AppApi = {
   say: (m: string) => void;
   upgrade: () => void;
+  goCode: () => void;
   ask: (text: string) => void;
   confirm: (title: string, text: string, ok: string, fn: () => void) => void;
   chats: Chat[];
@@ -54,7 +55,7 @@ export type AppApi = {
   close: () => void;
 };
 export const AppCtx = createContext<AppApi>({
-  say: () => {}, ask: () => {}, upgrade: () => {}, confirm: () => {}, chats: [], unshare: () => {}, exportData: () => {}, wipe: () => {}, close: () => {},
+  say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, chats: [], unshare: () => {}, exportData: () => {}, wipe: () => {}, close: () => {},
 });
 export const useApp = () => useContext(AppCtx);
 

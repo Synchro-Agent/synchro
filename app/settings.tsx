@@ -5,6 +5,8 @@ import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
 import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
+import { MODES, PRESETS } from "./codeview";
+import { SkillsPanel, SKILLS_UPLOAD } from "./skillsui";
 
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -266,7 +268,7 @@ function Memory() {
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setImp(false)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Import memory to Synchro</h2>
             <p className="d" style={{ margin: "0 0 8px" }}>1&nbsp; Copy this prompt into a chat with your other AI provider</p>
-            <div className="codebox">Export all of my stored memories and any context you&apos;ve learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences.<button className="btn" style={{ position: "absolute", right: 8, bottom: 8, height: 26 }} onClick={() => { navigator.clipboard?.writeText("Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences."); app.say("Prompt copied"); }}>Copy</button></div>
+            <div className="codebox cb-copy">Export all of my stored memories and any context you&apos;ve learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences.<button className="btn cb-btn" onClick={() => { navigator.clipboard?.writeText("Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences."); app.say("Prompt copied"); }}>Copy</button></div>
             <p className="d" style={{ margin: "14px 0 8px" }}>2&nbsp; Paste results below to add to Synchro&apos;s memory</p>
             <textarea className="textarea" value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="Paste your memory details here" />
             <div className="modal-foot"><button className="btn" onClick={() => setImp(false)}>Cancel</button><button className="btn dark" disabled={!txt.trim()} style={!txt.trim() ? { opacity: 0.4 } : undefined} onClick={() => { const items = txt.split(/\n+/).map((x) => x.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean); setMems((o) => [...o, ...items]); app.say(`Added ${items.length} memories`); setImp(false); setTxt(""); }}>Add to memory</button></div>
@@ -363,40 +365,52 @@ function Focus() {
 
 function CodeTab() {
   const app = useApp();
-  const [v, setV] = usePref("codeTg", [true, true, false, false]);
-  const t = (i: number) => <Toggle on={v[i]} set={(x) => setV(v.map((y, j) => (j === i ? x : y)))} />;
-  const [font, setFont] = usePref("uiFont", "Anthropic Sans");
-  const [width, setWidth] = usePref("width", "Narrow");
-  const [view, setView] = usePref("tview", "Normal");
+  const [mode, setMode] = usePref("codeMode", "code");
+  const [rules, setRules] = usePref("codeRules", { preset: "next", custom: "" });
+  const [edTheme, setEdTheme] = usePref("codeEdTheme", "Auto");
   const [cf, setCf] = usePref("codeFont", "");
-  const [br, setBr] = usePref("branch", "claude");
+  const [size, setSize] = usePref("codeSize", "13");
+  const [list, setList] = usePref<{ id: number }[]>("codeList", []);
+  const [iso, setIso] = useState(true);
+  useEffect(() => setIso(!!window.crossOriginIsolated), []);
+  const modeLabel = (k: string) => MODES.find((m) => m.k === k)?.short ?? "Code";
+  const presetLabel = (k: string) => (k === "custom" ? "Custom rules" : k === "none" ? "No rules" : PRESETS.find((p) => p.k === k)?.label ?? "");
+  const presetKey = (l: string) => (l === "Custom rules" ? "custom" : l === "No rules" ? "none" : PRESETS.find((p) => p.label === l)?.k ?? "none");
+  const sample = ["1  function greet(name: string) {", "2    return `Hello, ${name}`", "3  }"];
+  const ff = { fontFamily: cf ? `${cf}, var(--font-mono)` : undefined, fontSize: Number(size) };
+  const Badge = ({ ok, children }: { ok?: boolean; children: React.ReactNode }) => <span className={`s-badge ${ok ? "ok" : ""}`}>{children}</span>;
   return (
     <>
       <div className="promo">
-        <div><div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Synchro Code</div><p className="d" style={{ margin: "0 0 14px" }}>Synchro understands your codebase and helps you build, debug, and ship faster. Upgrade your plan to get started.</p><button className="btn dark" onClick={app.upgrade}>Upgrade to Max or Pro ↗</button></div>
+        <div><div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Synchro Code</div><p className="d" style={{ margin: "0 0 14px" }}>Write, debug and run code with Synchro. Pick a mode, attach files with @, and preview results right in the browser.</p><button className="btn dark" onClick={app.goCode}>Open Synchro Code</button></div>
         <div className="term"><span style={{ color: "#e5604f" }}>●</span> <span style={{ color: "#e8b84a" }}>●</span> <span style={{ color: "#5fb36b" }}>●</span><div style={{ marginTop: 10 }}>&gt; Fix the auth bug in signup flow</div></div>
       </div>
-      <H>General</H>
-      <Row t="Classify session states" d="Allow Synchro to automatically classify sessions as blocked, ready for review, or done. Classifying sessions counts towards your plan usage. Applies to new sessions." top>{t(0)}</Row>
-      <Row t="Switch models when a message is flagged" d="When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.">{t(1)}</Row>
+      <H>Defaults</H>
+      <Row t="Default mode" d="Mode used when you open Synchro Code. Plan only outlines steps, Code writes full files, Debug traces errors to the root cause." top><Seg value={modeLabel(mode)} onChange={(l) => setMode(MODES.find((m) => m.short === l)?.k ?? "code")} options={MODES.map((m) => m.short)} /></Row>
+      <Row t="Tech stack rules" d="Added to every Code request so answers follow your stack."><Select value={presetLabel(rules.preset)} width={260} onChange={(l) => setRules({ ...rules, preset: presetKey(l) })} options={[...PRESETS.map((p) => p.label), "Custom rules", "No rules"]} /></Row>
+      {rules.preset === "custom" && <textarea className="textarea" style={{ marginTop: 4 }} placeholder="e.g. Use Go 1.22, no global state, return errors explicitly" value={rules.custom} onChange={(e) => setRules({ ...rules, custom: e.target.value })} />}
+      <H>Safety and context</H>
+      <Row t="Secret redaction" d="API keys, tokens and passwords are masked before anything is sent, then restored in the code you get back." top><Badge ok>Always on</Badge></Row>
+      <Row t="Context window" d="Attached files and conversation history count toward this limit. Large files are trimmed to the most relevant parts."><Badge>128k tokens</Badge></Row>
       <H>Code appearance</H>
       <div style={{ display: "flex", gap: 12 }}>
-        <div className="codebox" style={{ flex: 1, background: "#fff", color: "#222" }}><div className="muted" style={{ marginBottom: 6 }}>Synchro Light ⌄</div>1 function greet(name: string) {"{"}<br />2 &nbsp; return `Hello, ${"${name}"}`<br />3 {"}"}</div>
-        <div className="codebox" style={{ flex: 1, background: "#1b1b1b", color: "#ddd" }}><div className="muted" style={{ marginBottom: 6 }}>Synchro Dark ⌄</div>1 function greet(name: string) {"{"}<br />2 &nbsp; return `Hello, ${"${name}"}`<br />3 {"}"}</div>
+        {[["Light", "#fff", "#222"], ["Dark", "#1b1b1b", "#ddd"]].map(([n, bg, fg]) => (
+          <button key={n} className={`codebox cb-theme ${edTheme === n ? "on" : ""}`} style={{ flex: 1, background: bg, color: fg, textAlign: "left", ...ff }} onClick={() => setEdTheme(n)}>
+            <div className="dd-lbl" style={{ marginBottom: 6, opacity: 0.6, fontFamily: "var(--font-sans)", fontSize: 12 }}>Synchro {n}</div>
+            {sample.map((l) => <div key={l} style={{ whiteSpace: "pre" }}>{l}</div>)}
+          </button>
+        ))}
       </div>
-      <Row t="Code font" d="Set a custom monospace font for code and terminal."><input className="field" style={{ width: 200, margin: 0 }} placeholder="e.g. JetBrains Mono" value={cf} onChange={(e) => setCf(e.target.value)} /></Row>
-      <H>Appearance</H>
-      <Row t="Interface font" d="Font for the whole interface — menus, sidebars, and panels." top><Seg value={font} onChange={setFont} options={["Anthropic Sans", "System", "Serif"]} /></Row>
-      <Row t="Transcript width" d="Maximum width of the transcript and composer columns."><Seg value={width} onChange={setWidth} options={["Narrow", "Medium", "Wide"]} /></Row>
-      <Row t="Default transcript view" d="View sessions open in. Picking a view from a session's Transcript view menu changes only that session."><Seg value={view} onChange={setView} options={["Normal", "Thinking", "Verbose"]} /></Row>
-      <H>Pull requests</H>
-      <Row t="Branch prefix" d="Prefix added to branch names for both local and cloud sessions." top><input className="field" style={{ width: 200, margin: 0 }} value={br} onChange={(e) => setBr(e.target.value)} /></Row>
-      <Row t="Create pull requests automatically" d="When Synchro pushes changes to a branch, it automatically opens a pull request without asking first. Applies to cloud sessions only.">{t(2)}</Row>
-      <Row t="Auto-fix pull requests" d="When you create a pull request, Synchro automatically monitors it for CI failures and review comments, then responds proactively.">{t(3)}</Row>
-      <H>Authorization tokens</H>
-      <p className="d" style={{ marginTop: -6 }}>Created when you sign in to Synchro Code. Revoke a token to sign out from that device.</p>
-      <table className="tbl"><thead><tr><th>Application</th><th>Scopes</th></tr></thead></table>
-      <div className="empty" style={{ marginTop: 20 }}><b>No connected Synchro Code instances</b><span>When you sign in to Synchro Code, your authorization tokens will appear here.</span></div>
+      <Row t="Editor theme" d="Theme for the code editor panel. Auto follows the interface theme."><Seg value={edTheme} onChange={setEdTheme} options={["Auto", "Light", "Dark"]} /></Row>
+      <Row t="Code font" d="Monospace font for code blocks and the editor. Must be installed on your device."><input className="field" style={{ width: 200, margin: 0 }} placeholder="e.g. JetBrains Mono" value={cf} onChange={(e) => setCf(e.target.value)} /></Row>
+      <Row t="Code font size" d="Applies to code blocks and the editor."><Seg value={size} onChange={setSize} options={["12", "13", "14", "16"]} /></Row>
+      <H>Run code</H>
+      <Row t="HTML and JavaScript" d="Runs in a sandboxed preview frame next to the chat." top><Badge ok>Ready</Badge></Row>
+      <Row t="Python" d="Runs in your browser with Pyodide. No server needed."><Badge ok>Ready</Badge></Row>
+      <Row t="Node.js" d="Runs in a WebContainer inside your browser. Needs HTTPS for cross-origin isolation."><Badge ok={iso}>{iso ? "Ready" : "Needs HTTPS"}</Badge></Row>
+      <Row t="Cloud sandbox" d="Optional server runtime (E2B) for heavier jobs. Enabled when the server has an E2B key."><Badge>Optional</Badge></Row>
+      <H>Data</H>
+      <Row t="Code sessions" d={`${list.length} session${list.length === 1 ? "" : "s"} stored in this browser.`} top><button className="btn" disabled={!list.length} style={!list.length ? { opacity: 0.4 } : undefined} onClick={() => app.confirm("Clear all Code sessions?", "Every Synchro Code conversation saved in this browser will be deleted. This can't be undone.", "Clear all", () => { Object.keys(localStorage).filter((k) => k.startsWith("codeS:")).forEach((k) => localStorage.removeItem(k)); setList([]); app.goCode(); app.say("Code sessions cleared"); })}>Clear all</button></Row>
     </>
   );
 }
@@ -456,7 +470,8 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
   const cats = Object.fromEntries(CATS.map((c) => [c, c]));
   const doAdd = (a: string) => {
     setAdd(false);
-    if (a === "Upload skill" || a === "Upload plugin") fileRef.current?.click();
+    if (a === "Upload skill") { setSub("Yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }
+    else if (a === "Upload plugin") fileRef.current?.click();
     else if (a.startsWith("Create")) { app.close(); app.ask(a === "Create with Synchro" ? `Hãy giúp tôi tạo một ${kind === "Skills" ? "skill" : kind === "Plugins" ? "plugin" : "connector"} mới.` : `Hướng dẫn tôi tạo một ${kind === "Skills" ? "skill" : "plugin"} từ đầu.`); }
     else if (a === "Browse connectors") setSub("Discover");
     else { setForm({ title: a, ph: a === "Add marketplace" ? "https://github.com/owner/marketplace" : "https://example.com/mcp" }); setFormVal(""); }
@@ -490,7 +505,7 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
         <button className="icon-btn" aria-label="Sort" title={sort === "asc" ? "A → Z" : sort === "desc" ? "Z → A" : "Default order"} onClick={() => { const n = sort === "" ? "asc" : sort === "asc" ? "desc" : ""; setSort(n); app.say(n === "asc" ? "Sắp xếp A → Z" : n === "desc" ? "Sắp xếp Z → A" : "Thứ tự mặc định"); }} style={sort ? { background: "var(--active)" } : undefined}><I.Sort size={16} /></button>
         <input ref={fileRef} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCustom((o) => [...o, [f.name.replace(/\.[^.]+$/, ""), "Uploaded " + f.name]]); setSub("Yours"); app.say(`Đã tải lên ${f.name}`); } e.target.value = ""; }} />
         <div ref={addRef} style={{ position: "relative" }}>
-          <button className="btn dark" onClick={() => setAdd(!add)}>+ Add ⌄</button>
+          <button className="btn dark" onClick={() => setAdd(!add)}>+ Add<I.Chevron size={13} /></button>
             <Menu open={!!(add)} className="down" style={{ top: 36, right: 0, width: 190 }}>
               {addItems.map((a) => <button key={a} className="menu-item" onClick={() => doAdd(a)}>{a}</button>)}
             </Menu>
@@ -498,22 +513,7 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
       </div>
       {cat && <div className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Filtered by {cat} · <a className="lnk" onClick={() => setCat("")}>Clear</a></div>}
 
-      {kind === "Skills" && sub === "Yours" && (
-        <>
-          <div className="promo" style={{ marginBottom: 20 }}>
-            <div><div style={{ fontWeight: 600 }}>Add your first skills</div><p className="d" style={{ margin: "4px 0 12px" }}>Skills teach Synchro how you work. Add them from Discover, or create your own.</p><button className="btn dark" onClick={() => setSub("Discover")}>Discover skills</button></div>
-          </div>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>From Anthropic &amp; Partners <span className="new-tag" style={{ background: "var(--hover)", color: "var(--text-2)" }}>{SKILLS.length - removed.length + custom.length + added.length}</span></div>
-          {srt([...custom.map(([n, d]) => [n, d, "Just now"]), ...added.map((n) => [n, "Installed from Discover", "Just now"]), ...SKILLS.filter((s) => !removed.includes(s[0]))]).filter((s) => s[0].toLowerCase().includes(q.toLowerCase()) && tagged(s[0])).map(([n, d, t]) => (
-            <div key={n} className="item-row" style={{ position: "relative" }}>
-              <div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 500 }}>{n}</b> <span className="muted" style={{ fontSize: 12 }}>{SKILLS.some((x) => x[0] === n) ? "from Anthropic" : "yours"}</span> <span className="muted" style={{ fontSize: 12 }}>· {d}</span></div>
-              <span className="muted" style={{ fontSize: 12 }}>{t}</span>
-              <button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setRm(rm === n ? "" : n)}>⋮</button>
-              {rm === n && <button className="btn danger" style={{ position: "absolute", right: 0, top: 36, zIndex: 5 }} onClick={() => { if (custom.some((x) => x[0] === n)) setCustom((o) => o.filter((x) => x[0] !== n)); else if (added.includes(n)) setAdded((o) => o.filter((x) => x !== n)); else setRemoved([...removed, n]); setRm(""); app.say(`Đã gỡ ${n}`); }}>Remove</button>}
-            </div>
-          ))}
-        </>
-      )}
+      {kind === "Skills" && sub === "Yours" && <SkillsPanel q={q} sort={sort} Toggle={Toggle} />}
 
       {kind === "Skills" && sub === "Discover" && (
         <>

@@ -25,7 +25,7 @@ jobs:
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/id_deploy" \
-            --exclude node_modules --exclude .next --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' \
+            --exclude node_modules --exclude .next --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/synchro/
 
       - name: Build và khởi động lại
