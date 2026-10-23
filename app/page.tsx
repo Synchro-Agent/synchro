@@ -830,7 +830,7 @@ export default function Home() {
         <div className="side-bottom">
           <div ref={userRef} style={{ flex: 1, position: "relative" }}>
             <button className="user" style={{ width: "100%" }} onClick={() => setUserMenu(!userMenu)}>
-              <Avatar name={name} /><span>{name} <span className="muted">· Free</span></span><span style={{ marginLeft: "auto" }} className="muted"><I.Chevron size={14} /></span>
+              <Avatar name={name} /><span>{name}</span><span style={{ marginLeft: "auto" }} className="muted"><I.Chevron size={14} /></span>
             </button>
               <Menu open={!!(userMenu)} style={{ bottom: 44, left: 0, width: 300 }} className="usermenu">
                 <div className="muted" style={{ fontSize: 13, padding: "6px 10px" }}>{me.email}</div>
