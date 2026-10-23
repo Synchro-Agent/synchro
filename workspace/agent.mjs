@@ -261,8 +261,12 @@ async function devtools(u, path, method = "GET") {
   return r.json();
 }
 
-// Bật Chromium nếu chưa chạy; trả về địa chỉ WebSocket của tab chính.
-async function pageUrl(u) {
+const pages = async (u) => (await devtools(u, "/json/list")).filter((t) => t.type === "page");
+const tabOf = (x) => ({ id: x.id, title: x.title, url: x.url });
+const wsOf = (u, id) => `ws://${st(u).ip}:9223/devtools/page/${id}`;
+
+// Bật Chromium nếu chưa chạy; trả về tab đang dùng (tab người dùng chọn gần nhất, mặc định tab đầu).
+async function activeTab(u) {
   const s = await ensure(u);
   let ok = false;
   try { await devtools(u, "/json/version"); ok = true; } catch {}
@@ -270,17 +274,22 @@ async function pageUrl(u) {
     const r = await run("docker", ["exec", "-u", UID, "-e", `HOME=${HOME}`, cname(u), "/opt/synchro/browser.sh"], { timeout: 30_000 });
     if (r.code) throw new E(500, "Không bật được trình duyệt: " + (r.err || r.out).trim().slice(0, 300));
   }
-  let list = (await devtools(u, "/json/list")).filter((t) => t.type === "page");
-  if (!list.length) { await devtools(u, "/json/new?about:blank", "PUT"); list = (await devtools(u, "/json/list")).filter((t) => t.type === "page"); }
+  let list = await pages(u);
+  if (!list.length) { await devtools(u, "/json/new?about:blank", "PUT"); list = await pages(u); }
   touch(u);
-  return list[0].webSocketDebuggerUrl.replace(/^ws:\/\/[^/]+/, `ws://${s.ip}:9223`);
+  const t = list.find((x) => x.id === s.tab) ?? list[0];
+  s.tab = t.id;
+  return t;
 }
 
 // Kết nối điều khiển dùng chung của agent (giữ log console để agent đọc lại).
 async function agentCdp(u) {
   const s = st(u);
-  if (s.cdp && !s.cdp.closed) return s.cdp;
-  const c = await CDP.open(await pageUrl(u));
+  if (s.cdp && !s.cdp.closed && s.cdp.tid === s.tab) return s.cdp;
+  s.cdp?.close();
+  const t = await activeTab(u);
+  const c = await CDP.open(wsOf(u, t.id));
+  c.tid = t.id;
   c.logs = [];
   const push = (l) => { c.logs.push(l.slice(0, 2000)); if (c.logs.length > 200) c.logs.shift(); };
   c.on("Runtime.consoleAPICalled", (p) => push(`[${p.type}] ${p.args.map((a) => a.value ?? a.description ?? a.type).join(" ")}`));
@@ -442,34 +451,58 @@ async function screen(ws, t) {
   ws.on("message", (m) => (handle ? handle(m) : queue.push(m)));
   ws.on("close", () => { gone = true; });
   const s = st(t.u);
-  const c = await CDP.open(await pageUrl(t.u));
-  if (gone) { c.close(); return; }
+  await activeTab(t.u);
+  if (gone) return;
   s.socks++;
-  let size = { w: 1280, h: 800 };
+  let size = { w: 1280, h: 800, mobile: false };
+  let c = null, lastTabs = "";
   const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
-  const sendInfo = async () => send({ t: "nav", ...(await info(c)) });
-  c.on("Page.screencastFrame", (p) => {
-    send({ t: "frame", data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight });
-    c.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
-  });
-  c.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) send({ t: "nav", url: p.frame.url }); });
-  c.on("Page.loadEventFired", () => { sendInfo(); });
-  c.on("Page.frameStartedLoading", () => send({ t: "loading", on: true }));
-  c.on("Page.frameStoppedLoading", () => send({ t: "loading", on: false }));
-  c.on("close", () => ws.close(1011, "browser closed"));
+  const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
+  const pushTabs = async () => {
+    try {
+      const list = (await pages(t.u)).map(tabOf);
+      const j = JSON.stringify([list, s.tab]);
+      if (j !== lastTabs) { lastTabs = j; send({ t: "tabs", list, active: s.tab }); }
+    } catch {}
+  };
+  const metrics = () => c.send("Emulation.setDeviceMetricsOverride", { width: size.w, height: size.h, deviceScaleFactor: 1, mobile: size.mobile }).catch(() => {});
   const startCast = () => c.send("Page.startScreencast", { format: "jpeg", quality: 65, maxWidth: size.w, maxHeight: size.h, everyNthFrame: 1 }).catch(() => {});
-  await c.send("Page.enable");
-  await c.send("Emulation.setDeviceMetricsOverride", { width: size.w, height: size.h, deviceScaleFactor: 1, mobile: false }).catch(() => {});
-  await startCast();
-  sendInfo();
+  // Gắn màn hình vào một tab (đổi tab = đóng kết nối cũ, mở kết nối tới tab mới). Agent cũng làm việc trên tab này.
+  const attach = async (id) => {
+    const list = await pages(t.u);
+    let target = list.find((x) => x.id === id) ?? list.find((x) => x.id === s.tab) ?? list[0];
+    if (!target) target = await devtools(t.u, "/json/new?about:blank", "PUT");
+    const old = c;
+    if (old) { old.switching = true; old.close(); }
+    const n = await CDP.open(wsOf(t.u, target.id));
+    c = n; s.tab = target.id;
+    n.on("Page.screencastFrame", (p) => {
+      send({ t: "frame", data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight });
+      n.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
+    });
+    n.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) { send({ t: "nav", url: p.frame.url }); pushTabs(); } });
+    n.on("Page.loadEventFired", () => { sendInfo(); pushTabs(); });
+    n.on("Page.frameStartedLoading", () => send({ t: "loading", on: true }));
+    n.on("Page.frameStoppedLoading", () => send({ t: "loading", on: false }));
+    // Tab bị đóng (vd. trang tự đóng): chuyển sang tab còn lại.
+    n.on("close", () => { if (!n.switching && !gone) attach().catch(() => ws.close(1011, "browser closed")); });
+    await n.send("Page.enable");
+    await metrics();
+    await startCast();
+    await sendInfo();
+    await pushTabs();
+  };
+  await attach(s.tab);
+  // Tab mới do trang mở (window.open, target=_blank) hoặc do agent: cập nhật danh sách định kỳ.
+  const poll = setInterval(pushTabs, 2000);
   let lastTouch = 0;
   handle = async (m) => {
-    const n = Date.now(); if (n - lastTouch > 10_000) { lastTouch = n; touch(t.u); }
+    const now = Date.now(); if (now - lastTouch > 10_000) { lastTouch = now; touch(t.u); }
     let j; try { j = JSON.parse(m.toString()); } catch { return; }
     try {
       if (j.t === "size") {
-        size = { w: Math.max(320, Math.min(j.w | 0, 2560)), h: Math.max(240, Math.min(j.h | 0, 1600)) };
-        await c.send("Emulation.setDeviceMetricsOverride", { width: size.w, height: size.h, deviceScaleFactor: 1, mobile: false });
+        size = { w: Math.max(320, Math.min(j.w | 0, 2560)), h: Math.max(240, Math.min(j.h | 0, 1600)), mobile: !!j.mobile };
+        await metrics();
         await c.send("Page.stopScreencast").catch(() => {});
         await startCast();
       } else if (j.t === "mouse") {
@@ -482,13 +515,42 @@ async function screen(ws, t) {
         await c.send("Input.insertText", { text: String(j.text ?? "") });
       } else if (j.t === "go") {
         await browserTool(t.u, { action: "navigate", url: j.url }).catch((e) => send({ t: "error", error: e.message }));
+      } else if (j.t === "html") {
+        // Mở file HTML người dùng chọn trên máy (gửi nội dung lên, hiển thị bằng data URL).
+        const html = String(j.html ?? "").slice(0, 5_000_000);
+        await c.send("Page.navigate", { url: "data:text/html;charset=utf-8;base64," + Buffer.from(html).toString("base64") });
       } else if (j.t === "back" || j.t === "forward" || j.t === "reload") {
         await browserTool(t.u, { action: j.t });
+      } else if (j.t === "tab") {
+        if (j.id !== s.tab) await attach(String(j.id));
+      } else if (j.t === "newtab") {
+        const u = String(j.url ?? "about:blank");
+        const nt = await devtools(t.u, `/json/new?${encodeURIComponent(u)}`, "PUT");
+        await attach(nt.id);
+      } else if (j.t === "closetab") {
+        const id = String(j.id);
+        const list = await pages(t.u);
+        if (list.length <= 1) { await devtools(t.u, "/json/new?about:blank", "PUT"); }
+        const next = (await pages(t.u)).find((x) => x.id !== id);
+        if (id === s.tab && next) await attach(next.id);
+        await fetch(`http://${s.ip}:9223/json/close/${id}`, { signal: AbortSignal.timeout(4000) }).catch(() => {});
+        lastTabs = ""; await pushTabs();
+      } else if (j.t === "clear") {
+        await c.send("Network.clearBrowserCookies").catch(() => {});
+        await c.send("Network.clearBrowserCache").catch(() => {});
+        await c.send("Storage.clearDataForOrigin", { origin: "*", storageTypes: "all" }).catch(() => {});
+        send({ t: "cleared" });
+      } else if (j.t === "ports") {
+        // Server đang nghe trong workspace (đọc /proc/net/tcp*), trừ cổng nội bộ của trình duyệt và DNS của Docker (127.0.0.11).
+        const r = await run("docker", ["exec", cname(t.u), "cat", "/proc/net/tcp", "/proc/net/tcp6"], { timeout: 10_000 });
+        const ports = [...new Set(r.out.split("\n").map((l) => l.trim().split(/\s+/)).filter((f) => f[3] === "0A" && !f[1].startsWith("0B00007F:")).map((f) => parseInt(f[1].split(":").pop(), 16)))]
+          .filter((p) => p && p !== 9222 && p !== 9223).sort((a, b) => a - b);
+        send({ t: "ports", list: ports });
       }
     } catch (e) { send({ t: "error", error: e.message }); }
   };
   for (const m of queue.splice(0)) handle(m);
-  const bye = () => { s.socks--; c.send("Page.stopScreencast").catch(() => {}).finally(() => c.close()); };
+  const bye = () => { s.socks--; clearInterval(poll); if (c) { c.switching = true; c.send("Page.stopScreencast").catch(() => {}).finally(() => c.close()); } };
   if (gone) bye(); else ws.on("close", bye);
 }
 

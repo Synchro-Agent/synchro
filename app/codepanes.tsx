@@ -103,43 +103,75 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
 const MOD = (e: React.KeyboardEvent | React.MouseEvent) => (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 const BTN = ["left", "middle", "right"] as const;
 
-export function BrowserPane({ sid, visible, say }: { sid: number; visible: boolean; say: Say }) {
+type BTab = { id: string; title: string; url: string };
+type Viewport = "responsive" | "desktop" | "tablet" | "mobile";
+const VIEWPORTS: { k: Viewport; label: string; w?: number; h?: number; mobile?: boolean }[] = [
+  { k: "responsive", label: "Tự co giãn" }, { k: "desktop", label: "Máy tính · 1280×800", w: 1280, h: 800 },
+  { k: "tablet", label: "Máy tính bảng · 768×1024", w: 768, h: 1024, mobile: true }, { k: "mobile", label: "Điện thoại · 390×844", w: 390, h: 844, mobile: true },
+];
+const blankUrl = (u: string) => !u || u === "about:blank" || u.startsWith("chrome://newtab");
+const hostOf = (u: string) => { try { const x = new URL(u); return x.host || u; } catch { return u; } };
+
+// Trình duyệt của workspace (giống trình duyệt tích hợp của Claude): hàng tab, thanh địa chỉ, trang tab mới gợi ý server đang chạy,
+// menu ⋮ (mở bằng trình duyệt của bạn, sao chép URL, lưu ảnh chụp, mở file HTML, khung nhìn, xóa dữ liệu) và nút phóng to.
+export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, autoOpen, setAutoOpen }: { sid: number; visible: boolean; say: Say; onClose: () => void; onExpand: () => void; expanded: boolean; autoOpen: boolean; setAutoOpen: (v: boolean) => void }) {
   const [url, setUrl] = useState("");
   const [addr, setAddr] = useState("");
-  const [title, setTitle] = useState("");
+  const [focus, setFocus] = useState(false);
+  const [tabs, setTabs] = useState<BTab[]>([]);
+  const [active, setActive] = useState("");
   const [st, setSt] = useState<"connecting" | "open" | "closed">("connecting");
   const [loading, setLoading] = useState(false);
   const [blank, setBlank] = useState(true);
+  const [ports, setPorts] = useState<number[] | null>(null);
+  const [menu, setMenu] = useState(false);
+  const [vp, setVp] = useState<Viewport>("responsive");
+  const [navd, setNavd] = useState(false); // đã nhận địa chỉ thật của tab (tránh coi nhầm là tab mới lúc vừa kết nối)
   const ws = useRef<WebSocket | null>(null);
   const view = useRef<HTMLDivElement>(null);
   const img = useRef<HTMLImageElement>(null);
+  const addrIn = useRef<HTMLInputElement>(null);
+  const htmlIn = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const editing = useRef(false);
   const lastMove = useRef(0);
+  const vpRef = useRef(vp); vpRef.current = vp;
   const send = (o: Record<string, unknown>) => { if (ws.current?.readyState === 1) ws.current.send(JSON.stringify(o)); };
+  const sendSize = () => {
+    const v = VIEWPORTS.find((x) => x.k === vpRef.current);
+    if (v?.w) return send({ t: "size", w: v.w, h: v.h, mobile: v.mobile });
+    const r = view.current?.getBoundingClientRect();
+    if (r && r.width > 50) send({ t: "size", w: Math.round(r.width), h: Math.round(r.height) });
+  };
 
   const connect = useCallback(async () => {
     ws.current?.close();
     setSt("connecting");
+    setNavd(false);
     try {
       const { url: u } = await wsOp<{ url: string }>("ticket", sid, { kind: "screen" });
       const s = new WebSocket(u);
       ws.current = s;
-      s.onopen = () => {
-        setSt("open");
-        const r = view.current?.getBoundingClientRect();
-        if (r?.width) s.send(JSON.stringify({ t: "size", w: Math.round(r.width), h: Math.round(r.height) }));
-      };
+      s.onopen = () => { setSt("open"); sendSize(); };
       s.onmessage = (e) => {
-        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string };
+        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string };
         try { j = JSON.parse(String(e.data)); } catch { return; }
         if (j.t === "frame" && img.current) { img.current.src = `data:image/jpeg;base64,${j.data}`; setBlank(false); }
-        else if (j.t === "nav") { if (j.url !== undefined) { setUrl(j.url); if (!editing.current) setAddr(j.url === "about:blank" ? "" : j.url); } if (j.title !== undefined) setTitle(j.title); }
+        else if (j.t === "nav") { if (j.url !== undefined) { setUrl(j.url); setNavd(true); if (!editing.current) setAddr(blankUrl(j.url) ? "" : j.url); } }
+        else if (j.t === "tabs") {
+          // Giữ thứ tự tab đã thấy; tab mới thêm vào bên phải (Chromium trả tab mới nhất lên đầu).
+          const list = j.list as BTab[];
+          setTabs((old) => [...old.filter((o) => list.some((x) => x.id === o.id)).map((o) => list.find((x) => x.id === o.id)!), ...list.filter((x) => !old.some((o) => o.id === x.id)).reverse()]);
+          setActive(j.active ?? "");
+        }
+        else if (j.t === "ports") setPorts(j.list as number[]);
         else if (j.t === "loading") setLoading(!!j.on);
+        else if (j.t === "cleared") say("Đã xóa dữ liệu duyệt web");
         else if (j.t === "error" && j.error) say(j.error);
       };
       s.onclose = () => { if (ws.current === s) setSt("closed"); };
     } catch (e) { say((e as Error).message); setSt("closed"); }
-  }, [sid, say]);
+  }, [sid, say]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chỉ nhận hình khi khung đang hiện (tiết kiệm băng thông); ẩn thì ngắt.
   useEffect(() => {
@@ -152,12 +184,29 @@ export function BrowserPane({ sid, visible, say }: { sid: number; visible: boole
     const el = view.current;
     if (!el) return;
     let t: ReturnType<typeof setTimeout> | undefined;
-    const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { const r = el.getBoundingClientRect(); if (r.width > 50) send({ t: "size", w: Math.round(r.width), h: Math.round(r.height) }); }, 150); });
+    const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { if (vpRef.current === "responsive") sendSize(); }, 150); });
     ro.observe(el);
-    const wheel = (e: WheelEvent) => { e.preventDefault(); const p = pt(e.clientX, e.clientY); send({ t: "wheel", ...p, dx: e.deltaX, dy: e.deltaY }); };
+    const wheel = (e: WheelEvent) => { if (vpRef.current !== "responsive" && e.shiftKey) return; e.preventDefault(); const p = pt(e.clientX, e.clientY); send({ t: "wheel", ...p, dx: e.deltaX, dy: e.deltaY }); };
     el.addEventListener("wheel", wheel, { passive: false });
     return () => { ro.disconnect(); el.removeEventListener("wheel", wheel); clearTimeout(t); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { sendSize(); }, [vp]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trang tab mới: gợi ý các server đang chạy trong workspace, cập nhật vài giây một lần.
+  const isNew = st === "open" && navd && blankUrl(url);
+  useEffect(() => {
+    if (!isNew || !visible) return;
+    send({ t: "ports" });
+    const i = setInterval(() => send({ t: "ports" }), 4000);
+    setTimeout(() => addrIn.current?.focus(), 50);
+    return () => clearInterval(i);
+  }, [isNew, visible, active]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!menu) return;
+    const h = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenu(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [menu]);
 
   const pt = (cx: number, cy: number) => {
     const im = img.current;
@@ -177,22 +226,82 @@ export function BrowserPane({ sid, visible, say }: { sid: number; visible: boole
     const text = printable ? e.key : e.key === "Enter" ? "\r" : undefined;
     send({ t: "key", type: type === "up" ? "keyUp" : text ? "keyDown" : "rawKeyDown", key: e.key, code: e.code, text: type === "down" ? text : undefined, kc: e.keyCode, mod: MOD(e) });
   };
-  const go = (e: React.FormEvent) => { e.preventDefault(); editing.current = false; if (addr.trim()) send({ t: "go", url: addr.trim() }); view.current?.focus(); };
-  const local = !url || isLocalUrl(url);
+  const go = (to: string) => { editing.current = false; if (to.trim()) { send({ t: "go", url: to.trim() }); setAddr(to.trim()); } addrIn.current?.blur(); view.current?.focus(); };
+  const local = blankUrl(url) || isLocalUrl(url) || url.startsWith("data:");
+  const shot = () => {
+    const src = img.current?.src;
+    if (!src || blank) return say("Chưa có hình để lưu");
+    const a = document.createElement("a");
+    a.href = src; a.download = `synchro-${hostOf(url).replace(/[^\w.-]+/g, "_") || "trang"}-${Date.now()}.jpg`; a.click();
+  };
+  const openHtml = async (f?: File | null) => { if (!f) return; send({ t: "html", html: await f.text() }); say(`Đã mở ${f.name}`); };
+  const item = (label: string, fn: () => void, o: { disabled?: boolean; check?: boolean; danger?: boolean; icon?: React.ReactNode } = {}) => (
+    <button className={`menu-item bp-mi ${o.danger ? "del" : ""}`} disabled={o.disabled} onClick={() => { setMenu(false); fn(); }}>{o.icon}<span>{label}</span>{o.check && <span className="ck"><I.Check size={14} /></span>}</button>
+  );
+  const fixed = VIEWPORTS.find((x) => x.k === vp)?.w;
+
   return (
     <div className="bp">
-      <form className="bp-bar" onSubmit={go}>
+      <div className="bp-tabs">
+        <div className="bp-tablist">
+          {tabs.map((t) => (
+            <div key={t.id} className={`bp-tab ${t.id === active ? "on" : ""}`} title={t.url}>
+              <button onClick={() => send({ t: "tab", id: t.id })}><I.Globe size={13} /><span className="cv-ell" data-notr>{blankUrl(t.url) ? "Tab mới" : t.title || hostOf(t.url)}</span></button>
+              <button className="tp-x" onClick={() => send({ t: "closetab", id: t.id })} aria-label="Đóng tab"><I.X size={11} /></button>
+            </div>
+          ))}
+          <button className="icon-btn bp-new" onClick={() => send({ t: "newtab" })} aria-label="Tab mới" title="Tab mới"><I.Plus size={15} /></button>
+        </div>
+        <div className="bp-acts" ref={menuRef}>
+          <button className={`icon-btn ${menu ? "on" : ""}`} onClick={() => setMenu(!menu)} aria-label="Tùy chọn trình duyệt" title="Tùy chọn"><I.Dots size={16} /></button>
+          <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} title={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Đóng trình duyệt" title="Đóng"><I.X size={15} /></button>
+          {menu && (
+            <div className="menu bp-menu">
+              {item("Mở trong trình duyệt của bạn", () => window.open(url, "_blank", "noopener"), { disabled: local, icon: <I.External size={15} /> })}
+              {item("Sao chép URL", () => { navigator.clipboard?.writeText(url); say("Đã sao chép URL"); }, { disabled: blankUrl(url), icon: <I.Copy size={15} /> })}
+              {item("Lưu ảnh chụp màn hình", shot, { icon: <I.Camera size={15} /> })}
+              {item("Mở file HTML…", () => htmlIn.current?.click(), { icon: <I.File size={15} /> })}
+              <hr />
+              <div className="cv-mh">Khung nhìn</div>
+              {VIEWPORTS.map((v) => <div key={v.k}>{item(v.label, () => setVp(v.k), { check: vp === v.k })}</div>)}
+              <hr />
+              {item("Tự mở trình duyệt khi agent dùng", () => setAutoOpen(!autoOpen), { check: autoOpen })}
+              <hr />
+              {item("Xóa dữ liệu duyệt web", () => send({ t: "clear" }), { danger: true })}
+            </div>
+          )}
+          <input ref={htmlIn} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { openHtml(e.target.files?.[0]); e.target.value = ""; }} />
+        </div>
+      </div>
+      <form className="bp-bar" onSubmit={(e) => { e.preventDefault(); go(addr); }}>
         <button type="button" className="icon-btn" onClick={() => send({ t: "back" })} aria-label="Quay lại"><I.Back size={15} /></button>
         <button type="button" className="icon-btn" onClick={() => send({ t: "forward" })} aria-label="Tiến tới"><span style={{ display: "inline-flex", transform: "scaleX(-1)" }}><I.Back size={15} /></span></button>
         <button type="button" className="icon-btn" onClick={() => send({ t: "reload" })} aria-label="Tải lại">{loading ? <span className="ag-spin" /> : <I.Retry size={15} />}</button>
-        <input value={addr} placeholder="Nhập địa chỉ, vd. localhost:3000 hoặc example.com" onFocus={(e) => { editing.current = true; e.target.select(); }} onBlur={() => { editing.current = false; }} onChange={(e) => setAddr(e.target.value)} spellCheck={false} data-notr />
-        <button type="button" className="icon-btn" disabled={local} onClick={() => window.open(url, "_blank", "noopener")} title={local ? "Địa chỉ localhost chỉ có trong workspace" : "Mở trong trình duyệt của bạn (Chrome…)"} aria-label="Mở trong trình duyệt của bạn"><I.External size={15} /></button>
+        <input ref={addrIn} className={focus || !addr ? "" : "rest"} value={focus ? addr : addr ? hostOf(addr) + (() => { try { const x = new URL(addr); return x.pathname === "/" ? "" : x.pathname; } catch { return ""; } })() : ""}
+          placeholder="Nhập địa chỉ" spellCheck={false} data-notr
+          onFocus={(e) => { editing.current = true; setFocus(true); setTimeout(() => e.target.select(), 0); }}
+          onBlur={() => { editing.current = false; setFocus(false); }} onChange={(e) => setAddr(e.target.value)} />
+        <button type="button" className="icon-btn" disabled={local} onClick={() => window.open(url, "_blank", "noopener")} title={local ? "Địa chỉ localhost chỉ có trong workspace" : "Mở trong trình duyệt của bạn"} aria-label="Mở trong trình duyệt của bạn"><I.External size={15} /></button>
       </form>
-      <div ref={view} className="bp-view" tabIndex={0} onMouseDown={mouse("mousePressed")} onMouseUp={mouse("mouseReleased")} onMouseMove={mouse("mouseMoved")} onContextMenu={(e) => e.preventDefault()}
-        onKeyDown={key("down")} onKeyUp={key("up")} onPaste={(e) => { e.preventDefault(); send({ t: "text", text: e.clipboardData.getData("text") }); }} title={title}>
+      <div ref={view} className={`bp-view ${fixed ? "fixed" : ""}`} tabIndex={0} onMouseDown={mouse("mousePressed")} onMouseUp={mouse("mouseReleased")} onMouseMove={mouse("mouseMoved")} onContextMenu={(e) => e.preventDefault()}
+        onKeyDown={key("down")} onKeyUp={key("up")} onPaste={(e) => { e.preventDefault(); send({ t: "text", text: e.clipboardData.getData("text") }); }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={img} alt="" draggable={false} style={{ visibility: blank ? "hidden" : "visible" }} />
-        {blank && st !== "closed" && <div className="bp-empty"><span className="ag-spin" />Đang bật trình duyệt của workspace…</div>}
+        <img ref={img} alt="" draggable={false} style={{ visibility: blank || isNew ? "hidden" : "visible", width: fixed ? `min(100%, ${fixed}px)` : undefined }} />
+        {isNew && (
+          <div className="bp-newtab" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="bp-nt-in">
+              {ports === null ? <p className="bp-nt-note"><span className="ag-spin" />Đang tìm server trong workspace…</p>
+                : ports.length ? <>
+                  <p className="bp-nt-note">Đã tìm thấy server đang chạy trong workspace.</p>
+                  {ports.map((p) => (
+                    <div key={p} className="bp-nt-row"><div><span>localhost · cổng {p}</span><code data-notr>http://localhost:{p}</code></div><button className="btn" onClick={() => go(`http://localhost:${p}`)}>Mở</button></div>
+                  ))}
+                </> : <p className="bp-nt-note txt">Chưa có server nào chạy trong workspace. Nhập địa chỉ ở trên, hoặc nhờ agent chạy dự án (vd. <code>npm run dev</code>).</p>}
+            </div>
+          </div>
+        )}
+        {blank && !isNew && st !== "closed" && <div className="bp-empty"><span className="ag-spin" />Đang bật trình duyệt của workspace…</div>}
         {st === "closed" && <div className="bp-empty"><span>Đã ngắt kết nối trình duyệt.</span><button className="btn" onClick={connect}><I.Retry size={14} />Kết nối lại</button></div>}
       </div>
     </div>

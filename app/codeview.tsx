@@ -201,6 +201,9 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
   const [paneW, setPaneW] = usePref("codePaneW", 560);
   const [dragW, setDragW] = useState<number | null>(null);
   const [rail, setRail] = usePref("codeRail", false);
+  const [paneMax, setPaneMax] = useState(false);
+  const [autoBrowser, setAutoBrowser] = usePref("codeAutoBrowser", true);
+  const autoBrowserRef = useRef(autoBrowser); autoBrowserRef.current = autoBrowser;
   const [wsUsed, setWsUsed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   // Khung chat nổi trên luồng tin nhắn: chừa đúng chiều cao của nó (thay đổi khi có danh sách việc, tệp đính kèm…).
@@ -385,6 +388,7 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
           else if (e.t === "plan") patchNode(id, (n) => ({ ...n, plan: e.items }));
           else if (e.t === "usage") patchNode(id, (n) => ({ ...n, usage: { input: e.input, output: (n.usage?.output ?? 0) + e.output } }));
           else if (e.t === "ui") {
+            if (e.open === "browser" && !autoBrowserRef.current) return;
             openPane(e.open);
             if (e.open === "terminal") showTerm(e.tab ?? "log");
             if (e.open === "files" && e.path) showFile(e.path);
@@ -841,7 +845,7 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
 
   return (
     <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
-      <div className="cv-body">
+      <div className={`cv-body ${pane && paneMax ? "pane-max" : ""}`}>
       <div className="cv-col" ref={colRef}>
       <div className="cv-bar">
         <div className="cv-bar-l">
@@ -1058,18 +1062,19 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
 
       {pane && <div className="cv-split" onMouseDown={startDrag} onDoubleClick={() => setPaneW(560)} />}
       <div className={`cv-side ${pane ? "" : "hide"}`} style={{ width: dragW ?? paneW }}>
-        <div className="cv-side-h">
+        <div className="cv-side-h" hidden={pane === "browser"}>
           {(["terminal", "browser", "files", "block"] as PaneKind[]).filter((k) => mountedP.includes(k) && (k !== "block" || panel)).map((k) => (
             <button key={k} className={`cv-side-tab ${pane === k ? "on" : ""}`} onClick={() => setPane(k)}>
               {k === "terminal" ? <><I.Terminal size={14} />Terminal</> : k === "browser" ? <><I.Globe size={14} />Trình duyệt</> : k === "files" ? <><I.Folder size={14} />File</> : <><I.Code size={14} /><span className="cv-ell" data-notr>{panel?.name}</span></>}
             </button>
           ))}
           <div className="cv-sp" />
-          <button className="icon-btn" onClick={() => setPane(null)} aria-label="Đóng khung" title="Đóng khung"><I.X size={15} /></button>
+          <button className="icon-btn" onClick={() => setPaneMax(!paneMax)} aria-label={paneMax ? "Thu nhỏ" : "Phóng to"} title={paneMax ? "Thu nhỏ" : "Phóng to"}>{paneMax ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>
+          <button className="icon-btn" onClick={() => { setPane(null); setPaneMax(false); }} aria-label="Đóng khung" title="Đóng khung"><I.X size={15} /></button>
         </div>
         <div className="cv-side-b">
           {sid !== null && mountedP.includes("terminal") && <div className="cv-pane" hidden={pane !== "terminal"}><TerminalPane sid={sid} visible={pane === "terminal"} /></div>}
-          {sid !== null && mountedP.includes("browser") && <div className="cv-pane" hidden={pane !== "browser"}><BrowserPane sid={sid} visible={pane === "browser"} say={say} /></div>}
+          {sid !== null && mountedP.includes("browser") && <div className="cv-pane" hidden={pane !== "browser"}><BrowserPane sid={sid} visible={pane === "browser"} say={say} onClose={() => { setPane(null); setPaneMax(false); }} onExpand={() => setPaneMax(!paneMax)} expanded={paneMax} autoOpen={autoBrowser} setAutoOpen={setAutoBrowser} /></div>}
           {sid !== null && mountedP.includes("files") && <div className="cv-pane" hidden={pane !== "files"}><FilesPane sid={sid} visible={pane === "files"} say={say} /></div>}
           {panel && <div className="cv-pane" hidden={pane !== "block"}><SidePanel key={panel.name + panel.code.length} panel={panel} setPanel={setPanel} say={say} onFix={autoFix} /></div>}
         </div>
