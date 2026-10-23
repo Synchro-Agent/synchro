@@ -288,8 +288,12 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
   const openPane = useCallback((k: PaneKind) => {
     setPane(k);
     setMountedP((m) => (m.includes(k) ? m : [...m, k]));
-    if (k !== "block") setWsUsed(true);
-  }, []);
+    if (k !== "block") {
+      setWsUsed(true);
+      // Mở pane sẽ bật container: cập nhật trạng thái hiển thị trong session rail.
+      setTimeout(() => wsStatus().then(setStatus).catch(() => {}), 4000);
+    }
+  }, [setStatus]);
   const wsPane = (k: PaneKind) => {
     if (pane === k) { setPane(null); return; }
     if (k !== "block" && !status?.available) { say(status?.reason ?? "Workspace chưa sẵn sàng"); return; }
@@ -819,6 +823,8 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
 
   return (
     <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
+      <div className="cv-body">
+      <div className="cv-col" ref={colRef}>
       <div className="cv-bar">
         <div className="cv-bar-l">
           {!sideOpen && <button className="icon-btn" onClick={onSide} aria-label="Mở thanh bên"><I.Panel /></button>}
@@ -857,9 +863,6 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
           </div>
         </div>
       </div>
-
-      <div className="cv-body">
-      <div className="cv-col" ref={colRef}>
         <div className="thread cv-thread" ref={threadRef} onScroll={onScroll} onMouseUp={onThreadUp}>
           {path.length === 0 ? (
             <div className="cv-empty">
