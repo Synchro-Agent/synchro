@@ -133,7 +133,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
       <div className="sk-gh">
         <I.Globe size={16} />
         <input placeholder="Or paste a GitHub link (repo, folder or SKILL.md)" value={gh} onChange={(e) => setGh(e.target.value)} onKeyDown={(e) => e.key === "Enter" && importGh()} />
-        <button className="btn" disabled={checking || !gh.trim()} onClick={importGh}>{checking ? "Checking…" : "Import"}</button>
+        <button className="btn dark" disabled={checking || !gh.trim()} onClick={importGh}>{checking ? "Checking…" : "Import"}</button>
       </div>
       {err && <div className="sk-err" role="alert"><span>{err}</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {loadErr && <div className="sk-err">{loadErr}</div>}

@@ -1718,3 +1718,6 @@ b,strong{font-weight:600}
 .cv-model .model-btn{white-space:nowrap}
 .cv-model .menu{white-space:normal;font-size:14px;color:var(--text)}
 .cv-model .msub-note{white-space:normal}
+/* Nút Nhập skill từ GitHub: nút đậm đổi theo theme (sáng: nút tối, tối: nút sáng), mờ khi chưa có link */
+.sk-gh .btn.dark{padding:0 14px}
+.sk-gh .btn:disabled{opacity:.4;cursor:default}
