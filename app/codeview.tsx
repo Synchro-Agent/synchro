@@ -168,7 +168,7 @@ async function readEntry(en: FileSystemEntry, base: string, out: { path: string;
   }
 }
 
-export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void }) {
+export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; modelPicker: React.ReactNode; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [sel, setSel] = useState<Record<number, number>>({});
   const [ctx, setCtx] = useState<Ctx[]>([]);
@@ -1044,7 +1044,8 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
                 </Menu>
               </div>
               <div className="cv-sp" />
-              <span className="cv-model" data-notr>{model}</span>
+              {/* Bộ chọn model + mức nỗ lực dùng chung với khung chat thường (khóa model quản trị viên chưa cho phép). */}
+              <div className="cv-model" data-notr>{modelPicker}</div>
               <div style={{ position: "relative" }}>
                 <CtxRing pct={pct} active={menu === "ctx"} title={`Ngữ cảnh: ${fmtK(total)} / ${fmtK(MAX_TOK)} token (${Math.round(pct)}%)`} onClick={() => setMenu(menu === "ctx" ? "" : "ctx")} />
                 <Menu open={menu === "ctx"} className="cv-ctx" style={{ bottom: 34, right: -6, width: 360 }}>
