@@ -1713,3 +1713,8 @@ b,strong{font-weight:600}
 .cv-model .model-btn{height:28px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--text-2);display:flex;align-items:center;gap:5px}
 .cv-model .model-btn:hover{background:var(--hover);color:var(--text)}
 .cv-model .model-menu{bottom:34px;right:0}
+/* Menu model trong tab Code: không thừa hưởng cỡ chữ / "không xuống dòng" của hàng dưới khung chat */
+.cv-model{white-space:normal;font-size:inherit}
+.cv-model .model-btn{white-space:nowrap}
+.cv-model .menu{white-space:normal;font-size:14px;color:var(--text)}
+.cv-model .msub-note{white-space:normal}
