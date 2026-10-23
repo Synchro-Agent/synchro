@@ -1,4 +1,4 @@
-// Rút gọn họ tên để hiển thị: "Nguyễn Hữu Lâm Tùng" -> "Lâm Tùng", "Nguyễn Văn An" -> "An", "John Smith" -> "John".
+// Rút gọn họ tên để hiển thị: "Nguyễn Hữu Lâm Tùng" -> "Lâm Tùng", "Nguyễn Văn An" -> "An", "Mary Jane Watson" -> "Mary".
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 // Họ phổ biến của người Việt (so khớp không dấu để nhận cả tên gõ không dấu).
@@ -18,8 +18,9 @@ export function shortName(full: string | null | undefined): string {
   if (words.length <= 1) return cap(words[0] ?? "");
   // Giữ cách viết hoa của người dùng; nếu gõ toàn chữ thường thì viết hoa chữ đầu mỗi từ.
   const nice = words.map((w) => (w === w.toLocaleLowerCase("vi") ? cap(w) : w));
+  // Hai chữ thì đã đủ ngắn (và không phân biệt được "Lê Tùng" với "Lâm Tùng"), giữ nguyên.
+  if (words.length === 2) return nice.join(" ");
   if (!SURNAMES.has(fold(words[0]))) return nice[0];
-  if (words.length === 2) return nice[1];
   const last2 = nice.slice(-2);
   return MIDDLES.has(fold(last2[0])) ? last2[1] : last2.join(" ");
 }
