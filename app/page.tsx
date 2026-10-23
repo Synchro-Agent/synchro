@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
 import { getLang, tr } from "./i18n";
@@ -23,13 +23,6 @@ import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
-const SUGGEST: Record<string, string[]> = {
-  "Viết": ["Giúp tôi viết một email xin nghỉ phép", "Soạn bài đăng LinkedIn về thành tựu mới", "Viết lời mở đầu hấp dẫn cho bài blog", "Chỉnh sửa đoạn văn này cho mạch lạc hơn"],
-  "Học tập": ["Giải thích khái niệm blockchain đơn giản", "Tạo bộ thẻ ghi nhớ cho từ vựng tiếng Anh", "Lập kế hoạch học lập trình trong 30 ngày", "Giúp tôi hiểu đạo hàm là gì"],
-  "Lập trình": ["Viết hàm Python sắp xếp danh sách từ điển", "Tìm bug trong đoạn code React này", "Giải thích cách hoạt động của async/await", "Tối ưu truy vấn SQL chậm"],
-  "Cuộc sống": ["Gợi ý thực đơn tuần cho người bận rộn", "Lên kế hoạch du lịch Đà Nẵng 3 ngày", "Cách xây dựng thói quen dậy sớm", "Gợi ý quà sinh nhật cho bố mẹ"],
-  "Lựa chọn của Synchro": ["Kể cho tôi một sự thật thú vị về vũ trụ", "Cho tôi một câu đố logic", "Giới thiệu một cuốn sách đáng đọc", "Hãy thử thách tôi bằng một câu hỏi triết học"],
-};
 
 function useClickAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -198,26 +191,8 @@ function Composer(p: {
   const [web, setWeb] = useState(true);
   const perms = useApp().me?.perms;
   const [mem, setMem] = useState(true);
-  const [mode, setMode] = useState("chat");
   const [rec, setRec] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
-  const segRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const seg = segRef.current;
-    if (!seg) return;
-    const place = () => {
-      const t = seg.querySelector<HTMLElement>(".thumb"), b = seg.querySelector<HTMLElement>("button.on");
-      if (!t || !b) return;
-      t.style.setProperty("--x", b.offsetLeft + "px");
-      t.style.setProperty("--w", b.offsetWidth + "px");
-      t.dataset.ready = "1";
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    seg.querySelectorAll("button").forEach((b) => ro.observe(b));
-    document.fonts?.ready.then(place);
-    return () => ro.disconnect();
-  }, [mode]);
   const fileIn = useRef<HTMLInputElement>(null);
   const recRef = useRef<Rec | null>(null);
   const ref = useClickAway(() => setMenu(false));
@@ -312,11 +287,6 @@ function Composer(p: {
       <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
       <div className="comp-row">
         {plus}
-        <div className="seg" ref={segRef}>
-          <span className="thumb" />
-          <button className={mode === "chat" ? "on" : ""} onClick={() => setMode("chat")}>Đoạn chat</button>
-          <button className={mode === "cowork" ? "on" : ""} onClick={() => { setMode("cowork"); say("Cowork là bản xem trước, đang ở chế độ demo"); }}>Cowork</button>
-        </div>
         <div className="model">
           {modelPicker}
           {micBtn}
@@ -423,7 +393,6 @@ export default function Home() {
   const [incog, setIncog] = useState(false);
   const [files, setFiles] = useState<string[]>([]);
   const [prefill, setPrefill] = useState({ t: "", n: 0 });
-  const [cat, setCat] = useState<string | null>(null);
   const [greet, setGreet] = useState("");
   const [drag, setDrag] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -588,7 +557,6 @@ export default function Home() {
       setView("chat");
     } else patch(id, (m) => [...m, ...msgs]);
     setFiles([]);
-    setCat(null);
     setTplMode(null);
     setPrefill({ t: "", n: 0 });
     const prior = id !== null && view === "chat" ? (chatsRef.current.find((c) => c.id === id)?.msgs ?? []) : [];
@@ -631,7 +599,7 @@ export default function Home() {
     if (busy) stop();
     window.speechSynthesis?.cancel();
     setChats((cs) => cs.filter((c) => !c.inc));
-    setView("new"); setCur(null); setCat(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
+    setView("new"); setCur(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
   };
   const goCustom = (t: "Skills" | "Connectors" | "Plugins") => { setCTab(t); setView("customize"); };
   const removeChat = (id: number) => { setChats((cs) => cs.filter((c) => c.id !== id)); if (cur === id) goNew(); };
@@ -921,15 +889,7 @@ export default function Home() {
                 </div>
                 {t.k !== "doc" && <button className="mode-sys" onClick={() => say("Hệ thống thiết kế: chưa có hệ thống nào được thiết lập")}><I.Palette size={16} />Hệ thống thiết kế</button>}
               </div>); })()}
-            {incog ? <p className="muted" style={{ fontSize: 13, marginTop: 20 }}>Đoạn chat ẩn danh sẽ không được lưu vào lịch sử</p> : tplMode ? null : cat ? (
-              <div className="sugg">{SUGGEST[cat].map((s) => <button key={s} onClick={() => setPrefill({ t: s, n: Date.now() })}>{s}</button>)}</div>
-            ) : (
-              <div className="chips">
-                {[[<I.Pencil key="1" size={16} />, "Viết"], [<I.Grad key="2" size={16} />, "Học tập"], [<I.Code key="3" size={16} />, "Lập trình"], [<I.Coffee key="4" size={16} />, "Cuộc sống"], [<I.Bulb key="5" size={16} />, "Lựa chọn của Synchro"]].map(([ic, l]) => (
-                  <button key={l as string} className="chip" onClick={() => setCat(l as string)}>{ic}{l}</button>
-                ))}
-              </div>
-            )}
+            {incog ? <p className="muted" style={{ fontSize: 13, marginTop: 20 }}>Đoạn chat ẩn danh sẽ không được lưu vào lịch sử</p> : null}
           </div>
         )}
 
@@ -989,7 +949,7 @@ export default function Home() {
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tạo thứ gì đó mới</div>
             <div className="tpls">
               {TPLS.map((t, i) => (
-                <button key={t.k} className={`tpl tpl-${t.k} ${i === 2 ? "last" : ""}`} onClick={() => { setTplMode(t.k); setCat(null); setView("new"); }}>
+                <button key={t.k} className={`tpl tpl-${t.k} ${i === 2 ? "last" : ""}`} onClick={() => { setTplMode(t.k); setView("new"); }}>
                   <div className="th"><TplArt k={t.k} /><span className="cur"><svg width="16" height="18" viewBox="0 0 16 18"><path d="M1.5 1l12 7.2-5.4 1.3-2.6 5.2z" fill="#fff" stroke="#111" strokeWidth="1.2" strokeLinejoin="round" /></svg><em>Synchro</em></span></div>
                   <span className="tl">{t.name}<span className="new-tag">Mới</span></span>
                   <span className="tpl-pop"><b>{t.name}</b><i>Của Synchro</i><span>{t.desc}</span></span>
