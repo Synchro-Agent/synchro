@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
+import { FluidDots } from "./fluid-dots";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
@@ -125,7 +126,7 @@ export function AgentSteps({ steps, live, say }: { steps: AStep[]; live: boolean
 const fmtTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const fmtTime = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
 
-// Dòng trạng thái khi agent đang làm (giống Claude): chấm cam, việc đang làm (chữ lướt sáng), thời gian, số token.
+// Dòng trạng thái khi agent đang làm: animation tải của Synchro (FluidDots), việc đang làm (chữ lướt sáng), thời gian, số token.
 export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: number; tokens: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -148,7 +149,7 @@ export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: nu
   }
   return (
     <div className="ag-status">
-      <span className="ag-dots" aria-hidden><i /><i /><i /><i /></span>
+      <span className="ag-load" aria-hidden><FluidDots size={14} /></span>
       <span className="ag-shimmer">{label}</span>
       <span className="ag-meta" data-notr>{sec >= 1 ? `${fmtTime(sec)} · ` : ""}{fmtTok(tokens)} tokens</span>
     </div>

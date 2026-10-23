@@ -1663,3 +1663,4 @@ ul.cv-tasks li.completed{color:var(--text-2)}
 /* Độ đậm chữ như Claude: chữ in đậm và tiêu đề dùng semibold (600) thay vì bold (700) */
 b,strong{font-weight:600}
 .ai-msg h1,.ai-msg h2,.ai-msg h3,.ai-msg h4,.ai-msg th{font-weight:600}
+.ag-load{display:flex;align-items:center;flex:none}
