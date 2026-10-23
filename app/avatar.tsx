@@ -96,7 +96,7 @@ function AvatarFlow({ onClose }: { onClose: () => void }) {
               <span>Chỉ hỗ trợ ảnh JPG hoặc PNG, tối đa 10MB</span>
               {err && <em className="upl-err">{err}</em>}
               <input ref={inp} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ""; take(f); }} />
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="av-actions">
                 <button className="btn" onClick={() => inp.current?.click()}>Chọn ảnh</button>
                 {avatar && <button className="btn" onClick={() => { setAvatar(""); onClose(); }}>Xóa ảnh hiện tại</button>}
               </div>

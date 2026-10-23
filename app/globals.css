@@ -1062,6 +1062,8 @@ html body .cv-card,html[data-theme=dark] body .cv-card{background:var(--gl-fill)
 .upl-spin{width:12px;height:12px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;display:inline-block;margin-right:8px;vertical-align:-2px;animation:uplspin .7s linear infinite}
 @keyframes uplspin{to{transform:rotate(360deg)}}
 .upl-zone .btn+.btn{margin-top:8px}
+.upl-zone .av-actions{display:flex;align-items:center;justify-content:center;gap:8px}
+.upl-zone .av-actions .btn+.btn{margin-top:0}
 .upl-zone .upl-err{display:block;margin:10px 0 0;font-style:normal}
 .md-tbl{overflow-x:auto;margin:8px 0}
 .md-tbl table{border-collapse:collapse;font-size:13.5px;min-width:50%}

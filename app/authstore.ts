@@ -139,7 +139,7 @@ export function createUser(o: { email: string; name: string; passwordHash?: stri
 
 export function publicUser(u: UserRow) {
   return {
-    id: u.id, email: u.email, name: u.name, avatar: u.avatar, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
+    id: u.id, email: u.email, name: u.name, avatar: u.avatar || null, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
     profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation },
     needsProfile: !u.full_name || !u.birth_date,
     perms: permsOf(u),
@@ -205,7 +205,7 @@ export function cleanProfile(p: ProfileIn): ProfileCols {
   if (p.avatar !== undefined) {
     const v = typeof p.avatar === "string" ? p.avatar : "";
     if (v && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) || v.length > 400_000)) throw new AuthError("Ảnh đại diện không hợp lệ hoặc quá lớn.");
-    out.avatar = v || null;
+    out.avatar = v; // "" = đã chủ động xóa ảnh: đăng nhập Google/GitHub sau này không tự gắn lại
   }
   return out;
 }
@@ -354,7 +354,10 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
     u = getUser(u.id)!;
   }
   if (u.status !== "active") { audit("login_blocked", { target: u, ip, detail: p.provider }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
-  if (!u.avatar && p.avatar) db().prepare("UPDATE users SET avatar = ? WHERE id = ?").run(p.avatar, u.id);
+  // Ảnh từ nhà cung cấp chỉ dùng khi chưa có ảnh. GitHub tự tạo ảnh hoa văn cho tài khoản chưa đặt ảnh,
+  // nên ảnh Google (ảnh thật hoặc chữ cái đầu) được ưu tiên thay cho ảnh GitHub.
+  const fromGithub = !!u.avatar?.includes("avatars.githubusercontent.com");
+  if (p.avatar && (u.avatar === null || (p.provider === "google" && fromGithub))) db().prepare("UPDATE users SET avatar = ? WHERE id = ?").run(p.avatar, u.id);
   audit("login", { actor: u, ip, detail: p.provider });
   return { user: u, cookie: createSession(u, req, p.provider) };
 }
