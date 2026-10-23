@@ -17,14 +17,14 @@ import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc } from "./filemenu";
 import { ingestFile } from "./filestate";
-import { AgentSteps, CtxRing, GitHubButton, TaskCard, type AStep } from "./agentui";
+import { AgentSteps, CtxRing, GitHubButton, StatusLine, TaskCard, type AStep } from "./agentui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
 type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?: Pill[] };
 // steps/plan: lượt trả lời do agent (có workspace) làm: đoạn văn xen kẽ công cụ, và danh sách việc.
-type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[] };
+type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number } };
 type Ctx = { id: number; name: string; text: string; size: number; kind: "file" | "doc"; pinned?: boolean; off?: boolean };
 type Say = (m: string) => void;
 
@@ -202,7 +202,6 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
   const [dragW, setDragW] = useState<number | null>(null);
   const [rail, setRail] = usePref("codeRail", false);
   const [wsUsed, setWsUsed] = useState(false);
-  const [hidePlan, setHidePlan] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   // Khung chat nổi trên luồng tin nhắn: chừa đúng chiều cao của nó (thay đổi khi có danh sách việc, tệp đính kèm…).
   const colRef = useRef<HTMLDivElement>(null);
@@ -248,7 +247,7 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
     if (loadedSid.current === sid) return;
     loadedSid.current = sid;
     stopGen();
-    setAtts([]); setV(""); setPanel(null); setMountedP([]); setHidePlan(0);
+    setAtts([]); setV(""); setPanel(null); setMountedP([]);
     if (sid === null) setPane(null);
     try {
       const s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null");
@@ -384,6 +383,7 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
           else if (e.t === "tool") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "tool", id: e.id, name: e.name, input: e.input }] }));
           else if (e.t === "result") patchNode(id, (n) => ({ ...n, steps: (n.steps ?? []).map((x) => (x.k === "tool" && x.id === e.id ? { ...x, done: true, ok: e.ok, summary: e.summary, output: e.output, diff: e.diff, image: e.image } : x)) }));
           else if (e.t === "plan") patchNode(id, (n) => ({ ...n, plan: e.items }));
+          else if (e.t === "usage") patchNode(id, (n) => ({ ...n, usage: { input: e.input, output: (n.usage?.output ?? 0) + e.output } }));
           else if (e.t === "ui") {
             openPane(e.open);
             if (e.open === "terminal") showTerm(e.tab ?? "log");
@@ -788,8 +788,6 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
   const m = MODES.find((x) => x.k === mode) ?? MODES[1];
   const modeIcon = (k: string, s = 16) => (k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.Alert size={s} /> : <I.Code size={s} />);
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
-  const lastNode = path.length ? path[path.length - 1] : null;
-  const lastPlan = lastNode?.plan?.length && hidePlan !== lastNode.id ? lastNode.plan : null;
   // Kéo đường chia để đổi độ rộng khung bên phải.
   const startDrag = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -927,7 +925,7 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h"><span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span></div>
-                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && !n.steps.some((x) => x.k === "tool" && !x.done) && <Thinking label={n.steps.length ? "Đang làm…" : "Đang suy nghĩ…"} />}</> : n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">
@@ -971,7 +969,6 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
                 )}
               </div>
             )}
-            {lastPlan && <TaskCard key={lastNode!.id} plan={lastPlan} busy={busy && !lastNode!.done} onClose={() => setHidePlan(lastNode!.id)} />}
             <div className="composer cv-composer" data-drag={dragOn ? "1" : undefined}>
               {errOpen && (
                 <div className="cv-errbox">

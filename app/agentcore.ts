@@ -13,6 +13,7 @@ export type AgentEvent =
   | { t: "result"; id: string; ok: boolean; summary: string; output?: string; image?: string; diff?: { path: string; add: number; del: number } }
   | { t: "plan"; items: PlanItem[] }
   | { t: "ui"; open: Pane; path?: string; tab?: "log" | "term" }
+  | { t: "usage"; input: number; output: number }
   | { t: "done"; text: string; skills: string[] }
   | { t: "error"; error: string };
 type Emit = (e: AgentEvent) => void;
@@ -23,7 +24,7 @@ export const AGENT_TOOLS = [
   { name: "update_plan", description: "Cập nhật danh sách việc hiển thị cho người dùng. Gọi ở đầu mỗi việc nhiều bước và mỗi khi xong một bước. Luôn gửi toàn bộ danh sách; đúng một mục in_progress khi đang làm.",
     input_schema: obj({ items: { type: "array", items: obj({ content: { type: "string", description: "Việc cần làm, ngắn gọn (≤ 8 từ)" }, status: { type: "string", enum: ["pending", "in_progress", "completed"] } }, ["content", "status"]) } }, ["items"]) },
   { name: "bash", description: "Chạy lệnh bash trong thư mục làm việc của phiên (mỗi lần gọi bắt đầu lại ở thư mục này). Trả về stdout+stderr và mã thoát. Dùng background=true cho tiến trình chạy lâu (server dev, watch): lệnh chạy nền và trả về vài dòng log đầu.",
-    input_schema: obj({ command: { type: "string" }, timeout: { type: "number", description: "Giây, mặc định 120, tối đa 600" }, background: { type: "boolean" } }, ["command"]) },
+    input_schema: obj({ command: { type: "string" }, description: { type: "string", description: "Mô tả ngắn 3-8 từ việc lệnh này làm, hiện cho người dùng (vd. \"Cài thư viện và build thử\")" }, timeout: { type: "number", description: "Giây, mặc định 120, tối đa 600" }, background: { type: "boolean" } }, ["command"]) },
   { name: "read_file", description: "Đọc file văn bản (kèm số dòng). offset là dòng bắt đầu (từ 1), limit là số dòng.",
     input_schema: obj({ path: { type: "string" }, offset: { type: "number" }, limit: { type: "number" } }, ["path"]) },
   { name: "write_file", description: "Tạo mới hoặc ghi đè toàn bộ một file (tự tạo thư mục cha).",
@@ -102,7 +103,7 @@ async function runTool(c: Ctx, name: string, a: Record<string, unknown>): Promis
       const r = await exec(c.u, c.d, { cmd: script, env: { SYN_CMD: cmd, SYN_BG: bg ? "  (chạy nền)" : "" }, timeout: bg ? 30 : timeout });
       const out = clip((r.out + (r.err ? (r.out ? "\n" : "") + r.err : "")).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
       const note = r.code === 124 ? `\n[Hết thời gian ${timeout}s, lệnh đã bị dừng. Dùng background=true cho tiến trình chạy lâu.]` : "";
-      return { content: `${out || "(không có đầu ra)"}${note}\n[exit ${r.code}]`, is_error: r.code !== 0, summary: one(cmd), output: out + note };
+      return { content: `${out || "(không có đầu ra)"}${note}\n[exit ${r.code}]`, is_error: r.code !== 0, summary: one(cmd), output: `$ ${cmd}\n${out}${note}` };
     }
     case "read_file": {
       const p = cleanPath(s("path"), c.d);
@@ -191,7 +192,7 @@ async function safeRun(c: Ctx, name: string, input: Record<string, unknown>): Pr
 
 // ------------------------------------------------------------------ bộ chuyển đổi nhà cung cấp model
 type Call = { id: string; name: string; input: Record<string, unknown> };
-type Step = { text: string; calls: Call[]; assistant: unknown };
+type Step = { text: string; calls: Call[]; assistant: unknown; usage?: { input: number; output: number } };
 export type Adapter = { step: (msgs: unknown[], last: boolean) => Promise<Step>; results: (calls: Call[], res: Out[]) => unknown[] };
 export class ModelError extends Error { constructor(public status: number, m: string) { super(m); } }
 
@@ -226,6 +227,7 @@ export function anthropicAgent(o: { key: string; model: string; system: string; 
         text: blocks.filter((b) => b.type === "text").map((b) => b.text).join(""),
         calls: blocks.filter((b) => b.type === "tool_use").map((b) => ({ id: b.id!, name: b.name!, input: b.input ?? {} })),
         assistant: { role: "assistant", content: blocks },
+        usage: { input: (j.usage?.input_tokens ?? 0) + (j.usage?.cache_read_input_tokens ?? 0) + (j.usage?.cache_creation_input_tokens ?? 0), output: j.usage?.output_tokens ?? 0 },
       };
     },
     results: (calls, res) => [{
@@ -247,13 +249,14 @@ export function openaiAgent(o: { key: string; base: string; model: string; syste
         body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
-      const m = (await r.json()).choices?.[0]?.message ?? {};
+      const j = await r.json();
+      const m = j.choices?.[0]?.message ?? {};
       const calls: Call[] = (m.tool_calls ?? []).map((c: { id: string; function: { name: string; arguments: string } }) => {
         let input: Record<string, unknown> = {};
         try { input = JSON.parse(c.function.arguments || "{}"); } catch {}
         return { id: c.id, name: c.function.name, input };
       });
-      return { text: m.content ?? "", calls, assistant: m };
+      return { text: m.content ?? "", calls, assistant: m, usage: { input: j.usage?.prompt_tokens ?? 0, output: j.usage?.completion_tokens ?? 0 } };
     },
     results: (calls, res) => {
       const out: unknown[] = calls.map((c, i) => ({ role: "tool", tool_call_id: c.id, content: res[i].content }));
@@ -301,13 +304,15 @@ export function mockAgent(): Adapter {
       const steps: [string, Call[]][] = [
         ["Mình sẽ xem workspace trước, rồi dựng một trang demo để chạy thử các công cụ.", [call("update_plan", { items: plan(0) }), call("list_files", {})]],
         ["Tạo trang demo.", [call("update_plan", { items: plan(1) }), call("write_file", { path: "demo/index.html", content: html(q) })]],
-        ["Chạy server tĩnh ở cổng 8080.", [call("update_plan", { items: plan(2) }), call("bash", { command: "python3 -m http.server 8080 --directory demo", background: true })]],
+        ["Chạy server tĩnh ở cổng 8080.", [call("update_plan", { items: plan(2) }), call("bash", { command: "python3 -m http.server 8080 --directory demo", description: "Chạy server tĩnh cho trang demo", background: true })]],
         ["Mở trang trong trình duyệt của workspace.", [call("update_plan", { items: plan(3) }), call("browser_navigate", { url: "http://localhost:8080" })]],
         ["", [call("browser_read", {}), call("browser_screenshot", {})]],
         ["", [call("update_plan", { items: plan(4) })]],
       ];
       const [text, calls] = steps[k] ?? [`**Chế độ mô phỏng:** máy chủ chưa gắn model AI thật, nên đây là kịch bản mẫu để thử workspace. Mình đã tạo \`demo/index.html\`, chạy server ở cổng 8080 và mở trang trong trình duyệt bên cạnh.\n\nKhi quản trị viên gắn model (LLM_API_KEY), agent sẽ tự làm đúng yêu cầu của bạn: _"${q.slice(0, 200)}"_.`, []];
-      return { text, calls, assistant: { role: "assistant", content: [...(text ? [{ type: "text", text }] : []), ...calls.map((c) => ({ type: "tool_use", ...c }))] } };
+      // Ước lượng token (~4 ký tự / token) để giao diện có số liệu giống model thật.
+      const usage = { input: Math.round(JSON.stringify(msgs).length / 4) + 3200, output: Math.round((text.length + JSON.stringify(calls).length) / 4) };
+      return { text, calls, usage, assistant: { role: "assistant", content: [...(text ? [{ type: "text", text }] : []), ...calls.map((c) => ({ type: "tool_use", ...c }))] } };
     },
     results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
   };
@@ -322,6 +327,7 @@ Thư mục làm việc: ${WORK}/${o.d}${o.repo ? ` (repo GitHub ${o.repo}${o.bra
     `Cách làm việc:
 - Việc nhiều bước: gọi update_plan ngay từ đầu (≤ 8 mục ngắn), cập nhật trạng thái mỗi khi xong một bước, cuối cùng tất cả completed.
 - Trước mỗi nhóm công cụ, viết một câu ngắn cho người dùng biết bạn sắp làm gì.
+- Khi gọi bash, luôn điền description: mô tả ngắn 3-8 từ việc lệnh làm (hiện trong giao diện thay cho câu lệnh).
 - Đọc file trước khi sửa; edit_file cho thay đổi nhỏ, write_file cho file mới.
 - Server dev: chạy bằng bash với background=true, rồi browser_navigate tới http://localhost:<cổng>, dùng browser_screenshot / browser_read / browser_console để kiểm tra giao diện và lỗi.
 - Có thể git commit; KHÔNG tự push. Khi cần đẩy code, nhắc người dùng bấm nút Push trong khung Changes.
@@ -340,6 +346,7 @@ export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: st
   for (let i = 0; i < AGENT_MAX_STEPS; i++) {
     if (o.signal.aborted) break;
     const r = await o.adapter.step(msgs, i === AGENT_MAX_STEPS - 1);
+    if (r.usage) o.emit({ t: "usage", ...r.usage });
     if (r.text.trim()) { o.emit({ t: "text", text: r.text }); text = r.text; }
     msgs.push(r.assistant);
     if (!r.calls.length) break;

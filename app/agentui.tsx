@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
-import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, planDone, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
+import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 export type AStep = { k: "text"; text: string } | ToolStep;
@@ -18,6 +18,14 @@ const VERB: Record<string, string> = {
   browser_navigate: "Mở trang", browser_read: "Đọc trang", browser_screenshot: "Chụp màn hình", browser_click: "Click", browser_type: "Gõ", browser_key: "Nhấn phím",
   browser_scroll: "Cuộn trang", browser_console: "Xem console", open_pane: "Mở khung", load_skill: "Dùng skill", read_skill_file: "Đọc file skill", search_skills: "Tìm skill", run_skill_script: "Chạy script skill",
 };
+// Động từ cho dòng trạng thái kiểu Claude ("Clicking, waiting, capturing page").
+const DOING: Record<string, string> = {
+  bash: "chạy lệnh", read_file: "đọc file", write_file: "ghi file", edit_file: "sửa file", list_files: "xem thư mục", grep: "tìm trong code",
+  browser_navigate: "mở trang", browser_read: "đọc trang", browser_screenshot: "chụp trang", browser_click: "click", browser_type: "gõ", browser_key: "nhấn phím",
+  browser_scroll: "cuộn trang", browser_console: "xem console", open_pane: "mở khung", update_plan: "cập nhật danh sách việc", load_skill: "đọc skill", read_skill_file: "đọc file skill",
+  search_skills: "tìm skill", run_skill_script: "chạy script",
+};
+const desc = (t: ToolStep) => (typeof t.input.description === "string" && t.input.description.trim() ? t.input.description.trim() : "");
 const RUNNING: Record<string, string> = { bash: "Đang chạy lệnh…", write_file: "Đang ghi file…", edit_file: "Đang sửa file…", browser_navigate: "Đang mở trang…", browser_screenshot: "Đang chụp màn hình…" };
 const iconOf = (n: string) => (n === "bash" ? <I.Terminal size={14} /> : n.startsWith("browser_") ? <I.Globe size={14} /> : n.endsWith("_file") || n === "list_files" ? <I.File size={14} /> : n === "grep" ? <I.Search size={14} /> : n.includes("skill") ? <I.Scroll size={14} /> : <I.ChevronR size={14} />);
 
@@ -57,7 +65,7 @@ function ToolRow({ t, onFile }: { t: ToolStep; onFile: (p: string) => void }) {
     <div className={`ag-tool ${t.ok === false ? "bad" : ""}`}>
       <button className="ag-tool-h" onClick={() => setOpen(!open)}>
         <span className="ag-ic">{!t.done ? <span className="ag-spin" /> : iconOf(t.name)}</span>
-        <span className="ag-verb">{VERB[t.name] ?? t.name}</span>
+        <span className="ag-verb">{desc(t) || VERB[t.name] || t.name}</span>
         <code className="ag-sum" data-notr>{label}</code>
         <Diff d={t.diff} />
         {t.ok === false && <span className="ag-err">lỗi</span>}
@@ -81,7 +89,8 @@ function ToolGroup({ ts, live, onFile }: { ts: ToolStep[]; live: boolean; onFile
   return (
     <div className="ag-group">
       <button className="ag-group-h" onClick={() => setOpen(!open)}>
-        {run && live ? <><span className="ag-spin" />{RUNNING[run.name] ?? `${VERB[run.name] ?? run.name}…`}</> : <span>{groupLabel(ts)}</span>}
+        {run && live ? <span className="ag-shimmer">{desc(run) || RUNNING[run.name] || `${VERB[run.name] ?? run.name}…`}</span>
+          : ts.length === 1 && desc(ts[0]) ? <span>{desc(ts[0])}</span> : <span>{groupLabel(ts)}</span>}
         <span className={`ag-chev ${open ? "on" : ""}`}><I.ChevronR size={12} /></span>
       </button>
       {open ? <div className="ag-list">{ts.map((t) => <ToolRow key={t.id} t={t} onFile={onFile} />)}</div>
@@ -113,35 +122,52 @@ export function AgentSteps({ steps, live, say }: { steps: AStep[]; live: boolean
   );
 }
 
-// Thẻ danh sách việc phía trên khung chat (giống Claude Code).
-export function TaskCard({ plan, busy, onClose }: { plan: PlanItem[]; busy: boolean; onClose: () => void }) {
-  const done = plan.filter((x) => x.status === "completed").length;
-  const [open, setOpen] = useState(true);
-  const all = planDone(plan);
-  useEffect(() => { if (all && !busy) setOpen(false); }, [all, busy]);
+const fmtTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+const fmtTime = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
+
+// Dòng trạng thái khi agent đang làm (giống Claude): chấm cam, việc đang làm (chữ lướt sáng), thời gian, số token.
+export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: number; tokens: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const sec = Math.max(0, Math.floor((now - start) / 1000));
+  // Việc của nhóm công cụ gần nhất (tối đa 3 việc khác nhau), hoặc "Đang suy nghĩ" khi model đang viết.
+  const running = steps.some((x) => x.k === "tool" && !x.done);
+  let label = "Đang suy nghĩ";
+  const cur = [...steps].reverse().find((x): x is ToolStep => x.k === "tool" && !x.done);
+  if (cur && desc(cur)) label = desc(cur);
+  else if (running) {
+    const tail: string[] = [];
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const x = steps[i];
+      if (x.k !== "tool") break;
+      const d = DOING[x.name] ?? x.name;
+      if (!tail.includes(d)) tail.unshift(d);
+    }
+    const last = tail.slice(-3).join(", ");
+    label = last.charAt(0).toUpperCase() + last.slice(1);
+  }
   return (
-    <div className={`cv-tasks ${open ? "open" : ""}`}>
-      <div className="cv-tasks-h">
-        <button onClick={() => setOpen(!open)}>
-          <span className="cv-tasks-t">{all ? "Đã xong mọi việc" : plan.find((x) => x.status === "in_progress")?.content ?? "Danh sách việc"}</span>
-          <span className="cv-tasks-n">{done}/{plan.length}</span>
-          <span className={`ag-chev ${open ? "on down" : ""}`}><I.ChevronR size={12} /></span>
-        </button>
-        {!busy && <button className="icon-btn" onClick={onClose} aria-label="Ẩn danh sách việc"><I.X size={14} /></button>}
-      </div>
-      {open && (
-        <ul>
-          {plan.map((x, i) => (
-            <li key={i} className={x.status}>
-              <span className="tk-ic">{x.status === "completed" ? <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                : x.status === "in_progress" ? <svg viewBox="0 0 16 16" className={busy ? "spin" : ""}><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="30 10" /></svg>
-                : <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2.4" /></svg>}</span>
-              <span>{x.content}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="ag-status">
+      <span className="ag-dots" aria-hidden><i /><i /><i /><i /></span>
+      <span className="ag-shimmer">{label}</span>
+      <span className="ag-meta" data-notr>{sec >= 1 ? `${fmtTime(sec)} · ` : ""}{fmtTok(tokens)} tokens</span>
     </div>
+  );
+}
+
+// Danh sách việc nằm ngay trong đoạn chat khi agent đang làm (giống Claude); làm xong thì ẩn đi.
+export function TaskCard({ plan }: { plan: PlanItem[] }) {
+  return (
+    <ul className="cv-tasks">
+      {plan.map((x, i) => (
+        <li key={i} className={x.status}>
+          <span className="tk-ic">{x.status === "completed" ? <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            : x.status === "in_progress" ? <svg viewBox="0 0 16 16" className="spin"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="30 10" /></svg>
+            : <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2.4" /></svg>}</span>
+          <span>{x.content}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
