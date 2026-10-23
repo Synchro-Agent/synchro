@@ -39,6 +39,9 @@ export function db() {
   // Bảng tạo từ bản cũ chưa có các cột hồ sơ: thêm vào (CREATE IF NOT EXISTS không tự làm việc này).
   const cols = new Set((d.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name));
   for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
+  const sk = new Set((d.prepare("PRAGMA table_info(skills)").all() as { name: string }[]).map((c) => c.name));
+  if (!sk.has("use_count")) d.exec("ALTER TABLE skills ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
+  if (!sk.has("last_used_at")) d.exec("ALTER TABLE skills ADD COLUMN last_used_at INTEGER");
   return (g.__synchroDb = d);
 }
 

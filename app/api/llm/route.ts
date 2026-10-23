@@ -1,4 +1,4 @@
-import { enabledSkills } from "../../skillstore";
+import { enabledSkills, recordUse } from "../../skillstore";
 import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "../../skillruntime";
 import { can, canModel, current } from "../../authstore";
 import { CLAUDE_API_IDS } from "../../catalog";
@@ -106,14 +106,14 @@ const mockAdapter = (skills: Skl): Adapter => ({
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
 });
 
-async function skillLoop(ad: Adapter, msgs: unknown[], list: Skl) {
+async function skillLoop(ad: Adapter, msgs: unknown[], list: Skl, scripts = false) {
   const used: ToolRun["used"][] = [];
   const m = [...msgs];
   for (let i = 0; i < MAX_STEPS; i++) {
     const r = await ad.step(m, i === MAX_STEPS - 1);
     m.push(r.assistant);
     if (!r.calls.length) return { text: r.text, used };
-    const res = await Promise.all(r.calls.map((c) => runSkillTool(list, c.name, c.input)));
+    const res = await Promise.all(r.calls.map((c) => runSkillTool(list, c.name, c.input, scripts)));
     used.push(...res.filter((x) => !x.is_error && x.used.kind !== "search").map((x) => x.used));
     m.push(...ad.results(r.calls, res));
   }
@@ -132,13 +132,16 @@ export async function POST(req: Request) {
   try {
     const list = skills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
     if (list.length) {
-      const sk = skillsPrompt(list);
-      const tools = skillTools(list.length);
+      // Chạy script của skill chỉ khi máy chủ có sandbox và tài khoản được phép dùng Sandbox.
+      const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
+      const sk = skillsPrompt(list, scripts);
+      const tools = skillTools(list.length, scripts);
       const msgs = messages as { role: string; content: unknown }[];
       try {
-        const out = PROVIDER === "mock" ? await skillLoop(mockAdapter(list), msgs, list)
-          : isClaude(model) ? await skillLoop(anthropicAdapter(model, system, sk, max_tokens, tools), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list)
-          : await skillLoop(openaiAdapter(model, `${system}\n\n${sk}`, max_tokens, tools), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list);
+        const out = PROVIDER === "mock" ? await skillLoop(mockAdapter(list), msgs, list, scripts)
+          : isClaude(model) ? await skillLoop(anthropicAdapter(model, system, sk, max_tokens, tools), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list, scripts)
+          : await skillLoop(openaiAdapter(model, `${system}\n\n${sk}`, max_tokens, tools), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list, scripts);
+        recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
         return Response.json({ model, text: out.text, skills: out.used });
       } catch (e) {
         if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status });

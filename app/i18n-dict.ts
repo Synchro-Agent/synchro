@@ -230,6 +230,12 @@ export const VI2EN: Record<string, string> = {
   "Chưa có skill nào. Tải lên trong Tùy chỉnh → Kỹ năng.": "No skills yet. Upload one in Customize → Skills.",
   "Không lưu được thay đổi": "Couldn't save the change",
   "Đang tải…": "Loading…",
+  // Skills
+  "Không tìm thấy SKILL.md trong file nén": "No SKILL.md found in the archive",
+  "Chỉ hỗ trợ link từ github.com": "Only github.com links are supported",
+  "Link GitHub thiếu tên chủ sở hữu hoặc repo": "The GitHub link is missing the owner or repository",
+  "Không tìm thấy repo hoặc nhánh trên GitHub (chỉ hỗ trợ repo công khai)": "Repository or branch not found on GitHub (only public repositories are supported)",
+  "Máy chủ chưa bật chạy script của skill. Hãy làm theo hướng dẫn mà không chạy script.": "Running skill scripts isn't enabled on the server. Follow the instructions without running scripts.",
 };
 
 // Chuỗi gốc tiếng Anh (Cài đặt, Skills…) → tiếng Việt
@@ -544,9 +550,25 @@ export const EN2VI: Record<string, string> = {
   "Changed user access": "Đổi quyền người dùng",
   "Changed default access": "Đổi quyền mặc định",
   "Updated profile": "Cập nhật hồ sơ",
+  // Skills
+  "Or paste a GitHub link (repo, folder or SKILL.md)": "Hoặc dán link GitHub (repo, thư mục hoặc SKILL.md)",
+  "Import": "Nhập",
+  "Choose skills to add": "Chọn skill để thêm",
+  "This package contains several skills. Preview one to check it before adding, or add every valid skill at once.": "Gói này có nhiều skill. Xem trước từng skill để kiểm tra trước khi thêm, hoặc thêm tất cả skill hợp lệ một lần.",
+  "Installed · will update": "Đã có · sẽ cập nhật",
+  "Preview": "Xem trước",
+  "Skills are instructions the model will follow. Only add skills from sources you trust.": "Skill là chỉ dẫn mà model sẽ làm theo. Chỉ thêm skill từ nguồn bạn tin tưởng.",
+  "Not used yet": "Chưa được dùng",
+  "Versions:": "Phiên bản:",
+  "Restore version": "Khôi phục",
+  "The model will use this version from now on. Newer versions stay saved and can be restored later.": "Từ giờ model sẽ dùng phiên bản này. Các phiên bản mới hơn vẫn được giữ và có thể khôi phục lại.",
 };
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Gói có (\d+) skill\. Hãy chọn skill muốn thêm\.$/, (m) => `This package has ${m[1]} skills. Choose which to add.`],
+  [/^Bỏ qua (\d+) file có định dạng không hỗ trợ: (.+)$/, (m) => `Skipped ${m[1]} unsupported files: ${m[2]}`],
+  [/^Đã thêm (\d+) skill$/, (m) => `Added ${m[1]} skills`],
+  [/^Đã khôi phục (.+) về v(\d+)$/, (m) => `Restored ${m[1]} to v${m[2]}`],
   [/^Đã bật (.+) trong dự án$/, (m) => `Turned on ${m[1]} for this project`],
   [/^Đã tắt (.+) trong dự án$/, (m) => `Turned off ${m[1]} for this project`],
   [/^Bật (.+) trong dự án$/, (m) => `Turn on ${m[1]} for this project`],
@@ -591,6 +613,11 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
 ];
 
 export const RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Used (\d+) times$/, (m) => `Đã dùng ${m[1]} lần`],
+  [/^Restore v(\d+)\?$/, (m) => `Khôi phục v${m[1]}?`],
+  [/^Adding (\d+)\/(\d+)…$/, (m) => `Đang thêm ${m[1]}/${m[2]}…`],
+  [/^Add all \((\d+)\)$/, (m) => `Thêm tất cả (${m[1]})`],
+  [/^(\d+) found$/, (m) => `Tìm thấy ${m[1]}`],
   [/^This account signs in with (.+)\. Use that button above\.$/, (m) => `Tài khoản này đăng nhập bằng ${m[1]}. Hãy dùng nút đó ở phía trên.`],
   [/^(Google|GitHub|Apple) sign-in isn't set up on the server yet\.$/, (m) => `Đăng nhập bằng ${m[1]} chưa được cấu hình trên máy chủ.`],
   [/^Add ([a-z0-9-]+)$/, (m) => `Thêm ${m[1]}`],

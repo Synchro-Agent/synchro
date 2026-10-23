@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS skills (
   version      INTEGER NOT NULL,
   versions     TEXT NOT NULL DEFAULT '[]',
   warnings     TEXT NOT NULL DEFAULT '[]',
+  use_count    INTEGER NOT NULL DEFAULT 0,
+  last_used_at INTEGER,
   created_at   INTEGER NOT NULL,
   updated_at   INTEGER NOT NULL,
   UNIQUE (user_id, name)

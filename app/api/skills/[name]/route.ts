@@ -1,4 +1,4 @@
-import { getSkill, publicSkill, removeSkill, setEnabled, setProjectEnabled, SkillError } from "../../../skillstore";
+import { getSkill, publicSkill, removeSkill, restoreVersion, setEnabled, setProjectEnabled, SkillError } from "../../../skillstore";
 import { current, featureGate } from "../../../authstore";
 
 export const runtime = "nodejs";
@@ -13,14 +13,15 @@ export async function GET(req: Request, { params }: Ctx) {
   return Response.json({ skill: { ...publicSkill(s), body: s.body, files: s.files } });
 }
 
-// { enabled } bật/tắt cho cả tài khoản; { project, enabled } bật/tắt riêng trong một dự án.
+// { enabled } bật/tắt cho cả tài khoản; { project, enabled } bật/tắt riêng trong một dự án; { restore: n } quay lại phiên bản n.
 export async function PATCH(req: Request, { params }: Ctx) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
   const uid = current(req)!.user.id;
   try {
-    const { enabled, project } = await req.json();
+    const { enabled, project, restore } = await req.json();
     const name = (await params).name;
-    const s = project !== undefined ? await setProjectEnabled(uid, name, String(project), !!enabled) : await setEnabled(uid, name, !!enabled);
+    const s = typeof restore === "number" ? await restoreVersion(uid, name, restore)
+      : project !== undefined ? await setProjectEnabled(uid, name, String(project), !!enabled) : await setEnabled(uid, name, !!enabled);
     return Response.json({ skill: publicSkill(s) });
   } catch (e) { return err(e); }
 }

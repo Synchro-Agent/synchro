@@ -1305,3 +1305,20 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .pj-sk-t b{font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pj-sk-t span{font-size:12px;color:var(--text-3)}
 .pj-sk-all{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--hover);color:var(--text-2)}
+
+/* ---- Skills: nhập GitHub, chọn skill trong gói, phiên bản ---- */
+.sk-gh{display:flex;align-items:center;gap:8px;margin-top:8px;padding:6px 6px 6px 12px;border:.5px solid var(--border-strong);border-radius:10px;background:var(--card);color:var(--text-3)}
+.sk-gh input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-size:13px;color:var(--text);outline:none}
+.sk-gh .btn{height:28px}
+.sk-err span{white-space:pre-line}
+.sk-choices{display:flex;flex-direction:column;max-height:46vh;overflow:auto;border:.5px solid var(--border);border-radius:10px}
+.sk-choice{display:flex;align-items:center;gap:12px;padding:9px 12px;border-top:.5px solid var(--border);font-size:13px}
+.sk-choice:first-child{border-top:0}
+.sk-choice b{font-weight:500}
+.sk-tag{margin-left:8px;font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(47,123,246,.12);color:var(--accent-deep,#2f7bf6)}
+.sk-bad{color:#c6422f}
+.sk-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:-4px 0 10px;font-size:12px;color:var(--text-3)}
+.sk-vers{display:inline-flex;align-items:center;gap:8px}
+.sk-vers b{font-weight:600;color:var(--text)}
+.sk-vers .lnk{font-size:12px}
+.sk-choice .sk-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
