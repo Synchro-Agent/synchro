@@ -55,3 +55,16 @@ Trên VPS: `su - synchro -c "cd /var/www/synchro && node scripts/create-admin.mj
 | GitHub | GitHub → Settings → Developer settings → OAuth Apps | `https://synchro.net.nz/api/auth/oauth/github/callback` |
 | Apple | Apple Developer → Certificates, IDs & Profiles: tạo App ID bật Sign in with Apple, một Services ID (= `APPLE_CLIENT_ID`) và một Key (.p8) | `https://synchro.net.nz/api/auth/oauth/apple/callback` |
 
+
+## Workspace của Synchro Code
+
+Mỗi tài khoản có một container Linux riêng (Docker trên VPS) để agent và người dùng làm việc như trong Claude Code:
+terminal thật, trình duyệt Chromium dùng chung giữa người dùng và agent, cây file + Monaco, git (clone / commit / push / tạo PR).
+
+- `workspace/Dockerfile`: image `synchro-ws:1` (Node 22, Python 3, git, Chromium…), người dùng không có quyền root.
+- `workspace/agent.mjs`: dịch vụ `synchro-ws` (root, chỉ nghe 127.0.0.1:3555) quản lý container, chạy lệnh, PTY và CDP.
+  Container bị chặn khỏi mạng nội bộ / máy chủ; tối đa `WS_MAX_RUNNING` (mặc định 4) container chạy cùng lúc, tự dừng sau 20 phút rảnh.
+- `workspace/setup.sh`: deploy gọi sau mỗi lần build — build lại image khi thay đổi, cài systemd, nginx (`/ws-agent/term`, `/ws-agent/screen`).
+- `app/api/agent`: vòng lặp agent (model + công cụ bash, file, trình duyệt, danh sách việc), trả sự kiện NDJSON.
+  Chưa có `LLM_API_KEY` thì chạy kịch bản mô phỏng.
+- Quyền: tài khoản cần tính năng **Synchro Code** và **Cloud sandbox** (quản trị viên bật/tắt trong tab Quản trị viên).

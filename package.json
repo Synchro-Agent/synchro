@@ -11,6 +11,8 @@
     "@e2b/code-interpreter": "^2.8.3",
     "@monaco-editor/react": "^4.7.0",
     "@webcontainer/api": "^1.6.4",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "better-sqlite3": "^12.11.1",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
@@ -30,6 +32,7 @@
     "tailwind-merge": "^3.7.0",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.27.1",
+    "ws": "^8.22.0",
     "xlsx": "^0.18.5",
     "yaml": "^2.9.1",
     "zustand": "^5.0.15"
@@ -41,6 +44,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

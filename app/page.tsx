@@ -885,7 +885,7 @@ export default function Home() {
       </aside>
 
       <main className="main">
-        <div className="topbar">
+        {view !== "code" && <div className="topbar">
           <div className="left">
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
             {view === "chat" && chat && (
@@ -905,7 +905,7 @@ export default function Home() {
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
-        </div>
+        </div>}
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
@@ -1006,7 +1006,7 @@ export default function Home() {
             <Directory key={cTab} kind={cTab} />
           </div></div>
         )}
-        {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
+        {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
       </main>
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}

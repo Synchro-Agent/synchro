@@ -94,3 +94,14 @@ export const Image = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12
 
 export const Eye = (p: P) => <S {...p}><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z" /><circle cx="10" cy="10" r="2.3" /></S>;
 export const Download = (p: P) => <S {...p}><path d="M10 3.5v9M6.5 9.5L10 13l3.5-3.5M4 16h12" /></S>;
+// Synchro Code: nút góc trên phải và agent
+export const Terminal = (p: P) => <S {...p}><rect x="2.8" y="3.8" width="14.4" height="12.4" rx="2.4" /><path d="M6 8l2.4 2L6 12M10.2 12.4h3.6" /></S>;
+export const PanelR = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.5" /><path d="M12 4v12" /></S>;
+export const Dots = (p: P) => <S {...p} fill><circle cx="10" cy="4.6" r="1.35" /><circle cx="10" cy="10" r="1.35" /><circle cx="10" cy="15.4" r="1.35" /></S>;
+export const Branch = (p: P) => <S {...p}><circle cx="6" cy="4.8" r="1.8" /><circle cx="6" cy="15.2" r="1.8" /><circle cx="14" cy="7" r="1.8" /><path d="M6 6.6v6.8M14 8.8c0 3-3 3.2-6.6 4.9" /></S>;
+export const External = (p: P) => <S {...p}><path d="M11 3.5h5.5V9M16.5 3.5l-7 7M14 12v3a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 014 15V8a1.5 1.5 0 011.5-1.5h3" /></S>;
+export const Back = (p: P) => <S {...p}><path d="M12 5l-5 5 5 5" /></S>;
+export const File = (p: P) => <S {...p}><path d="M5 3.5h6l4 4v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-12a1 1 0 011-1zM11 3.5v4h4" /></S>;
+export const GitHub = ({ size = 18 }: P) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+);

@@ -1,5 +1,6 @@
 import { clearSessionCookie, deleteOwnAccount, handle, requireUser, sameOrigin, withCookies } from "../../../authstore";
 import { removeUserSkillFiles } from "../../../skillstore";
+import { destroyWorkspace } from "../../../workspace";
 
 export const runtime = "nodejs";
 
@@ -9,5 +10,6 @@ export const DELETE = handle(async (req) => {
   const { password } = await req.json();
   await deleteOwnAccount(req, user, password);
   await removeUserSkillFiles(user.id);
+  await destroyWorkspace(user.id);
   return withCookies(Response.json({ ok: true }), clearSessionCookie(req));
 });

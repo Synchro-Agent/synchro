@@ -1,5 +1,6 @@
 import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, sameOrigin, sessionsOf } from "../../../../authstore";
 import { removeUserSkillFiles } from "../../../../skillstore";
+import { destroyWorkspace } from "../../../../workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,5 +32,6 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   const id = (await params).id;
   adminDelete(req, user, id, confirm);
   await removeUserSkillFiles(id);
+  await destroyWorkspace(id);
   return Response.json({ ok: true });
 });

@@ -1,0 +1,64 @@
+import { can, canModel, current, limit, sameOrigin } from "../../authstore";
+import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, runAgent, type AgentEvent } from "../../agentcore";
+import { CLAUDE_API_IDS } from "../../catalog";
+import { enabledSkills, recordUse } from "../../skillstore";
+import { skillsPrompt } from "../../skillruntime";
+import { exec, sdir, wsAllowed } from "../../workspace";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 900;
+
+const PROVIDER = process.env.LLM_PROVIDER ?? "anthropic";
+const API_KEY = process.env.LLM_API_KEY ?? "";
+const MODEL = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
+const BASE_URL = process.env.LLM_BASE_URL ?? "https://api.openai.com/v1";
+
+// Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện dạng NDJSON (mỗi dòng một JSON).
+export async function POST(req: Request) {
+  const c = current(req);
+  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
+  if (!wsAllowed(c.user)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." }, { status: 403 });
+  try { limit("agent:" + c.user.id, 30, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
+
+  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills } = await req.json();
+  let d: string;
+  try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
+  if (typeof picked === "string" && picked && !canModel(c.user, picked)) return Response.json({ error: `Quản trị viên chưa cho phép tài khoản của bạn dùng model ${picked}.` }, { status: 403 });
+
+  const enc = new TextEncoder();
+  const ac = new AbortController();
+  req.signal.addEventListener("abort", () => ac.abort());
+  const stream = new ReadableStream({
+    async start(ctl) {
+      const emit = (e: AgentEvent) => { try { ctl.enqueue(enc.encode(JSON.stringify(e) + "\n")); } catch {} };
+      // Giữ kết nối qua proxy khi một lệnh chạy lâu.
+      const ping = setInterval(() => { try { ctl.enqueue(enc.encode("\n")); } catch {} }, 15_000);
+      try {
+        const info = await exec(c.user.id, d, { cmd: "git rev-parse --abbrev-ref HEAD 2>/dev/null; git remote get-url origin 2>/dev/null | sed -E 's#https://[^@/]*@#https://#'", timeout: 20 });
+        const [branch, remote] = info.out.split("\n");
+        const repo = /github\.com[/:]([^/]+\/[^/.\s]+)/.exec(remote ?? "")?.[1] ?? null;
+        const list = wantSkills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
+        const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
+        const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: String(system).slice(0, 60_000), skills: list.length ? skillsPrompt(list, scripts) : "" });
+        const tools = agentTools(list.length, scripts);
+        const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
+        const model = PROVIDER === "anthropic" && typeof picked === "string" && CLAUDE_API_IDS[picked] ? CLAUDE_API_IDS[picked] : MODEL;
+        const adapter = PROVIDER === "mock" || !API_KEY ? mockAgent()
+          : PROVIDER === "anthropic" && model.startsWith("claude") ? anthropicAgent({ key: API_KEY, model, system: sys, maxTokens: 8000, tools, signal: ac.signal })
+          : openaiAgent({ key: API_KEY, base: BASE_URL, model, system: sys, maxTokens: 8000, tools, signal: ac.signal });
+        const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal });
+        if (out.skills.length) recordUse(c.user.id, out.skills);
+        emit({ t: "done", text: out.text, skills: out.skills });
+      } catch (e) {
+        if (!ac.signal.aborted) emit({ t: "error", error: e instanceof ModelError ? `Model báo lỗi (${e.status}): ${e.message.slice(0, 300)}` : (e as Error).message || "Lỗi máy chủ" });
+      } finally {
+        clearInterval(ping);
+        try { ctl.close(); } catch {}
+      }
+    },
+    cancel() { ac.abort(); },
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" } });
+}

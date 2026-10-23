@@ -23,7 +23,9 @@ const stateCookie = (p: Provider) => `oauth_${p}`;
 // Apple gửi kết quả bằng POST từ appleid.apple.com nên cookie phải là SameSite=None.
 const sameSite = (p: Provider) => (p === "apple" ? "None" : "Lax") as "None" | "Lax";
 
-export function start(req: Request, p: Provider) {
+// purpose "link": người đã đăng nhập kết nối GitHub (quyền repo) cho Synchro Code, không phải đăng nhập.
+export type Purpose = "login" | "link";
+export function start(req: Request, p: Provider, purpose: Purpose = "login") {
   if (!configured(p)) throw new AuthError(`Đăng nhập bằng ${NAMES[p]} chưa được cấu hình trên máy chủ.`, 503);
   const state = rand(), verifier = rand() + rand(), nonce = rand();
   const q = new URLSearchParams({ client_id: env(`${p.toUpperCase()}_CLIENT_ID`), redirect_uri: redirectUri(req, p), state });
@@ -36,7 +38,7 @@ export function start(req: Request, p: Provider) {
     q.set("prompt", "select_account");
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + q;
   } else if (p === "github") {
-    q.set("scope", "read:user user:email");
+    q.set("scope", purpose === "link" ? "repo read:user user:email" : "read:user user:email");
     url = "https://github.com/login/oauth/authorize?" + q;
   } else {
     q.set("response_type", "code");
@@ -45,8 +47,9 @@ export function start(req: Request, p: Provider) {
     q.set("nonce", nonce);
     url = "https://appleid.apple.com/auth/authorize?" + q;
   }
-  return { url, cookie: cookie(req, stateCookie(p), `${state}.${verifier}.${nonce}`, 600, { sameSite: sameSite(p), path: COOKIE_PATH }) };
+  return { url, cookie: cookie(req, stateCookie(p), `${state}.${verifier}.${nonce}.${purpose}`, 600, { sameSite: sameSite(p), path: COOKIE_PATH }) };
 }
+export const purposeOf = (req: Request, p: Provider): Purpose => ((readCookie(req, stateCookie(p)) ?? "").split(".")[3] === "link" ? "link" : "login");
 export const clearState = (req: Request, p: Provider) => cookie(req, stateCookie(p), "", 0, { sameSite: sameSite(p), path: COOKIE_PATH });
 
 const eq = (a: string, b: string) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -62,7 +65,8 @@ async function call<T>(url: string, init: RequestInit, what: string): Promise<T>
 const form = (o: Record<string, string>) => ({ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, body: new URLSearchParams(o) });
 
 // Đổi code lấy hồ sơ người dùng. `params` là query (Google/GitHub) hoặc form POST (Apple).
-export async function finish(req: Request, p: Provider, params: URLSearchParams): Promise<OAuthProfile> {
+export type OAuthResult = OAuthProfile & { token?: string; login?: string; scopes?: string };
+export async function finish(req: Request, p: Provider, params: URLSearchParams): Promise<OAuthResult> {
   if (params.get("error")) throw new AuthError(params.get("error") === "access_denied" || params.get("error") === "user_cancelled_authorize" ? "Bạn đã hủy đăng nhập." : "Nhà cung cấp đăng nhập báo lỗi. Vui lòng thử lại.");
   const [state, verifier, nonce] = (readCookie(req, stateCookie(p)) ?? "").split(".");
   const code = params.get("code") ?? "";
@@ -76,12 +80,12 @@ export async function finish(req: Request, p: Provider, params: URLSearchParams)
   }
 
   if (p === "github") {
-    const t = await call<{ access_token: string }>("https://github.com/login/oauth/access_token", form({ code, client_id: id, client_secret: env("GITHUB_CLIENT_SECRET"), redirect_uri }), "github token");
+    const t = await call<{ access_token: string; scope?: string }>("https://github.com/login/oauth/access_token", form({ code, client_id: id, client_secret: env("GITHUB_CLIENT_SECRET"), redirect_uri }), "github token");
     const h = { headers: { Authorization: `Bearer ${t.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "Synchro" } };
     const u = await call<{ id: number; login: string; name?: string; avatar_url?: string }>("https://api.github.com/user", h, "github user");
     const emails = await call<{ email: string; primary: boolean; verified: boolean }[]>("https://api.github.com/user/emails", h, "github emails");
     const e = emails.find((x) => x.primary && x.verified) ?? emails.find((x) => x.verified);
-    return { provider: p, subject: String(u.id), email: e?.email ?? null, emailVerified: !!e, name: u.name || u.login, avatar: u.avatar_url ?? null };
+    return { provider: p, subject: String(u.id), email: e?.email ?? null, emailVerified: !!e, name: u.name || u.login, avatar: u.avatar_url ?? null, token: t.access_token, login: u.login, scopes: t.scope ?? "" };
   }
 
   const t = await call<{ id_token: string }>("https://appleid.apple.com/auth/token", form({ code, client_id: id, client_secret: appleSecret(), redirect_uri, grant_type: "authorization_code" }), "apple token");

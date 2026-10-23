@@ -96,3 +96,13 @@ CREATE TABLE IF NOT EXISTS skill_enablement (
   scope_id TEXT NOT NULL,
   PRIMARY KEY (skill_id, scope, scope_id)
 );
+
+-- Kết nối GitHub để làm việc với repo trong Synchro Code (token mã hóa AES-GCM, không bao giờ gửi về trình duyệt)
+CREATE TABLE IF NOT EXISTS github_links (
+  user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  gh_id      TEXT NOT NULL,
+  login      TEXT NOT NULL,
+  token      TEXT NOT NULL,
+  scopes     TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);

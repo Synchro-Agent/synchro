@@ -17,10 +17,14 @@ import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc } from "./filemenu";
 import { ingestFile } from "./filestate";
+import { AgentSteps, CtxRing, GitHubButton, TaskCard, type AStep } from "./agentui";
+import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
+import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
 type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?: Pill[] };
-type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[] };
+// steps/plan: lượt trả lời do agent (có workspace) làm: đoạn văn xen kẽ công cụ, và danh sách việc.
+type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[] };
 type Ctx = { id: number; name: string; text: string; size: number; kind: "file" | "doc"; pinned?: boolean; off?: boolean };
 type Say = (m: string) => void;
 
@@ -164,7 +168,7 @@ async function readEntry(en: FileSystemEntry, base: string, out: { path: string;
   }
 }
 
-export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; onCreate: (id: number, title: string) => void; onNew: () => void }) {
+export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [sel, setSel] = useState<Record<number, number>>({});
   const [ctx, setCtx] = useState<Ctx[]>([]);
@@ -181,7 +185,33 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   useDev((s) => s.encVer);
   useEffect(() => { loadEncoder(); }, []);
   const snapRef = useRef<Map<number, Ctx[]>>(new Map());
-  const [menu, setMenu] = useState<"" | "plus" | "mode" | "ctx" | "rules" | "err">("");
+  const [menu, setMenu] = useState<"" | "plus" | "mode" | "ctx" | "rules" | "more">("");
+  const menuRef = useRef(menu); menuRef.current = menu;
+  const [errOpen, setErrOpen] = useState(false);
+  // Workspace (container trên máy chủ): pane bên phải, session rail, trạng thái git của phiên.
+  const status = useCodeUi((s) => s.status);
+  const setStatus = useCodeUi((s) => s.setStatus);
+  const gitMap = useCodeUi((s) => s.git);
+  const setGit = useCodeUi((s) => s.setGit);
+  const showTerm = useCodeUi((s) => s.showTerm);
+  const showFile = useCodeUi((s) => s.showFile);
+  const [pane, setPane] = useState<PaneKind | null>(null);
+  const [mountedP, setMountedP] = useState<PaneKind[]>([]);
+  const [paneW, setPaneW] = usePref("codePaneW", 560);
+  const [dragW, setDragW] = useState<number | null>(null);
+  const [rail, setRail] = usePref("codeRail", false);
+  const [wsUsed, setWsUsed] = useState(false);
+  const [hidePlan, setHidePlan] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
+  // Khung chat nổi trên luồng tin nhắn: chừa đúng chiều cao của nó (thay đổi khi có danh sách việc, tệp đính kèm…).
+  const colRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const col = colRef.current, dock = col?.querySelector(".cv-dock");
+    if (!col || !dock) return;
+    const ro = new ResizeObserver(() => col.style.setProperty("--dock-h", `${Math.round(dock.getBoundingClientRect().height) + 28}px`));
+    ro.observe(dock);
+    return () => ro.disconnect();
+  }, [loaded]);
   const [mention, setMention] = useState<{ q: string; start: number } | null>(null);
   const [mi, setMi] = useState(0);
   const [docMode, setDocMode] = useState(false);
@@ -207,7 +237,9 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   const fileIn = useRef<HTMLInputElement>(null);
   const dirIn = useRef<HTMLInputElement>(null);
   const zipIn = useRef<HTMLInputElement>(null);
-  const away = useClickAway(() => { setMenu(""); setMention(null); });
+  const TOP_MENUS = ["rules", "more"];
+  const away = useClickAway(() => { if (!TOP_MENUS.includes(menuRef.current)) setMenu(""); setMention(null); });
+  const awayTop = useClickAway(() => { if (TOP_MENUS.includes(menuRef.current)) setMenu(""); });
 
   useEffect(() => { if (loaded) onEmpty(nodes.length === 0); }, [loaded, nodes.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const loadedSid = useRef<number | null | undefined>(undefined);
@@ -215,12 +247,13 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
     if (loadedSid.current === sid) return;
     loadedSid.current = sid;
     stopGen();
-    setAtts([]); setV(""); setPanel(null);
+    setAtts([]); setV(""); setPanel(null); setMountedP([]); setHidePlan(0);
+    if (sid === null) setPane(null);
     try {
       const s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null");
-      setNodes(s ? (s.nodes ?? []).map((n: Node) => ({ ...n, done: true })) : []);
-      setSel(s?.sel ?? {}); setCtx(s?.ctx ?? []);
-    } catch { setNodes([]); setSel({}); setCtx([]); }
+      setNodes(s ? (s.nodes ?? []).map((n: Node) => ({ ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" ? { ...x, done: true } : x)) })) : []);
+      setSel(s?.sel ?? {}); setCtx(s?.ctx ?? []); setWsUsed(!!s?.ws);
+    } catch { setNodes([]); setSel({}); setCtx([]); setWsUsed(false); }
     setLoaded(true);
   }, [sid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -232,8 +265,38 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
       loadedSid.current = id;
       onCreate(id, nodes[0].user.replace(/\s+/g, " ").trim().slice(0, 40) || "Phiên code");
     }
-    ls.set("codeS:" + id, JSON.stringify({ nodes, sel, ctx }));
-  }, [nodes, sel, ctx, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Ảnh chụp màn hình của agent chỉ giữ trong bộ nhớ, không lưu vào trình duyệt.
+    const lean = nodes.map((n) => (n.steps ? { ...n, steps: n.steps.map((x) => (x.k === "tool" && x.image ? { ...x, image: undefined } : x)) } : n));
+    ls.set("codeS:" + id, JSON.stringify({ nodes: lean, sel, ctx, ws: wsUsed || undefined }));
+  }, [nodes, sel, ctx, loaded, wsUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tạo phiên ngay khi cần thư mục workspace (mở terminal, clone repo, gửi tin nhắn đầu tiên).
+  const ensureSid = useCallback((t = "Phiên code mới") => {
+    if (loadedSid.current != null) return loadedSid.current;
+    const id = Date.now();
+    loadedSid.current = id;
+    onCreate(id, t.replace(/\s+/g, " ").trim().slice(0, 40) || "Phiên code mới");
+    return id;
+  }, [onCreate]);
+  useEffect(() => { wsStatus().then(setStatus).catch(() => setStatus({ available: false, reason: "Không kiểm tra được workspace." })); }, [setStatus]);
+  const git = sid !== null ? gitMap[sid] : undefined;
+  const refreshGit = useCallback(async (id: number | null | undefined) => {
+    if (id == null || !useCodeUi.getState().status?.available) return;
+    try { setGit(id, await gitOp(id, "status")); } catch {}
+  }, [setGit]);
+  useEffect(() => { if (sid !== null && wsUsed && status?.available && !gitMap[sid]) refreshGit(sid); }, [sid, wsUsed, status?.available]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openPane = useCallback((k: PaneKind) => {
+    setPane(k);
+    setMountedP((m) => (m.includes(k) ? m : [...m, k]));
+    if (k !== "block") setWsUsed(true);
+  }, []);
+  const wsPane = (k: PaneKind) => {
+    if (pane === k) { setPane(null); return; }
+    if (k !== "block" && !status?.available) { say(status?.reason ?? "Workspace chưa sẵn sàng"); return; }
+    ensureSid();
+    openPane(k);
+  };
+  useEffect(() => { if (panel) openPane("block"); else setPane((p) => (p === "block" ? null : p)); }, [panel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rule = rules.preset === "custom" ? rules.custom : PRESETS.find((p) => p.k === rules.preset)?.rule ?? "";
   const ruleLabel = rules.preset === "custom" ? "Luật tùy chỉnh" : rules.preset === "none" ? "Không có luật" : PRESETS.find((p) => p.k === rules.preset)?.label ?? "";
@@ -272,15 +335,70 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
 
   const stopGen = useCallback(() => {
     genRef.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     const id = activeRef.current;
     activeRef.current = null;
     setBusy(false);
-    if (id !== null) setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, ai: closeFences(n.ai), done: true, stopped: !!n.ai && n.stopped !== false ? true : n.stopped } : n)));
+    if (id !== null) setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, ai: closeFences(n.ai), done: true, stopped: (!!n.ai || !!n.steps?.length) && n.stopped !== false ? true : n.stopped, steps: n.steps?.map((x) => (x.k === "tool" && !x.done ? { ...x, done: true, ok: false, summary: x.summary ?? "Đã dừng" } : x)) } : n)));
   }, []);
 
+  // Có workspace: agent tự thao tác (lệnh, file, trình duyệt) và gửi từng bước về theo thời gian thực.
+  const runAgent = (id: number, hist: Node[], userText: string, md: string) => {
+    const gen = ++genRef.current;
+    activeRef.current = id;
+    setBusy(true);
+    const s = ensureSid(userText);
+    setWsUsed(true);
+    const live = ctxRef.current.filter((c) => !c.off);
+    const messages = hist.flatMap((n) => [
+      { role: "user", content: n.user + (n.hid ? "\n\n" + n.hid : "") + n.atts.map((a) => `\n\n[${a.name}]\n${a.text}`).join("") },
+      ...(n.ai && n.id !== id ? [{ role: "assistant", content: n.ai }] : []),
+    ]);
+    const system = [
+      MODE_SYS[md],
+      strictRef.current && STRICT_SYS,
+      SLASH.find((x) => userText.trimStart() === x.cmd || userText.trimStart().startsWith(x.cmd + " "))?.sys,
+      rule && `Luật dự án: ${rule}`,
+      "Các giá trị dạng <REDACTED_KEY_N> là bí mật đã được che; giữ nguyên, không đoán giá trị.",
+      live.length && "Tệp người dùng đính kèm làm ngữ cảnh (không nằm trong workspace):\n" + live.map((c) => `--- ${c.name} ---\n${c.text.slice(0, 6000)}`).join("\n"),
+    ].filter(Boolean).join("\n\n");
+    const ac = new AbortController();
+    abortRef.current = ac;
+    const addText = (n: Node, text: string): Node => ({ ...n, steps: [...(n.steps ?? []), { k: "text", text }], ai: n.ai ? `${n.ai}\n\n${text}` : text });
+    patchNode(id, (n) => ({ ...n, steps: [] }));
+    (async () => {
+      try {
+        await streamAgent({ sid: String(s), system, messages, model, skills: true }, (e) => {
+          if (gen !== genRef.current) return;
+          if (e.t === "text") patchNode(id, (n) => addText(n, e.text));
+          else if (e.t === "tool") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "tool", id: e.id, name: e.name, input: e.input }] }));
+          else if (e.t === "result") patchNode(id, (n) => ({ ...n, steps: (n.steps ?? []).map((x) => (x.k === "tool" && x.id === e.id ? { ...x, done: true, ok: e.ok, summary: e.summary, output: e.output, diff: e.diff, image: e.image } : x)) }));
+          else if (e.t === "plan") patchNode(id, (n) => ({ ...n, plan: e.items }));
+          else if (e.t === "ui") {
+            openPane(e.open);
+            if (e.open === "terminal") showTerm(e.tab ?? "log");
+            if (e.open === "files" && e.path) showFile(e.path);
+          } else if (e.t === "done") { if (e.skills.length) patchNode(id, (n) => ({ ...n, skills: e.skills })); }
+          else if (e.t === "error") patchNode(id, (n) => addText(n, `⚠️ ${e.error}`));
+        }, ac.signal);
+      } catch (e) {
+        if (!ac.signal.aborted && gen === genRef.current) patchNode(id, (n) => addText(n, `⚠️ ${(e as Error).message || "Không kết nối được agent."}`));
+      }
+      if (gen !== genRef.current) return;
+      activeRef.current = null;
+      abortRef.current = null;
+      patchNode(id, (n) => ({ ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" && !x.done ? { ...x, done: true } : x)) }));
+      setBusy(false);
+      refreshGit(s);
+      wsStatus().then(setStatus).catch(() => {});
+    })();
+  };
+
   const run = (id: number, hist: Node[], userText: string, userAtts: Att[], md: string) => {
+    if (status?.available) return runAgent(id, hist, userText, md);
     const gen = ++genRef.current;
     activeRef.current = id;
     setBusy(true);
@@ -363,7 +481,7 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   const retry = () => {
     const last = path[path.length - 1];
     if (!last || busy) return;
-    patchNode(last.id, (n) => ({ ...n, ai: "", done: false, stopped: undefined }));
+    patchNode(last.id, (n) => ({ ...n, ai: "", done: false, stopped: undefined, steps: undefined, plan: undefined }));
     run(last.id, path, last.user, last.atts, last.mode);
   };
 
@@ -530,8 +648,8 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   const addErr = () => {
     if (!errText.trim()) return;
     setAtts((a) => [...a, { k: "error", name: `Stack trace | Đã dán: ${errText.trim().split("\n").length} dòng`, text: redact(errText).text }]);
-    setErrText(""); setMenu("");
-    say("Đã phân tích log lỗi");
+    setErrText(""); setErrOpen(false);
+    say("Đã đính kèm log lỗi");
   };
 
   const openPanel = (b: { lang: string; code: string; name: string; run?: boolean }) => {
@@ -663,37 +781,85 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
   const m = MODES.find((x) => x.k === mode) ?? MODES[1];
   const modeIcon = (k: string, s = 16) => (k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.Alert size={s} /> : <I.Code size={s} />);
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
+  const lastNode = path.length ? path[path.length - 1] : null;
+  const lastPlan = lastNode?.plan?.length && hidePlan !== lastNode.id ? lastNode.plan : null;
+  // Kéo đường chia để đổi độ rộng khung bên phải.
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const railW = rail ? 300 : 0;
+    const clamp = (x: number) => Math.max(320, Math.min(window.innerWidth - railW - 380, x));
+    let w = paneW;
+    const move = (ev: MouseEvent) => { w = clamp(window.innerWidth - railW - ev.clientX); setDragW(w); };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); document.body.classList.remove("cv-dragging"); setPaneW(w); setDragW(null); };
+    document.body.classList.add("cv-dragging");
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+  const ctxPanel = (
+    <div className="cv-ctxp">
+      <div className="cv-ctxp-top"><b>{Math.round(pct)}% đã dùng</b><span>{fmtK(total)} / {fmtK(MAX_TOK)}</span></div>
+    <div className="cv-bar2"><i style={{ width: pct + "%" }} /></div>
+    {pct > 50 && <div className={`cv-warn ${pct > 80 ? "red" : "yel"}`}>{pct > 80 ? "Ngữ cảnh gần đầy." : "Ngữ cảnh đã dùng hơn một nửa."}<button onClick={summarize}>Tóm tắt & Làm gọn luồng chat</button></div>}
+    <div className="cv-stat"><span>Tệp {fmtK(ctxTok)}</span><span>Hội thoại {fmtK(histTok)}</span><span>Đang gõ {fmtK(draftTok)}</span></div>
+    {ctx.length === 0 ? <div className="cv-none">Chưa có tệp nào trong ngữ cảnh.</div> : (
+      <div className="cv-list">
+        {ctx.map((c) => (
+          <div key={c.id} className="cv-row">
+            <button className={`cv-sw ${c.off ? "" : "on"}`} onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, off: !x.off } : x)))} aria-label="Bật/tắt"><i /></button>
+            <span className="cv-ell">{c.name}</span><em>{fmtK(tok(c.text))}</em>
+            <button className="icon-btn" onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x)))} aria-label="Ghim">{c.pinned ? <I.PinOff size={14} /> : <I.Pin size={14} />}</button>
+            <button className="icon-btn" onClick={() => setCtx((a) => a.filter((x) => x.id !== c.id))} aria-label="Xóa"><I.Trash size={14} /></button>
+          </div>
+        ))}
+      </div>
+    )}
+    {ctx.length > 0 && <div className="cv-custom-r"><button className="btn" onClick={() => setCtx((a) => a.filter((x) => x.pinned))}>Xóa tệp chưa ghim</button></div>}
+    </div>
+  );
 
   return (
     <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
-      <div className="cv-col">
-        <div className="cv-bar">
-          <div className="cv-title"><I.Code size={16} />Synchro Code</div>
-          <div className="cv-bar-r">
-            <button className="chip cv-round" title="Hướng dẫn" aria-label="Hướng dẫn" onClick={() => setGuide(true)}><I.Help size={15} /><span className="cv-lb">Hướng dẫn</span></button>
-            <div style={{ position: "relative" }} ref={menu === "rules" ? away : undefined}>
-              <button className="chip cv-rule cv-round" title={ruleLabel} aria-label="Luật dự án" onClick={() => setMenu(menu === "rules" ? "" : "rules")}><I.Sliders size={15} /></button>
-              <Menu open={menu === "rules"} className="cv-rules" style={{ top: 42, right: 0, width: 340 }}>
-                <div className="cv-mh">Luật dự án cho phiên này</div>
-                {PRESETS.map((p) => (
-                  <button key={p.k} className={`menu-item cv-opt ${rules.preset === p.k ? "sel" : ""}`} onClick={() => { setRules({ ...rules, preset: p.k }); setMenu(""); say("Đã áp dụng: " + p.label); }}>
-                    <span className="cv-opt-t">{p.label}<small>{p.rule}</small></span>{rules.preset === p.k && <span className="ck"><I.Check /></span>}
-                  </button>
-                ))}
-                <hr />
-                <div className="cv-custom">
-                  <textarea rows={3} value={rules.custom} placeholder="Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…" onChange={(e) => setRules({ preset: "custom", custom: e.target.value })} />
-                  <div className="cv-custom-r">
-                    <button className="btn" onClick={() => { setRules({ preset: "none", custom: "" }); setMenu(""); }}>Bỏ luật</button>
-                    <button className="btn dark" onClick={() => { setRules({ ...rules, preset: "custom" }); setMenu(""); say("Đã lưu luật tùy chỉnh"); }}>Lưu</button>
-                  </div>
+      <div className="cv-bar">
+        <div className="cv-bar-l">
+          {!sideOpen && <button className="icon-btn" onClick={onSide} aria-label="Mở thanh bên"><I.Panel /></button>}
+          <div className="cv-title" title={title}><I.Code size={16} /><span className="cv-ell" data-notr>{title}</span></div>
+        </div>
+        <div className="cv-bar-r" ref={TOP_MENUS.includes(menu) ? awayTop : undefined}>
+          <button className={`icon-btn cv-tb ${rail ? "on" : ""}`} onClick={() => setRail(!rail)} aria-label="Ẩn/hiện session rail" title="Session rail"><I.PanelR /></button>
+          <button className={`icon-btn cv-tb ${pane === "terminal" ? "on" : ""}`} onClick={() => wsPane("terminal")} aria-label="Terminal" title="Terminal"><I.Terminal /></button>
+          <button className={`icon-btn cv-tb ${pane === "browser" ? "on" : ""}`} onClick={() => wsPane("browser")} aria-label="Trình duyệt" title="Trình duyệt / xem trước"><I.Globe /></button>
+          <button className={`icon-btn cv-tb ${pane === "files" ? "on" : ""}`} onClick={() => wsPane("files")} aria-label="File" title="File"><I.Folder /></button>
+          <div style={{ position: "relative" }}>
+            <button className={`icon-btn cv-tb ${menu === "more" || menu === "rules" ? "on" : ""}`} onClick={() => setMenu(menu === "more" ? "" : "more")} aria-label="Thêm" title="Thêm"><I.Dots /></button>
+            <Menu open={menu === "more"} style={{ top: 38, right: 0, width: 230 }}>
+              <button className="menu-item" onClick={() => { setMenu(""); newSession(); }}><I.Plus />Phiên mới</button>
+              <button className="menu-item" onClick={() => setMenu("rules")}><I.Sliders />Luật dự án<span className="cv-mi-r cv-ell">{ruleLabel}</span></button>
+              <button className="menu-item" onClick={() => { setMenu(""); exportMd(); }}><I.Download />Xuất cuộc trò chuyện (.md)</button>
+              <hr />
+              <button className="menu-item" onClick={() => { setMenu(""); setGuide(true); }}><I.Help />Hướng dẫn</button>
+            </Menu>
+            <Menu open={menu === "rules"} className="cv-rules" style={{ top: 38, right: 0, width: 340 }}>
+              <div className="cv-mh">Luật dự án cho phiên này</div>
+              {PRESETS.map((p) => (
+                <button key={p.k} className={`menu-item cv-opt ${rules.preset === p.k ? "sel" : ""}`} onClick={() => { setRules({ ...rules, preset: p.k }); setMenu(""); say("Đã áp dụng: " + p.label); }}>
+                  <span className="cv-opt-t">{p.label}<small>{p.rule}</small></span>{rules.preset === p.k && <span className="ck"><I.Check /></span>}
+                </button>
+              ))}
+              <hr />
+              <div className="cv-custom">
+                <textarea rows={3} value={rules.custom} placeholder="Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…" onChange={(e) => setRules({ preset: "custom", custom: e.target.value })} />
+                <div className="cv-custom-r">
+                  <button className="btn" onClick={() => { setRules({ preset: "none", custom: "" }); setMenu(""); }}>Bỏ luật</button>
+                  <button className="btn dark" onClick={() => { setRules({ ...rules, preset: "custom" }); setMenu(""); say("Đã lưu luật tùy chỉnh"); }}>Lưu</button>
                 </div>
-              </Menu>
-            </div>
-            <button className="chip cv-round" title="Phiên mới" aria-label="Phiên mới" onClick={newSession}><I.Plus size={15} /><span className="cv-lb">Phiên mới</span></button>
+              </div>
+            </Menu>
           </div>
         </div>
+      </div>
 
+      <div className="cv-body">
+      <div className="cv-col" ref={colRef}>
         <div className="thread cv-thread" ref={threadRef} onScroll={onScroll} onMouseUp={onThreadUp}>
           {path.length === 0 ? (
             <div className="cv-empty">
@@ -736,7 +902,7 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h"><span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span></div>
-                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && !n.steps.some((x) => x.k === "tool" && !x.done) && <Thinking label={n.steps.length ? "Đang làm…" : "Đang suy nghĩ…"} />}</> : n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">
@@ -780,7 +946,15 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
                 )}
               </div>
             )}
+            {lastPlan && <TaskCard key={lastNode!.id} plan={lastPlan} busy={busy && !lastNode!.done} onClose={() => setHidePlan(lastNode!.id)} />}
             <div className="composer cv-composer" data-drag={dragOn ? "1" : undefined}>
+              {errOpen && (
+                <div className="cv-errbox">
+                  <div className="cv-mh"><I.Alert size={14} />Dán log lỗi / stack trace</div>
+                  <textarea autoFocus rows={6} value={errText} onChange={(e) => setErrText(e.target.value)} placeholder={"TypeError: Cannot read properties of undefined\n    at login (src/lib/auth.ts:12:18)"} />
+                  <div className="cv-custom-r"><button className="btn" onClick={() => { setErrText(""); setErrOpen(false); }}>Hủy</button><button className="btn dark" onClick={addErr} disabled={!errText.trim()}>Đính kèm</button></div>
+                </div>
+              )}
               {(ctx.length > 0 || atts.length > 0) && (
                 <div className="cv-pills">
                   {ctx.length > 0 && (
@@ -818,65 +992,65 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
                     <button className="menu-item" onClick={() => { setMenu(""); setUpl(true); }}><I.Clip />Tải tệp lên</button>
                     <button className="menu-item" onClick={() => { setMenu(""); dirIn.current?.click(); }}><I.Folder />Tải cả thư mục</button>
                     <button className="menu-item" onClick={() => { setMenu(""); zipIn.current?.click(); }}><I.Layers />Tải tệp .zip</button>
+                    <button className="menu-item" onClick={() => { setMenu(""); setErrOpen(true); }}><I.Alert />Dán log lỗi / stack trace</button>
                     <hr />
                     <div className="cv-hint">Tải lên mọi loại tệp, không tự lọc. Có thể kéo thả vào khung chat.</div>
                   </Menu>
                 </div>
-                <div style={{ position: "relative" }}>
-                  <button className="cv-modebtn" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 15)}{m.short}<I.Chevron size={13} /></button>
-                  <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 44, left: 0, width: 340 }}>
-                    {MODES.map((x) => (
-                      <button key={x.k} className={`cv-mode-item ${mode === x.k ? "sel" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
-                        <span className={`cv-mode-ic m-${x.k}`}>{modeIcon(x.k, 18)}</span>
-                        <span className="cv-opt-t">{x.label}<small>{x.desc}</small></span>
-                        {mode === x.k && <span className="ck"><I.Check /></span>}
-                      </button>
-                    ))}
-                  </Menu>
-                </div>
                 <div className="cv-sp" />
-                <div style={{ position: "relative" }}>
-                  <button className="icon-btn" title="Dán lỗi / stack trace" onClick={() => setMenu(menu === "err" ? "" : "err")} aria-label="Dán lỗi"><I.Alert size={18} /></button>
-                  <Menu open={menu === "err"} className="cv-err" style={{ bottom: 44, right: -60, width: 440 }}>
-                    <div className="cv-mh">Dán log lỗi / stack trace</div>
-                    <textarea autoFocus rows={7} value={errText} onChange={(e) => setErrText(e.target.value)} placeholder={"TypeError: Cannot read properties of undefined\n    at login (src/lib/auth.ts:12:18)"} />
-                    <div className="cv-custom-r"><button className="btn" onClick={() => { setErrText(""); setMenu(""); }}>Hủy</button><button className="btn dark" onClick={addErr} disabled={!errText.trim()}>Phân tích</button></div>
-                  </Menu>
-                </div>
-                <div style={{ position: "relative" }}>
-                  <button className={`cv-meter ${pct > 80 ? "hot" : pct > 50 ? "mid" : ""}`} onClick={() => setMenu(menu === "ctx" ? "" : "ctx")} title="Quản lý ngữ cảnh">
-                    <span className="cv-ring" style={{ ["--p" as string]: pct }} />{fmtK(total)} / {fmtK(MAX_TOK)}
-                  </button>
-                  <Menu open={menu === "ctx"} className="cv-ctx" style={{ bottom: 44, right: 0, width: 360 }}>
-                    <div className="cv-mh">Ngữ cảnh phiên chat</div>
-                    <div className="cv-bar2"><i style={{ width: pct + "%" }} /></div>
-                    {pct > 50 && <div className={`cv-warn ${pct > 80 ? "red" : "yel"}`}>{pct > 80 ? "Ngữ cảnh gần đầy." : "Ngữ cảnh đã dùng hơn một nửa."}<button onClick={summarize}>Tóm tắt & Làm gọn luồng chat</button></div>}
-                    <div className="cv-stat"><span>Tệp {fmtK(ctxTok)}</span><span>Hội thoại {fmtK(histTok)}</span><span>Đang gõ {fmtK(draftTok)}</span></div>
-                    {ctx.length === 0 ? <div className="cv-none">Chưa có tệp nào trong ngữ cảnh.</div> : (
-                      <div className="cv-list">
-                        {ctx.map((c) => (
-                          <div key={c.id} className="cv-row">
-                            <button className={`cv-sw ${c.off ? "" : "on"}`} onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, off: !x.off } : x)))} aria-label="Bật/tắt"><i /></button>
-                            <span className="cv-ell">{c.name}</span><em>{fmtK(tok(c.text))}</em>
-                            <button className="icon-btn" onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x)))} aria-label="Ghim">{c.pinned ? <I.PinOff size={14} /> : <I.Pin size={14} />}</button>
-                            <button className="icon-btn" onClick={() => setCtx((a) => a.filter((x) => x.id !== c.id))} aria-label="Xóa"><I.Trash size={14} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {ctx.length > 0 && <div className="cv-custom-r"><button className="btn" onClick={() => setCtx((a) => a.filter((x) => x.pinned))}>Xóa tệp chưa ghim</button></div>}
-                  </Menu>
-                </div>
                 <button className="send" disabled={!busy && !v.trim() && !atts.length} onClick={busy ? stopGen : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.Stop /> : <I.Enter />}</button>
               </div>
               {dragOn && <div className="cv-drop">Thả tệp, thư mục hoặc .zip để thêm vào ngữ cảnh</div>}
             </div>
+            <div className="cv-under">
+              <GitHubButton git={git} available={!!status?.available} reason={status?.reason} ensureSid={() => ensureSid()} say={say}
+                onCloned={(g) => { const id = ensureSid(); setGit(id, g); setWsUsed(true); openPane("files"); }} />
+              <div style={{ position: "relative" }}>
+                <button className="cv-modebtn" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}{m.short}<I.Chevron size={12} /></button>
+                <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
+                  {MODES.map((x) => (
+                    <button key={x.k} className={`cv-mode-item ${mode === x.k ? "sel" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
+                      <span className={`cv-mode-ic m-${x.k}`}>{modeIcon(x.k, 18)}</span>
+                      <span className="cv-opt-t">{x.label}<small>{x.desc}</small></span>
+                      {mode === x.k && <span className="ck"><I.Check /></span>}
+                    </button>
+                  ))}
+                </Menu>
+              </div>
+              <div className="cv-sp" />
+              <span className="cv-model" data-notr>{model}</span>
+              <div style={{ position: "relative" }}>
+                <CtxRing pct={pct} active={menu === "ctx"} title={`Ngữ cảnh: ${fmtK(total)} / ${fmtK(MAX_TOK)} token (${Math.round(pct)}%)`} onClick={() => setMenu(menu === "ctx" ? "" : "ctx")} />
+                <Menu open={menu === "ctx"} className="cv-ctx" style={{ bottom: 34, right: -6, width: 360 }}>
+                  <div className="cv-mh">Ngữ cảnh phiên chat</div>
+                  {ctxPanel}
+                </Menu>
+              </div>
+            </div>
           </div>
-          <div className="disclaimer dock-note"><span>Synchro Code có thể mắc lỗi. Hãy kiểm tra trước khi chạy code.</span></div>
         </div>
       </div>
 
-      {panel && <SidePanel key={panel.name + panel.code.length} panel={panel} setPanel={setPanel} say={say} onFix={autoFix} />}
+      {pane && <div className="cv-split" onMouseDown={startDrag} onDoubleClick={() => setPaneW(560)} />}
+      <div className={`cv-side ${pane ? "" : "hide"}`} style={{ width: dragW ?? paneW }}>
+        <div className="cv-side-h">
+          {(["terminal", "browser", "files", "block"] as PaneKind[]).filter((k) => mountedP.includes(k) && (k !== "block" || panel)).map((k) => (
+            <button key={k} className={`cv-side-tab ${pane === k ? "on" : ""}`} onClick={() => setPane(k)}>
+              {k === "terminal" ? <><I.Terminal size={14} />Terminal</> : k === "browser" ? <><I.Globe size={14} />Trình duyệt</> : k === "files" ? <><I.Folder size={14} />File</> : <><I.Code size={14} /><span className="cv-ell" data-notr>{panel?.name}</span></>}
+            </button>
+          ))}
+          <div className="cv-sp" />
+          <button className="icon-btn" onClick={() => setPane(null)} aria-label="Đóng khung" title="Đóng khung"><I.X size={15} /></button>
+        </div>
+        <div className="cv-side-b">
+          {sid !== null && mountedP.includes("terminal") && <div className="cv-pane" hidden={pane !== "terminal"}><TerminalPane sid={sid} visible={pane === "terminal"} /></div>}
+          {sid !== null && mountedP.includes("browser") && <div className="cv-pane" hidden={pane !== "browser"}><BrowserPane sid={sid} visible={pane === "browser"} say={say} /></div>}
+          {sid !== null && mountedP.includes("files") && <div className="cv-pane" hidden={pane !== "files"}><FilesPane sid={sid} visible={pane === "files"} say={say} /></div>}
+          {panel && <div className="cv-pane" hidden={pane !== "block"}><SidePanel key={panel.name + panel.code.length} panel={panel} setPanel={setPanel} say={say} onFix={autoFix} /></div>}
+        </div>
+      </div>
+      {rail && <SessionRail sid={sid} status={status} git={git} onGit={(g) => sid !== null && setGit(sid, g)} say={say} context={ctxPanel} onClose={() => setRail(false)} />}
+      </div>
 
       {selBox && (
         <div className="cv-sel" style={{ left: selBox.x, top: selBox.y }} onMouseDown={(e) => e.preventDefault()}>
