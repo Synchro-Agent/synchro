@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
   full_name      TEXT,
   nickname       TEXT,
   birth_date     TEXT,
-  occupation     TEXT
+  occupation     TEXT,
+  perms          TEXT  -- JSON quyền riêng (NULL = theo mặc định do quản trị đặt)
 );
 
 -- Tài khoản liên kết từ Google / GitHub / Apple
@@ -56,4 +57,40 @@ CREATE INDEX IF NOT EXISTS audit_at ON audit(at);
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+-- Skill của từng người dùng. Bản hiện hành nằm ở đây; file gốc ở data/skills/<user_id>/<skill_id>/v<N>/
+CREATE TABLE IF NOT EXISTS skills (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  description  TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  version      INTEGER NOT NULL,
+  versions     TEXT NOT NULL DEFAULT '[]',
+  warnings     TEXT NOT NULL DEFAULT '[]',
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  UNIQUE (user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS skill_files (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  skill_id  TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  path      TEXT NOT NULL,
+  size      INTEGER NOT NULL,
+  mime_type TEXT NOT NULL,
+  kind      TEXT NOT NULL CHECK (kind IN ('reference', 'script', 'asset')),
+  UNIQUE (skill_id, path)
+);
+
+-- Bật skill riêng cho một dự án (scope = 'project', scope_id = id dự án của người dùng).
+-- Bật cho toàn tài khoản dùng cột skills.enabled.
+CREATE TABLE IF NOT EXISTS skill_enablement (
+  skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  scope    TEXT NOT NULL CHECK (scope IN ('user', 'project')),
+  scope_id TEXT NOT NULL,
+  PRIMARY KEY (skill_id, scope, scope_id)
 );

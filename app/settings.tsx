@@ -9,6 +9,7 @@ import { MODES, PRESETS } from "./codeview";
 import { SkillsPanel, SKILLS_UPLOAD } from "./skillsui";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
+import { ls } from "./userscope";
 
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -460,7 +461,7 @@ function CodeTab() {
       <Row t="Node.js" d="Runs in a WebContainer inside your browser. Needs HTTPS for cross-origin isolation."><Badge ok={iso}>{iso ? "Ready" : "Needs HTTPS"}</Badge></Row>
       <Row t="Cloud sandbox" d="Optional server runtime (E2B) for heavier jobs. Enabled when the server has an E2B key."><Badge>Optional</Badge></Row>
       <H>Data</H>
-      <Row t="Code sessions" d={`${list.length} session${list.length === 1 ? "" : "s"} stored in this browser.`} top><button className="btn" disabled={!list.length} style={!list.length ? { opacity: 0.4 } : undefined} onClick={() => app.confirm("Clear all Code sessions?", "Every Synchro Code conversation saved in this browser will be deleted. This can't be undone.", "Clear all", () => { Object.keys(localStorage).filter((k) => k.startsWith("codeS:")).forEach((k) => localStorage.removeItem(k)); setList([]); app.goCode(); app.say("Code sessions cleared"); })}>Clear all</button></Row>
+      <Row t="Code sessions" d={`${list.length} session${list.length === 1 ? "" : "s"} stored in this browser.`} top><button className="btn" disabled={!list.length} style={!list.length ? { opacity: 0.4 } : undefined} onClick={() => app.confirm("Clear all Code sessions?", "Every Synchro Code conversation saved in this browser will be deleted. This can't be undone.", "Clear all", () => { ls.keys().filter((k) => k.startsWith("codeS:")).forEach((k) => ls.remove(k)); setList([]); app.goCode(); app.say("Code sessions cleared"); })}>Clear all</button></Row>
     </>
   );
 }

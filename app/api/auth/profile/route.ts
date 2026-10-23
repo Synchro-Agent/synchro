@@ -6,6 +6,6 @@ export const runtime = "nodejs";
 export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  const { fullName, nickname, birthDate, occupation } = await req.json();
-  return Response.json({ user: publicUser(updateProfile(req, user, { fullName, nickname, birthDate, occupation })) });
+  const { fullName, nickname, birthDate, occupation, avatar } = await req.json();
+  return Response.json({ user: publicUser(updateProfile(req, user, { fullName, nickname, birthDate, occupation, avatar })) });
 });

@@ -211,14 +211,16 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
 export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
   const [tab, setTab] = useState(initial);
   const [q, setQ] = useState("");
-  const admin = useApp().me?.isAdmin;
+  const me = useApp().me;
+  const admin = me?.isAdmin;
+  const feat = me?.perms.features;
   const items: [string, React.ReactNode][] = [
     ["General", <I.Gear key="g" />], ...(admin ? [["Administrator", <I.Admin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.User key="a" />], ["Privacy", <I.Shield key="p" />],
     ["Capabilities", <I.Sliders key="c" />], ["Memory", <I.History key="m" />],
-    ["Synchro Code", <I.Code key="cc" />],
+    ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
   ];
   const custom: [string, React.ReactNode][] = [
-    ["Skills", <I.Layers key="s" />], ["Connectors", <I.Grid key="c" />], ["Plugins", <I.Plug key="p" />],
+    ...(feat?.skills !== false ? [["Skills", <I.Layers key="s" />] as [string, React.ReactNode]] : []), ["Connectors", <I.Grid key="c" />], ["Plugins", <I.Plug key="p" />],
   ];
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => n.toLowerCase().includes(q.toLowerCase()));
   return (

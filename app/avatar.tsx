@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
-import { initials, usePref } from "./store";
+import { initials, usePref, useApp } from "./store";
 
-export function Avatar({ name, size = 24, font = 9 }: { name: string; size?: number; font?: number }) {
-  const [img] = usePref("avatar", "");
+// `src` truyền vào khi hiển thị người khác (vd. danh sách quản trị). Không truyền thì là ảnh của chính mình:
+// ảnh đã tải lên (lưu trên máy chủ, có bản sao trong trình duyệt) hoặc ảnh từ Google/GitHub.
+export function Avatar({ name, size = 24, font = 9, src }: { name: string; size?: number; font?: number; src?: string | null }) {
+  const [own] = usePref("avatar", "");
+  const me = useApp().me;
+  const img = src !== undefined ? src : own || me?.avatar || "";
   return (
     <span className="avatar" style={{ width: size, height: size, fontSize: font }}>
       {img ? <img src={img} alt="" draggable={false} /> : initials(name)}
@@ -32,7 +36,15 @@ export function AvatarButton({ name }: { name: string }) {
 }
 
 function AvatarFlow({ onClose }: { onClose: () => void }) {
-  const [avatar, setAvatar] = usePref("avatar", "");
+  const [own, setOwn] = usePref("avatar", "");
+  const app = useApp();
+  const avatar = own || app.me?.avatar || "";
+  // Lưu lên máy chủ để ảnh đi theo tài khoản (đăng nhập máy khác vẫn thấy), giữ bản sao trong trình duyệt.
+  const setAvatar = (d: string) => {
+    setOwn(d);
+    fetch("/api/auth/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ avatar: d }) })
+      .then((r) => r.json()).then((j) => { if (j.user) app.setMe(j.user); else if (j.error) app.say(j.error); }).catch(() => {});
+  };
   const [src, setSrc] = useState<{ url: string; w: number; h: number } | null>(null);
   const [err, setErr] = useState("");
   const [drag, setDrag] = useState(false);

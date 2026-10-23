@@ -38,6 +38,7 @@ export const Plug = (p: P) => <S {...p}><path d="M7.4 12.6L4 16M6.5 9.3l4.2 4.2c
 export const Gear = (p: P) => <S {...p}><circle cx="10" cy="10" r="2.5" /><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" /></S>;
 export const User = (p: P) => <S {...p}><circle cx="10" cy="10" r="7" /><circle cx="10" cy="8.5" r="2.2" /><path d="M5.5 15c1-2 2.7-2.8 4.5-2.8s3.5.8 4.5 2.8" /></S>;
 export const Shield = (p: P) => <S {...p}><path d="M10 2.5l6 2.3v4.7c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V4.8z" /></S>;
+export const Lock = (p: P) => <S {...p}><rect x="4.5" y="8.5" width="11" height="8.5" rx="2" /><path d="M7 8.5V6.5a3 3 0 016 0v2" /></S>;
 export const Admin = (p: P) => <S {...p}><path d="M8.62 3.4Q10 2.4 11.38 3.4L16.22 6.9Q17.6 7.9 17.07 9.52L15.23 15.18Q14.7 16.8 13 16.8H7Q5.3 16.8 4.77 15.18L2.93 9.52Q2.4 7.9 3.78 6.9Z" /><circle cx="10" cy="8.9" r="2.1" /><path d="M6.7 16.7c.2-1.9 1.6-3.1 3.3-3.1s3.1 1.2 3.3 3.1" /></S>;
 export const Card = (p: P) => <S {...p}><rect x="2.5" y="5" width="15" height="10" rx="2" /><path d="M2.5 8.5h15" /></S>;
 export const Bell = (p: P) => <S {...p}><path d="M4.5 14.5h11l-1.5-2V9a4 4 0 10-8 0v3.5zM8.5 16.5h3" /></S>;

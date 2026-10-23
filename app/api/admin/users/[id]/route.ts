@@ -1,4 +1,5 @@
 import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, sameOrigin, sessionsOf } from "../../../../authstore";
+import { removeUserSkillFiles } from "../../../../skillstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,12 +14,12 @@ export const GET = handle(async (req, { params }: Ctx) => {
   return Response.json({ sessions: sessionsOf(u.id).map((s) => publicSession(s)), identities });
 });
 
-// { action: "suspend" | "restore" | "signout" }
+// { action: "suspend" | "restore" | "signout" | "set_password" (password, signOut) | "set_perms" (perms | null) }
 export const PATCH = handle(async (req, { params }: Ctx) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
-  const { action } = await req.json();
-  adminAct(req, user, (await params).id, action);
+  const body = await req.json();
+  await adminAct(req, user, (await params).id, body.action, body);
   return Response.json({ ok: true });
 });
 
@@ -27,6 +28,8 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
   const { confirm } = await req.json();
-  adminDelete(req, user, (await params).id, confirm);
+  const id = (await params).id;
+  adminDelete(req, user, id, confirm);
+  await removeUserSkillFiles(id);
   return Response.json({ ok: true });
 });

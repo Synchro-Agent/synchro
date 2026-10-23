@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { Menu, Thinking } from "./ui";
 import { Markdown, fileNameFor, type DevBlock } from "./md";
-import { callLLM, hasLLM, type LLMMsg } from "./llm";
+import { callLLM, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
+import { ls } from "./userscope";
+import { tr } from "./i18n";
 import { usePref } from "./store";
 import { redact, unredact, analyzePaste, SLASH, balanceBraces, type Pill } from "./devtools";
 import { useDev, type Panel } from "./devstore";
@@ -18,7 +20,7 @@ import { ingestFile } from "./filestate";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
 type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?: Pill[] };
-type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number };
+type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[] };
 type Ctx = { id: number; name: string; text: string; size: number; kind: "file" | "doc"; pinned?: boolean; off?: boolean };
 type Say = (m: string) => void;
 
@@ -215,7 +217,7 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
     stopGen();
     setAtts([]); setV(""); setPanel(null);
     try {
-      const s = sid === null ? null : JSON.parse(localStorage.getItem("codeS:" + sid) ?? "null");
+      const s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null");
       setNodes(s ? (s.nodes ?? []).map((n: Node) => ({ ...n, done: true })) : []);
       setSel(s?.sel ?? {}); setCtx(s?.ctx ?? []);
     } catch { setNodes([]); setSel({}); setCtx([]); }
@@ -230,7 +232,7 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
       loadedSid.current = id;
       onCreate(id, nodes[0].user.replace(/\s+/g, " ").trim().slice(0, 40) || "Phiên code");
     }
-    try { localStorage.setItem("codeS:" + id, JSON.stringify({ nodes, sel, ctx })); } catch {}
+    ls.set("codeS:" + id, JSON.stringify({ nodes, sel, ctx }));
   }, [nodes, sel, ctx, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rule = rules.preset === "custom" ? rules.custom : PRESETS.find((p) => p.k === rules.preset)?.rule ?? "";
@@ -302,13 +304,20 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
       let reply: string;
       const snips = /@codebase\b/i.test(userText) ? await pickRelevantTS(live, userText, 5) : [];
       const system = buildSystem(snips);
-      if (hasLLM) { try { reply = await callLLM(system, messages, 2500, { task: /^\s*\/commit\b/.test(userText) ? "commit" : undefined, tokens: tok(system) + messages.reduce((a, m) => a + tok(typeof m.content === "string" ? m.content : ""), 0) }); } catch { reply = "Không thể kết nối tới model. Vui lòng thử lại."; } }
+      let usedSk: string[] = [];
+      if (hasLLM) {
+        try {
+          reply = await callLLM(system, messages, 2500, { task: /^\s*\/commit\b/.test(userText) ? "commit" : undefined, tokens: tok(system) + messages.reduce((a, m) => a + tok(typeof m.content === "string" ? m.content : ""), 0) }, true, { feature: "code" });
+          usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))];
+        } catch (e) { reply = e instanceof LLMError && e.status === 403 ? e.message : "Không thể kết nối tới model. Vui lòng thử lại."; }
+      }
       else {
         await new Promise((r) => setTimeout(r, 650));
         const hasPrev = hist.slice(0, -1).some((n) => blocksOf(n.ai).length > 0);
         reply = mockReply(md, userText, hasPrev, userAtts, rule ? ruleLabel : "", live);
       }
       if (gen !== genRef.current) return;
+      if (usedSk.length) patchNode(id, (n) => ({ ...n, skills: usedSk }));
       let i = 0;
       timer.current = setInterval(() => {
         i += 16;
@@ -727,7 +736,7 @@ export function CodeView({ say, sid, onCreate, onNew, onEmpty }: { say: Say; onE
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h"><span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span></div>
-                      <div className="ai-msg">{n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">

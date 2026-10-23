@@ -8,12 +8,13 @@ import { useApp } from "./store";
 import { getLang } from "./i18n";
 import * as I from "./icons";
 import type { AuthUser, Providers } from "./auth";
+import { FEATURES, MODEL_PROVIDERS, type Perms } from "./catalog";
 
-type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean };
+type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
 type Data = {
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean }; providers: Providers; admins: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
@@ -41,7 +42,7 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   session_revoked: ["Ended a session", ""], sessions_revoked: ["Signed out other devices", ""], account_deleted: ["Deleted own account", "bad"],
   admin_suspend: ["Suspended account", "adm"], admin_restore: ["Restored account", "adm"], admin_signout: ["Signed user out everywhere", "adm"],
   admin_delete: ["Deleted account", "adm"], admin_revoke_session: ["Ended user session", "adm"], admin_signup_open: ["Opened sign-ups", "adm"],
-  admin_signup_closed: ["Closed sign-ups", "adm"], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
+  admin_signup_closed: ["Closed sign-ups", "adm"], admin_set_password: ["Set user password", "adm"], admin_set_perms: ["Changed user access", "adm"], admin_default_perms: ["Changed default access", "adm"], profile_updated: ["Updated profile", ""], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
 };
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,
@@ -49,6 +50,35 @@ const LOG_FILTER: Record<string, (a: string) => boolean> = {
   "Admin actions": (a) => a.startsWith("admin_"),
 };
 const ENV: Record<keyof Providers, string> = { google: "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", github: "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET", apple: "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY" };
+
+type ToggleT = (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement;
+// Chọn model và tính năng được phép. Dùng cho quyền mặc định và quyền riêng từng người.
+function PermsEditor({ value, onChange, Toggle }: { value: Perms; onChange: (p: Perms) => void; Toggle: ToggleT }) {
+  const flip = (m: string) => onChange({ ...value, models: value.models.includes(m) ? value.models.filter((x) => x !== m) : [...value.models, m] });
+  return (
+    <div className="adm-perms">
+      <div className="adm-perm-sec">
+        <h4>Models</h4>
+        {MODEL_PROVIDERS.map((pv) => (
+          <div key={pv.id} className="adm-perm-prov">
+            <span className="adm-perm-pname">{pv.name}</span>
+            <div className="adm-pchips">{pv.models.map((m) => <button key={m} type="button" className={`adm-pchip ${value.models.includes(m) ? "on" : ""}`} aria-pressed={value.models.includes(m)} onClick={() => flip(m)}>{value.models.includes(m) && <I.Check size={12} />}{m}</button>)}</div>
+          </div>
+        ))}
+        {value.models.length === 0 && <p className="adm-perm-warn">No models selected: this person won&apos;t be able to chat.</p>}
+      </div>
+      <div className="adm-perm-sec">
+        <h4>Features</h4>
+        {FEATURES.map((f) => (
+          <div key={f.key} className="adm-perm-row">
+            <div><div className="t">{f.label}</div><div className="d">{f.desc}</div></div>
+            <Toggle on={value.features[f.key]} set={(v) => onChange({ ...value, features: { ...value.features, [f.key]: v } })} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Seg({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
   return <div className="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} onClick={() => onChange(s)}>{s}</button>)}</div>;
@@ -67,6 +97,8 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   const [del, setDel] = useState<U | null>(null);
   const [delTxt, setDelTxt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pwFor, setPwFor] = useState<U | null>(null);
+  const [pw, setPw] = useState({ next: "", again: "", signOut: true });
 
   const load = useCallback(() => call<Data>("GET", "/api/admin").then((x) => { setD(x); setErr(""); setMore(x.audit.length >= 100); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
@@ -116,6 +148,13 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         </div>
       ))}
 
+      <h3 className="sec">Access</h3>
+      <p className="d adm-privacy"><I.Lock size={14} />Choose which models and features people can use. Administrators always have full access. Conversations, projects and files stay on each person&apos;s own device: administrators can&apos;t see them.</p>
+      <div className="adm-card">
+        <div className="adm-card-h"><b>Default for everyone</b><span className="d">Applies to every account without custom access.</span></div>
+        <PermsEditor Toggle={Toggle} value={d.settings.defaultPerms} onChange={(p) => { setD({ ...d, settings: { ...d.settings, defaultPerms: p } }); act(() => call("PATCH", "/api/admin/settings", { defaultPerms: p }), "Default access saved"); }} />
+      </div>
+
       <h3 className="sec">Users</h3>
       <div className="adm-bar">
         <div className="s-search"><I.Search size={14} /><input placeholder="Search by name or email" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -131,10 +170,10 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
               <Fragment key={u.id}>
                 <tr className={`adm-row ${open === u.id ? "on" : ""}`} onClick={() => toggle(u.id)}>
                   <td>
-                    <div className="adm-user"><Avatar name={u.name || u.email} size={28} font={10} /><div style={{ minWidth: 0 }}>
+                    <div className="adm-user"><Avatar name={u.name || u.email} size={28} font={10} src={u.avatar} /><div style={{ minWidth: 0 }}>
                       <div className="nm"><span data-notr>{u.name || u.email.split("@")[0]}</span>{u.id === app.me?.id ? <span className="new-tag" style={{ marginLeft: 6 }}>You</span> : u.protected ? <span className="new-tag" style={{ marginLeft: 6 }}>Admin</span> : null}</div>
                       <div className="em" data-notr>{u.email}</div>
-                      <div style={{ marginTop: 3 }}>{u.methods.map((m) => <span key={m} className="adm-chip">{METHOD[m] ?? m}</span>)}</div>
+                      <div style={{ marginTop: 3 }}>{u.methods.map((m) => <span key={m} className="adm-chip">{METHOD[m] ?? m}</span>)}{u.customPerms && <span className="adm-chip adm-chip-acc">Custom access</span>}</div>
                     </div></div>
                   </td>
                   <td data-notr style={{ whiteSpace: "nowrap" }}>{ago(u.lastSeen)}</td>
@@ -165,8 +204,17 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
                         ))}
                       </div>
                     </div>
+                    {!u.protected && (
+                      <div className="adm-card adm-card-in">
+                        <div className="adm-card-h"><b>Access</b><Seg value={u.customPerms ? "Custom" : "Default"} options={["Default", "Custom"]} onChange={(v) => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: v === "Default" ? null : u.perms }), v === "Default" ? "Using default access" : "Custom access on")} /></div>
+                        {u.customPerms
+                          ? <PermsEditor Toggle={Toggle} value={u.perms} onChange={(p) => { setD({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, perms: p } : x)) }); act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: p }), "Access saved"); }} />
+                          : <p className="d" style={{ margin: 0 }}>Follows the default access above. Switch to Custom to choose models and features just for this person.</p>}
+                      </div>
+                    )}
                     {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>Owner accounts can&apos;t be suspended or deleted from here.</p> : (
                       <div className="adm-actions">
+                        <button className="btn" disabled={busy} onClick={() => { setPwFor(u); setPw({ next: "", again: "", signOut: true }); }}>Set new password</button>
                         <button className="btn" disabled={busy || !u.sessions} onClick={() => app.confirm("Sign this user out everywhere?", "Every active session for this account will end immediately.", "Sign out", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "signout" }), "User signed out everywhere"))}>Sign out everywhere</button>
                         {u.status === "active"
                           ? <button className="btn" disabled={busy} onClick={() => app.confirm("Suspend this account?", "They will be signed out everywhere and can't sign in until you restore the account.", "Suspend", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "suspend" }), "Account suspended"))}>Suspend</button>
@@ -199,6 +247,24 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
       {logs.length === 0 && <div className="empty" style={{ marginTop: 16 }}>No events yet.</div>}
       {more && d.audit.length > 0 && <button className="btn" style={{ marginTop: 12 }} onClick={() => call<{ audit: Log[] }>("GET", `/api/admin?before=${d.audit[d.audit.length - 1].id}`).then((x) => { setD({ ...d, audit: [...d.audit, ...x.audit] }); setMore(x.audit.length >= 100); }).catch((e) => app.say(e.message))}>Load more</button>}
 
+      <Fade show={!!pwFor}>
+        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setPwFor(null)}>
+          <div className="modal sm" style={{ width: 420 }}>
+            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPwFor(null)}><I.X size={16} /></button>
+            <h2 style={{ fontSize: 16 }}>Set a new password</h2>
+            <p className="mono" style={{ margin: "0 0 6px", fontSize: 12 }} data-notr>{pwFor?.email}</p>
+            <p className="d" style={{ margin: "0 0 12px" }}>Their current password isn&apos;t needed. Share the new password with them privately.</p>
+            <input className="field" type="password" autoComplete="new-password" autoFocus placeholder="New password (at least 8 characters)" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+            <input className="field" type="password" autoComplete="new-password" placeholder="Confirm new password" value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} />
+            <label className="adm-check"><input type="checkbox" checked={pw.signOut} onChange={(e) => setPw({ ...pw, signOut: e.target.checked })} />Sign them out of all devices</label>
+            {pw.again.length > 0 && pw.next !== pw.again && <p className="auth-field-err" style={{ margin: "8px 0 0" }}>Passwords do not match!</p>}
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setPwFor(null)}>Cancel</button>
+              <button className="btn dark" disabled={busy || pw.next.length < 8 || pw.next !== pw.again} style={pw.next.length < 8 || pw.next !== pw.again ? { opacity: 0.4 } : undefined} onClick={() => { const u = pwFor!; setPwFor(null); act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_password", password: pw.next, signOut: pw.signOut }), "Password updated"); }}>Save password</button>
+            </div>
+          </div>
+        </div>
+      </Fade>
       <Fade show={!!del}>
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 420 }}>

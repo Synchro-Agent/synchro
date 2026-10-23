@@ -7,6 +7,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, CalendarDays } from "lucide-react";
 // Importing animation components from framer-motion
 import { AnimatePresence, motion, Variants } from "framer-motion";
+import type { Perms } from "./catalog";
 
 // --- NHỊP ANIMATION CHUNG ---
 // Mọi lớp trong một bước dùng cùng easing và thời lượng, chỉ lệch nhau STEP giây, và đều bắt đầu
@@ -76,7 +77,7 @@ const DefaultLogo = () => ( <div className="bg-primary text-primary-foreground r
 
 // --- TYPES + API ---
 export type AuthProfile = { fullName: string | null; nickname: string | null; birthDate: string | null; occupation: string | null };
-export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean };
+export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean; perms: Perms };
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;
 // Cùng danh sách với Cài đặt → Tài khoản để hai nơi hiển thị khớp nhau.

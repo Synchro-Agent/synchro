@@ -4,12 +4,46 @@ import GlassFolder from "./glass-folder";
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { Fade, Menu } from "./ui";
-import type { Chat, Project } from "./store";
+import { useApp, type Chat, type Project } from "./store";
 import { chunkText, extractText } from "./llm";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 
 type Say = (t: string) => void;
+
+// Bật skill riêng cho dự án: model chỉ dùng các skill này khi chat trong dự án (cộng với skill bật cho mọi đoạn chat).
+type PSkill = { name: string; description: string; enabled: boolean; projects: string[] };
+function ProjectSkills({ pid, say }: { pid: number; say: Say }) {
+  const [list, setList] = useState<PSkill[] | null>(null);
+  useEffect(() => {
+    fetch("/api/skills", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { skills: [] })).then((j) => setList(j.skills ?? [])).catch(() => setList([]));
+  }, []);
+  const flip = async (s: PSkill, on: boolean) => {
+    const id = String(pid);
+    setList((l) => l?.map((x) => (x.name === s.name ? { ...x, projects: on ? [...x.projects, id] : x.projects.filter((p) => p !== id) } : x)) ?? null);
+    const r = await fetch(`/api/skills/${encodeURIComponent(s.name)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: id, enabled: on }) });
+    if (!r.ok) say((await r.json().catch(() => ({}))).error || "Không lưu được thay đổi");
+    else say(on ? `Đã bật ${s.name} trong dự án` : `Đã tắt ${s.name} trong dự án`);
+  };
+  return (
+    <section>
+      <div className="pj-sh"><h3>Kỹ năng</h3></div>
+      {list === null ? <p className="muted">Đang tải…</p> : list.length === 0 ? <p className="muted">Chưa có skill nào. Tải lên trong Tùy chỉnh → Kỹ năng.</p> : (
+        <ul className="pj-skills">
+          {list.map((s) => {
+            const on = s.projects.includes(String(pid));
+            return (
+              <li key={s.name}>
+                <div className="pj-sk-t"><b data-notr>{s.name}</b><span>{s.enabled ? "Đang bật cho mọi đoạn chat" : on ? "Chỉ bật trong dự án này" : "Đang tắt"}</span></div>
+                {s.enabled ? <span className="pj-sk-all">Mọi nơi</span> : <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`Bật ${s.name} trong dự án`} onClick={() => flip(s, !on)} />}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export const projUpd = (p: Project, chats: Chat[]) => Math.max(p.upd ?? p.id, ...chats.filter((c) => c.project === p.id).map((c) => c.id));
 
@@ -221,6 +255,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const [ins, setIns] = useState(false);
   const [txt, setTxt] = useState(false);
   const [menu, setMenu] = useState(false);
+  const canSkills = useApp().me?.perms.features.skills !== false;
   const [add, setAdd] = useState(false);
   const mRef = useAway(() => setMenu(false));
   const aRef = useAway(() => setAdd(false));
@@ -291,6 +326,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
             <div className="pj-sh"><h3>Bộ nhớ</h3><button className="pj-memlink" onClick={() => setMemOpen(true)}>Xem bộ nhớ</button></div>
             {mem.length === 0 ? <p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p> : <ul className="pj-mem">{mem.slice(-3).map((m) => <li key={m.id}>{m.content}</li>)}</ul>}
           </section>
+          {canSkills && <ProjectSkills pid={proj.id} say={say} />}
           <section>
             <div className="pj-sh"><h3>Ngữ cảnh</h3>
               {busyCtx ? <span className="pj-spin" aria-label="Đang tải" /> : (

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { AuthUser } from "./auth";
+import { ls } from "./userscope";
 
 export type Msg = { role: "user" | "ai"; text: string; done?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[] };
 export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean };
@@ -17,7 +18,7 @@ function read(k: string): unknown {
   if (cache.has(k)) return cache.get(k);
   let v = defs.get(k);
   try {
-    const s = localStorage.getItem("p:" + k);
+    const s = ls.get("p:" + k);
     if (s !== null) v = JSON.parse(s);
   } catch {}
   cache.set(k, v);
@@ -31,7 +32,7 @@ export function usePref<T>(k: string, d: T): [T, (v: T | ((o: T) => T)) => void]
     const cur = read(k) as T;
     const nv = typeof n === "function" ? (n as (o: T) => T)(cur) : n;
     cache.set(k, nv);
-    try { localStorage.setItem("p:" + k, JSON.stringify(nv)); } catch {}
+    ls.set("p:" + k, JSON.stringify(nv));
     emit();
   }, [k]);
   return [v, set];
@@ -39,7 +40,13 @@ export function usePref<T>(k: string, d: T): [T, (v: T | ((o: T) => T)) => void]
 
 export function resetPrefs() {
   cache.clear();
-  try { Object.keys(localStorage).filter((k) => k.startsWith("p:")).forEach((k) => localStorage.removeItem(k)); } catch {}
+  ls.keys().filter((k) => k.startsWith("p:")).forEach((k) => ls.remove(k));
+  emit();
+}
+
+// Gọi sau khi đổi tài khoản (setUserScope): bỏ giá trị đã nhớ để mọi nơi đọc lại cài đặt của tài khoản mới.
+export function reloadPrefs() {
+  cache.clear();
   emit();
 }
 

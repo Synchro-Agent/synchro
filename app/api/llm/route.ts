@@ -1,6 +1,7 @@
 import { enabledSkills } from "../../skillstore";
-import { MAX_STEPS, SKILL_TOOLS, runSkillTool, skillsPrompt, type ToolRun } from "../../skillruntime";
-import { authGate } from "../../authstore";
+import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "../../skillruntime";
+import { can, canModel, current } from "../../authstore";
+import { CLAUDE_API_IDS } from "../../catalog";
 
 // Cổng duy nhất tới model (tương đương call_llm trong app.py). Đổi nhà cung cấp chỉ sửa ở đây.
 const PROVIDER = process.env.LLM_PROVIDER ?? "anthropic";
@@ -13,11 +14,14 @@ const BASE_URL = process.env.LLM_BASE_URL ?? "https://api.openai.com/v1";
 const MODEL_LONG = process.env.LLM_MODEL_LONG ?? "google/gemini-2.5-flash";
 const MODEL_COMMIT = process.env.LLM_MODEL_COMMIT ?? "deepseek/deepseek-chat";
 const LONG_CTX = Number(process.env.LLM_LONG_CTX ?? 100_000);
-function pickModel(route?: { task?: string; tokens?: number }) {
+// `picked` là model người dùng chọn trong giao diện (đã được kiểm tra quyền).
+function pickModel(route?: { task?: string; tokens?: number }, picked?: string) {
   if (route?.task === "commit") return MODEL_COMMIT;
   if ((route?.tokens ?? 0) > LONG_CTX) return MODEL_LONG;
+  if (PROVIDER === "anthropic" && picked && CLAUDE_API_IDS[picked]) return CLAUDE_API_IDS[picked];
   return MODEL;
 }
+const isClaude = (m: string) => PROVIDER === "anthropic" && m.startsWith("claude");
 
 type Blk = { type: string; text?: string; media_type?: string; data?: string; name?: string; fallbackText?: string; fallbackImages?: string[] };
 // Chuyển block chung -> định dạng từng provider.
@@ -36,7 +40,7 @@ type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; res
 class HttpErr extends Error { constructor(public status: number, m: string) { super(m); } }
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
-const anthropicAdapter = (model: string, system: string, skillSys: string, max_tokens: number): Adapter => ({
+const anthropicAdapter = (model: string, system: string, skillSys: string, max_tokens: number, tools: unknown[]): Adapter => ({
   step: async (msgs, noTools) => {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -44,7 +48,7 @@ const anthropicAdapter = (model: string, system: string, skillSys: string, max_t
       body: JSON.stringify({
         model, max_tokens,
         system: [{ type: "text", text: system || "Bạn là một trợ lý AI hữu ích." }, { type: "text", text: skillSys, cache_control: { type: "ephemeral" } }],
-        tools: SKILL_TOOLS, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: msgs,
+        tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: msgs,
       }),
     });
     if (!r.ok) throw new HttpErr(r.status, await r.text());
@@ -59,14 +63,14 @@ const anthropicAdapter = (model: string, system: string, skillSys: string, max_t
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
 });
 
-const openaiAdapter = (model: string, system: string, max_tokens: number): Adapter => ({
+const openaiAdapter = (model: string, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[]): Adapter => ({
   step: async (msgs, noTools) => {
     const r = await fetch(`${BASE_URL}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({
         model, max_tokens, messages: [{ role: "system", content: system }, ...msgs],
-        tools: SKILL_TOOLS.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })),
+        tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })),
         ...(noTools ? { tool_choice: "none" } : {}),
       }),
     });
@@ -102,34 +106,39 @@ const mockAdapter = (skills: Skl): Adapter => ({
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
 });
 
-async function skillLoop(ad: Adapter, msgs: unknown[]) {
+async function skillLoop(ad: Adapter, msgs: unknown[], list: Skl) {
   const used: ToolRun["used"][] = [];
   const m = [...msgs];
   for (let i = 0; i < MAX_STEPS; i++) {
     const r = await ad.step(m, i === MAX_STEPS - 1);
     m.push(r.assistant);
     if (!r.calls.length) return { text: r.text, used };
-    const res = await Promise.all(r.calls.map((c) => runSkillTool(c.name, c.input)));
-    used.push(...res.filter((x) => !x.is_error).map((x) => x.used));
+    const res = await Promise.all(r.calls.map((c) => runSkillTool(list, c.name, c.input)));
+    used.push(...res.filter((x) => !x.is_error && x.used.kind !== "search").map((x) => x.used));
     m.push(...ad.results(r.calls, res));
   }
   return { text: "Đã đạt giới hạn số lần gọi skill. Hãy thử hỏi lại cụ thể hơn.", used };
 }
 
 export async function POST(req: Request) {
-  const denied = authGate(req); if (denied) return denied;
+  const c = current(req);
+  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   if (!API_KEY && PROVIDER !== "mock") return Response.json({ error: "Chưa cấu hình LLM_API_KEY" }, { status: 500 });
-  const { system, messages, max_tokens = 1500, route, skills } = await req.json();
-  const model = pickModel(route);
+  // feature: "chat" | "code"; picked: tên model trong giao diện; project: id dự án đang chat (để bật skill theo dự án)
+  const { system, messages, max_tokens = 1500, route, skills, model: picked, feature, project } = await req.json();
+  if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
+  if (typeof picked === "string" && picked && !canModel(c.user, picked)) return Response.json({ error: `Quản trị viên chưa cho phép tài khoản của bạn dùng model ${picked}.` }, { status: 403 });
+  const model = pickModel(route, typeof picked === "string" ? picked : undefined);
   try {
-    const list = skills ? await enabledSkills() : [];
+    const list = skills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
     if (list.length) {
       const sk = skillsPrompt(list);
+      const tools = skillTools(list.length);
       const msgs = messages as { role: string; content: unknown }[];
       try {
-        const out = PROVIDER === "mock" ? await skillLoop(mockAdapter(list), msgs)
-          : PROVIDER === "anthropic" && model === MODEL ? await skillLoop(anthropicAdapter(model, system, sk, max_tokens), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })))
-          : await skillLoop(openaiAdapter(model, `${system}\n\n${sk}`, max_tokens), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })));
+        const out = PROVIDER === "mock" ? await skillLoop(mockAdapter(list), msgs, list)
+          : isClaude(model) ? await skillLoop(anthropicAdapter(model, system, sk, max_tokens, tools), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list)
+          : await skillLoop(openaiAdapter(model, `${system}\n\n${sk}`, max_tokens, tools), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list);
         return Response.json({ model, text: out.text, skills: out.used });
       } catch (e) {
         if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status });
@@ -137,7 +146,7 @@ export async function POST(req: Request) {
       }
     }
     if (PROVIDER === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
-    if (PROVIDER === "anthropic" && model === MODEL) {
+    if (isClaude(model)) {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },

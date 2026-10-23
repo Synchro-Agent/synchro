@@ -12,12 +12,14 @@ import { ShaderMetal } from "./shader-metal";
 import { CodeView } from "./codeview";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { callLLM, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { callLLM, LLMError, setActiveModel, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code";
-import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
+import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
+import { ALL_MODELS, DEFAULT_MODEL, MODEL_PROVIDERS } from "./catalog";
+import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -97,13 +99,9 @@ function MicPicker({ say, rec, onMic }: { say: Say; rec: boolean; onMic: () => v
   );
 }
 
-const PROVIDERS: { id: string; name: string; models: string[] }[] = [
-  { id: "claude", name: "Claude", models: ["Fable 5.1", "Opus 5.5", "Haiku 4.5"] },
-  { id: "gemini", name: "Gemini", models: ["4 Argon", "3.1 Pro", "3.5 Flash"] },
-  { id: "gpt", name: "ChatGPT", models: ["6 Astra", "6.1 Sol", "6 Luna"] },
-];
+const PROVIDERS = MODEL_PROVIDERS;
 const EFFORTS: [string, string][] = [["low", "Thấp"], ["medium", "Trung bình"], ["high", "Cao"], ["extra", "Cao hơn"], ["max", "Tối đa"]];
-const FREE_MODELS = PROVIDERS.flatMap((p) => p.models);
+const FREE_MODELS = ALL_MODELS;
 
 type TplKey = "doc" | "slides" | "design";
 const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; sys: string }[] = [
@@ -132,7 +130,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [flip, setFlip] = useState(false);
   const hoverProv = (id: string, el: HTMLElement) => { setSub(id); setSubTop(el.offsetTop); };
   const [effort, setEffort] = usePref("effort", "medium");
-  const { upgrade, say } = useApp();
+  const { upgrade, say, me } = useApp();
+  const allowed = me?.perms.models ?? FREE_MODELS;
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
   useEffect(() => {
@@ -145,6 +144,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   }, [sub, mm]);
   const subX = flip ? { right: "calc(100% + 8px)" } : { left: "calc(100% + 8px)" };
   const pick = (n: string) => {
+    if (!allowed.includes(n)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
     if (!FREE_MODELS.includes(n)) { close(); upgrade(); return; }
     setModel(n); close();
   };
@@ -172,8 +172,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {PROVIDERS.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub" style={{ ...subX, top: subTop - 6, width: 240 }}>
             {pv.models.map((n) => (
-              <button key={n} className="menu-item mline" onClick={() => pick(n)}>
-                {n}{n === model && <span className="ck"><I.Check /></span>}
+              <button key={n} className={`menu-item mline ${allowed.includes(n) ? "" : "locked"}`} onClick={() => pick(n)} title={allowed.includes(n) ? undefined : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
+                {n}{n === model ? <span className="ck"><I.Check /></span> : !allowed.includes(n) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
           </Menu>
@@ -196,6 +196,7 @@ function Composer(p: {
   const [foc, setFoc] = useState(false);
   const [menu, setMenu] = useState(false);
   const [web, setWeb] = useState(true);
+  const perms = useApp().me?.perms;
   const [mem, setMem] = useState(true);
   const [mode, setMode] = useState("chat");
   const [rec, setRec] = useState(false);
@@ -268,16 +269,16 @@ function Composer(p: {
       <input ref={fileIn} type="file" multiple hidden onChange={pick} />
       <button className="icon-btn" onClick={() => setMenu(!menu)} aria-label="Thêm"><I.Plus /></button>
         <Menu open={!!(menu)} className="" style={{ bottom: 40, left: 0, width: 264 }}>
-          <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>
+          {perms?.features.files !== false && <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>}
           <button className="menu-item" onClick={() => { setMenu(false); setFiles([...files, "Ảnh chụp màn hình.png"]); say("Đã chụp ảnh màn hình"); }}><I.Camera />Chụp ảnh màn hình</button>
           <button className="menu-item" onClick={() => soon("Hãy tạo dự án trước ở mục Dự án")}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
           <hr />
-          <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Skills"); }}><I.Scroll />Skills<span className="sc"><I.ChevronR size={16} /></span></button>
+          {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Skills"); }}><I.Scroll />Skills<span className="sc"><I.ChevronR size={16} /></span></button>}
           <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Connectors"); }}><I.Connect />Thêm trình kết nối<span className="sc"><I.ChevronR size={16} /></span></button>
           <button className="menu-item" onClick={() => soon("Chưa có hệ thống thiết kế nào")}><I.Palette />Hệ thống thiết kế<span className="sc"><I.ChevronR size={16} /></span></button>
           <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Plugins"); }}><I.Plug />Thêm plugin</button>
           <hr />
-          <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>
+          {perms?.features.web !== false && <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>}
           <button className="menu-item" onClick={() => { setMem(!mem); say(mem ? "Đã tắt bộ nhớ" : "Đã bật bộ nhớ"); }}><I.History />Bộ nhớ{mem && <span className="ck"><I.Check /></span>}</button>
         </Menu>
     </div>
@@ -439,9 +440,27 @@ export default function Home() {
     if (c) setCall(c);
     if (u.profile.occupation) setWork(u.profile.occupation);
   };
+  // Chat, dự án, model đã chọn… của tài khoản đang dùng (localStorage đã tách theo tài khoản).
+  const loadLocal = () => {
+    try {
+      setChats(JSON.parse(ls.get("chats") || "[]"));
+      setProjects(JSON.parse(ls.get("projects") || "[]"));
+      const m = ls.get("model"); setModel(m && FREE_MODELS.includes(m) ? m : DEFAULT_MODEL);
+      setBanner(ls.get("banner") !== "0");
+    } catch {}
+  };
+  // Chuyển sang vùng dữ liệu của tài khoản u: mỗi tài khoản có chat, dự án, cài đặt, ảnh đại diện riêng.
+  const enterAccount = (u: AuthUser) => {
+    if (userScope() === u.id) return;
+    setUserScope(u.id);
+    if (u.isAdmin) adoptLegacyData(u.id);
+    reloadPrefs();
+    loadLocal();
+    setCur(null); setView("new");
+  };
   useEffect(() => {
     localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
-    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); if (j.user) syncProfile(j.user); setMe(j.user); }).catch(() => setMe(null));
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); if (j.user) { enterAccount(j.user); syncProfile(j.user); } setMe(j.user); }).catch(() => setMe(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
@@ -458,22 +477,29 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      setChats(JSON.parse(localStorage.getItem("chats") || "[]"));
-      setProjects(JSON.parse(localStorage.getItem("projects") || "[]"));
-      { const m = localStorage.getItem("model"); setModel(m && FREE_MODELS.includes(m) ? m : "Haiku 4.5"); }
-      setBanner(localStorage.getItem("banner") !== "0");
+      setChats(JSON.parse(ls.get("chats") || "[]"));
+      setProjects(JSON.parse(ls.get("projects") || "[]"));
+      { const m = ls.get("model"); setModel(m && FREE_MODELS.includes(m) ? m : DEFAULT_MODEL); }
+      setBanner(ls.get("banner") !== "0");
     } catch {}
     setThemeS(localStorage.getItem("theme") || "light");
     setGreet(greeting(call));
     setLoaded(true);
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
+  useEffect(() => { setActiveModel(model); }, [model]);
+  useEffect(() => {
+    const ok = me?.perms.models;
+    if (ok?.length && !ok.includes(model)) setModel(ok.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : ok[0]);
+    if (me && view === "code" && !me.perms.features.code) setView("new");
+    if (me && (view === "projects" || view === "project") && !me.perms.features.projects) setView("new");
+  }, [me, model, view]);
   useEffect(() => {
     if (!loaded) return;
-    localStorage.setItem("chats", JSON.stringify(chats.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true })) }))));
-    localStorage.setItem("projects", JSON.stringify(projects));
-    localStorage.setItem("model", model);
-    localStorage.setItem("banner", banner ? "1" : "0");
+    ls.set("chats", JSON.stringify(chats.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true })) }))));
+    ls.set("projects", JSON.stringify(projects));
+    ls.set("model", model);
+    ls.set("banner", banner ? "1" : "0");
   }, [chats, projects, model, banner, loaded]);
 
   const setTheme = (t: string) => {
@@ -520,7 +546,7 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [];
-    try { reply = await callLLM(system, history, 1500, undefined, true); usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))]; } catch { reply = tr("Không thể kết nối tới model. Vui lòng thử lại."); }
+    try { reply = await callLLM(system, history, 1500, undefined, true, { project: pid }); usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))]; } catch (e) { reply = e instanceof LLMError && e.status === 403 ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
     if (gen !== genRef.current) return;
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
@@ -687,10 +713,10 @@ export default function Home() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     say("Đã xuất dữ liệu");
   };
-  // Xóa phiên trên máy chủ và dữ liệu chat cục bộ của trình duyệt này.
+  // Xóa phiên trên máy chủ. Dữ liệu của tài khoản vẫn được giữ (đã tách theo tài khoản) cho lần đăng nhập sau.
   const logout = () => {
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    ["chats", "projects", "model", "banner"].forEach((k) => localStorage.removeItem(k));
+    setUserScope(null); reloadPrefs();
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
   const api = {
@@ -701,7 +727,7 @@ export default function Home() {
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
     unshare: (id: number) => { setChats((cs) => cs.map((c) => (c.id === id ? { ...c, shared: false } : c))); say("Đã dừng chia sẻ"); },
-    wipe: () => { ["chats", "projects", "model", "banner"].forEach((k) => localStorage.removeItem(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
+    wipe: (what: "all" | "chats") => { if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
     me: me ?? null, setMe, logout,
   };
 
@@ -710,7 +736,7 @@ export default function Home() {
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving ? (
     <AuthComponent key="auth" brandName="Synchro" logo={null} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
-      onDone={(u) => { syncProfile(u); setMe(u); if (!u.needsProfile) setAuthLeaving(true); }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
+      onDone={(u) => { enterAccount(u); syncProfile(u); setMe(u); if (!u.needsProfile) setAuthLeaving(true); }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
   ) : null;
   if (!me || needProfile) return <>{null}{authEl}</>;
 
@@ -727,9 +753,9 @@ export default function Home() {
           <button className={`nav-item ${view === "new" ? "active" : ""}`} onClick={goNew}>
             {view === "new" ? <I.Plus /> : <span className="plus"><I.Plus size={14} /></span>}Mới<span className="sc-hint">⇧⌘O</span>
           </button>
-          <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />
+          {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
-          <Nav v="code" icon={<I.Code />} label="Code" />
+          {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
           <Nav v="customize" icon={<I.Brief />} label="Tùy chỉnh" />
         </div>
         {(() => {
@@ -776,7 +802,7 @@ export default function Home() {
                 <button className="menu-item" onClick={() => { setCodeList((l) => l.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x))); setCodeMenu(null); }}>{c.pinned ? <I.PinOff /> : <I.Pin />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
                 <hr />
-                <button className="menu-item del" onClick={() => { setCodeMenu(null); setCodeList((l) => l.filter((x) => x.id !== c.id)); try { localStorage.removeItem("codeS:" + c.id); } catch {} if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); }}><I.Trash />Xóa</button>
+                <button className="menu-item del" onClick={() => { setCodeMenu(null); setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); }}><I.Trash />Xóa</button>
               </Menu>
             </div>
           );
@@ -993,7 +1019,7 @@ export default function Home() {
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => [...o, f.name]); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Các đoạn chat lưu trên trình duyệt này sẽ bị xóa." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
+      <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
       <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Bạn có chắc chắn muốn xóa đoạn chat này không?" ok="Xóa" onCancel={() => setDelId(null)} onOk={() => { if (delId !== null) removeChat(delId); setDelId(null); say("Đã xóa đoạn chat"); }} /></Fade>
       <Fade show={!!(delProj !== null)}><Confirm title="Xóa dự án?" text="Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại." ok="Xóa" onCancel={() => setDelProj(null)} onOk={() => { setProjects((ps) => ps.filter((x) => x.id !== delProj)); setChats((cs) => cs.map((c) => (c.project === delProj ? { ...c, project: undefined } : c))); setDelProj(null); say("Đã xóa dự án"); }} /></Fade>
       <Fade show={!!(modal === "proj")}><ProjectModal onClose={() => setModal(null)} onCreate={(n, d) => { const id = Date.now(); setProjects([{ id, name: n, desc: d, upd: id, pinned: true }, ...projects]); setModal(null); setCurProj(id); setView("project"); say("Đã tạo dự án"); }} /></Fade>

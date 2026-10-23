@@ -1,6 +1,7 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
 import Database from "better-sqlite3";
+import { FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -22,7 +23,7 @@ export class AuthError extends Error {
 export type UserRow = {
   id: string; email: string; name: string; avatar: string | null; password_hash: string | null; email_verified: number;
   status: "active" | "suspended"; created_at: number; last_login_at: number | null; last_seen_at: number | null;
-  full_name: string | null; nickname: string | null; birth_date: string | null; occupation: string | null;
+  full_name: string | null; nickname: string | null; birth_date: string | null; occupation: string | null; perms: string | null;
 };
 export type SessionRow = { id: string; user_id: string; method: string; created_at: number; last_seen_at: number; expires_at: number; ip: string | null; user_agent: string | null };
 
@@ -37,7 +38,7 @@ export function db() {
   d.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
   // Bảng tạo từ bản cũ chưa có các cột hồ sơ: thêm vào (CREATE IF NOT EXISTS không tự làm việc này).
   const cols = new Set((d.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name));
-  for (const c of ["full_name", "nickname", "birth_date", "occupation"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
+  for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
   return (g.__synchroDb = d);
 }
 
@@ -141,12 +142,33 @@ export function publicUser(u: UserRow) {
     id: u.id, email: u.email, name: u.name, avatar: u.avatar, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
     profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation },
     needsProfile: !u.full_name || !u.birth_date,
+    perms: permsOf(u),
   };
 }
 
+// ---- quyền dùng model / tính năng ----
+// Mặc định áp cho mọi người; quản trị có thể đặt quyền riêng cho từng tài khoản. Quản trị viên luôn có toàn quyền.
+export const defaultPerms = (): Perms => { try { return normPerms(JSON.parse(getSetting("default_perms", "null"))); } catch { return FULL_PERMS; } };
+export function permsOf(u: UserRow): Perms {
+  if (isAdmin(u)) return FULL_PERMS;
+  const d = defaultPerms();
+  if (!u.perms) return d;
+  try { return normPerms(JSON.parse(u.perms), d); } catch { return d; }
+}
+export const can = (u: UserRow, f: Feature) => permsOf(u).features[f];
+export const canModel = (u: UserRow, model: string) => permsOf(u).models.includes(model);
+
+// Cổng cho API nội bộ: phải đăng nhập và được quản trị cho phép dùng tính năng này.
+export function featureGate(req: Request, f: Feature) {
+  const c = current(req);
+  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  if (!can(c.user, f)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng tính năng này." }, { status: 403 });
+  return null;
+}
+
 // ---- hồ sơ cá nhân ----
-type ProfileIn = { fullName?: unknown; nickname?: unknown; birthDate?: unknown; occupation?: unknown };
-type ProfileCols = Partial<Pick<UserRow, "full_name" | "nickname" | "birth_date" | "occupation">>;
+type ProfileIn = { fullName?: unknown; nickname?: unknown; birthDate?: unknown; occupation?: unknown; avatar?: unknown };
+type ProfileCols = Partial<Pick<UserRow, "full_name" | "nickname" | "birth_date" | "occupation" | "avatar">>;
 const oneLine = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").replace(/\s+/g, " ").trim() : "");
 
 // Kiểm tra các trường được gửi lên; trường không gửi thì bỏ qua (cho phép cập nhật từng phần).
@@ -178,6 +200,12 @@ export function cleanProfile(p: ProfileIn): ProfileCols {
     const v = oneLine(p.occupation);
     if (v.length > 60) throw new AuthError("Công việc tối đa 60 ký tự.");
     out.occupation = v || null;
+  }
+  // Ảnh đại diện tự tải lên: ảnh nhỏ đã cắt ở trình duyệt, lưu dạng data URL. Chuỗi rỗng = xóa ảnh.
+  if (p.avatar !== undefined) {
+    const v = typeof p.avatar === "string" ? p.avatar : "";
+    if (v && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) || v.length > 400_000)) throw new AuthError("Ảnh đại diện không hợp lệ hoặc quá lớn.");
+    out.avatar = v || null;
   }
   return out;
 }
@@ -365,7 +393,7 @@ export function adminStats() {
 export function adminUsers() {
   const rows = db().prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 2000").all() as UserRow[];
   const sess = new Map((db().prepare("SELECT user_id, COUNT(*) n FROM sessions WHERE expires_at > ? GROUP BY user_id").all(Date.now()) as { user_id: string; n: number }[]).map((r) => [r.user_id, r.n]));
-  return rows.map((u) => ({ ...publicUser(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0, protected: ADMIN_EMAILS.has(u.email.toLowerCase()) }));
+  return rows.map((u) => ({ ...publicUser(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0, protected: ADMIN_EMAILS.has(u.email.toLowerCase()), customPerms: !!u.perms }));
 }
 
 export function adminAudit(lim = 100, before?: number) {
@@ -379,9 +407,24 @@ function target(admin: UserRow, id: string) {
   return t;
 }
 
-export function adminAct(req: Request, admin: UserRow, id: string, action: unknown) {
+export async function adminAct(req: Request, admin: UserRow, id: string, action: unknown, body: Record<string, unknown> = {}) {
   const t = target(admin, id);
   const ip = clientIp(req);
+  if (action === "set_password") {
+    // Quản trị đặt mật khẩu mới cho người khác, không cần mật khẩu cũ. Mặc định đăng xuất mọi phiên của họ.
+    const pw = checkPassword(body.password, t.email);
+    db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), t.id);
+    if (body.signOut !== false) db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
+    audit("admin_set_password", { actor: admin, target: t, ip });
+    return;
+  }
+  if (action === "set_perms") {
+    // null = quay về quyền mặc định
+    const v = body.perms === null ? null : JSON.stringify(normPerms(body.perms, defaultPerms()));
+    db().prepare("UPDATE users SET perms = ? WHERE id = ?").run(v, t.id);
+    audit("admin_set_perms", { actor: admin, target: t, ip, detail: v ? "custom" : "default" });
+    return;
+  }
   if (action === "suspend") {
     db().prepare("UPDATE users SET status = 'suspended' WHERE id = ?").run(t.id);
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);

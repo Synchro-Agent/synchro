@@ -1,12 +1,14 @@
 // Lưu trữ + kiểm tra skill (chỉ chạy ở server).
-// "Bảng" skills / skill_files nằm trong data/skills/<user>/index.json; file gốc ở data/skills/<user>/<name>/v<N>/...
+// Bảng skills / skill_files / skill_enablement nằm trong data/synchro.db; file gốc ở data/skills/<user_id>/<skill_id>/v<N>/...
+// Mọi hàm đều nhận userId: skill của người này không bao giờ lộ sang người khác.
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import JSZip from "jszip";
 import { parse as parseYaml } from "yaml";
+import { db, DATA_DIR } from "./authstore";
 
-export const USER_ID = "default"; // app chưa có đăng nhập: mọi skill thuộc về một user
-const ROOT = process.env.SKILLS_DIR ?? path.join(process.cwd(), "data", "skills");
+const ROOT = process.env.SKILLS_DIR ?? path.join(DATA_DIR, "skills");
 
 export const LIMITS = {
   zip: 20 * 1024 * 1024,
@@ -16,8 +18,9 @@ export const LIMITS = {
   bodyTokens: 5000,
   desc: 1024,
   name: 64,
-  skills: 200,
-  uploadsPerHour: 30,
+  skills: 200,             // số skill tối đa mỗi tài khoản
+  userBytes: 300 * 1024 * 1024, // dung lượng skill tối đa mỗi tài khoản (mọi phiên bản)
+  uploadsPerHour: 30,      // mỗi tài khoản
 };
 
 const TEXT_EXT = new Set([".md", ".txt", ".json", ".csv", ".tsv", ".py", ".svg", ".yaml", ".yml", ".html", ".css", ".js", ".ts", ".sh", ".xml", ".toml", ".ini"]);
@@ -33,30 +36,33 @@ export type SkillFile = { path: string; size: number; mime_type: string; kind: "
 export type Skill = {
   id: string; user_id: string; name: string; description: string; body: string; storage_path: string;
   enabled: boolean; version: number; versions: number[]; created_at: string; updated_at: string;
-  files: SkillFile[]; warnings: string[];
+  files: SkillFile[]; warnings: string[]; projects: string[];
 };
 export type Preview = { name: string; description: string; body: string; files: SkillFile[]; warnings: string[]; tokens: number; exists: boolean; version: number };
 export class SkillError extends Error { status = 400; }
 const fail = (m: string, status = 400): never => { const e = new SkillError(m); e.status = status; throw e; };
 
-// ---------------------------------------------------------------- index
-const dir = (u = USER_ID) => path.join(ROOT, u);
-let chain: Promise<unknown> = Promise.resolve();
-const locked = <T>(fn: () => Promise<T>): Promise<T> => { const r = chain.then(fn, fn); chain = r.catch(() => {}); return r; };
-
-async function readIndex(u = USER_ID): Promise<Skill[]> {
-  try { return JSON.parse(await fs.readFile(path.join(dir(u), "index.json"), "utf8")); } catch { return []; }
-}
-async function writeIndex(list: Skill[], u = USER_ID) {
-  await fs.mkdir(dir(u), { recursive: true });
-  const tmp = path.join(dir(u), `index.${process.pid}.tmp`);
-  await fs.writeFile(tmp, JSON.stringify(list, null, 1));
-  await fs.rename(tmp, path.join(dir(u), "index.json"));
+// ---------------------------------------------------------------- đọc từ DB
+type Row = { id: string; user_id: string; name: string; description: string; body: string; storage_path: string; enabled: number; version: number; versions: string; warnings: string; created_at: number; updated_at: number };
+function hydrate(r: Row): Skill {
+  const files = db().prepare("SELECT path, size, mime_type, kind FROM skill_files WHERE skill_id = ? ORDER BY path").all(r.id) as SkillFile[];
+  const projects = (db().prepare("SELECT scope_id FROM skill_enablement WHERE skill_id = ? AND scope = 'project'").all(r.id) as { scope_id: string }[]).map((x) => x.scope_id);
+  return {
+    id: r.id, user_id: r.user_id, name: r.name, description: r.description, body: r.body, storage_path: r.storage_path,
+    enabled: !!r.enabled, version: r.version, versions: JSON.parse(r.versions), warnings: JSON.parse(r.warnings),
+    created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString(), files, projects,
+  };
 }
 
-export const listSkills = (u = USER_ID) => readIndex(u);
-export const getSkill = async (name: string, u = USER_ID) => (await readIndex(u)).find((s) => s.name === name) ?? null;
-export const enabledSkills = async (u = USER_ID) => (await readIndex(u)).filter((s) => s.enabled);
+export const listSkills = async (uid: string) => (db().prepare("SELECT * FROM skills WHERE user_id = ? ORDER BY name").all(uid) as Row[]).map(hydrate);
+export const getSkill = async (uid: string, name: string) => {
+  const r = db().prepare("SELECT * FROM skills WHERE user_id = ? AND name = ?").get(uid, name) as Row | undefined;
+  return r ? hydrate(r) : null;
+};
+// Skill model được dùng: bật cho cả tài khoản, hoặc bật riêng trong dự án đang chat.
+export const enabledSkills = async (uid: string, projectId?: string | null) =>
+  (db().prepare(`SELECT * FROM skills WHERE user_id = ? AND (enabled = 1 ${projectId ? "OR id IN (SELECT skill_id FROM skill_enablement WHERE scope = 'project' AND scope_id = ?)" : ""}) ORDER BY name`)
+    .all(...(projectId ? [uid, projectId] : [uid])) as Row[]).map(hydrate);
 
 // ---------------------------------------------------------------- validate
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -73,7 +79,7 @@ function cleanPath(p: string): string {
 }
 
 function parseSkillMd(raw: string) {
-  const text = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const text = raw.replace(/^﻿/, "").replace(/\r\n/g, "\n");
   const m = text.match(/^---\n([\s\S]*?)\n---[ \t]*(?:\n|$)/);
   if (!m) return fail("SKILL.md phải bắt đầu bằng phần frontmatter YAML (--- ... ---) chứa name và description");
   let fm: unknown;
@@ -168,29 +174,54 @@ export async function parseUpload(filename: string, buf: Buffer): Promise<Parsed
 }
 
 // ---------------------------------------------------------------- upload
-const hits: number[] = [];
-function rate() {
+const hits = new Map<string, number[]>();
+function rate(uid: string) {
   const now = Date.now();
-  while (hits.length && now - hits[0] > 3600_000) hits.shift();
-  if (hits.length >= LIMITS.uploadsPerHour) fail(`Tải lên quá nhiều lần, thử lại sau (tối đa ${LIMITS.uploadsPerHour} lần/giờ)`, 429);
-  hits.push(now);
+  const h = (hits.get(uid) ?? []).filter((t) => now - t < 3600_000);
+  if (h.length >= LIMITS.uploadsPerHour) fail(`Tải lên quá nhiều lần, thử lại sau (tối đa ${LIMITS.uploadsPerHour} lần/giờ)`, 429);
+  h.push(now);
+  hits.set(uid, h);
 }
 
-export async function previewSkill(filename: string, buf: Buffer): Promise<Preview> {
+// Tổng dung lượng file skill (mọi phiên bản) của một tài khoản trên đĩa.
+async function usedBytes(uid: string) {
+  let total = 0;
+  const walk = async (d: string) => {
+    for (const e of await fs.readdir(d, { withFileTypes: true }).catch(() => [])) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) await walk(p); else total += (await fs.stat(p).catch(() => ({ size: 0 }))).size;
+    }
+  };
+  await walk(path.join(ROOT, uid));
+  return total;
+}
+
+export async function previewSkill(uid: string, filename: string, buf: Buffer): Promise<Preview> {
   const p = await parseUpload(filename, buf);
-  const cur = await getSkill(p.name);
+  const cur = await getSkill(uid, p.name);
   return { name: p.name, description: p.description, body: p.body, files: p.files, warnings: p.warnings, tokens: p.tokens, exists: !!cur, version: (cur?.version ?? 0) + 1 };
 }
 
-export function saveSkill(filename: string, buf: Buffer, enabled = true): Promise<{ skill: Skill; created: boolean }> {
-  rate();
-  return locked(async () => {
+// Ghi tuần tự theo từng tài khoản để hai lần tải cùng lúc không tạo trùng phiên bản.
+const chains = new Map<string, Promise<unknown>>();
+const locked = <T>(uid: string, fn: () => Promise<T>): Promise<T> => {
+  const r = (chains.get(uid) ?? Promise.resolve()).then(fn, fn);
+  chains.set(uid, r.catch(() => {}));
+  return r;
+};
+
+export function saveSkill(uid: string, filename: string, buf: Buffer, enabled = true): Promise<{ skill: Skill; created: boolean }> {
+  rate(uid);
+  return locked(uid, async () => {
     const p = await parseUpload(filename, buf);
-    const list = await readIndex();
-    const cur = list.find((s) => s.name === p.name);
-    if (!cur && list.length >= LIMITS.skills) fail(`Đã đạt giới hạn ${LIMITS.skills} skill`);
+    const cur = await getSkill(uid, p.name);
+    const count = (db().prepare("SELECT COUNT(*) n FROM skills WHERE user_id = ?").get(uid) as { n: number }).n;
+    if (!cur && count >= LIMITS.skills) fail(`Đã đạt giới hạn ${LIMITS.skills} skill cho mỗi tài khoản`);
+    const size = p.entries.reduce((a, e) => a + e.data.length, 0);
+    if ((await usedBytes(uid)) + size > LIMITS.userBytes) fail(`Đã hết dung lượng skill của tài khoản (${LIMITS.userBytes / 1048576}MB). Hãy xóa bớt skill cũ`);
+    const id = cur?.id ?? crypto.randomUUID();
     const version = (cur ? Math.max(...cur.versions) : 0) + 1;
-    const rel = path.posix.join(USER_ID, p.name, `v${version}`);
+    const rel = path.posix.join(uid, id, `v${version}`);
     const base = path.join(ROOT, rel);
     await fs.mkdir(base, { recursive: true });
     for (const e of p.entries) {
@@ -199,32 +230,51 @@ export function saveSkill(filename: string, buf: Buffer, enabled = true): Promis
       await fs.mkdir(path.dirname(dest), { recursive: true });
       await fs.writeFile(dest, e.data);
     }
-    const now = new Date().toISOString();
-    const skill: Skill = {
-      id: cur?.id ?? crypto.randomUUID(), user_id: USER_ID, name: p.name, description: p.description, body: p.body, storage_path: rel,
-      enabled: cur ? cur.enabled : enabled, version, versions: [...(cur?.versions ?? []), version], created_at: cur?.created_at ?? now, updated_at: now,
-      files: p.files, warnings: p.warnings,
-    };
-    await writeIndex(cur ? list.map((s) => (s.name === p.name ? skill : s)) : [...list, skill]);
-    return { skill, created: !cur };
+    const now = Date.now();
+    const versions = JSON.stringify([...(cur?.versions ?? []), version]);
+    db().transaction(() => {
+      if (cur) {
+        // Phiên bản mới thay bản hiện hành; file của bản cũ vẫn nằm trên đĩa.
+        db().prepare("UPDATE skills SET description = ?, body = ?, storage_path = ?, version = ?, versions = ?, warnings = ?, updated_at = ? WHERE id = ?")
+          .run(p.description, p.body, rel, version, versions, JSON.stringify(p.warnings), now, id);
+        db().prepare("DELETE FROM skill_files WHERE skill_id = ?").run(id);
+      } else {
+        db().prepare("INSERT INTO skills (id, user_id, name, description, body, storage_path, enabled, version, versions, warnings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(id, uid, p.name, p.description, p.body, rel, enabled ? 1 : 0, version, versions, JSON.stringify(p.warnings), now, now);
+      }
+      const ins = db().prepare("INSERT INTO skill_files (skill_id, path, size, mime_type, kind) VALUES (?, ?, ?, ?, ?)");
+      for (const f of p.files) ins.run(id, f.path, f.size, f.mime_type, f.kind);
+    })();
+    return { skill: (await getSkill(uid, p.name))!, created: !cur };
   });
 }
 
-export const setEnabled = (name: string, enabled: boolean) => locked(async () => {
-  const list = await readIndex();
-  const s = list.find((x) => x.name === name);
-  if (!s) fail(`Không có skill "${name}"`, 404);
-  s!.enabled = enabled;
-  await writeIndex(list);
-  return s!;
+export async function setEnabled(uid: string, name: string, enabled: boolean) {
+  const s = await getSkill(uid, name);
+  if (!s) return fail(`Không có skill "${name}"`, 404);
+  db().prepare("UPDATE skills SET enabled = ?, updated_at = ? WHERE id = ?").run(enabled ? 1 : 0, Date.now(), s.id);
+  return (await getSkill(uid, name))!;
+}
+
+const PROJECT_RE = /^[\w-]{1,64}$/;
+export async function setProjectEnabled(uid: string, name: string, projectId: string, enabled: boolean) {
+  if (!PROJECT_RE.test(projectId)) fail("Mã dự án không hợp lệ");
+  const s = await getSkill(uid, name);
+  if (!s) return fail(`Không có skill "${name}"`, 404);
+  if (enabled) db().prepare("INSERT OR IGNORE INTO skill_enablement (skill_id, scope, scope_id) VALUES (?, 'project', ?)").run(s.id, projectId);
+  else db().prepare("DELETE FROM skill_enablement WHERE skill_id = ? AND scope = 'project' AND scope_id = ?").run(s.id, projectId);
+  return (await getSkill(uid, name))!;
+}
+
+export const removeSkill = (uid: string, name: string) => locked(uid, async () => {
+  const s = await getSkill(uid, name);
+  if (!s) return fail(`Không có skill "${name}"`, 404);
+  db().prepare("DELETE FROM skills WHERE id = ?").run(s.id);
+  await fs.rm(path.join(ROOT, uid, s.id), { recursive: true, force: true });
 });
 
-export const removeSkill = (name: string) => locked(async () => {
-  const list = await readIndex();
-  if (!list.some((x) => x.name === name)) fail(`Không có skill "${name}"`, 404);
-  await writeIndex(list.filter((x) => x.name !== name));
-  await fs.rm(path.join(ROOT, USER_ID, name), { recursive: true, force: true });
-});
+// Xóa toàn bộ file skill khi tài khoản bị xóa (bảng đã tự xóa theo khóa ngoại).
+export const removeUserSkillFiles = (uid: string) => fs.rm(path.join(ROOT, uid), { recursive: true, force: true });
 
 // ---------------------------------------------------------------- đọc file
 // Chỉ đọc file có trong danh sách skill_files của đúng skill đó, không nhận đường dẫn tự do.
@@ -238,4 +288,4 @@ export async function readSkillFile(s: Skill, p: string): Promise<{ text: string
   return { text: t.slice(0, LIMITS.fileRead), truncated: t.length > LIMITS.fileRead, binary: false, size: buf.length };
 }
 
-export const publicSkill = (s: Skill) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled, version: s.version, versions: s.versions, created_at: s.created_at, updated_at: s.updated_at, fileCount: s.files.length, warnings: s.warnings });
+export const publicSkill = (s: Skill) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled, version: s.version, versions: s.versions, created_at: s.created_at, updated_at: s.updated_at, fileCount: s.files.length, warnings: s.warnings, projects: s.projects });
