@@ -1664,3 +1664,9 @@ ul.cv-tasks li.completed{color:var(--text-2)}
 b,strong{font-weight:600}
 .ai-msg h1,.ai-msg h2,.ai-msg h3,.ai-msg h4,.ai-msg th{font-weight:600}
 .ag-load{display:flex;align-items:center;flex:none}
+
+/* Session rail là bảng nổi ngay dưới nút của nó (như Claude): không chiếm chỗ, khung chat không bị đẩy.
+   Chỉ terminal / trình duyệt / file mới làm cột chat co lại; bảng nổi đi theo hàng nút trong cột chat. */
+.cv-cols>.sr{position:absolute;top:46px;right:8px;bottom:auto;width:296px;max-height:calc(100% - 56px);overflow:auto;z-index:22;padding:0 0 4px;background:transparent;border:0;box-shadow:none;animation:pop .16s var(--ease) both;transform-origin:top right}
+.cv-cols>.sr section.sr-sec{box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px -14px rgba(0,0,0,.22)}
+.cv-col:has(>.cv-cols>.sr){min-width:340px}
