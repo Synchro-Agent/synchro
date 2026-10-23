@@ -188,6 +188,7 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
   const [menu, setMenu] = useState<"" | "plus" | "mode" | "ctx" | "rules" | "more">("");
   const menuRef = useRef(menu); menuRef.current = menu;
   const [errOpen, setErrOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
   // Workspace (container trên máy chủ): pane bên phải, session rail, trạng thái git của phiên.
   const status = useCodeUi((s) => s.status);
   const setStatus = useCodeUi((s) => s.setStatus);
@@ -322,7 +323,9 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
   const ctxTok = activeCtx.reduce((a, c) => a + tok(c.text), 0);
   const histTok = path.reduce((a, n) => a + tok(n.user) + tok(n.ai) + n.atts.reduce((b, x) => b + tok(x.text), 0), 0);
   const draftTok = tok(v) + atts.reduce((a, x) => a + tok(x.text), 0);
-  const total = ctxTok + histTok + draftTok;
+  // Lời nhắc hệ thống (ước lượng): chế độ, quy tắc, luật dự án và phần mô tả công cụ khi có workspace.
+  const sysTok = tok(MODE_SYS[mode] ?? "") + tok(RULES_SYS) + tok(rule) + (status?.available ? 2400 : 0);
+  const total = ctxTok + histTok + draftTok + sysTok;
   const pct = Math.min(100, (total / MAX_TOK) * 100);
 
   useEffect(() => {
@@ -793,31 +796,48 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
     const railW = rail ? 300 : 0;
     const clamp = (x: number) => Math.max(320, Math.min(window.innerWidth - railW - 380, x));
     let w = paneW;
-    const move = (ev: MouseEvent) => { w = clamp(window.innerWidth - railW - ev.clientX); setDragW(w); };
+    const move = (ev: MouseEvent) => { w = clamp(window.innerWidth - ev.clientX - 8); setDragW(w); };
     const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); document.body.classList.remove("cv-dragging"); setPaneW(w); setDragW(null); };
     document.body.classList.add("cv-dragging");
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
   };
+  // Bảng ngữ cảnh kiểu Claude: thanh nhiều màu + chú thích từng phần (dùng chung cho vòng tròn và session rail).
+  const pctOf = (x: number) => `${((x / MAX_TOK) * 100).toFixed(1)}%`;
+  const segs = [
+    { k: "Hội thoại", v: histTok, c: "#4a7fe0" },
+    { k: "Tệp đính kèm", v: ctxTok, c: "#e0784a" },
+    { k: "Lời nhắc hệ thống", v: sysTok, c: "#4fae7d" },
+    { k: "Đang soạn", v: draftTok, c: "#e3a83b" },
+  ];
+  const free = Math.max(0, MAX_TOK - total);
   const ctxPanel = (
-    <div className="cv-ctxp">
-      <div className="cv-ctxp-top"><b>{Math.round(pct)}% đã dùng</b><span>{fmtK(total)} / {fmtK(MAX_TOK)}</span></div>
-    <div className="cv-bar2"><i style={{ width: pct + "%" }} /></div>
-    {pct > 50 && <div className={`cv-warn ${pct > 80 ? "red" : "yel"}`}>{pct > 80 ? "Ngữ cảnh gần đầy." : "Ngữ cảnh đã dùng hơn một nửa."}<button onClick={summarize}>Tóm tắt & Làm gọn luồng chat</button></div>}
-    <div className="cv-stat"><span>Tệp {fmtK(ctxTok)}</span><span>Hội thoại {fmtK(histTok)}</span><span>Đang gõ {fmtK(draftTok)}</span></div>
-    {ctx.length === 0 ? <div className="cv-none">Chưa có tệp nào trong ngữ cảnh.</div> : (
-      <div className="cv-list">
-        {ctx.map((c) => (
-          <div key={c.id} className="cv-row">
-            <button className={`cv-sw ${c.off ? "" : "on"}`} onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, off: !x.off } : x)))} aria-label="Bật/tắt"><i /></button>
-            <span className="cv-ell">{c.name}</span><em>{fmtK(tok(c.text))}</em>
-            <button className="icon-btn" onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x)))} aria-label="Ghim">{c.pinned ? <I.PinOff size={14} /> : <I.Pin size={14} />}</button>
-            <button className="icon-btn" onClick={() => setCtx((a) => a.filter((x) => x.id !== c.id))} aria-label="Xóa"><I.Trash size={14} /></button>
-          </div>
-        ))}
+    <div className="ctxp">
+      <div className="ctxp-top"><span>{Math.round(pct)}% đã dùng</span><em data-notr>{fmtK(total)} / {fmtK(MAX_TOK)}</em></div>
+      <div className="ctxp-bar">{segs.map((x) => <i key={x.k} style={{ width: `${(x.v / MAX_TOK) * 100}%`, background: x.c }} />)}</div>
+      <div className="ctxp-rows">
+        {segs.map((x) => <div key={x.k} className="ctxp-row"><b style={{ background: x.c }} /><span>{x.k}</span><em data-notr>{fmtK(x.v)}</em><strong data-notr>{pctOf(x.v)}</strong></div>)}
+        <div className="ctxp-row free"><b /><span>Còn trống</span><em data-notr>{fmtK(free)}</em><strong data-notr>{pctOf(free)}</strong></div>
       </div>
-    )}
-    {ctx.length > 0 && <div className="cv-custom-r"><button className="btn" onClick={() => setCtx((a) => a.filter((x) => x.pinned))}>Xóa tệp chưa ghim</button></div>}
+      {ctx.length > 0 && (
+        <>
+          <button className="ctxp-sub" onClick={() => setFilesOpen(!filesOpen)}><span className={`ag-chev ${filesOpen ? "on" : ""}`}><I.ChevronR size={12} /></span>Tệp trong ngữ cảnh<em>{ctx.length}</em></button>
+          {filesOpen && (
+            <div className="cv-list">
+              {ctx.map((c) => (
+                <div key={c.id} className="cv-row">
+                  <button className={`cv-sw ${c.off ? "" : "on"}`} onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, off: !x.off } : x)))} aria-label="Bật/tắt"><i /></button>
+                  <span className="cv-ell">{c.name}</span><em>{fmtK(tok(c.text))}</em>
+                  <button className="icon-btn" onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x)))} aria-label="Ghim">{c.pinned ? <I.PinOff size={14} /> : <I.Pin size={14} />}</button>
+                  <button className="icon-btn" onClick={() => setCtx((a) => a.filter((x) => x.id !== c.id))} aria-label="Xóa"><I.Trash size={14} /></button>
+                </div>
+              ))}
+              <button className="ctxp-btn" onClick={() => setCtx((a) => a.filter((x) => x.pinned))}>Xóa tệp chưa ghim</button>
+            </div>
+          )}
+        </>
+      )}
+      <div className="ctxp-foot"><span className="cv-ell">Còn {fmtK(free)} trước khi đầy</span><button className="ctxp-btn" disabled={path.length < 2} onClick={summarize}>Làm gọn phiên</button></div>
     </div>
   );
 
@@ -863,6 +883,8 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
           </div>
         </div>
       </div>
+      <div className="cv-cols">
+      <div className="cv-main">
         <div className="thread cv-thread" ref={threadRef} onScroll={onScroll} onMouseUp={onThreadUp}>
           {path.length === 0 ? (
             <div className="cv-empty">
@@ -1032,6 +1054,9 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
             </div>
           </div>
         </div>
+        </div>
+        {rail && <SessionRail sid={sid} status={status} git={git} onGit={(g) => sid !== null && setGit(sid, g)} say={say} context={ctxPanel} onClose={() => setRail(false)} />}
+      </div>
       </div>
 
       {pane && <div className="cv-split" onMouseDown={startDrag} onDoubleClick={() => setPaneW(560)} />}
@@ -1052,7 +1077,6 @@ export function CodeView({ say, sid, title, model, sideOpen, onSide, onCreate, o
           {panel && <div className="cv-pane" hidden={pane !== "block"}><SidePanel key={panel.name + panel.code.length} panel={panel} setPanel={setPanel} say={say} onFix={autoFix} /></div>}
         </div>
       </div>
-      {rail && <SessionRail sid={sid} status={status} git={git} onGit={(g) => sid !== null && setGit(sid, g)} say={say} context={ctxPanel} onClose={() => setRail(false)} />}
       </div>
 
       {selBox && (

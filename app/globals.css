@@ -1577,3 +1577,59 @@ html[data-text-size="Large"] .user-msg,html[data-text-size="Large"] .ai-msg{font
   .cv-side{margin:0;border-radius:0;border:0}
 }
 @media(max-width:1100px){.sr{background:var(--bg);padding:4px 8px 8px;border-left:.5px solid var(--border)}}
+
+/* Session rail nằm trong cột chat, ngay dưới hàng nút; khung chat co lại bên trái nó */
+.cv-cols{flex:1;min-height:0;display:flex}
+.cv-main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.cv-cols>.sr{padding:0 8px 8px 4px;width:296px}
+.cv-cols>.sr section:first-child{margin-top:2px}
+.cv-col:has(>.cv-cols>.sr){min-width:640px}
+@media(max-width:1100px){
+  .cv-cols>.sr{position:absolute;right:0;top:48px;bottom:0;z-index:25;background:var(--bg);border-left:.5px solid var(--border);box-shadow:var(--shadow);padding:0 8px 8px}
+  .cv-col:has(>.cv-cols>.sr){min-width:340px}
+}
+
+/* Session rail kiểu Claude: thẻ thu gọn được, hàng có biểu tượng, bảng ngữ cảnh nhiều màu */
+.sr section.sr-sec{margin:0 0 8px;padding:11px 14px 12px;border:.5px solid var(--border-strong);border-radius:14px;background:var(--card)}
+.sr-sec-h{display:flex;align-items:center;justify-content:space-between;min-height:24px}
+.sr-sec-h>button:first-child{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:500;color:var(--text)}
+.sr-chev{display:inline-flex;color:var(--text-3);transition:transform .15s}
+.sr-chev.off{transform:rotate(-90deg)}
+.sr-mini{width:24px;height:24px}
+.sr-sec-b{margin-top:6px}
+.sr-row{display:flex;align-items:center;gap:12px;min-height:27px;font-size:13.5px;color:var(--text);min-width:0}
+.sr-row>svg{color:var(--text-2);flex:none}
+.sr-row>span{min-width:0}
+.sr-row em{margin-left:auto;display:flex;align-items:center;gap:6px;font-style:normal;font-size:12.5px;color:var(--text-3);white-space:nowrap}
+.sr-row a{color:var(--text);text-decoration:none}
+.sr-row a:hover{text-decoration:underline}
+.sr-link{margin-left:auto;font-size:13px;color:var(--text-3);text-decoration:underline;text-underline-offset:3px}
+.sr-link:hover{color:var(--text)}
+.sr-dim{color:var(--text-3);font-style:normal;font-size:12.5px}
+.sr-sum{display:flex;align-items:center;gap:12px;flex:1;min-width:0;height:27px;color:var(--text-2)}
+.sr-sum:disabled{cursor:default}
+.sr-sum .ag-diff{font-size:13px}
+.sr-files{margin:4px -4px 0}
+.sr-commit{margin-top:8px}
+.sr-commit input{height:28px;border-radius:7px;font-size:12.5px}
+.sr-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.sr-acts .ctxp-btn{margin:0;width:100%}
+.ctxp-btn{margin-left:auto;flex:none;height:26px;padding:0 10px;border-radius:7px;border:.5px solid var(--border-strong);font-size:12.5px;color:var(--text-2);background:transparent;white-space:nowrap}
+.ctxp-btn:hover:not(:disabled){background:var(--hover);color:var(--text)}
+.ctxp-btn:disabled{opacity:.45;cursor:default}
+.ctxp-top{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;margin-bottom:8px}
+.ctxp-top em{font-style:normal;color:var(--text-3);font-size:13px}
+.ctxp-bar{display:flex;gap:2px;height:6px;border-radius:99px;background:color-mix(in srgb,var(--text) 10%,transparent);overflow:hidden;margin-bottom:10px}
+.ctxp-bar i{display:block;height:100%;flex:none}
+.ctxp-rows{display:flex;flex-direction:column}
+.ctxp-row{display:grid;grid-template-columns:11px 1fr auto 50px;align-items:center;gap:10px;height:25px;font-size:13px}
+.ctxp-row b{width:10px;height:10px;border-radius:2.5px}
+.ctxp-row.free b{background:color-mix(in srgb,var(--text) 10%,transparent)}
+.ctxp-row em{font-style:normal;color:var(--text-3);text-align:right}
+.ctxp-row strong{font-weight:400;text-align:right}
+.ctxp-sub{display:flex;align-items:center;gap:6px;width:100%;margin-top:6px;height:26px;font-size:13px;color:var(--text-2)}
+.ctxp-sub em{margin-left:auto;font-style:normal;color:var(--text-3)}
+.ctxp .cv-list{margin:2px -6px 0}
+.ctxp .cv-list .ctxp-btn{margin:6px 6px 0}
+.ctxp-foot{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:var(--text-2)}
+.cv-ctx .ctxp{padding:4px 10px 8px}

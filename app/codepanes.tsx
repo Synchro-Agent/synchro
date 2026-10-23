@@ -296,9 +296,26 @@ export function FilesPane({ sid, visible, say }: { sid: number; visible: boolean
 }
 
 // ------------------------------------------------------------------ session rail
-export function SessionRail({ sid, status, git, onGit, say, context, onClose }: { sid: number | null; status: WsStatus | null; git?: GitState; onGit: (g: GitState) => void; say: Say; context: React.ReactNode; onClose: () => void }) {
+// Các thẻ thu gọn được, giống Claude: Môi trường, Ngữ cảnh, Thay đổi.
+function Sec({ id, title, open, onToggle, right, children }: { id: string; title: string; open: boolean; onToggle: (id: string) => void; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="sr-sec">
+      <div className="sr-sec-h">
+        <button onClick={() => onToggle(id)}>{title}<span className={`sr-chev ${open ? "" : "off"}`}><I.Chevron size={13} /></span></button>
+        {right}
+      </div>
+      {open && <div className="sr-sec-b">{children}</div>}
+    </section>
+  );
+}
+
+// Nằm trong cột chat, ngay dưới hàng nút (giống Claude); đóng bằng nút session rail phía trên.
+export function SessionRail({ sid, status, git, onGit, say, context }: { sid: number | null; status: WsStatus | null; git?: GitState; onGit: (g: GitState) => void; say: Say; context: React.ReactNode; onClose?: () => void }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState("");
+  const [list, setList] = useState(false);
+  const [closed, setClosed] = useState<string[]>([]);
+  const toggle = (id: string) => setClosed((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const showFile = useCodeUi((s) => s.showFile);
   const run = async (action: string, body: Record<string, unknown> = {}, ok?: string) => {
     if (sid === null) return;
@@ -314,30 +331,33 @@ export function SessionRail({ sid, status, git, onGit, say, context, onClose }: 
   };
   const stop = async () => { setBusy("stop"); try { await wsOp("stop", null); say("Đã dừng workspace (file vẫn được giữ)"); } catch (e) { say((e as Error).message); } setBusy(""); };
   const files = git?.git ? git.files : [];
+  const add = files.reduce((n, f) => n + f.add, 0), del = files.reduce((n, f) => n + f.del, 0);
+  const ready = sid !== null && !!status?.available;
   return (
     <aside className="sr">
-      <div className="sr-h"><b>Phiên làm việc</b><button className="icon-btn" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
-      <section>
-        <h4>Môi trường</h4>
+      <Sec id="env" title="Môi trường" open={!closed.includes("env")} onToggle={toggle}>
         {!status ? <p className="sr-note">Đang kiểm tra…</p> : !status.available ? <p className="sr-note">{status.reason}</p> : <>
-          <div className="sr-row"><span className={`sr-dot ${status.running ? "on" : ""}`} />Workspace Linux<em>{status.running ? "đang chạy" : "đang tắt"}</em></div>
-          {git?.git && git.repo && <div className="sr-row"><I.GitHub size={14} /><a href={`https://github.com/${git.repo}`} target="_blank" rel="noreferrer" data-notr>{git.repo}</a></div>}
-          {git?.git && <div className="sr-row"><I.Branch size={14} /><span data-notr>{git.branch}</span>{git.ahead ? <em>{git.ahead} commit chưa push</em> : null}</div>}
-          <p className="sr-note">Tự tắt sau {status.idleMin ?? 20} phút không dùng; file trong workspace vẫn được giữ.</p>
-          {status.running && <button className="btn sr-btn" disabled={busy === "stop"} onClick={stop}>Dừng workspace</button>}
+          <div className="sr-row" title={status.running ? `Đang chạy · tự tắt sau ${status.idleMin ?? 20} phút không dùng, file vẫn được giữ` : "Đang tắt · tự bật khi cần"}><I.Monitor size={16} /><span>Workspace Linux</span><i className={`sr-dot ${status.running ? "on" : ""}`} />
+            {status.running ? <button className="sr-link" disabled={busy === "stop"} onClick={stop}>Dừng</button> : <em>đang tắt</em>}</div>
+          <div className="sr-row"><I.Folder size={16} /><span className="cv-ell" data-notr>{git?.git && git.repo ? git.repo.split("/")[1] : "work"}<i className="sr-dim"> · {sid !== null ? `s${sid}` : "chưa có phiên"}</i></span></div>
+          {git?.git && <div className="sr-row"><I.Branch size={16} /><span className="cv-ell" data-notr>{git.branch}</span>{git.ahead ? <em>{git.ahead} chưa push</em> : null}</div>}
+          {git?.git && git.repo && <div className="sr-row"><I.GitHub size={15} /><a className="cv-ell" href={`https://github.com/${git.repo}`} target="_blank" rel="noreferrer" data-notr>{git.repo}</a></div>}
         </>}
-      </section>
-      <section>
-        <h4>Ngữ cảnh</h4>
-        {context}
-      </section>
-      <section className="sr-changes">
-        <h4>Thay đổi<button className="icon-btn" onClick={() => run("status")} aria-label="Làm mới" title="Làm mới"><I.Retry size={13} /></button></h4>
-        {sid === null || !status?.available ? <p className="sr-note">Chưa có workspace cho phiên này.</p>
+      </Sec>
+      <Sec id="ctx" title="Ngữ cảnh" open={!closed.includes("ctx")} onToggle={toggle}>{context}</Sec>
+      <Sec id="chg" title="Thay đổi" open={!closed.includes("chg")} onToggle={toggle}
+        right={ready && git?.git ? <button className="icon-btn sr-mini" onClick={() => run("status")} aria-label="Làm mới" title="Làm mới"><I.Retry size={13} /></button> : undefined}>
+        {!ready ? <p className="sr-note">Chưa có workspace cho phiên này.</p>
           : !git ? <p className="sr-note">Đang tải…</p>
-          : !git.git ? <><p className="sr-note">Thư mục chưa dùng git.</p><button className="btn sr-btn" disabled={!!busy} onClick={() => run("init", {}, "Đã khởi tạo git")}>Khởi tạo git</button></>
+          : !git.git ? <div className="sr-row"><I.Branch size={16} /><span className="sr-dim">Chưa dùng git</span><button className="ctxp-btn" disabled={!!busy} onClick={() => run("init", {}, "Đã khởi tạo git")}>Khởi tạo git</button></div>
           : <>
-            {files.length === 0 ? <p className="sr-note">Không có thay đổi chưa commit.</p> : (
+            <div className="sr-row">
+              <button className="sr-sum" onClick={() => setList(!list)} disabled={!files.length} title={files.length ? "Xem các file thay đổi" : undefined}>
+                <I.File size={16} />{files.length ? <span className="ag-diff"><b>+{add}</b><i>−{del}</i></span> : <span className="sr-dim">Không có thay đổi</span>}
+              </button>
+              {git.repo && <button className="ctxp-btn" disabled={!!busy} onClick={() => { const t = prompt("Tiêu đề pull request", ""); if (t !== null) run("pr", { title: t }); }}>Tạo PR</button>}
+            </div>
+            {list && files.length > 0 && (
               <div className="sr-files">
                 {files.map((f) => (
                   <button key={f.path} className="sr-file" onClick={() => showFile(f.path, true)} title={f.path}>
@@ -350,19 +370,18 @@ export function SessionRail({ sid, status, git, onGit, say, context, onClose }: 
             {files.length > 0 && (
               <div className="sr-commit">
                 <input value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && msg.trim()) run("commit", { message: msg }, "Đã commit"); }} placeholder="Nội dung commit" />
-                <button className="btn dark" disabled={!msg.trim() || !!busy} onClick={() => run("commit", { message: msg }, "Đã commit")}>Commit</button>
+                <button className="ctxp-btn" disabled={!msg.trim() || !!busy} onClick={() => run("commit", { message: msg }, "Đã commit")}>Commit</button>
               </div>
             )}
             {git.repo && (
               <div className="sr-acts">
-                <button className="btn" disabled={!!busy} onClick={() => run("push", {}, "Đã push lên GitHub")}>{busy === "push" ? "Đang push…" : `Push${git.ahead ? ` (${git.ahead})` : ""}`}</button>
-                <button className="btn" disabled={!!busy} onClick={() => run("pull", {}, "Đã cập nhật từ GitHub")}>Pull</button>
-                <button className="btn" disabled={!!busy} onClick={() => { const b = prompt("Tên nhánh mới", `synchro/${new Date().toISOString().slice(0, 10)}`); if (b) run("branch", { name: b }, `Đã chuyển sang nhánh ${b}`); }}>Nhánh mới</button>
-                <button className="btn" disabled={!!busy} onClick={() => { const t = prompt("Tiêu đề pull request", ""); if (t !== null) run("pr", { title: t }); }}>Tạo PR</button>
+                <button className="ctxp-btn" disabled={!!busy} onClick={() => run("push", {}, "Đã push lên GitHub")}>{busy === "push" ? "Đang push…" : `Push${git.ahead ? ` (${git.ahead})` : ""}`}</button>
+                <button className="ctxp-btn" disabled={!!busy} onClick={() => run("pull", {}, "Đã cập nhật từ GitHub")}>Pull</button>
+                <button className="ctxp-btn" disabled={!!busy} onClick={() => { const b = prompt("Tên nhánh mới", `synchro/${new Date().toISOString().slice(0, 10)}`); if (b) run("branch", { name: b }, `Đã chuyển sang nhánh ${b}`); }}>Nhánh mới</button>
               </div>
             )}
           </>}
-      </section>
+      </Sec>
     </aside>
   );
 }
