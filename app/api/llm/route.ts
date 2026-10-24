@@ -3,7 +3,7 @@ import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from 
 import { can, canModel, current } from "../../authstore";
 import { legacyModel } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "../../providers";
-import { anthropicCall, chatOnce, HttpErr, openaiCall, tokenParam, toAnthropic, toOpenAI, withPages } from "../../llmcall";
+import { anthropicCall, chatOnce, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "../../llmcall";
 
 // Cổng duy nhất tới model của chat. Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → API quyết định.
 
@@ -33,7 +33,7 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
 const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[]): Adapter => ({
   step: async (msgs, noTools) => {
     const j = await openaiCall(t, {
-      ...tokenParam(t, max_tokens), messages: [{ role: "system", content: system }, ...msgs],
+      max_tokens: outCap(t, max_tokens), messages: [{ role: "system", content: system }, ...msgs],
       tools: tools.map((x) => ({ type: "function", function: { name: x.name, description: x.description, parameters: x.input_schema } })),
       ...(noTools ? { tool_choice: "none" } : {}),
     });
@@ -46,6 +46,15 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
     return { text: m.content ?? "", calls, assistant: m };
   },
   results: (calls, res) => calls.map((c, i) => ({ role: "tool", tool_call_id: c.id, content: res[i].content })),
+});
+
+// OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
+const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[]): Adapter => ({
+  step: async (msgs, noTools) => {
+    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), input: respInput(msgs), tools: respTools(tools), ...(noTools ? { tool_choice: "none" } : {}) }));
+    return { text: r.text, calls: r.calls, assistant: { items: r.items } };
+  },
+  results: (calls, res) => calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })),
 });
 
 // Model giả lập (LLM_PROVIDER=mock) để thử vòng lặp khi chưa có API key.
@@ -103,7 +112,7 @@ export async function POST(req: Request) {
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await skillLoop(mockAdapter(list), msgs, list, scripts)
         : t.kind === "anthropic" ? await skillLoop(anthropicAdapter(t, system, sk, max_tokens, tools), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list, scripts)
-        : await skillLoop(openaiAdapter(t, `${system}\n\n${sk}`, max_tokens, tools), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list, scripts);
+        : await skillLoop((t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list, scripts);
       recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
       return Response.json({ model, text: out.text, skills: out.used });
     }

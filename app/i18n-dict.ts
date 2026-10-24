@@ -758,12 +758,10 @@ Object.assign(EN2VI, {
   "Model list updated": "Đã cập nhật danh sách model", "Hide models": "Ẩn danh sách model",
   "Speech and voice conversation will stop working until you add a key again.": "Speech và trò chuyện bằng giọng nói sẽ ngừng hoạt động cho tới khi bạn thêm lại khóa.",
   "Models from this provider will disappear from the model picker until you add a key again.": "Các model của nhà cung cấp này sẽ biến mất khỏi bộ chọn model cho tới khi bạn thêm lại khóa.",
-  "Name": "Tên", "e.g. DeepSeek": "VD: DeepSeek", "API key": "Khóa API", "· leave empty to keep the current key": "· để trống nếu muốn giữ khóa hiện tại",
+  "API key": "Khóa API", "· leave empty to keep the current key": "· để trống nếu muốn giữ khóa hiện tại",
   "Paste your API key": "Dán khóa API của bạn", "Show key": "Hiện khóa", "Hide key": "Ẩn khóa", "Advanced": "Nâng cao", "Base URL": "Base URL",
   "· optional, for proxies or compatible gateways": "· không bắt buộc, dùng cho proxy hoặc cổng tương thích",
   "Verify and save": "Kiểm tra và lưu",
-  "OpenAI-compatible provider": "Nhà cung cấp tương thích OpenAI", "Add an OpenAI-compatible provider": "Thêm nhà cung cấp tương thích OpenAI",
-  "DeepSeek, OpenRouter, xAI, Mistral, Groq and other services that follow the OpenAI API.": "DeepSeek, OpenRouter, xAI, Mistral, Groq và các dịch vụ khác theo chuẩn API của OpenAI.",
   "Add a key above, then send a test message to any model here.": "Thêm khóa ở trên, rồi gửi thử tin nhắn tới bất kỳ model nào tại đây.",
   "Model": "Model", "Message (optional)": "Tin nhắn (không bắt buộc)", "Sending…": "Đang gửi…", "Send test": "Gửi thử", "Works": "Hoạt động tốt",
   "Create a key": "Tạo khóa", "Sign in to the provider's console, add billing, and create an API key.": "Đăng nhập trang quản lý của nhà cung cấp, thêm phương thức thanh toán rồi tạo khóa API.",
@@ -787,7 +785,7 @@ RULES_VI.push(
   [/^· checked (.+)$/, (m) => `· kiểm tra ${m[1]}`],
   [/^Get a key from (.+)$/, (m) => `Lấy khóa từ ${m[1]}`],
   [/^Remove the (.+) key\?$/, (m) => `Gỡ khóa ${m[1]}?`],
-  [/^Synchro checks the key with (.+) first, then stores it encrypted on the server\. It is never shown again in full\.$/, (m) => `Synchro kiểm tra khóa với ${m[1] === "the provider" ? "nhà cung cấp" : m[1]} trước, rồi mã hóa và lưu trên máy chủ. Khóa đầy đủ sẽ không bao giờ hiện lại.`],
+  [/^Synchro checks the key with (.+) first, then stores it encrypted on the server\. It is never shown again in full\.$/, (m) => `Synchro kiểm tra khóa với ${m[1]} trước, rồi mã hóa và lưu trên máy chủ. Khóa đầy đủ sẽ không bao giờ hiện lại.`],
 );
 
 // Bộ chọn model và lỗi từ máy chủ khi gọi model (giao diện tiếng Anh).

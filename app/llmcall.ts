@@ -1,5 +1,6 @@
 // Gọi model theo từng nhà cung cấp (chỉ chạy ở máy chủ): Anthropic dùng API Messages gốc,
-// OpenAI, Gemini và các nhà cung cấp tương thích OpenAI dùng /chat/completions.
+// OpenAI dùng API Responses (chạy được mọi model chat, kể cả dòng -pro không có ở /chat/completions),
+// Gemini và các nhà cung cấp tương thích OpenAI dùng /chat/completions.
 import type { Target } from "./providers";
 
 export class HttpErr extends Error { constructor(public status: number, m: string) { super(m); } }
@@ -14,8 +15,8 @@ export const toOpenAI = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).map
   : b.type === "document" ? { type: "text", text: `<file name="${b.name}">\n${b.fallbackText ?? "(PDF scan: xem các ảnh trang đính kèm)"}\n</file>` } : b);
 export const withPages = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).flatMap((b) => b.type === "document" && b.fallbackImages ? [b, ...b.fallbackImages.map((d) => ({ type: "image", media_type: "image/jpeg", data: d }))] : [b]);
 
-// OpenAI: các model mới (GPT-5, dòng o) chỉ nhận max_completion_tokens; nhà cung cấp khác vẫn dùng max_tokens.
-export const tokenParam = (t: Target, n: number) => (t.kind === "openai" ? { max_completion_tokens: n } : { max_tokens: n });
+// Model có suy luận (GPT, Gemini) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
+export const outCap = (t: Target, n: number) => (t.kind === "openai" || t.kind === "google" ? Math.max(n, 16000) : n);
 
 // Đọc lỗi của nhà cung cấp thành một câu ngắn dễ hiểu.
 async function fail(r: Response): Promise<never> {
@@ -34,6 +35,43 @@ export async function anthropicCall(t: Target, body: Record<string, unknown>, si
   if (!r.ok) await fail(r);
   return r.json();
 }
+// ---- OpenAI Responses API ----
+type Item = Record<string, unknown>;
+type Part = { type: string; text?: string; image_url?: { url: string } };
+// Tin nhắn dạng chat (role + content) → đầu vào của Responses. Lượt trả lời trước của model ({ items }) và kết quả công cụ được giữ nguyên.
+export function respInput(msgs: unknown[]): Item[] {
+  return msgs.flatMap((m) => {
+    const x = m as { role?: string; content?: unknown; items?: Item[] };
+    if (x.items) return x.items;
+    if (!x.role) return [x as Item];
+    if (!Array.isArray(x.content)) return [{ role: x.role, content: String(x.content ?? "") }];
+    const out = x.role === "assistant" ? "output_text" : "input_text";
+    return [{ role: x.role, content: (x.content as Part[]).map((p) => (p.type === "image_url" ? { type: "input_image", image_url: p.image_url?.url } : { type: out, text: p.text ?? "" })) }];
+  });
+}
+type RespOut = { type: string; content?: { type: string; text?: string }[]; call_id?: string; name?: string; arguments?: string };
+export function respParse(j: { output?: RespOut[]; status?: string; incomplete_details?: { reason?: string } }) {
+  const out = j.output ?? [];
+  let text = out.filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text").map((c) => c.text ?? "").join("");
+  if (!text && j.status === "incomplete" && j.incomplete_details?.reason === "max_output_tokens") text = "Model đã dùng hết giới hạn token khi đang suy nghĩ nên chưa kịp trả lời. Hãy hỏi lại ngắn gọn hơn.";
+  const calls = out.filter((o) => o.type === "function_call").map((o) => {
+    let input: Record<string, unknown> = {};
+    try { input = JSON.parse(o.arguments || "{}"); } catch {}
+    return { id: o.call_id!, name: o.name!, input };
+  });
+  return { text, calls, items: out as Item[] };
+}
+export const respTools = (tools: { name: string; description: string; input_schema: unknown }[]) => tools.map((x) => ({ type: "function", name: x.name, description: x.description, parameters: x.input_schema }));
+export async function responsesCall(t: { base: string; key: string; model: string }, body: Record<string, unknown>, signal?: AbortSignal) {
+  const r = await fetch(`${t.base}/responses`, {
+    method: "POST", signal,
+    headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
+    body: JSON.stringify({ model: t.model, ...body }),
+  });
+  if (!r.ok) await fail(r);
+  return r.json();
+}
+
 export async function openaiCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal) {
   const r = await fetch(`${t.base}/chat/completions`, {
     method: "POST", signal,
@@ -51,7 +89,11 @@ export async function chatOnce(t: Target, system: string, messages: { role: stri
     const j = await anthropicCall(t, { max_tokens: maxTokens, ...(system ? { system } : {}), messages: messages.map((m) => ({ ...m, content: toAnthropic(m.content) })) }, signal);
     return (j.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("");
   }
-  const j = await openaiCall(t, { ...tokenParam(t, maxTokens), messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))] }, signal);
+  if (t.kind === "openai") {
+    const j = await responsesCall(t, { max_output_tokens: outCap(t, maxTokens), ...(system ? { instructions: system } : {}), input: respInput(messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))) }, signal);
+    return respParse(j).text;
+  }
+  const j = await openaiCall(t, { max_tokens: outCap(t, maxTokens), messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))] }, signal);
   const c = j.choices?.[0]?.message?.content;
   return typeof c === "string" ? c : Array.isArray(c) ? c.map((p: { text?: string }) => p.text ?? "").join("") : "";
 }

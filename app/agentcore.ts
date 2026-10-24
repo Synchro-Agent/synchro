@@ -3,6 +3,7 @@
 import { agent as wsAgent, cleanPath, exec, fsop, WORK } from "./workspace";
 import { runSkillTool, skillTools } from "./skillruntime";
 import type { Skill } from "./skillstore";
+import { respInput, respParse, respTools } from "./llmcall";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -240,13 +241,37 @@ export function anthropicAgent(o: { key: string; base?: string; model: string; s
   };
 }
 
-export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; completionTokens?: boolean }): Adapter {
+// OpenAI qua API Responses (mọi model chat của OpenAI, kể cả dòng -pro).
+export function responsesAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal }): Adapter {
+  return {
+    step: async (msgs, last) => {
+      const r = await fetch(`${o.base}/responses`, {
+        method: "POST", signal: o.signal,
+        headers: { Authorization: `Bearer ${o.key}`, "content-type": "application/json" },
+        body: JSON.stringify({ model: o.model, instructions: o.system, max_output_tokens: Math.max(o.maxTokens, 16000), input: respInput(msgs), tools: respTools(o.tools), ...(last ? { tool_choice: "none" } : {}) }),
+      });
+      if (!r.ok) throw new ModelError(r.status, await r.text());
+      const j = await r.json();
+      const p = respParse(j);
+      return { text: p.text, calls: p.calls, assistant: { items: p.items }, usage: { input: j.usage?.input_tokens ?? 0, output: j.usage?.output_tokens ?? 0 } };
+    },
+    results: (calls, res) => {
+      const out: unknown[] = calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content }));
+      const imgs = res.filter((x) => x.image);
+      if (imgs.length) out.push({ role: "user", content: imgs.map((x) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${x.image}` } })) });
+      return out;
+    },
+  };
+}
+
+// Gemini và nhà cung cấp tương thích OpenAI qua /chat/completions.
+export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal }): Adapter {
   return {
     step: async (msgs, last) => {
       const r = await fetch(`${o.base}/chat/completions`, {
         method: "POST", signal: o.signal,
         headers: { Authorization: `Bearer ${o.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: o.model, ...(o.completionTokens ? { max_completion_tokens: o.maxTokens } : { max_tokens: o.maxTokens }), messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
+        body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();

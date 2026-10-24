@@ -1,5 +1,5 @@
 import { can, canModel, current, limit, sameOrigin } from "../../authstore";
-import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, runAgent, type AgentEvent } from "../../agentcore";
+import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, type AgentEvent } from "../../agentcore";
 import { legacyModel } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
 import { enabledSkills, recordUse } from "../../skillstore";
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
         // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
         const adapter = target.kind === "mock" ? mockAgent()
           : target.kind === "anthropic" ? anthropicAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal })
-          : openaiAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, completionTokens: target.kind === "openai" });
+          : (target.kind === "openai" ? responsesAgent : openaiAgent)({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal });
         const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal });
         if (out.skills.length) recordUse(c.user.id, out.skills);
         emit({ t: "done", text: out.text, skills: out.skills });

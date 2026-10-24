@@ -49,7 +49,6 @@ const add = [
   ["anthropic", { id: "anthropic", key: MOCK_KEYS.anthropic, baseUrl: `${M}/anthropic` }],
   ["openai", { id: "openai", key: MOCK_KEYS.openai, baseUrl: `${M}/openai/v1` }],
   ["google", { id: "google", key: MOCK_KEYS.google, baseUrl: `${M}/google/v1beta/openai` }],
-  ["c-deepseek", { kind: "compatible", name: "DeepSeek", key: MOCK_KEYS.deepseek, baseUrl: `${M}/deepseek/v1` }],
 ];
 for (const [id, body] of add) {
   if (has(id)) continue;

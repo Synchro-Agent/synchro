@@ -7,6 +7,7 @@ import { useApp } from "./store";
 import { call, ago } from "./adminui";
 import { refreshModels } from "./models";
 import type { ProviderInfo } from "./catalog";
+import { BrandLogo, hasLogo } from "./brands";
 
 export type ApiProvider = {
   id: string; kind: string; name: string; vendor: string; builtin: boolean; configured: boolean; source: "db" | "env" | null;
@@ -15,44 +16,34 @@ export type ApiProvider = {
 };
 export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null };
 
-// Dấu nhận diện từng hãng: chữ cái trên nền trung tính, đồng bộ với các ô icon khác của web.
-const MARK: Record<string, string> = { anthropic: "A", openai: "O", google: "G", elevenlabs: "11" };
 const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation" };
-const PRESETS: [string, string][] = [["DeepSeek", "https://api.deepseek.com/v1"], ["OpenRouter", "https://openrouter.ai/api/v1"], ["xAI (Grok)", "https://api.x.ai/v1"], ["Mistral", "https://api.mistral.ai/v1"], ["Groq", "https://api.groq.com/openai/v1"]];
 
+// Logo của hãng trên ô nền trung tính; nhà cung cấp không có logo thì hiện chữ cái đầu.
 function Mark({ p }: { p: ApiProvider }) {
-  return <span className="api-mark" aria-hidden data-notr>{MARK[p.id] ?? p.name.slice(0, 1).toUpperCase()}</span>;
+  return <span className="api-mark" aria-hidden data-notr>{hasLogo(p.id) ? <BrandLogo id={p.id} size={20} /> : p.name.slice(0, 1).toUpperCase()}</span>;
 }
 
-function KeyForm({ p, custom, busy, err, onCancel, onSave }: { p?: ApiProvider; custom?: boolean; busy: boolean; err: string; onCancel: () => void; onSave: (v: { key: string; baseUrl: string; name: string }) => void }) {
+function KeyForm({ p, busy, err, onCancel, onSave }: { p: ApiProvider; busy: boolean; err: string; onCancel: () => void; onSave: (v: { key: string; baseUrl: string }) => void }) {
   const [key, setKey] = useState("");
   const [show, setShow] = useState(false);
-  const [name, setName] = useState(p && !p.builtin ? p.name : "");
-  const [base, setBase] = useState(p?.baseUrl ?? "");
-  const [adv, setAdv] = useState(!!custom || !!p?.baseUrl);
-  const editing = !!p?.configured && p.source === "db";
-  const can = !busy && (custom ? !!(key.trim() && base.trim() && name.trim()) : !!(key.trim() || (editing && base !== p?.baseUrl)));
+  const [base, setBase] = useState(p.baseUrl);
+  const [adv, setAdv] = useState(!!p.baseUrl);
+  const editing = p.configured && p.source === "db";
+  const can = !busy && !!(key.trim() || (editing && base !== p.baseUrl));
   return (
-    <form className="api-form" onSubmit={(e) => { e.preventDefault(); if (can) onSave({ key, baseUrl: base, name }); }}>
-      {custom && (
-        <>
-          <label className="api-lbl" htmlFor="api-name">Name</label>
-          <input id="api-name" className="field" placeholder="e.g. DeepSeek" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          <div className="api-presets">{PRESETS.map(([n, u]) => <button key={n} type="button" className={`api-preset ${base === u ? "on" : ""}`} onClick={() => { setBase(u); if (!name.trim()) setName(n.replace(/ \(.+\)$/, "")); }}>{n}</button>)}</div>
-        </>
-      )}
-      <label className="api-lbl" htmlFor={`api-key-${p?.id ?? "new"}`}>API key{editing && <span className="d"> · leave empty to keep the current key</span>}</label>
+    <form className="api-form" onSubmit={(e) => { e.preventDefault(); if (can) onSave({ key, baseUrl: base }); }}>
+      <label className="api-lbl" htmlFor={`api-key-${p.id}`}>API key{editing && <span className="d"> · leave empty to keep the current key</span>}</label>
       <div className="api-keyrow">
-        <input id={`api-key-${p?.id ?? "new"}`} className="field" type={show ? "text" : "password"} autoComplete="off" spellCheck={false}
-          placeholder={p?.prefix ? `${p.prefix}…` : "Paste your API key"} value={key} onChange={(e) => setKey(e.target.value)} autoFocus={!custom} />
+        <input id={`api-key-${p.id}`} className="field" type={show ? "text" : "password"} autoComplete="off" spellCheck={false}
+          placeholder={p.prefix ? `${p.prefix}…` : "Paste your API key"} value={key} onChange={(e) => setKey(e.target.value)} autoFocus />
         <button type="button" className="icon-btn" aria-label={show ? "Hide key" : "Show key"} title={show ? "Hide key" : "Show key"} onClick={() => setShow(!show)}><I.Eye size={16} /></button>
       </div>
-      {p?.keyUrl && <a className="api-get" href={p.keyUrl} target="_blank" rel="noreferrer">{`Get a key from ${p.vendor}`}<I.External size={12} /></a>}
-      {!custom && <button type="button" className="api-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}><I.ChevronR size={13} />Advanced</button>}
+      {p.keyUrl && <a className="api-get" href={p.keyUrl} target="_blank" rel="noreferrer">{`Get a key from ${p.vendor}`}<I.External size={12} /></a>}
+      <button type="button" className="api-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}><I.ChevronR size={13} />Advanced</button>
       {adv && (
         <>
-          <label className="api-lbl" htmlFor={`api-base-${p?.id ?? "new"}`}>Base URL{!custom && <span className="d"> · optional, for proxies or compatible gateways</span>}</label>
-          <input id={`api-base-${p?.id ?? "new"}`} className="field" data-notr placeholder={p?.defaultBase || "https://api.example.com/v1"} value={base} onChange={(e) => setBase(e.target.value)} />
+          <label className="api-lbl" htmlFor={`api-base-${p.id}`}>Base URL<span className="d"> · optional, for proxies or compatible gateways</span></label>
+          <input id={`api-base-${p.id}`} className="field" data-notr placeholder={p.defaultBase || "https://api.example.com/v1"} value={base} onChange={(e) => setBase(e.target.value)} />
         </>
       )}
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
@@ -60,7 +51,7 @@ function KeyForm({ p, custom, busy, err, onCancel, onSave }: { p?: ApiProvider; 
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
         <button type="submit" className="btn dark" disabled={!can}>{busy ? <><span className="api-spin" />Checking…</> : "Verify and save"}</button>
       </div>
-      <p className="api-note"><I.Lock size={12} /><span>{`Synchro checks the key with ${p?.vendor ?? "the provider"} first, then stores it encrypted on the server. It is never shown again in full.`}</span></p>
+      <p className="api-note"><I.Lock size={12} /><span>{`Synchro checks the key with ${p.vendor} first, then stores it encrypted on the server. It is never shown again in full.`}</span></p>
     </form>
   );
 }
@@ -71,10 +62,10 @@ function ProviderCard({ p, onChange }: { p: ApiProvider; onChange: (s: ApiState)
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [showModels, setShowModels] = useState(false);
-  const save = async (v: { key: string; baseUrl: string; name: string }) => {
+  const save = async (v: { key: string; baseUrl: string }) => {
     setBusy(true); setErr("");
     try {
-      const s = await call<ApiState>("POST", "/api/admin/apikeys", { id: p.id, key: v.key, baseUrl: v.baseUrl, name: v.name });
+      const s = await call<ApiState>("POST", "/api/admin/apikeys", { id: p.id, key: v.key, baseUrl: v.baseUrl, name: p.name });
       onChange(s); setEdit(false); refreshModels();
       const n = s.providers.find((x) => x.id === p.id)?.models.length ?? 0;
       app.say(p.id === "elevenlabs" ? `Connected ${p.name}` : `Connected ${p.name} · ${n} models`);
@@ -155,10 +146,6 @@ function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
 export function ApiPanel() {
   const [s, setS] = useState<ApiState | null>(null);
   const [err, setErr] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [addErr, setAddErr] = useState("");
-  const app = useApp();
   const load = () => call<ApiState>("GET", "/api/admin/apikeys").then((x) => { setS(x); setErr(""); }).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
@@ -167,11 +154,6 @@ export function ApiPanel() {
   const voice = s.providers.filter((p) => p.id === "elevenlabs");
   const nModels = s.catalog.reduce((n, p) => n + p.models.length, 0);
   const nConn = s.providers.filter((p) => p.configured).length;
-  const addCustom = async (v: { key: string; baseUrl: string; name: string }) => {
-    setBusy(true); setAddErr("");
-    try { const r = await call<ApiState>("POST", "/api/admin/apikeys", { kind: "compatible", name: v.name, key: v.key, baseUrl: v.baseUrl }); setS(r); setAdding(false); refreshModels(); app.say(`Connected ${v.name}`); }
-    catch (e) { setAddErr((e as Error).message); } finally { setBusy(false); }
-  };
   return (
     <>
       <div className="adm-head">
@@ -189,10 +171,6 @@ export function ApiPanel() {
 
       <h3 className="sec">Chat models</h3>
       <div className="api-list">{chat.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
-      {adding ? (
-        <div className="api-card open"><div className="api-card-h"><span className="api-mark"><I.Plus size={14} /></span><div className="api-meta"><div className="api-name"><b>OpenAI-compatible provider</b></div><div className="api-sub">DeepSeek, OpenRouter, xAI, Mistral, Groq and other services that follow the OpenAI API.</div></div></div>
-          <KeyForm custom busy={busy} err={addErr} onCancel={() => { setAdding(false); setAddErr(""); }} onSave={addCustom} /></div>
-      ) : <button className="api-addbtn" onClick={() => setAdding(true)}><I.Plus size={15} />Add an OpenAI-compatible provider</button>}
 
       <h3 className="sec">Voice</h3>
       <div className="api-list">{voice.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>

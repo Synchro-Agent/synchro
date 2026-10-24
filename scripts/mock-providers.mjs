@@ -1,4 +1,4 @@
-// Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, DeepSeek, ElevenLabs) để thử Synchro ở máy cục bộ mà không cần khóa thật.
+// Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, ElevenLabs) để thử Synchro ở máy cục bộ mà không cần khóa thật.
 // Kiểm tra khóa và tham số giống API thật, trả lời bằng nội dung mẫu kèm tên model để thấy rõ đang dùng model nào.
 // Dùng: npm run dev:mock (tự chạy cùng web), hoặc riêng: node scripts/mock-providers.mjs [cổng, mặc định 4010]
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi.
@@ -6,16 +6,26 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → API.
-export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001" };
+export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
 
-// Danh sách model như API thật trả về, gồm cả model không dùng để chat (Synchro phải tự lọc bỏ).
-const ANTHROPIC = [["claude-fable-5-1", "Claude Fable 5.1"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"], ["claude-haiku-4-5", "Claude Haiku 4.5"]];
-const OPENAI = ["gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "o3", "o4-mini", "gpt-4.1", "gpt-4o", "gpt-4o-2024-08-06", "gpt-5-pro", "gpt-5-codex",
-  "text-embedding-3-large", "whisper-1", "tts-1", "dall-e-3", "gpt-image-1", "gpt-realtime", "omni-moderation-latest"];
-const GOOGLE = [["gemini-3.1-pro", "Gemini 3.1 Pro", "generateContent"], ["gemini-3.5-flash", "Gemini 3.5 Flash", "generateContent"], ["gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", "generateContent"],
-  ["gemini-embedding-001", "Gemini Embedding", "embedContent"], ["gemini-2.5-flash-image", "Nano Banana", "generateContent"], ["imagen-4.0-generate-001", "Imagen 4", "predict"]];
-const DEEPSEEK = ["deepseek-chat", "deepseek-reasoner"];
-const VENDOR = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", deepseek: "DeepSeek" };
+// Danh sách model như API thật của từng hãng trả về (theo tài liệu tháng 10/2026), gồm cả model không dùng để nhắn tin mà Synchro phải tự lọc bỏ.
+const ANTHROPIC = [["claude-fable-5-1", "Claude Fable 5.1"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"],
+  ["claude-fable-5", "Claude Fable 5"], ["claude-opus-5", "Claude Opus 5"], ["claude-sonnet-5", "Claude Sonnet 5"], ["claude-opus-4-8", "Claude Opus 4.8"], ["claude-opus-4-7", "Claude Opus 4.7"],
+  ["claude-opus-4-6", "Claude Opus 4.6"], ["claude-sonnet-4-6", "Claude Sonnet 4.6"], ["claude-opus-4-5-20251101", "Claude Opus 4.5"], ["claude-haiku-4-5-20251001", "Claude Haiku 4.5"]];
+// Mới nhất trước. Model -pro chỉ chạy được qua API Responses, giống API thật.
+const OPENAI = ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "chat-latest", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano",
+  "gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-pro", "gpt-5-mini", "gpt-5-nano", "o3-pro", "o3", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini",
+  "gpt-image-2.5-sunburst", "gpt-image-2", "gpt-live-1", "gpt-realtime-2.1", "gpt-realtime-translate", "gpt-transcribe", "gpt-audio-1.5", "gpt-4o-mini-tts", "whisper-1", "tts-1",
+  "gpt-5.6-cyber", "gpt-rosalind-research", "gpt-oss-120b", "gpt-5.3-codex", "gpt-4o-2024-08-06", "text-embedding-3-large", "omni-moderation-latest"];
+const OPENAI_CHAT = OPENAI.slice(0, OPENAI.indexOf("gpt-image-2.5-sunburst"));
+const GOOGLE = [["gemini-4-argon", "Gemini 4 Argon", "generateContent"], ["gemini-3.8-flash", "Gemini 3.8 Flash", "generateContent"], ["gemini-3.6-flash", "Gemini 3.6 Flash", "generateContent"],
+  ["gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", "generateContent"], ["gemini-3.1-pro-preview", "Gemini 3.1 Pro", "generateContent"], ["gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite", "generateContent"],
+  ["gemini-3-flash-preview", "Gemini 3 Flash", "generateContent"], ["gemini-2.5-pro", "Gemini 2.5 Pro", "generateContent"], ["gemini-2.5-flash", "Gemini 2.5 Flash", "generateContent"], ["gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite", "generateContent"],
+  ["gemini-3.8-live", "Gemini 3.8 Live", "bidiGenerateContent"], ["gemini-3.8-flash-tts", "Gemini 3.8 Flash TTS", "generateContent"], ["gemini-3.1-flash-image", "Nano Banana 2", "generateContent"],
+  ["gemini-3-pro-image", "Nano Banana Pro", "generateContent"], ["gemini-3.5-transcribe", "Gemini 3.5 Transcribe", "generateContent"], ["gemini-omni-1.1-flash", "Gemini Omni Flash", "generateContent"],
+  ["gemini-robotics-er-2-preview", "Gemini Robotics ER 2", "generateContent"], ["gemini-embedding-2-preview", "Gemini Embedding 2", "embedContent"], ["lyria-3.5", "Lyria 3.5", "generateContent"],
+  ["deep-research-preview-04-2026", "Gemini Deep Research", "generateContent"]];
+const VENDOR = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
 
 const send = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
 const readBody = (req) => new Promise((ok) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { ok(JSON.parse(s || "{}")); } catch { ok({}); } }); });
@@ -27,7 +37,7 @@ function lastUserText(msgs = []) {
   for (const m of [...msgs].reverse()) {
     if (m.role !== "user") continue;
     if (typeof m.content === "string") return m.content;
-    const t = (m.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+    const t = (m.content ?? []).filter((b) => b.type === "text" || b.type === "input_text").map((b) => b.text).join("\n");
     if (t) return t;
   }
   return "";
@@ -37,16 +47,17 @@ const displayName = (provider, id) =>
   provider === "anthropic" ? ANTHROPIC.find(([x]) => x === id)?.[1] ?? id
   : provider === "google" ? GOOGLE.find(([x]) => x === id)?.[1] ?? id
   : provider === "openai" ? id.replace(/^gpt/i, "GPT") : id;
+const pro = (id) => /-pro$/.test(id);
 
 // Model lớn trả lời chậm hơn model nhỏ, để thấy trạng thái đang trả lời.
-const latency = (id) => (/opus|fable|pro|o3|reasoner/.test(id) ? 1600 : /mini|nano|flash|haiku|lite/.test(id) ? 450 : 900) + Math.random() * 300;
+const latency = (id) => (/astra|argon|opus|fable|pro|o3/.test(id) ? 1600 : /luna|mini|nano|flash|haiku|lite/.test(id) ? 450 : 900) + Math.random() * 300;
 
 function reply(provider, id, msgs, maxTokens) {
   const q = lastUserText(msgs).trim();
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
   const name = displayName(provider, id), vendor = VENDOR[provider];
   const short = q.length > 160 ? q.slice(0, 160) + "…" : q;
-  const n = msgs.filter((m) => m.role === "user" || m.role === "assistant").length;
+  const n = (msgs ?? []).filter((m) => m.role === "user" || m.role === "assistant").length;
   let body;
   if (/\b(code|hàm|function|python|javascript|typescript|lập trình|script)\b/i.test(q)) {
     body = vi
@@ -97,18 +108,39 @@ async function handler(req, res) {
     }
   }
 
-  // ---- OpenAI và DeepSeek (chuẩn OpenAI: /models, /chat/completions) ----
-  const oa = p.startsWith("/openai/v1/") ? "openai" : p.startsWith("/deepseek/v1/") ? "deepseek" : null;
-  if (oa) {
+  // ---- OpenAI (/models, /responses, /chat/completions) ----
+  if (p.startsWith("/openai/v1/")) {
     const err = (message, type = "invalid_request_error") => ({ error: { message, type } });
     if (!valid(auth)) return send(res, 401, err("Incorrect API key provided.", "invalid_api_key"));
-    const ids = oa === "openai" ? OPENAI : DEEPSEEK;
-    if (p.endsWith("/models")) return send(res, 200, { object: "list", data: ids.map((id, i) => ({ id, object: "model", created: 1_760_000_000 - i * 1000, owned_by: oa })) });
-    if (p.endsWith("/chat/completions")) {
-      // OpenAI không còn nhận max_tokens với model mới; DeepSeek vẫn dùng max_tokens.
-      if (oa === "openai" && b.max_tokens !== undefined) return send(res, 400, err("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."));
-      if (!ids.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
-      const { text, q } = reply(oa, b.model, b.messages, b.max_completion_tokens ?? b.max_tokens);
+    if (p === "/openai/v1/models") return send(res, 200, { object: "list", data: OPENAI.map((id, i) => ({ id, object: "model", created: 1_790_000_000 - i * 86400, owned_by: "openai" })) });
+    if (p === "/openai/v1/responses") {
+      if (b.max_tokens !== undefined || b.max_completion_tokens !== undefined) return send(res, 400, err("Unsupported parameter: use 'max_output_tokens' with the Responses API."));
+      if (!OPENAI_CHAT.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
+      const input = typeof b.input === "string" ? [{ role: "user", content: b.input }] : b.input ?? [];
+      // Như API thật: kết quả công cụ phải đi kèm đúng lượt gọi công cụ trước đó.
+      const outs = input.filter((x) => x.type === "function_call_output");
+      const bad = outs.find((o) => !input.some((x) => x.type === "function_call" && x.call_id === o.call_id));
+      if (bad) return send(res, 400, err(`No tool call found for function call output with call_id ${bad.call_id}.`));
+      const { text, q } = reply("openai", b.model, input, b.max_output_tokens);
+      // Gõ #tool: model gọi công cụ đầu tiên, lượt sau trả lời dựa trên kết quả.
+      if (q.includes("#tool") && b.tools?.length && b.tool_choice !== "none") {
+        if (!outs.length) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
+          output: [{ type: "reasoning", id: "rs_mock", summary: [] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: b.tools[0].name, arguments: JSON.stringify({ name: "mock-skill" }), status: "completed" }] });
+        const got = String(outs[outs.length - 1].output ?? "").slice(0, 120);
+        return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
+          output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: `Đã gọi công cụ ${b.tools[0].name} và nhận kết quả: ${got}`, annotations: [] }] }] });
+      }
+      if (await trap(res, q, (m) => err(m, "server_error"))) return;
+      await sleep(latency(b.model) * (pro(b.model) ? 2 : 1));
+      return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
+        output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }],
+        usage: { input_tokens: 40, output_tokens: Math.ceil(text.length / 4) } });
+    }
+    if (p === "/openai/v1/chat/completions") {
+      if (b.max_tokens !== undefined) return send(res, 400, err("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."));
+      if (pro(b.model)) return send(res, 404, err("This model is only supported in v1/responses and not in v1/chat/completions."));
+      if (!OPENAI_CHAT.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
+      const { text, q } = reply("openai", b.model, b.messages, b.max_completion_tokens);
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
       await sleep(latency(b.model));
       return send(res, 200, { id: `chatcmpl-mock${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }], usage: { prompt_tokens: 40, completion_tokens: Math.ceil(text.length / 4) } });
@@ -122,7 +154,7 @@ async function handler(req, res) {
   }
   if (p === "/google/v1beta/openai/chat/completions") {
     if (!valid(auth)) return send(res, 400, [{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]);
-    if (!GOOGLE.some(([id]) => id === b.model)) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
+    if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
     const { text, q } = reply("google", b.model, b.messages, b.max_tokens);
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));

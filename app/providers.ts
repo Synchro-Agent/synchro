@@ -55,10 +55,17 @@ const open = (box: string) => {
 const hint = (k: string) => (k.length > 12 ? `${k.slice(0, 6)}…${k.slice(-4)}` : "••••");
 
 // ---- danh sách model của từng hãng ----
-const OPENAI_SKIP = /(embedding|tts|whisper|transcribe|audio|realtime|image|dall-e|moderation|search|computer-use|codex|instruct|davinci|babbage|-pro\b|-\d{4}-\d{2}-\d{2}$|-\d{4}$)/i;
-const GOOGLE_SKIP = /(embedding|aqa|imagen|veo|tts|image|live|native-audio|robotics|learnlm)/i;
+// Chỉ giữ model nhắn tin: bỏ model ảnh, giọng nói, realtime, embedding, kiểm duyệt, code chuyên dụng, model cần duyệt riêng và bản chụp có ngày.
+const OPENAI_SKIP = /(embedding|tts|whisper|transcribe|audio|realtime|live|translate|image|dall-e|sora|moderation|search|computer-use|codex|deep-research|cyber|rosalind|daybreak|oss|instruct|davinci|babbage|-\d{4}-\d{2}-\d{2}$|-\d{4}$)/i;
+const GOOGLE_SKIP = /(embedding|aqa|imagen|veo|tts|image|live|native-audio|transcribe|translate|omni|robotics|computer-use|learnlm)/i;
 const COMPAT_SKIP = /(embed|tts|whisper|moderation|dall-e|image|rerank|guard)/i;
-const prettyOpenAI = (id: string) => id.replace(/^gpt/i, "GPT").replace(/^chatgpt/i, "ChatGPT").replace(/-latest$/, " (latest)");
+// "gpt-6-astra" → "GPT-6 Astra", "gpt-5.5-pro" → "GPT-5.5 Pro", "chat-latest" → "ChatGPT Latest"; dòng o giữ nguyên ("o3").
+const prettyOpenAI = (id: string) => {
+  if (id === "chat-latest") return "ChatGPT Latest";
+  const m = /^(gpt|chatgpt)-([\d.]+o?)(?:-(.+))?$/i.exec(id);
+  if (!m) return id;
+  return `${m[1].toLowerCase() === "gpt" ? "GPT" : "ChatGPT"}-${m[2]}${m[3] ? " " + m[3].split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") : ""}`;
+};
 
 async function getJson(url: string, headers: Record<string, string>) {
   const r = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) }).catch((e) => { throw new Error(`Không kết nối được tới ${new URL(url).host}: ${(e as Error).message}`); });
@@ -91,7 +98,7 @@ export async function listModels(kind: ProviderKind, base: string, key: string):
   const j = await getJson(`${b}/models`, { Authorization: `Bearer ${key}` });
   const list = ((j.data ?? j.models ?? []) as { id: string; created?: number; name?: string }[]).filter((m) => typeof m.id === "string");
   if (kind === "openai") {
-    return { models: list.filter((m) => /^(gpt|o\d|chatgpt)/i.test(m.id) && !OPENAI_SKIP.test(m.id)).sort((x, y) => (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyOpenAI(m.id) })) };
+    return { models: list.filter((m) => /^(gpt|o\d|chatgpt|chat-latest)/i.test(m.id) && !OPENAI_SKIP.test(m.id)).sort((x, y) => (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyOpenAI(m.id) })) };
   }
   return { models: list.filter((m) => !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: m.name || m.id })) };
 }

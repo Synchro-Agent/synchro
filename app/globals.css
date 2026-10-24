@@ -2410,6 +2410,7 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .api-card.open{border-color:var(--border-strong);box-shadow:0 4px 18px rgba(0,0,0,.06)}
 .api-card-h{display:flex;align-items:center;gap:12px;min-width:0}
 .api-mark{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;background:var(--pill);color:var(--text);font-size:13px;font-weight:460;letter-spacing:-.02em;box-shadow:inset 0 0 0 .5px var(--border-strong)}
+.api-mark svg{display:block}
 .api-meta{flex:1;min-width:0}
 .api-name{display:flex;align-items:baseline;gap:8px;min-width:0}
 .api-name b{font-weight:460;font-size:14px}
@@ -2436,10 +2437,6 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .api-adv svg{transition:transform .2s var(--ease)}
 .api-adv[aria-expanded="true"] svg{transform:rotate(90deg)}
 .api-adv .d{color:var(--text-3)}
-.api-presets{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 12px}
-.api-preset{height:26px;padding:0 10px;border-radius:999px;border:.5px solid var(--border-strong);font-size:12px;color:var(--text-2)}
-.api-preset:hover{background:var(--hover)}
-.api-preset.on{background:var(--btn-dark);color:var(--btn-dark-text);border-color:transparent}
 .api-err{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:#b23a29;background:rgba(198,66,47,.08);border-radius:10px;padding:8px 10px;margin:0 0 10px;word-break:break-word}
 .api-err svg{flex:none;margin-top:1px}
 .api-err.in{margin:10px 0 0}
@@ -2452,8 +2449,6 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .api-models .api-adv{margin:0}
 .api-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:180px;overflow:auto}
 .api-chip{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--hover);color:var(--text-2)}
-.api-addbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;height:40px;border-radius:12px;border:1px dashed var(--border-strong);font-size:13px;color:var(--text-2);transition:background .15s,color .15s}
-.api-addbtn:hover{background:var(--hover);color:var(--text)}
 .api-test{border:.5px solid var(--border);border-radius:12px;background:var(--card);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .api-test-row{display:flex;gap:8px;align-items:center}
 .api-test-row .field{margin:0;flex:1;min-width:0;height:34px}
