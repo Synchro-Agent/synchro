@@ -1,0 +1,69 @@
+// Chạy Synchro ở máy cục bộ với API giả lập của các hãng: không cần khóa thật, không gọi ra Internet.
+// Dữ liệu riêng trong data-mock/, bản build riêng trong .next-mock/, nên chạy song song được với npm run dev.
+// Dùng: npm run dev:mock   → mở http://localhost:3200 và đăng nhập bằng tài khoản thử nghiệm in ra ở terminal.
+// Xóa toàn bộ dữ liệu thử nghiệm: xóa thư mục data-mock/.
+import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { MOCK_KEYS, startMock } from "./mock-providers.mjs";
+
+const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010);
+const DATA = path.resolve("data-mock");
+// Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
+const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
+const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
+const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
+
+try { await startMock(MOCK_PORT); } catch (e) { console.error(`Không mở được API giả lập ở cổng ${MOCK_PORT}: ${e.message}`); process.exit(1); }
+
+if (!fs.existsSync(path.join(DATA, "synchro.db"))) {
+  const r = spawnSync(process.execPath, ["scripts/create-admin.mjs", ADMIN.email], { env, input: `${ADMIN.password}\n${ADMIN.password}\n`, encoding: "utf8" });
+  if (r.status !== 0) { console.error(r.stderr || r.stdout); process.exit(1); }
+}
+
+const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--turbopack", "-p", String(PORT)], { env, stdio: "inherit" });
+const stop = () => { next.kill("SIGINT"); process.exit(0); };
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
+next.on("exit", (code) => process.exit(code ?? 0));
+
+// Đợi web sẵn sàng, rồi nhập khóa giả lập qua chính Cài đặt → API (máy chủ tự kiểm tra, mã hóa và lấy danh sách model).
+let cookie = "";
+const call = async (method, p, body) => {
+  const r = await fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie }, body: body && JSON.stringify(body) });
+  for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
+  return { status: r.status, j: await r.json().catch(() => null) };
+};
+for (let i = 0; ; i++) {
+  try { if ((await fetch(`${B}/api/models`)).status < 500) break; } catch {}
+  if (i > 150) { console.error("Web chưa khởi động sau 5 phút."); stop(); }
+  await new Promise((r) => setTimeout(r, 2000));
+}
+const login = await call("POST", "/api/auth/login", { email: ADMIN.email, password: ADMIN.password });
+if (login.status !== 200) { console.error("Không đăng nhập được tài khoản thử nghiệm:", login.j?.error); stop(); }
+if (!login.j?.user?.profile?.fullName) await call("POST", "/api/auth/profile", { fullName: ADMIN.fullName, birthDate: "2000-01-01" });
+
+const state = (await call("GET", "/api/admin/apikeys")).j;
+const has = (id) => state?.providers?.find((p) => p.id === id)?.configured;
+const add = [
+  ["anthropic", { id: "anthropic", key: MOCK_KEYS.anthropic, baseUrl: `${M}/anthropic` }],
+  ["openai", { id: "openai", key: MOCK_KEYS.openai, baseUrl: `${M}/openai/v1` }],
+  ["google", { id: "google", key: MOCK_KEYS.google, baseUrl: `${M}/google/v1beta/openai` }],
+  ["c-deepseek", { kind: "compatible", name: "DeepSeek", key: MOCK_KEYS.deepseek, baseUrl: `${M}/deepseek/v1` }],
+];
+for (const [id, body] of add) {
+  if (has(id)) continue;
+  const r = await call("POST", "/api/admin/apikeys", body);
+  if (r.status !== 200) console.error(`Không nối được ${id}:`, r.j?.error);
+}
+const models = (await call("GET", "/api/models")).j?.providers ?? [];
+
+console.log(`
+  ┌─ Synchro với API giả lập ──────────────────────────────
+  │ Web:        ${B}
+  │ Đăng nhập:  ${ADMIN.email} / ${ADMIN.password}
+  │ Model:      ${models.map((p) => `${p.name} (${p.models.length})`).join(", ") || "chưa có"}
+  │ Thử lỗi:    gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn
+  │ Khóa thử:   khóa nào có chữ "mock" đều hợp lệ, API giả lập ở ${M}
+  └─ Ctrl+C để dừng ─────────────────────────────────────────
+`);

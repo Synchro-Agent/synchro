@@ -122,12 +122,19 @@ function TplArt({ k }: { k: string }) {
 function ModelPicker({ model, setModel }: { model: string; setModel: (m: string) => void }) {
   const [mm, setMm] = useState(false);
   const [sub, setSub] = useState<null | string>(null);
-  const [subTop, setSubTop] = useState(0);
+  const [subPos, setSubPos] = useState<React.CSSProperties>({});
   const [flip, setFlip] = useState(false);
-  const hoverProv = (id: string, el: HTMLElement) => { setSub(id); setSubTop(el.offsetTop); };
   const [effort, setEffort] = usePref("effort", "medium");
   const { say, me, openSettings } = useApp();
   const { providers, allowed, loaded } = useModels();
+  // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
+  const hoverProv = (id: string, el: HTMLElement) => {
+    setSub(id);
+    const r = el.getBoundingClientRect(), menu = (el.offsetParent as HTMLElement | null)?.getBoundingClientRect() ?? r;
+    const need = (providers.find((p) => p.id === id)?.models.length ?? 0) * el.offsetHeight + 12;
+    const below = window.innerHeight - r.top - 12;
+    setSubPos(need <= below ? { top: el.offsetTop - 6, maxHeight: Math.min(420, below) } : { bottom: 0, maxHeight: Math.min(420, Math.max(160, menu.bottom - 12)) });
+  };
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
   useEffect(() => {
@@ -175,7 +182,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
           ))}
         </Menu>
         {providers.map((pv) => (
-          <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, top: subTop - 6, width: 260 }}>
+          <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
                 <span className="mname-t">{m.name}</span>{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}

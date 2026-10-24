@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-mock/
 /out/
 
 # production
@@ -46,3 +47,5 @@ next-env.d.ts
 
 # dữ liệu skill do người dùng tải lên
 /data/
+# dữ liệu của npm run dev:mock (API giả lập)
+/data-mock/
