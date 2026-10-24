@@ -10,6 +10,7 @@ import { Fade, Menu, Thinking } from "./ui";
 import { Directory } from "./settings";
 import { ShaderMetal } from "./shader-metal";
 import { CodeView } from "./codeview";
+import { VoiceMode } from "./voicemode";
 import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
@@ -185,6 +186,7 @@ function Composer(p: {
   onSend: (t: string, f: string[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
   model: string; setModel: (m: string) => void; goCustom: (t: "Skills" | "Connectors" | "Plugins") => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
+  onVoice?: () => void;
 }) {
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
@@ -280,7 +282,7 @@ function Composer(p: {
         {plus}
         <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
         {micBtn}
-        {sendBtn}
+        {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
       </div>
     );
 
@@ -293,7 +295,7 @@ function Composer(p: {
         <div className="model">
           {modelPicker}
           {micBtn}
-          {canSend ? sendBtn : <button className="icon-btn" data-tip="Dùng chế độ giọng nói" onClick={mic} aria-label="Chế độ giọng nói"><I.Wave /></button>}
+          {canSend ? sendBtn : <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice ?? mic} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button>}
         </div>
       </div>
     </div>
@@ -659,7 +661,9 @@ export default function Home() {
   const Nav = ({ v, icon, label, tag, plus }: { v: View; icon: React.ReactNode; label: string; tag?: string; plus?: () => void }) => (
     <button className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
   );
-  const composerProps = { onSend: send, busy, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload") };
+  const [voiceOn, setVoiceOn] = useState(false);
+  const composerProps = { onSend: send, busy, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload"), onVoice: () => { window.speechSynthesis?.cancel(); setVoiceOn(true); } };
+  const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
   const visible = chats.filter((c) => !c.inc);
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
@@ -987,6 +991,7 @@ export default function Home() {
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
+      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} lang={VOICE_LANG[vlang] ?? "vi-VN"} rate={VOICE_RATE[vspeed] ?? 1} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><SearchModal chats={visible} onClose={() => setModal(null)} onPick={(id) => { setCur(id); setView("chat"); setModal(null); }} onNew={() => { goNew(); setModal(null); }} /></Fade>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as I from "../icons";
 import { VOICES, type Voice } from "./data";
-import { Drop, Field, Player, Range, Seg, Select, Toggle, VoiceChip, VoicePicker } from "./parts";
+import { Drop, Field, Player, Range, Seg, Select, Tabs, Toggle, VoiceChip, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
 const SFX_EX = ["Mưa rơi trên mái tôn, sấm xa", "Tiếng xe máy đi qua phố đêm Hà Nội", "Cửa gỗ cũ kẽo kẹt mở ra", "Đám đông vỗ tay trong hội trường", "Tiếng bàn phím cơ gõ nhanh", "Nhạc nền lo-fi nhẹ, lặp liền mạch"];
@@ -14,7 +14,7 @@ export function AudioTool({ say, demo, sub, setSub }: ToolProps) {
   return (
     <div className="sp-wide">
       <ToolHead title="Âm thanh" desc="Tạo hiệu ứng âm thanh, làm sạch bản thu, đổi giọng và căn phụ đề khớp từng từ.">
-        <Seg label="Công cụ" value={tab} onChange={setSub} items={[{ k: "sfx", label: "Tiếng động" }, { k: "isolate", label: "Lọc tạp âm" }, { k: "changer", label: "Đổi giọng" }, { k: "align", label: "Căn phụ đề" }, { k: "detect", label: "Phát hiện AI" }]} />
+        <Tabs label="Công cụ" value={tab} onChange={setSub} items={[{ k: "sfx", label: "Tiếng động" }, { k: "isolate", label: "Lọc tạp âm" }, { k: "changer", label: "Đổi giọng" }, { k: "align", label: "Căn phụ đề" }, { k: "detect", label: "Phát hiện AI" }]} />
       </ToolHead>
       {tab === "sfx" && <Sfx demo={demo} />}
       {tab === "isolate" && <Isolate demo={demo} />}
@@ -58,22 +58,31 @@ function Sfx({ demo }: { demo: () => void }) {
   );
 }
 
+const ISO_HIST = [["Phỏng vấn podcast · giọng sạch", "3:05", "mp3"], ["Video hướng dẫn · bỏ nhạc nền", "4:02", "mp4"], ["Ghi âm bài giảng · chỉ giọng nói", "5:17", "mp3"], ["Bài hát · tách giọng hát", "3:21", "wav"]];
+
 function Isolate({ demo }: { demo: () => void }) {
   const [file, setFile] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [view, setView] = useState<"before" | "after">("after");
+  const [q, setQ] = useState("");
   return (
-    <div className="sp-two">
-      <div className="sp-card">
-        <Drop title="Thả bản thu cần làm sạch" sub="Âm thanh hoặc video · tối đa 500 MB, 1 giờ" accept="audio/*,video/*" file={file} onFile={(f) => { setFile(f[0].name); setDone(false); }} />
-        <p className="sp-note">Tách giọng nói khỏi nhạc nền, tiếng gió, tiếng xe và tiếng vang phòng. Khoảng 1.000 credit mỗi phút.</p>
-        <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!file} onClick={() => { setDone(true); demo(); }}><I.ShieldCheck size={14} />Lọc tạp âm</button></div>
+    <>
+      <div className="sp-card sp-isolate">
+        <Drop title="Thả tệp vào đây" sub="Âm thanh hoặc video · tối đa 500 MB, 1 giờ · khoảng 1.000 credit mỗi phút" accept="audio/*,video/*" file={file} onFile={(f) => { setFile(f[0].name); setDone(false); }} />
+        <div className="sp-gen"><span className="sp-muted">Tách giọng nói khỏi nhạc nền, tiếng gió, tiếng xe và tiếng vang phòng</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!file} onClick={() => { setDone(true); demo(); }}><I.ShieldCheck size={14} />Lọc tạp âm</button></div>
+        {done && (
+          <div className="sp-result">
+            <div className="sp-result-h"><b>{file}</b><Seg small label="Nghe bản" value={view} onChange={setView} items={[{ k: "before", label: "Gốc" }, { k: "after", label: "Đã lọc" }]} /></div>
+            <Player title={view === "after" ? "Đã lọc tạp âm" : "Bản gốc"} dur={64} seed={view === "after" ? 3 : 31} onDemo={demo} />
+          </div>
+        )}
       </div>
-      <div className="sp-card">
-        <div className="sp-card-h">So sánh{done && <Seg small label="Nghe bản" value={view} onChange={setView} items={[{ k: "before", label: "Gốc" }, { k: "after", label: "Đã lọc" }]} />}</div>
-        {done ? <Player title={view === "after" ? "Đã lọc tạp âm" : "Bản gốc"} dur={64} seed={view === "after" ? 3 : 31} onDemo={demo} /> : <div className="sp-empty">Kết quả hiện ở đây, bấm qua lại giữa bản gốc và bản đã lọc để so sánh.</div>}
-      </div>
-    </div>
+      <label className="sp-search"><I.Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm trong lịch sử" aria-label="Tìm trong lịch sử" /></label>
+      <table className="sp-table sp-hist">
+        <thead><tr><th>Tên</th><th>Thời lượng</th><th>Định dạng</th><th aria-label="Tải xuống" /></tr></thead>
+        <tbody>{ISO_HIST.filter((r) => r[0].toLowerCase().includes(q.toLowerCase())).map((r) => <tr key={r[0]}><td><I.Wave size={14} />{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><button className="icon-btn" aria-label="Tải xuống" onClick={demo}><I.Download size={15} /></button></td></tr>)}</tbody>
+      </table>
+    </>
   );
 }
 

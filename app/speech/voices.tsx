@@ -1,12 +1,22 @@
 "use client";
-// Giọng nói: giọng của tôi, thư viện, thiết kế giọng từ mô tả, nhân bản nhanh/chuyên sâu, remix.
+// Giọng nói: giọng của tôi, thư viện cộng đồng, và trang Tạo giọng (nhân bản nhanh, chuyên sâu, thiết kế, remix).
 import { useState } from "react";
 import * as I from "../icons";
 import { KIND_LABEL, MY_VOICES, VOICES, fmtUses, type Voice } from "./data";
-import { Drop, Field, Player, Range, Seg, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
+import { Drop, Field, OrbStage, Player, Range, Seg, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
+type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 const DESIGN_EX = ["Nữ miền Nam, ngoài 20 tuổi, giọng ngọt, nói nhanh, hợp video mạng xã hội", "Ông lão miền Trung trầm ấm, kể chuyện cổ tích chậm rãi", "Nam phát thanh viên Hà Nội, rõ ràng, chuẩn mực, hơi nghiêm"];
+const CREATE = [
+  { k: "ivc" as const, title: "Nhân bản nhanh", desc: "Nhân bản giọng của bạn chỉ từ 10 giây âm thanh. Tải tệp lên hoặc ghi âm trực tiếp.", hue: 0, min: "10 giây", best: "3 phút", primary: true },
+  { k: "pvc" as const, title: "Nhân bản chuyên sâu", desc: "Bản nhân bản giống thật nhất. Tốt nhất với 30 phút mẫu trở lên, có xác minh chính chủ.", hue: 230, min: "10 phút", best: "2 giờ" },
+  { k: "design" as const, title: "Thiết kế giọng", desc: "Tạo giọng cho người hay nhân vật từ một câu mô tả, rồi tinh chỉnh theo ý.", hue: 120, tags: ["Giám đốc", "Cô gái miền Tây", "Lồng tiếng trailer", "Cướp biển", "Ông kể chuyện", "Chú chuột nhỏ"] },
+];
+
+function Back({ onClick, label }: { onClick: () => void; label: string }) {
+  return <button className="sp-back" onClick={onClick}><I.Back size={15} />{label}</button>;
+}
 
 function Previews({ seed, onSave, demo }: { seed: number; onSave: (i: number) => void; demo: () => void }) {
   return (
@@ -22,9 +32,11 @@ function Previews({ seed, onSave, demo }: { seed: number; onSave: (i: number) =>
 }
 
 export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
-  const tab = (["mine", "library", "design", "clone", "remix"] as const).find((x) => x === sub) ?? "mine";
+  const tab = ((["mine", "library", "create", "ivc", "pvc", "design", "remix"] as const).find((x) => x === sub) ?? "mine") as Sub;
+  const top = tab === "mine" || tab === "library" ? tab : "create";
   const [mine, setMine] = useState<Voice[]>(MY_VOICES);
-  const [pick, setPick] = useState<null | "remix">(null);
+  const [pick, setPick] = useState(false);
+  const [playing, setPlaying] = useState<string | null>(null);
   // Thiết kế
   const [desc, setDesc] = useState("");
   const [preview, setPreview] = useState("");
@@ -32,8 +44,7 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
   const [guide, setGuide] = useState(50);
   const [designed, setDesigned] = useState(0);
   // Nhân bản
-  const [cloneMode, setCloneMode] = useState<"ivc" | "pvc">("ivc");
-  const [samples, setSamples] = useState<{ name: string; dur: string }[]>([]);
+  const [samples, setSamples] = useState<{ name: string; sec: number }[]>([]);
   const [denoise, setDenoise] = useState(true);
   const [cname, setCname] = useState("");
   const [consent, setConsent] = useState(false);
@@ -45,18 +56,62 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
   const [remixed, setRemixed] = useState(0);
 
   const save = (name: string, kind: Voice["kind"]) => { setMine((m) => [{ ...VOICES[(m.length * 3) % VOICES.length], id: "demo-" + Date.now(), name, desc: KIND_LABEL[kind!], uses: 0, kind }, ...m]); setSub("mine"); say(`Đã lưu “${name}” vào Giọng của tôi`); };
+  const total = samples.reduce((n, x) => n + x.sec, 0);
+  const fmtSec = (s: number) => (s >= 60 ? `${Math.floor(s / 60)} phút ${s % 60 ? `${s % 60} giây` : ""}`.trim() : `${s} giây`);
+
+  const clone = (pro: boolean) => {
+    const target = pro ? 7200 : 180;
+    return (
+      <>
+        <div className="sp-clone">
+          <div className="sp-card sp-clone-l">
+            <Drop title="Tải tệp âm thanh lên hoặc ghi âm" sub={pro ? "Tối đa 1 GB mỗi tệp · một người nói, ít tạp âm" : "Tối đa 10 MB mỗi tệp · tối đa 25 tệp"} accept="audio/*,video/*" multiple
+              onFile={(f) => setSamples((s) => [...s, ...f.map((x) => ({ name: x.name, sec: Math.max(5, Math.round(x.size / 16000)) }))])} />
+            {samples.length > 0 && <div className="sp-samples">{samples.map((x, i) => <div key={i} className="sp-doc"><I.Wave size={16} /><span className="sp-doc-n"><b>{x.name}</b><small>{fmtSec(x.sec)}</small></span><button className="icon-btn" aria-label="Bỏ mẫu" onClick={() => setSamples(samples.filter((_, j) => j !== i))}><I.X size={14} /></button></div>)}</div>}
+            <div className="sp-clone-btns">
+              <button className="btn" onClick={() => document.querySelector<HTMLInputElement>(".sp-clone-l input[type=file]")?.click()}><I.Upload size={14} />Tải tệp lên</button>
+              <button className="btn" onClick={() => { setSamples((s) => [...s, { name: `Ghi âm ${s.length + 1}.webm`, sec: 45 }]); say("Đã thêm bản ghi âm (mẫu)"); }}><I.Mic size={14} />Ghi âm</button>
+            </div>
+          </div>
+          <div className="sp-card sp-clone-r">
+            <OrbStage hue={pro ? 230 : 0} progress={total / target} min={pro ? "10 phút" : "10 giây"} best={pro ? "2 giờ" : "3 phút"} active={samples.length > 0} />
+            <p className="sp-muted" style={{ textAlign: "center" }}>{total ? `Đã có ${fmtSec(total)} mẫu · ` : ""}Để giọng giống nhất, hãy cung cấp {pro ? "2 giờ" : "3 phút"} âm thanh mẫu.</p>
+          </div>
+        </div>
+        <div className="sp-card">
+          <div className="sp-two flat">
+            <Field label="Tên giọng" htmlFor="vc-name"><input id="vc-name" className="sp-input" value={cname} onChange={(e) => setCname(e.target.value)} placeholder="vd. Giọng của tôi" /></Field>
+            <Toggle checked={denoise} onChange={setDenoise} label="Lọc tạp âm nền trong mẫu" hint="Nên bật nếu thu ở nơi ồn" />
+          </div>
+          {pro && (
+            <ol className="sp-steps row">
+              {[["Tải mẫu giọng", "30 phút – 3 giờ"], ["Xác minh giọng", "Đọc to một câu ngẫu nhiên"], ["Huấn luyện", "Khoảng 2–4 giờ"]].map(([t, d], i) => (
+                <li key={t} className={pvcStep > i ? "done" : pvcStep === i ? "cur" : ""}><span className="sp-stepn">{pvcStep > i ? <I.Check size={13} /> : i + 1}</span><div><b>{t}</b><span>{d}</span></div></li>
+              ))}
+            </ol>
+          )}
+          {pro && pvcStep === 1 && <div className="sp-verify"><p>“Hôm nay trời Hà Nội se lạnh, tôi pha một ấm trà và đọc câu này.”</p><button className="btn dark" onClick={() => { setPvcStep(2); say("Đã xác minh giọng (mẫu)"); }}><I.Mic size={14} />Ghi âm câu xác minh</button></div>}
+          {pro && pvcStep === 2 && <div className="sp-progress"><i style={{ width: "36%" }} /><span>Đang huấn luyện · 36%</span></div>}
+          <label className="sp-consent"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /><span>Tôi xác nhận đây là giọng của tôi hoặc tôi có quyền và sự đồng ý để nhân bản giọng này, và sẽ không dùng để lừa đảo hay mạo danh.</span></label>
+          <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!samples.length || !cname.trim() || !consent || (pro && pvcStep > 0)}
+            onClick={() => { if (!pro) { save(cname.trim(), "cloned"); demo(); } else { setPvcStep(1); demo(); } }}><I.VoicePlus size={14} />{pro ? "Tiếp tục xác minh" : "Tạo giọng"}</button></div>
+        </div>
+      </>
+    );
+  };
 
   return (
     <div className="sp-wide">
-      <ToolHead title="Giọng nói" desc="Quản lý giọng, chọn từ thư viện cộng đồng, tạo giọng mới hoặc nhân bản giọng của chính bạn.">
-        <Seg label="Mục" value={tab} onChange={setSub} items={[{ k: "mine", label: "Giọng của tôi" }, { k: "library", label: "Thư viện" }, { k: "design", label: "Thiết kế" }, { k: "clone", label: "Nhân bản" }, { k: "remix", label: "Remix" }]} />
+      <ToolHead title={tab === "ivc" ? "Nhân bản nhanh" : tab === "pvc" ? "Nhân bản chuyên sâu" : tab === "design" ? "Thiết kế giọng" : tab === "remix" ? "Remix giọng" : "Giọng nói"}
+        desc={top === "create" && tab !== "create" ? "Làm theo các bước bên dưới. Giọng tạo xong nằm trong Giọng của tôi." : "Quản lý giọng, chọn từ thư viện cộng đồng, hoặc tạo giọng mới của riêng bạn."}>
+        {tab === "create" || tab === "mine" || tab === "library" ? <Tabs label="Mục" value={top} onChange={(k) => setSub(k)} items={[{ k: "mine", label: "Giọng của tôi" }, { k: "library", label: "Thư viện" }, { k: "create", label: "Tạo giọng" }]} /> : <Back label="Tạo giọng" onClick={() => setSub("create")} />}
       </ToolHead>
 
       {tab === "mine" && (
         <div className="sp-vgrid">
           {mine.map((v) => (
             <div key={v.id} className="sp-vcard">
-              <div className="sp-vcard-t"><VoiceAvatar v={v} size={40} /><div><b>{v.name}</b><span>{v.desc}</span></div></div>
+              <div className="sp-vcard-t"><VoiceAvatar v={v} size={40} playing={playing === v.id} /><div><b>{v.name}</b><span>{v.desc}</span></div></div>
               <div className="sp-vcard-m"><span className={`sp-badge k-${v.kind}`}>{v.kind ? KIND_LABEL[v.kind] : "Thư viện"}</span><span className="sp-muted">{v.lang} · {v.accent}</span></div>
               <Player dur={7} seed={v.name.length * 3} onDemo={demo} />
               <div className="sp-vcard-a">
@@ -66,15 +121,36 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
               </div>
             </div>
           ))}
-          <button className="sp-vcard sp-vnew" onClick={() => setSub("design")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>Thiết kế từ mô tả hoặc nhân bản</span></button>
+          <button className="sp-vcard sp-vnew" onClick={() => setSub("create")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>Nhân bản, thiết kế hoặc remix</span></button>
         </div>
       )}
 
-      {tab === "library" && (
+      {tab === "library" && <LibraryGrid demo={demo} onAdd={(v) => { if (!mine.some((x) => x.id === v.id)) setMine([{ ...v, kind: "library" }, ...mine]); say(`Đã thêm “${v.name}” vào Giọng của tôi`); }} />}
+
+      {tab === "create" && (
         <>
-          <LibraryGrid say={say} demo={demo} onAdd={(v) => { if (!mine.some((x) => x.id === v.id)) setMine([{ ...v, kind: "library" }, ...mine]); say(`Đã thêm “${v.name}” vào Giọng của tôi`); }} />
+          <div className="sp-create">
+            {CREATE.map((c) => (
+              <div key={c.k} className="sp-card sp-ccard">
+                <div><b>{c.title}</b><p>{c.desc}</p></div>
+                <div className="sp-ccard-orb">
+                  {c.tags && <div className="sp-ctags" aria-hidden="true">{c.tags.map((t) => <span key={t}>{t}</span>)}</div>}
+                  <OrbStage hue={c.hue} size={120} progress={c.min ? 0.001 : undefined} min={c.min} best={c.best} playing={playing === c.k} onPlay={() => setPlaying(playing === c.k ? null : c.k)} />
+                </div>
+                <button className={`btn ${c.primary ? "dark" : ""} sp-wbtn`} onClick={() => setSub(c.k)}>Tạo mới</button>
+              </div>
+            ))}
+          </div>
+          <div className="sp-sec-h"><b>Công cụ khác</b></div>
+          <div className="sp-card sp-remixcard">
+            <div><b>Remix giọng</b><p>Biến đổi giọng có sẵn bằng câu lệnh và thiết lập như cao độ, nhịp nói để ra giọng mới.</p><button className="btn" onClick={() => setSub("remix")}>Tạo mới</button></div>
+            <div className="sp-remix-demo" aria-hidden="true"><span>Tạo phiên bản giọng nữ của giọng này</span><div><em>Giọng cao</em><em>Nói nhanh</em></div><VoiceAvatar v={VOICES[3]} size={44} playing /></div>
+          </div>
         </>
       )}
+
+      {tab === "ivc" && clone(false)}
+      {tab === "pvc" && clone(true)}
 
       {tab === "design" && (
         <div className="sp-two">
@@ -88,40 +164,7 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
           </div>
           <div className="sp-card">
             <div className="sp-card-h">Bản nghe thử</div>
-            {designed ? <Previews seed={designed * 5} demo={demo} onSave={(i) => save(`Giọng thiết kế ${i + 1}`, "designed")} /> : <div className="sp-empty">Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. Synchro trả về 3 bản để bạn chọn.</div>}
-          </div>
-        </div>
-      )}
-
-      {tab === "clone" && (
-        <div className="sp-two">
-          <div className="sp-card">
-            <Seg label="Kiểu nhân bản" value={cloneMode} onChange={setCloneMode} items={[{ k: "ivc", label: "Nhân bản nhanh" }, { k: "pvc", label: "Nhân bản chuyên sâu" }]} />
-            <p className="sp-note">{cloneMode === "ivc" ? "Chỉ cần 1–2 phút âm thanh sạch, có ngay sau vài giây. Hợp để dùng thử và nội dung thường ngày." : "Huấn luyện riêng từ 30 phút đến 3 giờ âm thanh, giống gần như tuyệt đối. Cần xác minh đó là giọng của chính bạn."}</p>
-            <Drop title="Thả mẫu giọng vào đây" sub={cloneMode === "ivc" ? "Tối đa 25 tệp · nên 1–2 phút tổng" : "Nên 30 phút – 3 giờ · một người nói, ít tạp âm"} accept="audio/*,video/*" multiple
-              onFile={(f) => setSamples((s) => [...s, ...f.map((x) => ({ name: x.name, dur: `${Math.max(1, Math.round(x.size / 16000))} giây` }))])} />
-            {samples.map((s, i) => <div key={i} className="sp-doc"><I.Wave size={16} /><span className="sp-doc-n"><b>{s.name}</b><small>{s.dur}</small></span><button className="icon-btn" aria-label="Bỏ mẫu" onClick={() => setSamples(samples.filter((_, j) => j !== i))}><I.X size={14} /></button></div>)}
-            <button className="sp-add" onClick={() => say("Ghi âm trực tiếp bằng micro (mẫu)")}><I.Mic size={14} />Ghi âm trực tiếp</button>
-            <Toggle checked={denoise} onChange={setDenoise} label="Lọc tạp âm nền trong mẫu" />
-            <Field label="Tên giọng" htmlFor="vc-name"><input id="vc-name" className="sp-input" value={cname} onChange={(e) => setCname(e.target.value)} placeholder="vd. Giọng của tôi" /></Field>
-            <label className="sp-consent"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /><span>Tôi xác nhận đây là giọng của tôi hoặc tôi có quyền và sự đồng ý để nhân bản giọng này, và sẽ không dùng để lừa đảo hay mạo danh.</span></label>
-            <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!samples.length || !cname.trim() || !consent}
-              onClick={() => { if (cloneMode === "ivc") { save(cname.trim(), "cloned"); demo(); } else { setPvcStep(1); demo(); } }}><I.VoicePlus size={14} />{cloneMode === "ivc" ? "Tạo giọng" : "Tiếp tục"}</button></div>
-          </div>
-          <div className="sp-card">
-            <div className="sp-card-h">{cloneMode === "ivc" ? "Mẹo để giọng giống hơn" : "Các bước nhân bản chuyên sâu"}</div>
-            {cloneMode === "ivc" ? (
-              <ul className="sp-tips"><li>Thu ở phòng yên tĩnh, micro cách miệng 15–20 cm.</li><li>Đọc tự nhiên, đúng cảm xúc bạn muốn giọng có.</li><li>Tránh nhạc nền, tiếng vang và nhiều người nói.</li><li>Chất lượng mẫu quan trọng hơn độ dài.</li></ul>
-            ) : (
-              <ol className="sp-steps">
-                {[["Tải mẫu giọng", "30 phút – 3 giờ âm thanh sạch"], ["Xác minh giọng", "Đọc to một câu ngẫu nhiên để chứng minh là bạn"], ["Huấn luyện", "Khoảng 2–4 giờ, Synchro báo khi xong"]].map(([t, d], i) => (
-                  <li key={t} className={pvcStep > i ? "done" : pvcStep === i ? "cur" : ""}><span className="sp-stepn">{pvcStep > i ? <I.Check size={13} /> : i + 1}</span><div><b>{t}</b><span>{d}</span>
-                    {i === 1 && pvcStep === 1 && <div className="sp-verify"><p>“Hôm nay trời Hà Nội se lạnh, tôi pha một ấm trà và đọc câu này.”</p><button className="btn dark" onClick={() => { setPvcStep(2); say("Đã xác minh giọng (mẫu)"); }}><I.Mic size={14} />Ghi âm câu xác minh</button></div>}
-                    {i === 2 && pvcStep === 2 && <div className="sp-progress"><i style={{ width: "36%" }} /><span>Đang huấn luyện · 36%</span></div>}
-                  </div></li>
-                ))}
-              </ol>
-            )}
+            {designed ? <Previews seed={designed * 5} demo={demo} onSave={(i) => save(`Giọng thiết kế ${i + 1}`, "designed")} /> : <div className="sp-empty"><OrbStage hue={120} size={96} /><p>Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. Synchro trả về 3 bản để bạn chọn.</p></div>}
           </div>
         </div>
       )}
@@ -129,7 +172,7 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
       {tab === "remix" && (
         <div className="sp-two">
           <div className="sp-card">
-            <Field label="Giọng gốc"><VoiceChip v={src} onClick={() => setPick("remix")} /></Field>
+            <Field label="Giọng gốc"><VoiceChip v={src} onClick={() => setPick(true)} /></Field>
             <p className="sp-note">Remix được với giọng bạn sở hữu (thiết kế, nhân bản) hoặc giọng thư viện không giới hạn thời hạn.</p>
             <Field label="Muốn đổi thế nào?" htmlFor="rx-p"><textarea id="rx-p" className="sp-input ta" rows={3} value={rprompt} onChange={(e) => setRprompt(e.target.value)} placeholder="vd. Trầm hơn, thêm chút khàn, nói chậm và thì thầm hơn" /></Field>
             <div className="sp-exs">{["Trẻ hơn 10 tuổi", "Giọng miền Nam", "Vui tươi hơn", "Thêm chút khàn"].map((x) => <button key={x} className="sp-tag" onClick={() => setRprompt((p) => (p ? p + ", " : "") + x.toLowerCase())}>{x}</button>)}</div>
@@ -138,16 +181,16 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
           </div>
           <div className="sp-card">
             <div className="sp-card-h">Bản nghe thử</div>
-            {remixed ? <Previews seed={remixed * 9} demo={demo} onSave={(i) => save(`${src.name} remix ${i + 1}`, "designed")} /> : <div className="sp-empty">Chọn giọng gốc, mô tả thay đổi rồi bấm “Remix”.</div>}
+            {remixed ? <Previews seed={remixed * 9} demo={demo} onSave={(i) => save(`${src.name} remix ${i + 1}`, "designed")} /> : <div className="sp-empty"><OrbStage hue={src.hue ?? 200} size={96} /><p>Chọn giọng gốc, mô tả thay đổi rồi bấm “Remix”.</p></div>}
           </div>
         </div>
       )}
-      {pick && <VoicePicker value={src.id} onPick={setSrc} onClose={() => setPick(null)} say={say} />}
+      {pick && <VoicePicker value={src.id} onPick={setSrc} onClose={() => setPick(false)} say={say} />}
     </div>
   );
 }
 
-function LibraryGrid({ onAdd, demo }: { say: (m: string) => void; demo: () => void; onAdd: (v: Voice) => void }) {
+function LibraryGrid({ onAdd, demo }: { demo: () => void; onAdd: (v: Voice) => void }) {
   const [q, setQ] = useState("");
   const [lang, setLang] = useState("Tất cả");
   const list = VOICES.filter((v) => (lang === "Tất cả" || v.lang === lang) && `${v.name} ${v.desc} ${v.use} ${v.accent}`.toLowerCase().includes(q.toLowerCase()));

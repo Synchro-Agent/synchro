@@ -392,7 +392,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
         <div className={cn( "fixed top-4 left-4 z-20 flex items-center gap-2", "md:left-1/2 md:-translate-x-1/2" )}>
             {logo}
-            <h1 className="logo text-foreground" style={{ fontWeight: 400 }}>{brandName}</h1>
+            <h1 className="logo text-foreground" style={{ fontWeight: 360 }}>{brandName}</h1>
         </div>
 
         <div className={cn("flex w-full flex-1 h-full items-center justify-center bg-card", "relative overflow-hidden")}>

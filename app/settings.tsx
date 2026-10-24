@@ -259,7 +259,7 @@ function Billing() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", gap: 12 }}><I.Spark size={28} /><div><div style={{ fontWeight: 600 }}>Free plan</div><div className="d">Try Synchro</div></div></div>
+        <div style={{ display: "flex", gap: 12 }}><I.Spark size={28} /><div><div style={{ fontWeight: 560 }}>Free plan</div><div className="d">Try Synchro</div></div></div>
         <button className="btn dark" onClick={app.upgrade}>Upgrade plan</button>
       </div>
       <ul className="perks">{perks.map((p) => <li key={p}><I.Check size={14} />{p}</li>)}</ul>
@@ -308,7 +308,7 @@ function Memory() {
       <Row t="Import memory from other AI providers" d={<>Bring relevant context and data from another AI provider to Synchro. We&apos;ll provide a prompt you can use to fetch the memory from your other account. <A>Learn more</A></>}><button className="btn" onClick={() => setImp(true)}>Start import</button></Row>
       {mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No files yet</div> : (
         <>
-          <H>Stored memories <span className="muted" style={{ fontWeight: 400 }}>({mems.length})</span></H>
+          <H>Stored memories <span className="muted" style={{ fontWeight: 360 }}>({mems.length})</span></H>
           {mems.map((m, i) => <div key={i} className="item-row"><span style={{ flex: 1 }}>{m}</span><button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Delete memory" onClick={() => setMems((o) => o.filter((_, j) => j !== i))}><I.Trash size={14} /></button></div>)}
           <button className="btn danger" style={{ marginTop: 12 }} onClick={() => app.confirm("Delete all memory?", "Synchro will forget everything it has stored about you.", "Delete", () => { setMems([]); app.say("Memory cleared"); })}>Delete all</button>
         </>
@@ -433,7 +433,7 @@ function CodeTab() {
   return (
     <>
       <div className="promo">
-        <div><div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Synchro Code</div><p className="d" style={{ margin: "0 0 14px" }}>Write, debug and run code with Synchro. Pick a mode, attach files with @, and preview results right in the browser.</p><button className="btn dark" onClick={app.goCode}>Open Synchro Code</button></div>
+        <div><div style={{ fontWeight: 560, fontSize: 15, marginBottom: 6 }}>Synchro Code</div><p className="d" style={{ margin: "0 0 14px" }}>Write, debug and run code with Synchro. Pick a mode, attach files with @, and preview results right in the browser.</p><button className="btn dark" onClick={app.goCode}>Open Synchro Code</button></div>
         <div className="term"><span style={{ color: "#e5604f" }}>●</span> <span style={{ color: "#e8b84a" }}>●</span> <span style={{ color: "#5fb36b" }}>●</span><div style={{ marginTop: 10 }}>&gt; Fix the auth bug in signup flow</div></div>
       </div>
       <H>Defaults</H>
@@ -569,12 +569,12 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
       {kind === "Skills" && sub === "Discover" && (
         <>
           <div className="promo" style={{ background: "#12301f", color: "#e7f3ea", marginBottom: 20 }}>
-            <div><div className="muted" style={{ fontSize: 11 }}>From Anthropic</div><div style={{ fontWeight: 600, fontSize: 18 }}>Data</div><p style={{ margin: "4px 0 12px", fontSize: 13 }}>Query, chart and explain your data — SQL, spreadsheets and dashboards in one place.</p><button className="btn" style={{ color: "#141413", background: "#fff" }} onClick={() => setConfirm("Data")}>Add</button></div>
+            <div><div className="muted" style={{ fontSize: 11 }}>From Anthropic</div><div style={{ fontWeight: 560, fontSize: 18 }}>Data</div><p style={{ margin: "4px 0 12px", fontSize: 13 }}>Query, chart and explain your data — SQL, spreadsheets and dashboards in one place.</p><button className="btn" style={{ color: "#141413", background: "#fff" }} onClick={() => setConfirm("Data")}>Add</button></div>
           </div>
           <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>For you</div>
           <div className="cards">
             {srt([["Product Management"], ["Operations"], ["Small Business"], ["Bio Research"], ["Desktop Commander"], ["Nimble"]]).map((x) => x[0]).filter((n) => n.toLowerCase().includes(q.toLowerCase()) && tagged(n)).map((n) => (
-              <div key={n} className="dcard"><div className="lg">▢</div><div style={{ flex: 1 }}><b style={{ fontWeight: 500 }}>{n}</b><div className="d">Plugin by Anthropic · installs</div></div><button className="btn" style={{ height: 26 }} onClick={() => { app.close(); app.ask(`Hãy thử kỹ năng "${n}" với một ví dụ nhỏ.`); }}>Try</button><button className="icon-btn" style={{ width: 26, height: 26 }} aria-label={added.includes(n) ? "Installed" : "Install"} onClick={() => (added.includes(n) ? app.say(`${n} đã được cài đặt`) : setConfirm(n))}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
+              <div key={n} className="dcard"><div className="lg">▢</div><div style={{ flex: 1 }}><b style={{ fontWeight: 460 }}>{n}</b><div className="d">Plugin by Anthropic · installs</div></div><button className="btn" style={{ height: 26 }} onClick={() => { app.close(); app.ask(`Hãy thử kỹ năng "${n}" với một ví dụ nhỏ.`); }}>Try</button><button className="icon-btn" style={{ width: 26, height: 26 }} aria-label={added.includes(n) ? "Installed" : "Install"} onClick={() => (added.includes(n) ? app.say(`${n} đã được cài đặt`) : setConfirm(n))}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
             ))}
           </div>
         </>
@@ -582,10 +582,10 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
 
       {kind === "Connectors" && (
         <>
-          <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}><b style={{ color: "var(--text)", fontWeight: 600 }}>Top connectors</b> <span className="new-tag" style={{ background: "var(--hover)", color: "var(--text-2)" }}>6316</span></div>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}><b style={{ color: "var(--text)", fontWeight: 560 }}>Top connectors</b> <span className="new-tag" style={{ background: "var(--hover)", color: "var(--text-2)" }}>6316</span></div>
           <div className="cards">
             {srt([...custom.map(([n, d]) => [n, d, "you", "#6b6a63"]), ...CONNECTORS]).filter((c) => (sub === "Discover" || added.includes(c[0]) || custom.some((x) => x[0] === c[0])) && c[0].toLowerCase().includes(q.toLowerCase()) && tagged(c[0])).map(([n, d, by, col]) => (
-              <div key={n} className="dcard"><div className="lg" style={{ background: col, color: "#fff" }}>{n[0]}</div><div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 500 }}>{n}</b> <span className="muted">✓</span><div className="d">{d}</div><div className="d">by {by}</div></div>
+              <div key={n} className="dcard"><div className="lg" style={{ background: col, color: "#fff" }}>{n[0]}</div><div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 460 }}>{n}</b> <span className="muted">✓</span><div className="d">{d}</div><div className="d">by {by}</div></div>
                 <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => { const on = added.includes(n); setAdded(on ? added.filter((x) => x !== n) : [...added, n]); app.say(on ? `Đã ngắt kết nối ${n}` : `Đã kết nối ${n}`); }}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
             ))}
           </div>
@@ -598,7 +598,7 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
           <div className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>New plugins</div>
           <div className="cards">
             {srt([...custom.map(([n, d]) => [n, d]), ...PLUGINS]).filter((p) => (sub === "Discover" || added.includes(p[0]) || custom.some((x) => x[0] === p[0])) && p[0].toLowerCase().includes(q.toLowerCase()) && tagged(p[0])).map(([n, d]) => (
-              <div key={n} className="dcard"><div className="lg">▢</div><div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 500 }}>{n}</b><div className="d">{d}</div></div><button className="btn" style={{ height: 26 }} onClick={() => { app.close(); app.ask(`Hãy thử plugin "${n}" giúp tôi.`); }}>Try</button>
+              <div key={n} className="dcard"><div className="lg">▢</div><div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 460 }}>{n}</b><div className="d">{d}</div></div><button className="btn" style={{ height: 26 }} onClick={() => { app.close(); app.ask(`Hãy thử plugin "${n}" giúp tôi.`); }}>Try</button>
                 <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => (added.includes(n) ? (setAdded(added.filter((x) => x !== n)), app.say(`Đã gỡ ${n}`)) : setConfirm(n))}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
             ))}
           </div>
@@ -623,7 +623,7 @@ function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setConfirm("")}>
           <div className="modal sm" style={{ width: 380 }}>
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setConfirm("")}><I.X size={16} /></button>
-            <p style={{ margin: "0 0 10px", fontWeight: 500 }}>The {confirm} plugin may include components that run code</p>
+            <p style={{ margin: "0 0 10px", fontWeight: 460 }}>The {confirm} plugin may include components that run code</p>
             <div className="warn">Installing will grant access to everything available to Cowork.</div>
             <p className="d" style={{ margin: "10px 0 14px" }}>Only enable plugins from people you trust.</p>
             <div className="modal-foot"><button className="btn" onClick={() => setConfirm("")}>Cancel</button><button className="btn dark" onClick={() => { setAdded([...added, confirm]); setConfirm(""); }}>Continue</button></div>

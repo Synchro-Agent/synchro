@@ -1,9 +1,10 @@
 "use client";
 // Chép lời (Scribe v2): từ tệp hoặc trực tiếp từ micro, tách người nói, thực thể, từ khóa, xuất phụ đề.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
 import { LANGS } from "./data";
-import { Drop, Field, Player, Seg, Select, Toggle, Wave } from "./parts";
+import { Drop, Field, Player, Select, Tabs, Toggle } from "./parts";
+import { VoiceOrb, startMicLevel } from "../voicefx";
 import { ToolHead, type ToolProps } from "./view";
 
 type Seg_ = { sp: number; t: number; text: string; ent?: [string, string][] };
@@ -15,6 +16,7 @@ const DEMO: Seg_[] = [
   { sp: 0, t: 26, text: "Số điện thoại liên hệ của dự án vẫn là 0912 345 678 đúng không ạ?", ent: [["0912 345 678", "Số điện thoại"]] },
   { sp: 1, t: 31, text: "Đúng rồi, mọi người cứ gọi số đó trong giờ hành chính." },
 ];
+const RECENT = [["Giới thiệu sản phẩm mới", "12:40", "2 giờ trước"], ["Họp đánh giá kinh doanh quý", "48:12", "5 giờ trước"], ["Phỏng vấn khách hàng #12", "23:04", "Hôm qua"], ["Podcast tập 42: Tương lai của AI", "1:02:18", "3 ngày trước"]];
 const SPK_COLORS = ["#2f7bf6", "#c2410c", "#16a34a", "#9333ea"];
 const ts = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
@@ -60,7 +62,7 @@ export function STT({ say, demo, sub, setSub }: ToolProps) {
     <div className="sp-split">
       <div className="sp-main">
         <ToolHead title="Chép lời" desc="Scribe v2 chép lời 90+ ngôn ngữ, tách tới 32 người nói, mốc thời gian tới từng từ.">
-          <Seg label="Nguồn" value={mode} onChange={setSub} items={[{ k: "file", label: "Từ tệp" }, { k: "live", label: "Trực tiếp" }]} />
+          <Tabs label="Nguồn" value={mode} onChange={setSub} items={[{ k: "file", label: "Từ tệp" }, { k: "live", label: "Trực tiếp" }]} />
         </ToolHead>
         {mode === "file" ? (
           <>
@@ -74,6 +76,11 @@ export function STT({ say, demo, sub, setSub }: ToolProps) {
                   <button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={(!file && !url.trim()) || busy} onClick={run}>{busy ? <span className="sp-spin" /> : <I.Subtitle size={14} />}{busy ? "Đang chép…" : "Chép lời"}</button>
                 </div>
                 <button className="sp-link" onClick={() => { setFile("phong-van-khach-hang-12.m4a"); run(); }}>Thử với bản ghi mẫu</button>
+                <div className="sp-sec-h"><b>Bản chép gần đây</b></div>
+                <table className="sp-table sp-hist">
+                  <thead><tr><th>Tên</th><th>Thời lượng</th><th>Tạo lúc</th></tr></thead>
+                  <tbody>{RECENT.map((r) => <tr key={r[0]} onClick={() => { setFile(r[0]); setDone(true); }}><td><I.Subtitle size={14} />{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>)}</tbody>
+                </table>
               </>
             ) : (
               <div className="sp-trans">
@@ -111,7 +118,7 @@ export function STT({ say, demo, sub, setSub }: ToolProps) {
       </div>
 
       <aside className="sp-aside">
-        <div className="sp-aside-h">Cài đặt chép lời</div>
+        <div className="sp-aside-h"><b>Cài đặt chép lời</b></div>
         <div className="sp-aside-in">
           <Select id="stt-model" label="Model" value={model} options={mode === "live" ? ["Scribe v2 Realtime"] : ["Scribe v2", "Scribe v2 Medical"]} onChange={setModel} />
           <Select id="stt-lang" label="Ngôn ngữ" value={lang} options={LANGS} onChange={setLang} />
@@ -121,7 +128,7 @@ export function STT({ say, demo, sub, setSub }: ToolProps) {
           <Toggle checked={ents} onChange={setEnts} label="Nhận diện thực thể" hint="Tên, địa điểm, số điện thoại… 65 loại" />
           {ents && <Toggle checked={redact} onChange={setRedact} label="Che thông tin nhạy cảm" hint="Thay bằng nhãn loại thực thể" />}
           <Toggle checked={verb} onChange={setVerb} label="Bỏ từ đệm" hint="Lược “ừm”, “à”, lặp từ" />
-          <Select id="stt-gran" label="Mốc thời gian" value={gran} options={["Từng từ", "Từng ký tự", "Không"]} onChange={setGran} inline />
+          <Select id="stt-gran" label="Mốc thời gian" value={gran} options={["Từng từ", "Từng ký tự", "Không có"]} onChange={setGran} inline />
           <Field label="Từ khóa" hint={`${keys.length}/100`} htmlFor="stt-key">
             <div className="sp-keys">
               {keys.map((k) => <span key={k} className="sp-key">{k}<button aria-label={`Bỏ ${k}`} onClick={() => setKeys(keys.filter((x) => x !== k))}><I.X size={11} /></button></span>)}
@@ -137,26 +144,27 @@ export function STT({ say, demo, sub, setSub }: ToolProps) {
 
 const LIVE = ["Hôm nay mình muốn ghi lại vài ý tưởng cho buổi họp sáng mai.", "Thứ nhất là kế hoạch ra mắt bản mới vào cuối tháng.", "Thứ hai, cần chốt lại ngân sách quảng cáo với bên đối tác."];
 
-function Live({ demo, lang }: { say: (m: string) => void; demo: () => void; lang: string }) {
+function Live({ demo, lang, say }: { say: (m: string) => void; demo: () => void; lang: string }) {
   const [on, setOn] = useState(false);
   const [n, setN] = useState(0);
   const [sec, setSec] = useState(0);
+  const level = useRef(0);
   useEffect(() => {
     if (!on) return;
+    let stop: (() => void) | null = null, dead = false;
+    startMicLevel(level).then((s) => { if (dead) s(); else stop = s; }).catch(() => say("Không mở được micro: hãy cho phép Synchro dùng micro"));
     const a = setInterval(() => setSec((s) => s + 1), 1000);
     const b = setInterval(() => setN((x) => Math.min(x + 1, LIVE.length * 2)), 1600);
-    return () => { clearInterval(a); clearInterval(b); };
-  }, [on]);
+    return () => { dead = true; stop?.(); clearInterval(a); clearInterval(b); };
+  }, [on, say]);
   const full = Math.floor(n / 2), partial = n % 2 === 1 && full < LIVE.length ? LIVE[full].slice(0, Math.ceil(LIVE[full].length / 2)) : "";
   return (
     <div className="sp-live">
       <div className="sp-live-stage">
-        <button className={`sp-mic ${on ? "on" : ""}`} aria-pressed={on} aria-label={on ? "Dừng ghi" : "Bắt đầu ghi"} onClick={() => { if (!on) { setN(0); setSec(0); demo(); } setOn(!on); }}><I.Mic size={28} /></button>
-        <div className="sp-live-info">
-          <b>{on ? "Đang nghe…" : "Bấm micro để bắt đầu"}</b>
-          <span className="sp-muted">{on ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")} · độ trễ ~150 ms · ${lang}` : "Scribe v2 Realtime · độ trễ ~150 ms · không lộ khóa API (token dùng một lần)"}</span>
-        </div>
-        {on && <Wave n={36} seed={sec} h={34} progress={1} color="var(--accent)" />}
+        <div className={`sp-live-orb ${on ? "on" : ""}`}><VoiceOrb hue={0} level={level} idle={on ? 0.04 : 0} /></div>
+        <b>{on ? "Đang nghe…" : "Bấm micro để bắt đầu"}</b>
+        <span className="sp-muted">{on ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")} · độ trễ ~150 ms · ${lang}` : "Scribe v2 Realtime · độ trễ ~150 ms · không lộ khóa API (token dùng một lần)"}</span>
+        <button className={`sp-mic ${on ? "on" : ""}`} aria-pressed={on} aria-label={on ? "Dừng ghi" : "Bắt đầu ghi"} onClick={() => { if (!on) { setN(0); setSec(0); demo(); } setOn(!on); }}>{on ? <I.Stop size={22} /> : <I.Mic size={22} />}</button>
       </div>
       <div className="sp-live-text" aria-live="polite">
         {full === 0 && !partial && <span className="sp-muted">Lời nói sẽ hiện ở đây theo thời gian thực.</span>}

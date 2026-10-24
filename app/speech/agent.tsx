@@ -1,11 +1,12 @@
 "use client";
 // Voice Agent: gọi thử thời gian thực, cấu hình agent, công cụ, kiến thức, triển khai và lịch sử cuộc gọi.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as I from "../icons";
 import { ALL_MODELS } from "../catalog";
 import { LANGS, VOICES, type Voice } from "./data";
 import { Drop, Field, Range, Seg, Select, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
+import { VoiceOrb, startMicLevel, useSpeakingLevel } from "../voicefx";
 
 const SCRIPT: { who: "ai" | "me"; text: string }[] = [
   { who: "ai", text: "Xin chào! Mình là trợ lý của Synchro. Mình có thể giúp gì cho bạn hôm nay?" },
@@ -53,6 +54,16 @@ export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
   const [docs, setDocs] = useState(DOCS0);
   const [pick, setPick] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
+  // Quả cầu phản ứng theo micro khi đến lượt người gọi, và nhấp nhô theo giọng agent khi agent nói.
+  const micLv = useRef(0), aiLv = useRef(0);
+  const level = useMemo(() => ({ get current() { return Math.max(micLv.current, aiLv.current); }, set current(_v: number) {} }), []);
+  useSpeakingLevel(state === "speak", aiLv);
+  useEffect(() => {
+    if (state === "idle" || muted) return;
+    let stop: (() => void) | null = null, dead = false;
+    startMicLevel(micLv).then((s) => { if (dead) s(); else stop = s; }).catch(() => {});
+    return () => { dead = true; stop?.(); };
+  }, [state === "idle", muted]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (state === "idle") return;
     const a = setInterval(() => setSec((s) => s + 1), 1000);
@@ -69,7 +80,7 @@ export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
       <div className="sp-main">
         <ToolHead title="Voice Agent" desc="Agent giọng nói trò chuyện hai chiều thời gian thực: tự nhận lượt nói, cho phép ngắt lời, gọi công cụ." />
         <div className={`sp-call ${state}`}>
-          <div className="sp-orb" aria-hidden="true"><i /><i /><i /></div>
+          <div className="sp-agent-orb"><VoiceOrb hue={0} level={level} idle={state === "idle" ? 0 : 0.04} /></div>
           <b className="sp-call-n">{name}</b>
           <span className="sp-muted">{state === "idle" ? `${engine === "synchro" ? model : "ElevenAgents"} · giọng ${voice.name} · ${lang}` : `${state === "speak" ? "Đang nói" : "Đang nghe"} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`}</span>
           <div className="sp-call-a">

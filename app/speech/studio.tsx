@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as I from "../icons";
 import { DUB_LANGS, LANGS, VOICES, type Voice } from "./data";
-import { Drop, Field, Player, Seg, Select, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
+import { Drop, Field, Player, Seg, Select, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
 const DUBS = [
@@ -22,7 +22,7 @@ export function StudioTool({ say, demo, sub, setSub }: ToolProps) {
   return (
     <div className="sp-wide">
       <ToolHead title="Lồng tiếng & Studio" desc="Dịch và lồng tiếng video, chuyển sách thành sách nói, tạo podcast và avatar nói chuyện.">
-        <Seg label="Công cụ" value={tab} onChange={setSub} items={[{ k: "dub", label: "Lồng tiếng" }, { k: "book", label: "Sách nói" }, { k: "podcast", label: "Podcast" }, { k: "avatar", label: "Avatar" }]} />
+        <Tabs label="Công cụ" value={tab} onChange={setSub} items={[{ k: "dub", label: "Lồng tiếng" }, { k: "book", label: "Sách nói" }, { k: "podcast", label: "Podcast" }, { k: "avatar", label: "Avatar" }]} />
       </ToolHead>
       {tab === "dub" && <Dub demo={demo} say={say} />}
       {tab === "book" && <Book demo={demo} say={say} />}
@@ -145,7 +145,7 @@ function Podcast({ demo, say }: { demo: () => void; say: (m: string) => void }) 
             <Player title="Tập mới · bản nháp" dur={len === "short" ? 190 : len === "long" ? 730 : 430} seed={27} onDemo={demo} />
             <div className="sp-script">
               <p><VoiceAvatar v={host} size={18} /><b>{host.name}:</b> Chào mừng các bạn quay lại với chương trình! Hôm nay chúng ta có một chủ đề rất thú vị.</p>
-              {fmt === "conv" && <p><VoiceAvatar v={guest} size={18} /><b>{guest.name}:</b> Đúng vậy, [cười] tôi đã đọc bài này hai lần rồi đấy.</p>}
+              {fmt === "conv" && <p><VoiceAvatar v={guest} size={18} /><b>{guest.name}:</b> Đúng vậy, [laughs] tôi đã đọc bài này hai lần rồi đấy.</p>}
             </div>
             <button className="sp-link" onClick={() => say("Sửa kịch bản rồi tạo lại (mẫu)")}>Sửa kịch bản</button>
           </>
@@ -183,7 +183,7 @@ function Avatar({ demo, say }: { demo: () => void; say: (m: string) => void }) {
       <div className="sp-card sp-avstage">
         <div className={`sp-avframe r-${ratio.replace(":", "x")}`}>
           {imgUrl ? <img src={imgUrl} alt="Ảnh avatar" /> : <span className="sp-avph"><I.User size={42} /><small>Xem trước avatar</small></span>}
-          <span className="sp-avcap">{srcKind === "text" ? text.slice(0, 60) + (text.length > 60 ? "…" : "") : "Âm thanh tải lên"}</span>
+          <span className="sp-avcap" data-notr>{srcKind === "text" ? text.slice(0, 60) + (text.length > 60 ? "…" : "") : "Âm thanh tải lên"}</span>
         </div>
       </div>
       {pick && <VoicePicker value={voice.id} onPick={setVoice} onClose={() => setPick(false)} say={say} />}

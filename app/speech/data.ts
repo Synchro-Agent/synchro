@@ -14,26 +14,37 @@ export const TOOLS: { k: SpeechTool; label: string; desc: string }[] = [
 
 export type Voice = {
   id: string; name: string; desc: string; lang: string; accent: string;
-  gender: "Nữ" | "Nam"; age: "Trẻ" | "Trung niên" | "Lớn tuổi"; use: string; uses: number; color: string;
+  gender: "Nữ" | "Nam" | "Trung tính"; age: "Trẻ" | "Trung niên" | "Lớn tuổi"; use: string; uses: number; color: string;
+  hue?: number; more?: number; notice?: string; studio?: boolean;
   kind?: "library" | "designed" | "cloned" | "pro";
 };
+export const CATEGORIES = ["Hội thoại", "Kể chuyện", "Nhân vật", "Mạng xã hội", "Giáo dục", "Quảng cáo", "Giải trí"];
+export const NOTICES = ["30 ngày", "90 ngày", "1 năm", "2 năm", "Không thời hạn"];
+const v = (id: string, name: string, desc: string, lang: string, accent: string, gender: Voice["gender"], age: Voice["age"], use: string, uses: number, hue: number, more = 0, notice = "2 năm", studio = false): Voice =>
+  ({ id, name, desc, lang, accent, gender, age, use, uses, hue, more, notice, studio, color: `hsl(${hue} 62% 72%)` });
 export const VOICES: Voice[] = [
-  { id: "demo-lan", name: "Lan", desc: "Ấm áp, kể chuyện", lang: "Tiếng Việt", accent: "Miền Bắc", gender: "Nữ", age: "Trẻ", use: "Kể chuyện", uses: 1_200_000, color: "#e8c9a8" },
-  { id: "demo-minh", name: "Minh", desc: "Trầm, đáng tin", lang: "Tiếng Việt", accent: "Miền Bắc", gender: "Nam", age: "Trung niên", use: "Quảng cáo", uses: 842_000, color: "#a9c1e8" },
-  { id: "demo-thao", name: "Thảo", desc: "Trẻ trung, vui tươi", lang: "Tiếng Việt", accent: "Miền Nam", gender: "Nữ", age: "Trẻ", use: "Mạng xã hội", uses: 515_000, color: "#d6b8e3" },
-  { id: "demo-hung", name: "Hùng", desc: "Phát thanh viên", lang: "Tiếng Việt", accent: "Miền Bắc", gender: "Nam", age: "Trung niên", use: "Tin tức", uses: 398_000, color: "#b9d8c2" },
-  { id: "demo-ngoc", name: "Ngọc", desc: "Dịu dàng, tổng đài", lang: "Tiếng Việt", accent: "Miền Nam", gender: "Nữ", age: "Trẻ", use: "Hội thoại", uses: 276_000, color: "#f0d3a1" },
-  { id: "demo-bao", name: "Bảo", desc: "Ông kể chuyện", lang: "Tiếng Việt", accent: "Miền Trung", gender: "Nam", age: "Lớn tuổi", use: "Kể chuyện", uses: 121_000, color: "#c9c4ba" },
-  { id: "demo-rachel", name: "Rachel", desc: "Calm, narration", lang: "Tiếng Anh", accent: "Mỹ", gender: "Nữ", age: "Trẻ", use: "Kể chuyện", uses: 4_100_000, color: "#cfe0d8" },
-  { id: "demo-adam", name: "Adam", desc: "Deep, radio announcer", lang: "Tiếng Anh", accent: "Mỹ", gender: "Nam", age: "Trung niên", use: "Quảng cáo", uses: 1_500_000, color: "#d8d0e8" },
-  { id: "demo-yuki", name: "Yuki", desc: "Bright, anime", lang: "Tiếng Nhật", accent: "Tokyo", gender: "Nữ", age: "Trẻ", use: "Nhân vật", uses: 690_000, color: "#f3c9cf" },
-  { id: "demo-jiwoo", name: "Jiwoo", desc: "Soft, conversational", lang: "Tiếng Hàn", accent: "Seoul", gender: "Nam", age: "Trẻ", use: "Hội thoại", uses: 233_000, color: "#c8dcef" },
+  v("demo-lan", "Lan", "Ấm áp, kể chuyện", "Tiếng Việt", "Miền Bắc", "Nữ", "Trẻ", "Kể chuyện", 1_200_000, 28, 4, "2 năm", true),
+  v("demo-minh", "Minh", "Trầm, đáng tin", "Tiếng Việt", "Miền Bắc", "Nam", "Trung niên", "Quảng cáo", 842_000, 215, 2),
+  v("demo-thao", "Thảo", "Trẻ trung, vui tươi", "Tiếng Việt", "Miền Nam", "Nữ", "Trẻ", "Mạng xã hội", 515_000, 290, 6),
+  v("demo-hung", "Hùng", "Phát thanh viên", "Tiếng Việt", "Miền Bắc", "Nam", "Trung niên", "Giáo dục", 398_000, 150, 0, "1 năm", true),
+  v("demo-ngoc", "Ngọc", "Dịu dàng, tổng đài", "Tiếng Việt", "Miền Nam", "Nữ", "Trẻ", "Hội thoại", 276_000, 40, 3),
+  v("demo-bao", "Bảo", "Ông kể chuyện", "Tiếng Việt", "Miền Trung", "Nam", "Lớn tuổi", "Kể chuyện", 121_000, 35, 0, "Không thời hạn"),
+  v("demo-an", "An", "Trung tính, rõ ràng", "Tiếng Việt", "Miền Nam", "Trung tính", "Trẻ", "Giáo dục", 88_000, 185, 1),
+  v("demo-phuc", "Phúc", "Hài hước, nhân vật hoạt hình", "Tiếng Việt", "Miền Nam", "Nam", "Trẻ", "Nhân vật", 64_000, 330, 0, "90 ngày"),
+  v("demo-rachel", "Rachel", "Calm, narration", "Tiếng Anh", "Mỹ", "Nữ", "Trẻ", "Kể chuyện", 4_100_000, 160, 12, "2 năm", true),
+  v("demo-adam", "Adam", "Deep, radio announcer", "Tiếng Anh", "Mỹ", "Nam", "Trung niên", "Quảng cáo", 1_500_000, 250, 14),
+  v("demo-alice", "Alice", "Clear, engaging educator", "Tiếng Anh", "Anh", "Nữ", "Trung niên", "Giáo dục", 932_000, 120, 6),
+  v("demo-yuki", "Yuki", "Bright, anime", "Tiếng Nhật", "Tokyo", "Nữ", "Trẻ", "Nhân vật", 690_000, 345, 3),
+  v("demo-jiwoo", "Jiwoo", "Soft, conversational", "Tiếng Hàn", "Seoul", "Nam", "Trẻ", "Hội thoại", 233_000, 200, 2, "1 năm"),
+  v("demo-mei", "Mei", "Warm storyteller", "Tiếng Trung", "Bắc Kinh", "Nữ", "Trung niên", "Kể chuyện", 410_000, 10, 5),
+  v("demo-louis", "Louis", "Élégant, publicité", "Tiếng Pháp", "Paris", "Nam", "Trung niên", "Quảng cáo", 177_000, 230, 4, "30 ngày"),
+  v("demo-somchai", "Somchai", "Friendly host", "Tiếng Thái", "Bangkok", "Nam", "Trẻ", "Giải trí", 59_000, 95, 0),
 ];
 export const MY_VOICES: Voice[] = [
   { ...VOICES[0], kind: "library" },
-  { id: "demo-vy", name: "Vy", desc: "Quảng cáo mỹ phẩm", lang: "Tiếng Việt", accent: "Miền Nam", gender: "Nữ", age: "Trẻ", use: "Quảng cáo", uses: 0, color: "#e3c3dc", kind: "designed" },
-  { id: "demo-tung", name: "Giọng của Tùng", desc: "Nhân bản nhanh · 2 phút mẫu", lang: "Tiếng Việt", accent: "Miền Bắc", gender: "Nam", age: "Trẻ", use: "Cá nhân", uses: 0, color: "#a9c1e8", kind: "cloned" },
-  { id: "demo-tung-pro", name: "Tùng (chuyên sâu)", desc: "Huấn luyện từ 42 phút mẫu", lang: "Tiếng Việt", accent: "Miền Bắc", gender: "Nam", age: "Trẻ", use: "Cá nhân", uses: 0, color: "#8fb0de", kind: "pro" },
+  { ...v("demo-vy", "Vy", "Quảng cáo mỹ phẩm", "Tiếng Việt", "Miền Nam", "Nữ", "Trẻ", "Quảng cáo", 0, 310), kind: "designed" },
+  { ...v("demo-tung", "Giọng của Tùng", "Nhân bản nhanh · 2 phút mẫu", "Tiếng Việt", "Miền Bắc", "Nam", "Trẻ", "Cá nhân", 0, 205), kind: "cloned" },
+  { ...v("demo-tung-pro", "Tùng (chuyên sâu)", "Huấn luyện từ 42 phút mẫu", "Tiếng Việt", "Miền Bắc", "Nam", "Trẻ", "Cá nhân", 0, 225), kind: "pro" },
 ];
 export const KIND_LABEL: Record<NonNullable<Voice["kind"]>, string> = { library: "Thư viện", designed: "Thiết kế", cloned: "Nhân bản nhanh", pro: "Nhân bản chuyên sâu" };
 
@@ -44,7 +55,8 @@ export const TTS_MODELS = [
   { id: "eleven_multilingual_v2", name: "Multilingual v2", note: "Ổn định · 29 ngôn ngữ (không có tiếng Việt)", rate: 1 },
   { id: "eleven_flash_v2_5", name: "Flash v2.5", note: "Nhanh nhất ~75 ms · 32 ngôn ngữ, có tiếng Việt", rate: 0.5 },
 ];
-export const TAGS = ["[cười]", "[thở dài]", "[thì thầm]", "[hào hứng]", "[ngập ngừng]", "[hét lên]", "[nghỉ ngắn]", "[buồn]", "[mỉa mai]", "[ho]"];
+// Thẻ âm thanh của Eleven v3/v4 là tiếng Anh (API chỉ hiểu thẻ tiếng Anh); nhãn tiếng Việt nằm ở title.
+export const TAGS: [string, string][] = [["[laughs]", "cười"], ["[sighs]", "thở dài"], ["[whispers]", "thì thầm"], ["[excited]", "hào hứng"], ["[hesitates]", "ngập ngừng"], ["[shouts]", "hét lên"], ["[short pause]", "nghỉ ngắn"], ["[sad]", "buồn"], ["[sarcastic]", "mỉa mai"], ["[coughs]", "ho"]];
 export const LANGS = ["Tự nhận diện", "Tiếng Việt", "Tiếng Anh", "Tiếng Nhật", "Tiếng Hàn", "Tiếng Trung", "Tiếng Pháp", "Tiếng Đức", "Tiếng Tây Ban Nha", "Tiếng Thái", "Tiếng Indonesia"];
 export const FORMATS = ["MP3 44.1 kHz · 128 kbps", "MP3 44.1 kHz · 192 kbps", "WAV 44.1 kHz", "PCM 24 kHz", "Opus 48 kHz", "μ-law 8 kHz (điện thoại)"];
 export const DUB_LANGS = ["Tiếng Anh", "Tiếng Nhật", "Tiếng Hàn", "Tiếng Trung", "Tiếng Pháp", "Tiếng Đức", "Tiếng Tây Ban Nha", "Tiếng Thái", "Tiếng Indonesia", "Tiếng Hindi"];

@@ -125,7 +125,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
       <div className={`sk-drop ${drag ? "drag" : ""}`} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
         <I.Scroll size={22} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>{list && list.length ? "Add a skill" : "Add your first skill"}</div>
+          <div style={{ fontWeight: 560 }}>{list && list.length ? "Add a skill" : "Add your first skill"}</div>
           <p className="d" style={{ margin: "2px 0 0" }}>Drop a .zip skill folder or a SKILL.md here. Synchro checks it, shows a preview, then the model loads it automatically when a request matches.</p>
         </div>
         <button className="btn dark" disabled={checking} onClick={() => verRef.current?.click()}>{checking ? "Checking…" : "Upload skill"}</button>
@@ -144,7 +144,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
       {shown.map((s) => (
         <div key={s.name} className="item-row sk-row">
           <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => open(s.name)}>
-            <div><b style={{ fontWeight: 500 }} data-notr>{s.name}</b> <span className="muted" style={{ fontSize: 12 }} data-notr>{meta(s)}</span>{s.warnings.length > 0 && <span className="sk-warn" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}</div>
+            <div><b style={{ fontWeight: 460 }} data-notr>{s.name}</b> <span className="muted" style={{ fontSize: 12 }} data-notr>{meta(s)}</span>{s.warnings.length > 0 && <span className="sk-warn" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}</div>
             <div className="muted sk-desc">{s.description}</div>
           </div>
           <button className="btn" style={{ height: 26 }} onClick={() => open(s.name)}>View</button>

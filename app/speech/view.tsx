@@ -75,7 +75,7 @@ const CARDS: { t: SpeechTool; sub?: string; icon: (p: { size?: number }) => Reac
   { t: "agent", icon: I.Mic, title: "Voice Agent", desc: "Trò chuyện thời gian thực, gọi hàm", tone: "green" },
   { t: "stt", sub: "file", icon: I.Subtitle, title: "Chép lời", desc: "Scribe v2, tách người nói, mốc từng từ", tone: "amber" },
   { t: "voices", sub: "design", icon: I.Sparkle, title: "Thiết kế giọng", desc: "Tạo giọng mới từ một câu mô tả", tone: "pink" },
-  { t: "voices", sub: "clone", icon: I.VoicePlus, title: "Nhân bản giọng", desc: "Nhanh từ 1 phút, chuyên sâu từ 30 phút", tone: "blue" },
+  { t: "voices", sub: "ivc", icon: I.VoicePlus, title: "Nhân bản giọng", desc: "Nhanh từ 1 phút, chuyên sâu từ 30 phút", tone: "blue" },
   { t: "audio", sub: "sfx", icon: I.Wave, title: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây", tone: "amber" },
   { t: "audio", sub: "isolate", icon: I.ShieldCheck, title: "Lọc tạp âm", desc: "Tách giọng khỏi nhạc và tiếng ồn", tone: "green" },
   { t: "audio", sub: "changer", icon: I.Swap, title: "Đổi giọng", desc: "Giữ cảm xúc, đổi sang giọng khác", tone: "violet" },
@@ -99,7 +99,7 @@ function Home({ go, onDraft, say }: ToolProps & { onDraft: (t: string) => void }
       <h1 className="sp-hero">Hôm nay bạn muốn <em>nghe</em> gì?</h1>
       <div className="sp-compose">
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} aria-label="Văn bản cần đọc"
-          placeholder="Nhập hoặc dán văn bản để Synchro đọc lên. Thêm cảm xúc bằng thẻ như [cười], [thì thầm]…"
+          placeholder="Nhập hoặc dán văn bản để Synchro đọc lên. Thêm cảm xúc bằng thẻ như [laughs], [whispers]…"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) onDraft(text); }} />
         <div className="sp-compose-f">
           <VoiceChip v={voice} onClick={() => setPick(true)} />

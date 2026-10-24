@@ -1,3 +1,4 @@
+import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
   // Synchro Code: workspace, agent, GitHub
@@ -706,3 +707,7 @@ export const RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(\d+) min$/, (m) => `${m[1]} phút`],
   [/^Uploaded (.+)$/, (m) => `Đã tải lên ${m[1]}`],
 ];
+
+// Mục Speech: chỉ thêm chuỗi chưa có, không ghi đè bản dịch sẵn có.
+for (const [k, v] of Object.entries(SPEECH_VI2EN)) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
+RULES_EN.push(...SPEECH_RULES_EN);

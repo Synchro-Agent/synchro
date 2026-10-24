@@ -3,17 +3,17 @@
 import { useRef, useState } from "react";
 import * as I from "../icons";
 import { FORMATS, LANGS, TAGS, TTS_MODELS, VOICES, fmtNum, type Voice } from "./data";
-import { Field, Player, Range, Seg, Select, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
+import { Field, Player, Range, Seg, Select, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
-const SAMPLE = "Chào mừng bạn đến với Synchro. [hào hứng] Hôm nay chúng ta sẽ cùng khám phá cách biến bất kỳ văn bản nào thành giọng nói tự nhiên, chỉ trong vài giây. [nghỉ ngắn] Bạn chỉ cần nhập nội dung, chọn giọng, rồi bấm tạo.";
+const SAMPLE = "Chào mừng bạn đến với Synchro. [excited] Hôm nay chúng ta sẽ cùng khám phá cách biến bất kỳ văn bản nào thành giọng nói tự nhiên, chỉ trong vài giây. [short pause] Bạn chỉ cần nhập nội dung, chọn giọng, rồi bấm tạo.";
 const MAX = 40_000;
 
 type Line = { id: number; sp: number; text: string };
 const HISTORY = [
   { id: 1, text: "Chào mừng bạn đến với Synchro. Hôm nay chúng ta sẽ cùng khám phá…", voice: VOICES[0], model: "Eleven v4", dur: 18, when: "10:42", seed: 5 },
   { id: 2, text: "Ưu đãi chỉ trong tuần này: giảm 30% cho mọi đơn hàng đầu tiên.", voice: VOICES[1], model: "Flash v2.5", dur: 6, when: "09:15", seed: 7 },
-  { id: 3, text: "[thì thầm] Bạn có nghe thấy không? Có ai đó đang gõ cửa…", voice: VOICES[2], model: "Eleven v4", dur: 9, when: "Hôm qua", seed: 11 },
+  { id: 3, text: "[whispers] Bạn có nghe thấy không? Có ai đó đang gõ cửa…", voice: VOICES[2], model: "Eleven v4", dur: 9, when: "Hôm qua", seed: 11 },
 ];
 
 export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
@@ -22,8 +22,8 @@ export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
   const [voice, setVoice] = useState<Voice>(VOICES[0]);
   const [speakers, setSpeakers] = useState<Voice[]>([VOICES[0], VOICES[1]]);
   const [lines, setLines] = useState<Line[]>([
-    { id: 1, sp: 0, text: "[hào hứng] Anh Minh ơi, bản thu hôm qua nghe hay lắm!" },
-    { id: 2, sp: 1, text: "Thật à? [cười] Anh còn lo đoạn giữa hơi chậm." },
+    { id: 1, sp: 0, text: "[excited] Anh Minh ơi, bản thu hôm qua nghe hay lắm!" },
+    { id: 2, sp: 1, text: "Thật à? [laughs] Anh còn lo đoạn giữa hơi chậm." },
     { id: 3, sp: 0, text: "Không đâu, nhịp vừa đủ để người nghe kịp thở." },
   ]);
   const [pick, setPick] = useState<null | "main" | number>(null);
@@ -68,7 +68,7 @@ export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
         </ToolHead>
 
         <div className="sp-tags" aria-label="Chèn thẻ cảm xúc">
-          {TAGS.map((t) => <button key={t} className="sp-tag" onClick={() => (mode === "single" ? insertTag(t) : setLines((ls) => ls.map((l, i) => (i === ls.length - 1 ? { ...l, text: l.text + " " + t } : l))))}>{t}</button>)}
+          {TAGS.map(([t, vi]) => <button key={t} className="sp-tag" title={`Thẻ cảm xúc: ${vi}`} onClick={() => (mode === "single" ? insertTag(t) : setLines((ls) => ls.map((l, i) => (i === ls.length - 1 ? { ...l, text: l.text + " " + t } : l))))}>{t}</button>)}
         </div>
 
         {mode === "single" ? (
@@ -124,7 +124,7 @@ export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
       </div>
 
       <aside className="sp-aside">
-        <Seg label="Bảng bên" value={panel} onChange={setPanel} items={[{ k: "set", label: "Cài đặt" }, { k: "hist", label: "Lịch sử" }]} />
+        <div className="sp-aside-h"><Tabs label="Bảng bên" value={panel} onChange={setPanel} items={[{ k: "set", label: "Cài đặt" }, { k: "hist", label: "Lịch sử" }]} /></div>
         {panel === "set" ? (
           <div className="sp-aside-in">
             {mode === "single" && <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick("main")}><VoiceAvatar v={voice} size={30} /><span><b>{voice.name}</b><small>{voice.desc} · {voice.lang}</small></span><I.Chevron size={14} /></button></Field>}
@@ -145,7 +145,7 @@ export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
             <Select id="tts-lang" label="Ngôn ngữ" value={lang} options={LANGS} onChange={setLang} />
             <Range id="tts-stab" label="Độ ổn định" value={stab} onChange={setStab} left="Biểu cảm hơn" right="Ổn định hơn" show={`${stab}%`} />
             <Range id="tts-sim" label="Độ giống giọng gốc" value={sim} onChange={setSim} left="Thấp" right="Cao" show={`${sim}%`} />
-            <Range id="tts-style" label="Phóng đại phong cách" value={style} onChange={setStyle} left="Không" right="Phóng đại" show={`${style}%`} />
+            <Range id="tts-style" label="Phóng đại phong cách" value={style} onChange={setStyle} left="Không phóng đại" right="Phóng đại" show={`${style}%`} />
             <Range id="tts-speed" label="Tốc độ" value={speed} min={0.7} max={1.2} step={0.05} onChange={setSpeed} left="Chậm" right="Nhanh" show={`${speed.toFixed(2)}×`} />
             <Toggle checked={boost} onChange={setBoost} label="Tăng độ rõ người nói" hint="Giống giọng gốc hơn, chậm hơn một chút" />
             <hr className="sp-hr" />

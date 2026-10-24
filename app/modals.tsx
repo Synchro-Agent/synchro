@@ -135,7 +135,7 @@ export function UpgradeModal({ onClose, say }: { onClose: () => void; say: (m: s
         <div className="plans">
           {plans.map(([n, p, d, b], i) => (
             <div key={n} className={`plan ${i === 1 ? "hl" : ""}`}>
-              <b style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 400 }}>{n}</b>
+              <b style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 360 }}>{n}</b>
               <div><span style={{ fontSize: 28 }}>{p}</span><span className="muted"> / tháng</span></div>
               <p className="muted" style={{ fontSize: 13, margin: 0, minHeight: 58 }}>{d}</p>
               <button className={`btn ${i ? "dark" : ""}`} disabled={!i} style={!i ? { opacity: 0.5 } : undefined} onClick={() => { say("Đây là bản demo, chưa có thanh toán thật"); onClose(); }}>{b}</button>

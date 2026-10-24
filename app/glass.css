@@ -224,7 +224,7 @@ html body .nav-item .plus{transition:scale .35s var(--gl-spring)}
 :root:not([data-theme="dark"]) .seg{--gl-fill:rgba(60,60,90,.09)}
 :root:not([data-theme="dark"]) .seg .thumb{background:#fff;box-shadow:0 0 0 .5px rgba(30,30,60,.18),0 2px 6px rgba(30,30,70,.18),inset 0 1px 0 #fff}
 :root:not([data-theme="dark"]) .seg button{color:var(--text-3)}
-:root:not([data-theme="dark"]) .seg button.on{color:#111;font-weight:500}
+:root:not([data-theme="dark"]) .seg button.on{color:#111;font-weight:460}
 :root:not([data-theme="dark"]) .seg button:not(.on):hover{color:var(--text-2)}
 :root:not([data-theme="dark"]) .seg button:not(.on):active{color:var(--text-2)}
 
