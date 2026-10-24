@@ -380,6 +380,8 @@ export default function Home() {
   const [codeOpen, setCodeOpen] = useState(true);
   const [spTool, setSpTool] = usePref<SpeechTool>("spTool", "home");
   const [spOpen, setSpOpen] = usePref("spOpen", false);
+  // Rời Speech sang mục khác thì tự thu gọn danh sách công cụ.
+  useEffect(() => { if (view !== "speech") setSpOpen(false); }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [codeRen, setCodeRen] = useState<number | null>(null);
   const [codeMenu, setCodeMenu] = useState<number | null>(null);
   const [pickProj, setPickProj] = useState(false);
@@ -732,7 +734,11 @@ export default function Home() {
     <AppCtx.Provider value={api}>
     <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><ShaderMetal metal="chrome" color="#a5aebf" ribbons={3} speed={0.3} iridescence={0.2} interactive /></div>}
-      <aside className={`sidebar ${open ? "" : "closed"}`}>
+      <aside className={`sidebar ${open ? "" : "closed"}`} onClickCapture={(e) => {
+        // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
+        const t = e.target as HTMLElement;
+        if (spOpen && t.closest(".nav-item,.chat-item,.user,.icon-btn") && !t.closest(".nav-row,.nav-sub")) setSpOpen(false);
+      }}>
         <div className="side-top">
           <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Đóng thanh bên"><I.Panel /></button>
           <span className="logo">Synchro</span>
