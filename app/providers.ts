@@ -78,7 +78,20 @@ async function getJson(url: string, headers: Record<string, string>) {
   try { return JSON.parse(text); } catch { throw new Error("Máy chủ trả về dữ liệu không đọc được (có đúng địa chỉ API không?)"); }
 }
 
+// Chỉ hiện dòng model hiện tại mà các hãng đang đưa lên web chính thức (claude.ai, ChatGPT, Gemini — tháng 10/2026); đời cũ bị ẩn.
+// Model ra mắt sau này không khớp mẫu nào nên tự hiện. Khi hãng đưa một dòng về "legacy", thêm nó vào đây.
+const LEGACY: Partial<Record<ProviderKind, RegExp>> = {
+  anthropic: /^claude-(instant|\d|(opus|sonnet|haiku)-[1-4]\b|(fable|opus|sonnet|haiku)-5($|-\d{8}$))/,
+  openai: /^(gpt-[1-5]|o\d|chatgpt|chat-latest|gpt-6-sol$)/,
+  google: /^gemini-([12][.-]|3-|3\.6-|3\.1-flash|3\.5-flash$)/,
+};
+const isCurrent = (kind: ProviderKind, id: string) => !LEGACY[kind]?.test(id);
+
 export async function listModels(kind: ProviderKind, base: string, key: string): Promise<{ models: { id: string; name: string }[]; info?: string }> {
+  const r = await listAll(kind, base, key);
+  return { ...r, models: r.models.filter((m) => isCurrent(kind, m.id)) };
+}
+async function listAll(kind: ProviderKind, base: string, key: string): Promise<{ models: { id: string; name: string }[]; info?: string }> {
   const b = base.replace(/\/+$/, "");
   if (kind === "anthropic") {
     const j = await getJson(`${b}/v1/models?limit=1000`, { "x-api-key": key, "anthropic-version": "2023-06-01" });
@@ -123,6 +136,8 @@ async function envModels(v: Virtual) {
 const rows = () => table().prepare("SELECT * FROM api_providers ORDER BY created_at").all() as Row[];
 const rowById = (id: string) => table().prepare("SELECT * FROM api_providers WHERE id = ?").get(id) as Row | undefined;
 const parse = (s: string) => { try { return JSON.parse(s) as { id: string; name: string }[]; } catch { return []; } };
+// Danh sách đã lưu cũng lọc lại, để model vừa thành đời cũ biến mất mà không cần làm mới khóa.
+const stored = (r: Row) => parse(r.models).filter((m) => isCurrent(r.kind, m.id));
 
 // Mọi nhà cung cấp chat đang dùng được, kèm danh sách model (không gồm ElevenLabs vì chỉ dùng cho giọng nói).
 export async function catalog(): Promise<ProviderInfo[]> {
@@ -131,7 +146,7 @@ export async function catalog(): Promise<ProviderInfo[]> {
   for (const r of rows()) {
     have.add(r.id);
     if (r.kind === "elevenlabs") continue;
-    out.push({ id: r.id, name: r.name, kind: r.kind, models: parse(r.models).map((m) => ({ key: modelKey(r.id, m.id), id: m.id, name: m.name })) });
+    out.push({ id: r.id, name: r.name, kind: r.kind, models: stored(r).map((m) => ({ key: modelKey(r.id, m.id), id: m.id, name: m.name })) });
   }
   const v = envProvider();
   if (v && !have.has(v.id)) out.unshift({ id: v.id, name: v.name, kind: v.kind, models: (await envModels(v)).map((m) => ({ key: modelKey(v.id, m.id), id: m.id, name: m.name })) });
@@ -173,11 +188,11 @@ export async function adminList(): Promise<AdminProvider[]> {
     return { id, kind: b.kind, name: b.name, vendor: b.vendor, builtin: true, configured: !!r || !!envKey, source: r ? "db" : envKey ? "env" : null,
       baseUrl: r?.base_url ?? "", defaultBase: b.base, keyHint: r ? r.key_hint : envKey ? hint(envKey) : null, keyUrl: b.keyUrl, prefix: b.prefix,
       status: r ? (r.status as "ok" | "error") : envKey ? "ok" : null, error: r?.error ?? null, info: r?.info ?? null, checkedAt: r?.checked_at ?? null,
-      models: r ? parse(r.models).map((m) => ({ key: modelKey(id, m.id), name: m.name })) : [] };
+      models: r ? stored(r).map((m) => ({ key: modelKey(id, m.id), name: m.name })) : [] };
   });
   for (const r of list.filter((x) => !BUILTIN[x.id])) out.push({ id: r.id, kind: r.kind, name: r.name, vendor: "Tương thích OpenAI", builtin: false, configured: true, source: "db",
     baseUrl: r.base_url ?? "", defaultBase: "", keyHint: r.key_hint, keyUrl: null, prefix: null, status: r.status as "ok" | "error", error: r.error, info: r.info, checkedAt: r.checked_at,
-    models: parse(r.models).map((m) => ({ key: modelKey(r.id, m.id), name: m.name })) });
+    models: stored(r).map((m) => ({ key: modelKey(r.id, m.id), name: m.name })) });
   if (v && (v.id === "env" || v.id === "mock") && !list.some((x) => x.id === v.id)) {
     const ms = await envModels(v);
     out.push({ id: v.id, kind: v.kind, name: v.name, vendor: "Biến môi trường máy chủ", builtin: false, configured: true, source: "env", baseUrl: v.base, defaultBase: v.base, keyHint: v.key ? hint(v.key) : null,

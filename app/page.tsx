@@ -123,7 +123,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [mm, setMm] = useState(false);
   const [sub, setSub] = useState<null | string>(null);
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
-  const [flip, setFlip] = useState(false);
+  const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
   const [effort, setEffort] = usePref("effort", "medium");
   const { say, me, openSettings } = useApp();
   const { providers, allowed, loaded } = useModels();
@@ -142,11 +142,14 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     const m = mref.current?.querySelector(".model-menu") as HTMLElement | null;
     if (!m) return;
     const r = m.getBoundingClientRect();
-    const w = sub === "effort" ? 320 : 260;
-    setFlip(r.right + 8 + w > window.innerWidth - 8);
+    const w = sub === "effort" ? 320 : 260, vw = window.innerWidth;
+    // Ưu tiên bên phải menu, rồi bên trái; màn hình hẹp quá thì đặt sát mép phải màn hình (đè lên menu) để không bị cắt.
+    let x = r.right + 8;
+    if (x + w > vw - 8) { x = r.left - 8 - w; if (x < 8) x = Math.max(8, vw - 8 - w); }
+    setSubLeft(x - r.left);
   }, [sub, mm]);
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
-  const subX = flip ? { right: "calc(100% + 8px)" } : { left: "calc(100% + 8px)" };
+  const subX = { left: subLeft };
   const ok = (k: string) => allowsModel(allowed, k);
   const pick = (k: string) => {
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }

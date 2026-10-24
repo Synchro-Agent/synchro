@@ -126,7 +126,7 @@ function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
     try { setOut(await call<{ text: string; ms: number }>("POST", "/api/admin/apikeys/test", { model, prompt: q })); }
     catch (e) { setOut({ error: (e as Error).message }); } finally { setBusy(false); }
   };
-  if (!all.length) return <div className="api-empty"><I.Key size={18} /><span>Add a key above, then send a test message to any model here.</span></div>;
+  if (!all.length) return <div className="api-empty"><I.SetKey size={18} /><span>Add a key above, then send a test message to any model here.</span></div>;
   return (
     <div className="api-test">
       <div className="api-test-row">
@@ -157,7 +157,7 @@ export function ApiPanel() {
   return (
     <>
       <div className="adm-head">
-        <div className="adm-badge"><I.Key size={22} /></div>
+        <div className="adm-badge"><I.SetKey size={22} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="s-title">API</div>
           <div className="d">Connect Synchro to AI providers with your own API keys. One key unlocks every model that provider offers your account.</div>

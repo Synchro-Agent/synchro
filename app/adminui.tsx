@@ -162,7 +162,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   return (
     <>
       <div className="adm-head">
-        <div className="adm-badge"><I.Admin size={22} /></div>
+        <div className="adm-badge"><I.SetAdmin size={22} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="s-title">Administrator</div>
           <div className="d">Manage accounts, sessions and sign-in for Synchro. Every action here is recorded in the audit log.</div>

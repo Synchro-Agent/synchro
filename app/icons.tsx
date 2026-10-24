@@ -143,3 +143,17 @@ export const Book = (p: P) => <S {...p}><path d="M4 4.5h5a2 2 0 012 2V16a1.5 1.5
 export const VoicePlus = (p: P) => <S {...p}><circle cx="10" cy="7" r="3" /><path d="M4.5 16.5c.7-2.8 2.8-4.3 5.5-4.3s4.8 1.5 5.5 4.3M15.5 2.5v4M13.5 4.5h4" /></S>;
 export const Film = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.4" /><circle cx="10" cy="9" r="2.3" /><path d="M6.5 16c.6-2 1.9-3 3.5-3s2.9 1 3.5 3" /></S>;
 export const ShieldCheck = (p: P) => <S {...p}><path d="M10 2.5l6 2.3v4.7c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V4.8z" /><path d="M7.3 10l2 2 3.5-4" /></S>;
+
+// Bộ icon của menu Cài đặt, vẽ trên lưới 24 theo kiểu Lucide (ISC), nét quy đổi bằng nét 1.4/20 của các icon khác để đứng cạnh nhau đều nhau.
+const L = ({ size = 18, children }: P & { children: React.ReactNode }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    {children}
+  </svg>
+);
+export const SetGeneral = (p: P) => <L {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></L>;
+export const SetAdmin = (p: P) => <L {...p}><rect x="2.5" y="7" width="19" height="13" rx="2.5" /><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7" /><path d="M2.5 12.5h19" /></L>;
+export const SetAccount = (p: P) => <L {...p}><circle cx="12" cy="8" r="4" /><path d="M4.5 20.5c.6-3.6 3.7-6 7.5-6s6.9 2.4 7.5 6" /></L>;
+export const SetPrivacy = (p: P) => <L {...p}><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><rect x="9.25" y="11" width="5.5" height="4.5" rx="1" /><path d="M10.5 11V9.75a1.5 1.5 0 0 1 3 0V11" /></L>;
+export const SetCapabilities = (p: P) => <L {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4M22 5h-4" /></L>;
+export const SetMemory = (p: P) => <L {...p}><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" /><path d="M17.599 6.5a3 3 0 0 0 .399-1.375M6.003 5.125A3 3 0 0 0 6.401 6.5M3.477 10.896a4 4 0 0 1 .585-.396M19.938 10.5a4 4 0 0 1 .585.396M6 18a4 4 0 0 1-1.967-.516M19.967 17.484A4 4 0 0 1 18 18" /></L>;
+export const SetKey = (p: P) => <L {...p}><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".6" fill="currentColor" /></L>;

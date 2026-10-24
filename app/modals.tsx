@@ -215,10 +215,10 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   const admin = me?.isAdmin;
   const feat = me?.perms.features;
   const items: [string, React.ReactNode][] = [
-    ["General", <I.Gear key="g" />], ...(admin ? [["Administrator", <I.Admin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.User key="a" />], ["Privacy", <I.Shield key="p" />],
-    ["Capabilities", <I.Sliders key="c" />], ["Memory", <I.History key="m" />],
+    ["General", <I.SetGeneral key="g" />], ...(admin ? [["Administrator", <I.SetAdmin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
+    ["Capabilities", <I.SetCapabilities key="c" />], ["Memory", <I.SetMemory key="m" />],
     ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
-    ...(admin ? [["API", <I.Key key="api" />] as [string, React.ReactNode]] : []),
+    ...(admin ? [["API", <I.SetKey key="api" />] as [string, React.ReactNode]] : []),
   ];
   const custom: [string, React.ReactNode][] = [
     ...(feat?.skills !== false ? [["Skills", <I.Scroll key="s" />] as [string, React.ReactNode]] : []),
