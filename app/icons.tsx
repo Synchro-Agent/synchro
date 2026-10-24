@@ -56,24 +56,43 @@ export const Sort = (p: P) => <S {...p}><path d="M6 4v12M3.5 13.5L6 16l2.5-2.5M1
 export const List = (p: P) => <S {...p}><path d="M7 5h10M7 10h10M7 15h10M3.5 5h.01M3.5 10h.01M3.5 15h.01" /></S>;
 export const Brain = (p: P) => <S {...p}><path d="M10 4v12M7 4.5a2.5 2.5 0 00-2.5 2.5v.5A2.5 2.5 0 003 10a2.5 2.5 0 001.5 2.3V13A2.5 2.5 0 007 15.5M13 4.5A2.5 2.5 0 0115.5 7v.5A2.5 2.5 0 0117 10a2.5 2.5 0 01-1.5 2.3V13a2.5 2.5 0 01-2.5 2.5" /></S>;
 export const Clock = (p: P) => <S {...p}><circle cx="10" cy="10" r="7" /><path d="M10 6v4l2.5 2" /></S>;
+// Logo Synchro (kính sapphire): lõi chuyển sắc cyan → xanh điện → chàm → tím, ánh kim nhẹ, mặt vát, vệt bóng, viền sáng và tia lấp lánh.
 export const Spark = ({ size = 40 }: P) => (
-  <svg width={size} height={size} viewBox="-4 -4 108 108" className="spark" aria-hidden>
+  <svg width={size} height={size} viewBox="-4 -4 112 108" className="spark" aria-hidden>
     <defs>
-      <linearGradient id="sk-f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--sk-a)" /><stop offset="1" stopColor="var(--sk-b)" /></linearGradient>
-      <linearGradient id="sk-r" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--sk-r1)" /><stop offset=".5" stopColor="var(--sk-r2)" /><stop offset="1" stopColor="var(--sk-r1)" /></linearGradient>
-      <filter id="sk-g" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="2.2" result="bl" />
-        <feSpecularLighting in="bl" surfaceScale="5" specularConstant=".9" specularExponent="22" lightingColor="#fff" result="sp"><fePointLight x="10" y="-20" z="60" /></feSpecularLighting>
-        <feComposite in="sp" in2="SourceAlpha" operator="in" result="sp2" />
-        <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="b2" />
-        <feOffset in="b2" dy="2" result="o" />
-        <feComposite in="SourceAlpha" in2="o" operator="out" result="inner" />
-        <feFlood floodColor="var(--sk-sh)" result="fl" />
-        <feComposite in="fl" in2="inner" operator="in" result="sh" />
-        <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode in="sh" /><feMergeNode in="sp2" /></feMerge>
+      <path id="sl-p" d="M99.9 17.3 63.4 29.8 60.7 30.0 58.8 29.1 58.2 28.5 57.1 26.7 56.0 22.1 54.9 12.6 54.5 11.2 54.2 10.9 53.4 10.9 52.7 11.4 51.5 12.9 48.4 17.6 38.1 31.8 36.8 33.3 35.6 34.0 34.1 34.3 32.6 34.2 22.8 32.2 10.4 30.3 7.9 29.7 6.4 29.7 6.1 30.0 6.1 30.7 19.8 50.2 21.0 49.9 32.4 45.0 40.8 41.7 43.2 41.4 44.2 42.2 44.2 43.5 43.8 44.6 42.6 46.2 39.4 49.3 35.6 52.3 32.1 54.5 3.6 71.5 0.0 73.9 1.8 73.6 20.7 67.2 23.4 67.0 24.1 67.3 25.0 68.2 25.7 70.3 28.4 87.7 29.2 88.8 29.8 88.9 30.2 88.8 31.2 87.7 37.8 78.9 45.4 68.1 47.3 66.4 48.4 66.1 50.0 66.1 53.1 66.9 74.3 70.5 76.5 70.3 76.6 69.3 75.1 66.7 63.2 50.1 53.7 54.1 50.7 55.1 46.9 56.9 42.4 58.6 40.9 58.9 39.4 58.6 38.8 57.7 39.0 56.5 40.3 54.1 42.4 51.7 47.8 47.7 54.3 44.0 69.2 34.9Z" />
+      <clipPath id="sl-clip"><use href="#sl-p" /></clipPath>
+      <linearGradient id="sl-core" x1=".08" y1=".12" x2=".92" y2=".9"><stop offset="0" stopColor="#9BE2FF" /><stop offset=".22" stopColor="#4A9BFF" /><stop offset=".52" stopColor="#2C55FF" /><stop offset=".8" stopColor="#3A2BE0" /><stop offset="1" stopColor="#5A1FC8" /></linearGradient>
+      <linearGradient id="sl-iris" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="#FF7BD5" stopOpacity=".55" /><stop offset=".32" stopColor="#FF7BD5" stopOpacity="0" /><stop offset=".7" stopColor="#7BF2FF" stopOpacity="0" /><stop offset="1" stopColor="#7BF2FF" stopOpacity=".45" /></linearGradient>
+      <linearGradient id="sl-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".85" /><stop offset=".55" stopColor="#fff" stopOpacity=".18" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+      <linearGradient id="sl-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset=".35" stopColor="#fff" stopOpacity=".12" /><stop offset=".7" stopColor="#C8B8FF" stopOpacity=".08" /><stop offset="1" stopColor="#E6DDFF" stopOpacity=".7" /></linearGradient>
+      <radialGradient id="sl-glint"><stop offset="0" stopColor="#fff" /><stop offset=".35" stopColor="#CFF4FF" stopOpacity=".65" /><stop offset="1" stopColor="#9BB8FF" stopOpacity="0" /></radialGradient>
+      <filter id="sl-bevel" x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="b" />
+        <feOffset in="b" dx="2.2" dy="2.6" result="od" />
+        <feComposite in="SourceAlpha" in2="od" operator="out" result="he" />
+        <feFlood floodColor="#fff" floodOpacity=".75" />
+        <feComposite in2="he" operator="in" result="hi" />
+        <feOffset in="b" dx="-2.4" dy="-2.8" result="ou" />
+        <feComposite in="SourceAlpha" in2="ou" operator="out" result="se" />
+        <feFlood floodColor="#120A5E" floodOpacity=".6" />
+        <feComposite in2="se" operator="in" result="sh" />
+        <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode in="sh" /><feMergeNode in="hi" /></feMerge>
       </filter>
+      <filter id="sl-soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.2" /></filter>
     </defs>
-    <path d="M99.9 17.3 63.4 29.8 60.7 30.0 58.8 29.1 58.2 28.5 57.1 26.7 56.0 22.1 54.9 12.6 54.5 11.2 54.2 10.9 53.4 10.9 52.7 11.4 51.5 12.9 48.4 17.6 38.1 31.8 36.8 33.3 35.6 34.0 34.1 34.3 32.6 34.2 22.8 32.2 10.4 30.3 7.9 29.7 6.4 29.7 6.1 30.0 6.1 30.7 19.8 50.2 21.0 49.9 32.4 45.0 40.8 41.7 43.2 41.4 44.2 42.2 44.2 43.5 43.8 44.6 42.6 46.2 39.4 49.3 35.6 52.3 32.1 54.5 3.6 71.5 0.0 73.9 1.8 73.6 20.7 67.2 23.4 67.0 24.1 67.3 25.0 68.2 25.7 70.3 28.4 87.7 29.2 88.8 29.8 88.9 30.2 88.8 31.2 87.7 37.8 78.9 45.4 68.1 47.3 66.4 48.4 66.1 50.0 66.1 53.1 66.9 74.3 70.5 76.5 70.3 76.6 69.3 75.1 66.7 63.2 50.1 53.7 54.1 50.7 55.1 46.9 56.9 42.4 58.6 40.9 58.9 39.4 58.6 38.8 57.7 39.0 56.5 40.3 54.1 42.4 51.7 47.8 47.7 54.3 44.0 69.2 34.9Z" fill="url(#sk-f)" stroke="url(#sk-r)" strokeWidth="1" strokeLinejoin="round" filter="url(#sk-g)" />
+    <g filter="url(#sl-bevel)"><use href="#sl-p" fill="url(#sl-core)" /></g>
+    <g clipPath="url(#sl-clip)">
+      <use href="#sl-p" fill="url(#sl-iris)" />
+      <ellipse cx="42" cy="22" rx="60" ry="15" transform="rotate(-24 42 22)" fill="url(#sl-gloss)" opacity=".55" />
+      <ellipse cx="34" cy="31" rx="17" ry="5.5" transform="rotate(-12 34 31)" fill="#fff" opacity=".55" filter="url(#sl-soft)" />
+      <ellipse cx="72" cy="27" rx="20" ry="2.6" transform="rotate(-19 72 27)" fill="#fff" opacity=".6" filter="url(#sl-soft)" />
+    </g>
+    <use href="#sl-p" fill="none" stroke="url(#sl-rim)" strokeWidth=".9" strokeLinejoin="round" />
+    <g transform="translate(97.5 17.6)">
+      <circle r="7" fill="url(#sl-glint)" opacity=".9" />
+      <path d="M0-6.5.9-.9 6.5 0 .9.9 0 6.5-.9.9-6.5 0-.9-.9Z" fill="#fff" />
+    </g>
   </svg>
 );
 export const Pin = (p: P) => <S {...p}><g transform="translate(10 10) rotate(45) scale(.72) translate(-12 -12)" strokeWidth="2"><path d="M12 17v5M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z" /></g></S>;
