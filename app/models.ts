@@ -1,17 +1,18 @@
 "use client";
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
-import { allowsModel, splitKey, type ProviderInfo } from "./catalog";
+import { allowsModel, splitKey, type Effort, type ProviderInfo } from "./catalog";
 
-type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; loaded: boolean };
-let state: State = { providers: [], default: null, allowed: [], loaded: false };
+// effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
+type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
+let state: State = { providers: [], default: null, allowed: [], effort: {}, loaded: false };
 const subs = new Set<() => void>();
 let inflight: Promise<void> | null = null;
 
 export function refreshModels() {
   inflight ??= fetch("/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], loaded: true }; subs.forEach((f) => f()); } })
+    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } })
     .catch(() => {})
     .finally(() => { inflight = null; });
   return inflight;

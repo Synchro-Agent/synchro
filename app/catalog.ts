@@ -30,7 +30,22 @@ export const FEATURES = [
 ] as const;
 export type Feature = (typeof FEATURES)[number]["key"];
 
-export type Perms = { models: string[]; features: Record<Feature, boolean> };
+// Mức nỗ lực (độ sâu suy nghĩ) của model, từ thấp đến cao. Quản trị viên giới hạn mức cao nhất cho từng model trong Quyền truy cập.
+export const EFFORTS = ["low", "medium", "high", "extra", "max"] as const;
+export type Effort = (typeof EFFORTS)[number];
+export const isEffort = (e: unknown): e is Effort => typeof e === "string" && (EFFORTS as readonly string[]).includes(e);
+const rank = (e: Effort) => EFFORTS.indexOf(e);
+// Gemini chỉ có thấp / trung bình / cao; Claude và OpenAI có đủ năm mức.
+export const effortsFor = (kind?: string): Effort[] => (kind === "google" ? ["low", "medium", "high"] : [...EFFORTS]);
+// Mức cao nhất được phép: giới hạn riêng của model, không có thì giới hạn chung ("*"), không có nữa thì không giới hạn.
+export const effortCap = (caps: Record<string, Effort> | undefined, model: string): Effort => caps?.[model] ?? caps?.[ALL] ?? "max";
+// Hạ mức đã chọn xuống mức cao nhất mà giới hạn và model cho phép.
+export function clampEffort(e: Effort, cap: Effort, kind?: string): Effort {
+  const ok = effortsFor(kind).filter((x) => rank(x) <= rank(cap));
+  return ok.includes(e) ? e : ok.filter((x) => rank(x) <= rank(e)).pop() ?? ok[0] ?? "low";
+}
+
+export type Perms = { models: string[]; features: Record<Feature, boolean>; effort?: Record<string, Effort> };
 export const FULL_PERMS: Perms = { models: [ALL], features: Object.fromEntries(FEATURES.map((f) => [f.key, true])) as Record<Feature, boolean> };
 
 // Chuẩn hóa dữ liệu quyền nhận từ client/DB. Bản cũ cho phép đủ 9 model mẫu nghĩa là "tất cả" → "*".
@@ -44,5 +59,10 @@ export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
   }
   const features = { ...base.features };
   for (const f of FEATURES) if (typeof o.features?.[f.key] === "boolean") features[f.key] = o.features[f.key] as boolean;
-  return { models, features };
+  // Giới hạn mức nỗ lực: chỉ giữ khóa model hợp lệ; "max" là không giới hạn nên bỏ đi cho gọn.
+  let effort = base.effort ? { ...base.effort } : undefined;
+  const e = (o as { effort?: unknown }).effort;
+  if (e && typeof e === "object") effort = Object.fromEntries(Object.entries(e as Record<string, unknown>).filter(([k, v]) => (k === ALL || (k.includes("/") && k.length < 200)) && isEffort(v) && v !== "max")) as Record<string, Effort>;
+  // Giữ cả {} (đã bỏ hết giới hạn) để quyền riêng của một người không rơi về giới hạn của quyền mặc định.
+  return { models, features, ...(effort ? { effort } : {}) };
 }

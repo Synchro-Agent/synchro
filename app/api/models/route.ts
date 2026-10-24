@@ -12,5 +12,6 @@ export async function GET(req: Request) {
   const cat = await catalog();
   const main = mainModels();
   const providers = cat.map((p) => ({ ...p, models: main.includes(ALL) ? p.models : p.models.filter((m) => main.includes(m.key)) })).filter((p) => p.models.length);
-  return Response.json({ providers, default: pickDefault(cat, main), allowed: permsOf(c.user).models });
+  const perms = permsOf(c.user);
+  return Response.json({ providers, default: pickDefault(cat, main), allowed: perms.models, effort: perms.effort ?? {} });
 }

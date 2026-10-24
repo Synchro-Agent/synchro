@@ -1,6 +1,6 @@
-import { can, canModel, current, limit, sameOrigin } from "../../authstore";
+import { can, canModel, current, limit, permsOf, sameOrigin } from "../../authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, type AgentEvent } from "../../agentcore";
-import { legacyModel } from "../../catalog";
+import { clampEffort, effortCap, isEffort, legacyModel } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
 import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   if (!wsAllowed(c.user)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." }, { status: 403 });
   try { limit("agent:" + c.user.id, 30, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
 
-  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills } = await req.json();
+  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted } = await req.json();
   let d: string;
   try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
   // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
@@ -27,6 +27,7 @@ export async function POST(req: Request) {
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
   const target = await resolveModel(model);
   if (!target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
+  const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), target.kind) : undefined;
 
   const enc = new TextEncoder();
   const ac = new AbortController();
@@ -47,8 +48,8 @@ export async function POST(req: Request) {
         const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
         // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
         const adapter = target.kind === "mock" ? mockAgent()
-          : target.kind === "anthropic" ? anthropicAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal })
-          : (target.kind === "openai" ? responsesAgent : openaiAgent)({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal });
+          : target.kind === "anthropic" ? anthropicAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
+          : (target.kind === "openai" ? responsesAgent : openaiAgent)({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: target.kind, effort });
         const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal });
         if (out.skills.length) recordUse(c.user.id, out.skills);
         emit({ t: "done", text: out.text, skills: out.skills });

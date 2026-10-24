@@ -5,7 +5,8 @@ import * as I from "../icons";
 import { AGENT_MODELS, LANGS, VOICES, type Voice } from "./data";
 import { Drop, Field, ModelPick, Range, Select, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
-import { VoiceOrb, startMicLevel, useSpeakingLevel } from "../voicefx";
+import { startMicLevel, useSpeakingLevel } from "../voicefx";
+import { PearlOrb } from "../pearlorb";
 
 const SCRIPT: { who: "ai" | "me"; text: string }[] = [
   { who: "ai", text: "Xin chào! Mình là trợ lý của Synchro. Mình có thể giúp gì cho bạn hôm nay?" },
@@ -78,7 +79,7 @@ export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
       <div className="sp-main">
         <ToolHead title="Voice Agent" desc="Agent giọng nói trò chuyện hai chiều thời gian thực: tự nhận lượt nói, cho phép ngắt lời, gọi công cụ." />
         <div className={`sp-call ${state}`}>
-          <div className="sp-agent-orb"><VoiceOrb hue={0} level={level} idle={state === "idle" ? 0 : 0.04} /></div>
+          <div className="sp-agent-orb"><PearlOrb level={level} active={state !== "idle"} /></div>
           <b className="sp-call-n">{name}</b>
           <span className="sp-muted">{state === "idle" ? `${AGENT_MODELS.find((x) => x.id === model)?.name} · giọng ${voice.name} · ${lang}` : `${state === "speak" ? "Đang nói" : "Đang nghe"} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`}</span>
           <div className="sp-call-a">

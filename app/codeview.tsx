@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { Menu, Thinking } from "./ui";
 import { Markdown, fileNameFor, type DevBlock } from "./md";
-import { callLLM, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
+import { callLLM, getActiveEffort, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
 import { ls } from "./userscope";
 import { tr } from "./i18n";
 import { usePref } from "./store";
@@ -380,7 +380,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     patchNode(id, (n) => ({ ...n, steps: [] }));
     (async () => {
       try {
-        await streamAgent({ sid: String(s), system, messages, model, skills: true }, (e) => {
+        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort() }, (e) => {
           if (gen !== genRef.current) return;
           if (e.t === "text") patchNode(id, (n) => addText(n, e.text));
           else if (e.t === "tool") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "tool", id: e.id, name: e.name, input: e.input }] }));

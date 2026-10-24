@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
 import { LANGS } from "./data";
 import { Drop, Field, Player, Select, Tabs, Toggle } from "./parts";
-import { VoiceOrb, startMicLevel } from "../voicefx";
+import { startMicLevel } from "../voicefx";
+import { PearlOrb } from "../pearlorb";
 import { ToolHead, type ToolProps } from "./view";
 
 type Seg_ = { sp: number; t: number; text: string; ent?: [string, string][] };
@@ -161,7 +162,7 @@ function Live({ demo, lang, say }: { say: (m: string) => void; demo: () => void;
   return (
     <div className="sp-live">
       <div className="sp-live-stage">
-        <div className={`sp-live-orb ${on ? "on" : ""}`}><VoiceOrb hue={0} level={level} idle={on ? 0.04 : 0} /></div>
+        <div className={`sp-live-orb ${on ? "on" : ""}`}><PearlOrb level={level} active={on} /></div>
         <b>{on ? "Đang nghe…" : "Bấm micro để bắt đầu"}</b>
         <span className="sp-muted">{on ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")} · độ trễ ~150 ms · ${lang}` : "Scribe v2 Realtime · độ trễ ~150 ms · không lộ khóa API (token dùng một lần)"}</span>
         <button className={`sp-mic ${on ? "on" : ""}`} aria-pressed={on} aria-label={on ? "Dừng ghi" : "Bắt đầu ghi"} onClick={() => { if (!on) { setN(0); setSec(0); demo(); } setOn(!on); }}>{on ? <I.Stop size={22} /> : <I.Mic size={22} />}</button>

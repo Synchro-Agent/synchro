@@ -15,13 +15,13 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { callLLM, LLMError, setActiveModel, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { callLLM, LLMError, setActiveEffort, setActiveModel, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
-import { allowsModel, legacyModel } from "./catalog";
+import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { fitModel, modelName, refreshModels, useModels } from "./models";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
@@ -126,7 +126,14 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
   const [effort, setEffort] = usePref("effort", "medium");
   const { say, me, openSettings } = useApp();
-  const { providers, allowed, loaded } = useModels();
+  const { providers, allowed, loaded, effort: caps } = useModels();
+  // Mức nỗ lực thật sự dùng: mức người dùng chọn, hạ theo giới hạn quản trị viên đặt cho model và các mức model hỗ trợ.
+  const kind = providers.find((p) => p.models.some((m) => m.key === model))?.kind;
+  const cap = effortCap(caps, model);
+  const eff = clampEffort(isEffort(effort) ? effort : "medium", cap, kind);
+  const capped = cap !== "max";
+  const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
+  useEffect(() => { setActiveEffort(eff); }, [eff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
   const hoverProv = (id: string, el: HTMLElement) => {
     setSub(id);
@@ -155,7 +162,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
     setModel(k); close();
   };
-  const eLabel = EFFORTS.find((e) => e[0] === effort)?.[1] ?? "Trung bình";
+  const eLabel = levelName(eff);
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }}>
@@ -177,12 +184,17 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         <button className={`menu-item mline ${sub === "effort" ? "sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
-          {EFFORTS.map(([k, l]) => (
-            <button key={k} className="menu-item mline" onClick={() => { setEffort(k); if (k === "max") say("Mức Tối đa dùng giới hạn nhanh hơn từ 5 lần"); close(); }}>
-              {l}{k === "medium" && <span className="mtag">Được đề xuất</span>}
-              {effort === k && <span className="ck"><I.Check /></span>}
-            </button>
-          ))}
+          {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => {
+            const locked = clampEffort(k as Effort, cap, kind) !== k;
+            return (
+              <button key={k} className={`menu-item mline ${locked ? "locked" : ""}`} aria-disabled={locked} title={locked ? "Quản trị viên đã khóa mức này" : undefined}
+                onClick={() => { if (locked) { say(`Quản trị viên giới hạn ${modelName(model)} tối đa ở mức ${levelName(cap)}`); return; } setEffort(k); if (k === "max") say("Mức Tối đa dùng giới hạn nhanh hơn từ 5 lần"); close(); }}>
+                {l}{k === "medium" && !locked && <span className="mtag">Được đề xuất</span>}
+                {eff === k ? <span className="ck"><I.Check /></span> : locked && <span className="sc"><I.Lock size={14} /></span>}
+              </button>
+            );
+          })}
+          {capped && <div className="msub-note msub-cap"><I.Lock size={12} />{`Quản trị viên giới hạn model này tối đa ở mức ${levelName(cap)}.`}</div>}
         </Menu>
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
@@ -388,7 +400,6 @@ export default function Home() {
   const fm = useFileMenu((m) => say(m));
   const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
   const [userMenu, setUserMenu] = useState(false);
-  const [sub, setSub] = useState(false);
   const [chatMenu, setChatMenu] = useState<number | null>(null);
   const [codeList, setCodeList] = usePref<{ id: number; title: string; pinned?: boolean }[]>("codeList", []);
   const [codeCur, setCodeCur] = useState<number | null>(null);
@@ -640,7 +651,7 @@ export default function Home() {
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (userRef.current && !userRef.current.contains(t)) { setUserMenu(false); setSub(false); }
+      if (userRef.current && !userRef.current.contains(t)) setUserMenu(false);
       if (!t.closest(".chat-wrap")) { setChatMenu(null); setCodeMenu(null); setPickProj(false); }
       if (!t.closest(".title-wrap")) setTitleMenu(false);
     };
@@ -654,7 +665,7 @@ export default function Home() {
       if (e.key === "Escape") {
         const ov = [...document.querySelectorAll(".overlay")].filter((o) => !o.closest(".closing"));
         if (ov.length > 1) { ov[ov.length - 1].dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); return; }
-        setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setSub(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
+        setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
       else if (mod && k === "k") { e.preventDefault(); setModal("search"); }
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
       else if (mod && k === ".") { e.preventDefault(); setOpen((o) => !o); }
@@ -896,14 +907,10 @@ export default function Home() {
                 <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
                 <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
                 <hr />
-                <button className="menu-item" onClick={() => { window.open("https://claude.ai/download", "_blank", "noopener"); setUserMenu(false); }}><I.AppsPlus />Tải ứng dụng và tiện ích mở rộng</button>
-                <button className="menu-item" onClick={() => setSub(!sub)}><I.InfoCircle />Tìm hiểu thêm<span className="sc"><I.ChevronR size={16} /></span></button>
+                <button className="menu-item" onClick={() => { window.open("/download", "_blank", "noopener"); setUserMenu(false); }}><I.GetApps />Tải ứng dụng</button>
+                <button className="menu-item" onClick={() => { setModal("keys"); setUserMenu(false); }}><I.Keyboard />Phím tắt<span className="sc">⌘/</span></button>
                 <hr />
                 <button className="menu-item" onClick={() => { setModal("logout"); setUserMenu(false); }}><I.Out />Đăng xuất</button>
-                <Menu open={sub} style={{ bottom: 0, left: 308, width: 260 }}>
-                    {([["Giới thiệu về Anthropic ↗", "https://www.anthropic.com"], ["Synchro Academy", "https://www.anthropic.com/learn"], ["Chính sách sử dụng ↗", "https://www.anthropic.com/legal/aup"], ["Chính sách quyền riêng tư ↗", "https://www.anthropic.com/legal/privacy"], ["Điều khoản dịch vụ ↗", "https://www.anthropic.com/legal/consumer-terms"], ["Lựa chọn quyền riêng tư của bạn", "https://www.anthropic.com/legal/privacy-choices"]] as const).map(([x, u]) => <button key={x} className="menu-item" onClick={() => { window.open(u, "_blank", "noopener"); setUserMenu(false); setSub(false); }}>{x}</button>)}
-                    <hr /><button className="menu-item" onClick={() => { setModal("keys"); setUserMenu(false); setSub(false); }}>Phím tắt<span className="sc">⌘/</span></button>
-                  </Menu>
               </Menu>
           </div>
           {me?.perms.features.skills !== false && <button className="icon-btn" onClick={() => setView("customize")} aria-label="Skills" data-tip="Skills"><I.Scroll size={16} /></button>}

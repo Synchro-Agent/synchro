@@ -18,8 +18,14 @@ export const Pencil = (p: P) => <S {...p}><path d="M12.9 4a1.9 1.9 0 012.7 0l.4.
 export const Grad = (p: P) => <S {...p}><path d="M2 8l8-4 8 4-8 4zM5 10v4c0 1 2.2 2 5 2s5-1 5-2v-4" /></S>;
 export const Coffee = (p: P) => <S {...p}><path d="M4 8h9v5a3 3 0 01-3 3H7a3 3 0 01-3-3zM13 9h1.5a2 2 0 010 4H13M7 3.5c0 1-1 1-1 2M10 3.5c0 1-1 1-1 2" /></S>;
 export const Bulb = (p: P) => <S {...p}><path d="M7 14h6M8 16.5h4M10 3a5 5 0 00-3 9c.6.5 1 1.2 1 2h4c0-.8.4-1.5 1-2a5 5 0 00-3-9z" /></S>;
-export const Mic = (p: P) => <S {...p}><rect x="7.5" y="3" width="5" height="9" rx="2.5" /><path d="M4.5 10a5.5 5.5 0 0011 0M10 15.5V18" /></S>;
-export const Wave = (p: P) => <S {...p} fill><rect x="3" y="8" width="1.8" height="4" rx=".9" /><rect x="6.5" y="5" width="1.8" height="10" rx=".9" /><rect x="10" y="2.5" width="1.8" height="15" rx=".9" /><rect x="13.5" y="6" width="1.8" height="8" rx=".9" /><rect x="17" y="8.5" width="1.8" height="3" rx=".9" /></S>;
+// Micro kiểu Lucide (ISC): thân bo tròn, vòng ôm phía dưới và chân micro.
+export const Mic = ({ size = 18 }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="9" y="2" width="6" height="13" rx="3" /><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
+  </svg>
+);
+// Sóng âm của nút trò chuyện bằng giọng nói: chấm, vạch vừa, vạch cao, vạch vừa, chấm. Rê chuột vào nút thì các vạch nhún theo nhịp (CSS .wv).
+export const Wave = (p: P) => <S {...p} fill><g className="wv"><rect x="2.6" y="8.6" width="1.7" height="2.8" rx=".85" /><rect x="6" y="5.6" width="1.7" height="8.8" rx=".85" /><rect x="9.15" y="2.6" width="1.7" height="14.8" rx=".85" /><rect x="12.3" y="5.6" width="1.7" height="8.8" rx=".85" /><rect x="15.7" y="8.6" width="1.7" height="2.8" rx=".85" /></g></S>;
 export const Chevron = (p: P) => <S {...p}><path d="M6 8l4 4 4-4" /></S>;
 export const ChevronR = (p: P) => <S {...p}><path d="M8 5l5 5-5 5" /></S>;
 export const Check = (p: P) => <S {...p}><path d="M4.2 10.6l4 4 7.6-8.6" /></S>;
@@ -157,3 +163,6 @@ export const SetPrivacy = (p: P) => <L {...p}><path d="M20 13c0 5-3.5 7.5-7.66 8
 export const SetCapabilities = (p: P) => <L {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4M22 5h-4" /></L>;
 export const SetMemory = (p: P) => <L {...p}><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" /><path d="M17.599 6.5a3 3 0 0 0 .399-1.375M6.003 5.125A3 3 0 0 0 6.401 6.5M3.477 10.896a4 4 0 0 1 .585-.396M19.938 10.5a4 4 0 0 1 .585.396M6 18a4 4 0 0 1-1.967-.516M19.967 17.484A4 4 0 0 1 18 18" /></L>;
 export const SetKey = (p: P) => <L {...p}><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".6" fill="currentColor" /></L>;
+// Menu tài khoản: tải ứng dụng (máy tính + điện thoại) và phím tắt.
+export const GetApps = (p: P) => <L {...p}><rect x="2" y="4.5" width="13" height="10" rx="1.8" /><path d="M6.3 19h4.4M8.5 14.5V19" /><rect x="17" y="8.5" width="5" height="11" rx="1.3" /><path d="M19 17h1" /></L>;
+export const Keyboard = (p: P) => <L {...p}><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12.5h.01M18 12.5h.01M10 12.5h4M8 16h8" /></L>;

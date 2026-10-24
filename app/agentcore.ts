@@ -3,7 +3,8 @@
 import { agent as wsAgent, cleanPath, exec, fsop, WORK } from "./workspace";
 import { runSkillTool, skillTools } from "./skillruntime";
 import type { Skill } from "./skillstore";
-import { respInput, respParse, respTools } from "./llmcall";
+import { effortParams, respInput, respParse, respTools } from "./llmcall";
+import type { Effort } from "./catalog";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -212,14 +213,14 @@ function pruneImages(msgs: unknown[]) {
   }
 }
 
-export function anthropicAgent(o: { key: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal }): Adapter {
+export function anthropicAgent(o: { key: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       pruneImages(msgs);
       const r = await fetch(`${o.base ?? "https://api.anthropic.com"}/v1/messages`, {
         method: "POST", signal: o.signal,
         headers: { "x-api-key": o.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, system: [{ type: "text", text: o.system, cache_control: { type: "ephemeral" } }], tools: o.tools, ...(last ? { tool_choice: { type: "none" } } : {}), messages: msgs }),
+        body: JSON.stringify({ model: o.model, max_tokens: Math.max(o.maxTokens, 16000), ...effortParams({ kind: "anthropic" }, o.effort), system: [{ type: "text", text: o.system, cache_control: { type: "ephemeral" } }], tools: o.tools, ...(last ? { tool_choice: { type: "none" } } : {}), messages: msgs }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
@@ -242,13 +243,13 @@ export function anthropicAgent(o: { key: string; base?: string; model: string; s
 }
 
 // OpenAI qua API Responses (mọi model chat của OpenAI, kể cả dòng -pro).
-export function responsesAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal }): Adapter {
+export function responsesAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       const r = await fetch(`${o.base}/responses`, {
         method: "POST", signal: o.signal,
         headers: { Authorization: `Bearer ${o.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: o.model, instructions: o.system, max_output_tokens: Math.max(o.maxTokens, 16000), input: respInput(msgs), tools: respTools(o.tools), ...(last ? { tool_choice: "none" } : {}) }),
+        body: JSON.stringify({ model: o.model, instructions: o.system, max_output_tokens: Math.max(o.maxTokens, 16000), ...effortParams({ kind: "openai" }, o.effort), input: respInput(msgs), tools: respTools(o.tools), ...(last ? { tool_choice: "none" } : {}) }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
@@ -265,13 +266,13 @@ export function responsesAgent(o: { key: string; base: string; model: string; sy
 }
 
 // Gemini và nhà cung cấp tương thích OpenAI qua /chat/completions.
-export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal }): Adapter {
+export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; kind?: string; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       const r = await fetch(`${o.base}/chat/completions`, {
         method: "POST", signal: o.signal,
         headers: { Authorization: `Bearer ${o.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
+        body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, ...effortParams({ kind: (o.kind ?? "compatible") as "google" }, o.effort), messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();

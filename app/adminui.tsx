@@ -8,7 +8,8 @@ import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
 import type { AuthUser, Providers } from "./auth";
-import { ALL, allowsModel, FEATURES, type Perms, type ProviderInfo } from "./catalog";
+import { ALL, allowsModel, effortsFor, FEATURES, type Effort, type Perms, type ProviderInfo } from "./catalog";
+import { BrandLogo } from "./brands";
 import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
 
@@ -92,6 +93,42 @@ function ModelChips({ catalog, value, onChange, allLabel, allHint, Toggle }: { c
   );
 }
 
+const LEVEL: Record<Effort, string> = { max: "Max (no limit)", extra: "Extra high", high: "High", medium: "Medium", low: "Low" };
+
+// Giới hạn mức nỗ lực cao nhất: một mức chung cho mọi model, và mức riêng cho từng model (mặc định theo mức chung).
+function EffortLimits({ catalog, models, value, onChange }: { catalog: ProviderInfo[]; models: string[]; value: Record<string, Effort> | undefined; onChange: (v: Record<string, Effort>) => void }) {
+  const cur = value ?? {};
+  const set = (k: string, e: Effort | "") => {
+    const next = { ...cur };
+    if (!e || (k === ALL && e === "max")) delete next[k]; else next[k] = e;
+    onChange(next);
+  };
+  const all = cur[ALL] ?? "max";
+  const shown = catalog.map((p) => ({ ...p, models: p.models.filter((m) => allowsModel(models, m.key)) })).filter((p) => p.models.length);
+  return (
+    <>
+      <div className="adm-perm-row adm-eff-row" style={{ borderTop: 0, paddingTop: 0 }}>
+        <div><div className="t">All models</div><div className="d">Highest level this person can pick. Higher effort gives more thorough answers but uses more tokens.</div></div>
+        <span className="api-sel"><select aria-label="Effort limit for all models" value={all} onChange={(e) => set(ALL, e.target.value as Effort)}>
+          {(["max", "extra", "high", "medium", "low"] as Effort[]).map((k) => <option key={k} value={k}>{LEVEL[k]}</option>)}
+        </select><I.Chevron size={13} /></span>
+      </div>
+      {shown.map((p) => p.models.map((m) => {
+        const levels = effortsFor(p.kind).slice().reverse();
+        return (
+          <div key={m.key} className="adm-perm-row adm-eff-row">
+            <div className="adm-eff-name"><BrandLogo id={p.id} size={15} /><span data-notr>{m.name}</span></div>
+            <span className="api-sel"><select aria-label={`Effort limit for ${m.name}`} value={cur[m.key] ?? ""} onChange={(e) => set(m.key, e.target.value as Effort | "")}>
+              <option value="">{`Same as all models (${LEVEL[all].replace(/ \(.+\)$/, "")})`}</option>
+              {levels.map((k) => <option key={k} value={k}>{k === levels[0] && k !== "max" ? `${LEVEL[k]} (model max)` : LEVEL[k]}</option>)}
+            </select><I.Chevron size={13} /></span>
+          </div>
+        );
+      }))}
+    </>
+  );
+}
+
 // Chọn model và tính năng được phép. Dùng cho quyền mặc định và quyền riêng từng người.
 function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onChange: (p: Perms) => void; Toggle: ToggleT; catalog: ProviderInfo[] }) {
   const usable = catalog.some((p) => p.models.some((m) => allowsModel(value.models, m.key)));
@@ -111,6 +148,12 @@ function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onCha
           </div>
         ))}
       </div>
+      {catalog.length > 0 && usable && (
+        <div className="adm-perm-sec adm-eff">
+          <h4>Effort limit</h4>
+          <EffortLimits catalog={catalog} models={value.models} value={value.effort} onChange={(e) => onChange({ ...value, effort: e })} />
+        </div>
+      )}
     </div>
   );
 }

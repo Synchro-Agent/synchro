@@ -6,6 +6,7 @@
 import type { Project } from "./store";
 import { makeReply } from "./md";
 import type { ContentBlock } from "./fileproc/types";
+import type { Effort } from "./catalog";
 
 export const CHUNK_SIZE = 1500;
 export const SMALL_DOC_LIMIT = 12000;
@@ -33,6 +34,10 @@ export const takeSkillsUsed = () => { const u = lastSkills; lastSkills = []; ret
 // Model đang chọn trong giao diện; máy chủ kiểm tra tài khoản có được phép dùng model này không.
 let activeModel = "";
 export const setActiveModel = (m: string) => { activeModel = m; };
+// Mức nỗ lực đang dùng (đã hạ theo giới hạn của quản trị viên); máy chủ vẫn kiểm tra lại.
+let activeEffort: Effort | undefined;
+export const setActiveEffort = (e: Effort) => { activeEffort = e; };
+export const getActiveEffort = () => activeEffort;
 export class LLMError extends Error { constructor(m: string, public status: number) { super(m); } }
 
 // opts.feature: "code" khi gọi từ Synchro Code; opts.project: id dự án đang chat (bật skill riêng của dự án).
@@ -46,7 +51,7 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   const r = await fetch(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, feature: opts.feature ?? "chat", project: opts.project }),
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project }),
   });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status); }
   const j = await r.json();

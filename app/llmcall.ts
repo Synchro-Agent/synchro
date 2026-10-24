@@ -2,6 +2,7 @@
 // OpenAI dùng API Responses (chạy được mọi model chat, kể cả dòng -pro không có ở /chat/completions),
 // Gemini và các nhà cung cấp tương thích OpenAI dùng /chat/completions.
 import type { Target } from "./providers";
+import type { Effort } from "./catalog";
 
 export class HttpErr extends Error { constructor(public status: number, m: string) { super(m); } }
 
@@ -15,8 +16,8 @@ export const toOpenAI = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).map
   : b.type === "document" ? { type: "text", text: `<file name="${b.name}">\n${b.fallbackText ?? "(PDF scan: xem các ảnh trang đính kèm)"}\n</file>` } : b);
 export const withPages = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).flatMap((b) => b.type === "document" && b.fallbackImages ? [b, ...b.fallbackImages.map((d) => ({ type: "image", media_type: "image/jpeg", data: d }))] : [b]);
 
-// Model có suy luận (GPT, Gemini) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
-export const outCap = (t: Target, n: number) => (t.kind === "openai" || t.kind === "google" ? Math.max(n, 16000) : n);
+// Model có suy luận (Claude, GPT, Gemini) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
+export const outCap = (t: Target, n: number) => (t.kind === "openai" || t.kind === "google" || t.kind === "anthropic" ? Math.max(n, 16000) : n);
 
 // Đọc lỗi của nhà cung cấp thành một câu ngắn dễ hiểu.
 async function fail(r: Response): Promise<never> {
@@ -35,6 +36,16 @@ export async function anthropicCall(t: Target, body: Record<string, unknown>, si
   if (!r.ok) await fail(r);
   return r.json();
 }
+// Mức nỗ lực → tham số của từng hãng ("extra" là xhigh). Gemini chỉ tới high (đã hạ sẵn ở clampEffort). Không chọn thì để model dùng mặc định.
+export function effortParams(t: Pick<Target, "kind">, e?: Effort): Record<string, unknown> {
+  if (!e) return {};
+  const v = e === "extra" ? "xhigh" : e;
+  if (t.kind === "anthropic") return { output_config: { effort: v } };
+  if (t.kind === "openai") return { reasoning: { effort: v } };
+  if (t.kind === "google") return { reasoning_effort: v === "xhigh" || v === "max" ? "high" : v };
+  return {};
+}
+
 // ---- OpenAI Responses API ----
 type Item = Record<string, unknown>;
 type Part = { type: string; text?: string; image_url?: { url: string } };
@@ -83,17 +94,18 @@ export async function openaiCall(t: Target, body: Record<string, unknown>, signa
 }
 
 // Một lượt hỏi đáp không có công cụ: dùng cho chat thường và nút "Gửi thử" ở Cài đặt → API.
-export async function chatOnce(t: Target, system: string, messages: { role: string; content: unknown }[], maxTokens: number, signal?: AbortSignal): Promise<string> {
+export async function chatOnce(t: Target, system: string, messages: { role: string; content: unknown }[], maxTokens: number, signal?: AbortSignal, effort?: Effort): Promise<string> {
+  const ef = effortParams(t, effort);
   if (t.kind === "mock") return `[mock] ${String(messages[messages.length - 1]?.content ?? "").slice(0, 80)}`;
   if (t.kind === "anthropic") {
-    const j = await anthropicCall(t, { max_tokens: maxTokens, ...(system ? { system } : {}), messages: messages.map((m) => ({ ...m, content: toAnthropic(m.content) })) }, signal);
+    const j = await anthropicCall(t, { max_tokens: outCap(t, maxTokens), ...ef, ...(system ? { system } : {}), messages: messages.map((m) => ({ ...m, content: toAnthropic(m.content) })) }, signal);
     return (j.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("");
   }
   if (t.kind === "openai") {
-    const j = await responsesCall(t, { max_output_tokens: outCap(t, maxTokens), ...(system ? { instructions: system } : {}), input: respInput(messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))) }, signal);
+    const j = await responsesCall(t, { max_output_tokens: outCap(t, maxTokens), ...ef, ...(system ? { instructions: system } : {}), input: respInput(messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))) }, signal);
     return respParse(j).text;
   }
-  const j = await openaiCall(t, { max_tokens: outCap(t, maxTokens), messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))] }, signal);
+  const j = await openaiCall(t, { max_tokens: outCap(t, maxTokens), ...ef, messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))] }, signal);
   const c = j.choices?.[0]?.message?.content;
   return typeof c === "string" ? c : Array.isArray(c) ? c.map((p: { text?: string }) => p.text ?? "").join("") : "";
 }

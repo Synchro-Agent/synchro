@@ -817,3 +817,40 @@ RULES_EN.push(
   [/^Không kết nối được tới (\S+): ([\s\S]+)$/, (m) => `Couldn't connect to ${m[1]}: ${m[2]}`],
   [/^Lỗi (\d+): ([\s\S]+)$/, (m) => `Error ${m[1]}: ${m[2]}`],
 );
+
+// Menu tài khoản, trang tải ứng dụng, giới hạn mức nỗ lực (giao diện tiếng Anh).
+Object.assign(VI2EN, {
+  "Tải ứng dụng": "Get apps", "Máy tính": "Desktop", "Điện thoại": "Mobile", "Mở Synchro": "Open Synchro", "Bản xem trước": "Preview",
+  "Synchro trên máy tính của bạn": "Synchro on your desktop",
+  "Luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.": "Always there when you need it: open Synchro with a shortcut from anywhere and drag files from your computer into the chat. No tab-hopping required.",
+  "macOS 13 trở lên (Apple Silicon và Intel) · Windows 10 trở lên (x64 và ARM64)": "macOS 13 or later (Apple Silicon and Intel) · Windows 10 or later (x64 and ARM64)",
+  "Synchro trong túi bạn": "Synchro in your pocket",
+  "Cuộc trò chuyện đi theo bạn. Bắt đầu trên máy tính, hỏi tiếp trên điện thoại, mọi thứ đều được đồng bộ.": "Conversations follow you. Start on your computer, continue on your phone, and everything stays in sync.",
+  "Tải về trên": "Download on the", "iOS 17 trở lên · Android 10 trở lên": "iOS 17 or later · Android 10 or later",
+  "Gọi nhanh ở mọi nơi": "Quick access anywhere", "Nhấn": "Press", "để hỏi Synchro mà không rời ứng dụng đang dùng.": "to ask Synchro without leaving the app you're in.",
+  "Làm việc với tệp trên máy": "Work with your files", "Kéo tài liệu, ảnh và mã nguồn vào cuộc trò chuyện, Synchro đọc ngay tại chỗ.": "Drag documents, images and code into the chat and Synchro reads them right away.",
+  "Nói chuyện bằng giọng nói": "Talk with your voice", "Hỏi bằng giọng nói khi đang bận tay, nghe câu trả lời ngay trên máy tính hay điện thoại.": "Ask out loud when your hands are busy and hear the answer on your computer or phone.",
+  "Quyền riêng tư": "Privacy", "Điều khoản sử dụng": "Terms of use", "Về trang chủ": "Back to home",
+  "Lịch trình Đà Lạt 3 ngày": "3-day Da Lat itinerary", "Tóm tắt báo cáo quý III": "Q3 report summary", "Ý tưởng tên thương hiệu": "Brand name ideas",
+  "Gợi ý cho tôi lịch trình 3 ngày ở Đà Lạt": "Suggest a 3-day itinerary in Da Lat", "Ngày 1:": "Day 1:", "Ngày 2:": "Day 2:",
+  "Hồ Xuân Hương, chợ Đà Lạt và đồi chè Cầu Đất lúc hoàng hôn.": "Xuan Huong Lake, Da Lat market and the Cau Dat tea hills at sunset.",
+  "Thung lũng Tình Yêu, cà phê bên hồ Tuyền Lâm.": "Valley of Love, then coffee by Tuyen Lam Lake.", "Trả lời Synchro…": "Reply to Synchro…",
+  "Quản trị viên đã khóa mức này": "Locked by your administrator",
+});
+RULES_EN.push(
+  [/^Tải cho (.+)$/, (m) => `Download for ${m[1]}`],
+  [/^Ứng dụng cho (.+) đang được phát triển, sẽ sớm ra mắt\.$/, (m) => `The ${m[1]} app is in development and coming soon.`],
+  [/^Quản trị viên giới hạn model này tối đa ở mức (.+)\.$/, (m) => `Your administrator limits this model to ${VI2EN[m[1]] ?? m[1]} effort at most.`],
+  [/^Quản trị viên giới hạn (.+) tối đa ở mức (.+)$/, (m) => `Your administrator limits ${m[1]} to ${VI2EN[m[2]] ?? m[2]} effort at most`],
+);
+// Giới hạn mức nỗ lực trong Quyền truy cập (giao diện tiếng Việt).
+Object.assign(EN2VI, {
+  "Effort limit": "Giới hạn mức nỗ lực", "Max (no limit)": "Tối đa (không giới hạn)", "Extra high": "Cao hơn", "High": "Cao", "Medium": "Trung bình", "Low": "Thấp",
+  "Highest level this person can pick. Higher effort gives more thorough answers but uses more tokens.": "Mức cao nhất người này được chọn. Mức nỗ lực cao cho câu trả lời kỹ hơn nhưng tốn nhiều token hơn.",
+  "Effort limit for all models": "Giới hạn mức nỗ lực cho mọi model",
+});
+RULES_VI.push(
+  [/^Same as all models \((.+)\)$/, (m) => `Theo mức chung (${EN2VI[m[1]] ?? m[1]})`],
+  [/^(.+) \(model max\)$/, (m) => `${EN2VI[m[1]] ?? m[1]} (mức cao nhất của model)`],
+  [/^Effort limit for (.+)$/, (m) => `Giới hạn mức nỗ lực cho ${m[1]}`],
+);

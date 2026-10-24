@@ -26,6 +26,7 @@ const GOOGLE = [["gemini-4-argon", "Gemini 4 Argon", "generateContent"], ["gemin
   ["gemini-robotics-er-2-preview", "Gemini Robotics ER 2", "generateContent"], ["gemini-embedding-2-preview", "Gemini Embedding 2", "embedContent"], ["lyria-3.5", "Lyria 3.5", "generateContent"],
   ["deep-research-preview-04-2026", "Gemini Deep Research", "generateContent"]];
 const VENDOR = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
+const EFF = ["low", "medium", "high", "xhigh", "max"];
 
 const send = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
 const readBody = (req) => new Promise((ok) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { ok(JSON.parse(s || "{}")); } catch { ok({}); } }); });
@@ -52,7 +53,7 @@ const pro = (id) => /-pro$/.test(id);
 // Model lớn trả lời chậm hơn model nhỏ, để thấy trạng thái đang trả lời.
 const latency = (id) => (/astra|argon|opus|fable|pro|o3/.test(id) ? 1600 : /luna|mini|nano|flash|haiku|lite/.test(id) ? 450 : 900) + Math.random() * 300;
 
-function reply(provider, id, msgs, maxTokens) {
+function reply(provider, id, msgs, maxTokens, effort) {
   const q = lastUserText(msgs).trim();
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
   const name = displayName(provider, id), vendor = VENDOR[provider];
@@ -69,8 +70,8 @@ function reply(provider, id, msgs, maxTokens) {
       : "| Model | Speed | Best for |\n|---|---|---|\n| Claude Opus 5.5 | Slower | Complex, long reasoning |\n| GPT-5.1 | Medium | Everyday work |\n| Gemini 3.5 Flash | Fast | Short questions, summaries |\n\nThis table is sample data.";
   } else {
     body = vi
-      ? `${q ? `Bạn hỏi: “${short}”` : "Chào bạn!"}\n\nMột vài ý để bạn kiểm tra giao diện:\n1. Câu trả lời này đến từ **${name}**. Đổi model ở bộ chọn để thấy tên thay đổi.\n2. Cuộc trò chuyện đang có ${n} tin nhắn, giới hạn trả lời ${maxTokens ?? "?"} token.\n3. Gõ \`#429\` hoặc \`#500\` để xem web báo lỗi thế nào, \`#slow\` để thử trả lời chậm.`
-      : `${q ? `You asked: “${short}”` : "Hi there!"}\n\nA few things to check in the interface:\n1. This answer comes from **${name}**. Switch models in the picker to see the name change.\n2. The conversation has ${n} messages, with a ${maxTokens ?? "?"} token reply limit.\n3. Type \`#429\` or \`#500\` to see how errors look, or \`#slow\` for a slow reply.`;
+      ? `${q ? `Bạn hỏi: “${short}”` : "Chào bạn!"}\n\nMột vài ý để bạn kiểm tra giao diện:\n1. Câu trả lời này đến từ **${name}**. Đổi model ở bộ chọn để thấy tên thay đổi.\n2. Cuộc trò chuyện đang có ${n} tin nhắn, giới hạn trả lời ${maxTokens ?? "?"} token, mức nỗ lực **${effort ?? "mặc định"}**.\n3. Gõ \`#429\` hoặc \`#500\` để xem web báo lỗi thế nào, \`#slow\` để thử trả lời chậm.`
+      : `${q ? `You asked: “${short}”` : "Hi there!"}\n\nA few things to check in the interface:\n1. This answer comes from **${name}**. Switch models in the picker to see the name change.\n2. The conversation has ${n} messages, a ${maxTokens ?? "?"} token reply limit and **${effort ?? "default"}** effort.\n3. Type \`#429\` or \`#500\` to see how errors look, or \`#slow\` for a slow reply.`;
   }
   const foot = vi ? `\n\n— Trả lời giả lập trên máy cục bộ, không gọi tới ${vendor}.` : `\n\n— Simulated reply on this machine; nothing was sent to ${vendor}.`;
   return { text: body + foot, q };
@@ -101,7 +102,9 @@ async function handler(req, res) {
     if (p === "/anthropic/v1/messages") {
       if (!b.max_tokens) return send(res, 400, err("invalid_request_error", "max_tokens: Field required"));
       if (!ANTHROPIC.some(([id]) => id === b.model)) return send(res, 404, err("not_found_error", `model: ${b.model}`));
-      const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens);
+      const ef = b.output_config?.effort;
+      if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err("invalid_request_error", `output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'`));
+      const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
       if (await trap(res, q, (m) => err("api_error", m))) return;
       await sleep(latency(b.model));
       return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(text.length / 4) } });
@@ -121,7 +124,9 @@ async function handler(req, res) {
       const outs = input.filter((x) => x.type === "function_call_output");
       const bad = outs.find((o) => !input.some((x) => x.type === "function_call" && x.call_id === o.call_id));
       if (bad) return send(res, 400, err(`No tool call found for function call output with call_id ${bad.call_id}.`));
-      const { text, q } = reply("openai", b.model, input, b.max_output_tokens);
+      const ef = b.reasoning?.effort;
+      if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err(`Invalid value for 'reasoning.effort': '${ef}'.`));
+      const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef);
       // Gõ #tool: model gọi công cụ đầu tiên, lượt sau trả lời dựa trên kết quả.
       if (q.includes("#tool") && b.tools?.length && b.tool_choice !== "none") {
         if (!outs.length) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
@@ -155,7 +160,8 @@ async function handler(req, res) {
   if (p === "/google/v1beta/openai/chat/completions") {
     if (!valid(auth)) return send(res, 400, [{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]);
     if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
-    const { text, q } = reply("google", b.model, b.messages, b.max_tokens);
+    if (b.reasoning_effort !== undefined && !["minimal", "low", "medium", "high"].includes(b.reasoning_effort)) return send(res, 400, [{ error: { code: 400, message: `Invalid reasoning_effort: ${b.reasoning_effort}`, status: "INVALID_ARGUMENT" } }]);
+    const { text, q } = reply("google", b.model, b.messages, b.max_tokens, b.reasoning_effort);
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));
     return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }] });

@@ -1,9 +1,9 @@
 import { enabledSkills, recordUse } from "../../skillstore";
 import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "../../skillruntime";
-import { can, canModel, current } from "../../authstore";
-import { legacyModel } from "../../catalog";
+import { can, canModel, current, permsOf } from "../../authstore";
+import { clampEffort, effortCap, isEffort, legacyModel, type Effort } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "../../providers";
-import { anthropicCall, chatOnce, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "../../llmcall";
+import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "../../llmcall";
 
 // Cổng duy nhất tới model của chat. Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → API quyết định.
 
@@ -13,10 +13,10 @@ type Step = { text: string; calls: Call[]; assistant: unknown };
 type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: ToolRun[]) => unknown[] };
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
-const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[]): Adapter => ({
+const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort): Adapter => ({
   step: async (msgs, noTools) => {
     const j = await anthropicCall(t, {
-      max_tokens,
+      max_tokens: outCap(t, max_tokens), ...effortParams(t, effort),
       system: [{ type: "text", text: system || "Bạn là một trợ lý AI hữu ích." }, { type: "text", text: skillSys, cache_control: { type: "ephemeral" } }],
       tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: msgs,
     });
@@ -30,10 +30,10 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
 });
 
-const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[]): Adapter => ({
+const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
   step: async (msgs, noTools) => {
     const j = await openaiCall(t, {
-      max_tokens: outCap(t, max_tokens), messages: [{ role: "system", content: system }, ...msgs],
+      max_tokens: outCap(t, max_tokens), ...effortParams(t, effort), messages: [{ role: "system", content: system }, ...msgs],
       tools: tools.map((x) => ({ type: "function", function: { name: x.name, description: x.description, parameters: x.input_schema } })),
       ...(noTools ? { tool_choice: "none" } : {}),
     });
@@ -49,9 +49,9 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
 });
 
 // OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
-const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[]): Adapter => ({
+const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
   step: async (msgs, noTools) => {
-    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), input: respInput(msgs), tools: respTools(tools), ...(noTools ? { tool_choice: "none" } : {}) }));
+    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: respTools(tools), ...(noTools ? { tool_choice: "none" } : {}) }));
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
   results: (calls, res) => calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })),
@@ -95,13 +95,15 @@ export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
-  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project } = await req.json();
+  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted } = await req.json();
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
   const t = await resolveModel(model);
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
+  // Mức nỗ lực người dùng chọn, hạ xuống giới hạn quản trị viên đặt cho model này (quản trị viên không bị giới hạn).
+  const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
   try {
     const list = skills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
     if (list.length) {
@@ -111,13 +113,13 @@ export async function POST(req: Request) {
       const tools = skillTools(list.length, scripts);
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await skillLoop(mockAdapter(list), msgs, list, scripts)
-        : t.kind === "anthropic" ? await skillLoop(anthropicAdapter(t, system, sk, max_tokens, tools), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list, scripts)
-        : await skillLoop((t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list, scripts);
+        : t.kind === "anthropic" ? await skillLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list, scripts)
+        : await skillLoop((t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list, scripts);
       recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
       return Response.json({ model, text: out.text, skills: out.used });
     }
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
-    return Response.json({ model, text: await chatOnce(t, system, messages, max_tokens) });
+    return Response.json({ model, text: await chatOnce(t, system, messages, max_tokens, undefined, effort), effort });
   } catch (e) {
     if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });
     return Response.json({ error: String((e as Error).message ?? e) }, { status: 502 });
