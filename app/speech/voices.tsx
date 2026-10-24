@@ -164,7 +164,7 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
           </div>
           <div className="sp-card">
             <div className="sp-card-h">Bản nghe thử</div>
-            {designed ? <Previews seed={designed * 5} demo={demo} onSave={(i) => save(`Giọng thiết kế ${i + 1}`, "designed")} /> : <div className="sp-empty"><OrbStage hue={32} size={96} /><p>Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. Synchro trả về 3 bản để bạn chọn.</p></div>}
+            {designed ? <Previews seed={designed * 5} demo={demo} onSave={(i) => save(`Giọng thiết kế ${i + 1}`, "designed")} /> : <div className="sp-empty"><OrbStage hue={32} size={96} /><p>Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. ElevenLabs trả về 3 bản để bạn chọn.</p></div>}
           </div>
         </div>
       )}

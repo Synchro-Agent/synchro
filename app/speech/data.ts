@@ -56,6 +56,11 @@ export const TTS_MODELS = [
   { id: "eleven_flash_v2_5", name: "Flash v2.5", note: "Nhanh nhất ~75 ms · 32 ngôn ngữ, có tiếng Việt", rate: 0.5 },
 ];
 // Thẻ âm thanh của Eleven v3/v4 là tiếng Anh (API chỉ hiểu thẻ tiếng Anh); nhãn tiếng Việt nằm ở title.
+// Model của Voice Agent: chỉ dùng model ElevenLabs (Eleven Realtime).
+export const AGENT_MODELS = [
+  { id: "eleven_realtime_v1_max", name: "Eleven Realtime v1 Max", note: "Suy luận trước khi trả lời · gọi công cụ nhiều bước · ~0,57 s", rate: 1 },
+  { id: "eleven_realtime_v1_mini", name: "Eleven Realtime v1 Mini", note: "Nhanh và rẻ nhất · hợp hội thoại tự nhiên · ~0,62 s", rate: 1 },
+];
 export const TAGS: [string, string][] = [["[laughs]", "cười"], ["[sighs]", "thở dài"], ["[whispers]", "thì thầm"], ["[excited]", "hào hứng"], ["[hesitates]", "ngập ngừng"], ["[shouts]", "hét lên"], ["[short pause]", "nghỉ ngắn"], ["[sad]", "buồn"], ["[sarcastic]", "mỉa mai"], ["[coughs]", "ho"]];
 export const LANGS = ["Tự nhận diện", "Tiếng Việt", "Tiếng Anh", "Tiếng Nhật", "Tiếng Hàn", "Tiếng Trung", "Tiếng Pháp", "Tiếng Đức", "Tiếng Tây Ban Nha", "Tiếng Thái", "Tiếng Indonesia"];
 export const FORMATS = ["MP3 44.1 kHz · 128 kbps", "MP3 44.1 kHz · 192 kbps", "WAV 44.1 kHz", "PCM 24 kHz", "Opus 48 kHz", "μ-law 8 kHz (điện thoại)"];

@@ -124,7 +124,7 @@ function Align({ demo, say }: { demo: () => void; say: (m: string) => void }) {
     <div className="sp-two">
       <div className="sp-card">
         <Drop title="Thả tệp âm thanh hoặc video" sub="Tối đa 3 GB, 10 giờ" accept="audio/*,video/*" file={file} onFile={(f) => setFile(f[0].name)} compact />
-        <Field label="Văn bản có sẵn" hint="Synchro căn từng từ khớp với âm thanh" htmlFor="al-t"><textarea id="al-t" className="sp-input ta" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder="Dán lời thoại, kịch bản hoặc lời bài hát…" /></Field>
+        <Field label="Văn bản có sẵn" hint="ElevenLabs căn từng từ khớp với âm thanh" htmlFor="al-t"><textarea id="al-t" className="sp-input ta" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder="Dán lời thoại, kịch bản hoặc lời bài hát…" /></Field>
         <Select id="al-f" label="Xuất ra" value={fmt} options={["Phụ đề SRT", "WebVTT", "JSON từng từ", "JSON từng ký tự"]} onChange={setFmt} />
         <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!file || !text.trim()} onClick={() => { setDone(true); demo(); }}><I.Subtitle size={14} />Căn chỉnh</button></div>
       </div>

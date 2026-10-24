@@ -101,6 +101,26 @@ export function Player({ title, dur, seed = 3, onDemo }: { title?: string; dur: 
   );
 }
 
+// Ô chọn model ElevenLabs có mô tả ngắn, dùng chung cho Đọc văn bản và Voice Agent.
+export function ModelPick({ models, value, onChange }: { models: { id: string; name: string; note: string }[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const m = models.find((x) => x.id === value) ?? models[0];
+  return (
+    <div className="sp-mpick">
+      <button className="sp-vbig" aria-expanded={open} onClick={() => setOpen(!open)}><span><b>{m.name}</b><small>{m.note}</small></span><I.Chevron size={14} /></button>
+      {open && (
+        <div className="sp-mmenu" role="listbox" aria-label="Model">
+          {models.map((x) => (
+            <button key={x.id} role="option" aria-selected={x.id === value} className={x.id === value ? "on" : ""} onClick={() => { onChange(x.id); setOpen(false); }}>
+              <span><b>{x.name}</b><small>{x.note}</small></span>{x.id === value && <I.Check size={15} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Tab gạch chân cho các mục trong một trang (giống Settings/History của ElevenLabs).
 export function Tabs<T extends string>({ items, value, onChange, label }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
   return (

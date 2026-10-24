@@ -238,6 +238,12 @@ export const SPEECH_VI2EN: Record<string, string> = {
   "Hôm nay bạn muốn xây dựng gì?": "What do you want to build today?", "Sửa lỗi đăng nhập": "Fix the login bug", "Viết hàm login có xử lý lỗi": "Write a login function with error handling",
   "Dựng trang demo HTML": "Build an HTML demo page", "Có nút bấm, chạy thử được ngay": "With buttons, runnable right away", "Lập kế hoạch kiến trúc": "Plan the architecture",
   "Chia module, luồng dữ liệu": "Modules and data flow",
+  "Toàn bộ agent chạy trên ElevenLabs: nghe, suy nghĩ và nói đều do model Eleven Realtime đảm nhận.": "The whole agent runs on ElevenLabs: listening, thinking and speaking are all handled by an Eleven Realtime model.",
+  "Suy luận trước khi trả lời · gọi công cụ nhiều bước · ~0,57 s": "Reasons before replying · multi-step tool calls · ~0.57 s",
+  "Nhanh và rẻ nhất · hợp hội thoại tự nhiên · ~0,62 s": "Fastest and cheapest · great for natural conversation · ~0.62 s",
+  "ElevenLabs căn từng từ khớp với âm thanh": "ElevenLabs aligns every word to the audio", "ElevenLabs tóm ý và viết kịch bản": "ElevenLabs summarizes and writes the script",
+  "ElevenLabs (GenFM) đọc nguồn, viết kịch bản tự nhiên rồi thu âm với giọng bạn chọn.": "ElevenLabs (GenFM) reads the source, writes a natural script and records it with your chosen voices.",
+  "Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. ElevenLabs trả về 3 bản để bạn chọn.": "Describe the voice you want (at least 20 characters), then click “Create voice”. ElevenLabs returns 3 previews to choose from.",
 };
 
 export const SPEECH_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [

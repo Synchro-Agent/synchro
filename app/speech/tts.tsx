@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import * as I from "../icons";
 import { FORMATS, LANGS, TAGS, TTS_MODELS, VOICES, fmtNum, type Voice } from "./data";
-import { Field, Player, Range, Seg, Select, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
+import { Field, ModelPick, Player, Range, Seg, Select, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
 const SAMPLE = "Chào mừng bạn đến với Synchro. [excited] Hôm nay chúng ta sẽ cùng khám phá cách biến bất kỳ văn bản nào thành giọng nói tự nhiên, chỉ trong vài giây. [short pause] Bạn chỉ cần nhập nội dung, chọn giọng, rồi bấm tạo.";
@@ -38,7 +38,6 @@ export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
   const [fmt, setFmt] = useState(FORMATS[1]);
   const [norm, setNorm] = useState("Tự động");
   const [seed, setSeed] = useState("");
-  const [modelOpen, setModelOpen] = useState(false);
   const [result, setResult] = useState<null | { dur: number; seed: number }>(null);
   const [busy, setBusy] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -129,18 +128,7 @@ export function TTS({ say, demo, sub, setSub, draft }: ToolProps) {
           <div className="sp-aside-in">
             {mode === "single" && <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick("main")}><VoiceAvatar v={voice} size={30} /><span><b>{voice.name}</b><small>{voice.desc} · {voice.lang}</small></span><I.Chevron size={14} /></button></Field>}
             <Field label="Model">
-              <div className="sp-mpick">
-                <button className="sp-vbig" aria-expanded={modelOpen} onClick={() => setModelOpen(!modelOpen)}><span><b>{m.name}</b><small>{m.note}</small></span><I.Chevron size={14} /></button>
-                {modelOpen && (
-                  <div className="sp-mmenu" role="listbox" aria-label="Model">
-                    {TTS_MODELS.map((x) => (
-                      <button key={x.id} role="option" aria-selected={x.id === model} className={x.id === model ? "on" : ""} onClick={() => { setModel(x.id); setModelOpen(false); }}>
-                        <span><b>{x.name}</b><small>{x.note}</small></span>{x.id === model && <I.Check size={15} />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ModelPick models={TTS_MODELS} value={model} onChange={setModel} />
             </Field>
             <Select id="tts-lang" label="Ngôn ngữ" value={lang} options={LANGS} onChange={setLang} />
             <Range id="tts-stab" label="Độ ổn định" value={stab} onChange={setStab} left="Biểu cảm hơn" right="Ổn định hơn" show={`${stab}%`} />

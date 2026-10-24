@@ -2,9 +2,8 @@
 // Voice Agent: gọi thử thời gian thực, cấu hình agent, công cụ, kiến thức, triển khai và lịch sử cuộc gọi.
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as I from "../icons";
-import { ALL_MODELS } from "../catalog";
-import { LANGS, VOICES, type Voice } from "./data";
-import { Drop, Field, Range, Seg, Select, Toggle, VoiceAvatar, VoicePicker } from "./parts";
+import { AGENT_MODELS, LANGS, VOICES, type Voice } from "./data";
+import { Drop, Field, ModelPick, Range, Select, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 import { VoiceOrb, startMicLevel, useSpeakingLevel } from "../voicefx";
 
@@ -39,8 +38,7 @@ export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
   const [lines, setLines] = useState<typeof SCRIPT>([]);
   const [sec, setSec] = useState(0);
   const [muted, setMuted] = useState(false);
-  const [engine, setEngine] = useState<"synchro" | "eleven">("synchro");
-  const [model, setModel] = useState(ALL_MODELS[0]);
+  const [model, setModel] = useState(AGENT_MODELS[0].id);
   const [name, setName] = useState("Trợ lý Synchro");
   const [first, setFirst] = useState(SCRIPT[0].text);
   const [prompt, setPrompt] = useState("Bạn là trợ lý đặt lịch thân thiện của Synchro. Trả lời ngắn gọn, tự nhiên như người thật, luôn xác nhận lại ngày giờ trước khi đặt.");
@@ -82,7 +80,7 @@ export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
         <div className={`sp-call ${state}`}>
           <div className="sp-agent-orb"><VoiceOrb hue={0} level={level} idle={state === "idle" ? 0 : 0.04} /></div>
           <b className="sp-call-n">{name}</b>
-          <span className="sp-muted">{state === "idle" ? `${engine === "synchro" ? model : "ElevenAgents"} · giọng ${voice.name} · ${lang}` : `${state === "speak" ? "Đang nói" : "Đang nghe"} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`}</span>
+          <span className="sp-muted">{state === "idle" ? `${AGENT_MODELS.find((x) => x.id === model)?.name} · giọng ${voice.name} · ${lang}` : `${state === "speak" ? "Đang nói" : "Đang nghe"} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`}</span>
           <div className="sp-call-a">
             {state === "idle" ? (
               <button className="btn dark sp-go" onClick={start}><I.Mic size={15} />Gọi thử</button>
@@ -109,10 +107,8 @@ export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
           {tab === "agent" && (
             <>
               <Field label="Tên agent" htmlFor="ag-name"><input id="ag-name" className="sp-input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
-              <Field label="Bộ não">
-                <Seg label="Bộ não" value={engine} onChange={setEngine} items={[{ k: "synchro", label: "Model Synchro" }, { k: "eleven", label: "ElevenAgents" }]} />
-              </Field>
-              {engine === "synchro" ? <Select id="ag-model" label="Model" value={model} options={ALL_MODELS} onChange={setModel} /> : <p className="sp-note">ElevenLabs lo cả phần trí tuệ (LLM của họ). Model Synchro dùng đúng model bạn được cấp quyền trong Synchro.</p>}
+              <Field label="Model"><ModelPick models={AGENT_MODELS} value={model} onChange={setModel} /></Field>
+              <p className="sp-note">Toàn bộ agent chạy trên ElevenLabs: nghe, suy nghĩ và nói đều do model Eleven Realtime đảm nhận.</p>
               <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick(true)}><VoiceAvatar v={voice} size={30} /><span><b>{voice.name}</b><small>{voice.desc}</small></span><I.Chevron size={14} /></button></Field>
               <Select id="ag-lang" label="Ngôn ngữ chính" value={lang} options={LANGS.slice(1)} onChange={setLang} />
               <Field label="Lời chào đầu" htmlFor="ag-first"><textarea id="ag-first" className="sp-input ta" rows={2} value={first} onChange={(e) => setFirst(e.target.value)} /></Field>

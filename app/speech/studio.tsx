@@ -124,7 +124,7 @@ function Podcast({ demo, say }: { demo: () => void; say: (m: string) => void }) 
     <div className="sp-two">
       <div className="sp-card">
         <Field label="Nguồn nội dung"><Seg small label="Nguồn" value={srcKind} onChange={setSrcKind} items={[{ k: "url", label: "Liên kết" }, { k: "text", label: "Văn bản" }, { k: "file", label: "Tệp" }]} /></Field>
-        {srcKind === "file" ? <Drop compact title="Thả PDF, DOCX, TXT" sub="Synchro tóm ý và viết kịch bản" onFile={(f) => setSrc(f[0].name)} file={src || null} /> :
+        {srcKind === "file" ? <Drop compact title="Thả PDF, DOCX, TXT" sub="ElevenLabs tóm ý và viết kịch bản" onFile={(f) => setSrc(f[0].name)} file={src || null} /> :
           srcKind === "url" ? <input className="sp-input" value={src} onChange={(e) => setSrc(e.target.value)} placeholder="Bài báo, blog, trang tài liệu…" aria-label="Liên kết nguồn" /> :
           <textarea className="sp-input ta" rows={4} value={src} onChange={(e) => setSrc(e.target.value)} placeholder="Dán nội dung cần biến thành podcast…" aria-label="Văn bản nguồn" />}
         <Field label="Kiểu"><Seg label="Kiểu podcast" value={fmt} onChange={setFmt} items={[{ k: "conv", label: "Hai người trò chuyện" }, { k: "bulletin", label: "Một người bình luận" }]} /></Field>
@@ -149,7 +149,7 @@ function Podcast({ demo, say }: { demo: () => void; say: (m: string) => void }) 
             </div>
             <button className="sp-link" onClick={() => say("Sửa kịch bản rồi tạo lại (mẫu)")}>Sửa kịch bản</button>
           </>
-        ) : <div className="sp-empty">Synchro đọc nguồn, viết kịch bản tự nhiên rồi thu âm với giọng bạn chọn.</div>}
+        ) : <div className="sp-empty">ElevenLabs (GenFM) đọc nguồn, viết kịch bản tự nhiên rồi thu âm với giọng bạn chọn.</div>}
       </div>
       {pick && <VoicePicker value={(pick === "host" ? host : guest).id} onPick={pick === "host" ? setHost : setGuest} onClose={() => setPick(null)} say={say} />}
     </div>

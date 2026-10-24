@@ -40,7 +40,7 @@ export function SpeechView({ say, tool, setTool, sideOpen, onSide }: { say: (m: 
         <div className="sp-bar-r">
           <span className="sp-demo" title={DEMO_NOTE}><i />Chế độ mẫu</span>
           <span className="sp-credit" title={`Đã dùng ${fmtNum(PLAN.used)} / ${fmtNum(PLAN.total)} credit tháng này`}>
-            <b>{PLAN.name}</b><span className="sp-credit-n">{fmtNum(left)} credit</span>
+            <b>ElevenLabs {PLAN.name}</b><span className="sp-credit-n">{fmtNum(left)} credit</span>
             <span className="sp-credit-bar"><i style={{ width: `${(left / PLAN.total) * 100}%` }} /></span>
           </span>
         </div>
