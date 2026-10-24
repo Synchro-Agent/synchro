@@ -9,9 +9,9 @@ import { ToolHead, type ToolProps } from "./view";
 type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 const DESIGN_EX = ["Nữ miền Nam, ngoài 20 tuổi, giọng ngọt, nói nhanh, hợp video mạng xã hội", "Ông lão miền Trung trầm ấm, kể chuyện cổ tích chậm rãi", "Nam phát thanh viên Hà Nội, rõ ràng, chuẩn mực, hơi nghiêm"];
 const CREATE = [
-  { k: "ivc" as const, title: "Nhân bản nhanh", desc: "Nhân bản giọng của bạn chỉ từ 10 giây âm thanh. Tải tệp lên hoặc ghi âm trực tiếp.", hue: 0, min: "10 giây", best: "3 phút", primary: true },
-  { k: "pvc" as const, title: "Nhân bản chuyên sâu", desc: "Bản nhân bản giống thật nhất. Tốt nhất với 30 phút mẫu trở lên, có xác minh chính chủ.", hue: 230, min: "10 phút", best: "2 giờ" },
-  { k: "design" as const, title: "Thiết kế giọng", desc: "Tạo giọng cho người hay nhân vật từ một câu mô tả, rồi tinh chỉnh theo ý.", hue: 120, tags: ["Giám đốc", "Cô gái miền Tây", "Lồng tiếng trailer", "Cướp biển", "Ông kể chuyện", "Chú chuột nhỏ"] },
+  { k: "ivc" as const, title: "Nhân bản nhanh", desc: "Nhân bản giọng của bạn chỉ từ 10 giây âm thanh. Tải tệp lên hoặc ghi âm trực tiếp.", hue: 185, min: "10 giây", best: "3 phút", primary: true },
+  { k: "pvc" as const, title: "Nhân bản chuyên sâu", desc: "Bản nhân bản giống thật nhất. Tốt nhất với 30 phút mẫu trở lên, có xác minh chính chủ.", hue: 322, min: "10 phút", best: "2 giờ" },
+  { k: "design" as const, title: "Thiết kế giọng", desc: "Tạo giọng cho người hay nhân vật từ một câu mô tả, rồi tinh chỉnh theo ý.", hue: 32, tags: ["Giám đốc", "Cô gái miền Tây", "Lồng tiếng trailer", "Cướp biển", "Ông kể chuyện", "Chú chuột nhỏ"] },
 ];
 
 function Back({ onClick, label }: { onClick: () => void; label: string }) {
@@ -74,7 +74,7 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
             </div>
           </div>
           <div className="sp-card sp-clone-r">
-            <OrbStage hue={pro ? 230 : 0} progress={total / target} min={pro ? "10 phút" : "10 giây"} best={pro ? "2 giờ" : "3 phút"} active={samples.length > 0} />
+            <OrbStage hue={pro ? 322 : 185} progress={total / target} min={pro ? "10 phút" : "10 giây"} best={pro ? "2 giờ" : "3 phút"} active={samples.length > 0} />
             <p className="sp-muted" style={{ textAlign: "center" }}>{total ? `Đã có ${fmtSec(total)} mẫu · ` : ""}Để giọng giống nhất, hãy cung cấp {pro ? "2 giờ" : "3 phút"} âm thanh mẫu.</p>
           </div>
         </div>
@@ -164,7 +164,7 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
           </div>
           <div className="sp-card">
             <div className="sp-card-h">Bản nghe thử</div>
-            {designed ? <Previews seed={designed * 5} demo={demo} onSave={(i) => save(`Giọng thiết kế ${i + 1}`, "designed")} /> : <div className="sp-empty"><OrbStage hue={120} size={96} /><p>Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. Synchro trả về 3 bản để bạn chọn.</p></div>}
+            {designed ? <Previews seed={designed * 5} demo={demo} onSave={(i) => save(`Giọng thiết kế ${i + 1}`, "designed")} /> : <div className="sp-empty"><OrbStage hue={32} size={96} /><p>Mô tả giọng bạn muốn (ít nhất 20 ký tự), rồi bấm “Tạo giọng”. Synchro trả về 3 bản để bạn chọn.</p></div>}
           </div>
         </div>
       )}

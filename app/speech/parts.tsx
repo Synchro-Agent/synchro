@@ -4,7 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "../icons";
 import { CATEGORIES, NOTICES, fmtUses, MY_VOICES, VOICES, KIND_LABEL, type Voice } from "./data";
-import { VoiceOrb, useSpeakingLevel } from "../voicefx";
+import { LiquidOrb } from "../liquidorb";
+
+// Mức hoạt động giả lập khi đang nghe thử (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
+const talking = () => { const t = performance.now() / 1000; return Math.max(0, Math.sin(t * 0.85) + 0.35) * (0.12 + Math.max(0, Math.sin(t * 9.3 + Math.sin(t * 2.1))) ** 2 * 0.6); };
 
 export function Seg<T extends string>({ items, value, onChange, label, small }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string; small?: boolean }) {
   return (
@@ -109,8 +112,7 @@ export function Tabs<T extends string>({ items, value, onChange, label }: { item
 
 // Ảnh đại diện giọng: quả cầu màu chuyển động nhẹ bên trong (CSS, nhẹ hơn WebGL khi có nhiều giọng trong danh sách).
 export function VoiceAvatar({ v, size = 22, playing }: { v: Voice; size?: number; playing?: boolean }) {
-  const h = v.hue ?? 210;
-  return <span className={`sp-av ${playing ? "on" : ""}`} style={{ width: size, height: size, "--h1": `${h}`, "--h2": `${(h + 70) % 360}`, "--h3": `${(h + 200) % 360}` } as React.CSSProperties}><i /></span>;
+  return <span className={`sp-av ${playing ? "on" : ""}`} style={{ width: size, height: size }}><LiquidOrb hue={v.hue ?? 210} activity={playing ? talking : 0} /></span>;
 }
 
 export function VoiceChip({ v, onClick, small }: { v: Voice; onClick: () => void; small?: boolean }) {
@@ -119,8 +121,6 @@ export function VoiceChip({ v, onClick, small }: { v: Voice; onClick: () => void
 
 // Quả cầu giọng nói lớn (WebGL) kèm nút phát và vòng tiến độ “tối thiểu / tốt nhất” như trang tạo giọng.
 export function OrbStage({ hue, active, progress, min, best, size = 168, onPlay, playing }: { hue: number; active?: boolean; progress?: number; min?: string; best?: string; size?: number; onPlay?: () => void; playing?: boolean }) {
-  const level = useRef(0);
-  useSpeakingLevel(!!(active || playing), level);
   const r = size / 2 + 14, c = 2 * Math.PI * r;
   return (
     <div className="sp-orbstage" style={{ width: size + 40, height: size + 40 }}>
@@ -130,7 +130,7 @@ export function OrbStage({ hue, active, progress, min, best, size = 168, onPlay,
           <circle className="p" cx={(size + 40) / 2} cy={(size + 40) / 2} r={r} strokeDasharray={`${c * Math.min(1, progress)} ${c}`} />
         </svg>
       )}
-      <div className="sp-orbc" style={{ width: size, height: size }}><VoiceOrb hue={hue} level={level} idle={0.02} /></div>
+      <div className="sp-orbc" style={{ width: size, height: size }}><LiquidOrb hue={hue} activity={active || playing ? talking : 0} /></div>
       {onPlay && <button className="sp-orbplay" onClick={onPlay} aria-label={playing ? "Dừng nghe" : "Nghe thử"}>{playing ? <I.Pause size={16} /> : <I.Play size={16} />}</button>}
       {min && <span className="sp-dial-l"><b>Tối thiểu</b>{min}</span>}
       {best && <span className="sp-dial-r"><b>Tốt nhất</b>{best}</span>}

@@ -28,7 +28,7 @@ export function tr(s: string, lang: Lang = cur): string {
 }
 
 const SKIP = "script,style,textarea,input,code,pre,[data-notr],.ai-msg,.user-msg,.mdx,.title-edit";
-const ATTRS = ["placeholder", "title", "aria-label"];
+const ATTRS = ["placeholder", "title", "aria-label", "data-tip"];
 type Rec = { o: string; t: string };
 const texts = new WeakMap<Text, Rec>();
 const attrs = new WeakMap<Element, Record<string, Rec>>();
@@ -65,8 +65,8 @@ function walk(root: Node, lang: Lang) {
   const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let n: Node | null;
   while ((n = tw.nextNode())) doText(n as Text, lang);
-  if (el.matches("[placeholder],[title],[aria-label]")) doAttrs(el, lang);
-  el.querySelectorAll("[placeholder],[title],[aria-label]").forEach((x) => doAttrs(x, lang));
+  if (el.matches("[placeholder],[title],[aria-label],[data-tip]")) doAttrs(el, lang);
+  el.querySelectorAll("[placeholder],[title],[aria-label],[data-tip]").forEach((x) => doAttrs(x, lang));
 }
 
 export function I18n() {

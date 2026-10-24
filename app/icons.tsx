@@ -108,7 +108,7 @@ export const GitHub = ({ size = 18 }: P) => (
 export const Expand = (p: P) => <S {...p}><path d="M11.5 3.5h5v5M16.5 3.5l-5.5 5.5M8.5 16.5h-5v-5M3.5 16.5L9 11" /></S>;
 export const Collapse = (p: P) => <S {...p}><path d="M16 9h-5V4M11 9l5.5-5.5M4 11h5v5M9 11l-5.5 5.5" /></S>;
 // Speech (ElevenLabs)
-export const Speech = (p: P) => <S {...p}><circle cx="8" cy="7" r="3" /><path d="M2.6 16.5c.6-3 2.7-4.6 5.4-4.6s4.8 1.6 5.4 4.6M14.2 5.2c1 1 1 2.8 0 3.8M16.3 3.4c2 2 2 5.4 0 7.4" /></S>;
+export const Speech = (p: P) => <S {...p}><g className="ai-hd"><circle cx="8" cy="7" r="3" /></g><path d="M2.6 16.5c.6-3 2.7-4.6 5.4-4.6s4.8 1.6 5.4 4.6" /><g className="ai-sw1"><path d="M14.2 5.2c1 1 1 2.8 0 3.8" /></g><g className="ai-sw2"><path d="M16.3 3.4c2 2 2 5.4 0 7.4" /></g></S>;
 export const Play = (p: P) => <S {...p} fill><path d="M6 4.2l10 5.8-10 5.8z" /></S>;
 export const Pause = (p: P) => <S {...p} fill><rect x="5" y="4" width="3.4" height="12" rx="1" /><rect x="11.6" y="4" width="3.4" height="12" rx="1" /></S>;
 export const Upload = (p: P) => <S {...p}><path d="M10 13V3.5M6.5 7L10 3.5 13.5 7M4 16h12" /></S>;

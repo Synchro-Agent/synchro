@@ -711,3 +711,35 @@ export const RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [
 // Mục Speech: chỉ thêm chuỗi chưa có, không ghi đè bản dịch sẵn có.
 for (const [k, v] of Object.entries(SPEECH_VI2EN)) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
 RULES_EN.push(...SPEECH_RULES_EN);
+
+// Bổ sung sau lượt quét toàn web (giao diện tiếng Anh).
+Object.assign(VI2EN, {
+  "Mở công cụ Speech": "Show Speech tools", "Thu gọn công cụ Speech": "Hide Speech tools", "Đọc chính tả": "Dictate",
+  "Máy chủ chưa bật workspace.": "The workspace isn't enabled on the server.", "Đọc to": "Read aloud", "Hữu ích": "Helpful", "Không hữu ích": "Not helpful",
+  "Đang kết nối…": "Connecting…", "Đang mở kết nối giọng nói…": "Opening the voice connection…", "Ngôn ngữ nhận dạng": "Recognition language",
+  "Mất kết nối tới máy chủ giọng nói": "Lost connection to the voice server", "Lỗi kết nối giọng nói": "Voice connection error",
+  "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau.": "You've opened too many voice sessions. Please try again later.",
+  "(Câu hỏi bằng giọng nói)": "(Spoken question)", "Bảng phiên": "Session rail", "Tệp": "File",
+});
+RULES_EN.push([/^Ngữ cảnh: (.+) token \((\d+)%\)$/, (m) => `Context: ${m[1]} tokens (${m[2]}%)`]);
+
+// Bổ sung sau lượt quét toàn web (giao diện tiếng Việt): danh mục connector/plugin và nhãn tab Code.
+Object.assign(EN2VI, {
+  "Search, read, and upload files instantly": "Tìm, đọc và tải tệp lên tức thì",
+  "Draft replies, summarize threads, and search your inbox": "Soạn thư trả lời, tóm tắt chuỗi thư và tìm trong hộp thư",
+  "Manage your schedule and coordinate meetings effortlessly": "Quản lý lịch và sắp xếp cuộc họp dễ dàng",
+  "Search, create, autofill, and export Canva designs": "Tìm, tạo, tự điền và xuất thiết kế Canva",
+  "Access your company's SharePoint, OneDrive, Outlook, and Teams directly": "Truy cập trực tiếp SharePoint, OneDrive, Outlook và Teams của công ty",
+  "Connect your Notion workspace to search, update, and power workflows": "Kết nối không gian Notion để tìm kiếm, cập nhật và chạy quy trình",
+  "Generate diagrams and better code from Figma context": "Tạo sơ đồ và code tốt hơn từ ngữ cảnh Figma",
+  "Send messages, create canvases, and fetch black data": "Gửi tin nhắn, tạo canvas và lấy dữ liệu",
+  "CRM context for every answer, insight, and action": "Ngữ cảnh CRM cho mọi câu trả lời, nhận định và hành động",
+  "Connect to Asana to coordinate tasks, projects, and goals": "Kết nối Asana để điều phối việc, dự án và mục tiêu",
+  "Build QuickBooks integrations with the Intuit…": "Xây dựng tích hợp QuickBooks với Intuit…",
+  "Bring product decisions, customer evidence, and…": "Đưa quyết định sản phẩm, bằng chứng từ khách hàng và…",
+  "Configure, deploy and troubleshoot Umbraco 13/…": "Cấu hình, triển khai và xử lý sự cố Umbraco 13/…",
+  "Use this skill when the user wants intellectual…": "Dùng skill này khi người dùng muốn trao đổi học thuật…",
+  "Guide users through a structured workflow for co…": "Dẫn người dùng qua quy trình có cấu trúc để cùng…",
+  "Suite of tools for creating elaborate, multi-…": "Bộ công cụ để tạo các artifact phức tạp, nhiều…",
+  "by": "bởi", "Session rail": "Bảng phiên", "File": "Tệp",
+});

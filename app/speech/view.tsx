@@ -10,11 +10,12 @@ import { AgentTool } from "./agent";
 import { VoicesTool } from "./voices";
 import { AudioTool } from "./audio";
 import { StudioTool } from "./studio";
+import * as T from "./toolicons";
 
 export type ToolProps = { say: (m: string) => void; demo: () => void; sub: string; setSub: (s: string) => void; go: (t: SpeechTool, sub?: string) => void; draft: string };
 
 export const TOOL_ICON: Record<SpeechTool, (p: { size?: number }) => React.ReactNode> = {
-  home: I.Speech, tts: I.Speaker, stt: I.Subtitle, agent: I.Chat2, voices: I.VoicePlus, audio: I.Pulse, studio: I.Film,
+  home: T.Home, tts: T.TextToSpeech, stt: T.SpeechToText, agent: T.Agent, voices: T.VoiceClone, audio: T.SoundEffects, studio: T.Dubbing,
 };
 
 // Gói Pro: 500.000 credit mỗi tháng (số đã dùng là dữ liệu mẫu cho tới khi gắn API).
@@ -69,19 +70,20 @@ export function ToolHead({ title, desc, children }: { title: string; desc: strin
   );
 }
 
-const CARDS: { t: SpeechTool; sub?: string; icon: (p: { size?: number }) => React.ReactNode; title: string; desc: string; tone: string }[] = [
-  { t: "tts", sub: "single", icon: I.Speaker, title: "Đọc văn bản", desc: "Giọng tự nhiên, 90+ ngôn ngữ, thẻ cảm xúc", tone: "blue" },
-  { t: "tts", sub: "dialogue", icon: I.Chat2, title: "Hội thoại", desc: "Nhiều người nói trong một bản", tone: "violet" },
-  { t: "agent", icon: I.Mic, title: "Voice Agent", desc: "Trò chuyện thời gian thực, gọi hàm", tone: "green" },
-  { t: "stt", sub: "file", icon: I.Subtitle, title: "Chép lời", desc: "Scribe v2, tách người nói, mốc từng từ", tone: "amber" },
-  { t: "voices", sub: "design", icon: I.Sparkle, title: "Thiết kế giọng", desc: "Tạo giọng mới từ một câu mô tả", tone: "pink" },
-  { t: "voices", sub: "ivc", icon: I.VoicePlus, title: "Nhân bản giọng", desc: "Nhanh từ 1 phút, chuyên sâu từ 30 phút", tone: "blue" },
-  { t: "audio", sub: "sfx", icon: I.Wave, title: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây", tone: "amber" },
-  { t: "audio", sub: "isolate", icon: I.ShieldCheck, title: "Lọc tạp âm", desc: "Tách giọng khỏi nhạc và tiếng ồn", tone: "green" },
-  { t: "audio", sub: "changer", icon: I.Swap, title: "Đổi giọng", desc: "Giữ cảm xúc, đổi sang giọng khác", tone: "violet" },
-  { t: "studio", sub: "dub", icon: I.Globe, title: "Lồng tiếng", desc: "Dịch video sang 90+ ngôn ngữ", tone: "pink" },
-  { t: "studio", sub: "book", icon: I.Book, title: "Sách nói", desc: "Từ EPUB, PDF, DOCX, theo chương", tone: "amber" },
-  { t: "studio", sub: "podcast", icon: I.Bars, title: "Podcast", desc: "Hai người dẫn từ tài liệu hoặc link", tone: "blue" },
+// Màu các ô đi theo một dải sắc có chủ đích: xanh cho giọng nói, ấm cho âm thanh, hồng tím cho sáng tạo.
+const CARDS: { t: SpeechTool; sub?: string; icon: (p: { size?: number }) => React.ReactNode; title: string; desc: string; hue: number }[] = [
+  { t: "tts", sub: "single", icon: T.TextToSpeech, title: "Đọc văn bản", desc: "Giọng tự nhiên, 90+ ngôn ngữ, thẻ cảm xúc", hue: 222 },
+  { t: "tts", sub: "dialogue", icon: T.Dialogue, title: "Hội thoại", desc: "Nhiều người nói trong một bản", hue: 252 },
+  { t: "agent", icon: T.Agent, title: "Voice Agent", desc: "Trò chuyện thời gian thực, gọi hàm", hue: 168 },
+  { t: "stt", sub: "file", icon: T.SpeechToText, title: "Chép lời", desc: "Scribe v2, tách người nói, mốc từng từ", hue: 196 },
+  { t: "voices", sub: "design", icon: T.VoiceDesign, title: "Thiết kế giọng", desc: "Tạo giọng mới từ một câu mô tả", hue: 318 },
+  { t: "voices", sub: "ivc", icon: T.VoiceClone, title: "Nhân bản giọng", desc: "Nhanh từ 1 phút, chuyên sâu từ 30 phút", hue: 282 },
+  { t: "audio", sub: "sfx", icon: T.SoundEffects, title: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây", hue: 22 },
+  { t: "audio", sub: "isolate", icon: T.Isolator, title: "Lọc tạp âm", desc: "Tách giọng khỏi nhạc và tiếng ồn", hue: 148 },
+  { t: "audio", sub: "changer", icon: T.VoiceChanger, title: "Đổi giọng", desc: "Giữ cảm xúc, đổi sang giọng khác", hue: 266 },
+  { t: "studio", sub: "dub", icon: T.Dubbing, title: "Lồng tiếng", desc: "Dịch video sang 90+ ngôn ngữ", hue: 340 },
+  { t: "studio", sub: "book", icon: T.Audiobook, title: "Sách nói", desc: "Từ EPUB, PDF, DOCX, theo chương", hue: 38 },
+  { t: "studio", sub: "podcast", icon: T.Podcast, title: "Podcast", desc: "Hai người dẫn từ tài liệu hoặc link", hue: 8 },
 ];
 
 const RECENT = [
@@ -110,8 +112,8 @@ function Home({ go, onDraft, say }: ToolProps & { onDraft: (t: string) => void }
       </div>
       <div className="sp-cards">
         {CARDS.map((c) => (
-          <button key={c.title} className={`sp-tcard t-${c.tone}`} onClick={() => go(c.t, c.sub)}>
-            <span className="sp-tic"><c.icon size={18} /></span>
+          <button key={c.title} className="sp-tcard" onClick={() => go(c.t, c.sub)}>
+            <T.ToolTile hue={c.hue}><c.icon size={20} /></T.ToolTile>
             <b>{c.title}</b><span>{c.desc}</span>
           </button>
         ))}

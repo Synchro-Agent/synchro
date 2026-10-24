@@ -379,6 +379,7 @@ export default function Home() {
   const [codeEmpty, setCodeEmpty] = useState(false);
   const [codeOpen, setCodeOpen] = useState(true);
   const [spTool, setSpTool] = usePref<SpeechTool>("spTool", "home");
+  const [spOpen, setSpOpen] = usePref("spOpen", false);
   const [codeRen, setCodeRen] = useState<number | null>(null);
   const [codeMenu, setCodeMenu] = useState<number | null>(null);
   const [pickProj, setPickProj] = useState(false);
@@ -593,7 +594,10 @@ export default function Home() {
     if (speaking === key) { s.cancel(); setSpeaking(null); return; }
     s.cancel();
     const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, " "));
-    u.lang = VOICE_LANG[vlang] ?? "vi-VN"; u.rate = VOICE_RATE[vspeed] ?? 1; u.onend = () => setSpeaking(null);
+    // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt.
+    const vi = /[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i.test(text);
+    const pref = VOICE_LANG[vlang] ?? "vi-VN";
+    u.lang = vi ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref; u.rate = VOICE_RATE[vspeed] ?? 1; u.onend = () => setSpeaking(null);
     setSpeaking(key); s.speak(u);
   };
   const like = (i: number, v: 1 | -1) => {
@@ -664,6 +668,13 @@ export default function Home() {
   const [voiceOn, setVoiceOn] = useState(false);
   const composerProps = { onSend: send, busy, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload"), onVoice: () => { window.speechSynthesis?.cancel(); setVoiceOn(true); } };
   const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
+  // Lượt hỏi đáp từ Eleven Realtime được lưu vào đoạn chat như tin nhắn thường.
+  const voiceTurn = (u: string, a: string) => {
+    const now = Date.now();
+    const msgs: Msg[] = [{ role: "user", text: u || "(Câu hỏi bằng giọng nói)", time: now }, { role: "ai", text: a, time: now, done: true }];
+    if (view === "chat" && cur !== null) patch(cur, (m) => [...m, ...msgs]);
+    else { setChats((cs) => [{ id: now, title: (u || a).slice(0, 40), msgs }, ...cs]); setCur(now); setView("chat"); }
+  };
   const visible = chats.filter((c) => !c.inc);
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
@@ -735,10 +746,13 @@ export default function Home() {
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
           {me?.perms.features.speech !== false && (
             <>
-              <button className={`nav-item ${view === "speech" && spTool === "home" ? "active" : ""}`} aria-expanded={view === "speech"} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Speech />Speech</button>
-              <div className={`fold ${view === "speech" ? "open" : ""}`}>
+              <div className="nav-row">
+                <button className={`nav-item ${view === "speech" && (spTool === "home" || !spOpen) ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Speech />Speech</button>
+                <button className={`nav-chev ${spOpen ? "open" : ""}`} aria-expanded={spOpen} aria-label={spOpen ? "Thu gọn công cụ Speech" : "Mở công cụ Speech"} onClick={() => setSpOpen(!spOpen)}><I.ChevronR size={14} /></button>
+              </div>
+              <div className={`fold ${spOpen ? "open" : ""}`}>
                 <div className="nav-sub" aria-label="Công cụ Speech">
-                  {SP_TOOLS.filter((t) => t.k !== "home").map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={view === "speech" ? 0 : -1} onClick={() => setSpTool(t.k)}><Ic size={15} />{t.label}</button>; })}
+                  {SP_TOOLS.filter((t) => t.k !== "home").map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={spOpen ? 0 : -1} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
                 </div>
               </div>
             </>
@@ -991,7 +1005,7 @@ export default function Home() {
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
-      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} lang={VOICE_LANG[vlang] ?? "vi-VN"} rate={VOICE_RATE[vspeed] ?? 1} say={say} />}
+      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><SearchModal chats={visible} onClose={() => setModal(null)} onPick={(id) => { setCur(id); setView("chat"); setModal(null); }} onNew={() => { goNew(); setModal(null); }} /></Fade>
