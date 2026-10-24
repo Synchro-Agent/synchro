@@ -8,7 +8,7 @@ import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { Fade, Menu, Thinking } from "./ui";
 import { Directory } from "./settings";
-import { ShaderMetal } from "./shader-metal";
+import { HalftoneBg } from "./halftone";
 import { CodeView } from "./codeview";
 import { VoiceMode } from "./voicemode";
 import { SpeechView, TOOL_ICON } from "./speech/view";
@@ -733,7 +733,7 @@ export default function Home() {
   return (<>
     <AppCtx.Provider value={api}>
     <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}`}>
-      {view === "code" && codeEmpty && <div className="code-bg"><ShaderMetal metal="chrome" color="#a5aebf" ribbons={3} speed={0.3} iridescence={0.2} interactive /></div>}
+      {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
       <aside className={`sidebar ${open ? "" : "closed"}`} onClickCapture={(e) => {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
         const t = e.target as HTMLElement;
