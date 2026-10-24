@@ -1,10 +1,10 @@
-// Bộ icon riêng của Speech: lưới 24px, nét 1.6, đầu tròn. Các nhóm <g className="ti-*"> có chuyển động khi rê chuột
-// (định nghĩa trong globals.css), dùng chung cho ô màu ở trang chính và mục con ở thanh bên.
+// Bộ icon riêng của Speech: lưới 24px, nét mảnh 1.25, đầu tròn. Các nhóm <g className="ti-*"> có chuyển động khi rê chuột
+// (định nghĩa trong globals.css), dùng chung cho trang chính, tab trên điện thoại và mục con ở thanh bên.
 import React from "react";
 
 type P = { size?: number };
 const S = ({ size = 20, children }: P & { children: React.ReactNode }) => (
-  <svg className="ti" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+  <svg className="ti" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );
 
 // Đọc văn bản: chữ T phát ra sóng âm.
