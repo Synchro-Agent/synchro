@@ -2100,3 +2100,8 @@ b,strong{font-weight:600}
 @media (prefers-reduced-motion:reduce){.sp-orb i,.sp-call .sp-orb,.sp-mic.on::after{animation:none!important}}
 .modal .sp-search{display:flex;margin:0;font-size:inherit;font-weight:400}
 .modal .sp-vp-foot>label{margin:0;font-size:12.5px}
+.nav-sub{position:relative;display:flex;flex-direction:column;gap:1px;padding:1px 0 3px 21px}
+.nav-sub::before{content:"";position:absolute;left:19px;top:3px;bottom:5px;width:1px;background:var(--border-strong)}
+.nav-sub .nav-item{height:28px;font-size:13px;color:var(--text-2);padding-left:10px}
+.nav-sub .nav-item svg{color:var(--text-3)}
+.nav-sub .nav-item:hover,.nav-sub .nav-item.active{color:var(--text)}

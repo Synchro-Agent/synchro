@@ -729,7 +729,16 @@ export default function Home() {
           {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
-          {me?.perms.features.speech !== false && <Nav v="speech" icon={<I.Speech />} label="Speech" />}
+          {me?.perms.features.speech !== false && (
+            <>
+              <button className={`nav-item ${view === "speech" && spTool === "home" ? "active" : ""}`} aria-expanded={view === "speech"} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Speech />Speech</button>
+              <div className={`fold ${view === "speech" ? "open" : ""}`}>
+                <div className="nav-sub" aria-label="Công cụ Speech">
+                  {SP_TOOLS.filter((t) => t.k !== "home").map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={view === "speech" ? 0 : -1} onClick={() => setSpTool(t.k)}><Ic size={15} />{t.label}</button>; })}
+                </div>
+              </div>
+            </>
+          )}
           <Nav v="customize" icon={<I.Brief />} label="Tùy chỉnh" />
         </div>
         {(() => {
@@ -811,14 +820,6 @@ export default function Home() {
           const codeRest = codeList.filter((c) => !c.pinned);
           return (
             <div className="chat-scroll">
-              {view === "speech" && (
-                <>
-                  <div className="section-label"><span>Công cụ Speech</span></div>
-                  <div className="chat-list">
-                    {SP_TOOLS.map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`chat-item sp-nav ${spTool === t.k ? "active" : ""}`} onClick={() => setSpTool(t.k)}><Ic size={15} />{t.label}</button>; })}
-                  </div>
-                </>
-              )}
               {(pinned.length > 0 || pinProjs.length > 0 || codePinned.length > 0) && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setPinOpen(!pinOpen)}><span>Đã ghim</span><span className={`sec-chev ${pinOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>

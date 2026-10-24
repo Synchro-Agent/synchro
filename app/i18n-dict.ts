@@ -102,6 +102,7 @@ export const VI2EN: Record<string, string> = {
   "Đang chạy…": "Running…",
   "Đang tải tài liệu…": "Loading docs…",
   "Bung đoạn code bị ẩn": "Expand hidden code",
+  "Đọc văn bản": "Text to Speech", "Chép lời": "Speech to Text", "Giọng nói": "Voices", "Âm thanh": "Audio", "Lồng tiếng & Studio": "Dubbing & Studio",
   "Mới": "New", "Dự án": "Projects", "Tùy chỉnh": "Customize", "Đoạn chat và tác vụ": "Chats and tasks", "Chưa có đoạn chat nào": "No chats yet",
   "Gói Free ·": "Free plan ·", "Nâng cấp": "Upgrade", "Đoạn chat": "Chat", "Trung bình": "Medium", "Thấp": "Low", "Cao": "High", "Cao hơn": "Higher", "Tối đa": "Max",
   "Viết": "Write", "Học tập": "Learn", "Lập trình": "Code", "Cuộc sống": "Life stuff", "Lựa chọn của Synchro": "Synchro's choice",
