@@ -33,8 +33,3 @@ export const Audiobook = (p: P) => <S {...p}><path d="M12 9.5c-2-1.4-4.6-1.8-8-1
 export const Podcast = (p: P) => <S {...p}><rect x="8.5" y="2.8" width="7" height="11" rx="3.5" /><path d="M8.5 7h2.2M8.5 9.6h2.2M13.3 7h2.2M13.3 9.6h2.2M5.5 11.5a6.5 6.5 0 0013 0M12 18v3M9 21h6" /><g className="ti-w2"><path d="M20.6 6.2a4 4 0 010 4.6M3.4 6.2a4 4 0 000 4.6" /></g></S>;
 // Trang chính của Speech: lưới ô.
 export const Home = (p: P) => <S {...p}><rect x="3.5" y="3.5" width="7" height="7" rx="2" /><rect x="13.5" y="3.5" width="7" height="7" rx="2" /><rect x="3.5" y="13.5" width="7" height="7" rx="2" /><g className="ti-spin"><rect x="13.5" y="13.5" width="7" height="7" rx="3.5" /></g></S>;
-
-// Ô màu chuyển sắc cho trang chính: hai sắc liền kề (cách 28°) cùng một họ, có lớp bóng kính phía trên.
-export function ToolTile({ hue, children, size = 40 }: { hue: number; children: React.ReactNode; size?: number }) {
-  return <span className="ti-tile" style={{ width: size, height: size, "--th": `${hue}` } as React.CSSProperties}>{children}</span>;
-}

@@ -224,7 +224,7 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
               <div className="sp-vrow auto" role="option" aria-selected={false}>
                 <span className="sp-autoic"><I.Sparkle size={15} /></span>
                 <div className="sp-vmeta"><b>Tự chọn giọng</b><span>Chọn giọng phù hợp với văn bản mỗi lần tạo</span></div>
-                <button className="btn sp-use" onClick={() => { onPick({ ...VOICES[0], id: "auto", name: "Tự chọn", desc: "theo văn bản" }); onClose(); }}>Dùng</button>
+                <button className="btn dark sp-use" onClick={() => { onPick({ ...VOICES[0], id: "auto", name: "Tự chọn", desc: "theo văn bản" }); onClose(); }}>Dùng</button>
               </div>
             )}
             {list.length === 0 && <div className="sp-empty">Không có giọng khớp. Thử bỏ bớt bộ lọc, hoặc dán Voice ID ở dưới.</div>}

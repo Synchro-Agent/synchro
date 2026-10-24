@@ -9,7 +9,7 @@ import { ToolHead, type ToolProps } from "./view";
 type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 const DESIGN_EX = ["Nữ miền Nam, ngoài 20 tuổi, giọng ngọt, nói nhanh, hợp video mạng xã hội", "Ông lão miền Trung trầm ấm, kể chuyện cổ tích chậm rãi", "Nam phát thanh viên Hà Nội, rõ ràng, chuẩn mực, hơi nghiêm"];
 const CREATE = [
-  { k: "ivc" as const, title: "Nhân bản nhanh", desc: "Nhân bản giọng của bạn chỉ từ 10 giây âm thanh. Tải tệp lên hoặc ghi âm trực tiếp.", hue: 185, min: "10 giây", best: "3 phút", primary: true },
+  { k: "ivc" as const, title: "Nhân bản nhanh", desc: "Nhân bản giọng của bạn chỉ từ 10 giây âm thanh. Tải tệp lên hoặc ghi âm trực tiếp.", hue: 185, min: "10 giây", best: "3 phút" },
   { k: "pvc" as const, title: "Nhân bản chuyên sâu", desc: "Bản nhân bản giống thật nhất. Tốt nhất với 30 phút mẫu trở lên, có xác minh chính chủ.", hue: 322, min: "10 phút", best: "2 giờ" },
   { k: "design" as const, title: "Thiết kế giọng", desc: "Tạo giọng cho người hay nhân vật từ một câu mô tả, rồi tinh chỉnh theo ý.", hue: 32, tags: ["Giám đốc", "Cô gái miền Tây", "Lồng tiếng trailer", "Cướp biển", "Ông kể chuyện", "Chú chuột nhỏ"] },
 ];
@@ -137,13 +137,13 @@ export function VoicesTool({ say, demo, sub, setSub, go }: ToolProps) {
                   {c.tags && <div className="sp-ctags" aria-hidden="true">{c.tags.map((t) => <span key={t}>{t}</span>)}</div>}
                   <OrbStage hue={c.hue} size={120} progress={c.min ? 0.001 : undefined} min={c.min} best={c.best} playing={playing === c.k} onPlay={() => setPlaying(playing === c.k ? null : c.k)} />
                 </div>
-                <button className={`btn ${c.primary ? "dark" : ""} sp-wbtn`} onClick={() => setSub(c.k)}>Tạo mới</button>
+                <button className="btn dark sp-wbtn" onClick={() => setSub(c.k)}>Tạo mới</button>
               </div>
             ))}
           </div>
           <div className="sp-sec-h"><b>Công cụ khác</b></div>
           <div className="sp-card sp-remixcard">
-            <div><b>Remix giọng</b><p>Biến đổi giọng có sẵn bằng câu lệnh và thiết lập như cao độ, nhịp nói để ra giọng mới.</p><button className="btn" onClick={() => setSub("remix")}>Tạo mới</button></div>
+            <div><b>Remix giọng</b><p>Biến đổi giọng có sẵn bằng câu lệnh và thiết lập như cao độ, nhịp nói để ra giọng mới.</p><button className="btn dark" onClick={() => setSub("remix")}>Tạo mới</button></div>
             <div className="sp-remix-demo" aria-hidden="true"><span>Tạo phiên bản giọng nữ của giọng này</span><div><em>Giọng cao</em><em>Nói nhanh</em></div><VoiceAvatar v={VOICES[3]} size={44} playing /></div>
           </div>
         </>

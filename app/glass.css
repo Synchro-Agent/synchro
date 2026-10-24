@@ -258,3 +258,7 @@ html[data-theme="dark"] body .btn.dark::after{background:linear-gradient(180deg,
 html body :is(.btn.dark,.btn.danger):not(:disabled):hover{scale:1.05}
 html body :is(.btn.dark,.btn.danger):active{scale:.97;filter:none}
 @media (prefers-reduced-transparency:reduce){html body :is(.btn.dark,.btn.danger)::before{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--btn-dark)}}
+/* Danh sách con trong thanh điều hướng (Speech) cũng thu gọn được như danh sách chat */
+.nav .fold>*{min-height:0;overflow:hidden;transition:padding .28s}
+.nav .fold.open>*{overflow:visible}
+.nav .fold:not(.open)>*{padding-block:0}

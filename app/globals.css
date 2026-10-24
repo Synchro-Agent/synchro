@@ -2335,14 +2335,6 @@ b,strong{font-weight:560}
 /* ===== Bộ icon công cụ Speech ===== */
 .ti{overflow:visible}
 .ti g{transform-box:view-box;transition:transform .35s var(--ease),opacity .35s}
-.ti-tile{position:relative;display:grid;place-items:center;flex:none;border-radius:12px;color:#fff;isolation:isolate;
-  background:linear-gradient(145deg,hsl(var(--th) 92% 66%),hsl(calc(var(--th) + 28) 78% 52%));
-  box-shadow:0 6px 16px -6px hsl(var(--th) 80% 45% / .55),inset 0 0 0 .5px rgba(255,255,255,.35),inset 0 -6px 12px -6px rgba(0,0,0,.18)}
-.ti-tile::before{content:"";position:absolute;inset:1px 1px 50% 1px;border-radius:11px 11px 14px 14px / 11px 11px 8px 8px;background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,0));z-index:-1}
-.ti-tile svg{filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}
-[data-theme="dark"] .ti-tile{background:linear-gradient(145deg,hsl(var(--th) 80% 58%),hsl(calc(var(--th) + 28) 70% 42%));box-shadow:0 6px 18px -6px hsl(var(--th) 80% 40% / .6),inset 0 0 0 .5px rgba(255,255,255,.22)}
-.sp-tcard .ti-tile{transition:transform .35s var(--ease)}
-.sp-tcard:hover .ti-tile{transform:translateY(-1px) scale(1.04)}
 /* chuyển động riêng từng icon, chạy khi rê chuột vào thẻ, mục thanh bên hoặc tab */
 :is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-w1{animation:tiWave 1.1s ease-in-out infinite}
 :is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-w2{animation:tiWave 1.1s .18s ease-in-out infinite}
@@ -2380,4 +2372,7 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .vm-lang button{height:24px;min-width:34px;padding:0 9px;border-radius:99px;font-size:12px;color:rgba(255,255,255,.6)}
 .vm-lang button.on{background:rgba(255,255,255,.9);color:#111;font-weight:460}
 .vm-state.connecting i{background:rgba(255,255,255,.7);box-shadow:none;animation:pjpulse .8s ease-in-out infinite}
-.sp-tcard span.ti-tile{color:#fff;font-size:inherit;line-height:0}
+/* Icon công cụ ở trang chính: chỉ giữ icon, không nền màu */
+.sp-tcard .sp-tic{width:auto;height:auto;background:none;color:var(--text);border-radius:0;margin-bottom:2px}
+.sp-tcard .sp-tic svg{transition:transform .35s var(--ease)}
+.sp-tcard:hover .sp-tic svg{transform:translateY(-1px)}

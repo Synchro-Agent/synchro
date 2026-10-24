@@ -70,20 +70,19 @@ export function ToolHead({ title, desc, children }: { title: string; desc: strin
   );
 }
 
-// Màu các ô đi theo một dải sắc có chủ đích: xanh cho giọng nói, ấm cho âm thanh, hồng tím cho sáng tạo.
-const CARDS: { t: SpeechTool; sub?: string; icon: (p: { size?: number }) => React.ReactNode; title: string; desc: string; hue: number }[] = [
-  { t: "tts", sub: "single", icon: T.TextToSpeech, title: "Đọc văn bản", desc: "Giọng tự nhiên, 90+ ngôn ngữ, thẻ cảm xúc", hue: 222 },
-  { t: "tts", sub: "dialogue", icon: T.Dialogue, title: "Hội thoại", desc: "Nhiều người nói trong một bản", hue: 252 },
-  { t: "agent", icon: T.Agent, title: "Voice Agent", desc: "Trò chuyện thời gian thực, gọi hàm", hue: 168 },
-  { t: "stt", sub: "file", icon: T.SpeechToText, title: "Chép lời", desc: "Scribe v2, tách người nói, mốc từng từ", hue: 196 },
-  { t: "voices", sub: "design", icon: T.VoiceDesign, title: "Thiết kế giọng", desc: "Tạo giọng mới từ một câu mô tả", hue: 318 },
-  { t: "voices", sub: "ivc", icon: T.VoiceClone, title: "Nhân bản giọng", desc: "Nhanh từ 1 phút, chuyên sâu từ 30 phút", hue: 282 },
-  { t: "audio", sub: "sfx", icon: T.SoundEffects, title: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây", hue: 22 },
-  { t: "audio", sub: "isolate", icon: T.Isolator, title: "Lọc tạp âm", desc: "Tách giọng khỏi nhạc và tiếng ồn", hue: 148 },
-  { t: "audio", sub: "changer", icon: T.VoiceChanger, title: "Đổi giọng", desc: "Giữ cảm xúc, đổi sang giọng khác", hue: 266 },
-  { t: "studio", sub: "dub", icon: T.Dubbing, title: "Lồng tiếng", desc: "Dịch video sang 90+ ngôn ngữ", hue: 340 },
-  { t: "studio", sub: "book", icon: T.Audiobook, title: "Sách nói", desc: "Từ EPUB, PDF, DOCX, theo chương", hue: 38 },
-  { t: "studio", sub: "podcast", icon: T.Podcast, title: "Podcast", desc: "Hai người dẫn từ tài liệu hoặc link", hue: 8 },
+const CARDS: { t: SpeechTool; sub?: string; icon: (p: { size?: number }) => React.ReactNode; title: string; desc: string }[] = [
+  { t: "tts", sub: "single", icon: T.TextToSpeech, title: "Đọc văn bản", desc: "Giọng tự nhiên, 90+ ngôn ngữ, thẻ cảm xúc" },
+  { t: "tts", sub: "dialogue", icon: T.Dialogue, title: "Hội thoại", desc: "Nhiều người nói trong một bản" },
+  { t: "agent", icon: T.Agent, title: "Voice Agent", desc: "Trò chuyện thời gian thực, gọi hàm" },
+  { t: "stt", sub: "file", icon: T.SpeechToText, title: "Chép lời", desc: "Scribe v2, tách người nói, mốc từng từ" },
+  { t: "voices", sub: "design", icon: T.VoiceDesign, title: "Thiết kế giọng", desc: "Tạo giọng mới từ một câu mô tả" },
+  { t: "voices", sub: "ivc", icon: T.VoiceClone, title: "Nhân bản giọng", desc: "Nhanh từ 1 phút, chuyên sâu từ 30 phút" },
+  { t: "audio", sub: "sfx", icon: T.SoundEffects, title: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây" },
+  { t: "audio", sub: "isolate", icon: T.Isolator, title: "Lọc tạp âm", desc: "Tách giọng khỏi nhạc và tiếng ồn" },
+  { t: "audio", sub: "changer", icon: T.VoiceChanger, title: "Đổi giọng", desc: "Giữ cảm xúc, đổi sang giọng khác" },
+  { t: "studio", sub: "dub", icon: T.Dubbing, title: "Lồng tiếng", desc: "Dịch video sang 90+ ngôn ngữ" },
+  { t: "studio", sub: "book", icon: T.Audiobook, title: "Sách nói", desc: "Từ EPUB, PDF, DOCX, theo chương" },
+  { t: "studio", sub: "podcast", icon: T.Podcast, title: "Podcast", desc: "Hai người dẫn từ tài liệu hoặc link" },
 ];
 
 const RECENT = [
@@ -113,7 +112,7 @@ function Home({ go, onDraft, say }: ToolProps & { onDraft: (t: string) => void }
       <div className="sp-cards">
         {CARDS.map((c) => (
           <button key={c.title} className="sp-tcard" onClick={() => go(c.t, c.sub)}>
-            <T.ToolTile hue={c.hue}><c.icon size={20} /></T.ToolTile>
+            <span className="sp-tic"><c.icon size={24} /></span>
             <b>{c.title}</b><span>{c.desc}</span>
           </button>
         ))}
