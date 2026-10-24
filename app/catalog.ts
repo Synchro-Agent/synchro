@@ -26,6 +26,7 @@ export const FEATURES = [
   { key: "skills", label: "Skills", desc: "Upload skills and let the model use them." },
   { key: "files", label: "File uploads", desc: "Attach files and convert documents to text." },
   { key: "web", label: "Web search", desc: "Read web pages to answer questions." },
+  { key: "connectors", label: "Connectors", desc: "Connect apps and services through MCP so the model can use their tools." },
   { key: "sandbox", label: "Cloud sandbox", desc: "Run code on the server sandbox." },
 ] as const;
 export type Feature = (typeof FEATURES)[number]["key"];

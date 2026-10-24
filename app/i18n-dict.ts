@@ -1,4 +1,5 @@
 import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
+import { DIRECTORY } from "./connectordir";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
   // Synchro Code: workspace, agent, GitHub
@@ -338,7 +339,7 @@ export const EN2VI: Record<string, string> = {
   "Submit password": "Gửi mật khẩu",
   "Finish sign-up": "Hoàn tất đăng ký",
   "Settings": "Cài đặt", "General": "Chung", "Account": "Tài khoản", "Privacy": "Quyền riêng tư", "Billing": "Thanh toán", "Capabilities": "Khả năng", "Memory": "Bộ nhớ", "Reflect": "Nhìn lại", "Time and focus": "Thời gian và tập trung", "Synchro Code": "Synchro Code", "Customize": "Tùy chỉnh",
-  "Skills": "Kỹ năng", "Connectors": "Trình kết nối", "Plugins": "Plugin", "Search": "Tìm kiếm",
+  "Skills": "Kỹ năng", "Plugins": "Plugin", "Search": "Tìm kiếm",
   "Appearance": "Giao diện", "Theme": "Chủ đề", "Light": "Sáng", "Dark": "Tối", "System": "Hệ thống", "Chat font": "Phông chữ trò chuyện", "Serif": "Serif",
   "Transcript text size": "Cỡ chữ trò chuyện", "Size of the conversation transcript text.": "Kích thước chữ của đoạn hội thoại.", "Small": "Nhỏ", "Medium": "Vừa", "Large": "Lớn",
   "Motion": "Chuyển động", "Reduce animation in streaming responses and other interface elements.": "Giảm hoạt ảnh trong phản hồi dạng streaming và các thành phần giao diện khác.", "Reduced": "Giảm",
@@ -853,4 +854,77 @@ RULES_VI.push(
   [/^Same as all models \((.+)\)$/, (m) => `Theo mức chung (${EN2VI[m[1]] ?? m[1]})`],
   [/^(.+) \(model max\)$/, (m) => `${EN2VI[m[1]] ?? m[1]} (mức cao nhất của model)`],
   [/^Effort limit for (.+)$/, (m) => `Giới hạn mức nỗ lực cho ${m[1]}`],
+);
+
+// ===== Connectors (Cài đặt → Connectors, thẻ duyệt công cụ trong chat, lỗi từ máy chủ) =====
+Object.assign(EN2VI, {
+  "Let Synchro use your other apps and services for more context, and take actions in them for you.": "Cho Synchro dùng các ứng dụng và dịch vụ khác của bạn để có thêm ngữ cảnh, và thay bạn thao tác trong đó.",
+  "Browse connectors": "Duyệt connector", "Add custom connector": "Thêm connector tùy chỉnh", "No connectors yet": "Chưa có connector nào",
+  "Connect Notion, Linear, Figma and more, or any remote MCP server, so Synchro can search and work in them during your chats.": "Kết nối Notion, Linear, Figma và nhiều ứng dụng khác, hoặc bất kỳ máy chủ MCP từ xa nào, để Synchro tìm kiếm và làm việc trong đó khi bạn chat.",
+  "Sign-ins are encrypted on the server. Tools that change data ask before running unless you allow them.": "Thông tin đăng nhập được mã hóa trên máy chủ. Công cụ thay đổi dữ liệu sẽ hỏi bạn trước khi chạy, trừ khi bạn cho phép luôn.",
+  "Always allow": "Luôn cho phép", "Needs approval": "Hỏi trước", "Blocked": "Chặn", "Turned off": "Đã tắt", "Needs to be connected": "Cần kết nối", "Connection problem": "Lỗi kết nối",
+  "Turn off connector": "Tắt connector", "Turn on connector": "Bật connector", "Connect": "Kết nối", "More options": "Tùy chọn khác", "Refresh tools": "Làm mới công cụ",
+  "Reconnect account": "Kết nối lại tài khoản", "Disconnect": "Ngắt kết nối", "Search tools": "Tìm công cụ", "This server doesn't offer any tools yet.": "Máy chủ này chưa có công cụ nào.",
+  "Read-only tools": "Công cụ chỉ đọc", "Look things up without changing anything.": "Chỉ tra cứu, không thay đổi gì.",
+  "Tools that can make changes": "Công cụ có thể thay đổi dữ liệu", "May create, change or delete data, or the server doesn't say they're read-only.": "Có thể tạo, sửa hoặc xóa dữ liệu, hoặc máy chủ không cho biết là chỉ đọc.",
+  "No tools match your search.": "Không có công cụ nào khớp.", "Tools refreshed": "Đã làm mới công cụ",
+  "Synchro will stop using this connector and forget its sign-in. You can connect it again later.": "Synchro sẽ ngừng dùng connector này và quên thông tin đăng nhập. Bạn có thể kết nối lại sau.",
+  "Connect the apps you use so Synchro can find information and take actions for you.": "Kết nối các ứng dụng bạn dùng để Synchro tìm thông tin và thay bạn thao tác.",
+  "Search connectors": "Tìm connector", "Close": "Đóng", "Productivity": "Năng suất", "Development": "Lập trình", "Knowledge": "Tra cứu", "Payments": "Thanh toán", "Customer support": "Chăm sóc khách hàng",
+  "Finish": "Hoàn tất", "No connectors match your search.": "Không có connector nào khớp.", "Don't see the app you need?": "Không thấy ứng dụng bạn cần?", "Add a custom connector": "Thêm connector tùy chỉnh",
+  "Beta": "Beta", "Connect Synchro to any remote MCP server. If the server needs you to sign in, a window opens so you can approve access.": "Kết nối Synchro với bất kỳ máy chủ MCP từ xa nào. Nếu máy chủ cần đăng nhập, một cửa sổ sẽ mở ra để bạn cấp quyền.",
+  "Name": "Tên", "e.g. Company wiki": "VD: Wiki công ty", "Remote MCP server URL": "Địa chỉ máy chủ MCP từ xa", "Advanced settings": "Cài đặt nâng cao", "· optional": "· không bắt buộc",
+  "Only needed when the server doesn't let apps register themselves. Use this callback URL in that app's settings:": "Chỉ cần khi máy chủ không cho ứng dụng tự đăng ký. Dùng địa chỉ quay về này trong phần cài đặt ứng dụng đó:",
+  "Only use connectors from developers you trust. Synchro doesn't review custom connectors, and a connector can read what you share with it and act in that service on your behalf.": "Chỉ dùng connector của nhà phát triển bạn tin tưởng. Synchro không kiểm duyệt connector tùy chỉnh, và connector đọc được những gì bạn chia sẻ với nó cũng như thay bạn thao tác trong dịch vụ đó.",
+  "Connecting…": "Đang kết nối…",
+});
+for (const e of DIRECTORY) EN2VI[e.desc] = e.descVi;
+RULES_VI.push(
+  [/^(\d+) tools?$/, (m) => `${m[1]} công cụ`],
+  [/^Disconnect (.+)\?$/, (m) => `Ngắt kết nối ${m[1]}?`],
+  [/^Disconnected (.+)$/, (m) => `Đã ngắt kết nối ${m[1]}`],
+  [/^Permission for all: (.+)$/, (m) => `Quyền cho cả nhóm: ${EN2VI[m[1]] ?? m[1]}`],
+  [/^Permission for (.+)$/, (m) => `Quyền cho ${m[1]}`],
+);
+Object.assign(VI2EN, {
+  "Đã dùng": "Used", "Cho phép dùng công cụ": "Allow tool use", "Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.": "This tool can create, change or delete data in your app.",
+  "Xem dữ liệu gửi đi": "View data being sent", "Từ chối": "Deny", "Cho phép một lần": "Allow once", "Luôn cho phép": "Always allow",
+  "Không tìm thấy connector này.": "Connector not found.", "Connector đã bị gỡ.": "This connector was removed.", "Không tìm thấy connector này trong danh mục.": "This connector isn't in the directory.",
+  "Hãy đặt tên cho connector.": "Give the connector a name.", "Tên connector tối đa 60 ký tự.": "Connector names can be at most 60 characters.", "Hãy nhập địa chỉ máy chủ MCP.": "Enter the MCP server URL.",
+  "Địa chỉ quá dài.": "The URL is too long.", "Địa chỉ không hợp lệ.": "The URL isn't valid.", "Client ID hoặc Client Secret quá dài.": "Client ID or Client Secret is too long.",
+  "Bạn đã thêm một connector với địa chỉ này rồi.": "You've already added a connector with this URL.", "Tên connector phải từ 1 đến 60 ký tự.": "Connector names must be 1 to 60 characters.",
+  "Thiếu tham số state, kết nối bị hủy.": "The state parameter is missing, so the connection was cancelled.", "Phiên đăng nhập đã hết hạn hoặc đã dùng. Hãy bấm kết nối lại.": "This sign-in has expired or was already used. Click Connect again.",
+  "Phiên đăng nhập đã hết hạn. Hãy bấm kết nối lại.": "This sign-in has expired. Click Connect again.", "Hãy đăng nhập Synchro bằng tài khoản đã bấm kết nối rồi thử lại.": "Sign in to Synchro with the account that started connecting, then try again.",
+  "Máy chủ đăng nhập trả về không khớp, kết nối bị hủy để bảo vệ tài khoản.": "The sign-in server's response didn't match, so the connection was cancelled to protect your account.",
+  "Bạn đã từ chối cấp quyền cho Synchro.": "You declined to give Synchro access.", "Máy chủ đăng nhập không trả về mã xác nhận.": "The sign-in server didn't return an authorization code.",
+  "Connector cần thêm quyền để làm việc này. Hãy kết nối lại.": "The connector needs more permissions for this. Reconnect it.", "Phiên đăng nhập của connector đã hết hạn. Hãy kết nối lại.": "The connector's sign-in has expired. Reconnect it.",
+  "Connector này cần đăng nhập.": "This connector requires signing in.", "Máy chủ trả về dữ liệu quá lớn.": "The server returned too much data.", "Luồng dữ liệu từ máy chủ quá lớn.": "The server's data stream is too large.",
+  "Máy chủ không gửi địa chỉ endpoint.": "The server didn't send its endpoint.", "Endpoint của máy chủ không cùng tên miền.": "The server's endpoint is on a different domain.", "Máy chủ đã đóng kết nối.": "The server closed the connection.",
+  "Máy chủ không bắt tay được.": "The server's handshake failed.", "Máy chủ phản hồi quá lâu.": "The server took too long to respond.",
+  "Địa chỉ này không phải máy chủ MCP, hoặc máy chủ không phản hồi đúng chuẩn MCP.": "This URL isn't an MCP server, or the server doesn't follow the MCP standard.",
+  "Máy chủ MCP không trả lời.": "The MCP server didn't respond.", "Máy chủ MCP báo lỗi.": "The MCP server reported an error.",
+  "Công cụ cần thêm thông tin trực tiếp từ bạn, Synchro chưa hỗ trợ kiểu này.": "The tool needs more input directly from you, which Synchro doesn't support yet.",
+  "Không tìm thấy máy chủ đăng nhập (OAuth) của connector này.": "Couldn't find this connector's sign-in (OAuth) server.",
+  "Máy chủ đăng nhập của connector không hỗ trợ PKCE S256 nên không an toàn để kết nối.": "The connector's sign-in server doesn't support PKCE S256, so connecting isn't safe.",
+  "Connector này không cho ứng dụng tự đăng ký. Hãy xóa rồi thêm lại bằng \"Thêm connector tùy chỉnh\" và nhập OAuth Client ID ở phần Cài đặt nâng cao.": "This connector doesn't let apps register themselves. Remove it, then add it again with \"Add custom connector\" and enter an OAuth Client ID under Advanced settings.",
+  "Địa chỉ không được chứa tên đăng nhập hay mật khẩu.": "The URL can't contain a username or password.", "Địa chỉ phải bắt đầu bằng https://": "The URL must start with https://",
+  "Không kết nối được tới địa chỉ nội bộ.": "Can't connect to internal addresses.", "Máy chủ chuyển hướng quá nhiều lần.": "The server redirected too many times.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng connector.": "Your administrator hasn't allowed your account to use connectors.",
+  "Yêu cầu chờ duyệt đã hết hạn. Hãy gửi lại tin nhắn.": "The approval request expired. Send your message again.",
+});
+RULES_EN.push(
+  [/^Cho phép Synchro dùng "(.+)"\?$/, (m) => `Allow Synchro to use "${m[1]}"?`],
+  [/^Công cụ của (.+)$/, (m) => `A tool from ${m[1]}`],
+  [/^Mỗi tài khoản có tối đa (\d+) connector\.$/, (m) => `Each account can have at most ${m[1]} connectors.`],
+  [/^Đăng nhập không thành công: ([\s\S]+)$/, (m) => `Sign-in failed: ${m[1]}`],
+  [/^Không lấy được mã truy cập: ([\s\S]+)$/, (m) => `Couldn't get an access token: ${m[1]}`],
+  [/^Đã đăng nhập nhưng chưa lấy được danh sách công cụ: ([\s\S]+)$/, (m) => `Signed in, but couldn't load the tool list: ${m[1]}`],
+  [/^Máy chủ trả về lỗi (\d+) khi bắt tay\.$/, (m) => `The server returned error ${m[1]} during the handshake.`],
+  [/^Máy chủ (?:MCP )?trả về lỗi (\d+)\.$/, (m) => `The server returned error ${m[1]}.`],
+  [/^Máy chủ trả về kiểu kết quả chưa hỗ trợ \((.+)\)\.$/, (m) => `The server returned an unsupported result type (${m[1]}).`],
+  [/^Máy chủ đăng nhập từ chối đăng ký Synchro(?:: | \(lỗi )(.+?)\)?\.$/, (m) => `The sign-in server refused to register Synchro: ${m[1]}.`],
+  [/^Lỗi (\d+) khi lấy mã truy cập\.$/, (m) => `Error ${m[1]} while getting an access token.`],
+  [/^Không tìm thấy máy chủ (.+)\.$/, (m) => `Couldn't find the server ${m[1]}.`],
+  [/^Không kết nối được tới ([^:]+)\.$/, (m) => `Couldn't connect to ${m[1]}.`],
+  [/^Không gọi được (.+?): ([\s\S]+)$/, (m) => `Couldn't call ${m[1]}: ${m[2]}`],
 );

@@ -3,6 +3,8 @@ import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from 
 import { can, canModel, current, permsOf } from "../../authstore";
 import { clampEffort, effortCap, isEffort, legacyModel, type Effort } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "../../providers";
+import { ConnectorSession, connectorsPrompt } from "../../connectors";
+import { randomToken } from "../../mcpauth";
 import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "../../llmcall";
 
 // Cổng duy nhất tới model của chat. Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → API quyết định.
@@ -77,25 +79,122 @@ const mockAdapter = (skills: Skl): Adapter => ({
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
 });
 
-async function skillLoop(ad: Adapter, msgs: unknown[], list: Skl, scripts = false) {
-  const used: ToolRun["used"][] = [];
-  const m = [...msgs];
-  for (let i = 0; i < MAX_STEPS; i++) {
+// ---------------------------------------------------------------- vòng lặp công cụ (skill + connector)
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null };
+type Decision = "allow" | "always" | "deny";
+type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
+// Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
+type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number };
+const PENDING_TTL = 30 * 60_000;
+const pending = new Map<string, Pending>();
+function sweep() {
+  for (const [k, p] of pending) if (Date.now() - p.at > PENDING_TTL) { pending.delete(k); p.x.sess?.close(); }
+}
+
+async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
+  const ct = x.sess?.get(c.name);
+  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts);
+  const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
+  if (d === "deny") return { content: "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.", is_error: true, used };
+  return { ...(await x.sess!.call(c.name, c.input)), used };
+}
+const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name) === "ask";
+
+async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
+  const res = await Promise.all(calls.map((c) => runCall(x, c, d[c.id])));
+  used.push(...res.filter((r) => !r.is_error && r.used.kind !== "search").map((r) => r.used));
+  m.push(...ad.results(calls, res));
+}
+
+async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
+  for (let i = start; i < MAX_STEPS; i++) {
     const r = await ad.step(m, i === MAX_STEPS - 1);
     m.push(r.assistant);
     if (!r.calls.length) return { text: r.text, used };
-    const res = await Promise.all(r.calls.map((c) => runSkillTool(list, c.name, c.input, scripts)));
-    used.push(...res.filter((x) => !x.is_error && x.used.kind !== "search").map((x) => x.used));
-    m.push(...ad.results(r.calls, res));
+    const ask = r.calls.filter((c) => needsAsk(x, c));
+    if (ask.length) {
+      sweep();
+      const id = randomToken(18);
+      pending.set(id, { uid, model, ad, m, calls: r.calls, used, step: i, x, at: Date.now() });
+      return {
+        approval: {
+          id, calls: ask.map((c) => {
+            const ct = x.sess!.get(c.name)!;
+            const input = JSON.stringify(c.input ?? {});
+            return {
+              id: c.id, connector: { id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color },
+              tool: { name: ct.tool.name, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, description: (ct.tool.description ?? "").slice(0, 400), destructive: !ct.tool.annotations?.readOnlyHint && ct.tool.annotations?.destructiveHint === true },
+              input: input.length > 20_000 ? { _: input.slice(0, 20_000) + "…" } : c.input ?? {},
+            };
+          }),
+        },
+      };
+    }
+    await execute(ad, m, x, r.calls, used, {});
   }
-  return { text: "Đã đạt giới hạn số lần gọi skill. Hãy thử hỏi lại cụ thể hơn.", used };
+  return { text: "Đã đạt giới hạn số bước gọi công cụ trong một lượt. Hãy hỏi lại cụ thể hơn để Synchro làm tiếp.", used };
+}
+
+// Schema công cụ MCP → schema gửi cho model: bỏ khóa riêng ($schema, x-…); Gemini chỉ nhận một tập khóa OpenAPI nên lọc thêm.
+const GEMINI_KEYS = new Set(["type", "description", "properties", "required", "items", "enum", "format", "nullable", "anyOf", "minimum", "maximum", "minItems", "maxItems", "title", "minLength", "maxLength", "pattern", "default"]);
+function cleanSchema(s: unknown, gemini: boolean, depth = 0): unknown {
+  if (Array.isArray(s)) return s.map((v) => cleanSchema(v, gemini, depth + 1));
+  if (!s || typeof s !== "object" || depth > 30) return s;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(s as Record<string, unknown>)) {
+    if (k.startsWith("$") || k.startsWith("x-")) continue;
+    if (k === "properties" && v && typeof v === "object") { out[k] = Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([pk, pv]) => [pk, cleanSchema(pv, gemini, depth + 1)])); continue; }
+    if (gemini && !GEMINI_KEYS.has(k)) continue;
+    out[k] = cleanSchema(v, gemini, depth + 1);
+  }
+  return out;
+}
+function connectorToolDefs(sess: ConnectorSession, gemini: boolean) {
+  return sess.tools.map((ct) => {
+    const schema = cleanSchema(ct.tool.inputSchema ?? {}, gemini) as Record<string, unknown>;
+    return {
+      name: ct.fq,
+      description: `[${ct.cname}] ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}${ct.tool.description ? `: ${ct.tool.description}` : ""}`.slice(0, 1024),
+      input_schema: { ...schema, type: "object", properties: schema.properties && typeof schema.properties === "object" ? schema.properties : {} },
+    };
+  });
+}
+
+function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
+  if ("approval" in out) return Response.json({ model, approval: out.approval });
+  x.sess?.close();
+  recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
+  return Response.json({ model, text: out.text, skills: out.used });
 }
 
 export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
-  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted } = await req.json();
+  const body = await req.json();
+  // Tiếp tục lượt chat đang chờ duyệt công cụ: { resume, decisions: { id lượt gọi: "allow" | "always" | "deny" } }.
+  if (typeof body.resume === "string") {
+    sweep();
+    const p = pending.get(body.resume);
+    if (!p || p.uid !== c.user.id) return Response.json({ error: "Yêu cầu chờ duyệt đã hết hạn. Hãy gửi lại tin nhắn." }, { status: 410 });
+    pending.delete(body.resume);
+    const raw = (body.decisions && typeof body.decisions === "object" ? body.decisions : {}) as Record<string, unknown>;
+    const d: Record<string, Decision> = {};
+    for (const call of p.calls) if (needsAsk(p.x, call)) {
+      const v = raw[call.id];
+      d[call.id] = v === "allow" || v === "always" ? v : "deny";
+      if (v === "always") p.x.sess!.allowAlways(call.name);
+    }
+    try {
+      await execute(p.ad, p.m, p.x, p.calls, p.used, d);
+      return reply(c, p.model, await toolLoop(p.ad, p.m, p.x, p.used, c.user.id, p.model, p.step + 1), p.x);
+    } catch (e) {
+      p.x.sess?.close();
+      if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });
+      return Response.json({ error: String((e as Error).message ?? e) }, { status: 502 });
+    }
+  }
+  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted } = body;
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
@@ -104,23 +203,27 @@ export async function POST(req: Request) {
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   // Mức nỗ lực người dùng chọn, hạ xuống giới hạn quản trị viên đặt cho model này (quản trị viên không bị giới hạn).
   const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
+  let sess: ConnectorSession | null = null;
   try {
     const list = skills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
-    if (list.length) {
+    // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id); if (!sess.tools.length) sess = null; }
+    if (list.length || sess) {
       // Chạy script của skill chỉ khi máy chủ có sandbox và tài khoản được phép dùng Sandbox.
       const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
-      const sk = skillsPrompt(list, scripts);
-      const tools = skillTools(list.length, scripts);
+      const sk = [skillsPrompt(list, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
+      const tools = [...(list.length ? skillTools(list.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
+      const x: Exec = { list, scripts, sess };
       const msgs = messages as { role: string; content: unknown }[];
-      const out = t.kind === "mock" ? await skillLoop(mockAdapter(list), msgs, list, scripts)
-        : t.kind === "anthropic" ? await skillLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), list, scripts)
-        : await skillLoop((t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), list, scripts);
-      recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
-      return Response.json({ model, text: out.text, skills: out.used });
+      const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
+        : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)
+        : await toolLoop((t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), x, [], c.user.id, model);
+      return reply(c, model, out, x);
     }
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
     return Response.json({ model, text: await chatOnce(t, system, messages, max_tokens, undefined, effort), effort });
   } catch (e) {
+    sess?.close();
     if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });
     return Response.json({ error: String((e as Error).message ?? e) }, { status: 502 });
   }

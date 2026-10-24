@@ -52,6 +52,9 @@ const open = (box: string) => {
   d.setAuthTag(tag);
   return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
 };
+// Dùng chung để mã hóa khóa và token của connector.
+export const sealSecret = seal;
+export const openSecret = open;
 const hint = (k: string) => (k.length > 12 ? `${k.slice(0, 6)}…${k.slice(-4)}` : "••••");
 
 // ---- danh sách model của từng hãng ----

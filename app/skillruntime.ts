@@ -98,7 +98,7 @@ async function runScript(s: Skill, p0: string, args: string[], stdin?: string) {
   }
 }
 
-export type ToolRun = { content: string; is_error: boolean; used: { kind: "skill" | "file" | "search" | "script"; name: string; path?: string } };
+export type ToolRun = { content: string; is_error: boolean; used: { kind: "skill" | "file" | "search" | "script" | "tool"; name: string; path?: string } };
 
 const words = (t: string) => t.toLowerCase().normalize("NFC").split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1);
 function search(list: Skill[], q: string) {

@@ -166,3 +166,5 @@ export const SetKey = (p: P) => <L {...p}><path d="M2.586 17.414A2 2 0 0 0 2 18.
 // Menu tài khoản: tải ứng dụng (máy tính + điện thoại) và phím tắt.
 export const GetApps = (p: P) => <L {...p}><rect x="2" y="4.5" width="13" height="10" rx="1.8" /><path d="M6.3 19h4.4M8.5 14.5V19" /><rect x="17" y="8.5" width="5" height="11" rx="1.3" /><path d="M19 17h1" /></L>;
 export const Keyboard = (p: P) => <L {...p}><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12.5h.01M18 12.5h.01M10 12.5h4M8 16h8" /></L>;
+// Connectors: phích cắm nghiêng (Lucide "plug" xoay 45°).
+export const SetPlug = (p: P) => <L {...p}><g transform="rotate(45 12 12)"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" /></g></L>;

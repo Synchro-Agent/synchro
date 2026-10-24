@@ -26,7 +26,17 @@ export const hasLLM = !!LLM_ENDPOINT;
  * Endpoint nhận POST { system, messages, max_tokens } và trả về { text }.
  * (Có thể là một route Next.js `/api/llm` hoặc backend riêng.)
  */
-export type SkillUse = { kind: "skill" | "file"; name: string; path?: string };
+export type SkillUse = { kind: "skill" | "file" | "tool"; name: string; path?: string };
+
+// Công cụ connector cần người dùng duyệt trước khi chạy (máy chủ tạm dừng lượt chat và chờ quyết định).
+export type ApprovalCall = {
+  id: string; connector: { id: string; name: string; logo?: string; color?: string };
+  tool: { name: string; title: string; description: string; destructive: boolean }; input: unknown;
+};
+export type Decision = "allow" | "always" | "deny";
+let approver: ((calls: ApprovalCall[]) => Promise<Record<string, Decision>>) | null = null;
+/** Giao diện đăng ký hàm hỏi người dùng; chưa đăng ký thì mọi yêu cầu đều bị từ chối. */
+export const setApprover = (f: typeof approver) => { approver = f; };
 let lastSkills: SkillUse[] = [];
 /** Skill mà model vừa dùng ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeSkillsUsed = () => { const u = lastSkills; lastSkills = []; return u; };
@@ -54,7 +64,15 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
     body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project }),
   });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status); }
-  const j = await r.json();
+  let j = await r.json();
+  // Máy chủ dừng chờ duyệt công cụ: hỏi người dùng rồi gửi quyết định để máy chủ chạy tiếp (một lượt có thể hỏi nhiều lần).
+  for (let n = 0; j.approval && n < 20; n++) {
+    const calls = (j.approval.calls ?? []) as ApprovalCall[];
+    const decisions = approver ? await approver(calls).catch(() => ({})) : {};
+    const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions }) });
+    if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new LLMError(e.error || `LLM ${r2.status}`, r2.status); }
+    j = await r2.json();
+  }
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
   return String(j.text ?? j.reply ?? "");
 }

@@ -1,0 +1,33 @@
+// Danh mục connector có sẵn: máy chủ MCP từ xa chính thức của từng hãng (đã kiểm tra địa chỉ tháng 10/2026).
+// Chỉ gồm máy chủ đăng nhập tự động được (Client ID Metadata Document hoặc đăng ký động) hoặc không cần đăng nhập.
+// Logo ở public/connectors (simple-icons, CC0); hãng không có logo thì hiện chữ cái đầu trên màu thương hiệu.
+export type DirCat = "productivity" | "design" | "dev" | "knowledge" | "payments" | "support";
+export type DirEntry = { id: string; name: string; url: string; cat: DirCat; desc: string; descVi: string; logo?: string; color?: string; noAuth?: boolean };
+
+export const DIR_CATS: [DirCat | "all", string][] = [["all", "All"], ["productivity", "Productivity"], ["design", "Design"], ["dev", "Development"], ["knowledge", "Knowledge"], ["payments", "Payments"], ["support", "Customer support"]];
+
+export const DIRECTORY: DirEntry[] = [
+  { id: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", cat: "productivity", logo: "notion", desc: "Search, read and update pages and databases in your Notion workspace.", descVi: "Tìm, đọc và cập nhật trang, cơ sở dữ liệu trong không gian Notion." },
+  { id: "linear", name: "Linear", url: "https://mcp.linear.app/mcp", cat: "productivity", logo: "linear", desc: "Find, create and update issues, projects and cycles.", descVi: "Tìm, tạo và cập nhật issue, dự án và chu kỳ." },
+  { id: "atlassian", name: "Atlassian", url: "https://mcp.atlassian.com/v1/mcp", cat: "productivity", logo: "atlassian", desc: "Work with Jira issues and Confluence pages.", descVi: "Làm việc với issue Jira và trang Confluence." },
+  { id: "monday", name: "monday.com", url: "https://mcp.monday.com/mcp", cat: "productivity", color: "#FF3D57", desc: "Manage boards, items and updates.", descVi: "Quản lý bảng, mục công việc và cập nhật." },
+  { id: "clickup", name: "ClickUp", url: "https://mcp.clickup.com/mcp", cat: "productivity", logo: "clickup", desc: "Search and manage tasks, docs and spaces.", descVi: "Tìm và quản lý công việc, tài liệu và không gian." },
+  { id: "todoist", name: "Todoist", url: "https://ai.todoist.net/mcp", cat: "productivity", logo: "todoist", desc: "Add, organize and complete your tasks.", descVi: "Thêm, sắp xếp và hoàn thành công việc." },
+  { id: "airtable", name: "Airtable", url: "https://mcp.airtable.com/mcp", cat: "productivity", logo: "airtable", desc: "Query and edit records in your bases.", descVi: "Truy vấn và chỉnh sửa bản ghi trong các base." },
+  { id: "granola", name: "Granola", url: "https://mcp.granola.ai/mcp", cat: "productivity", color: "#2E6B3F", desc: "Search your meeting notes and transcripts.", descVi: "Tìm trong ghi chú và bản ghi lời cuộc họp." },
+  { id: "figma", name: "Figma", url: "https://mcp.figma.com/mcp", cat: "design", logo: "figma", desc: "Bring designs, components and variables into your chats.", descVi: "Đưa thiết kế, component và biến từ Figma vào cuộc trò chuyện." },
+  { id: "canva", name: "Canva", url: "https://mcp.canva.com/mcp", cat: "design", color: "#00C4CC", desc: "Search, create and edit Canva designs.", descVi: "Tìm, tạo và chỉnh sửa thiết kế Canva." },
+  { id: "miro", name: "Miro", url: "https://mcp.miro.com/", cat: "design", logo: "miro", desc: "Read and create content on Miro boards.", descVi: "Đọc và tạo nội dung trên bảng Miro." },
+  { id: "sentry", name: "Sentry", url: "https://mcp.sentry.dev/mcp", cat: "dev", logo: "sentry", desc: "Investigate errors, issues and performance.", descVi: "Điều tra lỗi, issue và hiệu năng ứng dụng." },
+  { id: "vercel", name: "Vercel", url: "https://mcp.vercel.com", cat: "dev", logo: "vercel", desc: "Check projects, deployments and build logs.", descVi: "Xem dự án, lượt triển khai và log build." },
+  { id: "supabase", name: "Supabase", url: "https://mcp.supabase.com/mcp", cat: "dev", logo: "supabase", desc: "Manage projects, databases and edge functions.", descVi: "Quản lý dự án, cơ sở dữ liệu và edge function." },
+  { id: "gitlab", name: "GitLab", url: "https://gitlab.com/api/v4/mcp", cat: "dev", logo: "gitlab", desc: "Work with issues, merge requests and pipelines.", descVi: "Làm việc với issue, merge request và pipeline." },
+  { id: "huggingface", name: "Hugging Face", url: "https://huggingface.co/mcp", cat: "dev", logo: "huggingface", noAuth: true, desc: "Search models, datasets, Spaces and papers.", descVi: "Tìm model, dataset, Space và bài báo." },
+  { id: "cloudflare-docs", name: "Cloudflare Docs", url: "https://docs.mcp.cloudflare.com/mcp", cat: "knowledge", logo: "cloudflare", noAuth: true, desc: "Search Cloudflare's developer documentation.", descVi: "Tìm trong tài liệu dành cho nhà phát triển của Cloudflare." },
+  { id: "deepwiki", name: "DeepWiki", url: "https://mcp.deepwiki.com/mcp", cat: "knowledge", color: "#0B66E4", noAuth: true, desc: "Ask questions about any public GitHub repository.", descVi: "Hỏi về bất kỳ kho mã GitHub công khai nào." },
+  { id: "context7", name: "Context7", url: "https://mcp.context7.com/mcp", cat: "knowledge", color: "#10B981", noAuth: true, desc: "Up-to-date docs and code examples for libraries.", descVi: "Tài liệu và ví dụ code mới nhất của các thư viện." },
+  { id: "stripe", name: "Stripe", url: "https://mcp.stripe.com", cat: "payments", logo: "stripe", desc: "Look up customers, payments, invoices and subscriptions.", descVi: "Tra cứu khách hàng, thanh toán, hóa đơn và gói thuê bao." },
+  { id: "paypal", name: "PayPal", url: "https://mcp.paypal.com/mcp", cat: "payments", logo: "paypal", desc: "Manage invoices, orders and transactions.", descVi: "Quản lý hóa đơn, đơn hàng và giao dịch." },
+  { id: "square", name: "Square", url: "https://mcp.squareup.com/sse", cat: "payments", logo: "square", desc: "Work with payments, orders and your catalog.", descVi: "Làm việc với thanh toán, đơn hàng và danh mục sản phẩm." },
+  { id: "intercom", name: "Intercom", url: "https://mcp.intercom.com/mcp", cat: "support", logo: "intercom", desc: "Search conversations, tickets and customer data.", descVi: "Tìm cuộc hội thoại, ticket và dữ liệu khách hàng." },
+];

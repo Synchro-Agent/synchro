@@ -15,7 +15,7 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { callLLM, LLMError, setActiveEffort, setActiveModel, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeSkillsUsed, type ApprovalCall, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
@@ -25,6 +25,7 @@ import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel,
 import { fitModel, modelName, refreshModels, useModels } from "./models";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
+import { ApprovalCard } from "./connectorsui";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -395,6 +396,16 @@ export default function Home() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [cur, setCur] = useState<number | null>(null);
+  const curRef = useRef(cur);
+  curRef.current = cur;
+  // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.
+  const [approval, setApproval] = useState<{ chat: number | null; calls: ApprovalCall[]; resolve: (d: Record<string, Decision>) => void } | null>(null);
+  const approvalRef = useRef(approval);
+  approvalRef.current = approval;
+  useEffect(() => {
+    setApprover((calls) => new Promise((resolve) => setApproval({ chat: curRef.current, calls, resolve })));
+    return () => setApprover(null);
+  }, []);
   const [curProj, setCurProj] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const fm = useFileMenu((m) => say(m));
@@ -480,6 +491,17 @@ export default function Home() {
     if (toastT.current) clearTimeout(toastT.current);
     toastT.current = setTimeout(() => setToast(""), 2400);
   }, []);
+  // Quay về từ trang đăng nhập connector (trình duyệt chặn cửa sổ bật lên): mở Cài đặt đúng tab và báo kết quả.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const tab = q.get("settings");
+    if (!tab) return;
+    setSettingsTab(tab);
+    setModal("settings");
+    const msg = q.get("msg");
+    if (msg) say(msg);
+    history.replaceState(null, "", location.pathname);
+  }, [say]);
 
   useEffect(() => {
     try {
@@ -536,6 +558,8 @@ export default function Home() {
   }, [chat?.msgs, busy]);
 
   const stop = () => {
+    approvalRef.current?.resolve({});
+    setApproval(null);
     genRef.current++;
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
@@ -554,8 +578,13 @@ export default function Home() {
     const history = (hist ?? [{ role: "user" as const, content: text }]).slice(-HISTORY_LIMIT);
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
-    let usedSk: string[] = [];
-    try { reply = await callLLM(system, history, 1500, undefined, true, { project: pid }); usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))]; } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
+    let usedSk: string[] = [], usedTl: string[] = [];
+    try {
+      reply = await callLLM(system, history, 1500, undefined, true, { project: pid });
+      const used = takeSkillsUsed();
+      usedSk = [...new Set(used.filter((u) => u.kind === "skill").map((u) => u.name))];
+      usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
+    } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
     if (gen !== genRef.current) return;
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
@@ -565,7 +594,7 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, tools: usedTl.length ? usedTl : undefined }]);
       if (i >= words.length) {
         stop();
         if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: "Câu trả lời đã hoàn tất." });
@@ -971,7 +1000,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="ai-msg">{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? <Markdown text={m.text} say={say} /> : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? <Markdown text={m.text} say={say} /> : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
@@ -985,6 +1014,7 @@ export default function Home() {
                     </div>
                   )
                 )}
+                {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
                 <div ref={endRef} />
               </div>
             </div>

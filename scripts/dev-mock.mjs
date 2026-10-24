@@ -6,15 +6,17 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { MOCK_KEYS, startMock } from "./mock-providers.mjs";
+import { startMockMcp } from "./mock-mcp.mjs";
 
-const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010);
+const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011);
 const DATA = path.resolve("data-mock");
 // Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
 const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
 const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
-const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
+const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
 
 try { await startMock(MOCK_PORT); } catch (e) { console.error(`Không mở được API giả lập ở cổng ${MOCK_PORT}: ${e.message}`); process.exit(1); }
+try { await startMockMcp(MCP_PORT); } catch (e) { console.error(`Không mở được máy chủ MCP giả lập ở cổng ${MCP_PORT}: ${e.message}`); process.exit(1); }
 
 if (!fs.existsSync(path.join(DATA, "synchro.db"))) {
   const r = spawnSync(process.execPath, ["scripts/create-admin.mjs", ADMIN.email], { env, input: `${ADMIN.password}\n${ADMIN.password}\n`, encoding: "utf8" });
@@ -64,5 +66,6 @@ console.log(`
   │ Model:      ${models.map((p) => `${p.name} (${p.models.length})`).join(", ") || "chưa có"}
   │ Thử lỗi:    gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn
   │ Khóa thử:   khóa nào có chữ "mock" đều hợp lệ, API giả lập ở ${M}
+  │ Connector:  http://127.0.0.1:${MCP_PORT}/mcp (OAuth) · /modern · /sse  — gõ #tool=tên trong tin nhắn để model gọi công cụ
   └─ Ctrl+C để dừng ─────────────────────────────────────────
 `);

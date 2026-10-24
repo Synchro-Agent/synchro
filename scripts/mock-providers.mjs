@@ -44,6 +44,20 @@ function lastUserText(msgs = []) {
   return "";
 }
 
+// "#tool" trong tin nhắn: model gọi công cụ. "#tool=tên" chọn công cụ có tên chứa chuỗi đó, "#args={...}" là tham số JSON.
+const SKILL_TOOLS = ["load_skill", "read_skill_file", "search_skills", "run_skill_script"];
+function wantTool(q, names) {
+  if (!q.includes("#tool") || !names.length) return null;
+  const m = /#tool=([\w.-]+)/.exec(q);
+  const name = m ? names.find((n) => n.includes(m[1])) : names.find((n) => !SKILL_TOOLS.includes(n)) ?? names[0];
+  if (!name) return null;
+  let args = name === "load_skill" ? { name: "mock-skill" } : {};
+  const a = /#args=(\{.*\})/.exec(q);
+  if (a) { try { args = JSON.parse(a[1]); } catch {} }
+  return { name, args };
+}
+const toolDone = (name, out) => `Đã gọi công cụ ${name} và nhận kết quả: ${String(out ?? "").slice(0, 300)}`;
+
 const displayName = (provider, id) =>
   provider === "anthropic" ? ANTHROPIC.find(([x]) => x === id)?.[1] ?? id
   : provider === "google" ? GOOGLE.find(([x]) => x === id)?.[1] ?? id
@@ -105,6 +119,17 @@ async function handler(req, res) {
       const ef = b.output_config?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err("invalid_request_error", `output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'`));
       const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
+      const last = b.messages?.[b.messages.length - 1];
+      const results = Array.isArray(last?.content) ? last.content.filter((x) => x.type === "tool_result") : [];
+      if (results.length) {
+        const prev = b.messages[b.messages.length - 2];
+        const use = (prev?.content ?? []).find?.((x) => x.type === "tool_use");
+        const r0 = results[0];
+        const out = typeof r0.content === "string" ? r0.content : (r0.content ?? []).map((x) => x.text ?? "").join(" ");
+        return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: toolDone(use?.name ?? "?", out) }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: 30 } });
+      }
+      const want = b.tool_choice?.type === "none" ? null : wantTool(q, (b.tools ?? []).map((x) => x.name));
+      if (want) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ dùng công cụ." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: want.name, input: want.args }], stop_reason: "tool_use", usage: { input_tokens: 40, output_tokens: 20 } });
       if (await trap(res, q, (m) => err("api_error", m))) return;
       await sleep(latency(b.model));
       return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(text.length / 4) } });
@@ -128,13 +153,15 @@ async function handler(req, res) {
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err(`Invalid value for 'reasoning.effort': '${ef}'.`));
       const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef);
       // Gõ #tool: model gọi công cụ đầu tiên, lượt sau trả lời dựa trên kết quả.
-      if (q.includes("#tool") && b.tools?.length && b.tool_choice !== "none") {
-        if (!outs.length) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
-          output: [{ type: "reasoning", id: "rs_mock", summary: [] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: b.tools[0].name, arguments: JSON.stringify({ name: "mock-skill" }), status: "completed" }] });
-        const got = String(outs[outs.length - 1].output ?? "").slice(0, 120);
+      const lastItem = input[input.length - 1];
+      if (lastItem?.type === "function_call_output") {
+        const call = input.find((x) => x.type === "function_call" && x.call_id === lastItem.call_id);
         return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
-          output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: `Đã gọi công cụ ${b.tools[0].name} và nhận kết quả: ${got}`, annotations: [] }] }] });
+          output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: toolDone(call?.name ?? "?", lastItem.output), annotations: [] }] }] });
       }
+      const want = b.tool_choice === "none" ? null : wantTool(q, (b.tools ?? []).map((x) => x.name));
+      if (want) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
+        output: [{ type: "reasoning", id: "rs_mock", summary: [] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: want.name, arguments: JSON.stringify(want.args), status: "completed" }] });
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
       await sleep(latency(b.model) * (pro(b.model) ? 2 : 1));
       return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
@@ -162,6 +189,13 @@ async function handler(req, res) {
     if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
     if (b.reasoning_effort !== undefined && !["minimal", "low", "medium", "high"].includes(b.reasoning_effort)) return send(res, 400, [{ error: { code: 400, message: `Invalid reasoning_effort: ${b.reasoning_effort}`, status: "INVALID_ARGUMENT" } }]);
     const { text, q } = reply("google", b.model, b.messages, b.max_tokens, b.reasoning_effort);
+    const lastMsg = b.messages?.[b.messages.length - 1];
+    if (lastMsg?.role === "tool") {
+      const prev = [...b.messages].reverse().find((x) => x.role === "assistant" && x.tool_calls);
+      return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: toolDone(prev?.tool_calls?.[0]?.function?.name ?? "?", lastMsg.content) }, finish_reason: "stop" }] });
+    }
+    const want = b.tool_choice === "none" ? null : wantTool(q, (b.tools ?? []).map((x) => x.function?.name).filter(Boolean));
+    if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } }] }, finish_reason: "tool_calls" }] });
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));
     return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }] });
