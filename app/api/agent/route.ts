@@ -1,6 +1,7 @@
 import { can, canModel, current, limit, sameOrigin } from "../../authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, runAgent, type AgentEvent } from "../../agentcore";
-import { CLAUDE_API_IDS } from "../../catalog";
+import { legacyModel } from "../../catalog";
+import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
 import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
 import { exec, sdir, wsAllowed } from "../../workspace";
@@ -8,11 +9,6 @@ import { exec, sdir, wsAllowed } from "../../workspace";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 900;
-
-const PROVIDER = process.env.LLM_PROVIDER ?? "anthropic";
-const API_KEY = process.env.LLM_API_KEY ?? "";
-const MODEL = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
-const BASE_URL = process.env.LLM_BASE_URL ?? "https://api.openai.com/v1";
 
 // Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện dạng NDJSON (mỗi dòng một JSON).
 export async function POST(req: Request) {
@@ -25,7 +21,12 @@ export async function POST(req: Request) {
   const { sid, system = "", messages = [], model: picked, project, skills: wantSkills } = await req.json();
   let d: string;
   try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
-  if (typeof picked === "string" && picked && !canModel(c.user, picked)) return Response.json({ error: `Quản trị viên chưa cho phép tài khoản của bạn dùng model ${picked}.` }, { status: 403 });
+  // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
+  const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
+  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
+  if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
+  const target = await resolveModel(model);
+  if (!target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
 
   const enc = new TextEncoder();
   const ac = new AbortController();
@@ -44,10 +45,10 @@ export async function POST(req: Request) {
         const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: String(system).slice(0, 60_000), skills: list.length ? skillsPrompt(list, scripts) : "" });
         const tools = agentTools(list.length, scripts);
         const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
-        const model = PROVIDER === "anthropic" && typeof picked === "string" && CLAUDE_API_IDS[picked] ? CLAUDE_API_IDS[picked] : MODEL;
-        const adapter = PROVIDER === "mock" || !API_KEY ? mockAgent()
-          : PROVIDER === "anthropic" && model.startsWith("claude") ? anthropicAgent({ key: API_KEY, model, system: sys, maxTokens: 8000, tools, signal: ac.signal })
-          : openaiAgent({ key: API_KEY, base: BASE_URL, model, system: sys, maxTokens: 8000, tools, signal: ac.signal });
+        // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
+        const adapter = target.kind === "mock" ? mockAgent()
+          : target.kind === "anthropic" ? anthropicAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal })
+          : openaiAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, completionTokens: target.kind === "openai" });
         const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal });
         if (out.skills.length) recordUse(c.user.id, out.skills);
         emit({ t: "done", text: out.text, skills: out.skills });

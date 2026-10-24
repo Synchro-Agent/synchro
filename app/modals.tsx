@@ -218,6 +218,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ["General", <I.Gear key="g" />], ...(admin ? [["Administrator", <I.Admin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.User key="a" />], ["Privacy", <I.Shield key="p" />],
     ["Capabilities", <I.Sliders key="c" />], ["Memory", <I.History key="m" />],
     ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
+    ...(admin ? [["API", <I.Key key="api" />] as [string, React.ReactNode]] : []),
   ];
   const custom: [string, React.ReactNode][] = [
     ...(feat?.skills !== false ? [["Skills", <I.Scroll key="s" />] as [string, React.ReactNode]] : []),

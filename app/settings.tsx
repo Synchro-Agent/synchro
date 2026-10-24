@@ -7,6 +7,7 @@ import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { MODES, PRESETS } from "./codeview";
 import { SkillsPanel, SKILLS_UPLOAD } from "./skillsui";
+import { ApiPanel } from "./apiui";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
@@ -497,6 +498,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
     case "Administrator": return <AdminPanel Toggle={Toggle} />;
+    case "API": return <ApiPanel />;
     case "Account": return <Account />;
     case "Privacy": return <Privacy go={go} />;
     case "Billing": return <Billing />;

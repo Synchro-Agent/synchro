@@ -211,11 +211,11 @@ function pruneImages(msgs: unknown[]) {
   }
 }
 
-export function anthropicAgent(o: { key: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal }): Adapter {
+export function anthropicAgent(o: { key: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal }): Adapter {
   return {
     step: async (msgs, last) => {
       pruneImages(msgs);
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetch(`${o.base ?? "https://api.anthropic.com"}/v1/messages`, {
         method: "POST", signal: o.signal,
         headers: { "x-api-key": o.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, system: [{ type: "text", text: o.system, cache_control: { type: "ephemeral" } }], tools: o.tools, ...(last ? { tool_choice: { type: "none" } } : {}), messages: msgs }),
@@ -240,13 +240,13 @@ export function anthropicAgent(o: { key: string; model: string; system: string; 
   };
 }
 
-export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal }): Adapter {
+export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; completionTokens?: boolean }): Adapter {
   return {
     step: async (msgs, last) => {
       const r = await fetch(`${o.base}/chat/completions`, {
         method: "POST", signal: o.signal,
         headers: { Authorization: `Bearer ${o.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
+        body: JSON.stringify({ model: o.model, ...(o.completionTokens ? { max_completion_tokens: o.maxTokens } : { max_tokens: o.maxTokens }), messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();

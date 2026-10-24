@@ -11,7 +11,7 @@ export const Plus = (p: P) => <S {...p}><path d="M10 4v12M4 10h12" /></S>;
 export const Panel = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.5" /><path d="M8 4v12" /></S>;
 export const Layers = (p: P) => <S {...p}><g className="ai-l1"><path d="M7 3.2h6" /></g><g className="ai-l2"><path d="M4.6 5.9h10.8" /></g><path d="M3.6 8.4h12.8M4.6 8.4l.8 6.9a1.8 1.8 0 001.8 1.6h5.6a1.8 1.8 0 001.8-1.6l.8-6.9" /></S>;
 export const Shapes = (p: P) => <S {...p}><g className="ai-q"><path d="M7 2.4a5.4 5.4 0 015.4 5.4H7z" /></g><circle cx="5.6" cy="14" r="3.2" /><g className="ai-sq"><rect x="10.4" y="10.4" width="6.4" height="6.4" rx="1.3" /></g></S>;
-export const Scroll = (p: P) => <S {...p}><path d="M5.2 3h7.3A1.8 1.8 0 0114.3 4.8V12" /><path d="M5.2 3a1.8 1.8 0 00-1.8 1.8v8.6M3.4 13.4h8.1v1.1a2.2 2.2 0 002.2 2.2H5.6a2.2 2.2 0 01-2.2-2.2zM11.5 13.4h5.1v1.1a2.2 2.2 0 01-2.9 2.1" /><path d="M7 7.3c.7-.7 1.3-.7 2 0s1.3.7 2 0" /></S>;
+export const Scroll = (p: P) => <S {...p}><path d="M5.2 3h7.3A1.8 1.8 0 0114.3 4.8V12" /><path d="M5.2 3a1.8 1.8 0 00-1.8 1.8v8.6" /><g className="ai-roll"><path d="M3.4 13.4h8.1v1.1a2.2 2.2 0 002.2 2.2H5.6a2.2 2.2 0 01-2.2-2.2zM11.5 13.4h5.1v1.1a2.2 2.2 0 01-2.9 2.1" /></g><g className="ai-ink"><path d="M7 7.3c.7-.7 1.3-.7 2 0s1.3.7 2 0" pathLength="1" /></g></S>;
 export const Code = (p: P) => <S {...p}><g className="ai-lt"><path d="M6.8 6L2.8 10l4 4" /></g><g className="ai-rt"><path d="M13.2 6l4 4-4 4" /></g><g className="ai-sl"><path d="M11.8 4l-3.6 12" /></g></S>;
 export const Brief = (p: P) => <S {...p}><g className="ai-br"><rect x="3" y="6" width="14" height="10" rx="2" /><path d="M7.5 6V4.5h5V6M3 10.5h14" /></g></S>;
 export const Pencil = (p: P) => <S {...p}><path d="M12.9 4a1.9 1.9 0 012.7 0l.4.4a1.9 1.9 0 010 2.7L7.6 15.5l-4 1 1-4zM11.2 5.8l3 3" /></S>;
@@ -134,6 +134,7 @@ export const Upload = (p: P) => <S {...p}><path d="M10 13V3.5M6.5 7L10 3.5 13.5 
 export const Heart = (p: P) => <S {...p}><path d="M10 15.5l-5.2-5a3.2 3.2 0 014.5-4.6l.7.7.7-.7a3.2 3.2 0 014.5 4.6z" /></S>;
 export const Bars = (p: P) => <S {...p}><path d="M4 8v4M7 5v10M10 3v14M13 6v8M16 8.5v3" /></S>;
 export const Chat2 = (p: P) => <S {...p}><path d="M3 5.5h9v6H7l-3 2.5v-2.5H3zM12 8.5h5v6h-1v2.3l-2.8-2.3H9v-2" /></S>;
+export const Key = (p: P) => <S {...p}><circle cx="13.2" cy="6.8" r="3.6" /><circle cx="13.9" cy="6.1" r=".6" fill="currentColor" stroke="none" /><path d="M10.6 9.4 4 16v1.6h2.2l.6-.6v-1.4h1.4l.9-.9v-1.3h1.3l1.4-1.4" /></S>;
 export const Sparkle = (p: P) => <S {...p}><path d="M10 3l1.8 4.6L16.5 9l-4.7 1.4L10 15l-1.8-4.6L3.5 9l4.7-1.4z" /></S>;
 export const Pulse = (p: P) => <S {...p}><path d="M3 10h2l2-5 3 10 2-6 1.5 3H17" /></S>;
 export const Swap = (p: P) => <S {...p}><path d="M4 7h11l-3-3M16 13H5l3 3" /></S>;

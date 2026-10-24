@@ -1,0 +1,42 @@
+"use client";
+// Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
+import { useSyncExternalStore } from "react";
+import { allowsModel, splitKey, type ProviderInfo } from "./catalog";
+
+type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; loaded: boolean };
+let state: State = { providers: [], default: null, allowed: [], loaded: false };
+const subs = new Set<() => void>();
+let inflight: Promise<void> | null = null;
+
+export function refreshModels() {
+  inflight ??= fetch("/api/models", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], loaded: true }; subs.forEach((f) => f()); } })
+    .catch(() => {})
+    .finally(() => { inflight = null; });
+  return inflight;
+}
+
+export function useModels() {
+  return useSyncExternalStore(
+    (f) => { subs.add(f); if (!state.loaded) refreshModels(); return () => subs.delete(f); },
+    () => state,
+    () => state,
+  );
+}
+
+// Tên hiển thị của một khóa model ("openai/gpt-5.1" → "GPT-5.1").
+export function modelName(key: string) {
+  for (const p of state.providers) for (const m of p.models) if (m.key === key) return m.name;
+  const id = splitKey(key).id || key;
+  return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/-/g, " ");
+}
+
+// Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định hoặc model đầu tiên được phép.
+export function fitModel(cur: string, s: State = state) {
+  const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));
+  const ok = (k: string | null): k is string => !!k && shown.includes(k) && allowsModel(s.allowed, k);
+  if (ok(cur)) return cur;
+  if (ok(s.default)) return s.default;
+  return shown.find((k) => allowsModel(s.allowed, k)) ?? cur;
+}

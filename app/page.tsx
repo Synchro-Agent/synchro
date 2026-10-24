@@ -21,7 +21,8 @@ import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, Sh
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
-import { ALL_MODELS, DEFAULT_MODEL, MODEL_PROVIDERS } from "./catalog";
+import { allowsModel, legacyModel } from "./catalog";
+import { fitModel, modelName, refreshModels, useModels } from "./models";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 type Say = (m: string) => void;
@@ -96,9 +97,7 @@ function MicPicker({ say, rec, onMic }: { say: Say; rec: boolean; onMic: () => v
   );
 }
 
-const PROVIDERS = MODEL_PROVIDERS;
 const EFFORTS: [string, string][] = [["low", "Thấp"], ["medium", "Trung bình"], ["high", "Cao"], ["extra", "Cao hơn"], ["max", "Tối đa"]];
-const FREE_MODELS = ALL_MODELS;
 
 type TplKey = "doc" | "slides" | "design";
 const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; sys: string }[] = [
@@ -127,8 +126,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [flip, setFlip] = useState(false);
   const hoverProv = (id: string, el: HTMLElement) => { setSub(id); setSubTop(el.offsetTop); };
   const [effort, setEffort] = usePref("effort", "medium");
-  const { upgrade, say, me } = useApp();
-  const allowed = me?.perms.models ?? FREE_MODELS;
+  const { say, me, openSettings } = useApp();
+  const { providers, allowed, loaded } = useModels();
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
   useEffect(() => {
@@ -136,26 +135,35 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     const m = mref.current?.querySelector(".model-menu") as HTMLElement | null;
     if (!m) return;
     const r = m.getBoundingClientRect();
-    const w = sub === "effort" ? 320 : 240;
+    const w = sub === "effort" ? 320 : 260;
     setFlip(r.right + 8 + w > window.innerWidth - 8);
   }, [sub, mm]);
+  useEffect(() => { if (mm) refreshModels(); }, [mm]);
   const subX = flip ? { right: "calc(100% + 8px)" } : { left: "calc(100% + 8px)" };
-  const pick = (n: string) => {
-    if (!allowed.includes(n)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
-    if (!FREE_MODELS.includes(n)) { close(); upgrade(); return; }
-    setModel(n); close();
+  const ok = (k: string) => allowsModel(allowed, k);
+  const pick = (k: string) => {
+    if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
+    setModel(k); close();
   };
   const eLabel = EFFORTS.find((e) => e[0] === effort)?.[1] ?? "Trung bình";
+  const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }}>
-      <button className="model-btn" onClick={() => { setMm(!mm); setSub(null); }}>{model} <span className="muted">{eLabel}</span><I.Chevron size={14} /></button>
+      <button className="model-btn" onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"} <span className="muted">{eLabel}</span><I.Chevron size={14} /></button>
       <Menu open={mm} className="model-menu" style={{ position: "absolute" }}>
-        {PROVIDERS.map((pv) => (
+        {none && (
+          <div className="mempty">
+            <b>Chưa kết nối model nào</b>
+            <span>{me?.isAdmin ? "Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu." : "Quản trị viên cần nhập khóa API để Synchro dùng được model."}</span>
+            {me?.isAdmin && <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>}
+          </div>
+        )}
+        {providers.map((pv) => (
           <button key={pv.id} className={`menu-item mline mprov ${sub === pv.id ? "sel" : ""}`} onClick={(e) => (sub === pv.id ? setSub(null) : hoverProv(pv.id, e.currentTarget))} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
-            {pv.name}<span className="sc">{pv.models.includes(model) && <i className="dot" />}<I.ChevronR size={16} /></span>
+            {pv.name}<span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
           </button>
         ))}
-        <hr />
+        {!none && <hr />}
         <button className={`menu-item mline ${sub === "effort" ? "sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
@@ -166,11 +174,11 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
             </button>
           ))}
         </Menu>
-        {PROVIDERS.map((pv) => (
-          <Menu key={pv.id} open={sub === pv.id} className="model-sub" style={{ ...subX, top: subTop - 6, width: 240 }}>
-            {pv.models.map((n) => (
-              <button key={n} className={`menu-item mline ${allowed.includes(n) ? "" : "locked"}`} onClick={() => pick(n)} title={allowed.includes(n) ? undefined : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                {n}{n === model ? <span className="ck"><I.Check /></span> : !allowed.includes(n) && <span className="sc"><I.Lock size={14} /></span>}
+        {providers.map((pv) => (
+          <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, top: subTop - 6, width: 260 }}>
+            {pv.models.map((m) => (
+              <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
+                <span className="mname-t">{m.name}</span>{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
           </Menu>
@@ -395,7 +403,9 @@ export default function Home() {
   const [tplMenu, setTplMenu] = useState(false);
   const tplRef = useClickAway(() => setTplMenu(false));
   const [toast, setToast] = useState("");
-  const [model, setModel] = useState("Haiku 4.5");
+  const [model, setModel] = useState("");
+  const models = useModels();
+  const [settingsTab, setSettingsTab] = useState("General");
   const [incog, setIncog] = useState(false);
   const [files, setFiles] = useState<string[]>([]);
   const [prefill, setPrefill] = useState({ t: "", n: 0 });
@@ -420,7 +430,7 @@ export default function Home() {
     try {
       setChats(JSON.parse(ls.get("chats") || "[]"));
       setProjects(JSON.parse(ls.get("projects") || "[]"));
-      const m = ls.get("model"); setModel(m && FREE_MODELS.includes(m) ? m : DEFAULT_MODEL);
+      setModel(legacyModel(ls.get("model") ?? "") ?? "");
       setBanner(ls.get("banner") !== "0");
     } catch {}
   };
@@ -454,7 +464,7 @@ export default function Home() {
     try {
       setChats(JSON.parse(ls.get("chats") || "[]"));
       setProjects(JSON.parse(ls.get("projects") || "[]"));
-      { const m = ls.get("model"); setModel(m && FREE_MODELS.includes(m) ? m : DEFAULT_MODEL); }
+      setModel(legacyModel(ls.get("model") ?? "") ?? "");
       setBanner(ls.get("banner") !== "0");
     } catch {}
     setThemeS(localStorage.getItem("theme") || "light");
@@ -463,9 +473,10 @@ export default function Home() {
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
   useEffect(() => { setActiveModel(model); }, [model]);
+  // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
+  useEffect(() => { if (me) refreshModels(); }, [me]);
+  useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
   useEffect(() => {
-    const ok = me?.perms.models;
-    if (ok?.length && !ok.includes(model)) setModel(ok.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : ok[0]);
     if (me && view === "code" && !me.perms.features.code) setView("new");
     if (me && view === "speech" && !me.perms.features.speech) setView("new");
     if (me && view === "customize" && !me.perms.features.skills) setView("new");
@@ -523,7 +534,7 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [];
-    try { reply = await callLLM(system, history, 1500, undefined, true, { project: pid }); usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))]; } catch (e) { reply = e instanceof LLMError && e.status === 403 ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
+    try { reply = await callLLM(system, history, 1500, undefined, true, { project: pid }); usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))]; } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
     if (gen !== genRef.current) return;
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
@@ -638,7 +649,7 @@ export default function Home() {
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
       else if (mod && k === ".") { e.preventDefault(); setOpen((o) => !o); }
       else if (mod && k === "/") { e.preventDefault(); setModal("keys"); }
-      else if (mod && e.shiftKey && k === ",") { e.preventDefault(); setModal("settings"); }
+      else if (mod && e.shiftKey && k === ",") { e.preventDefault(); setSettingsTab("General"); setModal("settings"); }
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
@@ -710,6 +721,7 @@ export default function Home() {
   const api = {
     say, chats, exportData,
     upgrade: () => setModal("upgrade"),
+    openSettings: (t?: string) => { setSettingsTab(t ?? "General"); setModal("settings"); },
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
@@ -871,7 +883,7 @@ export default function Home() {
             </button>
               <Menu open={!!(userMenu)} style={{ bottom: 44, left: 0, width: 300 }} className="usermenu">
                 <div className="muted" style={{ fontSize: 13, padding: "6px 10px" }}>{me.email}</div>
-                <button className="menu-item" onClick={() => { setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
+                <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
                 <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
                 <hr />
                 <button className="menu-item" onClick={() => { window.open("https://claude.ai/download", "_blank", "noopener"); setUserMenu(false); }}><I.AppsPlus />Tải ứng dụng và tiện ích mở rộng</button>
@@ -1009,7 +1021,7 @@ export default function Home() {
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} say={say} />}
-      <Fade show={!!(modal === "settings")}><Settings onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
+      <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><SearchModal chats={visible} onClose={() => setModal(null)} onPick={(id) => { setCur(id); setView("chat"); setModal(null); }} onNew={() => { goNew(); setModal(null); }} /></Fade>
       <Fade show={!!(modal === "share" && chat)}><ShareModal title={chat?.title ?? ""} onClose={() => setModal(null)} say={say} onCopy={() => chat && setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, shared: true } : c)))} /></Fade>

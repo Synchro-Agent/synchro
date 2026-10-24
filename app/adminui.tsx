@@ -5,10 +5,12 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { Avatar } from "./avatar";
 import { Fade } from "./ui";
 import { useApp } from "./store";
-import { getLang } from "./i18n";
+import { getLang, tr } from "./i18n";
 import * as I from "./icons";
 import type { AuthUser, Providers } from "./auth";
-import { FEATURES, MODEL_PROVIDERS, type Perms } from "./catalog";
+import { ALL, allowsModel, FEATURES, type Perms, type ProviderInfo } from "./catalog";
+import type { ApiState } from "./apiui";
+import { refreshModels } from "./models";
 
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
@@ -52,20 +54,53 @@ const LOG_FILTER: Record<string, (a: string) => boolean> = {
 const ENV: Record<keyof Providers, string> = { google: "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", github: "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET", apple: "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY" };
 
 type ToggleT = (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement;
+
+// Chọn nhiều model theo từng nhà cung cấp; "*" = mọi model (kể cả model hãng ra sau này).
+function ModelChips({ catalog, value, onChange, allLabel, allHint, Toggle }: { catalog: ProviderInfo[]; value: string[]; onChange: (v: string[]) => void; allLabel: string; allHint: string; Toggle: ToggleT }) {
+  const [q, setQ] = useState("");
+  const all = value.includes(ALL);
+  const keys = catalog.flatMap((p) => p.models.map((m) => m.key));
+  const ql = q.trim().toLowerCase();
+  const flip = (k: string) => {
+    const cur = all ? keys : value;
+    onChange(cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]);
+  };
+  const setProv = (p: ProviderInfo, on: boolean) => {
+    const cur = all ? keys : value, ks = p.models.map((m) => m.key);
+    onChange(on ? [...new Set([...cur, ...ks])] : cur.filter((k) => !ks.includes(k)));
+  };
+  if (!catalog.length) return <p className="adm-perm-warn" style={{ color: "var(--text-3)" }}>No models yet. Add an API key in Settings → API first.</p>;
+  return (
+    <>
+      <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>
+        <div><div className="t">{allLabel}</div><div className="d">{allHint}</div></div>
+        <Toggle on={all} set={(v) => onChange(v ? [ALL] : [...keys])} />
+      </div>
+      {keys.length > 12 && <div className="s-search adm-msearch"><I.Search size={14} /><input placeholder="Search models" value={q} onChange={(e) => setQ(e.target.value)} /></div>}
+      {catalog.map((pv) => {
+        const ms = pv.models.filter((m) => !ql || m.name.toLowerCase().includes(ql) || m.id.toLowerCase().includes(ql));
+        if (!ms.length) return null;
+        const on = pv.models.filter((m) => all || value.includes(m.key)).length;
+        return (
+          <div key={pv.id} className="adm-perm-prov">
+            <div className="adm-perm-pname"><span>{pv.name}</span><button type="button" className="adm-provall" onClick={() => setProv(pv, on < pv.models.length)}>{on < pv.models.length ? "Select all" : "Clear"}</button></div>
+            <div className="adm-pchips">{ms.map((m) => { const sel = all || value.includes(m.key); return <button key={m.key} type="button" className={`adm-pchip ${sel ? "on" : ""}`} aria-pressed={sel} title={m.id} onClick={() => flip(m.key)} data-notr>{sel && <I.Check size={12} />}{m.name}</button>; })}</div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // Chọn model và tính năng được phép. Dùng cho quyền mặc định và quyền riêng từng người.
-function PermsEditor({ value, onChange, Toggle }: { value: Perms; onChange: (p: Perms) => void; Toggle: ToggleT }) {
-  const flip = (m: string) => onChange({ ...value, models: value.models.includes(m) ? value.models.filter((x) => x !== m) : [...value.models, m] });
+function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onChange: (p: Perms) => void; Toggle: ToggleT; catalog: ProviderInfo[] }) {
+  const usable = catalog.some((p) => p.models.some((m) => allowsModel(value.models, m.key)));
   return (
     <div className="adm-perms">
       <div className="adm-perm-sec">
         <h4>Models</h4>
-        {MODEL_PROVIDERS.map((pv) => (
-          <div key={pv.id} className="adm-perm-prov">
-            <span className="adm-perm-pname">{pv.name}</span>
-            <div className="adm-pchips">{pv.models.map((m) => <button key={m} type="button" className={`adm-pchip ${value.models.includes(m) ? "on" : ""}`} aria-pressed={value.models.includes(m)} onClick={() => flip(m)}>{value.models.includes(m) && <I.Check size={12} />}{m}</button>)}</div>
-          </div>
-        ))}
-        {value.models.length === 0 && <p className="adm-perm-warn">No models selected: this person won&apos;t be able to chat.</p>}
+        <ModelChips catalog={catalog} value={value.models} onChange={(m) => onChange({ ...value, models: m })} allLabel="All models" allHint="Includes models added later." Toggle={Toggle} />
+        {catalog.length > 0 && !usable && <p className="adm-perm-warn">No models selected: this person won&apos;t be able to chat.</p>}
       </div>
       <div className="adm-perm-sec">
         <h4>Features</h4>
@@ -100,7 +135,11 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   const [pwFor, setPwFor] = useState<U | null>(null);
   const [pw, setPw] = useState({ next: "", again: "", signOut: true });
 
+  const [api, setApi] = useState<ApiState | null>(null);
   const load = useCallback(() => call<Data>("GET", "/api/admin").then((x) => { setD(x); setErr(""); setMore(x.audit.length >= 100); }).catch((e) => setErr(e.message)), []);
+  useEffect(() => { call<ApiState>("GET", "/api/admin/apikeys").then(setApi).catch(() => {}); }, []);
+  const saveMain = (main: string[]) => { if (!api) return; setApi({ ...api, main }); call<ApiState>("POST", "/api/admin/apikeys", { action: "main", main }).then((s) => { setApi(s); refreshModels(); }).catch((e) => app.say(e.message)); };
+  const saveDefault = (model: string) => { if (!api) return; call<ApiState>("POST", "/api/admin/apikeys", { action: "default", model }).then((s) => { setApi(s); refreshModels(); app.say("Default model saved"); }).catch((e) => app.say(e.message)); };
   useEffect(() => { load(); }, [load]);
   const loadDetail = (id: string) => call<Detail>("GET", `/api/admin/users/${id}`).then(setDetail).catch((e) => app.say(e.message));
   const toggle = (id: string) => { setDetail(null); if (open === id) { setOpen(null); return; } setOpen(id); loadDetail(id); };
@@ -148,11 +187,34 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         </div>
       ))}
 
+      <h3 className="sec">Model picker</h3>
+      <p className="d adm-privacy"><I.Sparkle size={14} />Choose which models appear in the model picker on the main screen, and which model new chats start with.</p>
+      <div className="adm-card">
+        <div className="adm-card-h"><b>Models on the main screen</b><span className="d">Hidden models can&apos;t be picked by anyone. Per-person access below still applies.</span></div>
+        {!api ? <div className="muted" style={{ fontSize: 12 }}>Loading…</div> : (
+          <>
+            <ModelChips catalog={api.catalog} value={api.main} onChange={saveMain} allLabel="Show every model" allHint="New models appear automatically when a provider adds them." Toggle={Toggle} />
+            {api.catalog.length > 0 && (() => {
+              const shown = api.catalog.map((p) => ({ ...p, models: p.models.filter((m) => allowsModel(api.main, m.key)) })).filter((p) => p.models.length);
+              return (
+                <div className="adm-perm-row">
+                  <div><div className="t">Default model</div><div className="d">Used for new chats and when someone&apos;s chosen model is no longer available.</div></div>
+                  <span className="api-sel"><select aria-label="Default model" value={api.default ?? ""} onChange={(e) => saveDefault(e.target.value)} data-notr>
+                    <option value="">{`${tr("Automatic")}${api.effectiveDefault ? ` (${api.catalog.flatMap((p) => p.models).find((m) => m.key === api.effectiveDefault)?.name ?? ""})` : ""}`}</option>
+                    {shown.map((p) => <optgroup key={p.id} label={p.name}>{p.models.map((m) => <option key={m.key} value={m.key}>{m.name}</option>)}</optgroup>)}
+                  </select><I.Chevron size={13} /></span>
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </div>
+
       <h3 className="sec">Access</h3>
       <p className="d adm-privacy"><I.Lock size={14} />Choose which models and features people can use. Administrators always have full access. Conversations, projects and files stay on each person&apos;s own device: administrators can&apos;t see them.</p>
       <div className="adm-card">
         <div className="adm-card-h"><b>Default for everyone</b><span className="d">Applies to every account without custom access.</span></div>
-        <PermsEditor Toggle={Toggle} value={d.settings.defaultPerms} onChange={(p) => { setD({ ...d, settings: { ...d.settings, defaultPerms: p } }); act(() => call("PATCH", "/api/admin/settings", { defaultPerms: p }), "Default access saved"); }} />
+        <PermsEditor catalog={api?.catalog ?? []} Toggle={Toggle} value={d.settings.defaultPerms} onChange={(p) => { setD({ ...d, settings: { ...d.settings, defaultPerms: p } }); act(() => call("PATCH", "/api/admin/settings", { defaultPerms: p }), "Default access saved"); }} />
       </div>
 
       <h3 className="sec">Users</h3>
@@ -208,7 +270,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
                       <div className="adm-card adm-card-in">
                         <div className="adm-card-h"><b>Access</b><Seg value={u.customPerms ? "Custom" : "Default"} options={["Default", "Custom"]} onChange={(v) => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: v === "Default" ? null : u.perms }), v === "Default" ? "Using default access" : "Custom access on")} /></div>
                         {u.customPerms
-                          ? <PermsEditor Toggle={Toggle} value={u.perms} onChange={(p) => { setD({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, perms: p } : x)) }); act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: p }), "Access saved"); }} />
+                          ? <PermsEditor catalog={api?.catalog ?? []} Toggle={Toggle} value={u.perms} onChange={(p) => { setD({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, perms: p } : x)) }); act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: p }), "Access saved"); }} />
                           : <p className="d" style={{ margin: 0 }}>Follows the default access above. Switch to Custom to choose models and features just for this person.</p>}
                       </div>
                     )}

@@ -1,7 +1,7 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
 import Database from "better-sqlite3";
-import { FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
+import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -159,7 +159,7 @@ export function permsOf(u: UserRow): Perms {
   try { return normPerms(JSON.parse(u.perms), d); } catch { return d; }
 }
 export const can = (u: UserRow, f: Feature) => permsOf(u).features[f];
-export const canModel = (u: UserRow, model: string) => permsOf(u).models.includes(model);
+export const canModel = (u: UserRow, model: string) => allowsModel(permsOf(u).models, model);
 
 // Cổng cho API nội bộ: phải đăng nhập và được quản trị cho phép dùng tính năng này.
 export function featureGate(req: Request, f: Feature) {

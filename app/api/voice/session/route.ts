@@ -1,11 +1,11 @@
 import { can, current, limit, sameOrigin } from "../../../authstore";
+import { serviceKey } from "../../../providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Model mặc định cho trò chuyện bằng giọng nói ở chat: Eleven Realtime v1 Max (giọng tự nhiên nhất, suy luận tốt,
+// Khóa ElevenLabs lấy từ Cài đặt → API (hoặc ELEVENLABS_API_KEY). Model mặc định: Eleven Realtime v1 Max (giọng tự nhiên nhất, suy luận tốt,
 // 90+ ngôn ngữ, tự nhận ngôn ngữ người nói). Cố định ở máy chủ, người dùng không tự chọn.
-const KEY = process.env.ELEVENLABS_API_KEY ?? "";
 const MODEL = "eleven_realtime_v1_max";
 const VOICE = process.env.ELEVENLABS_VOICE_MODE_VOICE || "brian";
 
@@ -19,12 +19,13 @@ export async function POST(req: Request) {
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
   // Chưa gắn khoá ElevenLabs, hoặc tài khoản chưa được bật Speech: trình duyệt dùng chế độ dự phòng (nhận dạng và đọc bằng trình duyệt).
-  if (!KEY || !can(c.user, "speech")) return Response.json({ fallback: true });
+  const el = serviceKey("elevenlabs");
+  if (!el || !can(c.user, "speech")) return Response.json({ fallback: true });
   try { limit("voice:" + c.user.id, 20, 60 * 60_000); } catch { return Response.json({ error: "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau." }, { status: 429 }); }
 
-  const r = await fetch("https://api.elevenlabs.io/v1/convai/realtime/client_secrets", {
+  const r = await fetch(`${el.base}/v1/convai/realtime/client_secrets`, {
     method: "POST",
-    headers: { "xi-api-key": KEY, "content-type": "application/json" },
+    headers: { "xi-api-key": el.key, "content-type": "application/json" },
     body: JSON.stringify({
       session: {
         type: "realtime",

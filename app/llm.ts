@@ -2,7 +2,7 @@
 // Logic giống backend app.py: model không nhớ gì, mỗi lần chat ta ghép lại
 // hướng dẫn + bộ nhớ + tài liệu liên quan thành system prompt.
 //
-// Để gắn model thật: đặt NEXT_PUBLIC_LLM_ENDPOINT (xem callLLM bên dưới).
+// Model thật được gọi qua /api/llm; muốn dùng backend riêng thì đặt NEXT_PUBLIC_LLM_ENDPOINT.
 import type { Project } from "./store";
 import { makeReply } from "./md";
 import type { ContentBlock } from "./fileproc/types";
@@ -16,7 +16,8 @@ export const MEMORY_EVERY_N_USER_MSGS = 4;
 export type LLMMsg = { role: "user" | "assistant"; content: string | ContentBlock[] };
 export const textOf = (c: LLMMsg["content"]) => (typeof c === "string" ? c : c.map((b) => (b.type === "text" ? b.text : b.type === "image" ? "[ảnh]" : `[PDF ${b.name ?? ""}]`)).join("\n"));
 
-export const LLM_ENDPOINT = process.env.NEXT_PUBLIC_LLM_ENDPOINT ?? "";
+// Mặc định gọi /api/llm của chính Synchro (khóa API do quản trị viên nhập ở Cài đặt → API).
+export const LLM_ENDPOINT = process.env.NEXT_PUBLIC_LLM_ENDPOINT || "/api/llm";
 export const hasLLM = !!LLM_ENDPOINT;
 
 /**

@@ -53,6 +53,7 @@ export function reloadPrefs() {
 export type AppApi = {
   say: (m: string) => void;
   upgrade: () => void;
+  openSettings?: (tab?: string) => void;
   goCode: () => void;
   ask: (text: string) => void;
   confirm: (title: string, text: string, ok: string, fn: () => void) => void;
