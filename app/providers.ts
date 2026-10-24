@@ -161,10 +161,11 @@ export async function adminList(): Promise<AdminProvider[]> {
   const v = envProvider();
   const out: AdminProvider[] = Object.entries(BUILTIN).map(([id, b]) => {
     const r = list.find((x) => x.id === id);
-    const env = !r && v && v.id === id ? v : null;
-    return { id, kind: b.kind, name: b.name, vendor: b.vendor, builtin: true, configured: !!r || !!env, source: r ? "db" : env ? "env" : null,
-      baseUrl: r?.base_url ?? "", defaultBase: b.base, keyHint: r ? r.key_hint : env ? hint(env.key) : null, keyUrl: b.keyUrl, prefix: b.prefix,
-      status: r ? (r.status as "ok" | "error") : env ? "ok" : null, error: r?.error ?? null, info: r?.info ?? null, checkedAt: r?.checked_at ?? null,
+    // Khóa ở biến môi trường: LLM_API_KEY (Claude) hoặc ELEVENLABS_API_KEY.
+    const envKey = r ? "" : v && v.id === id ? v.key : id === "elevenlabs" ? process.env.ELEVENLABS_API_KEY ?? "" : "";
+    return { id, kind: b.kind, name: b.name, vendor: b.vendor, builtin: true, configured: !!r || !!envKey, source: r ? "db" : envKey ? "env" : null,
+      baseUrl: r?.base_url ?? "", defaultBase: b.base, keyHint: r ? r.key_hint : envKey ? hint(envKey) : null, keyUrl: b.keyUrl, prefix: b.prefix,
+      status: r ? (r.status as "ok" | "error") : envKey ? "ok" : null, error: r?.error ?? null, info: r?.info ?? null, checkedAt: r?.checked_at ?? null,
       models: r ? parse(r.models).map((m) => ({ key: modelKey(id, m.id), name: m.name })) : [] };
   });
   for (const r of list.filter((x) => !BUILTIN[x.id])) out.push({ id: r.id, kind: r.kind, name: r.name, vendor: "Tương thích OpenAI", builtin: false, configured: true, source: "db",
