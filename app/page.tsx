@@ -185,7 +185,7 @@ type Rec = { lang: string; interimResults: boolean; onresult: (e: { results: Arr
 function Composer(p: {
   onSend: (t: string, f: string[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
-  model: string; setModel: (m: string) => void; goCustom: (t: "Skills" | "Connectors" | "Plugins") => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
+  model: string; setModel: (m: string) => void; goCustom: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
   onVoice?: () => void;
 }) {
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
@@ -253,10 +253,8 @@ function Composer(p: {
           <button className="menu-item" onClick={() => { setMenu(false); setFiles([...files, "Ảnh chụp màn hình.png"]); say("Đã chụp ảnh màn hình"); }}><I.Camera />Chụp ảnh màn hình</button>
           <button className="menu-item" onClick={() => soon("Hãy tạo dự án trước ở mục Dự án")}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
           <hr />
-          {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Skills"); }}><I.Scroll />Skills<span className="sc"><I.ChevronR size={16} /></span></button>}
-          <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Connectors"); }}><I.Connect />Thêm trình kết nối<span className="sc"><I.ChevronR size={16} /></span></button>
+          {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom(); }}><I.Scroll />Skills<span className="sc"><I.ChevronR size={16} /></span></button>}
           <button className="menu-item" onClick={() => soon("Chưa có hệ thống thiết kế nào")}><I.Palette />Hệ thống thiết kế<span className="sc"><I.ChevronR size={16} /></span></button>
-          <button className="menu-item" onClick={() => { setMenu(false); p.goCustom("Plugins"); }}><I.Plug />Thêm plugin</button>
           <hr />
           {perms?.features.web !== false && <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>}
           <button className="menu-item" onClick={() => { setMem(!mem); say(mem ? "Đã tắt bộ nhớ" : "Đã bật bộ nhớ"); }}><I.History />Bộ nhớ{mem && <span className="ck"><I.Check /></span>}</button>
@@ -390,7 +388,6 @@ export default function Home() {
   const [renaming, setRenaming] = useState<number | null>(null);
   const [delId, setDelId] = useState<number | null>(null);
   const [delProj, setDelProj] = useState<number | null>(null);
-  const [cTab, setCTab] = useState<"Skills" | "Connectors" | "Plugins">("Skills");
   const [theme, setThemeS] = useState("light");
   const [banner, setBanner] = useState(true);
   const [tab, setTab] = useState(0);
@@ -471,6 +468,7 @@ export default function Home() {
     if (ok?.length && !ok.includes(model)) setModel(ok.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : ok[0]);
     if (me && view === "code" && !me.perms.features.code) setView("new");
     if (me && view === "speech" && !me.perms.features.speech) setView("new");
+    if (me && view === "customize" && !me.perms.features.skills) setView("new");
     if (me && (view === "projects" || view === "project") && !me.perms.features.projects) setView("new");
   }, [me, model, view]);
   useEffect(() => {
@@ -614,7 +612,7 @@ export default function Home() {
     setChats((cs) => cs.filter((c) => !c.inc));
     setView("new"); setCur(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
   };
-  const goCustom = (t: "Skills" | "Connectors" | "Plugins") => { setCTab(t); setView("customize"); };
+  const goCustom = () => setView("customize");
   const removeChat = (id: number) => { setChats((cs) => cs.filter((c) => c.id !== id)); if (cur === id) goNew(); };
   const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
 
@@ -763,7 +761,7 @@ export default function Home() {
               </div>
             </>
           )}
-          <Nav v="customize" icon={<I.Brief />} label="Tùy chỉnh" />
+          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Scroll />} label="Skills" />}
         </div>
         {(() => {
           const row = (c: Chat) => (
@@ -886,7 +884,7 @@ export default function Home() {
                   </Menu>
               </Menu>
           </div>
-          <button className="icon-btn" onClick={() => setView("customize")} aria-label="Tùy chỉnh"><I.Grid size={16} /></button>
+          {me?.perms.features.skills !== false && <button className="icon-btn" onClick={() => setView("customize")} aria-label="Skills" data-tip="Skills"><I.Scroll size={16} /></button>}
           <button className="icon-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm"><I.Search size={16} /></button>
         </div>
       </aside>
@@ -1001,8 +999,7 @@ export default function Home() {
 
         {view === "customize" && (
           <div className="page"><div className="page-in" style={{ maxWidth: 820 }}>
-            <div className="tabs">{(["Skills", "Connectors", "Plugins"] as const).map((t) => <button key={t} className={`tab ${cTab === t ? "on" : ""}`} onClick={() => setCTab(t)}>{t}</button>)}</div>
-            <Directory key={cTab} kind={cTab} />
+            <Directory />
           </div></div>
         )}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}

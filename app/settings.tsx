@@ -272,13 +272,10 @@ function Billing() {
 function Capabilities() {
   const [v, setV0] = usePref<Record<string, boolean>>("caps", { conn: true, sw: true, art: true, ai: false, inl: true, code: true, net: false });
   const setV = (n: Record<string, boolean>) => setV0(n);
-  const [tool, setTool] = usePref("tool", "Tools already loaded");
   const t = (k: string) => <Toggle on={v[k]} set={(x) => setV({ ...v, [k]: x })} />;
   return (
     <>
       <H first>General</H>
-      <Row t="Tool access mode" d="Controls how connector tools are loaded in conversations." top><Select width={190} value={tool} onChange={setTool} options={["Tools already loaded", "Load when needed"]} /></Row>
-      <Row t="Connector search" d="Let Synchro search the connector directory and surface ones relevant to your conversations.">{t("conn")}</Row>
       <Row t="Switch models when a message is flagged" d="When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.">{t("sw")}</Row>
       <H>Visuals</H>
       <Row t="Artifacts" d="Build code, documents, and designs in a dedicated window alongside your conversation." top>{t("art")}</Row>
@@ -466,170 +463,32 @@ function CodeTab() {
   );
 }
 
-const SKILLS: [string, string, string][] = [
-  ["google-workspace", "Read this before the first Google Drive, Docs, Sheets or Slides connector call w…", "3d ago"],
-  ["import-memory", "Import a memory export from another AI assistant into Synchro's memory — …", "Sep 15"],
-  ["morning", "Render the user's morning brief as a styled HTML artifact, or set it up as a recur…", "Sep 15"],
-  ["skill-creator", "Create new skills, modify and improve existing skills, and measure skill perform…", "Sep 15"],
-];
-const CONNECTORS: [string, string, string, string][] = [
-  ["Google Drive", "Search, read, and upload files instantly", "Google", "#4285f4"],
-  ["Gmail", "Draft replies, summarize threads, and search your inbox", "Google", "#ea4335"],
-  ["Google Calendar", "Manage your schedule and coordinate meetings effortlessly", "Google", "#1a73e8"],
-  ["Canva", "Search, create, autofill, and export Canva designs", "Canva", "#00c4cc"],
-  ["Microsoft 365", "Access your company's SharePoint, OneDrive, Outlook, and Teams directly", "Anthropic", "#f25022"],
-  ["Notion", "Connect your Notion workspace to search, update, and power workflows", "Notion", "#222"],
-  ["Figma", "Generate diagrams and better code from Figma context", "Figma", "#a259ff"],
-  ["Slack", "Send messages, create canvases, and fetch black data", "Slack", "#611f69"],
-  ["HubSpot", "CRM context for every answer, insight, and action", "HubSpot", "#ff5c35"],
-  ["Asana", "Connect to Asana to coordinate tasks, projects, and goals", "Asana", "#f06a6a"],
-];
-const PLUGINS: [string, string][] = [
-  ["Intuit Developer", "Build QuickBooks integrations with the Intuit…"], ["Zentrik", "Bring product decisions, customer evidence, and…"],
-  ["Greenstack Umbraco", "Configure, deploy and troubleshoot Umbraco 13/…"], ["learn", "Use this skill when the user wants intellectual…"],
-  ["doc-coauthoring", "Guide users through a structured workflow for co…"], ["web-artifacts-builder", "Suite of tools for creating elaborate, multi-…"],
-];
-const TAGS: Record<string, string[]> = {
-  "Google Drive": ["Files & documents", "Everyday life", "Department"], Gmail: ["Email & messages", "Everyday life"], "Google Calendar": ["Events & tickets", "Everyday life"],
-  Canva: ["Designs & media", "Industry"], "Microsoft 365": ["Files & documents", "Email & messages", "Department"], Notion: ["Files & documents", "Automation & workflows"],
-  Figma: ["Designs & media", "Industry"], Slack: ["Email & messages", "Department"], HubSpot: ["Automation & workflows", "Department"], Asana: ["Automation & workflows", "Department"],
-  "Product Management": ["Department"], Operations: ["Department", "Automation & workflows"], "Small Business": ["Industry", "Finances"], "Bio Research": ["Industry", "Medicine"],
-  "Desktop Commander": ["Code", "Files & documents"], Nimble: ["AI models & agents", "APIs"], "google-workspace": ["Files & documents", "Email & messages"], "import-memory": ["AI models & agents"],
-  morning: ["Everyday life", "Automation & workflows"], "skill-creator": ["AI models & agents", "Code"], "Intuit Developer": ["APIs", "Finances"], learn: ["Books", "Languages"], "doc-coauthoring": ["Files & documents"], "web-artifacts-builder": ["Code", "Designs & media"],
-};
-const CATS = ["Topic", "Department", "Industry", "Everyday life"];
-const TOPICS = ["AI models & agents", "APIs", "Automation & workflows", "Books", "Synchro settings", "Code", "Dependencies & packages", "Designs & media", "Economics", "Email & messages", "Events & tickets", "Files & documents", "Finances", "Health & exercise data", "Languages", "Law", "Maths", "Medicine"];
-
-function Directory({ kind }: { kind: "Skills" | "Connectors" | "Plugins" }) {
-  const [sub, setSub] = useState(kind === "Skills" ? "Yours" : "Discover");
+// Trang Skills (trong Cài đặt và mục Skills ở thanh bên): danh sách skill thật của tài khoản.
+function Directory() {
   const [q, setQ] = useState("");
   const [add, setAdd] = useState(false);
-  const [filter, setFilter] = useState(false);
-  const [cat, setCat] = useState("");
   const app = useApp();
-  const [added, setAdded] = usePref<string[]>("inst:" + kind, []);
-  const [removed, setRemoved] = usePref<string[]>("rm:" + kind, []);
-  const [custom, setCustom] = usePref<[string, string][]>("cus:" + kind, []);
   const [sort, setSort] = useState<"" | "asc" | "desc">("");
-  const [rm, setRm] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [form, setForm] = useState<{ title: string; ph: string } | null>(null);
-  const [formVal, setFormVal] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const srt = <T extends string[]>(a: T[]): T[] => (sort ? [...a].sort((x, y) => (sort === "asc" ? 1 : -1) * x[0].localeCompare(y[0])) : a);
-  const tagged = (n: string) => !cat || (TAGS[n] ?? []).includes(cat);
-  const cats = Object.fromEntries(CATS.map((c) => [c, c]));
+  const addRef = useAway(() => setAdd(false));
   const doAdd = (a: string) => {
     setAdd(false);
-    if (a === "Upload skill") { setSub("Yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }
-    else if (a === "Upload plugin") fileRef.current?.click();
-    else if (a.startsWith("Create")) { app.close(); app.ask(a === "Create with Synchro" ? `Hãy giúp tôi tạo một ${kind === "Skills" ? "skill" : kind === "Plugins" ? "plugin" : "connector"} mới.` : `Hướng dẫn tôi tạo một ${kind === "Skills" ? "skill" : "plugin"} từ đầu.`); }
-    else if (a === "Browse connectors") setSub("Discover");
-    else { setForm({ title: a, ph: a === "Add marketplace" ? "https://github.com/owner/marketplace" : "https://example.com/mcp" }); setFormVal(""); }
+    if (a === "Upload skill") setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50);
+    else { app.close(); app.ask(a === "Create with Synchro" ? "Hãy giúp tôi tạo một skill mới." : "Hướng dẫn tôi tạo một skill từ đầu."); }
   };
-  const submit = () => {
-    const v = formVal.trim();
-    if (!v) return;
-    const name = v.replace(/^https?:\/\//, "").split(/[/?#]/)[0] || v;
-    setCustom((o) => [...o, [name, v]]);
-    setForm(null); setSub("Yours");
-    app.say(`Đã thêm ${name}`);
-  };
-  void cats;
-  const addRef = useAway(() => setAdd(false));
-  const fRef = useAway(() => setFilter(false));
-  const addItems = kind === "Skills" ? ["Upload skill", "Create a skill", "Create with Synchro"] : kind === "Plugins" ? ["Add marketplace", "Upload plugin", "Create a plugin", "Create with Synchro"] : ["Add custom connector", "Browse connectors"];
   return (
     <>
       <div className="dir-head">
-        <h2 className="dir-title">{kind}</h2>
-        <div className="group" style={{ marginRight: 8 }}>{["Yours", "Discover"].map((s) => <button key={s} className={sub === s ? "on" : ""} onClick={() => setSub(s)}>{s}</button>)}</div>
+        <h2 className="dir-title">Skills</h2>
         <div className="s-search" style={{ margin: 0, flex: 1, height: 30 }}><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div ref={fRef} style={{ position: "relative" }}>
-          <button className="icon-btn" onClick={() => setFilter(!filter)}><I.Sliders size={16} /></button>
-            <Menu open={!!(filter)} className="down" style={{ top: 36, right: 0, width: 200 }}>
-              <button className="menu-item" onClick={() => { setCat(""); setFilter(false); }}>All categories{!cat && <span className="ck"><I.Check size={16} /></span>}</button>
-              <hr />
-              {CATS.map((c) => <button key={c} className="menu-item" onClick={() => { setCat(c); setFilter(false); }}>{c}{cat === c ? <span className="ck"><I.Check size={16} /></span> : <span className="sc"><I.ChevronR size={14} /></span>}</button>)}
-            </Menu>
-        </div>
         <button className="icon-btn" aria-label="Sort" title={sort === "asc" ? "A → Z" : sort === "desc" ? "Z → A" : "Default order"} onClick={() => { const n = sort === "" ? "asc" : sort === "asc" ? "desc" : ""; setSort(n); app.say(n === "asc" ? "Sắp xếp A → Z" : n === "desc" ? "Sắp xếp Z → A" : "Thứ tự mặc định"); }} style={sort ? { background: "var(--active)" } : undefined}><I.Sort size={16} /></button>
-        <input ref={fileRef} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCustom((o) => [...o, [f.name.replace(/\.[^.]+$/, ""), "Uploaded " + f.name]]); setSub("Yours"); app.say(`Đã tải lên ${f.name}`); } e.target.value = ""; }} />
         <div ref={addRef} style={{ position: "relative" }}>
           <button className="btn dark" onClick={() => setAdd(!add)}>+ Add<I.Chevron size={13} /></button>
             <Menu open={!!(add)} className="down" style={{ top: 36, right: 0, width: 190 }}>
-              {addItems.map((a) => <button key={a} className="menu-item" onClick={() => doAdd(a)}>{a}</button>)}
+              {["Upload skill", "Create a skill", "Create with Synchro"].map((a) => <button key={a} className="menu-item" onClick={() => doAdd(a)}>{a}</button>)}
             </Menu>
         </div>
       </div>
-      {cat && <div className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Filtered by {cat} · <a className="lnk" onClick={() => setCat("")}>Clear</a></div>}
-
-      {kind === "Skills" && sub === "Yours" && <SkillsPanel q={q} sort={sort} Toggle={Toggle} />}
-
-      {kind === "Skills" && sub === "Discover" && (
-        <>
-          <div className="promo" style={{ background: "#12301f", color: "#e7f3ea", marginBottom: 20 }}>
-            <div><div className="muted" style={{ fontSize: 11 }}>From Anthropic</div><div style={{ fontWeight: 560, fontSize: 18 }}>Data</div><p style={{ margin: "4px 0 12px", fontSize: 13 }}>Query, chart and explain your data — SQL, spreadsheets and dashboards in one place.</p><button className="btn" style={{ color: "#141413", background: "#fff" }} onClick={() => setConfirm("Data")}>Add</button></div>
-          </div>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>For you</div>
-          <div className="cards">
-            {srt([["Product Management"], ["Operations"], ["Small Business"], ["Bio Research"], ["Desktop Commander"], ["Nimble"]]).map((x) => x[0]).filter((n) => n.toLowerCase().includes(q.toLowerCase()) && tagged(n)).map((n) => (
-              <div key={n} className="dcard"><div className="lg">▢</div><div style={{ flex: 1 }}><b style={{ fontWeight: 460 }}>{n}</b><div className="d">Plugin by Anthropic · installs</div></div><button className="btn" style={{ height: 26 }} onClick={() => { app.close(); app.ask(`Hãy thử kỹ năng "${n}" với một ví dụ nhỏ.`); }}>Try</button><button className="icon-btn" style={{ width: 26, height: 26 }} aria-label={added.includes(n) ? "Installed" : "Install"} onClick={() => (added.includes(n) ? app.say(`${n} đã được cài đặt`) : setConfirm(n))}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {kind === "Connectors" && (
-        <>
-          <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}><b style={{ color: "var(--text)", fontWeight: 560 }}>Top connectors</b> <span className="new-tag" style={{ background: "var(--hover)", color: "var(--text-2)" }}>6316</span></div>
-          <div className="cards">
-            {srt([...custom.map(([n, d]) => [n, d, "you", "#6b6a63"]), ...CONNECTORS]).filter((c) => (sub === "Discover" || added.includes(c[0]) || custom.some((x) => x[0] === c[0])) && c[0].toLowerCase().includes(q.toLowerCase()) && tagged(c[0])).map(([n, d, by, col]) => (
-              <div key={n} className="dcard"><div className="lg" style={{ background: col, color: "#fff" }}>{n[0]}</div><div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 460 }}>{n}</b> <span className="muted">✓</span><div className="d">{d}</div><div className="d">by {by}</div></div>
-                <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => { const on = added.includes(n); setAdded(on ? added.filter((x) => x !== n) : [...added, n]); app.say(on ? `Đã ngắt kết nối ${n}` : `Đã kết nối ${n}`); }}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
-            ))}
-          </div>
-          {sub === "Yours" && added.length === 0 && <div className="empty" style={{ marginTop: 40 }}>No connectors yet. Browse Discover to add one.</div>}
-        </>
-      )}
-
-      {kind === "Plugins" && (
-        <>
-          <div className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>New plugins</div>
-          <div className="cards">
-            {srt([...custom.map(([n, d]) => [n, d]), ...PLUGINS]).filter((p) => (sub === "Discover" || added.includes(p[0]) || custom.some((x) => x[0] === p[0])) && p[0].toLowerCase().includes(q.toLowerCase()) && tagged(p[0])).map(([n, d]) => (
-              <div key={n} className="dcard"><div className="lg">▢</div><div style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 460 }}>{n}</b><div className="d">{d}</div></div><button className="btn" style={{ height: 26 }} onClick={() => { app.close(); app.ask(`Hãy thử plugin "${n}" giúp tôi.`); }}>Try</button>
-                <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => (added.includes(n) ? (setAdded(added.filter((x) => x !== n)), app.say(`Đã gỡ ${n}`)) : setConfirm(n))}>{added.includes(n) ? <I.Check size={16} /> : <I.Plus size={16} />}</button></div>
-            ))}
-          </div>
-          {sub === "Yours" && added.length === 0 && <div className="empty" style={{ marginTop: 40 }}>No plugins installed yet.</div>}
-        </>
-      )}
-
-        <Menu open={!!(cat === "Topic" || cat === "Department" || cat === "Industry" || cat === "Everyday life")} className="" style={{ position: "fixed", left: "50%", top: 120, width: 220, maxHeight: 420, overflow: "auto" }}>
-          {TOPICS.map((t) => <button key={t} className="menu-item" style={{ height: 28 }} onClick={() => setCat(t)}>{t}{cat === t && <span className="ck"><I.Check size={16} /></span>}</button>)}
-        </Menu>
-
-      <Fade show={!!form}>
-        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setForm(null)}>
-          <div className="modal sm" style={{ width: 400 }}>
-            <h2 style={{ fontSize: 16 }}>{form?.title}</h2>
-            <input className="field" autoFocus placeholder={form?.ph} value={formVal} onChange={(e) => setFormVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && formVal.trim() && submit()} />
-            <div className="modal-foot"><button className="btn" onClick={() => setForm(null)}>Cancel</button><button className="btn dark" disabled={!formVal.trim()} style={!formVal.trim() ? { opacity: 0.4 } : undefined} onClick={submit}>Add</button></div>
-          </div>
-        </div>
-      </Fade>
-      {confirm && (
-        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setConfirm("")}>
-          <div className="modal sm" style={{ width: 380 }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setConfirm("")}><I.X size={16} /></button>
-            <p style={{ margin: "0 0 10px", fontWeight: 460 }}>The {confirm} plugin may include components that run code</p>
-            <div className="warn">Installing will grant access to everything available to Cowork.</div>
-            <p className="d" style={{ margin: "10px 0 14px" }}>Only enable plugins from people you trust.</p>
-            <div className="modal-foot"><button className="btn" onClick={() => setConfirm("")}>Cancel</button><button className="btn dark" onClick={() => { setAdded([...added, confirm]); setConfirm(""); }}>Continue</button></div>
-          </div>
-        </div>
-      )}
+      <SkillsPanel q={q} sort={sort} Toggle={Toggle} />
     </>
   );
 }
@@ -646,7 +505,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
     case "Reflect": return <Reflect />;
     case "Time and focus": return <Focus />;
     case "Synchro Code": return <CodeTab />;
-    case "Skills": case "Connectors": case "Plugins": return <Directory kind={tab} />;
+    case "Skills": return <Directory />;
     default: return null;
   }
 }

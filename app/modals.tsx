@@ -220,7 +220,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
   ];
   const custom: [string, React.ReactNode][] = [
-    ...(feat?.skills !== false ? [["Skills", <I.Layers key="s" />] as [string, React.ReactNode]] : []), ["Connectors", <I.Grid key="c" />], ["Plugins", <I.Plug key="p" />],
+    ...(feat?.skills !== false ? [["Skills", <I.Scroll key="s" />] as [string, React.ReactNode]] : []),
   ];
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => n.toLowerCase().includes(q.toLowerCase()));
   return (
