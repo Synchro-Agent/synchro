@@ -916,7 +916,7 @@ export default function Home() {
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
-            <div className="greeting">{incog ? <I.Ghost size={26} /> : <I.Spark size={36} />}{incog ? "Đoạn chat ẩn danh" : greet}</div>
+            <div className="greeting">{incog && <I.Ghost size={26} />}{incog ? "Đoạn chat ẩn danh" : greet}</div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
               <div className="modebar" key={tplMode}>
