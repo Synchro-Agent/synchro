@@ -597,6 +597,7 @@ export const EN2VI: Record<string, string> = {
   "Projects": "Dự án",
   "Projects with their own instructions, memory and context.": "Dự án với hướng dẫn, bộ nhớ và ngữ cảnh riêng.",
   "Code workspace with file editing and previews.": "Không gian code với chỉnh sửa tệp và xem trước.",
+  "Text to speech, transcription and voice tools (ElevenLabs).": "Đọc văn bản, chép lời và công cụ giọng nói (ElevenLabs).",
   "Upload skills and let the model use them.": "Tải lên skill và cho model sử dụng.",
   "File uploads": "Tải tệp lên",
   "Attach files and convert documents to text.": "Đính kèm tệp và chuyển tài liệu thành văn bản.",

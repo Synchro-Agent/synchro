@@ -107,3 +107,19 @@ export const GitHub = ({ size = 18 }: P) => (
 );
 export const Expand = (p: P) => <S {...p}><path d="M11.5 3.5h5v5M16.5 3.5l-5.5 5.5M8.5 16.5h-5v-5M3.5 16.5L9 11" /></S>;
 export const Collapse = (p: P) => <S {...p}><path d="M16 9h-5V4M11 9l5.5-5.5M4 11h5v5M9 11l-5.5 5.5" /></S>;
+// Speech (ElevenLabs)
+export const Speech = (p: P) => <S {...p}><circle cx="8" cy="7" r="3" /><path d="M2.6 16.5c.6-3 2.7-4.6 5.4-4.6s4.8 1.6 5.4 4.6M14.2 5.2c1 1 1 2.8 0 3.8M16.3 3.4c2 2 2 5.4 0 7.4" /></S>;
+export const Play = (p: P) => <S {...p} fill><path d="M6 4.2l10 5.8-10 5.8z" /></S>;
+export const Pause = (p: P) => <S {...p} fill><rect x="5" y="4" width="3.4" height="12" rx="1" /><rect x="11.6" y="4" width="3.4" height="12" rx="1" /></S>;
+export const Upload = (p: P) => <S {...p}><path d="M10 13V3.5M6.5 7L10 3.5 13.5 7M4 16h12" /></S>;
+export const Heart = (p: P) => <S {...p}><path d="M10 15.5l-5.2-5a3.2 3.2 0 014.5-4.6l.7.7.7-.7a3.2 3.2 0 014.5 4.6z" /></S>;
+export const Bars = (p: P) => <S {...p}><path d="M4 8v4M7 5v10M10 3v14M13 6v8M16 8.5v3" /></S>;
+export const Chat2 = (p: P) => <S {...p}><path d="M3 5.5h9v6H7l-3 2.5v-2.5H3zM12 8.5h5v6h-1v2.3l-2.8-2.3H9v-2" /></S>;
+export const Sparkle = (p: P) => <S {...p}><path d="M10 3l1.8 4.6L16.5 9l-4.7 1.4L10 15l-1.8-4.6L3.5 9l4.7-1.4z" /></S>;
+export const Pulse = (p: P) => <S {...p}><path d="M3 10h2l2-5 3 10 2-6 1.5 3H17" /></S>;
+export const Swap = (p: P) => <S {...p}><path d="M4 7h11l-3-3M16 13H5l3 3" /></S>;
+export const Subtitle = (p: P) => <S {...p}><rect x="3" y="4.5" width="14" height="11" rx="2" /><path d="M6 12h3M11 12h3M6 9h8" /></S>;
+export const Book = (p: P) => <S {...p}><path d="M4 4.5h5a2 2 0 012 2V16a1.5 1.5 0 00-1.5-1.5H4zM16 4.5h-5a2 2 0 00-2 2V16a1.5 1.5 0 011.5-1.5H16z" /></S>;
+export const VoicePlus = (p: P) => <S {...p}><circle cx="10" cy="7" r="3" /><path d="M4.5 16.5c.7-2.8 2.8-4.3 5.5-4.3s4.8 1.5 5.5 4.3M15.5 2.5v4M13.5 4.5h4" /></S>;
+export const Film = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.4" /><circle cx="10" cy="9" r="2.3" /><path d="M6.5 16c.6-2 1.9-3 3.5-3s2.9 1 3.5 3" /></S>;
+export const ShieldCheck = (p: P) => <S {...p}><path d="M10 2.5l6 2.3v4.7c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V4.8z" /><path d="M7.3 10l2 2 3.5-4" /></S>;

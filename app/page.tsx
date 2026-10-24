@@ -10,13 +10,15 @@ import { Fade, Menu, Thinking } from "./ui";
 import { Directory } from "./settings";
 import { ShaderMetal } from "./shader-metal";
 import { CodeView } from "./codeview";
+import { SpeechView, TOOL_ICON } from "./speech/view";
+import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
 import { callLLM, LLMError, setActiveModel, takeSkillsUsed, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
-type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code";
+type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { ALL_MODELS, DEFAULT_MODEL, MODEL_PROVIDERS } from "./catalog";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
@@ -374,6 +376,7 @@ export default function Home() {
   const [codeCur, setCodeCur] = useState<number | null>(null);
   const [codeEmpty, setCodeEmpty] = useState(false);
   const [codeOpen, setCodeOpen] = useState(true);
+  const [spTool, setSpTool] = usePref<SpeechTool>("spTool", "home");
   const [codeRen, setCodeRen] = useState<number | null>(null);
   const [codeMenu, setCodeMenu] = useState<number | null>(null);
   const [pickProj, setPickProj] = useState(false);
@@ -462,6 +465,7 @@ export default function Home() {
     const ok = me?.perms.models;
     if (ok?.length && !ok.includes(model)) setModel(ok.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : ok[0]);
     if (me && view === "code" && !me.perms.features.code) setView("new");
+    if (me && view === "speech" && !me.perms.features.speech) setView("new");
     if (me && (view === "projects" || view === "project") && !me.perms.features.projects) setView("new");
   }, [me, model, view]);
   useEffect(() => {
@@ -725,6 +729,7 @@ export default function Home() {
           {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
+          {me?.perms.features.speech !== false && <Nav v="speech" icon={<I.Speech />} label="Speech" />}
           <Nav v="customize" icon={<I.Brief />} label="Tùy chỉnh" />
         </div>
         {(() => {
@@ -806,6 +811,14 @@ export default function Home() {
           const codeRest = codeList.filter((c) => !c.pinned);
           return (
             <div className="chat-scroll">
+              {view === "speech" && (
+                <>
+                  <div className="section-label"><span>Công cụ Speech</span></div>
+                  <div className="chat-list">
+                    {SP_TOOLS.map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`chat-item sp-nav ${spTool === t.k ? "active" : ""}`} onClick={() => setSpTool(t.k)}><Ic size={15} />{t.label}</button>; })}
+                  </div>
+                </>
+              )}
               {(pinned.length > 0 || pinProjs.length > 0 || codePinned.length > 0) && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setPinOpen(!pinOpen)}><span>Đã ghim</span><span className={`sec-chev ${pinOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
@@ -854,7 +867,7 @@ export default function Home() {
       </aside>
 
       <main className="main">
-        {view !== "code" && <div className="topbar">
+        {view !== "code" && view !== "speech" && <div className="topbar">
           <div className="left">
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
             {view === "chat" && chat && (
@@ -968,6 +981,7 @@ export default function Home() {
           </div></div>
         )}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
+        {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
       </main>
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}

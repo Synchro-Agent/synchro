@@ -13,6 +13,7 @@ export const CLAUDE_API_IDS: Record<string, string> = { "Fable 5.1": "claude-fab
 
 export const FEATURES = [
   { key: "code", label: "Synchro Code", desc: "Code workspace with file editing and previews." },
+  { key: "speech", label: "Speech", desc: "Text to speech, transcription and voice tools (ElevenLabs)." },
   { key: "projects", label: "Projects", desc: "Projects with their own instructions, memory and context." },
   { key: "skills", label: "Skills", desc: "Upload skills and let the model use them." },
   { key: "files", label: "File uploads", desc: "Attach files and convert documents to text." },
