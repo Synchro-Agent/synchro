@@ -6,6 +6,7 @@ import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { Markdown } from "./md";
 import { artifactComplete, type OutFile } from "./llm";
+import { parseVbhc, vbhcHtml } from "./vbhc";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { Menu } from "./ui";
 import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "./artifacts";
@@ -209,6 +210,7 @@ function ArtIcon({ type, size = 18 }: { type: ArtType; size?: number }) {
   if (type === "svg") return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>;
   if (type === "markdown") return <svg {...p}><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></svg>;
   if (type === "mermaid") return <svg {...p}><rect x="3" y="3" width="7" height="6" rx="1.5" /><rect x="14" y="15" width="7" height="6" rx="1.5" /><path d="M6.5 9v3.5a2 2 0 002 2H14" /></svg>;
+  if (type === "vbhc") return <svg {...p}><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v4h4M9 8h3M9 12h7M9 15h7M9 18h4" /><circle cx="16" cy="18" r="1.6" /></svg>;
   return <svg {...p}><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" /></svg>;
 }
 
@@ -355,6 +357,32 @@ function DeckView({ art, ai, onError, onMsg, ctl, store }: { art: ArtVersion; ai
   );
 }
 
+// ---------------------------------------------------------------- văn bản hành chính (NĐ 30/2020)
+// Bản xem trước khổ A4 đúng thể thức; khung không chạy script. Nội dung lỗi (JSON sai, thiếu trường) thì báo để model sửa.
+function VbhcView({ content, title, onError }: { content: string; title: string; onError?: (m: string) => void }) {
+  const r = useMemo(() => parseVbhc(content), [content]);
+  const box = useRef<HTMLDivElement>(null);
+  // Trang A4 rộng 210 mm (~794 px): khung xem hẹp hơn thì thu nhỏ trang cho vừa (bản in vẫn đúng khổ).
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    const f = () => setZoom(Math.min(1, Math.round(((el.clientWidth - 24) / 794) * 100) / 100));
+    f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect();
+  }, []);
+  useEffect(() => { if (r.error) onError?.(r.error); }, [r.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!r.spec) return <div className="art-err-inline">{tr("Văn bản chưa đúng định dạng")}: {r.error}</div>;
+  return <div ref={box} className="vbhc-box"><iframe className="art-frame vbhc-frame" title={title} srcDoc={vbhcHtml(r.spec, title, zoom)} sandbox="" /></div>;
+}
+// In một trang HTML hoàn chỉnh qua khung ẩn (hộp thoại in của trình duyệt có "Lưu thành PDF").
+function printDoc(html: string) {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:fixed;width:0;height:0;border:0;right:0;bottom:0";
+  document.body.appendChild(f);
+  const d = f.contentDocument!;
+  d.open(); d.write(html); d.close();
+  setTimeout(() => { f.contentWindow?.focus(); f.contentWindow?.print(); setTimeout(() => f.remove(), 1000); }, 300);
+}
+
 // ---------------------------------------------------------------- so sánh hai phiên bản
 // Khác biệt theo dòng (dãy con chung dài nhất). Mã dài quá thì so theo khối đầu / cuối giống nhau rồi coi phần giữa là thay hết.
 type DiffLine = { k: " " | "+" | "-"; t: string };
@@ -380,7 +408,7 @@ export function lineDiff(a: string, b: string): DiffLine[] {
 }
 
 function CompareView({ a, b, ai, na, nb }: { a: ArtVersion; b: ArtVersion; ai: boolean; na: number; nb: number }) {
-  const live = a.type !== "code" && a.type !== "markdown" && a.type !== "mermaid";
+  const live = a.type !== "code" && a.type !== "markdown" && a.type !== "mermaid" && a.type !== "vbhc";
   const [mode, setMode] = useState<"side" | "diff">(live ? "side" : "diff");
   const d = useMemo(() => (mode === "diff" ? lineDiff(a.content, b.content) : []), [mode, a.content, b.content]);
   const add = d.filter((x) => x.k === "+").length, del = d.filter((x) => x.k === "-").length;
@@ -491,6 +519,13 @@ Yêu cầu: ${req.trim()}`);
   else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(art.content), `${name}.png`); done(`${name}.png`); } });
   else if (art.type === "markdown") items.push({ label: "Word (.doc)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(() => { const n = `${name}.doc`; saveBlob(new Blob(["\ufeff", wordDoc(art.title, cleanHtml(shown(".art-md"), art.content))], { type: "application/msword" }), n); done(n); }) },
     { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md"), art.content))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
+  else if (art.type === "vbhc") items.push({ label: "Word (.docx)", sub: "Đúng thể thức Nghị định 30/2020", run: async () => {
+    const n = `${name}.docx`;
+    const r = await fetch("/api/vbhc", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: art.content, name: n }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Lỗi ${r.status}`);
+    saveBlob(await r.blob(), n); done(n);
+  } }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => { const p = parseVbhc(art.content); if (!p.spec) throw new Error(p.error); printDoc(vbhcHtml(p.spec, art.title)); } },
+    { label: "JSON", sub: "Nội dung có cấu trúc", run: source });
   else if (art.type === "mermaid") items.push({ label: "SVG", sub: "Sơ đồ dạng vector", run: () => withPreview(() => { const n = `${name}.svg`; saveBlob(new Blob([shown(".art-mermaid svg").outerHTML], { type: "image/svg+xml" }), n); done(n); }, 1200) },
     { label: "PNG", sub: "Ảnh sơ đồ", run: () => withPreview(async () => { saveBlob(await svgToPng(shown(".art-mermaid svg").outerHTML), `${name}.png`); done(`${name}.png`); }, 1200) }, { label: "Mermaid", sub: "Mã nguồn sơ đồ", run: source });
   else items.push({ label: tr("Tệp mã nguồn"), sub: artFileName(art), run: source });
@@ -537,6 +572,8 @@ Yêu cầu: ${req.trim()}`);
           <div className="art-md mdx"><Markdown text={art.content} say={say} /></div>
         ) : art.type === "mermaid" ? (
           <div className="art-md"><MermaidSvg code={art.content} onError={setErr} /></div>
+        ) : art.type === "vbhc" ? (
+          <VbhcView content={art.content} title={art.title} onError={setErr} />
         ) : (
           <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
         )}
@@ -576,9 +613,11 @@ function Thumb({ a }: { a: Summary }) {
     io.observe(el); return () => io.disconnect();
   }, []);
   const live = a.type === "html" || a.type === "svg" || a.type === "react";
+  const vb = a.type === "vbhc" ? parseVbhc(a.preview).spec : null;
   return (
     <div className={`art-thumb t-${a.type}`} ref={ref}>
-      {live ? (vis && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={a.preview} ai={false} title={a.title} className="art-thumb-frame" /></div>)
+      {vb ? (vis && <div className="art-thumb-scale"><iframe className="art-thumb-frame" title={a.title} srcDoc={vbhcHtml(vb, a.title)} sandbox="" /></div>)
+        : live ? (vis && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={a.preview} ai={false} title={a.title} className="art-thumb-frame" /></div>)
         : <pre>{a.preview.split("\n").slice(0, 14).join("\n")}</pre>}
       <span className="art-thumb-shade" />
     </div>

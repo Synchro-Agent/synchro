@@ -306,6 +306,28 @@ document.getElementById("f").onsubmit = async (e) => {
 };
 load().then(render);
 </script></main></body></html>`;
+// Văn bản hành chính (NĐ 30/2020): model viết JSON, Synchro tự dàn trang và xuất Word / PDF.
+const CONG_VAN = JSON.stringify({
+  loai: "cong-van", coQuanChuQuan: "UBND TỈNH BẮC NINH", coQuan: "SỞ THÔNG TIN VÀ TRUYỀN THÔNG", so: "", kyHieu: "STTTT-CĐS", diaDanh: "Bắc Ninh", ngay: "2026-03-05",
+  trichYeu: "đề nghị bố trí kinh phí triển khai nền tảng trợ lý AI nội bộ", kinhGui: ["Sở Tài chính tỉnh Bắc Ninh"],
+  noiDung: [
+    "Thực hiện Kế hoạch chuyển đổi số năm 2026 của Ủy ban nhân dân tỉnh, Sở Thông tin và Truyền thông đã thử nghiệm nền tảng trợ lý AI nội bộ tại 05 đơn vị trong quý I/2026, bước đầu rút ngắn 30% thời gian soạn thảo văn bản.",
+    "Để triển khai chính thức cho các cơ quan, đơn vị trên địa bàn tỉnh, Sở Thông tin và Truyền thông đề nghị Sở Tài chính xem xét, tham mưu Ủy ban nhân dân tỉnh bố trí kinh phí năm 2026 với tổng số tiền **1.250.000.000 đồng** (Một tỷ hai trăm năm mươi triệu đồng), chi tiết tại phụ lục kèm theo.",
+    "Sở Thông tin và Truyền thông trân trọng đề nghị Sở Tài chính quan tâm, phối hợp./.",
+  ],
+  quyenHan: "KT. GIÁM ĐỐC", chucVu: "PHÓ GIÁM ĐỐC", nguoiKy: "Nguyễn Văn An", noiNhan: ["Như trên;", "UBND tỉnh (để b/c);", "Giám đốc Sở (để b/c);", "Lưu: VT, CĐS."],
+}, null, 2);
+const QUYET_DINH = JSON.stringify({
+  loai: "quyet-dinh", coQuan: "ỦY BAN NHÂN DÂN TỈNH BẮC NINH", so: "", kyHieu: "QĐ-UBND", diaDanh: "Bắc Ninh", ngay: "2026-01-08",
+  trichYeu: "Về việc thành lập Tổ công tác triển khai trợ lý AI trong cơ quan nhà nước", thamQuyen: "CHỦ TỊCH ỦY BAN NHÂN DÂN TỈNH BẮC NINH",
+  canCu: ["Căn cứ Luật Tổ chức chính quyền địa phương ngày 19 tháng 6 năm 2015;", "Theo đề nghị của Giám đốc Sở Thông tin và Truyền thông."],
+  noiDung: [
+    "Điều 1. Thành lập Tổ công tác triển khai trợ lý AI trong cơ quan nhà nước tỉnh Bắc Ninh (sau đây gọi là Tổ công tác), gồm các thành viên có tên tại danh sách kèm theo.",
+    "Điều 2. Tổ công tác có nhiệm vụ xây dựng kế hoạch, hướng dẫn và theo dõi việc sử dụng trợ lý AI tại các cơ quan, đơn vị; định kỳ hằng quý báo cáo Chủ tịch Ủy ban nhân dân tỉnh.",
+    "Điều 3. Quyết định này có hiệu lực kể từ ngày ký. Chánh Văn phòng Ủy ban nhân dân tỉnh, Giám đốc Sở Thông tin và Truyền thông và các thành viên Tổ công tác chịu trách nhiệm thi hành Quyết định này./.",
+  ],
+  quyenHan: "", chucVu: "CHỦ TỊCH", nguoiKy: "Trần Thị Bình", noiNhan: ["Như Điều 3;", "TT Tỉnh ủy, TT HĐND tỉnh (để b/c);", "Lưu: VT, KGVX."],
+}, null, 2);
 const art = (ident, type, title, content, extra = "") => `<artifact identifier="${ident}" type="${type}" title="${title}"${extra}>\n${content}\n</artifact>`;
 
 function lastArtifact(msgs) {
@@ -343,6 +365,8 @@ function artifactReply(t, sys, msgs) {
   if (has(t, /\b(may tinh|calculator)\b/) && !has(t, /\b(lai|vay)\b/)) return `Đây là máy tính bỏ túi, dùng được cả bàn phím (Enter để tính, Esc để xóa):\n\n${art("may-tinh", "text/html", "Máy tính", CALC)}`;
   if (has(t, /\b(landing|trang gioi thieu|trang web|website)\b/)) return `Mình đã làm trang giới thiệu cho một quán cà phê mẫu:\n\n${art("landing-cafe", "text/html", "Trang giới thiệu Lumen Coffee", LANDING)}`;
   if (has(t, /\b(logo|svg|bieu tuong)\b/)) return `Đây là logo dạng SVG, phóng to không vỡ nét:\n\n${art("logo", "image/svg+xml", "Logo Synchro", LOGO)}`;
+  if (has(t, /\b(cong van)\b/)) return `Mình đã soạn công văn đúng thể thức Nghị định 30/2020; bạn xem trước dạng trang A4 và tải về Word hoặc PDF ở khung bên cạnh:\n\n${art("cong-van-kinh-phi", "application/vnd.synchro.vbhc+json", "Công văn đề nghị bố trí kinh phí", CONG_VAN)}\n\nSố văn bản để trống để văn thư cấp số khi phát hành.`;
+  if (has(t, /\b(quyet dinh)\b/)) return `Mình đã soạn quyết định theo thể thức Nghị định 30/2020:\n\n${art("quyet-dinh-to-cong-tac", "application/vnd.synchro.vbhc+json", "Quyết định thành lập Tổ công tác", QUYET_DINH)}\n\nCác căn cứ pháp lý bạn kiểm tra lại cho đúng văn bản đang có hiệu lực.`;
   if (has(t, /\b(ke hoach|tai lieu|soan)\b/) && !has(t, /\b(word|docx|pdf|file|tep)\b/)) return `Mình đã soạn bản kế hoạch, bạn có thể tải về dạng Markdown:\n\n${art("ke-hoach", "text/markdown", "Kế hoạch ra mắt sản phẩm", PLAN)}`;
   return null;
 }

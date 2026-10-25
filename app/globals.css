@@ -3377,3 +3377,6 @@ html body .menu.pub-menu::before{background:var(--card)!important}
 .cmp-diff .add{background:color-mix(in srgb,#16a34a 10%,transparent)}
 .cmp-diff .del{background:color-mix(in srgb,#dc2626 10%,transparent)}
 .cmp-diff .gap{color:var(--text-3);background:var(--hover)}
+/* Văn bản hành chính: khung xem trang A4 */
+.vbhc-box{height:100%;width:100%;display:flex}
+.vbhc-box .vbhc-frame{flex:1;border:0;background:#e9e9e6}

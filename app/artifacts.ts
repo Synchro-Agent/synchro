@@ -4,7 +4,7 @@
 // Cùng identifier trong một cuộc trò chuyện là các phiên bản của cùng một artifact.
 // Tệp này dùng chung cho trình duyệt (tách artifact khỏi câu trả lời) và máy chủ (hướng dẫn cho model).
 
-export const ART_TYPES = ["html", "react", "svg", "markdown", "code", "mermaid"] as const;
+export const ART_TYPES = ["html", "react", "svg", "markdown", "code", "mermaid", "vbhc"] as const;
 export type ArtType = (typeof ART_TYPES)[number];
 export type ArtBlock = { ident: string; title: string; type: ArtType; lang: string | null; content: string; complete: boolean };
 export type Seg = { kind: "text"; text: string } | { kind: "art"; art: ArtBlock };
@@ -13,9 +13,10 @@ const MIME: Record<string, ArtType> = {
   "text/html": "html", html: "html", "application/vnd.react": "react", "application/vnd.ant.react": "react", react: "react", jsx: "react", tsx: "react",
   "image/svg+xml": "svg", svg: "svg", "text/markdown": "markdown", markdown: "markdown", md: "markdown", "application/vnd.code": "code", "application/vnd.ant.code": "code", code: "code",
   "application/vnd.mermaid": "mermaid", "application/vnd.ant.mermaid": "mermaid", mermaid: "mermaid",
+  "application/vnd.synchro.vbhc+json": "vbhc", vbhc: "vbhc",
 };
-export const ART_LABEL: Record<ArtType, string> = { html: "Trang web", react: "Ứng dụng", svg: "Hình SVG", markdown: "Tài liệu", code: "Mã nguồn", mermaid: "Sơ đồ" };
-export const ART_EXT: Record<ArtType, string> = { html: "html", react: "jsx", svg: "svg", markdown: "md", code: "txt", mermaid: "mmd" };
+export const ART_LABEL: Record<ArtType, string> = { html: "Trang web", react: "Ứng dụng", svg: "Hình SVG", markdown: "Tài liệu", code: "Mã nguồn", mermaid: "Sơ đồ", vbhc: "Văn bản hành chính" };
+export const ART_EXT: Record<ArtType, string> = { html: "html", react: "jsx", svg: "svg", markdown: "md", code: "txt", mermaid: "mmd", vbhc: "json" };
 const LANG_EXT: Record<string, string> = { python: "py", py: "py", javascript: "js", js: "js", typescript: "ts", ts: "ts", tsx: "tsx", jsx: "jsx", bash: "sh", sh: "sh", shell: "sh", go: "go", rust: "rs", java: "java", c: "c", cpp: "cpp", "c++": "cpp", csharp: "cs", cs: "cs", ruby: "rb", php: "php", swift: "swift", kotlin: "kt", sql: "sql", css: "css", json: "json", yaml: "yml", html: "html" };
 export const artFileName = (a: { title: string; type: ArtType; lang: string | null }) => {
   const base = a.title.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "artifact";
@@ -68,7 +69,8 @@ export function artifactsAsCode(text: string): string {
 export const ARTIFACT_RULES = (ai: boolean) => `<artifacts>
 Khi người dùng cần một nội dung độc lập, đủ dài và có thể dùng lại (trang web, ứng dụng nhỏ, công cụ tương tác, trò chơi, hình SVG, tài liệu dài, đoạn code hoàn chỉnh, sơ đồ), hãy đặt nó trong một artifact. Artifact hiện trong khung riêng cạnh cuộc trò chuyện để người dùng xem trước, chạy thử, sao chép, tải về.
 Cú pháp: <artifact identifier="ten-ngan-gon" type="KIỂU" title="Tiêu đề ngắn">NỘI DUNG</artifact>
-KIỂU: text/html (một trang HTML hoàn chỉnh, CSS và JS viết ngay trong trang) · application/vnd.react (một component React, export default, dùng hook bình thường) · image/svg+xml · text/markdown · application/vnd.code (thêm language="python"…) · application/vnd.mermaid.
+KIỂU: text/html (một trang HTML hoàn chỉnh, CSS và JS viết ngay trong trang) · application/vnd.react (một component React, export default, dùng hook bình thường) · image/svg+xml · text/markdown · application/vnd.code (thêm language="python"…) · application/vnd.mermaid · application/vnd.synchro.vbhc+json (văn bản hành chính Việt Nam).
+Văn bản hành chính (công văn, quyết định, tờ trình, thông báo, báo cáo, kế hoạch, giấy mời, biên bản, chỉ thị, hướng dẫn của cơ quan, tổ chức Việt Nam): dùng KIỂU application/vnd.synchro.vbhc+json, nội dung là MỘT đối tượng JSON; Synchro tự dàn trang đúng thể thức Nghị định 30/2020/NĐ-CP (khổ A4, lề, Times New Roman, quốc hiệu, tiêu ngữ, đường kẻ, chữ ký, nơi nhận) và xuất Word, PDF. Trường: loai ("cong-van" | "quyet-dinh" | "to-trinh" | "thong-bao" | "bao-cao" | "ke-hoach" | "giay-moi" | "bien-ban" | "chi-thi" | "huong-dan"), coQuanChuQuan (không bắt buộc), coQuan, so (để trống nếu chưa có số), kyHieu (ví dụ "QĐ-UBND"; công văn: "UBND-VP"), diaDanh, ngay ("YYYY-MM-DD", trống nếu chưa ký), trichYeu (công văn: phần sau "V/v"), thamQuyen (chỉ quyết định, ví dụ "CHỦ TỊCH ỦY BAN NHÂN DÂN TỈNH BẮC NINH"), canCu (chỉ quyết định: mảng các dòng "Căn cứ …;" và dòng "Theo đề nghị của …."), kinhGui (mảng; công văn, tờ trình, giấy mời), noiDung (mảng đoạn văn; "# Tiêu đề" cho đề mục như "# I. MỤC ĐÍCH, YÊU CẦU"; quyết định viết "Điều 1. …", "Điều 2. …"; **đậm** khi cần), quyenHan ("TM. ỦY BAN NHÂN DÂN", "KT. GIÁM ĐỐC"…, không có thì bỏ), chucVu, nguoiKy, noiNhan (mảng, dòng cuối "Lưu: VT, …."). Không tự viết quốc hiệu, tiêu ngữ, số, ngày tháng vào noiDung. Văn phong hành chính: ngắn gọn, chính xác, đúng thẩm quyền; tên cơ quan, chức danh viết đúng; không bịa số hiệu văn bản pháp luật, nếu không chắc thì để người dùng điền.
 React: có sẵn react, recharts, lucide-react (import bình thường), và Tailwind (dùng className). Không có thư viện nào khác. Không dùng localStorage/sessionStorage. Ảnh chỉ dùng data: URI hoặc SVG.
 Lưu dữ liệu (ứng dụng ghi chú, danh sách việc, chấm công, khảo sát, kho hàng…): dùng window.storage, mọi hàm trả Promise: await window.storage.get(key, shared) → {key, value} hoặc null; await window.storage.set(key, value, shared) (value là chuỗi, dữ liệu có cấu trúc thì JSON.stringify); await window.storage.delete(key, shared); await window.storage.list(prefix, shared) → {keys}. shared = true: dữ liệu chung của mọi người dùng ứng dụng (khi người dùng xuất bản artifact thành ứng dụng cho cả tổ chức); false: dữ liệu riêng của người đang dùng. Mỗi giá trị tối đa 100 KB. Luôn bọc try/catch, hiện trạng thái đang lưu, và nạp dữ liệu khi mở. Người dùng xuất bản artifact thành ứng dụng có địa chỉ riêng bằng nút tên lửa trên khung xem trước.
 HTML: có thể nạp thư viện từ cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com. Artifact không gọi được mạng (fetch/XHR bị chặn).

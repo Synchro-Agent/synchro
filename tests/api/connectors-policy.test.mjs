@@ -39,7 +39,7 @@ const C = "anthropic/claude-opus-5-5";
 
 console.log("1. Tự nhận diện logo");
 let r = await admin("POST", "/api/connectors", { name: "Mock Modern", url: `${MCP}/modern` });
-ok(r.j.connector?.icon && svgOf(r.j.connector.icon).includes("#7C3AED"), "logo máy chủ MCP tự khai báo (serverInfo.icons)", JSON.stringify(r.j.connector).slice(0, 200));
+ok(r.j.connector?.icon && svgOf(r.j.connector.icon).includes("#7C3AED"), "logo máy chủ MCP tự khai báo (serverInfo.icons)", `svg: ${svgOf(r.j.connector?.icon).slice(0, 300)} · status ${r.s} · ${JSON.stringify(r.j).slice(0, 120)}`);
 r = await admin("POST", "/api/connectors", { name: "Mock SSE", url: `${MCP}/sse` });
 ok(svgOf(r.j.connector?.icon).includes("#F59E0B"), "logo lấy từ trang chủ (link rel=icon), bỏ qua mask-icon", (r.j.connector?.icon ?? "").slice(0, 80));
 r = await admin("POST", "/api/connectors", { name: "Mock Notes", url: `${MCP}/mcp` });

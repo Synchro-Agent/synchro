@@ -1112,3 +1112,5 @@ Object.assign(VI2EN, {
   "Bấm vào phần muốn sửa trong khung xem trước": "Click the part you want to change in the preview", "Thoát": "Exit", "Muốn sửa gì ở phần này?": "What should change here?", "Sửa phần này": "Edit this part",
 });
 Object.assign(EN2VI, { "So sánh với bản trước": "So sánh với bản trước", "Chỉ vào phần muốn sửa": "Chỉ vào phần muốn sửa", "Chỉ và sửa": "Chỉ và sửa" });
+// Văn bản hành chính
+Object.assign(VI2EN, { "Văn bản hành chính": "Official document", "Văn bản chưa đúng định dạng": "The document is not in the right format" });
