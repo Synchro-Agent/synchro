@@ -100,6 +100,27 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
 }
 
 // Phần "Skill của bạn" trong Kho kỹ năng: các skill lẻ (tải lên, link GitHub một skill), cùng kiểu hàng với thư viện.
+// Điểm 👍 / 👎 của skill (cả tổ chức chấm qua nút dưới câu trả lời đã dùng skill đó).
+export type SkillScore = { up: number; down: number; low: boolean };
+export const LOW_NOTE = "Most answers that used this skill were rated unhelpful. Consider updating it or turning it off.";
+export function useSkillScores(key?: unknown) {
+  const [sc, setSc] = useState<Record<string, SkillScore>>({});
+  useEffect(() => { fetch("/api/feedback").then((r) => (r.ok ? r.json() : {})).then((j: { scores?: Record<string, SkillScore> }) => setSc(j.scores ?? {})).catch(() => {}); }, [key]);
+  return sc;
+}
+export const sumScores = (sc: Record<string, SkillScore>, names: string[]) => {
+  const up = names.reduce((n, k) => n + (sc[k]?.up ?? 0), 0), down = names.reduce((n, k) => n + (sc[k]?.down ?? 0), 0);
+  return { up, down, low: down >= 3 && down / (up + down) >= 0.6 };
+};
+export function ScoreBadge({ s }: { s?: SkillScore }) {
+  if (!s || s.up + s.down === 0) return null;
+  return (
+    <span className={`pl-b sk-score ${s.low ? "high" : ""}`} title={s.low ? LOW_NOTE : undefined}>
+      <I.ThumbUp size={11} />{s.up}<I.ThumbDown size={11} />{s.down}{s.low && <em>Often unhelpful</em>}
+    </span>
+  );
+}
+
 export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void }> }) {
   const app = useApp();
   const [list, setList] = useState<Item[] | null>(null);
@@ -111,6 +132,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
   const [err, setErr] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
   const [fileView, setFileView] = useState<{ path: string; text: string } | null>(null);
+  const sc = useSkillScores(list);
   const verRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -173,7 +195,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
           <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)}>
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
             <div className="pl-row2-t">
-              <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}{!s.enabled && <span className="pl-b">Off</span>}</div>
+              <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}</div>
               <span>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
@@ -214,12 +236,14 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
             <p className="d" style={{ margin: "0 0 10px" }}>{detail.description}</p>
             <div className="sk-meta">
               <span>{detail.useCount ? `Used ${detail.useCount} times` : "Not used yet"}</span>
+              {(sc[detail.name]?.up || sc[detail.name]?.down) ? <span>{`Rated helpful ${sc[detail.name].up} · unhelpful ${sc[detail.name].down}`}</span> : null}
               {detail.versions.length > 1 && (
                 <span className="sk-vers">Versions:{[...detail.versions].sort((a, b) => b - a).map((v) => v === detail.version
                   ? <b key={v}>v{v}</b>
                   : <button key={v} className="lnk" onClick={() => restore(detail.name, v)}>v{v}</button>)}</span>
               )}
             </div>
+            {sc[detail.name]?.low && <div className="sk-note bad">{LOW_NOTE}</div>}
             {detail.warnings.length > 0 && <ul className="sk-wl">{detail.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
             <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>SKILL.md</div>
             <pre className="sk-pre">{detail.body || "(empty)"}</pre>

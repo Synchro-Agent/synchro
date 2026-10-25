@@ -14,9 +14,11 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
+import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
+import { SaveSkillChip } from "./saveskill";
 import { attachRun, callLLM, LLMError, takeRoute, takeSources, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
-import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
+import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "knowledge" | "meetings";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
@@ -812,7 +814,11 @@ export default function Home() {
   };
   const like = (i: number, v: 1 | -1) => {
     if (!chat) return;
-    patch(chat.id, (m) => m.map((x, j) => (j === i ? { ...x, like: x.like === v ? undefined : v } : x)));
+    const m = chat.msgs[i], next = m?.like === v ? undefined : v;
+    patch(chat.id, (ms) => ms.map((x, j) => (j === i ? { ...x, like: next } : x)));
+    // Điểm cho các skill và thư viện câu trả lời đã dùng; Kho kỹ năng cộng điểm để chỉ ra skill hay bị chê.
+    const used = [...(m?.skills ?? []), ...(m?.libs ?? []).flatMap((l) => l.skills)];
+    if (m && used.length) fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ msg: `${chat.id}:${m.time}`, skills: used, value: next ?? 0 }) }).catch(() => {});
     say("Cảm ơn phản hồi của bạn");
   };
 
@@ -878,6 +884,29 @@ export default function Home() {
   const [voiceOn, setVoiceOn] = useState(false);
   const inboxN = useInboxCount(!!me);
   const [meetingOpen, setMeetingOpen] = useState<string | null>(null);
+  // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
+  const paletteCmds: PaletteCmd[] = [
+    { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hint: "new chat tao moi", run: goNew },
+    { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hint: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
+    { id: "knowledge", label: "Tri thức", icon: <I.Book size={16} />, hint: "knowledge kho tai lieu cong ty", run: () => setView("knowledge") },
+    { id: "meetings", label: "Cuộc họp", icon: <I.Mic size={16} />, hint: "meeting bien ban ghi am", run: () => { setMeetingOpen(null); setView("meetings"); } },
+    { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hint: "skill hub plugin thu vien", run: goCustom },
+    { id: "connectors", label: "Kết nối", icon: <I.Connectors size={16} />, hint: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
+    ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hint: "ung dung apps", run: () => setView("artifacts") }] : []),
+    { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hint: "projects", run: () => { setCurProj(null); setView("projects"); } },
+    { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hint: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
+    { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.Sun size={16} /> : <I.Moon size={16} />, hint: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
+    { id: "sidebar", label: "Ẩn / hiện thanh bên", icon: <I.Panel size={16} />, keys: "⌘.", hint: "sidebar", run: () => setOpen((o) => !o) },
+    { id: "keys", label: "Phím tắt", icon: <I.Keyboard size={16} />, keys: "⌘/", hint: "shortcuts", run: () => setModal("keys") },
+  ];
+  const paletteGo: PaletteGo = {
+    chat: (id) => { setCur(id); setView("chat"); },
+    artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
+    app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
+    skillHub: goCustom,
+    knowledge: () => setView("knowledge"),
+    meeting: (id) => { setMeetingOpen(id); setView("meetings"); },
+  };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
     const id = Date.now();
@@ -1183,6 +1212,7 @@ export default function Home() {
                           <span className="when">{ago(m.time)}</span>
                         </div>
                       )}
+                      {m.done && i === chat.msgs.length - 1 && !busy && <SaveSkillChip chat={chat} all={chats} say={say} />}
                     </div>
                   )
                 )}
@@ -1256,7 +1286,7 @@ export default function Home() {
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "search")}><SearchModal chats={visible} onClose={() => setModal(null)} onPick={(id) => { setCur(id); setView("chat"); setModal(null); }} onNew={() => { goNew(); setModal(null); }} /></Fade>
+      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}><ShareModal title={chat?.title ?? ""} onClose={() => setModal(null)} say={say} onCopy={() => chat && setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, shared: true } : c)))} /></Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => [...o, f.name]); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>

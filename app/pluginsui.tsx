@@ -7,7 +7,7 @@ import { getLang, tr } from "./i18n";
 import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
-import { SkillsPanel, SKILLS_DROP, SKILLS_UPLOAD } from "./skillsui";
+import { ScoreBadge, SkillsPanel, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -215,6 +215,7 @@ export function SkillHub() {
   const [tab, setTab] = useState<"yours" | "discover" | null>(null);
   const [pv, setPv] = useState<{ catalogId?: string; url?: string; name: string } | null>(null);
   const [addMenu, setAddMenu] = useState(false);
+  const sc = useSkillScores(d);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -273,7 +274,7 @@ export function SkillHub() {
       <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(p.id)}>
         <PlugMark id={p.catalogId} size={36} />
         <div className="pl-row2-t">
-          <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge>{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
+          <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
           <span>{p.author ? `${tr("từ")} ${p.author} · ` : ""}{p.description}</span>
         </div>
         <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>

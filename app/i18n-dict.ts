@@ -1154,3 +1154,24 @@ Object.assign(VI2EN, {
   "Mở cuộc họp": "Open meeting", "Đã tải biên bản": "Minutes downloaded",
   "Máy chủ chưa có dịch vụ chép lời (cần khóa ElevenLabs hoặc OpenAI ở Cài đặt → API). Hãy dán nội dung cuộc họp.": "The server has no transcription service yet (needs an ElevenLabs or OpenAI key in Settings → API). Paste the meeting content instead.",
 });
+// Bảng lệnh ⌘K, điểm skill, lưu cách làm thành skill
+Object.assign(VI2EN, {
+  "Bảng lệnh": "Command palette", "Tìm lệnh, đoạn chat, artifact, skill, tài liệu…": "Search commands, chats, artifacts, skills, documents…", "Lệnh": "Commands",
+  "Artifact và ứng dụng": "Artifacts and apps", "Skill và thư viện": "Skills and libraries", "Tri thức và cuộc họp": "Knowledge and meetings",
+  "Ứng dụng của tổ chức": "Organization app", "Tài liệu của tổ chức": "Organization document", "Tài liệu riêng": "Private document",
+  "chọn": "select", "mở": "open", "đóng": "close", "Kết nối": "Connectors", "Dự án": "Projects", "Chuyển sang giao diện sáng": "Switch to light theme",
+  "Chuyển sang giao diện tối": "Switch to dark theme", "Ẩn / hiện thanh bên": "Toggle sidebar",
+  "Đây là một lời dặn lâu dài.": "This sounds like a standing instruction.", "Lưu thành skill": "Save as skill", "Bỏ qua gợi ý": "Dismiss suggestion",
+  "Lưu cách làm thành skill": "Save this as a skill", "Synchro sẽ tự đọc skill này khi yêu cầu có liên quan, ở mọi đoạn chat. Bạn tắt hoặc sửa nó trong Kho kỹ năng.": "Synchro will read this skill whenever a request is related, in every chat. Turn it off or edit it in Skill Hub.",
+  "Lời dặn tìm thấy": "Instructions found", "Tên skill": "Skill name", "Chỉ dùng chữ thường không dấu, số và dấu gạch ngang.": "Use only lowercase letters, numbers and hyphens.",
+  "Khi nào dùng": "When to use", "Hủy": "Cancel", "Đang lưu…": "Saving…", "Lưu phiên bản mới": "Save new version", "Lưu skill": "Save skill", "Không lưu được skill": "Couldn't save the skill",
+});
+Object.assign(EN2VI, {
+  "Often unhelpful": "Hay bị chê", "Most answers that used this skill were rated unhelpful. Consider updating it or turning it off.": "Phần lớn câu trả lời dùng skill này bị đánh giá không hữu ích. Hãy cập nhật hoặc tắt skill.",
+});
+RULES_EN.push(
+  [/^Bạn đã dặn điều này (\d+) lần\.$/, (m) => `You've asked for this ${m[1]} times.`],
+  [/^Đã lưu skill (.+)$/, (m) => `Saved skill ${m[1]}`],
+  [/^Đã có skill tên (.+)\. Lưu sẽ tạo phiên bản mới v(\d+); bản cũ vẫn khôi phục được\.$/, (m) => `A skill named ${m[1]} already exists. Saving creates version v${m[2]}; older versions can still be restored.`],
+);
+RULES_VI.push([/^Rated helpful (\d+) · unhelpful (\d+)$/, (m) => `Hữu ích ${m[1]} · không hữu ích ${m[2]}`]);

@@ -63,41 +63,6 @@ export function ProjectModal({ onClose, onCreate, init, title = "Tạo dự án"
 }
 
 
-type Hit = { id: number; title: string; snippet: string };
-export function SearchModal({ chats, onClose, onPick, onNew }: { chats: { id: number; title: string; msgs: { text: string }[] }[]; onClose: () => void; onPick: (id: number) => void; onNew: () => void }) {
-  const [q, setQ] = useState("");
-  const [sel, setSel] = useState(0);
-  const hits: Hit[] = chats
-    .map((c) => ({ id: c.id, title: c.title, snippet: q ? (c.msgs.find((m) => m.text.toLowerCase().includes(q.toLowerCase()))?.text ?? "") : "" }))
-    .filter((h) => !q || h.title.toLowerCase().includes(q.toLowerCase()) || h.snippet);
-  useEffect(() => setSel(0), [q]);
-  const go = (i: number) => (i === -1 ? onNew() : hits[i] && onPick(hits[i].id));
-  return (
-    <div className="overlay top" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal search" style={{ width: 600 }}>
-        <div className="s-box"><I.Search size={18} />
-          <input autoFocus placeholder="Tìm kiếm đoạn chat..." value={q} onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowDown") { e.preventDefault(); setSel((sel + 1) % Math.max(hits.length, 1)); }
-              if (e.key === "ArrowUp") { e.preventDefault(); setSel((sel - 1 + hits.length) % Math.max(hits.length, 1)); }
-              if (e.key === "Enter") go(hits.length ? sel : -1);
-            }} />
-        </div>
-        <div className="s-list">
-          <button className="s-row" onClick={onNew}><span className="plus"><I.Plus size={14} /></span>Đoạn chat mới</button>
-          {hits.length > 0 && <div className="muted" style={{ fontSize: 12, padding: "10px 10px 4px" }}>{q ? "Kết quả" : "Gần đây"}</div>}
-          {hits.map((h, i) => (
-            <button key={h.id} className={`s-row ${i === sel ? "on" : ""}`} onMouseEnter={() => setSel(i)} onClick={() => onPick(h.id)}>
-              <I.History size={16} /><span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.title}{h.snippet && <span className="muted"> — {h.snippet.slice(0, 60)}</span>}</span>
-            </button>
-          ))}
-          {q && hits.length === 0 && <div className="muted" style={{ padding: 16, textAlign: "center", fontSize: 14 }}>Không tìm thấy kết quả</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function ShareModal({ title, onClose, say, onCopy }: { title: string; onClose: () => void; say: (m: string) => void; onCopy?: () => void }) {
   const [mode, setMode] = useState<"priv" | "pub">("priv");
   const link = `https://claude.ai/share/${Math.abs(title.length * 7919 + 104729).toString(16)}-c0de-4a1b`;
