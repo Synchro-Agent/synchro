@@ -1,7 +1,8 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
+// Synchro là web dùng cá nhân: chỉ một chủ sở hữu (email trong ADMIN_EMAILS, đã xác minh) đăng nhập và dùng được.
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
 import Database from "better-sqlite3";
-import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
+import { FULL_PERMS, type Feature, type Perms } from "./catalog";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -13,7 +14,7 @@ export const SESSION_TTL = 30 * DAY;
 export const PW_MIN = 8;
 const PW_MAX = 200;
 const MAX_SESSIONS = 20;
-// Quản trị viên: email nằm trong danh sách này VÀ đã được xác minh (OAuth hoặc tạo bằng scripts/create-admin.mjs).
+// Chủ sở hữu: email nằm trong danh sách này VÀ đã được xác minh (đăng nhập Google hoặc tạo bằng scripts/create-admin.mjs).
 export const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 
 export class AuthError extends Error {
@@ -122,7 +123,6 @@ export function limit(key: string, max: number, windowMs: number) {
 // ---- cài đặt + nhật ký ----
 export const getSetting = (k: string, d: string) => (db().prepare("SELECT value FROM settings WHERE key = ?").get(k) as { value: string } | undefined)?.value ?? d;
 export const setSetting = (k: string, v: string) => db().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
-export const signupOpen = () => getSetting("signup_open", "1") === "1";
 
 let auditN = 0;
 export function audit(action: string, o: { actor?: UserRow | null; target?: UserRow | null; targetEmail?: string; ip?: string; detail?: string } = {}) {
@@ -135,7 +135,9 @@ export function audit(action: string, o: { actor?: UserRow | null; target?: User
 export const getUser = (id: string) => db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
 export const findByEmail = (email: string) => db().prepare("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
 const methodsOf = (u: UserRow) => [...(u.password_hash ? ["password"] : []), ...(db().prepare("SELECT provider FROM identities WHERE user_id = ? ORDER BY created_at").all(u.id) as { provider: string }[]).map((r) => r.provider)];
+/** Chủ sở hữu của Synchro (tài khoản duy nhất được đăng nhập). */
 export const isAdmin = (u: UserRow) => ADMIN_EMAILS.has(u.email.toLowerCase()) && u.email_verified === 1 && u.status === "active";
+const NOT_OWNER = "Synchro là web dùng cá nhân, chỉ chủ sở hữu đăng nhập được.";
 
 export function createUser(o: { email: string; name: string; passwordHash?: string | null; verified: boolean; avatar?: string | null }) {
   const id = crypto.randomUUID();
@@ -154,23 +156,14 @@ export function publicUser(u: UserRow) {
 }
 
 // ---- quyền dùng model / tính năng ----
-// Mặc định áp cho mọi người; quản trị có thể đặt quyền riêng cho từng tài khoản. Quản trị viên luôn có toàn quyền.
-export const defaultPerms = (): Perms => { try { return normPerms(JSON.parse(getSetting("default_perms", "null"))); } catch { return FULL_PERMS; } };
-export function permsOf(u: UserRow): Perms {
-  if (isAdmin(u)) return FULL_PERMS;
-  const d = defaultPerms();
-  if (!u.perms) return d;
-  try { return normPerms(JSON.parse(u.perms), d); } catch { return d; }
-}
-export const can = (u: UserRow, f: Feature) => permsOf(u).features[f];
-export const canModel = (u: UserRow, model: string) => allowsModel(permsOf(u).models, model);
+// Web cá nhân: chủ sở hữu dùng được mọi model và tính năng (giữ các hàm để chỗ gọi không phải đổi).
+export const permsOf = (_u: UserRow): Perms => FULL_PERMS;
+export const can = (_u: UserRow, _f: Feature) => true;
+export const canModel = (_u: UserRow, _model: string) => true;
 
-// Cổng cho API nội bộ: phải đăng nhập và được quản trị cho phép dùng tính năng này.
-export function featureGate(req: Request, f: Feature) {
-  const c = current(req);
-  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
-  if (!can(c.user, f)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng tính năng này." }, { status: 403 });
-  return null;
+// Cổng cho API nội bộ: phải đăng nhập.
+export function featureGate(req: Request, _f: Feature) {
+  return current(req) ? null : Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
 }
 
 // ---- hồ sơ cá nhân ----
@@ -256,7 +249,8 @@ export function current(req: Request): { user: UserRow; session: SessionRow } | 
   const now = Date.now();
   if (s.expires_at < now) { db().prepare("DELETE FROM sessions WHERE id = ?").run(s.id); return null; }
   const user = getUser(s.user_id);
-  if (!user || user.status !== "active") return null;
+  // Phiên của tài khoản không phải chủ sở hữu (còn lại từ bản dùng nhiều người) không còn hiệu lực.
+  if (!user || !isAdmin(user)) return null;
   // gia hạn trượt, ghi tối đa 10 phút một lần
   if (now - s.last_seen_at > 10 * MIN) {
     db().prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?").run(now, now + SESSION_TTL, s.id);
@@ -269,11 +263,6 @@ export function requireUser(req: Request) {
   if (!c) throw new AuthError("Bạn cần đăng nhập.", 401);
   return c;
 }
-export function requireAdmin(req: Request) {
-  const c = requireUser(req);
-  if (!isAdmin(c.user)) throw new AuthError("Chỉ quản trị viên mới có quyền này.", 403);
-  return c;
-}
 
 export function device(ua: string | null) {
   const s = ua ?? "";
@@ -284,12 +273,14 @@ export function device(ua: string | null) {
 export const publicSession = (s: SessionRow, cur?: string) => ({ id: s.id, current: s.id === cur, method: s.method, device: device(s.user_agent), ip: s.ip, createdAt: s.created_at, lastSeen: s.last_seen_at });
 export const sessionsOf = (userId: string) => db().prepare("SELECT * FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC").all(userId, Date.now()) as SessionRow[];
 
-// ---- đăng ký / đăng nhập bằng email ----
+// ---- đăng nhập bằng email ----
+// owner: email này là của chủ sở hữu; email khác không đăng nhập được (không có đăng ký).
 export function lookup(req: Request, email: string) {
   limit("check:" + clientIp(req), 60, 10 * MIN);
   const em = normEmail(email);
   const u = findByEmail(em);
-  return { exists: !!u, hasPassword: !!u?.password_hash, methods: u ? methodsOf(u).filter((m) => m !== "password") : [], reserved: !u && ADMIN_EMAILS.has(em) };
+  const owner = ADMIN_EMAILS.has(em);
+  return { owner, exists: owner && !!u, hasPassword: owner && !!u?.password_hash, methods: owner && u ? methodsOf(u).filter((m) => m !== "password") : [] };
 }
 
 export async function login(req: Request, email0: unknown, pw: unknown) {
@@ -300,37 +291,8 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   const u = findByEmail(email);
   const ok = typeof pw === "string" && pw.length <= PW_MAX && (await verifyPassword(pw, u?.password_hash ?? null));
   if (!u || !ok) { audit("login_failed", { target: u, targetEmail: email, ip }); throw new AuthError("Email hoặc mật khẩu không đúng.", 401); }
-  if (u.status !== "active") { audit("login_blocked", { target: u, ip }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
+  if (!isAdmin(u)) { audit("login_blocked", { target: u, ip }); throw new AuthError(NOT_OWNER, 403); }
   audit("login", { actor: u, ip, detail: "password" });
-  return { user: u, cookie: createSession(u, req, "password") };
-}
-
-export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}) {
-  const ip = clientIp(req);
-  limit("signup:" + ip, 10, 60 * MIN);
-  const email = normEmail(email0);
-  const pw = checkPassword(pw0, email);
-  if (ADMIN_EMAILS.has(email)) throw new AuthError("Email này được dành riêng. Hãy đăng nhập bằng Google hoặc liên hệ quản trị viên.", 403);
-  if (!signupOpen()) throw new AuthError("Synchro hiện tạm ngừng nhận đăng ký mới.", 403);
-  if (findByEmail(email)) throw new AuthError("Email này đã có tài khoản. Hãy đăng nhập.", 409);
-  if (profile.fullName === undefined || profile.birthDate === undefined) throw new AuthError("Hãy điền họ tên và ngày sinh.");
-  const prof = cleanProfile(profile);
-  const hash = await hashPassword(pw);
-  // Tạo tài khoản và hồ sơ trong cùng một transaction: lỗi giữa chừng không để lại tài khoản dở.
-  let id: string;
-  try {
-    id = db().transaction(() => {
-      const c = createUser({ email, name: email.split("@")[0], passwordHash: hash, verified: false });
-      writeProfile(c.id, prof);
-      return c.id;
-    })();
-  } catch (e) {
-    // Hai yêu cầu đăng ký cùng email chạy song song: cái sau vướng ràng buộc UNIQUE.
-    if ((e as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") throw new AuthError("Email này đã có tài khoản. Hãy đăng nhập.", 409);
-    throw e;
-  }
-  const u = getUser(id)!;
-  audit("signup", { actor: u, ip, detail: "password" });
   return { user: u, cookie: createSession(u, req, "password") };
 }
 
@@ -343,6 +305,7 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
   if (!u) {
     if (!p.email || !p.emailVerified) throw new AuthError("Tài khoản này chưa có email đã xác minh, không thể dùng để đăng nhập.");
     const email = normEmail(p.email);
+    if (!ADMIN_EMAILS.has(email)) throw new AuthError(NOT_OWNER, 403);
     u = findByEmail(email);
     if (u) {
       // Email của tài khoản cũ chưa từng được xác minh → mật khẩu có thể do người khác đặt trước.
@@ -353,14 +316,13 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
       }
       audit("oauth_link", { actor: u, ip, detail: p.provider });
     } else {
-      if (!signupOpen() && !ADMIN_EMAILS.has(email)) throw new AuthError("Synchro hiện tạm ngừng nhận đăng ký mới.", 403);
       u = createUser({ email, name: p.name || email.split("@")[0], verified: true, avatar: p.avatar });
       audit("signup", { actor: u, ip, detail: p.provider });
     }
     db().prepare("INSERT INTO identities (provider, subject, user_id, email, created_at) VALUES (?, ?, ?, ?, ?)").run(p.provider, p.subject, u.id, email, Date.now());
     u = getUser(u.id)!;
   }
-  if (u.status !== "active") { audit("login_blocked", { target: u, ip, detail: p.provider }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
+  if (!isAdmin(u)) { audit("login_blocked", { target: u, ip, detail: p.provider }); throw new AuthError(NOT_OWNER, 403); }
   // Ảnh từ nhà cung cấp chỉ dùng khi chưa có ảnh. GitHub tự tạo ảnh hoa văn cho tài khoản chưa đặt ảnh,
   // nên ảnh Google (ảnh thật hoặc chữ cái đầu) được ưu tiên thay cho ảnh GitHub.
   const fromGithub = !!u.avatar?.includes("avatars.githubusercontent.com");
@@ -376,91 +338,6 @@ export async function changePassword(req: Request, u: UserRow, cur: unknown, nex
   const pw = checkPassword(next, u.email);
   db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), u.id);
   audit("password_changed", { actor: u, ip: clientIp(req) });
-}
-
-export async function deleteOwnAccount(req: Request, u: UserRow, pw: unknown) {
-  if (isAdmin(u)) throw new AuthError("Không thể tự xóa tài khoản quản trị viên.", 403);
-  limit("del:" + u.id, 5, 15 * MIN);
-  if (u.password_hash && !(typeof pw === "string" && (await verifyPassword(pw, u.password_hash)))) throw new AuthError("Mật khẩu không đúng.", 401);
-  db().prepare("DELETE FROM users WHERE id = ?").run(u.id);
-  audit("account_deleted", { actor: u, target: u, ip: clientIp(req) });
-}
-
-// ---- quản trị ----
-export function adminStats() {
-  const now = Date.now();
-  const n = (sql: string, ...a: unknown[]) => (db().prepare(sql).get(...a) as { n: number }).n;
-  return {
-    users: n("SELECT COUNT(*) n FROM users"),
-    active7: n("SELECT COUNT(*) n FROM users WHERE last_seen_at > ?", now - 7 * DAY),
-    new7: n("SELECT COUNT(*) n FROM users WHERE created_at > ?", now - 7 * DAY),
-    suspended: n("SELECT COUNT(*) n FROM users WHERE status = 'suspended'"),
-    sessions: n("SELECT COUNT(*) n FROM sessions WHERE expires_at > ?", now),
-    failed24: n("SELECT COUNT(*) n FROM audit WHERE action = 'login_failed' AND at > ?", now - DAY),
-  };
-}
-
-export function adminUsers() {
-  const rows = db().prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 2000").all() as UserRow[];
-  const sess = new Map((db().prepare("SELECT user_id, COUNT(*) n FROM sessions WHERE expires_at > ? GROUP BY user_id").all(Date.now()) as { user_id: string; n: number }[]).map((r) => [r.user_id, r.n]));
-  return rows.map((u) => ({ ...publicUser(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0, protected: ADMIN_EMAILS.has(u.email.toLowerCase()), customPerms: !!u.perms }));
-}
-
-export function adminAudit(lim = 100, before?: number) {
-  return db().prepare(`SELECT * FROM audit ${before ? "WHERE id < ?" : ""} ORDER BY id DESC LIMIT ?`).all(...(before ? [before, lim] : [lim]));
-}
-
-function target(admin: UserRow, id: string) {
-  const t = getUser(id);
-  if (!t) throw new AuthError("Không tìm thấy người dùng.", 404);
-  if (t.id === admin.id || ADMIN_EMAILS.has(t.email.toLowerCase())) throw new AuthError("Không thể thao tác trên tài khoản quản trị viên.", 403);
-  return t;
-}
-
-export async function adminAct(req: Request, admin: UserRow, id: string, action: unknown, body: Record<string, unknown> = {}) {
-  const t = target(admin, id);
-  const ip = clientIp(req);
-  if (action === "set_password") {
-    // Quản trị đặt mật khẩu mới cho người khác, không cần mật khẩu cũ. Mặc định đăng xuất mọi phiên của họ.
-    const pw = checkPassword(body.password, t.email);
-    db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), t.id);
-    if (body.signOut !== false) db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
-    audit("admin_set_password", { actor: admin, target: t, ip });
-    return;
-  }
-  if (action === "set_perms") {
-    // null = quay về quyền mặc định
-    const v = body.perms === null ? null : JSON.stringify(normPerms(body.perms, defaultPerms()));
-    db().prepare("UPDATE users SET perms = ? WHERE id = ?").run(v, t.id);
-    audit("admin_set_perms", { actor: admin, target: t, ip, detail: v ? "custom" : "default" });
-    return;
-  }
-  if (action === "suspend") {
-    db().prepare("UPDATE users SET status = 'suspended' WHERE id = ?").run(t.id);
-    db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
-    audit("admin_suspend", { actor: admin, target: t, ip });
-  } else if (action === "restore") {
-    db().prepare("UPDATE users SET status = 'active' WHERE id = ?").run(t.id);
-    audit("admin_restore", { actor: admin, target: t, ip });
-  } else if (action === "signout") {
-    db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
-    audit("admin_signout", { actor: admin, target: t, ip });
-  } else throw new AuthError("Thao tác không hợp lệ.");
-}
-
-export function adminDelete(req: Request, admin: UserRow, id: string, confirmEmail: unknown) {
-  const t = target(admin, id);
-  if (typeof confirmEmail !== "string" || confirmEmail.trim().toLowerCase() !== t.email.toLowerCase()) throw new AuthError("Email xác nhận không khớp.");
-  db().prepare("DELETE FROM users WHERE id = ?").run(t.id);
-  audit("admin_delete", { actor: admin, target: t, ip: clientIp(req) });
-}
-
-export function adminRevokeSession(req: Request, admin: UserRow, sid: string) {
-  const s = db().prepare("SELECT * FROM sessions WHERE id = ?").get(sid) as SessionRow | undefined;
-  if (!s) return;
-  const t = s.user_id === admin.id ? admin : target(admin, s.user_id);
-  db().prepare("DELETE FROM sessions WHERE id = ?").run(sid);
-  audit("admin_revoke_session", { actor: admin, target: t, ip: clientIp(req) });
 }
 
 // Bọc route handler: AuthError → JSON lỗi; lỗi khác → 500 và ghi log.

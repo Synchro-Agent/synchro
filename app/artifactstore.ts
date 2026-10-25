@@ -76,6 +76,3 @@ export function saveArtifact(uid: string, conv: string, a: ArtInput): string {
 export function deleteArtifact(uid: string, id: string) {
   return init().prepare("DELETE FROM artifacts WHERE id = ? AND user_id = ?").run(id, uid).changes > 0;
 }
-export function removeUserArtifacts(uid: string) {
-  init().prepare("DELETE FROM artifacts WHERE user_id = ?").run(uid);
-}

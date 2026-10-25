@@ -1,8 +1,7 @@
 "use client";
 // Mức dùng (giống "Plan usage limits" của Claude, nhưng tính theo chi phí API thật):
-// - UsageRing: vòng tròn cạnh bộ chọn model, bấm vào hiện giới hạn phiên 5 giờ, giới hạn tuần và hạn mức API của nhà cung cấp.
-// - UsageSettings: trang Cài đặt → Usage (chi tiết 30 ngày theo model, tính năng, ngày).
-// - UsageAdmin: quản trị viên đặt hạn mức (USD), hạn mức riêng từng người và bảng giá model.
+// - UsageRing: vòng tròn cạnh bộ chọn model, bấm vào hiện mức đã dùng trong phiên 5 giờ, trong tuần và hạn mức API của nhà cung cấp.
+// - UsageSettings: trang Cài đặt → Usage (chi tiết 30 ngày theo model, tính năng, ngày; ngân sách tự đặt và bảng giá model).
 import { useCallback, useEffect, useState } from "react";
 import { Menu } from "./ui";
 import { getLang, tr } from "./i18n";
@@ -10,7 +9,7 @@ import * as I from "./icons";
 
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type Rate = { provider: string; limit: number; remaining: number; resetAt: number; pct: number };
-export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string };
+export type UsageState = { limits: Limit[]; rate: Rate | null };
 const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
 
 // ---------------------------------------------------------------- dữ liệu dùng chung
@@ -168,7 +167,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
   const top = d?.byModel[0]?.cost || 1;
   return (
     <>
-      <h3 style={{ marginTop: 0 }}>Usage limits</h3>
+      <h3 style={{ marginTop: 0 }}>Usage</h3>
       <p className="d" style={{ margin: "-4px 0 14px" }}>Synchro uses AI models through their APIs, so usage is measured in real API cost: the tokens each model reads and writes, at that model&apos;s price.</p>
       <div className="us-card">
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : st.limits.map((l) => (
@@ -180,7 +179,10 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
           </div>
         ))}
       </div>
-      {st?.rate && <div className="us-card"><RateRow r={st.rate} /><p className="d" style={{ margin: "8px 0 0" }}>Rate limit reported by the provider for the whole Synchro server. When it runs out, replies wait until it resets.</p></div>}
+      {st?.rate && <div className="us-card"><RateRow r={st.rate} /><p className="d" style={{ margin: "8px 0 0" }}>Rate limit reported by the provider for your API key. When it runs out, replies wait until it resets.</p></div>}
+
+      <h3 className="sec">Budget</h3>
+      <BudgetCard />
 
       <h3 className="sec">Last 30 days</h3>
       <div className="us-stats">
@@ -213,19 +215,15 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
           <div className="us-card us-list">{d.byFeature.map((f) => <div key={f.feature} className="us-li"><div className="us-li-t"><b>{FEATURE[f.feature] ?? f.feature}</b><span>{en() ? `${f.calls.toLocaleString()} calls` : `${f.calls.toLocaleString("vi-VN")} lần gọi`}</span></div><em>{money(f.cost)}</em></div>)}</div>
         </>
       )}
-      <p className="d" style={{ marginTop: 16 }}>Cost is estimated from each provider&apos;s list price, including cache reads and writes. Your provider&apos;s invoice is the final amount.{st?.admin && go && <> Administrators can change limits and prices in <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")}>Administrator → Usage limits</a>.</>}</p>
+      <p className="d" style={{ marginTop: 16 }}>Cost is estimated from each provider&apos;s list price, including cache reads and writes. Your provider&apos;s invoice is the final amount.</p>
     </>
   );
 }
 
-// ---------------------------------------------------------------- Quản trị viên → Usage limits
-type AdminData = {
-  config: { session: number | null; weekly: number | null; admins: boolean; prices: Record<string, { in: number; out: number; cache: number }> };
-  users: { id: string; email: string; name: string; admin: boolean; override: { session?: number | null; weekly?: number | null }; limits: Limit[]; month: { cost: number; input: number; output: number }; effective: { session: number | null; weekly: number | null } }[];
-  prices: { model: string; in: number; out: number; cache: number; src: "official" | "estimate" | "custom" }[];
-};
-async function adm(method: string, body?: unknown): Promise<AdminData> {
-  const r = await fetch("/api/admin/usage", { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+// ---------------------------------------------------------------- ngân sách tự đặt và bảng giá
+type Budget = { budget: { session: number | null; weekly: number | null }; prices: { model: string; in: number; out: number; cache: number; src: "official" | "estimate" | "custom" }[] };
+async function budgetApi(method: string, body?: unknown): Promise<Budget> {
+  const r = await fetch("/api/usage/settings", { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
   return j;
@@ -239,50 +237,32 @@ function Money({ value, onSave, placeholder = "No limit" }: { value: number | nu
   return <span className="us-money"><i>$</i><input inputMode="decimal" value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></span>;
 }
 
-export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
-  const [d, setD] = useState<AdminData | null>(null);
+function BudgetCard() {
+  const [d, setD] = useState<Budget | null>(null);
+  const [err, setErr] = useState("");
   const [showPrices, setShowPrices] = useState(false);
-  useEffect(() => { adm("GET").then(setD).catch((e) => say(e.message)); }, [say]);
-  const patch = (body: unknown, ok: string) => adm("PATCH", body).then((x) => { setD(x); say(ok); refreshUsage(); }).catch((e) => say(e.message));
-  if (!d) return <div className="muted" style={{ fontSize: 12 }}>Loading…</div>;
-  const c = d.config;
+  useEffect(() => { budgetApi("GET").then(setD).catch((e) => setErr(e.message)); }, []);
+  const patch = (body: unknown) => budgetApi("PATCH", body).then((x) => { setD(x); setErr(""); refreshUsage(); }).catch((e) => setErr(e.message));
+  if (!d) return <div className="us-card"><div className="us-empty">{err || <span className="art-spin sm" />}</div></div>;
   return (
-    <div className="adm-card">
-      <div className="adm-card-h"><b>Default limits</b><span className="d">API cost each person can use. Leave empty for no limit. When a limit is reached, chats pause until it resets.</span></div>
-      <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with a person&apos;s first message.</div></div><Money value={c.session} onSave={(v) => patch({ config: { session: v } }, "Session limit saved")} /></div>
-      <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money value={c.weekly} onSave={(v) => patch({ config: { weekly: v } }, "Weekly limit saved")} /></div>
-      <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
-
-      <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
-      <div className="us-ppl">
-        {d.users.map((u) => {
-          const s = u.limits.find((l) => l.key === "session")!, w = u.limits.find((l) => l.key === "weekly")!;
-          return (
-            <div key={u.id} className="us-p">
-              <div className="us-p-t"><b data-notr>{u.name || u.email}</b><span data-notr>{u.email}{u.admin ? " · admin" : ""}</span></div>
-              <div className="us-p-m"><span>{money(u.month.cost)}</span><small>30 days</small></div>
-              <div className="us-p-l"><small>Session {u.effective.session === null ? "∞" : `${Math.round(s.pct)}%`}</small><Money value={"session" in u.override ? u.override.session : undefined} placeholder={u.effective.session === null ? "Default: none" : `Default: $${u.effective.session}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, session: v } }, "Limit saved")} /></div>
-              <div className="us-p-l"><small>Week {u.effective.weekly === null ? "∞" : `${Math.round(w.pct)}%`}</small><Money value={"weekly" in u.override ? u.override.weekly : undefined} placeholder={u.effective.weekly === null ? "Default: none" : `Default: $${u.effective.weekly}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, weekly: v } }, "Limit saved")} /></div>
-              {Object.keys(u.override).length > 0 && <button className="icon-btn" aria-label="Use default limits" data-tip="Use default limits" onClick={() => patch({ user: u.id, override: null }, "Using default limits")}><I.Retry size={14} /></button>}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="adm-card-h" style={{ marginTop: 14, cursor: "pointer" }} onClick={() => setShowPrices(!showPrices)}><b>Model prices {showPrices ? "▴" : "▾"}</b><span className="d">USD per 1 million tokens, used to turn tokens into cost. Claude prices are official; others are estimates you should check against each provider&apos;s pricing page.</span></div>
+    <div className="us-card us-budget">
+      <p className="d" style={{ margin: "0 0 6px" }}>Optional spending caps for yourself. Leave empty for no limit. When a cap is reached, chats pause until it resets.</p>
+      <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with your first message.</div></div><Money value={d.budget.session} onSave={(v) => patch({ budget: { session: v } })} /></div>
+      <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money value={d.budget.weekly} onSave={(v) => patch({ budget: { weekly: v } })} /></div>
+      <div className="adm-card-h" style={{ marginTop: 14, cursor: "pointer" }} role="button" tabIndex={0} onClick={() => setShowPrices(!showPrices)} onKeyDown={(e) => e.key === "Enter" && setShowPrices(!showPrices)}><b>Model prices {showPrices ? "▴" : "▾"}</b><span className="d">USD per 1 million tokens, used to turn tokens into cost. Claude prices are official; others are estimates you should check against each provider&apos;s pricing page.</span></div>
       {showPrices && (
         <div className="us-prices">
           <div className="us-pr h"><span>Model</span><span>Input</span><span>Output</span><span>Cache read</span><span /></div>
           {d.prices.map((p) => (
             <div key={p.model} className="us-pr">
               <span data-notr>{modelName(p.model)} <i className={`us-src ${p.src}`}>{p.src === "official" ? "Official" : p.src === "custom" ? "Custom" : "Estimate"}</i></span>
-              {(["in", "out", "cache"] as const).map((k) => <Money key={k} value={p[k]} placeholder="" onSave={(v) => v !== null && patch({ config: { prices: { [p.model]: { in: p.in, out: p.out, cache: p.cache, [k]: v } } } }, "Price saved")} />)}
-              {p.src === "custom" ? <button className="icon-btn" aria-label="Reset price" data-tip="Reset price" onClick={() => patch({ config: { prices: { [p.model]: null } } }, "Price reset")}><I.Retry size={14} /></button> : <span />}
+              {(["in", "out", "cache"] as const).map((k) => <Money key={k} value={p[k]} placeholder="" onSave={(v) => v !== null && patch({ prices: { [p.model]: { in: p.in, out: p.out, cache: p.cache, [k]: v } } })} />)}
+              {p.src === "custom" ? <button className="icon-btn" aria-label="Reset price" data-tip="Reset price" onClick={() => patch({ prices: { [p.model]: null } })}><I.Retry size={14} /></button> : <span />}
             </div>
           ))}
         </div>
       )}
-      <p className="d" style={{ marginTop: 10 }}>{tr("Synchro tính chi phí từ số token thật mà nhà cung cấp trả về sau mỗi lần gọi model.")}</p>
+      {err && <p className="d" style={{ color: "#b91c1c", marginTop: 8 }}>{err}</p>}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { startMockMcp } from "./mock-mcp.mjs";
 
 const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011);
 const DATA = path.resolve("data-mock");
-// Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
+// Tài khoản chủ sở hữu (thử nghiệm) chỉ tồn tại trong data-mock/ trên máy này.
 const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
 const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
 const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
@@ -83,7 +83,7 @@ if (!fs.existsSync(SEEDED)) {
   if (r.status === 200) fs.writeFileSync(SEEDED, new Date().toISOString());
 }
 const caps = (await call("GET", "/api/caps")).j;
-// Mức dùng: lần chạy đầu nạp lịch sử dùng mẫu 30 ngày cho tài khoản quản trị (đặt hạn mức riêng $5 / phiên, $40 / tuần)
+// Mức dùng: lần chạy đầu nạp lịch sử dùng mẫu 30 ngày cho tài khoản chủ sở hữu
 // để vòng tròn usage và Cài đặt → Usage có dữ liệu như đang dùng thật. Lượt chat mới vẫn được tính thật từ API giả lập.
 const USAGE_SEEDED = path.join(DATA, ".usage-seeded");
 if (!fs.existsSync(USAGE_SEEDED) && (await call("GET", "/api/usage")).status === 200) {
@@ -104,24 +104,24 @@ if (!fs.existsSync(USAGE_SEEDED) && (await call("GET", "/api/usage")).status ===
     const weekAnchor = now - 4.4 * D, sessionStart = now - (1 * H + 51 * 60_000);
     sdb.transaction(() => {
       for (let d = 30; d >= 5; d--) for (let k = 0, n = 2 + Math.floor(rnd() * 6); k < n; k++) add(now - d * D + rnd() * 10 * H, 0.15 + rnd() * 1.1);
-      // Đầu tuần tới trước phiên hiện tại: $33.90 (cộng $4.50 của phiên = 96% của $40), rải đều, không lấn sang phiên.
+      // Đầu tuần tới trước phiên hiện tại: $33.90, rải đều, không lấn sang phiên.
       for (let k = 0, step = (sessionStart - weekAnchor - 4 * H) / 30; k < 30; k++) add(weekAnchor + 2 * H + k * step, 1.13, models[Math.floor(rnd() * 3)]);
       for (let t = sessionStart + 5 * 60_000, total = 0; total < 4.5; t += 7 * 60_000) { const c = Math.min(0.42, 4.5 - total); add(t, c, "anthropic/claude-opus-5-5"); total += c; }
       sdb.prepare("INSERT INTO usage_users (user_id, session_start, week_anchor, override) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET session_start = excluded.session_start, week_anchor = excluded.week_anchor, override = excluded.override")
-        .run(uid, sessionStart, weekAnchor, JSON.stringify({ session: 5, weekly: 40 }));
+        .run(uid, sessionStart, weekAnchor, null);
     })();
     fs.writeFileSync(USAGE_SEEDED, new Date().toISOString());
   }
   sdb.close();
 }
 const usage = (await call("GET", "/api/usage?provider=anthropic")).j;
-// Plugins: lần chạy đầu cài sẵn ba studio (Thiết kế / Trình bày / Tài liệu) cho cả tổ chức từ GitHub, như quản trị viên đã cài.
+// Plugins: lần chạy đầu cài sẵn ba studio (Thiết kế / Trình bày / Tài liệu) từ GitHub.
 // Nếu có ~/Downloads/Vox Animations.zip thì thêm skill Vox vào Design Studio. Cần mạng; lỗi thì bỏ qua, cài lại ở Tùy chỉnh → Plugins.
 const PLUGINS_SEEDED = path.join(DATA, ".plugins-seeded");
 if (!fs.existsSync(PLUGINS_SEEDED)) {
   let ok = 0;
   for (const id of ["design-studio", "slides-studio", "docs-studio"]) {
-    const r = await call("POST", "/api/plugins", { action: "install", catalogId: id, scope: "org" }).catch((e) => ({ status: 0, j: { error: String(e) } }));
+    const r = await call("POST", "/api/plugins", { action: "install", catalogId: id }).catch((e) => ({ status: 0, j: { error: String(e) } }));
     if (r.status === 200) ok++; else console.error(`Không cài được plugin ${id}:`, r.j?.error);
     if (id === "design-studio" && r.status === 200) {
       const vox = path.join(process.env.HOME ?? "", "Downloads", "Vox Animations.zip");

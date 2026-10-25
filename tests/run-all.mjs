@@ -9,22 +9,22 @@ import { createRequire } from "node:module";
 const dir = path.join(path.dirname(new URL(import.meta.url).pathname), "api");
 const want = process.argv.slice(2);
 const suites = fs.readdirSync(dir).filter((f) => f.endsWith(".test.mjs")).sort().filter((f) => !want.length || want.some((w) => f.startsWith(w)));
-// Tài khoản quản trị thử nghiệm có hạn mức riêng; kiểm thử gọi model rất nhiều lần nên tạm nâng hạn mức rồi trả lại như cũ.
+// Kiểm thử gọi model rất nhiều lần: tạm bỏ ngân sách tự đặt (Cài đặt → Usage) rồi trả lại như cũ.
 const R = createRequire(path.join(process.cwd(), "package.json"));
 const db = new (R("better-sqlite3"))(path.join(process.cwd(), "data-mock", "synchro.db"));
 db.pragma("busy_timeout = 5000");
-const adminId = db.prepare("SELECT id FROM users WHERE email = ?").get("admin@synchro.test")?.id;
-const saved = adminId ? db.prepare("SELECT override FROM usage_users WHERE user_id = ?").get(adminId) : undefined;
-if (adminId) db.prepare("INSERT INTO usage_users (user_id, session_start, week_anchor, override) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET override = excluded.override")
-  .run(adminId, Date.now(), Date.now(), JSON.stringify({ session: 100000, weekly: 100000 }));
-const restore = () => { if (adminId && saved !== undefined) db.prepare("UPDATE usage_users SET override = ? WHERE user_id = ?").run(saved.override, adminId); else if (adminId) db.prepare("DELETE FROM usage_users WHERE user_id = ?").run(adminId); };
+db.exec("CREATE TABLE IF NOT EXISTS usage_config (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)");
+const saved = db.prepare("SELECT json FROM usage_config WHERE id = 1").get()?.json;
+const cfg = (() => { try { return JSON.parse(saved ?? "{}"); } catch { return {}; } })();
+db.prepare("INSERT INTO usage_config (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(JSON.stringify({ ...cfg, budget: { session: null, weekly: null } }));
+const restore = () => { if (saved === undefined) db.prepare("DELETE FROM usage_config WHERE id = 1").run(); else db.prepare("UPDATE usage_config SET json = ? WHERE id = 1").run(saved); };
 process.on("exit", restore);
 
-// Đăng nhập quản trị một lần, chia phiên cho các bộ kiểm thử.
+// Đăng nhập tài khoản chủ sở hữu một lần, chia phiên cho các bộ kiểm thử.
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 const lg = await fetch(`${B}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: "admin@synchro.test", password: "synchro-mock-123" }) });
 const adminCookie = (lg.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0];
-if (!adminCookie) { console.error(`Không đăng nhập được tài khoản quản trị thử nghiệm (${lg.status}): ${(await lg.text()).slice(0, 200)}`); process.exit(1); }
+if (!adminCookie) { console.error(`Không đăng nhập được tài khoản chủ sở hữu thử nghiệm (${lg.status}): ${(await lg.text()).slice(0, 200)}`); process.exit(1); }
 
 const rows = [];
 for (const f of suites) {

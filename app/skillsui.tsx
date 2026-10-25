@@ -60,8 +60,8 @@ export async function inspectGithub(url: string): Promise<Found> {
   return { kind: "skill", src: { ...src, pick: ok[0].dir }, pv: one.preview! };
 }
 
-// Duyệt một skill trước khi thêm. onOrg (chỉ quản trị viên, nguồn GitHub): cài skill này cho cả tổ chức dưới dạng plugin.
-export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; pv: Preview; onClose: () => void; onDone: () => void; onOrg?: () => void }) {
+// Duyệt một skill trước khi thêm.
+export function SkillAddModal({ src, pv, onClose, onDone }: { src: Src; pv: Preview; onClose: () => void; onDone: () => void }) {
   const app = useApp();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -89,7 +89,6 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
           <div className="sk-files">{pv.files.map((f) => <div key={f.path}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
         </>}
         <div className="sk-actions">
-          {onOrg && <button className="btn" disabled={saving} onClick={onOrg}>Install for everyone</button>}
           <span style={{ flex: 1 }} />
           <button className="btn" disabled={saving} onClick={onClose}>Cancel</button>
           <button className="btn dark" disabled={saving} onClick={confirm}>{saving ? "Saving…" : pv.exists ? "Update and keep state" : "Add and enable"}</button>
@@ -100,7 +99,7 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
 }
 
 // Phần "Skill của bạn" trong Kho kỹ năng: các skill lẻ (tải lên, link GitHub một skill), cùng kiểu hàng với thư viện.
-// Điểm 👍 / 👎 của skill (cả tổ chức chấm qua nút dưới câu trả lời đã dùng skill đó).
+// Điểm 👍 / 👎 của skill (chấm qua nút dưới câu trả lời đã dùng skill đó).
 export type SkillScore = { up: number; down: number; low: boolean };
 export const LOW_NOTE = "Most answers that used this skill were rated unhelpful. Consider updating it or turning it off.";
 export function useSkillScores(key?: unknown) {

@@ -12,11 +12,9 @@ function client() {
     return { s: r.status, j };
   };
 }
-const a = client(), b = client();
-for (const [c, email] of [[a, "task-a@synchro.test"], [b, "task-b@synchro.test"]]) {
-  await c("POST", "/api/auth/signup", { email, password: "Member-pass-123", profile: { fullName: email.split("@")[0], birthDate: "2000-01-01" } });
-  await c("POST", "/api/auth/login", { email, password: "Member-pass-123" });
-}
+// Web dùng cá nhân: tài khoản chủ sở hữu; "anon" là người chưa đăng nhập.
+const a = client(), anon = client();
+await a("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
 // Dọn tác vụ của lần chạy trước, đánh dấu đã đọc hết.
 for (const t of (await a("GET", "/api/tasks")).j?.tasks ?? []) await a("DELETE", `/api/tasks/${t.id}`);
 const MODEL = "anthropic/claude-haiku-5-5";
@@ -64,9 +62,8 @@ r = await a("PATCH", `/api/tasks/${daily.id}`, { schedule: { kind: "hourly", tz:
 ok(r.j.task.enabled && Math.abs(r.j.task.next_run_at - Date.now() - 3600_000) < 60_000, "đổi sang mỗi giờ và bật lại: lần tới sau 1 giờ");
 
 console.log("4. Quyền và xóa");
-ok((await b("GET", "/api/tasks")).j.tasks.every((x) => x.id !== daily.id), "tài khoản khác không thấy tác vụ");
-ok((await b("PATCH", `/api/tasks/${daily.id}`, { enabled: false })).s === 404 && (await b("POST", `/api/tasks/${daily.id}/run`)).s === 404 && (await b("DELETE", `/api/tasks/${daily.id}`)).s === 404, "tài khoản khác không sửa, chạy hay xóa được");
-ok((await b("GET", "/api/inbox")).j.items.every((x) => x.task !== once.id), "Hộp thư của ai người nấy xem");
+ok((await anon("GET", "/api/tasks")).s === 401 && (await anon("POST", `/api/tasks/${daily.id}/run`)).s === 401, "chưa đăng nhập thì không xem, không chạy được tác vụ");
+ok((await anon("GET", "/api/inbox")).s === 401, "chưa đăng nhập thì không xem được Hộp thư");
 r = await a("DELETE", `/api/tasks/${once.id}`);
 ok(r.s === 200 && (await a("GET", "/api/inbox")).j.items.every((x) => x.task !== once.id), "xóa tác vụ thì kết quả của nó cũng rời Hộp thư");
 ok((await fetch(`${B}/api/tasks`)).status === 401, "chưa đăng nhập → 401");

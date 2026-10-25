@@ -1,8 +1,8 @@
 import { AUTO, routeModel } from "../../router";
 import { ALL } from "../../catalog";
-import { can, canModel, current, limit, permsOf, sameOrigin } from "../../authstore";
+import { current, limit, sameOrigin } from "../../authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, type AgentEvent } from "../../agentcore";
-import { clampEffort, effortCap, isEffort, legacyModel } from "../../catalog";
+import { clampEffort, isEffort, legacyModel } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
 import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
@@ -18,26 +18,25 @@ export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
-  if (!wsAllowed(c.user)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." }, { status: 403 });
+  if (!wsAllowed(c.user)) return Response.json({ error: "Máy chủ chưa bật workspace cho Synchro Code." }, { status: 501 });
   try { limit("agent:" + c.user.id, 30, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
 
   const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted } = await req.json();
   let d: string;
   try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
-  // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
-  // Chế độ Tự động: việc code luôn cần model mạnh nhất tài khoản được dùng.
+  // Model đã chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định (Cài đặt → API).
+  // Chế độ Tự động: việc code luôn cần model mạnh nhất đang có.
   let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
   if (chosen === AUTO) {
     const main = mainModels();
-    const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
+    const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => main.includes(ALL) || main.includes(k));
     chosen = routeModel({ text: "", attachments: 0, turns: 0, studio: true }, allowed)?.model ?? null;
   }
   const model = chosen || pickDefault(await catalog(), mainModels());
-  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
-  if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
+  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Hãy nhập khóa API ở Cài đặt → API." }, { status: 503 });
   const target = await resolveModel(model);
   if (!target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
-  const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), target.kind) : undefined;
+  const effort = isEffort(wanted) ? clampEffort(wanted, "max", target.kind) : undefined;
   const over = overLimit(c.user);
   if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
 
@@ -54,8 +53,8 @@ export async function POST(req: Request) {
         const info = await exec(c.user.id, d, { cmd: "git rev-parse --abbrev-ref HEAD 2>/dev/null; git remote get-url origin 2>/dev/null | sed -E 's#https://[^@/]*@#https://#'", timeout: 20 });
         const [branch, remote] = info.out.split("\n");
         const repo = /github\.com[/:]([^/]+\/[^/.\s]+)/.exec(remote ?? "")?.[1] ?? null;
-        const list = wantSkills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
-        const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
+        const list = wantSkills ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
+        const scripts = !!process.env.E2B_API_KEY;
         const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: String(system).slice(0, 60_000), skills: list.length ? skillsPrompt(list, scripts) : "" });
         const tools = agentTools(list.length, scripts);
         const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));

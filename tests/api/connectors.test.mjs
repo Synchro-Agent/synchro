@@ -15,7 +15,8 @@ function client(init = "") {
   return f;
 }
 // run-all đăng nhập quản trị một lần rồi chia phiên (tránh giới hạn số lần đăng nhập); chạy riêng lẻ thì tự đăng nhập.
-const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), member = client();
+// Web dùng cá nhân: chỉ tài khoản chủ sở hữu; "anon" là người chưa đăng nhập.
+const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), anon = client();
 if (!process.env.SYNCHRO_ADMIN_COOKIE) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
 
 // Mô phỏng trình duyệt: mở trang đăng nhập, bấm Cho phép/Từ chối, theo chuyển hướng về Synchro (kèm cookie của người đã bấm kết nối).
@@ -53,19 +54,9 @@ const au = new URL(r.j.authorizeUrl);
 ok(au.searchParams.get("code_challenge_method") === "S256" && au.searchParams.get("code_challenge") && au.searchParams.get("state") && au.searchParams.get("resource") === `${MCP}/mcp`, "PKCE S256 + state + resource đúng");
 ok(/notes:read/.test(au.searchParams.get("scope")) && /offline_access/.test(au.searchParams.get("scope")) && au.searchParams.get("client_id")?.startsWith("mock_"), "scope lấy từ máy chủ + offline_access, client đăng ký động", au.searchParams.get("scope"));
 ok(r.j.connector.status === "needs_auth", "trạng thái chờ đăng nhập");
-// state đúng nhưng người khác hoàn tất → bị chặn
-await member("POST", "/api/auth/signup", { email: "conn-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Member", birthDate: "2000-01-01" } });
-await member("POST", "/api/auth/login", { email: "conn-member@synchro.test", password: "Member-pass-123" });
-// Tài khoản test có quyền riêng (mọi model, mọi tính năng) để không phụ thuộc quyền mặc định quản trị viên đặt cho thành viên.
-async function fullPerms(email) {
-  const u = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === email);
-  if (u) await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } });
-}
-await fullPerms("conn-member@synchro.test");
-
-for (const x of (await member("GET", "/api/connectors")).j.connectors ?? []) await member("DELETE", `/api/connectors/${x.id}`);
-let o = await oauth(member, r.j.authorizeUrl);
-ok(/tài khoản đã bấm kết nối/.test(o.html), "người khác không hoàn tất được đăng nhập của mình", o.html?.slice(0, 300));
+// state đúng nhưng trình duyệt chưa đăng nhập Synchro hoàn tất → bị chặn
+let o = await oauth(anon, r.j.authorizeUrl);
+ok(/tài khoản đã bấm kết nối/.test(o.html), "chưa đăng nhập Synchro thì không hoàn tất được đăng nhập connector", o.html?.slice(0, 300));
 // Lấy lại địa chỉ đăng nhập mới (state cũ đã dùng) rồi hoàn tất đúng
 r = await admin("POST", `/api/connectors/${notesId}/connect`);
 o = await oauth(admin, r.j.authorizeUrl, "allow", (b) => b.replace(/iss=[^&]+/, "iss=http%3A%2F%2Fevil.example"));
@@ -100,8 +91,8 @@ ok(r.s === 200 && /Kế hoạch ra mắt/.test(r.j.text) && r.j.skills?.some((u)
 r = await chat(admin, O, `Tạo ghi chú #tool=create_note #args={"title":"Từ GPT"}`);
 ok(r.s === 200 && r.j.approval?.calls?.[0]?.tool?.name === "create_note" && r.j.approval.calls[0].connector.name === "Mock Notes" && r.j.approval.calls[0].input.title === "Từ GPT", "công cụ ghi dừng lại chờ duyệt", JSON.stringify(r.j).slice(0, 300));
 let ap = r.j.approval;
-r = await resume(member, ap.id, { [ap.calls[0].id]: "allow" });
-ok(r.s === 410, "người khác không tiếp tục được lượt chờ duyệt của mình");
+r = await resume(anon, ap.id, { [ap.calls[0].id]: "allow" });
+ok(r.s === 401, "chưa đăng nhập thì không tiếp tục được lượt chờ duyệt");
 r = await resume(admin, ap.id, { [ap.calls[0].id]: "deny" });
 ok(r.s === 200 && /từ chối/.test(r.j.text), "Từ chối: model nhận kết quả bị từ chối", JSON.stringify(r.j).slice(0, 300));
 r = await resume(admin, ap.id, {});
@@ -148,15 +139,11 @@ r = await chat(admin, C, `#tool=search_notes #args={"query":"Synchro"}`);
 ok(!/Kế hoạch ra mắt/.test(r.j.text ?? ""), "tắt connector thì model không dùng được");
 await admin("PATCH", `/api/connectors/${notesId}`, { enabled: true });
 
-console.log("8. Tách biệt tài khoản");
-r = await member("GET", "/api/connectors");
-ok(r.s === 200 && r.j.connectors.length === 0, "tài khoản khác không thấy connector của mình");
-r = await member("PATCH", `/api/connectors/${notesId}`, { enabled: false });
-ok(r.s === 404, "tài khoản khác không sửa được connector của mình");
-r = await member("DELETE", `/api/connectors/${notesId}`);
-ok(r.s === 404, "tài khoản khác không xóa được connector của mình");
-r = await chat(member, C, `#tool=search_notes #args={"query":"Synchro"}`);
-ok(r.s === 200 && !/Kế hoạch ra mắt/.test(r.j.text ?? ""), "chat của tài khoản khác không dùng connector của mình");
+console.log("8. Phải đăng nhập");
+r = await anon("GET", "/api/connectors");
+ok(r.s === 401, "chưa đăng nhập thì không xem được connector");
+r = await anon("PATCH", `/api/connectors/${notesId}`, { enabled: false });
+ok(r.s === 401 || r.s === 403, "chưa đăng nhập thì không sửa được connector");
 
 console.log("9. Connector thật trên Internet (không cần đăng nhập)");
 r = await admin("POST", "/api/connectors", { dir: "deepwiki" });

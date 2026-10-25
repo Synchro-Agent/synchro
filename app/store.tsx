@@ -6,8 +6,8 @@ import type { TraceItem } from "./transpile";
 import { ls } from "./userscope";
 
 // trace: dấu vết công cụ (chuẩn Synchro) gửi lại ở lượt sau; stopped: người dùng đã bấm Dừng giữa chừng.
-export type Msg = { role: "user" | "ai"; text: string; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string; src?: { n: number; doc: string; title: string; scope: "private" | "org"; chunk: number; text: string }[] };
-export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean; studio?: "design" | "slides" | "docs" };
+export type Msg = { role: "user" | "ai"; text: string; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string };
+export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; studio?: "design" | "slides" | "docs" };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };
 
 const defs = new Map<string, unknown>();
@@ -54,13 +54,11 @@ export function reloadPrefs() {
 
 export type AppApi = {
   say: (m: string) => void;
-  upgrade: () => void;
   openSettings?: (tab?: string) => void;
   goCode: () => void;
   ask: (text: string) => void;
   confirm: (title: string, text: string, ok: string, fn: () => void) => void;
   chats: Chat[];
-  unshare: (id: number) => void;
   exportData: () => void;
   wipe: (what: "all" | "chats") => void;
   close: () => void;
@@ -69,7 +67,7 @@ export type AppApi = {
   logout: () => void;
 };
 export const AppCtx = createContext<AppApi>({
-  say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, chats: [], unshare: () => {}, exportData: () => {}, wipe: () => {}, close: () => {},
+  say: () => {}, ask: () => {}, goCode: () => {}, confirm: () => {}, chats: [], exportData: () => {}, wipe: () => {}, close: () => {},
   me: null, setMe: () => {}, logout: () => {},
 });
 export const useApp = () => useContext(AppCtx);

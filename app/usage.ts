@@ -1,16 +1,16 @@
-// Mức dùng model của từng tài khoản (chỉ chạy ở máy chủ). Synchro gọi model qua API nên mức dùng tính theo chi phí API thật:
+// Mức dùng model (chỉ chạy ở máy chủ). Synchro gọi model qua API nên mức dùng tính theo chi phí API thật:
 // mỗi lần gọi, đọc số token nhà cung cấp trả về (input, output, cache) rồi nhân với giá của model đó.
-// Giới hạn giống Claude: "phiên" 5 giờ tính từ tin nhắn đầu tiên, và "hằng tuần" đặt lại vào cùng giờ mỗi tuần.
-// Quản trị viên đặt hạn mức (USD) cho mọi người, từng người, và sửa bảng giá nếu nhà cung cấp đổi giá.
+// Ngân sách tự đặt (không bắt buộc), giống Claude: "phiên" 5 giờ tính từ tin nhắn đầu tiên, và "hằng tuần" đặt lại vào cùng giờ mỗi tuần.
+// Bảng giá sửa được nếu nhà cung cấp đổi giá.
 // Ngoài ra ghi lại hạn mức gọi API mà nhà cung cấp báo trong header (Anthropic, OpenAI) để biết API còn bao nhiêu.
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, isAdmin, type UserRow } from "./authstore";
+import { db, type UserRow } from "./authstore";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
 
 // ---------------------------------------------------------------- bảng giá (USD / 1 triệu token)
-// official: theo trang giá của hãng; estimate: chưa có giá chính thức, quản trị viên nên kiểm tra và sửa.
+// official: theo trang giá của hãng; estimate: chưa có giá chính thức, nên kiểm tra và sửa ở Cài đặt → Usage.
 export type Price = { in: number; out: number; cache: number; src: "official" | "estimate" | "custom" };
 const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"]][] = [
   [/^anthropic\/claude-fable-5-1/, { in: 10, out: 50, cache: 0.25 }, "official"],
@@ -31,11 +31,11 @@ const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"]][] = [
   [/./, { in: 3, out: 15, cache: 0.3 }, "estimate"],
 ];
 
-// ---------------------------------------------------------------- cấu hình của quản trị viên
-// session / weekly: hạn mức USD mặc định cho mọi người (null = không giới hạn). admins: có áp hạn mức cho quản trị viên không.
-export type UsageConfig = { session: number | null; weekly: number | null; admins: boolean; prices: Record<string, { in: number; out: number; cache: number }> };
-const DEFAULT_CONFIG: UsageConfig = { session: 2, weekly: 20, admins: false, prices: {} };
-type Override = { session?: number | null; weekly?: number | null };
+// ---------------------------------------------------------------- ngân sách và bảng giá
+// budget: ngân sách USD tự đặt cho mỗi phiên 5 giờ và mỗi tuần (null = không giới hạn, mặc định). Lưu ở trường riêng,
+// hạn mức chung của bản dùng nhiều người trước đây (session / weekly) không còn được áp dụng.
+export type Budget = { session: number | null; weekly: number | null };
+export type UsageConfig = { budget: Budget; prices: Record<string, { in: number; out: number; cache: number }> };
 
 let ready = false;
 function init() {
@@ -56,15 +56,13 @@ function init() {
 const num = (v: unknown) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
 export function getConfig(): UsageConfig {
   const r = init().prepare("SELECT json FROM usage_config WHERE id = 1").get() as { json: string } | undefined;
-  let j: Partial<UsageConfig> = {};
+  let j: { budget?: Partial<Budget>; prices?: UsageConfig["prices"] } = {};
   try { j = r ? JSON.parse(r.json) : {}; } catch {}
-  return { ...DEFAULT_CONFIG, ...j, prices: { ...(j.prices ?? {}) } };
+  return { budget: { session: num(j.budget?.session), weekly: num(j.budget?.weekly) }, prices: { ...(j.prices ?? {}) } };
 }
-export function setConfig(patch: Partial<UsageConfig>): UsageConfig {
+export function setConfig(patch: { budget?: Partial<Budget>; prices?: Record<string, { in?: unknown; out?: unknown; cache?: unknown } | null> }): UsageConfig {
   const c = getConfig();
-  if ("session" in patch) c.session = patch.session === null ? null : num(patch.session) ?? c.session;
-  if ("weekly" in patch) c.weekly = patch.weekly === null ? null : num(patch.weekly) ?? c.weekly;
-  if (typeof patch.admins === "boolean") c.admins = patch.admins;
+  if (patch.budget && typeof patch.budget === "object") for (const k of ["session", "weekly"] as const) if (k in patch.budget) c.budget[k] = patch.budget[k] === null ? null : num(patch.budget[k]) ?? c.budget[k];
   if (patch.prices && typeof patch.prices === "object") {
     for (const [k, v] of Object.entries(patch.prices)) {
       if (!/^[a-z0-9-]+\/[\w.:-]{1,120}$/.test(k)) continue;
@@ -112,13 +110,11 @@ export const costOf = (t: Tok, p: Price) => (t.input * p.in + t.cacheWrite * p.i
 
 function windows(uid: string, now: number) {
   const d = init();
-  const r = d.prepare("SELECT session_start, week_anchor, override FROM usage_users WHERE user_id = ?").get(uid) as { session_start: number | null; week_anchor: number | null; override: string | null } | undefined;
-  let ov: Override = {};
-  try { ov = r?.override ? JSON.parse(r.override) : {}; } catch {}
+  const r = d.prepare("SELECT session_start, week_anchor FROM usage_users WHERE user_id = ?").get(uid) as { session_start: number | null; week_anchor: number | null } | undefined;
   const sessionStart = r?.session_start && now < r.session_start + SESSION_MS ? r.session_start : null;
   const anchor = r?.week_anchor ?? null;
   const weekStart = anchor === null ? null : anchor + Math.floor((now - anchor) / WEEK_MS) * WEEK_MS;
-  return { sessionStart, anchor, weekStart, override: ov, exists: !!r };
+  return { sessionStart, anchor, weekStart, exists: !!r };
 }
 
 export function recordUsage(model: string, usage: unknown) {
@@ -164,20 +160,15 @@ export function noteResponse(provider: string, model: string, body: { usage?: un
 
 // ---------------------------------------------------------------- trạng thái để hiện vòng tròn và để chặn khi hết hạn mức
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
-export type UsageState = { limits: Limit[]; rate: (RateInfo & { pct: number }) | null; admin: boolean; plan: string };
+export type UsageState = { limits: Limit[]; rate: (RateInfo & { pct: number }) | null };
 
-function limitsFor(u: UserRow, cfg: UsageConfig, ov: Override) {
-  const exempt = isAdmin(u) && !cfg.admins;
-  const pick = (k: "session" | "weekly") => (k in ov ? ov[k] ?? null : exempt ? null : cfg[k]);
-  return { session: pick("session"), weekly: pick("weekly") };
-}
 const sumSince = (uid: string, since: number) => (init().prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE user_id = ? AND at >= ?").get(uid, since) as { c: number }).c;
 
 export function usageState(u: UserRow, provider?: string): UsageState {
   const now = Date.now();
   const cfg = getConfig();
   const w = windows(u.id, now);
-  const lim = limitsFor(u, cfg, w.override);
+  const lim = cfg.budget;
   const sUsed = w.sessionStart ? sumSince(u.id, w.sessionStart) : 0;
   const wUsed = w.weekStart !== null ? sumSince(u.id, w.weekStart) : 0;
   const mk = (key: Limit["key"], used: number, limit: number | null, resetAt: number | null, active: boolean): Limit =>
@@ -186,7 +177,7 @@ export function usageState(u: UserRow, provider?: string): UsageState {
   const rate = r && now - r.at < 10 * 60_000 && r.resetAt > now ? { ...r, pct: Math.min(100, Math.max(0, (1 - r.remaining / r.limit) * 100)) } : null;
   return {
     limits: [mk("session", sUsed, lim.session, w.sessionStart ? w.sessionStart + SESSION_MS : null, !!w.sessionStart), mk("weekly", wUsed, lim.weekly, w.weekStart !== null ? w.weekStart + WEEK_MS : null, w.weekStart !== null)],
-    rate, admin: isAdmin(u), plan: "API",
+    rate,
   };
 }
 
@@ -197,33 +188,11 @@ const until = (t: number) => {
 };
 export function overLimit(u: UserRow): string | null {
   for (const l of usageState(u).limits) {
-    if (l.limit !== null && l.used >= l.limit && l.resetAt) return l.key === "session" ? `Bạn đã dùng hết giới hạn của phiên này. Phiên mới bắt đầu sau ${until(l.resetAt)}.` : `Bạn đã dùng hết giới hạn hằng tuần. Giới hạn được đặt lại sau ${until(l.resetAt)}.`;
+    if (l.limit !== null && l.used >= l.limit && l.resetAt) return l.key === "session" ? `Bạn đã dùng hết ngân sách đặt cho phiên này. Phiên mới bắt đầu sau ${until(l.resetAt)} (đổi ngân sách ở Cài đặt → Usage).` : `Bạn đã dùng hết ngân sách hằng tuần. Ngân sách được đặt lại sau ${until(l.resetAt)} (đổi ở Cài đặt → Usage).`;
   }
   return null;
 }
 
-// ---------------------------------------------------------------- dành cho quản trị viên
-export function setOverride(uid: string, ov: Override | null) {
-  const clean: Override = {};
-  if (ov) for (const k of ["session", "weekly"] as const) if (k in ov) clean[k] = ov[k] === null ? null : num(ov[k]) ?? undefined;
-  init().prepare("INSERT INTO usage_users (user_id, override) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET override = excluded.override")
-    .run(uid, ov ? JSON.stringify(Object.fromEntries(Object.entries(clean).filter(([, v]) => v !== undefined))) : null);
-}
-export function adminUsage(users: UserRow[]) {
-  const cfg = getConfig();
-  const now = Date.now();
-  return users.map((u) => {
-    const w = windows(u.id, now);
-    const st = usageState(u);
-    const tot = init().prepare("SELECT COALESCE(SUM(cost),0) AS c, COALESCE(SUM(input+cache_read+cache_write),0) AS i, COALESCE(SUM(output),0) AS o FROM usage_events WHERE user_id = ? AND at >= ?").get(u.id, now - 30 * 86_400_000) as { c: number; i: number; o: number };
-    return { id: u.id, email: u.email, name: u.name, admin: isAdmin(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override) };
-  });
-}
-export function removeUserUsage(uid: string) {
-  const d = init();
-  d.prepare("DELETE FROM usage_events WHERE user_id = ?").run(uid);
-  d.prepare("DELETE FROM usage_users WHERE user_id = ?").run(uid);
-}
 // Bảng giá đang áp dụng cho các model đang bật.
 export const priceTable = (models: string[]) => { const cfg = getConfig(); return models.map((m) => ({ model: m, ...priceOf(m, cfg) })); };
 

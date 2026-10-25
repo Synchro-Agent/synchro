@@ -1,17 +1,16 @@
 // Cầu nối máy chủ Next -> dịch vụ workspace (workspace/agent.mjs trên VPS).
 // Mỗi người dùng một container; mỗi phiên Synchro Code một thư mục /home/user/work/s<id>.
 import crypto from "node:crypto";
-import { appUrl, AuthError, can, type UserRow } from "./authstore";
+import { appUrl, AuthError, type UserRow } from "./authstore";
 
 const AGENT = (process.env.WS_AGENT_URL ?? "").replace(/\/$/, "");
 const SECRET = process.env.WS_AGENT_SECRET ?? "";
 export const WORK = "/home/user/work";
 
 export const wsConfigured = () => !!AGENT && SECRET.length >= 32;
-export const wsAllowed = (u: UserRow) => wsConfigured() && can(u, "code") && can(u, "sandbox");
-export function requireWs(u: UserRow) {
+export const wsAllowed = (_u: UserRow) => wsConfigured();
+export function requireWs(_u: UserRow) {
   if (!wsConfigured()) throw new AuthError("Máy chủ chưa bật workspace.", 501);
-  if (!can(u, "code") || !can(u, "sandbox")) throw new AuthError("Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox).", 403);
 }
 
 // Id phiên code (Date.now() ở trình duyệt) -> tên thư mục.
@@ -70,8 +69,3 @@ export function ticket(req: Request, u: string, d: string, k: "term" | "log" | "
 
 export const shq = (x: string) => `'${x.replace(/'/g, "'\\''")}'`;
 
-// Xóa tài khoản: xóa luôn container và file workspace (không chặn nếu workspace đang tắt).
-export async function destroyWorkspace(u: string) {
-  if (!wsConfigured()) return;
-  await agent("/destroy", { u }, 60_000).catch((e) => console.error("[workspace] destroy", e));
-}

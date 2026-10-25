@@ -13,8 +13,7 @@ const call = async (p, body, raw) => {
   for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
   return raw ? r : { s: r.status, j: await r.json().catch(() => null) };
 };
-await call("/api/auth/signup", { email: "vbhc-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Văn thư", birthDate: "2000-01-01" } });
-await call("/api/auth/login", { email: "vbhc-member@synchro.test", password: "Member-pass-123" });
+await call("/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
 const CV = { loai: "cong-van", coQuanChuQuan: "UBND tỉnh Bắc Ninh", coQuan: "Sở Thông tin và Truyền thông", so: "", kyHieu: "sttt-cđs", diaDanh: "Bắc Ninh", ngay: "2026-02-05",
   trichYeu: "đề nghị bố trí kinh phí", kinhGui: ["Sở Tài chính"], noiDung: ["Đoạn một.", "Đề nghị **1.250.000.000 đồng**./."], quyenHan: "KT. Giám đốc", chucVu: "Phó Giám đốc", nguoiKy: "Nguyễn Văn An", noiNhan: ["Như trên;", "Lưu: VT, CĐS."] };
 const docx = async (spec) => { const r = await call("/api/vbhc", { content: JSON.stringify(spec), name: "cong-van.docx" }, true); return { r, buf: Buffer.from(await r.arrayBuffer()) }; };

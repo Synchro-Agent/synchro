@@ -1,18 +1,17 @@
 "use client";
-// Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
+// Danh sách model ở trình duyệt: lấy từ /api/models (model đang hiện ở bộ chọn, model mặc định).
 import { useSyncExternalStore } from "react";
-import { allowsModel, splitKey, type Effort, type ProviderInfo } from "./catalog";
+import { splitKey, type ProviderInfo } from "./catalog";
 
-// effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
-type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
-let state: State = { providers: [], default: null, allowed: [], effort: {}, loaded: false };
+type State = { providers: ProviderInfo[]; default: string | null; loaded: boolean };
+let state: State = { providers: [], default: null, loaded: false };
 const subs = new Set<() => void>();
 let inflight: Promise<void> | null = null;
 
 export function refreshModels() {
   inflight ??= fetch("/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } })
+    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, loaded: true }; subs.forEach((f) => f()); } })
     .catch(() => {})
     .finally(() => { inflight = null; });
   return inflight;
@@ -36,11 +35,11 @@ export function modelName(key: string) {
   return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/-/g, " ");
 }
 
-// Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định hoặc model đầu tiên được phép.
+// Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện ở bộ chọn, không thì model mặc định hoặc model đầu tiên.
 export function fitModel(cur: string, s: State = state) {
   const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));
-  const ok = (k: string | null): k is string => !!k && shown.includes(k) && allowsModel(s.allowed, k);
-  if (ok(cur) || (cur === AUTO && shown.some((k) => allowsModel(s.allowed, k)))) return cur;
+  const ok = (k: string | null): k is string => !!k && shown.includes(k);
+  if (ok(cur) || (cur === AUTO && shown.length)) return cur;
   if (ok(s.default)) return s.default;
-  return shown.find((k) => allowsModel(s.allowed, k)) ?? cur;
+  return shown[0] ?? cur;
 }

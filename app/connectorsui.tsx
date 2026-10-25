@@ -9,16 +9,14 @@ import { DIR_CATS, type DirCat, type DirEntry } from "./connectordir";
 import type { ApprovalCall, Decision } from "./llm";
 
 type Perm = "allow" | "chat" | "ask" | "block";
-type Tool = { name: string; title: string; description: string; readOnly: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
+type Tool = { name: string; title: string; description: string; readOnly: boolean; destructive: boolean; perm: Perm; locked?: "setting" };
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth"; tools: Tool[]; checkedAt: number | null;
-  settings: Settings; adminBlocked: boolean;
+  settings: Settings;
 };
-type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
-type Data = { connectors: Conn[]; directory: DirEntry[]; policy: Policy };
-const allowed = (p: Policy, dir: string) => p.allowed.includes("*") || p.allowed.includes(dir);
+type Data = { connectors: Conn[]; directory: DirEntry[] };
 type Res = { connectors: Conn[]; connector?: Conn; authorizeUrl?: string; error?: string };
 
 async function api<T = Res>(method: string, url: string, body?: unknown): Promise<T> {
@@ -60,10 +58,10 @@ function PermSelect({ value, onChange, label, mixed, locked }: { value: Perm; on
   );
 }
 
-const LOCK_NOTE = { setting: "Turned off by this connector's setting for tools that delete data.", admin: "Your administrator doesn't allow tools that delete data." } as const;
+const LOCK_NOTE = { setting: "Turned off by this connector's setting for tools that delete data." } as const;
 
 // Cài đặt riêng của connector, hiện phía trên danh sách công cụ.
-function ConnSettings({ c, policy, onSettings }: { c: Conn; policy: Policy; onSettings: (s: Partial<Settings>) => void }) {
+function ConnSettings({ c, onSettings }: { c: Conn; onSettings: (s: Partial<Settings>) => void }) {
   const st = c.settings;
   return (
     <div className="cn-set">
@@ -81,8 +79,8 @@ function ConnSettings({ c, policy, onSettings }: { c: Conn; policy: Policy; onSe
         </select><I.Chevron size={13} /></span>
       </div>
       <div className="cn-set-row">
-        <div><b>Tools that delete data</b><div className="d">{policy.destructive ? "Let Synchro use tools the server marks as able to delete data." : LOCK_NOTE.admin}</div></div>
-        <button className={`cn-switch ${st.destructive && policy.destructive ? "on" : ""}`} role="switch" aria-checked={st.destructive && policy.destructive} aria-label="Tools that delete data" disabled={!policy.destructive} onClick={() => onSettings({ destructive: !st.destructive })}><i /></button>
+        <div><b>Tools that delete data</b><div className="d">Let Synchro use tools the server marks as able to delete data.</div></div>
+        <button className={`cn-switch ${st.destructive ? "on" : ""}`} role="switch" aria-checked={st.destructive} aria-label="Tools that delete data" onClick={() => onSettings({ destructive: !st.destructive })}><i /></button>
       </div>
       <div className="cn-set-row">
         <div><b>Calls per message</b><div className="d">Most times Synchro may call this connector while answering one message.</div></div>
@@ -117,8 +115,8 @@ function ToolGroup({ title, hint, kind, tools, onPerm, onGroup }: { title: strin
   );
 }
 
-function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnect, onRefresh, onRemove, onPerm, onGroup, onSettings }: {
-  c: Conn; policy: Policy; open: boolean; busy: boolean; onToggleOpen: () => void; onEnable: (v: boolean) => void; onConnect: () => void; onRefresh: () => void; onRemove: () => void;
+function ConnectorCard({ c, open, busy, onToggleOpen, onEnable, onConnect, onRefresh, onRemove, onPerm, onGroup, onSettings }: {
+  c: Conn; open: boolean; busy: boolean; onToggleOpen: () => void; onEnable: (v: boolean) => void; onConnect: () => void; onRefresh: () => void; onRemove: () => void;
   onPerm: (t: Tool, p: Perm) => void; onGroup: (k: "read" | "write", p: Perm) => void; onSettings: (s: Partial<Settings>) => void;
 }) {
   const [menu, setMenu] = useState(false);
@@ -132,21 +130,21 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
   }, [menu]);
   const ql = q.trim().toLowerCase();
   const shown = c.tools.filter((t) => !ql || t.title.toLowerCase().includes(ql) || t.name.toLowerCase().includes(ql) || t.description.toLowerCase().includes(ql));
-  const status = c.adminBlocked ? "Turned off by your administrator" : c.status === "ok" ? (c.enabled ? `${c.tools.length} ${c.tools.length === 1 ? "tool" : "tools"}` : "Turned off") : c.status === "needs_auth" ? "Needs to be connected" : "Connection problem";
+  const status = c.status === "ok" ? (c.enabled ? `${c.tools.length} ${c.tools.length === 1 ? "tool" : "tools"}` : "Turned off") : c.status === "needs_auth" ? "Needs to be connected" : "Connection problem";
   return (
-    <div className={`cn-card ${open ? "open" : ""} ${c.status !== "ok" || c.adminBlocked ? "attn" : ""}`}>
+    <div className={`cn-card ${open ? "open" : ""} ${c.status !== "ok" ? "attn" : ""}`}>
       <div className="cn-card-h">
         <button className="cn-card-main" onClick={c.status === "ok" ? onToggleOpen : undefined} aria-expanded={c.status === "ok" ? open : undefined} disabled={c.status !== "ok"}>
           <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} />
           <span className="cn-meta">
             <span className="cn-name"><b data-notr>{c.name}</b>{c.dir === null && <span className="cn-tag">Custom</span>}</span>
-            <span className={`cn-sub ${c.adminBlocked ? "error" : c.status}`}><i />{status}<span className="cn-host" data-notr>{` · ${c.host}`}</span></span>
+            <span className={`cn-sub ${c.status}`}><i />{status}<span className="cn-host" data-notr>{` · ${c.host}`}</span></span>
           </span>
           {c.status === "ok" && <span className="cn-chev"><I.ChevronR size={14} /></span>}
         </button>
         <div className="cn-actions">
-          {c.status === "ok" || c.adminBlocked
-            ? <button className={`cn-switch ${c.enabled && !c.adminBlocked ? "on" : ""}`} role="switch" aria-checked={c.enabled && !c.adminBlocked} aria-label={c.enabled ? "Turn off connector" : "Turn on connector"} onClick={() => onEnable(!c.enabled)} disabled={busy || c.adminBlocked}><i /></button>
+          {c.status === "ok"
+            ? <button className={`cn-switch ${c.enabled ? "on" : ""}`} role="switch" aria-checked={c.enabled} aria-label={c.enabled ? "Turn off connector" : "Turn on connector"} onClick={() => onEnable(!c.enabled)} disabled={busy}><i /></button>
             : <button className="btn dark cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{c.status === "error" ? "Try again" : "Connect"}</button>}
           <div className="cn-more" ref={mref}>
             <button className="icon-btn" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)} disabled={busy}>{busy && c.status === "ok" ? <span className="api-spin" /> : <I.Dots size={16} />}</button>
@@ -163,7 +161,7 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
       {c.status !== "ok" && c.error && <div className="api-err in"><I.Alert size={14} /><span>{c.error}</span></div>}
       {open && c.status === "ok" && (
         <div className="cn-body">
-          <ConnSettings c={c} policy={policy} onSettings={onSettings} />
+          <ConnSettings c={c} onSettings={onSettings} />
           {c.tools.length > 8 && <div className="s-search cn-search"><I.Search size={14} /><input placeholder="Search tools" value={q} onChange={(e) => setQ(e.target.value)} /></div>}
           {c.tools.length === 0 ? <p className="d cn-empty-tools">This server doesn&apos;t offer any tools yet.</p> : <>
             <ToolGroup title="Read-only tools" hint="Look things up without changing anything." kind="read" tools={shown.filter((t) => t.readOnly)} onPerm={onPerm} onGroup={onGroup} />
@@ -178,7 +176,6 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
 }
 
 function Browse({ data, busy, onClose, onConnect, onCustom }: { data: Data; busy: string | null; onClose: () => void; onConnect: (e: DirEntry) => void; onCustom: () => void }) {
-  const pol = data.policy;
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<DirCat | "all">("all");
   const ql = q.trim().toLowerCase();
@@ -196,20 +193,19 @@ function Browse({ data, busy, onClose, onConnect, onCustom }: { data: Data; busy
         <div className="cn-grid">
           {list.map((e) => {
             const c = have(e);
-            const state = !allowed(pol, e.id) ? "blocked" : busy === e.id ? "busy" : c?.status === "ok" ? "ok" : c ? "pending" : "none";
+            const state = busy === e.id ? "busy" : c?.status === "ok" ? "ok" : c ? "pending" : "none";
             return (
               <div key={e.id} className="cn-item">
                 <ConnLogo logo={e.logo} color={e.color} name={e.name} size={40} />
                 <div className="cn-item-m"><b data-notr>{e.name}</b><span>{e.desc}</span></div>
-                {state === "blocked" ? <span className="cn-done off" title="Your administrator hasn't allowed this connector for your account."><I.Lock size={13} />Not allowed</span>
-                  : state === "ok" ? <span className="cn-done"><I.Check size={14} />Connected</span>
+                {state === "ok" ? <span className="cn-done"><I.Check size={14} />Connected</span>
                   : <button className="btn cn-item-btn" disabled={state === "busy" || !!busy} onClick={() => onConnect(e)}>{state === "busy" ? <span className="api-spin" /> : state === "pending" ? "Finish" : "Connect"}</button>}
               </div>
             );
           })}
           {!list.length && <p className="d cn-none">No connectors match your search.</p>}
         </div>
-        {pol.custom && <div className="cn-browse-f"><span className="d">Don&apos;t see the app you need?</span><button className="cn-link" onClick={onCustom}>Add a custom connector</button></div>}
+        <div className="cn-browse-f"><span className="d">Don&apos;t see the app you need?</span><button className="cn-link" onClick={onCustom}>Add a custom connector</button></div>
       </div>
     </div>
   );
@@ -343,7 +339,7 @@ export function ConnectorsPanel() {
       {head}
       <div className="cn-bar">
         <button className="btn dark" onClick={() => setBrowse(true)}><I.Search size={14} />Browse connectors</button>
-        {data.policy.custom && <button className="btn" onClick={() => setCustom(true)}><I.Plus size={14} />Add custom connector</button>}
+        <button className="btn" onClick={() => setCustom(true)}><I.Plus size={14} />Add custom connector</button>
       </div>
       {conns.length === 0 ? (
         <div className="cn-empty">
@@ -354,7 +350,7 @@ export function ConnectorsPanel() {
       ) : (
         <div className="cn-list">
           {conns.map((c) => (
-            <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy === c.id} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
+            <ConnectorCard key={c.id} c={c} open={open === c.id} busy={busy === c.id} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
               onEnable={(v) => patch(c, { enabled: v }, (x) => ({ ...x, enabled: v }))}
               onConnect={() => reconnect(c)} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
               onPerm={(t, p) => patch(c, { perms: { [t.name]: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) }))}

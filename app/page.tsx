@@ -17,18 +17,16 @@ import { Markdown, makeReply } from "./md";
 import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
-import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, takeSources, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
-import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
+import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal } from "./modals";
 
-type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "knowledge" | "meetings";
+type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
-import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
+import { clampEffort, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
 import { InboxPage, useInboxCount } from "./tasksui";
-import { KnowledgePage, SourceChips } from "./kbui";
-import { MeetingsPage } from "./meetingsui";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
@@ -174,13 +172,11 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
   const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
   const [effort, setEffort] = usePref("effort", "medium");
-  const { say, me, openSettings } = useApp();
-  const { providers, allowed, loaded, effort: caps } = useModels();
-  // Mức nỗ lực thật sự dùng: mức người dùng chọn, hạ theo giới hạn quản trị viên đặt cho model và các mức model hỗ trợ.
+  const { say, openSettings } = useApp();
+  const { providers, loaded } = useModels();
+  // Mức nỗ lực thật sự dùng: mức đã chọn, hạ về mức gần nhất model hỗ trợ (Gemini chỉ tới Cao).
   const kind = providers.find((p) => p.models.some((m) => m.key === model))?.kind;
-  const cap = effortCap(caps, model);
-  const eff = clampEffort(isEffort(effort) ? effort : "medium", cap, kind);
-  const capped = cap !== "max";
+  const eff = clampEffort(isEffort(effort) ? effort : "medium", "max", kind);
   const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
   useEffect(() => { setActiveEffort(eff); }, [eff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
@@ -206,11 +202,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   }, [sub, mm]);
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
   const subX = { left: subLeft };
-  const ok = (k: string) => k === AUTO || allowsModel(allowed, k);
-  const pick = (k: string) => {
-    if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
-    setModel(k); close();
-  };
+  const pick = (k: string) => { setModel(k); close(); };
   const eLabel = levelName(eff);
   const none = loaded && !providers.length;
   return (
@@ -220,8 +212,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {none && (
           <div className="mempty">
             <b>Chưa kết nối model nào</b>
-            <span>{me?.isAdmin ? "Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu." : "Quản trị viên cần nhập khóa API để Synchro dùng được model."}</span>
-            {me?.isAdmin && <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>}
+            <span>Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu.</span>
+            <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>
           </div>
         )}
         {!none && (
@@ -239,23 +231,18 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         <button className={`menu-item mline ${sub === "effort" ? "sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
-          {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => {
-            const locked = clampEffort(k as Effort, cap, kind) !== k;
-            return (
-              <button key={k} className={`menu-item mline ${locked ? "locked" : ""}`} aria-disabled={locked} title={locked ? "Quản trị viên đã khóa mức này" : undefined}
-                onClick={() => { if (locked) { say(`Quản trị viên giới hạn ${modelName(model)} tối đa ở mức ${levelName(cap)}`); return; } setEffort(k); if (k === "max") say("Mức Tối đa dùng giới hạn nhanh hơn từ 5 lần"); close(); }}>
-                {l}{k === "medium" && !locked && <span className="mtag">Được đề xuất</span>}
-                {eff === k ? <span className="ck"><I.Check /></span> : locked && <span className="sc"><I.Lock size={14} /></span>}
-              </button>
-            );
-          })}
-          {capped && <div className="msub-note msub-cap"><I.Lock size={12} />{`Quản trị viên giới hạn model này tối đa ở mức ${levelName(cap)}.`}</div>}
+          {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => (
+            <button key={k} className="menu-item mline" onClick={() => { setEffort(k); if (k === "max") say("Mức Tối đa tốn chi phí gấp nhiều lần"); close(); }}>
+              {l}{k === "medium" && <span className="mtag">Được đề xuất</span>}
+              {eff === k && <span className="ck"><I.Check /></span>}
+            </button>
+          ))}
         </Menu>
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.models.map((m) => (
-              <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <span className="mname-t">{m.name}</span>{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
+              <button key={m.key} className="menu-item mline" onClick={() => pick(m.key)} title={m.id}>
+                <span className="mname-t">{m.name}</span>{m.key === model && <span className="ck"><I.Check /></span>}
               </button>
             ))}
           </Menu>
@@ -463,7 +450,7 @@ export default function Home() {
   const [curProj, setCurProj] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const fm = useFileMenu((m) => say(m));
-  const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
+  const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "keys" | "logout" | "upload">(null);
   const [userMenu, setUserMenu] = useState(false);
   const [chatMenu, setChatMenu] = useState<number | null>(null);
   const [codeList, setCodeList] = usePref<{ id: number; title: string; pinned?: boolean }[]>("codeList", []);
@@ -568,7 +555,7 @@ export default function Home() {
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
   useEffect(() => { setActiveModel(model); }, [model]);
-  // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
+  // Danh sách model đổi (thêm, gỡ khóa API, đổi model hiện ở bộ chọn) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
   useEffect(() => { if (me) loadCaps(true); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
@@ -693,7 +680,7 @@ export default function Home() {
     const history = (hist ?? [{ role: "user" as const, content: text }]).slice(-HISTORY_LIMIT);
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
-    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null, src: Msg["src"] = [];
+    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null;
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false;
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     let streamed = false, pend: string | null = null, raf = 0;
@@ -715,7 +702,6 @@ export default function Home() {
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
       outs = takeOutputs();
       via = takeRoute();
-      src = takeSources();
       trace = takeTrace();
       cancelled = takeCancelled();
     } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
@@ -727,7 +713,7 @@ export default function Home() {
     }
     if (streamed || cancelled) {
       // Đã hiện dần theo thời gian thực: hiện bản cuối ngay, không giả lập gõ chữ.
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: reply, done: true, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, src: src?.length ? src : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: reply, done: true, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
       finishReply(id, reply, pr, history);
       return;
     }
@@ -739,7 +725,7 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, src: src?.length && i >= words.length ? src : undefined, trace: trace?.length ? trace : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
       if (i >= words.length) finishReply(id, reply, pr, history);
     }, 38);
   };
@@ -786,8 +772,8 @@ export default function Home() {
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
-        const via = takeRoute(), src = takeSources();
-        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, src: src.length ? src : undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined }));
+        const via = takeRoute();
+        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined }));
         if (runRef.current === run) runRef.current = null;
       }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
     }
@@ -922,13 +908,10 @@ export default function Home() {
   );
   const [voiceOn, setVoiceOn] = useState(false);
   const inboxN = useInboxCount(!!me);
-  const [meetingOpen, setMeetingOpen] = useState<string | null>(null);
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
     { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hint: "new chat tao moi", run: goNew },
     { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hint: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
-    { id: "knowledge", label: "Tri thức", icon: <I.Book size={16} />, hint: "knowledge kho tai lieu cong ty", run: () => setView("knowledge") },
-    { id: "meetings", label: "Cuộc họp", icon: <I.Mic size={16} />, hint: "meeting bien ban ghi am", run: () => { setMeetingOpen(null); setView("meetings"); } },
     { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hint: "skill hub plugin thu vien", run: goCustom },
     { id: "connectors", label: "Kết nối", icon: <I.Connectors size={16} />, hint: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hint: "ung dung apps", run: () => setView("artifacts") }] : []),
@@ -943,8 +926,6 @@ export default function Home() {
     artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
     skillHub: goCustom,
-    knowledge: () => setView("knowledge"),
-    meeting: (id) => { setMeetingOpen(id); setView("meetings"); },
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -964,9 +945,6 @@ export default function Home() {
   const visible = chats.filter((c) => !c.inc);
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
-  const pill = false && (
-    <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
-  );
   const proj = projects.find((x) => x.id === curProj);
   const sideRef = useClickAway(() => setSideProj(null));
   const patchProj = (id: number, f: Partial<Project>) => setProjects((ps) => ps.map((x) => (x.id === id ? { ...x, ...f, upd: Date.now() } : x)));
@@ -995,13 +973,11 @@ export default function Home() {
   };
   const api = {
     say, chats, exportData,
-    upgrade: () => setModal("upgrade"),
     openSettings: (t?: string) => { setSettingsTab(t ?? "General"); setModal("settings"); },
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
-    unshare: (id: number) => { setChats((cs) => cs.map((c) => (c.id === id ? { ...c, shared: false } : c))); say("Đã dừng chia sẻ"); },
     wipe: (what: "all" | "chats") => { if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
     me: me ?? null, setMe, logout,
   };
@@ -1035,8 +1011,6 @@ export default function Home() {
           {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
           <Nav v="inbox" icon={<I.Inbox />} label="Hộp thư" badge={inboxN} />
-          <Nav v="knowledge" icon={<I.Book />} label="Tri thức" />
-          <Nav v="meetings" icon={<I.Mic />} label="Cuộc họp" />
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
           {me?.perms.features.speech !== false && (
             <>
@@ -1191,11 +1165,9 @@ export default function Home() {
               </div>
             )}
           </div>
-          {(view === "new" || view === "chat") && pill}
           <div className="right">
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
             {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
-            {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
         </div>}
 
@@ -1240,7 +1212,7 @@ export default function Home() {
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
                         const full = arts.map.get(sg.art.ident)?.[v];
                         return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}{m.done && m.src?.length ? <SourceChips sources={m.src} /> : null}</div>
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
@@ -1294,7 +1266,7 @@ export default function Home() {
           <div className="page"><div className="page-in">
             <h1 style={{ marginBottom: 24 }}>Artifacts</h1>
             <div className="tabs" style={{ alignItems: "center" }}>
-              {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
+              {["Artifact", "Ứng dụng"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
               <span className="art-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></span>
             </div>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tạo thứ gì đó mới</div>
@@ -1307,15 +1279,13 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 3 ? "Ứng dụng nội bộ" : tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</div>
-            {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
+            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 1 ? "Ứng dụng của bạn" : "Artifact của bạn"}</div>
+            {tab === 1 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
               onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
           </div></div>
         )}
 
-        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} onOpenMeeting={(id) => { setMeetingOpen(id); setView("meetings"); }} />}
-        {view === "meetings" && <MeetingsPage say={say} model={model} onOpenChat={openAsChat} initial={meetingOpen} />}
-        {view === "knowledge" && <KnowledgePage say={say} />}
+        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
@@ -1327,10 +1297,8 @@ export default function Home() {
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "share" && chat)}><ShareModal title={chat?.title ?? ""} onClose={() => setModal(null)} say={say} onCopy={() => chat && setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, shared: true } : c)))} /></Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => [...o, f.name]); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
-      <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
       <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Bạn có chắc chắn muốn xóa đoạn chat này không?" ok="Xóa" onCancel={() => setDelId(null)} onOk={() => { if (delId !== null) removeChat(delId); setDelId(null); say("Đã xóa đoạn chat"); }} /></Fade>

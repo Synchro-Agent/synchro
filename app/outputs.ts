@@ -65,7 +65,3 @@ export function readOutput(uid: string, id: string): (OutFile & { data: Buffer }
   return { id: r.id, name: r.name, mime: r.mime, size: r.size, data: fs.readFileSync(p) };
 }
 
-export function removeUserOutputs(uid: string) {
-  init().prepare("DELETE FROM outputs WHERE user_id = ?").run(uid);
-  fs.rmSync(path.join(ROOT, uid), { recursive: true, force: true });
-}

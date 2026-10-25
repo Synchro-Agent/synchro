@@ -12,7 +12,7 @@ rmSync(DL, { recursive: true, force: true }); mkdirSync(DL, { recursive: true })
 rmSync(PROF, { recursive: true, force: true });
 const ONLY = process.argv[2] ?? "";
 
-// Tài khoản test của bản local, xóa mức dùng cũ.
+// Tài khoản chủ sở hữu của bản local (web dùng cá nhân), xóa mức dùng cũ.
 const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
 const api = async (p, body) => {

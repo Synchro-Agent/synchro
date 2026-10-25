@@ -12,15 +12,13 @@ function client(init = "") {
   };
 }
 // run-all đăng nhập quản trị một lần rồi chia phiên (tránh giới hạn số lần đăng nhập); chạy riêng lẻ thì tự đăng nhập.
-const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), member = client();
+const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? "");
 if (!process.env.SYNCHRO_ADMIN_COOKIE) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
-await member("POST", "/api/auth/signup", { email: "route-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Route Member", birthDate: "2000-01-01" } });
-await member("POST", "/api/auth/login", { email: "route-member@synchro.test", password: "Member-pass-123" });
-const setPerms = async (models) => {
-  const u = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === "route-member@synchro.test");
-  await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models, features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } });
-};
-await setPerms(["*"]);
+const member = admin;
+// Model hiện ở bộ chọn (Cài đặt → API → Model picker): chế độ Tự động chỉ chọn trong các model này.
+const before = (await admin("GET", "/api/admin/apikeys")).j?.main ?? ["*"];
+const setShown = (main) => admin("POST", "/api/admin/apikeys", { action: "main", main });
+await setShown(["*"]);
 const ask = (c, text, extra = {}) => c("POST", "/api/llm", { system: "", model: "auto", skills: true, messages: [{ role: "user", content: text }], ...extra });
 const last = async () => (await fetch(`${MOCK}/_debug/last`)).json();
 
@@ -35,17 +33,17 @@ ok(r.s === 200 && r.j.auto && r.j.auto.tier !== "strong", `câu hỏi kiến th�
 r = await ask(member, "Đọc giúp tôi tệp này", { messages: [{ role: "user", content: [{ type: "text", text: "Tóm tắt tài liệu đính kèm" }, { type: "image", media_type: "image/png", data: "iVBORw0KGgo=" }] }] });
 ok(r.s === 200 && r.j.auto?.why?.includes("có tệp đính kèm"), `có tệp đính kèm được tính là khó hơn: ${r.j?.model}`, JSON.stringify(r.j?.auto));
 
-console.log("2. Chỉ chọn trong model được phép");
-// Danh sách được phép chỉ có model nhanh và model cân bằng: việc khó dùng model mạnh nhất có trong danh sách.
-await setPerms(["anthropic/claude-haiku-5-5", "openai/gpt-6.1-sol"]);
+console.log("2. Chỉ chọn trong model đang hiện ở bộ chọn");
+// Bộ chọn chỉ có model nhanh và model cân bằng: việc khó dùng model mạnh nhất có trong danh sách.
+await setShown(["anthropic/claude-haiku-5-5", "openai/gpt-6.1-sol"]);
 r = await ask(member, "Làm trang web cho quán cà phê");
-ok(r.s === 200 && r.j.model === "openai/gpt-6.1-sol", `chỉ được Haiku và GPT-6.1 Sol → việc khó dùng Sol: ${r.j?.model}`, JSON.stringify(r.j).slice(0, 200));
+ok(r.s === 200 && r.j.model === "openai/gpt-6.1-sol", `bộ chọn chỉ có Haiku và GPT-6.1 Sol → việc khó dùng Sol: ${r.j?.model}`, JSON.stringify(r.j).slice(0, 200));
 r = await ask(member, "Xin chào");
 ok(r.s === 200 && r.j.model === "anthropic/claude-haiku-5-5", `… còn câu chào vẫn dùng Haiku: ${r.j?.model}`);
-await setPerms([]);
+await setShown([]);
 r = await ask(member, "Xin chào");
-ok(r.s === 403, "không được dùng model nào → báo lỗi rõ ràng", JSON.stringify(r.j));
-await setPerms(["*"]);
+ok(r.s === 503 && /bộ chọn model/.test(r.j?.error ?? ""), "bộ chọn không có model nào → báo lỗi rõ ràng", JSON.stringify(r.j));
+await setShown(before);
 
 console.log("3. Bộ nhớ đệm prompt (Anthropic)");
 r = await member("POST", "/api/llm", { system: "", model: "anthropic/claude-opus-5-5", skills: true, messages: [{ role: "user", content: "Câu một" }, { role: "assistant", content: "Trả lời một" }, { role: "user", content: "Làm trang web cho quán cà phê" }] });

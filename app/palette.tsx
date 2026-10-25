@@ -1,5 +1,5 @@
 "use client";
-// Bảng lệnh ⌘K: một ô tìm cho mọi thứ — lệnh nhanh, đoạn chat, artifact, ứng dụng nội bộ, skill và thư viện, tài liệu tri thức, cuộc họp.
+// Bảng lệnh ⌘K: một ô tìm cho mọi thứ — lệnh nhanh, đoạn chat, artifact, ứng dụng, skill và thư viện.
 // Tìm không cần gõ dấu ("bao cao" khớp "Báo cáo"), mũi tên lên / xuống để chọn, Enter để mở. Dữ liệu máy chủ tải một lần mỗi lần mở bảng.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
@@ -11,8 +11,6 @@ export type PaletteGo = {
   artifact: (conv: string, title: string) => void;
   app: (id: string) => void;
   skillHub: () => void;
-  knowledge: () => void;
-  meeting: (id: string) => void;
 };
 type Row = { key: string; group: string; label: string; sub?: string; icon: ReactNode; keys?: string; hay: string; run: () => void };
 
@@ -29,11 +27,9 @@ const get = (url: string): Promise<any> => fetch(url).then((r) => (r.ok ? r.json
 
 type Remote = {
   arts: { conv: string; title: string; type: string }[];
-  apps: { id: string; title: string; visibility?: string }[];
+  apps: { id: string; title: string }[];
   skills: { name: string; description: string }[];
   libs: { name: string; description: string; skills: unknown[] }[];
-  docs: { id: string; title: string; scope: string }[];
-  meetings: { id: string; title: string; date?: string | null }[];
 };
 
 export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: number; title: string; msgs: { text: string }[] }[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
@@ -44,8 +40,8 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts"), get("/api/apps"), get("/api/skills"), get("/api/plugins"), get("/api/kb"), get("/api/meetings")]).then(([a, ap, sk, pl, kb, mt]) => {
-      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [], docs: kb.docs ?? [], meetings: mt.meetings ?? [] });
+    Promise.all([get("/api/artifacts"), get("/api/apps"), get("/api/skills"), get("/api/plugins")]).then(([a, ap, sk, pl]) => {
+      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [] });
     });
     return () => { live = false; };
   }, []);
@@ -61,15 +57,13 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     }
     if (rem) {
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
-      for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng của tổ chức" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
+      for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr("Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
       for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: go.skillHub });
       for (const l of rem.libs) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skills.length} skill`, icon: <I.Plugins size={16} />, run: go.skillHub });
-      for (const d of rem.docs) add({ key: "doc:" + d.id, group: "Tri thức và cuộc họp", label: d.title, sub: tr(d.scope === "org" ? "Tài liệu của tổ chức" : "Tài liệu riêng"), icon: <I.Book size={16} />, run: go.knowledge });
-      for (const m of rem.meetings) add({ key: "meet:" + m.id, group: "Tri thức và cuộc họp", label: m.title, sub: tr("Cuộc họp") + (m.date ? ` · ${m.date}` : ""), icon: <I.Mic size={16} />, run: () => go.meeting(m.id) });
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm tối đa 6 kết quả, nhóm theo thứ tự cố định.
     if (!words.length) return [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, 6)];
-    const order = ["Lệnh", "Đoạn chat", "Artifact và ứng dụng", "Skill và thư viện", "Tri thức và cuộc họp"];
+    const order = ["Lệnh", "Đoạn chat", "Artifact và ứng dụng", "Skill và thư viện"];
     const scored = out.map((r) => ({ r, s: score(r.hay, words, r.label) })).filter((x) => x.s > 0);
     return order.flatMap((g) => scored.filter((x) => x.r.group === g).sort((a, b) => b.s - a.s).slice(0, 6).map((x) => x.r));
   }, [q, chats, cmds, rem, go]);

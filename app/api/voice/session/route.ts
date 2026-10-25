@@ -1,4 +1,4 @@
-import { can, current, limit, sameOrigin } from "../../../authstore";
+import { current, limit, sameOrigin } from "../../../authstore";
 import { serviceKey } from "../../../providers";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
   // Chưa gắn khoá ElevenLabs, hoặc tài khoản chưa được bật Speech: trình duyệt dùng chế độ dự phòng (nhận dạng và đọc bằng trình duyệt).
   const el = serviceKey("elevenlabs");
-  if (!el || !can(c.user, "speech")) return Response.json({ fallback: true });
+  if (!el) return Response.json({ fallback: true });
   try { limit("voice:" + c.user.id, 20, 60 * 60_000); } catch { return Response.json({ error: "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau." }, { status: 429 }); }
 
   const r = await fetch(`${el.base}/v1/convai/realtime/client_secrets`, {

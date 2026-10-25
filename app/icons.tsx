@@ -138,7 +138,7 @@ export const Inbox = (p: P) => <S {...p}><path d="M3.5 11.5l2-6.2c.2-.5.6-.8 1.1
 // Chỉ và sửa (chọn một phần tử trong artifact) và so sánh hai phiên bản.
 export const Pointer = (p: P) => <S {...p}><path d="M5 3.5l9.5 5.6-4.2 1.1-2.2 4.1z" /><path d="M10.6 10.4l3.6 3.6" /><path d="M14.5 3.2v1.6M16.8 5.5h-1.6M16.2 3.8l-1 1" /></S>;
 export const Compare = (p: P) => <S {...p}><rect x="2.8" y="4" width="6.2" height="12" rx="1.6" /><rect x="11" y="4" width="6.2" height="12" rx="1.6" /><path d="M5.2 8h1.6M13.4 8h1.6M5.2 11h1.6M13.4 11h1.6" /></S>;
-// Ứng dụng nội bộ (artifact xuất bản) và phạm vi chia sẻ cho cả tổ chức.
+// Ứng dụng (artifact xuất bản).
 export const Rocket = (p: P) => <S {...p}><path d="M11.8 3.2c2.3-.6 4.2-.5 5 .2.7.8.8 2.7.2 5-.7 2.6-2.6 5-5.2 6.4l-1.6.8-4-4 .8-1.6C8.4 7.4 9.2 4 11.8 3.2z" /><circle cx="12.6" cy="7.4" r="1.4" /><path d="M6.2 10.4l-2.6.4-.8 2.2 3.1.2M9.6 13.8l-.4 2.6-2.2.8-.2-3.1M4.8 15.2c-.8.8-1.1 2-1.1 2s1.2-.3 2-1.1" /></S>;
 export const Users = (p: P) => <S {...p}><circle cx="7.5" cy="7" r="2.6" /><path d="M2.8 16c.5-2.6 2.4-4.1 4.7-4.1s4.2 1.5 4.7 4.1" /><path d="M13 4.6a2.4 2.4 0 010 4.7M14.6 11.9c1.4.5 2.4 1.8 2.7 4.1" /></S>;
 // Menu Thêm của Kho kỹ năng: tải tệp skill lên, tạo cùng Synchro, duyệt danh mục thư viện.

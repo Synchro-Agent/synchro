@@ -1,6 +1,6 @@
 import { limit, sameOrigin } from "../../../../authstore";
 import { listConnectors, refreshConnector } from "../../../../connectors";
-import { connectorUser, policyOf, route } from "../../shared";
+import { connectorUser, route } from "../../shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export const POST = route(async (req, { params }: Ctx) => {
   sameOrigin(req);
   const user = connectorUser(req);
-  const pol = policyOf(user);
   limit("conn:" + user.id, 60, 10 * 60_000);
-  const connector = await refreshConnector(user.id, (await params).id, pol);
-  return Response.json({ connector, connectors: listConnectors(user.id, pol) });
+  const connector = await refreshConnector(user.id, (await params).id);
+  return Response.json({ connector, connectors: listConnectors(user.id) });
 });

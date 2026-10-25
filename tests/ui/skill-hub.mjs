@@ -15,15 +15,14 @@ rmSync(DL, { recursive: true, force: true }); mkdirSync(DL, { recursive: true })
 rmSync(PROF, { recursive: true, force: true });
 const ONLY = process.argv[2] ?? "";
 
-// Tài khoản test của bản local, xóa mức dùng cũ.
-const email = process.env.ADMIN ? "admin@synchro.test" : "dl-member@synchro.test", password = process.env.ADMIN ? "synchro-mock-123" : "Member-pass-123";
+// Tài khoản chủ sở hữu của bản local (web dùng cá nhân), xóa mức dùng cũ.
+const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
 const api = async (p, body) => {
   const r = await fetch(B + p, { method: "POST", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify(body) });
   for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
   return r.status;
 };
-await api("/api/auth/signup", { email, password, profile: { fullName: "Download Tester", birthDate: "2000-01-01" } });
 await api("/api/auth/login", { email, password });
 { const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
@@ -111,7 +110,7 @@ try {
   ok(/^Kho kỹ năng( \| Connectors)?$/.test(cz), "trang Tùy chỉnh không còn Skills / Plugins riêng: " + cz, cz);
   const title = await text(".pl-title"), secs = await text(".pl-sec");
   ok(title === "Kho kỹ năng", "tiêu đề: " + title);
-  ok(/Thư viện cho mọi người/.test(secs) && /Skill của bạn/.test(secs), "các phần: " + secs, secs);
+  ok(/Thư viện của bạn/.test(secs) && /Skill của bạn/.test(secs) && !/mọi người/.test(secs), "các phần: " + secs, secs);
   ok(await ev(`!!document.querySelector(".hub-yours .gh-add input")`), "ô Thêm từ GitHub nằm ngay đầu trang");
   await shot("1-page");
 
@@ -156,7 +155,7 @@ try {
   await ev(`(() => { const i = document.querySelector(".pl-search input"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, ""); i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
 
   // Cài đặt: một mục Kho kỹ năng thay cho Skills + Plugins
-  await click(`[...document.querySelectorAll("aside button")].find((e) => e.textContent.includes("Download Tester"))`, "user menu"); await sleep(500);
+  await click(`document.querySelector("aside button.user")`, "user menu"); await sleep(500);
   const st = await ev(`!!${byText(".menu-item", "Cài đặt")}`);
   if (st) { await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);
     const tabs = await text(".s-nav button");

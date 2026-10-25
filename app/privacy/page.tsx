@@ -5,26 +5,22 @@ export const metadata: Metadata = { title: "Chính sách quyền riêng tư – 
 
 export default function Privacy() {
   return (
-    <LegalDoc title="Chính sách quyền riêng tư" updated="22/10/2026">
-      <p>Trang này mô tả những dữ liệu Synchro (synchro.net.nz) thu thập khi bạn dùng dịch vụ, lý do thu thập và cách bạn kiểm soát chúng.</p>
-      <h2>Dữ liệu chúng tôi lưu</h2>
+    <LegalDoc title="Chính sách quyền riêng tư" updated="25/10/2026">
+      <p>Synchro (synchro.net.nz) là trợ lý AI dùng cá nhân của chủ sở hữu. Trang này mô tả dữ liệu Synchro lưu và nơi dữ liệu đi tới.</p>
+      <h2>Dữ liệu được lưu</h2>
       <ul>
-        <li><b>Tài khoản:</b> email, tên hiển thị và ảnh đại diện. Nếu bạn đặt mật khẩu, mật khẩu chỉ được lưu dưới dạng băm (scrypt), không ai đọc được mật khẩu gốc.</li>
-        <li><b>Đăng nhập bằng Google hoặc GitHub:</b> chúng tôi chỉ nhận email đã xác minh, tên và ảnh đại diện công khai của bạn. Chúng tôi không truy cập Gmail, Drive, kho mã hay bất kỳ dữ liệu nào khác.</li>
-        <li><b>Phiên đăng nhập:</b> thời điểm đăng nhập, địa chỉ IP và loại trình duyệt, để bạn xem và đăng xuất các thiết bị trong Cài đặt → Tài khoản.</li>
-        <li><b>Nhật ký bảo mật:</b> các sự kiện đăng ký, đăng nhập, đăng nhập thất bại, dùng để phát hiện truy cập trái phép.</li>
+        <li><b>Tài khoản:</b> email, tên hiển thị và ảnh đại diện của chủ sở hữu. Mật khẩu (nếu có) chỉ lưu dạng băm (scrypt).</li>
+        <li><b>Đăng nhập bằng Google hoặc GitHub:</b> chỉ nhận email đã xác minh, tên và ảnh đại diện công khai; không truy cập Gmail, Drive hay kho mã.</li>
+        <li><b>Phiên đăng nhập và nhật ký bảo mật:</b> thời điểm, địa chỉ IP và loại trình duyệt của các lần đăng nhập, để phát hiện truy cập trái phép.</li>
+        <li><b>Nội dung làm việc:</b> đoạn chat và dự án lưu trong trình duyệt; tệp, skill, connector, ứng dụng, tác vụ nền lưu trên máy chủ Synchro.</li>
       </ul>
-      <h2>Nội dung trò chuyện</h2>
-      <p>Các đoạn chat và dự án được lưu trong trình duyệt của bạn. Khi bạn gửi tin nhắn hoặc tệp, nội dung đó được chuyển tới nhà cung cấp mô hình AI để tạo câu trả lời và không được dùng cho mục đích khác.</p>
-      <h2>Chúng tôi không làm gì</h2>
+      <h2>Nội dung gửi tới model AI</h2>
+      <p>Tin nhắn và tệp bạn gửi được chuyển thẳng tới nhà cung cấp model (Anthropic, OpenAI, Google, ElevenLabs) qua khóa API của chính bạn để tạo câu trả lời, theo chính sách dữ liệu của nhà cung cấp đó.</p>
+      <h2>Không làm</h2>
       <ul>
-        <li>Không bán hay chia sẻ dữ liệu cá nhân cho bên thứ ba để quảng cáo.</li>
+        <li>Không bán hay chia sẻ dữ liệu cho bên thứ ba để quảng cáo.</li>
         <li>Không dùng cookie quảng cáo hay theo dõi. Cookie duy nhất là cookie phiên đăng nhập.</li>
       </ul>
-      <h2>Lưu trữ và xóa dữ liệu</h2>
-      <p>Dữ liệu tài khoản được lưu trên máy chủ của Synchro. Bạn có thể xóa tài khoản bất cứ lúc nào trong Cài đặt → Tài khoản → Xóa tài khoản; tài khoản, cách đăng nhập và mọi phiên sẽ bị xóa vĩnh viễn.</p>
-      <h2>Liên hệ</h2>
-      <p>Nếu có câu hỏi về quyền riêng tư, hãy liên hệ quản trị viên Synchro qua email hỗ trợ hiển thị trên màn hình đăng nhập.</p>
     </LegalDoc>
   );
 }

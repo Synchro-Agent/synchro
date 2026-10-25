@@ -1,7 +1,7 @@
 // Plugin (chỉ chạy ở máy chủ): một gói nhiều skill cài một lần, giống Plugins của Claude, nâng cấp thêm:
 // - Cài cả repo (hoặc nhiều repo) một lần, tự tìm mọi SKILL.md, bỏ bản trùng, giữ nguồn và commit để cập nhật / quay lại.
 // - Trước khi cài: xem từng skill, giấy phép (chặn skill độc quyền), mức rủi ro của script (gọi mạng, chạy lệnh, đọc bí mật).
-// - Hai phạm vi: "org" (quản trị viên cài một lần cho mọi tài khoản) và cá nhân (mỗi người tự cài).
+// - Plugin cài sẵn lúc máy chủ khởi động lưu với chủ "org" (của hệ thống), plugin tự cài lưu với tài khoản; chủ sở hữu quản lý tất cả.
 // - Gắn plugin với một "studio" (Thiết kế / Trình bày / Tài liệu): bấm nút là model có cả thư viện skill đó.
 // - Không làm phình prompt: skill của plugin chỉ vào cuộc trò chuyện khi studio đang bật, hoặc khi plugin được bật "dùng mọi nơi".
 import fs from "node:fs/promises";
@@ -311,8 +311,8 @@ export async function updatePlugin(id: string) {
 
 // ---------------------------------------------------------------- đọc
 export type PublicPlugin = {
-  id: string; scope: "org" | "personal"; slug: string; catalogId: string | null; name: string; description: string; author: string | null; homepage: string | null; color: string | null;
-  studio: Studio | null; everywhere: boolean; enabled: boolean; mine: { enabled: boolean; everywhere: boolean }; sources: Source[]; commits: Record<string, string>; size: number;
+  id: string; slug: string; catalogId: string | null; name: string; description: string; author: string | null; homepage: string | null; color: string | null;
+  studio: Studio | null; everywhere: boolean; enabled: boolean; sources: Source[]; commits: Record<string, string>; size: number;
   updatedAt: number; checkedAt: number | null; updateAvailable: boolean; skills: { id: string; name: string; description: string; enabled: boolean; report: SkillReport; useCount: number; lastUsed: number | null }[];
   risk: Risk; licenses: string[];
 };
@@ -321,16 +321,17 @@ function pub(r: Row, uid?: string): PublicPlugin {
   const pref = uid ? (init().prepare("SELECT enabled, everywhere FROM plugin_prefs WHERE user_id = ? AND plugin_id = ?").get(uid, r.id) as { enabled: number | null; everywhere: number | null } | undefined) : undefined;
   const risk = skills.reduce<Risk>((a, s) => (RANK[s.report.risk] > RANK[a] ? s.report.risk : a), "none");
   return {
-    id: r.id, scope: r.owner === "org" ? "org" : "personal", slug: r.slug, catalogId: r.catalog_id, name: r.name, description: r.description, author: r.author, homepage: r.homepage, color: r.color,
-    studio: (r.studio as Studio) ?? null, everywhere: !!r.everywhere, enabled: !!r.enabled,
-    mine: { enabled: pref?.enabled === null || pref?.enabled === undefined ? true : !!pref.enabled, everywhere: pref?.everywhere === null || pref?.everywhere === undefined ? !!r.everywhere : !!pref.everywhere },
+    id: r.id, slug: r.slug, catalogId: r.catalog_id, name: r.name, description: r.description, author: r.author, homepage: r.homepage, color: r.color,
+    // Lựa chọn riêng còn lại từ bản dùng nhiều người (tắt cho mình…) vẫn được tính cho tới khi đổi lại ở plugin.
+    studio: (r.studio as Studio) ?? null, everywhere: pref?.everywhere === null || pref?.everywhere === undefined ? !!r.everywhere : !!pref.everywhere,
+    enabled: !!r.enabled && (pref?.enabled === null || pref?.enabled === undefined || !!pref.enabled),
     sources: JSON.parse(r.sources), commits: JSON.parse(r.commits), size: r.size, updatedAt: r.updated_at, checkedAt: r.checked_at, updateAvailable: !!r.latest,
     skills, risk, licenses: [...new Set(skills.map((s) => s.report.license))],
   };
 }
 export const getPlugin = (id: string, uid?: string) => { const r = init().prepare("SELECT * FROM plugins WHERE id = ?").get(id) as Row | undefined; return r ? pub(r, uid) : null; };
 export const pluginOwner = (id: string) => (init().prepare("SELECT owner FROM plugins WHERE id = ?").get(id) as { owner: string } | undefined)?.owner ?? null;
-// Plugin người này thấy: của tổ chức (quản trị viên cài) và của riêng họ.
+// Plugin cài sẵn của hệ thống và plugin tự cài.
 export function listPlugins(uid: string): PublicPlugin[] {
   return (init().prepare("SELECT * FROM plugins WHERE owner = 'org' OR owner = ? ORDER BY owner = 'org' DESC, name").all(uid) as Row[]).map((r) => pub(r, uid));
 }
@@ -341,22 +342,15 @@ export function setPlugin(id: string, patch: { enabled?: boolean; everywhere?: b
   if (typeof patch.everywhere === "boolean") d.prepare("UPDATE plugins SET everywhere = ? WHERE id = ?").run(patch.everywhere ? 1 : 0, id);
   if (patch.studio === null || (typeof patch.studio === "string" && STUDIOS.includes(patch.studio))) d.prepare("UPDATE plugins SET studio = ? WHERE id = ?").run(patch.studio, id);
   if (patch.skills && typeof patch.skills === "object") for (const [n, on] of Object.entries(patch.skills)) d.prepare("UPDATE plugin_skills SET enabled = ? WHERE plugin_id = ? AND name = ?").run(on ? 1 : 0, id, n);
+  if (typeof patch.enabled === "boolean" || typeof patch.everywhere === "boolean") d.prepare("DELETE FROM plugin_prefs WHERE plugin_id = ?").run(id);
 }
-// Lựa chọn riêng của một người với plugin của tổ chức (tắt cho mình, dùng mọi nơi hay không).
-export function setPref(uid: string, id: string, p: { enabled?: boolean; everywhere?: boolean }) {
-  const d = init();
-  const cur = d.prepare("SELECT enabled, everywhere FROM plugin_prefs WHERE user_id = ? AND plugin_id = ?").get(uid, id) as { enabled: number | null; everywhere: number | null } | undefined;
-  d.prepare("INSERT INTO plugin_prefs (user_id, plugin_id, enabled, everywhere) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, plugin_id) DO UPDATE SET enabled = excluded.enabled, everywhere = excluded.everywhere")
-    .run(uid, id, typeof p.enabled === "boolean" ? (p.enabled ? 1 : 0) : cur?.enabled ?? null, typeof p.everywhere === "boolean" ? (p.everywhere ? 1 : 0) : cur?.everywhere ?? null);
-}
-
 // ---------------------------------------------------------------- dùng trong chat
 const toSkill = (s: SRow, plugin: string): Skill => ({
   id: s.id, user_id: plugin, name: s.name, description: s.description, body: s.body, storage_path: s.storage_path, enabled: true, version: 1, versions: [1],
   created_at: "", updated_at: "", files: JSON.parse(s.files), warnings: [], projects: [], use_count: s.use_count, last_used_at: null,
 });
 function active(uid: string) {
-  return listPlugins(uid).filter((p) => p.enabled && p.mine.enabled);
+  return listPlugins(uid).filter((p) => p.enabled);
 }
 // Skill của các plugin gắn với studio (khi người dùng bấm nút Thiết kế / Trình bày / Tài liệu).
 export function studioSkills(uid: string, studio: Studio): { skills: Skill[]; plugins: string[] } {
@@ -365,11 +359,11 @@ export function studioSkills(uid: string, studio: Studio): { skills: Skill[]; pl
 }
 // Skill của plugin bật "dùng trong mọi cuộc trò chuyện".
 export function everywhereSkills(uid: string): Skill[] {
-  return active(uid).filter((p) => p.mine.everywhere).flatMap((p) => (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(p.id) as SRow[]).map((s) => toSkill(s, p.id)));
+  return active(uid).filter((p) => p.everywhere).flatMap((p) => (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(p.id) as SRow[]).map((s) => toSkill(s, p.id)));
 }
 // Plugin không gắn studio và chưa bật "mọi cuộc trò chuyện": vào chat thường dưới dạng một thư viện riêng, model tự mở khi cần.
 export function libraryPlugins(uid: string): { slug: string; name: string; description: string; skills: Skill[] }[] {
-  return active(uid).filter((p) => !p.studio && !p.mine.everywhere)
+  return active(uid).filter((p) => !p.studio && !p.everywhere)
     .map((p) => ({ slug: p.slug, name: p.name, description: p.description, skills: (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(p.id) as SRow[]).map((s) => toSkill(s, p.id)) }))
     .filter((l) => l.skills.length);
 }
@@ -378,15 +372,10 @@ export function recordPluginUse(ids: string[]) {
   for (const id of ids) st.run(Date.now(), id);
 }
 export const studioOf = (v: unknown): Studio | null => (typeof v === "string" && (STUDIOS as string[]).includes(v) ? (v as Studio) : null);
-export async function removeUserPlugins(uid: string) {
-  const ids = (init().prepare("SELECT id FROM plugins WHERE owner = ?").all(uid) as { id: string }[]).map((x) => x.id);
-  for (const id of ids) await removePlugin(id);
-  init().prepare("DELETE FROM plugin_prefs WHERE user_id = ?").run(uid);
-}
 export { isText };
 
-// ---------------------------------------------------------------- cài sẵn 3 studio cho cả tổ chức (một lần)
-// Chạy khi máy chủ khởi động (instrumentation.ts). Đã cài xong một lần thì ghi nhớ, quản trị viên gỡ đi cũng không tự cài lại.
+// ---------------------------------------------------------------- cài sẵn 3 studio (một lần)
+// Chạy khi máy chủ khởi động (instrumentation.ts). Đã cài xong một lần thì ghi nhớ, gỡ đi cũng không tự cài lại.
 // Lỗi mạng thì thử lại ở lần khởi động sau. Tắt bằng SYNCHRO_DEFAULT_PLUGINS=0.
 export async function ensureDefaultPlugins() {
   const d = init();

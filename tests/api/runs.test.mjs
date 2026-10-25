@@ -5,8 +5,7 @@ let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 let cookie = "";
 const call = async (m, p, b) => { const r = await fetch(B + p, { method: m, headers: { "content-type": "application/json", origin: B, cookie }, body: b && JSON.stringify(b) }); for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0]; return { s: r.status, j: await r.json().catch(() => null) }; };
-await call("POST", "/api/auth/signup", { email: "dl-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Download Tester", birthDate: "2000-01-01" } });
-await call("POST", "/api/auth/login", { email: "dl-member@synchro.test", password: "Member-pass-123" });
+await call("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
 const MODEL = "anthropic/claude-haiku-5-5";
 const ask = (text) => call("POST", "/api/llm", { async: true, skills: true, system: "", model: MODEL, messages: [{ role: "user", content: text }], conv: "runtest" });
 // Đọc SSE tới khi có "done" (hoặc hết giờ); trả về các bước và kết quả.
