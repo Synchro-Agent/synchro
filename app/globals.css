@@ -3048,7 +3048,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .cz-body{min-width:0}
 @media (max-width:760px){.page-in.cz{grid-template-columns:1fr;gap:12px}.cz-nav{position:static;flex-direction:row;overflow-x:auto}.cz-nav button{flex:none}}
 /* Plugins */
-.pl-mark{display:inline-grid;place-items:center;border-radius:11px;color:#fff;font-weight:600;letter-spacing:.02em;flex:none;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+.pl-mark{display:inline-grid;place-items:center;border-radius:10px;flex:none;background:var(--pill);color:var(--text-2);box-shadow:inset 0 0 0 .5px var(--border-strong)}
 .pl-url{display:flex;align-items:center;gap:8px;margin:4px 0 6px;padding:6px 6px 6px 12px;border:.5px solid var(--border-strong);border-radius:12px;background:var(--card);color:var(--text-3)}
 .pl-url input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:13.5px;color:var(--text)}
 .pl-url:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}

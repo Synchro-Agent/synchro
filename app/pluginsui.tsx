@@ -22,9 +22,14 @@ const STUDIO: Record<Studio, string> = { design: "Design", slides: "Slides", doc
 const RISK: Record<Risk, [string, string]> = { none: ["No scripts", "ok"], low: ["Scripts, sandboxed", "low"], medium: ["Review scripts", "mid"], high: ["High risk", "high"] };
 const mb = (n: number) => (n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`);
 
-function PlugMark({ name, color, size = 40 }: { name: string; color?: string | null; size?: number }) {
-  const ini = name.replace(/[^A-Za-z0-9 ]/g, "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "P";
-  return <span className="pl-mark" style={{ width: size, height: size, background: color ?? "#555", fontSize: size * 0.36 }}>{ini}</span>;
+// Biểu tượng plugin: ô trung tính với icon đơn sắc theo nội dung (không dùng màu thương hiệu cho đỡ rối mắt).
+const MARK: Record<string, (p: { size?: number }) => React.ReactElement> = {
+  "design-studio": I.Palette, "slides-studio": I.Layers, "docs-studio": I.File, "web-dev-qa": I.Code, "emil-kowalski": I.Sparkle, "ui-ux-pro-max": I.Grid,
+  taste: I.Eye, "awesome-design-html": I.Globe, "app-store-screenshots": I.Image, "ux-designer": I.Pencil, "vercel-agent-skills": I.Terminal, "anthropic-skills": I.Book,
+};
+function PlugMark({ id, size = 40 }: { id?: string | null; size?: number }) {
+  const Ic = (id && MARK[id]) || I.Plugins;
+  return <span className="pl-mark" style={{ width: size, height: size }}><Ic size={Math.round(size * 0.48)} /></span>;
 }
 function Badge({ kind, children }: { kind: string; children: React.ReactNode }) { return <span className={`pl-b ${kind}`}>{children}</span>; }
 
@@ -130,7 +135,7 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
       <div className="modal pl-modal">
         <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Close"><I.X size={16} /></button>
         <div className="pl-dh">
-          <PlugMark name={p.name} color={p.color} size={44} />
+          <PlugMark id={p.catalogId} size={44} />
           <div><h2 data-notr>{p.name}</h2><div className="pl-tags">{p.scope === "org" ? <Badge kind="ok">Everyone</Badge> : <Badge kind="">Personal</Badge>}{p.studio && <Badge kind="studio">{STUDIO[p.studio]} studio</Badge>}<Badge kind={RISK[p.risk][1]}>{RISK[p.risk][0]}</Badge>{p.licenses.map((l) => <Badge key={l} kind="">{l}</Badge>)}</div></div>
         </div>
         <p className="d">{p.description}</p>
@@ -210,7 +215,7 @@ export function PluginsPanel() {
           const p = d.plugins.find((y) => y.studio === x.studio);
           return (
             <div key={x.catalogId} className={`pl-card studio ${p ? "in" : ""}`}>
-              <div className="pl-card-h"><PlugMark name={x.name} color={x.color} /><div><b>{x.name}</b><span>{p ? `${p.skills.filter((s) => s.enabled).length} skill · ${p.scope === "org" ? tr("for everyone") : tr("personal")}` : `${x.skillCount} skill · ${x.license}`}</span></div></div>
+              <div className="pl-card-h"><PlugMark id={x.catalogId} /><div><b>{x.name}</b><span>{p ? `${p.skills.filter((s) => s.enabled).length} skill · ${p.scope === "org" ? tr("for everyone") : tr("personal")}` : `${x.skillCount} skill · ${x.license}`}</span></div></div>
               <p>{x.tagline}</p>
               {p ? <button className="btn" onClick={() => setOpen(p.id)}>Manage</button> : d.canInstall ? <button className="btn dark" onClick={() => setPv({ catalogId: x.catalogId, name: x.name })}>Install</button> : <span className="d">Ask an administrator to install it.</span>}
             </div>
@@ -224,7 +229,7 @@ export function PluginsPanel() {
           <div className="pl-inst">
             {d.plugins.map((p) => (
               <button key={p.id} className={`pl-li ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)}>
-                <PlugMark name={p.name} color={p.color} size={36} />
+                <PlugMark id={p.catalogId} size={36} />
                 <span className="pl-li-t"><b data-notr>{p.name}</b><span>{p.skills.length} skill · {mb(p.size)} · {p.scope === "org" ? tr("for everyone") : tr("personal")}{p.studio ? ` · ${STUDIO[p.studio]} studio` : ""}{p.mine.everywhere ? ` · ${tr("every chat")}` : ""}</span></span>
                 {p.updateAvailable && <Badge kind="mid">Update</Badge>}
                 <Badge kind={RISK[p.risk][1]}>{RISK[p.risk][0]}</Badge>
@@ -239,7 +244,7 @@ export function PluginsPanel() {
       <div className="pl-grid">
         {more.map((x) => (
           <div key={x.catalogId} className="pl-card">
-            <div className="pl-card-h"><PlugMark name={x.name} color={x.color} /><div><b data-notr>{x.name}</b><span>{x.author} · {x.skillCount} skill · {x.license}</span></div></div>
+            <div className="pl-card-h"><PlugMark id={x.catalogId} /><div><b data-notr>{x.name}</b><span>{x.author} · {x.skillCount} skill · {x.license}</span></div></div>
             <p>{x.tagline}</p>
             {installed.has(x.catalogId) ? <button className="btn" onClick={() => setOpen(d.plugins.find((p) => p.catalogId === x.catalogId)!.id)}>Manage</button>
               : d.canInstall ? <button className="btn" onClick={() => setPv({ catalogId: x.catalogId, name: x.name })}>Install</button> : null}
