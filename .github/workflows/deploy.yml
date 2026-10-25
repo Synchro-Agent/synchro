@@ -49,7 +49,8 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
           { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
-            for f in tsc.log build.log tests.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -120 $f; }; done; } > ci.txt
+            [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
+            for f in tsc.log build.log tests.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
           scp -i ~/.ssh/id_deploy ci.txt ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ci-status/${{ github.ref_name }}.txt || true
 
   deploy:

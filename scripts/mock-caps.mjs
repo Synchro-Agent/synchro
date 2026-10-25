@@ -556,9 +556,34 @@ function artifactAi(q) {
 }
 
 // Trả về { text } (trả lời luôn) hoặc { tool: { name, args } } (gọi công cụ), hoặc null.
+// "Chỉ và sửa": người dùng chỉ vào một phần tử trong artifact và yêu cầu sửa riêng phần đó → phiên bản mới, chỉ phần đó đổi.
+function pointEdit(q, msgs) {
+  const prev = lastArtifact(msgs);
+  const blk = /<point_edit>([\s\S]*?)<\/point_edit>/.exec(q);
+  if (!prev || !blk) return null;
+  const get = (k) => new RegExp(`${k}:\\s*([^\\n]*)`).exec(blk[1])?.[1]?.trim() ?? "";
+  const sel = get("vị trí"), shown = get("nội dung đang hiện");
+  const req = /Yêu cầu:\s*([\s\S]*)$/.exec(q)?.[1]?.trim() ?? "";
+  let body = prev.body, what = "";
+  const to = /(?:thành|sang|là)\s*["“'](.+?)["”']\s*$/i.exec(req) ?? /(?:thành|sang|là)\s+(.+)$/i.exec(req);
+  if (to && shown && !/\bmàu\b/i.test(req)) {
+    const old = shown.split("\n")[0].trim();
+    if (body.includes(old)) { body = body.replace(old, to[1].trim()); what = `đổi nội dung “${old.slice(0, 40)}” thành “${to[1].trim()}”`; }
+  }
+  if (!what && /màu|mau/i.test(req)) {
+    const color = /đỏ|do\b/i.test(req) ? "#dc2626" : /xanh lá|xanh la/i.test(req) ? "#16a34a" : /cam/i.test(req) ? "#ea580c" : "#2563eb";
+    body = body.replace(/(<\/style>)/, `  ${sel}{color:${color}!important}\n$1`);
+    what = `đổi màu phần tử ${sel.split(" > ").pop()}`;
+  }
+  if (!what && /(ẩn|xóa|xoá|bỏ)/i.test(req)) { body = body.replace(/(<\/style>)/, `  ${sel}{display:none!important}\n$1`); what = `ẩn phần tử ${sel.split(" > ").pop()}`; }
+  if (!what) return null;
+  return `Mình chỉ sửa đúng phần bạn chỉ vào (${what}), mọi phần khác giữ nguyên:\n\n${art(prev.ident, prev.type, prev.title, body)}`;
+}
+
 export function capsReply(sys, q, msgs, toolNames) {
   const t = norm(q);
   const s = String(sys ?? "");
+  if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
   if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }
   if (s.includes("<artifacts>")) { const a = artifactReply(t, s, msgs); if (a) return { text: a }; }
@@ -654,6 +679,7 @@ function routeStep(S, M, q, toolNames) {
   return product(st, `Mình đã tự chọn và đọc skill **${want.map((w) => w.name).join("**, **")}**${want[0].label ? ` (thư viện ${want[0].label})` : ""} rồi áp dụng.`, q);
 }
 export function studioStep(sys, msgsJson, q, toolNames) {
+  if (String(q ?? "").includes("<point_edit>")) return null; // sửa đúng một phần tử: làm luôn, không đọc skill
   const S = String(sys ?? ""), M = String(msgsJson ?? "");
   const m = /<studio name=\\?"(design|slides|docs)\\?">/.exec(S) ?? /<studio name=\\?"(design|slides|docs)\\?">/.exec(M);
   if (!m) {

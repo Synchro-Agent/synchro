@@ -1105,3 +1105,10 @@ Object.assign(VI2EN, {
 Object.assign(EN2VI, {
   "Xuất bản thành ứng dụng": "Xuất bản thành ứng dụng", "Chép đường dẫn": "Chép đường dẫn", "Gỡ ứng dụng": "Gỡ ứng dụng",
 });
+// Chỉ và sửa, so sánh phiên bản
+Object.assign(VI2EN, {
+  "Song song": "Side by side", "Mã thay đổi": "Code changes", "đang xem": "viewing", "Hai phiên bản giống hệt nhau": "The two versions are identical",
+  "Sửa artifact": "Edit artifact", "chỉ thay đổi đúng phần tử tôi chỉ vào, giữ nguyên mọi phần khác.": "change only the element I pointed at and keep everything else.",
+  "Bấm vào phần muốn sửa trong khung xem trước": "Click the part you want to change in the preview", "Thoát": "Exit", "Muốn sửa gì ở phần này?": "What should change here?", "Sửa phần này": "Edit this part",
+});
+Object.assign(EN2VI, { "So sánh với bản trước": "So sánh với bản trước", "Chỉ vào phần muốn sửa": "Chỉ vào phần muốn sửa", "Chỉ và sửa": "Chỉ và sửa" });

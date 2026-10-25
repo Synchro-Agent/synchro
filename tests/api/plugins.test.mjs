@@ -38,7 +38,8 @@ ok(ds && ds.scope === "org" && ds.skills.length >= 25, `Design Studio: ${ds?.ski
 ok(byStudio("slides")?.skills.length >= 5 && byStudio("docs")?.skills.length >= 4, `Slides ${byStudio("slides")?.skills.length} skill, Docs ${byStudio("docs")?.skills.length} skill`);
 ok(ds.skills.every((s) => s.report.licenseKind === "open" || s.report.repo === "upload"), "mọi skill có giấy phép mở", JSON.stringify(ds.skills.filter((s) => s.report.licenseKind !== "open").map((s) => [s.name, s.report.license])));
 ok(ds.skills.some((s) => s.name === "awesome-design-html" && s.report.files > 100), "skill nhiều file (118 mẫu HTML) cài được", JSON.stringify(ds.skills.find((s) => s.name === "awesome-design-html")?.report));
-ok(ds.skills.some((s) => s.name === "vox-animation"), "đã thêm skill Vox Animation từ file zip vào Design Studio", ds.skills.map((s) => s.name).join(","));
+// Skill Vox chỉ được cài khi máy có ~/Downloads/Vox Animations.zip (dev:mock tự thêm lúc khởi tạo).
+if ((await import("node:fs")).existsSync(`${process.env.HOME}/Downloads/Vox Animations.zip`)) ok(ds.skills.some((s) => s.name === "vox-animation"), "đã thêm skill Vox Animation từ file zip vào Design Studio", ds.skills.map((s) => s.name).join(","));
 ok(new Set(ds.skills.map((s) => s.name)).size === ds.skills.length, "không có skill trùng tên");
 
 console.log("2. Xem trước: giấy phép và rủi ro");

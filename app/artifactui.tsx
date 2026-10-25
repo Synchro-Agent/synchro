@@ -49,8 +49,17 @@ if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(functio
 else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
 var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWidth)):2;
 htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
+else if(d.t==="pick"){pk=!!d.on;document.documentElement.style.cursor=pk?"crosshair":"";if(!pk&&hl)hl.style.display="none"}
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
 else if(d.t==="present")window.__sxPresent=!!d.on});
+// Chỉ và sửa: Synchro bật chế độ chọn, rê chuột thì viền phần tử, bấm thì gửi vị trí + mã của đúng phần tử đó (Esc để thoát).
+var pk=false,hl=null;
+function box(){if(hl)return hl;hl=document.createElement("div");hl.setAttribute("data-sx-noprint","");hl.style.cssText="position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #2f7bf6;border-radius:4px;background:rgba(47,123,246,.08);display:none";document.documentElement.appendChild(hl);return hl}
+function where(el){var p=[];while(el&&el.nodeType===1&&el!==document.body&&el!==document.documentElement&&p.length<6){var s=el.tagName.toLowerCase();if(el.id&&/^[A-Za-z][\\w-]*$/.test(el.id)){p.unshift(s+"#"+el.id);break}var i=1,x=el;while((x=x.previousElementSibling))if(x.tagName===el.tagName)i++;p.unshift(s+":nth-of-type("+i+")");el=el.parentElement}return p.join(" > ")}
+addEventListener("mouseover",function(e){if(!pk||e.target===hl)return;var r=e.target.getBoundingClientRect(),b=box();b.style.display="block";b.style.left=r.left+"px";b.style.top=r.top+"px";b.style.width=r.width+"px";b.style.height=r.height+"px"},true);
+addEventListener("click",function(e){if(!pk)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();var el=e.target;if(el===document.body||el===document.documentElement)return;
+post({t:"picked",sel:where(el),tag:el.tagName.toLowerCase(),text:String(el.innerText||el.textContent||"").replace(/\\s+/g," ").trim().slice(0,200),html:el.outerHTML.slice(0,1500)})},true);
+addEventListener("keydown",function(e){if(pk&&e.key==="Escape"){e.preventDefault();post({t:"picked",cancel:true})}},true);
 addEventListener("error",function(e){post({t:"error",message:String(e.message||(e.error&&e.error.message)||"Lỗi không rõ"),line:e.lineno||0})});
 addEventListener("unhandledrejection",function(e){var r=e.reason;post({t:"error",message:String(r&&r.message||r)})});
 var last=0;function h(f){var v=Math.ceil(Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0));if(f||v!==last){last=v;post({t:"height",h:v})}}
@@ -149,7 +158,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
       const d = e.data as { __synchro?: string; t?: string; id?: number; prompt?: unknown; message?: string; h?: number; op?: string; key?: unknown; value?: unknown; shared?: boolean; prefix?: unknown };
       if (!d || d.__synchro !== ch) return;
       if (d.t === "height" && typeof d.h === "number") cb.current.onHeight?.(d.h);
-      else if (d.t === "slides" || d.t === "png" || d.t === "ready") cb.current.onMsg?.(d as FrameMsg);
+      else if (d.t === "slides" || d.t === "png" || d.t === "ready" || d.t === "picked") cb.current.onMsg?.(d as FrameMsg);
       else if (d.t === "error") cb.current.onError?.(String(d.message ?? "").slice(0, 500));
       else if (d.t === "complete") {
         const res = (m: Record<string, unknown>) => w.postMessage({ __synchro: ch, t: "res", id: d.id, ...m }, "*");
@@ -346,6 +355,61 @@ function DeckView({ art, ai, onError, onMsg, ctl, store }: { art: ArtVersion; ai
   );
 }
 
+// ---------------------------------------------------------------- so sánh hai phiên bản
+// Khác biệt theo dòng (dãy con chung dài nhất). Mã dài quá thì so theo khối đầu / cuối giống nhau rồi coi phần giữa là thay hết.
+type DiffLine = { k: " " | "+" | "-"; t: string };
+export function lineDiff(a: string, b: string): DiffLine[] {
+  const A = a.split("\n"), B = b.split("\n");
+  let s = 0; while (s < A.length && s < B.length && A[s] === B[s]) s++;
+  let e = 0; while (e < A.length - s && e < B.length - s && A[A.length - 1 - e] === B[B.length - 1 - e]) e++;
+  const a2 = A.slice(s, A.length - e), b2 = B.slice(s, B.length - e);
+  const head: DiffLine[] = A.slice(0, s).map((t) => ({ k: " ", t })), tail: DiffLine[] = A.slice(A.length - e).map((t) => ({ k: " ", t }));
+  if (a2.length * b2.length > 4_000_000) return [...head, ...a2.map((t) => ({ k: "-" as const, t })), ...b2.map((t) => ({ k: "+" as const, t })), ...tail];
+  const n = a2.length, m = b2.length, L = new Int32Array((n + 1) * (m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i * (m + 1) + j] = a2[i] === b2[j] ? L[(i + 1) * (m + 1) + j + 1] + 1 : Math.max(L[(i + 1) * (m + 1) + j], L[i * (m + 1) + j + 1]);
+  const mid: DiffLine[] = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a2[i] === b2[j]) { mid.push({ k: " ", t: a2[i] }); i++; j++; }
+    else if (L[(i + 1) * (m + 1) + j] >= L[i * (m + 1) + j + 1]) mid.push({ k: "-", t: a2[i++] });
+    else mid.push({ k: "+", t: b2[j++] });
+  }
+  while (i < n) mid.push({ k: "-", t: a2[i++] });
+  while (j < m) mid.push({ k: "+", t: b2[j++] });
+  return [...head, ...mid, ...tail];
+}
+
+function CompareView({ a, b, ai, na, nb }: { a: ArtVersion; b: ArtVersion; ai: boolean; na: number; nb: number }) {
+  const live = a.type !== "code" && a.type !== "markdown" && a.type !== "mermaid";
+  const [mode, setMode] = useState<"side" | "diff">(live ? "side" : "diff");
+  const d = useMemo(() => (mode === "diff" ? lineDiff(a.content, b.content) : []), [mode, a.content, b.content]);
+  const add = d.filter((x) => x.k === "+").length, del = d.filter((x) => x.k === "-").length;
+  // Mã dài: chỉ hiện các dòng đổi kèm 3 dòng xung quanh.
+  const keep = new Set<number>();
+  d.forEach((x, i) => { if (x.k !== " ") for (let k = Math.max(0, i - 3); k <= Math.min(d.length - 1, i + 3); k++) keep.add(k); });
+  return (
+    <div className="cmp">
+      <div className="cmp-bar">
+        <div className="art-tabs">{live && <button className={mode === "side" ? "on" : ""} onClick={() => setMode("side")}>{tr("Song song")}</button>}<button className={mode === "diff" ? "on" : ""} onClick={() => setMode("diff")}>{tr("Mã thay đổi")}</button></div>
+        {mode === "diff" && <span className="cmp-n"><b className="add">+{add}</b> <b className="del">−{del}</b></span>}
+      </div>
+      {mode === "side" ? (
+        <div className="cmp-side">
+          {[[a, na], [b, nb]].map(([v, n]) => (
+            <div key={n as number} className="cmp-col">
+              <div className="cmp-h">{tr("Phiên bản")} {n as number}{n === nb ? ` · ${tr("đang xem")}` : ""}</div>
+              <ArtifactFrame type={(v as ArtVersion).type} content={(v as ArtVersion).content} ai={ai} title={(v as ArtVersion).title} className="art-frame" deck={isDeck(v as ArtVersion) ? { fixed: 0 } : undefined} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <pre className="art-code cmp-diff">{d.map((x, i) => keep.has(i) ? <div key={i} className={x.k === "+" ? "add" : x.k === "-" ? "del" : ""}><span>{x.k === " " ? "" : x.k}</span>{x.t || " "}</div>
+          : keep.has(i - 1) ? <div key={i} className="gap"><span>⋯</span></div> : null)}{!add && !del && <div className="gap"><span />{tr("Hai phiên bản giống hệt nhau")}</div>}</pre>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- khung xem bên cạnh
 // conv: đoạn chat chứa artifact (để artifact lưu được dữ liệu thử bằng window.storage); extra: nút thêm trên đầu khung theo phiên bản đang xem.
 export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher, conv, extra }: {
@@ -360,10 +424,17 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const send = useRef<FrameSend | null>(null);
   const body = useRef<HTMLDivElement>(null);
   const pending = useRef<Map<number, (d: FrameMsg) => void>>(new Map());
+  // Chỉ và sửa: đang chọn phần tử / phần tử đã chọn và yêu cầu sửa. So sánh: bản trước và bản đang xem.
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<{ sel: string; tag: string; text: string; html: string } | null>(null);
+  const [req, setReq] = useState("");
+  const [compare, setCompare] = useState(false);
   const runnable = art.type !== "code";
   const showCode = tab === "code" || !runnable || !art.complete;
   const deck = art.complete && isDeck(art);
   useEffect(() => { setErr(""); }, [art.content, reload]);
+  useEffect(() => { setPicking(false); setPicked(null); setReq(""); }, [art.content]);
+  useEffect(() => { if (index <= 0) setCompare(false); }, [index]);
   useEffect(() => { if (!runnable) setTab("code"); }, [runnable]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === "Escape" && expanded) setExpanded(false); };
@@ -388,7 +459,24 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
     pending.current.set(id, (d) => { clearTimeout(t); d.error ? no(new Error(String(d.error))) : ok(d); });
     send.current({ ...m, id });
   });
-  const onMsg = (d: FrameMsg) => { const f = pending.current.get(d.id as number); if (f) { pending.current.delete(d.id as number); f(d); } };
+  const onMsg = (d: FrameMsg) => {
+    if (d.t === "picked") { send.current?.({ t: "pick", on: false }); setPicking(false); if (!d.cancel) { setPicked({ sel: String(d.sel ?? ""), tag: String(d.tag ?? ""), text: String(d.text ?? ""), html: String(d.html ?? "") }); setReq(""); } return; }
+    const f = pending.current.get(d.id as number); if (f) { pending.current.delete(d.id as number); f(d); }
+  };
+  const canPick = !!onAsk && art.complete && !showCode && !compare && ["html", "react", "svg"].includes(art.type);
+  const togglePick = () => { const on = !picking; setPicking(on); setPicked(null); send.current?.({ t: "pick", on }); };
+  // Yêu cầu sửa đúng phần tử: gửi vị trí, nội dung và mã của phần tử để model chỉ đổi đúng chỗ đó (phiên bản mới cùng identifier).
+  const askEdit = () => {
+    if (!picked || !req.trim() || !onAsk) return;
+    onAsk(`${tr("Sửa artifact")} “${art.title}” (identifier="${art.ident}"): ${tr("chỉ thay đổi đúng phần tử tôi chỉ vào, giữ nguyên mọi phần khác.")}
+<point_edit>
+vị trí: ${picked.sel}
+nội dung đang hiện: ${picked.text.slice(0, 200)}
+mã của phần tử: ${picked.html.slice(0, 1200)}
+</point_edit>
+Yêu cầu: ${req.trim()}`);
+    setPicked(null); setReq("");
+  };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
   const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture" }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
   const shown = (sel: string) => { const el = body.current?.querySelector(sel); if (!el) throw new Error(tr("Chưa hiện xong nội dung")); return el; };
@@ -418,10 +506,12 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
             <button className="icon-btn" disabled={index <= 0} onClick={() => setIndex(index - 1)} aria-label="Phiên bản trước"><span className="flip"><I.ChevronR size={14} /></span></button>
             <span title={`${tr("Phiên bản")} ${index + 1}/${versions.length}`}>{index + 1}/{versions.length}</span>
             <button className="icon-btn" disabled={index >= versions.length - 1} onClick={() => setIndex(index + 1)} aria-label="Phiên bản sau"><I.ChevronR size={14} /></button>
+            {art.complete && index > 0 && <button className={`icon-btn ${compare ? "on" : ""}`} onClick={() => setCompare(!compare)} aria-label="So sánh với bản trước" data-tip="So sánh với bản trước" aria-pressed={compare}><I.Compare size={15} /></button>}
           </div>
         )}
         {runnable && <div className="art-tabs"><button className={!showCode ? "on" : ""} disabled={!art.complete} onClick={() => setTab("preview")}>{tr("Xem trước")}</button><button className={showCode ? "on" : ""} onClick={() => setTab("code")}>{tr("Mã")}</button></div>}
         <div className="art-acts">
+          {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.Check size={15} /> : <I.Copy size={15} />}</button>
           {art.complete && extra?.(art)}
@@ -436,8 +526,10 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
       {err && !showCode && (
         <div className="art-err"><span><b>{tr("Artifact gặp lỗi")}</b>{err}</span>{onFix && <button className="btn" onClick={() => onFix(art, err)}>{tr("Nhờ Synchro sửa")}</button>}</div>
       )}
-      <div className={`art-body ${deck && !showCode ? "is-deck" : ""}`} ref={body}>
-        {showCode ? (
+      <div className={`art-body ${deck && !showCode && !compare ? "is-deck" : ""}`} ref={body}>
+        {compare && index > 0 ? (
+          <CompareView a={versions[index - 1]} b={art} ai={ai} na={index} nb={index + 1} />
+        ) : showCode ? (
           <pre className="art-code">{lines.map((l, i) => <div key={i}><span>{i + 1}</span>{l || " "}</div>)}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
         ) : deck ? (
           <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
@@ -449,6 +541,17 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
           <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
         )}
       </div>
+      {picking && <div className="pe-bar pe-hint"><I.Pointer size={15} /><span>{tr("Bấm vào phần muốn sửa trong khung xem trước")}</span><button className="btn" onClick={togglePick}>{tr("Thoát")}</button></div>}
+      {picked && (
+        <form className="pe-bar" onSubmit={(e) => { e.preventDefault(); askEdit(); }}>
+          <div className="pe-what"><code data-notr>{`<${picked.tag}>`}</code><span data-notr>{picked.text || picked.sel}</span></div>
+          <div className="pe-in">
+            <input autoFocus value={req} onChange={(e) => setReq(e.target.value)} placeholder={tr("Muốn sửa gì ở phần này?")} onKeyDown={(e) => { if (e.key === "Escape") setPicked(null); }} />
+            <button type="button" className="btn" onClick={() => setPicked(null)}>{tr("Hủy")}</button>
+            <button className="btn dark" disabled={!req.trim()}>{tr("Sửa phần này")}</button>
+          </div>
+        </form>
+      )}
       {footer}
     </aside>
   );
