@@ -16,6 +16,16 @@ const last = () => fetch(`${LLM}/_debug/last`).then((r) => r.json());
 const M = "anthropic/claude-sonnet-5-5";
 const ask = (body) => api("POST", "/api/llm", { system: "", max_tokens: 1500, skills: true, model: M, ...body });
 const block = (j, k) => j.blocks.find((b) => b.key === k);
+// Gợi ý skill theo câu hỏi chỉ có khi tài khoản có skill đang bật: tạo một skill thử (xóa khi xong).
+const SKILL = "mixer-cafe-landing";
+const upload = (name, desc) => {
+  const fd = new FormData();
+  fd.append("file", new Blob([`---\nname: ${name}\ndescription: ${JSON.stringify(desc)}\n---\n\n# ${name}\n\nHướng dẫn thử.\n`]), "SKILL.md");
+  return fetch(B + "/api/skills", { method: "POST", headers: { origin: B, cookie }, body: fd }).then((r) => r.json());
+};
+await api("DELETE", `/api/skills/${SKILL}`);
+const up = await upload(SKILL, "Thiết kế trang web, landing page cho quán cà phê và nhà hàng: bố cục, màu sắc, thực đơn.");
+if (up.skill && !up.skill.enabled) await api("PATCH", `/api/skills/${SKILL}`, { enabled: true });
 
 console.log("1. Ước tính token từng khối");
 const ART = `Đây là trang:\n\n<artifact identifier="trang" type="text/html" title="Trang">\n<!doctype html><title>T</title>\n${"<p>đoạn văn dài</p>\n".repeat(200)}</artifact>`;
@@ -66,5 +76,6 @@ L = (await last()).anthropic;
 ok(JSON.stringify(L.messages[0]).includes("<conversation_summary>"), "lượt thật: tóm tắt đặt ở đầu tin nhắn đầu tiên", JSON.stringify(L.messages[0]).slice(0, 200));
 ok((await fetch(`${B}/api/context/compact`, { method: "POST", headers: { "content-type": "application/json", origin: B }, body: "{}" })).status === 401, "chưa đăng nhập → 401");
 
+await api("DELETE", `/api/skills/${SKILL}`);
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
