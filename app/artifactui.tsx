@@ -43,7 +43,8 @@ function lib(u,cb){if(window.htmlToImage)return cb(true);var n=0;(function tryLo
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
 if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
 else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
-htmlToImage.toPng(el,{pixelRatio:2,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
+var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWidth)):2;
+htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
 else if(d.t==="present")window.__sxPresent=!!d.on});
 addEventListener("error",function(e){post({t:"error",message:String(e.message||(e.error&&e.error.message)||"Lỗi không rõ"),line:e.lineno||0})});
@@ -67,9 +68,10 @@ function show(i){S=find();if(!S.length){post({t:"slides",n:0,cur:0});return}cur=
 S.forEach(function(el,k){el.setAttribute("data-sx-slide","");if(k===cur){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","");CL.forEach(function(c){el.classList.add(c)})}else{el.setAttribute("data-sx-hide","");el.removeAttribute("data-sx-on");CL.forEach(function(c){el.classList.remove(c)})}});
 if(fixed===null)post({t:"slides",n:S.length,cur:cur})}
 window.__sxGo=function(i){show(i)};window.__sxCur=function(){return S[cur]||null};
-window.__sxPrint=function(){S=find();S.forEach(function(el){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","")});
-[].forEach.call(document.body.querySelectorAll("*"),function(el){if(S.indexOf(el)<0&&!S.some(function(s){return s.contains(el)||el.contains(s)})&&getComputedStyle(el).position==="fixed")el.setAttribute("data-sx-noprint","")});
-setTimeout(function(){print();show(cur)},60)};
+function reveal(){S=find();S.forEach(function(el){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","")});
+[].forEach.call(document.body.querySelectorAll("*"),function(el){if(S.indexOf(el)<0&&!S.some(function(s){return s.contains(el)||el.contains(s)})&&getComputedStyle(el).position==="fixed")el.setAttribute("data-sx-noprint","")})}
+window.__sxPrint=function(){reveal();setTimeout(function(){print();show(cur)},60)};
+addEventListener("beforeprint",reveal);addEventListener("afterprint",function(){show(cur)});
 if(fixed===null){addEventListener("keydown",function(e){var k=e.key,n=["ArrowRight","ArrowDown","PageDown"," ","Enter"].indexOf(k)>=0?1:["ArrowLeft","ArrowUp","PageUp","Backspace"].indexOf(k)>=0?-1:0;
 if(k==="Home"||k==="End"){e.preventDefault();e.stopImmediatePropagation();show(k==="Home"?0:1e9);return}if(n){e.preventDefault();e.stopImmediatePropagation();show(cur+n)}},true);
 addEventListener("click",function(e){if(e.target.closest&&e.target.closest("a,button,input,select,textarea,label,[onclick]"))return;e.stopImmediatePropagation();if(window.__sxPresent)show(cur+(e.clientX>innerWidth/3?1:-1))},true)}
@@ -81,21 +83,27 @@ function csp(origin: string) {
 }
 const BASE_CSS = `<style>:root{color-scheme:light dark}html,body{margin:0}body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>`;
 
-export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean, deck?: { fixed: number | null }): string {
+// Chèn vào <head> của trang (hoặc bọc trang nếu model chỉ viết phần thân).
+function withHead(content: string, head: string) {
+  if (/<head[^>]*>/i.test(content)) return content.replace(/<head[^>]*>/i, (m) => m + head);
+  if (/<html[^>]*>/i.test(content)) return content.replace(/<html[^>]*>/i, (m) => `${m}<head>${head}</head>`);
+  return `<!doctype html><html><head>${head}${BASE_CSS}</head><body>${content}</body></html>`;
+}
+// Tệp HTML tải về của bản trình bày: mở bằng trình duyệt là trình chiếu được (phím mũi tên, bấm chuột), in ra mỗi slide một trang.
+export const deckExport = (content: string) => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`);
+
+export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean, deck?: { fixed: number | null }, title = ""): string {
   const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${csp(origin)}${bridge(ch, origin)}${deck && type === "html" ? `<script>window.__sxCh=${JSON.stringify(ch)}</script>${deckRuntime(deck.fixed)}` : ""}`;
-  if (type === "html") {
-    // Chèn CSP + cầu nối vào <head> của trang (hoặc bọc trang nếu model chỉ viết phần thân).
-    if (/<head[^>]*>/i.test(content)) return content.replace(/<head[^>]*>/i, (m) => m + head);
-    if (/<html[^>]*>/i.test(content)) return content.replace(/<html[^>]*>/i, (m) => `${m}<head>${head}</head>`);
-    return `<!doctype html><html><head>${head}${BASE_CSS}</head><body>${content}</body></html>`;
-  }
+  // Chèn CSP + cầu nối; trang HTML giữ tiêu đề của chính nó, React / SVG lấy tên artifact (tên mặc định khi lưu PDF).
+  if (type === "html") return withHead(content, head);
+  const titled = title ? `${head}<title>${htmlEsc(title)}</title>` : head;
   if (type === "svg") {
-    return `<!doctype html><html><head>${head}<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${dark ? "#1b1b1b" : "#fff"}}svg{max-width:100%;max-height:100vh;height:auto}</style></head><body>${content}</body></html>`;
+    return `<!doctype html><html><head>${titled}<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${dark ? "#1b1b1b" : "#fff"}}svg{max-width:100%;max-height:100vh;height:auto}</style></head><body>${content}</body></html>`;
   }
   // React: tải thư viện theo thứ tự, dịch JSX/TSX bằng Babel trong khung, import được react, recharts, lucide-react; có Tailwind.
   const libs = LIBS.map(([f, cdn, sri]) => [`${origin}${V}${f}`, `https://cdn.jsdelivr.net/npm/${cdn}`, sri]);
   const loading = `<style>.__ld{position:fixed;inset:0;display:grid;place-items:center}.__ld i{width:22px;height:22px;border-radius:50%;border:2px solid #d6d6d0;border-top-color:#545452;animation:__s .8s linear infinite}@keyframes __s{to{transform:rotate(360deg)}}</style><div class="__ld"><i></i></div>`;
-  return `<!doctype html><html><head>${head}${BASE_CSS}</head><body><div id="root">${loading}</div>
+  return `<!doctype html><html><head>${titled}${BASE_CSS}</head><body><div id="root">${loading}</div>
 <script>(function(){var src=${esc(JSON.stringify(content))},libs=${JSON.stringify(libs)},i=0;
 function load(u,sri,cb){var s=document.createElement("script");s.src=u;s.crossOrigin="anonymous";s.integrity=sri;s.onload=function(){cb(true)};s.onerror=function(){s.remove();cb(false)};document.head.appendChild(s)}
 function next(){if(i>=libs.length)return run();var l=libs[i++];load(l[0],l[2],function(ok){if(ok)return step();load(l[1],l[2],function(ok2){if(!ok2)throw new Error("Không tải được thư viện cho artifact. Kiểm tra kết nối mạng rồi bấm Chạy lại.");step()})})}
@@ -123,7 +131,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
   const deckKey = deck ? String(deck.fixed) : "";
-  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck), [type, content, ch, deckKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck, title), [type, content, ch, deckKey, title]); // eslint-disable-line react-hooks/exhaustive-deps
   const cb = useRef({ onError, onHeight, ai, onMsg });
   cb.current = { onError, onHeight, ai, onMsg };
   useEffect(() => { ctl?.((m) => ref.current?.contentWindow?.postMessage({ ...m, __synchro: ch }, "*"), ref.current); });
@@ -203,7 +211,18 @@ export function saveBlob(data: Blob, name: string) {
 const htmlEsc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const baseName = (a: { title: string; type: ArtType; lang: string | null }) => artFileName(a).replace(/\.[^.]+$/, "");
 // Nội dung đã hiện (tài liệu, sơ đồ) bỏ các nút giao diện như "Sao chép" trước khi xuất.
-const cleanHtml = (el: Element) => { const c = el.cloneNode(true) as Element; c.querySelectorAll("button,[data-noexport]").forEach((x) => x.remove()); return c.innerHTML; };
+// Khung chat hiện mọi tiêu đề bằng h3 và bọc từng chữ trong <span> (hiệu ứng chữ chạy): xuất thì gỡ các span đó
+// và trả tiêu đề về đúng cấp theo bản Markdown gốc, để Word nhận ra Tiêu đề 1 / 2 / 3.
+const cleanHtml = (el: Element, md = "") => {
+  const c = el.cloneNode(true) as Element;
+  c.querySelectorAll("button,[data-noexport]").forEach((x) => x.remove());
+  [...c.querySelectorAll("span")].reverse().forEach((x) => { if (!x.attributes.length || (x.attributes.length === 1 && x.className === "w")) x.replaceWith(...x.childNodes); });
+  const lv = md.replace(/```[\s\S]*?```/g, "").split("\n").map((l) => /^(#{1,3})\s+\S/.exec(l)?.[1].length).filter((n): n is number => !!n);
+  const hs = [...c.querySelectorAll("h3")];
+  if (hs.length === lv.length) hs.forEach((h, i) => { if (lv[i] === 3) return; const n = document.createElement(`h${lv[i]}`); n.append(...h.childNodes); h.replaceWith(n); });
+  c.normalize();
+  return c.innerHTML;
+};
 const DOC_CSS = `body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:11pt;line-height:1.55;color:#1f1f1f;max-width:720px;margin:0 auto;padding:24px}
 h1{font-size:22pt;margin:0 0 12pt}h2{font-size:16pt;margin:18pt 0 8pt}h3{font-size:13pt;margin:14pt 0 6pt}table{border-collapse:collapse;margin:8pt 0}td,th{border:1px solid #bbb;padding:5pt 8pt;text-align:left}th{background:#f2f2f2}
 code{font-family:Consolas,Menlo,monospace;font-size:10pt}pre{background:#f6f6f6;padding:10pt;border-radius:6px;white-space:pre-wrap}blockquote{border-left:3px solid #ccc;margin:8pt 0;padding-left:12pt;color:#555}img,svg{max-width:100%}`;
@@ -362,13 +381,13 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   if (deck) {
     items.push({ label: "PDF", sub: "Mỗi slide một trang (chọn Lưu thành PDF)", run: pdfFrame });
     if (onAsk) items.push({ label: "PowerPoint (.pptx)", sub: "Synchro tạo tệp chỉnh sửa được", run: () => onAsk(`${tr("Hãy xuất bản trình bày")} “${art.title}” ${tr("thành tệp PowerPoint (.pptx) chỉnh sửa được, giữ nguyên nội dung, thứ tự và bố cục từng slide.")}`) });
-    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: source }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
+    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: () => { const n = artFileName(art); saveBlob(new Blob([deckExport(art.content)], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
   } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: "Ảnh toàn trang", run: pngFrame });
-  else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", art.content, location.origin, "export", false)], { type: "text/html" }), n); done(n); } },
+  else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", art.content, location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
     { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: pngFrame }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
   else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(art.content), `${name}.png`); done(`${name}.png`); } });
-  else if (art.type === "markdown") items.push({ label: "Word (.doc)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(() => { const n = `${name}.doc`; saveBlob(new Blob(["\ufeff", wordDoc(art.title, cleanHtml(shown(".art-md")))], { type: "application/msword" }), n); done(n); }) },
-    { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md")))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
+  else if (art.type === "markdown") items.push({ label: "Word (.doc)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(() => { const n = `${name}.doc`; saveBlob(new Blob(["\ufeff", wordDoc(art.title, cleanHtml(shown(".art-md"), art.content))], { type: "application/msword" }), n); done(n); }) },
+    { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md"), art.content))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
   else if (art.type === "mermaid") items.push({ label: "SVG", sub: "Sơ đồ dạng vector", run: () => withPreview(() => { const n = `${name}.svg`; saveBlob(new Blob([shown(".art-mermaid svg").outerHTML], { type: "image/svg+xml" }), n); done(n); }, 1200) },
     { label: "PNG", sub: "Ảnh sơ đồ", run: () => withPreview(async () => { saveBlob(await svgToPng(shown(".art-mermaid svg").outerHTML), `${name}.png`); done(`${name}.png`); }, 1200) }, { label: "Mermaid", sub: "Mã nguồn sơ đồ", run: source });
   else items.push({ label: tr("Tệp mã nguồn"), sub: artFileName(art), run: source });
