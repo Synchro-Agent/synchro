@@ -3308,9 +3308,10 @@ body{font-weight:400;text-rendering:optimizeLegibility}
 .pl-mi b,.art-dl-t b{font-weight:480;color:var(--ink-strong)}
 .pl-mi em,.art-dl-t em{color:var(--text-3)}
 
-/* Icon: nét 1px thật trên màn hình (Retina: đúng 2 điểm ảnh, không nhòe), nhìn mảnh như nét chữ đứng cạnh; vẽ trên lưới 16, 20 hay 24 đều như nhau */
+/* Icon: nét đúng bằng thân chữ đứng cạnh (đo trên Anthropic Sans 14px: đậm 430 → 1.34px, đậm 500 → 1.5px); vẽ trên lưới 16, 20 hay 24 đều như nhau */
 .nav-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .s-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .menu-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .icon-btn svg :is(path,circle,rect,line,polyline,polygon,ellipse),
-.pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:1px}
+.pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:1.34px}
+.nav-item.active svg :is(path,circle,rect,line,polyline,polygon,ellipse),.s-item.on svg :is(path,circle,rect,line,polyline,polygon,ellipse){stroke-width:1.5px}
