@@ -3254,3 +3254,8 @@ html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--ca
 .prod-ic{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;background:var(--hover);color:var(--text-2);font-size:11px;flex:none}
 @media (max-width:600px){.deck-th-in{width:104px;height:58.5px}.deck-th-frame{transform:scale(.08125)}.prod-btn{display:none}}
 .fp-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--bg-2,var(--hover));color:var(--text-3);font-size:13px}.fp-loading em{font-style:normal}
+/* Ô "Thêm từ GitHub" dùng chung cho Kỹ năng và Plugins */
+.gh-hint{font-size:12px;line-height:1.5;margin:6px 2px 0;color:var(--text-3)}
+.pl-modal .gh-add .sk-gh{margin-top:4px}
+.pl-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;padding:8px 12px;border-radius:10px;background:var(--hover);font-size:12.5px;line-height:1.5;color:var(--text-2)}
+.pl-note svg{flex:none;margin-top:2px}

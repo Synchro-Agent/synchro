@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang } from "./i18n";
+import { GithubAdd } from "./ghadd";
 
 type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number };
 type FileInfo = { path: string; size: number; kind: string };
@@ -45,6 +46,58 @@ export async function dryRunSkill(f: File): Promise<Preview> {
   return j.preview;
 }
 
+// Xem link GitHub có mấy skill (không lưu gì): một skill → bản xem trước để thêm vào Kỹ năng; nhiều skill → nên cài thành plugin.
+export type Found = { kind: "skill"; src: Src; pv: Preview } | { kind: "bundle"; count: number };
+export async function inspectGithub(url: string): Promise<Found> {
+  const src: Src = { kind: "github", url };
+  const j = await send(src, true);
+  if (j.preview) return { kind: "skill", src: { ...src, pick: (j.preview as Preview & { pick?: string }).pick }, pv: j.preview };
+  const ok = (j.choices ?? []).filter((c) => !c.error);
+  if (!ok.length) throw new Error(j.choices?.length ? j.choices.map((c) => `${c.name || c.dir}: ${c.error}`).join("\n") : "No SKILL.md found at this link.");
+  if (ok.length > 1) return { kind: "bundle", count: ok.length };
+  const one = await send({ ...src, pick: ok[0].dir }, true);
+  return { kind: "skill", src: { ...src, pick: ok[0].dir }, pv: one.preview! };
+}
+
+// Duyệt một skill trước khi thêm. onOrg (chỉ quản trị viên, nguồn GitHub): cài skill này cho cả tổ chức dưới dạng plugin.
+export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; pv: Preview; onClose: () => void; onDone: () => void; onOrg?: () => void }) {
+  const app = useApp();
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const confirm = async () => {
+    setSaving(true); setErr("");
+    try {
+      const j = await send(src, false);
+      app.say(j.created ? `Đã thêm skill ${j.skill!.name}` : `Đã cập nhật ${j.skill!.name} lên v${j.skill!.version}`);
+      window.dispatchEvent(new Event(SKILLS_CHANGED)); onDone();
+    } catch (e) { setErr((e as Error).message); setSaving(false); }
+  };
+  return (
+    <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="sk-modal">
+        <div className="sk-mh"><b>{pv.exists ? `Update ${pv.name} to v${pv.version}` : `Add ${pv.name}`}</b></div>
+        {pv.source && <div className="muted" style={{ fontSize: 12, margin: "-2px 0 8px" }} data-notr>{pv.source}{src.pick ? ` · ${src.pick.split("/").slice(1).join("/")}` : ""}</div>}
+        <p className="d" style={{ margin: "0 0 10px" }}>{pv.description}</p>
+        <div className="sk-note">Skills are instructions the model will follow. Only enable skills from sources you trust, and read the content below first.</div>
+        {pv.warnings.length > 0 && <ul className="sk-wl">{pv.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
+        {err && <div className="sk-err" role="alert"><span>{err}</span></div>}
+        <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>SKILL.md · ~{pv.tokens} tokens</div>
+        <pre className="sk-pre">{pv.body || "(empty)"}</pre>
+        {pv.files.length > 0 && <>
+          <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>{pv.files.length} files</div>
+          <div className="sk-files">{pv.files.map((f) => <div key={f.path}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
+        </>}
+        <div className="sk-actions">
+          {onOrg && <button className="btn" disabled={saving} onClick={onOrg}>Install for everyone</button>}
+          <span style={{ flex: 1 }} />
+          <button className="btn" disabled={saving} onClick={onClose}>Cancel</button>
+          <button className="btn dark" disabled={saving} onClick={confirm}>{saving ? "Saving…" : pv.exists ? "Update and keep state" : "Add and enable"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" | "desc"; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void }> }) {
   const app = useApp();
   const [list, setList] = useState<Item[] | null>(null);
@@ -52,9 +105,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
   const [pending, setPending] = useState<{ src: Src; pv: Preview } | null>(null);
   const [choose, setChoose] = useState<{ src: Src; choices: Choice[] } | null>(null);
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
-  const [gh, setGh] = useState("");
   const [checking, setChecking] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
   const [fileView, setFileView] = useState<{ path: string; text: string } | null>(null);
@@ -76,16 +127,6 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
     } catch (e) { setErr((e as Error).message); } finally { setChecking(false); }
   };
   const pick = (f: File) => check({ kind: "file", file: f });
-  const importGh = () => { const u = gh.trim(); if (u) check({ kind: "github", url: u }); };
-  const confirm = async () => {
-    if (!pending) return;
-    setSaving(true);
-    try {
-      const j = await send(pending.src, false);
-      app.say(j.created ? `Đã thêm skill ${j.skill!.name}` : `Đã cập nhật ${j.skill!.name} lên v${j.skill!.version}`);
-      setPending(null); setGh(""); await load();
-    } catch (e) { setErr((e as Error).message); setPending(null); } finally { setSaving(false); }
-  };
   // Thêm lần lượt mọi skill hợp lệ trong gói; skill lỗi được bỏ qua và báo lại.
   const addAll = async () => {
     if (!choose) return;
@@ -96,7 +137,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
       try { await send({ ...choose.src, pick: ok[i].dir }, false); } catch (e) { failed.push(`${ok[i].name}: ${(e as Error).message}`); }
       setBulk({ done: i + 1, total: ok.length });
     }
-    setBulk(null); setChoose(null); setGh(""); await load();
+    setBulk(null); setChoose(null); await load();
     app.say(`Đã thêm ${ok.length - failed.length} skill`);
     if (failed.length) setErr(failed.join("\n"));
   };
@@ -130,11 +171,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
         </div>
         <button className="btn dark" disabled={checking} onClick={() => verRef.current?.click()}>{checking ? "Checking…" : "Upload skill"}</button>
       </div>
-      <div className="sk-gh">
-        <I.Globe size={16} />
-        <input placeholder="Or paste a GitHub link (repo, folder or SKILL.md)" value={gh} onChange={(e) => setGh(e.target.value)} onKeyDown={(e) => e.key === "Enter" && importGh()} />
-        <button className="btn dark" disabled={checking || !gh.trim()} onClick={importGh}>{checking ? "Checking…" : "Import"}</button>
-      </div>
+      <GithubAdd onDone={(r) => { if (r.kind === "plugin") app.say(`${r.plugin.name}: ${r.plugin.skills.length} skill → Plugins`); }} />
       {err && <div className="sk-err" role="alert"><span>{err}</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {loadErr && <div className="sk-err">{loadErr}</div>}
 
@@ -175,24 +212,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
         </div>
       )}
 
-      {pending && portal(
-        <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !saving && setPending(null)}>
-          <div className="sk-modal">
-            <div className="sk-mh"><b>{pending.pv.exists ? `Update ${pending.pv.name} to v${pending.pv.version}` : `Add ${pending.pv.name}`}</b></div>
-            {pending.pv.source && <div className="muted" style={{ fontSize: 12, margin: "-2px 0 8px" }} data-notr>{pending.pv.source}{pending.src.pick ? ` · ${pending.src.pick.split("/").slice(1).join("/")}` : ""}</div>}
-            <p className="d" style={{ margin: "0 0 10px" }}>{pending.pv.description}</p>
-            <div className="sk-note">Skills are instructions the model will follow. Only enable skills from sources you trust, and read the content below first.</div>
-            {pending.pv.warnings.length > 0 && <ul className="sk-wl">{pending.pv.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
-            <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>SKILL.md · ~{pending.pv.tokens} tokens</div>
-            <pre className="sk-pre">{pending.pv.body || "(empty)"}</pre>
-            {pending.pv.files.length > 0 && <>
-              <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>{pending.pv.files.length} files</div>
-              <div className="sk-files">{pending.pv.files.map((f) => <div key={f.path}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
-            </>}
-            <div className="sk-actions"><button className="btn" disabled={saving} onClick={() => setPending(null)}>Cancel</button><button className="btn dark" disabled={saving} onClick={confirm}>{saving ? "Saving…" : pending.pv.exists ? "Update and keep state" : "Add and enable"}</button></div>
-          </div>
-        </div>
-      )}
+      {pending && portal(<SkillAddModal src={pending.src} pv={pending.pv} onClose={() => setPending(null)} onDone={() => setPending(null)} />)}
 
       {detail && portal(
         <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && setDetail(null)}>

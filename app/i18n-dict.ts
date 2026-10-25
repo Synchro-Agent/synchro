@@ -1068,3 +1068,13 @@ Object.assign(EN2VI, {
 Object.assign(VI2EN, { "từ": "from" });
 Object.assign(EN2VI, { "is installed and ready to use": "đã cài và sẵn sàng dùng" });
 Object.assign(VI2EN, { "is installed and ready to use": "is installed and ready to use" });
+// Ô "Thêm từ GitHub" dùng chung (Kỹ năng + Plugins)
+Object.assign(EN2VI, {
+  "Paste a GitHub link: one skill or a whole repository": "Dán link GitHub: một skill hoặc cả repo",
+  "Synchro looks at the link for you. One skill is added to Skills. A repository with several skills is installed as a plugin, with license and script checks and one-click updates.": "Synchro tự xem link. Một skill thì thêm vào Kỹ năng. Repo có nhiều skill thì cài thành một plugin, có kiểm tra giấy phép, script và cập nhật một chạm.",
+  "Checking…": "Đang kiểm tra…", "Add from GitHub": "Thêm từ GitHub", "One skill or a whole repository, detected for you": "Một skill hay cả repo, Synchro tự nhận ra",
+  "Paste a link to a public repository, a folder inside it, or a single SKILL.md. Synchro checks licenses and scripts and shows you everything before installing.": "Dán link repo công khai, một thư mục trong đó hoặc một file SKILL.md. Synchro kiểm tra giấy phép, script và cho bạn xem hết trước khi cài.",
+  "Install for everyone": "Cài cho mọi người", "Installed as a one-skill plugin so every account can use it.": "Cài thành plugin một skill để mọi tài khoản cùng dùng được.",
+  "It's a single skill, so it was added to Skills": "Đây là một skill lẻ nên đã được thêm vào Kỹ năng", "No SKILL.md found at this link.": "Không tìm thấy SKILL.md nào ở link này.",
+});
+RULES_VI.push([/^This link has (\d+) skills, so Synchro installs them together as one plugin under Plugins\. Untick any skill you don't need\.$/, (m) => `Link này có ${m[1]} skill nên Synchro cài chung thành một plugin trong mục Plugins. Bỏ chọn những skill không cần.`]);

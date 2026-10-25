@@ -6,6 +6,7 @@ import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import type { DirPlugin } from "./plugindir";
+import { GithubAdd } from "./ghadd";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -34,12 +35,13 @@ function PlugMark({ id, size = 40 }: { id?: string | null; size?: number }) {
 function Badge({ kind, children }: { kind: string; children: React.ReactNode }) { return <span className={`pl-b ${kind}`}>{children}</span>; }
 
 // ---------------------------------------------------------------- xem trước trước khi cài
-function PreviewModal({ target, data, onClose, onDone }: { target: { catalogId?: string; url?: string; name: string }; data: Data; onClose: () => void; onDone: (p: PublicPlugin) => void }) {
+// note: lời giải thích phía trên danh sách (ví dụ "link này có nhiều skill nên cài thành một bộ").
+export function PreviewModal({ target, admin, note, onClose, onDone }: { target: { catalogId?: string; url?: string; name: string }; admin: boolean; note?: React.ReactNode; onClose: () => void; onDone: (p: PublicPlugin) => void }) {
   const app = useApp();
   const [pv, setPv] = useState<Preview | null>(null);
   const [err, setErr] = useState("");
   const [skip, setSkip] = useState<Set<string>>(new Set());
-  const [scope, setScope] = useState<"org" | "personal">(data.admin ? "org" : "personal");
+  const [scope, setScope] = useState<"org" | "personal">(admin ? "org" : "personal");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     api<{ preview: Preview }>("POST", "/api/plugins", { action: "preview", catalogId: target.catalogId, url: target.url }).then((r) => setPv(r.preview)).catch((e) => setErr(e.message));
@@ -61,6 +63,7 @@ function PreviewModal({ target, data, onClose, onDone }: { target: { catalogId?:
         {err ? <div className="pl-err"><I.Alert size={16} />{err}</div> : !pv ? <div className="pl-load"><span className="art-spin" /><span>Reading the repository and checking every skill…</span></div> : (
           <>
             <p className="d">{pv.def.description}</p>
+            {note && <div className="pl-note"><I.InfoCircle size={14} /><span>{note}</span></div>}
             <div className="pl-sum">
               <span><b>{ok.length}</b> skill</span><span><b>{mb(pv.size)}</b></span>
               {Object.entries(pv.commits).map(([r, c]) => <a key={r} href={`https://github.com/${r}/tree/${c}`} target="_blank" rel="noreferrer" data-notr>{r}@{c.slice(0, 7)}</a>)}
@@ -69,7 +72,7 @@ function PreviewModal({ target, data, onClose, onDone }: { target: { catalogId?:
               {pv.skills.map((s) => <SkillLine key={`${s.repo}/${s.dir}`} s={s} checked={!s.blocked && !s.duplicateOf && !skip.has(s.name)} disabled={!!s.blocked || !!s.duplicateOf}
                 onToggle={() => setSkip((x) => { const y = new Set(x); if (y.has(s.name)) y.delete(s.name); else y.add(s.name); return y; })} />)}
             </div>
-            {data.admin && (
+            {admin && (
               <div className="pl-scope">
                 <button className={scope === "org" ? "on" : ""} onClick={() => setScope("org")}><b>Everyone</b><span>Install once for every account on this Synchro</span></button>
                 <button className={scope === "personal" ? "on" : ""} onClick={() => setScope("personal")}><b>Only me</b><span>A personal plugin in your account</span></button>
@@ -172,17 +175,17 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
 // ---------------------------------------------------------------- trang Plugins
 // Kết hợp Claude và Synchro: hai tab Của bạn / Khám phá, nút + cài một chạm cho plugin trong danh mục (đã kiểm tra giấy phép),
 // "Thêm từ repo GitHub" có bước xem trước giấy phép và rủi ro, mỗi plugin có menu nhanh (quản lý, cập nhật, tắt, gỡ).
-function AddRepo({ onClose, onPreview }: { onClose: () => void; onPreview: (url: string) => void }) {
-  const [url, setUrl] = useState("");
+// Cùng một ô với trang Kỹ năng: link một skill thì thêm vào Kỹ năng, link nhiều skill thì cài thành plugin.
+function AddRepo({ onClose, onDone }: { onClose: () => void; onDone: (r: { kind: "skill" } | { kind: "plugin"; plugin: PublicPlugin }) => void }) {
+  const [child, setChild] = useState(false);
   return (
-    <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="modal pl-modal pl-small" onSubmit={(e) => { e.preventDefault(); if (url.trim()) onPreview(url.trim()); }}>
+    <div className="overlay" style={{ zIndex: 70, display: child ? "none" : undefined }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal pl-modal pl-small">
         <button type="button" className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Close"><I.X size={16} /></button>
-        <h2>Add from a GitHub repository</h2>
-        <p className="d">Paste a link to a public repository or a folder inside it. Synchro finds every SKILL.md, checks licenses and scripts, and shows you everything before installing.</p>
-        <div className="pl-url"><I.GitHub size={16} /><input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://github.com/owner/repo" spellCheck={false} /></div>
-        <div className="modal-foot"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn dark" disabled={!url.trim()}>Preview</button></div>
-      </form>
+        <h2>Add from GitHub</h2>
+        <p className="d">Paste a link to a public repository, a folder inside it, or a single SKILL.md. Synchro checks licenses and scripts and shows you everything before installing.</p>
+        <GithubAdd autoFocus onModal={setChild} onDone={onDone} />
+      </div>
     </div>
   );
 }
@@ -303,7 +306,7 @@ export function PluginsPanel() {
             {addMenu && (
               <div className="menu pl-menu right">
                 <button className="menu-item" onClick={() => { setAddMenu(false); setTab("discover"); }}><I.Book size={15} /><span className="pl-mi"><b>Browse Synchro directory</b><em>Curated plugins with checked licenses</em></span></button>
-                <button className="menu-item" onClick={() => { setAddMenu(false); setAdding(true); }}><I.Branch size={15} /><span className="pl-mi"><b>Add from a repository</b><em>Install skills from a GitHub repository</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setAdding(true); }}><I.Branch size={15} /><span className="pl-mi"><b>Add from GitHub</b><em>One skill or a whole repository, detected for you</em></span></button>
               </div>
             )}
           </div>
@@ -340,8 +343,8 @@ export function PluginsPanel() {
         </>
       )}
 
-      {adding && <AddRepo onClose={() => setAdding(false)} onPreview={(url) => { setAdding(false); setPv({ url, name: url.replace(/^https?:\/\/(www\.)?github\.com\//, "") }); }} />}
-      {pv && <PreviewModal target={pv} data={d} onClose={() => setPv(null)} onDone={(p) => { setPv(null); load(); setTab("yours"); setOpen(p.id); }} />}
+      {adding && <AddRepo onClose={() => setAdding(false)} onDone={(r) => { setAdding(false); if (r.kind === "plugin") { load(); setTab("yours"); setOpen(r.plugin.id); } else app.say(tr("It's a single skill, so it was added to Skills")); }} />}
+      {pv && <PreviewModal target={pv} admin={d.admin} onClose={() => setPv(null)} onDone={(p) => { setPv(null); load(); setTab("yours"); setOpen(p.id); }} />}
       {cur && <Detail p={cur} admin={d.admin} onClose={() => setOpen(null)} onChange={merge} />}
     </>
   );
