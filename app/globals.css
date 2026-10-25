@@ -3303,3 +3303,9 @@ html body .menu.pl-menu::before{background:var(--card)!important}
 /* Lượt chạy nền: bước đang làm hiện cạnh chấm động */
 .thinking{gap:10px}
 .thinking-t{font-size:13px;color:var(--text-3);animation:fadeIn .3s both;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
+/* Chế độ Tự động trong bộ chọn model, và tên model đã dùng dưới câu trả lời */
+.menu-item.mauto{height:auto;padding-top:8px;padding-bottom:8px}
+.mauto-t{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.mauto-t b{font-weight:480;color:var(--ink-strong)}
+.mauto-t em{font-style:normal;font-size:12px;color:var(--text-3);white-space:normal;line-height:1.4}
+.actions .via{font-size:12px;color:var(--text-3);padding:2px 8px;border-radius:999px;background:var(--hover)}

@@ -1,3 +1,5 @@
+import { AUTO, routeModel } from "../../router";
+import { ALL } from "../../catalog";
 import { can, canModel, current, limit, permsOf, sameOrigin } from "../../authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, type AgentEvent } from "../../agentcore";
 import { clampEffort, effortCap, isEffort, legacyModel } from "../../catalog";
@@ -23,7 +25,14 @@ export async function POST(req: Request) {
   let d: string;
   try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
   // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
-  const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
+  // Chế độ Tự động: việc code luôn cần model mạnh nhất tài khoản được dùng.
+  let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
+  if (chosen === AUTO) {
+    const main = mainModels();
+    const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
+    chosen = routeModel({ text: "", attachments: 0, turns: 0, studio: true }, allowed)?.model ?? null;
+  }
+  const model = chosen || pickDefault(await catalog(), mainModels());
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
   const target = await resolveModel(model);

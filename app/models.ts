@@ -26,8 +26,11 @@ export function useModels() {
   );
 }
 
+// "auto": Synchro tự chọn model theo độ khó của yêu cầu (máy chủ chọn, xem router.ts).
+export const AUTO = "auto";
 // Tên hiển thị của một khóa model ("openai/gpt-5.1" → "GPT-5.1").
 export function modelName(key: string) {
+  if (key === AUTO) return "Tự động";
   for (const p of state.providers) for (const m of p.models) if (m.key === key) return m.name;
   const id = splitKey(key).id || key;
   return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/-/g, " ");
@@ -37,7 +40,7 @@ export function modelName(key: string) {
 export function fitModel(cur: string, s: State = state) {
   const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));
   const ok = (k: string | null): k is string => !!k && shown.includes(k) && allowsModel(s.allowed, k);
-  if (ok(cur)) return cur;
+  if (ok(cur) || (cur === AUTO && shown.some((k) => allowsModel(s.allowed, k)))) return cur;
   if (ok(s.default)) return s.default;
   return shown.find((k) => allowsModel(s.allowed, k)) ?? cur;
 }

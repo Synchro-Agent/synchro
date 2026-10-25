@@ -180,6 +180,7 @@ async function trap(res, q, fmt) {
   return true;
 }
 
+const LAST = {};
 async function handler(req, res) {
   const u = new URL(req.url, "http://x");
   const p = u.pathname;
@@ -187,6 +188,10 @@ async function handler(req, res) {
   const b = req.method === "POST" ? await readBody(req) : {};
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : null;
+
+  // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…).
+  if (p === "/_debug/last") return send(res, 200, LAST);
+  if (res.__prov) LAST[res.__prov] = b;
 
   // ---- Anthropic (/v1/models, /v1/messages) ----
   if (p.startsWith("/anthropic/")) {

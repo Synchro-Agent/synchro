@@ -47,6 +47,9 @@ export type LibUse = { key: string; label: string; forced?: boolean; skills: str
 let lastLibs: LibUse[] = [];
 export const takeLibsUsed = () => { const u = lastLibs; lastLibs = []; return u; };
 let lastFiles: OutFile[] = [];
+// Chế độ Tự động: model máy chủ đã chọn cho lượt vừa rồi (đọc một lần).
+let lastRoute: string | null = null;
+export const takeRoute = () => { const r = lastRoute; lastRoute = null; return r; };
 /** Tệp code vừa tạo ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeOutputs = () => { const f = lastFiles; lastFiles = []; return f; };
 
@@ -94,6 +97,7 @@ async function absorb(j: Record<string, any>): Promise<string> { // eslint-disab
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
   lastLibs = Array.isArray(j.libs) ? j.libs : [];
   lastFiles = Array.isArray(j.files) ? j.files : [];
+  lastRoute = j.auto && typeof j.model === "string" ? j.model : null;
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model.
   if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage"));
   return String(j.text ?? j.reply ?? "");

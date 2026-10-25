@@ -14,14 +14,14 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { attachRun, callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, LLMError, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
-import { fitModel, modelName, refreshModels, useModels } from "./models";
+import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
@@ -198,7 +198,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   }, [sub, mm]);
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
   const subX = { left: subLeft };
-  const ok = (k: string) => allowsModel(allowed, k);
+  const ok = (k: string) => k === AUTO || allowsModel(allowed, k);
   const pick = (k: string) => {
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
     setModel(k); close();
@@ -216,6 +216,12 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
             {me?.isAdmin && <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>}
           </div>
         )}
+        {!none && (
+          <button className="menu-item mline mauto" onClick={() => pick(AUTO)} onMouseEnter={() => setSub(null)}>
+            <span className="mauto-t"><b>Tự động</b><em>Việc đơn giản dùng model nhanh, việc khó dùng model mạnh nhất</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
+          </button>
+        )}
+        {!none && <hr />}
         {providers.map((pv) => (
           <button key={pv.id} className={`menu-item mline mprov ${sub === pv.id ? "sel" : ""}`} onClick={(e) => (sub === pv.id ? setSub(null) : hoverProv(pv.id, e.currentTarget))} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
             {pv.name}<span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
@@ -673,7 +679,7 @@ export default function Home() {
     const history = (hist ?? [{ role: "user" as const, content: text }]).slice(-HISTORY_LIMIT);
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
-    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [];
+    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null;
     let outs: Msg["outs"] = [];
     try {
       // Skill hai câu trả lời gần nhất đã dùng: lượt tiếp nối (sửa, thêm, đổi) đọc lại để giữ cùng phong cách.
@@ -690,6 +696,7 @@ export default function Home() {
       usedSk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
       outs = takeOutputs();
+      via = takeRoute();
     } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
     if (gen !== genRef.current) return;
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
@@ -700,7 +707,7 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined }]);
       if (i >= words.length) {
         stop();
         // Lưu artifact của câu trả lời này vào trang Artifacts (không lưu đoạn chat ẩn danh).
@@ -733,7 +740,8 @@ export default function Home() {
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
-        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined }));
+        const via = takeRoute();
+        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined }));
         if (capsRef.current.art && hasArtifacts(text) && !c.inc) saveArtifacts(String(c.id), splitArtifacts(text).flatMap((sg) => (sg.kind === "art" ? [sg.art] : []))).then(() => setArtRefresh((n) => n + 1));
       }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
     }
@@ -1149,6 +1157,7 @@ export default function Home() {
                           <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => like(i, 1)} aria-label="Hữu ích"><I.ThumbUp size={16} /></button>
                           <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => like(i, -1)} aria-label="Không hữu ích"><I.ThumbDown size={16} /></button>
                           {i === chat.msgs.length - 1 && <button className="icon-btn" onClick={retry} aria-label="Thử lại"><I.Retry size={16} /></button>}
+                          {m.via && <span className="via" title="Chế độ Tự động đã chọn model này">{modelName(m.via)}</span>}
                           <span className="when">{ago(m.time)}</span>
                         </div>
                       )}

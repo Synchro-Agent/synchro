@@ -105,7 +105,11 @@ export async function chatOnce(t: Target, system: string, messages: { role: stri
   const ef = effortParams(t, effort);
   if (t.kind === "mock") return `[mock] ${String(messages[messages.length - 1]?.content ?? "").slice(0, 80)}`;
   if (t.kind === "anthropic") {
-    const j = await anthropicCall(t, { max_tokens: outCap(t, maxTokens), ...ef, ...(system ? { system } : {}), messages: messages.map((m) => ({ ...m, content: toAnthropic(m.content) })) }, signal);
+    // Bộ nhớ đệm prompt: điểm đệm ở cuối hướng dẫn hệ thống và cuối tin nhắn mới nhất (phần lặp lại tính giá rẻ hơn).
+    const msgs = messages.map((m) => ({ ...m, content: toAnthropic(m.content) }));
+    const last = msgs[msgs.length - 1] as { content: unknown } | undefined;
+    if (last) { const bl = typeof last.content === "string" ? [{ type: "text", text: last.content }] : Array.isArray(last.content) ? (last.content as Record<string, unknown>[]) : []; if (bl.length) last.content = bl.map((x, k) => (k === bl.length - 1 ? { ...x, cache_control: { type: "ephemeral" } } : x)); }
+    const j = await anthropicCall(t, { max_tokens: outCap(t, maxTokens), ...ef, ...(system ? { system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] } : {}), messages: msgs }, signal);
     return (j.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("");
   }
   if (t.kind === "openai") {

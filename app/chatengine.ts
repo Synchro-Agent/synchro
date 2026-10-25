@@ -8,6 +8,8 @@ import { randomToken } from "./mcpauth";
 import { capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
 import { progress, registerExec } from "./runs";
+import { AUTO, routeModel } from "./router";
+import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { STUDIO_LABEL } from "./plugindir";
 import { suggest, type Hit } from "./skillroute";
@@ -26,12 +28,25 @@ type Step = { text: string; calls: Call[]; assistant: unknown };
 type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: ToolRun[]) => unknown[] };
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
+// Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
+// điểm thứ hai ở cuối tin nhắn mới nhất. Lịch sử hội thoại và các bước gọi công cụ trong cùng lượt được đọc lại từ bộ đệm
+// (rẻ hơn nhiều so với gửi lại), chỉ phần mới được tính đủ giá. Không sửa mảng gốc vì vòng lặp còn thêm bước vào đó.
+export function withCacheMark(msgs: unknown[]): unknown[] {
+  if (!msgs.length) return msgs;
+  const last = msgs[msgs.length - 1] as { role: string; content: unknown };
+  const blocks = typeof last.content === "string" ? [{ type: "text", text: last.content }] : Array.isArray(last.content) ? (last.content as Record<string, unknown>[]) : null;
+  if (!blocks?.length) return msgs;
+  const i = blocks.length - 1;
+  const marked = blocks.map((b, k) => (k === i ? { ...b, cache_control: { type: "ephemeral" } } : b));
+  return [...msgs.slice(0, -1), { ...last, content: marked }];
+}
+
 const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort): Adapter => ({
   step: async (msgs, noTools) => {
     const j = await anthropicCall(t, {
       max_tokens: outCap(t, max_tokens), ...effortParams(t, effort),
       system: [{ type: "text", text: system || "Bạn là một trợ lý AI hữu ích." }, { type: "text", text: skillSys, cache_control: { type: "ephemeral" } }],
-      tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: msgs,
+      tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: withCacheMark(msgs),
     });
     const blocks: { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }[] = j.content ?? [];
     return {
@@ -307,8 +322,23 @@ function artifactMessages(raw: unknown): { role: "user" | "assistant"; content: 
 }
 
 type Who = { user: UserRow };
-/** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng). */
+/** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
+ *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (body.model !== AUTO || typeof body.resume === "string") return chatTurn(body, c, scope);
+  const cat = await catalog(), main = mainModels();
+  const allowed = cat.flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
+  const msgs = Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : [];
+  const lastUser = [...msgs].reverse().find((m) => m?.role === "user");
+  const attachments = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string }[]).filter((b) => b?.type && b.type !== "text").length : 0;
+  const r = routeModel({ text: lastUserText(msgs), attachments, turns: msgs.length, studio: !!studioOf(body.studio) }, allowed);
+  if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
+  const res = await chatTurn({ ...body, model: r.model }, c, scope);
+  const j = await res.json().catch(() => ({}));
+  return Response.json({ ...j, model: j.model ?? r.model, auto: { tier: r.tier, why: r.why } }, { status: res.status });
+}
+
+async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
   // Tiếp tục lượt chat đang chờ duyệt công cụ: { resume, decisions: { id lượt gọi: "allow" | "always" | "deny" } }.
   if (typeof body.resume === "string") {
