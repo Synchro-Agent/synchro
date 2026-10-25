@@ -2,7 +2,7 @@
 // Sửa artifact đã có không viết lại cả tệp: model gửi các khối SEARCH/REPLACE (mode="patch"), Synchro áp vào bản hiện tại
 // để ra phiên bản mới. Lịch sử gửi cho model chỉ giữ MỘT bản hiện tại của mỗi artifact (<current_artifacts>), các bản cũ
 // thay bằng một dòng tham chiếu, nên sửa 10 lần cũng không phình token.
-import { splitArtifacts, type ArtBlock } from "./artifacts";
+import { ART_TYPES, splitArtifacts, type ArtBlock } from "./artifacts";
 
 export const PATCH_RE = /<<<<<<< SEARCH\n([\s\S]*?)\n?=======\n([\s\S]*?)\n?>>>>>>> REPLACE/g;
 export type Patch = { search: string; replace: string };
@@ -60,9 +60,10 @@ export function resolveArt(prev: ArtVersion | undefined, a: ArtBlock): ArtVersio
   return { ...prev, title: a.title || prev.title, content: r.content, complete: a.complete, patch: true, fix: { applied: r.applied, failed: a.complete ? r.failed : [] }, v, patchText: a.content };
 }
 
-/** Duyệt các câu trả lời theo thứ tự, trả về trạng thái hiện tại của mọi artifact. */
-export function artState(texts: string[]): ArtState {
-  const st: ArtState = new Map();
+/** Duyệt các câu trả lời theo thứ tự, trả về trạng thái hiện tại của mọi artifact.
+ *  base: bản hiện tại của artifact thuộc phần lịch sử không gửi (đã nén), làm nền cho các bản sửa phía sau. */
+export function artState(texts: string[], base: ArtVersion[] = []): ArtState {
+  const st: ArtState = new Map(base.map((a) => [a.ident, a]));
   for (const t of texts) for (const sg of splitArtifacts(t)) if (sg.kind === "art") st.set(sg.art.ident, resolveArt(st.get(sg.art.ident), sg.art));
   return st;
 }
@@ -79,6 +80,21 @@ export function stubArtifacts(text: string, st: ArtState, seen: Map<string, numb
     return `<artifact identifier="${sg.art.ident}" title="${esc(sg.art.title)}" version="${v}"${sg.art.patch ? ' mode="patch"' : ""}${failed} />`;
   }).join("");
 }
+
+// Nền artifact trình duyệt gửi lên (phần lịch sử đã nén): chỉ nhận dữ liệu hợp lệ.
+export function cleanBase(raw: unknown): ArtVersion[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 30).flatMap((x): ArtVersion[] => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const ident = typeof o.ident === "string" && /^[\w.-]{1,80}$/.test(o.ident) ? o.ident : "";
+    const type = typeof o.type === "string" && (ART_TYPES as readonly string[]).includes(o.type) ? (o.type as ArtVersion["type"]) : null;
+    const content = typeof o.content === "string" && o.content.length <= 400_000 ? o.content : "";
+    if (!ident || !type || !content) return [];
+    return [{ ident, type, title: typeof o.title === "string" ? o.title.slice(0, 200) : ident, lang: typeof o.lang === "string" ? o.lang.slice(0, 30) : null, content, complete: true, v: Math.max(1, Math.min(999, Number(o.v) || 1)) }];
+  });
+}
+/** Bản hiện tại của mọi artifact trong các câu trả lời (trình duyệt dùng để gửi nền cho phần lịch sử đã nén). */
+export const artBase = (texts: string[]) => [...artState(texts).values()].filter((a) => a.complete).map(({ ident, type, title, lang, content, v }) => ({ ident, type, title, lang, content, v }));
 
 const MIME_OUT: Record<string, string> = { html: "text/html", react: "application/vnd.react", svg: "image/svg+xml", markdown: "text/markdown", code: "application/vnd.code", mermaid: "application/vnd.mermaid", vbhc: "application/vnd.synchro.vbhc+json" };
 /** Khối <current_artifacts>: bản hiện tại của các artifact liên quan nhất (mới sửa gần đây hoặc được nhắc tới), có giới hạn kích thước. */

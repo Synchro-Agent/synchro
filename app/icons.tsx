@@ -156,6 +156,8 @@ export const Heart = (p: P) => <S {...p}><path d="M10 15.5l-5.2-5a3.2 3.2 0 014.
 export const Bars = (p: P) => <S {...p}><path d="M4 8v4M7 5v10M10 3v14M13 6v8M16 8.5v3" /></S>;
 export const Chat2 = (p: P) => <S {...p}><path d="M3 5.5h9v6H7l-3 2.5v-2.5H3zM12 8.5h5v6h-1v2.3l-2.8-2.3H9v-2" /></S>;
 export const Key = (p: P) => <S {...p}><circle cx="13.2" cy="6.8" r="3.6" /><circle cx="13.9" cy="6.1" r=".6" fill="currentColor" stroke="none" /><path d="M10.6 9.4 4 16v1.6h2.2l.6-.6v-1.4h1.4l.9-.9v-1.3h1.3l1.4-1.4" /></S>;
+// Đồng hồ đo: thanh đo ngữ cảnh (bàn trộn).
+export const Gauge = (p: P) => <S {...p}><path d="M3.6 14.2a6.6 6.6 0 1112.8 0" /><path d="M10 13.4l3.1-4.2" /><circle cx="10" cy="13.6" r=".9" fill="currentColor" stroke="none" /></S>;
 export const Sparkle = (p: P) => <S {...p}><path d="M10 3l1.8 4.6L16.5 9l-4.7 1.4L10 15l-1.8-4.6L3.5 9l4.7-1.4z" /></S>;
 export const Pulse = (p: P) => <S {...p}><path d="M3 10h2l2-5 3 10 2-6 1.5 3H17" /></S>;
 export const Swap = (p: P) => <S {...p}><path d="M4 7h11l-3-3M16 13H5l3 3" /></S>;

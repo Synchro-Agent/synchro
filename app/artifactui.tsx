@@ -10,6 +10,7 @@ import { parseVbhc, vbhcHtml } from "./vbhc";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { Menu } from "./ui";
 import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "./artifacts";
+import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "./srcloc";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
@@ -59,9 +60,12 @@ else if(d.t==="present")window.__sxPresent=!!d.on});
 var pk=false,hl=null;
 function box(){if(hl)return hl;hl=document.createElement("div");hl.setAttribute("data-sx-noprint","");hl.style.cssText="position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #2f7bf6;border-radius:4px;background:rgba(47,123,246,.08);display:none";document.documentElement.appendChild(hl);return hl}
 function where(el){var p=[];while(el&&el.nodeType===1&&el!==document.body&&el!==document.documentElement&&p.length<6){var s=el.tagName.toLowerCase();if(el.id&&/^[A-Za-z][\\w-]*$/.test(el.id)){p.unshift(s+"#"+el.id);break}var i=1,x=el;while((x=x.previousElementSibling))if(x.tagName===el.tagName)i++;p.unshift(s+":nth-of-type("+i+")");el=el.parentElement}return p.join(" > ")}
-addEventListener("mouseover",function(e){if(!pk||e.target===hl)return;var r=e.target.getBoundingClientRect(),b=box();b.style.display="block";b.style.left=r.left+"px";b.style.top=r.top+"px";b.style.width=r.width+"px";b.style.height=r.height+"px"},true);
-addEventListener("click",function(e){if(!pk)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();var el=e.target;if(el===document.body||el===document.documentElement)return;
-post({t:"picked",sel:where(el),tag:el.tagName.toLowerCase(),text:String(el.innerText||el.textContent||"").replace(/\\s+/g," ").trim().slice(0,200),html:el.outerHTML.slice(0,1500)})},true);
+// Alt+Click (không cần bật chế độ chọn): chỉ ở khung có đánh dấu dòng mã (data-sx-loc), giữ Alt thì viền phần tử dưới chuột.
+function at(el){return el&&el.closest?el.closest("[data-sx-loc]"):null}
+addEventListener("keyup",function(e){if(e.key==="Alt"&&!pk&&hl)hl.style.display="none"},true);
+addEventListener("mouseover",function(e){if(e.target===hl)return;if(!pk&&!(e.altKey&&at(e.target))){if(hl&&!pk)hl.style.display="none";return}var r=e.target.getBoundingClientRect(),b=box();b.style.display="block";b.style.left=r.left+"px";b.style.top=r.top+"px";b.style.width=r.width+"px";b.style.height=r.height+"px"},true);
+addEventListener("click",function(e){var el=e.target,L=at(el);if(!pk&&!(e.altKey&&L))return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(el===document.body||el===document.documentElement)return;if(hl&&!pk)hl.style.display="none";
+post({t:"picked",sel:where(el),tag:el.tagName.toLowerCase(),text:String(el.innerText||el.textContent||"").replace(/\\s+/g," ").trim().slice(0,200),html:el.outerHTML.replace(/\\s+data-sx-loc="[^"]*"/g,"").slice(0,1500),loc:L?L.getAttribute("data-sx-loc"):""})},true);
 addEventListener("keydown",function(e){if(pk&&e.key==="Escape"){e.preventDefault();post({t:"picked",cancel:true})}},true);
 addEventListener("error",function(e){post({t:"error",message:String(e.message||(e.error&&e.error.message)||"Lỗi không rõ"),line:e.lineno||0})});
 addEventListener("unhandledrejection",function(e){var r=e.reason;post({t:"error",message:String(r&&r.message||r)})});
@@ -108,7 +112,9 @@ function withHead(content: string, head: string) {
 // Tệp HTML tải về của bản trình bày: mở bằng trình duyệt là trình chiếu được (phím mũi tên, bấm chuột), in ra mỗi slide một trang.
 export const deckExport = (content: string) => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`);
 
-export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean, deck?: { fixed: number | null }, title = ""): string {
+// loc: đánh dấu dòng mã nguồn lên từng phần tử (Alt+Click → đúng dòng), chỉ ở khung xem trước, không có trong bản tải về.
+export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean, deck?: { fixed: number | null }, title = "", loc = false): string {
+  if (loc && (type === "html" || type === "svg")) content = instrumentHtml(content);
   const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${csp(origin)}${bridge(ch, origin)}${deck && type === "html" ? `<script>window.__sxCh=${JSON.stringify(ch)}</script>${deckRuntime(deck.fixed)}` : ""}`;
   // Chèn CSP + cầu nối; trang HTML giữ tiêu đề của chính nó, React / SVG lấy tên artifact (tên mặc định khi lưu PDF).
   if (type === "html") return withHead(content, head);
@@ -126,7 +132,8 @@ function next(){if(i>=libs.length)return run();var l=libs[i++];load(l[0],l[2],fu
 function step(){if(window.React&&!window.react)window.react=window.React;next()}
 function run(){var mods={"react":React,"react-dom":ReactDOM,"react-dom/client":ReactDOM,"recharts":Recharts,"lucide-react":LucideReact,"prop-types":PropTypes};
 function req(n){if(mods[n])return mods[n];throw new Error('Thư viện "'+n+'" không có sẵn trong artifact (chỉ có react, recharts, lucide-react).')}
-var out=Babel.transform(src,{filename:"App.tsx",presets:[["typescript",{isTSX:true,allExtensions:true}],["react",{runtime:"classic"}]],plugins:["transform-modules-commonjs"]}).code;
+${loc ? `function sxLoc(b){var t=b.types;return{visitor:{JSXOpeningElement:function(p){var n=p.node,el=p.parent;if(!n.loc||n.name.type!=="JSXIdentifier"||!/^[a-z]/.test(n.name.name))return;if(n.attributes.some(function(a){return a.type==="JSXAttribute"&&a.name&&a.name.name==="${LOC_ATTR}"}))return;n.attributes.push(t.jsxAttribute(t.jsxIdentifier("${LOC_ATTR}"),t.stringLiteral(n.loc.start.line+"-"+(el&&el.loc?el.loc.end.line:n.loc.end.line))))}}}}
+` : ""}var out=Babel.transform(src,{filename:"App.tsx",presets:[["typescript",{isTSX:true,allExtensions:true}],["react",{runtime:"classic"}]],plugins:[${loc ? "sxLoc," : ""}"transform-modules-commonjs"]}).code;
 var module={exports:{}};new Function("module","exports","require","React",out)(module,module.exports,req,React);
 var C=module.exports.default||module.exports.App||Object.values(module.exports).find(function(v){return typeof v==="function"});
 if(!C)throw new Error("Không tìm thấy component (cần export default).");
@@ -142,14 +149,14 @@ export type FrameMsg = { t: string; [k: string]: unknown };
 export type FrameSend = (m: FrameMsg) => void;
 // store: nơi lưu dữ liệu cho window.storage ({ app } ứng dụng đã xuất bản, { art } artifact đang thử trong chat); không có thì báo không lưu được.
 export type StoreRef = { app: string } | { art: { conv: string; ident: string } };
-export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl, store }: {
+export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl, store, loc }: {
   type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties;
-  deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void; store?: StoreRef;
+  deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void; store?: StoreRef; loc?: boolean;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
   const deckKey = deck ? String(deck.fixed) : "";
-  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck, title), [type, content, ch, deckKey, title]); // eslint-disable-line react-hooks/exhaustive-deps
+  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck, title, loc), [type, content, ch, deckKey, title, loc]); // eslint-disable-line react-hooks/exhaustive-deps
   const cb = useRef({ onError, onHeight, ai, onMsg, store });
   cb.current = { onError, onHeight, ai, onMsg, store };
   useEffect(() => { ctl?.((m) => ref.current?.contentWindow?.postMessage({ ...m, __synchro: ch }, "*"), ref.current); });
@@ -314,7 +321,7 @@ function DownloadMenu({ items, say }: { items: DlItem[]; say: (m: string) => voi
 }
 
 // Bản trình bày: khung 16:9, chuyển slide, ảnh thu nhỏ từng slide, trình chiếu toàn màn hình.
-function DeckView({ art, ai, onError, onMsg, ctl, store }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void; store?: StoreRef }) {
+function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void; store?: StoreRef; loc?: boolean }) {
   const [st, setSt] = useState({ n: 0, cur: 0 });
   const [full, setFull] = useState(false);
   const send = useRef<FrameSend | null>(null);
@@ -338,7 +345,7 @@ function DeckView({ art, ai, onError, onMsg, ctl, store }: { art: ArtVersion; ai
   return (
     <div className="deck">
       <div className="deck-stage" ref={stage}>
-        <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError} store={store}
+        <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError} store={store} loc={loc}
           onMsg={(d) => { if (d.t === "slides") setSt({ n: Number(d.n) || 0, cur: Number(d.cur) || 0 }); else onMsg(d); }}
           ctl={(s, el) => { send.current = s; frame.current = el; ctl(s); }} />
         {full && st.n > 1 && <div className="deck-hud">{st.cur + 1} / {st.n}</div>}
@@ -461,7 +468,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const pending = useRef<Map<number, (d: FrameMsg) => void>>(new Map());
   // Chỉ và sửa: đang chọn phần tử / phần tử đã chọn và yêu cầu sửa. So sánh: bản trước và bản đang xem.
   const [picking, setPicking] = useState(false);
-  const [picked, setPicked] = useState<{ sel: string; tag: string; text: string; html: string } | null>(null);
+  const [picked, setPicked] = useState<{ sel: string; tag: string; text: string; html: string; loc: { start: number; end: number } | null } | null>(null);
   const [req, setReq] = useState("");
   const [compare, setCompare] = useState(false);
   const runnable = art.type !== "code";
@@ -495,19 +502,28 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
     send.current({ ...m, id });
   });
   const onMsg = (d: FrameMsg) => {
-    if (d.t === "picked") { send.current?.({ t: "pick", on: false }); setPicking(false); if (!d.cancel) { setPicked({ sel: String(d.sel ?? ""), tag: String(d.tag ?? ""), text: String(d.text ?? ""), html: String(d.html ?? "") }); setReq(""); } return; }
+    if (d.t === "picked") {
+      send.current?.({ t: "pick", on: false }); setPicking(false);
+      if (!d.cancel) { setPicked({ sel: String(d.sel ?? ""), tag: String(d.tag ?? ""), text: String(d.text ?? ""), html: String(d.html ?? ""), loc: parseLoc(d.loc, art.content.split("\n").length) }); setReq(""); }
+      return;
+    }
     const f = pending.current.get(d.id as number); if (f) { pending.current.delete(d.id as number); f(d); }
   };
   const canPick = !!onAsk && art.complete && !showCode && !compare && ["html", "react", "svg"].includes(art.type);
+  // Phần tử đã chọn có dòng mã: ở chế độ xem Mã thì tô các dòng đó và cuộn tới.
+  const hlLoc = showCode && picked?.loc ? picked.loc : null;
+  useEffect(() => { if (hlLoc) body.current?.querySelector(".art-code .hl")?.scrollIntoView({ block: "center" }); }, [hlLoc?.start, hlLoc?.end, showCode]); // eslint-disable-line react-hooks/exhaustive-deps
   const togglePick = () => { const on = !picking; setPicking(on); setPicked(null); send.current?.({ t: "pick", on }); };
   // Yêu cầu sửa đúng phần tử: gửi vị trí, nội dung và mã của phần tử để model chỉ đổi đúng chỗ đó (phiên bản mới cùng identifier).
+  // Biết dòng mã (Alt+Click / chế độ chọn trên khung có đánh dấu dòng) thì gửi đúng các dòng quanh đó thay vì đoán từ mã đang hiện.
   const askEdit = () => {
     if (!picked || !req.trim() || !onAsk) return;
+    const at = picked.loc ? `\ndòng: ${picked.loc.start}-${picked.loc.end}\nmã nguồn quanh đó (số dòng | mã):\n${snippet(art.content, picked.loc)}` : "";
     onAsk(`${tr("Sửa artifact")} “${art.title}” (identifier="${art.ident}"): ${tr("chỉ thay đổi đúng phần tử tôi chỉ vào, giữ nguyên mọi phần khác.")}
 <point_edit>
 vị trí: ${picked.sel}
-nội dung đang hiện: ${picked.text.slice(0, 200)}
-mã của phần tử: ${picked.html.slice(0, 1200)}
+nội dung đang hiện: ${picked.text.slice(0, 200)}${at}
+mã của phần tử: ${picked.html.slice(0, picked.loc ? 600 : 1200)}
 </point_edit>
 Yêu cầu: ${req.trim()}`);
     setPicked(null); setReq("");
@@ -553,7 +569,7 @@ Yêu cầu: ${req.trim()}`);
         )}
         {runnable && <div className="art-tabs"><button className={!showCode ? "on" : ""} disabled={!art.complete} onClick={() => setTab("preview")}>{tr("Xem trước")}</button><button className={showCode ? "on" : ""} onClick={() => setTab("code")}>{tr("Mã")}</button></div>}
         <div className="art-acts">
-          {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa" aria-pressed={picking}><I.Pointer size={15} /></button>}
+          {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.Check size={15} /> : <I.Copy size={15} />}</button>
           {art.complete && extra?.(art)}
@@ -572,9 +588,9 @@ Yêu cầu: ${req.trim()}`);
         {compare && index > 0 ? (
           <CompareView a={versions[index - 1]} b={art} ai={ai} na={index} nb={index + 1} />
         ) : showCode ? (
-          <pre className="art-code">{lines.map((l, i) => <div key={i}><span>{i + 1}</span>{l || " "}</div>)}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
+          <pre className="art-code">{lines.map((l, i) => <div key={i} className={hlLoc && i + 1 >= hlLoc.start && i + 1 <= hlLoc.end ? "hl" : undefined}><span>{i + 1}</span>{l || " "}</div>)}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
         ) : deck ? (
-          <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
+          <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} loc={!!onAsk} />
         ) : art.type === "markdown" ? (
           <div className="art-md mdx"><Markdown text={art.content} say={say} /></div>
         ) : art.type === "mermaid" ? (
@@ -582,13 +598,15 @@ Yêu cầu: ${req.trim()}`);
         ) : art.type === "vbhc" ? (
           <VbhcView content={art.content} title={art.title} onError={setErr} />
         ) : (
-          <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
+          <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} loc={!!onAsk} />
         )}
       </div>
-      {picking && <div className="pe-bar pe-hint"><I.Pointer size={15} /><span>{tr("Bấm vào phần muốn sửa trong khung xem trước")}</span><button className="btn" onClick={togglePick}>{tr("Thoát")}</button></div>}
+      {picking && <div className="pe-bar pe-hint"><I.Pointer size={15} /><span>{tr("Bấm vào phần muốn sửa trong khung xem trước. Lần sau chỉ cần giữ Alt (⌥) rồi bấm.")}</span><button className="btn" onClick={togglePick}>{tr("Thoát")}</button></div>}
       {picked && (
         <form className="pe-bar" onSubmit={(e) => { e.preventDefault(); askEdit(); }}>
-          <div className="pe-what"><code data-notr>{`<${picked.tag}>`}</code><span data-notr>{picked.text || picked.sel}</span></div>
+          <div className="pe-what"><code data-notr>{`<${picked.tag}>`}</code><span data-notr>{picked.text || picked.sel}</span>
+            {picked.loc && <button type="button" className={`pe-loc ${showCode ? "on" : ""}`} onClick={() => setTab(showCode ? "preview" : "code")} data-tip={showCode ? tr("Quay lại xem trước") : tr("Xem trong mã")}><I.Code size={12} />{tr("Dòng")} <span data-notr>{picked.loc.start === picked.loc.end ? picked.loc.start : `${picked.loc.start}–${picked.loc.end}`}</span></button>}
+          </div>
           <div className="pe-in">
             <input autoFocus value={req} onChange={(e) => setReq(e.target.value)} placeholder={tr("Muốn sửa gì ở phần này?")} onKeyDown={(e) => { if (e.key === "Escape") setPicked(null); }} />
             <button type="button" className="btn" onClick={() => setPicked(null)}>{tr("Hủy")}</button>

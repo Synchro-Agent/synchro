@@ -10,7 +10,7 @@ import { overLimit, usageScope } from "./usage";
 import { delta, deltaStep, liveNow, progress, registerExec, runSignal } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
-import { artState, resolveArt } from "./vfs";
+import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { splitArtifacts } from "./artifacts";
 import { AUTO, routeModel } from "./router";
 import { ALL } from "./catalog";
@@ -316,9 +316,9 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
 
 // Bản sửa artifact (mode="patch") phải áp được vào bản hiện tại. Không khớp thì nhắc model sửa lại đúng một lần (tự vá),
 // còn sai nữa thì giữ câu trả lời; trình duyệt hiện bản sửa lỗi kèm nút yêu cầu viết lại toàn bộ.
-function patchProblems(history: { role: string; content: unknown }[], text: string): string[] {
+function patchProblems(history: { role: string; content: unknown }[], text: string, base: ArtVersion[]): string[] {
   if (!/mode\s*=\s*["']patch/i.test(text)) return [];
-  const st = artState(history.filter((h) => h.role === "assistant" || h.role === "ai").map((h) => (typeof h.content === "string" ? h.content : "")));
+  const st = artState(history.filter((h) => h.role === "assistant" || h.role === "ai").map((h) => (typeof h.content === "string" ? h.content : "")), base);
   const out: string[] = [];
   for (const sg of splitArtifacts(text)) if (sg.kind === "art" && sg.art.patch) {
     const r = resolveArt(st.get(sg.art.ident), sg.art);
@@ -327,9 +327,9 @@ function patchProblems(history: { role: string; content: unknown }[], text: stri
   }
   return out;
 }
-async function healPatch(ad: Adapter, m: unknown[], history: { role: string; content: unknown }[], out: Out): Promise<Out> {
+async function healPatch(ad: Adapter, m: unknown[], history: { role: string; content: unknown }[], out: Out, base: ArtVersion[] = []): Promise<Out> {
   if ("approval" in out || out.cancelled) return out;
-  const bad = patchProblems(history, out.text);
+  const bad = patchProblems(history, out.text, base);
   if (!bad.length) return out;
   progress("step", "Đang sửa lại bản sửa artifact cho khớp");
   deltaStep();
@@ -396,6 +396,38 @@ function artifactMessages(raw: unknown): { role: "user" | "assistant"; content: 
     out.push({ role, content: m.content });
   }
   return total <= 120_000 && out[out.length - 1].role === "user" ? out : null;
+}
+
+// Tài liệu ghim của đoạn chat: [{ name, text }] (trình duyệt đã đọc chữ từ tệp), tối đa 200.000 ký tự.
+function pinnedBlock(raw: unknown): string {
+  if (!Array.isArray(raw)) return "";
+  let left = 200_000;
+  const docs = raw.slice(0, 20).flatMap((d) => {
+    const o = (d ?? {}) as { name?: unknown; text?: unknown };
+    const name = typeof o.name === "string" ? o.name.slice(0, 120).replace(/"/g, "'") : "";
+    const text = typeof o.text === "string" ? o.text.slice(0, left) : "";
+    if (!name || !text.trim()) return [];
+    left -= text.length;
+    return [`<document name="${name}">\n${text}\n</document>`];
+  });
+  return docs.length ? `<pinned_documents>\nTài liệu người dùng đã ghim cho đoạn chat này (luôn có trong ngữ cảnh). Dùng khi liên quan:\n${docs.join("\n")}\n</pinned_documents>` : "";
+}
+// Bàn trộn ngữ cảnh: ước tính token từng khối của lượt tiếp theo (không gọi model). ~3,5 ký tự một token (tiếng Việt và tiếng Anh lẫn nhau).
+const tok = (chars: number) => Math.ceil(chars / 3.5);
+function estimate(sys: string[], skills: string[], pinned: string, prep: ReturnType<typeof prepareHistory>) {
+  const len = (a: string[]) => a.filter(Boolean).reduce((n, x) => n + x.length, 0);
+  const z = prep.sizes;
+  const blocks = [
+    { key: "system", tier: "static", chars: len(sys) },
+    { key: "skills", tier: "static", chars: len(skills) },
+    { key: "pinned", tier: "static", chars: pinned.length },
+    { key: "summary", tier: "history", chars: z.summary },
+    { key: "history", tier: "history", chars: z.history },
+    { key: "tools", tier: "dynamic", chars: z.tools },
+    { key: "artifacts", tier: "dynamic", chars: z.artifacts },
+    { key: "dynamic", tier: "dynamic", chars: z.dynamic },
+  ].map((b) => ({ ...b, tokens: tok(b.chars) }));
+  return Response.json({ blocks, total: blocks.reduce((n, b) => n + b.tokens, 0), dropped: z.dropped });
 }
 
 type Who = { user: UserRow };
@@ -467,8 +499,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const studio = skills ? studioOf(body.studio) : null;
   const st = studio ? studioSkills(c.user.id, studio) : null;
   const capSys = cs ? [feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
-  // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng (tầng động ở cuối prompt).
-  const prep = prepareHistory(messages);
+  // Bàn trộn ngữ cảnh (trình duyệt gửi): tắt khối tầng động, chỉ gửi N tin gần nhất, tóm tắt các lượt cũ đã nén.
+  const mixer = (body.mixer && typeof body.mixer === "object" ? body.mixer : {}) as { artifacts?: unknown; tools?: unknown; recent?: unknown };
+  const base = cleanBase(body.artBase);
+  const mix = { artifacts: mixer.artifacts !== false, tools: mixer.tools !== false, recent: typeof mixer.recent === "number" ? mixer.recent : undefined, summary: typeof body.summary === "string" ? body.summary : undefined, base };
+  // Tài liệu ghim: tầng tĩnh, ngay sau hướng dẫn hệ thống và danh mục skill (không đổi giữa các lượt nên đọc từ bộ đệm prompt).
+  const pinned = pinnedBlock(body.pinned);
   const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {
@@ -517,6 +553,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const recent = recentNames.filter((n) => list.some((k) => k.name === n) && !hits.some((h) => h.skill.name === n)).map((n) => ({ name: n, lib: libs[n]?.[0] }));
       route = routingPrompt(hits, recent);
     }
+    // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
+    // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
+    const prep = prepareHistory(messages, [route], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock") { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
@@ -525,8 +564,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (visible.length || sess || code || refs) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(visible, scripts), route, sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
+      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", pinned].filter(Boolean).join("\n\n");
       const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : [])];
+      if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
       const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
@@ -535,12 +575,14 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const m0: unknown[] = t.kind === "mock" ? [...msgs] : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
       // Kiểm tra bản sửa trên lịch sử gốc (bản đã rút gọn không còn nội dung artifact cũ).
       const raw = (Array.isArray(messages) ? messages : []) as { role: string; content: unknown }[];
-      const out = await healPatch(ad, m0, raw, await toolLoop(ad, m0, x, [], c.user.id, model));
+      const out = await healPatch(ad, m0, raw, await toolLoop(ad, m0, x, [], c.user.id, model), base);
       return reply(c, model, out, x);
     }
+    if (body.estimate === true) return estimate([system, capSys], [], pinned, prep);
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
     let text: string, cancelled = false;
-    try { text = await chatOnce(t, capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, prep.messages, max_tokens, runSignal(), effort, live()); }
+    const sys0 = [capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, pinned].filter(Boolean).join("\n\n");
+    try { text = await chatOnce(t, sys0, prep.messages, max_tokens, runSignal(), effort, live()); }
     catch (e) { if (!isAbort(e)) throw e; text = liveNow(); cancelled = true; }
     return Response.json({ model, text, effort, ...(cancelled ? { cancelled: true } : {}) });
   } catch (e) {

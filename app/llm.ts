@@ -145,7 +145,7 @@ export async function attachRun(id: string, onProgress?: (text: string) => void,
   return absorb(result, { onProgress, onDelta });
 }
 
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void } = {}): Promise<string> {
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
   if (!hasLLM) {
     // Chưa có model: trả lời giả lập từ câu hỏi cuối.
@@ -155,7 +155,7 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   const r = await fetch(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills, async: opts.onRun ? true : undefined }),
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills, ...(opts.extra ?? {}), async: opts.onRun ? true : undefined }),
   });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status); }
   const j = await r.json();
@@ -166,6 +166,23 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
     return absorb(result, opts);
   }
   return absorb(j, opts);
+}
+
+// Bàn trộn ngữ cảnh: máy chủ lắp đúng prompt của lượt tiếp theo rồi ước tính token từng khối (không gọi model).
+export type CtxBlock = { key: "system" | "skills" | "pinned" | "summary" | "history" | "tools" | "artifacts" | "dynamic"; tier: "static" | "history" | "dynamic"; chars: number; tokens: number };
+export async function estimateContext(body: Record<string, unknown>): Promise<{ blocks: CtxBlock[]; total: number; dropped: number }> {
+  const r = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ system: "Bạn là một trợ lý AI hữu ích.", max_tokens: 1500, skills: true, model: activeModel || undefined, effort: activeEffort, ...body, estimate: true }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new LLMError(j.error || `LLM ${r.status}`, r.status);
+  return j;
+}
+/** Nén lịch sử: tóm tắt các tin cũ (kèm tóm tắt trước đó nếu có) thành bản ngắn. */
+export async function compactHistory(messages: { role: string; content: string }[], summary?: string): Promise<string> {
+  const r = await fetch("/api/context/compact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages, summary }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new LLMError(j.error || `Lỗi ${r.status}`, r.status);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage"));
+  return String(j.summary ?? "");
 }
 
 // Artifact dùng AI: window.synchro.complete(prompt) bên trong artifact → model đang chọn (không công cụ, không skill).

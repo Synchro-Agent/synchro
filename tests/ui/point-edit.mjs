@@ -61,6 +61,13 @@ handlers.push(async (m) => {
   await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }, s).catch(() => {});
   await send("Runtime.runIfWaitingForDebugger", {}, s).catch(() => {});
 });
+// Các khung con (artifact chạy ở tiến trình riêng): để đọc vị trí phần tử bên trong khung.
+const frames = [];
+handlers.push((m) => { if (m.method === "Target.attachedToTarget" && m.params.targetInfo?.type === "iframe") frames.push(m.params.sessionId); });
+const inFrame = async (expr) => {
+  for (const s of [...frames].reverse()) { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true }, s).catch(() => null); if (r?.result?.value) return r.result.value; }
+  return null;
+};
 await P("Runtime.enable"); await P("Page.enable"); await P("Network.enable");
 await P("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
 await P("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -130,6 +137,59 @@ try {
   const n = await ev(`document.querySelector(".cmp-n").textContent`);
   ok(/\+1/.test(n) && /−1/.test(n), "mã thay đổi: đúng 1 dòng thêm, 1 dòng bớt " + n, n);
   await shot("4-diff");
+
+  // Alt+Click: không bật chế độ chọn, giữ Alt rồi bấm vào phần tử → biết đúng dòng mã, chỉ gửi các dòng quanh đó.
+  const altPick = async (find, what) => {
+    let r = null;
+    for (let i = 0; i < 30 && !r; i++) { r = await inFrame(`(() => { if (!document.querySelector("[data-sx-loc]")) return null; const el = ${find}; if (!el) return null; el.scrollIntoView({ block: "center" }); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`); if (!r) await sleep(300); }
+    if (!r) throw new Error("not found in frame: " + what);
+    await sleep(300);
+    const fo = await ev(`(() => { const b = document.querySelector(".art-panel .art-frame").getBoundingClientRect(); return [b.x, b.y]; })()`);
+    for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await P("Input.dispatchMouseEvent", { type, x: fo[0] + r[0], y: fo[1] + r[1], button: "left", clickCount: 1, modifiers: 1 });
+    await until(`!!document.querySelector(".pe-bar .pe-loc")`, 8000, "alt-picked " + what);
+  };
+  const sendEdit = async (text, ver) => {
+    await click(`document.querySelector(".pe-in input")`, "req"); await P("Input.insertText", { text });
+    await click(`document.querySelector(".pe-in .btn.dark")`, "send");
+    await until(`[...document.querySelectorAll(".art-ver span")].some((e) => e.textContent.trim() === ${JSON.stringify(ver)}) && !document.querySelector(".thinking") && !document.querySelector(".art-card.busy")`, 60000, "version " + ver);
+    await sleep(1500);
+  };
+  const hlInfo = `(() => { const h = [...document.querySelectorAll(".art-code div.hl")]; return { n: h.length, first: h[0]?.querySelector("span")?.textContent, text: h.map((d) => d.textContent).join("\\n") }; })()`;
+  await click(`document.querySelector('[aria-label="So sánh với bản trước"]')`, "compare off"); await sleep(1500);
+  ok(await ev(`!document.querySelector(".pe-hint")`), "chưa bật chế độ chọn");
+  await altPick(`[...document.querySelectorAll("h3")].find((e) => e.textContent === "Pha thủ công")`, "card h3");
+  const chip = await ev(`document.querySelector(".pe-loc").textContent`);
+  ok(/<h3>/.test(await ev(`document.querySelector(".pe-what code").textContent`)) && /Dòng \d+/.test(chip), "Alt+Click vào tiêu đề thẻ: thanh sửa hiện đúng phần tử và số dòng (" + chip + ")", chip);
+  await shot("5-alt");
+  await click(`document.querySelector(".pe-loc")`, "loc chip"); await sleep(700);
+  let hi = await ev(hlInfo);
+  ok(hi.n === 1 && hi.text.includes("<h3>Pha thủ công</h3>") && chip.endsWith(hi.first), "Xem trong mã: tô đúng dòng chứa phần tử (" + hi.first + ")", JSON.stringify(hi));
+  await shot("6-code-hl");
+  await sendEdit("đổi màu đỏ", "3/3");
+  await click(byText(".art-tabs button", "Mã"), "code tab"); await sleep(600);
+  const code3 = await ev(`document.querySelector(".art-code").textContent`);
+  ok(code3.includes('<h3 style="color:#dc2626">Pha thủ công</h3>') && code3.includes("<h3>Rang trong ngày</h3>") && code3.includes("<h3>Không gian yên tĩnh</h3>"), "sửa đúng phần tử ở dòng đó, hai thẻ cùng dòng mẫu giữ nguyên");
+  const texts = ((await fetch("http://127.0.0.1:4010/_debug/last").then((r) => r.json())).anthropic?.messages ?? []).flatMap((m) => (typeof m.content === "string" ? [m.content] : (m.content ?? []).map((x) => x.text ?? "")));
+  const pe = /<point_edit>([\s\S]*?)<\/point_edit>/.exec(texts.findLast((t) => t.includes("<point_edit>")) ?? "")?.[1] ?? "";
+  ok(/dòng: \d+-\d+/.test(pe) && /mã nguồn quanh đó/.test(pe) && !/<meta charset/.test(pe) && pe.split("\n").length < 15, "yêu cầu gửi model: số dòng và vài dòng mã quanh phần tử, không kèm cả trang", pe);
+  const bubble = await ev(`(() => { const u = [...document.querySelectorAll(".user-msg")].at(-1); return u ? [!!u.querySelector(".pe-msg"), u.textContent] : [false, ""]; })()`);
+  ok(bubble[0] && !bubble[1].includes("point_edit") && /<h3>Pha thủ côngDòng \d+đổi màu đỏ/.test(bubble[1]), "tin nhắn trong chat hiện gọn: phần tử, dòng, yêu cầu (" + bubble[1] + ")", bubble[1]);
+
+  // React: dòng mã lấy từ JSX (Babel), phần tử sinh từ danh sách trỏ về đúng dòng mẫu trong .map().
+  await click(byText(".nav-item", "Mới"), "new chat"); await sleep(800);
+  await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm ứng dụng todo" });
+  await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
+  await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking") && /Danh sách việc cần làm/.test(document.querySelector(".art-panel .art-head-t")?.textContent ?? "")`, 60000, "todo reply");
+  await sleep(2500);
+  await altPick(`[...document.querySelectorAll("span")].find((e) => e.textContent === "Gửi email cho nhóm thiết kế")`, "todo item");
+  await click(`document.querySelector(".pe-loc")`, "loc chip"); await sleep(700);
+  hi = await ev(hlInfo);
+  ok(hi.n === 1 && hi.text.includes("{i.text}</span>"), "React: bấm một việc trong danh sách → đúng dòng mẫu trong .map() (" + hi.first + ")", JSON.stringify(hi));
+  await sendEdit("đổi màu xanh lá", "2/2");
+  await click(byText(".art-tabs button", "Xem trước"), "preview"); await sleep(2500);
+  const col = await inFrame(`(() => { const e = [...document.querySelectorAll("span")].find((x) => x.textContent === "Gửi email cho nhóm thiết kế"); return e ? getComputedStyle(e).color : null; })()`);
+  ok(col === "rgb(22, 163, 74)", "bản sửa chạy được: việc trong danh sách đổi sang xanh lá (" + col + ")", col);
+  await shot("7-react");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 const fails = results.filter((r) => !r[0]).length;
 console.log(`${results.length - fails}/${results.length} đạt`);

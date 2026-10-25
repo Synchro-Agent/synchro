@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
 import { getLang, tr } from "./i18n";
@@ -33,6 +33,8 @@ import { ApprovalCard } from "./connectorsui";
 import { loadCaps, useCaps } from "./capsclient";
 import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
 import { resolveArt, type ArtVersion } from "./vfs";
+import { chatHistory, mixExtra } from "./history";
+import { ContextMixer } from "./mixer";
 import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
 import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
 import type { OutFile } from "./llm";
@@ -258,7 +260,7 @@ function Composer(p: {
   onSend: (t: string, f: string[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
   model: string; setModel: (m: string) => void; goCustom: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
-  onVoice?: () => void;
+  onVoice?: () => void; extra?: React.ReactNode;
 }) {
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
@@ -351,6 +353,7 @@ function Composer(p: {
         {chips && <div style={{ width: "100%" }}>{chips}</div>}
         {plus}
         <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
+        {p.extra}
         {micBtn}
         {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
       </div>
@@ -401,6 +404,26 @@ function Toast({ text }: { text: string }) {
   }, [text]);
   if (!shown) return null;
   return <div className={`toast ${out ? "out" : ""}`} key={shown} role="status">{shown}</div>;
+}
+
+// Tin "Chỉ và sửa": hiện gọn phần tử đã chỉ (thẻ, nội dung, dòng mã) và yêu cầu; khối <point_edit> đầy đủ chỉ dành cho model.
+const PE_RE = /^([\s\S]*?)<point_edit>([\s\S]*?)<\/point_edit>\s*(?:Yêu cầu:\s*)?([\s\S]*)$/;
+function UserText({ text }: { text: string }) {
+  const m = PE_RE.exec(text);
+  if (!m) return <>{text}</>;
+  const get = (k: string) => new RegExp(`^${k}:[ \\t]*(.*)$`, "m").exec(m[2])?.[1]?.trim() ?? "";
+  const tag = /^<([a-zA-Z][\w-]*)/.exec(get("mã của phần tử"))?.[1];
+  const line = /^(\d+)-(\d+)$/.exec(get("dòng"));
+  const title = /“([^”]*)”/.exec(m[1])?.[1];
+  return (
+    <>
+      <span className="pe-msg" title={title}>
+        <I.Pointer size={12} />{tag && <code data-notr>{`<${tag}>`}</code>}<span data-notr>{get("nội dung đang hiện") || get("vị trí")}</span>
+        {line && <em>{tr("Dòng")} <span data-notr>{line[1] === line[2] ? line[1] : `${line[1]}–${line[2]}`}</span></em>}
+      </span>
+      {m[3].trim()}
+    </>
+  );
 }
 
 export default function Home() {
@@ -693,7 +716,8 @@ export default function Home() {
       // Lượt chạy bền: máy chủ trả lời ở nền; mã lượt lưu vào tin nhắn để tải lại trang vẫn nhận được kết quả.
       const lastMsg = (f: (m: Msg) => Msg) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills,
-        onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta });
+        onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta,
+        extra: mixExtra(chatsRef.current.find((c) => c.id === id)) });
       const used = takeSkillsUsed();
       libs = takeLibsUsed();
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -799,9 +823,8 @@ export default function Home() {
     setTplMode(null);
     setPrefill({ t: "", n: 0 });
     const prior = id !== null && view === "chat" ? (chatsRef.current.find((c) => c.id === id)?.msgs ?? []) : [];
-    // Lịch sử theo chuẩn Synchro: câu trả lời kèm dấu vết công cụ; câu trả lời bị dừng ghi rõ là chưa hoàn chỉnh.
-    const STOPPED = { id: "stop", name: "(dừng)", label: "Câu trả lời", input: "", status: "cancelled_by_user" as const, summary: "Người dùng đã bấm Dừng giữa chừng; câu trả lời trên chưa hoàn chỉnh." };
-    const hist: LLMMsg[] = [...prior.filter((m) => m.text || m.stopped).map((m): LLMMsg => (m.role === "ai" ? { role: "assistant", content: m.text, ...(m.trace?.length || m.stopped ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : [])] } : {}) } : { role: "user", content: m.text })), { role: "user", content: t }];
+    // Lịch sử theo chuẩn Synchro (history.ts): kèm dấu vết công cụ, đánh dấu câu trả lời bị dừng, bỏ phần đã nén.
+    const hist: LLMMsg[] = [...chatHistory(prior, chatsRef.current.find((c) => c.id === id)?.compact), { role: "user", content: t }];
     const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
     fileContext(f, t).then(({ blocks, errors }) => {
       errors.forEach((m) => say(m));
@@ -1197,11 +1220,11 @@ export default function Home() {
           <>
             <div className="thread" ref={threadRef} onScroll={onScroll}>
               <div className="thread-in">
-                {chat.msgs.map((m, i) =>
+                {chat.msgs.map((m, i) => <Fragment key={i}>{chat.compact?.upto === i && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}{
                   m.role === "user" ? (
                     <div key={i} className="user-wrap">
                       {m.files && <div className="attach" style={{ justifyContent: "flex-end" }}>{m.files.map((f, k) => <FileCard key={k} name={f} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
-                      <div className="user-msg">{m.text}</div>
+                      <div className="user-msg"><UserText text={m.text} /></div>
                     </div>
                   ) : (
                     <div key={i}>
@@ -1227,7 +1250,7 @@ export default function Home() {
                       {m.done && i === chat.msgs.length - 1 && !busy && <SaveSkillChip chat={chat} all={chats} say={say} />}
                     </div>
                   )
-                )}
+                }</Fragment>)}
                 {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
                 <div ref={endRef} />
               </div>
@@ -1247,7 +1270,8 @@ export default function Home() {
               {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
                   onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
-              <Composer {...composerProps} dock />
+              <Composer {...composerProps} dock extra={<ContextMixer chat={chat} studio={chat.studio} busy={busy} say={say} recentSkills={[...new Set(chat.msgs.filter((m) => m.role === "ai").slice(-2).flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))]}
+                onChange={(p) => setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, ...p } : c)))} />} />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
             </div>
           </>

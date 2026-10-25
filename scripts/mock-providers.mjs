@@ -163,7 +163,7 @@ function lastUserFull(msgs = []) {
   return "";
 }
 // Tầng động Synchro ghép vào cuối tin nhắn mới nhất (artifact hiện tại, tài liệu tri thức…): không phải câu người dùng gõ.
-const DYN = /<(current_artifacts|tool_activity|context_mixer)>[\s\S]*?<\/\1>/g;
+const DYN = /<(current_artifacts|tool_activity|context_mixer|skill_routing)>[\s\S]*?<\/\1>/g;
 const lastUserText = (msgs) => lastUserFull(msgs).replace(DYN, "").trim();
 // Tầng động của tin nhắn người dùng gần nhất có tầng động (bước tự vá chèn thêm một tin nhắn hệ thống phía sau).
 function dynOf(msgs = []) {
@@ -349,7 +349,7 @@ async function handler(req, res) {
       const shape = anthropicShape(b);
       if (shape) return send(res, 400, err("invalid_request_error", shape));
       const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
-      const sst = studioStep(sysText(b.system), JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
+      const sst = studioStep(`${sysText(b.system)}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ đọc skill trong thư viện trước." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: sst.text }], stop_reason: "end_turn" }); }
       const last = b.messages?.[b.messages.length - 1];
@@ -387,7 +387,7 @@ async function handler(req, res) {
       const ef = b.reasoning?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err(`Invalid value for 'reasoning.effort': '${ef}'.`));
       const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef);
-      const sst = studioStep(b.instructions, JSON.stringify(input), q, normTools(b.tools).map((t) => t.name));
+      const sst = studioStep(`${b.instructions ?? ""}\n${dynOf(input)}`, JSON.stringify(input), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: sst.tool.name, arguments: JSON.stringify(sst.tool.args), status: "completed" }] });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: sst.text, annotations: [] }] }] }); }
       // Gõ #tool: model gọi công cụ đầu tiên, lượt sau trả lời dựa trên kết quả.
@@ -436,7 +436,7 @@ async function handler(req, res) {
     if (shape) return send(res, 400, [{ error: { code: 400, message: shape, status: "INVALID_ARGUMENT" } }]);
     const { text, q } = reply("google", b.model, b.messages, b.max_tokens, b.reasoning_effort);
     const sig = (call) => (geminiThinks(b.model) ? { ...call, extra_content: { google: { thought_signature: `sig_${Date.now().toString(36)}` } } } : call);
-    const sst = studioStep(b.messages?.find((m) => m.role === "system")?.content, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
+    const sst = studioStep(`${b.messages?.find((m) => m.role === "system")?.content ?? ""}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
     if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } })] }, finish_reason: "tool_calls" }] });
     if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: sst.text }, finish_reason: "stop" }] }); }
     const lastMsg = b.messages?.[b.messages.length - 1];

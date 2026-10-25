@@ -17,8 +17,17 @@ db.exec("CREATE TABLE IF NOT EXISTS usage_config (id INTEGER PRIMARY KEY CHECK (
 const saved = db.prepare("SELECT json FROM usage_config WHERE id = 1").get()?.json;
 const cfg = (() => { try { return JSON.parse(saved ?? "{}"); } catch { return {}; } })();
 db.prepare("INSERT INTO usage_config (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(JSON.stringify({ ...cfg, budget: { session: null, weekly: null } }));
-const restore = () => { if (saved === undefined) db.prepare("DELETE FROM usage_config WHERE id = 1").run(); else db.prepare("UPDATE usage_config SET json = ? WHERE id = 1").run(saved); };
+// Khả năng (Cài đặt → Khả năng) của tài khoản thử nghiệm: bộ kiểm thử bật / tắt rồi tự trả lại, nhưng bộ bị ngắt giữa chừng thì không,
+// nên trình chạy chụp lại trước và trả về như cũ khi xong (kể cả khi lỗi).
+db.exec("CREATE TABLE IF NOT EXISTS user_caps (user_id TEXT PRIMARY KEY, caps TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+const owner = db.prepare("SELECT id FROM users WHERE email = ?").get("admin@synchro.test")?.id;
+const savedCaps = owner ? db.prepare("SELECT caps FROM user_caps WHERE user_id = ?").get(owner)?.caps : undefined;
+const restore = () => {
+  if (saved === undefined) db.prepare("DELETE FROM usage_config WHERE id = 1").run(); else db.prepare("UPDATE usage_config SET json = ? WHERE id = 1").run(saved);
+  if (owner) { if (savedCaps === undefined) db.prepare("DELETE FROM user_caps WHERE user_id = ?").run(owner); else db.prepare("UPDATE user_caps SET caps = ? WHERE user_id = ?").run(savedCaps, owner); }
+};
 process.on("exit", restore);
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
 
 // Đăng nhập tài khoản chủ sở hữu một lần, chia phiên cho các bộ kiểm thử.
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";

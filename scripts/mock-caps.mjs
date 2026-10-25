@@ -641,10 +641,27 @@ function pointEdit(q, msgs, sys) {
   const sel = get("vị trí"), shown = get("nội dung đang hiện");
   const req = /Yêu cầu:\s*([\s\S]*)$/.exec(q)?.[1]?.trim() ?? "";
   let body = prev.body, what = "";
+  // Có số dòng (Alt+Click): như model thật, sửa đúng các dòng đó (kể cả khi cùng nội dung xuất hiện ở chỗ khác).
+  const ln = /dòng:\s*(\d+)-(\d+)/.exec(blk[1]);
+  const inLines = (fn) => {
+    const L = body.split("\n"), a = Number(ln[1]) - 1, b = Math.max(a + 1, Number(ln[2]));
+    const seg = L.slice(a, b).join("\n"), next = fn(seg);
+    if (next === seg) return false;
+    L.splice(a, b - a, ...next.split("\n")); body = L.join("\n"); return true;
+  };
   const to = /(?:thành|sang|là)\s*["“'](.+?)["”']\s*$/i.exec(req) ?? /(?:thành|sang|là)\s+(.+)$/i.exec(req);
   if (to && shown && !/\bmàu\b/i.test(req)) {
     const old = shown.split("\n")[0].trim();
-    if (body.includes(old)) { body = body.replace(old, to[1].trim()); what = `đổi nội dung “${old.slice(0, 40)}” thành “${to[1].trim()}”`; }
+    if (ln) { if (inLines((x) => x.replace(old, to[1].trim()))) what = `đổi nội dung “${old.slice(0, 40)}” ở dòng ${ln[1]} thành “${to[1].trim()}”`; }
+    else if (body.includes(old)) { body = body.replace(old, to[1].trim()); what = `đổi nội dung “${old.slice(0, 40)}” thành “${to[1].trim()}”`; }
+  }
+  if (!what && ln && /màu|mau/i.test(req)) {
+    const color = /đỏ|do\b/i.test(req) ? "#dc2626" : /xanh lá|xanh la/i.test(req) ? "#16a34a" : /cam/i.test(req) ? "#ea580c" : "#2563eb";
+    const style = /react/.test(prev.type) ? `style={{ color: "${color}" }}` : `style="color:${color}"`;
+    // Đúng phần tử đã chỉ (mã của nó nằm trong các dòng đó), không thì thẻ đầu tiên của dòng.
+    const own = get("mã của phần tử"), tag = /^<([a-zA-Z][\w-]*)/.exec(own)?.[0];
+    const mark = (x) => (own && tag && x.includes(own) ? x.replace(own, own.replace(tag, `${tag} ${style}`)) : x.replace(/<([a-zA-Z][\w-]*)/, `<$1 ${style}`));
+    if (inLines(mark)) what = `đổi màu phần tử ở dòng ${ln[1]}`;
   }
   if (!what && /màu|mau/i.test(req)) {
     const color = /đỏ|do\b/i.test(req) ? "#dc2626" : /xanh lá|xanh la/i.test(req) ? "#16a34a" : /cam/i.test(req) ? "#ea580c" : "#2563eb";
@@ -680,9 +697,17 @@ function askReply(t, msgs) {
   return `Để làm đúng ý ngay lần đầu, bạn chọn nhanh giúp mình vài điều:\n\n\`\`\`ask\n${JSON.stringify({ questions: ASK[kind] }, null, 1)}\n\`\`\``;
 }
 
+// Nén lịch sử (bàn trộn ngữ cảnh): như model thật, tóm tắt yêu cầu và sản phẩm thành vài gạch đầu dòng ngắn.
+function compactReply(q) {
+  const asks = [...String(q).matchAll(/Người dùng: ([^\n]+)/g)].map((m) => m[1].trim().slice(0, 120));
+  const arts = [...new Set([...String(q).matchAll(/\[artifact "([^"]+)"\]/g)].map((m) => m[1]))];
+  return [`- Mục tiêu: ${asks[0] ?? "trò chuyện chung"}.`, ...asks.slice(1, 6).map((x) => `- Người dùng yêu cầu thêm: ${x}.`), ...(arts.length ? [`- Sản phẩm đã tạo: ${arts.join(", ")} (bản hiện tại gửi kèm ở mỗi lượt).`] : []), `- Đã nén ${asks.length} lượt hỏi đáp.`].join("\n");
+}
+
 export function capsReply(sys, q, msgs, toolNames) {
   const t = norm(q);
   const s = String(sys ?? "");
+  if (s.includes("<compact_history>")) return { text: compactReply(q) };
   if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs, s); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
   if (s.includes("<ask_user>")) { const a = askReply(t, msgs); if (a) return { text: a }; }
