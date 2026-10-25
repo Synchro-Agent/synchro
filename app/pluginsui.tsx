@@ -296,11 +296,11 @@ export function SkillHub() {
             <button className="btn dark pl-add" onClick={() => setAddMenu(!addMenu)}><I.Plus size={14} />Add<I.Chevron size={13} /></button>
             {addMenu && (
               <div className="menu pl-menu right">
-                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setGhFocus(Date.now()); }}><I.GitHub size={15} /><span className="pl-mi"><b>Add from GitHub</b><em>One skill or a whole repository, detected for you</em></span></button>
-                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }}><I.Upload size={15} /><span className="pl-mi"><b>Upload a skill</b><em>A .zip skill folder or a SKILL.md file</em></span></button>
-                <button className="menu-item" onClick={() => { setAddMenu(false); app.close(); app.ask("Hãy giúp tôi tạo một skill mới."); }}><I.Sparkle size={15} /><span className="pl-mi"><b>Create with Synchro</b><em>Describe what you need, Synchro writes the skill</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setGhFocus(Date.now()); }}><span className="pl-mic"><I.GitHub size={15} /></span><span className="pl-mi"><b>Add from GitHub</b><em>One skill or a whole repository, detected for you</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }}><span className="pl-mic"><I.FileUp size={17} /></span><span className="pl-mi"><b>Upload a skill</b><em>A .zip skill folder or a SKILL.md file</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); app.close(); app.ask("Hãy giúp tôi tạo một skill mới."); }}><span className="pl-mic"><I.Sparkles size={17} /></span><span className="pl-mi"><b>Create with Synchro</b><em>Describe what you need, Synchro writes the skill</em></span></button>
                 <hr />
-                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("discover"); }}><I.Book size={15} /><span className="pl-mi"><b>Browse Synchro directory</b><em>Curated libraries with checked licenses</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("discover"); }}><span className="pl-mic"><I.Library size={17} /></span><span className="pl-mi"><b>Browse Synchro directory</b><em>Curated libraries with checked licenses</em></span></button>
               </div>
             )}
           </div>

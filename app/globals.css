@@ -449,7 +449,8 @@ html[data-chat-font="System"] .ai-msg{font-family:system-ui,-apple-system,sans-s
   background:color-mix(in srgb,var(--card) 88%,transparent);-webkit-backdrop-filter:blur(22px) saturate(1.8);backdrop-filter:blur(22px) saturate(1.8);
   box-shadow:0 0 0 .5px var(--border-strong),inset 0 1px 0 rgba(255,255,255,.18),0 14px 36px rgba(0,0,0,.28);
   opacity:0;visibility:hidden;transform:translateY(-4px) scale(.98);transform-origin:top left;pointer-events:none;transition:opacity .18s,transform .22s var(--ease),visibility 0s .22s}
-.tpl.last .tpl-pop{left:auto;right:0;transform-origin:top right}
+/* Thẻ cuối chỉ lật khung mô tả sang phải khi màn hình hẹp, còn lại luôn nằm ngay dưới thẻ đang rê */
+@media (max-width:900px){.tpl.last .tpl-pop{left:auto;right:0;transform-origin:top right}}
 .tpl:hover .tpl-pop{opacity:1;visibility:visible;transform:none;transition-delay:.12s,.12s,.12s}
 .tpl-pop b{font-size:18px;font-weight:460;color:var(--text)}
 .tpl-pop i{font-style:normal;font-size:14px;color:var(--text-3)}
@@ -3269,3 +3270,47 @@ html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--ca
 .hub-drop b{font-weight:560;color:var(--text)}
 .hub-drop span{font-size:12.5px;color:var(--text-3)}
 .hub-yours .pl-row2 .toggle{flex:none}
+/* Ô icon trong menu Thêm của Kho kỹ năng: cùng kích thước, nền nhạt, viền mảnh */
+.pl-mic{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--pill);color:var(--text-2);box-shadow:inset 0 0 0 .5px var(--border-strong)}
+.menu.pl-menu .menu-item:hover .pl-mic{background:var(--card);color:var(--text)}
+.menu.pl-menu.right .menu-item{gap:12px;padding-left:8px}
+/* Khung mô tả của thẻ mẫu (Docs / Slides / Design) phải nằm trên lưới artifact bên dưới:
+   thẻ nhích lên khi rê chuột (transform) tạo lớp riêng, nên nâng cả hàng mẫu và thẻ đang rê lên trên. */
+.tpls{position:relative;z-index:6}
+.tpl:hover,.tpl:focus-visible{z-index:2}
+.tpl-pop{background:color-mix(in srgb,var(--card) 97%,transparent)}
+/* Menu Thêm của Kho kỹ năng nằm đè lên chữ: nền đặc để không lộ chữ phía sau */
+html body .menu.pl-menu{--gl-fill:color-mix(in srgb,var(--card) 96%,transparent)}
+html body .menu.pl-menu::before{background:var(--card)!important}
+
+/* ===================== Rõ nét: chữ đậm vừa, mực dịu, icon cùng một nét ===================== */
+/* Chữ nền 360 quá mảnh nên trông nhòe và díu lại; 400 cho đoạn văn, 430 cho chữ trên nút và mục điều hướng. */
+:root{--ink:#3d3d3a;--ink-strong:#141413}
+[data-theme="dark"]{--ink:#dedcd4;--ink-strong:#faf9f5}
+body{font-weight:400;text-rendering:optimizeLegibility}
+.nav-item,.chat-item,.menu-item,.sel,.btn,.chip,.tab,.sec-btn,.s-item{font-weight:430}
+.nav-item.active,.s-item.on,.chat-item.active{font-weight:500;color:var(--ink-strong)}
+
+/* Thanh bên: hàng 32px, chữ 14px, icon 18px, khoảng cách đều như bản mẫu */
+.nav{gap:2px}
+.nav-item{height:32px;font-size:14px;gap:11px;color:var(--ink)}
+.nav-item>svg{width:18px;height:18px}
+.chat-item{height:30px;line-height:30px;font-size:13.5px;color:var(--ink)}
+.section-label{font-size:12.5px;font-weight:430;margin-top:18px}
+
+/* Cài đặt: cùng nhịp với thanh bên */
+.s-item{height:34px;gap:12px;font-size:14px;color:var(--ink)}
+.s-item>svg{width:19px;height:19px}
+.s-group{font-size:12.5px;font-weight:430;color:var(--text-3)}
+
+/* Menu: chữ chính đậm vừa, mô tả nhạt hơn một bậc */
+.menu-item{color:var(--ink)}
+.pl-mi b,.art-dl-t b{font-weight:480;color:var(--ink-strong)}
+.pl-mi em,.art-dl-t em{color:var(--text-3)}
+
+/* Icon: nét 1.5px thật trên màn hình cho mọi icon (vẽ trên lưới 16, 20 hay 24 đều như nhau), không còn chỗ dày chỗ mảnh */
+.nav-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
+.s-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
+.menu-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
+.icon-btn svg :is(path,circle,rect,line,polyline,polygon,ellipse),
+.pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:1.5px}
