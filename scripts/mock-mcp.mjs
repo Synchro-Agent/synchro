@@ -27,6 +27,10 @@ export function startMockMcp(port = 4011) {
   ];
   const SSE_TOOLS = [{ name: "echo", title: "Echo", description: "Lặp lại nội dung gửi vào.", inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] }, annotations: { readOnlyHint: true } }];
 
+  // Logo để thử tự nhận diện: trang chủ khai báo favicon SVG; máy chủ /modern tự khai báo icon trong serverInfo.
+  const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#F59E0B"/><path d="M18 18h28v6H18zm0 11h28v6H18zm0 11h18v6H18z" fill="#fff"/></svg>`;
+  const MODERN_ICON = "data:image/svg+xml;base64," + Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#7C3AED"/><path d="M32 14l14 32H18z" fill="#fff"/></svg>`).toString("base64");
+  const MODERN_INFO = { name: "mock-modern", title: "Mock Modern", version: "1.0.0", icons: [{ src: MODERN_ICON, mimeType: "image/svg+xml", sizes: ["any"] }] };
   const text = (t, isError = false) => ({ content: [{ type: "text", text: t }], ...(isError ? { isError: true } : {}) });
   function callNotes(name, a = {}) {
     if (name === "search_notes") { const q = String(a.query ?? "").toLowerCase(); const r = notes.filter((n) => (n.title + " " + n.body).toLowerCase().includes(q)); return text(r.length ? r.map((n) => `[${n.id}] ${n.title}: ${n.body}`).join("\n") : "Không có ghi chú nào khớp."); }
@@ -48,6 +52,8 @@ export function startMockMcp(port = 4011) {
     const u = new URL(req.url, BASE);
     const p = u.pathname;
 
+    if (p === "/" && req.method === "GET") return html(res, `<!doctype html><html><head><title>Mock Notes</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="mask-icon" href="/mask.svg"></head><body>Mock Notes</body></html>`);
+    if (p === "/favicon.svg") { res.writeHead(200, { "content-type": "image/svg+xml" }); return res.end(FAVICON); }
     // ---------------- OAuth ----------------
     if (p === "/.well-known/oauth-protected-resource/mcp" || p === "/.well-known/oauth-protected-resource") return send(res, 200, { resource: `${BASE}/mcp`, authorization_servers: [BASE], scopes_supported: ["notes:read", "notes:write"], bearer_methods_supported: ["header"] });
     if (p === "/.well-known/oauth-authorization-server") return send(res, 200, { issuer: BASE, authorization_endpoint: `${BASE}/authorize`, token_endpoint: `${BASE}/token`, registration_endpoint: `${BASE}/register`, response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"], code_challenge_methods_supported: ["S256"], token_endpoint_auth_methods_supported: ["none"], scopes_supported: ["notes:read", "notes:write", "offline_access"], authorization_response_iss_parameter_supported: true });
@@ -59,7 +65,10 @@ export function startMockMcp(port = 4011) {
       return send(res, 201, { ...c, client_id_issued_at: Math.floor(Date.now() / 1000), token_endpoint_auth_method: "none" });
     }
     if (p === "/authorize") {
-      const q = u.searchParams, c = clients.get(q.get("client_id") ?? "");
+      // Client đã đăng ký trước lần khởi động lại máy chủ giả lập vẫn được nhận (máy chủ chỉ lưu trong bộ nhớ).
+      const q = u.searchParams, cid = q.get("client_id") ?? "";
+      if (!clients.has(cid) && cid.startsWith("mock_") && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(q.get("redirect_uri") ?? "")) clients.set(cid, { client_id: cid, redirect_uris: [q.get("redirect_uri")], client_name: "Synchro" });
+      const c = clients.get(cid);
       if (!c || !c.redirect_uris.includes(q.get("redirect_uri"))) return html(res, "<p>client_id hoặc redirect_uri không hợp lệ.</p>");
       if (q.get("code_challenge_method") !== "S256" || !q.get("code_challenge")) return html(res, "<p>Thiếu PKCE S256.</p>");
       if (q.get("resource") !== `${BASE}/mcp`) return html(res, `<p>resource không đúng: ${q.get("resource")}</p>`);
@@ -142,8 +151,8 @@ export function startMockMcp(port = 4011) {
       if (!ver || !meta["io.modelcontextprotocol/clientCapabilities"]) return send(res, 400, err(m.id ?? null, -32602, "Missing required _meta fields"));
       if (ver !== "2026-07-28") return send(res, 400, err(m.id, -32022, "Unsupported protocol version", { supported: ["2026-07-28"], requested: ver }));
       if (req.headers["mcp-protocol-version"] !== ver || req.headers["mcp-method"] !== m.method) return send(res, 400, err(m.id, -32020, "Header mismatch: MCP-Protocol-Version / Mcp-Method"));
-      const info = { "io.modelcontextprotocol/serverInfo": { name: "mock-modern", title: "Mock Modern", version: "1.0.0" } };
-      if (m.method === "server/discover") return send(res, 200, ok(m.id, { resultType: "complete", supportedVersions: ["2026-07-28"], capabilities: { tools: {} }, serverInfo: { name: "mock-modern", title: "Mock Modern", version: "1.0.0" }, _meta: info }));
+      const info = { "io.modelcontextprotocol/serverInfo": MODERN_INFO };
+      if (m.method === "server/discover") return send(res, 200, ok(m.id, { resultType: "complete", supportedVersions: ["2026-07-28"], capabilities: { tools: {} }, serverInfo: MODERN_INFO, _meta: info }));
       if (m.method === "tools/list") return send(res, 200, ok(m.id, { resultType: "complete", tools: MODERN_TOOLS, _meta: info }));
       if (m.method === "tools/call") {
         if (decode(req.headers["mcp-name"]) !== m.params?.name) return send(res, 400, err(m.id, -32020, "Header mismatch: Mcp-Name"));

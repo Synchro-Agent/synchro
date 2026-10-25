@@ -1,7 +1,7 @@
 import { enabledSkills, recordUse } from "../../skillstore";
 import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "../../skillruntime";
 import { can, canModel, current, permsOf } from "../../authstore";
-import { clampEffort, effortCap, isEffort, legacyModel, type Effort } from "../../catalog";
+import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "../../providers";
 import { ConnectorSession, connectorsPrompt } from "../../connectors";
 import { randomToken } from "../../mcpauth";
@@ -81,7 +81,7 @@ const mockAdapter = (skills: Skl): Adapter => ({
 
 // ---------------------------------------------------------------- vòng lặp công cụ (skill + connector)
 type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null };
-type Decision = "allow" | "always" | "deny";
+type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
 type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number };
@@ -122,7 +122,7 @@ async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"
             const ct = x.sess!.get(c.name)!;
             const input = JSON.stringify(c.input ?? {});
             return {
-              id: c.id, connector: { id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color },
+              id: c.id, connector: { id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color, icon: ct.icon },
               tool: { name: ct.tool.name, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, description: (ct.tool.description ?? "").slice(0, 400), destructive: !ct.tool.annotations?.readOnlyHint && ct.tool.annotations?.destructiveHint === true },
               input: input.length > 20_000 ? { _: input.slice(0, 20_000) + "…" } : c.input ?? {},
             };
@@ -182,8 +182,9 @@ export async function POST(req: Request) {
     const d: Record<string, Decision> = {};
     for (const call of p.calls) if (needsAsk(p.x, call)) {
       const v = raw[call.id];
-      d[call.id] = v === "allow" || v === "always" ? v : "deny";
+      d[call.id] = v === "allow" || v === "chat" || v === "always" ? v : "deny";
       if (v === "always") p.x.sess!.allowAlways(call.name);
+      if (v === "chat") p.x.sess!.allowChat(call.name);
     }
     try {
       await execute(p.ad, p.m, p.x, p.calls, p.used, d);
@@ -194,7 +195,7 @@ export async function POST(req: Request) {
       return Response.json({ error: String((e as Error).message ?? e) }, { status: 502 });
     }
   }
-  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted } = body;
+  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted, conv } = body;
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
@@ -207,7 +208,7 @@ export async function POST(req: Request) {
   try {
     const list = skills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
-    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id); if (!sess.tools.length) sess = null; }
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: typeof conv === "string" && conv.length <= 64 ? conv : undefined, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     if (list.length || sess) {
       // Chạy script của skill chỉ khi máy chủ có sandbox và tài khoản được phép dùng Sandbox.
       const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");

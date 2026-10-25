@@ -8,7 +8,9 @@ import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
 import type { AuthUser, Providers } from "./auth";
-import { ALL, allowsModel, effortsFor, FEATURES, type Effort, type Perms, type ProviderInfo } from "./catalog";
+import { ALL, allowsModel, effortsFor, FEATURES, FULL_CONN, type ConnPolicy, type Effort, type Perms, type ProviderInfo } from "./catalog";
+import { DIRECTORY } from "./connectordir";
+import { ConnLogo } from "./connectorsui";
 import { BrandLogo } from "./brands";
 import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
@@ -129,6 +131,38 @@ function EffortLimits({ catalog, models, value, onChange }: { catalog: ProviderI
   );
 }
 
+// Quyền connector: thêm connector tùy chỉnh, connector nào trong danh mục, công cụ xóa dữ liệu.
+function ConnPolicyEditor({ value, onChange, Toggle }: { value: ConnPolicy; onChange: (v: ConnPolicy) => void; Toggle: ToggleT }) {
+  const all = value.allowed.includes(ALL);
+  const ids = DIRECTORY.map((d) => d.id);
+  const flip = (id: string) => {
+    const cur = all ? ids : value.allowed;
+    onChange({ ...value, allowed: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+  };
+  return (
+    <>
+      <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>
+        <div><div className="t">Custom connectors</div><div className="d">Add any remote MCP server by URL.</div></div>
+        <Toggle on={value.custom} set={(v) => onChange({ ...value, custom: v })} />
+      </div>
+      <div className="adm-perm-row">
+        <div><div className="t">Tools that delete data</div><div className="d">Use tools the server marks as able to delete data. When off, those tools are blocked everywhere.</div></div>
+        <Toggle on={value.destructive} set={(v) => onChange({ ...value, destructive: v })} />
+      </div>
+      <div className="adm-perm-row">
+        <div><div className="t">All directory connectors</div><div className="d">Includes connectors added to the directory later.</div></div>
+        <Toggle on={all} set={(v) => onChange({ ...value, allowed: v ? [ALL] : [...ids] })} />
+      </div>
+      <div className="adm-conn-chips">
+        {DIRECTORY.map((d) => {
+          const on = all || value.allowed.includes(d.id);
+          return <button key={d.id} type="button" className={`adm-pchip adm-cchip ${on ? "on" : ""}`} aria-pressed={on} onClick={() => flip(d.id)}><ConnLogo logo={d.logo} color={d.color} name={d.name} size={18} /><span data-notr>{d.name}</span>{on && <I.Check size={12} />}</button>;
+        })}
+      </div>
+    </>
+  );
+}
+
 // Chọn model và tính năng được phép. Dùng cho quyền mặc định và quyền riêng từng người.
 function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onChange: (p: Perms) => void; Toggle: ToggleT; catalog: ProviderInfo[] }) {
   const usable = catalog.some((p) => p.models.some((m) => allowsModel(value.models, m.key)));
@@ -148,6 +182,12 @@ function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onCha
           </div>
         ))}
       </div>
+      {value.features.connectors && (
+        <div className="adm-perm-sec adm-eff">
+          <h4>Connectors</h4>
+          <ConnPolicyEditor value={value.connectors ?? FULL_CONN} onChange={(v) => onChange({ ...value, connectors: v })} Toggle={Toggle} />
+        </div>
+      )}
       {catalog.length > 0 && usable && (
         <div className="adm-perm-sec adm-eff">
           <h4>Effort limit</h4>

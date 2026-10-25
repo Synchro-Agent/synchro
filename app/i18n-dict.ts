@@ -928,3 +928,25 @@ RULES_EN.push(
   [/^Không kết nối được tới ([^:]+)\.$/, (m) => `Couldn't connect to ${m[1]}.`],
   [/^Không gọi được (.+?): ([\s\S]+)$/, (m) => `Couldn't call ${m[1]}: ${m[2]}`],
 );
+
+// Connectors: quyền chi tiết (giao diện tiếng Việt / tiếng Anh).
+Object.assign(EN2VI, {
+  "Ask once per chat": "Hỏi một lần mỗi cuộc trò chuyện", "Ask every time": "Hỏi mỗi lần", "Use in": "Dùng trong", "Where Synchro may use this connector.": "Nơi Synchro được dùng connector này.",
+  "Chats": "Cuộc trò chuyện", "New tools": "Công cụ mới", "Permission for tools the server adds later.": "Quyền cho công cụ máy chủ thêm sau này.", "Permission for new tools": "Quyền cho công cụ mới",
+  "Automatic (read-only: allow, others: ask)": "Tự động (chỉ đọc: cho phép, còn lại: hỏi)", "Tools that delete data": "Công cụ xóa dữ liệu",
+  "Let Synchro use tools the server marks as able to delete data.": "Cho Synchro dùng công cụ được máy chủ đánh dấu là có thể xóa dữ liệu.",
+  "Calls per message": "Số lần gọi mỗi tin nhắn", "Most times Synchro may call this connector while answering one message.": "Số lần nhiều nhất Synchro được gọi connector này khi trả lời một tin nhắn.",
+  "No limit": "Không giới hạn", "Turned off by this connector's setting for tools that delete data.": "Đang tắt theo cài đặt công cụ xóa dữ liệu của connector này.",
+  "Your administrator doesn't allow tools that delete data.": "Quản trị viên không cho dùng công cụ xóa dữ liệu.", "Turned off by your administrator": "Quản trị viên đã tắt",
+  "Not allowed": "Không được phép", "Your administrator hasn't allowed this connector for your account.": "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này.",
+  "Custom connectors": "Connector tùy chỉnh", "Add any remote MCP server by URL.": "Tự thêm bất kỳ máy chủ MCP từ xa nào bằng địa chỉ.",
+  "Use tools the server marks as able to delete data. When off, those tools are blocked everywhere.": "Dùng công cụ được máy chủ đánh dấu là có thể xóa dữ liệu. Khi tắt, các công cụ đó bị chặn ở mọi nơi.",
+  "All directory connectors": "Mọi connector trong danh mục", "Includes connectors added to the directory later.": "Gồm cả connector được thêm vào danh mục sau này.",
+});
+Object.assign(VI2EN, {
+  "Cho phép trong cuộc trò chuyện này": "Allow for this chat",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này.": "Your administrator hasn't allowed your account to use this connector.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng connector tùy chỉnh.": "Your administrator hasn't allowed your account to use custom connectors.",
+  "Quản trị viên chưa cho phép tài khoản của bạn thêm connector tùy chỉnh.": "Your administrator hasn't allowed your account to add custom connectors.",
+});
+EN2VI["Connect apps and services through MCP so the model can use their tools."] = "Kết nối ứng dụng và dịch vụ qua MCP để model dùng được công cụ của chúng.";

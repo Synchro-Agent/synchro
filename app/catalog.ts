@@ -46,7 +46,14 @@ export function clampEffort(e: Effort, cap: Effort, kind?: string): Effort {
   return ok.includes(e) ? e : ok.filter((x) => rank(x) <= rank(e)).pop() ?? ok[0] ?? "low";
 }
 
-export type Perms = { models: string[]; features: Record<Feature, boolean>; effort?: Record<string, Effort> };
+// Quyền connector do quản trị viên đặt: được thêm connector tùy chỉnh không, được kết nối connector nào trong danh mục ("*" là tất cả),
+// được dùng công cụ có thể xóa dữ liệu không.
+export type ConnPolicy = { custom: boolean; allowed: string[]; destructive: boolean };
+export const FULL_CONN: ConnPolicy = { custom: true, allowed: [ALL], destructive: true };
+export const connPolicy = (p: Perms): ConnPolicy => p.connectors ?? FULL_CONN;
+export const allowsDir = (pol: ConnPolicy, dir: string | null) => (dir ? pol.allowed.includes(ALL) || pol.allowed.includes(dir) : pol.custom);
+
+export type Perms = { models: string[]; features: Record<Feature, boolean>; effort?: Record<string, Effort>; connectors?: ConnPolicy };
 export const FULL_PERMS: Perms = { models: [ALL], features: Object.fromEntries(FEATURES.map((f) => [f.key, true])) as Record<Feature, boolean> };
 
 // Chuẩn hóa dữ liệu quyền nhận từ client/DB. Bản cũ cho phép đủ 9 model mẫu nghĩa là "tất cả" → "*".
@@ -64,6 +71,13 @@ export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
   let effort = base.effort ? { ...base.effort } : undefined;
   const e = (o as { effort?: unknown }).effort;
   if (e && typeof e === "object") effort = Object.fromEntries(Object.entries(e as Record<string, unknown>).filter(([k, v]) => (k === ALL || (k.includes("/") && k.length < 200)) && isEffort(v) && v !== "max")) as Record<string, Effort>;
+  let connectors = base.connectors ? { ...base.connectors } : undefined;
+  const c = (o as { connectors?: unknown }).connectors as Partial<ConnPolicy> | undefined;
+  if (c && typeof c === "object") {
+    const cur = connectors ?? FULL_CONN;
+    const allowed = Array.isArray(c.allowed) ? c.allowed.filter((x): x is string => typeof x === "string" && /^[a-z0-9*-]{1,40}$/.test(x)) : cur.allowed;
+    connectors = { custom: typeof c.custom === "boolean" ? c.custom : cur.custom, allowed: allowed.includes(ALL) ? [ALL] : allowed, destructive: typeof c.destructive === "boolean" ? c.destructive : cur.destructive };
+  }
   // Giữ cả {} (đã bỏ hết giới hạn) để quyền riêng của một người không rơi về giới hạn của quyền mặc định.
-  return { models, features, ...(effort ? { effort } : {}) };
+  return { models, features, ...(effort ? { effort } : {}), ...(connectors ? { connectors } : {}) };
 }

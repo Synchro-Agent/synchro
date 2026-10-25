@@ -1,15 +1,24 @@
 // Connector của từng tài khoản (chỉ chạy ở máy chủ): lưu máy chủ MCP người dùng đã kết nối, token OAuth (mã hóa),
-// danh sách công cụ và quyền từng công cụ (luôn cho phép / hỏi trước / chặn). Giống Connectors của Claude:
+// danh sách công cụ, quyền từng công cụ (luôn cho phép / hỏi một lần mỗi cuộc trò chuyện / hỏi mỗi lần / chặn) và cài đặt riêng
+// của từng connector (dùng ở đâu, công cụ mới, công cụ xóa dữ liệu, giới hạn số lần gọi). Giống Connectors của Claude:
 // mỗi người tự kết nối tài khoản của mình, không ai xem được connector hay token của người khác.
 import { appUrl, current, db } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
 import { DIRECTORY } from "./connectordir";
+import { allowsDir, FULL_CONN, type ConnPolicy } from "./catalog";
+import { detectIcon } from "./connicons";
 import { McpClient, McpError, resultText, type Era, type McpTool } from "./mcp";
 import { authorizeUrl, checkIssuer, discover, exchangeCode, randomToken, refreshTokens, registerClient, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked } from "./safefetch";
 
-export type Perm = "allow" | "ask" | "block";
-export const PERMS: Perm[] = ["allow", "ask", "block"];
+export type Perm = "allow" | "chat" | "ask" | "block";
+export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
+// Cài đặt riêng từng connector: dùng trong chat thường / dự án, quyền cho công cụ máy chủ mới thêm,
+// có cho dùng công cụ xóa dữ liệu không, số lần gọi tối đa trong một tin nhắn (0 = không giới hạn).
+export type ConnSettings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
+export const DEFAULT_SETTINGS: ConnSettings = { chat: true, projects: true, newTools: "auto", destructive: true, maxCalls: 0 };
+export const MAX_CALLS = [0, 3, 5, 10, 20, 50];
+const GRANT_TTL = 7 * 24 * 3600_000;
 const MAX_PER_USER = 30;
 const AUTH_TTL = 15 * 60_000;
 
@@ -20,11 +29,14 @@ type Auth = {
 type Row = {
   id: string; user_id: string; name: string; url: string; dir: string | null; enabled: number; era: string | null; status: string; error: string | null;
   server_name: string | null; enc_auth: string; tools: string; perms: string; created_at: number; updated_at: number; checked_at: number | null;
+  icon: string | null; settings: string;
 };
-export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; destructive: boolean; perm: Perm };
+// locked: công cụ đang bị khóa vì connector tắt công cụ xóa dữ liệu ("setting") hoặc quản trị viên không cho ("admin").
+export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 export type PublicConnector = {
-  id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; enabled: boolean;
+  id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth"; tools: PublicTool[]; checkedAt: number | null;
+  settings: ConnSettings; adminBlocked: boolean;
 };
 export class ConnectorError extends Error { constructor(m: string, public status = 400) { super(m); } }
 
@@ -37,7 +49,12 @@ function table() {
       status TEXT NOT NULL DEFAULT 'needs_auth', error TEXT, server_name TEXT, enc_auth TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '[]', perms TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, checked_at INTEGER);
     CREATE INDEX IF NOT EXISTS connectors_user ON connectors(user_id);
-    CREATE TABLE IF NOT EXISTS connector_auth (state TEXT PRIMARY KEY, user_id TEXT NOT NULL, connector_id TEXT NOT NULL, enc TEXT NOT NULL, created_at INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS connector_auth (state TEXT PRIMARY KEY, user_id TEXT NOT NULL, connector_id TEXT NOT NULL, enc TEXT NOT NULL, created_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS connector_grants (user_id TEXT NOT NULL, conv TEXT NOT NULL, connector_id TEXT NOT NULL, tool TEXT NOT NULL, created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, conv, connector_id, tool));`);
+    const cols = new Set((d.prepare("PRAGMA table_info(connectors)").all() as { name: string }[]).map((c) => c.name));
+    if (!cols.has("icon")) d.exec("ALTER TABLE connectors ADD COLUMN icon TEXT");
+    if (!cols.has("settings")) d.exec("ALTER TABLE connectors ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'");
     ready = true;
   }
   return d;
@@ -58,20 +75,40 @@ function markStatus(id: string, status: PublicConnector["status"], error: string
 export const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 400);
 // Công cụ chỉ đọc mặc định được dùng luôn; công cụ có thể thay đổi dữ liệu mặc định phải hỏi trước (như Claude).
 const defaultPerm = (t: McpTool): Perm => (t.annotations?.readOnlyHint ? "allow" : "ask");
+const isDestructive = (t: McpTool) => !t.annotations?.readOnlyHint && t.annotations?.destructiveHint === true;
+const settingsOf = (r: Row): ConnSettings => ({ ...DEFAULT_SETTINGS, ...json<Partial<ConnSettings>>(r.settings, {}) });
+// Công cụ bị khóa: connector tắt công cụ xóa dữ liệu, hoặc quản trị viên không cho dùng loại công cụ này.
+function lockOf(t: McpTool, st: ConnSettings, pol: ConnPolicy): PublicTool["locked"] {
+  if (!isDestructive(t)) return undefined;
+  if (!pol.destructive) return "admin";
+  return st.destructive ? undefined : "setting";
+}
+// Connector trong danh mục cần logo thật thì đã có sẵn; còn lại (tùy chỉnh, hoặc danh mục chưa có logo) thì tự tìm.
+const needsIcon = (r: Pick<Row, "dir" | "icon">) => !r.icon && !DIRECTORY.find((x) => x.id === r.dir)?.logo;
+async function findIcon(id: string, serverIcons?: Parameters<typeof detectIcon>[1]) {
+  const r = rowById(id);
+  if (!r || !needsIcon(r)) return;
+  const icon = await detectIcon(r.url, serverIcons);
+  if (icon) table().prepare("UPDATE connectors SET icon = ? WHERE id = ? AND icon IS NULL").run(icon, id);
+}
 
-function publicOf(r: Row): PublicConnector {
+function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
   const dir = DIRECTORY.find((x) => x.id === r.dir);
   const perms = json<Record<string, Perm>>(r.perms, {});
+  const st = settingsOf(r);
   const tools = json<McpTool[]>(r.tools, []).map((t) => ({
     name: t.name, title: t.title || t.annotations?.title || t.name, description: (t.description ?? "").slice(0, 600),
-    readOnly: !!t.annotations?.readOnlyHint, destructive: !t.annotations?.readOnlyHint && t.annotations?.destructiveHint === true, perm: perms[t.name] ?? defaultPerm(t),
+    readOnly: !!t.annotations?.readOnlyHint, destructive: isDestructive(t), perm: perms[t.name] ?? defaultPerm(t), locked: lockOf(t, st, pol),
   }));
   let host = r.url;
   try { host = new URL(r.url).host; } catch {}
-  return { id: r.id, name: r.name, url: r.url, host, dir: r.dir, logo: dir?.logo, color: dir?.color, enabled: !!r.enabled, status: r.status as PublicConnector["status"], error: r.error, serverName: r.server_name, auth: getAuth(r).mode, tools, checkedAt: r.checked_at };
+  return {
+    id: r.id, name: r.name, url: r.url, host, dir: r.dir, logo: dir?.logo, color: dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, enabled: !!r.enabled,
+    status: r.status as PublicConnector["status"], error: r.error, serverName: r.server_name, auth: getAuth(r).mode, tools, checkedAt: r.checked_at, settings: st, adminBlocked: !allowsDir(pol, r.dir),
+  };
 }
 
-export const listConnectors = (uid: string) => (table().prepare("SELECT * FROM connectors WHERE user_id = ? ORDER BY created_at").all(uid) as Row[]).map(publicOf);
+export const listConnectors = (uid: string, pol: ConnPolicy = FULL_CONN) => (table().prepare("SELECT * FROM connectors WHERE user_id = ? ORDER BY created_at").all(uid) as Row[]).map((r) => publicOf(r, pol));
 
 // ---- token: làm mới khi sắp hết hạn; mỗi connector chỉ làm mới một lần cùng lúc (refresh token có thể chỉ dùng được một lần) ----
 const refreshing = new Map<string, Promise<Auth>>();
@@ -121,13 +158,18 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
 
 // Lấy lại danh sách công cụ; giữ quyền cũ, công cụ mới nhận quyền mặc định, công cụ đã bỏ thì xóa quyền.
 async function syncTools(id: string) {
-  const { tools, name } = await withClient(id, async (c) => ({ tools: await c.listTools(), name: c.serverName }));
+  const { tools, name, icons } = await withClient(id, async (c) => ({ tools: await c.listTools(), name: c.serverName, icons: c.serverIcons }));
   const r = rowById(id)!;
   const old = json<Record<string, Perm>>(r.perms, {});
+  const st = settingsOf(r);
+  const first = r.checked_at === null;
   const slim = tools.slice(0, 300).map((t) => ({ name: t.name, title: t.title, description: (t.description ?? "").slice(0, 2000), inputSchema: t.inputSchema ?? { type: "object", properties: {} }, annotations: t.annotations }));
-  const perms = Object.fromEntries(slim.map((t) => [t.name, old[t.name] ?? defaultPerm(t)]));
+  // Công cụ máy chủ mới thêm (sau lần kết nối đầu) nhận quyền theo cài đặt "Công cụ mới" của connector.
+  const fresh = (t: McpTool): Perm => (first || st.newTools === "auto" ? defaultPerm(t) : st.newTools);
+  const perms = Object.fromEntries(slim.map((t) => [t.name, old[t.name] ?? fresh(t)]));
   table().prepare("UPDATE connectors SET tools = ?, perms = ?, status = 'ok', error = NULL, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
     .run(JSON.stringify(slim), JSON.stringify(perms), name ?? null, Date.now(), Date.now(), id);
+  if (needsIcon(r)) await findIcon(id, icons);
 }
 
 // Bắt đầu đăng nhập OAuth: tìm máy chủ đăng nhập, đăng ký Synchro, lưu PKCE + state, trả về địa chỉ để mở cửa sổ đăng nhập.
@@ -156,14 +198,15 @@ async function startAuth(req: Request, id: string, www: string): Promise<string>
 }
 
 // Kết nối (hoặc kết nối lại): thử lấy danh sách công cụ; máy chủ đòi đăng nhập thì trả về địa chỉ đăng nhập.
-export async function connect(req: Request, uid: string, id: string): Promise<{ connector: PublicConnector; authorizeUrl?: string }> {
-  rowOf(uid, id);
+export async function connect(req: Request, uid: string, id: string, pol: ConnPolicy = FULL_CONN): Promise<{ connector: PublicConnector; authorizeUrl?: string }> {
+  const row = rowOf(uid, id);
+  if (!allowsDir(pol, row.dir)) throw new ConnectorError(row.dir ? "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này." : "Quản trị viên chưa cho phép tài khoản của bạn dùng connector tùy chỉnh.", 403);
   try {
     await syncTools(id);
-    return { connector: publicOf(rowById(id)!) };
+    return { connector: publicOf(rowById(id)!, pol) };
   } catch (e) {
     if (e instanceof McpError && (e.kind === "auth" || e.kind === "scope")) {
-      try { return { connector: publicOf(rowById(id)!), authorizeUrl: await startAuth(req, id, e.wwwAuth) }; }
+      try { return { connector: publicOf(rowById(id)!, pol), authorizeUrl: await startAuth(req, id, e.wwwAuth) }; }
       catch (e2) { markStatus(id, "error", errText(e2)); throw new ConnectorError(errText(e2)); }
     }
     markStatus(id, "error", errText(e));
@@ -171,10 +214,13 @@ export async function connect(req: Request, uid: string, id: string): Promise<{ 
   }
 }
 
-export async function addConnector(req: Request, uid: string, o: { name?: string; url?: string; dir?: string; clientId?: string; clientSecret?: string }) {
-  const entry = o.dir ? DIRECTORY.find((x) => x.id === o.dir) : undefined;
+export async function addConnector(req: Request, uid: string, o: { name?: string; url?: string; dir?: string; clientId?: string; clientSecret?: string }, pol: ConnPolicy = FULL_CONN) {
+  let entry = o.dir ? DIRECTORY.find((x) => x.id === o.dir) : undefined;
   if (o.dir && !entry) throw new ConnectorError("Không tìm thấy connector này trong danh mục.");
-  const name = (entry?.name ?? String(o.name ?? "")).trim().replace(/\s+/g, " ");
+  // Dán đúng địa chỉ của một connector có trong danh mục thì coi là connector đó (có logo, theo quyền của danh mục).
+  if (!entry && o.url) { try { const u = new URL(String(o.url).trim()); entry = DIRECTORY.find((x) => { const d = new URL(x.url); return d.host === u.host && d.pathname.replace(/\/$/, "") === u.pathname.replace(/\/$/, ""); }); } catch {} }
+  if (!allowsDir(pol, entry?.id ?? null)) throw new ConnectorError(entry ? "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này." : "Quản trị viên chưa cho phép tài khoản của bạn thêm connector tùy chỉnh.", 403);
+  const name = (o.dir ? entry!.name : String(o.name ?? "") || entry?.name || "").trim().replace(/\s+/g, " ");
   const url = (entry?.url ?? String(o.url ?? "")).trim();
   if (!name) throw new ConnectorError("Hãy đặt tên cho connector.");
   if (name.length > 60) throw new ConnectorError("Tên connector tối đa 60 ký tự.");
@@ -186,18 +232,20 @@ export async function addConnector(req: Request, uid: string, o: { name?: string
   const t = table();
   const same = t.prepare("SELECT * FROM connectors WHERE user_id = ? AND url = ?").get(uid, url) as Row | undefined;
   if (same) {
-    if (!entry) throw new ConnectorError("Bạn đã thêm một connector với địa chỉ này rồi.");
-    return connect(req, uid, same.id);
+    if (!o.dir) throw new ConnectorError("Bạn đã thêm một connector với địa chỉ này rồi.");
+    return connect(req, uid, same.id, pol);
   }
   const n = (t.prepare("SELECT COUNT(*) n FROM connectors WHERE user_id = ?").get(uid) as { n: number }).n;
   if (n >= MAX_PER_USER) throw new ConnectorError(`Mỗi tài khoản có tối đa ${MAX_PER_USER} connector.`);
   const id = "cn_" + randomToken(9);
   const now = Date.now();
   const auth: Auth = { mode: "none", ...(clientId ? { preset: { clientId, clientSecret: clientSecret || undefined } } : {}) };
-  t.prepare("INSERT INTO connectors (id, user_id, name, url, dir, enabled, status, enc_auth, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, 'needs_auth', ?, ?, ?)")
+  t.prepare("INSERT INTO connectors (id, user_id, name, url, dir, enabled, status, enc_auth, created_at, updated_at, settings) VALUES (?, ?, ?, ?, ?, 1, 'needs_auth', ?, ?, ?, '{}')")
     .run(id, uid, name, url, entry?.id ?? null, sealSecret(JSON.stringify(auth)), now, now);
-  try { return await connect(req, uid, id); }
-  catch (e) { t.prepare("DELETE FROM connectors WHERE id = ?").run(id); throw e; }
+  // Tìm logo song song với lúc kết nối (trang chủ của hãng không cần đăng nhập), để thẻ connector có logo ngay.
+  const icon = needsIcon({ dir: entry?.id ?? null, icon: null }) ? findIcon(id) : Promise.resolve();
+  try { const r = await connect(req, uid, id, pol); await icon; return { ...r, connector: publicOf(rowById(id)!, pol) }; }
+  catch (e) { await icon.catch(() => {}); t.prepare("DELETE FROM connectors WHERE id = ?").run(id); throw e; }
 }
 
 // Máy chủ đăng nhập chuyển về đây: kiểm tra state + iss, đổi mã lấy token, rồi tải danh sách công cụ.
@@ -238,14 +286,14 @@ export async function finishAuth(req: Request, q: URLSearchParams): Promise<{ ok
   return { ok: true, id: r.id, message: `Đã kết nối ${r.name}` };
 }
 
-export async function refreshConnector(uid: string, id: string) {
+export async function refreshConnector(uid: string, id: string, pol: ConnPolicy = FULL_CONN) {
   rowOf(uid, id);
   try { await syncTools(id); }
   catch (e) { if (!(e instanceof McpError && (e.kind === "auth" || e.kind === "scope"))) markStatus(id, "error", errText(e)); throw new ConnectorError(errText(e), 502); }
-  return publicOf(rowById(id)!);
+  return publicOf(rowById(id)!, pol);
 }
 
-export function updateConnector(uid: string, id: string, o: { enabled?: unknown; name?: unknown; perms?: unknown; group?: unknown }) {
+export function updateConnector(uid: string, id: string, o: { enabled?: unknown; name?: unknown; perms?: unknown; group?: unknown; settings?: unknown }, pol: ConnPolicy = FULL_CONN) {
   const r = rowOf(uid, id);
   const t = table();
   if (typeof o.enabled === "boolean") t.prepare("UPDATE connectors SET enabled = ?, updated_at = ? WHERE id = ?").run(o.enabled ? 1 : 0, Date.now(), id);
@@ -265,7 +313,16 @@ export function updateConnector(uid: string, id: string, o: { enabled?: unknown;
     changed = true;
   }
   if (changed) t.prepare("UPDATE connectors SET perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(perms), Date.now(), id);
-  return publicOf(rowById(id)!);
+  // Cài đặt riêng của connector: chỉ nhận đúng kiểu và giá trị cho phép.
+  if (o.settings && typeof o.settings === "object") {
+    const x = o.settings as Record<string, unknown>;
+    const st = settingsOf(r);
+    for (const k of ["chat", "projects", "destructive"] as const) if (typeof x[k] === "boolean") st[k] = x[k] as boolean;
+    if (x.newTools === "auto" || x.newTools === "ask" || x.newTools === "block") st.newTools = x.newTools;
+    if (typeof x.maxCalls === "number" && MAX_CALLS.includes(x.maxCalls)) st.maxCalls = x.maxCalls;
+    t.prepare("UPDATE connectors SET settings = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(st), Date.now(), id);
+  }
+  return publicOf(rowById(id)!, pol);
 }
 
 export function removeConnector(uid: string, id: string) {
@@ -273,16 +330,20 @@ export function removeConnector(uid: string, id: string) {
   const t = table();
   t.prepare("DELETE FROM connectors WHERE id = ?").run(id);
   t.prepare("DELETE FROM connector_auth WHERE connector_id = ?").run(id);
+  t.prepare("DELETE FROM connector_grants WHERE connector_id = ?").run(id);
 }
 
-export const removeUserConnectors = (uid: string) => { const t = table(); t.prepare("DELETE FROM connectors WHERE user_id = ?").run(uid); t.prepare("DELETE FROM connector_auth WHERE user_id = ?").run(uid); };
+export const removeUserConnectors = (uid: string) => {
+  const t = table();
+  for (const x of ["connectors", "connector_auth", "connector_grants"]) t.prepare(`DELETE FROM ${x} WHERE user_id = ?`).run(uid);
+};
 
 // ---- dùng trong chat ----
-export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; tool: McpTool };
+export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; icon?: string; tool: McpTool };
 
 // Tên công cụ gửi cho model: "<connector>__<công cụ>", chỉ chữ, số, _ và -, tối đa 64 ký tự (giới hạn chung của các hãng).
 function fqName(prefix: string, tool: string, used: Set<string>) {
-  const clean = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+  const clean = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
   let base = `${clean(prefix).toLowerCase().slice(0, 20) || "mcp"}__${clean(tool) || "tool"}`.slice(0, 64);
   let name = base;
   for (let i = 2; used.has(name); i++) name = `${base.slice(0, 60)}_${i}`;
@@ -290,32 +351,40 @@ function fqName(prefix: string, tool: string, used: Set<string>) {
   return name;
 }
 
-// Phiên dùng connector trong một lượt chat: công cụ đang bật, gọi công cụ (dùng lại kết nối trong cùng lượt), quyền mới nhất.
+// Phiên dùng connector trong một lượt chat: công cụ đang bật (theo quyền quản trị viên và cài đặt của connector),
+// gọi công cụ (dùng lại kết nối trong cùng lượt), quyền mới nhất, số lần đã gọi.
 export class ConnectorSession {
   tools: ChatTool[] = [];
   private by = new Map<string, ChatTool>();
   private cache = new Map<string, McpClient>();
-  constructor(public uid: string) {
+  private calls = new Map<string, number>();
+  constructor(public uid: string, private ctx: { conv?: string; project?: boolean; pol: ConnPolicy }) {
     const rows = table().prepare("SELECT * FROM connectors WHERE user_id = ? AND enabled = 1 AND status = 'ok' ORDER BY created_at").all(uid) as Row[];
     const used = new Set<string>();
     for (const r of rows) {
+      const st = settingsOf(r);
+      if (!allowsDir(ctx.pol, r.dir) || !(ctx.project ? st.projects : st.chat)) continue;
       const perms = json<Record<string, Perm>>(r.perms, {});
       const dir = DIRECTORY.find((x) => x.id === r.dir);
       for (const tool of json<McpTool[]>(r.tools, [])) {
-        if ((perms[tool.name] ?? defaultPerm(tool)) === "block") continue;
-        const ct = { fq: fqName(r.name, tool.name, used), cid: r.id, cname: r.name, logo: dir?.logo, color: dir?.color, tool };
+        if ((perms[tool.name] ?? defaultPerm(tool)) === "block" || lockOf(tool, st, ctx.pol)) continue;
+        const ct = { fq: fqName(r.name, tool.name, used), cid: r.id, cname: r.name, logo: dir?.logo, color: dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, tool };
         this.tools.push(ct);
         this.by.set(ct.fq, ct);
       }
     }
   }
   get(name: string) { return this.by.get(name); }
-  // Quyền hiện tại (đọc lại từ cơ sở dữ liệu vì người dùng có thể vừa đổi).
+  // Quyền hiện tại (đọc lại từ cơ sở dữ liệu vì người dùng có thể vừa đổi). "chat" thành "allow" nếu đã cho phép trong cuộc trò chuyện này.
   perm(name: string): Perm {
     const ct = this.by.get(name);
     const r = ct && rowById(ct.cid);
-    if (!ct || !r || !r.enabled || r.status !== "ok") return "block";
-    return json<Record<string, Perm>>(r.perms, {})[ct.tool.name] ?? defaultPerm(ct.tool);
+    if (!ct || !r || !r.enabled || r.status !== "ok" || !allowsDir(this.ctx.pol, r.dir) || lockOf(ct.tool, settingsOf(r), this.ctx.pol)) return "block";
+    const p = json<Record<string, Perm>>(r.perms, {})[ct.tool.name] ?? defaultPerm(ct.tool);
+    if (p !== "chat") return p;
+    if (!this.ctx.conv) return "ask";
+    const g = table().prepare("SELECT created_at FROM connector_grants WHERE user_id = ? AND conv = ? AND connector_id = ? AND tool = ?").get(this.uid, this.ctx.conv, ct.cid, ct.tool.name) as { created_at: number } | undefined;
+    return g && Date.now() - g.created_at < GRANT_TTL ? "allow" : "ask";
   }
   allowAlways(name: string) {
     const ct = this.by.get(name);
@@ -325,10 +394,23 @@ export class ConnectorSession {
     perms[ct.tool.name] = "allow";
     table().prepare("UPDATE connectors SET perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(perms), Date.now(), r.id);
   }
+  // Cho phép công cụ này trong cuộc trò chuyện hiện tại (nhớ 7 ngày).
+  allowChat(name: string) {
+    const ct = this.by.get(name);
+    if (!ct || !this.ctx.conv) return;
+    const t = table();
+    t.prepare("DELETE FROM connector_grants WHERE created_at < ?").run(Date.now() - GRANT_TTL);
+    t.prepare("INSERT OR REPLACE INTO connector_grants (user_id, conv, connector_id, tool, created_at) VALUES (?, ?, ?, ?, ?)").run(this.uid, this.ctx.conv, ct.cid, ct.tool.name, Date.now());
+  }
   async call(name: string, args: Record<string, unknown>): Promise<{ content: string; is_error: boolean }> {
     const ct = this.by.get(name);
     if (!ct) return { content: `Không có công cụ ${name}.`, is_error: true };
     if (this.perm(name) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
+    const r = rowById(ct.cid);
+    const max = r ? settingsOf(r).maxCalls : 0;
+    const n = (this.calls.get(ct.cid) ?? 0) + 1;
+    if (max > 0 && n > max) return { content: `Đã đạt giới hạn ${max} lần gọi ${ct.cname} trong một tin nhắn (người dùng đặt trong Cài đặt → Connectors). Hãy trả lời với thông tin đang có.`, is_error: true };
+    this.calls.set(ct.cid, n);
     try {
       const res = await withClient(ct.cid, (c) => c.callTool(ct.tool, args && typeof args === "object" ? args : {}), this.cache);
       const { text, isError } = resultText(res);

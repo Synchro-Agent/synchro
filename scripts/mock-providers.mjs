@@ -44,19 +44,70 @@ function lastUserText(msgs = []) {
   return "";
 }
 
-// "#tool" trong tin nhắn: model gọi công cụ. "#tool=tên" chọn công cụ có tên chứa chuỗi đó, "#args={...}" là tham số JSON.
+// Model giả lập tự chọn công cụ như model thật: đoán ý định từ câu hỏi (tìm, tạo, xóa, sửa, xem…) và đối tượng nhắc tới
+// (ghi chú, wiki, repo…), khớp với tên + mô tả công cụ, rồi điền tham số theo schema. "#tool=tên" và "#args={...}" vẫn dùng được để ép chọn.
 const SKILL_TOOLS = ["load_skill", "read_skill_file", "search_skills", "run_skill_script"];
-function wantTool(q, names) {
-  if (!q.includes("#tool") || !names.length) return null;
-  const m = /#tool=([\w.-]+)/.exec(q);
-  const name = m ? names.find((n) => n.includes(m[1])) : names.find((n) => !SKILL_TOOLS.includes(n)) ?? names[0];
-  if (!name) return null;
-  let args = name === "load_skill" ? { name: "mock-skill" } : {};
-  const a = /#args=(\{.*\})/.exec(q);
-  if (a) { try { args = JSON.parse(a[1]); } catch {} }
-  return { name, args };
+const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+const INTENTS = [
+  [/\b(tim|tim kiem|search|find|tra cuu|tra|lookup|hoi)\b/, ["search", "find", "lookup", "query", "ask", "resolve"]],
+  [/\b(tao|them|create|add|new|viet|ghi lai)\b/, ["create", "add", "new", "insert", "post"]],
+  [/\b(xoa|delete|remove|go bo|bo di)\b/, ["delete", "remove"]],
+  [/\b(sua|cap nhat|update|edit|doi ten)\b/, ["update", "edit", "patch", "rename"]],
+  [/\b(liet ke|danh sach|list|xem|doc|read|get|lay|mo|cau truc)\b/, ["list", "get", "read", "fetch", "structure", "contents"]],
+  [/\b(may gio|thoi gian|gio hien tai|time)\b/, ["time"]],
+  [/\b(lap lai|nhac lai|echo)\b/, ["echo"]],
+];
+const TOPICS = [["ghi chu", "note"], ["wiki", "wiki"], ["repo", "repo"], ["kho ma", "repo"], ["thu vien", "librar"], ["tai lieu", "doc"], ["vung", "region"], ["gio", "time"], ["echo", "echo"]];
+const normTools = (list) => (list ?? []).map((x) => (x.function ? { name: x.function.name, description: x.function.description, schema: x.function.parameters } : { name: x.name, description: x.description, schema: x.input_schema ?? x.parameters })).filter((x) => x.name);
+function buildArgs(tool, q) {
+  const props = tool.schema?.properties ?? {};
+  const keys = tool.schema?.required?.length ? tool.schema.required : Object.keys(props).slice(0, 1);
+  const quoted = /["“'](.+?)["”']/.exec(q)?.[1];
+  const topic = (quoted ?? /(?:về|ve|about|tên|ten|tiêu đề|tieu de|là|la)\s+(.+?)\s*[.?!]*$/i.exec(q)?.[1] ?? q).trim().slice(0, 200);
+  const args = {};
+  for (const k of keys) {
+    const p = props[k] ?? {};
+    if (/id$/i.test(k)) args[k] = /\b(n\d+)\b/.exec(q)?.[1] ?? "n1";
+    else if (/repo/i.test(k)) args[k] = /([\w.-]+\/[\w.-]+)/.exec(q)?.[1] ?? "modelcontextprotocol/modelcontextprotocol";
+    else if (/region/i.test(k)) args[k] = /\b([a-z]{2}-[\w-]+)\b/i.exec(q)?.[1] ?? "ap-southeast-1";
+    else if (p.type === "boolean") args[k] = true;
+    else if (p.type === "number" || p.type === "integer") args[k] = 5;
+    else args[k] = topic;
+  }
+  if (props.body && args.body === undefined) args.body = "Tạo từ Synchro (giả lập)";
+  return args;
 }
-const toolDone = (name, out) => `Đã gọi công cụ ${name} và nhận kết quả: ${String(out ?? "").slice(0, 300)}`;
+function wantTool(q, list) {
+  const tools = normTools(list);
+  if (!tools.length) return null;
+  if (q.includes("#tool")) {
+    const names = tools.map((t) => t.name);
+    const m = /#tool=([\w.-]+)/.exec(q);
+    const name = m ? names.find((n) => n.includes(m[1])) : names.find((n) => !SKILL_TOOLS.includes(n)) ?? names[0];
+    if (!name) return null;
+    let args = name === "load_skill" ? { name: "mock-skill" } : {};
+    const a = /#args=(\{.*\})/.exec(q);
+    if (a) { try { args = JSON.parse(a[1]); } catch {} }
+    return { name, args };
+  }
+  const t = norm(q);
+  let best = null;
+  for (const tool of tools) {
+    if (SKILL_TOOLS.includes(tool.name)) continue;
+    const tn = norm(`${tool.name} ${tool.description ?? ""}`).replace(/[_-]/g, " ");
+    let score = 0;
+    for (const [re, keys] of INTENTS) if (re.test(t) && keys.some((k) => tn.includes(k))) score += 2;
+    for (const [vi, en] of TOPICS) if ((t.includes(vi) || t.includes(en)) && tn.includes(en)) score += 1;
+    if (score >= 3 && score > (best?.score ?? 0)) best = { tool, score };
+  }
+  return best ? { name: best.tool.name, args: buildArgs(best.tool, q) } : null;
+}
+const toolDone = (name, out) => {
+  const o = String(out ?? "");
+  if (/^Người dùng đã từ chối/.test(o)) return `Bạn đã từ chối cho mình dùng công cụ ${name}, nên mình chưa làm việc này. Nếu muốn, bạn có thể hỏi lại và chọn "Cho phép".`;
+  if (/^(Không gọi được|Người dùng đã chặn|Đã đạt giới hạn)/.test(o)) return `Mình chưa làm được: ${o.slice(0, 300)}`;
+  return `Đã gọi công cụ ${name} và nhận kết quả: ${o.slice(0, 300)}\n\n— Câu trả lời giả lập: model giả tự chọn công cụ từ câu hỏi của bạn.`;
+};
 
 const displayName = (provider, id) =>
   provider === "anthropic" ? ANTHROPIC.find(([x]) => x === id)?.[1] ?? id
@@ -128,7 +179,7 @@ async function handler(req, res) {
         const out = typeof r0.content === "string" ? r0.content : (r0.content ?? []).map((x) => x.text ?? "").join(" ");
         return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: toolDone(use?.name ?? "?", out) }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: 30 } });
       }
-      const want = b.tool_choice?.type === "none" ? null : wantTool(q, (b.tools ?? []).map((x) => x.name));
+      const want = b.tool_choice?.type === "none" ? null : wantTool(q, b.tools);
       if (want) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ dùng công cụ." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: want.name, input: want.args }], stop_reason: "tool_use", usage: { input_tokens: 40, output_tokens: 20 } });
       if (await trap(res, q, (m) => err("api_error", m))) return;
       await sleep(latency(b.model));
@@ -159,7 +210,7 @@ async function handler(req, res) {
         return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
           output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: toolDone(call?.name ?? "?", lastItem.output), annotations: [] }] }] });
       }
-      const want = b.tool_choice === "none" ? null : wantTool(q, (b.tools ?? []).map((x) => x.name));
+      const want = b.tool_choice === "none" ? null : wantTool(q, b.tools);
       if (want) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
         output: [{ type: "reasoning", id: "rs_mock", summary: [] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: want.name, arguments: JSON.stringify(want.args), status: "completed" }] });
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
@@ -194,7 +245,7 @@ async function handler(req, res) {
       const prev = [...b.messages].reverse().find((x) => x.role === "assistant" && x.tool_calls);
       return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: toolDone(prev?.tool_calls?.[0]?.function?.name ?? "?", lastMsg.content) }, finish_reason: "stop" }] });
     }
-    const want = b.tool_choice === "none" ? null : wantTool(q, (b.tools ?? []).map((x) => x.function?.name).filter(Boolean));
+    const want = b.tool_choice === "none" ? null : wantTool(q, b.tools);
     if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } }] }, finish_reason: "tool_calls" }] });
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));

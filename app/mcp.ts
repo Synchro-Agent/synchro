@@ -4,6 +4,7 @@
 //  - legacy (2025-03-26 … 2025-11-25): Streamable HTTP, bắt tay initialize rồi gửi kèm Mcp-Session-Id.
 //  - sse (2024-11-05, đã ngừng khuyến nghị): mở luồng GET, nhận sự kiện "endpoint", gửi POST tới endpoint đó, kết quả về qua luồng.
 import { safeFetch } from "./safefetch";
+import type { ServerIcon } from "./connicons";
 
 export const MODERN = "2026-07-28";
 export const LEGACY = "2025-11-25";
@@ -100,6 +101,7 @@ async function* sseEvents(r: Response): AsyncGenerator<{ event: string; data: st
 export class McpClient {
   era?: Era;
   serverName?: string;
+  serverIcons?: ServerIcon[];
   private version = LEGACY;
   private session?: string;
   private ready = false;
@@ -175,11 +177,12 @@ export class McpClient {
   }
   private async initialize() {
     const r = await this.post(this.url, { jsonrpc: "2.0", id: this.nextId++, method: "initialize", params: { protocolVersion: LEGACY, capabilities: {}, clientInfo: CLIENT } }, {}, 20_000);
-    const res = r.reply?.result as { protocolVersion?: string; serverInfo?: { name?: string; title?: string } } | undefined;
+    const res = r.reply?.result as { protocolVersion?: string; serverInfo?: { name?: string; title?: string; icons?: ServerIcon[] } } | undefined;
     if (!res) throw new McpError(r.reply?.error?.message ?? `Máy chủ trả về lỗi ${r.status} khi bắt tay.`, "protocol", r.status);
     this.session = r.headers.get("mcp-session-id") ?? undefined;
     this.version = res.protocolVersion || LEGACY;
     this.serverName = res.serverInfo?.title || res.serverInfo?.name;
+    this.serverIcons = Array.isArray(res.serverInfo?.icons) ? res.serverInfo!.icons : undefined;
     this.ready = true;
     await this.post(this.url, { jsonrpc: "2.0", method: "notifications/initialized" }, this.legacyHeaders(), 10_000).catch(() => {});
   }
@@ -229,9 +232,10 @@ export class McpClient {
     });
     state.endpoint = await endpoint;
     const init = await this.sseSend("initialize", { protocolVersion: SSE_VERSION, capabilities: {}, clientInfo: CLIENT }, 20_000);
-    const res2 = init.reply?.result as { serverInfo?: { name?: string; title?: string } } | undefined;
+    const res2 = init.reply?.result as { serverInfo?: { name?: string; title?: string; icons?: ServerIcon[] } } | undefined;
     if (!res2) throw new McpError(init.reply?.error?.message ?? "Máy chủ không bắt tay được.", "protocol");
     this.serverName = res2.serverInfo?.title || res2.serverInfo?.name;
+    this.serverIcons = Array.isArray(res2.serverInfo?.icons) ? res2.serverInfo!.icons : undefined;
     await safeFetch(state.endpoint, { method: "POST", headers: this.headers(), body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }), timeout: 10_000 }).then((r) => r.body?.cancel()).catch(() => {});
     this.ready = true;
   }
@@ -256,9 +260,10 @@ export class McpClient {
     const err = r.reply?.error;
     if (r.reply?.result && r.status < 300) {
       this.era = "modern";
-      const info = (r.reply.result as { serverInfo?: { name?: string; title?: string }; _meta?: Record<string, { name?: string; title?: string }> });
+      const info = (r.reply.result as { serverInfo?: { name?: string; title?: string; icons?: ServerIcon[] }; _meta?: Record<string, { name?: string; title?: string; icons?: ServerIcon[] }> });
       const si = info.serverInfo ?? info._meta?.["io.modelcontextprotocol/serverInfo"];
       this.serverName = si?.title || si?.name;
+      this.serverIcons = Array.isArray(si?.icons) ? si!.icons : undefined;
       return;
     }
     if (err && MODERN_CODES.has(err.code)) {

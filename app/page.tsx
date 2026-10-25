@@ -580,7 +580,7 @@ export default function Home() {
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [];
     try {
-      reply = await callLLM(system, history, 1500, undefined, true, { project: pid });
+      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id });
       const used = takeSkillsUsed();
       usedSk = [...new Set(used.filter((u) => u.kind === "skill").map((u) => u.name))];
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];

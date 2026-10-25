@@ -57,6 +57,24 @@ for (const [id, body] of add) {
   const r = await call("POST", "/api/admin/apikeys", body);
   if (r.status !== 200) console.error(`Không nối được ${id}:`, r.j?.error);
 }
+// Connector giả lập kết nối sẵn như đang dùng thật: Mock Notes (đăng nhập OAuth, tự bấm "Cho phép"), Mock Status (giao thức 2026),
+// Mock Echo (SSE đời cũ) và DeepWiki thật (nếu có mạng). Máy chủ giả lập lưu token trong bộ nhớ nên mỗi lần chạy đều kết nối lại.
+const MC = `http://127.0.0.1:${MCP_PORT}`;
+async function approve(url) {
+  const page = await fetch(url).then((x) => x.text()).catch(() => "");
+  const link = /id="allow" href="([^"]+)"/.exec(page)?.[1]?.replace(/&amp;/g, "&");
+  const back = link && (await fetch(link, { redirect: "manual" })).headers.get("location");
+  if (back) await fetch(back, { headers: { cookie } });
+}
+const conns = (await call("GET", "/api/connectors")).j?.connectors ?? [];
+for (const [name, url] of [["Mock Notes", `${MC}/mcp`], ["Mock Status", `${MC}/modern`], ["Mock Echo", `${MC}/sse`]]) {
+  const have = conns.find((x) => x.url === url);
+  const r = have ? await call("POST", `/api/connectors/${have.id}/connect`) : await call("POST", "/api/connectors", { name, url });
+  if (r.status !== 200) { console.error(`Không nối được connector ${name}:`, r.j?.error); continue; }
+  if (r.j.authorizeUrl) await approve(r.j.authorizeUrl);
+}
+if (!conns.some((x) => x.dir === "deepwiki")) await call("POST", "/api/connectors", { dir: "deepwiki" }).catch(() => {});
+const connected = ((await call("GET", "/api/connectors")).j?.connectors ?? []).filter((x) => x.status === "ok");
 const models = (await call("GET", "/api/models")).j?.providers ?? [];
 
 console.log(`
@@ -66,6 +84,7 @@ console.log(`
   │ Model:      ${models.map((p) => `${p.name} (${p.models.length})`).join(", ") || "chưa có"}
   │ Thử lỗi:    gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn
   │ Khóa thử:   khóa nào có chữ "mock" đều hợp lệ, API giả lập ở ${M}
-  │ Connector:  http://127.0.0.1:${MCP_PORT}/mcp (OAuth) · /modern · /sse  — gõ #tool=tên trong tin nhắn để model gọi công cụ
+  │ Connector:  ${connected.map((x) => x.name).join(", ") || "chưa có"} (đã kết nối sẵn)
+  │ Thử:        "Tìm ghi chú về Synchro", "Tạo ghi chú tên Họp thứ Hai", "Xóa ghi chú n2", "Mấy giờ rồi?"
   └─ Ctrl+C để dừng ─────────────────────────────────────────
 `);
