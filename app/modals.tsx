@@ -223,7 +223,8 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   ];
   const custom: [string, React.ReactNode][] = [
     ...(feat?.skills !== false ? [["Skills", <I.Scroll key="s" />] as [string, React.ReactNode]] : []),
-    ...(feat?.connectors !== false ? [["Connectors", <I.SetPlug key="cn" />] as [string, React.ReactNode]] : []),
+    ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
+    ...(feat?.skills !== false ? [["Plugins", <I.Plugins key="pl" />] as [string, React.ReactNode]] : []),
   ];
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => n.toLowerCase().includes(q.toLowerCase()));
   return (

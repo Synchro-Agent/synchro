@@ -8,7 +8,7 @@ import JSZip from "jszip";
 import { parse as parseYaml } from "yaml";
 import { db, DATA_DIR } from "./authstore";
 
-const ROOT = process.env.SKILLS_DIR ?? path.join(DATA_DIR, "skills");
+export const ROOT = process.env.SKILLS_DIR ?? path.join(DATA_DIR, "skills");
 
 export const LIMITS = {
   zip: 20 * 1024 * 1024,
@@ -39,8 +39,8 @@ const MIME: Record<string, string> = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
   ".pdf": "application/pdf", ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2", ".xsd": "application/xml",
 };
-const isText = (p: string) => TEXT_EXT.has(extOf(p)) || (!extOf(p) && TEXT_NAMES.has(path.posix.basename(p)));
-const isAllowed = (p: string) => isText(p) || BIN_EXT.has(extOf(p));
+export const isText = (p: string) => TEXT_EXT.has(extOf(p)) || (!extOf(p) && TEXT_NAMES.has(path.posix.basename(p)));
+export const isAllowed = (p: string) => isText(p) || BIN_EXT.has(extOf(p));
 
 export type SkillFile = { path: string; size: number; mime_type: string; kind: "reference" | "script" | "asset" };
 export type Skill = {
@@ -97,7 +97,7 @@ function cleanPath(p: string): string {
   return path.posix.normalize(n);
 }
 
-function parseSkillMd(raw: string) {
+export function parseSkillMd(raw: string) {
   const text = raw.replace(/^﻿/, "").replace(/\r\n/g, "\n");
   const m = text.match(/^---\n([\s\S]*?)\n---[ \t]*(?:\n|$)/);
   if (!m) return fail("SKILL.md phải bắt đầu bằng phần frontmatter YAML (--- ... ---) chứa name và description");
@@ -133,12 +133,12 @@ function missingRefs(body: string, have: Set<string>): string[] {
   return [...out].slice(0, 10).map((c) => `SKILL.md nhắc tới "${c}" nhưng gói không có file này`);
 }
 
-type Parsed = { name: string; description: string; body: string; entries: { path: string; data: Buffer }[]; warnings: string[]; files: SkillFile[]; tokens: number };
-type Entry = { path: string; data: Buffer };
+export type Parsed = { name: string; description: string; body: string; entries: { path: string; data: Buffer }[]; warnings: string[]; files: SkillFile[]; tokens: number };
+export type Entry = { path: string; data: Buffer };
 
 // Kiểm tra nội dung một skill đã tách thành danh sách file (path tương đối, có SKILL.md ở gốc).
-function parseEntries(entries: Entry[], warnings: string[]): Parsed {
-  if (entries.length > LIMITS.files + 1) fail(`Quá nhiều file (${entries.length}, tối đa ${LIMITS.files})`);
+export function parseEntries(entries: Entry[], warnings: string[], maxFiles = LIMITS.files): Parsed {
+  if (entries.length > maxFiles + 1) fail(`Quá nhiều file (${entries.length}, tối đa ${maxFiles})`);
   const md = entries.find((e) => e.path === "SKILL.md");
   if (!md) return fail("Không tìm thấy SKILL.md");
   const { name, description, body } = parseSkillMd(md.data.toString("utf8"));
@@ -408,7 +408,7 @@ export function parseGithubUrl(raw: string) {
   return { owner, repo, segs: kind ? rest : [], file: kind === "blob" };
 }
 
-async function download(url: string, max: number) {
+export async function download(url: string, max: number) {
   const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "Synchro" } });
   if (r.status === 404) return null;
   if (!r.ok || !r.body) fail(`GitHub trả lỗi ${r.status}`, 502);

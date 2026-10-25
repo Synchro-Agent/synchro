@@ -4,7 +4,7 @@
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi.
 import http from "node:http";
 import { pathToFileURL } from "node:url";
-import { capsReply, codeDone } from "./mock-caps.mjs";
+import { capsReply, codeDone, studioStep } from "./mock-caps.mjs";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → API.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
@@ -200,6 +200,9 @@ async function handler(req, res) {
       const ef = b.output_config?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err("invalid_request_error", `output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'`));
       const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
+      const sst = studioStep(sysText(b.system), JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
+      if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ đọc skill trong thư viện trước." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
+      if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: sst.text }], stop_reason: "end_turn" }); }
       const last = b.messages?.[b.messages.length - 1];
       const results = Array.isArray(last?.content) ? last.content.filter((x) => x.type === "tool_result") : [];
       if (results.length) {
@@ -235,6 +238,9 @@ async function handler(req, res) {
       const ef = b.reasoning?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err(`Invalid value for 'reasoning.effort': '${ef}'.`));
       const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef);
+      const sst = studioStep(b.instructions, JSON.stringify(input), q, normTools(b.tools).map((t) => t.name));
+      if (sst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: sst.tool.name, arguments: JSON.stringify(sst.tool.args), status: "completed" }] });
+      if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: sst.text, annotations: [] }] }] }); }
       // Gõ #tool: model gọi công cụ đầu tiên, lượt sau trả lời dựa trên kết quả.
       const lastItem = input[input.length - 1];
       if (lastItem?.type === "function_call_output") {
@@ -276,6 +282,9 @@ async function handler(req, res) {
     if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
     if (b.reasoning_effort !== undefined && !["minimal", "low", "medium", "high"].includes(b.reasoning_effort)) return send(res, 400, [{ error: { code: 400, message: `Invalid reasoning_effort: ${b.reasoning_effort}`, status: "INVALID_ARGUMENT" } }]);
     const { text, q } = reply("google", b.model, b.messages, b.max_tokens, b.reasoning_effort);
+    const sst = studioStep(b.messages?.find((m) => m.role === "system")?.content, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
+    if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } }] }, finish_reason: "tool_calls" }] });
+    if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: sst.text }, finish_reason: "stop" }] }); }
     const lastMsg = b.messages?.[b.messages.length - 1];
     if (lastMsg?.role === "tool") {
       const prev = [...b.messages].reverse().find((x) => x.role === "assistant" && x.tool_calls);

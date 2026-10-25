@@ -14,6 +14,7 @@ import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
+import { PluginsPanel } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 
 function useAway(close: () => void) {
@@ -542,6 +543,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
     case "Administrator": return <AdminPanel Toggle={Toggle} />;
     case "API": return <ApiPanel />;
     case "Connectors": return <ConnectorsPanel />;
+    case "Plugins": return <PluginsPanel />;
     case "Account": return <Account />;
     case "Privacy": return <Privacy go={go} />;
     case "Billing": return <Billing />;

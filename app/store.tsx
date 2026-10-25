@@ -5,7 +5,7 @@ import type { AuthUser } from "./auth";
 import { ls } from "./userscope";
 
 export type Msg = { role: "user" | "ai"; text: string; done?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[] };
-export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean };
+export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean; studio?: "design" | "slides" | "docs" };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };
 
 const defs = new Map<string, unknown>();

@@ -1019,3 +1019,34 @@ Object.assign(VI2EN, {
   "Synchro tính chi phí từ số token thật mà nhà cung cấp trả về sau mỗi lần gọi model.": "Synchro calculates cost from the real token counts the provider returns after every model call.",
 });
 EN2VI["Usage limits"] = "Giới hạn sử dụng";
+
+// Plugins và trang Tùy chỉnh.
+Object.assign(EN2VI, {
+  "Plugins": "Plugins",
+  "Install a whole set of skills in one step from GitHub. Link a plugin to the Design, Slides or Docs button and Synchro gets its entire library for that work.": "Cài cả một bộ skill từ GitHub chỉ trong một bước. Gắn plugin với nút Thiết kế, Trình bày hoặc Tài liệu để Synchro có cả thư viện chuyên môn cho việc đó.",
+  "Preview": "Xem trước", "Studios": "Studio",
+  "The Design, Slides and Docs buttons on the Artifacts page. Each one loads its plugin's library, so Synchro already knows how to do the work well.": "Các nút Thiết kế, Trình bày và Tài liệu ở trang Artifacts. Mỗi nút nạp thư viện của plugin tương ứng, nên Synchro biết sẵn cách làm việc đó cho đẹp.",
+  "Manage": "Quản lý", "Install": "Cài đặt", "Ask an administrator to install it.": "Hãy nhờ quản trị viên cài.", "Installed": "Đã cài", "Browse": "Khám phá",
+  "Synchro only installs skills whose license allows copying. Anthropic's docx, pdf, pptx and xlsx skills are proprietary and are skipped; Synchro creates those files with code execution instead.": "Synchro chỉ cài skill có giấy phép cho phép sao chép. Skill docx, pdf, pptx và xlsx của Anthropic là độc quyền nên bị bỏ qua; Synchro tạo các tệp đó bằng chạy code.",
+  "Reading the repository and checking every skill…": "Đang đọc repo và kiểm tra từng skill…", "Everyone": "Mọi người", "Install once for every account on this Synchro": "Cài một lần cho mọi tài khoản trên Synchro này",
+  "Only me": "Chỉ mình tôi", "A personal plugin in your account": "Plugin riêng trong tài khoản của bạn", "Cancel": "Hủy", "Installing…": "Đang cài…",
+  "Personal": "Cá nhân", "Turned on": "Đang bật", "Turn it off just for you.": "Tắt cho riêng bạn.", "Off: no skill of this plugin is used anywhere.": "Tắt: không skill nào của plugin này được dùng.",
+  "Use in every chat": "Dùng trong mọi cuộc trò chuyện", "Off: skills only load when you press its studio button. Saves context for big plugins.": "Tắt: skill chỉ được nạp khi bạn bấm nút studio. Tiết kiệm ngữ cảnh với plugin lớn.",
+  "Studio button": "Nút studio", "Pressing this Artifacts button gives Synchro the whole library of this plugin.": "Bấm nút này ở trang Artifacts là Synchro có cả thư viện của plugin.",
+  "None": "Không", "Design": "Thiết kế", "Slides": "Trình bày", "Docs": "Tài liệu", "Uninstall": "Gỡ cài đặt", "Add skills from zip": "Thêm skill từ file zip",
+  "Update": "Cập nhật", "Check for updates": "Kiểm tra cập nhật", "No scripts": "Không có script", "Scripts, sandboxed": "Có script, chạy trong sandbox",
+  "Review scripts": "Nên xem script", "High risk": "Rủi ro cao", "files": "tệp", "skills": "skill",
+});
+Object.assign(VI2EN, {
+  "Installed": "Installed", "Duplicate of": "Duplicate of", "An update is available": "An update is available", "Already up to date": "Already up to date",
+  "Plugin updated": "Plugin updated", "Added": "Added", "Plugin uninstalled": "Plugin uninstalled", "Updated": "Updated",
+  "for everyone": "for everyone", "personal": "personal", "every chat": "every chat",
+  "Thư viện": "Library", "Cài thư viện thiết kế": "Install the design library", "Cài thư viện trình bày": "Install the slides library", "Cài thư viện tài liệu": "Install the docs library",
+});
+Object.assign(EN2VI, {
+  "Installed": "Đã cài", "Duplicate of": "Trùng với", "An update is available": "Có bản cập nhật mới", "Already up to date": "Đang là bản mới nhất",
+  "Plugin updated": "Đã cập nhật plugin", "Added": "Đã thêm", "Plugin uninstalled": "Đã gỡ plugin", "Updated": "Cập nhật",
+  "for everyone": "cho mọi người", "personal": "cá nhân", "every chat": "mọi cuộc trò chuyện",
+});
+Object.assign(EN2VI, { "https://github.com/owner/repo  (every SKILL.md inside is found automatically)": "https://github.com/chủ-sở-hữu/repo  (tự tìm mọi SKILL.md bên trong)", "Close": "Đóng" });
+Object.assign(VI2EN, { "Cài": "Install", "Gỡ": "Uninstall", "tệp": "files" });

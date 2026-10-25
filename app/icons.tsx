@@ -11,7 +11,10 @@ export const Plus = (p: P) => <S {...p}><path d="M10 4v12M4 10h12" /></S>;
 export const Panel = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.5" /><path d="M8 4v12" /></S>;
 export const Layers = (p: P) => <S {...p}><g className="ai-l1"><path d="M7 3.2h6" /></g><g className="ai-l2"><path d="M4.6 5.9h10.8" /></g><path d="M3.6 8.4h12.8M4.6 8.4l.8 6.9a1.8 1.8 0 001.8 1.6h5.6a1.8 1.8 0 001.8-1.6l.8-6.9" /></S>;
 export const Shapes = (p: P) => <S {...p}><g className="ai-q"><path d="M7 2.4a5.4 5.4 0 015.4 5.4H7z" /></g><circle cx="5.6" cy="14" r="3.2" /><g className="ai-sq"><rect x="10.4" y="10.4" width="6.4" height="6.4" rx="1.3" /></g></S>;
-export const Scroll = (p: P) => <S {...p}><path d="M5.2 3h7.3A1.8 1.8 0 0114.3 4.8V12" /><path d="M5.2 3a1.8 1.8 0 00-1.8 1.8v8.6" /><g className="ai-roll"><path d="M3.4 13.4h8.1v1.1a2.2 2.2 0 002.2 2.2H5.6a2.2 2.2 0 01-2.2-2.2zM11.5 13.4h5.1v1.1a2.2 2.2 0 01-2.9 2.1" /></g><g className="ai-ink"><path d="M7 7.3c.7-.7 1.3-.7 2 0s1.3.7 2 0" pathLength="1" /></g></S>;
+// Skills / Connectors / Plugins: cùng bộ với mục Customize của Claude. Nhóm ai-* là phần chuyển động khi rê chuột (giữ nguyên tên để animation cũ vẫn chạy).
+export const Scroll = (p: P) => <S {...p}><path d="M7.2 3.3h7.4a1.9 1.9 0 011.9 1.9v9.7" /><g className="ai-roll"><path d="M7.2 3.3a1.9 1.9 0 00-1.9 1.9v1.6h1.9M5.3 6.8V14" /><path d="M16.5 14.9v.9a1.9 1.9 0 01-1.9 1.9H5.2a1.9 1.9 0 01-1.9-1.9V14h9.3v1.8a1.9 1.9 0 001.9 1.9" /></g><g className="ai-ink"><path d="M8.6 9.4c.7-.8 1.4-.8 2.1 0s1.4.8 2.1 0" pathLength="1" /></g></S>;
+export const Connectors = (p: P) => <S {...p}><path d="M3.3 8.6h5v5h5v5h-10z" /><path d="M3.3 13.6h5v5" /><g className="ai-snap"><rect x="11.4" y="3.3" width="5.3" height="5.3" rx="1.1" /></g></S>;
+export const Plugins = (p: P) => <S {...p}><g className="ai-plug"><path d="M12.6 4.2l-2.3 2.3M15.8 7.4l-2.3 2.3" /><path d="M8.6 6.2l5.2 5.2-1.6 1.6a3.3 3.3 0 01-4.6 0l-.6-.6a3.3 3.3 0 010-4.6z" /></g><path d="M7 13.4l-3.5 3.5" /></S>;
 export const Code = (p: P) => <S {...p}><g className="ai-lt"><path d="M6.8 6L2.8 10l4 4" /></g><g className="ai-rt"><path d="M13.2 6l4 4-4 4" /></g><g className="ai-sl"><path d="M11.8 4l-3.6 12" /></g></S>;
 export const Brief = (p: P) => <S {...p}><g className="ai-br"><rect x="3" y="6" width="14" height="10" rx="2" /><path d="M7.5 6V4.5h5V6M3 10.5h14" /></g></S>;
 export const Pencil = (p: P) => <S {...p}><path d="M12.9 4a1.9 1.9 0 012.7 0l.4.4a1.9 1.9 0 010 2.7L7.6 15.5l-4 1 1-4zM11.2 5.8l3 3" /></S>;
@@ -166,5 +169,5 @@ export const SetKey = (p: P) => <L {...p}><path d="M2.586 17.414A2 2 0 0 0 2 18.
 // Menu tài khoản: tải ứng dụng (máy tính + điện thoại) và phím tắt.
 export const GetApps = (p: P) => <L {...p}><rect x="2" y="4.5" width="13" height="10" rx="1.8" /><path d="M6.3 19h4.4M8.5 14.5V19" /><rect x="17" y="8.5" width="5" height="11" rx="1.3" /><path d="M19 17h1" /></L>;
 export const Keyboard = (p: P) => <L {...p}><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12.5h.01M18 12.5h.01M10 12.5h4M8 16h8" /></L>;
-// Connectors: phích cắm nghiêng (Lucide "plug" xoay 45°).
-export const SetPlug = (p: P) => <L {...p}><g transform="rotate(45 12 12)"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" /></g></L>;
+// Connectors dùng chung icon với mục Customize (giữ tên SetPlug cho chỗ cũ).
+export const SetPlug = (p: P) => <Connectors {...p} />;

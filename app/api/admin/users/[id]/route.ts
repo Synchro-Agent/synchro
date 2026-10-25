@@ -5,6 +5,7 @@ import { removeUserCaps } from "../../../../caps";
 import { removeUserOutputs } from "../../../../outputs";
 import { removeUserArtifacts } from "../../../../artifactstore";
 import { removeUserUsage } from "../../../../usage";
+import { removeUserPlugins } from "../../../../plugins";
 import { destroyWorkspace } from "../../../../workspace";
 
 export const runtime = "nodejs";
@@ -42,6 +43,7 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   removeUserOutputs(id);
   removeUserArtifacts(id);
   removeUserUsage(id);
+  await removeUserPlugins(id);
   await destroyWorkspace(id);
   return Response.json({ ok: true });
 });

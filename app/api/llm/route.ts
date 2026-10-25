@@ -7,6 +7,7 @@ import { ConnectorSession, connectorsPrompt } from "../../connectors";
 import { randomToken } from "../../mcpauth";
 import { capsState, skillsOn } from "../../caps";
 import { overLimit, usageScope } from "../../usage";
+import { everywhereSkills, recordPluginUse, studioOf, studioSkills, type Studio } from "../../plugins";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "../../coderun";
 import { saveOutputs, type OutFile } from "../../outputs";
 import { ARTIFACT_RULES, VIZ_RULES } from "../../artifacts";
@@ -188,9 +189,24 @@ function connectorToolDefs(sess: ConnectorSession, gemini: boolean) {
 function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   if ("approval" in out) return Response.json({ model, approval: out.approval });
   x.sess?.close();
-  recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
+  const usedNames = out.used.filter((u) => u.kind === "skill").map((u) => u.name);
+  recordUse(c.user.id, usedNames);
+  recordPluginUse(x.list.filter((k) => k.user_id.startsWith("pl_") && usedNames.includes(k.name)).map((k) => k.id));
   return Response.json({ model, text: out.text, skills: out.used, files: x.outs });
 }
+
+// Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
+const STUDIO_TASK: Record<Studio, string> = {
+  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG).",
+  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML trình chiếu được, có điều hướng giữa các slide; khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
+  docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code.",
+};
+const STUDIO_RULES = (s: Studio, plugins: string[], n: number) => `<studio name="${s}">
+Người dùng đang ở chế độ ${STUDIO_TASK[s]}
+${n ? `Bạn có thư viện ${n} skill chuyên môn${plugins.length ? ` (từ ${plugins.join(", ")})` : ""} trong available_skills. Trước khi làm, tự chọn 1-3 skill hợp nhất với yêu cầu và gọi load_skill để đọc (đọc thêm tài liệu tham khảo nếu skill chỉ dẫn), rồi áp dụng đúng nguyên tắc của skill.` : "Chưa có thư viện skill cho studio này: dùng kiến thức chuyên môn tốt nhất của bạn."}
+Đừng hỏi lại người dùng về phong cách, màu sắc, bố cục hay giọng văn: hãy tự đưa ra lựa chọn có chủ đích, nhất quán và đẹp, rồi làm luôn bản hoàn chỉnh. Chỉ hỏi khi thiếu thông tin không thể tự đoán (ví dụ tên thương hiệu thật).
+Sau sản phẩm, nêu ngắn gọn 2-3 quyết định chính bạn đã chọn và gợi ý hướng chỉnh sửa.
+</studio>`;
 
 // Artifact dùng AI: trang trong artifact gọi window.synchro.complete(...) → trình duyệt chuyển tới đây.
 // Không có công cụ, không có skill; chỉ tài khoản đang bật "Artifact dùng AI" mới gọi được.
@@ -270,10 +286,16 @@ async function post(req: Request, c: NonNullable<ReturnType<typeof current>>, sc
   }
   // Lượt chat chính (skills = true) áp dụng Cài đặt → Khả năng: Artifacts, hình minh họa trong chat, chạy code.
   const cs = skills ? capsState(c.user) : null;
-  const capSys = cs ? [cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : ""].filter(Boolean).join("\n\n") : "";
+  // Nút Thiết kế / Trình bày / Tài liệu (studio): nạp thư viện skill của plugin gắn với studio đó.
+  const studio = skills && can(c.user, "skills") ? studioOf(body.studio) : null;
+  const st = studio ? studioSkills(c.user.id, studio) : null;
+  const capSys = cs ? [cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
   let sess: ConnectorSession | null = null;
   try {
-    const list = skills && can(c.user, "skills") && skillsOn(c.user) ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
+    const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
+    // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
+    for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
+    for (let i = list.length - 1; i >= 0; i--) if (list.findIndex((x) => x.name === list[i].name) !== i) list.splice(i, 1);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: typeof conv === "string" && conv.length <= 64 ? conv : undefined, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";

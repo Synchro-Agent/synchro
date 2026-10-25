@@ -115,6 +115,26 @@ if (!fs.existsSync(USAGE_SEEDED) && (await call("GET", "/api/usage")).status ===
   sdb.close();
 }
 const usage = (await call("GET", "/api/usage?provider=anthropic")).j;
+// Plugins: lần chạy đầu cài sẵn ba studio (Thiết kế / Trình bày / Tài liệu) cho cả tổ chức từ GitHub, như quản trị viên đã cài.
+// Nếu có ~/Downloads/Vox Animations.zip thì thêm skill Vox vào Design Studio. Cần mạng; lỗi thì bỏ qua, cài lại ở Tùy chỉnh → Plugins.
+const PLUGINS_SEEDED = path.join(DATA, ".plugins-seeded");
+if (!fs.existsSync(PLUGINS_SEEDED)) {
+  let ok = 0;
+  for (const id of ["design-studio", "slides-studio", "docs-studio"]) {
+    const r = await call("POST", "/api/plugins", { action: "install", catalogId: id, scope: "org" }).catch((e) => ({ status: 0, j: { error: String(e) } }));
+    if (r.status === 200) ok++; else console.error(`Không cài được plugin ${id}:`, r.j?.error);
+    if (id === "design-studio" && r.status === 200) {
+      const vox = path.join(process.env.HOME ?? "", "Downloads", "Vox Animations.zip");
+      if (fs.existsSync(vox)) {
+        const fd = new FormData();
+        fd.append("file", new Blob([fs.readFileSync(vox)], { type: "application/zip" }), "vox.zip");
+        await fetch(`${B}/api/plugins/${r.j.plugin.id}`, { method: "POST", headers: { origin: B, cookie }, body: fd }).catch(() => {});
+      }
+    }
+  }
+  if (ok === 3) fs.writeFileSync(PLUGINS_SEEDED, new Date().toISOString());
+}
+const plugins = (await call("GET", "/api/plugins")).j?.plugins ?? [];
 const models = (await call("GET", "/api/models")).j?.providers ?? [];
 
 console.log(`
@@ -131,6 +151,8 @@ console.log(`
   │   Hình:     "Vẽ biểu đồ doanh thu 6 tháng", "Tỷ lệ doanh thu theo kênh", "Vẽ sơ đồ quy trình đặt hàng", "Mô phỏng tính lãi vay"
   │   Chạy code:"Tạo file Excel báo cáo doanh thu", "Viết báo cáo tuần ra file Word", "Làm slide PowerPoint", "Xuất hóa đơn PDF",
   │             "Đếm số nguyên tố dưới 1 triệu", "Cài thư viện humanize bằng pip", "Thử truy cập mạng"
+  │ Plugins:    ${plugins.map((p) => `${p.name} (${p.skills.length} skill${p.studio ? `, nút ${p.studio === "design" ? "Thiết kế" : p.studio === "slides" ? "Trình bày" : "Tài liệu"}` : ""})`).join(", ") || "chưa có"}
+  │   Thử:     Artifacts → bấm "Thiết kế" rồi gõ "Làm trang web cho quán cà phê"; "Trang trình bày" → "Báo cáo quý"; "Tài liệu" → "Viết đề xuất"
   │ Mức dùng:   ${usage?.limits ? usage.limits.map((l) => `${l.key === "session" ? "phiên" : "tuần"} ${Math.round(l.pct)}% ($${l.used.toFixed(2)}${l.limit ? `/$${l.limit}` : ""})`).join(" · ") : "?"} — bấm vòng tròn cạnh tên model, hoặc Cài đặt → Usage
   └─ Ctrl+C để dừng ─────────────────────────────────────────
 `);

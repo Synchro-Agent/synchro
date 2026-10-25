@@ -30,6 +30,8 @@ import { loadCaps, useCaps } from "./capsclient";
 import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
 import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
 import { UsageRing } from "./usageui";
+import { CustomizePage, useStudios, type CzTab } from "./pluginsui";
+import { ConnectorsPanel } from "./connectorsui";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -105,6 +107,8 @@ function MicPicker({ say, rec, onMic }: { say: Say; rec: boolean; onMic: () => v
 const EFFORTS: [string, string][] = [["low", "Thấp"], ["medium", "Trung bình"], ["high", "Cao"], ["extra", "Cao hơn"], ["max", "Tối đa"]];
 
 type TplKey = "doc" | "slides" | "design";
+// Mỗi mẫu là một "studio": gắn với plugin cùng tên (Design / Slides / Docs Studio) để model có cả thư viện skill chuyên môn.
+const STUDIO_OF: Record<TplKey, "docs" | "slides" | "design"> = { doc: "docs", slides: "slides", design: "design" };
 const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; sys: string }[] = [
   { k: "doc", name: "Tài liệu", label: "Synchro Docs", ph: "Tài liệu này nên nói về chủ đề gì?", desc: "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.",
     sys: "Tôi tạo một tài liệu soạn thảo bằng công cụ Docs, gồm tiêu đề và nội dung các phần. Tài liệu này có thể xuất ra Word, PDF hoặc Markdown." },
@@ -612,11 +616,15 @@ export default function Home() {
   capsRef.current = caps;
   const [artRefresh, setArtRefresh] = useState(0);
   const [artQ, setArtQ] = useState("");
+  const [czTab, setCzTab] = useState<CzTab>("skills");
+  // Plugin gắn với các nút studio (Thiết kế / Trình bày / Tài liệu): tên và số skill để hiện trên nút.
+  const studios = useStudios();
+  const openPlugins = () => { setCzTab("plugins"); setView("customize"); };
   const chatsRef = useRef<Chat[]>([]);
   chatsRef.current = chats;
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
-  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number) => {
+  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"]) => {
     const gen = ++genRef.current;
     setBusy(true);
     const pr = pid !== undefined ? projsRef.current.find((x) => x.id === pid) : undefined;
@@ -626,7 +634,7 @@ export default function Home() {
     let usedSk: string[] = [], usedTl: string[] = [];
     let outs: Msg["outs"] = [];
     try {
-      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id });
+      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio });
       const used = takeSkillsUsed();
       usedSk = [...new Set(used.filter((u) => u.kind === "skill").map((u) => u.name))];
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
@@ -671,7 +679,7 @@ export default function Home() {
     if (view !== "chat" || id === null) {
       id = Date.now();
       const nid = id;
-      setChats((cs) => [{ id: nid, title: t.slice(0, 40), msgs, inc: incog || undefined, project: view === "project" ? curProj ?? undefined : undefined }, ...cs]);
+      setChats((cs) => [{ id: nid, title: t.slice(0, 40), msgs, inc: incog || undefined, project: view === "project" ? curProj ?? undefined : undefined, studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
       setCur(id);
       setView("chat");
     } else patch(id, (m) => [...m, ...msgs]);
@@ -684,7 +692,7 @@ export default function Home() {
     fileContext(f, t).then(({ blocks, errors }) => {
       errors.forEach((m) => say(m));
       if (blocks.length) hist[hist.length - 1] = { role: "user", content: [{ type: "text", text: t || "Hãy xem các tệp đính kèm." }, ...blocks] };
-      streamReply(id, t, hist, pid);
+      streamReply(id, t, hist, pid, tp ? STUDIO_OF[tp.k] : undefined);
     });
   };
   const retry = () => {
@@ -1032,7 +1040,9 @@ export default function Home() {
                     <button className="menu-item" onClick={() => { setTplMode(null); setTplMenu(false); }}><I.X size={14} />Xóa {t.k === "doc" ? "tài liệu" : t.k === "slides" ? "bản trình bày" : "thiết kế"}</button>
                   </Menu>
                 </div>
-                {t.k !== "doc" && <button className="mode-sys" onClick={() => say("Hệ thống thiết kế: chưa có hệ thống nào được thiết lập")}><I.Palette size={16} />Hệ thống thiết kế</button>}
+                {/* Thư viện skill của studio: bấm để xem / cài plugin. */}
+                {studios[STUDIO_OF[t.k]] ? <button className="mode-sys" onClick={openPlugins} title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={16} />Thư viện {studios[STUDIO_OF[t.k]]!.skills} skill</button>
+                  : <button className="mode-sys" onClick={openPlugins}><I.Plugins size={16} />Cài thư viện {t.k === "doc" ? "tài liệu" : t.k === "slides" ? "trình bày" : "thiết kế"}</button>}
               </div>); })()}
             {incog ? <p className="muted" style={{ fontSize: 13, marginTop: 20 }}>Đoạn chat ẩn danh sẽ không được lưu vào lịch sử</p> : null}
           </div>
@@ -1108,7 +1118,7 @@ export default function Home() {
               {TPLS.map((t, i) => (
                 <button key={t.k} className={`tpl tpl-${t.k} ${i === 2 ? "last" : ""}`} onClick={() => { setTplMode(t.k); setView("new"); }}>
                   <div className="th"><TplArt k={t.k} /><span className="cur"><svg width="16" height="18" viewBox="0 0 16 18"><path d="M1.5 1l12 7.2-5.4 1.3-2.6 5.2z" fill="#fff" stroke="#111" strokeWidth="1.2" strokeLinejoin="round" /></svg><em>Synchro</em></span></div>
-                  <span className="tl">{t.name}<span className="new-tag">Mới</span></span>
+                  <span className="tl">{t.name}{studios[STUDIO_OF[t.k]] ? <span className="tpl-lib" title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={12} />{studios[STUDIO_OF[t.k]]!.skills} skill</span> : <span className="new-tag">Mới</span>}</span>
                   <span className="tpl-pop"><b>{t.name}</b><i>Của Synchro</i><span>{t.desc}</span></span>
                 </button>
               ))}
@@ -1119,11 +1129,7 @@ export default function Home() {
           </div></div>
         )}
 
-        {view === "customize" && (
-          <div className="page"><div className="page-in" style={{ maxWidth: 820 }}>
-            <Directory />
-          </div></div>
-        )}
+        {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} skills={<Directory />} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
       </main>
