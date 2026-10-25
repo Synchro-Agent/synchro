@@ -55,6 +55,8 @@ function applyArt(cur, text) {
 }
 
 console.log("0. Chuẩn bị: bật artifact, kết nối connector có dữ liệu lớn");
+// Giữ cài đặt khả năng hiện có để trả lại khi xong (bộ kiểm thử khác cần chạy code bật để dùng skill).
+const capsBefore = (await api("GET", "/api/caps")).j?.caps;
 await api("PATCH", "/api/caps", { art: true, ai: true, inl: true, code: false });
 const before = (await api("GET", "/api/connectors")).j?.connectors ?? [];
 for (const x of before) if (/Cửa hàng mẫu/.test(x.name) || x.url === `${MCP}/modern`) await api("DELETE", `/api/connectors/${x.id}`);
@@ -157,5 +159,6 @@ for (const model of MODELS) {
 }
 
 if (connId) await api("DELETE", `/api/connectors/${connId}`);
+if (capsBefore) await api("PATCH", "/api/caps", capsBefore);
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
