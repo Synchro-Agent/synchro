@@ -659,6 +659,7 @@ function Thumb({ a }: { a: Summary }) {
     <div className={`art-thumb t-${a.type}`} ref={ref}>
       {vb ? (vis && <div className="art-thumb-scale"><iframe className="art-thumb-frame" title={a.title} srcDoc={vbhcHtml(vb, a.title)} sandbox="" /></div>)
         : live ? (vis && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={a.preview} ai={false} title={a.title} className="art-thumb-frame" /></div>)
+        : a.type === "markdown" ? <div className="art-thumb-doc mdx"><Markdown text={a.preview.split("\n").slice(0, 24).join("\n")} say={() => {}} /></div>
         : <pre>{a.preview.split("\n").slice(0, 14).join("\n")}</pre>}
       <span className="art-thumb-shade" />
     </div>
@@ -682,7 +683,7 @@ export function ArtifactsGallery({ q, ai, say, onOpenChat, refreshKey }: { q: st
     if (r.ok) { setList((l) => l?.filter((x) => x.id !== id) ?? null); if (open?.id === id) setOpen(null); say(tr("Đã xóa artifact")); }
   };
   const shown = (list ?? []).filter((a) => !q || a.title.toLowerCase().includes(q.toLowerCase()));
-  const when = (t: number) => new Date(t).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short", year: "numeric" });
+  const when = (t: number) => new Date(t).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", getLang() === "en" ? { day: "numeric", month: "short", year: "numeric" } : { day: "2-digit", month: "2-digit", year: "numeric" });
   return (
     <>
       {list === null ? <div className="art-grid">{[0, 1, 2].map((i) => <div key={i} className="art-tile sk" />)}</div>

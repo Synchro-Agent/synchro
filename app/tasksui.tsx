@@ -21,7 +21,11 @@ const DAYS = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm"
 export const scheduleText = (s: Schedule) => s.kind === "once" ? tr("Một lần") : s.kind === "hourly" ? tr("Mỗi giờ") : s.kind === "daily" ? `${tr("Mỗi ngày lúc")} ${s.time}` : `${tr(DAYS[s.weekday ?? 1])} ${tr("hằng tuần lúc")} ${s.time}`;
 // Kết quả có artifact: tài liệu Markdown hiện thẳng như văn bản, loại khác hiện thành khối mã.
 const readable = (text: string) => (hasArtifacts(text) ? splitArtifacts(text).map((sg) => (sg.kind === "text" ? sg.text : sg.art.type === "markdown" ? `\n${sg.art.content}\n` : artifactsAsCode(`<artifact identifier="${sg.art.ident}" type="${sg.art.type}" title="${sg.art.title}">\n${sg.art.content}\n</artifact>`))).join("") : text);
-const when = (t: number) => new Date(t).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+// "14:05" trong hôm nay, "14:05 · 26/10" các ngày khác.
+const when = (t: number) => {
+  const d = new Date(t), p = (n: number) => String(n).padStart(2, "0"), hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  return d.toDateString() === new Date().toDateString() ? hm : `${hm} · ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
+};
 // Mẫu tác vụ hay dùng (người dùng sửa lại cho đúng việc của mình).
 const TEMPLATES = [
   { title: "Bản tin buổi sáng", prompt: "Tóm tắt những việc tôi cần chú ý hôm nay: lịch họp, email quan trọng chưa trả lời, việc đến hạn. Ngắn gọn theo mức độ ưu tiên.", schedule: { kind: "daily", time: "08:00" } },

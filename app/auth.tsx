@@ -309,6 +309,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     }
   };
 
+  const socials = (["google", "github", "apple"] as const).filter((p) => providers?.[p]);
   const social = (p: keyof Providers) => {
     if (stage !== "form") return;
     if (!providers?.[p]) { fail(`${PROVIDER_NAMES[p]} sign-in isn't set up on the server yet.`); return; }
@@ -358,7 +359,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   }, [authStep, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const titles: Record<string, [string, string]> = {
-    email: ["Get started", "Continue with"],
+    email: ["Get started", socials.length ? "Continue with" : "Sign in with the owner's email"],
     password: ["Welcome back", "Enter your password to sign in."],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };
@@ -387,12 +388,15 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                     {authStep === "email" && <motion.div key="email-content" exit={stepExit} className="w-full flex flex-col items-center gap-4">
                         <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground whitespace-nowrap">{titles.email[0]}</p></div></BlurFade>
                         <BlurFade delay={BASE + STEP}><p className="text-sm font-medium text-muted-foreground">{titles.email[1]}</p></BlurFade>
+                        {/* Chỉ hiện cách đăng nhập máy chủ đã thiết lập (web cá nhân thường chỉ dùng một cách). */}
+                        {socials.length > 0 && <>
                         <BlurFade delay={BASE + STEP * 2}><div className="flex items-center justify-center gap-3 w-full">
-                            <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>
-                            <GlassButton type="button" onClick={() => social("github")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GitHubIcon /><span className="font-semibold text-foreground">GitHub</span></GlassButton>
-                            <GlassButton type="button" onClick={() => social("apple")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><AppleIcon /><span className="font-semibold text-foreground">Apple</span></GlassButton>
+                            {socials.includes("google") && <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>}
+                            {socials.includes("github") && <GlassButton type="button" onClick={() => social("github")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GitHubIcon /><span className="font-semibold text-foreground">GitHub</span></GlassButton>}
+                            {socials.includes("apple") && <GlassButton type="button" onClick={() => social("apple")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><AppleIcon /><span className="font-semibold text-foreground">Apple</span></GlassButton>}
                         </div></BlurFade>
                         <BlurFade delay={BASE + STEP * 3} className="w-[300px]"><div className="flex items-center w-full gap-2 py-2"><hr className="w-full border-border"/><span className="text-xs font-semibold text-muted-foreground">OR</span><hr className="w-full border-border"/></div></BlurFade>
+                        </>}
                     </motion.div>}
                     {authStep !== "email" && <motion.div key={`${authStep}-title`} exit={stepExit} className="w-full flex flex-col items-center text-center gap-4">
                         <BlurFade className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl tracking-tight text-foreground whitespace-nowrap">{titles[authStep][0]}</p></div></BlurFade>

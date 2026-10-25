@@ -75,7 +75,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
   let last = "";
   return (
     <div className="overlay top" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal search pal" style={{ width: 640 }} role="dialog" aria-label={tr("Bảng lệnh")}>
+      <div className="modal search pal" style={{ width: "min(640px, calc(100vw - 24px))" }} role="dialog" aria-label={tr("Bảng lệnh")}>
         <div className="s-box"><I.Search size={18} />
           <input autoFocus placeholder={tr("Tìm lệnh, đoạn chat, artifact, skill, tài liệu…")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={tr("Tìm kiếm")}
             onKeyDown={(e) => {

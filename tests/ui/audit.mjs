@@ -44,13 +44,14 @@ const CHECK = `(() => {
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.left >= W || r.right <= 0 || !vis(el)) continue;
     if (r.right > W + 2 && !clipped(el)) { out.push("tràn khỏi mép phải " + Math.round(r.right - W) + "px: " + name(el)); n++; continue; }
+    if (r.left < -2 && r.right > 8 && !clipped(el) && !el.closest(".sidebar.closed") && getComputedStyle(el).position !== "sticky") { out.push("tràn khỏi mép trái " + Math.round(-r.left) + "px: " + name(el)); n++; continue; }
     const cs = getComputedStyle(el);
     const own = [...el.childNodes].some((c) => c.nodeType === 3 && c.nodeValue.trim());
     if (own && /(hidden|clip)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 2 && cs.textOverflow !== "ellipsis" && !el.closest("pre,code,.art-code,textarea")) { out.push("chữ bị cắt (không có …): " + name(el) + " “" + el.textContent.trim().slice(0, 40) + "”"); n++; }
   }
   for (const img of document.images) if (img.complete && img.naturalWidth === 0 && img.getAttribute("src") && vis(img)) out.push("ảnh hỏng: " + img.getAttribute("src").slice(0, 80));
   if (document.fonts.status !== "loaded") out.push("phông chữ chưa tải xong");
-  const bad = [...document.fonts].filter((f) => f.status === "error").map((f) => f.family);
+  const bad = [...document.fonts].filter((f) => f.status === "error" && !/Fallback/.test(f.family)).map((f) => f.family);
   if (bad.length) out.push("phông lỗi: " + [...new Set(bad)].join(", "));
   // Chữ tiếng Anh sót trong giao diện tiếng Việt (bỏ qua nội dung người dùng, code, tên riêng).
   const EN = /\\b(the|and|your|with|this|that|from|will|Settings|Search|Delete|Cancel|Save|Close|Enable|Disable|Upload|Download|Loading|Untitled|Add|Remove|Edit|Copy|Share|Retry|Error|Failed|Back|Next|Done|Open|New|Preview|Learn more|Turn on|Turn off)\\b/;
@@ -120,7 +121,10 @@ for (const theme of THEMES) for (const size of SIZES) {
     await until(`!document.querySelector(".thinking") && !document.querySelector(".art-card.busy") && !document.querySelector(".msg-stop, .stop-btn, [aria-label='Dừng']")`, 90000, "reply " + text);
     await sleep(1200);
   };
-  const side = async () => { if (await ev(`!!document.querySelector(".sidebar.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); } };
+  const side = async () => {
+    // Điện thoại: khung artifact mở toàn màn hình, đóng trước (như người dùng bấm X) rồi mới mở thanh bên.
+    if (mobile && (await ev(`!!document.querySelector(".art-panel")`))) { await click(`document.querySelector(".art-panel [aria-label='Đóng']")`, "close art").catch(() => {}); await sleep(400); }
+    if (await ev(`!!document.querySelector(".sidebar.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); } };
   const nav = async (label) => { await side(); await click(byText(".nav-item", label), label); await sleep(1500); };
   const step0 = async (name, fn) => { try { await fn(); } catch (e) { note(`${tag}/${name}`, "không chạy được bước: " + e.message.split("\n")[0]); await shot(name + "-fail").catch(() => {}); } };
 

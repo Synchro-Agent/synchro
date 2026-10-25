@@ -119,6 +119,7 @@ const EFFORTS: [string, string][] = [["low", "Thấp"], ["medium", "Trung bình"
 type TplKey = "doc" | "slides" | "design";
 // Mỗi mẫu là một "studio": gắn với plugin cùng tên (Design / Slides / Docs Studio) để model có cả thư viện skill chuyên môn.
 const STUDIO_OF: Record<TplKey, "docs" | "slides" | "design"> = { doc: "docs", slides: "slides", design: "design" };
+const NARROW = "(max-width: 760px)";
 const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; sys: string }[] = [
   { k: "doc", name: "Tài liệu", label: "Synchro Docs", ph: "Tài liệu này nên nói về chủ đề gì?", desc: "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.",
     sys: "Tôi tạo một tài liệu soạn thảo bằng công cụ Docs, gồm tiêu đề và nội dung các phần. Tài liệu này có thể xuất ra Word, PDF hoặc Markdown." },
@@ -204,6 +205,19 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     setSubLeft(x - r.left);
   }, [sub, mm]);
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
+  // Menu mở ra bị tràn khỏi màn hình (nút nằm giữa ô soạn tin trên điện thoại): dịch ngang cho vừa.
+  const [shift, setShift] = useState(0);
+  useEffect(() => {
+    if (!mm) { setShift(0); return; }
+    // Menu canh mép phải theo nút; đo sau khi menu đã gắn (bỏ qua hiệu ứng phóng to lúc mở).
+    const raf = requestAnimationFrame(() => {
+      const m = mref.current?.querySelector(".model-menu") as HTMLElement | null, w = mref.current?.getBoundingClientRect();
+      if (!m || !w) return;
+      const left = w.right - m.offsetWidth, vw = window.innerWidth;
+      setShift(left < 12 ? 12 - left : w.right > vw - 12 ? vw - 12 - w.right : 0);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mm]);
   const subX = { left: subLeft };
   const pick = (k: string) => { setModel(k); close(); };
   const eLabel = levelName(eff);
@@ -211,7 +225,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   return (
     <div ref={mref} style={{ position: "relative" }}>
       <button className="model-btn" onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"} <span className="muted">{eLabel}</span><I.Chevron size={14} /></button>
-      <Menu open={mm} className="model-menu" style={{ position: "absolute" }}>
+      <Menu open={mm} className="model-menu" style={{ position: "absolute", ...(shift ? { translate: `${shift}px 0` } : {}) }}>
         {none && (
           <div className="mempty">
             <b>Chưa kết nối model nào</b>
@@ -458,6 +472,9 @@ export default function Home() {
   }, [motion, font, uiFont, size, width]);
   const [view, setView] = useState<View>("new");
   const [open, setOpen] = useState(true);
+  // Màn hình hẹp (điện thoại): thanh bên là ngăn kéo trượt đè lên nội dung, mặc định đóng, chọn mục xong tự đóng.
+  const narrow = () => typeof window !== "undefined" && window.matchMedia(NARROW).matches;
+  useEffect(() => { if (narrow()) setOpen(false); }, []);
   const [chats, setChats] = useState<Chat[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [cur, setCur] = useState<number | null>(null);
@@ -1054,6 +1071,7 @@ export default function Home() {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
         const t = e.target as HTMLElement;
         if (spOpen && t.closest(".nav-item,.chat-item,.user,.icon-btn") && !t.closest(".nav-row,.nav-sub")) setSpOpen(false);
+        if (narrow() && t.closest(".nav-item,.chat-item") && !t.closest(".nav-row > .icon-btn, .chat-item .icon-btn, .chat-item input")) setTimeout(() => setOpen(false), 0);
       }}>
         <div className="side-top">
           <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Đóng thanh bên"><I.Panel /></button>
@@ -1203,6 +1221,7 @@ export default function Home() {
           <button className="icon-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm"><I.Search size={16} /></button>
         </div>
       </aside>
+      {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
       <main className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         {view !== "code" && view !== "speech" && <div className="topbar">
@@ -1210,7 +1229,7 @@ export default function Home() {
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
             {view === "chat" && chat && (
               <div className="title-wrap" style={{ position: "relative" }}>
-                <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}>{chat.title}<I.Chevron size={14} /></button>
+                <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t">{chat.title}</span><I.Chevron size={14} /></button>
                   <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
                     <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.PinOff /> : <I.Pin />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>

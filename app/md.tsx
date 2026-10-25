@@ -260,10 +260,11 @@ export function Markdown({ text: text0, say, dev, viz, live }: { text: string; s
           flushT();
           const b = l.match(/^\s*[-*]\s+(.*)/);
           const n = l.match(/^\s*\d+\.\s+(.*)/);
-          const h = l.match(/^#{1,3}\s+(.*)/);
+          const h = l.match(/^(#{1,6})\s+(.*)/);
           if (b || n) { const o = !!n; if (list.length && o !== ord) flush(); ord = o; list.push((b || n)![1]); return; }
           flush();
-          if (h) out.push(<h3 key={out.length}><Inline t={h[1]} /></h3>);
+          // Giữ đúng cấp tiêu đề (# lớn nhất … #### trở xuống cùng cỡ) để tài liệu dài vẫn thấy rõ bố cục.
+          if (h) { const H = `h${Math.min(h[1].length, 4)}` as "h1" | "h2" | "h3" | "h4"; out.push(<H key={out.length}><Inline t={h[2]} /></H>); }
           else if (l.trim()) out.push(<p key={out.length}><Inline t={l} /></p>);
         });
         flush(); flushT();

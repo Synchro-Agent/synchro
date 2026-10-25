@@ -106,9 +106,6 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
       <Row t="Speed"><Select value={speed} onChange={setSpeed} options={["Slow", "Normal", "Fast"]} /></Row>
       <H>Notifications</H>
       <Row t="Response completions" d="Get notified when Synchro has finished a response. Useful for long-running tasks." top><Toggle on={tg[0]} set={set(0)} /></Row>
-      <Row t="Mentions and replies" d="Get an email when someone @mentions you on an artifact, or replies in a comment thread you're part of."><Toggle on={tg[1]} set={set(1)} /></Row>
-      <Row t="Comments on your artifacts" d="Get an email when someone comments on an artifact you own, even when you're not mentioned. Follows “Mentions and replies” until you change it."><Toggle on={tg[2]} set={set(2)} /></Row>
-      <Row t="Artifacts shared with you" d="Get an email when someone shares an artifact with you."><Toggle on={tg[3]} set={set(3)} /></Row>
     </>
   );
 }
@@ -155,7 +152,7 @@ function Account() {
       <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
-      <p className="d" style={{ margin: "0 0 10px" }}>Synchro will keep these in mind for this and any of your associated accounts across chats and Cowork within <A>Anthropic&apos;s guidelines</A>. <A>Learn more</A></p>
+      <p className="d" style={{ margin: "0 0 10px" }}>Synchro keeps these in mind in every chat.</p>
       <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I primarily code in Python (not a coding beginner)" />
       {ins !== saved0 && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -208,6 +205,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
   const title = { files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
     <>
+      <H first>Privacy</H>
       <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on your own server for you alone. Chats are kept in this browser; files, skills, connectors and apps are kept on your Synchro server. What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through your own API key.</p>
       <H>Your data</H>
       <Row t="Export data" top><button className="btn" onClick={app.exportData}>Export data</button></Row>
@@ -298,10 +296,10 @@ function Memory() {
   return (
     <>
       <H first>Memory</H>
-      <Row t="Generate memory from chats" d={<>Allow Synchro to generate memory from your chats. <A>Learn more</A></>} top><Toggle on={gen} set={setGen} /></Row>
-      <Row t="Include sensitive topics in memory" d={<>Allow Synchro to save details about sensitive topics like health conditions or religious beliefs to memory. <A>Learn more</A></>}><Toggle on={sens} set={setSens} /></Row>
-      <Row t="Import memory from other AI providers" d={<>Bring relevant context and data from another AI provider to Synchro. We&apos;ll provide a prompt you can use to fetch the memory from your other account. <A>Learn more</A></>}><button className="btn" onClick={() => setImp(true)}>Start import</button></Row>
-      {mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No files yet</div> : (
+      <Row t="Generate memory from chats" d={<>Allow Synchro to generate memory from your chats.</>} top><Toggle on={gen} set={setGen} /></Row>
+      <Row t="Include sensitive topics in memory" d={<>Allow Synchro to save details about sensitive topics like health conditions or religious beliefs to memory.</>}><Toggle on={sens} set={setSens} /></Row>
+      <Row t="Import memory from other AI providers" d={<>Bring relevant context and data from another AI provider to Synchro. We&apos;ll provide a prompt you can use to fetch the memory from your other account.</>}><button className="btn" onClick={() => setImp(true)}>Start import</button></Row>
+      {mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No memories yet</div> : (
         <>
           <H>Stored memories <span className="muted" style={{ fontWeight: 360 }}>({mems.length})</span></H>
           {mems.map((m, i) => <div key={i} className="item-row"><span style={{ flex: 1 }}>{m}</span><button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Delete memory" onClick={() => setMems((o) => o.filter((_, j) => j !== i))}><I.Trash size={14} /></button></div>)}
