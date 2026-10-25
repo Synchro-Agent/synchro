@@ -3151,6 +3151,8 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .pl-seg button.on{background:var(--card);color:var(--text);box-shadow:0 0 0 .5px var(--border-strong)}
 .pl-search{margin:0!important;height:32px;width:min(240px,40vw)}
 .pl-addw{position:relative}
+/* Trong Cài đặt, nút đóng của hộp thoại nằm góc trên phải: chừa chỗ để nút Thêm không đè lên. */
+.modal.settings .pl-top{padding-right:40px}
 .pl-add{display:inline-flex;align-items:center;gap:5px}
 .menu.pl-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:200px;z-index:40}
 .menu.pl-menu.right{min-width:310px}
