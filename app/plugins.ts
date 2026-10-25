@@ -367,6 +367,12 @@ export function studioSkills(uid: string, studio: Studio): { skills: Skill[]; pl
 export function everywhereSkills(uid: string): Skill[] {
   return active(uid).filter((p) => p.mine.everywhere).flatMap((p) => (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(p.id) as SRow[]).map((s) => toSkill(s, p.id)));
 }
+// Plugin không gắn studio và chưa bật "mọi cuộc trò chuyện": vào chat thường dưới dạng một thư viện riêng, model tự mở khi cần.
+export function libraryPlugins(uid: string): { slug: string; name: string; description: string; skills: Skill[] }[] {
+  return active(uid).filter((p) => !p.studio && !p.mine.everywhere)
+    .map((p) => ({ slug: p.slug, name: p.name, description: p.description, skills: (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(p.id) as SRow[]).map((s) => toSkill(s, p.id)) }))
+    .filter((l) => l.skills.length);
+}
 export function recordPluginUse(ids: string[]) {
   const st = init().prepare("UPDATE plugin_skills SET use_count = use_count + 1, last_used_at = ? WHERE id = ?");
   for (const id of ids) st.run(Date.now(), id);
@@ -378,3 +384,20 @@ export async function removeUserPlugins(uid: string) {
   init().prepare("DELETE FROM plugin_prefs WHERE user_id = ?").run(uid);
 }
 export { isText };
+
+// ---------------------------------------------------------------- cài sẵn 3 studio cho cả tổ chức (một lần)
+// Chạy khi máy chủ khởi động (instrumentation.ts). Đã cài xong một lần thì ghi nhớ, quản trị viên gỡ đi cũng không tự cài lại.
+// Lỗi mạng thì thử lại ở lần khởi động sau. Tắt bằng SYNCHRO_DEFAULT_PLUGINS=0.
+export async function ensureDefaultPlugins() {
+  const d = init();
+  d.exec("CREATE TABLE IF NOT EXISTS plugin_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  if (d.prepare("SELECT 1 FROM plugin_meta WHERE key = 'defaults'").get()) return;
+  const { PLUGIN_DIR } = await import("./plugindir");
+  let ok = true;
+  for (const def of PLUGIN_DIR.filter((p) => p.category === "studio")) {
+    if (d.prepare("SELECT 1 FROM plugins WHERE owner = 'org' AND catalog_id = ?").get(def.catalogId)) continue;
+    try { await installPlugin("org", def); console.log(`[plugins] đã cài sẵn ${def.name}`); }
+    catch (e) { ok = false; console.error(`[plugins] chưa cài được ${def.name}:`, (e as Error).message); }
+  }
+  if (ok) d.prepare("INSERT OR REPLACE INTO plugin_meta (key, value) VALUES ('defaults', ?)").run(String(Date.now()));
+}

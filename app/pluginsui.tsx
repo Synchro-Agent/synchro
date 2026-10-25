@@ -142,7 +142,7 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
         <div className="pl-rows">
           <div className="pl-row"><div><b>Turned on</b><span>{p.scope === "org" && !admin ? "Turn it off just for you." : "Off: no skill of this plugin is used anywhere."}</span></div>
             <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} onClick={() => patch(p.scope === "org" && !admin ? { mine: { enabled: !p.mine.enabled } } : { enabled: !p.enabled })} /></div>
-          <div className="pl-row"><div><b>Use in every chat</b><span>Off: skills only load when you press its studio button. Saves context for big plugins.</span></div>
+          <div className="pl-row"><div><b>List every skill directly</b><span>Off: Synchro opens this library on its own when a request needs it. On: each skill is listed in every chat, which uses more context.</span></div>
             <button className={`toggle ${p.mine.everywhere ? "on" : ""}`} role="switch" aria-checked={p.mine.everywhere} onClick={() => patch(p.scope === "org" ? { mine: { everywhere: !p.mine.everywhere } } : { everywhere: !p.everywhere })} /></div>
           {manage && <div className="pl-row"><div><b>Studio button</b><span>Pressing this Artifacts button gives Synchro the whole library of this plugin.</span></div>
             <select className="pl-sel" value={p.studio ?? ""} onChange={(e) => patch({ studio: e.target.value || null })}><option value="">None</option><option value="design">Design</option><option value="slides">Slides</option><option value="docs">Docs</option></select></div>}
@@ -170,92 +170,179 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
 }
 
 // ---------------------------------------------------------------- trang Plugins
+// Kết hợp Claude và Synchro: hai tab Của bạn / Khám phá, nút + cài một chạm cho plugin trong danh mục (đã kiểm tra giấy phép),
+// "Thêm từ repo GitHub" có bước xem trước giấy phép và rủi ro, mỗi plugin có menu nhanh (quản lý, cập nhật, tắt, gỡ).
+function AddRepo({ onClose, onPreview }: { onClose: () => void; onPreview: (url: string) => void }) {
+  const [url, setUrl] = useState("");
+  return (
+    <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <form className="modal pl-modal pl-small" onSubmit={(e) => { e.preventDefault(); if (url.trim()) onPreview(url.trim()); }}>
+        <button type="button" className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Close"><I.X size={16} /></button>
+        <h2>Add from a GitHub repository</h2>
+        <p className="d">Paste a link to a public repository or a folder inside it. Synchro finds every SKILL.md, checks licenses and scripts, and shows you everything before installing.</p>
+        <div className="pl-url"><I.GitHub size={16} /><input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://github.com/owner/repo" spellCheck={false} /></div>
+        <div className="modal-foot"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn dark" disabled={!url.trim()}>Preview</button></div>
+      </form>
+    </div>
+  );
+}
+
+function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolean; onOpen: () => void; onAct: (a: "check" | "toggle" | "remove") => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const on = p.enabled && p.mine.enabled;
+  return (
+    <div className="pl-more" ref={ref} onClick={(e) => e.stopPropagation()}>
+      <button className="icon-btn" aria-label="More" onClick={() => setOpen(!open)}><I.Dots size={16} /></button>
+      {open && (
+        <div className="menu pl-menu">
+          <button className="menu-item" onClick={() => { setOpen(false); onOpen(); }}><I.Sliders size={15} />Manage</button>
+          {manage && <button className="menu-item" onClick={() => { setOpen(false); onAct("check"); }}><I.Retry size={15} />Check for updates</button>}
+          <button className="menu-item" onClick={() => { setOpen(false); onAct("toggle"); }}>{on ? <I.Pause size={15} /> : <I.Play size={15} />}{on ? (p.scope === "org" && !manage ? "Turn off for me" : "Turn off") : "Turn on"}</button>
+          {manage && <><hr /><button className="menu-item del" onClick={() => { setOpen(false); onAct("remove"); }}><I.Trash size={15} />Uninstall</button></>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CAT: Record<string, string> = { studio: "Studios", design: "Design", dev: "Development & testing", writing: "Writing" };
+
 export function PluginsPanel() {
   const app = useApp();
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState("");
-  const [url, setUrl] = useState("");
+  const [tab, setTab] = useState<"yours" | "discover" | null>(null);
   const [pv, setPv] = useState<{ catalogId?: string; url?: string; name: string } | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addMenu, setAddMenu] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const addRef = useRef<HTMLDivElement>(null);
   const load = useCallback(() => api<Data>("GET", "/api/plugins").then((x) => { setD(x); setErr(""); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
-  const head = (
-    <div className="adm-head">
-      <div className="adm-badge"><I.Plugins size={22} /></div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="s-title">Plugins</div>
-        <div className="d">Install a whole set of skills in one step from GitHub. Link a plugin to the Design, Slides or Docs button and Synchro gets its entire library for that work.</div>
-      </div>
+  useEffect(() => {
+    if (!addMenu) return;
+    const h = (e: MouseEvent) => { if (!addRef.current?.contains(e.target as Node)) setAddMenu(false); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+  }, [addMenu]);
+  if (err) return <div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
+  if (!d) return <div className="empty" style={{ marginTop: 40 }}><span className="art-spin" /></div>;
+  const view = tab ?? (d.plugins.length ? "yours" : "discover");
+  const merge = (r: { plugins: PublicPlugin[]; plugin?: PublicPlugin }) => setD((x) => (x ? { ...x, plugins: r.plugins.length ? r.plugins : x.plugins.map((p) => (r.plugin && p.id === r.plugin.id ? r.plugin : p)) } : x));
+  const byCat = new Map(d.plugins.filter((p) => p.catalogId).map((p) => [p.catalogId!, p]));
+  const ql = q.trim().toLowerCase();
+  const match = (t: string) => !ql || t.toLowerCase().includes(ql);
+  // Cài một chạm (plugin trong danh mục đã được kiểm tra giấy phép): quản trị viên cài cho cả tổ chức.
+  const quick = async (x: DirPlugin) => {
+    setBusy(x.catalogId);
+    try {
+      const r = await api<{ plugin: PublicPlugin; plugins: PublicPlugin[] }>("POST", "/api/plugins", { action: "install", catalogId: x.catalogId, scope: d.admin ? "org" : "personal" });
+      merge({ plugins: r.plugins }); fire();
+      app.say(`${r.plugin.name} ${tr("is installed and ready to use")}`);
+    } catch (e) { app.say((e as Error).message); }
+    setBusy(null);
+  };
+  const act = async (p: PublicPlugin, a: "check" | "toggle" | "remove") => {
+    const manage = p.scope === "personal" || d.admin;
+    try {
+      if (a === "check") { const r = await api<{ changed: string[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, { action: "check" }); merge({ plugins: [], plugin: r.plugin }); app.say(r.changed.length ? tr("An update is available") : tr("Already up to date")); }
+      if (a === "toggle") { const on = p.enabled && p.mine.enabled; merge(await api("PATCH", `/api/plugins/${p.id}`, p.scope === "org" && !manage ? { mine: { enabled: !on } } : { enabled: !on })); fire(); }
+      if (a === "remove") app.confirm(`${tr("Gỡ")} ${p.name}?`, tr(`${p.skills.length} skill sẽ bị gỡ${p.scope === "org" ? " cho mọi người" : ""}. Bạn có thể cài lại từ danh mục.`), "Uninstall",
+        () => api<{ plugins: PublicPlugin[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { setD((x) => (x ? { ...x, plugins: r.plugins } : x)); fire(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
+    } catch (e) { app.say((e as Error).message); }
+  };
+  const cur = d.plugins.find((p) => p.id === open);
+  const featured = d.directory.find((x) => x.catalogId === "design-studio")!;
+  const plusBtn = (x: DirPlugin) => {
+    const inst = byCat.get(x.catalogId);
+    if (inst) return <button className="pl-plus done" aria-label="Installed" data-tip="Installed" onClick={() => setOpen(inst.id)}><I.Check size={15} /></button>;
+    if (!d.canInstall) return null;
+    return <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy} onClick={() => quick(x)}>{busy === x.catalogId ? <span className="art-spin sm" /> : <I.Plus size={15} />}</button>;
+  };
+  const card = (x: DirPlugin) => (
+    <div key={x.catalogId} className="pl-dcard">
+      <PlugMark id={x.catalogId} size={44} />
+      <div className="pl-dcard-t"><b data-notr>{x.name}</b><span>{x.tagline}</span><em>{x.author} · {x.skillCount} skill · {x.license}</em></div>
+      {plusBtn(x)}
     </div>
   );
-  if (err) return <>{head}<div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div></>;
-  if (!d) return <>{head}<div className="empty" style={{ marginTop: 40 }}><span className="muted">Loading…</span></div></>;
-  const merge = (r: { plugins: PublicPlugin[]; plugin?: PublicPlugin }) => setD((x) => (x ? { ...x, plugins: r.plugins.length ? r.plugins : x.plugins.map((p) => (r.plugin && p.id === r.plugin.id ? r.plugin : p)) } : x));
-  const installed = new Set(d.plugins.map((p) => p.catalogId).filter(Boolean));
-  const studios = d.directory.filter((x) => x.category === "studio");
-  const ql = q.trim().toLowerCase();
-  const more = d.directory.filter((x) => x.category !== "studio" && (!ql || `${x.name} ${x.tagline} ${x.author}`.toLowerCase().includes(ql)));
-  const cur = d.plugins.find((p) => p.id === open);
+  const row = (p: PublicPlugin) => {
+    const manage = p.scope === "personal" || d.admin;
+    return (
+      <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(p.id)}>
+        <PlugMark id={p.catalogId} size={36} />
+        <div className="pl-row2-t">
+          <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge>{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
+          <span>{p.author ? `${tr("từ")} ${p.author} · ` : ""}{p.description}</span>
+        </div>
+        <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>
+        <RowMenu p={p} manage={manage} onOpen={() => setOpen(p.id)} onAct={(a) => act(p, a)} />
+      </div>
+    );
+  };
+  const org = d.plugins.filter((p) => p.scope === "org" && match(`${p.name} ${p.description}`));
+  const mine = d.plugins.filter((p) => p.scope === "personal" && match(`${p.name} ${p.description}`));
+  const cats = ["studio", "design", "dev", "writing"].map((c) => [c, d.directory.filter((x) => x.category === c && match(`${x.name} ${x.tagline} ${x.author}`))] as const).filter(([, l]) => l.length);
   return (
     <>
-      {head}
-      {d.canInstall && (
-        <form className="pl-url" onSubmit={(e) => { e.preventDefault(); if (url.trim()) setPv({ url: url.trim(), name: url.trim().replace(/^https?:\/\/(www\.)?github\.com\//, "") }); }}>
-          <I.GitHub size={16} />
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://github.com/owner/repo  (every SKILL.md inside is found automatically)" spellCheck={false} />
-          <button className="btn dark" disabled={!url.trim()}>Preview</button>
-        </form>
-      )}
-
-      <h3 className="sec">Studios</h3>
-      <p className="d" style={{ marginTop: -6 }}>The Design, Slides and Docs buttons on the Artifacts page. Each one loads its plugin&apos;s library, so Synchro already knows how to do the work well.</p>
-      <div className="pl-grid">
-        {studios.map((x) => {
-          const p = d.plugins.find((y) => y.studio === x.studio);
-          return (
-            <div key={x.catalogId} className={`pl-card studio ${p ? "in" : ""}`}>
-              <div className="pl-card-h"><PlugMark id={x.catalogId} /><div><b>{x.name}</b><span>{p ? `${p.skills.filter((s) => s.enabled).length} skill · ${p.scope === "org" ? tr("for everyone") : tr("personal")}` : `${x.skillCount} skill · ${x.license}`}</span></div></div>
-              <p>{x.tagline}</p>
-              {p ? <button className="btn" onClick={() => setOpen(p.id)}>Manage</button> : d.canInstall ? <button className="btn dark" onClick={() => setPv({ catalogId: x.catalogId, name: x.name })}>Install</button> : <span className="d">Ask an administrator to install it.</span>}
-            </div>
-          );
-        })}
+      <div className="pl-top">
+        <h1 className="pl-title">Plugins</h1>
+        <div className="pl-seg"><button className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
+        <span style={{ flex: 1 }} />
+        <span className="s-search pl-search"><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span>
+        {d.canInstall && (
+          <div className="pl-addw" ref={addRef}>
+            <button className="btn dark pl-add" onClick={() => setAddMenu(!addMenu)}><I.Plus size={14} />Add<I.Chevron size={13} /></button>
+            {addMenu && (
+              <div className="menu pl-menu right">
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("discover"); }}><I.Book size={15} /><span className="pl-mi"><b>Browse Synchro directory</b><em>Curated plugins with checked licenses</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setAdding(true); }}><I.Branch size={15} /><span className="pl-mi"><b>Add from a repository</b><em>Install skills from a GitHub repository</em></span></button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {d.plugins.length > 0 && (
+      {view === "yours" ? (
         <>
-          <h3 className="sec">Installed</h3>
-          <div className="pl-inst">
-            {d.plugins.map((p) => (
-              <button key={p.id} className={`pl-li ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)}>
-                <PlugMark id={p.catalogId} size={36} />
-                <span className="pl-li-t"><b data-notr>{p.name}</b><span>{p.skills.length} skill · {mb(p.size)} · {p.scope === "org" ? tr("for everyone") : tr("personal")}{p.studio ? ` · ${STUDIO[p.studio]} studio` : ""}{p.mine.everywhere ? ` · ${tr("every chat")}` : ""}</span></span>
-                {p.updateAvailable && <Badge kind="mid">Update</Badge>}
-                <Badge kind={RISK[p.risk][1]}>{RISK[p.risk][0]}</Badge>
-                <I.ChevronR size={14} />
-              </button>
-            ))}
-          </div>
+          {!d.plugins.length && (
+            <div className="pl-hero">
+              <div><b>Add your first plugins</b><span>Give Synchro role-level expertise with plugins. Add them from Discover.</span><button className="btn dark" onClick={() => setTab("discover")}>Discover plugins</button></div>
+              <I.Plugins size={64} />
+            </div>
+          )}
+          {org.length > 0 && <><div className="pl-sec">For everyone <i>{org.length}</i></div><div className="pl-rows2">{org.map(row)}</div></>}
+          {mine.length > 0 && <><div className="pl-sec">Just for you <i>{mine.length}</i></div><div className="pl-rows2">{mine.map(row)}</div></>}
+          {d.plugins.length > 0 && !org.length && !mine.length && <div className="empty" style={{ marginTop: 40 }}><span>No plugins match your search.</span></div>}
+          {d.plugins.length > 0 && <p className="d pl-tip"><I.InfoCircle size={14} />Just chat: Synchro looks through every installed library and picks the skills that fit your request. The Design, Slides and Docs buttons on the Artifacts page only force that mode.</p>}
+        </>
+      ) : (
+        <>
+          {!ql && (
+            <div className="pl-hero feat">
+              <div><em>From Synchro</em><b>{featured.name}</b><span>{featured.tagline}</span>
+                {byCat.get(featured.catalogId) ? <button className="btn" onClick={() => setOpen(byCat.get(featured.catalogId)!.id)}><I.Check size={14} />Installed</button>
+                  : d.canInstall ? <button className="btn dark" disabled={!!busy} onClick={() => quick(featured)}>{busy === featured.catalogId ? <span className="art-spin sm" /> : null}Add</button> : null}
+              </div>
+              <I.Palette size={72} />
+            </div>
+          )}
+          {cats.map(([c, list]) => <div key={c}><div className="pl-sec">{CAT[c]}</div><div className="pl-dgrid">{list.map(card)}</div></div>)}
+          {!cats.length && <div className="empty" style={{ marginTop: 40 }}><span>No plugins match your search.</span></div>}
+          <p className="d pl-tip"><I.ShieldCheck size={14} />Directory plugins only contain skills whose license allows copying. Anthropic&apos;s docx, pdf, pptx and xlsx skills are proprietary and are skipped; Synchro creates those files with code execution instead.</p>
         </>
       )}
 
-      <h3 className="sec" style={{ display: "flex", alignItems: "center", gap: 12 }}>Browse<span className="s-search" style={{ margin: "0 0 0 auto", height: 30, width: 220 }}><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span></h3>
-      <div className="pl-grid">
-        {more.map((x) => (
-          <div key={x.catalogId} className="pl-card">
-            <div className="pl-card-h"><PlugMark id={x.catalogId} /><div><b data-notr>{x.name}</b><span>{x.author} · {x.skillCount} skill · {x.license}</span></div></div>
-            <p>{x.tagline}</p>
-            {installed.has(x.catalogId) ? <button className="btn" onClick={() => setOpen(d.plugins.find((p) => p.catalogId === x.catalogId)!.id)}>Manage</button>
-              : d.canInstall ? <button className="btn" onClick={() => setPv({ catalogId: x.catalogId, name: x.name })}>Install</button> : null}
-          </div>
-        ))}
-      </div>
-      <p className="d" style={{ marginTop: 14 }}>Synchro only installs skills whose license allows copying. Anthropic&apos;s docx, pdf, pptx and xlsx skills are proprietary and are skipped; Synchro creates those files with code execution instead.</p>
-
-      {pv && <PreviewModal target={pv} data={d} onClose={() => setPv(null)} onDone={(p) => { setPv(null); setUrl(""); load(); setOpen(p.id); }} />}
+      {adding && <AddRepo onClose={() => setAdding(false)} onPreview={(url) => { setAdding(false); setPv({ url, name: url.replace(/^https?:\/\/(www\.)?github\.com\//, "") }); }} />}
+      {pv && <PreviewModal target={pv} data={d} onClose={() => setPv(null)} onDone={(p) => { setPv(null); load(); setTab("yours"); setOpen(p.id); }} />}
       {cur && <Detail p={cur} admin={d.admin} onClose={() => setOpen(null)} onChange={merge} />}
-      {app && null}
     </>
   );
 }

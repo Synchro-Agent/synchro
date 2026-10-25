@@ -7,7 +7,8 @@ import { ConnectorSession, connectorsPrompt } from "../../connectors";
 import { randomToken } from "../../mcpauth";
 import { capsState, skillsOn } from "../../caps";
 import { overLimit, usageScope } from "../../usage";
-import { everywhereSkills, recordPluginUse, studioOf, studioSkills, type Studio } from "../../plugins";
+import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "../../plugins";
+import type { Skill } from "../../skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "../../coderun";
 import { saveOutputs, type OutFile } from "../../outputs";
 import { ARTIFACT_RULES, VIZ_RULES } from "../../artifacts";
@@ -208,6 +209,33 @@ ${n ? `Bạn có thư viện ${n} skill chuyên môn${plugins.length ? ` (từ $
 Sau sản phẩm, nêu ngắn gọn 2-3 quyết định chính bạn đã chọn và gợi ý hướng chỉnh sửa.
 </studio>`;
 
+// Mục "studio-…" trong available_skills của chat thường: mở ra là danh sách skill của thư viện kèm cách dùng.
+const STUDIO_WHEN: Record<Studio, string> = {
+  design: "thiết kế giao diện, trang web, landing page, ứng dụng, logo, banner, poster, minh họa, bảng màu, font, chuyển động / animation, UX",
+  slides: "bản trình bày, slide, pitch deck, thuyết trình, báo cáo dạng slide",
+  docs: "viết tài liệu, đề xuất, báo cáo, kế hoạch, thư, thông báo nội bộ, quy trình, văn bản cần trình bày đẹp",
+};
+function studioIndex(s: Studio, plugins: string[], lib: Skill[]): Skill {
+  const body = `${STUDIO_RULES(s, plugins, lib.length)}
+
+Thư viện gồm ${lib.length} skill (gọi load_skill với đúng tên để đọc skill bạn chọn):
+${lib.map((k) => `- ${k.name}: ${k.description.slice(0, 220)}`).join("\n")}`;
+  return indexSkill(`studio-${s}`, `Thư viện ${lib.length} skill chuyên môn cho ${STUDIO_WHEN[s]}. Khi yêu cầu thuộc loại này, gọi load_skill("studio-${s}") trước để chọn skill phù hợp trong thư viện.`, body);
+}
+// Plugin không gắn studio: một mục "lib-…" mô tả plugin và tên các skill bên trong. Plugin nhỏ (≤ 2 skill) hiện thẳng từng skill.
+function libIndex(l: { slug: string; name: string; description: string; skills: Skill[] }): Skill {
+  const names = l.skills.map((k) => k.name);
+  const body = `<library name="${l.slug}">
+Thư viện skill của plugin ${l.name}. Chọn 1-3 skill hợp nhất với yêu cầu, gọi load_skill với đúng tên để đọc (đọc thêm tài liệu tham khảo nếu skill chỉ dẫn), rồi áp dụng đúng nguyên tắc của skill.
+</library>
+
+Thư viện gồm ${l.skills.length} skill:
+${l.skills.map((k) => `- ${k.name}: ${k.description.slice(0, 220)}`).join("\n")}`;
+  return indexSkill(`lib-${l.slug}`, `${l.description.slice(0, 240)} Thư viện ${names.length} skill: ${names.slice(0, 14).join(", ")}${names.length > 14 ? "…" : ""}. Khi yêu cầu liên quan, gọi load_skill("lib-${l.slug}") trước để chọn skill phù hợp.`, body);
+}
+const indexSkill = (name: string, description: string, body: string): Skill => ({ id: name, user_id: "studio", name, description, body,
+  storage_path: "", enabled: true, version: 1, versions: [1], created_at: "", updated_at: "", files: [], warnings: [], projects: [], use_count: 0, last_used_at: null });
+
 // Artifact dùng AI: trang trong artifact gọi window.synchro.complete(...) → trình duyệt chuyển tới đây.
 // Không có công cụ, không có skill; chỉ tài khoản đang bật "Artifact dùng AI" mới gọi được.
 const ARTIFACT_SYSTEM = "Bạn là model AI được một ứng dụng nhỏ (artifact) gọi tới từ bên trong Synchro. Trả lời đúng điều được yêu cầu, không chào hỏi hay giải thích thêm. Khi được yêu cầu trả về JSON, chỉ trả JSON hợp lệ, không bọc trong ```.";
@@ -296,15 +324,35 @@ async function post(req: Request, c: NonNullable<ReturnType<typeof current>>, sc
     // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
     for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
     for (let i = list.length - 1; i >= 0; i--) if (list.findIndex((x) => x.name === list[i].name) !== i) list.splice(i, 1);
+    // Mọi thư viện đã cài đều tự dùng được: mỗi studio là một mục "studio-…", mỗi plugin khác là một mục "lib-…" trong available_skills.
+    // Model tự mở thư viện khi việc cần tới (load_skill), rồi chọn skill cụ thể bên trong. Prompt chỉ thêm một dòng mỗi thư viện,
+    // các skill trong thư viện không chiếm chỗ cho tới khi được mở. Khi bấm nút studio, thư viện của studio đó đã mở sẵn.
+    const visible = [...list];
+    const hidden = (ks: Skill[]) => { for (const k of ks) if (!list.some((x) => x.name === k.name)) list.push(k); };
+    if (skills && can(c.user, "skills") && skillsOn(c.user)) {
+      for (const s of STUDIOS) {
+        const lib = s === studio ? null : studioSkills(c.user.id, s);
+        if (!lib?.skills.length) continue;
+        visible.push(studioIndex(s, lib.plugins, lib.skills));
+        hidden(lib.skills);
+      }
+      for (const l of libraryPlugins(c.user.id)) {
+        const fresh = l.skills.filter((k) => !list.some((x) => x.name === k.name));
+        if (!fresh.length) continue;
+        if (fresh.length <= 2) { visible.push(...fresh); list.push(...fresh); continue; }
+        visible.push(libIndex({ ...l, skills: fresh }));
+        hidden(fresh);
+      }
+    }
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: typeof conv === "string" && conv.length <= 64 ? conv : undefined, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
-    if (list.length || sess || code) {
+    if (visible.length || sess || code) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(list, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(list.length ? skillTools(list.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
-      const x: Exec = { list, scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [] };
+      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [] };
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
         : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)

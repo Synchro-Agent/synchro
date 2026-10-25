@@ -1031,7 +1031,7 @@ Object.assign(EN2VI, {
   "Reading the repository and checking every skill…": "Đang đọc repo và kiểm tra từng skill…", "Everyone": "Mọi người", "Install once for every account on this Synchro": "Cài một lần cho mọi tài khoản trên Synchro này",
   "Only me": "Chỉ mình tôi", "A personal plugin in your account": "Plugin riêng trong tài khoản của bạn", "Cancel": "Hủy", "Installing…": "Đang cài…",
   "Personal": "Cá nhân", "Turned on": "Đang bật", "Turn it off just for you.": "Tắt cho riêng bạn.", "Off: no skill of this plugin is used anywhere.": "Tắt: không skill nào của plugin này được dùng.",
-  "Use in every chat": "Dùng trong mọi cuộc trò chuyện", "Off: skills only load when you press its studio button. Saves context for big plugins.": "Tắt: skill chỉ được nạp khi bạn bấm nút studio. Tiết kiệm ngữ cảnh với plugin lớn.",
+  "List every skill directly": "Liệt kê thẳng từng skill", "Off: Synchro opens this library on its own when a request needs it. On: each skill is listed in every chat, which uses more context.": "Tắt: Synchro tự mở thư viện này khi yêu cầu cần tới. Bật: từng skill được liệt kê trong mọi cuộc trò chuyện, tốn ngữ cảnh hơn.",
   "Studio button": "Nút studio", "Pressing this Artifacts button gives Synchro the whole library of this plugin.": "Bấm nút này ở trang Artifacts là Synchro có cả thư viện của plugin.",
   "None": "Không", "Design": "Thiết kế", "Slides": "Trình bày", "Docs": "Tài liệu", "Uninstall": "Gỡ cài đặt", "Add skills from zip": "Thêm skill từ file zip",
   "Update": "Cập nhật", "Check for updates": "Kiểm tra cập nhật", "No scripts": "Không có script", "Scripts, sandboxed": "Có script, chạy trong sandbox",
@@ -1050,3 +1050,18 @@ Object.assign(EN2VI, {
 });
 Object.assign(EN2VI, { "https://github.com/owner/repo  (every SKILL.md inside is found automatically)": "https://github.com/chủ-sở-hữu/repo  (tự tìm mọi SKILL.md bên trong)", "Close": "Đóng" });
 Object.assign(VI2EN, { "Cài": "Install", "Gỡ": "Uninstall", "tệp": "files" });
+Object.assign(EN2VI, {
+  "Yours": "Của bạn", "Discover": "Khám phá", "Add": "Thêm", "Add from a GitHub repository": "Thêm từ repo GitHub",
+  "Paste a link to a public repository or a folder inside it. Synchro finds every SKILL.md, checks licenses and scripts, and shows you everything before installing.": "Dán link repo công khai hoặc một thư mục trong đó. Synchro tự tìm mọi SKILL.md, kiểm tra giấy phép và script, rồi cho bạn xem hết trước khi cài.",
+  "Manage": "Quản lý", "Turn off for me": "Tắt cho tôi", "Turn off": "Tắt", "Turn on": "Bật", "Studios": "Studio", "Development & testing": "Lập trình & kiểm thử", "Writing": "Viết",
+  "Browse Synchro directory": "Duyệt danh mục của Synchro", "Curated plugins with checked licenses": "Plugin chọn lọc, đã kiểm tra giấy phép",
+  "Add from a repository": "Thêm từ repo", "Install skills from a GitHub repository": "Cài skill từ một repo GitHub",
+  "Add your first plugins": "Thêm plugin đầu tiên", "Give Synchro role-level expertise with plugins. Add them from Discover.": "Cho Synchro chuyên môn theo từng vai trò bằng plugin. Thêm từ mục Khám phá.",
+  "Discover plugins": "Khám phá plugin", "For everyone": "Cho mọi người", "Just for you": "Riêng bạn", "No plugins match your search.": "Không có plugin nào khớp.",
+  "Just chat: Synchro looks through every installed library and picks the skills that fit your request. The Design, Slides and Docs buttons on the Artifacts page only force that mode.": "Cứ chat bình thường: Synchro tự xem mọi thư viện đã cài và chọn skill hợp với yêu cầu. Các nút Thiết kế, Trình bày, Tài liệu ở trang Artifacts chỉ để ép vào chế độ đó.",
+  "From Synchro": "Từ Synchro", "Directory plugins only contain skills whose license allows copying. Anthropic's docx, pdf, pptx and xlsx skills are proprietary and are skipped; Synchro creates those files with code execution instead.": "Plugin trong danh mục chỉ gồm skill có giấy phép cho phép sao chép. Skill docx, pdf, pptx, xlsx của Anthropic là độc quyền nên bị bỏ qua; Synchro tạo các tệp đó bằng chạy code.",
+  "Off": "Tắt", "Install": "Cài đặt",
+});
+Object.assign(VI2EN, { "từ": "from" });
+Object.assign(EN2VI, { "is installed and ready to use": "đã cài và sẵn sàng dùng" });
+Object.assign(VI2EN, { "is installed and ready to use": "is installed and ready to use" });
