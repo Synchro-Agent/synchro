@@ -136,6 +136,7 @@ export function InboxPage({ say, model, onOpenChat, onOpenMeeting }: { say: (m: 
                       : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
                     {x.status === "done" && <div className="tk-acts">
                       {x.link?.startsWith("meeting:") ? <button className="btn" onClick={() => onOpenMeeting?.(x.link!.slice(8))}><I.Mic size={14} />{tr("Mở cuộc họp")}</button>
+                        : x.link?.startsWith("app:") ? <a className="btn" href={`/apps/${encodeURIComponent(x.link.slice(4))}#comments`} target="_blank" rel="noopener"><I.Chat2 size={14} />{tr("Mở bình luận")}</a>
                         : <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
                     </div>}
                   </div>

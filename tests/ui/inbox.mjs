@@ -110,13 +110,14 @@ try {
   await click(`document.querySelector(".tk-modal .modal-foot .btn.dark")`, "save");
   await until(`!document.querySelector(".tk-modal")`, 10000, "form closed");
   await click(byText(".pl-seg button", "Kết quả"), "results tab");
-  await until(`[...document.querySelectorAll(".tk-item")].some((e) => e.textContent.includes("Bản tin buổi sáng") && !e.querySelector(".tk-dot.running"))`, 60000, "result in inbox");
+  // Chỉ tính kết quả mới (chưa đọc): tài khoản test có thể còn kết quả cũ từ lần chạy trước.
+  await until(`[...document.querySelectorAll(".tk-item.unread")].some((e) => e.textContent.includes("Bản tin buổi sáng") && !e.querySelector(".tk-dot.running"))`, 60000, "result in inbox");
   ok(true, "tác vụ chạy ở nền, kết quả hiện trong Hộp thư");
   await P("Page.reload", {}); await sleep(3000);
   const badge = await ev(`document.querySelector(".nav-badge")?.textContent ?? ""`);
   ok(Number(badge) >= 1, "thanh bên hiện số kết quả chưa đọc: " + badge);
   await click(byText(".nav-item", "Hộp thư"), "inbox"); await sleep(1500);
-  await click(`[...document.querySelectorAll(".tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`, "open item"); await sleep(800);
+  await click(`[...document.querySelectorAll(".tk-item.unread .tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`, "open item"); await sleep(800);
   ok(await ev(`!!document.querySelector(".tk-body .mdx")`), "mở kết quả: hiện nội dung đầy đủ");
   await shot("2-result");
   await click(byText(".tk-acts .btn", "Mở thành đoạn chat"), "as chat"); await sleep(1200);

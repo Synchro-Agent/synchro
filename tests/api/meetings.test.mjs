@@ -57,10 +57,10 @@ ok(r.s === 200 && r.j.item.done === 1, "đánh dấu xong");
 r = await a("PATCH", `/api/meetings/items/${lan.id}`, { assignee: "Lan Anh", due: "2026-01-01" });
 ok(r.j.item.assignee === "Lan Anh" && r.j.item.due === "2026-01-01", "đổi người phụ trách và hạn chót");
 let note = null;
-for (let i = 0; i < 20 && !note; i++) { await sleep(1000); note = (await a("GET", "/api/inbox")).j.items.find((x) => x.kind === "notice" && /Lan Anh/.test(x.text)); }
+for (let i = 0; i < 20 && !note; i++) { await sleep(1000); note = (await a("GET", "/api/inbox")).j.items.find((x) => x.kind === "notice" && x.link === `meeting:${id}` && /Lan Anh/.test(x.text)); }
 ok(note && /Nhắc việc/.test(note.title) && note.link === `meeting:${id}` && /quá hạn/.test(note.text), "việc quá hạn: nhắc vào Hộp thư, kèm đường dẫn mở cuộc họp", JSON.stringify(note));
 await sleep(4000);
-ok((await a("GET", "/api/inbox")).j.items.filter((x) => x.kind === "notice" && /Lan Anh/.test(x.text)).length === 1, "chỉ nhắc một lần");
+ok((await a("GET", "/api/inbox")).j.items.filter((x) => x.kind === "notice" && x.link === `meeting:${id}` && /Lan Anh/.test(x.text)).length === 1, "chỉ nhắc một lần");
 ok(!(await a("GET", "/api/inbox")).j.items.some((x) => x.kind === "notice" && x.title.includes("thông cáo")), "việc đã xong thì không nhắc");
 
 console.log("4. Quyền và xóa");

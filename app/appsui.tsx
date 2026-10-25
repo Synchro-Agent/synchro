@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
-import { ArtifactFrame, type ArtVersion } from "./artifactui";
+import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
+import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";
 
 export type AppInfo = { id: string; title: string; type: "html" | "react" | "svg"; visibility: "private" | "org"; conv: string; ident: string; created_at: number; updated_at: number; opens: number; mine: boolean; ownerName: string };
@@ -115,6 +116,13 @@ export function AppRunner({ id }: { id: string }) {
   const [app, setApp] = useState<(AppInfo & { content: string }) | null>(null);
   const [err, setErr] = useState("");
   const [ai, setAi] = useState(false);
+  const [me, setMe] = useState("");
+  const [panel, setPanel] = useState(false);
+  const [toast, setToast] = useState("");
+  // Mã riêng của tab: ghi dữ liệu chung từ tab này thì tab này không nhận lại thông báo "vừa đổi".
+  const [client] = useState(() => Math.random().toString(36).slice(2, 12));
+  const frame = useRef<FrameSend | null>(null);
+  const live = useLive(app ? app.id : null, client, (key) => frame.current?.({ t: "changed", key }));
   useEffect(() => {
     fetch(`/api/apps/${encodeURIComponent(id)}?open=1`).then(async (r) => {
       if (r.status === 401) { location.href = `/?next=${encodeURIComponent(location.pathname)}`; return; }
@@ -124,9 +132,14 @@ export function AppRunner({ id }: { id: string }) {
     }).catch((e) => setErr(e.message));
     // Ứng dụng gọi được AI khi tài khoản đang bật "Artifact dùng AI" (máy chủ vẫn kiểm tra lại mỗi lần gọi).
     fetch("/api/caps").then((r) => (r.ok ? r.json() : null)).then((j) => setAi(!!j?.caps?.ai)).catch(() => {});
+    fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)).then((j) => setMe(j?.user?.id ?? "")).catch(() => {});
+    // Mở từ thông báo "nhắc bạn trong…" (#comments): mở sẵn bảng bình luận.
+    if (location.hash === "#comments") setPanel(true);
   }, [id]);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 2600); return () => clearTimeout(t); }, [toast]);
   if (err) return <div className="app-run"><div className="app-miss"><I.Rocket size={26} /><b>{tr("Không mở được ứng dụng")}</b><span>{err}</span><a className="btn" href="/">{tr("Về Synchro")}</a></div></div>;
   if (!app) return <div className="app-run"><div className="app-miss"><span className="art-spin" /></div></div>;
+  const n = (live.comments ?? []).filter((c) => !c.resolved).length;
   return (
     <div className="app-run">
       <header className="app-bar">
@@ -134,8 +147,15 @@ export function AppRunner({ id }: { id: string }) {
         <span className="app-sep" />
         <b data-notr>{app.title}</b>
         <span className="app-meta">{app.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi")}{app.mine ? "" : ` · ${tr("của")} ${app.ownerName}`}</span>
+        <span style={{ flex: 1 }} />
+        <Presence people={live.people} me={me} />
+        <button className={`btn app-cmt ${panel ? "on" : ""}`} onClick={() => setPanel(!panel)} aria-pressed={panel}><I.Chat2 size={15} />{tr("Bình luận")}{n > 0 && <span className="cl-n">{n}</span>}</button>
       </header>
-      <ArtifactFrame type={app.type} content={app.content} ai={ai} title={app.title} className="app-frame" store={{ app: app.id }} />
+      <div className="app-body">
+        <ArtifactFrame type={app.type} content={app.content} ai={ai} title={app.title} className="app-frame" store={{ app: app.id, client }} ctl={(send) => { frame.current = send; }} />
+        {panel && <CommentsPanel app={app.id} me={me} owner={app.mine} comments={live.comments} setComments={live.setComments} onClose={() => setPanel(false)} say={setToast} />}
+      </div>
+      {toast && <div className="app-toast" role="status">{toast}</div>}
     </div>
   );
 }

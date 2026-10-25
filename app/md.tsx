@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { tr } from "./i18n";
 import { ChartView, parseChart } from "./charts";
 import { ArtifactFrame, MermaidSvg } from "./artifactui";
+import { AskCard } from "./askcard";
 
 function Inline({ t }: { t: string }) {
   const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
@@ -176,7 +177,50 @@ function Visual({ lang, code, closed, say }: { lang: string; code: string; close
   );
 }
 
-export function Markdown({ text: text0, say, dev, viz }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean }) {
+// Bảng trong câu trả lời: bấm tiêu đề cột để sắp xếp (hiểu số kiểu Việt "12.500", "12,5"), chép sang Excel / Sheets, tải CSV.
+const plain = (c: string) => c.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/`([^`]+)`/g, "$1").trim();
+function num(c: string): number | null {
+  const m = plain(c).replace(/\s/g, "").match(/^[^\d-]*(-?[\d.,]+)/);
+  if (!m) return null;
+  let x = m[1];
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(x)) x = x.replace(/\./g, "").replace(",", ".");
+  else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(x)) x = x.replace(/,/g, "");
+  else x = x.replace(",", ".");
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
+function MdTable({ head, rows, say }: { head: string[]; rows: string[][]; say: (m: string) => void }) {
+  const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
+  const shown = useMemo(() => {
+    if (!sort) return rows;
+    const { col, dir } = sort;
+    const isNum = rows.filter((r) => plain(r[col] ?? "")).every((r) => num(r[col] ?? "") !== null);
+    return [...rows].sort((a, b) => dir * (isNum ? (num(a[col] ?? "") ?? 0) - (num(b[col] ?? "") ?? 0) : plain(a[col] ?? "").localeCompare(plain(b[col] ?? ""), "vi", { numeric: true })));
+  }, [rows, sort]);
+  const grid = [head, ...shown].map((r) => r.map(plain));
+  const copy = () => { navigator.clipboard?.writeText(grid.map((r) => r.join("\t")).join("\n")).then(() => say(tr("Đã chép bảng, dán vào Excel hoặc Google Sheets được ngay")), () => say(tr("Không chép được"))); };
+  const csv = () => {
+    const q = (c: string) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+    const url = URL.createObjectURL(new Blob(["\ufeff" + grid.map((r) => r.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = "bang.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const by = (k: number) => setSort((s) => (s?.col !== k ? { col: k, dir: 1 } : s.dir === 1 ? { col: k, dir: -1 } : null));
+  return (
+    <div className="md-tbl">
+      <div className="md-tbl-bar">
+        <button className="icon-btn" onClick={copy} aria-label="Chép bảng" title="Chép bảng (dán vào Excel, Sheets)"><I.Copy size={14} /></button>
+        <button className="icon-btn" onClick={csv} aria-label="Tải CSV" title="Tải CSV"><I.Download size={14} /></button>
+      </div>
+      <table><thead><tr>{head.map((c, k) => (
+        <th key={k} aria-sort={sort?.col === k ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
+          <button className="md-th" onClick={() => by(k)} title="Bấm để sắp xếp"><Inline t={c} /><span className={`md-sort ${sort?.col === k ? "on" : ""}`}>{sort?.col === k && sort.dir === -1 ? "↓" : "↑"}</span></button>
+        </th>
+      ))}</tr></thead><tbody>{shown.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j}><Inline t={c} /></td>)}</tr>)}</tbody></table>
+    </div>
+  );
+}
+
+export function Markdown({ text: text0, say, dev, viz, live }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean }) {
   let cbi = 0;
   const { text, meta } = dev ? splitMeta(text0) : { text: text0, meta: null };
   const segs = text.split(/(```[\s\S]*?(?:```|$))/g);
@@ -188,6 +232,7 @@ export function Markdown({ text: text0, say, dev, viz }: { text: string; say: (m
           const nl = body.indexOf("\n");
           const lang = nl === -1 ? body : body.slice(0, nl);
           const l = lang.trim().toLowerCase();
+          if (l === "ask" && !dev) return <AskCard key={i} code={nl === -1 ? "" : body.slice(nl + 1)} closed={/```\s*$/.test(s) && s.length > 6} live={!!live} />;
           if (viz && (l === "chart" || l === "mermaid" || l === "widget")) return <Visual key={i} lang={l} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} closed={/```\s*$/.test(s) && s.length > 6} say={say} />;
           return <Code key={i} lang={lang.trim()} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} say={say} dev={dev} idx={cbi++} />;
         }
@@ -207,7 +252,7 @@ export function Markdown({ text: text0, say, dev, viz }: { text: string; say: (m
           if (!tbl.length) return;
           const hasSep = tbl.length > 1 && /^[\s|:-]+$/.test(tbl[1]);
           const head = cells(tbl[0]), rows = tbl.slice(hasSep ? 2 : 1).map(cells);
-          out.push(<div key={out.length} className="md-tbl"><table><thead><tr>{head.map((c, k) => <th key={k}><Inline t={c} /></th>)}</tr></thead><tbody>{rows.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j}><Inline t={c} /></td>)}</tr>)}</tbody></table></div>);
+          out.push(<MdTable key={out.length} head={head} rows={rows} say={say} />);
           tbl = [];
         };
         lines.forEach((l) => {

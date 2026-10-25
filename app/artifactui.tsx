@@ -41,6 +41,8 @@ var ask=function(m){return new Promise(function(ok,no){var id=++seq;wait[id]=[ok
 // Kho dữ liệu của ứng dụng: window.storage.get/set/delete/list(…, shared). shared=true: dữ liệu chung của mọi người dùng ứng dụng.
 var storage={get:function(k,s){return ask({t:"store",op:"get",key:k,shared:!!s})},set:function(k,v,s){return ask({t:"store",op:"set",key:k,value:v,shared:!!s})},
 "delete":function(k,s){return ask({t:"store",op:"delete",key:k,shared:!!s})},list:function(p,s){return ask({t:"store",op:"list",prefix:p||"",shared:!!s})}};
+// storage.onChange(fn): gọi fn({ key, shared }) khi người khác vừa đổi dữ liệu chung (ứng dụng đã xuất bản, đang mở cùng lúc).
+var subs=[];storage.onChange=function(f){subs.push(f);return function(){subs=subs.filter(function(x){return x!==f})}};
 var api={complete:function(p){return ask({t:"complete",prompt:p})},storage:storage};
 window.synchro=api;window.claude=api;try{window.storage=storage}catch(e){}
 // Synchro yêu cầu: in (lưu PDF) hoặc chụp ảnh PNG phần đang xem (slide hiện tại nếu là bản trình bày).
@@ -52,6 +54,7 @@ var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWi
 htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
 else if(d.t==="pick"){pk=!!d.on;document.documentElement.style.cursor=pk?"crosshair":"";if(!pk&&hl)hl.style.display="none"}
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
+else if(d.t==="changed"){var ev={key:d.key,shared:true};subs.slice().forEach(function(f){try{f(ev)}catch(x){}});try{dispatchEvent(new CustomEvent("synchro:storage",{detail:ev}))}catch(x){}}
 else if(d.t==="present")window.__sxPresent=!!d.on});
 // Chỉ và sửa: Synchro bật chế độ chọn, rê chuột thì viền phần tử, bấm thì gửi vị trí + mã của đúng phần tử đó (Esc để thoát).
 var pk=false,hl=null;
@@ -139,7 +142,8 @@ const isDark = () => typeof document !== "undefined" && document.documentElement
 export type FrameMsg = { t: string; [k: string]: unknown };
 export type FrameSend = (m: FrameMsg) => void;
 // store: nơi lưu dữ liệu cho window.storage ({ app } ứng dụng đã xuất bản, { art } artifact đang thử trong chat); không có thì báo không lưu được.
-export type StoreRef = { app: string } | { art: { conv: string; ident: string } };
+// client: mã của tab (ứng dụng đã xuất bản), để tab ghi dữ liệu không nhận lại thông báo "vừa đổi" của chính mình.
+export type StoreRef = { app: string; client?: string } | { art: { conv: string; ident: string } };
 export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl, store }: {
   type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties;
   deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void; store?: StoreRef;
@@ -169,7 +173,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
         const res = (m: Record<string, unknown>) => w.postMessage({ __synchro: ch, t: "res", id: d.id, ...m }, "*");
         if (!cb.current.store) return res({ error: tr("Khung này không lưu được dữ liệu. Mở artifact trong khung xem trước hoặc xuất bản thành ứng dụng.") });
         try {
-          const r = await fetch("/api/apps/data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: cb.current.store, op: d.op, key: d.key, value: d.value, shared: d.shared, prefix: d.prefix }) });
+          const r = await fetch("/api/apps/data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: cb.current.store, op: d.op, key: d.key, value: d.value, shared: d.shared, prefix: d.prefix, client: "client" in cb.current.store ? cb.current.store.client : undefined }) });
           const j = await r.json().catch(() => ({}));
           res(r.ok ? { result: j.result ?? null } : { error: j.error || `Lỗi ${r.status}` });
         } catch (err) { res({ error: (err as Error).message }); }

@@ -4,6 +4,7 @@
 import { db, getUser, type UserRow } from "./authstore";
 import { randomToken } from "./mcpauth";
 import { ART_TYPES, type ArtType } from "./artifacts";
+import { publish } from "./live";
 
 export type Visibility = "private" | "org";
 export type AppRow = { id: string; owner: string; title: string; type: ArtType; content: string; visibility: Visibility; conv: string; ident: string; created_at: number; updated_at: number; opens: number };
@@ -75,14 +76,18 @@ export function updateApp(uid: string, id: string, p: { title?: unknown; visibil
 }
 
 /** Gỡ ứng dụng: xóa luôn dữ liệu của ứng dụng. */
+// Bình luận của ứng dụng (bảng do collab.ts tạo khi có bình luận đầu tiên) bị xóa theo ứng dụng.
+function dropComments(ids: string[]) { try { for (const id of ids) init().prepare("DELETE FROM app_comments WHERE app = ?").run(id); } catch { /* chưa có bảng */ } }
 export function removeApp(uid: string, id: string) {
   const ok = init().prepare("DELETE FROM apps WHERE id = ? AND owner = ?").run(id, uid).changes > 0;
-  if (ok) init().prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`);
+  if (ok) { init().prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`); dropComments([id]); }
   return ok;
 }
 export function removeUserApps(uid: string) {
   const d = init();
-  for (const r of d.prepare("SELECT id FROM apps WHERE owner = ?").all(uid) as { id: string }[]) d.prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${r.id}`);
+  const ids = (d.prepare("SELECT id FROM apps WHERE owner = ?").all(uid) as { id: string }[]).map((r) => r.id);
+  for (const id of ids) d.prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`);
+  dropComments(ids);
   d.prepare("DELETE FROM apps WHERE owner = ?").run(uid);
   d.prepare("DELETE FROM app_data WHERE owner = ? OR ref LIKE ?").run(uid, `art:${uid}:%`);
 }
@@ -102,7 +107,8 @@ function resolve(u: UserRow, ref: StoreRef): string {
 }
 const keyOk = (k: unknown): string => (typeof k === "string" && k.length >= 1 && k.length <= APP_LIMITS.key && !/[\u0000-\u001f]/.test(k) ? k : fail("Khóa phải là chuỗi 1-200 ký tự."));
 
-export function storeOp(u: UserRow, body: { ref?: StoreRef; op?: unknown; key?: unknown; value?: unknown; shared?: unknown; prefix?: unknown }) {
+// client: mã của tab đang ghi, để chính tab đó bỏ qua thông báo "dữ liệu chung vừa đổi" do mình gây ra.
+export function storeOp(u: UserRow, body: { ref?: StoreRef; op?: unknown; key?: unknown; value?: unknown; shared?: unknown; prefix?: unknown; client?: string }) {
   const ref = resolve(u, body.ref ?? {});
   const owner = body.shared === true ? "" : u.id;
   const d = init();
@@ -124,11 +130,13 @@ export function storeOp(u: UserRow, body: { ref?: StoreRef; op?: unknown; key?: 
       d.prepare(`INSERT INTO app_data (ref, owner, key, value, size, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(ref, owner, key) DO UPDATE SET value = excluded.value, size = excluded.size, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
         .run(ref, owner, key, value, size, u.id, Date.now());
+      if (owner === "" && ref.startsWith("app:")) publish(ref.slice(4), { type: "data", key, client: typeof body.client === "string" ? body.client.slice(0, 40) : undefined });
       return { key, value, shared: owner === "" };
     }
     case "delete": {
       const key = keyOk(body.key);
       const n = d.prepare("DELETE FROM app_data WHERE ref = ? AND owner = ? AND key = ?").run(ref, owner, key).changes;
+      if (n && owner === "" && ref.startsWith("app:")) publish(ref.slice(4), { type: "data", key, client: typeof body.client === "string" ? body.client.slice(0, 40) : undefined });
       return { key, deleted: n > 0, shared: owner === "" };
     }
     case "list": {

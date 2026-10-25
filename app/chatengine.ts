@@ -17,7 +17,7 @@ import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "./coderun";
 import { saveOutputs, type OutFile } from "./outputs";
-import { ARTIFACT_RULES, VIZ_RULES } from "./artifacts";
+import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "./llmcall";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
@@ -394,7 +394,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const st = studio ? studioSkills(c.user.id, studio) : null;
   // Bộ não công ty: trí nhớ nhóm và các đoạn tài liệu liên quan tới câu hỏi mới nhất (chỉ ở lượt chat chính, không ở Synchro Code).
   const kb = skills && feature !== "code" ? knowledgePrompt(c.user, lastUserText(messages)) : null;
-  const capSys = cs ? [cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", kb?.prompt ?? ""].filter(Boolean).join("\n\n") : "";
+  const capSys = cs ? [feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", kb?.prompt ?? ""].filter(Boolean).join("\n\n") : "";
   let sess: ConnectorSession | null = null;
   try {
     const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];

@@ -11,8 +11,10 @@ import { SKILLS_CHANGED } from "./skillsui";
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 // Lời dặn lâu dài: có từ chỉ thời gian về sau hoặc "luôn / không bao giờ".
 const PERSIST = /(^|[^a-z])(tu (gio|nay|bay gio|lan nay)|lan sau|ve sau|sau nay|moi lan|lan nao cung|luon luon|luon|nho (la|rang|giup|nhe)|dung bao gio|khong bao gio|always|never|from now on|next time|every time|going forward)([^a-z]|$)/;
-// Câu mệnh lệnh ngắn ("hãy viết…", "đừng dùng…", "chỉ trả lời…"): tính là lời dặn khi lặp lại ở nhiều đoạn chat.
-const RULE = /(^|[^a-z])(hay|dung|khong duoc|phai|chi|uu tien|please|don't|do not|only|use)([^a-z]|$)/;
+// Câu mệnh lệnh ("hãy viết…", "đừng dùng…", "ưu tiên…"): tính là lời dặn khi lặp lại ở nhiều đoạn chat.
+// So trên chữ có dấu: bỏ dấu thì "dùng" và "đừng" trùng nhau.
+const RULE = /(^|[\s,.!;:(])(hãy|đừng|không được|phải luôn|chỉ được|ưu tiên|please always|don't|do not|always use|never use|only use)(?=[\s,.!;:)]|$)/u;
+const isRule = (t: string) => RULE.test(t.toLowerCase()) && !/\?\s*$/.test(t);
 const STOP = new Set("tu gio nay bay lan sau ve moi nao cung luon nho la rang giup nhe nha nhen hay dung bao khong duoc phai chi cho toi minh ban em anh chi the thi va voi cua de se da dang mot nhung cac khi nay do ay nua roi la always never from now next time every please the a an to and of for in on with my me you your use only do not dont be is are going forward".split(" "));
 const words = (s: string) => fold(s).split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !STOP.has(w));
 const similar = (a: string[], b: string[]) => {
@@ -32,15 +34,17 @@ export type Suggestion = { key: string; rules: string[]; repeated: number };
 export function suggestSkill(chat: ChatLike, all: ChatLike[]): Suggestion | null {
   const u = [...chat.msgs].reverse().find((m) => m.role === "user");
   if (!u || u.text.length < 10 || u.text.length > 1200) return null;
+  // Câu trả lời cho thẻ hỏi lại ("Câu hỏi → lựa chọn") không phải lời dặn.
+  if (u.text.includes("→")) return null;
   const f = fold(u.text), persist = PERSIST.test(f);
-  if (!persist && !RULE.test(f)) return null;
+  if (!persist && !isRule(u.text)) return null;
   const w = words(u.text);
   if (w.length < 2) return null;
   const others: string[] = [];
   for (const c of all) for (const m of c.msgs) {
     if (m.role !== "user" || m === u || m.text.length > 1200 || others.includes(m.text) || m.text === u.text) continue;
-    const g = fold(m.text);
-    if ((PERSIST.test(g) || RULE.test(g)) && similar(w, words(m.text)) >= 0.4) others.push(m.text);
+    if (m.text.includes("→")) continue;
+    if ((PERSIST.test(fold(m.text)) || isRule(m.text)) && similar(w, words(m.text)) >= 0.4) others.push(m.text);
   }
   if (!persist && others.length < 1) return null;
   const key = `${chat.id}:${u.time}`;

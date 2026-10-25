@@ -305,6 +305,8 @@ document.getElementById("f").onsubmit = async (e) => {
   catch (err) { st.textContent = "Không lưu được: " + err.message; }
 };
 load().then(render);
+// Người khác vừa đăng ghi chú (đang mở cùng ứng dụng) → nạp lại ngay.
+if (window.storage.onChange) window.storage.onChange(({ key }) => { if (key === KEY) load().then(render); });
 </script></main></body></html>`;
 // Văn bản hành chính (NĐ 30/2020): model viết JSON, Synchro tự dàn trang và xuất Word / PDF.
 const CONG_VAN = JSON.stringify({
@@ -633,12 +635,37 @@ function meetingMinutes(q, s) {
   }, null, 2);
 }
 
+// Hỏi lại như model thật: yêu cầu làm sản phẩm lớn mà chưa nói gì về mục đích / phong cách → khối ```ask.
+// Lượt ngay sau khi người dùng trả lời thì làm luôn (không hỏi lại).
+const ASK = {
+  web: [
+    { q: "Trang web dùng để làm gì?", options: ["Giới thiệu công ty", "Bán hàng online", "Sự kiện, hội thảo", "Hồ sơ cá nhân"] },
+    { q: "Phong cách bạn thích?", options: ["Tối giản, sáng sủa", "Hiện đại, nhiều màu", "Sang trọng, tông tối"] },
+    { q: "Cần những phần nào?", options: ["Bảng giá", "Form liên hệ", "Câu hỏi thường gặp", "Đánh giá khách hàng"], multi: true },
+  ],
+  slides: [
+    { q: "Bài thuyết trình cho ai xem?", options: ["Ban giám đốc", "Khách hàng", "Nội bộ nhóm", "Nhà đầu tư"] },
+    { q: "Dài khoảng bao nhiêu?", options: ["5 trang", "10 trang", "15 trang trở lên"] },
+  ],
+};
+const askMatch = (t) => t.trim().match(/^(hay |giup (toi|minh) )?(lam|tao|thiet ke|dung|viet)( giup)?( cho (toi|minh|em))?( mot| 1)? (trang web|website|landing page|bai thuyet trinh|slide|bo slide)( (di|nhe|nha|voi|giup))*[.!]?$/);
+function askReply(t, msgs) {
+  const prev = [...(msgs ?? [])].reverse().find((m) => m.role === "assistant");
+  const pt = typeof prev?.content === "string" ? prev.content : Array.isArray(prev?.content) ? prev.content.map((b) => b.text ?? "").join("") : "";
+  if (pt.includes("```ask")) return null;
+  const m = askMatch(t);
+  if (!m) return null;
+  const kind = /slide|thuyet trinh/.test(m[8]) ? "slides" : "web";
+  return `Để làm đúng ý ngay lần đầu, bạn chọn nhanh giúp mình vài điều:\n\n\`\`\`ask\n${JSON.stringify({ questions: ASK[kind] }, null, 1)}\n\`\`\``;
+}
+
 export function capsReply(sys, q, msgs, toolNames) {
   const t = norm(q);
   const s = String(sys ?? "");
   if (s.includes("<meeting_minutes>")) return { text: meetingMinutes(String(q), s) };
   if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
+  if (s.includes("<ask_user>")) { const a = askReply(t, msgs); if (a) return { text: a }; }
   if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }
   if (s.includes("<artifacts>")) { const a = artifactReply(t, s, msgs); if (a) return { text: a }; }
   else { const a = noArtifactReply(t); if (a) return { text: a }; }
@@ -746,6 +773,8 @@ export function studioStep(sys, msgsJson, q, toolNames) {
   if (!m) {
     // Chat thường: có thư viện studio trong available_skills và câu hỏi đúng loại thì mở thư viện trước.
     const t = norm(q);
+    // Yêu cầu mơ hồ (sẽ hỏi lại bằng thẻ lựa chọn): chưa đọc skill.
+    if (S.includes("<ask_user>") && !M.includes("```ask") && askMatch(t)) return null;
     // Yêu cầu tạo tệp (Word, PowerPoint, PDF…) đi thẳng tới chạy code.
     if (/\b(word|docx|excel|xlsx|powerpoint|pptx|pdf|csv|file|tep)\b/.test(t)) return null;
     const lib = libStep(S, M, t, toolNames);

@@ -16,6 +16,7 @@ import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
 import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
+import { ASK_EVENT } from "./askcard";
 import { attachRun, callLLM, LLMError, takeRoute, takeSources, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
@@ -861,6 +862,10 @@ export default function Home() {
   }, []);
   const goNewRef = useRef(goNew);
   goNewRef.current = goNew;
+  // Thẻ hỏi lại (```ask): lựa chọn của người dùng thành tin nhắn tiếp theo.
+  const sendRef = useRef<(t: string) => void>(() => {});
+  sendRef.current = (t) => send(t);
+  useEffect(() => { const h = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current(t); }; window.addEventListener(ASK_EVENT, h); return () => window.removeEventListener(ASK_EVENT, h); }, []);
 
   useEffect(() => {
     let n = 0;
@@ -1194,13 +1199,13 @@ export default function Home() {
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} /> : (() => {
+                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
                         const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
                         return <ArtifactCard key={k} art={sg.art} version={v + 1} total={total} active={active} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}{m.done && m.src?.length ? <SourceChips sources={m.src} /> : null}</div>
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}{m.done && m.src?.length ? <SourceChips sources={m.src} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>

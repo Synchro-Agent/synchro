@@ -9,6 +9,7 @@ import { removeUserTasks } from "../../../../tasks";
 import { removeUserKb } from "../../../../kb";
 import { removeUserMeetings } from "../../../../meetings";
 import { removeUserVotes } from "../../../../feedback";
+import { removeUserComments } from "../../../../collab";
 import { removeUserUsage } from "../../../../usage";
 import { removeUserPlugins } from "../../../../plugins";
 import { destroyWorkspace } from "../../../../workspace";
@@ -52,6 +53,7 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   removeUserKb(id);
   removeUserMeetings(id);
   removeUserVotes(id);
+  removeUserComments(id);
   removeUserUsage(id);
   await removeUserPlugins(id);
   await destroyWorkspace(id);

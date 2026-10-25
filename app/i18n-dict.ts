@@ -1175,3 +1175,19 @@ RULES_EN.push(
   [/^Đã có skill tên (.+)\. Lưu sẽ tạo phiên bản mới v(\d+); bản cũ vẫn khôi phục được\.$/, (m) => `A skill named ${m[1]} already exists. Saving creates version v${m[2]}; older versions can still be restored.`],
 );
 RULES_VI.push([/^Rated helpful (\d+) · unhelpful (\d+)$/, (m) => `Hữu ích ${m[1]} · không hữu ích ${m[2]}`]);
+// Thẻ hỏi lại, bảng tương tác, bình luận và cộng tác trên ứng dụng
+Object.assign(VI2EN, {
+  "Đang soạn câu hỏi…": "Writing questions…", "Synchro cần bạn chọn": "Synchro needs your input", "Đã gửi lựa chọn": "Answer sent", "Câu hỏi của Synchro": "Synchro's questions",
+  "chọn được nhiều": "pick any", "Ý khác…": "Something else…", "Bỏ qua, cứ làm đi": "Skip, just go ahead", "Bạn tự chọn phương án hợp lý nhất và làm luôn.": "Pick whatever makes the most sense and go ahead.",
+  "Đã chép bảng, dán vào Excel hoặc Google Sheets được ngay": "Table copied, paste it straight into Excel or Google Sheets", "Không chép được": "Couldn't copy",
+  "Chép bảng": "Copy table", "Tải CSV": "Download CSV", "Chép bảng (dán vào Excel, Sheets)": "Copy table (paste into Excel, Sheets)", "Bấm để sắp xếp": "Click to sort",
+  "Đang xem": "Viewing", "đang xem cùng bạn": "is here with you", "người đang xem cùng bạn": "people are here with you", "Bình luận": "Comments",
+  "Chưa có bình luận. Góp ý cho ứng dụng, gõ @ để nhắc đồng nghiệp.": "No comments yet. Leave feedback on the app, type @ to mention a colleague.",
+  "Ẩn bình luận đã xử lý": "Hide resolved comments", "Xem bình luận đã xử lý": "Show resolved comments", "Viết bình luận… gõ @ để nhắc tên": "Write a comment… type @ to mention",
+  "Gửi bình luận": "Send comment", "Đã gửi, người được nhắc sẽ nhận thông báo": "Sent, the people you mentioned will be notified", "Không thực hiện được": "Couldn't do that",
+  "Mở lại": "Reopen", "Đánh dấu đã xử lý": "Mark as resolved", "Xóa bình luận": "Delete comment", "Mở bình luận": "Open comments",
+});
+RULES_EN.push(
+  [/^(.+) nhắc bạn trong (.+)$/, (m) => `${m[1]} mentioned you in ${m[2]}`],
+  [/^(.+) bình luận trong (.+)$/, (m) => `${m[1]} commented in ${m[2]}`],
+);
