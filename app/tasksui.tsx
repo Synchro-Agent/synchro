@@ -8,7 +8,7 @@ import { artifactsAsCode, hasArtifacts, splitArtifacts } from "./artifacts";
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekly"; time?: string; weekday?: number; tz: string };
 type Task = { id: string; title: string; prompt: string; schedule: Schedule; model: string | null; enabled: boolean; next_run_at: number | null; last_run_at: number | null; created_at: number; runs: number };
-type Item = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string };
+type Item = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice"; link?: string };
 export const INBOX_CHANGED = "synchro:inbox";
 
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
@@ -91,7 +91,7 @@ function TaskForm({ init, onClose, onSaved, say, model }: { init?: Task | null; 
   );
 }
 
-export function InboxPage({ say, model, onOpenChat }: { say: (m: string) => void; model?: string; onOpenChat: (title: string, text: string) => void }) {
+export function InboxPage({ say, model, onOpenChat, onOpenMeeting }: { say: (m: string) => void; model?: string; onOpenChat: (title: string, text: string) => void; onOpenMeeting?: (id: string) => void }) {
   const [tab, setTab] = useState<"inbox" | "tasks">("inbox");
   const [items, setItems] = useState<Item[] | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -134,7 +134,10 @@ export function InboxPage({ say, model, onOpenChat }: { say: (m: string) => void
                     {x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{tr("Synchro đang chạy tác vụ này ở nền")}</div>
                       : x.error ? <div className="sk-err"><span>{x.error}</span></div>
                       : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
-                    {x.status === "done" && <div className="tk-acts"><button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button></div>}
+                    {x.status === "done" && <div className="tk-acts">
+                      {x.link?.startsWith("meeting:") ? <button className="btn" onClick={() => onOpenMeeting?.(x.link!.slice(8))}><I.Mic size={14} />{tr("Mở cuộc họp")}</button>
+                        : <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
+                    </div>}
                   </div>
                 )}
               </div>

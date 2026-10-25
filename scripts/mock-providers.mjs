@@ -181,6 +181,15 @@ async function trap(res, q, fmt) {
 }
 
 const LAST = {};
+// Chép lời giả lập: một cuộc họp ngắn tiếng Việt, 3 người nói (dùng cho tính năng Cuộc họp).
+const MEETING_LINES = [
+  [0, "Chào mọi người, hôm nay mình chốt kế hoạch ra mắt ứng dụng Synchro bản di động."],
+  [1, "Bên thiết kế đã xong 80% màn hình, còn màn hình thanh toán. Lan sẽ hoàn thiện màn hình thanh toán trước thứ Sáu tuần này."],
+  [2, "Phần máy chủ ổn rồi, nhưng cần kiểm thử tải. Minh sẽ chạy kiểm thử tải và gửi báo cáo trước ngày 5 tháng sau."],
+  [0, "Vậy mình thống nhất ngày ra mắt là 15 tháng 12. Hùng phụ trách chuẩn bị thông cáo báo chí."],
+  [1, "Còn ngân sách quảng cáo thì chưa chốt, để tuần sau họp tiếp."],
+];
+const MEETING_TEXT = MEETING_LINES.map(([, t]) => t).join(" ");
 async function handler(req, res) {
   const u = new URL(req.url, "http://x");
   const p = u.pathname;
@@ -188,6 +197,19 @@ async function handler(req, res) {
   const b = req.method === "POST" ? await readBody(req) : {};
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : null;
+
+  // Chép lời: ElevenLabs Scribe (từ kèm người nói) và OpenAI Whisper (văn bản).
+  if (p === "/elevenlabs/v1/speech-to-text" && req.method === "POST") {
+    if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
+    await sleep(600);
+    const words = MEETING_LINES.flatMap(([sp, t]) => t.split(" ").flatMap((w, i, a) => [{ text: w, type: "word", speaker_id: `speaker_${sp}` }, ...(i < a.length - 1 ? [{ text: " ", type: "spacing", speaker_id: `speaker_${sp}` }] : [])]));
+    return send(res, 200, { language_code: "vie", text: MEETING_TEXT, words });
+  }
+  if (p === "/openai/v1/audio/transcriptions" && req.method === "POST") {
+    if (!valid(auth)) return send(res, 401, { error: { message: "Incorrect API key provided.", type: "invalid_api_key" } });
+    await sleep(600);
+    return send(res, 200, { text: MEETING_TEXT });
+  }
 
   // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…).
   if (p === "/_debug/last") return send(res, 200, LAST);

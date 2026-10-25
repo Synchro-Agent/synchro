@@ -21,7 +21,9 @@ function init() {
       model TEXT, enabled INTEGER NOT NULL DEFAULT 1, next_run_at INTEGER, last_run_at INTEGER, created_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS tasks_due ON tasks(enabled, next_run_at);
       CREATE TABLE IF NOT EXISTS task_runs (run_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, owner TEXT NOT NULL, title TEXT NOT NULL, at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0);
-      CREATE INDEX IF NOT EXISTS task_runs_owner ON task_runs(owner, at)`);
+      CREATE INDEX IF NOT EXISTS task_runs_owner ON task_runs(owner, at);
+      CREATE TABLE IF NOT EXISTS notices (id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL, link TEXT, at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0);
+      CREATE INDEX IF NOT EXISTS notices_owner ON notices(owner, at)`);
     ready = true;
   }
   return d;
@@ -116,7 +118,7 @@ export function deleteTask(uid: string, id: string) {
   if (ok) d.prepare("DELETE FROM task_runs WHERE task_id = ?").run(id);
   return ok;
 }
-export function removeUserTasks(uid: string) { const d = init(); d.prepare("DELETE FROM tasks WHERE owner = ?").run(uid); d.prepare("DELETE FROM task_runs WHERE owner = ?").run(uid); }
+export function removeUserTasks(uid: string) { const d = init(); d.prepare("DELETE FROM tasks WHERE owner = ?").run(uid); d.prepare("DELETE FROM task_runs WHERE owner = ?").run(uid); d.prepare("DELETE FROM notices WHERE owner = ?").run(uid); }
 
 // ---------------------------------------------------------------- chạy
 const SYSTEM = "Bạn là trợ lý của Synchro đang chạy một tác vụ nền theo lịch người dùng đã hẹn. Người dùng không ở đó để trả lời câu hỏi: hãy tự làm trọn vẹn, ngắn gọn, có tiêu đề rõ ràng, nêu điểm chính trước. Khi thiếu dữ liệu thì nói rõ thiếu gì thay vì bịa. Trình bày kết quả trực tiếp bằng Markdown (tiêu đề, gạch đầu dòng, bảng), không đặt vào artifact trừ khi yêu cầu là làm trang web, ứng dụng hay văn bản hành chính.";
@@ -153,16 +155,30 @@ export function tick(now = Date.now()) {
   return n;
 }
 
+// Thông báo vào Hộp thư không cần chạy model (ví dụ nhắc việc đến hạn của cuộc họp).
+export function addNotice(owner: string, title: string, text: string, link?: string) {
+  const id = "ntc_" + crypto.randomBytes(8).toString("base64url");
+  init().prepare("INSERT INTO notices (id, owner, title, text, link, at) VALUES (?, ?, ?, ?, ?, ?)").run(id, owner, title.slice(0, 200), text.slice(0, 4000), link ?? null, Date.now());
+  return id;
+}
+// Việc khác chạy theo nhịp của bộ hẹn giờ (nhắc việc cuộc họp…), đăng ký từ mô-đun của chúng.
+const gh = globalThis as unknown as { __synchroTickHooks?: Map<string, (now: number) => void> };
+const hooks = (gh.__synchroTickHooks ??= new Map());
+export const onTick = (name: string, f: (now: number) => void) => { hooks.set(name, f); };
+
 const g = globalThis as unknown as { __synchroTasks?: ReturnType<typeof setInterval> };
 /** Bật bộ hẹn giờ (gọi một lần lúc máy chủ khởi động). */
 export function startScheduler(everyMs = 30_000) {
   if (g.__synchroTasks) return;
-  g.__synchroTasks = setInterval(() => { try { const n = tick(); if (n) console.log(`[tasks] chạy ${n} tác vụ đến hạn`); } catch (e) { console.error("[tasks]", e); } }, everyMs);
+  g.__synchroTasks = setInterval(() => {
+    try { const n = tick(); if (n) console.log(`[tasks] chạy ${n} tác vụ đến hạn`); } catch (e) { console.error("[tasks]", e); }
+    for (const [name, f] of hooks) try { f(Date.now()); } catch (e) { console.error(`[${name}]`, e); }
+  }, everyMs);
   g.__synchroTasks.unref?.();
 }
 
 // ---------------------------------------------------------------- hộp thư
-export type InboxItem = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string };
+export type InboxItem = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice"; link?: string };
 export function inbox(uid: string, limit = 50): { items: InboxItem[]; unread: number } {
   const d = init();
   const rows = d.prepare("SELECT * FROM task_runs WHERE owner = ? ORDER BY at DESC LIMIT ?").all(uid, limit) as { run_id: string; task_id: string; title: string; at: number; read: number }[];
@@ -171,12 +187,15 @@ export function inbox(uid: string, limit = 50): { items: InboxItem[]; unread: nu
     const res = (run?.result ?? {}) as { text?: string; error?: string };
     return { run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: run?.status ?? "error", text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : !run ? { error: "Kết quả đã quá 7 ngày nên không còn lưu." } : {}) };
   });
+  const notes = (d.prepare("SELECT * FROM notices WHERE owner = ? ORDER BY at DESC LIMIT ?").all(uid, limit) as { id: string; title: string; text: string; link: string | null; at: number; read: number }[])
+    .map((n): InboxItem => ({ run: n.id, task: "", title: n.title, at: n.at, read: !!n.read, status: "done", text: n.text, kind: "notice", ...(n.link ? { link: n.link } : {}) }));
+  const all = [...items.map((x) => ({ ...x, kind: "task" as const })), ...notes].sort((a, b) => b.at - a.at).slice(0, limit);
   // Chỉ tính chưa đọc khi đã có kết quả (đang chạy thì chưa báo).
-  const unread = items.filter((x) => !x.read && x.status !== "running").length;
-  return { items, unread };
+  const unread = all.filter((x) => !x.read && x.status !== "running").length;
+  return { items: all, unread };
 }
 export function markRead(uid: string, runs: string[] | "all") {
   const d = init();
-  if (runs === "all") d.prepare("UPDATE task_runs SET read = 1 WHERE owner = ?").run(uid);
-  else for (const r of runs.slice(0, 200)) d.prepare("UPDATE task_runs SET read = 1 WHERE owner = ? AND run_id = ?").run(uid, r);
+  if (runs === "all") { d.prepare("UPDATE task_runs SET read = 1 WHERE owner = ?").run(uid); d.prepare("UPDATE notices SET read = 1 WHERE owner = ?").run(uid); }
+  else for (const r of runs.slice(0, 200)) { d.prepare("UPDATE task_runs SET read = 1 WHERE owner = ? AND run_id = ?").run(uid, r); d.prepare("UPDATE notices SET read = 1 WHERE owner = ? AND id = ?").run(uid, r); }
 }

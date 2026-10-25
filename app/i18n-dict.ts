@@ -1140,3 +1140,17 @@ Object.assign(VI2EN, {
   "Gõ câu hỏi để xem Synchro tìm thấy đoạn nào": "Type a question to see which passages Synchro finds", "Tìm": "Search", "Không tìm thấy đoạn nào liên quan.": "No relevant passages found.",
   "Dán văn bản vào kho": "Paste text into the library", "Tên tài liệu": "Document name", "Nội dung": "Content", "Thêm vào kho": "Add to library", "Đang đọc": "Reading", "Đã thêm": "Added", "Đã thêm tài liệu": "Document added", "Đang lưu…": "Saving…",
 });
+// Cuộc họp
+Object.assign(VI2EN, {
+  "Cuộc họp": "Meetings", "Cuộc họp mới": "New meeting", "Chưa có cuộc họp nào": "No meetings yet", "Tệp ghi âm": "Recording", "Dán ghi chép": "Paste notes", "Tên cuộc họp": "Meeting name", "Ngày họp": "Date",
+  "Synchro chép lời (nếu là tệp ghi âm), lập biên bản và tách việc cần làm kèm người phụ trách, hạn chót.": "Synchro transcribes (for recordings), writes the minutes and pulls out action items with owners and due dates.",
+  "Tải tệp ghi âm cuộc họp hoặc dán ghi chép: Synchro lập biên bản, tách việc cần làm, người phụ trách, hạn chót và nhắc khi đến hạn.": "Upload a meeting recording or paste notes: Synchro writes the minutes, pulls out action items, owners and due dates, and reminds you when they're due.",
+  "Chọn tệp ghi âm": "Choose a recording", "MP3, M4A, WAV, MP4… tối đa 100 MB": "MP3, M4A, WAV, MP4… up to 100 MB", "Nội dung cuộc họp": "Meeting content", "Dán bản chép lời hoặc ghi chép nhanh trong cuộc họp": "Paste a transcript or quick notes from the meeting",
+  "Lập biên bản": "Write minutes", "Đang xử lý cuộc họp ở nền": "Processing the meeting in the background", "Đang chép lời…": "Transcribing…", "Đang lập biên bản…": "Writing minutes…",
+  "Bạn có thể rời trang, Synchro vẫn xử lý ở nền.": "You can leave this page; Synchro keeps working in the background.", "Tất cả cuộc họp": "All meetings", "chép lời bằng": "transcribed with",
+  "Biên bản": "Minutes", "Việc cần làm": "Action items", "Bản ghi": "Transcript", "Biên bản Word": "Minutes (Word)", "Hỏi tiếp trong chat": "Continue in chat",
+  "Thành phần": "Attendees", "Nội dung chính": "Key points", "Quyết định": "Decisions", "Câu hỏi còn mở": "Open questions", "Người phụ trách": "Owner", "hạn": "due", "việc": "items", "đã xong": "done",
+  "Cuộc họp không có việc cần làm nào.": "This meeting has no action items.", "Đến hạn mà chưa xong, Synchro gửi lời nhắc vào Hộp thư lúc 8 giờ sáng.": "When an item is due and not done, Synchro sends a reminder to your Inbox at 8 am.",
+  "Mở cuộc họp": "Open meeting", "Đã tải biên bản": "Minutes downloaded",
+  "Máy chủ chưa có dịch vụ chép lời (cần khóa ElevenLabs hoặc OpenAI ở Cài đặt → API). Hãy dán nội dung cuộc họp.": "The server has no transcription service yet (needs an ElevenLabs or OpenAI key in Settings → API). Paste the meeting content instead.",
+});

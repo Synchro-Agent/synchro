@@ -92,6 +92,7 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
     (async () => {
       // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.
       if (!executors.has(kind) && kind === "chat") await import("./chatengine");
+      if (!executors.has(kind) && kind === "meeting") await import("./meetings");
       const f = executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return f(body, user);

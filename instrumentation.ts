@@ -5,6 +5,7 @@ export async function register() {
   setTimeout(async () => {
     try {
       await import("./app/chatengine");
+      await import("./app/meetings"); // bộ chạy "meeting" và nhắc việc đến hạn
       const { resumeInterrupted } = await import("./app/runs");
       const n = resumeInterrupted();
       if (n) console.log(`[runs] chạy lại ${n} lượt bị gián đoạn`);

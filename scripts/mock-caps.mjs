@@ -604,9 +604,39 @@ function pointEdit(q, msgs) {
   return `Mình chỉ sửa đúng phần bạn chỉ vào (${what}), mọi phần khác giữ nguyên:\n\n${art(prev.ident, prev.type, prev.title, body)}`;
 }
 
+// Biên bản cuộc họp: như model thật, đọc nội dung họp rồi trả JSON (người tham dự, quyết định, việc cần làm kèm người và hạn chót).
+function meetingMinutes(q, s) {
+  const date = /Ngày họp là (\d{4}-\d{2}-\d{2})/.exec(s)?.[1] ?? new Date().toISOString().slice(0, 10);
+  const base = new Date(date + "T00:00:00Z");
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const dueOf = (t) => {
+    if (/thứ sáu tuần này/i.test(t)) { const d = new Date(base); d.setUTCDate(d.getUTCDate() + ((5 - d.getUTCDay() + 7) % 7)); return iso(d); }
+    const m = /ngày (\d{1,2}) tháng (sau|\d{1,2})/i.exec(t);
+    if (m) { const d = new Date(base); d.setUTCMonth(m[2] === "sau" ? d.getUTCMonth() + 1 : Number(m[2]) - 1, Number(m[1])); if (d < base) d.setUTCFullYear(d.getUTCFullYear() + 1); return iso(d); }
+    return null;
+  };
+  const sentences = q.replace(/^Cuộc họp:.*\n/, "").split(/(?<=[.!?])\s+|\n+/).map((x) => x.replace(/^Người nói \d+:\s*/, "").trim()).filter(Boolean);
+  // \b của JavaScript không nhận ranh giới sau chữ có dấu ("sẽ"): so khớp theo chữ Unicode.
+  const word = (w) => new RegExp(`(?<![\\p{L}])(${w})(?![\\p{L}])`, "iu");
+  const viec = sentences.filter((x) => word("sẽ|phụ trách").test(x)).map((x) => {
+    const who = /^([A-ZĐ][\p{L}]+)\s+(sẽ|phụ trách)/u.exec(x)?.[1] ?? "";
+    const what = x.replace(/^[A-ZĐ][\p{L}]+\s+(sẽ|phụ trách)\s*/u, "").replace(/\s*trước .*$/i, "").replace(/[.]$/, "");
+    return { noiDung: what.charAt(0).toUpperCase() + what.slice(1), nguoiPhuTrach: who, hanChot: dueOf(x) };
+  });
+  const people = [...new Set(viec.map((v) => v.nguoiPhuTrach).filter(Boolean))];
+  return JSON.stringify({
+    tomTat: sentences.slice(0, 2).join(" "),
+    thanhPhan: people.length ? people : ["Các thành viên dự án"],
+    noiDung: sentences.filter((x) => !word("sẽ|phụ trách|thống nhất|chưa chốt").test(x)).slice(0, 5),
+    quyetDinh: sentences.filter((x) => word("thống nhất|quyết định|chốt").test(x) && !/chưa chốt/i.test(x)),
+    viec, cauHoiMo: sentences.filter((x) => /chưa chốt|họp tiếp/i.test(x)),
+  }, null, 2);
+}
+
 export function capsReply(sys, q, msgs, toolNames) {
   const t = norm(q);
   const s = String(sys ?? "");
+  if (s.includes("<meeting_minutes>")) return { text: meetingMinutes(String(q), s) };
   if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
   if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }

@@ -18,13 +18,14 @@ import { attachRun, callLLM, LLMError, takeRoute, takeSources, setActiveEffort, 
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
-type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "knowledge";
+type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "knowledge" | "meetings";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
 import { InboxPage, useInboxCount } from "./tasksui";
 import { KnowledgePage, SourceChips } from "./kbui";
+import { MeetingsPage } from "./meetingsui";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
@@ -876,6 +877,7 @@ export default function Home() {
   );
   const [voiceOn, setVoiceOn] = useState(false);
   const inboxN = useInboxCount(!!me);
+  const [meetingOpen, setMeetingOpen] = useState<string | null>(null);
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
     const id = Date.now();
@@ -966,6 +968,7 @@ export default function Home() {
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
           <Nav v="inbox" icon={<I.Inbox />} label="Hộp thư" badge={inboxN} />
           <Nav v="knowledge" icon={<I.Book />} label="Tri thức" />
+          <Nav v="meetings" icon={<I.Mic />} label="Cuộc họp" />
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
           {me?.perms.features.speech !== false && (
             <>
@@ -1240,7 +1243,8 @@ export default function Home() {
           </div></div>
         )}
 
-        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
+        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} onOpenMeeting={(id) => { setMeetingOpen(id); setView("meetings"); }} />}
+        {view === "meetings" && <MeetingsPage say={say} model={model} onOpenChat={openAsChat} initial={meetingOpen} />}
         {view === "knowledge" && <KnowledgePage say={say} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
