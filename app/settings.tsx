@@ -13,6 +13,7 @@ import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
+import { UsageSettings } from "./usageui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 
 function useAway(close: () => void) {
@@ -545,6 +546,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
     case "Privacy": return <Privacy go={go} />;
     case "Billing": return <Billing />;
     case "Capabilities": return <Capabilities go={go} />;
+    case "Usage": return <UsageSettings go={go} />;
     case "Memory": return <Memory />;
     case "Reflect": return <Reflect />;
     case "Time and focus": return <Focus />;

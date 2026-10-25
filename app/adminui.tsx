@@ -7,6 +7,7 @@ import { Fade } from "./ui";
 import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
+import { UsageAdmin, UsageIcon } from "./usageui";
 import type { AuthUser, Providers } from "./auth";
 import { ALL, allowsModel, effortsFor, FEATURES, FULL_CONN, type ConnPolicy, type Effort, type Perms, type ProviderInfo } from "./catalog";
 import { DIRECTORY } from "./connectordir";
@@ -292,6 +293,10 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
           </>
         )}
       </div>
+
+      <h3 className="sec">Usage limits</h3>
+      <p className="d adm-privacy"><UsageIcon size={14} />Synchro uses models through their APIs. Usage is the real API cost of each call, so you can cap how much each person spends.</p>
+      <UsageAdmin say={app.say} Toggle={Toggle} />
 
       <h3 className="sec">Access</h3>
       <p className="d adm-privacy"><I.Lock size={14} />Choose which models and features people can use. Administrators always have full access. Conversations, projects and files stay on each person&apos;s own device: administrators can&apos;t see them.</p>

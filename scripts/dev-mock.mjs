@@ -83,6 +83,38 @@ if (!fs.existsSync(SEEDED)) {
   if (r.status === 200) fs.writeFileSync(SEEDED, new Date().toISOString());
 }
 const caps = (await call("GET", "/api/caps")).j;
+// Mức dùng: lần chạy đầu nạp lịch sử dùng mẫu 30 ngày cho tài khoản quản trị (đặt hạn mức riêng $5 / phiên, $40 / tuần)
+// để vòng tròn usage và Cài đặt → Usage có dữ liệu như đang dùng thật. Lượt chat mới vẫn được tính thật từ API giả lập.
+const USAGE_SEEDED = path.join(DATA, ".usage-seeded");
+if (!fs.existsSync(USAGE_SEEDED) && (await call("GET", "/api/usage")).status === 200) {
+  const { default: Database } = await import("better-sqlite3");
+  const sdb = new Database(path.join(DATA, "synchro.db"));
+  sdb.pragma("busy_timeout = 5000");
+  const uid = sdb.prepare("SELECT id FROM users WHERE email = ?").get(ADMIN.email)?.id;
+  if (uid) {
+    const now = Date.now(), H = 3600_000, D = 24 * H;
+    const PRICE = { "anthropic/claude-opus-5-5": [4, 20], "anthropic/claude-sonnet-5-5": [2, 10], "anthropic/claude-fable-5-1": [10, 50], "openai/gpt-6-astra": [10, 50], "google/gemini-3.8-flash": [1.5, 9] };
+    const models = Object.keys(PRICE), feats = ["chat", "chat", "chat", "code", "code", "artifact", "internal"];
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const ins = sdb.prepare("INSERT INTO usage_events (user_id, at, model, feature, input, output, cache_read, cache_write, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const add = (at, cost, model = models[Math.floor(rnd() * models.length)]) => {
+      const [pi, po] = PRICE[model], out = Math.round((cost * 0.55) / po * 1e6), fresh = Math.round((cost * 0.35) / pi * 1e6), cache = Math.round((cost * 0.1) / (pi / 10) * 1e6);
+      ins.run(uid, Math.round(at), model, feats[Math.floor(rnd() * feats.length)], fresh, out, cache, 0, cost);
+    };
+    const weekAnchor = now - 4.4 * D, sessionStart = now - (1 * H + 51 * 60_000);
+    sdb.transaction(() => {
+      for (let d = 30; d >= 5; d--) for (let k = 0, n = 2 + Math.floor(rnd() * 6); k < n; k++) add(now - d * D + rnd() * 10 * H, 0.15 + rnd() * 1.1);
+      // Đầu tuần tới trước phiên hiện tại: $33.90 (cộng $4.50 của phiên = 96% của $40), rải đều, không lấn sang phiên.
+      for (let k = 0, step = (sessionStart - weekAnchor - 4 * H) / 30; k < 30; k++) add(weekAnchor + 2 * H + k * step, 1.13, models[Math.floor(rnd() * 3)]);
+      for (let t = sessionStart + 5 * 60_000, total = 0; total < 4.5; t += 7 * 60_000) { const c = Math.min(0.42, 4.5 - total); add(t, c, "anthropic/claude-opus-5-5"); total += c; }
+      sdb.prepare("INSERT INTO usage_users (user_id, session_start, week_anchor, override) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET session_start = excluded.session_start, week_anchor = excluded.week_anchor, override = excluded.override")
+        .run(uid, sessionStart, weekAnchor, JSON.stringify({ session: 5, weekly: 40 }));
+    })();
+    fs.writeFileSync(USAGE_SEEDED, new Date().toISOString());
+  }
+  sdb.close();
+}
+const usage = (await call("GET", "/api/usage?provider=anthropic")).j;
 const models = (await call("GET", "/api/models")).j?.providers ?? [];
 
 console.log(`
@@ -99,5 +131,6 @@ console.log(`
   │   Hình:     "Vẽ biểu đồ doanh thu 6 tháng", "Tỷ lệ doanh thu theo kênh", "Vẽ sơ đồ quy trình đặt hàng", "Mô phỏng tính lãi vay"
   │   Chạy code:"Tạo file Excel báo cáo doanh thu", "Viết báo cáo tuần ra file Word", "Làm slide PowerPoint", "Xuất hóa đơn PDF",
   │             "Đếm số nguyên tố dưới 1 triệu", "Cài thư viện humanize bằng pip", "Thử truy cập mạng"
+  │ Mức dùng:   ${usage?.limits ? usage.limits.map((l) => `${l.key === "session" ? "phiên" : "tuần"} ${Math.round(l.pct)}% ($${l.used.toFixed(2)}${l.limit ? `/$${l.limit}` : ""})`).join(" · ") : "?"} — bấm vòng tròn cạnh tên model, hoặc Cài đặt → Usage
   └─ Ctrl+C để dừng ─────────────────────────────────────────
 `);

@@ -4,6 +4,7 @@ import { agent as wsAgent, cleanPath, exec, fsop, WORK } from "./workspace";
 import { runSkillTool, skillTools } from "./skillruntime";
 import type { Skill } from "./skillstore";
 import { effortParams, respInput, respParse, respTools } from "./llmcall";
+import { noteResponse } from "./usage";
 import type { Effort } from "./catalog";
 
 export const AGENT_MAX_STEPS = 40;
@@ -213,7 +214,7 @@ function pruneImages(msgs: unknown[]) {
   }
 }
 
-export function anthropicAgent(o: { key: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal; effort?: Effort }): Adapter {
+export function anthropicAgent(o: { provider?: string; key: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       pruneImages(msgs);
@@ -224,6 +225,7 @@ export function anthropicAgent(o: { key: string; base?: string; model: string; s
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
+      noteResponse(o.provider ?? "anthropic", o.model, j, r.headers);
       const blocks: { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }[] = j.content ?? [];
       return {
         text: blocks.filter((b) => b.type === "text").map((b) => b.text).join(""),
@@ -243,7 +245,7 @@ export function anthropicAgent(o: { key: string; base?: string; model: string; s
 }
 
 // OpenAI qua API Responses (mọi model chat của OpenAI, kể cả dòng -pro).
-export function responsesAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; effort?: Effort }): Adapter {
+export function responsesAgent(o: { provider?: string; key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       const r = await fetch(`${o.base}/responses`, {
@@ -253,6 +255,7 @@ export function responsesAgent(o: { key: string; base: string; model: string; sy
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
+      noteResponse(o.provider ?? "openai", o.model, j, r.headers);
       const p = respParse(j);
       return { text: p.text, calls: p.calls, assistant: { items: p.items }, usage: { input: j.usage?.input_tokens ?? 0, output: j.usage?.output_tokens ?? 0 } };
     },
@@ -266,7 +269,7 @@ export function responsesAgent(o: { key: string; base: string; model: string; sy
 }
 
 // Gemini và nhà cung cấp tương thích OpenAI qua /chat/completions.
-export function openaiAgent(o: { key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; kind?: string; effort?: Effort }): Adapter {
+export function openaiAgent(o: { provider?: string; key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; kind?: string; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       const r = await fetch(`${o.base}/chat/completions`, {
@@ -276,6 +279,7 @@ export function openaiAgent(o: { key: string; base: string; model: string; syste
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
+      noteResponse(o.provider ?? "compatible", o.model, j, r.headers);
       const m = j.choices?.[0]?.message ?? {};
       const calls: Call[] = (m.tool_calls ?? []).map((c: { id: string; function: { name: string; arguments: string } }) => {
         let input: Record<string, unknown> = {};

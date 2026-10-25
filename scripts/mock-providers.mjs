@@ -29,7 +29,29 @@ const GOOGLE = [["gemini-4-argon", "Gemini 4 Argon", "generateContent"], ["gemin
 const VENDOR = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
 const EFF = ["low", "medium", "high", "xhigh", "max"];
 
-const send = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+// Như API thật: phản hồi thành công kèm số token đã dùng (usage) và header hạn mức token mỗi phút của tổ chức,
+// để Synchro tính mức dùng và hiện hạn mức API trong vòng tròn usage.
+const RATE = { anthropic: { limit: 400_000, used: 0, start: 0 }, openai: { limit: 2_000_000, used: 0, start: 0 } };
+const inTok = (b) => Math.ceil(JSON.stringify([b?.system, b?.instructions, b?.messages, b?.input, b?.tools]).length / 4);
+function meter(res, obj) {
+  const prov = res.__prov, b = res.__body;
+  if (!prov || !obj || obj.error || obj.type === "error") return obj;
+  const input = inTok(b), output = Math.ceil(JSON.stringify(obj.content ?? obj.output ?? obj.choices ?? "").length / 3.5);
+  if (prov === "anthropic" && obj.type === "message") obj.usage = { input_tokens: Math.round(input * 0.3), cache_read_input_tokens: Math.round(input * 0.7), cache_creation_input_tokens: 0, output_tokens: output };
+  if (prov === "openai" && obj.object === "response") obj.usage = { input_tokens: input, input_tokens_details: { cached_tokens: Math.round(input * 0.5) }, output_tokens: output };
+  if (obj.object === "chat.completion") obj.usage = { prompt_tokens: input, completion_tokens: output };
+  const r = RATE[prov];
+  if (r) {
+    const now = Date.now();
+    if (now - r.start >= 60_000) { r.start = now; r.used = 0; }
+    r.used = Math.min(r.limit, r.used + input + output);
+    const reset = r.start + 60_000;
+    if (prov === "anthropic") { res.setHeader("anthropic-ratelimit-tokens-limit", r.limit); res.setHeader("anthropic-ratelimit-tokens-remaining", r.limit - r.used); res.setHeader("anthropic-ratelimit-tokens-reset", new Date(reset).toISOString()); }
+    else { res.setHeader("x-ratelimit-limit-tokens", r.limit); res.setHeader("x-ratelimit-remaining-tokens", r.limit - r.used); res.setHeader("x-ratelimit-reset-tokens", `${Math.ceil((reset - now) / 1000)}s`); }
+  }
+  return obj;
+}
+const send = (res, code, obj) => { if (code === 200) obj = meter(res, obj); res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
 const readBody = (req) => new Promise((ok) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { ok(JSON.parse(s || "{}")); } catch { ok({}); } }); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const valid = (k) => typeof k === "string" && k.includes("mock");
@@ -163,6 +185,8 @@ async function handler(req, res) {
   const p = u.pathname;
   const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
   const b = req.method === "POST" ? await readBody(req) : {};
+  res.__body = b;
+  res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : null;
 
   // ---- Anthropic (/v1/models, /v1/messages) ----
   if (p.startsWith("/anthropic/")) {

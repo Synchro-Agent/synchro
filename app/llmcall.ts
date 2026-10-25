@@ -3,6 +3,7 @@
 // Gemini và các nhà cung cấp tương thích OpenAI dùng /chat/completions.
 import type { Target } from "./providers";
 import type { Effort } from "./catalog";
+import { noteResponse } from "./usage";
 
 export class HttpErr extends Error { constructor(public status: number, m: string) { super(m); } }
 
@@ -34,7 +35,9 @@ export async function anthropicCall(t: Target, body: Record<string, unknown>, si
     body: JSON.stringify({ model: t.model, ...body }),
   });
   if (!r.ok) await fail(r);
-  return r.json();
+  const j = await r.json();
+  noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
+  return j;
 }
 // Mức nỗ lực → tham số của từng hãng ("extra" là xhigh). Gemini chỉ tới high (đã hạ sẵn ở clampEffort). Không chọn thì để model dùng mặc định.
 export function effortParams(t: Pick<Target, "kind">, e?: Effort): Record<string, unknown> {
@@ -73,14 +76,16 @@ export function respParse(j: { output?: RespOut[]; status?: string; incomplete_d
   return { text, calls, items: out as Item[] };
 }
 export const respTools = (tools: { name: string; description: string; input_schema: unknown }[]) => tools.map((x) => ({ type: "function", name: x.name, description: x.description, parameters: x.input_schema }));
-export async function responsesCall(t: { base: string; key: string; model: string }, body: Record<string, unknown>, signal?: AbortSignal) {
+export async function responsesCall(t: { base: string; key: string; model: string; provider?: string }, body: Record<string, unknown>, signal?: AbortSignal) {
   const r = await fetch(`${t.base}/responses`, {
     method: "POST", signal,
     headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
     body: JSON.stringify({ model: t.model, ...body }),
   });
   if (!r.ok) await fail(r);
-  return r.json();
+  const j = await r.json();
+  noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
+  return j;
 }
 
 export async function openaiCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal) {
@@ -90,7 +95,9 @@ export async function openaiCall(t: Target, body: Record<string, unknown>, signa
     body: JSON.stringify({ model: t.model, ...body }),
   });
   if (!r.ok) await fail(r);
-  return r.json();
+  const j = await r.json();
+  noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
+  return j;
 }
 
 // Một lượt hỏi đáp không có công cụ: dùng cho chat thường và nút "Gửi thử" ở Cài đặt → API.

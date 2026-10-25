@@ -29,6 +29,7 @@ import { ApprovalCard } from "./connectorsui";
 import { loadCaps, useCaps } from "./capsclient";
 import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
 import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
+import { UsageRing } from "./usageui";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -1081,7 +1082,7 @@ export default function Home() {
             )}
             <div className="dock">
               <Composer {...composerProps} dock />
-              <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /></div>
+              <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
             </div>
           </>
         )}

@@ -80,6 +80,8 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   }
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
   lastFiles = Array.isArray(j.files) ? j.files : [];
+  // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model.
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage"));
   return String(j.text ?? j.reply ?? "");
 }
 
@@ -91,6 +93,7 @@ export async function artifactComplete(prompt: unknown): Promise<string> {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new LLMError(j.error || `LLM ${r.status}`, r.status);
+  window.dispatchEvent(new Event("synchro:usage"));
   return String(j.text ?? "");
 }
 

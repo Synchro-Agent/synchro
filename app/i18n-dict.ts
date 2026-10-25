@@ -989,3 +989,33 @@ Object.assign(VI2EN, {
   "Tệp không còn nữa (tệp được giữ 30 ngày).": "This file is no longer available (files are kept for 30 days).",
   "Không lưu được cài đặt.": "Couldn't save the setting.", "Không kết nối được máy chủ.": "Couldn't reach the server.",
 });
+
+// Mức dùng API (Cài đặt → Usage, Quản trị viên → Usage limits).
+Object.assign(EN2VI, {
+  "Usage": "Mức dùng", "Usage limits": "Giới hạn sử dụng",
+  "Synchro uses AI models through their APIs, so usage is measured in real API cost: the tokens each model reads and writes, at that model's price.": "Synchro dùng model AI qua API, nên mức dùng được tính bằng chi phí API thật: số token mỗi model đọc và viết, nhân với giá của model đó.",
+  "Current session": "Phiên hiện tại", "Weekly · all models": "Hằng tuần · mọi model",
+  "Starts with your first message and lasts 5 hours.": "Bắt đầu từ tin nhắn đầu tiên và kéo dài 5 giờ.", "Resets at the same time every week.": "Đặt lại vào cùng giờ mỗi tuần.",
+  "No limit": "Không giới hạn", "Rate limit reported by the provider for the whole Synchro server. When it runs out, replies wait until it resets.": "Hạn mức do nhà cung cấp báo cho cả máy chủ Synchro. Khi hết, câu trả lời phải chờ tới lúc hạn mức được đặt lại.",
+  "Last 30 days": "30 ngày qua", "API cost": "Chi phí API", "Input tokens": "Token đầu vào", "Output tokens": "Token đầu ra", "Read from cache": "Đọc từ cache",
+  "Daily cost": "Chi phí theo ngày", "Hover a day for details": "Rê chuột vào một ngày để xem chi tiết", "30 days ago": "30 ngày trước", "Today": "Hôm nay",
+  "By model": "Theo model", "By feature": "Theo tính năng", "No usage yet. Start a chat and it shows up here.": "Chưa có mức dùng nào. Bắt đầu một cuộc trò chuyện và số liệu sẽ hiện ở đây.",
+  "AI-powered artifacts": "Artifact dùng AI", "Memory and titles": "Bộ nhớ và tiêu đề", "API key tests": "Thử khóa API",
+  "Cost is estimated from each provider's list price, including cache reads and writes. Your provider's invoice is the final amount.": "Chi phí được ước tính theo giá niêm yết của từng nhà cung cấp, gồm cả đọc và ghi cache. Hóa đơn của nhà cung cấp là số tiền cuối cùng.",
+  "Administrators can change limits and prices in": "Quản trị viên đổi hạn mức và bảng giá ở", "Administrator → Usage limits": "Quản trị viên → Giới hạn sử dụng",
+  "Synchro uses models through their APIs. Usage is the real API cost of each call, so you can cap how much each person spends.": "Synchro dùng model qua API. Mức dùng là chi phí API thật của mỗi lần gọi, nên bạn đặt được hạn mức chi tiêu cho từng người.",
+  "Default limits": "Hạn mức mặc định", "API cost each person can use. Leave empty for no limit. When a limit is reached, chats pause until it resets.": "Chi phí API mỗi người được dùng. Để trống là không giới hạn. Khi chạm hạn mức, chat tạm dừng tới khi được đặt lại.",
+  "Per session (5 hours)": "Mỗi phiên (5 giờ)", "Starts with a person's first message.": "Bắt đầu từ tin nhắn đầu tiên của người đó.", "Per week": "Mỗi tuần",
+  "Apply to administrators": "Áp dụng cho quản trị viên", "Off: administrators have no limit unless you set one for them below.": "Tắt: quản trị viên không bị giới hạn, trừ khi bạn đặt riêng bên dưới.",
+  "People": "Mọi người", "Cost in the last 30 days and limits for each account. A custom limit replaces the default.": "Chi phí 30 ngày qua và hạn mức của từng tài khoản. Hạn mức riêng thay cho hạn mức mặc định.",
+  "30 days": "30 ngày", "Session": "Phiên", "Week": "Tuần", "Use default limits": "Dùng hạn mức mặc định",
+  "Model prices": "Bảng giá model", "USD per 1 million tokens, used to turn tokens into cost. Claude prices are official; others are estimates you should check against each provider's pricing page.": "USD cho mỗi 1 triệu token, dùng để quy token ra chi phí. Giá Claude là giá chính thức; các hãng khác là giá ước tính, bạn nên đối chiếu với trang giá của từng hãng.",
+  "Model": "Model", "Input": "Đầu vào", "Output": "Đầu ra", "Cache read": "Đọc cache", "Official": "Chính thức", "Custom": "Tùy chỉnh", "Estimate": "Ước tính", "Reset price": "Đặt lại giá",
+  "Session limit saved": "Đã lưu hạn mức phiên", "Weekly limit saved": "Đã lưu hạn mức tuần", "Limits now apply to administrators": "Hạn mức giờ áp dụng cả cho quản trị viên",
+  "Administrators have no limit": "Quản trị viên không bị giới hạn", "Limit saved": "Đã lưu hạn mức", "Using default limits": "Đang dùng hạn mức mặc định", "Price saved": "Đã lưu giá", "Price reset": "Đã đặt lại giá",
+});
+Object.assign(VI2EN, {
+  "Ngữ cảnh phiên chat": "Session context",
+  "Synchro tính chi phí từ số token thật mà nhà cung cấp trả về sau mỗi lần gọi model.": "Synchro calculates cost from the real token counts the provider returns after every model call.",
+});
+EN2VI["Usage limits"] = "Giới hạn sử dụng";

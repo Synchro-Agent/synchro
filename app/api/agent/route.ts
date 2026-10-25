@@ -5,6 +5,7 @@ import { catalog, mainModels, pickDefault, resolveModel } from "../../providers"
 import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
 import { exec, sdir, wsAllowed } from "../../workspace";
+import { overLimit, withUsage } from "../../usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,12 +29,15 @@ export async function POST(req: Request) {
   const target = await resolveModel(model);
   if (!target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), target.kind) : undefined;
+  const over = overLimit(c.user);
+  if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
 
   const enc = new TextEncoder();
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort());
   const stream = new ReadableStream({
-    async start(ctl) {
+    // Mọi lời gọi model của lượt này được tính vào mức dùng của tài khoản (Synchro Code).
+    start: (ctl) => withUsage(c.user.id, "code", async () => {
       const emit = (e: AgentEvent) => { try { ctl.enqueue(enc.encode(JSON.stringify(e) + "\n")); } catch {} };
       // Giữ kết nối qua proxy khi một lệnh chạy lâu.
       const ping = setInterval(() => { try { ctl.enqueue(enc.encode("\n")); } catch {} }, 15_000);
@@ -48,8 +52,8 @@ export async function POST(req: Request) {
         const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
         // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
         const adapter = target.kind === "mock" ? mockAgent()
-          : target.kind === "anthropic" ? anthropicAgent({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
-          : (target.kind === "openai" ? responsesAgent : openaiAgent)({ key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: target.kind, effort });
+          : target.kind === "anthropic" ? anthropicAgent({ provider: target.provider, key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
+          : (target.kind === "openai" ? responsesAgent : openaiAgent)({ provider: target.provider, key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: target.kind, effort });
         const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal });
         if (out.skills.length) recordUse(c.user.id, out.skills);
         emit({ t: "done", text: out.text, skills: out.skills });
@@ -59,7 +63,7 @@ export async function POST(req: Request) {
         clearInterval(ping);
         try { ctl.close(); } catch {}
       }
-    },
+    }),
     cancel() { ac.abort(); },
   });
   return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" } });

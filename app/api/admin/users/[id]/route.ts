@@ -4,6 +4,7 @@ import { removeUserConnectors } from "../../../../connectors";
 import { removeUserCaps } from "../../../../caps";
 import { removeUserOutputs } from "../../../../outputs";
 import { removeUserArtifacts } from "../../../../artifactstore";
+import { removeUserUsage } from "../../../../usage";
 import { destroyWorkspace } from "../../../../workspace";
 
 export const runtime = "nodejs";
@@ -40,6 +41,7 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   removeUserCaps(id);
   removeUserOutputs(id);
   removeUserArtifacts(id);
+  removeUserUsage(id);
   await destroyWorkspace(id);
   return Response.json({ ok: true });
 });

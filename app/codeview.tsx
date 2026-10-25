@@ -7,7 +7,7 @@ import { Markdown, fileNameFor, type DevBlock } from "./md";
 import { callLLM, getActiveEffort, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
 import { ls } from "./userscope";
 import { tr } from "./i18n";
-import { usePref } from "./store";
+import { usePref, useApp } from "./store";
 import { redact, unredact, analyzePaste, SLASH, balanceBraces, type Pill } from "./devtools";
 import { useDev, type Panel } from "./devstore";
 import { countTokens, loadEncoder, pickRelevantTS, runPython, runNode, runServer, nodeNeedsContainer, scrapeDoc, type RunResult } from "./heavy";
@@ -17,7 +17,8 @@ import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc } from "./filemenu";
 import { ingestFile } from "./filestate";
-import { AgentSteps, CtxRing, GitHubButton, StatusLine, TaskCard, type AStep } from "./agentui";
+import { AgentSteps, GitHubButton, StatusLine, TaskCard, type AStep } from "./agentui";
+import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
@@ -169,6 +170,7 @@ async function readEntry(en: FileSystemEntry, base: string, out: { path: string;
 }
 
 export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; modelPicker: React.ReactNode; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void }) {
+  const app = useApp();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [sel, setSel] = useState<Record<number, number>>({});
   const [ctx, setCtx] = useState<Ctx[]>([]);
@@ -392,7 +394,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
             openPane(e.open);
             if (e.open === "terminal") showTerm(e.tab ?? "log");
             if (e.open === "files" && e.path) showFile(e.path);
-          } else if (e.t === "done") { if (e.skills.length) patchNode(id, (n) => ({ ...n, skills: e.skills })); }
+          } else if (e.t === "done") { if (e.skills.length) patchNode(id, (n) => ({ ...n, skills: e.skills })); refreshUsage(); }
           else if (e.t === "error") patchNode(id, (n) => addText(n, `⚠️ ${e.error}`));
         }, ac.signal);
       } catch (e) {
@@ -1047,11 +1049,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               {/* Bộ chọn model + mức nỗ lực dùng chung với khung chat thường (khóa model quản trị viên chưa cho phép). */}
               <div className="cv-model" data-notr>{modelPicker}</div>
               <div style={{ position: "relative" }}>
-                <CtxRing pct={pct} active={menu === "ctx"} title={`Ngữ cảnh: ${fmtK(total)} / ${fmtK(MAX_TOK)} token (${Math.round(pct)}%)`} onClick={() => setMenu(menu === "ctx" ? "" : "ctx")} />
-                <Menu open={menu === "ctx"} className="cv-ctx" style={{ bottom: 34, right: -6, width: 360 }}>
-                  <div className="cv-mh">Ngữ cảnh phiên chat</div>
-                  {ctxPanel}
-                </Menu>
+                {/* Mức dùng API (giới hạn phiên, tuần, hạn mức nhà cung cấp) kèm ngữ cảnh của phiên code này. */}
+                <UsageRing model={model} onDetails={() => app.openSettings?.("Usage")} extra={<div className="us-ctx"><div className="us-sub">Ngữ cảnh phiên chat · {Math.round(pct)}%</div>{ctxPanel}</div>} />
               </div>
             </div>
           </div>

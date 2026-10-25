@@ -6,6 +6,7 @@ import { catalog, mainModels, pickDefault, resolveModel, type Target } from "../
 import { ConnectorSession, connectorsPrompt } from "../../connectors";
 import { randomToken } from "../../mcpauth";
 import { capsState, skillsOn } from "../../caps";
+import { overLimit, usageScope } from "../../usage";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "../../coderun";
 import { saveOutputs, type OutFile } from "../../outputs";
 import { ARTIFACT_RULES, VIZ_RULES } from "../../artifacts";
@@ -211,6 +212,14 @@ function artifactMessages(raw: unknown): { role: "user" | "assistant"; content: 
 export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  // Mọi lời gọi model trong yêu cầu này được tính vào mức dùng của tài khoản; hết hạn mức thì dừng trước khi gọi.
+  const over = overLimit(c.user);
+  if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
+  const scope = { uid: c.user.id, feature: "chat" };
+  return usageScope.run(scope, () => post(req, c, scope));
+}
+
+async function post(req: Request, c: NonNullable<ReturnType<typeof current>>, scope: { feature: string }) {
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
   const body = await req.json();
   // Tiếp tục lượt chat đang chờ duyệt công cụ: { resume, decisions: { id lượt gọi: "allow" | "always" | "deny" } }.
@@ -237,6 +246,7 @@ export async function POST(req: Request) {
     }
   }
   const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted, conv } = body;
+  scope.feature = feature === "artifact" ? "artifact" : feature === "code" ? "code" : skills ? "chat" : "internal";
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });

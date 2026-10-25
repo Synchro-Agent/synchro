@@ -112,19 +112,19 @@ export function ChartView({ spec }: { spec: ChartSpec }) {
             : `M${p(a, R)}A${R},${R} 0 ${large} 1 ${p(a2, R)}${r0 ? `L${p(a2, r0)}A${r0},${r0} 0 ${large} 0 ${p(a, r0)}` : `L${cx},${cy}`}Z`;
           const mid = (a + a2) / 2;
           a = a2;
-          return <path key={k} d={d} className={`cv-s${k % SLOTS}`} fill="currentColor" fillRule="evenodd" stroke="var(--cv-surface)" strokeWidth={2}
+          return <path key={k} d={d} className={`vz-s${k % SLOTS}`} fill="currentColor" fillRule="evenodd" stroke="var(--vz-surface)" strokeWidth={2}
             onMouseMove={() => setTip({ x: cx + R * 0.7 * Math.cos(mid), y: cy + R * 0.7 * Math.sin(mid), title: r.label, rows: [{ i: k, name: s, v: r.v }] })} onMouseLeave={() => setTip(null)} />;
         })}
-        {spec.type === "donut" && <text x={cx} y={cy + 5} textAnchor="middle" className="cv-hero">{compact(total)}{u}</text>}
+        {spec.type === "donut" && <text x={cx} y={cy + 5} textAnchor="middle" className="vz-hero">{compact(total)}{u}</text>}
         <g transform={`translate(${cx + R + 24},${cy - rows.length * 11})`}>
-          {rows.map((r, k) => <g key={k} transform={`translate(0,${k * 22})`}><rect width={10} height={10} rx={2} y={-1} className={`cv-s${k % SLOTS}`} fill="currentColor" /><text x={16} y={8} className="cv-lbl">{r.label.slice(0, 24)} · {Math.round((r.v / total) * 100)}%</text></g>)}
+          {rows.map((r, k) => <g key={k} transform={`translate(0,${k * 22})`}><rect width={10} height={10} rx={2} y={-1} className={`vz-s${k % SLOTS}`} fill="currentColor" /><text x={16} y={8} className="vz-lbl">{r.label.slice(0, 24)} · {Math.round((r.v / total) * 100)}%</text></g>)}
         </g>
       </>
     );
   } else {
-    const grid = dom.map((t) => <g key={t}><line x1={padL} x2={padL + iw} y1={sy(t)} y2={sy(t)} className="cv-grid" /><text x={padL - 8} y={sy(t) + 4} textAnchor="end" className="cv-tick">{compact(t)}</text></g>);
-    const xt = xNum ? xDom.map((t) => <text key={t} x={padL + ((t - xDom[0]) / (xDom[xDom.length - 1] - xDom[0] || 1)) * iw} y={H - padB + 18} textAnchor="middle" className="cv-tick">{compact(t)}</text>)
-      : xs.map((t, i) => (i % every ? null : <text key={i} x={sx(i)} y={H - padB + 18} textAnchor="middle" className="cv-tick">{t.length > 12 ? t.slice(0, 11) + "…" : t}</text>));
+    const grid = dom.map((t) => <g key={t}><line x1={padL} x2={padL + iw} y1={sy(t)} y2={sy(t)} className="vz-grid" /><text x={padL - 8} y={sy(t) + 4} textAnchor="end" className="vz-tick">{compact(t)}</text></g>);
+    const xt = xNum ? xDom.map((t) => <text key={t} x={padL + ((t - xDom[0]) / (xDom[xDom.length - 1] - xDom[0] || 1)) * iw} y={H - padB + 18} textAnchor="middle" className="vz-tick">{compact(t)}</text>)
+      : xs.map((t, i) => (i % every ? null : <text key={i} x={sx(i)} y={H - padB + 18} textAnchor="middle" className="vz-tick">{t.length > 12 ? t.slice(0, 11) + "…" : t}</text>));
     let marks: React.ReactNode = null;
     if (spec.type === "bar") {
       const groups = spec.stacked ? 1 : series.length;
@@ -141,11 +141,11 @@ export function ChartView({ spec }: { spec: ChartSpec }) {
           // Bo 4px ở đầu dữ liệu, vuông ở gốc.
           const d = up ? `M${x},${top + h}V${top + rr}Q${x},${top} ${x + rr},${top}H${x + bw - rr}Q${x + bw},${top} ${x + bw},${top + rr}V${top + h}Z`
             : `M${x},${top}V${top + h - rr}Q${x},${top + h} ${x + rr},${top + h}H${x + bw - rr}Q${x + bw},${top + h} ${x + bw},${top + h - rr}V${top}Z`;
-          return <path key={s.i} d={d} className={`cv-s${s.i % SLOTS}`} fill="currentColor" />;
+          return <path key={s.i} d={d} className={`vz-s${s.i % SLOTS}`} fill="currentColor" />;
         })}</g>;
       });
     } else if (spec.type === "scatter") {
-      marks = series.map((s) => spec.data.map((r, i) => { const v = num(r[s.name]); return v === null ? null : <circle key={`${s.i}-${i}`} cx={sx(i)} cy={sy(v)} r={4.5} className={`cv-s${s.i % SLOTS}`} fill="currentColor" stroke="var(--cv-surface)" strokeWidth={2} onMouseMove={() => rowTip(i, sx(i), sy(v))} onMouseLeave={() => setTip(null)} />; }));
+      marks = series.map((s) => spec.data.map((r, i) => { const v = num(r[s.name]); return v === null ? null : <circle key={`${s.i}-${i}`} cx={sx(i)} cy={sy(v)} r={4.5} className={`vz-s${s.i % SLOTS}`} fill="currentColor" stroke="var(--vz-surface)" strokeWidth={2} onMouseMove={() => rowTip(i, sx(i), sy(v))} onMouseLeave={() => setTip(null)} />; }));
     } else {
       const acc = spec.data.map(() => 0);
       marks = series.map((s) => {
@@ -155,10 +155,10 @@ export function ChartView({ spec }: { spec: ChartSpec }) {
         const line = ok.map((p, k) => `${k ? "L" : "M"}${p[0]},${p[1]}`).join("");
         const area = spec.type === "area" ? `${line}${[...ok].reverse().map((p) => `L${p[0]},${p[2]}`).join("")}Z` : "";
         const last = ok[ok.length - 1];
-        return <g key={s.i} className={`cv-s${s.i % SLOTS}`}>
+        return <g key={s.i} className={`vz-s${s.i % SLOTS}`}>
           {area && <path d={area} fill="currentColor" opacity={0.12} />}
           <path d={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx={last[0]} cy={last[1]} r={4} fill="currentColor" stroke="var(--cv-surface)" strokeWidth={2} />
+          <circle cx={last[0]} cy={last[1]} r={4} fill="currentColor" stroke="var(--vz-surface)" strokeWidth={2} />
         </g>;
       });
     }
@@ -168,30 +168,30 @@ export function ChartView({ spec }: { spec: ChartSpec }) {
     const tipI = tip ? xs.indexOf(tip.title) : -1;
     plot = <>
       {grid}
-      <line x1={padL} x2={padL + iw} y1={sy(Math.max(y0, Math.min(0, y1)))} y2={sy(Math.max(y0, Math.min(0, y1)))} className="cv-axis" />
-      {(spec.type === "line" || spec.type === "area") && tip && tipI >= 0 && <line x1={sx(tipI)} x2={sx(tipI)} y1={padT} y2={padT + ih} className="cv-cross" />}
+      <line x1={padL} x2={padL + iw} y1={sy(Math.max(y0, Math.min(0, y1)))} y2={sy(Math.max(y0, Math.min(0, y1)))} className="vz-axis" />
+      {(spec.type === "line" || spec.type === "area") && tip && tipI >= 0 && <line x1={sx(tipI)} x2={sx(tipI)} y1={padT} y2={padT + ih} className="vz-cross" />}
       {marks}{xt}{hits}
     </>;
   }
   return (
-    <figure className="cv" ref={ref}>
-      <figcaption className="cv-head">
-        <span className="cv-title">{spec.title ?? spec.y.join(", ")}{spec.unit && <em> ({spec.unit})</em>}</span>
-        <button className="cv-btn" onClick={() => setTable(!table)}>{tr(table ? "Xem biểu đồ" : "Xem bảng")}</button>
+    <figure className="vz" ref={ref}>
+      <figcaption className="vz-head">
+        <span className="vz-title">{spec.title ?? spec.y.join(", ")}{spec.unit && <em> ({spec.unit})</em>}</span>
+        <button className="vz-btn" onClick={() => setTable(!table)}>{tr(table ? "Xem biểu đồ" : "Xem bảng")}</button>
       </figcaption>
-      {!pie && spec.y.length > 1 && <div className="cv-legend">{spec.y.map((name, i) => (
+      {!pie && spec.y.length > 1 && <div className="vz-legend">{spec.y.map((name, i) => (
         <button key={name} className={hidden.has(i) ? "off" : ""} onClick={() => setHidden((h) => { const n2 = new Set(h); if (n2.has(i)) n2.delete(i); else if (n2.size < spec.y.length - 1) n2.add(i); return n2; })}>
-          <i className={`cv-s${i % SLOTS}`} />{name}
+          <i className={`vz-s${i % SLOTS}`} />{name}
         </button>
       ))}</div>}
       {table ? (
-        <div className="md-tbl cv-table"><table><thead><tr><th>{spec.x}</th>{spec.y.map((y) => <th key={y}>{y}</th>)}</tr></thead>
+        <div className="md-tbl vz-table"><table><thead><tr><th>{spec.x}</th>{spec.y.map((y) => <th key={y}>{y}</th>)}</tr></thead>
           <tbody>{spec.data.map((r, i) => <tr key={i}><td>{String(r[spec.x] ?? "")}</td>{spec.y.map((y) => <td key={y}>{full(num(r[y]))}</td>)}</tr>)}</tbody></table></div>
       ) : (
-        <div className="cv-plot">
+        <div className="vz-plot">
           <svg width={w} height={H} role="img" aria-label={spec.title ?? "chart"}>{plot}</svg>
-          {tip && <div className="cv-tip" style={{ left: Math.min(Math.max(tip.x, 70), w - 70), top: Math.max(tip.y - 12, 0) }}>
-            <b>{tip.title}</b>{tip.rows.map((r) => <span key={r.i}><i className={`cv-s${(pie ? r.i : r.i) % SLOTS}`} />{r.name}<em>{full(r.v)}{u}</em></span>)}
+          {tip && <div className="vz-tip" style={{ left: Math.min(Math.max(tip.x, 70), w - 70), top: Math.max(tip.y - 12, 0) }}>
+            <b>{tip.title}</b>{tip.rows.map((r) => <span key={r.i}><i className={`vz-s${(pie ? r.i : r.i) % SLOTS}`} />{r.name}<em>{full(r.v)}{u}</em></span>)}
           </div>}
         </div>
       )}

@@ -1,6 +1,7 @@
 import { handle, requireAdmin, sameOrigin } from "../../../../authstore";
 import { chatOnce, HttpErr } from "../../../../llmcall";
 import { resolveModel } from "../../../../providers";
+import { withUsage } from "../../../../usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,14 +9,14 @@ export const dynamic = "force-dynamic";
 // Gửi thử một câu tới model để kiểm tra khóa, địa chỉ và mã model, trả về câu trả lời và thời gian phản hồi.
 export const POST = handle(async (req) => {
   sameOrigin(req);
-  requireAdmin(req);
+  const { user } = requireAdmin(req);
   const { model, prompt } = await req.json();
   const t = typeof model === "string" ? await resolveModel(model) : null;
   if (!t) return Response.json({ error: "Không tìm thấy model này. Hãy làm mới danh sách model." }, { status: 400 });
   const q = String(prompt || "Chào bạn! Hãy giới thiệu ngắn gọn bạn là model nào trong một câu.").slice(0, 2000);
   const t0 = Date.now();
   try {
-    const text = await chatOnce(t, "", [{ role: "user", content: q }], 300, AbortSignal.timeout(60_000));
+    const text = await withUsage(user.id, "test", () => chatOnce(t, "", [{ role: "user", content: q }], 300, AbortSignal.timeout(60_000)));
     return Response.json({ text: text || "(Model không trả lời nội dung nào)", ms: Date.now() - t0 });
   } catch (e) {
     const status = e instanceof HttpErr ? e.status : 502;
