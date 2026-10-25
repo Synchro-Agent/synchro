@@ -237,7 +237,7 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
 const STUDIO_TASK: Record<Studio, string> = {
   design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG).",
-  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML trình chiếu được, có điều hướng giữa các slide; khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
+  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF); khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
   docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code.",
 };
 const STUDIO_RULES = (s: Studio, plugins: string[], n: number) => `<studio name="${s}">

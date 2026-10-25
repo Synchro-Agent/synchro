@@ -3194,3 +3194,63 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .pl-tip svg{flex:none;margin-top:2px;color:var(--text-3)}
 .modal.pl-small{max-width:520px}
 @media (max-width:640px){.pl-top{gap:8px}.pl-search{order:5;width:100%}.pl-date{display:none}.pl-hero>svg{display:none}}
+
+/* ---------------------------------------------------------------- xem trước sản phẩm: tải về nhiều định dạng */
+.art-dl{position:relative}
+.menu.art-dl-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:250px;padding:6px;z-index:40}
+.art-dl-h{font-size:12px;color:var(--text-3);padding:6px 10px 4px}
+.art-dl-menu .menu-item,.prod-menu .menu-item{gap:10px;align-items:center;padding:8px 10px;height:auto}
+.art-dl-t{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;text-align:left}
+.art-dl-t b{font-weight:500;font-size:13.5px;color:var(--text);max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.art-dl-t em{font-style:normal;font-size:12px;color:var(--text-3)}
+html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--card) 94%,transparent)}
+
+/* Bản trình bày: khung 16:9, thanh điều khiển, ảnh thu nhỏ, trình chiếu toàn màn hình. */
+.art-body.is-deck{background:var(--bg-2,var(--hover))}
+.deck{display:flex;flex-direction:column;gap:10px;padding:14px;height:100%;box-sizing:border-box;overflow:auto}
+.deck-stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;flex:none;box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 28px rgba(0,0,0,.12)}
+.art-panel.full .deck-stage{width:min(100%,calc((100vh - 270px) * 16 / 9));margin:0 auto}
+.deck-frame{width:100%;height:100%;border:0;display:block;background:#fff}
+.deck-stage:fullscreen{border-radius:0;aspect-ratio:auto;width:100vw;height:100vh;display:grid;place-items:center;box-shadow:none}
+.deck-stage:fullscreen .deck-frame{width:min(100vw,177.78vh);height:min(56.25vw,100vh)}
+.deck-hud{position:absolute;right:18px;bottom:14px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-variant-numeric:tabular-nums;pointer-events:none}
+.deck-bar{display:flex;align-items:center;gap:4px;flex:none}
+.art-panel.full .deck-bar,.art-panel.full .deck-thumbs{width:min(100%,calc((100vh - 270px) * 16 / 9));margin:0 auto}
+.deck-count{font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums;min-width:86px;text-align:center}
+.deck-play{height:30px;font-size:13px;gap:6px;display:inline-flex;align-items:center}
+.deck-thumbs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;flex:none;scrollbar-width:thin}
+.deck-th{flex:none;display:flex;flex-direction:column;gap:4px;border:0;background:none;padding:0;cursor:pointer;text-align:left}
+.deck-th-in{display:block;width:132px;height:74.25px;border-radius:6px;overflow:hidden;position:relative;background:#fff;box-shadow:0 0 0 .5px var(--border-strong);transition:box-shadow .15s,transform .15s var(--ease)}
+.deck-th:hover .deck-th-in{transform:translateY(-1px)}
+.deck-th.on .deck-th-in{box-shadow:0 0 0 2px var(--text)}
+.deck-th-frame{position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform:scale(.103125);transform-origin:0 0;pointer-events:none}
+.deck-th em{font-style:normal;font-size:11px;color:var(--text-3);padding-left:2px}
+.deck-th.on em{color:var(--text)}
+
+/* Xem trước tệp do code tạo. */
+.fp-body{display:flex;flex-direction:column}
+.fp-frame{flex:1;width:100%;height:100%;border:0;display:block;background:#fff}
+.fp-img{flex:1;display:grid;place-items:center;padding:16px;box-sizing:border-box;overflow:auto;background:var(--bg-2,var(--hover))}
+.fp-img img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.1);background:#fff}
+.fp-media{flex:1;display:grid;place-items:center;padding:20px}.fp-media video{max-width:100%;max-height:100%;border-radius:8px}
+.fp-none{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--text-2);font-size:14px}
+.fp-none b{color:var(--text);font-weight:500}
+.fp-dl{height:30px;font-size:13px;gap:6px;display:inline-flex;align-items:center;margin-right:4px;text-decoration:none;color:inherit}
+.art-head .out-badge{width:30px;height:30px;font-size:8.5px;border-radius:7px}
+.out-card{cursor:pointer}
+.out-card.on{border-color:var(--text-2);box-shadow:0 0 0 .5px var(--text-2)}
+.out-dl{text-decoration:none}
+.out-dl:hover{background:var(--active,var(--hover))!important}
+.outs-imgs button{border:0;padding:0;background:none;cursor:zoom-in;border-radius:10px}
+
+/* Sản phẩm của đoạn chat: nút trên đầu trang và danh sách chuyển nhanh trong khung xem trước. */
+.prod-btn{display:inline-flex;align-items:center;gap:6px;margin-right:6px}
+.prod-n{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--hover);font-size:11px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.prod-sw{position:relative;flex:none}
+.prod-sw-b{width:auto!important;padding:0 7px;gap:5px;display:inline-flex;align-items:center;font-size:12px;color:var(--text-2)}
+.menu.prod-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:280px;max-height:60vh;overflow:auto;padding:6px;z-index:40}
+.prod-it.on{background:var(--hover)}
+.out-badge.sm{width:28px;height:28px;font-size:8px;border-radius:6px}
+.prod-ic{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;background:var(--hover);color:var(--text-2);font-size:11px;flex:none}
+@media (max-width:600px){.deck-th-in{width:104px;height:58.5px}.deck-th-frame{transform:scale(.08125)}.prod-btn{display:none}}
+.fp-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--bg-2,var(--hover));color:var(--text-3);font-size:13px}.fp-loading em{font-style:normal}

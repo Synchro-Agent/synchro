@@ -1,3 +1,7 @@
 Thư viện chạy bên trong artifact (khung iframe cô lập), tải từ npm, giữ nguyên bản phát hành:
 react 18.3.1, react-dom 18.3.1 (MIT) · @babel/standalone 7.29.11 (MIT) · recharts 2.15.4 (MIT) · prop-types 15.8.1 (MIT)
 @tailwindcss/browser 4.3.3 (MIT) · lucide-react 0.460.0 (ISC)
+
+Thư viện cho khung xem trước tệp (Word, Excel, PowerPoint) và xuất ảnh, cũng chạy trong khung cô lập:
+jszip 3.10.1 (MIT, chọn MIT trong giấy phép kép MIT / GPL-3.0) · mammoth 1.8.0 (BSD-2-Clause) · xlsx 0.18.5 (Apache-2.0) · html-to-image 1.11.11 (MIT)
+pdfjs-dist 3.11.174 (Apache-2.0), bản legacy: xem trước PDF

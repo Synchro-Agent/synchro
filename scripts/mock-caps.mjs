@@ -542,24 +542,17 @@ const PREFER = {
 const DECK = `<!doctype html>
 <html lang="vi"><head><meta charset="utf-8"><title>Synchro 2026</title>
 <style>
-  *{box-sizing:border-box}body{margin:0;height:100vh;overflow:hidden;font-family:system-ui,sans-serif;background:#0f172a;color:#f8fafc}
-  .s{position:absolute;inset:0;padding:8vh 9vw;display:flex;flex-direction:column;justify-content:center;opacity:0;transform:translateY(16px);transition:.5s cubic-bezier(.16,1,.3,1)}
-  .s.on{opacity:1;transform:none}h1{font-size:clamp(34px,6vw,72px);margin:0 0 12px;letter-spacing:-.02em}h2{font-size:clamp(26px,4vw,48px);margin:0 0 24px}
-  p,li{font-size:clamp(16px,2vw,24px);color:#cbd5e1;line-height:1.5}.k{color:#f97316}.big{font-size:clamp(48px,9vw,120px);font-weight:700;color:#f97316}
-  .bar{position:fixed;left:0;bottom:0;height:4px;background:#f97316;transition:width .4s}.n{position:fixed;right:24px;bottom:18px;color:#64748b;font-size:14px}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.card{background:#1e293b;border-radius:16px;padding:22px}.card b{display:block;font-size:22px;margin-bottom:6px}
+  *{box-sizing:border-box}html,body{margin:0;background:#0f172a;font-family:system-ui,sans-serif;color:#f8fafc}
+  .slide{width:100vw;height:100vh;padding:8vh 9vw;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(120% 90% at 85% 0%,#1e293b 0%,#0f172a 60%)}
+  h1{font-size:6vw;margin:0 0 1.5vh;letter-spacing:-.02em;line-height:1.05}h2{font-size:4vw;margin:0 0 3vh}
+  p,li{font-size:2vw;color:#cbd5e1;line-height:1.5}.k{color:#f97316;font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:1.4vw}.big{font-size:11vw;font-weight:700;color:#f97316;line-height:1}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2vw}.card{background:#1e293b;border-radius:1.4vw;padding:2.2vw}.card b{display:block;font-size:2.2vw;margin-bottom:.6vw}.card p{font-size:1.5vw;margin:0}
 </style></head><body>
-<section class="s"><p class="k">Báo cáo quý III</p><h1>Synchro tăng trưởng<br>nhờ AI có kỷ luật</h1><p>Ba con số, một câu chuyện, một quyết định.</p></section>
-<section class="s"><h2>Người dùng hoạt động</h2><div class="big">+38%</div><p>so với quý trước, chủ yếu từ Artifacts và Synchro Code.</p></section>
-<section class="s"><h2>Ba động lực</h2><div class="grid"><div class="card"><b>Artifacts</b><p>Ứng dụng chạy ngay trong chat.</p></div><div class="card"><b>Plugins</b><p>Thư viện skill cài một lần.</p></div><div class="card"><b>Mức dùng</b><p>Chi phí API minh bạch.</p></div></div></section>
-<section class="s"><h2>Đề xuất</h2><ul><li>Mở Plugins cho mọi nhóm</li><li>Đặt hạn mức theo phòng ban</li><li>Đo hiệu quả theo tuần</li></ul></section>
-<div class="bar"></div><div class="n"></div>
-<script>
-  const S=[...document.querySelectorAll(".s")];let i=0;
-  const go=(k)=>{i=Math.max(0,Math.min(S.length-1,k));S.forEach((s,j)=>s.classList.toggle("on",j===i));document.querySelector(".bar").style.width=((i+1)/S.length*100)+"%";document.querySelector(".n").textContent=(i+1)+" / "+S.length;};
-  addEventListener("keydown",(e)=>{if(["ArrowRight"," ","PageDown"].includes(e.key))go(i+1);if(["ArrowLeft","PageUp"].includes(e.key))go(i-1);});
-  addEventListener("click",(e)=>go(e.clientX>innerWidth/2?i+1:i-1));go(0);
-</script></body></html>`;
+<section class="slide"><p class="k">Báo cáo quý III</p><h1>Synchro tăng trưởng<br>nhờ AI có kỷ luật</h1><p>Ba con số, một câu chuyện, một quyết định.</p></section>
+<section class="slide"><h2>Người dùng hoạt động</h2><div class="big">+38%</div><p>so với quý trước, chủ yếu từ Artifacts và Synchro Code.</p></section>
+<section class="slide"><h2>Ba động lực</h2><div class="grid"><div class="card"><b>Artifacts</b><p>Ứng dụng chạy ngay trong chat.</p></div><div class="card"><b>Plugins</b><p>Thư viện skill cài một lần.</p></div><div class="card"><b>Mức dùng</b><p>Chi phí API minh bạch.</p></div></div></section>
+<section class="slide"><h2>Đề xuất</h2><ul><li>Mở Plugins cho mọi nhóm</li><li>Đặt hạn mức theo phòng ban</li><li>Đo hiệu quả theo tuần</li></ul></section>
+</body></html>`;
 const DOC = `# Đề xuất: Triển khai Plugins cho toàn công ty
 
 **Tóm tắt.** Cài sẵn ba thư viện (Thiết kế, Trình bày, Tài liệu) cho mọi người để sản phẩm làm bằng Synchro đạt chuẩn ngay lần đầu.
@@ -600,7 +593,7 @@ function libStep(S, M, t, toolNames) {
 }
 // Sản phẩm mẫu theo loại thư viện: Trình bày → bản trình chiếu, Tài liệu → tài liệu, Thiết kế → logo hoặc landing page.
 function product(st, used, q) {
-  if (st === "slides") return { text: `${used}\n\n${art("bao-cao-quy-3", "text/html", "Báo cáo quý III", DECK)}\n\nQuyết định chính: một ý mỗi slide, số liệu lớn làm điểm nhấn, nền tối tương phản cao. Bấm hoặc dùng phím mũi tên để chuyển slide. Muốn mình xuất ra PowerPoint không?` };
+  if (st === "slides") return { text: `${used}\n\n${art("bao-cao-quy-3", "text/html", "Báo cáo quý III", DECK)}\n\nQuyết định chính: một ý mỗi slide, số liệu lớn làm điểm nhấn, nền tối tương phản cao. Xem từng slide, trình chiếu toàn màn hình hoặc tải PDF / PowerPoint ngay trong khung xem trước.` };
   if (st === "docs") return { text: `${used}\n\n${art("de-xuat-plugins", "text/markdown", "Đề xuất triển khai Plugins", DOC)}\n\nQuyết định chính: tóm tắt một câu ở đầu, bảng phân công rõ người chịu trách nhiệm, kết thúc bằng hạn chót. Cần bản Word hoặc PDF thì nói mình nhé.` };
   if (st === "design" && /\b(logo|svg|bieu tuong)\b/.test(norm(q))) return { text: `${used}\n\n${art("logo", "image/svg+xml", "Logo Synchro", LOGO)}\n\nQuyết định chính: hai nét cong lồng nhau thể hiện "đồng bộ", gradient xanh sang tím, góc bo lớn để dùng tốt làm icon ứng dụng.` };
   if (st === "design" && !/\b(hieu ung|chuyen dong|animation|muot)\b/.test(norm(q))) return { text: `${used}\n\n${art("landing-cafe", "text/html", "Trang giới thiệu Lumen Coffee", LANDING)}\n\nQuyết định chính: font serif ấm cho thương hiệu cà phê, bảng màu kem và nâu, nhiều khoảng trắng; bố cục hai cột co về một cột trên điện thoại. Muốn đổi tông màu hay thêm mục thực đơn không?` };

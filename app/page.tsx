@@ -29,6 +29,8 @@ import { ApprovalCard } from "./connectorsui";
 import { loadCaps, useCaps } from "./capsclient";
 import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
 import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
+import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
+import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
 import { CustomizePage, useStudios, type CzTab } from "./pluginsui";
 import { ConnectorsPanel } from "./connectorsui";
@@ -581,6 +583,8 @@ export default function Home() {
   // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
   const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
   const [artFull, setArtFull] = useState(false);
+  // Tệp do code tạo đang xem trước (cùng khung bên cạnh với artifact; mở cái này thì đóng cái kia).
+  const [fileSel, setFileSel] = useState<{ chat: number; file: OutFile } | null>(null);
   const artDismissed = useRef("");
   const arts = (() => {
     const map = new Map<string, (ArtBlock & { msg: number })[]>();
@@ -607,9 +611,19 @@ export default function Home() {
     if (!chat || !liveArt) return;
     const key = `${chat.id}-${lastIdx}-${liveArt.ident}`;
     if (artDismissed.current === key) return;
-    if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true });
+    if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) { setFileSel(null); setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true }); }
   }, [chat?.id, lastIdx, liveArt?.ident, liveArt?.v]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!artOpen) setArtFull(false); }, [artOpen]);
+  const fileOpen = view === "chat" && !!chat && fileSel?.chat === chat.id && !artOpen;
+  const panelOpen = artOpen || fileOpen;
+  useEffect(() => { if (!panelOpen) setArtFull(false); }, [panelOpen]);
+  const openArt = (s: { chat: number; ident: string; v: number; follow: boolean }) => { setFileSel(null); setArtSel(s); };
+  const openFile = (f: OutFile) => { if (!chat) return; setArtSel(null); setFileSel({ chat: chat.id, file: f }); };
+  // Mọi sản phẩm của đoạn chat (artifact bản mới nhất, tệp code đã tạo), để chuyển nhanh trong khung xem trước.
+  const products: Product[] = !chat ? [] : [
+    ...[...arts.map.entries()].map(([ident, vs]) => { const a = vs[vs.length - 1]; return { key: `a:${ident}`, title: a.title, type: a.type, content: a.content, open: () => openArt({ chat: chat.id, ident, v: vs.length - 1, follow: false }) }; }),
+    ...chat.msgs.flatMap((m) => m.outs ?? []).map((f) => ({ key: `f:${f.id}`, title: f.name, file: f, open: () => openFile(f) })),
+  ];
+  const activeProduct = artOpen && artSel ? `a:${artSel.ident}` : fileOpen && fileSel ? `f:${fileSel.file.id}` : "";
   const closeArt = () => {
     if (chat && liveArt) artDismissed.current = `${chat.id}-${lastIdx}-${liveArt.ident}`;
     setArtSel(null);
@@ -1040,7 +1054,7 @@ export default function Home() {
         </div>
       </aside>
 
-      <main className={`main ${artOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
+      <main className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         {view !== "code" && view !== "speech" && <div className="topbar">
           <div className="left">
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
@@ -1059,6 +1073,7 @@ export default function Home() {
           {(view === "new" || view === "chat") && pill}
           <div className="right">
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
+            {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
         </div>}
@@ -1102,8 +1117,8 @@ export default function Home() {
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
-                        return <ArtifactCard key={k} art={sg.art} version={v + 1} total={total} active={active} onOpen={() => { setArtSel({ chat: chat.id, ident: sg.art.ident, v, follow: false }); }} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} />) : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}{m.outs?.length ? <OutputFiles files={m.outs} /> : null}</div>
+                        return <ArtifactCard key={k} art={sg.art} version={v + 1} total={total} active={active} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} />) : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
@@ -1124,8 +1139,12 @@ export default function Home() {
             {showDown && <button className="scroll-down" onClick={toBottom} aria-label="Cuộn xuống cuối"><I.Chevron size={16} /></button>}
             {artOpen && artVersions && (
               <ArtifactPanel versions={artVersions} index={artIndex} setIndex={(v) => setArtSel({ chat: chat.id, ident: artSel!.ident, v, follow: false })} ai={caps.ai} onClose={closeArt}
-                expanded={artFull} setExpanded={setArtFull} say={say}
+                expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />}
+                onAsk={busy ? undefined : (text) => send(text)}
                 onFix={busy ? undefined : (a, err) => send(`${tr("Artifact")} “${a.title}” ${tr("gặp lỗi")}: ${err}\n${tr("Hãy sửa lỗi này.")}`)} />
+            )}
+            {fileOpen && fileSel && (
+              <FilePanel file={fileSel.file} onClose={() => setFileSel(null)} expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />} />
             )}
             <div className="dock">
               {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (

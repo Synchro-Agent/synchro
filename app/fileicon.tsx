@@ -14,6 +14,9 @@ const COLOR: Record<string, string> = {
   ppt: "#f97316", pptx: "#f97316", json: "#e5b010", css: "#2f5ff5", code: "#ea580c", png: "#555a63", jpg: "#2f8a3e", img: "#ec4899", video: "#2f8a3e",
 };
 
+// Tên loại tệp và cỡ tệp hiện trên thẻ tệp và khung xem trước.
+export const FILE_KIND: Record<string, string> = { docx: "Word", doc: "Word", xlsx: "Excel", xls: "Excel", csv: "CSV", tsv: "TSV", pptx: "PowerPoint", pdf: "PDF", png: "Ảnh", jpg: "Ảnh", jpeg: "Ảnh", gif: "Ảnh", webp: "Ảnh", svg: "SVG", json: "JSON", md: "Markdown", txt: "Văn bản", html: "HTML", zip: "ZIP", mp3: "Âm thanh", wav: "Âm thanh", mp4: "Video" };
+export const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 export function fileKind(name: string) {
   const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
   const kind = Object.keys(MAP).find((k) => MAP[k].includes(ext)) ?? "txt";

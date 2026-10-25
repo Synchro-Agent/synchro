@@ -6,7 +6,8 @@ import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { Markdown } from "./md";
 import { artifactComplete, type OutFile } from "./llm";
-import { fileKind } from "./fileicon";
+import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
+import { Menu } from "./ui";
 import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "./artifacts";
 
 export type ArtVersion = ArtBlock & { at?: number };
@@ -24,29 +25,64 @@ const LIBS: [string, string, string][] = [
   ["lucide-react-0.460.0.min.js", "lucide-react@0.460.0/dist/umd/lucide-react.min.js", "sha384-JEoKym/kMViouWwSkyVNKeAyxFMvD/XeYv4VtG86kNEtGxzuvjSjTqWulOQd6dNY"],
   ["babel-7.29.11.min.js", "@babel/standalone@7.29.11/babel.min.js", "sha384-WLl8kKG54INe3zxB+zrpQr6Z1cgCoBg+ZirrqnCcjzA5sjvtSirQ11bgyU91deI+"],
 ];
+// Thư viện tải khi cần: chụp ảnh PNG của artifact (html-to-image).
+export const H2I: [string, string, string] = ["html-to-image-1.11.11.js", "html-to-image@1.11.11/dist/html-to-image.js", "sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz"];
+export const libUrls = (origin: string, l: [string, string, string]) => [`${origin}${V}${l[0]}`, `https://cdn.jsdelivr.net/npm/${l[1]}`, l[2]];
 const CDNS = "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com";
 const esc = (s: string) => s.replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
 // báo lỗi và chiều cao nội dung về cho Synchro. Chỉ trao đổi qua postMessage với đúng khung cha.
-const bridge = (ch: string) => `<script>(function(){var ch=${JSON.stringify(ch)},seq=0,wait={};
+const bridge = (ch: string, origin: string) => `<script>(function(){var ch=${JSON.stringify(ch)},seq=0,wait={},h2i=${JSON.stringify(libUrls(origin, H2I))};
 function post(m){m.__synchro=ch;try{parent.postMessage(m,"*")}catch(e){}}
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch||d.t!=="res"||!wait[d.id])return;var w=wait[d.id];delete wait[d.id];d.error?w[1](new Error(d.error)):w[0](d.text)});
 var api={complete:function(p){return new Promise(function(ok,no){var id=++seq;wait[id]=[ok,no];post({t:"complete",id:id,prompt:p})})}};
 window.synchro=api;window.claude=api;
+// Synchro yêu cầu: in (lưu PDF) hoặc chụp ảnh PNG phần đang xem (slide hiện tại nếu là bản trình bày).
+function lib(u,cb){if(window.htmlToImage)return cb(true);var n=0;(function tryLoad(){if(n>1)return cb(false);var s=document.createElement("script");s.src=h2i[n++];s.crossOrigin="anonymous";s.integrity=h2i[2];s.onload=function(){cb(true)};s.onerror=function(){s.remove();tryLoad()};document.head.appendChild(s)})()}
+addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
+if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
+else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
+htmlToImage.toPng(el,{pixelRatio:2,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
+else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
+else if(d.t==="present")window.__sxPresent=!!d.on});
 addEventListener("error",function(e){post({t:"error",message:String(e.message||(e.error&&e.error.message)||"Lỗi không rõ"),line:e.lineno||0})});
 addEventListener("unhandledrejection",function(e){var r=e.reason;post({t:"error",message:String(r&&r.message||r)})});
 var last=0;function h(f){var v=Math.ceil(Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0));if(f||v!==last){last=v;post({t:"height",h:v})}}
 addEventListener("load",function(){h(1);post({t:"ready"});setTimeout(function(){h(1)},250);setTimeout(function(){h(1)},1200);try{new ResizeObserver(function(){h()}).observe(document.body||document.documentElement)}catch(e){setInterval(h,500)}});
 })();</script>`;
 
+// Bản trình bày HTML: mỗi slide là <section class="slide"> (hoặc các <section> nối nhau của bản trình chiếu tự viết).
+// Synchro điều khiển: chỉ hiện slide đang xem, nhận lệnh chuyển slide, báo số slide; in thì mỗi slide một trang (PDF 16:9).
+// fixed: khung ảnh thu nhỏ chỉ hiện đúng một slide, không nhận thao tác.
+export const isDeck = (a: { type: ArtType; content: string }) => a.type === "html" &&
+  ((a.content.match(/<section\b[^>]*(class=["'][^"']*\bslide\b|data-slide)/gi)?.length ?? 0) >= 2 || ((a.content.match(/<section\b/gi)?.length ?? 0) >= 2 && /ArrowRight|PageDown/.test(a.content)));
+const deckRuntime = (fixed: number | null) => `<style>[data-sx-hide]{display:none!important}[data-sx-on]{opacity:1!important;visibility:visible!important;transform:none!important}
+${fixed !== null ? "html{pointer-events:none}html,body{overflow:hidden!important}" : ""}
+@media print{@page{size:13.333in 7.5in;margin:0}html,body{height:auto!important;overflow:visible!important}[data-sx-slide]{position:relative!important;inset:auto!important;left:auto!important;top:auto!important;opacity:1!important;visibility:visible!important;transform:none!important;width:100vw!important;height:100vh!important;break-after:page;page-break-after:always;box-sizing:border-box}[data-sx-noprint]{display:none!important}}</style>
+<script>(function(){var fixed=${fixed === null ? "null" : fixed},cur=0,S=[],CL=["on","active","current","is-active","visible","present"];
+function post(m){m.__synchro=window.__sxCh;try{parent.postMessage(m,"*")}catch(e){}}
+function find(){var s=[].slice.call(document.querySelectorAll("section.slide,[data-slide]"));if(s.length<2)s=[].slice.call(document.querySelectorAll("body>section,body>main>section,body>div>section,.slides>section"));return s.length>1?s:[]}
+function show(i){S=find();if(!S.length){post({t:"slides",n:0,cur:0});return}cur=Math.max(0,Math.min(i,S.length-1));
+S.forEach(function(el,k){el.setAttribute("data-sx-slide","");if(k===cur){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","");CL.forEach(function(c){el.classList.add(c)})}else{el.setAttribute("data-sx-hide","");el.removeAttribute("data-sx-on");CL.forEach(function(c){el.classList.remove(c)})}});
+if(fixed===null)post({t:"slides",n:S.length,cur:cur})}
+window.__sxGo=function(i){show(i)};window.__sxCur=function(){return S[cur]||null};
+window.__sxPrint=function(){S=find();S.forEach(function(el){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","")});
+[].forEach.call(document.body.querySelectorAll("*"),function(el){if(S.indexOf(el)<0&&!S.some(function(s){return s.contains(el)||el.contains(s)})&&getComputedStyle(el).position==="fixed")el.setAttribute("data-sx-noprint","")});
+setTimeout(function(){print();show(cur)},60)};
+if(fixed===null){addEventListener("keydown",function(e){var k=e.key,n=["ArrowRight","ArrowDown","PageDown"," ","Enter"].indexOf(k)>=0?1:["ArrowLeft","ArrowUp","PageUp","Backspace"].indexOf(k)>=0?-1:0;
+if(k==="Home"||k==="End"){e.preventDefault();e.stopImmediatePropagation();show(k==="Home"?0:1e9);return}if(n){e.preventDefault();e.stopImmediatePropagation();show(cur+n)}},true);
+addEventListener("click",function(e){if(e.target.closest&&e.target.closest("a,button,input,select,textarea,label,[onclick]"))return;e.stopImmediatePropagation();if(window.__sxPresent)show(cur+(e.clientX>innerWidth/3?1:-1))},true)}
+function start(){show(fixed===null?0:fixed);setTimeout(function(){show(fixed===null?cur:fixed)},120)}
+if(document.readyState==="loading")addEventListener("DOMContentLoaded",start);else start()})();</script>`;
+
 function csp(origin: string) {
   return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' ${origin}${V} ${CDNS}; style-src 'unsafe-inline' https://fonts.googleapis.com ${CDNS}; font-src https://fonts.gstatic.com ${CDNS} data:; img-src data: blob:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">`;
 }
 const BASE_CSS = `<style>:root{color-scheme:light dark}html,body{margin:0}body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>`;
 
-export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean): string {
-  const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${csp(origin)}${bridge(ch)}`;
+export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean, deck?: { fixed: number | null }): string {
+  const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${csp(origin)}${bridge(ch, origin)}${deck && type === "html" ? `<script>window.__sxCh=${JSON.stringify(ch)}</script>${deckRuntime(deck.fixed)}` : ""}`;
   if (type === "html") {
     // Chèn CSP + cầu nối vào <head> của trang (hoặc bọc trang nếu model chỉ viết phần thân).
     if (/<head[^>]*>/i.test(content)) return content.replace(/<head[^>]*>/i, (m) => m + head);
@@ -77,12 +113,20 @@ next()})();</script></body></html>`;
 const isDark = () => typeof document !== "undefined" && document.documentElement.dataset.theme === "dark";
 
 // Khung chạy artifact (html / react / svg). ai: cho gọi window.synchro.complete.
-export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style }: { type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties }) {
+// deck: chế độ bản trình bày (xem buildDoc). onMsg: tin khác từ khung (slides, png). ctl: nhận hàm gửi lệnh vào khung.
+export type FrameMsg = { t: string; [k: string]: unknown };
+export type FrameSend = (m: FrameMsg) => void;
+export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl }: {
+  type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties;
+  deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void;
+}) {
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
-  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark()), [type, content, ch]);
-  const cb = useRef({ onError, onHeight, ai });
-  cb.current = { onError, onHeight, ai };
+  const deckKey = deck ? String(deck.fixed) : "";
+  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck), [type, content, ch, deckKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cb = useRef({ onError, onHeight, ai, onMsg });
+  cb.current = { onError, onHeight, ai, onMsg };
+  useEffect(() => { ctl?.((m) => ref.current?.contentWindow?.postMessage({ ...m, __synchro: ch }, "*"), ref.current); });
   // Gắn trước khi khung kịp tải (khung nhỏ có thể tải xong trước cả useEffect).
   useLayoutEffect(() => {
     const h = async (e: MessageEvent) => {
@@ -91,6 +135,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
       const d = e.data as { __synchro?: string; t?: string; id?: number; prompt?: unknown; message?: string; h?: number };
       if (!d || d.__synchro !== ch) return;
       if (d.t === "height" && typeof d.h === "number") cb.current.onHeight?.(d.h);
+      else if (d.t === "slides" || d.t === "png" || d.t === "ready") cb.current.onMsg?.(d as FrameMsg);
       else if (d.t === "error") cb.current.onError?.(String(d.message ?? "").slice(0, 500));
       else if (d.t === "complete") {
         const res = (m: Record<string, unknown>) => w.postMessage({ __synchro: ch, t: "res", id: d.id, ...m }, "*");
@@ -143,24 +188,147 @@ export function ArtifactCard({ art, version, total, active, onOpen }: { art: Art
       <span className="art-card-ic"><ArtIcon type={art.type} size={20} />{!art.complete && <span className="art-spin sm" />}</span>
       <span className="art-card-txt">
         <b>{art.title}</b>
-        <span>{tr(art.complete ? ART_LABEL[art.type] : "Đang tạo…")}{total > 1 && <> · {tr("Phiên bản")} {version}</>}{art.complete && <> · <em>{tr(active ? "Đang mở" : "Nhấn để mở")}</em></>}</span>
+        <span>{tr(!art.complete ? "Đang tạo…" : isDeck(art) ? "Bản trình bày" : ART_LABEL[art.type])}{total > 1 && <> · {tr("Phiên bản")} {version}</>}{art.complete && <> · <em>{tr(active ? "Đang mở" : "Nhấn để mở")}</em></>}</span>
       </span>
     </button>
   );
 }
 
+// ---------------------------------------------------------------- tải về nhiều định dạng
+export function saveBlob(data: Blob, name: string) {
+  const url = URL.createObjectURL(data);
+  const a = document.createElement("a"); a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+const htmlEsc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const baseName = (a: { title: string; type: ArtType; lang: string | null }) => artFileName(a).replace(/\.[^.]+$/, "");
+// Nội dung đã hiện (tài liệu, sơ đồ) bỏ các nút giao diện như "Sao chép" trước khi xuất.
+const cleanHtml = (el: Element) => { const c = el.cloneNode(true) as Element; c.querySelectorAll("button,[data-noexport]").forEach((x) => x.remove()); return c.innerHTML; };
+const DOC_CSS = `body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:11pt;line-height:1.55;color:#1f1f1f;max-width:720px;margin:0 auto;padding:24px}
+h1{font-size:22pt;margin:0 0 12pt}h2{font-size:16pt;margin:18pt 0 8pt}h3{font-size:13pt;margin:14pt 0 6pt}table{border-collapse:collapse;margin:8pt 0}td,th{border:1px solid #bbb;padding:5pt 8pt;text-align:left}th{background:#f2f2f2}
+code{font-family:Consolas,Menlo,monospace;font-size:10pt}pre{background:#f6f6f6;padding:10pt;border-radius:6px;white-space:pre-wrap}blockquote{border-left:3px solid #ccc;margin:8pt 0;padding-left:12pt;color:#555}img,svg{max-width:100%}`;
+// Word mở được tệp HTML có khai báo Office (.doc), giữ tiêu đề, bảng, danh sách.
+const wordDoc = (title: string, html: string) => `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${htmlEsc(title)}</title><style>${DOC_CSS}</style></head><body>${html}</body></html>`;
+// In qua khung ẩn cùng nguồn gốc: hộp thoại in của trình duyệt có "Lưu thành PDF".
+export function printHtml(title: string, html: string) {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:fixed;width:0;height:0;border:0;right:0;bottom:0";
+  document.body.appendChild(f);
+  const d = f.contentDocument!;
+  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>${htmlEsc(title)}</title><style>${DOC_CSS}@page{margin:18mm}</style></head><body>${html}</body></html>`); d.close();
+  setTimeout(() => { f.contentWindow?.focus(); f.contentWindow?.print(); setTimeout(() => f.remove(), 1000); }, 250);
+}
+// SVG → PNG (gấp đôi độ phân giải), vẽ qua canvas ngay trong Synchro.
+export async function svgToPng(svg: string): Promise<Blob> {
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+  const vb = (doc.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
+  let w = parseFloat(doc.getAttribute("width") ?? "") || vb[2] || 1024, h = parseFloat(doc.getAttribute("height") ?? "") || vb[3] || 1024;
+  if (w < 512) { h = h * 1024 / w; w = 1024; }
+  doc.setAttribute("width", String(w)); doc.setAttribute("height", String(h));
+  if (!doc.getAttribute("xmlns")) doc.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(doc)], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error(tr("Không vẽ được hình SVG"))); img.src = url; });
+    const c = document.createElement("canvas"); c.width = Math.round(w * 2); c.height = Math.round(h * 2);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("PNG"))), "image/png"));
+  } finally { URL.revokeObjectURL(url); }
+}
+const dataUrlBlob = (u: string) => { const [h, b] = u.split(","); const bin = atob(b); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: /data:([^;]+)/.exec(h)?.[1] ?? "image/png" }); };
+
+type DlItem = { label: string; sub: string; run: () => void | Promise<void> };
+function DownloadMenu({ items, say }: { items: DlItem[]; say: (m: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const run = async (it: DlItem) => {
+    setOpen(false); setBusy(it.label);
+    try { await it.run(); } catch (e) { say(`${tr("Không xuất được")} ${it.label}: ${(e as Error).message}`); } finally { setBusy(""); }
+  };
+  return (
+    <div className="art-dl" ref={ref}>
+      <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Tải về" data-tip="Tải về" aria-expanded={open}>{busy ? <span className="art-spin sm" /> : <I.Download size={16} />}</button>
+      <Menu open={open} className="art-dl-menu">
+        <div className="art-dl-h">{tr("Tải về")}</div>
+        {items.map((it) => <button key={it.label} className="menu-item" onClick={() => run(it)}><span className="art-dl-t"><b>{it.label}</b><em>{tr(it.sub)}</em></span></button>)}
+      </Menu>
+    </div>
+  );
+}
+
+// Bản trình bày: khung 16:9, chuyển slide, ảnh thu nhỏ từng slide, trình chiếu toàn màn hình.
+function DeckView({ art, ai, onError, onMsg, ctl }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void }) {
+  const [st, setSt] = useState({ n: 0, cur: 0 });
+  const [full, setFull] = useState(false);
+  const send = useRef<FrameSend | null>(null);
+  const frame = useRef<HTMLIFrameElement | null>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const thumbs = useRef<HTMLDivElement>(null);
+  const go = (i: number) => send.current?.({ t: "go", i: Math.max(0, Math.min(i, st.n - 1)) });
+  useEffect(() => {
+    const f = () => { const on = document.fullscreenElement === stage.current; setFull(on); send.current?.({ t: "present", on }); if (on) setTimeout(() => frame.current?.focus(), 50); };
+    document.addEventListener("fullscreenchange", f); return () => document.removeEventListener("fullscreenchange", f);
+  }, []);
+  useEffect(() => {
+    if (!full) return;
+    const k = (e: KeyboardEvent) => {
+      if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(st.cur + 1); }
+      else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); go(st.cur - 1); }
+    };
+    addEventListener("keydown", k); return () => removeEventListener("keydown", k);
+  }, [full, st]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { thumbs.current?.querySelector(".deck-th.on")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }, [st.cur]);
+  return (
+    <div className="deck">
+      <div className="deck-stage" ref={stage}>
+        <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError}
+          onMsg={(d) => { if (d.t === "slides") setSt({ n: Number(d.n) || 0, cur: Number(d.cur) || 0 }); else onMsg(d); }}
+          ctl={(s, el) => { send.current = s; frame.current = el; ctl(s); }} />
+        {full && st.n > 1 && <div className="deck-hud">{st.cur + 1} / {st.n}</div>}
+      </div>
+      {st.n > 1 && <>
+        <div className="deck-bar">
+          <button className="icon-btn" disabled={st.cur <= 0} onClick={() => go(st.cur - 1)} aria-label="Slide trước"><span className="flip"><I.ChevronR size={16} /></span></button>
+          <span className="deck-count">{tr("Slide")} {st.cur + 1} / {st.n}</span>
+          <button className="icon-btn" disabled={st.cur >= st.n - 1} onClick={() => go(st.cur + 1)} aria-label="Slide sau"><I.ChevronR size={16} /></button>
+          <span style={{ flex: 1 }} />
+          <button className="btn deck-play" onClick={() => stage.current?.requestFullscreen?.().catch(() => {})}><I.Play size={13} />{tr("Trình chiếu")}</button>
+        </div>
+        <div className="deck-thumbs" ref={thumbs}>
+          {Array.from({ length: Math.min(st.n, 40) }, (_, k) => (
+            <button key={k} className={`deck-th ${k === st.cur ? "on" : ""}`} onClick={() => go(k)} aria-label={`Slide ${k + 1}`}>
+              <span className="deck-th-in"><ArtifactFrame type="html" content={art.content} ai={false} title="" deck={{ fixed: k }} className="deck-th-frame" /></span>
+              <em>{k + 1}</em>
+            </button>
+          ))}
+        </div>
+      </>}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- khung xem bên cạnh
-export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, expanded, setExpanded, say, footer }: {
-  versions: ArtVersion[]; index: number; setIndex: (i: number) => void; ai: boolean; onClose: () => void; onFix?: (a: ArtVersion, err: string) => void;
-  expanded: boolean; setExpanded: (v: boolean) => void; say: (m: string) => void; footer?: React.ReactNode;
+export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher }: {
+  versions: ArtVersion[]; index: number; setIndex: (i: number) => void; ai: boolean; onClose: () => void; onFix?: (a: ArtVersion, err: string) => void; onAsk?: (text: string) => void;
+  expanded: boolean; setExpanded: (v: boolean) => void; say: (m: string) => void; footer?: React.ReactNode; switcher?: React.ReactNode;
 }) {
   const art = versions[Math.min(index, versions.length - 1)];
   const [tab, setTab] = useState<"preview" | "code">("preview");
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
   const [reload, setReload] = useState(0);
+  const send = useRef<FrameSend | null>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const pending = useRef<Map<number, (d: FrameMsg) => void>>(new Map());
   const runnable = art.type !== "code";
   const showCode = tab === "code" || !runnable || !art.complete;
+  const deck = art.complete && isDeck(art);
   useEffect(() => { setErr(""); }, [art.content, reload]);
   useEffect(() => { if (!runnable) setTab("code"); }, [runnable]);
   useEffect(() => {
@@ -168,19 +336,49 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, e
     addEventListener("keydown", k); return () => removeEventListener("keydown", k);
   }, [expanded, setExpanded]);
   const copy = () => { navigator.clipboard?.writeText(art.content); setCopied(true); say(tr("Đã sao chép nội dung artifact")); setTimeout(() => setCopied(false), 1500); };
-  const download = () => {
-    const name = artFileName(art);
-    const url = URL.createObjectURL(new Blob([art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }));
-    const a = document.createElement("a"); a.href = url; a.download = name; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    say(`${tr("Đã tải")} ${name}`);
+  const name = baseName(art);
+  const done = (n: string) => say(`${tr("Đã tải")} ${n}`);
+  const source = () => {
+    const n = artFileName(art);
+    saveBlob(new Blob([art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
   };
+  // Xuất cần phần xem trước đang hiện (tài liệu đã dựng, khung đã chạy): chuyển sang Xem trước rồi chờ một chút.
+  const withPreview = (fn: () => void | Promise<void>, wait = 400) => new Promise<void>((ok, no) => {
+    if (!showCode) { Promise.resolve(fn()).then(ok, no); return; }
+    setTab("preview"); setTimeout(() => Promise.resolve(fn()).then(ok, no), wait);
+  });
+  const frameCall = (m: FrameMsg) => new Promise<FrameMsg>((ok, no) => {
+    if (!send.current) return no(new Error(tr("Khung xem chưa sẵn sàng")));
+    const id = Date.now() + Math.random();
+    const t = setTimeout(() => { pending.current.delete(id); no(new Error(tr("Quá thời gian chờ"))); }, 20000);
+    pending.current.set(id, (d) => { clearTimeout(t); d.error ? no(new Error(String(d.error))) : ok(d); });
+    send.current({ ...m, id });
+  });
+  const onMsg = (d: FrameMsg) => { const f = pending.current.get(d.id as number); if (f) { pending.current.delete(d.id as number); f(d); } };
+  const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
+  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture" }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
+  const shown = (sel: string) => { const el = body.current?.querySelector(sel); if (!el) throw new Error(tr("Chưa hiện xong nội dung")); return el; };
+  const items: DlItem[] = [];
+  if (deck) {
+    items.push({ label: "PDF", sub: "Mỗi slide một trang (chọn Lưu thành PDF)", run: pdfFrame });
+    if (onAsk) items.push({ label: "PowerPoint (.pptx)", sub: "Synchro tạo tệp chỉnh sửa được", run: () => onAsk(`${tr("Hãy xuất bản trình bày")} “${art.title}” ${tr("thành tệp PowerPoint (.pptx) chỉnh sửa được, giữ nguyên nội dung, thứ tự và bố cục từng slide.")}`) });
+    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: source }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
+  } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: "Ảnh toàn trang", run: pngFrame });
+  else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", art.content, location.origin, "export", false)], { type: "text/html" }), n); done(n); } },
+    { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: pngFrame }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
+  else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(art.content), `${name}.png`); done(`${name}.png`); } });
+  else if (art.type === "markdown") items.push({ label: "Word (.doc)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(() => { const n = `${name}.doc`; saveBlob(new Blob(["\ufeff", wordDoc(art.title, cleanHtml(shown(".art-md")))], { type: "application/msword" }), n); done(n); }) },
+    { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md")))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
+  else if (art.type === "mermaid") items.push({ label: "SVG", sub: "Sơ đồ dạng vector", run: () => withPreview(() => { const n = `${name}.svg`; saveBlob(new Blob([shown(".art-mermaid svg").outerHTML], { type: "image/svg+xml" }), n); done(n); }, 1200) },
+    { label: "PNG", sub: "Ảnh sơ đồ", run: () => withPreview(async () => { saveBlob(await svgToPng(shown(".art-mermaid svg").outerHTML), `${name}.png`); done(`${name}.png`); }, 1200) }, { label: "Mermaid", sub: "Mã nguồn sơ đồ", run: source });
+  else items.push({ label: tr("Tệp mã nguồn"), sub: artFileName(art), run: source });
   const lines = art.content.split("\n");
   return (
     <aside className={`art-panel ${expanded ? "full" : ""}`} aria-label={art.title}>
       <header className="art-head">
         <span className="art-head-ic"><ArtIcon type={art.type} /></span>
-        <div className="art-head-t"><b title={art.title}>{art.title}</b><span>{tr(ART_LABEL[art.type])}{art.type === "code" && art.lang ? ` · ${art.lang}` : ""}</span></div>
+        <div className="art-head-t"><b title={art.title}>{art.title}</b><span>{deck ? tr("Bản trình bày") : tr(ART_LABEL[art.type])}{art.type === "code" && art.lang ? ` · ${art.lang}` : ""}</span></div>
+        {switcher}
         {versions.length > 1 && (
           <div className="art-ver">
             <button className="icon-btn" disabled={index <= 0} onClick={() => setIndex(index - 1)} aria-label="Phiên bản trước"><span className="flip"><I.ChevronR size={14} /></span></button>
@@ -192,7 +390,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, e
         <div className="art-acts">
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.Check size={15} /> : <I.Copy size={15} />}</button>
-          <button className="icon-btn" onClick={download} aria-label="Tải về" data-tip="Tải về"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" /></svg></button>
+          {art.complete && <DownloadMenu items={items} say={say} />}
           <button className="icon-btn" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "Thu nhỏ" : "Toàn màn hình"} data-tip={expanded ? "Thu nhỏ" : "Toàn màn hình"}>
             {expanded ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" /></svg>
               : <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" /></svg>}
@@ -203,15 +401,17 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, e
       {err && !showCode && (
         <div className="art-err"><span><b>{tr("Artifact gặp lỗi")}</b>{err}</span>{onFix && <button className="btn" onClick={() => onFix(art, err)}>{tr("Nhờ Synchro sửa")}</button>}</div>
       )}
-      <div className="art-body">
+      <div className={`art-body ${deck && !showCode ? "is-deck" : ""}`} ref={body}>
         {showCode ? (
           <pre className="art-code">{lines.map((l, i) => <div key={i}><span>{i + 1}</span>{l || " "}</div>)}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
+        ) : deck ? (
+          <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} />
         ) : art.type === "markdown" ? (
           <div className="art-md mdx"><Markdown text={art.content} say={say} /></div>
         ) : art.type === "mermaid" ? (
           <div className="art-md"><MermaidSvg code={art.content} onError={setErr} /></div>
         ) : (
-          <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" />
+          <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} />
         )}
       </div>
       {footer}
@@ -295,21 +495,20 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
 }
 
 // ---------------------------------------------------------------- tệp code đã tạo (run_code → outputs/)
-const KIND: Record<string, string> = { docx: "Word", doc: "Word", xlsx: "Excel", xls: "Excel", csv: "CSV", pptx: "PowerPoint", pdf: "PDF", png: "Ảnh", jpg: "Ảnh", jpeg: "Ảnh", gif: "Ảnh", webp: "Ảnh", svg: "SVG", json: "JSON", md: "Markdown", txt: "Văn bản", html: "HTML", zip: "ZIP" };
-const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-export function OutputFiles({ files }: { files: OutFile[] }) {
+// Bấm thẻ để xem trước trong khung bên cạnh; nút mũi tên tải thẳng về máy.
+export function OutputFiles({ files, onOpen, active }: { files: OutFile[]; onOpen?: (f: OutFile) => void; active?: string }) {
   const imgs = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.mime));
   return (
     <div className="outs">
-      {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <a key={f.id} href={`/api/outputs/${f.id}?inline=1`} target="_blank" rel="noreferrer"><img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" /></a>)}</div>}
+      {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <button key={f.id} onClick={() => onOpen?.(f)} aria-label={f.name}><img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" /></button>)}</div>}
       {files.map((f) => {
         const k = fileKind(f.name);
         return (
-          <a key={f.id} className="out-card" href={`/api/outputs/${f.id}`} download={f.name} title={tr("Tải về")}>
+          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} role="button" tabIndex={0} onClick={() => onOpen?.(f)} onKeyDown={(e) => { if (e.key === "Enter") onOpen?.(f); }} title={tr("Xem trước")}>
             <span className="out-badge" style={{ background: k.color }}>{k.label}</span>
             <span className="out-txt"><b data-notr>{f.name}</b><span>{tr(KIND[k.ext] ?? "Tệp")} · {fmtSize(f.size)}</span></span>
-            <span className="out-dl"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" /></svg></span>
-          </a>
+            <a className="out-dl" href={`/api/outputs/${f.id}`} download={f.name} onClick={(e) => e.stopPropagation()} aria-label={tr("Tải về")} data-tip="Tải về"><I.Download size={15} /></a>
+          </div>
         );
       })}
     </div>
