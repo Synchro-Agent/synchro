@@ -1114,3 +1114,19 @@ Object.assign(VI2EN, {
 Object.assign(EN2VI, { "So sánh với bản trước": "So sánh với bản trước", "Chỉ vào phần muốn sửa": "Chỉ vào phần muốn sửa", "Chỉ và sửa": "Chỉ và sửa" });
 // Văn bản hành chính
 Object.assign(VI2EN, { "Văn bản hành chính": "Official document", "Văn bản chưa đúng định dạng": "The document is not in the right format" });
+// Hộp thư, tác vụ nền
+Object.assign(VI2EN, {
+  "Hộp thư": "Inbox", "Kết quả": "Results", "Tác vụ đã hẹn": "Scheduled tasks", "Tác vụ nền mới": "New background task", "Đánh dấu đã đọc hết": "Mark all as read",
+  "Chưa có kết quả nào": "No results yet", "Hẹn một tác vụ nền (ví dụ bản tin mỗi sáng, tổng kết cuối tuần), Synchro sẽ tự chạy và gửi kết quả vào đây.": "Schedule a background task (a morning briefing, a weekly wrap-up) and Synchro will run it and send the result here.",
+  "Đang chạy…": "Running…", "Lỗi": "Error", "Xong": "Done", "Synchro đang chạy tác vụ này ở nền": "Synchro is running this task in the background", "Mở thành đoạn chat": "Open as a chat",
+  "Chưa hẹn tác vụ nào": "No scheduled tasks", "Ví dụ: 8 giờ sáng mỗi ngày tóm tắt lịch và email; chiều thứ Sáu tổng kết tuần.": "For example: every morning at 8 summarize calendar and email; Friday afternoon wrap up the week.",
+  "lần tới": "next", "đã tắt": "off", "lần chạy": "runs", "Chạy ngay": "Run now", "Đang chạy, kết quả sẽ vào Hộp thư": "Running, the result will arrive in your Inbox", "Đã xóa tác vụ": "Task deleted",
+  "Sửa tác vụ": "Edit task", "Synchro tự chạy yêu cầu này theo lịch, kể cả khi bạn không mở trang. Kết quả vào Hộp thư.": "Synchro runs this request on schedule, even when you're not on the page. Results arrive in your Inbox.",
+  "Tên": "Name", "Yêu cầu": "Request", "Lịch chạy": "Schedule", "Vào": "On", "Lúc": "At", "Giờ theo múi giờ": "Times in time zone", "Lưu": "Save", "Chạy": "Run", "Hẹn lịch": "Schedule",
+  "Một lần, chạy ngay": "Once, run now", "Một lần": "Once", "Mỗi giờ": "Every hour", "Mỗi ngày": "Every day", "Mỗi tuần": "Every week", "Mỗi ngày lúc": "Every day at", "hằng tuần lúc": "weekly at",
+  "Chủ nhật": "Sunday", "Thứ Hai": "Monday", "Thứ Ba": "Tuesday", "Thứ Tư": "Wednesday", "Thứ Năm": "Thursday", "Thứ Sáu": "Friday", "Thứ Bảy": "Saturday",
+  "Bản tin buổi sáng": "Morning briefing", "Tổng kết tuần": "Weekly wrap-up", "Theo dõi đối thủ": "Competitor watch", "Ví dụ: Bản tin buổi sáng": "For example: Morning briefing",
+  "Viết như khi nhắn cho Synchro. Connector đã kết nối (email, lịch…) được dùng như trong chat.": "Write it like a chat message. Connected connectors (email, calendar…) work as in chat.",
+  "Đã lưu tác vụ": "Task saved", "Đã tạo tác vụ, sẽ chạy trong vòng một phút": "Task created, it will run within a minute", "Đã hẹn tác vụ": "Task scheduled",
+  "Tác vụ nền đã chạy xong. Mở Hộp thư để xem kết quả.": "A background task finished. Open your Inbox to see the result.", "Tác vụ nền": "Background task",
+});

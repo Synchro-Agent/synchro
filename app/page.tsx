@@ -18,11 +18,12 @@ import { attachRun, callLLM, LLMError, takeRoute, setActiveEffort, setActiveMode
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
-type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech";
+type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
+import { InboxPage, useInboxCount } from "./tasksui";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
@@ -868,10 +869,17 @@ export default function Home() {
     return () => { window.removeEventListener("dragenter", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); window.removeEventListener("dragover", prevent); };
   }, [say]);
 
-  const Nav = ({ v, icon, label, tag, plus }: { v: View; icon: React.ReactNode; label: string; tag?: string; plus?: () => void }) => (
-    <button className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
+  const Nav = ({ v, icon, label, tag, plus, badge }: { v: View; icon: React.ReactNode; label: string; tag?: string; plus?: () => void; badge?: number }) => (
+    <button className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
   );
   const [voiceOn, setVoiceOn] = useState(false);
+  const inboxN = useInboxCount(!!me);
+  // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
+  const openAsChat = (title: string, text: string) => {
+    const id = Date.now();
+    setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: `${tr("Tác vụ nền")}: ${title}`, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
+    setCur(id); setView("chat");
+  };
   const composerProps = { onSend: send, busy, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload"), onVoice: () => { window.speechSynthesis?.cancel(); setVoiceOn(true); } };
   const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
   // Lượt hỏi đáp từ Eleven Realtime được lưu vào đoạn chat như tin nhắn thường.
@@ -954,6 +962,7 @@ export default function Home() {
           </button>
           {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
+          <Nav v="inbox" icon={<I.Inbox />} label="Hộp thư" badge={inboxN} />
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
           {me?.perms.features.speech !== false && (
             <>
@@ -1228,6 +1237,7 @@ export default function Home() {
           </div></div>
         )}
 
+        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}

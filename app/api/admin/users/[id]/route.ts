@@ -5,6 +5,7 @@ import { removeUserCaps } from "../../../../caps";
 import { removeUserOutputs } from "../../../../outputs";
 import { removeUserArtifacts } from "../../../../artifactstore";
 import { removeUserApps } from "../../../../appstore";
+import { removeUserTasks } from "../../../../tasks";
 import { removeUserUsage } from "../../../../usage";
 import { removeUserPlugins } from "../../../../plugins";
 import { destroyWorkspace } from "../../../../workspace";
@@ -44,6 +45,7 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   removeUserOutputs(id);
   removeUserArtifacts(id);
   removeUserApps(id);
+  removeUserTasks(id);
   removeUserUsage(id);
   await removeUserPlugins(id);
   await destroyWorkspace(id);

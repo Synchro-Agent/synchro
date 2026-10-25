@@ -242,10 +242,12 @@ export async function addConnector(req: Request, uid: string, o: { name?: string
   const auth: Auth = { mode: "none", ...(clientId ? { preset: { clientId, clientSecret: clientSecret || undefined } } : {}) };
   t.prepare("INSERT INTO connectors (id, user_id, name, url, dir, enabled, status, enc_auth, created_at, updated_at, settings) VALUES (?, ?, ?, ?, ?, 1, 'needs_auth', ?, ?, ?, '{}')")
     .run(id, uid, name, url, entry?.id ?? null, sealSecret(JSON.stringify(auth)), now, now);
-  // Tìm logo song song với lúc kết nối (trang chủ của hãng không cần đăng nhập), để thẻ connector có logo ngay.
-  const icon = needsIcon({ dir: entry?.id ?? null, icon: null }) ? findIcon(id) : Promise.resolve();
-  try { const r = await connect(req, uid, id, pol); await icon; return { ...r, connector: publicOf(rowById(id)!, pol) }; }
-  catch (e) { await icon.catch(() => {}); t.prepare("DELETE FROM connectors WHERE id = ?").run(id); throw e; }
+  // Tìm logo trên trang chủ song song với lúc kết nối (không cần đăng nhập), để thẻ connector có logo ngay cả khi còn chờ đăng nhập.
+  // Logo máy chủ tự khai báo (lấy được khi kết nối xong) luôn được ưu tiên; logo trang chủ chỉ dùng khi máy chủ không khai báo.
+  const site = needsIcon({ dir: entry?.id ?? null, icon: null }) ? detectIcon(url).catch(() => null) : Promise.resolve(null);
+  const useSite = async () => { const img = await site; if (img) t.prepare("UPDATE connectors SET icon = ? WHERE id = ? AND icon IS NULL").run(img, id); };
+  try { const r = await connect(req, uid, id, pol); await useSite(); return { ...r, connector: publicOf(rowById(id)!, pol) }; }
+  catch (e) { await site; t.prepare("DELETE FROM connectors WHERE id = ?").run(id); throw e; }
 }
 
 // Máy chủ đăng nhập chuyển về đây: kiểm tra state + iss, đổi mã lấy token, rồi tải danh sách công cụ.

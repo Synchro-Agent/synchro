@@ -64,7 +64,9 @@ export function progress(kind: RunEvent["kind"], text: string) {
 }
 
 export type Exec = (body: Record<string, unknown>, user: UserRow) => Promise<{ http: number; json: unknown }>;
-const executors = new Map<string, Exec>();
+// Toàn cục: mỗi route của Next được đóng gói riêng, bộ chạy đăng ký ở gói này phải thấy được ở gói khác.
+const ge = globalThis as unknown as { __synchroExecs?: Map<string, Exec> };
+const executors = (ge.__synchroExecs ??= new Map<string, Exec>());
 // Mỗi loại lượt (chat, tác vụ nền…) đăng ký hàm chạy của nó; lúc khởi động lại máy chủ dùng để chạy lại lượt dở dang.
 export const registerExec = (kind: string, f: Exec) => { executors.set(kind, f); };
 
@@ -86,10 +88,14 @@ function finish(id: string, http: number, json: unknown) {
 }
 
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow) {
-  const f = executors.get(kind);
-  if (!f) { finish(id, 500, { error: `Không có bộ chạy cho loại "${kind}".` }); return; }
   scope.run({ id }, () => {
-    f(body, user).then((r) => finish(id, r.http, r.json), (e) => finish(id, 502, { error: String((e as Error)?.message ?? e) }));
+    (async () => {
+      // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.
+      if (!executors.has(kind) && kind === "chat") await import("./chatengine");
+      const f = executors.get(kind);
+      if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
+      return f(body, user);
+    })().then((r) => finish(id, r.http, r.json), (e) => finish(id, 502, { error: String((e as Error)?.message ?? e) }));
   });
 }
 
