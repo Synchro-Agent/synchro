@@ -1,5 +1,5 @@
 "use client";
-// Giao diện Plugins (Tùy chỉnh → Plugins, Cài đặt → Plugins) và trang Tùy chỉnh có ba mục Skills / Connectors / Plugins.
+// Kho kỹ năng (gộp Skills và Plugins; ở thanh bên, Tùy chỉnh và Cài đặt) và trang Tùy chỉnh có hai mục Kho kỹ năng / Connectors.
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
@@ -7,6 +7,7 @@ import { getLang, tr } from "./i18n";
 import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
+import { SkillsPanel, SKILLS_DROP, SKILLS_UPLOAD } from "./skillsui";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -172,24 +173,9 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
   );
 }
 
-// ---------------------------------------------------------------- trang Plugins
+// ---------------------------------------------------------------- trang Kho kỹ năng
 // Kết hợp Claude và Synchro: hai tab Của bạn / Khám phá, nút + cài một chạm cho plugin trong danh mục (đã kiểm tra giấy phép),
 // "Thêm từ repo GitHub" có bước xem trước giấy phép và rủi ro, mỗi plugin có menu nhanh (quản lý, cập nhật, tắt, gỡ).
-// Cùng một ô với trang Kỹ năng: link một skill thì thêm vào Kỹ năng, link nhiều skill thì cài thành plugin.
-function AddRepo({ onClose, onDone }: { onClose: () => void; onDone: (r: { kind: "skill" } | { kind: "plugin"; plugin: PublicPlugin }) => void }) {
-  const [child, setChild] = useState(false);
-  return (
-    <div className="overlay" style={{ zIndex: 70, display: child ? "none" : undefined }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal pl-modal pl-small">
-        <button type="button" className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Close"><I.X size={16} /></button>
-        <h2>Add from GitHub</h2>
-        <p className="d">Paste a link to a public repository, a folder inside it, or a single SKILL.md. Synchro checks licenses and scripts and shows you everything before installing.</p>
-        <GithubAdd autoFocus onModal={setChild} onDone={onDone} />
-      </div>
-    </div>
-  );
-}
-
 function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolean; onOpen: () => void; onAct: (a: "check" | "toggle" | "remove") => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -214,15 +200,20 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolea
   );
 }
 
+const Toggle = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} />;
+
 const CAT: Record<string, string> = { studio: "Studios", design: "Design", dev: "Development & testing", writing: "Writing" };
 
-export function PluginsPanel() {
+// Kho kỹ năng: gộp Skills và Plugins. Thư viện (plugin, nhiều skill) và skill lẻ nằm chung một trang,
+// một ô "Thêm từ GitHub" tự nhận ra link một skill hay cả bộ, thả tệp .zip / SKILL.md vào đâu trên trang cũng được.
+export function SkillHub() {
   const app = useApp();
+  const [ghFocus, setGhFocus] = useState(0);
+  const [drop, setDrop] = useState(false);
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<"yours" | "discover" | null>(null);
   const [pv, setPv] = useState<{ catalogId?: string; url?: string; name: string } | null>(null);
-  const [adding, setAdding] = useState(false);
   const [addMenu, setAddMenu] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -296,7 +287,7 @@ export function PluginsPanel() {
   return (
     <>
       <div className="pl-top">
-        <h1 className="pl-title">Plugins</h1>
+        <h1 className="pl-title">Skill Hub</h1>
         <div className="pl-seg"><button className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
         <span style={{ flex: 1 }} />
         <span className="s-search pl-search"><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span>
@@ -305,8 +296,11 @@ export function PluginsPanel() {
             <button className="btn dark pl-add" onClick={() => setAddMenu(!addMenu)}><I.Plus size={14} />Add<I.Chevron size={13} /></button>
             {addMenu && (
               <div className="menu pl-menu right">
-                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("discover"); }}><I.Book size={15} /><span className="pl-mi"><b>Browse Synchro directory</b><em>Curated plugins with checked licenses</em></span></button>
-                <button className="menu-item" onClick={() => { setAddMenu(false); setAdding(true); }}><I.Branch size={15} /><span className="pl-mi"><b>Add from GitHub</b><em>One skill or a whole repository, detected for you</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setGhFocus(Date.now()); }}><I.GitHub size={15} /><span className="pl-mi"><b>Add from GitHub</b><em>One skill or a whole repository, detected for you</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }}><I.Upload size={15} /><span className="pl-mi"><b>Upload a skill</b><em>A .zip skill folder or a SKILL.md file</em></span></button>
+                <button className="menu-item" onClick={() => { setAddMenu(false); app.close(); app.ask("Hãy giúp tôi tạo một skill mới."); }}><I.Sparkle size={15} /><span className="pl-mi"><b>Create with Synchro</b><em>Describe what you need, Synchro writes the skill</em></span></button>
+                <hr />
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("discover"); }}><I.Book size={15} /><span className="pl-mi"><b>Browse Synchro directory</b><em>Curated libraries with checked licenses</em></span></button>
               </div>
             )}
           </div>
@@ -314,18 +308,21 @@ export function PluginsPanel() {
       </div>
 
       {view === "yours" ? (
-        <>
+        <div className={`hub-yours ${drop ? "drop" : ""}`} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDrop(true); } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrop(false); }}
+          onDrop={(e) => { e.preventDefault(); setDrop(false); const f = e.dataTransfer.files?.[0]; if (f) window.dispatchEvent(new CustomEvent(SKILLS_DROP, { detail: f })); }}>
+          {d.canInstall && <GithubAdd focus={ghFocus} onDone={(r) => { if (r.kind === "plugin") { load(); setOpen(r.plugin.id); } }} />}
           {!d.plugins.length && (
             <div className="pl-hero">
               <div><b>Add your first plugins</b><span>Give Synchro role-level expertise with plugins. Add them from Discover.</span><button className="btn dark" onClick={() => setTab("discover")}>Discover plugins</button></div>
               <I.Plugins size={64} />
             </div>
           )}
-          {org.length > 0 && <><div className="pl-sec">For everyone <i>{org.length}</i></div><div className="pl-rows2">{org.map(row)}</div></>}
-          {mine.length > 0 && <><div className="pl-sec">Just for you <i>{mine.length}</i></div><div className="pl-rows2">{mine.map(row)}</div></>}
-          {d.plugins.length > 0 && !org.length && !mine.length && <div className="empty" style={{ marginTop: 40 }}><span>No plugins match your search.</span></div>}
-          {d.plugins.length > 0 && <p className="d pl-tip"><I.InfoCircle size={14} />Just chat: Synchro looks through every installed library and picks the skills that fit your request. The Design, Slides and Docs buttons on the Artifacts page only force that mode.</p>}
-        </>
+          {org.length > 0 && <><div className="pl-sec">Libraries for everyone <i>{org.length}</i></div><div className="pl-rows2">{org.map(row)}</div></>}
+          {mine.length > 0 && <><div className="pl-sec">Your libraries <i>{mine.length}</i></div><div className="pl-rows2">{mine.map(row)}</div></>}
+          <SkillsPanel q={q} Toggle={Toggle} />
+          <p className="d pl-tip"><I.InfoCircle size={14} />Just chat: Synchro looks through every library and skill here and picks the ones that fit your request. A library is a set of skills installed together; a single skill is one you added on its own.</p>
+          {drop && <div className="hub-drop"><I.Upload size={22} /><b>Drop to add the skill</b><span>.zip skill folder or SKILL.md</span></div>}
+        </div>
       ) : (
         <>
           {!ql && (
@@ -343,7 +340,6 @@ export function PluginsPanel() {
         </>
       )}
 
-      {adding && <AddRepo onClose={() => setAdding(false)} onDone={(r) => { setAdding(false); if (r.kind === "plugin") { load(); setTab("yours"); setOpen(r.plugin.id); } else app.say(tr("It's a single skill, so it was added to Skills")); }} />}
       {pv && <PreviewModal target={pv} admin={d.admin} onClose={() => setPv(null)} onDone={(p) => { setPv(null); load(); setTab("yours"); setOpen(p.id); }} />}
       {cur && <Detail p={cur} admin={d.admin} onClose={() => setOpen(null)} onChange={merge} />}
     </>
@@ -351,13 +347,13 @@ export function PluginsPanel() {
 }
 
 // ---------------------------------------------------------------- trang Tùy chỉnh (Skills / Connectors / Plugins)
-export type CzTab = "skills" | "connectors" | "plugins";
-export function CustomizePage({ tab, setTab, skills, connectors, feats }: { tab: CzTab; setTab: (t: CzTab) => void; skills: React.ReactNode; connectors: React.ReactNode; feats: { skills: boolean; connectors: boolean } }) {
-  const items: [CzTab, string, React.ReactNode, boolean][] = [["skills", "Skills", <I.Scroll key="s" />, feats.skills], ["connectors", "Connectors", <I.Connectors key="c" />, feats.connectors], ["plugins", "Plugins", <I.Plugins key="p" />, feats.skills]];
+export type CzTab = "hub" | "connectors";
+export function CustomizePage({ tab, setTab, connectors, feats }: { tab: CzTab; setTab: (t: CzTab) => void; connectors: React.ReactNode; feats: { skills: boolean; connectors: boolean } }) {
+  const items: [CzTab, string, React.ReactNode, boolean][] = [["hub", "Skill Hub", <I.Plugins key="h" />, feats.skills], ["connectors", "Connectors", <I.Connectors key="c" />, feats.connectors]];
   return (
     <div className="page"><div className="page-in cz">
       <nav className="cz-nav">{items.filter((x) => x[3]).map(([k, label, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{label}</span></button>)}</nav>
-      <div className="cz-body">{tab === "skills" ? skills : tab === "connectors" ? connectors : <PluginsPanel />}</div>
+      <div className="cz-body">{tab === "connectors" && feats.connectors ? connectors : <SkillHub />}</div>
     </div></div>
   );
 }

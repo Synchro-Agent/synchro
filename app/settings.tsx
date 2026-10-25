@@ -6,7 +6,6 @@ import { AvatarButton } from "./avatar";
 import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { MODES, PRESETS } from "./codeview";
-import { SkillsPanel, SKILLS_UPLOAD } from "./skillsui";
 import { ApiPanel } from "./apiui";
 import { ConnectorsPanel } from "./connectorsui";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
@@ -14,7 +13,7 @@ import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
-import { PluginsPanel } from "./pluginsui";
+import { SkillHub } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 
 function useAway(close: () => void) {
@@ -305,7 +304,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
         {lockNote("code") ? <span className="cap-note warn">{lockNote("code")}</span> : st.runner && v.code ? <span className="cap-note">{RUNNER[st.runner]}</span> : null}</>} top>{t("code")}</Row>
       <div className={`inset ${!v.code ? "dim" : ""}`}><Row t="Allow network egress" d={<>Allow Synchro to access common package managers to install packages and libraries for data analysis, visualizations, and file processing. <A onClick={() => setModal("domains")}>View package manager domains</A>. Monitor chats closely as this comes with <A onClick={() => setModal("risks")}>security risks</A>.</>} top>{t("net", !v.code)}</Row></div>
       <H>Skills</H>
-      <p className="d" style={{ marginTop: -6 }}>Skills have moved to <A onClick={() => go("Skills")}>Customize</A>.{!v.code && !locks.code && <span className="cap-note">Skills are paused while code execution and file creation is off.</span>}</p>
+      <p className="d" style={{ marginTop: -6 }}>Skills and plugins live in the <A onClick={() => go("Skill Hub")}>Skill Hub</A>.{!v.code && !locks.code && <span className="cap-note">Skills are paused while code execution and file creation is off.</span>}</p>
       <Fade show={!!modal}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setModal("")}>
           <div className="modal sm cap-modal">
@@ -507,43 +506,13 @@ function CodeTab() {
   );
 }
 
-// Trang Skills (trong Cài đặt và mục Skills ở thanh bên): danh sách skill thật của tài khoản.
-function Directory() {
-  const [q, setQ] = useState("");
-  const [add, setAdd] = useState(false);
-  const app = useApp();
-  const [sort, setSort] = useState<"" | "asc" | "desc">("");
-  const addRef = useAway(() => setAdd(false));
-  const doAdd = (a: string) => {
-    setAdd(false);
-    if (a === "Upload skill") setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50);
-    else { app.close(); app.ask(a === "Create with Synchro" ? "Hãy giúp tôi tạo một skill mới." : "Hướng dẫn tôi tạo một skill từ đầu."); }
-  };
-  return (
-    <>
-      <div className="dir-head">
-        <h2 className="dir-title">Skills</h2>
-        <div className="s-search" style={{ margin: 0, flex: 1, height: 30 }}><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <button className="icon-btn" aria-label="Sort" title={sort === "asc" ? "A → Z" : sort === "desc" ? "Z → A" : "Default order"} onClick={() => { const n = sort === "" ? "asc" : sort === "asc" ? "desc" : ""; setSort(n); app.say(n === "asc" ? "Sắp xếp A → Z" : n === "desc" ? "Sắp xếp Z → A" : "Thứ tự mặc định"); }} style={sort ? { background: "var(--active)" } : undefined}><I.Sort size={16} /></button>
-        <div ref={addRef} style={{ position: "relative" }}>
-          <button className="btn dark" onClick={() => setAdd(!add)}>+ Add<I.Chevron size={13} /></button>
-            <Menu open={!!(add)} className="down" style={{ top: 36, right: 0, width: 190 }}>
-              {["Upload skill", "Create a skill", "Create with Synchro"].map((a) => <button key={a} className="menu-item" onClick={() => doAdd(a)}>{a}</button>)}
-            </Menu>
-        </div>
-      </div>
-      <SkillsPanel q={q} sort={sort} Toggle={Toggle} />
-    </>
-  );
-}
-
 export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme: string; setTheme: (t: string) => void; go: (t: string) => void }) {
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
     case "Administrator": return <AdminPanel Toggle={Toggle} />;
     case "API": return <ApiPanel />;
     case "Connectors": return <ConnectorsPanel />;
-    case "Plugins": return <PluginsPanel />;
+    case "Skill Hub": case "Skills": case "Plugins": return <SkillHub />;
     case "Account": return <Account />;
     case "Privacy": return <Privacy go={go} />;
     case "Billing": return <Billing />;
@@ -553,8 +522,6 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
     case "Reflect": return <Reflect />;
     case "Time and focus": return <Focus />;
     case "Synchro Code": return <CodeTab />;
-    case "Skills": return <Directory />;
     default: return null;
   }
 }
-export { Directory };

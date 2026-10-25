@@ -7,7 +7,6 @@ import { getLang, tr } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { Fade, Menu, Thinking } from "./ui";
-import { Directory } from "./settings";
 import { HalftoneBg } from "./halftone";
 import { CodeView } from "./codeview";
 import { VoiceMode } from "./voicemode";
@@ -325,7 +324,7 @@ function Composer(p: {
           <button className="menu-item" onClick={() => { setMenu(false); setFiles([...files, "Ảnh chụp màn hình.png"]); say("Đã chụp ảnh màn hình"); }}><I.Camera />Chụp ảnh màn hình</button>
           <button className="menu-item" onClick={() => soon("Hãy tạo dự án trước ở mục Dự án")}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
           <hr />
-          {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom(); }}><I.Scroll />Skills<span className="sc"><I.ChevronR size={16} /></span></button>}
+          {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom(); }}><I.Plugins />Skill Hub<span className="sc"><I.ChevronR size={16} /></span></button>}
           <button className="menu-item" onClick={() => soon("Chưa có hệ thống thiết kế nào")}><I.Palette />Hệ thống thiết kế<span className="sc"><I.ChevronR size={16} /></span></button>
           <hr />
           {perms?.features.web !== false && <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>}
@@ -659,10 +658,10 @@ export default function Home() {
   capsRef.current = caps;
   const [artRefresh, setArtRefresh] = useState(0);
   const [artQ, setArtQ] = useState("");
-  const [czTab, setCzTab] = useState<CzTab>("skills");
+  const [czTab, setCzTab] = useState<CzTab>("hub");
   // Plugin gắn với các nút studio (Thiết kế / Trình bày / Tài liệu): tên và số skill để hiện trên nút.
   const studios = useStudios();
-  const openPlugins = () => { setCzTab("plugins"); setView("customize"); };
+  const openPlugins = () => { setCzTab("hub"); setView("customize"); };
   const chatsRef = useRef<Chat[]>([]);
   chatsRef.current = chats;
   const projsRef = useRef<Project[]>([]);
@@ -780,7 +779,7 @@ export default function Home() {
     setChats((cs) => cs.filter((c) => !c.inc));
     setView("new"); setCur(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
   };
-  const goCustom = () => setView("customize");
+  const goCustom = () => { setCzTab("hub"); setView("customize"); };
   const removeChat = (id: number) => { setChats((cs) => cs.filter((c) => c.id !== id)); if (cur === id) goNew(); };
   const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
 
@@ -930,7 +929,7 @@ export default function Home() {
               </div>
             </>
           )}
-          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Scroll />} label="Skills" />}
+          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Plugins />} label="Skill Hub" />}
         </div>
         {(() => {
           const row = (c: Chat) => (
@@ -1049,7 +1048,7 @@ export default function Home() {
                 <button className="menu-item" onClick={() => { setModal("logout"); setUserMenu(false); }}><I.Out />Đăng xuất</button>
               </Menu>
           </div>
-          {me?.perms.features.skills !== false && <button className="icon-btn" onClick={() => setView("customize")} aria-label="Skills" data-tip="Skills"><I.Scroll size={16} /></button>}
+          {me?.perms.features.skills !== false && <button className="icon-btn" onClick={goCustom} aria-label="Skill Hub" data-tip="Skill Hub"><I.Plugins size={16} /></button>}
           <button className="icon-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm"><I.Search size={16} /></button>
         </div>
       </aside>
@@ -1188,7 +1187,7 @@ export default function Home() {
           </div></div>
         )}
 
-        {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} skills={<Directory />} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
+        {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
       </main>

@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang } from "./i18n";
-import { GithubAdd } from "./ghadd";
 
 type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number };
 type FileInfo = { path: string; size: number; kind: string };
@@ -19,6 +18,8 @@ const portal = (n: ReactNode) => (typeof document === "undefined" ? n : createPo
 
 export const SKILLS_CHANGED = "skills:changed";
 export const SKILLS_UPLOAD = "skills:upload";
+// Kho kỹ năng nhận tệp thả vào trang rồi chuyển cho danh sách skill (detail = File).
+export const SKILLS_DROP = "skills:drop";
 const api = async (url: string, init?: RequestInit) => {
   const r = await fetch(url, init);
   const j = await r.json().catch(() => ({}));
@@ -98,7 +99,8 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
   );
 }
 
-export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" | "desc"; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void }> }) {
+// Phần "Skill của bạn" trong Kho kỹ năng: các skill lẻ (tải lên, link GitHub một skill), cùng kiểu hàng với thư viện.
+export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void }> }) {
   const app = useApp();
   const [list, setList] = useState<Item[] | null>(null);
   const [loadErr, setLoadErr] = useState("");
@@ -109,7 +111,6 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
   const [err, setErr] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
   const [fileView, setFileView] = useState<{ path: string; text: string } | null>(null);
-  const [drag, setDrag] = useState(false);
   const verRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -118,6 +119,7 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
   useEffect(() => { load(); const h = () => load(); window.addEventListener(SKILLS_CHANGED, h); return () => window.removeEventListener(SKILLS_CHANGED, h); }, [load]);
 
   useEffect(() => { const h = () => verRef.current?.click(); window.addEventListener(SKILLS_UPLOAD, h); return () => window.removeEventListener(SKILLS_UPLOAD, h); }, []);
+  useEffect(() => { const h = (e: Event) => { const f = (e as CustomEvent<File>).detail; if (f) pick(f); }; window.addEventListener(SKILLS_DROP, h); return () => window.removeEventListener(SKILLS_DROP, h); });
   const check = async (src: Src) => {
     setErr(""); setDetail(null); setChecking(true);
     try {
@@ -155,39 +157,30 @@ export function SkillsPanel({ q, sort, Toggle }: { q: string; sort: "" | "asc" |
   const openFile = async (n: string, path: string) => {
     try { const j = await api(`/api/skills/${n}/file?path=${encodeURIComponent(path)}`); setFileView({ path, text: j.binary ? "(binary file)" : j.text + (j.truncated ? "\n…" : "") }); } catch (e) { setErr((e as Error).message); }
   };
-  const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) pick(f); };
 
   const shown = (list ?? []).filter((s) => (s.name + " " + s.description).toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (sort ? (sort === "asc" ? 1 : -1) * a.name.localeCompare(b.name) : +new Date(b.updated_at) - +new Date(a.updated_at)));
+    .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
   const on = (list ?? []).filter((s) => s.enabled).length;
 
   return (
     <>
-      <div className={`sk-drop ${drag ? "drag" : ""}`} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
-        <I.Scroll size={22} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 560 }}>{list && list.length ? "Add a skill" : "Add your first skill"}</div>
-          <p className="d" style={{ margin: "2px 0 0" }}>Drop a .zip skill folder or a SKILL.md here. Synchro checks it, shows a preview, then the model loads it automatically when a request matches.</p>
-        </div>
-        <button className="btn dark" disabled={checking} onClick={() => verRef.current?.click()}>{checking ? "Checking…" : "Upload skill"}</button>
-      </div>
-      <GithubAdd onDone={(r) => { if (r.kind === "plugin") app.say(`${r.plugin.name}: ${r.plugin.skills.length} skill → Plugins`); }} />
+      {(list === null || list.length > 0 || !q) && <div className="pl-sec">Your skills <i>{list?.length ?? 0}</i>{list && list.length > 0 && <span className="pl-sec-d">{`${on} enabled`}</span>}{checking && <span className="art-spin sm" />}</div>}
       {err && <div className="sk-err" role="alert"><span>{err}</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {loadErr && <div className="sk-err">{loadErr}</div>}
-
-      <div className="muted" style={{ fontSize: 12, margin: "18px 0 8px" }}>Your skills <span className="new-tag" style={{ background: "var(--hover)", color: "var(--text-2)" }}>{list?.length ?? 0}</span> · {`${on} enabled`}</div>
-      {list === null && <div className="muted" style={{ fontSize: 13 }}>Loading…</div>}
-      {list !== null && !shown.length && <div className="empty" style={{ margin: "24px 0" }}>{list.length ? "No matching skills." : "No skills yet."}</div>}
-      {shown.map((s) => (
-        <div key={s.name} className="item-row sk-row">
-          <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => open(s.name)}>
-            <div><b style={{ fontWeight: 460 }} data-notr>{s.name}</b> <span className="muted" style={{ fontSize: 12 }} data-notr>{meta(s)}</span>{s.warnings.length > 0 && <span className="sk-warn" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}</div>
-            <div className="muted sk-desc">{s.description}</div>
+      {list !== null && !list.length && !q && <div className="hub-empty"><I.Scroll size={18} /><span>Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.</span></div>}
+      <div className="pl-rows2">
+        {shown.map((s) => (
+          <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)}>
+            <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
+            <div className="pl-row2-t">
+              <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}{!s.enabled && <span className="pl-b">Off</span>}</div>
+              <span>{s.description}</span>
+            </div>
+            <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
+            <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} set={(v) => toggle(s.name, v)} /></span>
           </div>
-          <button className="btn" style={{ height: 26 }} onClick={() => open(s.name)}>View</button>
-          <Toggle on={s.enabled} set={(v) => toggle(s.name, v)} />
-        </div>
-      ))}
+        ))}
+      </div>
       <input ref={verRef} type="file" hidden accept=".zip,.md" onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ""; }} />
 
       {choose && portal(

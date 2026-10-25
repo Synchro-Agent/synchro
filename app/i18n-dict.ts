@@ -1071,10 +1071,21 @@ Object.assign(VI2EN, { "is installed and ready to use": "is installed and ready 
 // Ô "Thêm từ GitHub" dùng chung (Kỹ năng + Plugins)
 Object.assign(EN2VI, {
   "Paste a GitHub link: one skill or a whole repository": "Dán link GitHub: một skill hoặc cả repo",
-  "Synchro looks at the link for you. One skill is added to Skills. A repository with several skills is installed as a plugin, with license and script checks and one-click updates.": "Synchro tự xem link. Một skill thì thêm vào Kỹ năng. Repo có nhiều skill thì cài thành một plugin, có kiểm tra giấy phép, script và cập nhật một chạm.",
+  "Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates.": "Synchro tự xem link. Một skill thì vào mục Skill của bạn. Repo có nhiều skill thì cài thành một thư viện, có kiểm tra giấy phép, script và cập nhật một chạm.",
   "Checking…": "Đang kiểm tra…", "Add from GitHub": "Thêm từ GitHub", "One skill or a whole repository, detected for you": "Một skill hay cả repo, Synchro tự nhận ra",
   "Paste a link to a public repository, a folder inside it, or a single SKILL.md. Synchro checks licenses and scripts and shows you everything before installing.": "Dán link repo công khai, một thư mục trong đó hoặc một file SKILL.md. Synchro kiểm tra giấy phép, script và cho bạn xem hết trước khi cài.",
-  "Install for everyone": "Cài cho mọi người", "Installed as a one-skill plugin so every account can use it.": "Cài thành plugin một skill để mọi tài khoản cùng dùng được.",
+  "Install for everyone": "Cài cho mọi người", "Installed as a one-skill library so every account can use it.": "Cài thành thư viện một skill để mọi tài khoản cùng dùng được.",
   "It's a single skill, so it was added to Skills": "Đây là một skill lẻ nên đã được thêm vào Kỹ năng", "No SKILL.md found at this link.": "Không tìm thấy SKILL.md nào ở link này.",
 });
-RULES_VI.push([/^This link has (\d+) skills, so Synchro installs them together as one plugin under Plugins\. Untick any skill you don't need\.$/, (m) => `Link này có ${m[1]} skill nên Synchro cài chung thành một plugin trong mục Plugins. Bỏ chọn những skill không cần.`]);
+RULES_VI.push([/^This link has (\d+) skills, so Synchro installs them together as one library\. Untick any skill you don't need\.$/, (m) => `Link này có ${m[1]} skill nên Synchro cài chung thành một thư viện. Bỏ chọn những skill không cần.`]);
+// Kho kỹ năng (gộp Skills và Plugins)
+Object.assign(EN2VI, {
+  "Skill Hub": "Kho kỹ năng", "Libraries for everyone": "Thư viện cho mọi người", "Your libraries": "Thư viện của bạn", "Your skills": "Skill của bạn",
+  "Upload a skill": "Tải lên skill", "A .zip skill folder or a SKILL.md file": "Thư mục skill dạng .zip hoặc file SKILL.md",
+  "Describe what you need, Synchro writes the skill": "Mô tả điều bạn cần, Synchro viết skill giúp bạn", "Curated libraries with checked licenses": "Thư viện chọn lọc, đã kiểm tra giấy phép",
+  "Just chat: Synchro looks through every library and skill here and picks the ones that fit your request. A library is a set of skills installed together; a single skill is one you added on its own.": "Cứ chat bình thường: Synchro tự xem mọi thư viện và skill ở đây rồi chọn cái hợp với yêu cầu. Thư viện là một bộ nhiều skill cài cùng lúc; skill lẻ là skill bạn thêm riêng từng cái.",
+  "Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.": "Skill lẻ bạn thêm sẽ hiện ở đây. Dán link GitHub ở trên, hoặc thả thư mục skill .zip hay file SKILL.md vào bất kỳ đâu trên trang này.",
+  "Drop to add the skill": "Thả vào để thêm skill", ".zip skill folder or SKILL.md": "Thư mục skill .zip hoặc SKILL.md", "Scripts": "Có script",
+  "Skills and plugins live in the": "Skill và plugin nằm trong",
+});
+Object.assign(VI2EN, { "Kho kỹ năng": "Skill Hub" });
