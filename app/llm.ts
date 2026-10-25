@@ -50,6 +50,10 @@ let lastFiles: OutFile[] = [];
 // Chế độ Tự động: model máy chủ đã chọn cho lượt vừa rồi (đọc một lần).
 let lastRoute: string | null = null;
 export const takeRoute = () => { const r = lastRoute; lastRoute = null; return r; };
+// Bộ não công ty: các đoạn tài liệu model được đưa để trả lời, kèm số trích dẫn (đọc một lần).
+export type KbSource = { n: number; doc: string; title: string; scope: "private" | "org"; chunk: number; text: string };
+let lastSources: KbSource[] = [];
+export const takeSources = () => { const s = lastSources; lastSources = []; return s; };
 /** Tệp code vừa tạo ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeOutputs = () => { const f = lastFiles; lastFiles = []; return f; };
 
@@ -98,6 +102,7 @@ async function absorb(j: Record<string, any>): Promise<string> { // eslint-disab
   lastLibs = Array.isArray(j.libs) ? j.libs : [];
   lastFiles = Array.isArray(j.files) ? j.files : [];
   lastRoute = j.auto && typeof j.model === "string" ? j.model : null;
+  lastSources = Array.isArray(j.sources) ? j.sources : [];
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model.
   if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage"));
   return String(j.text ?? j.reply ?? "");

@@ -9,6 +9,7 @@ import { capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
 import { progress, registerExec } from "./runs";
 import { AUTO, routeModel } from "./router";
+import { knowledgePrompt, type KbHit } from "./kb";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { STUDIO_LABEL } from "./plugindir";
@@ -109,7 +110,7 @@ const mockAdapter = (skills: Skl): Adapter => ({
 // code: công cụ run_code đang bật (net: được tải gói từ kho thư viện); outs: tệp code đã tạo trong lượt này.
 // libs: skill (và mục thư viện) → thư viện chứa nó, để câu trả lời hiện "Thư viện Thiết kế · skill đã đọc". studio: chế độ người dùng chọn bằng nút.
 type Lib = { key: string; label: string };
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string> };
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; sources?: Omit<KbHit, "score">[] };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -261,7 +262,7 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   const usedNames = out.used.filter((u) => u.kind === "skill").map((u) => u.name);
   recordUse(c.user.id, usedNames);
   recordPluginUse(x.list.filter((k) => k.user_id.startsWith("pl_") && usedNames.includes(k.name)).map((k) => k.id));
-  return Response.json({ model, text: out.text, skills: out.used, files: x.outs, libs: usedLibs(x, usedNames) });
+  return Response.json({ model, text: out.text, skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.sources?.length ? { sources: x.sources } : {}) });
 }
 
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
@@ -391,7 +392,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   // Nút Thiết kế / Trình bày / Tài liệu (studio): nạp thư viện skill của plugin gắn với studio đó.
   const studio = skills && can(c.user, "skills") ? studioOf(body.studio) : null;
   const st = studio ? studioSkills(c.user.id, studio) : null;
-  const capSys = cs ? [cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
+  // Bộ não công ty: trí nhớ nhóm và các đoạn tài liệu liên quan tới câu hỏi mới nhất (chỉ ở lượt chat chính, không ở Synchro Code).
+  const kb = skills && feature !== "code" ? knowledgePrompt(c.user, lastUserText(messages)) : null;
+  const capSys = cs ? [cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", kb?.prompt ?? ""].filter(Boolean).join("\n\n") : "";
   let sess: ConnectorSession | null = null;
   try {
     const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
@@ -447,7 +450,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const scripts = code;
       const sk = [capSys, skillsPrompt(visible, scripts), route, sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
       const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, sources: kb?.sources };
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
         : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)
@@ -455,7 +458,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       return reply(c, model, out, x);
     }
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
-    return Response.json({ model, text: await chatOnce(t, capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, messages, max_tokens, undefined, effort), effort });
+    return Response.json({ model, text: await chatOnce(t, capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, messages, max_tokens, undefined, effort), effort, ...(kb?.sources.length ? { sources: kb.sources } : {}) });
   } catch (e) {
     sess?.close();
     if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });

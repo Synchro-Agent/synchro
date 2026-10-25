@@ -1130,3 +1130,13 @@ Object.assign(VI2EN, {
   "Đã lưu tác vụ": "Task saved", "Đã tạo tác vụ, sẽ chạy trong vòng một phút": "Task created, it will run within a minute", "Đã hẹn tác vụ": "Task scheduled",
   "Tác vụ nền đã chạy xong. Mở Hộp thư để xem kết quả.": "A background task finished. Open your Inbox to see the result.", "Tác vụ nền": "Background task",
 });
+// Bộ não công ty
+Object.assign(VI2EN, {
+  "Tri thức": "Knowledge", "Tài liệu": "Documents", "Trí nhớ nhóm": "Team memory", "Thử tìm": "Try a search", "Riêng tôi": "Only me", "Nguồn": "Sources",
+  "Synchro tự tìm trong kho này mỗi khi bạn hỏi và trả lời kèm nguồn [1], [2]. Tài liệu của cả tổ chức do quản trị viên thêm, mọi người cùng dùng.": "Synchro searches this library whenever you ask and answers with sources [1], [2]. Organization documents are added by admins and shared with everyone.",
+  "Dán văn bản": "Paste text", "Tải tài liệu lên": "Upload documents", "Kho tài liệu đang trống": "The library is empty", "ký tự": "characters", "đoạn": "passages", "Ghi nhớ": "Remember",
+  "Tải lên quy trình, chính sách, hợp đồng mẫu, tài liệu sản phẩm… (PDF, Word, Excel, văn bản). Synchro sẽ trả lời dựa trên chúng và ghi rõ nguồn.": "Upload processes, policies, contract templates, product docs… (PDF, Word, Excel, text). Synchro will answer from them and cite the source.",
+  "Chưa có trí nhớ nào": "No memories yet", "Những điều Synchro nên luôn nhớ khi làm việc với bạn hoặc cả tổ chức: quy ước, văn phong, tên viết tắt, người phụ trách…": "Things Synchro should always remember for you or your organization: conventions, tone, abbreviations, owners…",
+  "Gõ câu hỏi để xem Synchro tìm thấy đoạn nào": "Type a question to see which passages Synchro finds", "Tìm": "Search", "Không tìm thấy đoạn nào liên quan.": "No relevant passages found.",
+  "Dán văn bản vào kho": "Paste text into the library", "Tên tài liệu": "Document name", "Nội dung": "Content", "Thêm vào kho": "Add to library", "Đang đọc": "Reading", "Đã thêm": "Added", "Đã thêm tài liệu": "Document added", "Đang lưu…": "Saving…",
+});

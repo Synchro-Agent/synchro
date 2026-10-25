@@ -612,6 +612,13 @@ export function capsReply(sys, q, msgs, toolNames) {
   if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }
   if (s.includes("<artifacts>")) { const a = artifactReply(t, s, msgs); if (a) return { text: a }; }
   else { const a = noArtifactReply(t); if (a) return { text: a }; }
+  // Bộ não công ty: trả lời từ đoạn tài liệu được đưa vào, ghi số nguồn như model thật (trừ khi người dùng muốn vẽ biểu đồ, sơ đồ).
+  const kn = [...s.matchAll(/<source n="(\d+)" title="([^"]*)">\n([\s\S]*?)\n<\/source>/g)];
+  if (kn.length && !/\b(ve|bieu do|so do|chart)\b/.test(t)) {
+    const first = (x) => x.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s/)[0].slice(0, 300);
+    const lines = kn.slice(0, 2).map(([, n, title, body]) => `- Theo **${title}**: ${first(body)} [${n}]`);
+    return { text: `Mình tìm thấy trong kho tài liệu của tổ chức:\n\n${lines.join("\n")}\n\nBạn mở phần Nguồn bên dưới để xem nguyên văn.` };
+  }
   if (s.includes("<inline_visuals>")) { const v = vizReply(t); if (v) return { text: v }; }
   return null;
 }
