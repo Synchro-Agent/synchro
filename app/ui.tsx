@@ -28,9 +28,10 @@ export function Spark({ size = 18 }: { size?: number }) {
   );
 }
 
-export function Thinking({ label }: { label: string }) {
+// text: bước đang làm của lượt chạy nền ("Đang đọc skill …"), hiện cạnh chấm động.
+export function Thinking({ label, text }: { label: string; text?: string }) {
   return (
-    <div className="thinking" role="status" aria-label={label}><FluidDots size={14} /></div>
+    <div className="thinking" role="status" aria-label={text || label}><FluidDots size={14} />{text && <span className="thinking-t" key={text}>{text}</span>}</div>
   );
 }
 

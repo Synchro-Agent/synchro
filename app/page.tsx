@@ -14,7 +14,7 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
@@ -566,7 +566,7 @@ export default function Home() {
   }, [me, model, view]);
   useEffect(() => {
     if (!loaded) return;
-    ls.set("chats", JSON.stringify(chats.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true })) }))));
+    ls.set("chats", JSON.stringify(chats.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true, prog: undefined })) }))));
     ls.set("projects", JSON.stringify(projects));
     ls.set("model", model);
     ls.set("banner", banner ? "1" : "0");
@@ -679,7 +679,10 @@ export default function Home() {
       // Skill hai câu trả lời gần nhất đã dùng: lượt tiếp nối (sửa, thêm, đổi) đọc lại để giữ cùng phong cách.
       const recentSkills = [...new Set((chatsRef.current.find((c) => c.id === id)?.msgs ?? []).filter((m) => m.role === "ai" && (m.skills?.length || m.libs?.length)).slice(-2)
         .flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))];
-      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills });
+      // Lượt chạy bền: máy chủ trả lời ở nền; mã lượt lưu vào tin nhắn để tải lại trang vẫn nhận được kết quả.
+      const lastMsg = (f: (m: Msg) => Msg) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
+      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills,
+        onRun: (run) => lastMsg((m) => ({ ...m, run })), onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); } });
       const used = takeSkillsUsed();
       libs = takeLibsUsed();
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -714,6 +717,27 @@ export default function Home() {
       }
     }, 38);
   };
+  // Mở lại trang khi câu trả lời còn đang chạy ở máy chủ: nối vào lượt đó, hiện bước đang làm, nhận kết quả khi xong.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!loaded || !me || resumed.current) return;
+    resumed.current = true;
+    for (const c of chatsRef.current) {
+      const last = c.msgs[c.msgs.length - 1];
+      if (!last || last.role !== "ai" || last.text || !last.run) continue;
+      const run = last.run;
+      const set = (f: (m: Msg) => Msg) => patch(c.id, (ms) => (ms.length && ms[ms.length - 1].run === run ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
+      set((m) => ({ ...m, done: false }));
+      attachRun(run, (prog) => set((m) => ({ ...m, prog }))).then((text) => {
+        const used = takeSkillsUsed(), libs = takeLibsUsed(), outs = takeOutputs();
+        const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
+        const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
+        const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
+        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined }));
+        if (capsRef.current.art && hasArtifacts(text) && !c.inc) saveArtifacts(String(c.id), splitArtifacts(text).flatMap((sg) => (sg.kind === "art" ? [sg.art] : []))).then(() => setArtRefresh((n) => n + 1));
+      }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
+    }
+  }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
   const send = (t: string, f: string[] = []) => {
     if (busy) return;
     stick.current = true;
@@ -1117,7 +1141,7 @@ export default function Home() {
                         const v = pos?.v ?? 0;
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
                         return <ArtifactCard key={k} art={sg.art} version={v + 1} total={total} active={active} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} />) : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>

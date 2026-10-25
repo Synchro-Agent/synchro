@@ -3315,3 +3315,6 @@ body{font-weight:400;text-rendering:optimizeLegibility}
 .icon-btn svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:1.34px}
 .nav-item.active svg :is(path,circle,rect,line,polyline,polygon,ellipse),.s-item.on svg :is(path,circle,rect,line,polyline,polygon,ellipse){stroke-width:1.5px}
+/* Lượt chạy nền: bước đang làm hiện cạnh chấm động */
+.thinking{gap:10px}
+.thinking-t{font-size:13px;color:var(--text-3);animation:fadeIn .3s both;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}

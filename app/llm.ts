@@ -60,20 +60,29 @@ export const getActiveEffort = () => activeEffort;
 export class LLMError extends Error { constructor(m: string, public status: number) { super(m); } }
 
 // opts.feature: "code" khi gọi từ Synchro Code; opts.project: id dự án đang chat (bật skill riêng của dự án).
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[] } = {}): Promise<string> {
-  lastSkills = []; lastFiles = [];
-  if (!hasLLM) {
-    // Chưa có model: trả lời giả lập từ câu hỏi cuối.
-    const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    return makeReply(textOf(last));
-  }
-  const r = await fetch(LLM_ENDPOINT, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills }),
+// Lượt chạy bền: máy chủ chạy câu trả lời ở nền, trình duyệt theo dõi qua SSE (tự nối lại khi rớt mạng).
+// onProgress nhận các bước đang làm ("Đang đọc skill …"); kết quả cuối giống hệt /api/llm trả về.
+export function waitRun(id: string, onProgress?: (text: string) => void): Promise<{ http: number; result: Record<string, unknown> }> {
+  return new Promise((ok, no) => {
+    let settled = false;
+    const es = new EventSource(`/api/runs/${encodeURIComponent(id)}`);
+    const end = (f: () => void) => { if (settled) return; settled = true; es.close(); f(); };
+    es.addEventListener("step", (e) => { try { onProgress?.(JSON.parse((e as MessageEvent).data).text); } catch {} });
+    es.addEventListener("done", (e) => { try { const d = JSON.parse((e as MessageEvent).data); end(() => ok({ http: d.http ?? 502, result: d.result ?? {} })); } catch (x) { end(() => no(x)); } });
+    // Rớt kết nối: EventSource tự nối lại (gửi Last-Event-ID). Chỉ khi máy chủ từ chối hẳn mới hỏi trạng thái một lần.
+    es.onerror = () => {
+      if (es.readyState !== EventSource.CLOSED) return;
+      fetch(`/api/runs/${encodeURIComponent(id)}?json=1`).then((r) => r.json().then((j) => ({ r, j }))).then(({ r, j }) => {
+        if (!r.ok) return end(() => no(new LLMError(j.error || `Run ${r.status}`, r.status)));
+        if (j.run.status === "running") return end(() => ok(waitRun(id, onProgress) as never));
+        end(() => ok({ http: j.run.http ?? 502, result: j.run.result ?? {} }));
+      }, (x) => end(() => no(x)));
+    };
   });
-  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status); }
-  let j = await r.json();
+}
+
+// Kết quả một lượt (từ /api/llm hoặc lượt chạy bền) → văn bản; skill, thư viện, tệp đã dùng đọc qua take…().
+async function absorb(j: Record<string, any>): Promise<string> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Máy chủ dừng chờ duyệt công cụ: hỏi người dùng rồi gửi quyết định để máy chủ chạy tiếp (một lượt có thể hỏi nhiều lần).
   for (let n = 0; j.approval && n < 20; n++) {
     const calls = (j.approval.calls ?? []) as ApprovalCall[];
@@ -88,6 +97,37 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model.
   if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage"));
   return String(j.text ?? j.reply ?? "");
+}
+
+/** Mở lại một lượt đang chạy (sau khi tải lại trang): chờ kết quả rồi trả lời như callLLM. */
+export async function attachRun(id: string, onProgress?: (text: string) => void): Promise<string> {
+  lastSkills = []; lastFiles = []; lastLibs = [];
+  const { http, result } = await waitRun(id, onProgress);
+  if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http);
+  return absorb(result);
+}
+
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void } = {}): Promise<string> {
+  lastSkills = []; lastFiles = []; lastLibs = [];
+  if (!hasLLM) {
+    // Chưa có model: trả lời giả lập từ câu hỏi cuối.
+    const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    return makeReply(textOf(last));
+  }
+  const r = await fetch(LLM_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills, async: opts.onRun ? true : undefined }),
+  });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status); }
+  const j = await r.json();
+  if (typeof j.run === "string") {
+    opts.onRun?.(j.run);
+    const { http, result } = await waitRun(j.run, opts.onProgress);
+    if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http);
+    return absorb(result);
+  }
+  return absorb(j);
 }
 
 // Artifact dùng AI: window.synchro.complete(prompt) bên trong artifact → model đang chọn (không công cụ, không skill).
