@@ -4,7 +4,7 @@ import { capsState, setUserCaps } from "../../caps";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Cài đặt → Khả năng: lựa chọn đã lưu, lý do bị khóa (máy chủ chưa có nơi chạy code), và nơi máy chủ chạy code.
+// Cài đặt → Khả năng của tài khoản: lựa chọn đã áp dụng quyền quản trị viên, lý do bị khóa, và nơi máy chủ chạy code.
 export const GET = handle(async (req: Request) => Response.json(capsState(requireUser(req).user)));
 
 export const PATCH = handle(async (req: Request) => {

@@ -1046,7 +1046,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                 </Menu>
               </div>
               <div className="cv-sp" />
-              {/* Bộ chọn model + mức nỗ lực dùng chung với khung chat thường. */}
+              {/* Bộ chọn model + mức nỗ lực dùng chung với khung chat thường (khóa model quản trị viên chưa cho phép). */}
               <div className="cv-model" data-notr>{modelPicker}</div>
               <div style={{ position: "relative" }}>
                 {/* Mức dùng API (giới hạn phiên, tuần, hạn mức nhà cung cấp) kèm ngữ cảnh của phiên code này. */}

@@ -1,8 +1,8 @@
 import { enabledSkills, recordUse } from "./skillstore";
 import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "./skillruntime";
 import { healScript } from "./skillheal";
-import { limit, type UserRow } from "./authstore";
-import { clampEffort, isEffort, legacyModel, type Effort } from "./catalog";
+import { can, canModel, limit, permsOf, type UserRow } from "./authstore";
+import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
 import { ConnectorSession, connectorsPrompt } from "./connectors";
 import { randomToken } from "./mcpauth";
@@ -25,7 +25,7 @@ import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "./llmcall";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
-// Model nào gọi tới nhà cung cấp nào do khóa API nhập ở Cài đặt → API quyết định.
+// Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → API quyết định.
 
 // ---------------------------------------------------------------- vòng lặp tool cho skill
 type Call = { id: string; name: string; input: Record<string, unknown> };
@@ -438,12 +438,12 @@ type Who = { user: UserRow };
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (body.model !== AUTO || typeof body.resume === "string") return chatTurn(body, c, scope);
   const cat = await catalog(), main = mainModels();
-  const allowed = cat.flatMap((p) => p.models.map((m) => m.key)).filter((k) => main.includes(ALL) || main.includes(k));
+  const allowed = cat.flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
   const msgs = Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : [];
   const lastUser = [...msgs].reverse().find((m) => m?.role === "user");
   const attachments = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string }[]).filter((b) => b?.type && b.type !== "text").length : 0;
   const r = routeModel({ text: lastUserText(msgs), attachments, turns: msgs.length, studio: !!studioOf(body.studio) }, allowed);
-  if (!r) return Response.json({ error: "Chưa có model nào ở bộ chọn model. Hãy chọn model hiện ở Cài đặt → API." }, { status: 503 });
+  if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   const res = await chatTurn({ ...body, model: r.model }, c, scope);
   const j = await res.json().catch(() => ({}));
   return Response.json({ ...j, model: j.model ?? r.model, auto: { tier: r.tier, why: r.why } }, { status: res.status });
@@ -476,12 +476,14 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   }
   const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted, conv } = body;
   scope.feature = feature === "artifact" ? "artifact" : feature === "code" ? "code" : skills ? "chat" : "internal";
+  if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
-  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Hãy nhập khóa API ở Cài đặt → API." }, { status: 503 });
+  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
+  if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
   const t = await resolveModel(model);
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
-  // Mức nỗ lực đã chọn, hạ về mức gần nhất model hỗ trợ (Gemini chỉ tới Cao).
-  const effort = isEffort(wanted) ? clampEffort(wanted, "max", t.kind) : undefined;
+  // Mức nỗ lực người dùng chọn, hạ xuống giới hạn quản trị viên đặt cho model này (quản trị viên không bị giới hạn).
+  const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
   if (feature === "artifact") {
     if (!capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
     limit("artai:" + c.user.id, 120, 10 * 60_000);
@@ -498,7 +500,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   // Lượt chat chính (skills = true) áp dụng Cài đặt → Khả năng: Artifacts, hình minh họa trong chat, chạy code.
   const cs = skills ? capsState(c.user) : null;
   // Nút Thiết kế / Trình bày / Tài liệu (studio): nạp thư viện skill của plugin gắn với studio đó.
-  const studio = skills ? studioOf(body.studio) : null;
+  const studio = skills && can(c.user, "skills") ? studioOf(body.studio) : null;
   const st = studio ? studioSkills(c.user.id, studio) : null;
   const capSys = cs ? [feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
   // Bàn trộn ngữ cảnh (trình duyệt gửi): tắt khối tầng động, chỉ gửi N tin gần nhất, tóm tắt các lượt cũ đã nén.
@@ -510,7 +512,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {
-    const list = skills && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
+    const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
     // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
     for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
     for (let i = list.length - 1; i >= 0; i--) if (list.findIndex((x) => x.name === list[i].name) !== i) list.splice(i, 1);
@@ -523,7 +525,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const libs: Record<string, Lib[]> = {};
     const tag = (lib: Lib, ks: Skill[]) => { libs[lib.key] = [lib]; for (const k of ks) (libs[k.name] ??= []).push(lib); };
     if (studio) tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
-    if (skills && skillsOn(c.user)) {
+    if (skills && can(c.user, "skills") && skillsOn(c.user)) {
       for (const s of STUDIOS) {
         const lib = s === studio ? null : studioSkills(c.user.id, s);
         if (!lib?.skills.length) continue;
@@ -559,7 +561,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
     const prep = prepareHistory(messages, [route], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
-    if (skills && t.kind !== "mock") { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project }); if (!sess.tools.length) sess = null; }
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
     // read_ref: đọc dữ liệu lớn đã lưu theo tham chiếu (ở lượt này hoặc các lượt trước, kể cả khi đổi model).
     const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));

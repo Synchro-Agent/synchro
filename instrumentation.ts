@@ -1,5 +1,5 @@
 // Chạy một lần khi máy chủ Next khởi động: chạy lại các lượt trả lời bị gián đoạn khi máy chủ tắt,
-// bật bộ hẹn giờ tác vụ nền, và cài sẵn các plugin studio nếu chưa từng cài.
+// bật bộ hẹn giờ tác vụ nền, và cài sẵn các plugin studio cho cả tổ chức nếu chưa từng cài.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   setTimeout(async () => {

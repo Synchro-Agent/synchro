@@ -63,6 +63,56 @@ export function ProjectModal({ onClose, onCreate, init, title = "Tạo dự án"
 }
 
 
+export function ShareModal({ title, onClose, say, onCopy }: { title: string; onClose: () => void; say: (m: string) => void; onCopy?: () => void }) {
+  const [mode, setMode] = useState<"priv" | "pub">("priv");
+  const link = `https://claude.ai/share/${Math.abs(title.length * 7919 + 104729).toString(16)}-c0de-4a1b`;
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal sm" style={{ width: 480 }}>
+        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 14, right: 14 }}><I.X size={16} /></button>
+        <h2 style={{ fontSize: 16 }}>Chia sẻ đoạn chat</h2>
+        <p className="muted" style={{ fontSize: 13, margin: "0 0 14px" }}>{title}</p>
+        {(["priv", "pub"] as const).map((m) => (
+          <button key={m} className={`radio-row ${mode === m ? "on" : ""}`} onClick={() => setMode(m)}>
+            <span className="rd" />
+            <span><b>{m === "priv" ? "Riêng tư" : "Công khai"}</b><br /><span className="muted" style={{ fontSize: 13 }}>{m === "priv" ? "Chỉ bạn mới có quyền truy cập" : "Bất kỳ ai có liên kết đều có thể xem"}</span></span>
+          </button>
+        ))}
+        <div className="modal-foot" style={{ marginTop: 16 }}>
+          <button className="btn" onClick={onClose}>Hủy</button>
+          <button className="btn dark" disabled={mode === "priv"} style={mode === "priv" ? { opacity: 0.4 } : undefined} onClick={() => { navigator.clipboard?.writeText(link); onCopy?.(); say("Đã sao chép liên kết"); onClose(); }}>Sao chép liên kết</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function UpgradeModal({ onClose, say }: { onClose: () => void; say: (m: string) => void }) {
+  const plans = [
+    ["Free", "$0", "Trò chuyện trên web, iOS, Android và máy tính", "Gói hiện tại"],
+    ["Pro", "$17", "Nhiều lượt dùng hơn, Synchro Code, Projects, nghiên cứu", "Nâng cấp lên Pro"],
+    ["Max", "$100", "Gấp 5–20 lần Pro, truy cập sớm tính năng mới", "Nâng cấp lên Max"],
+  ];
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal sm" style={{ width: 760 }}>
+        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 14, right: 14 }}><I.X size={16} /></button>
+        <h2 style={{ fontSize: 18 }}>Chọn gói phù hợp với bạn</h2>
+        <div className="plans">
+          {plans.map(([n, p, d, b], i) => (
+            <div key={n} className={`plan ${i === 1 ? "hl" : ""}`}>
+              <b style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 360 }}>{n}</b>
+              <div><span style={{ fontSize: 28 }}>{p}</span><span className="muted"> / tháng</span></div>
+              <p className="muted" style={{ fontSize: 13, margin: 0, minHeight: 58 }}>{d}</p>
+              <button className={`btn ${i ? "dark" : ""}`} disabled={!i} style={!i ? { opacity: 0.5 } : undefined} onClick={() => { say("Đây là bản demo, chưa có thanh toán thật"); onClose(); }}>{b}</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function UploadModal({ onClose, onFiles, onConverted }: { onClose: () => void; onFiles: (f: File[]) => void; onConverted?: (f: File, md: string) => void; say?: (m: string) => void }) {
   const inp = useRef<HTMLInputElement>(null);
   const mdIn = useRef<HTMLInputElement>(null);
@@ -127,12 +177,19 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
 export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
   const [tab, setTab] = useState(initial);
   const [q, setQ] = useState("");
+  const me = useApp().me;
+  const admin = me?.isAdmin;
+  const feat = me?.perms.features;
   const items: [string, React.ReactNode][] = [
-    ["General", <I.SetGeneral key="g" />], ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
+    ["General", <I.SetGeneral key="g" />], ...(admin ? [["Administrator", <I.SetAdmin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
     ["Capabilities", <I.SetCapabilities key="c" />], ["Usage", <UsageIcon key="u" size={18} />], ["Memory", <I.SetMemory key="m" />],
-    ["Synchro Code", <I.Code key="cc" />], ["API", <I.SetKey key="api" />],
+    ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
+    ...(admin ? [["API", <I.SetKey key="api" />] as [string, React.ReactNode]] : []),
   ];
-  const custom: [string, React.ReactNode][] = [["Skill Hub", <I.Plugins key="pl" />], ["Connectors", <I.Connectors key="cn" />]];
+  const custom: [string, React.ReactNode][] = [
+    ...(feat?.skills !== false ? [["Skill Hub", <I.Plugins key="pl" />] as [string, React.ReactNode]] : []),
+    ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
+  ];
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => n.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

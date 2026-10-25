@@ -1,4 +1,4 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
+import { canModel, handle, limit, requireUser, sameOrigin } from "../../../authstore";
 import { catalog, mainModels, resolveModel } from "../../../providers";
 import { ALL } from "../../../catalog";
 import { routeModel } from "../../../router";
@@ -33,7 +33,7 @@ export const POST = handle(async (req: Request) => {
   const flat = splitArtifacts(answer).map((sg) => (sg.kind === "text" ? sg.text : `[sản phẩm "${sg.art.title}"]`)).join("")
     .replace(/```[\s\S]*?(```|$)/g, "[khối code]").slice(0, 12_000);
   const main = mainModels();
-  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => main.includes(ALL) || main.includes(k));
+  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(user, k));
   const pick = routeModel({ text: "tóm tắt", attachments: 0, turns: 1, studio: false }, allowed);
   const t = pick && (await resolveModel(pick.model));
   if (!t) return Response.json({ error: "Synchro chưa được kết nối với model nào." }, { status: 503 });

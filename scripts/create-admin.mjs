@@ -1,5 +1,5 @@
-// Tạo (hoặc đặt lại mật khẩu cho) tài khoản chủ sở hữu trực tiếp trong data/synchro.db.
-// Synchro dùng cá nhân, không có đăng ký: đây là cách tạo tài khoản bằng mật khẩu (ngoài đăng nhập Google/GitHub/Apple). Email phải nằm trong ADMIN_EMAILS.
+// Tạo (hoặc đặt lại mật khẩu cho) tài khoản quản trị viên trực tiếp trong data/synchro.db.
+// Web không cho đăng ký bằng mật khẩu với email quản trị, nên đây là cách duy nhất ngoài đăng nhập Google/GitHub/Apple.
 // Dùng: node scripts/create-admin.mjs [email]   (trên VPS: chạy bằng user synchro trong /var/www/synchro)
 import Database from "better-sqlite3";
 import crypto from "node:crypto";
@@ -48,4 +48,4 @@ if (u) db.prepare("UPDATE users SET password_hash = ?, email_verified = 1, statu
 else db.prepare("INSERT INTO users (id, email, name, password_hash, email_verified, created_at) VALUES (?, ?, ?, ?, 1, ?)").run(id, email, email.split("@")[0], hash, now);
 db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
 db.prepare("INSERT INTO audit (at, action, actor_id, actor_email, target_id, target_email, detail) VALUES (?, ?, ?, ?, ?, ?, 'cli')").run(now, u ? "admin_password_reset" : "admin_created", id, email, id, email);
-console.log(u ? `Đã đặt lại mật khẩu cho ${email}.` : `Đã tạo tài khoản chủ sở hữu ${email}.`);
+console.log(u ? `Đã đặt lại mật khẩu cho ${email}.` : `Đã tạo tài khoản quản trị ${email}.`);

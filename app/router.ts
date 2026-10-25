@@ -1,6 +1,6 @@
 // Chế độ "Tự động" của bộ chọn model: Synchro tự chọn model theo độ khó của yêu cầu để tiết kiệm.
 // Câu hỏi ngắn, trò chuyện → model nhanh, rẻ. Việc chuyên môn (thiết kế, tài liệu, code, phân tích, tệp đính kèm) → model mạnh nhất được phép.
-// Chỉ chọn trong các model đang hiện ở bộ chọn model.
+// Chỉ chọn trong các model tài khoản được phép dùng và quản trị viên cho hiện.
 import { expand, fold } from "./skillroute";
 
 export const AUTO = "auto";
@@ -38,7 +38,7 @@ export function difficulty(q: RouteInput): { score: number; why: string[] } {
   return { score: s, why };
 }
 
-/** Chọn model cho chế độ Tự động trong danh sách đang hiện (thứ tự = thứ tự ở bộ chọn). */
+/** Chọn model cho chế độ Tự động trong danh sách được phép (thứ tự = thứ tự quản trị viên hiển thị). */
 export function routeModel(q: RouteInput, allowed: string[]): { model: string; tier: Tier; why: string[] } | null {
   if (!allowed.length) return null;
   const { score, why } = difficulty(q);

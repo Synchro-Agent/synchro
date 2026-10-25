@@ -12,14 +12,15 @@ rmSync(DL, { recursive: true, force: true }); mkdirSync(DL, { recursive: true })
 rmSync(PROF, { recursive: true, force: true });
 const ONLY = process.argv[2] ?? "";
 
-// Tài khoản chủ sở hữu của bản local (web dùng cá nhân), xóa mức dùng cũ.
-const email = "admin@synchro.test", password = "synchro-mock-123";
+// Tài khoản test của bản local, xóa mức dùng cũ.
+const email = "dl-member@synchro.test", password = "Member-pass-123";
 let cookie = "";
 const api = async (p, body) => {
   const r = await fetch(B + p, { method: "POST", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify(body) });
   for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
   return r.status;
 };
+await api("/api/auth/signup", { email, password, profile: { fullName: "Download Tester", birthDate: "2000-01-01" } });
 await api("/api/auth/login", { email, password });
 { const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");

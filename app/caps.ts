@@ -1,6 +1,6 @@
 // Cài đặt → Khả năng của từng tài khoản (chỉ chạy ở máy chủ). Lưu trên máy chủ để máy chủ tự áp dụng khi chat
 // (không tin giá trị trình duyệt gửi lên) và để cài đặt đi theo tài khoản trên mọi thiết bị.
-import { db, type UserRow } from "./authstore";
+import { can, db, type UserRow } from "./authstore";
 import { CAP_KEYS, DEFAULT_CAPS, type Caps, type CapsState } from "./catalog";
 import { runner } from "./coderun";
 
@@ -14,7 +14,7 @@ function init() {
   return d;
 }
 
-// Lựa chọn đã lưu (chưa tính máy chủ có nơi chạy code hay không).
+// Lựa chọn của người dùng (chưa tính quyền quản trị viên hay máy chủ).
 export function userCaps(uid: string): Caps {
   const r = init().prepare("SELECT caps FROM user_caps WHERE user_id = ?").get(uid) as { caps: string } | undefined;
   let raw: Record<string, unknown> = {};
@@ -30,14 +30,18 @@ export function setUserCaps(uid: string, patch: Record<string, unknown>): Caps {
   return cur;
 }
 
+export function removeUserCaps(uid: string) {
+  init().prepare("DELETE FROM user_caps WHERE user_id = ?").run(uid);
+}
 
-// Khả năng thực sự dùng được: chạy code cần máy chủ có nơi chạy code;
+// Khả năng thực sự dùng được: chạy code cần quản trị viên cho phép Cloud sandbox và máy chủ có nơi chạy code;
 // artifact dùng AI cần bật Artifacts; truy cập mạng cần bật chạy code.
 export function capsState(u: UserRow): CapsState {
   const mine = userCaps(u.id);
   const locks: CapsState["locks"] = {};
   const run = runner();
-  if (!run) { locks.code = "server"; locks.net = "server"; }
+  if (!can(u, "sandbox")) { locks.code = "admin"; locks.net = "admin"; }
+  else if (!run) { locks.code = "server"; locks.net = "server"; }
   const caps: Caps = { ...mine };
   if (locks.code) { caps.code = false; caps.net = false; }
   if (!caps.code) caps.net = false;

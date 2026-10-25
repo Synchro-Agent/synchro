@@ -1,5 +1,5 @@
 // Khóa API của các nhà cung cấp model (chỉ chạy ở máy chủ).
-// Khóa nhập ở Cài đặt → API; khóa được mã hóa AES-256-GCM rồi lưu trong SQLite, không bao giờ gửi về trình duyệt.
+// Quản trị viên nhập khóa ở Cài đặt → API; khóa được mã hóa AES-256-GCM rồi lưu trong SQLite, không bao giờ gửi về trình duyệt.
 // Khi lưu, máy chủ gọi thử API của hãng để kiểm tra khóa và lấy danh sách model thật mà khóa đó được dùng.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -201,7 +201,7 @@ export async function adminList(): Promise<AdminProvider[]> {
     out.push({ id: v.id, kind: v.kind, name: v.name, vendor: "Biến môi trường máy chủ", builtin: false, configured: true, source: "env", baseUrl: v.base, defaultBase: v.base, keyHint: v.key ? hint(v.key) : null,
       keyUrl: null, prefix: null, status: "ok", error: null, info: null, checkedAt: null, models: ms.map((m) => ({ key: modelKey(v.id, m.id), name: m.name })) });
   }
-  // Khóa ở biến môi trường của Claude: hiện danh sách model thật để chọn.
+  // Khóa ở biến môi trường của Claude: hiện danh sách model thật để quản trị viên chọn.
   const a = out.find((p) => p.id === "anthropic" && p.source === "env");
   if (a && v) a.models = (await envModels(v)).map((m) => ({ key: modelKey("anthropic", m.id), name: m.name }));
   return out;
@@ -252,13 +252,13 @@ export async function refreshProvider(id: string) {
 }
 export const removeProvider = (id: string) => table().prepare("DELETE FROM api_providers WHERE id = ?").run(id).changes > 0;
 
-// ---- model hiển thị ở màn hình chính và model mặc định (chọn ở Cài đặt → API) ----
+// ---- model hiển thị ở màn hình chính và model mặc định (quản trị viên chọn) ----
 export const mainModels = (): string[] => { try { const v = JSON.parse(getSetting("main_models", JSON.stringify([ALL]))); return Array.isArray(v) ? v : [ALL]; } catch { return [ALL]; } };
 export const setMainModels = (v: string[]) => setSetting("main_models", JSON.stringify(v.includes(ALL) ? [ALL] : v.filter((m) => typeof m === "string" && m.includes("/")).slice(0, 500)));
 export const defaultModel = () => getSetting("default_model", "");
 export const setDefaultModel = (k: string) => setSetting("default_model", k);
 
-// Model mặc định thật sự dùng: model đã chọn nếu còn tồn tại, không thì model đầu tiên đang hiện.
+// Model mặc định thật sự dùng: cài đặt của quản trị viên nếu còn tồn tại, không thì model đầu tiên đang hiện.
 export function pickDefault(cat: ProviderInfo[], main: string[]): string | null {
   const all = cat.flatMap((p) => p.models.map((m) => m.key));
   const shown = main.includes(ALL) ? all : all.filter((k) => main.includes(k));

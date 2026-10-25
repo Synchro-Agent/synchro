@@ -1,4 +1,4 @@
-import { handle, requireUser, sameOrigin } from "../../../../authstore";
+import { handle, requireAdmin, sameOrigin } from "../../../../authstore";
 import { chatOnce, HttpErr } from "../../../../llmcall";
 import { resolveModel } from "../../../../providers";
 import { withUsage } from "../../../../usage";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // Gửi thử một câu tới model để kiểm tra khóa, địa chỉ và mã model, trả về câu trả lời và thời gian phản hồi.
 export const POST = handle(async (req) => {
   sameOrigin(req);
-  const { user } = requireUser(req);
+  const { user } = requireAdmin(req);
   const { model, prompt } = await req.json();
   const t = typeof model === "string" ? await resolveModel(model) : null;
   if (!t) return Response.json({ error: "Không tìm thấy model này. Hãy làm mới danh sách model." }, { status: 400 });

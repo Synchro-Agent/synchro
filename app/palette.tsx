@@ -1,5 +1,5 @@
 "use client";
-// Bảng lệnh ⌘K: một ô tìm cho mọi thứ — lệnh nhanh, đoạn chat, artifact, ứng dụng, skill và thư viện.
+// Bảng lệnh ⌘K: một ô tìm cho mọi thứ — lệnh nhanh, đoạn chat, artifact, ứng dụng nội bộ, skill và thư viện.
 // Tìm không cần gõ dấu ("bao cao" khớp "Báo cáo"), mũi tên lên / xuống để chọn, Enter để mở. Dữ liệu máy chủ tải một lần mỗi lần mở bảng.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
@@ -27,7 +27,7 @@ const get = (url: string): Promise<any> => fetch(url).then((r) => (r.ok ? r.json
 
 type Remote = {
   arts: { conv: string; title: string; type: string }[];
-  apps: { id: string; title: string }[];
+  apps: { id: string; title: string; visibility?: string }[];
   skills: { name: string; description: string }[];
   libs: { name: string; description: string; skills: unknown[] }[];
 };
@@ -57,7 +57,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     }
     if (rem) {
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
-      for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr("Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
+      for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng của tổ chức" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
       for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: go.skillHub });
       for (const l of rem.libs) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skills.length} skill`, icon: <I.Plugins size={16} />, run: go.skillHub });
     }

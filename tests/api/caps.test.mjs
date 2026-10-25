@@ -14,23 +14,32 @@ function client(init = "") {
   return f;
 }
 // run-all đăng nhập quản trị một lần rồi chia phiên (tránh giới hạn số lần đăng nhập); chạy riêng lẻ thì tự đăng nhập.
-// Web dùng cá nhân: chỉ tài khoản chủ sở hữu; "anon" là người chưa đăng nhập.
-const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), anon = client();
+const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), member = client();
 if (!process.env.SYNCHRO_ADMIN_COOKIE) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
+await member("POST", "/api/auth/signup", { email: "cap-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Member", birthDate: "2000-01-01" } });
+await member("POST", "/api/auth/login", { email: "cap-member@synchro.test", password: "Member-pass-123" });
+// Tài khoản test có quyền riêng (mọi model, mọi tính năng) để không phụ thuộc quyền mặc định quản trị viên đặt cho thành viên.
+async function fullPerms(email) {
+  const u = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === email);
+  if (u) await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } });
+}
+await fullPerms("cap-member@synchro.test");
 
 const M = "anthropic/claude-opus-5-5";
 const chat = (c, text, model = M) => c("POST", "/api/llm", { system: "", messages: [{ role: "user", content: text }], model, skills: true, max_tokens: 1500 });
 const setCaps = (c, p) => c("PATCH", "/api/caps", p);
 const ALL_ON = { art: true, ai: true, inl: true, code: true, net: false, sw: true };
 
-console.log("1. Lưu cài đặt");
+console.log("1. Lưu cài đặt theo tài khoản");
 let r = await setCaps(admin, ALL_ON);
 ok(r.s === 200 && r.j.caps.code && r.j.runner === "local", "lưu được, máy chủ chạy code ở chế độ giả lập cục bộ", JSON.stringify(r.j));
 r = await setCaps(admin, { art: false, bogus: true, code: "yes" });
 ok(r.j.caps.art === false && r.j.caps.ai === false && r.j.caps.code === true && !("bogus" in r.j.caps), "tắt Artifacts thì artifact dùng AI cũng tắt; khóa lạ và giá trị sai bị bỏ qua", JSON.stringify(r.j.caps));
-r = await anon("GET", "/api/caps");
-ok(r.s === 401, "chưa đăng nhập thì không đọc được cài đặt");
-await setCaps(admin, ALL_ON);
+r = await member("GET", "/api/caps");
+ok(r.j.caps.art === true && r.j.caps.ai === false, "tài khoản khác có cài đặt riêng (mặc định)", JSON.stringify(r.j.caps));
+r = await member("PATCH", "/api/caps", { art: false });
+ok(r.s === 200, "người dùng thường tự đổi được");
+await member("PATCH", "/api/caps", { art: true });
 r = await fetch(B + "/api/caps", { method: "PATCH", headers: { "content-type": "application/json", origin: "https://evil.example" }, body: "{}" });
 ok(r.status === 401 || r.status === 403, "yêu cầu từ trang khác bị từ chối");
 
@@ -60,8 +69,8 @@ r = await admin("GET", `/api/artifacts/${aid}`);
 ok(r.j?.artifact?.versions?.length === 2, "nội dung trùng không thêm phiên bản; nội dung mới thêm phiên bản", JSON.stringify(r.j?.artifact?.versions?.length));
 r = await admin("GET", "/api/artifacts");
 ok(r.j.artifacts.some((a) => a.id === aid && a.count === 2), "danh sách artifact");
-r = await anon("GET", `/api/artifacts/${aid}`);
-ok(r.s === 401, "chưa đăng nhập thì không xem được");
+r = await member("GET", `/api/artifacts/${aid}`);
+ok(r.s === 404, "tài khoản khác không xem được");
 r = await admin("POST", "/api/artifacts", { conv: "c1", items: [{ ...item, type: "exe" }, { ...item, ident: "../x" }] });
 ok(r.j.ids.every((x) => x === null), "artifact sai kiểu / sai tên bị bỏ", JSON.stringify(r.j));
 r = await admin("DELETE", `/api/artifacts/${aid}`);
@@ -75,10 +84,8 @@ r = await ask(admin, [{ role: "user", content: "Chào" }, { role: "assistant", c
 ok(r.s === 200 && r.j.text, "gửi được hội thoại nhiều lượt", JSON.stringify(r.j));
 r = await ask(admin, [{ role: "system", content: "x" }]);
 ok(r.s === 400, "dữ liệu sai bị từ chối", JSON.stringify(r.j));
-await setCaps(admin, { ai: false });
-r = await ask(admin, "Chào");
-ok(r.s === 403 && /Artifact dùng AI/.test(r.j.error), "tắt Artifact dùng AI thì artifact không gọi được model", JSON.stringify(r.j));
-await setCaps(admin, ALL_ON);
+r = await ask(member, "Chào");
+ok(r.s === 403 && /Artifact dùng AI/.test(r.j.error), "tài khoản chưa bật Artifact dùng AI bị chặn", JSON.stringify(r.j));
 
 console.log("5. Hình minh họa trong chat");
 r = await chat(admin, "Vẽ biểu đồ doanh thu 6 tháng");
@@ -118,8 +125,8 @@ await fileTest("Xuất dữ liệu mẫu ra csv", "csv", "ma_don");
 const png = await fileTest("Vẽ ảnh biểu đồ png bằng matplotlib", "png", "\x89PNG");
 r = await chat(admin, "Tạo file Excel báo cáo doanh thu");
 ok(/Mình đã chạy code và tạo \*\*bao-cao-doanh-thu.xlsx\*\*/.test(r.j?.text ?? "") && r.j.skills.some((u) => u.kind === "code"), "model tóm tắt kết quả và ghi nhận đã chạy code", (r.j?.text ?? "").slice(0, 200));
-r = await anon("GET", `/api/outputs/${xl?.id}`, undefined, true);
-ok(r.status === 401, "chưa đăng nhập thì không tải được tệp");
+r = await member("GET", `/api/outputs/${xl?.id}`, undefined, true);
+ok(r.status === 404, "tài khoản khác không tải được tệp");
 r = await admin("GET", `/api/outputs/${png?.id}?inline=1`, undefined, true);
 ok(r.headers.get("content-type") === "image/png" && /^inline/.test(r.headers.get("content-disposition") ?? ""), "ảnh xem được ngay trong chat");
 r = await admin("GET", `/api/outputs/${xl?.id}?inline=1`, undefined, true);
@@ -151,15 +158,22 @@ r = await chat(admin, "Cài thư viện humanize bằng pip");
 ok(/Đã cài humanize/.test(r.j?.text ?? ""), "bật mạng: pip install được", (r.j?.text ?? "").slice(0, 400));
 await setCaps(admin, { net: false });
 
-console.log("9. Tắt chạy code");
+console.log("9. Tắt chạy code / quyền quản trị viên");
 await setCaps(admin, { code: false });
 r = await chat(admin, "Tạo file Excel báo cáo doanh thu");
 ok(!(r.j?.files ?? []).length, "tắt chạy code: model không chạy code", JSON.stringify(r.j).slice(0, 200));
 r = await admin("GET", "/api/caps");
 ok(r.j.caps.net === false, "tắt chạy code thì mạng cũng tắt");
 await setCaps(admin, ALL_ON);
-r = await admin("GET", "/api/caps");
-ok(!r.j.locks.code && r.j.caps.code === true, "bật lại chạy code: dùng được ngay (không còn khóa của quản trị viên)", JSON.stringify(r.j));
+const me = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === "cap-member@synchro.test");
+r = await admin("PATCH", `/api/admin/users/${me.id}`, { action: "set_perms", perms: { models: ["*"], features: { ...me.perms.features, sandbox: false } } });
+r = await member("GET", "/api/caps");
+ok(r.j.locks.code === "admin" && r.j.caps.code === false, "quản trị viên tắt Cloud sandbox: chạy code bị khóa", JSON.stringify(r.j));
+r = await chat(member, "Tạo file Excel báo cáo doanh thu");
+ok(!(r.j?.files ?? []).length, "tài khoản bị khóa không chạy được code", JSON.stringify(r.j).slice(0, 200));
+await fullPerms("cap-member@synchro.test");
+r = await member("GET", "/api/caps");
+ok(!r.j.locks.code && r.j.caps.code === true, "về quyền mặc định: dùng lại được");
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

@@ -1,4 +1,4 @@
-import { handle, requireUser, sameOrigin } from "../../authstore";
+import { can, handle, requireUser, sameOrigin } from "../../authstore";
 import { getLink, gh, removeLink } from "../../github";
 import { configured } from "../../oauth";
 
@@ -21,7 +21,7 @@ export const GET = handle(async (req) => {
         .map((r) => ({ full: r.full_name, private: r.private, branch: r.default_branch, desc: r.description, pushed: r.pushed_at, url: r.html_url, push: !!r.permissions?.push })),
     });
   }
-  return Response.json({ configured: configured("github"), linked: !!l, login: l?.login ?? null, repoScope: !!l?.scopes.split(/[ ,]/).includes("repo") });
+  return Response.json({ configured: configured("github"), allowed: can(user, "code"), linked: !!l, login: l?.login ?? null, repoScope: !!l?.scopes.split(/[ ,]/).includes("repo") });
 });
 
 // Ngắt kết nối: xóa token trên máy chủ.

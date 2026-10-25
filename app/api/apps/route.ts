@@ -4,10 +4,10 @@ import { AppError, listApps, publishApp } from "../../appstore";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Ứng dụng đã xuất bản.
+// Ứng dụng nội bộ: của mình và của cả tổ chức.
 export const GET = handle(async (req: Request) => Response.json({ apps: listApps(requireUser(req).user.id) }));
 
-// Xuất bản artifact thành ứng dụng: { conv, ident, title, type, content } → { id, created }.
+// Xuất bản artifact thành ứng dụng: { conv, ident, title, type, content, visibility: "private" | "org" } → { id, created }.
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);
   const { user } = requireUser(req);

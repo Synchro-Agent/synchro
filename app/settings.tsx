@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
-import { usePref, useApp, initials } from "./store";
+import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { MODES, PRESETS } from "./codeview";
 import { ApiPanel } from "./apiui";
 import { ConnectorsPanel } from "./connectorsui";
-import { call as api, fmtDate, METHOD } from "./setcommon";
+import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
@@ -123,6 +123,7 @@ function Account() {
   const [saved, setSaved] = useState("");
   const [sessions, setSessions] = useState<Sess[] | null>(null);
   const [pw, setPw] = useState<null | { cur: string; next: string; again: string }>(null);
+  const [del, setDel] = useState<null | string>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { api<{ sessions: Sess[] }>("GET", "/api/auth/sessions").then((r) => setSessions(r.sessions)).catch(() => setSessions([])); }, []);
   const endSessions = (body: object, ok: string) => api<{ sessions: Sess[] }>("DELETE", "/api/auth/sessions", body).then((r) => { setSessions(r.sessions); app.say(ok); }).catch((e) => app.say(e.message));
@@ -131,6 +132,11 @@ function Account() {
     if (pw.next !== pw.again) { app.say("Passwords do not match!"); return; }
     setBusy(true);
     try { const r = await api<{ user: AuthUser }>("POST", "/api/auth/password", { current: pw.cur, password: pw.next }); app.setMe(r.user); setPw(null); app.say("Password saved"); }
+    catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
+  };
+  const deleteAccount = async () => {
+    setBusy(true);
+    try { await api("DELETE", "/api/auth/account", { password: del }); setDel(null); app.wipe("all"); resetPrefs(); app.logout(); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   const pwOk = !!pw && pw.next.length >= 8 && pw.again.length >= 8 && (!me?.hasPassword || pw.cur.length > 0);
@@ -164,6 +170,7 @@ function Account() {
       <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span></Row>
       <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."}><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
       <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
+      <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>
       <Row t="Account ID"><span className="mono" data-notr>{me?.id}</span></Row>
       <H>Trusted devices</H>
       <p className="d" style={{ marginTop: -6 }}>Devices that can control your local machine through remote sessions.</p>
@@ -193,22 +200,38 @@ function Account() {
           </div>
         </div>
       </Fade>
+      <Fade show={del !== null}>
+        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
+          <div className="modal sm" style={{ width: 400 }}>
+            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
+            <h2 style={{ fontSize: 16 }}>Delete your account?</h2>
+            <p className="d" style={{ margin: "0 0 12px" }}>Your account, sign-in methods and sessions will be permanently removed, and chats stored in this browser will be erased. This can&apos;t be undone.</p>
+            {me?.hasPassword && <input className="field" type="password" autoFocus autoComplete="current-password" placeholder="Enter your password to confirm" value={del ?? ""} onChange={(e) => setDel(e.target.value)} />}
+            <div className="modal-foot"><button className="btn" onClick={() => setDel(null)}>Cancel</button><button className="btn danger" disabled={busy || (!!me?.hasPassword && !del)} onClick={deleteAccount}>Delete account</button></div>
+          </div>
+        </div>
+      </Fade>
     </>
   );
 }
 
 function Privacy({ go }: { go: (t: string) => void }) {
   const app = useApp();
-  const [panel, setPanel] = useState<"" | "files" | "feedback">("");
+  const [a, setA] = usePref("loc", true);
+  const [b, setB] = usePref("improve", true);
+  const [panel, setPanel] = useState<"" | "shared" | "artifacts" | "files" | "feedback">("");
+  const shared = app.chats.filter((c) => c.shared);
   const files = app.chats.flatMap((c) => c.msgs.flatMap((m) => (m.files ?? []).map((f) => ({ f, c: c.title }))));
   const fb = app.chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
-  const title = { files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
+  const title = { shared: "Shared chats", artifacts: "Shared artifacts", files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
     <>
       <H first>Privacy</H>
-      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on your own server for you alone. Chats are kept in this browser; files, skills, connectors and apps are kept on your Synchro server. What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through your own API key.</p>
+      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server. What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
       <H>Your data</H>
       <Row t="Export data" top><button className="btn" onClick={app.exportData}>Export data</button></Row>
+      <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
+      <Row t="Shared artifacts"><button className="btn" onClick={() => setPanel("artifacts")}>Manage</button></Row>
       <Row t="Uploaded files"><button className="btn" onClick={() => setPanel("files")}>Manage</button></Row>
       <Row t="Your feedback"><button className="btn" onClick={() => setPanel("feedback")}>Manage</button></Row>
       <Row t="Memory preferences"><button className="btn" onClick={() => go("Memory")}>Manage ↗</button></Row>
@@ -217,11 +240,29 @@ function Privacy({ go }: { go: (t: string) => void }) {
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{title}</h2>
+            {panel === "shared" && (shared.length ? shared.map((c) => <div key={c.id} className="item-row"><span style={{ flex: 1 }}>{c.title}</span><button className="btn danger" style={{ height: 26 }} onClick={() => app.unshare(c.id)}>Stop sharing</button></div>) : <div className="empty">No shared chats.</div>)}
+            {panel === "artifacts" && <div className="empty">No shared artifacts.</div>}
             {panel === "files" && (files.length ? files.map((x, i) => <div key={i} className="item-row"><I.Clip size={14} /><span style={{ flex: 1 }}>{x.f}</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">No uploaded files.</div>)}
             {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}
           </div>
         </div>
       </Fade>
+    </>
+  );
+}
+
+function Billing() {
+  const app = useApp();
+  const perks = ["Chat on web, iOS, Android, and on your desktop", "Generate code and visualize data", "Write, edit, and create content", "Ability to search the web", "Memory across conversations", "Create files and execute code", "Unlock more from Synchro with desktop extensions", "Connect Slack and Google Workspace services", "Integrate any context or tool through connectors with remote MCP", "Extended thinking for complex work"];
+  return (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 12 }}><I.Spark size={28} /><div><div style={{ fontWeight: 560 }}>Free plan</div><div className="d">Try Synchro</div></div></div>
+        <button className="btn dark" onClick={app.upgrade}>Upgrade plan</button>
+      </div>
+      <ul className="perks">{perks.map((p) => <li key={p}><I.Check size={14} />{p}</li>)}</ul>
+      <H>Invoices</H>
+      <p className="d">We have not sent you an invoice yet.</p>
     </>
   );
 }
@@ -241,7 +282,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
     const err = await setCaps({ [k]: x });
     if (err) app.say(err);
   };
-  const lockNote = (k: keyof Caps) => locks[k] === "server" ? "This server has no place to run code yet. Set up the workspace service or an E2B key on the server." : null;
+  const lockNote = (k: keyof Caps) => locks[k] === "admin" ? "Your administrator has turned off Cloud sandbox for your account." : locks[k] === "server" ? "This server has no place to run code yet. An administrator needs to set up the workspace service or an E2B key." : null;
   const t = (k: keyof Caps, disabled = false) => <Toggle on={v[k]} set={(x) => set(k, x)} disabled={disabled || !!locks[k]} />;
   return (
     <>
@@ -460,14 +501,15 @@ function CodeTab() {
 }
 
 export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme: string; setTheme: (t: string) => void; go: (t: string) => void }) {
-  const app = useApp();
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
-    case "API": return <ApiPanel Toggle={Toggle} say={app.say} />;
+    case "Administrator": return <AdminPanel Toggle={Toggle} />;
+    case "API": return <ApiPanel />;
     case "Connectors": return <ConnectorsPanel />;
     case "Skill Hub": case "Skills": case "Plugins": return <SkillHub />;
     case "Account": return <Account />;
     case "Privacy": return <Privacy go={go} />;
+    case "Billing": return <Billing />;
     case "Capabilities": return <Capabilities go={go} />;
     case "Usage": return <UsageSettings go={go} />;
     case "Memory": return <Memory />;

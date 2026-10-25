@@ -12,14 +12,15 @@ rmSync(DL, { recursive: true, force: true }); mkdirSync(DL, { recursive: true })
 rmSync(PROF, { recursive: true, force: true });
 const ONLY = process.argv[2] ?? "";
 
-// Tài khoản chủ sở hữu của bản local (web dùng cá nhân), xóa mức dùng cũ.
-const email = "admin@synchro.test", password = "synchro-mock-123";
+// Tài khoản test của bản local, xóa mức dùng cũ.
+const email = process.env.ADMIN ? "admin@synchro.test" : "dl-member@synchro.test", password = process.env.ADMIN ? "synchro-mock-123" : "Member-pass-123";
 let cookie = "";
 const api = async (p, body) => {
   const r = await fetch(B + p, { method: "POST", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify(body) });
   for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
   return r.status;
 };
+await api("/api/auth/signup", { email, password, profile: { fullName: "Download Tester", birthDate: "2000-01-01" } });
 await api("/api/auth/login", { email, password });
 { const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
@@ -99,37 +100,39 @@ const shot = async (n) => { const { data } = await P("Page.captureScreenshot", {
 const tap = async (x, y) => { for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await P("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 }); };
 try {
   await sleep(800);
-  await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm sổ ghi chú" });
+  await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm bảng tin nhóm" });
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking")`, 60000, "reply");
   await sleep(2500);
   ok(await ev(`!!document.querySelector(".pub-w .icon-btn")`), "khung artifact có nút Xuất bản (tên lửa)");
   await click(`document.querySelector(".pub-w .icon-btn")`, "publish"); await sleep(700);
-  await until(`!!document.querySelector(".pub-acts .btn.dark")`, 10000, "publish menu");
-  ok(await ev(`!document.querySelector(".pub-vis") && !/tổ chức|nhóm/i.test(document.querySelector(".pub-menu").textContent)`), "không còn chọn phạm vi chia sẻ (web dùng cá nhân)");
+  await until(`!!document.querySelector(".pub-vis")`, 10000, "publish menu");
   await shot("1-publish");
+  await click(`document.querySelector(".pub-vis button")`, "org"); await sleep(200);
   await click(`document.querySelector(".pub-acts .btn.dark")`, "publish now");
   await until(`!!document.querySelector(".pub-link a")`, 15000, "app link");
   const href = await ev(`document.querySelector(".pub-link a").getAttribute("href")`);
   ok(/^\/apps\/[\w-]+$/.test(href), "xuất bản xong có địa chỉ ứng dụng: " + href);
   await P("Page.navigate", { url: B + href }); await sleep(2500);
   await until(`!!document.querySelector(".app-frame")`, 20000, "app page");
-  ok(/Sổ ghi chú/.test(await ev(`document.querySelector(".app-bar").textContent`)), "trang /apps hiện tên ứng dụng");
-  ok(await ev(`!document.querySelector(".app-cmt, .cl-pres")`), "không còn bình luận, người đang xem cùng");
+  ok(/Bảng tin nhóm/.test(await ev(`document.querySelector(".app-bar").textContent`)), "trang /apps hiện tên ứng dụng và phạm vi");
   await sleep(2500);
   // Gõ ghi chú vào ô trong khung ứng dụng rồi bấm Đăng.
   const fr = await ev(`(() => { const b = document.querySelector(".app-frame").getBoundingClientRect(); return [b.x, b.y, b.width]; })()`);
   const cx = fr[0] + fr[2] / 2;
   await tap(cx - 60, fr[1] + 32 + 72 + 20);  // ô nhập: main cách đỉnh 32px, tiêu đề + mô tả ~72px
-  await P("Input.insertText", { text: "Mua sữa lúc 9 giờ" });
+  await P("Input.insertText", { text: "Họp nhóm lúc 9 giờ" });
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await sleep(2500);
   await shot("2-app");
-  // Dữ liệu ứng dụng lưu trên máy chủ: đọc lại qua API, tải lại trang vẫn còn.
-  const got = await fetch(B + "/api/apps/data", { method: "POST", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify({ ref: { app: href.split("/").pop() }, op: "get", key: "notes" }) }).then((r) => r.json()).catch(() => null);
-  ok(/Mua sữa lúc 9 giờ/.test(got?.result?.value ?? ""), "ghi chú vừa thêm được lưu trong kho dữ liệu của ứng dụng", JSON.stringify(got));
-  await P("Page.reload", {}); await sleep(3500);
-  ok(await ev(`!!document.querySelector(".app-frame")`), "tải lại trang ứng dụng vẫn mở được");
+  // Tài khoản khác (đăng nhập riêng) đọc dữ liệu chung của ứng dụng.
+  const other = async (m, p, b) => { const r = await fetch(B + p, { method: m, headers: { "content-type": "application/json", origin: B, cookie: other.c ?? "" }, body: b && JSON.stringify(b) }); for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) other.c = c.split(";")[0]; return r.json().catch(() => null); };
+  await other("POST", "/api/auth/signup", { email: "apps-b@synchro.test", password: "Member-pass-123", profile: { fullName: "apps-b", birthDate: "2000-01-01" } });
+  await other("POST", "/api/auth/login", { email: "apps-b@synchro.test", password: "Member-pass-123" });
+  const got = await other("POST", "/api/apps/data", { ref: { app: href.split("/").pop() }, op: "get", key: "notes", shared: true });
+  ok(/Họp nhóm lúc 9 giờ/.test(got?.result?.value ?? ""), "tài khoản khác đọc được ghi chú vừa đăng trong ứng dụng", JSON.stringify(got));
+  const apps = await other("GET", "/api/apps");
+  ok(apps?.apps?.some((a) => a.id === href.split("/").pop()), "ứng dụng hiện trong danh sách Ứng dụng của tài khoản khác");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 const fails = results.filter((r) => !r[0]).length;
 console.log(`${results.length - fails}/${results.length} đạt`);

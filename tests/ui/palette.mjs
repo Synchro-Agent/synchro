@@ -12,19 +12,26 @@ rmSync(DL, { recursive: true, force: true }); mkdirSync(DL, { recursive: true })
 rmSync(PROF, { recursive: true, force: true });
 const ONLY = process.argv[2] ?? "";
 
-// Tài khoản chủ sở hữu của bản local (web dùng cá nhân), xóa mức dùng cũ.
-const email = "admin@synchro.test", password = "synchro-mock-123";
+// Tài khoản test của bản local, xóa mức dùng cũ.
+const email = process.env.ADMIN ? "admin@synchro.test" : "pal-member@synchro.test", password = process.env.ADMIN ? "synchro-mock-123" : "Member-pass-123";
 let cookie = "";
 const api = async (p, body) => {
   const r = await fetch(B + p, { method: "POST", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify(body) });
   for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
   return r.status;
 };
+await api("/api/auth/signup", { email, password, profile: { fullName: "Palette Tester", birthDate: "2000-01-01" } });
 await api("/api/auth/login", { email, password });
 { const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
   db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run(email); db.close(); }
 if (!cookie) throw new Error("login failed");
+// Quyền mặc định của thành viên do quản trị viên đặt (có thể tắt Skills): cấp đủ quyền cho tài khoản test.
+{ let ac = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
+  if (!ac) { const r = await fetch(B + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: "admin@synchro.test", password: "synchro-mock-123" }) }); ac = (r.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0] ?? ""; }
+  const u = (await (await fetch(B + "/api/admin", { headers: { cookie: ac } })).json()).users.find((x) => x.email === email);
+  if (u) await fetch(B + `/api/admin/users/${u.id}`, { method: "PATCH", headers: { "content-type": "application/json", origin: B, cookie: ac }, body: JSON.stringify({ action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } }) }); }
+
 const chrome = spawn(process.env.CHROME_PATH ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome"), ["--headless=new", "--remote-debugging-port=9336", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9336/json/version").then((r) => r.json()).catch(() => null); }
@@ -125,17 +132,17 @@ try {
   let rows = await palette("");
   ok(rows.some((r) => r.startsWith("Đoạn chat mới")) && rows.some((r) => r.startsWith("Hộp thư")), "mở bằng ⌘K, chưa gõ gì thì hiện lệnh nhanh", rows.join(" | "));
   await shot("1-open");
-  ok(!rows.some((r) => /^(Tri thức|Cuộc họp)/.test(r)), "không còn lệnh Tri thức, Cuộc họp", rows.join(" | "));
+  ok(!rows.some((r) => /^(Tri thức|Cuộc họp)/.test(r)), "không có lệnh Tri thức, Cuộc họp", rows.join(" | "));
   rows = await palette("hop thu");
   ok(rows[0]?.startsWith("Hộp thư"), "gõ không dấu \"hop thu\" → lệnh Hộp thư đứng đầu", rows.join(" | "));
   await key("Enter", "Enter", 13);
   await until(`!!document.querySelector(".tk-top")`, 8000, "inbox page");
   await sleep(600);
   ok(!(await ev(`!!document.querySelector(".pal") && !document.querySelector(".pal").closest(".closing")`)), "Enter mở trang Hộp thư, bảng lệnh đóng");
+  await shot("2-search");
   rows = await palette("ban tin noi bo");
   ok(rows.some((r) => r.startsWith(SK)), "tìm skill theo mô tả", rows.join(" | "));
   ok(await ev(`[...document.querySelectorAll(".pal-g")].some((g) => g.textContent === "Skill và thư viện")`), "kết quả xếp theo nhóm");
-  await shot("2-search");
   await key("ArrowDown", "ArrowDown", 40); await sleep(150);
   const sel = await ev(`[...document.querySelectorAll(".pal .s-row")].findIndex((r) => r.classList.contains("on"))`);
   ok(sel === 1 || rows.length === 1, "mũi tên xuống chuyển dòng chọn", sel);

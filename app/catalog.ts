@@ -1,5 +1,5 @@
 // Danh mục model và tính năng dùng chung cho giao diện và máy chủ (phân quyền theo tài khoản).
-// Danh sách model thật lấy từ khóa API nhập ở Cài đặt → API (xem app/providers.ts),
+// Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → API (xem app/providers.ts),
 // mỗi model định danh bằng khóa "nhà cung cấp/mã model", ví dụ "anthropic/claude-opus-5-5".
 
 export type ModelInfo = { key: string; id: string; name: string };
@@ -31,7 +31,7 @@ export const FEATURES = [
 ] as const;
 export type Feature = (typeof FEATURES)[number]["key"];
 
-// Mức nỗ lực (độ sâu suy nghĩ) của model, từ thấp đến cao.
+// Mức nỗ lực (độ sâu suy nghĩ) của model, từ thấp đến cao. Quản trị viên giới hạn mức cao nhất cho từng model trong Quyền truy cập.
 export const EFFORTS = ["low", "medium", "high", "extra", "max"] as const;
 export type Effort = (typeof EFFORTS)[number];
 export const isEffort = (e: unknown): e is Effort => typeof e === "string" && (EFFORTS as readonly string[]).includes(e);
@@ -46,9 +46,41 @@ export function clampEffort(e: Effort, cap: Effort, kind?: string): Effort {
   return ok.includes(e) ? e : ok.filter((x) => rank(x) <= rank(e)).pop() ?? ok[0] ?? "low";
 }
 
-// Web cá nhân: chủ sở hữu dùng được mọi model và mọi tính năng (giữ kiểu này để các chỗ gọi cũ không phải đổi).
-export type Perms = { models: string[]; features: Record<Feature, boolean>; effort?: Record<string, Effort> };
+// Quyền connector do quản trị viên đặt: được thêm connector tùy chỉnh không, được kết nối connector nào trong danh mục ("*" là tất cả),
+// được dùng công cụ có thể xóa dữ liệu không.
+export type ConnPolicy = { custom: boolean; allowed: string[]; destructive: boolean };
+export const FULL_CONN: ConnPolicy = { custom: true, allowed: [ALL], destructive: true };
+export const connPolicy = (p: Perms): ConnPolicy => p.connectors ?? FULL_CONN;
+export const allowsDir = (pol: ConnPolicy, dir: string | null) => (dir ? pol.allowed.includes(ALL) || pol.allowed.includes(dir) : pol.custom);
+
+export type Perms = { models: string[]; features: Record<Feature, boolean>; effort?: Record<string, Effort>; connectors?: ConnPolicy };
 export const FULL_PERMS: Perms = { models: [ALL], features: Object.fromEntries(FEATURES.map((f) => [f.key, true])) as Record<Feature, boolean> };
+
+// Chuẩn hóa dữ liệu quyền nhận từ client/DB. Bản cũ cho phép đủ 9 model mẫu nghĩa là "tất cả" → "*".
+export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
+  const o = (p && typeof p === "object" ? p : {}) as { models?: unknown; features?: Record<string, unknown> };
+  let models = [...base.models];
+  if (Array.isArray(o.models)) {
+    const raw = (o.models as unknown[]).filter((m): m is string => typeof m === "string" && m.length > 0 && m.length < 200);
+    const legacyAll = Object.keys(LEGACY).every((m) => raw.includes(m));
+    models = legacyAll || raw.includes(ALL) ? [ALL] : [...new Set(raw.map(legacyModel).filter((m): m is string => !!m && (m === ALL || m.includes("/"))))];
+  }
+  const features = { ...base.features };
+  for (const f of FEATURES) if (typeof o.features?.[f.key] === "boolean") features[f.key] = o.features[f.key] as boolean;
+  // Giới hạn mức nỗ lực: chỉ giữ khóa model hợp lệ; "max" là không giới hạn nên bỏ đi cho gọn.
+  let effort = base.effort ? { ...base.effort } : undefined;
+  const e = (o as { effort?: unknown }).effort;
+  if (e && typeof e === "object") effort = Object.fromEntries(Object.entries(e as Record<string, unknown>).filter(([k, v]) => (k === ALL || (k.includes("/") && k.length < 200)) && isEffort(v) && v !== "max")) as Record<string, Effort>;
+  let connectors = base.connectors ? { ...base.connectors } : undefined;
+  const c = (o as { connectors?: unknown }).connectors as Partial<ConnPolicy> | undefined;
+  if (c && typeof c === "object") {
+    const cur = connectors ?? FULL_CONN;
+    const allowed = Array.isArray(c.allowed) ? c.allowed.filter((x): x is string => typeof x === "string" && /^[a-z0-9*-]{1,40}$/.test(x)) : cur.allowed;
+    connectors = { custom: typeof c.custom === "boolean" ? c.custom : cur.custom, allowed: allowed.includes(ALL) ? [ALL] : allowed, destructive: typeof c.destructive === "boolean" ? c.destructive : cur.destructive };
+  }
+  // Giữ cả {} (đã bỏ hết giới hạn) để quyền riêng của một người không rơi về giới hạn của quyền mặc định.
+  return { models, features, ...(effort ? { effort } : {}), ...(connectors ? { connectors } : {}) };
+}
 
 // ---------------------------------------------------------------- Cài đặt → Khả năng (lưu trên máy chủ theo tài khoản)
 // sw: đổi model khi tin nhắn bị gắn cờ · art: Artifacts · ai: artifact gọi được model · inl: biểu đồ / sơ đồ ngay trong chat
@@ -57,8 +89,8 @@ export const FULL_PERMS: Perms = { models: [ALL], features: Object.fromEntries(F
 export type Caps = { sw: boolean; art: boolean; ai: boolean; inl: boolean; code: boolean; net: boolean; crit: boolean };
 export const DEFAULT_CAPS: Caps = { sw: true, art: true, ai: false, inl: true, code: true, net: false, crit: true };
 export const CAP_KEYS = Object.keys(DEFAULT_CAPS) as (keyof Caps)[];
-// Lý do một khả năng đang bị khóa: máy chủ chưa có nơi chạy code.
-export type CapLock = "server";
+// Lý do một khả năng đang bị khóa: quản trị viên không cho (Cloud sandbox) hoặc máy chủ chưa có nơi chạy code.
+export type CapLock = "admin" | "server";
 export type CapsState = { caps: Caps; locks: Partial<Record<keyof Caps, CapLock>>; runner: "e2b" | "workspace" | "local" | null };
 
 // Tên miền kho thư viện được phép khi bật "Cho phép truy cập mạng" (mọi tên miền con cũng được phép).

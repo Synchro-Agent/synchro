@@ -1,33 +1,39 @@
-import { AuthError, handle, requireUser, sameOrigin } from "../../../authstore";
-import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, setPlugin, updatePlugin, type Studio } from "../../../plugins";
+import { AuthError, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
+import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, setPlugin, setPref, updatePlugin, type Studio } from "../../../plugins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 type Ctx = { params: Promise<{ id: string }> };
 
-// Plugin cài sẵn của hệ thống ("org") hoặc plugin tự cài.
+// Quản lý được: chủ plugin cá nhân, hoặc quản trị viên với plugin của tổ chức.
 async function access(req: Request, ctx: Ctx) {
   const { user } = requireUser(req);
   const id = (await ctx.params).id;
   const owner = pluginOwner(id);
   if (!owner || (owner !== "org" && owner !== user.id)) throw new AuthError("Không tìm thấy plugin.", 404);
-  return { user, id };
+  return { user, id, manage: owner === user.id || (owner === "org" && isAdmin(user)), org: owner === "org" };
 }
 const err = (e: unknown) => { if (e instanceof PluginError) return Response.json({ error: e.message }, { status: e.status }); throw e; };
 
-// { enabled?, everywhere?, studio?, skills?: { tên: bật } }
+// Quản lý: { enabled?, everywhere?, studio?, skills?: { tên: bật } }. Người dùng với plugin tổ chức: { mine: { enabled?, everywhere? } }.
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const a = await access(req, ctx);
   const b = await req.json().catch(() => ({}));
-  setPlugin(a.id, { enabled: b.enabled, everywhere: b.everywhere, studio: b.studio as Studio | null | undefined, skills: b.skills });
+  if (b.mine && typeof b.mine === "object") setPref(a.user.id, a.id, { enabled: b.mine.enabled, everywhere: b.mine.everywhere });
+  const admin = { enabled: b.enabled, everywhere: b.everywhere, studio: b.studio as Studio | null | undefined, skills: b.skills };
+  if (Object.values(admin).some((v) => v !== undefined)) {
+    if (!a.manage) throw new AuthError("Chỉ quản trị viên mới đổi được plugin của tổ chức.", 403);
+    setPlugin(a.id, admin);
+  }
   return Response.json({ plugin: getPlugin(a.id, a.user.id), plugins: listPlugins(a.user.id) });
 });
 
 export const DELETE = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const a = await access(req, ctx);
+  if (!a.manage) throw new AuthError("Chỉ quản trị viên mới gỡ được plugin của tổ chức.", 403);
   await removePlugin(a.id);
   return Response.json({ plugins: listPlugins(a.user.id) });
 });
@@ -36,6 +42,7 @@ export const DELETE = handle(async (req: Request, ctx: Ctx) => {
 export const POST = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const a = await access(req, ctx);
+  if (!a.manage) throw new AuthError("Chỉ quản trị viên mới cập nhật được plugin của tổ chức.", 403);
   try {
     if ((req.headers.get("content-type") ?? "").includes("multipart/form-data")) {
       const f = (await req.formData()).get("file");

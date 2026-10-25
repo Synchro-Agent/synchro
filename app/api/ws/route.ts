@@ -1,4 +1,4 @@
-import { AuthError, handle, requireUser, sameOrigin, type UserRow } from "../../authstore";
+import { AuthError, can, handle, requireUser, sameOrigin, type UserRow } from "../../authstore";
 import { getLink, gh, gitAuthEnv, parseRepo } from "../../github";
 import { agent, exec, fsop, requireWs, sdir, ticket, wsConfigured } from "../../workspace";
 
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export const GET = handle(async (req) => {
   const { user } = requireUser(req);
   if (!wsConfigured()) return Response.json({ available: false, reason: "Máy chủ chưa bật workspace." });
+  if (!can(user, "code") || !can(user, "sandbox")) return Response.json({ available: false, reason: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." });
   const s = await agent<{ running: boolean; idleMin: number }>("/status", { u: user.id }).catch(() => null);
   return Response.json({ available: !!s, reason: s ? undefined : "Không kết nối được workspace.", running: !!s?.running, idleMin: s?.idleMin });
 });

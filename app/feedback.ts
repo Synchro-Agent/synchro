@@ -27,8 +27,9 @@ export function vote(uid: string, msg: string, skills: string[], value: number) 
 }
 
 export type Score = { up: number; down: number; low: boolean };
-/** Điểm của mọi skill. low: từ 3 lượt chê và chê chiếm 60% trở lên. */
+/** Điểm của mọi skill (cả tổ chức chấm). low: từ 3 lượt chê và chê chiếm 60% trở lên. */
 export function scores(): Record<string, Score> {
   const rows = init().prepare("SELECT skill, SUM(value = 1) AS up, SUM(value = -1) AS down FROM skill_votes GROUP BY skill").all() as { skill: string; up: number; down: number }[];
   return Object.fromEntries(rows.map((r) => [r.skill, { up: r.up, down: r.down, low: r.down >= 3 && r.down / (r.up + r.down) >= 0.6 }]));
 }
+export function removeUserVotes(uid: string) { init().prepare("DELETE FROM skill_votes WHERE user_id = ?").run(uid); }

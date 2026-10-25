@@ -13,22 +13,28 @@ function client(init = "") {
   return f;
 }
 // run-all đăng nhập quản trị một lần rồi chia phiên (tránh giới hạn số lần đăng nhập); chạy riêng lẻ thì tự đăng nhập.
-// Web dùng cá nhân: chỉ tài khoản chủ sở hữu (member là tên gọi khác của cùng phiên).
-const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? "");
+const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), member = client();
 if (!process.env.SYNCHRO_ADMIN_COOKIE) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
-const member = admin;
+await member("POST", "/api/auth/signup", { email: "plugin-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Plugin Member", birthDate: "2000-01-01" } });
+await member("POST", "/api/auth/login", { email: "plugin-member@synchro.test", password: "Member-pass-123" });
+// Tài khoản test có quyền riêng (mọi model, mọi tính năng) để không phụ thuộc quyền mặc định quản trị viên đặt cho thành viên.
+async function fullPerms(email) {
+  const u = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === email);
+  if (u) await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } });
+}
+await fullPerms("plugin-member@synchro.test");
+
 // Tài khoản test chạy nhiều lần sẽ chạm hạn mức dùng của chính nó: xóa mức dùng cũ trước mỗi lần chạy.
 { const { createRequire } = await import("node:module"); const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
-  db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run("admin@synchro.test"); db.close(); }
-// Dọn plugin do lần chạy trước cài: Vercel (từ danh mục) và plugin cài bằng link GitHub (không có mã danh mục). Ba studio giữ nguyên.
-for (const p of (await member("GET", "/api/plugins")).j.plugins.filter((p) => p.catalogId === "vercel-agent-skills" || (!p.catalogId && /emilkowalski/.test(JSON.stringify(p.sources))))) await member("DELETE", `/api/plugins/${p.id}`);
+  db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run("plugin-member@synchro.test"); db.close(); }
+for (const p of (await member("GET", "/api/plugins")).j.plugins.filter((p) => p.scope === "personal")) await member("DELETE", `/api/plugins/${p.id}`);
 
-console.log("1. Ba studio cài sẵn");
+console.log("1. Ba studio cài sẵn cho cả tổ chức");
 let r = await admin("GET", "/api/plugins");
 const byStudio = (s) => r.j.plugins.find((p) => p.studio === s);
 const ds = byStudio("design");
-ok(ds && !("scope" in ds) && !("mine" in ds) && ds.skills.length >= 25, `Design Studio: ${ds?.skills.length} skill`, JSON.stringify(r.j.plugins.map((p) => [p.name, p.skills.length])));
+ok(ds && ds.scope === "org" && ds.skills.length >= 25, `Design Studio: ${ds?.skills.length} skill`, JSON.stringify(r.j.plugins.map((p) => [p.name, p.skills.length])));
 ok(byStudio("slides")?.skills.length >= 5 && byStudio("docs")?.skills.length >= 4, `Slides ${byStudio("slides")?.skills.length} skill, Docs ${byStudio("docs")?.skills.length} skill`);
 ok(ds.skills.every((s) => s.report.licenseKind === "open" || s.report.repo === "upload"), "mọi skill có giấy phép mở", JSON.stringify(ds.skills.filter((s) => s.report.licenseKind !== "open").map((s) => [s.name, s.report.license])));
 ok(ds.skills.some((s) => s.name === "awesome-design-html" && s.report.files > 100), "skill nhiều file (118 mẫu HTML) cài được", JSON.stringify(ds.skills.find((s) => s.name === "awesome-design-html")?.report));
@@ -48,20 +54,26 @@ ok(r.s === 400, "chỉ nhận link GitHub", JSON.stringify(r.j));
 r = await admin("POST", "/api/plugins", { action: "preview", url: "https://github.com/nonexistent-owner-xyz123/nothing-here" });
 ok(r.s === 404, "repo không tồn tại: báo rõ", JSON.stringify(r.j));
 
-console.log("3. Cài từ GitHub, bật tắt");
-r = await member("POST", "/api/plugins", { action: "install", url: "https://github.com/emilkowalski/skills", skip: ["write-swift"] });
+console.log("3. Plugin cá nhân và quyền");
+r = await member("POST", "/api/plugins", { action: "install", url: "https://github.com/emilkowalski/skills", scope: "org" });
+ok(r.s === 403, "người thường không cài được cho cả tổ chức");
+r = await member("POST", "/api/plugins", { action: "install", url: "https://github.com/emilkowalski/skills", scope: "personal", skip: ["write-swift"] });
 const mine = r.j?.plugin;
-ok(r.s === 200 && mine.skills.length === 14 && !mine.skills.some((s) => s.name === "write-swift"), `cài từ link GitHub: ${mine?.skills.length} skill, bỏ skill đã bỏ chọn`, JSON.stringify(r.j).slice(0, 300));
+ok(r.s === 200 && mine.scope === "personal" && mine.skills.length === 14 && !mine.skills.some((s) => s.name === "write-swift"), `cài từ link GitHub: ${mine?.skills.length} skill, bỏ skill đã bỏ chọn`, JSON.stringify(r.j).slice(0, 300));
 r = await member("GET", "/api/plugins");
-ok(r.j.plugins.some((p) => p.id === mine.id) && r.j.plugins.some((p) => p.studio === "design") && !("admin" in r.j), "danh sách có plugin cài sẵn và plugin vừa cài, không còn phân quyền", JSON.stringify(Object.keys(r.j)));
-r = await member("PATCH", `/api/plugins/${ds.id}`, { enabled: false });
-ok(r.s === 200 && r.j.plugin.enabled === false, "tắt được cả plugin cài sẵn", JSON.stringify(r.j).slice(0, 200));
+ok(r.j.plugins.some((p) => p.id === mine.id) && r.j.plugins.some((p) => p.studio === "design"), "người thường thấy plugin của tổ chức và của mình");
+r = await admin("GET", "/api/plugins");
+ok(!r.j.plugins.some((p) => p.id === mine.id), "plugin cá nhân không lộ sang tài khoản khác");
+r = await member("PATCH", `/api/plugins/${ds.id}`, { studio: null });
+ok(r.s === 403, "người thường không đổi được plugin của tổ chức");
+r = await member("PATCH", `/api/plugins/${ds.id}`, { mine: { enabled: false } });
+ok(r.s === 200 && r.j.plugin.mine.enabled === false && r.j.plugin.enabled === true, "người thường tắt plugin tổ chức cho riêng mình");
 
 console.log("4. Studio trong chat");
 const studioChat = (c, studio, text) => c("POST", "/api/llm", { system: "", messages: [{ role: "user", content: text }], model: "anthropic/claude-opus-5-5", skills: true, studio });
 r = await studioChat(member, "design", "Làm trang web cho quán cà phê");
 ok(/Chưa có thư viện skill/.test(r.j?.text ?? ""), "đã tắt plugin: studio không có thư viện", (r.j?.text ?? "").slice(0, 200));
-await member("PATCH", `/api/plugins/${ds.id}`, { enabled: true });
+await member("PATCH", `/api/plugins/${ds.id}`, { mine: { enabled: true } });
 r = await studioChat(member, "design", "Làm trang web cho quán cà phê");
 const usedSk = (r.j?.skills ?? []).filter((u) => u.kind === "skill").map((u) => u.name);
 ok(usedSk.length === 2 && /<artifact identifier="landing-cafe"/.test(r.j.text), `bấm Thiết kế: model tự đọc ${usedSk.join(", ")} rồi làm artifact`, JSON.stringify(r.j).slice(0, 400));
@@ -95,7 +107,7 @@ for (const q of ["Xin chào, hôm nay thế nào?", "Thủ đô của Pháp là 
 r = await member("POST", "/api/llm", { system: "", model: "anthropic/claude-opus-5-5", skills: true, recentSkills: cafe,
   messages: [{ role: "user", content: "Làm trang web cho quán cà phê" }, { role: "assistant", content: "Đây là trang giới thiệu Lumen Coffee." }, { role: "user", content: "Đổi sang tông màu xanh lá" }] });
 ok(read(r).join() === cafe.join() && r.j.libs?.[0]?.key === "studio-design", `lượt tiếp nối: đọc lại ${read(r).join(", ")} để giữ nhất quán`, JSON.stringify(r.j).slice(0, 300));
-r = await member("POST", "/api/plugins", { action: "install", catalogId: "vercel-agent-skills" });
+r = await member("POST", "/api/plugins", { action: "install", catalogId: "vercel-agent-skills", scope: "personal" });
 const vc = r.j?.plugin;
 r = await plain("Tối ưu hiệu năng React cho trang Next.js");
 names = read(r);
@@ -106,9 +118,11 @@ console.log("5. Cập nhật và gỡ");
 r = await member("POST", `/api/plugins/${mine.id}`, { action: "check" });
 ok(r.s === 200 && Array.isArray(r.j.changed) && r.j.changed.length === 0, "kiểm tra cập nhật: đang là bản mới nhất", JSON.stringify(r.j).slice(0, 200));
 r = await member("PATCH", `/api/plugins/${mine.id}`, { skills: { animate: false }, everywhere: true });
-ok(r.j.plugin.skills.find((s) => s.name === "animate").enabled === false && r.j.plugin.everywhere, "tắt từng skill, bật dùng trong mọi cuộc trò chuyện");
+ok(r.j.plugin.skills.find((s) => s.name === "animate").enabled === false && r.j.plugin.mine.everywhere, "tắt từng skill, bật dùng trong mọi cuộc trò chuyện");
 r = await member("DELETE", `/api/plugins/${mine.id}`);
-ok(r.s === 200 && !r.j.plugins.some((p) => p.id === mine.id), "gỡ plugin");
+ok(r.s === 200 && !r.j.plugins.some((p) => p.id === mine.id), "gỡ plugin cá nhân");
+r = await member("DELETE", `/api/plugins/${ds.id}`);
+ok(r.s === 403, "người thường không gỡ được plugin của tổ chức");
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

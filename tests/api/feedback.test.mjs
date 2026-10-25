@@ -13,10 +13,15 @@ function client(init = "") {
   };
   return f;
 }
-// Web dùng cá nhân: mọi lượt chấm đều của chủ sở hữu (a và b chỉ là hai tên gọi cho cùng một phiên).
-const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? "");
+const admin = client(process.env.SYNCHRO_ADMIN_COOKIE ?? ""), a = client(), b = client();
 if (!process.env.SYNCHRO_ADMIN_COOKIE) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
-const a = admin, b = admin;
+for (const [c, email] of [[a, "fb-a@synchro.test"], [b, "fb-b@synchro.test"]]) {
+  await c("POST", "/api/auth/signup", { email, password: "Member-pass-123", profile: { fullName: email.split("@")[0], birthDate: "2000-01-01" } });
+  await c("POST", "/api/auth/login", { email, password: "Member-pass-123" });
+}
+// Quyền mặc định của thành viên do quản trị viên đặt (có thể tắt Skills): cấp đủ quyền cho tài khoản test.
+{ const u = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === "fb-a@synchro.test");
+  await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } }); }
 const NAME = "fb-test-ngan-gon";
 await a("DELETE", `/api/skills/${NAME}`);
 const md = (body) => { const fd = new FormData(); fd.append("file", new Blob([`---\nname: ${NAME}\ndescription: ${JSON.stringify("Cách làm người dùng đã dặn: luôn trả lời ngắn gọn, có gạch đầu dòng. Áp dụng cho mọi câu trả lời có liên quan.")}\n---\n\n${body}\n`], { type: "text/markdown" }), "SKILL.md"); return fd; };
@@ -32,6 +37,7 @@ r = await a("POST", "/api/skills", fd);
 ok(r.j.preview?.exists === true && r.j.preview.version === 2, "trùng tên → báo đã có, lưu sẽ thành v2", JSON.stringify(r.j));
 r = await a("POST", "/api/skills", md("# Trả lời ngắn gọn\n\n- Luôn trả lời ngắn gọn.\n- Đừng mở đầu bằng lời chào."));
 ok(r.s === 200 && r.j.created === false && r.j.skill.version === 2, "lưu lần hai thành phiên bản mới", JSON.stringify(r.j));
+ok((await b("GET", "/api/skills")).j?.skills?.every?.((s) => s.name !== NAME) ?? true, "skill là của riêng người lưu");
 
 console.log("2. Chấm điểm câu trả lời");
 const score = async () => (await a("GET", "/api/feedback")).j.scores[NAME];

@@ -362,6 +362,8 @@ export const removeSkill = (uid: string, name: string) => locked(uid, async () =
   await fs.rm(path.join(ROOT, uid, s.id), { recursive: true, force: true });
 });
 
+// Xóa toàn bộ file skill khi tài khoản bị xóa (bảng đã tự xóa theo khóa ngoại).
+export const removeUserSkillFiles = (uid: string) => fs.rm(path.join(ROOT, uid), { recursive: true, force: true });
 
 // ---------------------------------------------------------------- đọc file
 // Chỉ đọc file có trong danh sách skill_files của đúng skill đó, không nhận đường dẫn tự do.

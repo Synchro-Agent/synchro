@@ -19,11 +19,11 @@ import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
 import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
-import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal } from "./modals";
+import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
-import { clampEffort, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
+import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
 import { InboxPage, useInboxCount } from "./tasksui";
@@ -176,11 +176,13 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
   const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
   const [effort, setEffort] = usePref("effort", "medium");
-  const { say, openSettings } = useApp();
-  const { providers, loaded } = useModels();
-  // Mức nỗ lực thật sự dùng: mức đã chọn, hạ về mức gần nhất model hỗ trợ (Gemini chỉ tới Cao).
+  const { say, me, openSettings } = useApp();
+  const { providers, allowed, loaded, effort: caps } = useModels();
+  // Mức nỗ lực thật sự dùng: mức người dùng chọn, hạ theo giới hạn quản trị viên đặt cho model và các mức model hỗ trợ.
   const kind = providers.find((p) => p.models.some((m) => m.key === model))?.kind;
-  const eff = clampEffort(isEffort(effort) ? effort : "medium", "max", kind);
+  const cap = effortCap(caps, model);
+  const eff = clampEffort(isEffort(effort) ? effort : "medium", cap, kind);
+  const capped = cap !== "max";
   const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
   useEffect(() => { setActiveEffort(eff); }, [eff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
@@ -219,7 +221,11 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     return () => cancelAnimationFrame(raf);
   }, [mm]);
   const subX = { left: subLeft };
-  const pick = (k: string) => { setModel(k); close(); };
+  const ok = (k: string) => k === AUTO || allowsModel(allowed, k);
+  const pick = (k: string) => {
+    if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
+    setModel(k); close();
+  };
   const eLabel = levelName(eff);
   const none = loaded && !providers.length;
   return (
@@ -229,8 +235,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {none && (
           <div className="mempty">
             <b>Chưa kết nối model nào</b>
-            <span>Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu.</span>
-            <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>
+            <span>{me?.isAdmin ? "Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu." : "Quản trị viên cần nhập khóa API để Synchro dùng được model."}</span>
+            {me?.isAdmin && <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>}
           </div>
         )}
         {!none && (
@@ -248,18 +254,23 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         <button className={`menu-item mline ${sub === "effort" ? "sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
-          {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => (
-            <button key={k} className="menu-item mline" onClick={() => { setEffort(k); if (k === "max") say("Mức Tối đa tốn chi phí gấp nhiều lần"); close(); }}>
-              {l}{k === "medium" && <span className="mtag">Được đề xuất</span>}
-              {eff === k && <span className="ck"><I.Check /></span>}
-            </button>
-          ))}
+          {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => {
+            const locked = clampEffort(k as Effort, cap, kind) !== k;
+            return (
+              <button key={k} className={`menu-item mline ${locked ? "locked" : ""}`} aria-disabled={locked} title={locked ? "Quản trị viên đã khóa mức này" : undefined}
+                onClick={() => { if (locked) { say(`Quản trị viên giới hạn ${modelName(model)} tối đa ở mức ${levelName(cap)}`); return; } setEffort(k); if (k === "max") say("Mức Tối đa dùng giới hạn nhanh hơn từ 5 lần"); close(); }}>
+                {l}{k === "medium" && !locked && <span className="mtag">Được đề xuất</span>}
+                {eff === k ? <span className="ck"><I.Check /></span> : locked && <span className="sc"><I.Lock size={14} /></span>}
+              </button>
+            );
+          })}
+          {capped && <div className="msub-note msub-cap"><I.Lock size={12} />{`Quản trị viên giới hạn model này tối đa ở mức ${levelName(cap)}.`}</div>}
         </Menu>
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.models.map((m) => (
-              <button key={m.key} className="menu-item mline" onClick={() => pick(m.key)} title={m.id}>
-                <span className="mname-t">{m.name}</span>{m.key === model && <span className="ck"><I.Check /></span>}
+              <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
+                <span className="mname-t">{m.name}</span>{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
           </Menu>
@@ -491,7 +502,7 @@ export default function Home() {
   const [curProj, setCurProj] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const fm = useFileMenu((m) => say(m));
-  const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "keys" | "logout" | "upload">(null);
+  const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
   const [userMenu, setUserMenu] = useState(false);
   const [chatMenu, setChatMenu] = useState<number | null>(null);
   const [codeList, setCodeList] = usePref<{ id: number; title: string; pinned?: boolean }[]>("codeList", []);
@@ -596,7 +607,7 @@ export default function Home() {
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
   useEffect(() => { setActiveModel(model); }, [model]);
-  // Danh sách model đổi (thêm, gỡ khóa API, đổi model hiện ở bộ chọn) → chọn lại model hợp lệ.
+  // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
   useEffect(() => { if (me) loadCaps(true); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
@@ -1017,6 +1028,9 @@ export default function Home() {
   const visible = chats.filter((c) => !c.inc);
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
+  const pill = false && (
+    <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
+  );
   const proj = projects.find((x) => x.id === curProj);
   const sideRef = useClickAway(() => setSideProj(null));
   const patchProj = (id: number, f: Partial<Project>) => setProjects((ps) => ps.map((x) => (x.id === id ? { ...x, ...f, upd: Date.now() } : x)));
@@ -1045,11 +1059,13 @@ export default function Home() {
   };
   const api = {
     say, chats, exportData,
+    upgrade: () => setModal("upgrade"),
     openSettings: (t?: string) => { setSettingsTab(t ?? "General"); setModal("settings"); },
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
+    unshare: (id: number) => { setChats((cs) => cs.map((c) => (c.id === id ? { ...c, shared: false } : c))); say("Đã dừng chia sẻ"); },
     wipe: (what: "all" | "chats") => { if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
     me: me ?? null, setMe, logout,
   };
@@ -1239,9 +1255,11 @@ export default function Home() {
               </div>
             )}
           </div>
+          {(view === "new" || view === "chat") && pill}
           <div className="right">
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
             {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
+            {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
         </div>}
 
@@ -1343,7 +1361,7 @@ export default function Home() {
           <div className="page"><div className="page-in">
             <h1 style={{ marginBottom: 24 }}>Artifacts</h1>
             <div className="tabs" style={{ alignItems: "center" }}>
-              {["Artifact", "Ứng dụng"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
+              {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
               <span className="art-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></span>
             </div>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tạo thứ gì đó mới</div>
@@ -1356,8 +1374,8 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 1 ? "Ứng dụng của bạn" : "Artifact của bạn"}</div>
-            {tab === 1 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
+            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 3 ? "Ứng dụng nội bộ" : tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</div>
+            {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
               onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
           </div></div>
         )}
@@ -1374,8 +1392,10 @@ export default function Home() {
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
+      <Fade show={!!(modal === "share" && chat)}><ShareModal title={chat?.title ?? ""} onClose={() => setModal(null)} say={say} onCopy={() => chat && setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, shared: true } : c)))} /></Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => [...o, f.name]); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
+      <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
       <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Bạn có chắc chắn muốn xóa đoạn chat này không?" ok="Xóa" onCancel={() => setDelId(null)} onOk={() => { if (delId !== null) removeChat(delId); setDelId(null); say("Đã xóa đoạn chat"); }} /></Fade>

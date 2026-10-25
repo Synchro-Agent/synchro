@@ -272,9 +272,9 @@ export default function Counter() {
 }`;
 const FIXED = BUGGY.replace("const items = undefined;", "const items = [\"Táo\", \"Cam\", \"Xoài\"];");
 
-// Ứng dụng có lưu dữ liệu (window.storage): thử xuất bản thành ứng dụng có địa chỉ riêng.
+// Ứng dụng có lưu dữ liệu chung (window.storage, shared = true): thử xuất bản thành ứng dụng cho cả tổ chức.
 const NOTES = `<!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><title>Sổ ghi chú</title>
+<html lang="vi"><head><meta charset="utf-8"><title>Bảng tin nhóm</title>
 <style>
   *{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#f7f7f5;color:#1f1f1d}
   main{max-width:560px;margin:32px auto;padding:0 18px}h1{font-size:22px;margin:0 0 4px}p.d{margin:0 0 16px;color:#6b6b66;font-size:14px}
@@ -284,14 +284,14 @@ const NOTES = `<!doctype html>
   li{background:#fff;border:1px solid #ecece7;border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;gap:10px}
   li small{color:#8a8a84}#st{font-size:12.5px;color:#8a8a84;margin-top:10px}
 </style></head><body><main>
-<h1>Sổ ghi chú</h1><p class="d">Ghi chú được lưu lại, mở lại lúc nào cũng còn.</p>
+<h1>Bảng tin nhóm</h1><p class="d">Ghi chú dùng chung: ai mở ứng dụng cũng thấy và thêm được.</p>
 <form id="f"><input id="t" placeholder="Viết ghi chú…" maxlength="200" required><button>Đăng</button></form>
 <div id="st">Đang tải…</div><ul id="list"></ul>
 <script>
 const KEY = "notes";
 const list = document.getElementById("list"), st = document.getElementById("st");
 async function load() {
-  try { const r = await window.storage.get(KEY); return r ? JSON.parse(r.value) : []; } catch (e) { st.textContent = "Không đọc được dữ liệu: " + e.message; return []; }
+  try { const r = await window.storage.get(KEY, true); return r ? JSON.parse(r.value) : []; } catch (e) { st.textContent = "Không đọc được dữ liệu: " + e.message; return []; }
 }
 function render(items) {
   list.innerHTML = "";
@@ -301,10 +301,12 @@ function render(items) {
 document.getElementById("f").onsubmit = async (e) => {
   e.preventDefault(); const t = document.getElementById("t"); const text = t.value.trim(); if (!text) return;
   st.textContent = "Đang lưu…";
-  try { const items = await load(); items.push({ text, at: Date.now() }); await window.storage.set(KEY, JSON.stringify(items)); t.value = ""; render(items); }
+  try { const items = await load(); items.push({ text, at: Date.now() }); await window.storage.set(KEY, JSON.stringify(items), true); t.value = ""; render(items); }
   catch (err) { st.textContent = "Không lưu được: " + err.message; }
 };
 load().then(render);
+// Người khác vừa đăng ghi chú (đang mở cùng ứng dụng) → nạp lại ngay.
+if (window.storage.onChange) window.storage.onChange(({ key }) => { if (key === KEY) load().then(render); });
 </script></main></body></html>`;
 // Văn bản hành chính (NĐ 30/2020): model viết JSON, Synchro tự dàn trang và xuất Word / PDF.
 const CONG_VAN = JSON.stringify({
@@ -407,7 +409,7 @@ function artifactReply(t, sys, msgs) {
     if (body === prev.body) body = body.replace(/(<\/style>)/, "  body{filter:hue-rotate(110deg)}\n$1");
     return `Đã cập nhật **${prev.title}** sang tông xanh lá. Bạn có thể dùng mũi tên phiên bản ở khung bên phải để so với bản trước.\n\n${edited(sys, prev, body)}`;
   }
-  if (has(t, /\b(so ghi chu|ung dung ghi chu|ghi chu ca nhan)\b/)) return `Mình đã làm sổ ghi chú, ghi chú được lưu lại bằng window.storage. Bấm nút tên lửa trên khung xem trước để xuất bản thành ứng dụng có địa chỉ riêng.\n\n${art("so-ghi-chu", "text/html", "Sổ ghi chú", NOTES)}`;
+  if (has(t, /\b(bang tin nhom|ghi chu nhom|ghi chu chung)\b/)) return `Mình đã làm bảng tin nhóm, ghi chú được lưu lại và dùng chung cho mọi người (window.storage). Bấm nút tên lửa trên khung xem trước để xuất bản thành ứng dụng cho cả tổ chức.\n\n${art("bang-tin-nhom", "text/html", "Bảng tin nhóm", NOTES)}`;
   if (has(t, /#artbug/)) return `Đây là bộ đếm đơn giản:\n\n${art("bo-dem", "application/vnd.react", "Bộ đếm", BUGGY)}`;
   if (has(t, /\b(dich|translat|tro ly|chatbot)\b/) && has(t, /\b(app|ung dung|cong cu)\b/))
     return ai ? `Mình đã làm ứng dụng dịch dùng model AI ngay bên trong artifact. Nhập câu, chọn ngôn ngữ rồi bấm **Dịch**:\n\n${art("tro-ly-dich", "application/vnd.react", "Trợ lý dịch", TRANSLATOR)}`
@@ -753,6 +755,13 @@ export function capsReply(sys, q, msgs, toolNames) {
   if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }
   if (s.includes("<artifacts>")) { const a = artifactReply(t, s, msgs); if (a) return { text: a }; }
   else { const a = noArtifactReply(t); if (a) return { text: a }; }
+  // Bộ não công ty: trả lời từ đoạn tài liệu được đưa vào, ghi số nguồn như model thật (trừ khi người dùng muốn vẽ biểu đồ, sơ đồ).
+  const kn = [...s.matchAll(/<source n="(\d+)" title="([^"]*)">\n([\s\S]*?)\n<\/source>/g)];
+  if (kn.length && !/\b(ve|bieu do|so do|chart)\b/.test(t)) {
+    const first = (x) => x.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s/)[0].slice(0, 300);
+    const lines = kn.slice(0, 2).map(([, n, title, body]) => `- Theo **${title}**: ${first(body)} [${n}]`);
+    return { text: `Mình tìm thấy trong kho tài liệu của tổ chức:\n\n${lines.join("\n")}\n\nBạn mở phần Nguồn bên dưới để xem nguyên văn.` };
+  }
   if (s.includes("<inline_visuals>")) { const v = vizReply(t); if (v) return { text: v }; }
   return null;
 }

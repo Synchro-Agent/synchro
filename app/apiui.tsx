@@ -1,10 +1,10 @@
 "use client";
-// Cài đặt → API: nhập khóa API của từng nhà cung cấp, xem model lấy được, chọn model hiện ở bộ chọn, gửi thử một câu tới model.
+// Cài đặt → API (chỉ quản trị viên): nhập khóa API của từng nhà cung cấp, xem model lấy được, gửi thử một câu tới model.
 // Khóa gửi lên máy chủ một lần khi lưu; máy chủ kiểm tra với API của hãng, mã hóa rồi lưu, và chỉ trả về dạng che (sk-ant…a1b2).
 import { useEffect, useMemo, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { call, ago, ModelPickerSettings } from "./setcommon";
+import { call, ago } from "./adminui";
 import { refreshModels } from "./models";
 import type { ProviderInfo } from "./catalog";
 import { BrandLogo, hasLogo } from "./brands";
@@ -143,7 +143,7 @@ function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
   );
 }
 
-export function ApiPanel({ Toggle, say }: { Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement; say: (m: string) => void }) {
+export function ApiPanel() {
   const [s, setS] = useState<ApiState | null>(null);
   const [err, setErr] = useState("");
   const load = () => call<ApiState>("GET", "/api/admin/apikeys").then((x) => { setS(x); setErr(""); }).catch((e) => setErr(e.message));
@@ -172,9 +172,6 @@ export function ApiPanel({ Toggle, say }: { Toggle: (p: { on: boolean; set: (v: 
       <h3 className="sec">Chat models</h3>
       <div className="api-list">{chat.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
 
-      <h3 className="sec">Model picker</h3>
-      <ModelPickerSettings s={s} setS={setS} say={say} Toggle={Toggle} />
-
       <h3 className="sec">Voice</h3>
       <div className="api-list">{voice.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
 
@@ -185,7 +182,7 @@ export function ApiPanel({ Toggle, say }: { Toggle: (p: { on: boolean; set: (v: 
       <ol className="api-steps">
         <li><b>Create a key</b><span>Sign in to the provider&apos;s console, add billing, and create an API key.</span></li>
         <li><b>Paste it here</b><span>Synchro checks the key and loads every model it can use.</span></li>
-        <li><b>Pick your models</b><span>Under Model picker above, choose which models appear on the main screen and which one new chats start with.</span></li>
+        <li><b>Choose what people see</b><span>In Administrator, pick which models appear in the model picker and who may use them.</span></li>
       </ol>
     </>
   );

@@ -1,8 +1,15 @@
-// Dùng chung cho các route connector: kiểm tra đăng nhập, đổi lỗi thành JSON.
-import { handle, requireUser } from "../../authstore";
+// Dùng chung cho các route connector: kiểm tra đăng nhập + quyền dùng connector, đổi lỗi thành JSON.
+import { AuthError, can, handle, permsOf, requireUser } from "../../authstore";
+import { connPolicy } from "../../catalog";
 import { ConnectorError } from "../../connectors";
 
-export const connectorUser = (req: Request) => requireUser(req).user;
+export function connectorUser(req: Request) {
+  const { user } = requireUser(req);
+  if (!can(user, "connectors")) throw new AuthError("Quản trị viên chưa cho phép tài khoản của bạn dùng connector.", 403);
+  return user;
+}
+// Quyền connector quản trị viên đặt cho tài khoản này (quản trị viên: không giới hạn).
+export const policyOf = (user: Parameters<typeof permsOf>[0]) => connPolicy(permsOf(user));
 
 export function route<A extends unknown[]>(fn: (req: Request, ...a: A) => Promise<Response>) {
   return handle(async (req: Request, ...a: A) => {

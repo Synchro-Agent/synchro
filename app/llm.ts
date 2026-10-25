@@ -20,7 +20,7 @@ export const MEMORY_EVERY_N_USER_MSGS = 4;
 export type LLMMsg = { role: "user" | "assistant"; content: string | ContentBlock[]; trace?: TraceItem[] };
 export const textOf = (c: LLMMsg["content"]) => (typeof c === "string" ? c : c.map((b) => (b.type === "text" ? b.text : b.type === "image" ? "[ảnh]" : `[PDF ${b.name ?? ""}]`)).join("\n"));
 
-// Mặc định gọi /api/llm của chính Synchro (khóa API nhập ở Cài đặt → API).
+// Mặc định gọi /api/llm của chính Synchro (khóa API do quản trị viên nhập ở Cài đặt → API).
 export const LLM_ENDPOINT = process.env.NEXT_PUBLIC_LLM_ENDPOINT || "/api/llm";
 export const hasLLM = !!LLM_ENDPOINT;
 
@@ -71,7 +71,7 @@ type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => 
 // Model đang chọn trong giao diện; máy chủ kiểm tra tài khoản có được phép dùng model này không.
 let activeModel = "";
 export const setActiveModel = (m: string) => { activeModel = m; };
-// Mức nỗ lực đang dùng (đã hạ về mức model hỗ trợ); máy chủ vẫn kiểm tra lại.
+// Mức nỗ lực đang dùng (đã hạ theo giới hạn của quản trị viên); máy chủ vẫn kiểm tra lại.
 let activeEffort: Effort | undefined;
 export const setActiveEffort = (e: Effort) => { activeEffort = e; };
 export const getActiveEffort = () => activeEffort;

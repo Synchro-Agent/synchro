@@ -339,7 +339,7 @@ export function mockAgent(): Adapter {
         ["", [call("browser_read", {}), call("browser_screenshot", {})]],
         ["", [call("update_plan", { items: plan(4) })]],
       ];
-      const [text, calls] = steps[k] ?? [`**Chế độ mô phỏng:** máy chủ chưa gắn model AI thật, nên đây là kịch bản mẫu để thử workspace. Mình đã tạo \`demo/index.html\`, chạy server ở cổng 8080 và mở trang trong trình duyệt bên cạnh.\n\nKhi máy chủ được gắn model (nhập khóa API ở Cài đặt → API), agent sẽ tự làm đúng yêu cầu của bạn: _"${q.slice(0, 200)}"_.`, []];
+      const [text, calls] = steps[k] ?? [`**Chế độ mô phỏng:** máy chủ chưa gắn model AI thật, nên đây là kịch bản mẫu để thử workspace. Mình đã tạo \`demo/index.html\`, chạy server ở cổng 8080 và mở trang trong trình duyệt bên cạnh.\n\nKhi quản trị viên gắn model (LLM_API_KEY), agent sẽ tự làm đúng yêu cầu của bạn: _"${q.slice(0, 200)}"_.`, []];
       // Ước lượng token (~4 ký tự / token) để giao diện có số liệu giống model thật.
       const usage = { input: Math.round(JSON.stringify(msgs).length / 4) + 3200, output: Math.round((text.length + JSON.stringify(calls).length) / 4) };
       return { text, calls, usage, assistant: { role: "assistant", content: [...(text ? [{ type: "text", text }] : []), ...calls.map((c) => ({ type: "tool_use", ...c }))] } };

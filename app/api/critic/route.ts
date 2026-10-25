@@ -1,4 +1,4 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
+import { canModel, handle, limit, requireUser, sameOrigin } from "../../authstore";
 import { catalog, mainModels, resolveModel } from "../../providers";
 import { ALL } from "../../catalog";
 import { tierOf, type Tier } from "../../router";
@@ -46,7 +46,7 @@ export const POST = handle(async (req: Request) => {
   if (content.length > 200_000 || lines > 4000) return Response.json({ error: "Sản phẩm quá dài để phản biện." }, { status: 413 });
   const gen = typeof b.model === "string" ? b.model : "";
   const main = mainModels();
-  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => main.includes(ALL) || main.includes(k));
+  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(user, k));
   const picks = pickCritics(allowed, gen.split("/")[0] ?? "", gen);
   if (!picks.length) return Response.json({ error: "Synchro chưa được kết nối với model nào." }, { status: 503 });
   const kind = LABEL[String(b.type)] ?? "code";

@@ -1,4 +1,4 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
+import { canModel, handle, limit, requireUser, sameOrigin } from "../../../authstore";
 import { catalog, mainModels, resolveModel } from "../../../providers";
 import { ALL } from "../../../catalog";
 import { routeModel } from "../../../router";
@@ -30,7 +30,7 @@ export const POST = handle(async (req: Request) => {
   const flat = msgs.map((m) => `${m.role === "user" ? "Người dùng" : "Trợ lý"}: ${splitArtifacts(m.content).map((sg) => (sg.kind === "text" ? sg.text : `[artifact "${sg.art.title}"]`)).join("").slice(0, 4000)}`).join("\n\n").slice(-120_000);
   const prev = typeof b.summary === "string" && b.summary.trim() ? `Tóm tắt các lượt trước đó:\n${b.summary.slice(0, 8000)}\n\n` : "";
   const main = mainModels();
-  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => main.includes(ALL) || main.includes(k));
+  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(user, k));
   const pick = routeModel({ text: "tóm tắt", attachments: 0, turns: 1, studio: false }, allowed);
   const t = pick && (await resolveModel(pick.model));
   if (!t) return Response.json({ error: "Synchro chưa được kết nối với model nào. Hãy nhập khóa API ở Cài đặt → API." }, { status: 503 });
