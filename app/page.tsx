@@ -663,7 +663,10 @@ export default function Home() {
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [];
     let outs: Msg["outs"] = [];
     try {
-      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio });
+      // Skill hai câu trả lời gần nhất đã dùng: lượt tiếp nối (sửa, thêm, đổi) đọc lại để giữ cùng phong cách.
+      const recentSkills = [...new Set((chatsRef.current.find((c) => c.id === id)?.msgs ?? []).filter((m) => m.role === "ai" && (m.skills?.length || m.libs?.length)).slice(-2)
+        .flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))];
+      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills });
       const used = takeSkillsUsed();
       libs = takeLibsUsed();
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.

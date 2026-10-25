@@ -9,6 +9,7 @@ import { capsState, skillsOn } from "../../caps";
 import { overLimit, usageScope } from "../../usage";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "../../plugins";
 import { STUDIO_LABEL } from "../../plugindir";
+import { suggest, type Hit } from "../../skillroute";
 import type { Skill } from "../../skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "../../coderun";
 import { saveOutputs, type OutFile } from "../../outputs";
@@ -91,7 +92,7 @@ const mockAdapter = (skills: Skl): Adapter => ({
 // code: công cụ run_code đang bật (net: được tải gói từ kho thư viện); outs: tệp code đã tạo trong lượt này.
 // libs: skill (và mục thư viện) → thư viện chứa nó, để câu trả lời hiện "Thư viện Thiết kế · skill đã đọc". studio: chế độ người dùng chọn bằng nút.
 type Lib = { key: string; label: string };
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib };
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string> };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -190,6 +191,26 @@ function connectorToolDefs(sess: ConnectorSession, gemini: boolean) {
   });
 }
 
+// Văn bản của tin nhắn người dùng mới nhất (nội dung có thể là chuỗi hoặc danh sách khối).
+function lastUserText(messages: unknown): string {
+  const list = Array.isArray(messages) ? (messages as { role?: string; content?: unknown }[]) : [];
+  const m = [...list].reverse().find((x) => x?.role === "user");
+  if (!m) return "";
+  if (typeof m.content === "string") return m.content.slice(0, 4000);
+  return Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n").slice(0, 4000) : "";
+}
+// Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
+// và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
+function routingPrompt(hits: Hit[], recent: { name: string; lib?: Lib }[]) {
+  if (!hits.length && !recent.length) return "";
+  const where = (l?: Lib) => (l ? ` (thư viện ${l.label} · ${l.key})` : "");
+  return `<skill_routing>
+${hits.length ? `Hệ thống đã đối chiếu yêu cầu mới nhất với toàn bộ kho skill. Các skill có vẻ liên quan nhất (gợi ý tự động, có thể chưa đúng):
+${hits.map((h) => `- ${h.skill.name}${where(h.lib)}: ${h.skill.description.replace(/\s+/g, " ").slice(0, 180)}`).join("\n")}` : ""}
+${recent.length ? `Các lượt trước trong đoạn chat này đã dùng: ${recent.map((r) => `${r.name}${where(r.lib)}`).join(", ")}. Nếu yêu cầu mới sửa hoặc tiếp tục sản phẩm đó, hãy đọc lại các skill này để giữ cùng phong cách và nguyên tắc.` : ""}
+Bạn tự quyết định: đọc ngay các skill hợp bằng load_skill (gọi thẳng tên skill, không cần mở thư viện), bỏ qua skill không hợp, hoặc dùng search_skills để tìm thêm.
+</skill_routing>`.replace(/\n{2,}/g, "\n");
+}
 // Thư viện đã dùng trong lượt: chế độ studio đang bật (nếu có), rồi các thư viện model tự mở, kèm skill đã đọc trong từng thư viện.
 function usedLibs(x: Exec, used: string[]) {
   const out = new Map<string, Lib & { forced?: boolean; skills: string[] }>();
@@ -197,7 +218,7 @@ function usedLibs(x: Exec, used: string[]) {
   const opened = new Set([...(x.studio ? [x.studio.key] : []), ...used.filter((n) => x.libs?.[n]?.[0]?.key === n)]);
   for (const n of used) {
     const all = x.libs?.[n];
-    const l = all?.find((c) => opened.has(c.key)) ?? all?.[0];
+    const l = all?.find((c) => opened.has(c.key)) ?? all?.find((c) => c.key === x.prefer?.[n]) ?? all?.[0];
     if (!l) continue;
     const g = out.get(l.key) ?? out.set(l.key, { ...l, skills: [] }).get(l.key)!;
     if (n !== l.key && !g.skills.includes(n)) g.skills.push(n);
@@ -367,15 +388,30 @@ async function post(req: Request, c: NonNullable<ReturnType<typeof current>>, sc
         hidden(fresh);
       }
     }
+    // Định tuyến: chấm điểm toàn bộ kho skill theo yêu cầu mới nhất. Skill có ở nhiều thư viện được gán vào thư viện
+    // mà các gợi ý khác cùng thuộc về (đề xuất dự án → Tài liệu, không phải Trình bày).
+    let route = "";
+    const prefer: Record<string, string> = {};
+    if (list.length) {
+      const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k })));
+      const votes = new Map<string, number>();
+      for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
+      const pick = (n: string) => (libs[n] ?? []).slice().sort((a, b) => (votes.get(b.key) ?? 0) - (votes.get(a.key) ?? 0))[0];
+      const hits = raw.map((h) => ({ ...h, lib: pick(h.skill.name) }));
+      for (const h of hits) if (h.lib) prefer[h.skill.name] = h.lib.key;
+      const recentNames = Array.isArray(body.recentSkills) ? [...new Set((body.recentSkills as unknown[]).filter((n): n is string => typeof n === "string"))].slice(0, 6) : [];
+      const recent = recentNames.filter((n) => list.some((k) => k.name === n) && !hits.some((h) => h.skill.name === n)).map((n) => ({ name: n, lib: libs[n]?.[0] }));
+      route = routingPrompt(hits, recent);
+    }
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: typeof conv === "string" && conv.length <= 64 ? conv : undefined, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
     if (visible.length || sess || code) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
+      const sk = [capSys, skillsPrompt(visible, scripts), route, sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
       const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer };
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
         : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)

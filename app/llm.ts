@@ -60,7 +60,7 @@ export const getActiveEffort = () => activeEffort;
 export class LLMError extends Error { constructor(m: string, public status: number) { super(m); } }
 
 // opts.feature: "code" khi gọi từ Synchro Code; opts.project: id dự án đang chat (bật skill riêng của dự án).
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string } = {}): Promise<string> {
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[] } = {}): Promise<string> {
   lastSkills = []; lastFiles = [];
   if (!hasLLM) {
     // Chưa có model: trả lời giả lập từ câu hỏi cuối.
@@ -70,7 +70,7 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   const r = await fetch(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio }),
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills }),
   });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status); }
   let j = await r.json();

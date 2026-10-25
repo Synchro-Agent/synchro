@@ -598,6 +598,33 @@ function libStep(S, M, t, toolNames) {
   if (!loaded.length && toolNames.includes("load_skill") && lines.length) return { tool: { name: "load_skill", args: { name: (lines.find(([, d]) => overlap(t, d)) ?? lines[0])[0] } } };
   return { text: `Mình đã mở thư viện **${m[1]}**, đọc skill **${loaded.join("**, **") || "(không có)"}** và áp dụng.\n\n\`\`\`css\n.button {\n  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);\n}\n.button:active {\n  transform: scale(0.97);\n}\n\`\`\`\n\nNhấn xuống thu nhỏ 3% trong 160ms với đường cong ease-out mạnh, đủ để có cảm giác phản hồi mà không rề rà.` };
 }
+// Sản phẩm mẫu theo loại thư viện: Trình bày → bản trình chiếu, Tài liệu → tài liệu, Thiết kế → logo hoặc landing page.
+function product(st, used, q) {
+  if (st === "slides") return { text: `${used}\n\n${art("bao-cao-quy-3", "text/html", "Báo cáo quý III", DECK)}\n\nQuyết định chính: một ý mỗi slide, số liệu lớn làm điểm nhấn, nền tối tương phản cao. Bấm hoặc dùng phím mũi tên để chuyển slide. Muốn mình xuất ra PowerPoint không?` };
+  if (st === "docs") return { text: `${used}\n\n${art("de-xuat-plugins", "text/markdown", "Đề xuất triển khai Plugins", DOC)}\n\nQuyết định chính: tóm tắt một câu ở đầu, bảng phân công rõ người chịu trách nhiệm, kết thúc bằng hạn chót. Cần bản Word hoặc PDF thì nói mình nhé.` };
+  if (st === "design" && /\b(logo|svg|bieu tuong)\b/.test(norm(q))) return { text: `${used}\n\n${art("logo", "image/svg+xml", "Logo Synchro", LOGO)}\n\nQuyết định chính: hai nét cong lồng nhau thể hiện "đồng bộ", gradient xanh sang tím, góc bo lớn để dùng tốt làm icon ứng dụng.` };
+  if (st === "design" && !/\b(hieu ung|chuyen dong|animation|muot)\b/.test(norm(q))) return { text: `${used}\n\n${art("landing-cafe", "text/html", "Trang giới thiệu Lumen Coffee", LANDING)}\n\nQuyết định chính: font serif ấm cho thương hiệu cà phê, bảng màu kem và nâu, nhiều khoảng trắng; bố cục hai cột co về một cột trên điện thoại. Muốn đổi tông màu hay thêm mục thực đơn không?` };
+  return { text: `${used}\n\n\`\`\`css\n.button {\n  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);\n}\n.button:active {\n  transform: scale(0.97);\n}\n\`\`\`\n\nNhấn xuống thu nhỏ 3% trong 160ms với đường cong ease-out mạnh, đủ để có cảm giác phản hồi mà không rề rà.` };
+}
+// Gợi ý định tuyến của máy chủ (<skill_routing>): đọc thẳng 1-2 skill được gợi ý rồi làm. Yêu cầu sửa / tiếp nối thì ưu tiên
+// skill lượt trước đã dùng. Giống model thật: không cần mở thư viện trước khi đã biết tên skill.
+function routeStep(S, M, q, toolNames) {
+  const r = /<skill_routing>([\s\S]*?)<\/skill_routing>/.exec(S);
+  if (!r || !toolNames.includes("load_skill")) return null;
+  // Như model thật tự cân nhắc: biểu đồ, sơ đồ trong chat hay chạy code thì làm luôn, không cần đọc skill thiết kế được gợi ý.
+  if (/\b(bieu do|so do|mermaid|matplotlib|png|chart|python)\b/.test(norm(q))) return null;
+  const item = /([a-z0-9-]+)(?: \(thư viện ([^·)]+) · ([a-z0-9-]+)\))?/;
+  const hinted = [...r[1].matchAll(/^- ([a-z0-9-]+)(?: \(thư viện ([^·)]+) · ([a-z0-9-]+)\))?:/gm)].map((x) => ({ name: x[1], label: x[2]?.trim(), key: x[3] }));
+  const recent = (/đã dùng: ([^\n]*?)\. Nếu/.exec(r[1])?.[1] ?? "").split(/, (?=[a-z0-9-]+(?: \(|$))/).map((p) => item.exec(p)).filter(Boolean).map((x) => ({ name: x[1], label: x[2]?.trim(), key: x[3] }));
+  const edit = /\b(doi|sua|them|bot|lam lai|chinh|tong mau)\b/.test(norm(q));
+  const want = (edit && recent.length ? [...recent, ...hinted] : [...hinted, ...recent]).slice(0, 2);
+  if (!want.length) return null;
+  const loaded = [...M.matchAll(/<skill name=\\?"([^"\\]+)/g)].map((x) => x[1]);
+  const next = want.find((w) => !loaded.includes(w.name));
+  if (next) return { tool: { name: "load_skill", args: { name: next.name } } };
+  const st = { "studio-design": "design", "studio-slides": "slides", "studio-docs": "docs" }[want[0].key] ?? "";
+  return product(st, `Mình đã tự chọn và đọc skill **${want.map((w) => w.name).join("**, **")}**${want[0].label ? ` (thư viện ${want[0].label})` : ""} rồi áp dụng.`, q);
+}
 export function studioStep(sys, msgsJson, q, toolNames) {
   const S = String(sys ?? ""), M = String(msgsJson ?? "");
   const m = /<studio name=\\?"(design|slides|docs)\\?">/.exec(S) ?? /<studio name=\\?"(design|slides|docs)\\?">/.exec(M);
@@ -608,6 +635,8 @@ export function studioStep(sys, msgsJson, q, toolNames) {
     if (/\b(word|docx|excel|xlsx|powerpoint|pptx|pdf|csv|file|tep)\b/.test(t)) return null;
     const lib = libStep(S, M, t, toolNames);
     if (lib) return lib;
+    const routed = routeStep(S, M, q, toolNames);
+    if (routed) return routed;
     const hit = INTENT.find(([k, re]) => S.includes(`<name>studio-${k}</name>`) && re.test(t));
     if (hit && toolNames.includes("load_skill")) return { tool: { name: "load_skill", args: { name: `studio-${hit[0]}` } } };
     // Thư viện của plugin khác ("lib-…"): mở khi từ khóa của yêu cầu có trong mô tả thư viện.
@@ -621,8 +650,5 @@ export function studioStep(sys, msgsJson, q, toolNames) {
   const next = want.find((n) => !loaded.includes(n));
   if (toolNames.includes("load_skill") && next && loaded.length < 2) return { tool: { name: "load_skill", args: { name: next } } };
   const used = loaded.length ? `Mình đã mở thư viện ${st === "design" ? "Thiết kế" : st === "slides" ? "Trình bày" : "Tài liệu"}, đọc skill **${loaded.join("**, **")}** và áp dụng.` : "Chưa có thư viện skill cho studio này, mình dùng kinh nghiệm thiết kế chung.";
-  if (st === "slides") return { text: `${used}\n\n${art("bao-cao-quy-3", "text/html", "Báo cáo quý III", DECK)}\n\nQuyết định chính: một ý mỗi slide, số liệu lớn làm điểm nhấn, nền tối tương phản cao. Bấm hoặc dùng phím mũi tên để chuyển slide. Muốn mình xuất ra PowerPoint không?` };
-  if (st === "docs") return { text: `${used}\n\n${art("de-xuat-plugins", "text/markdown", "Đề xuất triển khai Plugins", DOC)}\n\nQuyết định chính: tóm tắt một câu ở đầu, bảng phân công rõ người chịu trách nhiệm, kết thúc bằng hạn chót. Cần bản Word hoặc PDF thì nói mình nhé.` };
-  if (/\b(logo|svg|bieu tuong)\b/.test(norm(q))) return { text: `${used}\n\n${art("logo", "image/svg+xml", "Logo Synchro", LOGO)}\n\nQuyết định chính: hai nét cong lồng nhau thể hiện "đồng bộ", gradient xanh sang tím, góc bo lớn để dùng tốt làm icon ứng dụng.` };
-  return { text: `${used}\n\n${art("landing-cafe", "text/html", "Trang giới thiệu Lumen Coffee", LANDING)}\n\nQuyết định chính: font serif ấm cho thương hiệu cà phê, bảng màu kem và nâu, nhiều khoảng trắng; bố cục hai cột co về một cột trên điện thoại. Muốn đổi tông màu hay thêm mục thực đơn không?` };
+  return product(st, used, q);
 }
