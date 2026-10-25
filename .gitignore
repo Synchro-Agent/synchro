@@ -49,3 +49,7 @@ next-env.d.ts
 /data/
 # dữ liệu của npm run dev:mock (API giả lập)
 /data-mock/
+
+# Kiểm thử (CI)
+.next-ci/
+mock.log

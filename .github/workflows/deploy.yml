@@ -1,15 +1,50 @@
 name: Deploy to VPS
+# Mỗi lần đẩy code: kiểm tra trước (kiểu, build production, kiểm thử API trên Synchro giả lập), đạt mới deploy.
+# Nhánh main → synchro.net.nz. Nhánh staging → staging.synchro.net.nz (dữ liệu riêng, không có khóa model thật).
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
 
 concurrency:
-  group: deploy
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cài gói
+        run: npm ci
+
+      - name: Kiểm tra kiểu (TypeScript)
+        run: node node_modules/typescript/bin/tsc --noEmit -p .
+
+      - name: Build production
+        run: NEXT_DIST_DIR=.next-ci NODE_OPTIONS=--max-old-space-size=4096 npx next build
+
+      - name: Kiểm thử API trên Synchro giả lập
+        run: |
+          npm run dev:mock > mock.log 2>&1 &
+          for i in $(seq 1 120); do grep -q "Synchro với API giả lập" mock.log && break; sleep 5; done
+          grep -q "Synchro với API giả lập" mock.log || { tail -60 mock.log; exit 1; }
+          node tests/run-all.mjs
+
+      - name: Nhật ký máy chủ giả lập (khi lỗi)
+        if: failure()
+        run: tail -200 mock.log || true
+
   deploy:
+    needs: verify
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,3 +67,29 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             'chown -R synchro:synchro /var/www/synchro && su - synchro -c "cd /var/www/synchro && npm ci && .mkvenv/bin/pip install -q -r requirements.txt && rm -rf .next/cache && NODE_OPTIONS=--max-old-space-size=2048 npx next build && rm -rf .next/server/route-cache && pm2 restart synchro --update-env" && bash /var/www/synchro/workspace/setup.sh'
+
+  deploy-staging:
+    needs: verify
+    if: github.ref_name == 'staging'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cấu hình SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Đẩy code lên staging
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploy" \
+            --exclude node_modules --exclude .next --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/synchro-staging/
+
+      - name: Build và khởi động lại staging
+        run: |
+          ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            'chown -R synchro:synchro /var/www/synchro-staging && su - synchro -c "cd /var/www/synchro-staging && npm ci && rm -rf .next/cache && NODE_OPTIONS=--max-old-space-size=2048 npx next build && (pm2 restart synchro-staging --update-env || pm2 start npm --name synchro-staging -- start -- -p 3001) && pm2 save"'
