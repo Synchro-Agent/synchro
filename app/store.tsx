@@ -6,11 +6,13 @@ import type { TraceItem } from "./transpile";
 import { ls } from "./userscope";
 
 // trace: dấu vết công cụ (chuẩn Synchro) gửi lại ở lượt sau; stopped: người dùng đã bấm Dừng giữa chừng.
+import type { CriticEntry } from "./critic";
 export type Msg = { role: "user" | "ai"; text: string; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string };
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;
-// pins: tài liệu ghim (chữ đã đọc từ tệp, luôn có trong ngữ cảnh của đoạn chat).
+// pins: tài liệu ghim (chữ đã đọc từ tệp, luôn có trong ngữ cảnh của đoạn chat). critic: kết quả hội đồng phản biện theo từng phiên bản artifact.
 export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; studio?: "design" | "slides" | "docs";
-  mixer?: { artifacts?: boolean; tools?: boolean; recent?: number }; compact?: { upto: number; text: string; at: number }; pins?: { name: string; text: string }[] };
+  mixer?: { artifacts?: boolean; tools?: boolean; recent?: number }; compact?: { upto: number; text: string; at: number }; pins?: { name: string; text: string }[];
+  critic?: Record<string, CriticEntry> };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };
 
 const defs = new Map<string, unknown>();

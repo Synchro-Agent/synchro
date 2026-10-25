@@ -704,10 +704,49 @@ function compactReply(q) {
   return [`- Mục tiêu: ${asks[0] ?? "trò chuyện chung"}.`, ...asks.slice(1, 6).map((x) => `- Người dùng yêu cầu thêm: ${x}.`), ...(arts.length ? [`- Sản phẩm đã tạo: ${arts.join(", ")} (bản hiện tại gửi kèm ở mỗi lượt).`] : []), `- Đã nén ${asks.length} lượt hỏi đáp.`].join("\n");
 }
 
+// Giọng nói hai luồng: như model thật, tóm câu trả lời đã viết thành 1–2 câu nói, nhắc xem chi tiết trong khung chat nếu có sản phẩm.
+function voiceBrief(q) {
+  const ans = /Câu trả lời đã viết:\n([\s\S]*)$/.exec(String(q))?.[1] ?? "";
+  const rich = /\[(sản phẩm|khối code)/.test(ans);
+  const plain = ans.replace(/\[(sản phẩm|khối code)[^\]]*\]/g, " ").replace(/[#*_`>|]+/g, " ").replace(/\s+/g, " ").trim();
+  const first = (plain.match(/[^.!?]+[.!?]?/) ?? [""])[0].trim().replace(/:$/, ".");
+  return `${first}${rich ? " Chi tiết mình để trong khung chat." : ""}`.trim() || "Xong rồi.";
+}
+
+// Hội đồng phản biện: như model thật, đọc mã có số dòng và trả JSON lỗi theo dòng kèm bản sửa (bọc trong khối ```json).
+function criticReply(q) {
+  const out = [];
+  for (const [, n, l] of String(q).matchAll(/^\s*(\d+) \| (.*)$/gm)) {
+    const line = Number(n);
+    if (/=\s*undefined;/.test(l)) out.push({ line_start: line, line_end: line, severity: "high", title: "Biến chưa có giá trị nên đọc .length sẽ lỗi", detail: "Biến được gán undefined rồi đọc thuộc tính ngay khi hiển thị, ứng dụng sẽ báo lỗi và không chạy.", suggested_fix: l.replace(/=\s*undefined;/, "= [];") });
+    else if (/<input\b/.test(l) && !/aria-label/.test(l)) out.push({ line_start: line, line_end: line, severity: "low", title: "Ô nhập thiếu nhãn cho trình đọc màn hình", detail: "Ô nhập chỉ có chữ gợi ý, trình đọc màn hình không đọc được ô này dùng để làm gì.", suggested_fix: l.replace("<input", '<input aria-label="Việc mới"') });
+    else if (/class="cta" href="#"/.test(l)) out.push({ line_start: line, line_end: line, severity: "medium", title: "Nút “Đặt bàn ngay” chưa dẫn tới đâu", detail: "Liên kết trỏ tới # nên bấm vào chỉ nhảy lên đầu trang, khách không đặt bàn được.", suggested_fix: l.replace('href="#"', 'href="tel:0900000000"') });
+  }
+  return "```json\n" + JSON.stringify({ findings: out }, null, 1) + "\n```";
+}
+
+// Skill tự sửa lỗi: như model thật, đọc lỗi và sửa đúng dòng hỏng. Bản giả lập nhận dòng hỏng qua chú thích "BUG … FIX: <dòng đúng>"
+// (mỗi lần sửa một dòng, theo thứ tự), không có thì trả KHONG_SUA.
+function healReply(q) {
+  const src = /<script>\n([\s\S]*?)\n<\/script>/.exec(String(q))?.[1];
+  if (!src) return "KHONG_SUA";
+  const L = src.split("\n");
+  const i = L.findIndex((l) => /(#|\/\/) BUG\b.*FIX: /.test(l));
+  if (i < 0) return "KHONG_SUA";
+  L[i] = (/^\s*/.exec(L[i])[0]) + L[i].split("FIX: ").pop().trim();
+  return "```python\n" + L.join("\n") + "\n```";
+}
+
 export function capsReply(sys, q, msgs, toolNames) {
   const t = norm(q);
   const s = String(sys ?? "");
   if (s.includes("<compact_history>")) return { text: compactReply(q) };
+  if (s.includes("<skill_heal>")) return { text: healReply(q) };
+  // Thử chạy script của skill: "#skillrun <skill> <đường dẫn> [tham số…]".
+  const sr = /#skillrun\s+(\S+)\s+(\S+)(.*)$/.exec(String(q));
+  if (sr && toolNames.includes("run_skill_script")) return { tool: { name: "run_skill_script", args: { name: sr[1], path: sr[2], args: sr[3].trim() ? sr[3].trim().split(/\s+/) : [] } } };
+  if (s.includes("<critic_review>")) return { text: criticReply(q) };
+  if (s.includes("<voice_brief>")) return { text: voiceBrief(q) };
   if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs, s); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
   if (s.includes("<ask_user>")) { const a = askReply(t, msgs); if (a) return { text: a }; }
@@ -806,7 +845,7 @@ function routeStep(S, M, q, toolNames) {
 }
 export function studioStep(sys, msgsJson, q, toolNames) {
   if (String(q ?? "").includes("<point_edit>")) return null; // sửa đúng một phần tử: làm luôn, không đọc skill
-  if (/#(rev\s*\d+|badpatch)/.test(String(q ?? ""))) return null; // lệnh thử sửa artifact: gửi bản sửa SEARCH/REPLACE ngay
+  if (/#(rev\s*\d+|badpatch|skillrun)/.test(String(q ?? ""))) return null; // lệnh thử: sửa artifact (SEARCH/REPLACE) hoặc chạy script skill ngay
   const S = String(sys ?? ""), M = String(msgsJson ?? "");
   const m = /<studio name=\\?"(design|slides|docs)\\?">/.exec(S) ?? /<studio name=\\?"(design|slides|docs)\\?">/.exec(M);
   if (!m) {

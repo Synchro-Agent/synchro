@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang } from "./i18n";
+import { diffLines } from "./md";
 
 type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number };
 type FileInfo = { path: string; size: number; kind: string };
@@ -11,7 +12,9 @@ type Preview = { name: string; description: string; body: string; files: FileInf
 type Choice = { dir: string; name: string; description: string; error?: string; exists: boolean };
 // Nguồn của skill đang thêm: file tải lên hoặc link GitHub; pick = thư mục skill khi gói có nhiều skill.
 type Src = { kind: "file"; file: File; pick?: string } | { kind: "github"; url: string; pick?: string };
-type Detail = Item & { body: string; files: FileInfo[] };
+// patches: bản tự sửa script (skillheal.ts), kèm bản gốc hiện tại để xem khác biệt.
+type Patch = { id: string; path: string; status: "active" | "pending" | "rejected" | "reverted"; mutating: boolean; error: string; attempts: number; created_at: number; uses: number; stale: boolean; content: string; original: string };
+type Detail = Item & { body: string; files: FileInfo[]; patches?: Patch[] };
 
 // Hộp thoại gắn thẳng vào <body> để không bị thanh bên hay khung chứa có z-index cao hơn che mất.
 const portal = (n: ReactNode) => (typeof document === "undefined" ? n : createPortal(n, document.body));
@@ -251,6 +254,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
               <div className="sk-files">{detail.files.map((f) => <div key={f.path} className="clk" onClick={() => openFile(detail.name, f.path)}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
               {fileView && <><div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>{fileView.path}</div><pre className="sk-pre">{fileView.text}</pre></>}
             </>}
+            {!!detail.patches?.length && <SelfFixes name={detail.name} patches={detail.patches} onChange={(patches) => setDetail({ ...detail, patches })} onErr={setErr} />}
             <div className="sk-actions">
               <button className="btn danger" onClick={() => del(detail.name)}>Delete</button>
               <span style={{ flex: 1 }} />
@@ -260,6 +264,43 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+// Bản tự sửa: script của skill hỏng thì Synchro tự sửa và chạy lại (script chỉ đọc), hoặc chuẩn bị bản sửa chờ duyệt
+// (script có thể gửi / ghi dữ liệu ra ngoài). Xem khác biệt so với bản gốc, duyệt, bỏ, hoặc hoàn tác.
+const PATCH_LABEL: Record<Patch["status"], string> = { active: "In use", pending: "Waiting for approval", rejected: "Rejected", reverted: "Undone" };
+function SelfFixes({ name, patches, onChange, onErr }: { name: string; patches: Patch[]; onChange: (p: Patch[]) => void; onErr: (m: string) => void }) {
+  const [open, setOpen] = useState<string | null>(patches.find((p) => p.status === "pending" && !p.stale)?.id ?? null);
+  const act = async (id: string, action: "approve" | "reject" | "revert") => {
+    try { const j = await api(`/api/skills/${name}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ patch: id, action }) }); onChange(j.patches); } catch (e) { onErr((e as Error).message); }
+  };
+  return (
+    <>
+      <div className="muted" style={{ fontSize: 12, margin: "12px 0 4px" }}>Self-fixes</div>
+      <div className="sk-fixes">
+        {patches.map((p) => (
+          <div key={p.id} className={`sk-fix ${p.status} ${p.stale ? "stale" : ""}`}>
+            <div className="sk-fix-h">
+              <span className={`sk-tag ${p.status}`}>{p.stale ? "Skill updated, no longer applies" : PATCH_LABEL[p.status]}</span>
+              <b data-notr>{p.path}</b>
+              <span className="muted" data-notr>{new Date(p.created_at).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")}</span>
+              <span style={{ flex: 1 }} />
+              <button className="lnk" onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? "Hide changes" : "View changes"}</button>
+            </div>
+            <div className="sk-fix-e" data-notr>{p.error.trim().split("\n").filter((l) => l.trim()).pop()}</div>
+            <div className="muted sk-fix-m">{p.mutating ? "This script can change data outside the sandbox, so Synchro waits for your approval before using the fix." : p.status === "active" ? (p.uses ? `Fixed automatically after ${p.attempts} ${p.attempts === 1 ? "try" : "tries"} · used ${p.uses} more times` : `Fixed automatically after ${p.attempts} ${p.attempts === 1 ? "try" : "tries"}`) : ""}</div>
+            {open === p.id && <pre className="sk-pre sk-diff">{diffLines(p.original, p.content).filter((d, i, a) => d.t !== " " || a.slice(Math.max(0, i - 2), i + 3).some((x) => x.t !== " ")).map((d, i) => <div key={i} className={d.t === "+" ? "add" : d.t === "-" ? "del" : ""}>{d.t} {d.s}</div>)}</pre>}
+            {!p.stale && (p.status === "pending" || p.status === "active") && (
+              <div className="sk-fix-a">
+                {p.status === "pending" && <><button className="btn" onClick={() => act(p.id, "reject")}>Reject</button><button className="btn dark" onClick={() => act(p.id, "approve")}>Approve fix</button></>}
+                {p.status === "active" && <button className="btn" onClick={() => act(p.id, "revert")}>Undo fix</button>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </>
   );
 }

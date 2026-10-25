@@ -4,6 +4,7 @@
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi.
 import http from "node:http";
 import { pathToFileURL } from "node:url";
+import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → API.
@@ -236,6 +237,12 @@ function wantTool(q, list) {
 }
 const toolDone = (name, out) => {
   if (name === "run_code") return codeDone(out);
+  if (name === "run_skill_script") {
+    const o = String(out ?? ""), exit = /exit_code="(-?\d+)"/.exec(o)?.[1];
+    const stdout = /<stdout>\n([\s\S]*?)\n<\/stdout>/.exec(o)?.[1]?.trim() ?? "", stderr = /<stderr>\n([\s\S]*?)\n<\/stderr>/.exec(o)?.[1]?.trim() ?? "";
+    const heal = /<self_heal status="(\w+)"[^>]*>([\s\S]*?)<\/self_heal>/.exec(o);
+    return `${exit === "0" ? `Script chạy xong: ${stdout}` : `Script lỗi (mã thoát ${exit ?? "?"}): ${stderr.split("\n").pop()}`}${heal ? `\n\n[${heal[1]}] ${heal[2]}` : ""}`;
+  }
   const o = String(out ?? "");
   if (/^Người dùng đã từ chối/.test(o)) return `Bạn đã từ chối cho mình dùng công cụ ${name}, nên mình chưa làm việc này. Nếu muốn, bạn có thể hỏi lại và chọn "Cho phép".`;
   if (/^(Không gọi được|Người dùng đã chặn|Đã đạt giới hạn)/.test(o)) return `Mình chưa làm được: ${o.slice(0, 300)}`;
@@ -453,6 +460,23 @@ async function handler(req, res) {
     return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }] });
   }
 
+  // ---- ElevenLabs Realtime: cấp khóa tạm cho phiên (giữ cấu hình để WebSocket giả lập dùng) ----
+  if (p === "/elevenlabs/v1/convai/realtime/client_secrets" && req.method === "POST") {
+    if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
+    const sess = b.session ?? {};
+    if (sess.model !== "eleven_realtime_v1_max" && sess.model !== "eleven_realtime_v1_mini") return send(res, 422, { detail: { message: "Unknown model" } });
+    if (sess.tools && !RT.cfg.tools) return send(res, 422, { detail: { message: "Unknown field: session.tools" } });
+    if (sess.tools && !(Array.isArray(sess.tools) && sess.tools.every((t) => t.type === "function" && t.name && t.parameters?.type === "object"))) return send(res, 422, { detail: { message: "Invalid tools" } });
+    const value = `ek_mock_${Math.random().toString(36).slice(2, 10)}`;
+    RT.secrets.set(value, sess);
+    RT.sessions.push({ tools: !!sess.tools, instructions: String(sess.instructions ?? "") });
+    return send(res, 200, { value, expires_at: Math.floor(Date.now() / 1000) + 120 });
+  }
+  if (p === "/_debug/rt") {
+    if (req.method === "POST") { RT.cfg = { ...RT.cfg, ...b }; RT.log = []; RT.sessions = []; }
+    return send(res, 200, { cfg: RT.cfg, sessions: RT.sessions, log: RT.log });
+  }
+
   // ---- ElevenLabs (chỉ kiểm tra khóa; giọng nói không giả lập) ----
   if (p === "/elevenlabs/v1/user") {
     if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
@@ -462,9 +486,64 @@ async function handler(req, res) {
   send(res, 404, { error: { message: `Không có đường dẫn ${p} trên máy chủ giả lập` } });
 }
 
+// ---- ElevenLabs Realtime giả lập (WebSocket, cùng sự kiện với OpenAI Realtime) ----
+// Không nhận dạng giọng thật: khi micro bắt đầu gửi âm thanh, giả như người dùng vừa nói câu RT.cfg.say. Phiên có công cụ
+// giao_viec thì nói câu xác nhận rồi gọi giao_viec; nhận function_call_output thì đọc phần tóm tắt. Không có công cụ thì tự trả lời.
+const RT = { cfg: { tools: true, say: "Làm trang web cho quán cà phê" }, secrets: new Map(), sessions: [], log: [] };
+const pcm = (sec) => { const n = Math.round(24000 * sec), buf = Buffer.alloc(n * 2); for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin(i / 24000 * 2 * Math.PI * 220) * 1200), i * 2); return buf; };
+function rtSpeak(ws, text, sec, extra = []) {
+  const ev = (o) => ws.readyState === 1 && ws.send(JSON.stringify(o));
+  const id = `resp_${Math.random().toString(36).slice(2, 8)}`;
+  ev({ type: "response.created", response: { id } });
+  const audio = pcm(sec);
+  for (let o = 0; o < audio.length; o += 9600) ev({ type: "response.output_audio.delta", response_id: id, delta: audio.subarray(o, o + 9600).toString("base64") });
+  for (const w of text.split(/(?<= )/)) ev({ type: "response.output_audio_transcript.delta", response_id: id, delta: w });
+  for (const e of extra) ev(e);
+  ev({ type: "response.done", response: { id, status: "completed" } });
+}
+function rtConnect(ws, req) {
+  const proto = String(req.headers["sec-websocket-protocol"] ?? "");
+  const secret = /openai-insecure-api-key\.([^,\s]+)/.exec(proto)?.[1];
+  const sess = secret && RT.secrets.get(secret);
+  if (!sess) { ws.send(JSON.stringify({ type: "error", error: { message: "Invalid client secret" } })); ws.close(4001); return; }
+  RT.log.push({ t: "open", tools: !!sess.tools });
+  let heard = false;
+  const ev = (o) => ws.readyState === 1 && ws.send(JSON.stringify(o));
+  ws.on("message", (raw) => {
+    let m; try { m = JSON.parse(String(raw)); } catch { return; }
+    if (m.type === "input_audio_buffer.append") {
+      if (heard) return;
+      heard = true;
+      setTimeout(() => {
+        ev({ type: "input_audio_buffer.speech_started" });
+        setTimeout(() => {
+          ev({ type: "input_audio_buffer.speech_stopped" });
+          ev({ type: "conversation.item.input_audio_transcription.completed", transcript: RT.cfg.say });
+          if (sess.tools) rtSpeak(ws, "Được, để mình xem nhé.", 0.8, [{ type: "response.function_call_arguments.done", call_id: "call_mock_1", name: "giao_viec", arguments: JSON.stringify({ yeu_cau: RT.cfg.say }) }]);
+          else rtSpeak(ws, "Mình là bản giả lập, chưa giao việc được nên trả lời luôn.", 1);
+        }, 300);
+      }, 300);
+      return;
+    }
+    RT.log.push({ t: m.type, ...(m.type === "conversation.item.create" ? { item: m.item } : {}) });
+    if (m.type === "response.create") {
+      const out = [...RT.log].reverse().find((x) => x.item?.type === "function_call_output")?.item;
+      let said = "Xong rồi.";
+      try { const o = JSON.parse(out?.output ?? "{}"); said = o.tom_tat || o.loi || said; } catch {}
+      setTimeout(() => rtSpeak(ws, said, 1.2), 100);
+    }
+  });
+  ws.on("close", () => RT.log.push({ t: "close" }));
+}
+
 export function startMock(port = 4010) {
   return new Promise((ok, fail) => {
     const s = http.createServer((req, res) => handler(req, res).catch((e) => send(res, 500, { error: { message: String(e) } })));
+    const wss = new WebSocketServer({ noServer: true, handleProtocols: (ps) => (ps.has("realtime") ? "realtime" : false) });
+    s.on("upgrade", (req, sock, head) => {
+      if (!String(req.url).startsWith("/elevenlabs/v1/convai/realtime")) { sock.destroy(); return; }
+      wss.handleUpgrade(req, sock, head, (ws) => rtConnect(ws, req));
+    });
     s.once("error", fail);
     s.listen(port, "127.0.0.1", () => ok(s));
   });

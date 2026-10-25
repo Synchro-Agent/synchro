@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import JSZip from "jszip";
 import { parse as parseYaml } from "yaml";
 import { db, DATA_DIR } from "./authstore";
+import { runner } from "./coderun";
 
 export const ROOT = process.env.SKILLS_DIR ?? path.join(DATA_DIR, "skills");
 
@@ -62,12 +63,19 @@ const fail = (m: string, status = 400): never => { const e = new SkillError(m); 
 
 // ---------------------------------------------------------------- đọc từ DB
 type Row = { id: string; user_id: string; name: string; description: string; body: string; storage_path: string; enabled: number; version: number; versions: string; warnings: string; created_at: number; updated_at: number; use_count: number | null; last_used_at: number | null };
+// Ghi chú về script tính theo máy chủ lúc đọc (không lưu cố định lúc tải lên): có nơi chạy code thì không cần ghi chú gì.
+// Bỏ ghi chú cũ đã lưu ở các bản trước (nhắc tới quyền Sandbox theo tài khoản, không còn đúng).
+function scriptNote(files: SkillFile[], stored: string[]): string[] {
+  const out = stored.filter((w) => !/^Gói có script/.test(w));
+  if (files.some((f) => f.kind === "script") && !runner()) out.push("Gói có script. Máy chủ chưa có nơi chạy code nên model chỉ đọc script như tài liệu, không chạy");
+  return out;
+}
 function hydrate(r: Row): Skill {
   const files = db().prepare("SELECT path, size, mime_type, kind FROM skill_files WHERE skill_id = ? ORDER BY path").all(r.id) as SkillFile[];
   const projects = (db().prepare("SELECT scope_id FROM skill_enablement WHERE skill_id = ? AND scope = 'project'").all(r.id) as { scope_id: string }[]).map((x) => x.scope_id);
   return {
     id: r.id, user_id: r.user_id, name: r.name, description: r.description, body: r.body, storage_path: r.storage_path,
-    enabled: !!r.enabled, version: r.version, versions: JSON.parse(r.versions), warnings: JSON.parse(r.warnings),
+    enabled: !!r.enabled, version: r.version, versions: JSON.parse(r.versions), warnings: scriptNote(files, JSON.parse(r.warnings)),
     created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString(), files, projects,
     use_count: r.use_count ?? 0, last_used_at: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
   };
@@ -148,7 +156,6 @@ export function parseEntries(entries: Entry[], warnings: string[], maxFiles = LI
   if (description.length > LIMITS.desc) warnings.push(`description dài ${description.length} ký tự (nên ≤ ${LIMITS.desc}): mô tả nằm trong prompt của mọi đoạn chat nên càng ngắn càng tiết kiệm`);
   if (tokens > LIMITS.bodyTokens) warnings.push(`SKILL.md khá dài (~${tokens} token, nên ≤ ${LIMITS.bodyTokens}). Hãy tách bớt sang thư mục references/`);
   warnings.push(...missingRefs(body, new Set(files.map((f) => f.path))));
-  if (files.some((f) => f.kind === "script")) warnings.push(process.env.E2B_API_KEY ? "Gói có script: model chỉ chạy được chúng trong sandbox cô lập nếu tài khoản được phép dùng Sandbox" : "Gói có script. Máy chủ chưa có sandbox nên model chỉ đọc script như tài liệu, không chạy");
   return { name, description, body, entries, warnings, files, tokens };
 }
 

@@ -2,6 +2,7 @@
 // Chế độ trò chuyện bằng giọng nói: làm mờ toàn màn hình, chỉ còn sóng Siri.
 // Mặc định dùng Eleven Realtime v1 Max (máy chủ cấp khoá tạm): tự nhận ngôn ngữ, trả lời bằng giọng ElevenLabs, nói chen được.
 // Khi máy chủ chưa có khoá ElevenLabs: dự phòng bằng nhận dạng giọng nói + đọc to của trình duyệt, câu hỏi đi qua model chat.
+// Hai luồng: nói ngay một câu xác nhận, việc chính chạy trong khung chat; xong thì đọc bản tóm tắt vài câu (bản đầy đủ ở khung chat).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
@@ -9,20 +10,24 @@ import { getLang } from "./i18n";
 import { usePref } from "./store";
 import { SiriWave, startMicLevel, useSpeakingLevel } from "./voicefx";
 import { startRealtime, type RtPhase } from "./realtime";
+import { createVad } from "./vad";
+import { ACK_DELAY, ackPlan, localBrief, spokenPlan, toSpeech, VI, type Lang } from "./voiceflow";
 
-type Phase = "connecting" | "listen" | "think" | "speak" | "paused";
+type Phase = "connecting" | "listen" | "think" | "work" | "speak" | "paused";
 type Rec = { lang: string; interimResults: boolean; continuous: boolean; onresult: ((e: { results: ArrayLike<{ isFinal: boolean } & ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null; start: () => void; stop: () => void; abort: () => void };
+// Việc đang làm: câu hỏi, lúc gửi, ngôn ngữ; done (chế độ realtime) nhận lời tóm tắt để model giọng nói đọc.
+type Job = { id: number; q: string; at: number; lang: Lang; done?: (brief: string) => void; ackT?: number };
 
-const LABEL: Record<Phase, string> = { connecting: "Đang kết nối…", listen: "Đang nghe…", think: "Đang suy nghĩ…", speak: "Đang trả lời…", paused: "Đã tắt micro" };
-const VI = /[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i;
+const LABEL: Record<Phase, string> = { connecting: "Đang kết nối…", listen: "Đang nghe…", think: "Đang suy nghĩ…", work: "Đang làm việc…", speak: "Đang trả lời…", paused: "Đã tắt micro" };
+const JOB_MAX = 180_000;
 
-// Bỏ Markdown và khối code trước khi đọc, rồi chia câu để trình duyệt đọc trọn câu dài.
-function toSpeech(md: string) {
-  const plain = md.replace(/```[\s\S]*?```/g, " ").replace(/`([^`]*)`/g, "$1").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[#>*_~|]+/g, " ").replace(/\s+/g, " ").trim();
-  const parts = plain.match(/[^.!?。…]+[.!?。…]*\s*/g) ?? [plain];
-  const out: string[] = [];
-  for (const s of parts) { if (out.length && (out[out.length - 1] + s).length < 180) out[out.length - 1] += s; else out.push(s); }
-  return out.filter((x) => x.trim());
+async function briefOf(q: string, answer: string, lang: Lang): Promise<string> {
+  try {
+    const r = await fetch("/api/voice/brief", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: q, answer }) });
+    const j = await r.json();
+    if (r.ok && typeof j.brief === "string" && j.brief.trim()) return j.brief.trim();
+  } catch {}
+  return localBrief(answer, lang);
 }
 
 export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
@@ -33,49 +38,124 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
   const [mode, setMode] = useState<"rt" | "browser" | null>(null);
   const [heard, setHeard] = useState("");
   const [caption, setCaption] = useState("");
+  const [working, setWorking] = useState(false);
   const [out, setOut] = useState(false);
   const [lang, setLang] = usePref<"vi-VN" | "en-US">("vmLang", getLang() === "en" ? "en-US" : "vi-VN");
+  const [barge, setBarge] = usePref("vmBarge", true);
   const micLv = useRef(0), aiLv = useRef(0);
   const level = useMemo(() => ({ get current() { return Math.max(micLv.current, aiLv.current); }, set current(_v: number) {} }), []);
   const rt = useRef<Awaited<ReturnType<typeof startRealtime>> | null>(null);
   const turnRef = useRef(onTurn);
   turnRef.current = onTurn;
+  const askRef = useRef(onAsk);
+  askRef.current = onAsk;
   const mutedRef = useRef(false);
+  const bargeRef = useRef(barge);
+  bargeRef.current = barge;
   const recRef = useRef<Rec | null>(null);
-  const askedAt = useRef(0);
+  const job = useRef<Job | null>(null);
+  const gen = useRef(0);
   const alive = useRef(true);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const go = (p: Phase) => { phaseRef.current = p; setPhase(p); };
   useSpeakingLevel(mode === "browser" && phase === "speak", aiLv);
 
-  const close = () => { setOut(true); window.speechSynthesis?.cancel(); recRef.current?.abort(); rt.current?.close(); rt.current = null; setTimeout(onClose, 220); };
+  const close = () => { setOut(true); job.current?.done?.(""); job.current = null; window.speechSynthesis?.cancel(); recRef.current?.abort(); rt.current?.close(); rt.current = null; setTimeout(onClose, 220); };
+
+  // ---- Việc chính (luồng thứ hai) ----
+  // Gửi câu hỏi vào khung chat; chế độ trình duyệt thì nói câu xác nhận (ngay nếu là việc cần làm, hoặc khi trả lời lâu hơn 1,2 giây).
+  const startJob = (q: string, done?: (brief: string) => void) => {
+    const plan = ackPlan(q, lang.startsWith("vi") ? "vi" : "en");
+    const j: Job = { id: ++gen.current, q, at: Date.now(), lang: plan.lang, done };
+    job.current = j;
+    setHeard(q); setCaption("");
+    if (done) setWorking(true); else go("think");
+    askRef.current(q);
+    if (!done) {
+      const ack = () => { if (job.current === j && phaseRef.current === "think") speak([plan.text], plan.lang, () => { if (job.current === j && phaseRef.current === "speak") go("work"); }); };
+      if (plan.now) ack(); else j.ackT = window.setTimeout(ack, ACK_DELAY);
+    }
+  };
+  // Câu trả lời đầy đủ đã xong: ngắn thì đọc nguyên văn, dài hoặc có sản phẩm thì đọc bản tóm tắt.
+  useEffect(() => {
+    const j = job.current;
+    if (!j || busy || !reply || reply.time < j.at || !reply.text.trim()) return;
+    job.current = null;
+    clearTimeout(j.ackT);
+    (async () => {
+      const direct = spokenPlan(reply.text) === "direct";
+      const text = direct ? toSpeech(reply.text).join(" ") : await briefOf(j.q, reply.text, j.lang);
+      if (!alive.current || gen.current !== j.id) return;
+      if (j.done) { setWorking(false); j.done(text); return; }
+      speak(toSpeech(text), VI.test(text) ? "vi" : j.lang, () => { if (alive.current && phaseRef.current === "speak") { setCaption(""); go("listen"); } });
+    })();
+  }, [busy, reply]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Việc chạy quá lâu (lỗi mạng…): thôi chờ để không kẹt, kết quả vẫn hiện trong khung chat khi xong.
+  useEffect(() => {
+    if (phase !== "work" && phase !== "think" && !working) return;
+    const t = setTimeout(() => {
+      const j = job.current;
+      if (!j || Date.now() - j.at < JOB_MAX) return;
+      job.current = null;
+      const m = j.lang === "en" ? "This is taking longer than expected. The answer will appear in the chat." : "Việc này lâu hơn dự kiến, kết quả sẽ hiện trong khung chat.";
+      if (j.done) { setWorking(false); j.done(m); } else speak([m], j.lang, () => { if (alive.current) go("listen"); });
+    }, JOB_MAX + 500);
+    return () => clearTimeout(t);
+  }, [phase, working]);
+
+  // Đọc to bằng trình duyệt (xếp hàng sau câu đang đọc, không cắt câu xác nhận).
+  const speak = (chunks: string[], l: Lang, onEnd: () => void) => {
+    const s = window.speechSynthesis;
+    if (!s || !chunks.length) { onEnd(); return; }
+    const voice = s.getVoices().find((v) => v.lang.toLowerCase().startsWith(l));
+    go("speak");
+    chunks.forEach((c, i) => {
+      const u = new SpeechSynthesisUtterance(c);
+      u.lang = l === "vi" ? "vi-VN" : "en-US"; u.rate = rate; if (voice) u.voice = voice;
+      u.onstart = () => setCaption(c);
+      if (i === chunks.length - 1) u.onend = onEnd;
+      s.speak(u);
+    });
+  };
 
   // Chọn chế độ: xin khoá tạm từ máy chủ; có khoá thì nối Eleven Realtime, không thì dùng trình duyệt.
+  // dead: cờ riêng của từng lần gắn (React có thể gắn lại khung này), để kết nối mở dở của lần trước không sống song song.
   useEffect(() => {
     alive.current = true;
+    let dead = false;
     (async () => {
       const s = await fetch("/api/voice/session", { method: "POST" }).then((r) => r.json()).catch(() => ({ fallback: true }));
-      if (!alive.current) return;
+      if (dead) return;
       if (s.value) {
         try {
-          rt.current = await startRealtime({ url: s.url, model: s.model, secret: s.value, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current }, {
-            onPhase: (p: RtPhase) => alive.current && setPhase((cur) => (cur === "paused" ? cur : p)),
-            onCaption: (t) => alive.current && setCaption(t),
-            onUser: (t) => alive.current && setHeard(t),
-            onTurn: (u, a) => turnRef.current(u, a),
-            onError: (m) => say(m),
-            onClose: () => alive.current && close(),
+          const conn = await startRealtime({ url: s.url, model: s.model, secret: s.value, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current, barge: () => bargeRef.current }, {
+            onPhase: (p: RtPhase) => !dead && setPhase((cur) => (cur === "paused" ? cur : p)),
+            onCaption: (t) => !dead && setCaption(t),
+            onUser: (t) => !dead && setHeard(t),
+            onTurn: (u, a) => !dead && turnRef.current(u, a),
+            // Đang làm việc trước thì báo lại để model giọng nói nói với người dùng, không chồng hai việc.
+            onTask: (q) => new Promise<string>((done) => {
+              if (dead) return done("");
+              if (job.current) return done("Synchro còn đang làm việc trước đó; hãy nhờ lại sau khi xong.");
+              startJob(q, done);
+            }),
+            onError: (m) => !dead && say(m),
+            onClose: () => !dead && close(),
           });
-          if (!alive.current) { rt.current?.close(); return; }
+          if (dead) { conn.close(); return; }
+          rt.current = conn;
           setMode("rt");
           return;
-        } catch { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); setMode("rt"); setPhase("paused"); return; }
+        } catch { if (!dead) { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); setMode("rt"); setPhase("paused"); } return; }
       }
       setMode("browser"); setPhase("listen");
     })();
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
     window.addEventListener("keydown", h, true);
-    return () => { alive.current = false; window.removeEventListener("keydown", h, true); recRef.current?.abort(); window.speechSynthesis?.cancel(); rt.current?.close(); rt.current = null; };
+    return () => { dead = true; alive.current = false; window.removeEventListener("keydown", h, true); recRef.current?.abort(); window.speechSynthesis?.cancel(); rt.current?.close(); rt.current = null; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Chế độ trình duyệt ----
@@ -94,12 +174,12 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
     r.onerror = (e) => {
       if (e.error === "no-speech" || e.error === "aborted") return;
       say(e.error === "not-allowed" || e.error === "service-not-allowed" ? "Synchro cần quyền dùng micro để trò chuyện bằng giọng nói" : "Trình duyệt chưa nhận dạng được giọng nói, hãy thử lại");
-      phaseRef.current = "paused"; setPhase("paused");
+      go("paused");
     };
     r.onend = () => {
       if (!alive.current || phaseRef.current !== "listen") return;
       const q = finalText.trim();
-      if (q) { askedAt.current = Date.now(); setPhase("think"); onAsk(q); }
+      if (q) startJob(q);
       else listen();
     };
     recRef.current = r;
@@ -109,68 +189,75 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
 
   useEffect(() => {
     if (mode !== "browser") return;
-    if (phase !== "listen") { if (phase === "think") aiLv.current = 0.08; return; }
+    if (phase !== "listen") { if (phase === "think" || phase === "work") aiLv.current = 0.08; return; }
     let stop: (() => void) | null = null, dead = false;
     startMicLevel(micLv).then((s) => { if (dead) s(); else stop = s; }).catch(() => {});
     listen();
     return () => { dead = true; stop?.(); };
   }, [phase, mode, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Có câu trả lời mới (đã viết xong) thì đọc to, giọng đọc theo đúng ngôn ngữ của câu trả lời.
+  // Nói chen để ngắt (chế độ trình duyệt): đo micro trong lúc đọc, VAD tại chỗ phát hiện người dùng nói trong ~150 ms.
+  // Giọng đọc của trình duyệt không đo được nên ngưỡng học theo tiếng vọng nghe thấy lúc mới đọc.
   useEffect(() => {
-    if (mode !== "browser" || phase !== "think" || busy || !reply || reply.time < askedAt.current - 1000 || !reply.text.trim()) return;
-    const s = window.speechSynthesis;
-    const chunks = toSpeech(reply.text);
-    if (!s || !chunks.length) { setPhase("listen"); return; }
-    const vi = VI.test(reply.text);
-    const voice = s.getVoices().find((v) => v.lang.toLowerCase().startsWith(vi ? "vi" : "en"));
-    s.cancel();
-    setPhase("speak");
-    chunks.forEach((c, i) => {
-      const u = new SpeechSynthesisUtterance(c);
-      u.lang = vi ? "vi-VN" : "en-US"; u.rate = rate; if (voice) u.voice = voice;
-      u.onstart = () => setCaption(c);
-      if (i === chunks.length - 1) u.onend = () => { if (alive.current && phaseRef.current === "speak") { setCaption(""); setPhase("listen"); } };
-      s.speak(u);
-    });
-  }, [phase, busy, reply, rate, mode]);
+    if (mode !== "browser" || phase !== "speak" || !barge) return;
+    let stop: (() => void) | null = null, dead = false, raf = 0;
+    const vad = createVad({ floor: 0.18, calibMs: 500 });
+    const mic = { current: 0 };
+    startMicLevel(mic).then((s) => {
+      if (dead) { s(); return; }
+      stop = s;
+      const tick = (t: number) => { if (vad.feed(mic.current, t)) { interrupt(); return; } micLv.current = mic.current; raf = requestAnimationFrame(tick); };
+      raf = requestAnimationFrame(tick);
+    }).catch(() => {});
+    return () => { dead = true; cancelAnimationFrame(raf); stop?.(); micLv.current = 0; };
+  }, [phase, mode, barge]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ngắt lời: dừng đọc và nghe tiếp. Kết quả của việc đang chờ không đọc nữa (vẫn có trong khung chat).
   const interrupt = () => {
-    if (phase !== "speak") return;
-    if (mode === "rt") rt.current?.interrupt();
-    else { window.speechSynthesis?.cancel(); setPhase("listen"); }
+    if (phaseRef.current !== "speak") return;
+    if (modeRef.current === "rt") rt.current?.interrupt();
+    else {
+      const j = job.current;
+      if (j) { clearTimeout(j.ackT); job.current = null; }
+      gen.current++;
+      window.speechSynthesis?.cancel(); go("listen");
+    }
     setCaption("");
   };
   const toggleMic = () => {
     if (mode === "rt") { mutedRef.current = !mutedRef.current; setPhase(mutedRef.current ? "paused" : "listen"); return; }
-    if (phase === "paused") setPhase("listen"); else { recRef.current?.abort(); window.speechSynthesis?.cancel(); setCaption(""); setPhase("paused"); }
+    if (phase === "paused") go("listen"); else { recRef.current?.abort(); window.speechSynthesis?.cancel(); setCaption(""); go("paused"); }
   };
 
+  // Chế độ realtime: model giọng nói đã xác nhận, Synchro đang làm việc chính trong lúc chờ.
+  const shown: Phase = working && (phase === "listen" || phase === "think") ? "work" : phase;
   return createPortal(
     <div className={`vm ${out ? "out" : ""}`} role="dialog" aria-modal="true" aria-label="Trò chuyện bằng giọng nói">
       <div className="vm-top">
-        <span className={`vm-state ${phase}`}><i />{LABEL[phase]}</span>
+        <span className={`vm-state ${shown}`}><i />{LABEL[shown]}</span>
         {mode === "browser" && (
           <span className="vm-lang" role="group" aria-label="Ngôn ngữ nhận dạng">
             {(["vi-VN", "en-US"] as const).map((l) => <button key={l} className={lang === l ? "on" : ""} aria-pressed={lang === l} onClick={() => { setLang(l); recRef.current?.abort(); }}>{l === "vi-VN" ? "VI" : "EN"}</button>)}
           </span>
         )}
+        {mode && <button className={`vm-opt ${barge ? "on" : ""}`} aria-pressed={barge} onClick={() => setBarge(!barge)} title="Đang trả lời mà bạn nói thì Synchro dừng lại để nghe">Nói chen để ngắt</button>}
       </div>
       <button className="vm-wave" onClick={interrupt} aria-label={phase === "speak" ? "Ngắt lời" : "Sóng giọng nói"} tabIndex={phase === "speak" ? 0 : -1}>
         <SiriWave level={level} />
       </button>
       <div className="vm-cap" aria-live="polite">
-        {phase === "connecting" && <p className="hint">Đang mở kết nối giọng nói…</p>}
-        {phase === "listen" && (heard ? <p className="me">{heard}</p> : <p className="hint">Hãy nói điều bạn muốn hỏi</p>)}
-        {phase === "think" && <p className="me">{heard}</p>}
-        {phase === "speak" && <p>{caption}</p>}
-        {phase === "paused" && <p className="hint">Bấm micro để tiếp tục</p>}
+        {shown === "connecting" && <p className="hint">Đang mở kết nối giọng nói…</p>}
+        {shown === "listen" && (heard ? <p className="me">{heard}</p> : <p className="hint">Hãy nói điều bạn muốn hỏi</p>)}
+        {shown === "think" && <p className="me">{heard}</p>}
+        {shown === "work" && <><p className="me">{heard}</p><p className="hint">Kết quả đầy đủ sẽ có trong khung chat</p></>}
+        {shown === "speak" && <p>{caption}</p>}
+        {shown === "paused" && <p className="hint">Bấm micro để tiếp tục</p>}
       </div>
       <div className="vm-ctl">
         <button className={`vm-btn ${phase === "paused" ? "off" : ""}`} onClick={toggleMic} aria-label={phase === "paused" ? "Bật micro" : "Tắt micro"} aria-pressed={phase === "paused"}><I.Mic size={22} /></button>
         <button className="vm-btn end" onClick={close} aria-label="Kết thúc trò chuyện bằng giọng nói"><I.X size={22} /></button>
       </div>
-      {phase === "speak" && <span className="vm-tip">Chạm vào sóng để ngắt lời</span>}
+      {phase === "speak" && <span className="vm-tip">{barge ? "Nói chen hoặc chạm vào sóng để ngắt lời" : "Chạm vào sóng để ngắt lời"}</span>}
     </div>,
     document.body,
   );

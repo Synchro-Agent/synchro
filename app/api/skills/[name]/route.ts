@@ -1,4 +1,5 @@
-import { getSkill, publicSkill, removeSkill, restoreVersion, setEnabled, setProjectEnabled, SkillError } from "../../../skillstore";
+import { getSkill, publicSkill, readSkillRaw, removeSkill, restoreVersion, setEnabled, setProjectEnabled, SkillError, type Skill } from "../../../skillstore";
+import { dropPatches, hashText, listPatches, setPatch } from "../../../skillheal";
 import { current, featureGate } from "../../../authstore";
 
 export const runtime = "nodejs";
@@ -10,16 +11,32 @@ export async function GET(req: Request, { params }: Ctx) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
   const s = await getSkill(current(req)!.user.id, (await params).name);
   if (!s) return Response.json({ error: "Không có skill này" }, { status: 404 });
-  return Response.json({ skill: { ...publicSkill(s), body: s.body, files: s.files } });
+  return Response.json({ skill: { ...publicSkill(s), body: s.body, files: s.files, patches: await patchesOf(current(req)!.user.id, s) } });
 }
 
-// { enabled } bật/tắt cho cả tài khoản; { project, enabled } bật/tắt riêng trong một dự án; { restore: n } quay lại phiên bản n.
+// Bản tự sửa script của skill, kèm bản gốc hiện tại để xem khác biệt; bản sửa cho bản gốc cũ (skill đã cập nhật) đánh dấu stale.
+async function patchesOf(uid: string, s: Skill) {
+  const original: Record<string, string> = {}, hashes: Record<string, string> = {};
+  for (const f of s.files.filter((x) => x.kind === "script")) {
+    try { const t = (await readSkillRaw(s, f.path)).toString("utf8"); original[f.path] = t; hashes[f.path] = hashText(t); } catch {}
+  }
+  return listPatches(uid, s.id, hashes, true).map((p) => ({ ...p, original: original[p.path] ?? "" }));
+}
+
+// { enabled } bật/tắt cho cả tài khoản; { project, enabled } bật/tắt riêng trong một dự án; { restore: n } quay lại phiên bản n;
+// { patch, action } duyệt / bỏ bản tự sửa đang chờ hoặc hoàn tác bản đang dùng.
 export async function PATCH(req: Request, { params }: Ctx) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
   const uid = current(req)!.user.id;
   try {
-    const { enabled, project, restore } = await req.json();
+    const { enabled, project, restore, patch, action } = await req.json();
     const name = (await params).name;
+    if (typeof patch === "string") {
+      const sk = await getSkill(uid, name);
+      if (!sk || !["approve", "reject", "revert"].includes(action)) return Response.json({ error: "Yêu cầu không hợp lệ" }, { status: 400 });
+      if (!setPatch(uid, patch, action)) return Response.json({ error: "Bản sửa này không còn ở trạng thái đó." }, { status: 409 });
+      return Response.json({ ok: true, patches: await patchesOf(uid, sk) });
+    }
     const s = typeof restore === "number" ? await restoreVersion(uid, name, restore)
       : project !== undefined ? await setProjectEnabled(uid, name, String(project), !!enabled) : await setEnabled(uid, name, !!enabled);
     return Response.json({ skill: publicSkill(s) });
@@ -28,5 +45,6 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
 export async function DELETE(req: Request, { params }: Ctx) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
-  try { await removeSkill(current(req)!.user.id, (await params).name); return Response.json({ ok: true }); } catch (e) { return err(e); }
+  const uid = current(req)!.user.id, name = (await params).name;
+  try { const sk = await getSkill(uid, name); await removeSkill(uid, name); if (sk) dropPatches(uid, sk.id); return Response.json({ ok: true }); } catch (e) { return err(e); }
 }

@@ -2,6 +2,7 @@
 // Mọi tool chạy trong phạm vi một người dùng (và dự án đang chat): không đọc được skill của người khác.
 import { findFile, LIMITS, readSkillFile, readSkillRaw, SkillError, type Skill } from "./skillstore";
 import { execRun } from "./coderun";
+import { activePatch, hashText, isMutating, looksLikeBug, markUsed, MAX_RETRIES, savePatch } from "./skillheal";
 import { rank } from "./skillroute";
 
 export const MAX_STEPS = 10;
@@ -73,7 +74,14 @@ const INTERP: Record<string, string> = { ".py": "python3", ".sh": "bash", ".bash
 const cut = (t: string) => (t.length > LIMITS.scriptOut ? t.slice(0, LIMITS.scriptOut) + "\n[Đã cắt bớt]" : t);
 
 // Chạy script trong sandbox dùng một lần (xem coderun.ts): chép file của skill vào, chạy, rồi xóa.
-export type RunCtx = { uid: string; net: boolean };
+// heal: nhờ model sửa script khi script hỏng vì lỗi của chính nó (xem skillheal.ts); không có thì chỉ chạy.
+export type RunCtx = { uid: string; net: boolean; heal?: (input: { skill: string; path: string; source: string; error: string; args: string[] }) => Promise<string | null> };
+type Ran = { exit: number; stdout: string; stderr: string };
+const resultOf = (s: Skill, p: string, r: Ran, note = "") => ({
+  content: `<script_result skill="${esc(s.name)}" path="${esc(p)}" exit_code="${r.exit}">\n<stdout>\n${cut(r.stdout)}\n</stdout>\n<stderr>\n${cut(r.stderr)}\n</stderr>\n</script_result>${note ? `\n${note}` : ""}`,
+  is_error: r.exit !== 0,
+});
+const firstLine = (e: string) => e.trim().split("\n").filter((l) => l.trim()).pop()?.trim().slice(0, 200) ?? "";
 async function runScript(s: Skill, p0: string, args: string[], stdin: string | undefined, ctx: RunCtx) {
   const f = findFile(s, p0);
   const p = f?.path ?? p0;
@@ -82,9 +90,39 @@ async function runScript(s: Skill, p0: string, args: string[], stdin: string | u
   const interp = INTERP[ext];
   if (!interp) return { content: `Chưa hỗ trợ chạy file ${ext}. Chỉ chạy được .py, .sh, .js`, is_error: true };
   const files = await Promise.all(["SKILL.md", ...s.files.map((x) => x.path)].map(async (rel) => ({ path: rel, data: await readSkillRaw(s, rel) })));
+  const orig = files.find((x) => x.path === p)!.data.toString("utf8");
+  const base = hashText(orig);
+  // Chạy với nội dung script cho trước (bản gốc, bản tự sửa đã lưu, hoặc bản vừa sửa).
+  const run = (src: string): Promise<Ran> => execRun({ uid: ctx.uid, files: files.map((x) => (x.path === p ? { path: p, data: Buffer.from(src) } : x)), argv: [interp, p, ...args], stdin, net: ctx.net, timeout: 60 });
   try {
-    const r = await execRun({ uid: ctx.uid, files, argv: [interp, p, ...args], stdin, net: ctx.net, timeout: 60 });
-    return { content: `<script_result skill="${esc(s.name)}" path="${esc(p)}" exit_code="${r.exit}">\n<stdout>\n${cut(r.stdout)}\n</stdout>\n<stderr>\n${cut(r.stderr)}\n</stderr>\n</script_result>`, is_error: r.exit !== 0 };
+    const saved = activePatch(ctx.uid, s.id, p, base);
+    let src = saved?.content ?? orig;
+    let r = await run(src);
+    if (r.exit === 0) {
+      if (saved) markUsed(saved.id);
+      return resultOf(s, p, r, saved ? `<self_heal status="patched">Đang dùng bản tự sửa đã lưu của script này (bản gốc từng bị lỗi).</self_heal>` : "");
+    }
+    if (!ctx.heal || !looksLikeBug(r.stderr)) return resultOf(s, p, r);
+    const firstErr = r.stderr;
+    // Script có thể gửi / ghi dữ liệu ra ngoài: chuẩn bị bản sửa nhưng không tự chạy, chờ người dùng duyệt.
+    if (isMutating(orig)) {
+      const fixed = await ctx.heal({ skill: s.name, path: p, source: src, error: r.stderr, args }).catch(() => null);
+      if (!fixed || fixed === src) return resultOf(s, p, r);
+      const id = savePatch({ uid: ctx.uid, skillId: s.id, skill: s.name, path: p, base, content: fixed, error: firstErr, status: "pending", mutating: true, attempts: 0 });
+      return resultOf(s, p, r, `<self_heal status="needs_approval" patch="${id}">Script này có thể thay đổi dữ liệu bên ngoài (gửi lên mạng, ghi cơ sở dữ liệu, gửi thư…) nên Synchro không tự chạy bản sửa. Bản sửa đã chuẩn bị sẵn: hãy báo người dùng duyệt ở Kho kỹ năng → skill "${esc(s.name)}" → Bản tự sửa, rồi chạy lại.</self_heal>`);
+    }
+    for (let k = 1; k <= MAX_RETRIES; k++) {
+      const fixed = await ctx.heal({ skill: s.name, path: p, source: src, error: r.stderr, args }).catch(() => null);
+      if (!fixed || fixed === src) break;
+      src = fixed;
+      r = await run(src);
+      if (r.exit === 0) {
+        savePatch({ uid: ctx.uid, skillId: s.id, skill: s.name, path: p, base, content: src, error: firstErr, status: "active", mutating: false, attempts: k });
+        return resultOf(s, p, r, `<self_heal status="healed" attempts="${k}">Script gặp lỗi (${esc(firstLine(firstErr))}); Synchro đã tự sửa và chạy lại thành công. Bản sửa được lưu, các lần sau dùng luôn; người dùng xem hoặc hoàn tác ở Kho kỹ năng.</self_heal>`);
+      }
+      if (!looksLikeBug(r.stderr)) break;
+    }
+    return resultOf(s, p, r, `<self_heal status="failed" attempts="${MAX_RETRIES}">Synchro đã thử tự sửa script nhưng vẫn lỗi; hãy báo người dùng lỗi ở trên.</self_heal>`);
   } catch (e) {
     return { content: `Không chạy được script: ${(e as Error).message}`, is_error: true };
   }

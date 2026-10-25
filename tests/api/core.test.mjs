@@ -64,6 +64,8 @@ let r = await api("POST", "/api/connectors", { name: "Cửa hàng mẫu", url: `
 ok(r.s === 200 && r.j.connector?.tools?.some((t) => t.name === "list_orders"), "connector giả lập có công cụ list_orders", JSON.stringify(r.j).slice(0, 300));
 const connId = r.j.connector?.id;
 
+// Làm nóng đường nghe luồng chữ: bản dev biên dịch route ở lần gọi đầu (vài giây trên máy CI), lượt trả lời ngắn có thể xong trước khi kịp nghe.
+await api("GET", "/api/runs/run_warmup_0000").catch(() => {});
 console.log("1. Truyền chữ theo thời gian thực");
 let run = await start({ model: "anthropic/claude-haiku-5-5", messages: [{ role: "user", content: "xin chào, giới thiệu ngắn về bạn" }] });
 let f = await follow(run);

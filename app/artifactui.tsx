@@ -1,7 +1,7 @@
 "use client";
 // Giao diện Artifact: thẻ trong tin nhắn, khung xem bên cạnh cuộc trò chuyện (xem trước / mã / phiên bản),
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { Markdown } from "./md";
@@ -11,6 +11,8 @@ import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { Menu } from "./ui";
 import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "./artifacts";
 import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "./srcloc";
+import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "./critic";
+import { CriticNote, CriticPill } from "./criticui";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
@@ -454,9 +456,11 @@ function CompareView({ a, b, ai, na, nb }: { a: ArtVersion; b: ArtVersion; ai: b
 
 // ---------------------------------------------------------------- khung xem bên cạnh
 // conv: đoạn chat chứa artifact (để artifact lưu được dữ liệu thử bằng window.storage); extra: nút thêm trên đầu khung theo phiên bản đang xem.
-export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher, conv, extra }: {
+// criticOf / onCritic / onApplyFix: hội đồng phản biện (kết quả theo phiên bản, chạy lại, áp dụng bản sửa thành phiên bản mới).
+export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher, conv, extra, criticOf, onCritic, onApplyFix }: {
   versions: ArtVersion[]; index: number; setIndex: (i: number) => void; ai: boolean; onClose: () => void; onFix?: (a: ArtVersion, err: string) => void; onAsk?: (text: string) => void;
   expanded: boolean; setExpanded: (v: boolean) => void; say: (m: string) => void; footer?: React.ReactNode; switcher?: React.ReactNode; conv?: string; extra?: (a: ArtVersion) => React.ReactNode;
+  criticOf?: (a: ArtVersion) => CriticEntry | undefined; onCritic?: (a: ArtVersion) => void; onApplyFix?: (a: ArtVersion, f: Finding) => void;
 }) {
   const art = versions[Math.min(index, versions.length - 1)];
   const [tab, setTab] = useState<"preview" | "code">("preview");
@@ -471,6 +475,11 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const [picked, setPicked] = useState<{ sel: string; tag: string; text: string; html: string; loc: { start: number; end: number } | null } | null>(null);
   const [req, setReq] = useState("");
   const [compare, setCompare] = useState(false);
+  // Hội đồng phản biện: kết quả của phiên bản đang xem; ý kiến đã bỏ qua (theo phiên bản) không hiện nữa.
+  const crit = criticOf?.(art);
+  const [skip, setSkip] = useState<Set<string>>(new Set());
+  const ver = hashOf(art.content);
+  const findings = (crit?.status === "done" ? crit.findings : []).filter((f) => !skip.has(`${ver}:${f.line_start}:${f.title}`));
   const runnable = art.type !== "code";
   const showCode = tab === "code" || !runnable || !art.complete;
   const deck = art.complete && isDeck(art);
@@ -570,6 +579,8 @@ Yêu cầu: ${req.trim()}`);
         {runnable && <div className="art-tabs"><button className={!showCode ? "on" : ""} disabled={!art.complete} onClick={() => setTab("preview")}>{tr("Xem trước")}</button><button className={showCode ? "on" : ""} onClick={() => setTab("code")}>{tr("Mã")}</button></div>}
         <div className="art-acts">
           {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
+          {criticOf && art.complete && !compare && <CriticPill entry={crit} findings={findings} can={important(art) && !!onCritic}
+            onRun={() => onCritic?.(art)} onShow={() => { setTab("code"); setTimeout(() => body.current?.querySelector(".cr-note")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60); }} />}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.Check size={15} /> : <I.Copy size={15} />}</button>
           {art.complete && extra?.(art)}
@@ -588,7 +599,12 @@ Yêu cầu: ${req.trim()}`);
         {compare && index > 0 ? (
           <CompareView a={versions[index - 1]} b={art} ai={ai} na={index} nb={index + 1} />
         ) : showCode ? (
-          <pre className="art-code">{lines.map((l, i) => <div key={i} className={hlLoc && i + 1 >= hlLoc.start && i + 1 <= hlLoc.end ? "hl" : undefined}><span>{i + 1}</span>{l || " "}</div>)}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
+          <pre className="art-code">{lines.map((l, i) => {
+            const n = i + 1, on = findings.filter((f) => n >= f.line_start && n <= f.line_end), end = findings.filter((f) => f.line_end === n);
+            const cls = [hlLoc && n >= hlLoc.start && n <= hlLoc.end ? "hl" : "", on.length ? `cr cr-${on[0].severity}` : ""].filter(Boolean).join(" ");
+            return <Fragment key={i}><div className={cls || undefined}><span>{n}</span>{l || " "}</div>{end.map((f) => <CriticNote key={f.title} f={f} canFix={!!onApplyFix && !!fixPatch(art.content, f)}
+              onFix={() => onApplyFix?.(art, f)} onSkip={() => setSkip((x) => new Set(x).add(`${ver}:${f.line_start}:${f.title}`))} />)}</Fragment>;
+          })}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
         ) : deck ? (
           <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} loc={!!onAsk} />
         ) : art.type === "markdown" ? (

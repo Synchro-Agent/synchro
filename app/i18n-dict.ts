@@ -373,6 +373,10 @@ export const EN2VI: Record<string, string> = {
   "Switch models when a message is flagged": "Chuyển mô hình khi tin nhắn bị gắn cờ", "When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.": "Khi hệ thống bảo vệ gắn cờ một tin nhắn, tự động chuyển sang mô hình khác để tiếp tục trò chuyện. Khi tắt, phiên sẽ tạm dừng.",
   "Visuals": "Hình ảnh trực quan", "Build code, documents, and designs in a dedicated window alongside your conversation.": "Tạo code, tài liệu và thiết kế trong một cửa sổ riêng bên cạnh cuộc trò chuyện.",
   "AI-powered artifacts": "Artifact tích hợp AI", "Build apps and interactive documents that use Synchro inside the artifact.": "Tạo ứng dụng và tài liệu tương tác dùng Synchro ngay bên trong artifact.",
+  "Self-fixes": "Bản tự sửa", "In use": "Đang dùng", "Waiting for approval": "Chờ duyệt", "Rejected": "Đã bỏ", "Undone": "Đã hoàn tác", "Skill updated, no longer applies": "Skill đã cập nhật, không còn áp dụng",
+  "View changes": "Xem thay đổi", "Hide changes": "Ẩn thay đổi", "Reject": "Bỏ", "Approve fix": "Duyệt bản sửa", "Undo fix": "Hoàn tác bản sửa",
+  "This script can change data outside the sandbox, so Synchro waits for your approval before using the fix.": "Script này có thể thay đổi dữ liệu bên ngoài sandbox nên Synchro chờ bạn duyệt rồi mới dùng bản sửa.",
+  "Critic council": "Hội đồng phản biện", "After Synchro writes code, a web page, or an app, one or two models from other providers review it in the background and point out bugs by line, with a fix you can apply.": "Sau khi Synchro viết code, trang web hoặc ứng dụng, một hoặc hai model của hãng khác đọc lại ở nền và chỉ ra lỗi theo từng dòng, kèm bản sửa áp dụng được ngay.",
   "Inline visualizations": "Trực quan hóa nội tuyến", "Allow Synchro to create interactive visuals, charts, and diagrams within the conversation.": "Cho phép Synchro tạo hình ảnh tương tác, biểu đồ và sơ đồ ngay trong cuộc trò chuyện.",
   "Code execution and file creation": "Thực thi code và tạo tệp", "Synchro can execute code and create and edit docs, spreadsheets, presentations, PDFs, and data reports. Required for skills.": "Synchro có thể thực thi code, tạo và chỉnh sửa tài liệu, bảng tính, bản trình bày, PDF và báo cáo dữ liệu. Bắt buộc cho kỹ năng.",
   "Allow network egress": "Cho phép truy cập mạng ra ngoài", "Allow Synchro to access common package managers to install packages and libraries for data analysis, visualizations, and file processing.": "Cho phép Synchro truy cập các trình quản lý gói phổ biến để cài gói và thư viện phục vụ phân tích dữ liệu, trực quan hóa và xử lý tệp.",
@@ -1193,3 +1197,4 @@ RULES_EN.push(
   [/^(.+) nhắc bạn trong (.+)$/, (m) => `${m[1]} mentioned you in ${m[2]}`],
   [/^(.+) bình luận trong (.+)$/, (m) => `${m[1]} commented in ${m[2]}`],
 );
+RULES_VI.push([/^Fixed automatically after (\d+) tr(?:y|ies)(?: · used (\d+) more times)?$/, (m) => `Tự sửa sau ${m[1]} lần thử${m[2] ? ` · đã dùng thêm ${m[2]} lần` : ""}`]);
