@@ -2876,6 +2876,12 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .art-card:hover{border-color:var(--text-3);box-shadow:var(--shadow-input)}
 .art-card:active{transform:scale(.995)}
 .art-card.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+/* Bản sửa artifact (SEARCH/REPLACE) không áp được: viền và chữ đỏ, kèm nút nhờ viết lại toàn bộ. */
+.art-card-wrap{display:block}
+.art-card.warn{border-color:color-mix(in srgb,#dc2626 45%,var(--border-strong))}
+.art-card .art-bad{color:#b91c1c;font-style:normal}
+.art-redo{display:inline-block;margin:-4px 0 10px 4px;font-size:13px}
+[data-theme="dark"] .art-card .art-bad{color:#f87171}
 .art-card-ic{position:relative;width:44px;height:44px;flex:none;display:grid;place-items:center;border-radius:9px;background:var(--hover);color:var(--text-2)}
 .art-card.busy .art-card-ic>svg{opacity:.35}
 .art-card-ic .art-spin{position:absolute}

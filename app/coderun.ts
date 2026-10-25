@@ -13,7 +13,8 @@ import { PKG_HOSTS } from "./catalog";
 import { agent, wsConfigured } from "./workspace";
 
 export type RunFile = { path: string; data: Buffer };
-export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: string; net: boolean; timeout?: number };
+// signal: người dùng bấm Dừng thì dừng tiến trình ngay (chỉ máy cục bộ; nơi chạy khác thì bỏ chờ kết quả).
+export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: string; net: boolean; timeout?: number; signal?: AbortSignal };
 export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean };
 export type Runner = "e2b" | "workspace" | "local";
 
@@ -74,14 +75,14 @@ async function runLocal(i: RunInput, timeout: number): Promise<RunOutput> {
       ...(ca ? { SSL_CERT_FILE: ca, REQUESTS_CA_BUNDLE: ca } : {}),
       ...(proxy ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy } : {}),
     };
-    const res = await spawnCapped("sandbox-exec", ["-p", profile, ...i.argv], { cwd: dir, env, stdin: i.stdin, timeout });
+    const res = await spawnCapped("sandbox-exec", ["-p", profile, ...i.argv], { cwd: dir, env, stdin: i.stdin, timeout, signal: i.signal });
     return { ...res, files: collect(dir) };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
-function spawnCapped(cmd: string, args: string[], o: { cwd: string; env: Record<string, string>; stdin?: string; timeout: number }) {
+function spawnCapped(cmd: string, args: string[], o: { cwd: string; env: Record<string, string>; stdin?: string; timeout: number; signal?: AbortSignal }) {
   return new Promise<{ exit: number; stdout: string; stderr: string; timedOut: boolean }>((resolve) => {
     const p = spawn(cmd, args, { cwd: o.cwd, env: o.env as NodeJS.ProcessEnv, stdio: ["pipe", "pipe", "pipe"], detached: true });
     const out: Buffer[] = [], err: Buffer[] = [];
@@ -91,6 +92,7 @@ function spawnCapped(cmd: string, args: string[], o: { cwd: string; env: Record<
     p.stderr.on("data", take(err));
     const kill = () => { try { process.kill(-p.pid!, "SIGKILL"); } catch {} };
     const t = setTimeout(() => { timedOut = true; kill(); }, o.timeout * 1000);
+    o.signal?.addEventListener("abort", kill, { once: true });
     p.on("error", (e) => { clearTimeout(t); resolve({ exit: 127, stdout: "", stderr: String(e), timedOut }); });
     p.on("close", (code) => {
       clearTimeout(t); kill();

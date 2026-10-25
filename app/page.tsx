@@ -17,7 +17,7 @@ import { Markdown, makeReply } from "./md";
 import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
-import { attachRun, callLLM, LLMError, takeRoute, takeSources, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, takeSources, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
@@ -34,6 +34,7 @@ import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
 import { loadCaps, useCaps } from "./capsclient";
 import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
+import { resolveArt, type ArtVersion } from "./vfs";
 import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
 import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
 import type { OutFile } from "./llm";
@@ -599,14 +600,15 @@ export default function Home() {
   const [fileSel, setFileSel] = useState<{ chat: number; file: OutFile } | null>(null);
   const artDismissed = useRef("");
   const arts = (() => {
-    const map = new Map<string, (ArtBlock & { msg: number })[]>();
+    // Bản sửa (mode="patch") được áp vào phiên bản trước để thành phiên bản đầy đủ (vfs.ts).
+    const map = new Map<string, (ArtVersion & { msg: number })[]>();
     const at: Record<number, { ident: string; v: number }[]> = {};
     if (!chat || !caps.art) return { map, at };
     chat.msgs.forEach((m, i) => {
       if (m.role !== "ai" || !hasArtifacts(m.text)) return;
       for (const sg of splitArtifacts(m.text)) if (sg.kind === "art") {
         const l = map.get(sg.art.ident) ?? [];
-        l.push({ ...sg.art, msg: i });
+        l.push({ ...resolveArt(l[l.length - 1], sg.art), msg: i });
         map.set(sg.art.ident, l);
         (at[i] ??= []).push({ ident: sg.art.ident, v: l.length - 1 });
       }
@@ -657,14 +659,19 @@ export default function Home() {
     if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: busy ? "auto" : "smooth" });
   }, [chat?.msgs, busy]);
 
-  const stop = () => {
+  // user = false: câu trả lời vừa hiện xong. Mặc định (nút Dừng, đổi đoạn chat…): hủy luôn lượt ở máy chủ để không tốn thêm token,
+  // phần đã viết được giữ lại và đánh dấu đã dừng (lượt sau model biết câu trả lời này chưa hoàn chỉnh).
+  const runRef = useRef<string | null>(null);
+  const stop = (user: unknown = true) => {
     approvalRef.current?.resolve({});
     setApproval(null);
     genRef.current++;
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     setBusy(false);
-    setChats((cs) => cs.map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true })) })));
+    if (user !== false && runRef.current) cancelRun(runRef.current);
+    runRef.current = null;
+    setChats((cs) => cs.map((c) => ({ ...c, msgs: c.msgs.map((m) => (m.done ? m : { ...m, done: true, prog: undefined, ...(user !== false && m.role === "ai" ? { stopped: true, run: undefined } : {}) })) })));
   };
   const genRef = useRef(0);
   const capsRef = useRef(caps);
@@ -687,7 +694,11 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null, src: Msg["src"] = [];
-    let outs: Msg["outs"] = [];
+    let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false;
+    // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
+    let streamed = false, pend: string | null = null, raf = 0;
+    const flush = () => { raf = 0; if (pend === null || gen !== genRef.current) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
+    const onDelta = (t: string) => { streamed = true; pend = t; if (!raf) raf = requestAnimationFrame(flush); };
     try {
       // Skill hai câu trả lời gần nhất đã dùng: lượt tiếp nối (sửa, thêm, đổi) đọc lại để giữ cùng phong cách.
       const recentSkills = [...new Set((chatsRef.current.find((c) => c.id === id)?.msgs ?? []).filter((m) => m.role === "ai" && (m.skills?.length || m.libs?.length)).slice(-2)
@@ -695,7 +706,7 @@ export default function Home() {
       // Lượt chạy bền: máy chủ trả lời ở nền; mã lượt lưu vào tin nhắn để tải lại trang vẫn nhận được kết quả.
       const lastMsg = (f: (m: Msg) => Msg) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills,
-        onRun: (run) => lastMsg((m) => ({ ...m, run })), onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); } });
+        onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta });
       const used = takeSkillsUsed();
       libs = takeLibsUsed();
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -705,8 +716,21 @@ export default function Home() {
       outs = takeOutputs();
       via = takeRoute();
       src = takeSources();
+      trace = takeTrace();
+      cancelled = takeCancelled();
     } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
-    if (gen !== genRef.current) return;
+    if (raf) cancelAnimationFrame(raf);
+    // Người dùng đã bấm Dừng: máy chủ trả phần đã viết và dấu vết (công cụ bị dừng ghi cancelled_by_user) — lưu lại cho lượt sau.
+    if (gen !== genRef.current) {
+      if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply, trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
+      return;
+    }
+    if (streamed || cancelled) {
+      // Đã hiện dần theo thời gian thực: hiện bản cuối ngay, không giả lập gõ chữ.
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: reply, done: true, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, src: src?.length ? src : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+      finishReply(id, reply, pr, history);
+      return;
+    }
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
     const words = (reply + note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : "")).split(/(\s+)/);
@@ -715,22 +739,28 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, src: src?.length && i >= words.length ? src : undefined }]);
-      if (i >= words.length) {
-        stop();
-        // Lưu artifact của câu trả lời này vào trang Artifacts (không lưu đoạn chat ẩn danh).
-        if (capsRef.current.art && hasArtifacts(reply) && !chatsRef.current.find((c) => c.id === id)?.inc)
-          saveArtifacts(String(id), splitArtifacts(reply).flatMap((sg) => (sg.kind === "art" ? [sg.art] : []))).then(() => setArtRefresh((n) => n + 1));
-        if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: "Câu trả lời đã hoàn tất." });
-        if (pr && history.filter((m) => m.role === "user").length % MEMORY_EVERY_N_USER_MSGS === 0) {
-          const full: LLMMsg[] = [...history, { role: "assistant", content: reply }];
-          extractMemory(projsRef.current.find((x) => x.id === pr.id) ?? pr, full).then((items) => {
-            if (!items.length) return;
-            setProjects((ps) => ps.map((x) => (x.id === pr.id ? { ...x, mem: [...(x.mem ?? []), ...items.filter((c) => !(x.mem ?? []).some((m) => m.content === c)).map((c, k) => ({ id: Date.now() + k, content: c }))] } : x)));
-          });
-        }
-      }
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, src: src?.length && i >= words.length ? src : undefined, trace: trace?.length ? trace : undefined }]);
+      if (i >= words.length) finishReply(id, reply, pr, history);
     }, 38);
+  };
+  // Câu trả lời đã hiện xong: lưu artifact (bản đầy đủ, đã áp các bản sửa), thông báo, rút trí nhớ dự án.
+  const finishReply = (id: number, reply: string, pr: Project | undefined, history: LLMMsg[]) => {
+    stop(false);
+    const c = chatsRef.current.find((x) => x.id === id);
+    if (capsRef.current.art && hasArtifacts(reply) && c && !c.inc) {
+      const st = new Map<string, ArtVersion>();
+      for (const m of c.msgs) if (m.role === "ai" && m.text !== reply) for (const sg of splitArtifacts(m.text)) if (sg.kind === "art") st.set(sg.art.ident, resolveArt(st.get(sg.art.ident), sg.art));
+      const full = splitArtifacts(reply).flatMap((sg): ArtBlock[] => { if (sg.kind !== "art") return []; const r = resolveArt(st.get(sg.art.ident), sg.art); st.set(sg.art.ident, r); return r.fix?.failed.length ? [] : [{ ident: r.ident, title: r.title, type: r.type, lang: r.lang, content: r.content, complete: r.complete }]; });
+      if (full.length) saveArtifacts(String(id), full).then(() => setArtRefresh((n) => n + 1));
+    }
+    if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: "Câu trả lời đã hoàn tất." });
+    if (pr && history.filter((m) => m.role === "user").length % MEMORY_EVERY_N_USER_MSGS === 0) {
+      const full: LLMMsg[] = [...history, { role: "assistant", content: reply }];
+      extractMemory(projsRef.current.find((x) => x.id === pr.id) ?? pr, full).then((items) => {
+        if (!items.length) return;
+        setProjects((ps) => ps.map((x) => (x.id === pr.id ? { ...x, mem: [...(x.mem ?? []), ...items.filter((c) => !(x.mem ?? []).some((m) => m.content === c)).map((c, k) => ({ id: Date.now() + k, content: c }))] } : x)));
+      });
+    }
   };
   // Mở ứng dụng nội bộ khi chưa đăng nhập: /apps/<id> chuyển về đây kèm ?next=, đăng nhập xong thì quay lại đúng ứng dụng.
   useEffect(() => {
@@ -745,18 +775,20 @@ export default function Home() {
     resumed.current = true;
     for (const c of chatsRef.current) {
       const last = c.msgs[c.msgs.length - 1];
-      if (!last || last.role !== "ai" || last.text || !last.run) continue;
+      // Còn mã lượt chạy = câu trả lời chưa nhận xong (mọi đường hoàn tất đều xóa mã này; bản lưu trong trình duyệt luôn ghi done).
+      if (!last || last.role !== "ai" || !last.run) continue;
       const run = last.run;
       const set = (f: (m: Msg) => Msg) => patch(c.id, (ms) => (ms.length && ms[ms.length - 1].run === run ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       set((m) => ({ ...m, done: false }));
-      attachRun(run, (prog) => set((m) => ({ ...m, prog }))).then((text) => {
-        const used = takeSkillsUsed(), libs = takeLibsUsed(), outs = takeOutputs();
+      runRef.current = run;
+      attachRun(run, (prog) => set((m) => ({ ...m, prog })), (text) => set((m) => ({ ...m, text, prog: undefined }))).then((text) => {
+        const used = takeSkillsUsed(), libs = takeLibsUsed(), outs = takeOutputs(), trace = takeTrace(), stopped = takeCancelled();
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
         const via = takeRoute(), src = takeSources();
-        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, src: src.length ? src : undefined }));
-        if (capsRef.current.art && hasArtifacts(text) && !c.inc) saveArtifacts(String(c.id), splitArtifacts(text).flatMap((sg) => (sg.kind === "art" ? [sg.art] : []))).then(() => setArtRefresh((n) => n + 1));
+        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, src: src.length ? src : undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined }));
+        if (runRef.current === run) runRef.current = null;
       }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -781,7 +813,9 @@ export default function Home() {
     setTplMode(null);
     setPrefill({ t: "", n: 0 });
     const prior = id !== null && view === "chat" ? (chatsRef.current.find((c) => c.id === id)?.msgs ?? []) : [];
-    const hist: LLMMsg[] = [...prior.filter((m) => m.text).map((m) => ({ role: (m.role === "ai" ? "assistant" : "user") as LLMMsg["role"], content: m.text })), { role: "user", content: t }];
+    // Lịch sử theo chuẩn Synchro: câu trả lời kèm dấu vết công cụ; câu trả lời bị dừng ghi rõ là chưa hoàn chỉnh.
+    const STOPPED = { id: "stop", name: "(dừng)", label: "Câu trả lời", input: "", status: "cancelled_by_user" as const, summary: "Người dùng đã bấm Dừng giữa chừng; câu trả lời trên chưa hoàn chỉnh." };
+    const hist: LLMMsg[] = [...prior.filter((m) => m.text || m.stopped).map((m): LLMMsg => (m.role === "ai" ? { role: "assistant", content: m.text, ...(m.trace?.length || m.stopped ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : [])] } : {}) } : { role: "user", content: m.text })), { role: "user", content: t }];
     const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
     fileContext(f, t).then(({ blocks, errors }) => {
       errors.forEach((m) => say(m));
@@ -1204,7 +1238,8 @@ export default function Home() {
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
-                        return <ArtifactCard key={k} art={sg.art} version={v + 1} total={total} active={active} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
+                        const full = arts.map.get(sg.art.ident)?.[v];
+                        return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
                       })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}{m.done && m.src?.length ? <SourceChips sources={m.src} /> : null}</div>
                       {m.done && (
                         <div className="actions in">

@@ -24,7 +24,11 @@ export function startMockMcp(port = 4011) {
   const MODERN_TOOLS = [
     { name: "get_time", title: "Get time", description: "Giờ hiện tại của máy chủ.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
     { name: "lookup_region", title: "Lookup region", description: "Tra thông tin một vùng.", inputSchema: { type: "object", properties: { region: { type: "string", "x-mcp-header": "Region" }, detail: { type: "boolean" } }, required: ["region"] }, annotations: { readOnlyHint: true } },
+    { name: "list_orders", title: "List orders", description: "Liệt kê đơn hàng của cửa hàng (dữ liệu lớn).", inputSchema: { type: "object", properties: { limit: { type: "integer" } } }, annotations: { readOnlyHint: true } },
   ];
+  // Kết quả lớn (~60 KB JSON) để thử ngữ cảnh theo tham chiếu: Synchro không nhét nguyên văn vào lịch sử chat.
+  const CITY = ["Hà Nội", "Đà Nẵng", "TP. Hồ Chí Minh", "Cần Thơ", "Hải Phòng"];
+  const ORDERS = Array.from({ length: 400 }, (_, i) => ({ id: `DH${String(i + 1).padStart(4, "0")}`, customer: `Khách ${i + 1}`, city: CITY[i % 5], total: 150000 + ((i * 7919) % 90) * 10000, status: i % 7 === 0 ? "đã hủy" : i % 3 === 0 ? "đang giao" : "đã giao", items: [{ sku: `SP${(i % 23) + 1}`, qty: (i % 4) + 1 }] }));
   const SSE_TOOLS = [{ name: "echo", title: "Echo", description: "Lặp lại nội dung gửi vào.", inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] }, annotations: { readOnlyHint: true } }];
 
   // Logo để thử tự nhận diện: trang chủ khai báo favicon SVG; máy chủ /modern tự khai báo icon trong serverInfo.
@@ -157,6 +161,7 @@ export function startMockMcp(port = 4011) {
       if (m.method === "tools/call") {
         if (decode(req.headers["mcp-name"]) !== m.params?.name) return send(res, 400, err(m.id, -32020, "Header mismatch: Mcp-Name"));
         if (m.params.name === "get_time") return send(res, 200, ok(m.id, { resultType: "complete", ...text(`Giờ máy chủ: ${new Date().toISOString()}`), _meta: info }));
+        if (m.params.name === "list_orders") return send(res, 200, ok(m.id, { resultType: "complete", ...text(JSON.stringify({ shop: "Synchro Store", count: ORDERS.length, orders: ORDERS })), _meta: info }));
         if (m.params.name === "lookup_region") {
           const region = m.params.arguments?.region;
           if (decode(req.headers["mcp-param-region"]) !== region) return send(res, 400, err(m.id, -32020, "Header mismatch: Mcp-Param-Region"));

@@ -7,7 +7,11 @@ import { ConnectorSession, connectorsPrompt } from "./connectors";
 import { randomToken } from "./mcpauth";
 import { capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { progress, registerExec } from "./runs";
+import { delta, deltaStep, liveNow, progress, registerExec, runSignal } from "./runs";
+import { prepareHistory, type TraceItem } from "./transpile";
+import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
+import { artState, resolveArt } from "./vfs";
+import { splitArtifacts } from "./artifacts";
 import { AUTO, routeModel } from "./router";
 import { knowledgePrompt, type KbHit } from "./kb";
 import { ALL } from "./catalog";
@@ -32,23 +36,29 @@ type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 // Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
 // điểm thứ hai ở cuối tin nhắn mới nhất. Lịch sử hội thoại và các bước gọi công cụ trong cùng lượt được đọc lại từ bộ đệm
 // (rẻ hơn nhiều so với gửi lại), chỉ phần mới được tính đủ giá. Không sửa mảng gốc vì vòng lặp còn thêm bước vào đó.
-export function withCacheMark(msgs: unknown[]): unknown[] {
-  if (!msgs.length) return msgs;
-  const last = msgs[msgs.length - 1] as { role: string; content: unknown };
-  const blocks = typeof last.content === "string" ? [{ type: "text", text: last.content }] : Array.isArray(last.content) ? (last.content as Record<string, unknown>[]) : null;
-  if (!blocks?.length) return msgs;
+// hist: chỉ số tin cuối của phần lịch sử ổn định (trước tin nhắn mới nhất có tầng động): thêm một điểm đệm ở đó để lượt sau
+// đọc lại được cả lịch sử từ bộ đệm dù tầng động của lượt này không còn trong lịch sử nữa.
+function markOne(m: unknown): unknown {
+  const x = m as { role: string; content: unknown };
+  const blocks = typeof x.content === "string" ? [{ type: "text", text: x.content }] : Array.isArray(x.content) ? (x.content as Record<string, unknown>[]) : null;
+  if (!blocks?.length) return m;
   const i = blocks.length - 1;
-  const marked = blocks.map((b, k) => (k === i ? { ...b, cache_control: { type: "ephemeral" } } : b));
-  return [...msgs.slice(0, -1), { ...last, content: marked }];
+  return { ...x, content: blocks.map((b, k) => (k === i ? { ...b, cache_control: { type: "ephemeral" } } : b)) };
 }
+export function withCacheMark(msgs: unknown[], hist = -1): unknown[] {
+  if (!msgs.length) return msgs;
+  return msgs.map((m, i) => (i === msgs.length - 1 || (i === hist && hist < msgs.length - 1) ? markOne(m) : m));
+}
+// Truyền chữ chỉ khi đang ở lượt chạy nền (có người theo dõi qua SSE).
+const live = () => (runSignal() ? delta : undefined);
 
-const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort): Adapter => ({
+const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort, hist = -1): Adapter => ({
   step: async (msgs, noTools) => {
     const j = await anthropicCall(t, {
       max_tokens: outCap(t, max_tokens), ...effortParams(t, effort),
       system: [{ type: "text", text: system || "Bạn là một trợ lý AI hữu ích." }, { type: "text", text: skillSys, cache_control: { type: "ephemeral" } }],
-      tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: withCacheMark(msgs),
-    });
+      tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: withCacheMark(msgs, hist),
+    }, runSignal(), live());
     const blocks: { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }[] = j.content ?? [];
     return {
       text: blocks.filter((b) => b.type === "text").map((b) => b.text).join(""),
@@ -65,7 +75,7 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
       max_tokens: outCap(t, max_tokens), ...effortParams(t, effort), messages: [{ role: "system", content: system }, ...msgs],
       tools: tools.map((x) => ({ type: "function", function: { name: x.name, description: x.description, parameters: x.input_schema } })),
       ...(noTools ? { tool_choice: "none" } : {}),
-    });
+    }, runSignal(), live());
     const m = j.choices?.[0]?.message ?? {};
     const calls: Call[] = (m.tool_calls ?? []).map((c: { id: string; function: { name: string; arguments: string } }) => {
       let input: Record<string, unknown> = {};
@@ -80,7 +90,7 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
 // OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
 const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
   step: async (msgs, noTools) => {
-    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: respTools(tools), ...(noTools ? { tool_choice: "none" } : {}) }));
+    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: respTools(tools), ...(noTools ? { tool_choice: "none" } : {}) }, runSignal(), live()));
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
   results: (calls, res) => calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })),
@@ -110,9 +120,10 @@ const mockAdapter = (skills: Skl): Adapter => ({
 // code: công cụ run_code đang bật (net: được tải gói từ kho thư viện); outs: tệp code đã tạo trong lượt này.
 // libs: skill (và mục thư viện) → thư viện chứa nó, để câu trả lời hiện "Thư viện Thiết kế · skill đã đọc". studio: chế độ người dùng chọn bằng nút.
 type Lib = { key: string; label: string };
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; sources?: Omit<KbHit, "score">[] };
+// trace: dấu vết công cụ của lượt theo chuẩn Synchro (trả về trình duyệt, lượt sau gửi lại để model nào cũng biết đã làm gì).
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; sources?: Omit<KbHit, "score">[]; trace: TraceItem[]; conv?: string };
 type Decision = "allow" | "chat" | "always" | "deny";
-type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
+type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
 type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number };
 const PENDING_TTL = 30 * 60_000;
@@ -129,7 +140,7 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<ToolRun
   if (!x.code) return { content: "Chạy code đang tắt trong Cài đặt → Khả năng.", is_error: true, used };
   if (!code.trim() || code.length > 200_000) return { content: "Thiếu code hoặc code quá dài (tối đa 200.000 ký tự).", is_error: true, used };
   try {
-    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net });
+    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, signal: runSignal() });
     const saved = saveOutputs(x.uid, r.files);
     x.outs.push(...saved);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
@@ -140,6 +151,7 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<ToolRun
 }
 
 async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
+  if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net });
@@ -160,16 +172,54 @@ function describe(x: Exec, c: Call) {
   const ct = x.sess?.get(c.name);
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
 }
+// Công cụ lấy dữ liệu (connector, chạy code, script của skill): kết quả lớn lưu theo tham chiếu và có trong dấu vết của lượt.
+// Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
+const isData = (x: Exec, c: Call) => !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script";
+const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
+function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) return Promise.reject(new DOMException("Đã dừng", "AbortError"));
+  return new Promise((ok, no) => {
+    const f = () => no(new DOMException("Đã dừng", "AbortError"));
+    signal.addEventListener("abort", f, { once: true });
+    p.then((v) => { signal.removeEventListener("abort", f); ok(v); }, (e) => { signal.removeEventListener("abort", f); no(e); });
+  });
+}
+const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSignal()?.aborted;
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
   for (const c of calls) progress("tool", describe(x, c));
-  const res = await Promise.all(calls.map((c) => runCall(x, c, d[c.id])));
+  let res: ToolRun[];
+  try {
+    res = await abortable(Promise.all(calls.map((c) => runCall(x, c, d[c.id]))), runSignal());
+  } catch (e) {
+    // Người dùng dừng khi công cụ đang chạy: ghi rõ trong dấu vết để lượt sau model biết việc này chưa xong.
+    if (isAbort(e)) for (const c of calls) if (isData(x, c)) x.trace.push({ id: c.id, name: c.name, label: label(x, c), input: JSON.stringify(c.input ?? {}).slice(0, 300), status: "cancelled_by_user", summary: "Người dùng đã dừng khi công cụ đang chạy; chưa có kết quả." });
+    throw e;
+  }
+  res.forEach((r, i) => {
+    const c = calls[i];
+    if (!isData(x, c)) return;
+    const big = maybeRef(x.uid, x.conv, c.name, r.content);
+    r.content = big.content;
+    const summary = (big.ref ? big.content.replace(/^<ref[^>]*>\n/, "").split("\nDữ liệu đầy đủ đã lưu")[0] : r.content).slice(0, 700);
+    x.trace.push({ id: c.id, name: c.name, label: label(x, c), input: JSON.stringify(c.input ?? {}).slice(0, 300), status: d[c.id] === "deny" ? "denied" : r.is_error ? "error" : "ok", summary, ...(big.ref ? { ref: big.ref } : {}) });
+  });
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   m.push(...ad.results(calls, res));
 }
 
 async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
+  try { return await loop(ad, m, x, used, uid, model, start); }
+  catch (e) {
+    if (!isAbort(e)) throw e;
+    // Dừng giữa chừng: giữ phần đã viết, lượt kết thúc bình thường (không phải lỗi).
+    x.sess?.close();
+    return { text: liveNow(), used, cancelled: true };
+  }
+}
+async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
   for (let i = start; i < MAX_STEPS; i++) {
-    if (i > 0) progress("step", "Đang viết câu trả lời");
+    if (i > 0) { progress("step", "Đang viết câu trả lời"); deltaStep(); }
     const r = await ad.step(m, i === MAX_STEPS - 1);
     m.push(r.assistant);
     if (!r.calls.length) return { text: r.text, used };
@@ -262,7 +312,34 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   const usedNames = out.used.filter((u) => u.kind === "skill").map((u) => u.name);
   recordUse(c.user.id, usedNames);
   recordPluginUse(x.list.filter((k) => k.user_id.startsWith("pl_") && usedNames.includes(k.name)).map((k) => k.id));
-  return Response.json({ model, text: out.text, skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.sources?.length ? { sources: x.sources } : {}) });
+  return Response.json({ model, text: out.text, skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.sources?.length ? { sources: x.sources } : {}), ...(x.trace.length ? { trace: x.trace } : {}), ...(out.cancelled ? { cancelled: true } : {}) });
+}
+
+// Bản sửa artifact (mode="patch") phải áp được vào bản hiện tại. Không khớp thì nhắc model sửa lại đúng một lần (tự vá),
+// còn sai nữa thì giữ câu trả lời; trình duyệt hiện bản sửa lỗi kèm nút yêu cầu viết lại toàn bộ.
+function patchProblems(history: { role: string; content: unknown }[], text: string): string[] {
+  if (!/mode\s*=\s*["']patch/i.test(text)) return [];
+  const st = artState(history.filter((h) => h.role === "assistant" || h.role === "ai").map((h) => (typeof h.content === "string" ? h.content : "")));
+  const out: string[] = [];
+  for (const sg of splitArtifacts(text)) if (sg.kind === "art" && sg.art.patch) {
+    const r = resolveArt(st.get(sg.art.ident), sg.art);
+    if (r.fix?.failed.length) out.push(`${sg.art.ident}: ${r.fix.failed.map((f) => `"${f}"`).join(", ")}`);
+    st.set(sg.art.ident, r);
+  }
+  return out;
+}
+async function healPatch(ad: Adapter, m: unknown[], history: { role: string; content: unknown }[], out: Out): Promise<Out> {
+  if ("approval" in out || out.cancelled) return out;
+  const bad = patchProblems(history, out.text);
+  if (!bad.length) return out;
+  progress("step", "Đang sửa lại bản sửa artifact cho khớp");
+  deltaStep();
+  m.push({ role: "user", content: `Hệ thống: bản sửa artifact chưa áp được vì khối SEARCH không khớp nguyên văn với bản hiện tại trong <current_artifacts> (${bad.join("; ")}). Hãy viết lại TOÀN BỘ câu trả lời, với bản sửa có SEARCH chép đúng từng ký tự từ bản hiện tại (hoặc viết lại toàn bộ artifact nếu khó).` });
+  try {
+    const r = await ad.step(m, true);
+    m.push(r.assistant);
+    return r.text.trim() ? { ...out, text: r.text } : out;
+  } catch (e) { if (isAbort(e)) return { ...out, cancelled: true }; throw e; }
 }
 
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
@@ -394,7 +471,10 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const st = studio ? studioSkills(c.user.id, studio) : null;
   // Bộ não công ty: trí nhớ nhóm và các đoạn tài liệu liên quan tới câu hỏi mới nhất (chỉ ở lượt chat chính, không ở Synchro Code).
   const kb = skills && feature !== "code" ? knowledgePrompt(c.user, lastUserText(messages)) : null;
-  const capSys = cs ? [feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", kb?.prompt ?? ""].filter(Boolean).join("\n\n") : "";
+  const capSys = cs ? [feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", kb?.memory ?? ""].filter(Boolean).join("\n\n") : "";
+  // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng; đoạn tài liệu tìm theo câu hỏi nằm ở tầng động cuối prompt.
+  const prep = prepareHistory(messages, [kb?.knowledge ?? ""]);
+  const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {
     const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
@@ -443,22 +523,31 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       route = routingPrompt(hits, recent);
     }
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
-    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: typeof conv === "string" && conv.length <= 64 ? conv : undefined, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
-    if (visible.length || sess || code) {
+    // read_ref: đọc dữ liệu lớn đã lưu theo tham chiếu (ở lượt này hoặc các lượt trước, kể cả khi đổi model).
+    const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));
+    if (visible.length || sess || code || refs) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, skillsPrompt(visible, scripts), route, sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, sources: kb?.sources };
-      const msgs = messages as { role: string; content: unknown }[];
-      const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
-        : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)
-        : await toolLoop((t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) })), x, [], c.user.id, model);
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : [])];
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, sources: kb?.sources, trace: [], conv: convId };
+      const msgs = prep.messages;
+      const ad = t.kind === "mock" ? mockAdapter(list)
+        : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, tools, effort, prep.historyEnd)
+        : (t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools, effort);
+      const m0: unknown[] = t.kind === "mock" ? [...msgs] : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
+      // Kiểm tra bản sửa trên lịch sử gốc (bản đã rút gọn không còn nội dung artifact cũ).
+      const raw = (Array.isArray(messages) ? messages : []) as { role: string; content: unknown }[];
+      const out = await healPatch(ad, m0, raw, await toolLoop(ad, m0, x, [], c.user.id, model));
       return reply(c, model, out, x);
     }
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
-    return Response.json({ model, text: await chatOnce(t, capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, messages, max_tokens, undefined, effort), effort, ...(kb?.sources.length ? { sources: kb.sources } : {}) });
+    let text: string, cancelled = false;
+    try { text = await chatOnce(t, capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, prep.messages, max_tokens, runSignal(), effort, live()); }
+    catch (e) { if (!isAbort(e)) throw e; text = liveNow(); cancelled = true; }
+    return Response.json({ model, text, effort, ...(kb?.sources.length ? { sources: kb.sources } : {}), ...(cancelled ? { cancelled: true } : {}) });
   } catch (e) {
     sess?.close();
     if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });

@@ -219,15 +219,20 @@ function ArtIcon({ type, size = 18 }: { type: ArtType; size?: number }) {
 }
 
 // ---------------------------------------------------------------- thẻ trong tin nhắn
-export function ArtifactCard({ art, version, total, active, onOpen }: { art: ArtBlock; version: number; total: number; active: boolean; onOpen: () => void }) {
+// fix: phiên bản là bản sửa (SEARCH/REPLACE) — số chỗ đã sửa, hoặc các chỗ không khớp (onRedo: nhờ model viết lại toàn bộ).
+export function ArtifactCard({ art, version, total, active, onOpen, fix, onRedo }: { art: ArtBlock; version: number; total: number; active: boolean; onOpen: () => void; fix?: { applied: number; failed: string[] }; onRedo?: () => void }) {
+  const bad = !!fix?.failed.length && art.complete;
   return (
-    <button className={`art-card ${active ? "on" : ""} ${art.complete ? "" : "busy"}`} onClick={onOpen}>
-      <span className="art-card-ic"><ArtIcon type={art.type} size={20} />{!art.complete && <span className="art-spin sm" />}</span>
-      <span className="art-card-txt">
-        <b>{art.title}</b>
-        <span>{tr(!art.complete ? "Đang tạo…" : isDeck(art) ? "Bản trình bày" : ART_LABEL[art.type])}{total > 1 && <> · {tr("Phiên bản")} {version}</>}{art.complete && <> · <em>{tr(active ? "Đang mở" : "Nhấn để mở")}</em></>}</span>
-      </span>
-    </button>
+    <div className="art-card-wrap">
+      <button className={`art-card ${active ? "on" : ""} ${art.complete ? "" : "busy"} ${bad ? "warn" : ""}`} onClick={onOpen}>
+        <span className="art-card-ic"><ArtIcon type={art.type} size={20} />{!art.complete && <span className="art-spin sm" />}</span>
+        <span className="art-card-txt">
+          <b>{art.title}</b>
+          <span>{tr(!art.complete ? (fix ? "Đang sửa…" : "Đang tạo…") : isDeck(art) ? "Bản trình bày" : ART_LABEL[art.type])}{total > 1 && <> · {tr("Phiên bản")} {version}</>}{fix && art.complete && !bad && <> · {tr("Đã sửa")} {fix.applied} {tr("chỗ")}</>}{art.complete && !bad && <> · <em>{tr(active ? "Đang mở" : "Nhấn để mở")}</em></>}{bad && <> · <em className="art-bad">{tr("Bản sửa chưa khớp")} {fix!.failed.length} {tr("chỗ")}</em></>}</span>
+        </span>
+      </button>
+      {bad && onRedo && <button className="lnk art-redo" onClick={onRedo}>{tr("Nhờ viết lại toàn bộ")}</button>}
+    </div>
   );
 }
 

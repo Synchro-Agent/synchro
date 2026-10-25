@@ -329,6 +329,7 @@ export function resultText(r: Record<string, unknown>): { text: string; isError:
   }
   if (!parts.length && r.structuredContent !== undefined) parts.push(JSON.stringify(r.structuredContent));
   let text = parts.join("\n\n").trim() || "(Công cụ không trả về nội dung.)";
-  if (text.length > 40_000) text = text.slice(0, 40_000) + "\n[Đã cắt bớt vì quá dài]";
+  // Kết quả lớn được lưu theo tham chiếu (refs.ts) trước khi tới model, nên giữ đủ để JSON không bị cắt hỏng.
+  if (text.length > 2_000_000) text = text.slice(0, 2_000_000) + "\n[Đã cắt bớt vì quá dài]";
   return { text, isError: r.isError === true };
 }

@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const over = overLimit(c.user);
   if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
   const body = await req.json();
-  if (body.async === true && typeof body.resume !== "string") {
+  if (body.async === true) {
     const { async: _, ...rest } = body;
     return Response.json({ run: startRun(c.user, "chat", rest, typeof body.conv === "string" ? body.conv.slice(0, 64) : null) });
   }

@@ -4,7 +4,7 @@
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi.
 import http from "node:http";
 import { pathToFileURL } from "node:url";
-import { capsReply, codeDone, studioStep } from "./mock-caps.mjs";
+import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → API.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
@@ -51,18 +51,127 @@ function meter(res, obj) {
   }
   return obj;
 }
-const send = (res, code, obj) => { if (code === 200) obj = meter(res, obj); res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+// Như API thật: yêu cầu có stream: true thì trả SSE đúng định dạng từng hãng (chữ đến từng đoạn nhỏ).
+// Gõ #streamslow để chữ đến chậm (thử nút Dừng). STREAMS đếm luồng đã mở / chạy hết / bị client ngắt giữa chừng.
+const STREAMS = { started: 0, completed: 0, aborted: 0 };
+const isModel = (o) => o && (o.type === "message" || o.object === "response" || o.object === "chat.completion");
+const pieces = (t, n) => { const out = []; for (let i = 0; i < t.length; i += n) out.push(t.slice(i, i + n)); return out; };
+async function streamOut(res, obj) {
+  const b = res.__body, prov = res.__prov, gap = res.__slow ? 150 : 8;
+  STREAMS.started++;
+  res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+  let closed = false;
+  res.on("close", () => { if (!res.writableEnded) closed = true; });
+  const ev = (event, data) => { if (!closed) res.write(`${event ? `event: ${event}\n` : ""}data: ${typeof data === "string" ? data : JSON.stringify(data)}\n\n`); };
+  const tick = async () => { await sleep(gap); return closed; };
+  const quit = () => { STREAMS.aborted++; };
+  if (prov === "anthropic") {
+    ev("message_start", { type: "message_start", message: { ...obj, content: [], stop_reason: null, usage: { ...(obj.usage ?? {}), output_tokens: 1 } } });
+    for (const [i, blk] of (obj.content ?? []).entries()) {
+      if (blk.type === "text") {
+        ev("content_block_start", { type: "content_block_start", index: i, content_block: { type: "text", text: "" } });
+        for (const p of pieces(blk.text ?? "", 12)) { if (await tick()) return quit(); ev("content_block_delta", { type: "content_block_delta", index: i, delta: { type: "text_delta", text: p } }); }
+      } else if (blk.type === "tool_use") {
+        ev("content_block_start", { type: "content_block_start", index: i, content_block: { type: "tool_use", id: blk.id, name: blk.name, input: {} } });
+        for (const p of pieces(JSON.stringify(blk.input ?? {}), 16)) { if (await tick()) return quit(); ev("content_block_delta", { type: "content_block_delta", index: i, delta: { type: "input_json_delta", partial_json: p } }); }
+      }
+      ev("content_block_stop", { type: "content_block_stop", index: i });
+    }
+    ev("message_delta", { type: "message_delta", delta: { stop_reason: obj.stop_reason, stop_sequence: null }, usage: { output_tokens: obj.usage?.output_tokens ?? 0 } });
+    ev("message_stop", { type: "message_stop" });
+  } else if (obj.object === "response") {
+    ev("response.created", { type: "response.created", response: { ...obj, status: "in_progress", output: [] } });
+    for (const [oi, item] of (obj.output ?? []).entries()) {
+      if (item.type !== "message") continue;
+      for (const p of pieces(item.content?.[0]?.text ?? "", 12)) { if (await tick()) return quit(); ev("response.output_text.delta", { type: "response.output_text.delta", item_id: item.id, output_index: oi, content_index: 0, delta: p }); }
+    }
+    ev("response.completed", { type: "response.completed", response: obj });
+  } else {
+    const base = { id: obj.id, object: "chat.completion.chunk", model: obj.model };
+    const m = obj.choices?.[0]?.message ?? {};
+    ev(null, { ...base, choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }] });
+    for (const p of pieces(m.content ?? "", 12)) { if (await tick()) return quit(); ev(null, { ...base, choices: [{ index: 0, delta: { content: p }, finish_reason: null }] }); }
+    for (const [k, tc] of (m.tool_calls ?? []).entries()) {
+      const { function: fn, ...rest } = tc;
+      ev(null, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: k, ...rest, function: { name: fn.name, arguments: "" } }] }, finish_reason: null }] });
+      for (const p of pieces(fn.arguments ?? "", 16)) { if (await tick()) return quit(); ev(null, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: k, function: { arguments: p } }] }, finish_reason: null }] }); }
+    }
+    ev(null, { ...base, choices: [{ index: 0, delta: {}, finish_reason: obj.choices?.[0]?.finish_reason ?? "stop" }] });
+    if (b?.stream_options?.include_usage && obj.usage) ev(null, { ...base, choices: [], usage: obj.usage });
+    ev(null, "[DONE]");
+  }
+  STREAMS.completed++;
+  res.end();
+}
+const send = (res, code, obj) => {
+  if (code === 200) obj = meter(res, obj);
+  if (code === 200 && res.__body?.stream === true && isModel(obj)) { streamOut(res, obj).catch(() => {}); return; }
+  res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj));
+};
+
+// Như API thật, lịch sử sai cấu trúc bị từ chối với lỗi 400 (để chắc Synchro không bao giờ gửi lịch sử hỏng khi đổi model).
+const blocks = (m) => (Array.isArray(m?.content) ? m.content : []);
+function anthropicShape(b) {
+  const ms = b.messages ?? [];
+  if (!ms.length || ms[0].role !== "user") return 'messages: first message must use the "user" role';
+  let tools = false;
+  for (let i = 0; i < ms.length; i++) {
+    const m = ms[i];
+    if (i > 0 && m.role === ms[i - 1].role) return `messages: roles must alternate between "user" and "assistant", but found multiple "${m.role}" roles in a row`;
+    if ((typeof m.content === "string" && !m.content.trim() || Array.isArray(m.content) && !m.content.length) && !(i === ms.length - 1 && m.role === "assistant")) return `messages.${i}: all messages must have non-empty content except for the optional final assistant message`;
+    const uses = blocks(m).filter((x) => x.type === "tool_use").map((x) => x.id), res = blocks(m).filter((x) => x.type === "tool_result").map((x) => x.tool_use_id);
+    if (uses.length || res.length) tools = true;
+    const prevUses = blocks(ms[i - 1]).filter((x) => x.type === "tool_use").map((x) => x.id);
+    const stray = res.find((r) => !prevUses.includes(r));
+    if (stray) return `messages.${i}.content: unexpected \`tool_use_id\` found in \`tool_result\` blocks: ${stray}. Each \`tool_result\` block must have a corresponding \`tool_use\` block in the previous message.`;
+    if (uses.length && i < ms.length - 1) {
+      const got = blocks(ms[i + 1]).filter((x) => x.type === "tool_result").map((x) => x.tool_use_id);
+      const miss = uses.find((u) => !got.includes(u));
+      if (miss) return `messages.${i + 1}: \`tool_use\` ids were found without \`tool_result\` blocks immediately after: ${miss}. Each \`tool_use\` block must have a corresponding \`tool_result\` block in the next message.`;
+    }
+  }
+  if (tools && !b.tools?.length) return "Requests which include `tool_use` or `tool_result` blocks must define tools.";
+  return null;
+}
+const geminiThinks = (id) => /^gemini-(3|4)/.test(id ?? "");
+function chatShape(b, google) {
+  const ms = b.messages ?? [];
+  for (let i = 0; i < ms.length; i++) {
+    if (ms[i].role !== "tool") continue;
+    const owner = ms.slice(0, i).reverse().find((x) => x.role !== "tool");
+    if (owner?.role !== "assistant" || !(owner.tool_calls ?? []).some((t) => t.id === ms[i].tool_call_id)) return "Invalid parameter: messages with role 'tool' must be a response to a preceeding message with 'tool_calls'.";
+  }
+  // Gemini 3 trở lên: lời gọi hàm trong lượt hiện tại phải gửi lại kèm thought_signature đã nhận.
+  if (google && geminiThinks(b.model)) {
+    const lastUser = ms.map((m) => m.role).lastIndexOf("user");
+    for (const m of ms.slice(lastUser + 1)) if (m.role === "assistant" && m.tool_calls?.length && !m.tool_calls[0]?.extra_content?.google?.thought_signature) return "Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance.";
+  }
+  return null;
+}
 const readBody = (req) => new Promise((ok) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { ok(JSON.parse(s || "{}")); } catch { ok({}); } }); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const valid = (k) => typeof k === "string" && k.includes("mock");
 
 // Chữ của tin nhắn người dùng gần nhất (bỏ qua kết quả công cụ, ảnh, tệp).
-function lastUserText(msgs = []) {
+function lastUserFull(msgs = []) {
   for (const m of [...msgs].reverse()) {
     if (m.role !== "user") continue;
     if (typeof m.content === "string") return m.content;
     const t = (m.content ?? []).filter((b) => b.type === "text" || b.type === "input_text").map((b) => b.text).join("\n");
     if (t) return t;
+  }
+  return "";
+}
+// Tầng động Synchro ghép vào cuối tin nhắn mới nhất (artifact hiện tại, tài liệu tri thức…): không phải câu người dùng gõ.
+const DYN = /<(current_artifacts|knowledge|team_memory|tool_activity|context_mixer)>[\s\S]*?<\/\1>/g;
+const lastUserText = (msgs) => lastUserFull(msgs).replace(DYN, "").trim();
+// Tầng động của tin nhắn người dùng gần nhất có tầng động (bước tự vá chèn thêm một tin nhắn hệ thống phía sau).
+function dynOf(msgs = []) {
+  for (const m of [...msgs].reverse()) {
+    if (m.role !== "user") continue;
+    const t = typeof m.content === "string" ? m.content : (m.content ?? []).map((b) => b.text ?? "").join("\n");
+    const hit = t.match(DYN);
+    if (hit) return hit.join("\n");
   }
   return "";
 }
@@ -80,7 +189,7 @@ const INTENTS = [
   [/\b(may gio|thoi gian|gio hien tai|time)\b/, ["time"]],
   [/\b(lap lai|nhac lai|echo)\b/, ["echo"]],
 ];
-const TOPICS = [["ghi chu", "note"], ["wiki", "wiki"], ["repo", "repo"], ["kho ma", "repo"], ["thu vien", "librar"], ["tai lieu", "doc"], ["vung", "region"], ["gio", "time"], ["echo", "echo"]];
+const TOPICS = [["don hang", "order"], ["ghi chu", "note"], ["wiki", "wiki"], ["repo", "repo"], ["kho ma", "repo"], ["thu vien", "librar"], ["tai lieu", "doc"], ["vung", "region"], ["gio", "time"], ["echo", "echo"]];
 const normTools = (list) => (list ?? []).map((x) => (x.function ? { name: x.function.name, description: x.function.description, schema: x.function.parameters } : { name: x.name, description: x.description, schema: x.input_schema ?? x.parameters })).filter((x) => x.name);
 function buildArgs(tool, q) {
   const props = tool.schema?.properties ?? {};
@@ -167,7 +276,16 @@ function reply(provider, id, msgs, maxTokens, effort) {
 }
 
 // Câu trả lời theo Cài đặt → Khả năng (artifact, hình minh họa, chạy code) nếu system prompt có hướng dẫn tương ứng.
-const capsFor = (sys, q, msgs, tools, none) => (none ? null : capsReply(sys, q, msgs, normTools(tools).map((t) => t.name)));
+// Yêu cầu vừa lấy dữ liệu vừa sửa artifact (#rev): như model thật, gọi công cụ trước, sửa sau khi có kết quả.
+// tool_choice "none" (bước cuối, bước tự vá): vẫn trả lời bằng chữ / artifact như model thật, chỉ không gọi công cụ.
+const capsFor = (sys, q, msgs, tools, none) => {
+  const first = !none && /#rev\s*\d+/.test(q) && !q.includes("#tool") && wantTool(q.replace(/#rev\s*\d+/, ""), tools);
+  if (first) return { tool: first };
+  const r = capsReply(`${sys ?? ""}\n${dynOf(msgs)}`, q, msgs, normTools(tools).map((t) => t.name));
+  return none ? (r?.text ? { text: r.text } : null) : r;
+};
+// Lượt có gọi công cụ và yêu cầu sửa artifact (#rev): sau kết quả công cụ vẫn gửi kèm bản sửa.
+const afterTool = (sys, q, msgs) => { const r = revReply(`${sys ?? ""}\n${dynOf(msgs)}`, q, msgs); return r ? `\n\n${r}` : ""; };
 const sysText = (x) => (typeof x === "string" ? x : Array.isArray(x) ? x.map((b) => b.text ?? "").join("\n") : "");
 
 // Lỗi thử nghiệm theo từ khóa trong tin nhắn; trả về true nếu đã trả lỗi.
@@ -211,9 +329,11 @@ async function handler(req, res) {
     return send(res, 200, { text: MEETING_TEXT });
   }
 
-  // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…).
+  // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…), số token ước tính, số luồng.
   if (p === "/_debug/last") return send(res, 200, LAST);
-  if (res.__prov) LAST[res.__prov] = b;
+  if (p === "/_debug/streams") return send(res, 200, STREAMS);
+  if (res.__prov) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); }
+  res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
 
   // ---- Anthropic (/v1/models, /v1/messages) ----
   if (p.startsWith("/anthropic/")) {
@@ -226,6 +346,8 @@ async function handler(req, res) {
       if (!ANTHROPIC.some(([id]) => id === b.model)) return send(res, 404, err("not_found_error", `model: ${b.model}`));
       const ef = b.output_config?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err("invalid_request_error", `output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'`));
+      const shape = anthropicShape(b);
+      if (shape) return send(res, 400, err("invalid_request_error", shape));
       const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
       const sst = studioStep(sysText(b.system), JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ đọc skill trong thư viện trước." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
@@ -237,7 +359,7 @@ async function handler(req, res) {
         const use = (prev?.content ?? []).find?.((x) => x.type === "tool_use");
         const r0 = results[0];
         const out = typeof r0.content === "string" ? r0.content : (r0.content ?? []).map((x) => x.text ?? "").join(" ");
-        return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: toolDone(use?.name ?? "?", out) }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: 30 } });
+        return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: toolDone(use?.name ?? "?", out) + afterTool(sysText(b.system), q, b.messages) }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: 30 } });
       }
       const cr = capsFor(sysText(b.system), q, b.messages, b.tools, b.tool_choice?.type === "none");
       if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: cr.text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(cr.text.length / 4) } }); }
@@ -273,7 +395,7 @@ async function handler(req, res) {
       if (lastItem?.type === "function_call_output") {
         const call = input.find((x) => x.type === "function_call" && x.call_id === lastItem.call_id);
         return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
-          output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: toolDone(call?.name ?? "?", lastItem.output), annotations: [] }] }] });
+          output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: toolDone(call?.name ?? "?", lastItem.output) + afterTool(b.instructions, q, input), annotations: [] }] }] });
       }
       const prior = input.filter((x) => x.role === "user" || x.role === "assistant").map((x) => ({ role: x.role, content: typeof x.content === "string" ? x.content : (x.content ?? []).map((c) => c.text ?? "").join("") }));
       const cr = capsFor(b.instructions, q, prior, b.tools, b.tool_choice === "none");
@@ -291,6 +413,8 @@ async function handler(req, res) {
       if (b.max_tokens !== undefined) return send(res, 400, err("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."));
       if (pro(b.model)) return send(res, 404, err("This model is only supported in v1/responses and not in v1/chat/completions."));
       if (!OPENAI_CHAT.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
+      const shape = chatShape(b, false);
+      if (shape) return send(res, 400, err(shape));
       const { text: text0, q } = reply("openai", b.model, b.messages, b.max_completion_tokens);
       const text = capsFor(b.messages?.find((m) => m.role === "system")?.content, q, b.messages, b.tools, false)?.text ?? text0;
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
@@ -308,19 +432,22 @@ async function handler(req, res) {
     if (!valid(auth)) return send(res, 400, [{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]);
     if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
     if (b.reasoning_effort !== undefined && !["minimal", "low", "medium", "high"].includes(b.reasoning_effort)) return send(res, 400, [{ error: { code: 400, message: `Invalid reasoning_effort: ${b.reasoning_effort}`, status: "INVALID_ARGUMENT" } }]);
+    const shape = chatShape(b, true);
+    if (shape) return send(res, 400, [{ error: { code: 400, message: shape, status: "INVALID_ARGUMENT" } }]);
     const { text, q } = reply("google", b.model, b.messages, b.max_tokens, b.reasoning_effort);
+    const sig = (call) => (geminiThinks(b.model) ? { ...call, extra_content: { google: { thought_signature: `sig_${Date.now().toString(36)}` } } } : call);
     const sst = studioStep(b.messages?.find((m) => m.role === "system")?.content, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
-    if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } }] }, finish_reason: "tool_calls" }] });
+    if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } })] }, finish_reason: "tool_calls" }] });
     if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: sst.text }, finish_reason: "stop" }] }); }
     const lastMsg = b.messages?.[b.messages.length - 1];
     if (lastMsg?.role === "tool") {
       const prev = [...b.messages].reverse().find((x) => x.role === "assistant" && x.tool_calls);
-      return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: toolDone(prev?.tool_calls?.[0]?.function?.name ?? "?", lastMsg.content) }, finish_reason: "stop" }] });
+      return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: toolDone(prev?.tool_calls?.[0]?.function?.name ?? "?", lastMsg.content) + afterTool(b.messages?.find((m) => m.role === "system")?.content, q, b.messages) }, finish_reason: "stop" }] });
     }
     const cr = capsFor(b.messages?.find((m) => m.role === "system")?.content, q, b.messages, b.tools, b.tool_choice === "none");
     if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: cr.text }, finish_reason: "stop" }] }); }
     const want = cr?.tool ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
-    if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } }] }, finish_reason: "tool_calls" }] });
+    if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } })] }, finish_reason: "tool_calls" }] });
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));
     return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }] });

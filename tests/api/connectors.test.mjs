@@ -87,7 +87,7 @@ ok(!JSON.stringify(r.j).match(/at_|rt_|code_verifier|client_secret/), "không l�
 
 console.log("4. Máy chủ đời mới 2026-07-28 và SSE đời cũ");
 r = await admin("POST", "/api/connectors", { name: "Mock Modern", url: `${MCP}/modern` });
-ok(r.s === 200 && !r.j.authorizeUrl && r.j.connector.status === "ok" && r.j.connector.tools.length === 2, "modern: kết nối ngay, 2 công cụ", JSON.stringify(r.j).slice(0, 300));
+ok(r.s === 200 && !r.j.authorizeUrl && r.j.connector.status === "ok" && r.j.connector.tools.length === 3, "modern: kết nối ngay, 3 công cụ", JSON.stringify(r.j).slice(0, 300));
 r = await admin("POST", "/api/connectors", { name: "Mock SSE", url: `${MCP}/sse` });
 ok(r.s === 200 && r.j.connector.status === "ok" && r.j.connector.tools[0]?.name === "echo", "SSE đời cũ: kết nối được", JSON.stringify(r.j).slice(0, 300));
 r = await admin("POST", "/api/connectors", { name: "Trùng", url: `${MCP}/sse` });

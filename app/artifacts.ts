@@ -6,7 +6,8 @@
 
 export const ART_TYPES = ["html", "react", "svg", "markdown", "code", "mermaid", "vbhc"] as const;
 export type ArtType = (typeof ART_TYPES)[number];
-export type ArtBlock = { ident: string; title: string; type: ArtType; lang: string | null; content: string; complete: boolean };
+// patch: câu trả lời chỉ gửi các khối SEARCH/REPLACE để sửa bản trước (vfs.ts áp vào thành bản đầy đủ); patchText giữ nguyên khối sửa.
+export type ArtBlock = { ident: string; title: string; type: ArtType; lang: string | null; content: string; complete: boolean; patch?: boolean; patchText?: string };
 export type Seg = { kind: "text"; text: string } | { kind: "art"; art: ArtBlock };
 
 const MIME: Record<string, ArtType> = {
@@ -42,12 +43,14 @@ export function splitArtifacts(text: string): Seg[] {
   while ((m = re.exec(text))) {
     const tag = m[0];
     const close = text.indexOf("</artifact>", m.index + tag.length);
-    const type = MIME[(attr(tag, "type") ?? "").toLowerCase()] ?? null;
+    const patch = (attr(tag, "mode") ?? "").toLowerCase() === "patch";
+    // Bản sửa (patch) thừa hưởng kiểu của bản trước nên được phép thiếu type.
+    const type = MIME[(attr(tag, "type") ?? "").toLowerCase()] ?? (patch ? "code" : null);
     const ident = (attr(tag, "identifier") ?? attr(tag, "id") ?? "").trim().toLowerCase().replace(/[^\w.-]+/g, "-").slice(0, 80);
     if (!type || !ident) continue;
     if (m.index > pos) out.push({ kind: "text", text: text.slice(pos, m.index) });
     const body = text.slice(m.index + tag.length, close === -1 ? undefined : close);
-    out.push({ kind: "art", art: { ident, title: (attr(tag, "title") ?? ident).trim().slice(0, 200) || ident, type, lang: attr(tag, "language"), content: unfence(body), complete: close !== -1 } });
+    out.push({ kind: "art", art: { ident, title: (attr(tag, "title") ?? (patch ? "" : ident)).trim().slice(0, 200) || (patch ? "" : ident), type, lang: attr(tag, "language"), content: unfence(body), complete: close !== -1, ...(patch ? { patch } : {}) } });
     pos = close === -1 ? text.length : close + "</artifact>".length;
     re.lastIndex = pos;
   }
@@ -76,7 +79,13 @@ Lưu dữ liệu (ứng dụng ghi chú, danh sách việc, chấm công, khảo
 HTML: có thể nạp thư viện từ cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com. Artifact không gọi được mạng (fetch/XHR bị chặn).
 Bản trình bày (slide): một trang text/html, mỗi slide là một <section class="slide"> chiếm trọn khung 16:9 (width:100vw; height:100vh; box-sizing:border-box). Synchro tự lo chuyển slide, ảnh thu nhỏ, trình chiếu toàn màn hình và xuất PDF / PowerPoint, nên KHÔNG viết JS điều hướng, thanh tiến trình hay số trang riêng; chỉ cần CSS cho từng slide.
 Người dùng tải được mọi artifact (HTML, PDF, PNG, Word cho tài liệu…) ngay trong khung xem trước; tệp Word / Excel / PowerPoint / PDF thật tạo bằng run_code cũng xem trước được cạnh cuộc trò chuyện.
-Sửa artifact đã có: viết lại toàn bộ với CÙNG identifier (sẽ thành phiên bản mới). Mỗi câu trả lời chỉ nên có một artifact. Không đặt câu trả lời ngắn, đoạn code nhỏ, hay giải thích vào artifact.
+Sửa artifact đã có (bản hiện tại nằm trong <current_artifacts> ở tin nhắn mới nhất): KHÔNG viết lại cả tệp. Gửi bản sửa với CÙNG identifier và mode="patch", nội dung là một hay nhiều khối:
+<<<<<<< SEARCH
+(vài dòng chép NGUYÊN VĂN từ bản hiện tại, đủ để chỉ duy nhất một chỗ)
+=======
+(các dòng thay thế)
+>>>>>>> REPLACE
+Ví dụ: <artifact identifier="todo-app" mode="patch">…các khối…</artifact>. Mỗi khối càng ngắn càng tốt; SEARCH rỗng là thêm vào cuối tệp. Chỉ viết lại toàn bộ (không có mode) khi thay đổi quá nửa nội dung hoặc đổi kiểu artifact. Thẻ artifact tự đóng có version="…" trong lịch sử chỉ là chỗ đánh dấu phiên bản cũ; có patch_failed nghĩa là bản sửa đó không áp được, hãy sửa lại dựa trên bản hiện tại. Mỗi câu trả lời chỉ nên có một artifact. Không đặt câu trả lời ngắn, đoạn code nhỏ, hay giải thích vào artifact.
 Bên ngoài artifact chỉ viết vài câu ngắn giới thiệu hoặc hướng dẫn dùng; đừng lặp lại nội dung artifact.${ai ? `
 Artifact gọi được model AI: await window.synchro.complete(prompt) trả về chuỗi câu trả lời (prompt là chuỗi, hoặc mảng [{role:"user"|"assistant", content}] cho hội thoại nhiều lượt). Dùng cho ứng dụng có AI bên trong (dịch, tóm tắt, trò chuyện, gợi ý…). Mỗi lần gọi không nhớ lần trước: muốn giữ ngữ cảnh thì gửi cả lịch sử. Khi cần dữ liệu có cấu trúc, yêu cầu model trả JSON và JSON.parse kết quả (bọc try/catch). Luôn hiện trạng thái đang chờ và xử lý lỗi.` : `
 Artifact KHÔNG gọi được model AI (người dùng đang tắt "Artifact dùng AI"). Nếu người dùng muốn ứng dụng có AI bên trong, hãy làm phần giao diện và nói họ bật Cài đặt → Khả năng → Artifact dùng AI.`}

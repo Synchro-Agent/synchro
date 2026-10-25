@@ -138,10 +138,12 @@ export function removeUserKb(uid: string) {
 }
 
 /** Khối ngữ cảnh cho model: trí nhớ nhóm + các đoạn tài liệu liên quan có đánh số để trích dẫn. */
-export function knowledgePrompt(u: UserRow, q: string): { prompt: string; sources: Omit<KbHit, "score">[] } {
+// memory: trí nhớ nhóm (ít đổi → để ở phần đầu prompt, đọc từ bộ đệm); knowledge: đoạn tài liệu tìm theo câu hỏi mới nhất
+// (đổi mỗi lượt → để ở tầng động cuối prompt, không làm hỏng bộ đệm của phần đầu).
+export function knowledgePrompt(u: UserRow, q: string): { prompt: string; memory: string; knowledge: string; sources: Omit<KbHit, "score">[] } {
   const hits = searchKb(u, q);
   const mem = listMemory(u).slice(0, 40);
-  if (!hits.length && !mem.length) return { prompt: "", sources: [] };
+  if (!hits.length && !mem.length) return { prompt: "", memory: "", knowledge: "", sources: [] };
   const parts: string[] = [];
   if (mem.length) parts.push(`<team_memory>\nNhững điều tổ chức và người dùng muốn bạn luôn nhớ (áp dụng khi liên quan):\n${mem.map((m) => `- ${m.content}${m.scope === "org" ? " (cả tổ chức)" : ""}`).join("\n")}\n</team_memory>`);
   if (hits.length) parts.push(`<knowledge>
@@ -149,5 +151,6 @@ Các đoạn sau lấy từ kho tài liệu của tổ chức, liên quan đến
 Khi dùng thông tin từ một đoạn, ghi số nguồn ngay sau câu đó, ví dụ [1] hoặc [1][3]. Không bịa nguồn; tài liệu không nói tới thì nói rõ là kho tài liệu chưa có.
 ${hits.map((h) => `<source n="${h.n}" title="${h.title.replace(/"/g, "'")}">\n${h.text}\n</source>`).join("\n")}
 </knowledge>`);
-  return { prompt: parts.join("\n\n"), sources: hits.map(({ score: _s, ...h }) => ({ ...h, text: h.text.slice(0, 600) })) };
+  const memory = mem.length ? parts[0] : "", knowledge = hits.length ? parts[parts.length - 1] : "";
+  return { prompt: parts.join("\n\n"), memory, knowledge, sources: hits.map(({ score: _s, ...h }) => ({ ...h, text: h.text.slice(0, 600) })) };
 }

@@ -7,14 +7,17 @@ import type { Project } from "./store";
 import { makeReply } from "./md";
 import type { ContentBlock } from "./fileproc/types";
 import type { Effort } from "./catalog";
+import type { TraceItem } from "./transpile";
 
 export const CHUNK_SIZE = 1500;
 export const SMALL_DOC_LIMIT = 12000;
 export const TOP_K = 5;
-export const HISTORY_LIMIT = 20;
+// Máy chủ tự rút gọn lịch sử (artifact cũ thành tham chiếu, kết quả công cụ thành tóm tắt) nên gửi được nhiều lượt hơn.
+export const HISTORY_LIMIT = 60;
 export const MEMORY_EVERY_N_USER_MSGS = 4;
 
-export type LLMMsg = { role: "user" | "assistant"; content: string | ContentBlock[] };
+// trace: dấu vết công cụ của câu trả lời (chuẩn Synchro), gửi lại để model ở lượt sau, kể cả model khác hãng, biết đã làm gì.
+export type LLMMsg = { role: "user" | "assistant"; content: string | ContentBlock[]; trace?: TraceItem[] };
 export const textOf = (c: LLMMsg["content"]) => (typeof c === "string" ? c : c.map((b) => (b.type === "text" ? b.text : b.type === "image" ? "[ảnh]" : `[PDF ${b.name ?? ""}]`)).join("\n"));
 
 // Mặc định gọi /api/llm của chính Synchro (khóa API do quản trị viên nhập ở Cài đặt → API).
@@ -56,6 +59,14 @@ let lastSources: KbSource[] = [];
 export const takeSources = () => { const s = lastSources; lastSources = []; return s; };
 /** Tệp code vừa tạo ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeOutputs = () => { const f = lastFiles; lastFiles = []; return f; };
+// Dấu vết công cụ và cờ "người dùng đã dừng" của lượt vừa rồi (đọc một lần).
+let lastTrace: TraceItem[] = [];
+export const takeTrace = () => { const t = lastTrace; lastTrace = []; return t; };
+let lastCancelled = false;
+export const takeCancelled = () => { const c = lastCancelled; lastCancelled = false; return c; };
+/** Nút Dừng: hủy lượt đang chạy ở máy chủ (không chỉ ngừng hiển thị) để không tốn thêm token. */
+export const cancelRun = (id: string) => fetch(`/api/runs/${encodeURIComponent(id)}`, { method: "DELETE" }).then(() => undefined, () => undefined);
+type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void };
 
 // Model đang chọn trong giao diện; máy chủ kiểm tra tài khoản có được phép dùng model này không.
 let activeModel = "";
@@ -69,19 +80,28 @@ export class LLMError extends Error { constructor(m: string, public status: numb
 // opts.feature: "code" khi gọi từ Synchro Code; opts.project: id dự án đang chat (bật skill riêng của dự án).
 // Lượt chạy bền: máy chủ chạy câu trả lời ở nền, trình duyệt theo dõi qua SSE (tự nối lại khi rớt mạng).
 // onProgress nhận các bước đang làm ("Đang đọc skill …"); kết quả cuối giống hệt /api/llm trả về.
-export function waitRun(id: string, onProgress?: (text: string) => void): Promise<{ http: number; result: Record<string, unknown> }> {
+// onDelta nhận toàn bộ chữ model đã viết ở bước hiện tại mỗi khi có thêm chữ (truyền theo thời gian thực).
+export function waitRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void): Promise<{ http: number; result: Record<string, unknown> }> {
   return new Promise((ok, no) => {
     let settled = false;
     const es = new EventSource(`/api/runs/${encodeURIComponent(id)}`);
     const end = (f: () => void) => { if (settled) return; settled = true; es.close(); f(); };
     es.addEventListener("step", (e) => { try { onProgress?.(JSON.parse((e as MessageEvent).data).text); } catch {} });
+    let step = -1, text = "";
+    const take = (d: { s: number; t?: string; text?: string; reset?: boolean }) => {
+      if (d.s !== step || d.reset) { step = d.s; text = ""; }
+      text += d.text ?? d.t ?? "";
+      onDelta?.(text);
+    };
+    es.addEventListener("snapshot", (e) => { try { const d = JSON.parse((e as MessageEvent).data); step = -1; take(d); } catch {} });
+    es.addEventListener("delta", (e) => { try { take(JSON.parse((e as MessageEvent).data)); } catch {} });
     es.addEventListener("done", (e) => { try { const d = JSON.parse((e as MessageEvent).data); end(() => ok({ http: d.http ?? 502, result: d.result ?? {} })); } catch (x) { end(() => no(x)); } });
     // Rớt kết nối: EventSource tự nối lại (gửi Last-Event-ID). Chỉ khi máy chủ từ chối hẳn mới hỏi trạng thái một lần.
     es.onerror = () => {
       if (es.readyState !== EventSource.CLOSED) return;
       fetch(`/api/runs/${encodeURIComponent(id)}?json=1`).then((r) => r.json().then((j) => ({ r, j }))).then(({ r, j }) => {
         if (!r.ok) return end(() => no(new LLMError(j.error || `Run ${r.status}`, r.status)));
-        if (j.run.status === "running") return end(() => ok(waitRun(id, onProgress) as never));
+        if (j.run.status === "running") return end(() => ok(waitRun(id, onProgress, onDelta) as never));
         end(() => ok({ http: j.run.http ?? 502, result: j.run.result ?? {} }));
       }, (x) => end(() => no(x)));
     };
@@ -89,15 +109,24 @@ export function waitRun(id: string, onProgress?: (text: string) => void): Promis
 }
 
 // Kết quả một lượt (từ /api/llm hoặc lượt chạy bền) → văn bản; skill, thư viện, tệp đã dùng đọc qua take…().
-async function absorb(j: Record<string, any>): Promise<string> { // eslint-disable-line @typescript-eslint/no-explicit-any
+async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Máy chủ dừng chờ duyệt công cụ: hỏi người dùng rồi gửi quyết định để máy chủ chạy tiếp (một lượt có thể hỏi nhiều lần).
+  // Phần chạy tiếp cũng là lượt chạy nền: vẫn truyền chữ và dừng được.
   for (let n = 0; j.approval && n < 20; n++) {
     const calls = (j.approval.calls ?? []) as ApprovalCall[];
     const decisions = approver ? await approver(calls).catch(() => ({})) : {};
-    const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions }) });
+    const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions, async: true }) });
     if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new LLMError(e.error || `LLM ${r2.status}`, r2.status); }
     j = await r2.json();
+    if (typeof j.run === "string") {
+      cb.onRun?.(j.run);
+      const { http, result } = await waitRun(j.run, cb.onProgress, cb.onDelta);
+      if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http);
+      j = result;
+    }
   }
+  lastTrace = Array.isArray(j.trace) ? j.trace : [];
+  lastCancelled = j.cancelled === true;
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
   lastLibs = Array.isArray(j.libs) ? j.libs : [];
   lastFiles = Array.isArray(j.files) ? j.files : [];
@@ -109,15 +138,15 @@ async function absorb(j: Record<string, any>): Promise<string> { // eslint-disab
 }
 
 /** Mở lại một lượt đang chạy (sau khi tải lại trang): chờ kết quả rồi trả lời như callLLM. */
-export async function attachRun(id: string, onProgress?: (text: string) => void): Promise<string> {
+export async function attachRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = [];
-  const { http, result } = await waitRun(id, onProgress);
+  const { http, result } = await waitRun(id, onProgress, onDelta);
   if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http);
-  return absorb(result);
+  return absorb(result, { onProgress, onDelta });
 }
 
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void } = {}): Promise<string> {
-  lastSkills = []; lastFiles = []; lastLibs = [];
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void } = {}): Promise<string> {
+  lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
   if (!hasLLM) {
     // Chưa có model: trả lời giả lập từ câu hỏi cuối.
     const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
@@ -132,11 +161,11 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   const j = await r.json();
   if (typeof j.run === "string") {
     opts.onRun?.(j.run);
-    const { http, result } = await waitRun(j.run, opts.onProgress);
+    const { http, result } = await waitRun(j.run, opts.onProgress, opts.onDelta);
     if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http);
-    return absorb(result);
+    return absorb(result, opts);
   }
-  return absorb(j);
+  return absorb(j, opts);
 }
 
 // Artifact dùng AI: window.synchro.complete(prompt) bên trong artifact → model đang chọn (không công cụ, không skill).

@@ -332,7 +332,57 @@ const QUYET_DINH = JSON.stringify({
 }, null, 2);
 const art = (ident, type, title, content, extra = "") => `<artifact identifier="${ident}" type="${type}" title="${title}"${extra}>\n${content}\n</artifact>`;
 
-function lastArtifact(msgs) {
+// Bản hiện tại của artifact: Synchro gửi ở <current_artifacts> (các bản cũ trong lịch sử chỉ còn thẻ tham chiếu).
+function currentArtifact(sys) {
+  // Khối thật luôn xuống dòng ngay sau thẻ mở (hướng dẫn hệ thống chỉ nhắc tên thẻ giữa câu).
+  const blk = /<current_artifacts>\n([\s\S]*?)<\/current_artifacts>/.exec(sys ?? "");
+  const m = blk && /<artifact\b([^>]*)>\n?([\s\S]*?)\n?<\/artifact>/.exec(blk[1]);
+  if (!m) return null;
+  const g = (k) => new RegExp(`${k}="([^"]*)"`).exec(m[1])?.[1] ?? "";
+  return { ident: g("identifier"), type: g("type"), title: g("title").replace(/&quot;/g, '"').replace(/&amp;/g, "&"), body: m[2] };
+}
+// Như model thật khi được dặn sửa bằng SEARCH/REPLACE: chỉ gửi các đoạn đổi, mỗi đoạn kèm một dòng ngữ cảnh.
+function patchOf(a, b) {
+  const A = a.split("\n"), B = b.split("\n");
+  const hunks = [];
+  if (A.length === B.length) {
+    for (let i = 0; i < A.length; i++) {
+      if (A[i] === B[i]) continue;
+      let j = i; while (j + 1 < A.length && A[j + 1] !== B[j + 1]) j++;
+      const from = Math.max(0, i - 1);
+      hunks.push([A.slice(from, j + 1).join("\n"), B.slice(from, j + 1).join("\n")]);
+      i = j;
+    }
+  } else {
+    let p = 0; while (p < A.length && p < B.length && A[p] === B[p]) p++;
+    let q = 0; while (q < A.length - p && q < B.length - p && A[A.length - 1 - q] === B[B.length - 1 - q]) q++;
+    const from = Math.max(0, p - 1);
+    hunks.push([A.slice(from, A.length - q).join("\n"), B.slice(from, B.length - q).join("\n")]);
+  }
+  return hunks.map(([x, y]) => `<<<<<<< SEARCH\n${x}\n=======\n${y}\n>>>>>>> REPLACE`).join("\n");
+}
+const wantsPatch = (sys) => String(sys ?? "").includes('mode="patch"');
+// Artifact sửa: bản patch nếu Synchro yêu cầu (và có bản hiện tại), không thì viết lại toàn bộ như trước.
+const edited = (sys, prev, body) => (wantsPatch(sys) && prev.fromCurrent ? `<artifact identifier="${prev.ident}" mode="patch">\n${patchOf(prev.body, body)}\n</artifact>` : art(prev.ident, prev.type, prev.title, body));
+/** #rev N: sửa nhỏ, xác định được (dùng để thử sửa artifact nhiều lần liên tiếp, kể cả sau khi gọi công cụ). */
+export function revReply(sys, q, msgs) {
+  // #badpatch: bản sửa có SEARCH không khớp (thử bước tự vá); Synchro nhắc lại thì viết lại toàn bộ như model thật.
+  const prev0 = lastArtifact(msgs, sys);
+  if (prev0 && /ban sua artifact chua ap duoc|bản sửa artifact chưa áp được/.test(String(q))) return `Mình viết lại toàn bộ cho chắc:\n\n${art(prev0.ident, prev0.type, prev0.title, prev0.body.replace(/<\/title>/, "</title><!-- healed -->"))}`;
+  if (prev0 && /#badpatch/.test(String(q)) && wantsPatch(sys)) return `Đã sửa.\n\n<artifact identifier="${prev0.ident}" mode="patch">\n<<<<<<< SEARCH\ndòng này không có trong tệp\n=======\nthay thế\n>>>>>>> REPLACE\n</artifact>`;
+  const n = /#rev\s*(\d+)/.exec(String(q))?.[1];
+  const prev = n && lastArtifact(msgs, sys);
+  if (!prev) return null;
+  const lines = prev.body.split("\n");
+  let i = lines.findIndex((l) => /<title>|export default function/.test(l));
+  if (i < 0) i = 0;
+  lines[i] = /<title>/.test(lines[i]) ? lines[i].replace(/<\/title>.*$/, `</title><!-- rev ${n} -->`) : lines[i].replace(/\s*\/\/ rev \d+$/, "") + ` // rev ${n}`;
+  return `Đã sửa lần ${n}.\n\n${edited(sys, prev, lines.join("\n"))}`;
+}
+
+function lastArtifact(msgs, sys) {
+  const cur = currentArtifact(sys);
+  if (cur) return { ...cur, fromCurrent: true };
   for (const m of [...(msgs ?? [])].reverse()) {
     if (m.role !== "assistant") continue;
     const t = typeof m.content === "string" ? m.content : (m.content ?? []).map((b) => b.text ?? "").join("");
@@ -348,14 +398,16 @@ function lastArtifact(msgs) {
 
 function artifactReply(t, sys, msgs) {
   const ai = !sys.includes("KHÔNG gọi được model AI");
-  const prev = lastArtifact(msgs);
-  // Sửa lỗi / chỉnh artifact đã có → phiên bản mới cùng identifier.
+  const prev = lastArtifact(msgs, sys);
+  const rev = revReply(sys, t, msgs);
+  if (rev) return rev;
+  // Sửa lỗi / chỉnh artifact đã có → phiên bản mới cùng identifier (bản sửa SEARCH/REPLACE khi Synchro yêu cầu).
   if (prev && has(t, /\b(gap loi|sua loi|loi)\b/) && prev.body.includes("const items = undefined"))
-    return `Lỗi do \`items\` chưa có giá trị nên không đọc được \`.length\`. Mình đã gán danh sách mẫu cho \`items\`:\n\n${art(prev.ident, prev.type, prev.title, FIXED)}\n\nGiờ artifact chạy bình thường.`;
+    return `Lỗi do \`items\` chưa có giá trị nên không đọc được \`.length\`. Mình đã gán danh sách mẫu cho \`items\`:\n\n${edited(sys, { ...prev, type: prev.type || "application/vnd.react" }, prev.body.replace("const items = undefined;", "const items = [\"Táo\", \"Cam\", \"Xoài\"];"))}\n\nGiờ artifact chạy bình thường.`;
   if (prev && has(t, /\b(doi mau|mau xanh la|mau khac|sua|chinh|cap nhat|them|lam lai|giao dien toi|dark)\b/)) {
     let body = prev.body.replace(/blue-/g, "emerald-").replace(/#2f7bf6/gi, "#16a34a").replace(/indigo-/g, "emerald-");
     if (body === prev.body) body = body.replace(/(<\/style>)/, "  body{filter:hue-rotate(110deg)}\n$1");
-    return `Đã cập nhật **${prev.title}** sang tông xanh lá. Bạn có thể dùng mũi tên phiên bản ở khung bên phải để so với bản trước.\n\n${art(prev.ident, prev.type, prev.title, body)}`;
+    return `Đã cập nhật **${prev.title}** sang tông xanh lá. Bạn có thể dùng mũi tên phiên bản ở khung bên phải để so với bản trước.\n\n${edited(sys, prev, body)}`;
   }
   if (has(t, /\b(bang tin nhom|ghi chu nhom|ghi chu chung)\b/)) return `Mình đã làm bảng tin nhóm, ghi chú được lưu lại và dùng chung cho mọi người (window.storage). Bấm nút tên lửa trên khung xem trước để xuất bản thành ứng dụng cho cả tổ chức.\n\n${art("bang-tin-nhom", "text/html", "Bảng tin nhóm", NOTES)}`;
   if (has(t, /#artbug/)) return `Đây là bộ đếm đơn giản:\n\n${art("bo-dem", "application/vnd.react", "Bộ đếm", BUGGY)}`;
@@ -583,8 +635,8 @@ function artifactAi(q) {
 
 // Trả về { text } (trả lời luôn) hoặc { tool: { name, args } } (gọi công cụ), hoặc null.
 // "Chỉ và sửa": người dùng chỉ vào một phần tử trong artifact và yêu cầu sửa riêng phần đó → phiên bản mới, chỉ phần đó đổi.
-function pointEdit(q, msgs) {
-  const prev = lastArtifact(msgs);
+function pointEdit(q, msgs, sys) {
+  const prev = lastArtifact(msgs, sys);
   const blk = /<point_edit>([\s\S]*?)<\/point_edit>/.exec(q);
   if (!prev || !blk) return null;
   const get = (k) => new RegExp(`${k}:\\s*([^\\n]*)`).exec(blk[1])?.[1]?.trim() ?? "";
@@ -603,7 +655,7 @@ function pointEdit(q, msgs) {
   }
   if (!what && /(ẩn|xóa|xoá|bỏ)/i.test(req)) { body = body.replace(/(<\/style>)/, `  ${sel}{display:none!important}\n$1`); what = `ẩn phần tử ${sel.split(" > ").pop()}`; }
   if (!what) return null;
-  return `Mình chỉ sửa đúng phần bạn chỉ vào (${what}), mọi phần khác giữ nguyên:\n\n${art(prev.ident, prev.type, prev.title, body)}`;
+  return `Mình chỉ sửa đúng phần bạn chỉ vào (${what}), mọi phần khác giữ nguyên:\n\n${edited(sys, prev, body)}`;
 }
 
 // Biên bản cuộc họp: như model thật, đọc nội dung họp rồi trả JSON (người tham dự, quyết định, việc cần làm kèm người và hạn chót).
@@ -663,7 +715,7 @@ export function capsReply(sys, q, msgs, toolNames) {
   const t = norm(q);
   const s = String(sys ?? "");
   if (s.includes("<meeting_minutes>")) return { text: meetingMinutes(String(q), s) };
-  if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs); if (pe) return { text: pe }; }
+  if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs, s); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
   if (s.includes("<ask_user>")) { const a = askReply(t, msgs); if (a) return { text: a }; }
   if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }

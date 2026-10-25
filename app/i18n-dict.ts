@@ -970,6 +970,8 @@ Object.assign(EN2VI, {
   "Done": "Xong",
 });
 Object.assign(VI2EN, {
+  "Đang sửa…": "Editing…", "Đã sửa": "Edited", "chỗ": "places", "Bản sửa chưa khớp": "Edit didn't apply in", "Nhờ viết lại toàn bộ": "Ask to rewrite in full",
+  "Bản sửa": "The edit to", "không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.": "didn't apply. Please rewrite this whole artifact (without mode=\"patch\"), keeping the changes I just asked for.",
   "Đang tạo…": "Creating…", "Phiên bản": "Version", "phiên bản": "versions", "Nhấn để mở": "Click to open", "Đang mở": "Open", "Mã": "Code",
   "Chạy lại": "Run again", "Toàn màn hình": "Full screen", "Thu nhỏ": "Exit full screen", "Phiên bản trước": "Previous version", "Phiên bản sau": "Next version",
   "Artifact gặp lỗi": "This artifact hit an error", "Nhờ Synchro sửa": "Ask Synchro to fix", "Đã sao chép nội dung artifact": "Artifact copied", "Đã tải": "Downloaded",

@@ -2,9 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { AuthUser } from "./auth";
+import type { TraceItem } from "./transpile";
 import { ls } from "./userscope";
 
-export type Msg = { role: "user" | "ai"; text: string; done?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string; src?: { n: number; doc: string; title: string; scope: "private" | "org"; chunk: number; text: string }[] };
+// trace: dấu vết công cụ (chuẩn Synchro) gửi lại ở lượt sau; stopped: người dùng đã bấm Dừng giữa chừng.
+export type Msg = { role: "user" | "ai"; text: string; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string; src?: { n: number; doc: string; title: string; scope: "private" | "org"; chunk: number; text: string }[] };
 export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean; studio?: "design" | "slides" | "docs" };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };
 

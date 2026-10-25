@@ -32,10 +32,15 @@ function init() {
 }
 
 // Người đang theo dõi từng lượt (các kết nối SSE); toàn cục để sống qua lần nạp lại module khi phát triển.
-const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: { event?: RunEvent; done?: PublicRun }) => void>> };
+// delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
+export type Delta = { s: number; t?: string; reset?: boolean };
+type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
+const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, { s: number; text: string; ctl: AbortController; conv: string | null; uid: string }> };
 const subs = (g.__synchroRunSubs ??= new Map());
-const notify = (id: string, m: { event?: RunEvent; done?: PublicRun }) => { for (const f of subs.get(id) ?? []) try { f(m); } catch {} };
-export function watch(id: string, f: (m: { event?: RunEvent; done?: PublicRun }) => void) {
+// Lượt đang chạy trong tiến trình này: chữ đang viết (để người mở lại trang thấy ngay phần đã có) và bộ hủy.
+const live = (g.__synchroRunLive ??= new Map());
+const notify = (id: string, m: Msg) => { for (const f of subs.get(id) ?? []) try { f(m); } catch {} };
+export function watch(id: string, f: (m: Msg) => void) {
   const s = subs.get(id) ?? subs.set(id, new Set()).get(id)!;
   s.add(f);
   return () => { s.delete(f); if (!s.size) subs.delete(id); };
@@ -50,6 +55,35 @@ export const listRuns = (uid: string, limit = 50) => (init().prepare("SELECT * F
 
 // Tiến độ của lượt đang chạy: toolLoop gọi progress(...) mà không cần truyền id đi khắp nơi.
 const scope = new AsyncLocalStorage<{ id: string }>();
+/** Chữ đang viết của lượt (null nếu lượt không chạy trong tiến trình này). */
+export const liveText = (id: string) => { const l = live.get(id); return l ? { s: l.s, text: l.text } : null; };
+/** Lượt đang chạy của một đoạn chat (để người xem chung nhận chữ đang viết). */
+export const liveRunOf = (uid: string, conv: string) => { for (const [id, l] of live) if (l.uid === uid && l.conv === conv) return id; return null; };
+/** Chữ đã viết ở bước hiện tại của lượt đang chạy (dùng khi người dùng bấm Dừng giữa chừng). */
+export const liveNow = () => { const s = scope.getStore(); return s ? live.get(s.id)?.text ?? "" : ""; };
+/** Tín hiệu hủy của lượt đang chạy: truyền vào mọi lời gọi model, connector, chạy code. */
+export const runSignal = (): AbortSignal | undefined => { const s = scope.getStore(); return s ? live.get(s.id)?.ctl.signal : undefined; };
+/** Chữ model vừa viết (không ghi vào cơ sở dữ liệu, chỉ gửi cho người đang theo dõi). */
+export function delta(t: string) {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l || !t) return;
+  l.text += t;
+  notify(s!.id, { delta: { s: l.s, t } });
+}
+/** Bắt đầu bước mới của vòng lặp công cụ: chữ của bước trước (thường là câu dẫn trước khi gọi công cụ) được thay. */
+export function deltaStep() {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l) return;
+  l.s++; l.text = "";
+  notify(s!.id, { delta: { s: l.s, reset: true } });
+}
+/** Người dùng bấm Dừng: hủy mọi lời gọi đang chạy của lượt; lượt kết thúc với phần đã viết được. */
+export function cancelRun(id: string, uid: string): boolean {
+  const l = live.get(id);
+  if (!l || l.uid !== uid) return false;
+  l.ctl.abort();
+  return true;
+}
 export function progress(kind: RunEvent["kind"], text: string) {
   const s = scope.getStore();
   if (!s) return;
@@ -80,6 +114,7 @@ if (!gs.__synchroStopHook) {
 
 function finish(id: string, http: number, json: unknown) {
   if (gs.__synchroStopping && http >= 500) return;
+  live.delete(id);
   const status: RunStatus = http >= 200 && http < 300 ? "done" : "error";
   // Lượt xong thì bỏ nội dung yêu cầu (có thể chứa ảnh, tệp) cho nhẹ cơ sở dữ liệu.
   init().prepare("UPDATE runs SET status = ?, http = ?, result = ?, req = NULL, updated_at = ? WHERE id = ?").run(status, http, JSON.stringify(json), Date.now(), id);
@@ -87,7 +122,8 @@ function finish(id: string, http: number, json: unknown) {
   if (r) notify(id, { done: r });
 }
 
-function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow) {
+function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null) {
+  live.set(id, { s: 0, text: "", ctl: new AbortController(), conv, uid: user.id });
   scope.run({ id }, () => {
     (async () => {
       // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.
@@ -107,7 +143,7 @@ export function startRun(user: UserRow, kind: string, body: Record<string, unkno
   const now = Date.now();
   init().prepare("INSERT INTO runs (id, user_id, conv, kind, status, req, events, created_at, updated_at) VALUES (?, ?, ?, ?, 'running', ?, '[]', ?, ?)")
     .run(id, user.id, conv ?? null, kind, raw.length <= REQ_MAX ? raw : null, now, now);
-  launch(id, kind, body, user);
+  launch(id, kind, body, user, conv ?? null);
   return id;
 }
 
@@ -120,7 +156,7 @@ export function resumeInterrupted() {
     if (!r.req || !user || r.attempts >= MAX_ATTEMPTS) { finish(r.id, 503, { error: "Lượt trả lời bị gián đoạn khi máy chủ khởi động lại. Hãy gửi lại tin nhắn." }); continue; }
     d.prepare("UPDATE runs SET attempts = attempts + 1, updated_at = ? WHERE id = ?").run(Date.now(), r.id);
     scope.run({ id: r.id }, () => progress("note", "Máy chủ vừa khởi động lại, Synchro đang chạy lại lượt này"));
-    launch(r.id, r.kind, JSON.parse(r.req), user);
+    launch(r.id, r.kind, JSON.parse(r.req), user, r.conv);
   }
   return rows.length;
 }
