@@ -71,8 +71,19 @@
 }
 
 *{box-sizing:border-box}
+/* ===================== Biến thiết kế: chữ, độ đậm, nhịp hàng, icon. Chỉnh giao diện lõi ở đây, đừng ghi đè ở cuối tệp. ===================== */
+:root{
+  --fs-ui:14px;--fs-chat:13.5px;--fs-label:12.5px;          /* chữ điều hướng, danh sách chat, nhãn nhóm */
+  --fw-body:400;--fw-ui:430;--fw-strong:500;               /* đoạn văn, chữ trên nút/mục, mục đang chọn */
+  --row:32px;--row-chat:30px;--row-menu:34px;--row-set:34px; /* chiều cao hàng: thanh bên, chat, menu, Cài đặt */
+  --icon:18px;--icon-set:19px;--gap-nav:11px;
+  --icon-stroke:1.34px;--icon-stroke-strong:1.5px;          /* bằng thân chữ đứng cạnh (Anthropic Sans 14px: đậm 430, đậm 500) */
+  --ink:#3d3d3a;--ink-strong:#141413;                       /* mực chữ điều hướng: dịu hơn chữ nội dung */
+}
+[data-theme="dark"]{--ink:#dedcd4;--ink-strong:#faf9f5}
+
 html,body{height:100%;margin:0}
-body{font-family:var(--font-sans);font-weight:360;font-size:14px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;transition:background .3s,color .3s}
+body{font-family:var(--font-sans);font-weight:var(--fw-body);font-size:14px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;transition:background .3s,color .3s}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 input,textarea{font:inherit;color:inherit;outline:0}
 ::placeholder{color:var(--text-3)}
@@ -81,19 +92,21 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .app{display:flex;height:100vh;overflow:hidden}
 .sidebar{width:290px;padding-left:3px;flex:none;background:var(--sidebar);border-right:.5px solid var(--border);display:flex;flex-direction:column;transition:margin-left .3s var(--ease),background .3s;position:relative;z-index:5}
 .sidebar.closed{margin-left:-290px}
-.side-top{height:54px;display:flex;align-items:center;padding:0 12px;gap:10px}
-.logo{font-family:var(--font-serif);font-size:22px;letter-spacing:-.02em}
+.side-top{height:48px;display:flex;align-items:center;padding:0 12px;gap:10px}
+.logo{font-family:var(--font-serif);font-size:20px;font-weight:500;letter-spacing:-.02em}
 .icon-btn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--text-2);transition:background .15s,color .15s}
 .icon-btn:hover{background:var(--hover);color:var(--text)}
 .nav{padding:4px 8px;display:flex;flex-direction:column;gap:2px}
-.nav-item{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:8px;font-size:14px;color:var(--text);transition:background .15s}
+.nav-item{display:flex;align-items:center;gap:var(--gap-nav);height:var(--row);padding:0 10px;border-radius:8px;font-size:var(--fs-ui);font-weight:var(--fw-ui);color:var(--ink);transition:background .15s}
+.nav-item>svg{width:var(--icon);height:var(--icon);flex:none}
+.nav-item .plus{width:18px;height:18px}
 .nav-item:hover{background:var(--hover)}
 .nav-item.active{background:var(--active)}
 .nav-item .tag{margin-left:auto;font-size:12px;color:var(--link)}
 .nav-item .plus{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#2f7bf6;color:#fff;margin-left:-2px;margin-right:-2px}
-.section-label{display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 18px;margin-top:20px;font-size:12px;color:var(--text-3);height:28px}
+.section-label{display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 18px;margin-top:18px;font-size:var(--fs-label);font-weight:var(--fw-ui);color:var(--text-3);height:26px}
 .chat-list{flex:1;overflow:auto;padding:4px 8px}
-.chat-item{display:block;width:100%;text-align:left;height:32px;line-height:32px;padding:0 10px;border-radius:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:fadeIn .3s var(--ease)}
+.chat-item{display:block;width:100%;text-align:left;height:var(--row-chat);line-height:var(--row-chat);padding:0 10px;border-radius:8px;font-size:var(--fs-chat);font-weight:var(--fw-ui);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:fadeIn .3s var(--ease)}
 .chat-item:hover{background:var(--hover)}
 .chat-item.active{background:var(--active)}
 .side-bottom{height:52px;display:flex;align-items:center;padding:0 12px;gap:4px;position:relative}
@@ -138,7 +151,7 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .menu{position:absolute;min-width:224px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:30;animation:pop .16s var(--ease) both;transform-origin:bottom left}
 .menu.down{transform-origin:top right}
 .menu hr{border:0;border-top:.5px solid var(--border);margin:6px 8px}
-.menu-item{display:flex;align-items:center;gap:12px;width:100%;height:34px;padding:0 10px;border-radius:8px;font-size:14px;text-align:left}
+.menu-item{display:flex;align-items:center;gap:12px;width:100%;height:var(--row-menu);padding:0 10px;border-radius:8px;font-size:var(--fs-ui);font-weight:var(--fw-ui);color:var(--ink);text-align:left}
 .menu-item:hover{background:var(--hover)}
 .menu-item .sc{margin-left:auto;font-size:12px;color:var(--text-3)}
 .menu-item .ck{margin-left:auto;color:var(--toggle-on)}
@@ -182,8 +195,10 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .s-nav{width:200px;flex:none;border-right:.5px solid var(--border);background:var(--sidebar);padding:16px 8px;overflow:auto}
 .s-search{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:8px;background:var(--hover);margin:0 0 16px;color:var(--text-3)}
 .s-search input{background:transparent;border:0;flex:1;min-width:0}
-.s-group{font-size:12px;color:var(--text-3);padding:0 10px;margin:0 0 6px}
-.s-item{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 10px;border-radius:8px;font-size:14px;text-align:left;transition:background .15s}
+.s-group{font-size:var(--fs-label);font-weight:var(--fw-ui);color:var(--text-3);padding:0 10px;margin:0 0 6px}
+.s-item{display:flex;align-items:center;gap:12px;width:100%;height:var(--row-set);padding:0 10px;border-radius:8px;font-size:var(--fs-ui);font-weight:var(--fw-ui);color:var(--ink);text-align:left;transition:background .15s}
+.s-item>svg{width:var(--icon-set);height:var(--icon-set)}
+.nav-item.active,.s-item.on,.chat-item.active{font-weight:var(--fw-strong);color:var(--ink-strong)}
 .s-item:hover{background:var(--hover)}
 .s-item.on{background:var(--active)}
 .s-body{flex:1;overflow:auto;padding:24px 28px;animation:fadeIn .25s both}
@@ -1570,15 +1585,7 @@ body.cv-dragging iframe,body.cv-dragging .bp-view{pointer-events:none}
 .gh-cur .btn{display:flex;align-items:center;gap:6px;align-self:flex-start;text-decoration:none;color:var(--text)}
 .gh-err{font-size:12.5px;color:#c92a2a;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,#e03131 8%,transparent)}
 
-/* ===================== Cỡ chữ và mật độ giống Claude (thanh bên 13px, khung chat 14px) ===================== */
-.side-top{height:48px}
-.logo{font-size:20px}
-.nav{gap:1px}
-.nav-item{height:28px;font-size:13px;gap:9px}
-.nav-item>svg{width:16px;height:16px;flex:none}
-.nav-item .plus{width:18px;height:18px}
-.chat-item{height:28px;line-height:28px;font-size:13px}
-.section-label{margin-top:16px;height:26px}
+/* ===================== Cỡ chữ khung chat (thanh bên, menu, Cài đặt: xem biến thiết kế ở đầu tệp) ===================== */
 .ai-msg,.cv-ai .ai-msg{font-size:14px;line-height:1.5}
 .user-msg{font-size:14px}
 html[data-text-size="Small"] .user-msg,html[data-text-size="Small"] .ai-msg{font-size:13px}
@@ -2135,10 +2142,8 @@ b,strong{font-weight:560}
 .nav-sub .nav-item:hover,.nav-sub .nav-item.active{color:var(--text)}
 
 /* Độ đậm theo vai trò, giống claude.ai */
-.nav-item,.chat-item,.menu-item,.sel,.btn,.chip,.tab,.sec-btn{font-weight:395}
+.sel,.btn,.chip,.tab,.sec-btn{font-weight:var(--fw-ui)}
 .btn.dark{font-weight:460}
-.section-label,.sec-btn{font-weight:480}
-.logo{font-weight:500}
 .greeting,.page h1,.dir-title,.sp-head h1,.sp-hero,.cv-hero h1{font-weight:320;line-height:1.2}
 
 /* ===== Trò chuyện bằng giọng nói (Siri Wave) ===== */
@@ -3283,38 +3288,18 @@ html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--ca
 html body .menu.pl-menu{--gl-fill:color-mix(in srgb,var(--card) 96%,transparent)}
 html body .menu.pl-menu::before{background:var(--card)!important}
 
-/* ===================== Rõ nét: chữ đậm vừa, mực dịu, icon cùng một nét ===================== */
-/* Chữ nền 360 quá mảnh nên trông nhòe và díu lại; 400 cho đoạn văn, 430 cho chữ trên nút và mục điều hướng. */
-:root{--ink:#3d3d3a;--ink-strong:#141413}
-[data-theme="dark"]{--ink:#dedcd4;--ink-strong:#faf9f5}
-body{font-weight:400;text-rendering:optimizeLegibility}
-.nav-item,.chat-item,.menu-item,.sel,.btn,.chip,.tab,.sec-btn,.s-item{font-weight:430}
-.nav-item.active,.s-item.on,.chat-item.active{font-weight:500;color:var(--ink-strong)}
-
-/* Thanh bên: hàng 32px, chữ 14px, icon 18px, khoảng cách đều như bản mẫu */
-.nav{gap:2px}
-.nav-item{height:32px;font-size:14px;gap:11px;color:var(--ink)}
-.nav-item>svg{width:18px;height:18px}
-.chat-item{height:30px;line-height:30px;font-size:13.5px;color:var(--ink)}
-.section-label{font-size:12.5px;font-weight:430;margin-top:18px}
-
-/* Cài đặt: cùng nhịp với thanh bên */
-.s-item{height:34px;gap:12px;font-size:14px;color:var(--ink)}
-.s-item>svg{width:19px;height:19px}
-.s-group{font-size:12.5px;font-weight:430;color:var(--text-3)}
-
+/* ===================== Rõ nét: menu và icon (cỡ chữ, độ đậm, màu mực: xem biến thiết kế ở đầu tệp) ===================== */
 /* Menu: chữ chính đậm vừa, mô tả nhạt hơn một bậc */
-.menu-item{color:var(--ink)}
 .pl-mi b,.art-dl-t b{font-weight:480;color:var(--ink-strong)}
 .pl-mi em,.art-dl-t em{color:var(--text-3)}
 
-/* Icon: nét đúng bằng thân chữ đứng cạnh (đo trên Anthropic Sans 14px: đậm 430 → 1.34px, đậm 500 → 1.5px); vẽ trên lưới 16, 20 hay 24 đều như nhau */
+/* Icon: nét bằng thân chữ đứng cạnh (--icon-stroke); vẽ trên lưới 16, 20 hay 24 đều như nhau */
 .nav-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .s-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .menu-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
 .icon-btn svg :is(path,circle,rect,line,polyline,polygon,ellipse),
-.pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:1.34px}
-.nav-item.active svg :is(path,circle,rect,line,polyline,polygon,ellipse),.s-item.on svg :is(path,circle,rect,line,polyline,polygon,ellipse){stroke-width:1.5px}
+.pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:var(--icon-stroke)}
+.nav-item.active svg :is(path,circle,rect,line,polyline,polygon,ellipse),.s-item.on svg :is(path,circle,rect,line,polyline,polygon,ellipse){stroke-width:var(--icon-stroke-strong)}
 /* Lượt chạy nền: bước đang làm hiện cạnh chấm động */
 .thinking{gap:10px}
 .thinking-t{font-size:13px;color:var(--text-3);animation:fadeIn .3s both;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
