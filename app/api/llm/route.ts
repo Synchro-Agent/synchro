@@ -8,6 +8,7 @@ import { randomToken } from "../../mcpauth";
 import { capsState, skillsOn } from "../../caps";
 import { overLimit, usageScope } from "../../usage";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "../../plugins";
+import { STUDIO_LABEL } from "../../plugindir";
 import type { Skill } from "../../skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "../../coderun";
 import { saveOutputs, type OutFile } from "../../outputs";
@@ -88,7 +89,9 @@ const mockAdapter = (skills: Skl): Adapter => ({
 
 // ---------------------------------------------------------------- vòng lặp công cụ (skill + connector)
 // code: công cụ run_code đang bật (net: được tải gói từ kho thư viện); outs: tệp code đã tạo trong lượt này.
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[] };
+// libs: skill (và mục thư viện) → thư viện chứa nó, để câu trả lời hiện "Thư viện Thiết kế · skill đã đọc". studio: chế độ người dùng chọn bằng nút.
+type Lib = { key: string; label: string };
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -187,13 +190,27 @@ function connectorToolDefs(sess: ConnectorSession, gemini: boolean) {
   });
 }
 
+// Thư viện đã dùng trong lượt: chế độ studio đang bật (nếu có), rồi các thư viện model tự mở, kèm skill đã đọc trong từng thư viện.
+function usedLibs(x: Exec, used: string[]) {
+  const out = new Map<string, Lib & { forced?: boolean; skills: string[] }>();
+  if (x.studio) out.set(x.studio.key, { ...x.studio, forced: true, skills: [] });
+  const opened = new Set([...(x.studio ? [x.studio.key] : []), ...used.filter((n) => x.libs?.[n]?.[0]?.key === n)]);
+  for (const n of used) {
+    const all = x.libs?.[n];
+    const l = all?.find((c) => opened.has(c.key)) ?? all?.[0];
+    if (!l) continue;
+    const g = out.get(l.key) ?? out.set(l.key, { ...l, skills: [] }).get(l.key)!;
+    if (n !== l.key && !g.skills.includes(n)) g.skills.push(n);
+  }
+  return [...out.values()];
+}
 function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   if ("approval" in out) return Response.json({ model, approval: out.approval });
   x.sess?.close();
   const usedNames = out.used.filter((u) => u.kind === "skill").map((u) => u.name);
   recordUse(c.user.id, usedNames);
   recordPluginUse(x.list.filter((k) => k.user_id.startsWith("pl_") && usedNames.includes(k.name)).map((k) => k.id));
-  return Response.json({ model, text: out.text, skills: out.used, files: x.outs });
+  return Response.json({ model, text: out.text, skills: out.used, files: x.outs, libs: usedLibs(x, usedNames) });
 }
 
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
@@ -329,16 +346,22 @@ async function post(req: Request, c: NonNullable<ReturnType<typeof current>>, sc
     // các skill trong thư viện không chiếm chỗ cho tới khi được mở. Khi bấm nút studio, thư viện của studio đó đã mở sẵn.
     const visible = [...list];
     const hidden = (ks: Skill[]) => { for (const k of ks) if (!list.some((x) => x.name === k.name)) list.push(k); };
+    // Một skill có thể nằm trong nhiều thư viện (theme-factory ở cả Thiết kế và Trình bày): giữ đủ để gán đúng thư viện đã mở.
+    const libs: Record<string, Lib[]> = {};
+    const tag = (lib: Lib, ks: Skill[]) => { libs[lib.key] = [lib]; for (const k of ks) (libs[k.name] ??= []).push(lib); };
+    if (studio) tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
     if (skills && can(c.user, "skills") && skillsOn(c.user)) {
       for (const s of STUDIOS) {
         const lib = s === studio ? null : studioSkills(c.user.id, s);
         if (!lib?.skills.length) continue;
         visible.push(studioIndex(s, lib.plugins, lib.skills));
         hidden(lib.skills);
+        tag({ key: `studio-${s}`, label: STUDIO_LABEL[s] }, lib.skills);
       }
       for (const l of libraryPlugins(c.user.id)) {
         const fresh = l.skills.filter((k) => !list.some((x) => x.name === k.name));
         if (!fresh.length) continue;
+        tag({ key: `lib-${l.slug}`, label: l.name }, fresh);
         if (fresh.length <= 2) { visible.push(...fresh); list.push(...fresh); continue; }
         visible.push(libIndex({ ...l, skills: fresh }));
         hidden(fresh);
@@ -352,7 +375,7 @@ async function post(req: Request, c: NonNullable<ReturnType<typeof current>>, sc
       const scripts = code;
       const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
       const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [] };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined };
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
         : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)

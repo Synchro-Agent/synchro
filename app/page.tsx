@@ -15,7 +15,7 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeOutputs, takeSkillsUsed, type ApprovalCall, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
@@ -117,6 +117,37 @@ const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; 
   { k: "design", name: "Thiết kế", label: "Synchro Design", ph: "Bản thiết kế này nên thể hiện điều gì?", desc: "Màn hình, luồng và đồ họa được bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa.",
     sys: "Tôi tạo một thiết kế trực quan như màn hình ứng dụng, poster, landing page hay mockup. Nó hiện trên canvas để bạn xem, chỉnh và chia sẻ." },
 ];
+
+// Thư viện mẫu khi đang ở chế độ studio: bấm để điền sẵn một yêu cầu đầy đủ vào ô nhập, sửa lại rồi gửi.
+const STARTERS: Record<TplKey, { t: string; d: string; p: string }[]> = {
+  design: [
+    { t: "Landing page", d: "Trang giới thiệu một sản phẩm hay cửa hàng", p: "Thiết kế landing page cho quán cà phê specialty tên Lumen: phần mở đầu có ảnh lớn, thực đơn nổi bật, giờ mở cửa và nút đặt bàn." },
+    { t: "Logo", d: "Logo SVG, có bản cho nền tối", p: "Thiết kế logo SVG cho thương hiệu Synchro: tối giản, dùng tốt làm icon ứng dụng, kèm phiên bản cho nền tối." },
+    { t: "Màn hình ứng dụng", d: "Giao diện điện thoại bấm thử được", p: "Thiết kế màn hình chính của ứng dụng quản lý chi tiêu trên điện thoại: số dư, biểu đồ chi tiêu trong tuần và danh sách giao dịch gần đây." },
+    { t: "Poster sự kiện", d: "Ấn phẩm cho hội thảo, khai trương", p: "Thiết kế poster cho hội thảo công nghệ ngày 15/12 tại Hà Nội, phong cách hiện đại, làm nổi bật tên ba diễn giả chính." },
+  ],
+  slides: [
+    { t: "Pitch deck gọi vốn", d: "10 slide cho vòng seed", p: "Làm pitch deck 10 slide gọi vốn vòng seed cho startup giao đồ ăn healthy: vấn đề, giải pháp, thị trường, mô hình kinh doanh, đội ngũ và số vốn cần gọi." },
+    { t: "Báo cáo quý", d: "Số liệu, điểm nổi bật, kế hoạch", p: "Làm bản trình bày báo cáo kết quả kinh doanh quý III: doanh thu, tăng trưởng, điểm nổi bật, khó khăn và kế hoạch quý IV." },
+    { t: "Giới thiệu nhân viên mới", d: "Văn hóa, phòng ban, tuần đầu", p: "Làm slide giới thiệu công ty cho nhân viên mới: văn hóa, cơ cấu phòng ban, cách làm việc và những điều cần biết trong tuần đầu." },
+    { t: "Kế hoạch dự án", d: "Mục tiêu, mốc thời gian, phân công", p: "Làm slide trình bày kế hoạch triển khai dự án trong 3 tháng: mục tiêu, các mốc chính, phân công và rủi ro." },
+  ],
+  doc: [
+    { t: "Đề xuất dự án", d: "Bối cảnh, mục tiêu, chi phí, lộ trình", p: "Viết đề xuất dự án triển khai hệ thống chăm sóc khách hàng mới: bối cảnh, mục tiêu, phạm vi, chi phí và lộ trình." },
+    { t: "Báo cáo tuần", d: "Kết quả, chỉ số, việc tuần tới", p: "Viết báo cáo công việc tuần cho nhóm marketing: kết quả chính, chỉ số, việc đang làm, vướng mắc và kế hoạch tuần tới." },
+    { t: "Quy trình nội bộ", d: "Các bước, người duyệt, thời hạn", p: "Viết quy trình xin nghỉ phép cho công ty 50 người: các bước, người duyệt, thời hạn và mẫu đơn." },
+    { t: "Thông báo toàn công ty", d: "Rõ ràng, giọng văn thân thiện", p: "Viết thông báo toàn công ty về việc chuyển văn phòng sang địa điểm mới từ tháng sau, giọng văn thân thiện và rõ ràng." },
+  ],
+};
+
+// Thư viện skill một câu trả lời đã dùng: chế độ studio người dùng chọn, hoặc thư viện model tự mở, kèm skill đã đọc.
+function LibChips({ libs, onOpen }: { libs: LibUse[]; onOpen: () => void }) {
+  return <div className="skill-used">{libs.map((l) => (
+    <button key={l.key} className="skill-chip lib-chip" onClick={onOpen} title={l.skills.join(", ")}>
+      <I.Plugins size={13} /><span>{tr(l.forced ? "Chế độ" : "Thư viện")} <b data-notr={l.key.startsWith("lib-") || undefined}>{l.key.startsWith("lib-") ? l.label : tr(l.label)}</b></span>
+      {l.skills.length > 0 && <span className="lib-sk" data-notr>{l.skills.slice(0, 3).join(", ")}{l.skills.length > 3 ? ` +${l.skills.length - 3}` : ""}</span>}
+    </button>))}</div>;
+}
 
 function TplArt({ k }: { k: string }) {
   if (k === "doc") return (
@@ -440,8 +471,6 @@ export default function Home() {
   const [banner, setBanner] = useState(true);
   const [tab, setTab] = useState(0);
   const [tplMode, setTplMode] = useState<TplKey | null>(null);
-  const [tplMenu, setTplMenu] = useState(false);
-  const tplRef = useClickAway(() => setTplMenu(false));
   const [toast, setToast] = useState("");
   const [model, setModel] = useState("");
   const models = useModels();
@@ -631,12 +660,15 @@ export default function Home() {
     const history = (hist ?? [{ role: "user" as const, content: text }]).slice(-HISTORY_LIMIT);
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
-    let usedSk: string[] = [], usedTl: string[] = [];
+    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [];
     let outs: Msg["outs"] = [];
     try {
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio });
       const used = takeSkillsUsed();
-      usedSk = [...new Set(used.filter((u) => u.kind === "skill").map((u) => u.name))];
+      libs = takeLibsUsed();
+      // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
+      const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
+      usedSk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
       outs = takeOutputs();
     } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
@@ -649,7 +681,7 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined }]);
       if (i >= words.length) {
         stop();
         // Lưu artifact của câu trả lời này vào trang Artifacts (không lưu đoạn chat ẩn danh).
@@ -1033,16 +1065,18 @@ export default function Home() {
             <div className="greeting">{incog && <I.Ghost size={26} />}{incog ? "Đoạn chat ẩn danh" : greet}</div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
-              <div className="modebar" key={tplMode}>
-                <div ref={tplRef} style={{ position: "relative" }}>
-                  <button className={`mode-tag mt-${t.k}`} onClick={() => setTplMenu(!tplMenu)}>{t.label}</button>
-                  <Menu open={tplMenu} className="tpl-menu" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0 }}>
-                    <button className="menu-item" onClick={() => { setTplMode(null); setTplMenu(false); }}><I.X size={14} />Xóa {t.k === "doc" ? "tài liệu" : t.k === "slides" ? "bản trình bày" : "thiết kế"}</button>
-                  </Menu>
+              <div className="modewrap" key={tplMode}>
+                <div className="modebar">
+                  <span className={`mode-tag mt-${t.k}`}>{t.label}<button className="mode-x" onClick={() => setTplMode(null)} aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"><I.X size={12} /></button></span>
+                  {/* Thư viện skill của studio: bấm để xem / cài plugin. */}
+                  {studios[STUDIO_OF[t.k]] ? <button className="mode-sys" onClick={openPlugins} title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={16} />Thư viện {studios[STUDIO_OF[t.k]]!.skills} skill</button>
+                    : <button className="mode-sys" onClick={openPlugins}><I.Plugins size={16} />Cài thư viện {t.k === "doc" ? "tài liệu" : t.k === "slides" ? "trình bày" : "thiết kế"}</button>}
                 </div>
-                {/* Thư viện skill của studio: bấm để xem / cài plugin. */}
-                {studios[STUDIO_OF[t.k]] ? <button className="mode-sys" onClick={openPlugins} title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={16} />Thư viện {studios[STUDIO_OF[t.k]]!.skills} skill</button>
-                  : <button className="mode-sys" onClick={openPlugins}><I.Plugins size={16} />Cài thư viện {t.k === "doc" ? "tài liệu" : t.k === "slides" ? "trình bày" : "thiết kế"}</button>}
+                <div className="starters">
+                  {STARTERS[t.k].map((x) => (
+                    <button key={x.t} className={`starter mt-${t.k}`} onClick={() => setPrefill((p) => ({ t: tr(x.p), n: p.n + 1 }))}><b>{x.t}</b><span>{x.d}</span></button>
+                  ))}
+                </div>
               </div>); })()}
             {incog ? <p className="muted" style={{ fontSize: 13, marginTop: 20 }}>Đoạn chat ẩn danh sẽ không được lưu vào lịch sử</p> : null}
           </div>
@@ -1060,7 +1094,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} /> : (() => {
+                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} /> : (() => {
                         const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;
@@ -1091,6 +1125,9 @@ export default function Home() {
                 onFix={busy ? undefined : (a, err) => send(`${tr("Artifact")} “${a.title}” ${tr("gặp lỗi")}: ${err}\n${tr("Hãy sửa lỗi này.")}`)} />
             )}
             <div className="dock">
+              {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
+                <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
+                  onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
               <Composer {...composerProps} dock />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
             </div>

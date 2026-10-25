@@ -42,6 +42,10 @@ export const setApprover = (f: typeof approver) => { approver = f; };
 let lastSkills: SkillUse[] = [];
 /** Skill mà model vừa dùng ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeSkillsUsed = () => { const u = lastSkills; lastSkills = []; return u; };
+/** Thư viện skill đã dùng: chế độ studio người dùng chọn (forced) hoặc thư viện model tự mở, kèm skill đã đọc trong đó. */
+export type LibUse = { key: string; label: string; forced?: boolean; skills: string[] };
+let lastLibs: LibUse[] = [];
+export const takeLibsUsed = () => { const u = lastLibs; lastLibs = []; return u; };
 let lastFiles: OutFile[] = [];
 /** Tệp code vừa tạo ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeOutputs = () => { const f = lastFiles; lastFiles = []; return f; };
@@ -79,6 +83,7 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
     j = await r2.json();
   }
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
+  lastLibs = Array.isArray(j.libs) ? j.libs : [];
   lastFiles = Array.isArray(j.files) ? j.files : [];
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model.
   if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage"));

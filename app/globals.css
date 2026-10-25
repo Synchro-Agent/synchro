@@ -464,6 +464,28 @@ html[data-chat-font="System"] .ai-msg{font-family:system-ui,-apple-system,sans-s
 [data-theme="dark"] .mt-doc{--mc:#86aef0}[data-theme="dark"] .mt-slides{--mc:#d9ab6a}[data-theme="dark"] .mt-design{--mc:#b3a6ec}
 [data-theme="dark"] .mode-tag::before{background:linear-gradient(160deg,rgba(255,255,255,.18),rgba(255,255,255,0) 55%)}
 .mode-sys{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text-2);height:30px;padding:0 6px;border-radius:8px}
+/* Chip chế độ: tên studio + nút ✕ để bỏ chế độ ngay (về chat tự chọn thư viện). */
+.mode-tag{display:inline-flex;align-items:center;gap:4px;cursor:default}
+.mode-x{display:grid;place-items:center;width:20px;height:20px;margin-right:-6px;border-radius:6px;color:inherit;opacity:.7;cursor:pointer}
+.mode-x:hover{opacity:1;background:color-mix(in srgb,var(--mc) 18%,transparent)}
+.mode-tag.sm{height:26px;padding:0 10px;font-size:13px;border-radius:8px}
+.modewrap{display:flex;flex-direction:column;align-items:center;width:100%;position:relative;z-index:30}
+.modewrap .modebar{position:static}
+/* Thư viện mẫu của studio: 4 yêu cầu dựng sẵn, bấm để điền vào ô nhập. */
+.starters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:min(640px,calc(100% - 48px));margin-top:14px;animation:rise .45s var(--ease) both}
+.starter{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;border-radius:12px;border:.5px solid var(--border-strong);background:color-mix(in srgb,var(--card) 70%,transparent);cursor:pointer;transition:background .15s,border-color .15s,transform .15s var(--ease)}
+.starter b{font-size:14px;font-weight:500;color:var(--text)}
+.starter span{font-size:12.5px;color:var(--text-3);line-height:1.4}
+.starter:hover{background:color-mix(in srgb,var(--mc) 8%,var(--card));border-color:color-mix(in srgb,var(--mc) 40%,transparent)}
+.starter:active{transform:scale(.98)}
+.dock-mode{display:flex;width:min(var(--thread-w,640px),calc(100% - 48px));margin-bottom:6px}
+/* Chip thư viện dưới câu trả lời. */
+.lib-chip{cursor:pointer;font:inherit;font-size:12px}
+.lib-chip:hover{color:var(--text);background:var(--active,var(--hover))}
+.lib-chip b{font-weight:500;color:var(--text)}
+.lib-sk{color:var(--text-3);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-sk::before{content:"· ";}
+@media (max-width:600px){.starters{grid-template-columns:1fr;width:calc(100% - 32px)}.lib-sk{max-width:140px}}
 .mode-sys:hover{background:var(--hover)}
 .tpl-menu{min-width:200px;padding:6px;z-index:30}.tpl-menu .menu-item{gap:10px;white-space:nowrap}
 .modebar{position:relative;z-index:30}
