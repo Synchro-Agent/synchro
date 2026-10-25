@@ -3,8 +3,11 @@
 // - API HTTP cho máy chủ Next (khóa WS_AGENT_SECRET): bật container, chạy lệnh, điều khiển trình duyệt.
 // - WebSocket cho trình duyệt của người dùng (vé ký HMAC do Next cấp): terminal (PTY) và màn hình trình duyệt.
 import http from "node:http";
+import net from "node:net";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
+import { lookup } from "node:dns/promises";
 import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 
@@ -17,6 +20,19 @@ const ROOT = env("WS_ROOT", "/srv/synchro-ws");
 const NET = env("WS_NETWORK", "synchro-ws");
 const BRIDGE = "br-synchro";
 const SUBNET = env("WS_SUBNET", "172.30.0.0/16");
+// Chạy code cho chat (mỗi lần một container mới, xóa ngay sau khi chạy): mạng riêng không ra được internet,
+// chỉ tới được proxy của dịch vụ này ở cổng RUN_PROXY_PORT; proxy chỉ cho đi tới các kho thư viện (PKG_HOSTS).
+const RUN_NET = env("WS_RUN_NETWORK", "synchro-run");
+const RUN_BRIDGE = "br-synchro-run";
+const RUN_SUBNET = env("WS_RUN_SUBNET", "172.29.0.0/24");
+const RUN_GW = env("WS_RUN_GATEWAY", "172.29.0.1");
+const RUN_PROXY_PORT = Number(env("WS_RUN_PROXY_PORT", 3556));
+const RUN_MAX = Number(env("WS_RUN_MAX", 4));
+const RUN_MEMORY = env("WS_RUN_MEMORY", "1g");
+// Giữ giống PKG_DOMAINS trong app/catalog.ts.
+const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "registry.npmjs.org", "npmjs.org", "npmjs.com", "registry.yarnpkg.com", "yarnpkg.com",
+  "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org", "sum.golang.org", "conda.anaconda.org", "repo.anaconda.com",
+  "github.com", "codeload.github.com", "objects.githubusercontent.com", "deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com"];
 const MAX_RUNNING = Number(env("WS_MAX_RUNNING", 4));
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
@@ -102,6 +118,15 @@ async function setupHost() {
   await rule("DOCKER-USER", ["-i", BRIDGE, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "RETURN"]);
   await rule("INPUT", ["-i", BRIDGE, "-j", "DROP"]);
   await rule("INPUT", ["-i", BRIDGE, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT"]);
+  // Mạng chạy code: không chuyển tiếp gói nào ra ngoài; vào máy chủ chỉ được tới cổng proxy.
+  if ((await run("docker", ["network", "inspect", RUN_NET])).code) {
+    const r = await run("docker", ["network", "create", "--driver", "bridge", "--subnet", RUN_SUBNET, "--gateway", RUN_GW,
+      "-o", `com.docker.network.bridge.name=${RUN_BRIDGE}`, "-o", "com.docker.network.bridge.enable_icc=false", RUN_NET]);
+    if (r.code) log("Không tạo được mạng chạy code", r.err);
+  }
+  await rule("DOCKER-USER", ["-i", RUN_BRIDGE, "-j", "DROP"]);
+  await rule("INPUT", ["-i", RUN_BRIDGE, "-j", "DROP"]);
+  await rule("INPUT", ["-i", RUN_BRIDGE, "-p", "tcp", "--dport", String(RUN_PROXY_PORT), "-j", "ACCEPT"]);
   if ((await run("docker", ["image", "inspect", IMAGE])).code) log(`Chưa có image ${IMAGE}: chạy workspace/setup.sh để build.`);
 }
 
@@ -220,6 +245,101 @@ async function exec(u, { d, cmd, argv, timeout = 120, stdin, env: ev = {} }) {
   touch(u);
   return r;
 }
+
+// ------------------------------------------------------------------ chạy code một lần (chat)
+const runDir = (id) => `${ROOT}/_runs/${id}`;
+let running = 0;
+const safeRel = (p) => typeof p === "string" && p.length > 0 && p.length < 300 && !p.startsWith("/") && !p.split(/[\\/]/).some((x) => x === ".." || x === "");
+
+async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, timeout = 120 }) {
+  if (!Array.isArray(argv) || !argv.length || argv.length > 60 || argv.some((a) => typeof a !== "string" || a.length > 4000)) throw new E(400, "Lệnh không hợp lệ");
+  if (!Array.isArray(files) || files.length > 120 || files.some((f) => !safeRel(f?.path) || typeof f.b64 !== "string")) throw new E(400, "Tệp không hợp lệ");
+  if (wantNet && !proxyUp) throw new E(503, "Máy chủ chưa bật được mạng cho code (proxy kho thư viện).");
+  if (running >= RUN_MAX) throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.");
+  const sec = Math.max(5, Math.min(Number(timeout) || 120, 300));
+  const id = crypto.randomBytes(8).toString("hex");
+  const dir = runDir(id), name = "srun-" + id;
+  running++;
+  try {
+    fs.mkdirSync(`${dir}/outputs`, { recursive: true, mode: 0o700 });
+    for (const f of files) {
+      const p = `${dir}/${f.path}`;
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, Buffer.from(f.b64, "base64"));
+    }
+    await run("chown", ["-R", `${UID}:${UID}`, dir]);
+    const proxy = `http://${RUN_GW}:${RUN_PROXY_PORT}`;
+    const envs = { HOME: HOME, LANG: "C.UTF-8", LC_ALL: "C.UTF-8", MPLBACKEND: "Agg", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1",
+      PIP_BREAK_SYSTEM_PACKAGES: "1", PIP_DISABLE_PIP_VERSION_CHECK: "1", NPM_CONFIG_PREFIX: `${HOME}/.npm-global`, npm_config_update_notifier: "false",
+      PATH: `${HOME}/.local/bin:${HOME}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+      ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy } : {}) };
+    const args = ["run", "--rm", "-i", "--name", name, "--hostname", "sandbox", "--init", "--network", wantNet ? RUN_NET : "none",
+      "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", "1", "--pids-limit", "256", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+      "--shm-size", "128m", "--label", `synchro.run=${u}`, "-u", UID, "-w", `${HOME}/run`, "-v", `${dir}:${HOME}/run`,
+      ...Object.entries(envs).flatMap(([k, v]) => ["-e", `${k}=${v}`]), IMAGE, "timeout", "-k", "5", String(sec), ...argv];
+    const r = await run("docker", args, { input: stdin ?? "", timeout: (sec + 30) * 1000, max: 400_000 });
+    const out = [];
+    let total = 0;
+    const walk = (d, depth) => {
+      if (depth > 3 || !fs.existsSync(d)) return;
+      for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        const p = `${d}/${e.name}`;
+        if (e.isDirectory()) walk(p, depth + 1);
+        else if (e.isFile() && out.length < 10) {
+          const size = fs.statSync(p).size;
+          if (size > 20 * 1024 * 1024 || total + size > 40 * 1024 * 1024) continue;
+          total += size;
+          out.push({ path: path.relative(`${dir}/outputs`, p), b64: fs.readFileSync(p).toString("base64") });
+        }
+      }
+    };
+    walk(`${dir}/outputs`, 0);
+    const timedOut = r.code === 124;
+    return { code: r.code, out: r.out, err: r.err + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : ""), timedOut, files: out };
+  } finally {
+    running--;
+    await run("docker", ["rm", "-f", name], { timeout: 20_000 });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Proxy cho code (chỉ nghe trên cổng của mạng chạy code): chỉ CONNECT/HTTP tới kho thư viện, không tới địa chỉ nội bộ.
+let proxyUp = false;
+const v4Private = (ip) => { const [a, b] = ip.split(".").map(Number); return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224; };
+const ipPrivate = (ip) => (net.isIP(ip) === 4 ? v4Private(ip) : /^(::|::1|f[cd]|fe[89ab]|::ffff:)/i.test(ip));
+async function pkgTarget(host, port) {
+  const h = String(host).toLowerCase().replace(/\.$/, "");
+  if (!PKG_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is not a package registry`);
+  if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
+  const ips = (await lookup(h, { all: true })).map((x) => x.address);
+  if (!ips.length || ips.some(ipPrivate)) throw new Error(`blocked: ${h} resolves to a private address`);
+  return ips.find((x) => net.isIP(x) === 4) ?? ips[0];
+}
+function startProxy() {
+  const px = http.createServer(async (req, res) => {
+    try {
+      const t = new URL(req.url);
+      const ip = await pkgTarget(t.hostname, Number(t.port || 80));
+      const up = http.request({ host: ip, port: Number(t.port || 80), path: t.pathname + t.search, method: req.method, headers: { ...req.headers, host: t.host } }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); });
+      up.on("error", () => { res.writeHead(502); res.end(); });
+      req.pipe(up);
+    } catch (e) { res.writeHead(403, { "content-type": "text/plain" }); res.end(String(e.message ?? e)); }
+  });
+  px.on("connect", async (req, sock, head) => {
+    sock.on("error", () => {});
+    const [h, p] = String(req.url ?? "").split(":");
+    try {
+      const ip = await pkgTarget(h, Number(p || 443));
+      const up = net.connect(Number(p || 443), ip, () => { sock.write("HTTP/1.1 200 Connection Established\r\n\r\n"); if (head?.length) up.write(head); up.pipe(sock); sock.pipe(up); });
+      up.on("error", () => sock.destroy());
+      sock.on("close", () => up.destroy());
+    } catch (e) { sock.end(`HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n\r\n${String(e.message ?? e)}`); }
+  });
+  px.on("error", (e) => { proxyUp = false; log("proxy", e.message); });
+  px.listen(RUN_PROXY_PORT, RUN_GW, () => { proxyUp = true; log(`proxy kho thư viện nghe tại ${RUN_GW}:${RUN_PROXY_PORT}`); });
+}
+// Dọn thư mục chạy dở còn sót (dịch vụ khởi động lại giữa chừng).
+fs.rmSync(`${ROOT}/_runs`, { recursive: true, force: true });
 
 // ------------------------------------------------------------------ trình duyệt (Chromium qua CDP)
 class CDP {
@@ -581,6 +701,7 @@ const server = http.createServer(async (req, res) => {
         return reply(res, 200, { exists: !!c, running: !!c?.State?.Running, last: live.get(b.u)?.last ?? null, idleMin: IDLE_MS / 60_000 });
       }
       case "/exec": return reply(res, 200, await exec(b.u, b));
+      case "/run": return reply(res, 200, await runOnce(b.u, b));
       case "/browser": return reply(res, 200, await browserTool(b.u, b));
       case "/stop": await stop(b.u); return reply(res, 200, { ok: true });
       case "/destroy": await destroy(b.u); return reply(res, 200, { ok: true });
@@ -605,4 +726,7 @@ server.on("upgrade", (req, sock, head) => {
   });
 });
 
-setupHost().catch((e) => log("setup", e)).finally(() => server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`)));
+setupHost().catch((e) => log("setup", e)).finally(() => {
+  server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
+  startProxy();
+});

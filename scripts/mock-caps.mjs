@@ -1,0 +1,533 @@
+// Model giả lập cho Cài đặt → Khả năng: trả lời như model thật khi system prompt có hướng dẫn tương ứng.
+//  - <artifacts>: tạo artifact (ứng dụng React, trang HTML, SVG, tài liệu), sửa thành phiên bản mới, artifact dùng AI.
+//  - <inline_visuals>: biểu đồ ```chart, sơ đồ ```mermaid, hình tương tác ```widget.
+//  - công cụ run_code: viết code Python tạo tệp (Excel, Word, PowerPoint, PDF, CSV, ảnh), tính toán, cài gói.
+// Không có hướng dẫn nào khớp thì trả về null để model giả trả lời bình thường.
+
+const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+const has = (t, re) => re.test(t);
+
+// ---------------------------------------------------------------- artifact mẫu
+const TODO = `import { useState } from "react";
+import { Check, Plus, Trash2, ListTodo } from "lucide-react";
+
+export default function TodoApp() {
+  const [items, setItems] = useState([
+    { id: 1, text: "Đọc lại báo cáo quý", done: true },
+    { id: 2, text: "Gửi email cho nhóm thiết kế", done: false },
+    { id: 3, text: "Chuẩn bị slide họp thứ Hai", done: false },
+  ]);
+  const [text, setText] = useState("");
+  const [filter, setFilter] = useState("all");
+  const add = () => {
+    if (!text.trim()) return;
+    setItems([...items, { id: Date.now(), text: text.trim(), done: false }]);
+    setText("");
+  };
+  const shown = items.filter((i) => (filter === "all" ? true : filter === "done" ? i.done : !i.done));
+  const left = items.filter((i) => !i.done).length;
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-start justify-center p-6">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <ListTodo className="w-6 h-6 text-blue-600" />
+          <h1 className="text-xl font-semibold text-slate-800">Việc cần làm</h1>
+          <span className="ml-auto text-sm text-slate-500">{left} việc còn lại</span>
+        </div>
+        <div className="flex gap-2 mb-4">
+          <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="Thêm việc mới…" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+          <button onClick={add} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Plus className="w-4 h-4" /> Thêm
+          </button>
+        </div>
+        <div className="flex gap-1 mb-3 text-sm">
+          {[["all", "Tất cả"], ["todo", "Chưa xong"], ["done", "Đã xong"]].map(([k, l]) => (
+            <button key={k} onClick={() => setFilter(k)} className={"rounded-md px-3 py-1 " + (filter === k ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-500 hover:bg-slate-100")}>{l}</button>
+          ))}
+        </div>
+        <ul className="divide-y divide-slate-100">
+          {shown.map((i) => (
+            <li key={i.id} className="flex items-center gap-3 py-2.5 group">
+              <button onClick={() => setItems(items.map((x) => (x.id === i.id ? { ...x, done: !x.done } : x)))}
+                className={"w-5 h-5 rounded-md border flex items-center justify-center " + (i.done ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300")}>
+                {i.done && <Check className="w-3.5 h-3.5" />}
+              </button>
+              <span className={"flex-1 text-sm " + (i.done ? "line-through text-slate-400" : "text-slate-700")}>{i.text}</span>
+              <button onClick={() => setItems(items.filter((x) => x.id !== i.id))} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+          {!shown.length && <li className="py-8 text-center text-sm text-slate-400">Không có việc nào</li>}
+        </ul>
+      </div>
+    </div>
+  );
+}`;
+
+const DASH = `import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { TrendingUp, Users, ShoppingCart } from "lucide-react";
+
+const months = ["T1", "T2", "T3", "T4", "T5", "T6"];
+const data = months.map((m, i) => ({ thang: m, doanhThu: [320, 410, 380, 520, 610, 690][i], donHang: [120, 150, 140, 190, 230, 260][i] }));
+
+function Stat({ icon: Icon, label, value, delta }) {
+  return (
+    <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4">
+      <div className="flex items-center gap-2 text-slate-500 text-sm"><Icon className="w-4 h-4" />{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-slate-800">{value}</div>
+      <div className="text-xs text-emerald-600 mt-1">{delta} so với tháng trước</div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <div className="min-h-screen bg-slate-50 p-6 space-y-5">
+      <h1 className="text-xl font-semibold text-slate-800">Tổng quan kinh doanh</h1>
+      <div className="grid grid-cols-3 gap-4">
+        <Stat icon={TrendingUp} label="Doanh thu" value="690 tr₫" delta="+13%" />
+        <Stat icon={ShoppingCart} label="Đơn hàng" value="260" delta="+13%" />
+        <Stat icon={Users} label="Khách mới" value="84" delta="+9%" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 h-72">
+          <div className="text-sm font-medium text-slate-600 mb-2">Doanh thu (triệu ₫)</div>
+          <ResponsiveContainer width="100%" height="90%">
+            <BarChart data={data}><CartesianGrid stroke="#eef0f3" vertical={false} /><XAxis dataKey="thang" /><YAxis /><Tooltip /><Bar dataKey="doanhThu" fill="#2a78d6" radius={[4, 4, 0, 0]} barSize={22} /></BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 h-72">
+          <div className="text-sm font-medium text-slate-600 mb-2">Số đơn hàng</div>
+          <ResponsiveContainer width="100%" height="90%">
+            <LineChart data={data}><CartesianGrid stroke="#eef0f3" vertical={false} /><XAxis dataKey="thang" /><YAxis /><Tooltip /><Line dataKey="donHang" stroke="#eb6834" strokeWidth={2} dot={{ r: 4 }} /></LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}`;
+
+const CALC = `<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Máy tính</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#eef2ff,#f8fafc);font-family:system-ui,sans-serif}
+  .calc{width:300px;background:#111827;border-radius:22px;padding:18px;box-shadow:0 20px 50px rgba(17,24,39,.35)}
+  .screen{color:#fff;text-align:right;padding:18px 8px 14px;min-height:76px}
+  .prev{color:#9ca3af;font-size:14px;min-height:18px}
+  .cur{font-size:40px;font-weight:300;word-break:break-all}
+  .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  button{height:58px;border:0;border-radius:16px;font-size:20px;background:#374151;color:#fff;cursor:pointer;transition:filter .1s,transform .05s}
+  button:hover{filter:brightness(1.15)} button:active{transform:scale(.96)}
+  .op{background:#2f7bf6}.fn{background:#9ca3af;color:#111827}.zero{grid-column:span 2}
+</style>
+</head>
+<body>
+<div class="calc">
+  <div class="screen"><div class="prev" id="prev"></div><div class="cur" id="cur">0</div></div>
+  <div class="keys" id="keys"></div>
+</div>
+<script>
+  const keys = ["C","±","%","÷","7","8","9","×","4","5","6","−","1","2","3","+","0",".","="];
+  let cur = "0", prev = "", op = null, fresh = false;
+  const $ = (id) => document.getElementById(id);
+  const show = () => { $("cur").textContent = cur; $("prev").textContent = prev && op ? prev + " " + op : ""; };
+  const calc = (a, b, o) => ({ "+": a + b, "−": a - b, "×": a * b, "÷": b === 0 ? NaN : a / b })[o];
+  function press(k) {
+    if (/[0-9]/.test(k)) { cur = fresh || cur === "0" ? k : cur + k; fresh = false; }
+    else if (k === ".") { if (!cur.includes(".")) cur += "."; }
+    else if (k === "C") { cur = "0"; prev = ""; op = null; }
+    else if (k === "±") cur = String(-parseFloat(cur));
+    else if (k === "%") cur = String(parseFloat(cur) / 100);
+    else if (k === "=") { if (op) { cur = String(+calc(parseFloat(prev), parseFloat(cur), op).toFixed(10)); prev = ""; op = null; fresh = true; } }
+    else { if (op && !fresh) cur = String(+calc(parseFloat(prev), parseFloat(cur), op).toFixed(10)); prev = cur; op = k; fresh = true; }
+    if (cur === "NaN") cur = "Lỗi";
+    show();
+  }
+  keys.forEach((k) => { const b = document.createElement("button"); b.textContent = k; b.className = "÷×−+=".includes(k) ? "op" : "C±%".includes(k) ? "fn" : k === "0" ? "zero" : ""; b.onclick = () => press(k); $("keys").appendChild(b); });
+  addEventListener("keydown", (e) => { const m = { "/": "÷", "*": "×", "-": "−", "+": "+", Enter: "=", Escape: "C" }; const k = m[e.key] ?? e.key; if (keys.includes(k)) press(k); });
+</script>
+</body>
+</html>`;
+
+const LANDING = `<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lumen Coffee</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;font-family:Georgia,serif;color:#2b2118;background:#fbf7f2}
+  header{display:flex;align-items:center;justify-content:space-between;padding:22px 6vw}
+  .logo{font-size:22px;font-weight:700;letter-spacing:.02em}nav a{margin-left:22px;color:#6b5847;text-decoration:none;font-family:system-ui,sans-serif;font-size:14px}
+  .hero{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;padding:40px 6vw 70px}
+  h1{font-size:clamp(34px,5vw,58px);line-height:1.05;margin:0 0 18px}p{font-family:system-ui,sans-serif;color:#6b5847;line-height:1.6}
+  .cta{display:inline-block;margin-top:14px;padding:13px 22px;border-radius:999px;background:#2b2118;color:#fbf7f2;font-family:system-ui,sans-serif;text-decoration:none}
+  .cup{aspect-ratio:1;border-radius:32px;background:radial-gradient(circle at 50% 42%,#c58b55 0 22%,#5b3a22 23% 34%,#fff 35% 48%,#e9dccd 49%);box-shadow:0 30px 60px rgba(91,58,34,.25)}
+  .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:0 6vw 70px}
+  .card{background:#fff;border-radius:18px;padding:22px;border:1px solid #efe4d7}.card h3{margin:0 0 6px}
+  @media(max-width:700px){.hero,.feat{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <header><div class="logo">Lumen</div><nav><a href="#">Thực đơn</a><a href="#">Cửa hàng</a><a href="#">Liên hệ</a></nav></header>
+  <section class="hero">
+    <div>
+      <h1>Cà phê rang mộc, pha chậm mỗi sáng.</h1>
+      <p>Hạt Arabica Cầu Đất rang trong ngày, xay theo từng ly. Ghé Lumen để có một buổi sáng chậm rãi giữa lòng thành phố.</p>
+      <a class="cta" href="#">Đặt bàn ngay</a>
+    </div>
+    <div class="cup" role="img" aria-label="Ly cà phê nhìn từ trên xuống"></div>
+  </section>
+  <section class="feat">
+    <div class="card"><h3>Rang trong ngày</h3><p>Mẻ rang nhỏ mỗi sáng để giữ trọn hương thơm.</p></div>
+    <div class="card"><h3>Pha thủ công</h3><p>Pour-over, phin và espresso do barista pha từng ly.</p></div>
+    <div class="card"><h3>Không gian yên tĩnh</h3><p>Ghế êm, ổ cắm ở mọi bàn, Wi-Fi nhanh.</p></div>
+  </section>
+</body>
+</html>`;
+
+const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f7bf6"/><stop offset="1" stop-color="#6250d6"/></linearGradient></defs>
+  <rect x="20" y="20" width="200" height="200" rx="48" fill="url(#g)"/>
+  <path d="M78 150c0-36 28-64 64-64" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round"/>
+  <path d="M162 90c0 36-28 64-64 64" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="142" cy="86" r="11" fill="#fff"/><circle cx="98" cy="154" r="11" fill="#fff" fill-opacity=".55"/>
+</svg>`;
+
+const PLAN = `# Kế hoạch ra mắt sản phẩm
+
+## 1. Mục tiêu
+- Đạt **1.000 người dùng** trong 30 ngày đầu
+- Tỷ lệ giữ chân tuần 4 trên **35%**
+
+## 2. Lịch trình
+| Tuần | Việc chính | Người phụ trách |
+|---|---|---|
+| 1 | Hoàn thiện bản beta, kiểm thử nội bộ | Nhóm sản phẩm |
+| 2 | Mời 200 người dùng sớm, thu phản hồi | Nhóm tăng trưởng |
+| 3 | Sửa lỗi, chuẩn bị trang giới thiệu | Cả nhóm |
+| 4 | Ra mắt công khai | Marketing |
+
+## 3. Rủi ro
+- Máy chủ quá tải ngày ra mắt → chuẩn bị tự mở rộng
+- Phản hồi tiêu cực về giá → có gói miễn phí
+
+## 4. Đo lường
+Theo dõi hằng ngày: lượt đăng ký, người dùng hoạt động, tỷ lệ chuyển đổi.`;
+
+const TRANSLATOR = `import { useState } from "react";
+import { Languages, ArrowRightLeft, Loader2 } from "lucide-react";
+
+export default function Translator() {
+  const [src, setSrc] = useState("Xin chào! Hôm nay bạn thế nào?");
+  const [out, setOut] = useState("");
+  const [to, setTo] = useState("English");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    setBusy(true); setErr("");
+    try {
+      const r = await window.synchro.complete("Dịch sang " + to + ", chỉ trả về bản dịch:\\n\\n" + src);
+      setOut(r.trim());
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-indigo-50 p-6 flex justify-center">
+      <div className="w-full max-w-2xl space-y-4">
+        <div className="flex items-center gap-2"><Languages className="w-6 h-6 text-indigo-600" /><h1 className="text-xl font-semibold text-slate-800">Trợ lý dịch</h1></div>
+        <div className="grid grid-cols-2 gap-3">
+          <textarea value={src} onChange={(e) => setSrc(e.target.value)} className="h-44 rounded-xl border border-slate-200 bg-white p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+          <div className="h-44 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700 whitespace-pre-wrap">{busy ? <span className="inline-flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" />Đang dịch…</span> : out || <span className="text-slate-400">Bản dịch sẽ hiện ở đây</span>}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <select value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            {["English", "日本語", "한국어", "Français", "Tiếng Việt"].map((l) => <option key={l}>{l}</option>)}
+          </select>
+          <button onClick={run} disabled={busy || !src.trim()} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"><ArrowRightLeft className="w-4 h-4" />Dịch</button>
+          {err && <span className="text-sm text-red-600">{err}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}`;
+
+const BUGGY = `import { useState } from "react";
+
+export default function Counter() {
+  const [n, setN] = useState(0);
+  const items = undefined;
+  return (
+    <div className="p-8 text-center">
+      <h1 className="text-2xl font-semibold">Bộ đếm: {n}</h1>
+      <p className="text-slate-500">Có {items.length} mục</p>
+      <button onClick={() => setN(n + 1)} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white">Tăng</button>
+    </div>
+  );
+}`;
+const FIXED = BUGGY.replace("const items = undefined;", "const items = [\"Táo\", \"Cam\", \"Xoài\"];");
+
+const art = (ident, type, title, content, extra = "") => `<artifact identifier="${ident}" type="${type}" title="${title}"${extra}>\n${content}\n</artifact>`;
+
+function lastArtifact(msgs) {
+  for (const m of [...(msgs ?? [])].reverse()) {
+    if (m.role !== "assistant") continue;
+    const t = typeof m.content === "string" ? m.content : (m.content ?? []).map((b) => b.text ?? "").join("");
+    const all = [...t.matchAll(/<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/g)];
+    if (all.length) {
+      const [, attrs, body] = all[all.length - 1];
+      const g = (k) => new RegExp(`${k}="([^"]*)"`).exec(attrs)?.[1] ?? "";
+      return { ident: g("identifier"), type: g("type"), title: g("title"), body: body.replace(/^\n|\n$/g, "") };
+    }
+  }
+  return null;
+}
+
+function artifactReply(t, sys, msgs) {
+  const ai = !sys.includes("KHÔNG gọi được model AI");
+  const prev = lastArtifact(msgs);
+  // Sửa lỗi / chỉnh artifact đã có → phiên bản mới cùng identifier.
+  if (prev && has(t, /\b(gap loi|sua loi|loi)\b/) && prev.body.includes("const items = undefined"))
+    return `Lỗi do \`items\` chưa có giá trị nên không đọc được \`.length\`. Mình đã gán danh sách mẫu cho \`items\`:\n\n${art(prev.ident, prev.type, prev.title, FIXED)}\n\nGiờ artifact chạy bình thường.`;
+  if (prev && has(t, /\b(doi mau|mau xanh la|mau khac|sua|chinh|cap nhat|them|lam lai|giao dien toi|dark)\b/)) {
+    let body = prev.body.replace(/blue-/g, "emerald-").replace(/#2f7bf6/gi, "#16a34a").replace(/indigo-/g, "emerald-");
+    if (body === prev.body) body = body.replace(/(<\/style>)/, "  body{filter:hue-rotate(110deg)}\n$1");
+    return `Đã cập nhật **${prev.title}** sang tông xanh lá. Bạn có thể dùng mũi tên phiên bản ở khung bên phải để so với bản trước.\n\n${art(prev.ident, prev.type, prev.title, body)}`;
+  }
+  if (has(t, /#artbug/)) return `Đây là bộ đếm đơn giản:\n\n${art("bo-dem", "application/vnd.react", "Bộ đếm", BUGGY)}`;
+  if (has(t, /\b(dich|translat|tro ly|chatbot)\b/) && has(t, /\b(app|ung dung|cong cu)\b/))
+    return ai ? `Mình đã làm ứng dụng dịch dùng model AI ngay bên trong artifact. Nhập câu, chọn ngôn ngữ rồi bấm **Dịch**:\n\n${art("tro-ly-dich", "application/vnd.react", "Trợ lý dịch", TRANSLATOR)}`
+      : `Mình đã làm giao diện ứng dụng dịch, nhưng **Artifact dùng AI** đang tắt nên nút Dịch sẽ báo lỗi. Bật ở Cài đặt → Khả năng → Artifact dùng AI rồi thử lại.\n\n${art("tro-ly-dich", "application/vnd.react", "Trợ lý dịch", TRANSLATOR)}`;
+  if (has(t, /\b(todo|viec can lam|danh sach viec)\b/)) return `Đây là ứng dụng danh sách việc cần làm: thêm việc bằng Enter, đánh dấu xong, lọc và xóa.\n\n${art("todo-app", "application/vnd.react", "Danh sách việc cần làm", TODO)}\n\nMuốn mình thêm hạn chót hay nhãn ưu tiên không?`;
+  if (has(t, /\b(dashboard|bang dieu khien|tong quan kinh doanh)\b/)) return `Mình đã dựng bảng điều khiển kinh doanh với số liệu mẫu 6 tháng:\n\n${art("dashboard", "application/vnd.react", "Tổng quan kinh doanh", DASH)}`;
+  if (has(t, /\b(may tinh|calculator)\b/) && !has(t, /\b(lai|vay)\b/)) return `Đây là máy tính bỏ túi, dùng được cả bàn phím (Enter để tính, Esc để xóa):\n\n${art("may-tinh", "text/html", "Máy tính", CALC)}`;
+  if (has(t, /\b(landing|trang gioi thieu|trang web|website)\b/)) return `Mình đã làm trang giới thiệu cho một quán cà phê mẫu:\n\n${art("landing-cafe", "text/html", "Trang giới thiệu Lumen Coffee", LANDING)}`;
+  if (has(t, /\b(logo|svg|bieu tuong)\b/)) return `Đây là logo dạng SVG, phóng to không vỡ nét:\n\n${art("logo", "image/svg+xml", "Logo Synchro", LOGO)}`;
+  if (has(t, /\b(ke hoach|tai lieu|soan)\b/) && !has(t, /\b(word|docx|pdf|file|tep)\b/)) return `Mình đã soạn bản kế hoạch, bạn có thể tải về dạng Markdown:\n\n${art("ke-hoach", "text/markdown", "Kế hoạch ra mắt sản phẩm", PLAN)}`;
+  return null;
+}
+
+// Artifact tắt: trả lời bằng khối code thường, nhắc bật Artifacts.
+function noArtifactReply(t) {
+  if (has(t, /\b(todo|viec can lam|ung dung|app|trang web|landing|may tinh)\b/) && has(t, /\b(tao|lam|viet|xay)\b/))
+    return `Đây là code ứng dụng (Artifacts đang tắt nên mình gửi dạng code; bật ở Cài đặt → Khả năng → Artifacts để xem trước và chạy thử ngay trong chat):\n\n\`\`\`jsx\n${TODO}\n\`\`\``;
+  return null;
+}
+
+// ---------------------------------------------------------------- hình minh họa trong chat
+function vizReply(t) {
+  if (has(t, /\b(so do|quy trinh|flowchart|luong|kien truc)\b/))
+    return "Quy trình xử lý đơn hàng gồm 5 bước, có nhánh khi thanh toán thất bại:\n\n```mermaid\nflowchart LR\n  A[Khách đặt hàng] --> B{Thanh toán}\n  B -- Thành công --> C[Đóng gói]\n  B -- Thất bại --> D[Gửi nhắc thanh toán]\n  D --> B\n  C --> E[Giao hàng]\n  E --> F[Hoàn tất]\n```\n\nBước dễ nghẽn nhất thường là thanh toán, nên có vòng nhắc lại.";
+  if (has(t, /\b(mo phong|tinh lai|vay|widget|thanh truot|tuong tac)\b/))
+    return "Kéo các thanh trượt để xem tiền trả hằng tháng thay đổi thế nào:\n\n```widget\n<div style=\"font-family:system-ui;padding:16px 18px;color:#1f2937\">\n  <style>label{display:flex;justify-content:space-between;font-size:13px;margin-top:12px}input{width:100%}.big{font-size:28px;font-weight:600;margin-top:14px}.sub{color:#6b7280;font-size:13px}</style>\n  <label>Số tiền vay <b id=\"pv\"></b></label><input id=\"p\" type=\"range\" min=\"100\" max=\"5000\" step=\"50\" value=\"1500\">\n  <label>Lãi suất / năm <b id=\"rv\"></b></label><input id=\"r\" type=\"range\" min=\"4\" max=\"18\" step=\"0.1\" value=\"9.5\">\n  <label>Thời hạn <b id=\"nv\"></b></label><input id=\"n\" type=\"range\" min=\"1\" max=\"30\" value=\"15\">\n  <div class=\"big\" id=\"m\"></div><div class=\"sub\" id=\"t\"></div>\n  <script>\n    const $=(i)=>document.getElementById(i);\n    function upd(){const P=$('p').value*1e6,r=$('r').value/1200,n=$('n').value*12;const m=P*r/(1-Math.pow(1+r,-n));\n      $('pv').textContent=(+$('p').value).toLocaleString('vi-VN')+' triệu';$('rv').textContent=$('r').value+'%';$('nv').textContent=$('n').value+' năm';\n      $('m').textContent=Math.round(m).toLocaleString('vi-VN')+' ₫ / tháng';$('t').textContent='Tổng lãi phải trả: '+Math.round(m*n-P).toLocaleString('vi-VN')+' ₫';}\n    document.querySelectorAll('input').forEach(i=>i.oninput=upd);upd();\n  </script>\n</div>\n```\n\nLãi suất tăng 1% với khoản vay 1,5 tỷ trong 15 năm làm tiền trả hằng tháng tăng khoảng 900 nghìn đồng.";
+  if (has(t, /\b(ty le|ti le|co cau|ti trong|phan tram|thi phan)\b/))
+    return "Cơ cấu doanh thu theo kênh bán:\n\n```chart\n{\"type\":\"donut\",\"title\":\"Doanh thu theo kênh\",\"x\":\"kenh\",\"y\":[\"doanhThu\"],\"unit\":\"tr₫\",\"data\":[{\"kenh\":\"Cửa hàng\",\"doanhThu\":420},{\"kenh\":\"Website\",\"doanhThu\":310},{\"kenh\":\"Sàn TMĐT\",\"doanhThu\":260},{\"kenh\":\"Mạng xã hội\",\"doanhThu\":120}]}\n```\n\nCửa hàng vẫn chiếm phần lớn nhất (khoảng 38%), nhưng kênh online cộng lại đã vượt quá nửa.";
+  if (has(t, /\b(bieu do|chart|thong ke|doanh thu|xu huong|so lieu)\b/)) {
+    const line = has(t, /\b(xu huong|duong|theo thang|tang truong)\b/);
+    return `Doanh thu và chi phí 6 tháng đầu năm:\n\n\`\`\`chart\n{"type":"${line ? "line" : "bar"}","title":"Doanh thu và chi phí","x":"thang","y":["Doanh thu","Chi phí"],"unit":"tr₫","data":[{"thang":"T1","Doanh thu":320,"Chi phí":240},{"thang":"T2","Doanh thu":410,"Chi phí":260},{"thang":"T3","Doanh thu":380,"Chi phí":270},{"thang":"T4","Doanh thu":520,"Chi phí":300},{"thang":"T5","Doanh thu":610,"Chi phí":330},{"thang":"T6","Doanh thu":690,"Chi phí":350}]}\n\`\`\`\n\nDoanh thu tăng đều từ tháng 3 và đến tháng 6 đã gấp đôi chi phí.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- chạy code
+const PY = {
+  excel: `from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.chart import BarChart, Reference
+
+wb = Workbook()
+ws = wb.active
+ws.title = "Doanh thu"
+ws.append(["Tháng", "Doanh thu (tr₫)", "Chi phí (tr₫)", "Lợi nhuận (tr₫)"])
+for i, (dt, cp) in enumerate([(320, 240), (410, 260), (380, 270), (520, 300), (610, 330), (690, 350)], start=2):
+    ws.append([f"Tháng {i - 1}", dt, cp, f"=B{i}-C{i}"])
+ws.append(["Tổng", "=SUM(B2:B7)", "=SUM(C2:C7)", "=SUM(D2:D7)"])
+for c in ws[1]:
+    c.font = Font(bold=True, color="FFFFFF")
+    c.fill = PatternFill("solid", fgColor="2A78D6")
+    c.alignment = Alignment(horizontal="center")
+for c in ws[8]:
+    c.font = Font(bold=True)
+for col, w in zip("ABCD", (12, 18, 16, 18)):
+    ws.column_dimensions[col].width = w
+chart = BarChart()
+chart.title = "Doanh thu và chi phí"
+chart.add_data(Reference(ws, min_col=2, max_col=3, min_row=1, max_row=7), titles_from_data=True)
+chart.set_categories(Reference(ws, min_col=1, min_row=2, max_row=7))
+ws.add_chart(chart, "F2")
+wb.save("outputs/bao-cao-doanh-thu.xlsx")
+print("Đã tạo outputs/bao-cao-doanh-thu.xlsx: 6 tháng, có công thức và biểu đồ")`,
+  word: `from docx import Document
+from docx.shared import Pt
+
+doc = Document()
+doc.add_heading("Báo cáo tuần", 0)
+doc.add_paragraph("Tóm tắt công việc của nhóm trong tuần qua.")
+doc.add_heading("Việc đã xong", level=1)
+for x in ["Hoàn thiện trang Cài đặt → Khả năng", "Ra mắt Artifacts", "Thêm chạy code và tạo tệp"]:
+    doc.add_paragraph(x, style="List Bullet")
+doc.add_heading("Số liệu", level=1)
+t = doc.add_table(rows=1, cols=3)
+t.style = "Light Grid Accent 1"
+for c, h in zip(t.rows[0].cells, ["Chỉ số", "Tuần trước", "Tuần này"]):
+    c.text = h
+for row in [("Người dùng hoạt động", "1.240", "1.410"), ("Tin nhắn", "18.300", "21.050"), ("Artifact đã tạo", "—", "312")]:
+    cells = t.add_row().cells
+    for c, v in zip(cells, row):
+        c.text = v
+doc.add_heading("Kế hoạch tuần tới", level=1)
+doc.add_paragraph("Tối ưu tốc độ khung xem artifact và thêm mẫu biểu đồ.")
+doc.save("outputs/bao-cao-tuan.docx")
+print("Đã tạo outputs/bao-cao-tuan.docx")`,
+  pptx: `from pptx import Presentation
+from pptx.util import Inches, Pt
+
+prs = Presentation()
+s = prs.slides.add_slide(prs.slide_layouts[0])
+s.shapes.title.text = "Synchro — Khả năng mới"
+s.placeholders[1].text = "Artifacts · Hình minh họa · Chạy code"
+for title, points in [
+    ("Artifacts", ["Ứng dụng, trang web, tài liệu trong khung riêng", "Nhiều phiên bản, xem trước và tải về"]),
+    ("Hình minh họa trong chat", ["Biểu đồ, sơ đồ, widget tương tác", "Không cần rời cuộc trò chuyện"]),
+    ("Chạy code và tạo tệp", ["Word, Excel, PowerPoint, PDF", "Sandbox cô lập, mạng được kiểm soát"]),
+]:
+    sl = prs.slides.add_slide(prs.slide_layouts[1])
+    sl.shapes.title.text = title
+    body = sl.placeholders[1].text_frame
+    body.text = points[0]
+    for p in points[1:]:
+        body.add_paragraph().text = p
+prs.save("outputs/gioi-thieu-kha-nang.pptx")
+print("Đã tạo outputs/gioi-thieu-kha-nang.pptx: 4 slide")`,
+  pdf: `from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.colors import HexColor
+
+c = canvas.Canvas("outputs/hoa-don.pdf", pagesize=A4)
+w, h = A4
+c.setFillColor(HexColor("#2A78D6")); c.rect(0, h - 90, w, 90, fill=1, stroke=0)
+c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 22); c.drawString(40, h - 55, "INVOICE #2026-1025")
+c.setFillColor(HexColor("#111111")); c.setFont("Helvetica", 11)
+rows = [("Synchro Pro - 1 month", 1, 20.0), ("Extra storage 50 GB", 2, 2.5), ("Priority support", 1, 5.0)]
+y = h - 140
+c.drawString(40, y, "Item"); c.drawString(360, y, "Qty"); c.drawString(440, y, "Amount")
+y -= 20
+total = 0
+for name, q, p in rows:
+    c.drawString(40, y, name); c.drawString(360, y, str(q)); c.drawRightString(520, y, f"\${q * p:.2f}")
+    total += q * p; y -= 18
+c.line(40, y, 520, y); y -= 20
+c.setFont("Helvetica-Bold", 12); c.drawString(360, y, "Total"); c.drawRightString(520, y, f"\${total:.2f}")
+c.save()
+print(f"Đã tạo outputs/hoa-don.pdf, tổng {total:.2f} USD")`,
+  csv: `import csv, random
+random.seed(7)
+with open("outputs/du-lieu-mau.csv", "w", newline="", encoding="utf-8") as f:
+    w = csv.writer(f)
+    w.writerow(["ma_don", "khach_hang", "so_luong", "don_gia", "thanh_tien"])
+    for i in range(1, 51):
+        q, p = random.randint(1, 9), random.choice([45000, 79000, 120000, 250000])
+        w.writerow([f"DH{i:03}", f"Khách {i}", q, p, q * p])
+print("Đã tạo outputs/du-lieu-mau.csv với 50 dòng")`,
+  png: `import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+thang = ["T1", "T2", "T3", "T4", "T5", "T6"]
+dt = [320, 410, 380, 520, 610, 690]
+cp = [240, 260, 270, 300, 330, 350]
+fig, ax = plt.subplots(figsize=(8, 4.2), dpi=150)
+ax.plot(thang, dt, color="#2a78d6", linewidth=2, marker="o", label="Doanh thu")
+ax.plot(thang, cp, color="#eb6834", linewidth=2, marker="o", label="Chi phí")
+ax.set_title("Doanh thu và chi phí (triệu ₫)")
+ax.grid(axis="y", color="#e5e7eb"); ax.spines[["top", "right"]].set_visible(False)
+ax.legend(frameon=False)
+fig.tight_layout()
+fig.savefig("outputs/bieu-do-doanh-thu.png")
+print("Đã lưu outputs/bieu-do-doanh-thu.png")`,
+  primes: `import math, time
+t = time.time()
+N = 1_000_000
+sieve = bytearray([1]) * (N + 1)
+sieve[0:2] = b"\\x00\\x00"
+for i in range(2, int(math.isqrt(N)) + 1):
+    if sieve[i]:
+        sieve[i * i :: i] = bytearray(len(range(i * i, N + 1, i)))
+primes = [i for i in range(N + 1) if sieve[i]]
+print(f"Có {len(primes):,} số nguyên tố nhỏ hơn {N:,}")
+print("10 số lớn nhất:", primes[-10:])
+print(f"Thời gian: {time.time() - t:.3f} giây")`,
+  pip: `import subprocess, sys
+r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "humanize"], capture_output=True, text=True)
+print("pip exit code:", r.returncode)
+if r.returncode == 0:
+    import importlib, site
+    sys.path.insert(0, __import__("os").environ.get("PIP_TARGET", site.getusersitepackages()))
+    humanize = importlib.import_module("humanize")
+    print("Đã cài humanize", humanize.__version__ if hasattr(humanize, "__version__") else "")
+    print("Ví dụ:", humanize.naturalsize(123456789))
+else:
+    print((r.stderr or r.stdout).strip().splitlines()[-1] if (r.stderr or r.stdout).strip() else "pip failed")`,
+  net: `import urllib.request
+for url in ["https://pypi.org/simple/humanize/", "https://example.com/"]:
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            print(url, "→ truy cập được, HTTP", r.status)
+    except Exception as e:
+        print(url, "→ bị chặn:", type(e).__name__, str(e)[:120])`,
+};
+
+function codeCall(t) {
+  const py = (k) => ({ name: "run_code", args: { language: "python", code: PY[k] } });
+  if (has(t, /\b(excel|xlsx|bang tinh)\b/)) return py("excel");
+  if (has(t, /\b(word|docx)\b/)) return py("word");
+  if (has(t, /\b(powerpoint|pptx|slide|thuyet trinh)\b/)) return py("pptx");
+  if (has(t, /\b(pdf|hoa don)\b/)) return py("pdf");
+  if (has(t, /\b(csv)\b/)) return py("csv");
+  if (has(t, /\b(png|anh bieu do|matplotlib)\b/)) return py("png");
+  if (has(t, /\b(pip|cai thu vien|cai goi|cai dat goi)\b/)) return py("pip");
+  if (has(t, /\b(truy cap mang|thu mang|internet)\b/)) return py("net");
+  if (has(t, /\b(so nguyen to|chay code|chay thu code|tinh toan)\b/)) return py("primes");
+  return null;
+}
+
+// Trả lời sau khi run_code chạy xong: tóm tắt kết quả như model thật.
+export function codeDone(out) {
+  const o = String(out ?? "");
+  if (/^Chạy code đang tắt|^Không chạy được code/.test(o)) return `Mình chưa chạy được code: ${o.slice(0, 300)}`;
+  const exit = /exit_code="(-?\d+)"/.exec(o)?.[1];
+  const stdout = /<stdout>\n([\s\S]*?)\n<\/stdout>/.exec(o)?.[1]?.trim() ?? "";
+  const stderr = /<stderr>\n([\s\S]*?)\n<\/stderr>/.exec(o)?.[1]?.trim() ?? "";
+  const files = [...o.matchAll(/outputs\/(\S+) \(([^)]+)\)/g)].map((m) => `**${m[1]}** (${m[2]})`);
+  if (exit !== "0") return `Code chạy lỗi (mã thoát ${exit}):\n\n\`\`\`\n${(stderr || stdout).split("\n").slice(-8).join("\n")}\n\`\`\`\n\nNếu lỗi do thiếu thư viện hoặc mạng, hãy kiểm tra Cài đặt → Khả năng.`;
+  return `${files.length ? `Mình đã chạy code và tạo ${files.join(", ")}. Tệp ở ngay bên dưới để bạn tải về.` : "Mình đã chạy code, kết quả:"}\n\n\`\`\`\n${stdout.split("\n").slice(0, 12).join("\n")}\n\`\`\``;
+}
+
+// Artifact dùng AI (window.synchro.complete): trả lời ngắn gọn như model thật được ứng dụng gọi tới.
+const PHRASES = {
+  English: { "xin chao! hom nay ban the nao?": "Hello! How are you today?", "cam on ban rat nhieu": "Thank you very much", "chuc mot ngay tot lanh": "Have a nice day" },
+  "日本語": { "xin chao! hom nay ban the nao?": "こんにちは！今日はお元気ですか？" },
+  "한국어": { "xin chao! hom nay ban the nao?": "안녕하세요! 오늘 어떠세요?" },
+  "Français": { "xin chao! hom nay ban the nao?": "Bonjour ! Comment allez-vous aujourd'hui ?" },
+};
+function artifactAi(q) {
+  const m = /^Dịch sang (.+?),[^\n]*\n\n([\s\S]+)$/.exec(q.trim());
+  if (m) return PHRASES[m[1]]?.[norm(m[2]).trim()] ?? `[${m[1]}] ${m[2].trim()}`;
+  return `Câu trả lời giả lập cho: “${q.trim().slice(0, 160)}”`;
+}
+
+// Trả về { text } (trả lời luôn) hoặc { tool: { name, args } } (gọi công cụ), hoặc null.
+export function capsReply(sys, q, msgs, toolNames) {
+  const t = norm(q);
+  const s = String(sys ?? "");
+  if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
+  if (toolNames.includes("run_code")) { const c = codeCall(t); if (c) return { tool: c }; }
+  if (s.includes("<artifacts>")) { const a = artifactReply(t, s, msgs); if (a) return { text: a }; }
+  else { const a = noArtifactReply(t); if (a) return { text: a }; }
+  if (s.includes("<inline_visuals>")) { const v = vizReply(t); if (v) return { text: v }; }
+  return null;
+}

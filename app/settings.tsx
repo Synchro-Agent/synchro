@@ -12,6 +12,8 @@ import { ConnectorsPanel } from "./connectorsui";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
+import { setCaps, useCaps } from "./capsclient";
+import { PKG_DOMAINS, type Caps } from "./catalog";
 
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -23,8 +25,8 @@ function useAway(close: () => void) {
   return ref;
 }
 
-export function Toggle({ on, set }: { on: boolean; set: (v: boolean) => void }) {
-  return <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} />;
+export function Toggle({ on, set, disabled }: { on: boolean; set: (v: boolean) => void; disabled?: boolean }) {
+  return <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} disabled={disabled} />;
 }
 
 export function Select({ value, options, onChange, search, width = 160 }: { value: string; options: string[]; onChange: (v: string) => void; search?: boolean; width?: number }) {
@@ -61,7 +63,7 @@ function Row({ t, d, children, top }: { t: React.ReactNode; d?: React.ReactNode;
   );
 }
 const H = ({ children, first }: { children: React.ReactNode; first?: boolean }) => <h3 className={first ? "" : "sec"}>{children}</h3>;
-const A = ({ children }: { children: React.ReactNode }) => <a className="lnk">{children}</a>;
+const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={(e) => e.key === "Enter" && onClick?.()}>{children}</a>;
 
 function Toasts({ msg }: { msg: string }) {
   return msg ? <div className="toast"><I.Clock size={14} />{msg}</div> : null;
@@ -271,23 +273,61 @@ function Billing() {
   );
 }
 
-function Capabilities() {
-  const [v, setV0] = usePref<Record<string, boolean>>("caps", { conn: true, sw: true, art: true, ai: false, inl: true, code: true, net: false });
-  const setV = (n: Record<string, boolean>) => setV0(n);
-  const t = (k: string) => <Toggle on={v[k]} set={(x) => setV({ ...v, [k]: x })} />;
+const RUNNER: Record<string, string> = {
+  workspace: "Code runs in a fresh, isolated container on the Synchro server and is deleted right after.",
+  e2b: "Code runs in an isolated E2B cloud sandbox that is deleted right after.",
+  local: "Local simulation: code runs on this computer inside the macOS sandbox (no access to your files).",
+};
+
+function Capabilities({ go }: { go: (t: string) => void }) {
+  const app = useApp();
+  const st = useCaps();
+  const { caps: v, locks } = st;
+  const [modal, setModal] = useState<"" | "domains" | "risks">("");
+  const set = async (k: keyof Caps, x: boolean) => {
+    const err = await setCaps({ [k]: x });
+    if (err) app.say(err);
+  };
+  const lockNote = (k: keyof Caps) => locks[k] === "admin" ? "Your administrator has turned off Cloud sandbox for your account." : locks[k] === "server" ? "This server has no place to run code yet. An administrator needs to set up the workspace service or an E2B key." : null;
+  const t = (k: keyof Caps, disabled = false) => <Toggle on={v[k]} set={(x) => set(k, x)} disabled={disabled || !!locks[k]} />;
   return (
     <>
       <H first>General</H>
       <Row t="Switch models when a message is flagged" d="When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.">{t("sw")}</Row>
       <H>Visuals</H>
       <Row t="Artifacts" d="Build code, documents, and designs in a dedicated window alongside your conversation." top>{t("art")}</Row>
-      <Row t="AI-powered artifacts" d="Build apps and interactive documents that use Synchro inside the artifact.">{t("ai")}</Row>
+      <Row t="AI-powered artifacts" d={<>Build apps and interactive documents that use Synchro inside the artifact.{!v.art && <span className="cap-note">Turn on Artifacts first.</span>}</>}>{t("ai", !v.art)}</Row>
       <Row t="Inline visualizations" d="Allow Synchro to create interactive visuals, charts, and diagrams within the conversation.">{t("inl")}</Row>
       <H>Code execution and file creation</H>
-      <Row t="Code execution and file creation" d="Synchro can execute code and create and edit docs, spreadsheets, presentations, PDFs, and data reports. Required for skills." top>{t("code")}</Row>
-      <div className="inset"><Row t="Allow network egress" d={<>Allow Synchro to access common package managers to install packages and libraries for data analysis, visualizations, and file processing. <A>View package manager domains</A>. Monitor chats closely as this comes with <A>security risks</A>.</>} top>{t("net")}</Row></div>
+      <Row t="Code execution and file creation" d={<>Synchro can execute code and create and edit docs, spreadsheets, presentations, PDFs, and data reports. Required for skills.
+        {lockNote("code") ? <span className="cap-note warn">{lockNote("code")}</span> : st.runner && v.code ? <span className="cap-note">{RUNNER[st.runner]}</span> : null}</>} top>{t("code")}</Row>
+      <div className={`inset ${!v.code ? "dim" : ""}`}><Row t="Allow network egress" d={<>Allow Synchro to access common package managers to install packages and libraries for data analysis, visualizations, and file processing. <A onClick={() => setModal("domains")}>View package manager domains</A>. Monitor chats closely as this comes with <A onClick={() => setModal("risks")}>security risks</A>.</>} top>{t("net", !v.code)}</Row></div>
       <H>Skills</H>
-      <p className="d" style={{ marginTop: -6 }}>Skills have moved to <A>Customize</A>.</p>
+      <p className="d" style={{ marginTop: -6 }}>Skills have moved to <A onClick={() => go("Skills")}>Customize</A>.{!v.code && !locks.code && <span className="cap-note">Skills are paused while code execution and file creation is off.</span>}</p>
+      <Fade show={!!modal}>
+        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setModal("")}>
+          <div className="modal sm cap-modal">
+            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setModal("")} aria-label="Close"><I.X size={16} /></button>
+            {modal === "domains" ? (
+              <>
+                <h2>Package manager domains</h2>
+                <p className="d">With network egress on, code can only reach these registries (and their subdomains). Every other address is blocked.</p>
+                <div className="cap-domains">{PKG_DOMAINS.map((g) => <div key={g.group}><b>{g.group}</b>{g.hosts.map((h) => <code key={h}>{h}</code>)}</div>)}</div>
+              </>
+            ) : (
+              <>
+                <h2>Security risks of network egress</h2>
+                <ul className="cap-risks">
+                  <li>Packages from public registries can contain malicious code. It runs inside the isolated sandbox, which is deleted after each run.</li>
+                  <li>Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Only package registries are reachable, which limits but does not remove that risk.</li>
+                  <li>Review what Synchro runs, especially in chats that use files or connectors you don&apos;t fully trust. Turn this off when you don&apos;t need extra packages.</li>
+                </ul>
+              </>
+            )}
+            <div className="modal-foot"><button className="btn dark" onClick={() => setModal("")}>Done</button></div>
+          </div>
+        </div>
+      </Fade>
     </>
   );
 }
@@ -504,7 +544,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
     case "Account": return <Account />;
     case "Privacy": return <Privacy go={go} />;
     case "Billing": return <Billing />;
-    case "Capabilities": return <Capabilities />;
+    case "Capabilities": return <Capabilities go={go} />;
     case "Memory": return <Memory />;
     case "Reflect": return <Reflect />;
     case "Time and focus": return <Focus />;

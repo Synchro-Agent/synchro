@@ -4,6 +4,7 @@
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi.
 import http from "node:http";
 import { pathToFileURL } from "node:url";
+import { capsReply, codeDone } from "./mock-caps.mjs";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → API.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
@@ -103,6 +104,7 @@ function wantTool(q, list) {
   return best ? { name: best.tool.name, args: buildArgs(best.tool, q) } : null;
 }
 const toolDone = (name, out) => {
+  if (name === "run_code") return codeDone(out);
   const o = String(out ?? "");
   if (/^Người dùng đã từ chối/.test(o)) return `Bạn đã từ chối cho mình dùng công cụ ${name}, nên mình chưa làm việc này. Nếu muốn, bạn có thể hỏi lại và chọn "Cho phép".`;
   if (/^(Không gọi được|Người dùng đã chặn|Đã đạt giới hạn)/.test(o)) return `Mình chưa làm được: ${o.slice(0, 300)}`;
@@ -142,6 +144,10 @@ function reply(provider, id, msgs, maxTokens, effort) {
   return { text: body + foot, q };
 }
 
+// Câu trả lời theo Cài đặt → Khả năng (artifact, hình minh họa, chạy code) nếu system prompt có hướng dẫn tương ứng.
+const capsFor = (sys, q, msgs, tools, none) => (none ? null : capsReply(sys, q, msgs, normTools(tools).map((t) => t.name)));
+const sysText = (x) => (typeof x === "string" ? x : Array.isArray(x) ? x.map((b) => b.text ?? "").join("\n") : "");
+
 // Lỗi thử nghiệm theo từ khóa trong tin nhắn; trả về true nếu đã trả lỗi.
 async function trap(res, q, fmt) {
   if (q.includes("#slow")) await sleep(8000);
@@ -179,7 +185,9 @@ async function handler(req, res) {
         const out = typeof r0.content === "string" ? r0.content : (r0.content ?? []).map((x) => x.text ?? "").join(" ");
         return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: toolDone(use?.name ?? "?", out) }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: 30 } });
       }
-      const want = b.tool_choice?.type === "none" ? null : wantTool(q, b.tools);
+      const cr = capsFor(sysText(b.system), q, b.messages, b.tools, b.tool_choice?.type === "none");
+      if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: cr.text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(cr.text.length / 4) } }); }
+      const want = cr?.tool ?? (b.tool_choice?.type === "none" ? null : wantTool(q, b.tools));
       if (want) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ dùng công cụ." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: want.name, input: want.args }], stop_reason: "tool_use", usage: { input_tokens: 40, output_tokens: 20 } });
       if (await trap(res, q, (m) => err("api_error", m))) return;
       await sleep(latency(b.model));
@@ -210,7 +218,10 @@ async function handler(req, res) {
         return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
           output: [{ type: "message", id: "msg_mock", role: "assistant", status: "completed", content: [{ type: "output_text", text: toolDone(call?.name ?? "?", lastItem.output), annotations: [] }] }] });
       }
-      const want = b.tool_choice === "none" ? null : wantTool(q, b.tools);
+      const prior = input.filter((x) => x.role === "user" || x.role === "assistant").map((x) => ({ role: x.role, content: typeof x.content === "string" ? x.content : (x.content ?? []).map((c) => c.text ?? "").join("") }));
+      const cr = capsFor(b.instructions, q, prior, b.tools, b.tool_choice === "none");
+      if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: cr.text, annotations: [] }] }] }); }
+      const want = cr?.tool ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
       if (want) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
         output: [{ type: "reasoning", id: "rs_mock", summary: [] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: want.name, arguments: JSON.stringify(want.args), status: "completed" }] });
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
@@ -223,7 +234,8 @@ async function handler(req, res) {
       if (b.max_tokens !== undefined) return send(res, 400, err("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."));
       if (pro(b.model)) return send(res, 404, err("This model is only supported in v1/responses and not in v1/chat/completions."));
       if (!OPENAI_CHAT.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
-      const { text, q } = reply("openai", b.model, b.messages, b.max_completion_tokens);
+      const { text: text0, q } = reply("openai", b.model, b.messages, b.max_completion_tokens);
+      const text = capsFor(b.messages?.find((m) => m.role === "system")?.content, q, b.messages, b.tools, false)?.text ?? text0;
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
       await sleep(latency(b.model));
       return send(res, 200, { id: `chatcmpl-mock${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }], usage: { prompt_tokens: 40, completion_tokens: Math.ceil(text.length / 4) } });
@@ -245,7 +257,9 @@ async function handler(req, res) {
       const prev = [...b.messages].reverse().find((x) => x.role === "assistant" && x.tool_calls);
       return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: toolDone(prev?.tool_calls?.[0]?.function?.name ?? "?", lastMsg.content) }, finish_reason: "stop" }] });
     }
-    const want = b.tool_choice === "none" ? null : wantTool(q, b.tools);
+    const cr = capsFor(b.messages?.find((m) => m.role === "system")?.content, q, b.messages, b.tools, b.tool_choice === "none");
+    if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: cr.text }, finish_reason: "stop" }] }); }
+    const want = cr?.tool ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
     if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } }] }, finish_reason: "tool_calls" }] });
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));

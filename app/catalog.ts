@@ -81,3 +81,29 @@ export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
   // Giữ cả {} (đã bỏ hết giới hạn) để quyền riêng của một người không rơi về giới hạn của quyền mặc định.
   return { models, features, ...(effort ? { effort } : {}), ...(connectors ? { connectors } : {}) };
 }
+
+// ---------------------------------------------------------------- Cài đặt → Khả năng (lưu trên máy chủ theo tài khoản)
+// sw: đổi model khi tin nhắn bị gắn cờ · art: Artifacts · ai: artifact gọi được model · inl: biểu đồ / sơ đồ ngay trong chat
+// code: chạy code và tạo tệp (Skills cần bật) · net: khi chạy code được tải gói từ các kho thư viện bên dưới.
+export type Caps = { sw: boolean; art: boolean; ai: boolean; inl: boolean; code: boolean; net: boolean };
+export const DEFAULT_CAPS: Caps = { sw: true, art: true, ai: false, inl: true, code: true, net: false };
+export const CAP_KEYS = Object.keys(DEFAULT_CAPS) as (keyof Caps)[];
+// Lý do một khả năng đang bị khóa: quản trị viên không cho (Cloud sandbox) hoặc máy chủ chưa có nơi chạy code.
+export type CapLock = "admin" | "server";
+export type CapsState = { caps: Caps; locks: Partial<Record<keyof Caps, CapLock>>; runner: "e2b" | "workspace" | "local" | null };
+
+// Tên miền kho thư viện được phép khi bật "Cho phép truy cập mạng" (mọi tên miền con cũng được phép).
+export const PKG_DOMAINS: { group: string; hosts: string[] }[] = [
+  { group: "Python (pip)", hosts: ["pypi.org", "files.pythonhosted.org", "pythonhosted.org"] },
+  { group: "JavaScript (npm, yarn)", hosts: ["registry.npmjs.org", "npmjs.org", "npmjs.com", "registry.yarnpkg.com", "yarnpkg.com"] },
+  { group: "Rust (cargo)", hosts: ["crates.io", "index.crates.io", "static.crates.io"] },
+  { group: "Go", hosts: ["proxy.golang.org", "sum.golang.org"] },
+  { group: "Conda", hosts: ["conda.anaconda.org", "repo.anaconda.com"] },
+  { group: "GitHub (packages, releases)", hosts: ["github.com", "codeload.github.com", "objects.githubusercontent.com"] },
+  { group: "Linux (apt)", hosts: ["deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com"] },
+];
+export const PKG_HOSTS = PKG_DOMAINS.flatMap((g) => g.hosts);
+export const pkgHostAllowed = (host: string) => {
+  const h = host.toLowerCase().replace(/\.$/, "");
+  return PKG_HOSTS.some((d) => h === d || h.endsWith("." + d));
+};

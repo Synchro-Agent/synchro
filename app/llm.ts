@@ -26,7 +26,9 @@ export const hasLLM = !!LLM_ENDPOINT;
  * Endpoint nhận POST { system, messages, max_tokens } và trả về { text }.
  * (Có thể là một route Next.js `/api/llm` hoặc backend riêng.)
  */
-export type SkillUse = { kind: "skill" | "file" | "tool"; name: string; path?: string };
+export type SkillUse = { kind: "skill" | "file" | "tool" | "code" | "script" | "search"; name: string; path?: string };
+// Tệp code của model tạo ra trong lượt chat (tải qua /api/outputs/<id>).
+export type OutFile = { id: string; name: string; size: number; mime: string };
 
 // Công cụ connector cần người dùng duyệt trước khi chạy (máy chủ tạm dừng lượt chat và chờ quyết định).
 export type ApprovalCall = {
@@ -40,6 +42,9 @@ export const setApprover = (f: typeof approver) => { approver = f; };
 let lastSkills: SkillUse[] = [];
 /** Skill mà model vừa dùng ở lần callLLM gần nhất (chỉ đọc một lần). */
 export const takeSkillsUsed = () => { const u = lastSkills; lastSkills = []; return u; };
+let lastFiles: OutFile[] = [];
+/** Tệp code vừa tạo ở lần callLLM gần nhất (chỉ đọc một lần). */
+export const takeOutputs = () => { const f = lastFiles; lastFiles = []; return f; };
 
 // Model đang chọn trong giao diện; máy chủ kiểm tra tài khoản có được phép dùng model này không.
 let activeModel = "";
@@ -52,7 +57,7 @@ export class LLMError extends Error { constructor(m: string, public status: numb
 
 // opts.feature: "code" khi gọi từ Synchro Code; opts.project: id dự án đang chat (bật skill riêng của dự án).
 export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string } = {}): Promise<string> {
-  lastSkills = [];
+  lastSkills = []; lastFiles = [];
   if (!hasLLM) {
     // Chưa có model: trả lời giả lập từ câu hỏi cuối.
     const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
@@ -74,7 +79,19 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
     j = await r2.json();
   }
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
+  lastFiles = Array.isArray(j.files) ? j.files : [];
   return String(j.text ?? j.reply ?? "");
+}
+
+// Artifact dùng AI: window.synchro.complete(prompt) bên trong artifact → model đang chọn (không công cụ, không skill).
+export async function artifactComplete(prompt: unknown): Promise<string> {
+  const r = await fetch(LLM_ENDPOINT, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ feature: "artifact", prompt, max_tokens: 2000, model: activeModel || undefined, effort: activeEffort }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new LLMError(j.error || `LLM ${r.status}`, r.status);
+  return String(j.text ?? "");
 }
 
 // ------------------------------------------------------------ NGỮ CẢNH

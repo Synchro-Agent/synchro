@@ -1,6 +1,9 @@
 import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, sameOrigin, sessionsOf } from "../../../../authstore";
 import { removeUserSkillFiles } from "../../../../skillstore";
 import { removeUserConnectors } from "../../../../connectors";
+import { removeUserCaps } from "../../../../caps";
+import { removeUserOutputs } from "../../../../outputs";
+import { removeUserArtifacts } from "../../../../artifactstore";
 import { destroyWorkspace } from "../../../../workspace";
 
 export const runtime = "nodejs";
@@ -34,6 +37,9 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   adminDelete(req, user, id, confirm);
   await removeUserSkillFiles(id);
   removeUserConnectors(id);
+  removeUserCaps(id);
+  removeUserOutputs(id);
+  removeUserArtifacts(id);
   await destroyWorkspace(id);
   return Response.json({ ok: true });
 });

@@ -10,6 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ripgrep jq tree htop build-essential openssh-client \
   && rm -rf /var/lib/apt/lists/*
 
+# Thư viện để code trong chat tạo tệp (Word, Excel, PowerPoint, PDF, biểu đồ) và phân tích dữ liệu.
+RUN pip install --break-system-packages --no-cache-dir \
+      pandas numpy matplotlib openpyxl python-docx python-pptx reportlab
+
 # Người dùng không có quyền root; mọi dữ liệu nằm trong /home/user/work (volume trên máy chủ).
 RUN useradd -m -u 1500 -s /bin/bash user \
   && mkdir -p /home/user/work /home/user/.synchro /opt/synchro \

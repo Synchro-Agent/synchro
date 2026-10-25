@@ -15,7 +15,7 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
-import { callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeSkillsUsed, type ApprovalCall, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { callLLM, LLMError, setActiveEffort, setActiveModel, setApprover, takeOutputs, takeSkillsUsed, type ApprovalCall, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, SearchModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
@@ -26,6 +26,9 @@ import { fitModel, modelName, refreshModels, useModels } from "./models";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
+import { loadCaps, useCaps } from "./capsclient";
+import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
+import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -374,7 +377,7 @@ export default function Home() {
   const [width] = usePref("width", "Narrow");
   const [motion] = usePref("motion", "System");
   const [notif] = usePref("notif", [false, true, true, true]);
-  const [caps] = usePref<Record<string, boolean>>("caps", { art: true });
+  const { caps } = useCaps();
   const [vlang] = usePref("vlang", "Vietnamese");
   usePref("uilang", "vi");
   const [vspeed] = usePref("vspeed", "Normal");
@@ -518,6 +521,7 @@ export default function Home() {
   useEffect(() => { setActiveModel(model); }, [model]);
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
+  useEffect(() => { if (me) loadCaps(true); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
   useEffect(() => {
     if (me && view === "code" && !me.perms.features.code) setView("new");
@@ -540,6 +544,42 @@ export default function Home() {
   };
 
   const chat = chats.find((c) => c.id === cur);
+  // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
+  const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
+  const [artFull, setArtFull] = useState(false);
+  const artDismissed = useRef("");
+  const arts = (() => {
+    const map = new Map<string, (ArtBlock & { msg: number })[]>();
+    const at: Record<number, { ident: string; v: number }[]> = {};
+    if (!chat || !caps.art) return { map, at };
+    chat.msgs.forEach((m, i) => {
+      if (m.role !== "ai" || !hasArtifacts(m.text)) return;
+      for (const sg of splitArtifacts(m.text)) if (sg.kind === "art") {
+        const l = map.get(sg.art.ident) ?? [];
+        l.push({ ...sg.art, msg: i });
+        map.set(sg.art.ident, l);
+        (at[i] ??= []).push({ ident: sg.art.ident, v: l.length - 1 });
+      }
+    });
+    return { map, at };
+  })();
+  const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
+  const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
+  const artOpen = view === "chat" && !!artVersions?.length;
+  // Câu trả lời đang viết có artifact: tự mở khung xem và đi theo phiên bản mới nhất (trừ khi người dùng vừa đóng).
+  const lastIdx = chat ? chat.msgs.length - 1 : -1;
+  const liveArt = chat && lastIdx >= 0 && !chat.msgs[lastIdx].done ? arts.at[lastIdx]?.at(-1) : undefined;
+  useEffect(() => {
+    if (!chat || !liveArt) return;
+    const key = `${chat.id}-${lastIdx}-${liveArt.ident}`;
+    if (artDismissed.current === key) return;
+    if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true });
+  }, [chat?.id, lastIdx, liveArt?.ident, liveArt?.v]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!artOpen) setArtFull(false); }, [artOpen]);
+  const closeArt = () => {
+    if (chat && liveArt) artDismissed.current = `${chat.id}-${lastIdx}-${liveArt.ident}`;
+    setArtSel(null);
+  };
   const patch = (id: number, fn: (m: Msg[]) => Msg[]) => setChats((cs) => cs.map((c) => (c.id === id ? { ...c, msgs: fn(c.msgs) } : c)));
   const threadRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -567,6 +607,10 @@ export default function Home() {
     setChats((cs) => cs.map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true })) })));
   };
   const genRef = useRef(0);
+  const capsRef = useRef(caps);
+  capsRef.current = caps;
+  const [artRefresh, setArtRefresh] = useState(0);
+  const [artQ, setArtQ] = useState("");
   const chatsRef = useRef<Chat[]>([]);
   chatsRef.current = chats;
   const projsRef = useRef<Project[]>([]);
@@ -579,11 +623,13 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [];
+    let outs: Msg["outs"] = [];
     try {
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id });
       const used = takeSkillsUsed();
       usedSk = [...new Set(used.filter((u) => u.kind === "skill").map((u) => u.name))];
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
+      outs = takeOutputs();
     } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
     if (gen !== genRef.current) return;
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
@@ -594,9 +640,12 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, tools: usedTl.length ? usedTl : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined }]);
       if (i >= words.length) {
         stop();
+        // Lưu artifact của câu trả lời này vào trang Artifacts (không lưu đoạn chat ẩn danh).
+        if (capsRef.current.art && hasArtifacts(reply) && !chatsRef.current.find((c) => c.id === id)?.inc)
+          saveArtifacts(String(id), splitArtifacts(reply).flatMap((sg) => (sg.kind === "art" ? [sg.art] : []))).then(() => setArtRefresh((n) => n + 1));
         if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: "Câu trả lời đã hoàn tất." });
         if (pr && history.filter((m) => m.role === "user").length % MEMORY_EVERY_N_USER_MSGS === 0) {
           const full: LLMMsg[] = [...history, { role: "assistant", content: reply }];
@@ -947,7 +996,7 @@ export default function Home() {
         </div>
       </aside>
 
-      <main className="main">
+      <main className={`main ${artOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         {view !== "code" && view !== "speech" && <div className="topbar">
           <div className="left">
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
@@ -1000,7 +1049,13 @@ export default function Home() {
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? <Markdown text={m.text} say={say} /> : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} /> : (() => {
+                        const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
+                        const total = arts.map.get(sg.art.ident)?.length ?? 1;
+                        const v = pos?.v ?? 0;
+                        const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
+                        return <ArtifactCard key={k} art={sg.art} version={v + 1} total={total} active={active} onOpen={() => { setArtSel({ chat: chat.id, ident: sg.art.ident, v, follow: false }); }} />;
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} />) : !m.done ? <Thinking label="Đang suy nghĩ…" /> : null}{m.outs?.length ? <OutputFiles files={m.outs} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
@@ -1019,6 +1074,11 @@ export default function Home() {
               </div>
             </div>
             {showDown && <button className="scroll-down" onClick={toBottom} aria-label="Cuộn xuống cuối"><I.Chevron size={16} /></button>}
+            {artOpen && artVersions && (
+              <ArtifactPanel versions={artVersions} index={artIndex} setIndex={(v) => setArtSel({ chat: chat.id, ident: artSel!.ident, v, follow: false })} ai={caps.ai} onClose={closeArt}
+                expanded={artFull} setExpanded={setArtFull} say={say}
+                onFix={busy ? undefined : (a, err) => send(`${tr("Artifact")} “${a.title}” ${tr("gặp lỗi")}: ${err}\n${tr("Hãy sửa lỗi này.")}`)} />
+            )}
             <div className="dock">
               <Composer {...composerProps} dock />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /></div>
@@ -1040,7 +1100,7 @@ export default function Home() {
             <h1 style={{ marginBottom: 24 }}>Artifacts</h1>
             <div className="tabs" style={{ alignItems: "center" }}>
               {["Tất cả", "Của bạn", "Được chia sẻ với bạn"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
-              <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}><I.Search /><I.List /><I.Sliders /></span>
+              <span className="art-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></span>
             </div>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tạo thứ gì đó mới</div>
             <div className="tpls">
@@ -1052,7 +1112,9 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <div className="empty"><I.Shapes size={64} /><b>Các artifact của bạn nằm ở đây</b><span>Bắt đầu từ một mẫu ở trên, hoặc yêu cầu Synchro tạo thứ gì đó trong bất kỳ đoạn chat nào.</span></div>
+            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</div>
+            <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
+              onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />
           </div></div>
         )}
 

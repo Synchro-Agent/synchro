@@ -950,3 +950,42 @@ Object.assign(VI2EN, {
   "Quản trị viên chưa cho phép tài khoản của bạn thêm connector tùy chỉnh.": "Your administrator hasn't allowed your account to add custom connectors.",
 });
 EN2VI["Connect apps and services through MCP so the model can use their tools."] = "Kết nối ứng dụng và dịch vụ qua MCP để model dùng được công cụ của chúng.";
+
+// Cài đặt → Khả năng, Artifacts, hình minh họa trong chat, tệp code đã tạo.
+Object.assign(EN2VI, {
+  "Turn on Artifacts first.": "Hãy bật Artifacts trước.",
+  "Your administrator has turned off Cloud sandbox for your account.": "Quản trị viên đã tắt Cloud sandbox cho tài khoản của bạn.",
+  "This server has no place to run code yet. An administrator needs to set up the workspace service or an E2B key.": "Máy chủ chưa có nơi chạy code. Quản trị viên cần bật dịch vụ workspace hoặc nhập khóa E2B.",
+  "Code runs in a fresh, isolated container on the Synchro server and is deleted right after.": "Code chạy trong một container mới, cô lập trên máy chủ Synchro và được xóa ngay sau khi chạy.",
+  "Code runs in an isolated E2B cloud sandbox that is deleted right after.": "Code chạy trong sandbox đám mây E2B cô lập và được xóa ngay sau khi chạy.",
+  "Local simulation: code runs on this computer inside the macOS sandbox (no access to your files).": "Giả lập cục bộ: code chạy trên máy này trong sandbox của macOS (không đọc được tệp của bạn).",
+  "Skills are paused while code execution and file creation is off.": "Skills đang tạm dừng vì Thực thi code và tạo tệp đang tắt.",
+  "Package manager domains": "Tên miền của trình quản lý gói",
+  "With network egress on, code can only reach these registries (and their subdomains). Every other address is blocked.": "Khi bật truy cập mạng, code chỉ tới được các kho thư viện này (và tên miền con của chúng). Mọi địa chỉ khác đều bị chặn.",
+  "GitHub (packages, releases)": "GitHub (gói, bản phát hành)",
+  "Security risks of network egress": "Rủi ro bảo mật khi cho truy cập mạng",
+  "Packages from public registries can contain malicious code. It runs inside the isolated sandbox, which is deleted after each run.": "Gói từ kho công khai có thể chứa mã độc. Mã đó chỉ chạy trong sandbox cô lập, bị xóa sau mỗi lần chạy.",
+  "Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Only package registries are reachable, which limits but does not remove that risk.": "Nội dung Synchro đọc (trang web, tệp, kết quả connector) có thể tìm cách lừa nó cài gói hoặc gửi dữ liệu ra ngoài. Chỉ kho thư viện là truy cập được, nên rủi ro giảm bớt nhưng không mất hẳn.",
+  "Review what Synchro runs, especially in chats that use files or connectors you don't fully trust. Turn this off when you don't need extra packages.": "Hãy xem Synchro chạy gì, nhất là trong cuộc trò chuyện dùng tệp hoặc connector bạn không hoàn toàn tin tưởng. Tắt mục này khi không cần cài thêm gói.",
+  "Done": "Xong",
+});
+Object.assign(VI2EN, {
+  "Đang tạo…": "Creating…", "Phiên bản": "Version", "phiên bản": "versions", "Nhấn để mở": "Click to open", "Đang mở": "Open", "Mã": "Code",
+  "Chạy lại": "Run again", "Toàn màn hình": "Full screen", "Thu nhỏ": "Exit full screen", "Phiên bản trước": "Previous version", "Phiên bản sau": "Next version",
+  "Artifact gặp lỗi": "This artifact hit an error", "Nhờ Synchro sửa": "Ask Synchro to fix", "Đã sao chép nội dung artifact": "Artifact copied", "Đã tải": "Downloaded",
+  "Trang web": "Web page", "Ứng dụng": "App", "Hình SVG": "SVG image", "Mã nguồn": "Code", "Sơ đồ": "Diagram",
+  "Không vẽ được sơ đồ": "Couldn't draw the diagram", "Không vẽ được biểu đồ": "Couldn't draw the chart", "Hình minh họa gặp lỗi": "The visual hit an error",
+  "Đang vẽ biểu đồ…": "Drawing chart…", "Đang vẽ sơ đồ…": "Drawing diagram…", "Đang tạo hình minh họa…": "Creating visual…",
+  "Xem bảng": "View table", "Xem biểu đồ": "View chart", "Khác": "Other",
+  "Chưa có artifact nào được chia sẻ với bạn": "No artifacts have been shared with you yet", "Không tìm thấy artifact nào": "No artifacts found",
+  "Khi ai đó chia sẻ artifact với bạn, nó sẽ hiện ở đây.": "When someone shares an artifact with you, it shows up here.",
+  "Mở cuộc trò chuyện": "Open chat", "Cuộc trò chuyện gốc không còn trên thiết bị này": "The original chat isn't on this device anymore",
+  "Đã xóa artifact": "Artifact deleted", "Không mở được artifact": "Couldn't open the artifact", "Xóa artifact": "Delete artifact",
+  "Tìm artifact": "Search artifacts", "Artifact của bạn": "Your artifacts",
+  "Ảnh": "Image", "Văn bản": "Text", "gặp lỗi": "hit an error", "Hãy sửa lỗi này.": "Please fix it.",
+  "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng.": "AI-powered artifacts are off. Turn them on in Settings → Capabilities.",
+  "Chạy code đang tắt trong Cài đặt → Khả năng.": "Code execution is off in Settings → Capabilities.",
+  "Máy chủ chưa có nơi chạy code.": "This server has no place to run code yet.",
+  "Tệp không còn nữa (tệp được giữ 30 ngày).": "This file is no longer available (files are kept for 30 days).",
+  "Không lưu được cài đặt.": "Couldn't save the setting.", "Không kết nối được máy chủ.": "Couldn't reach the server.",
+});

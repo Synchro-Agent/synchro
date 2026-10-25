@@ -20,7 +20,7 @@ function embeddedV4(x: string): string | null {
   const hi = parseInt(m[2], 16), lo = parseInt(m[3], 16);
   return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
 }
-function isPrivate(ip: string) {
+export function isPrivate(ip: string) {
   if (isIP(ip) === 4) return v4Private(ip);
   const x = ip.toLowerCase();
   const v4 = embeddedV4(x);

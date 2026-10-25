@@ -13,7 +13,7 @@ const DATA = path.resolve("data-mock");
 // Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
 const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
 const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
-const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
+const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
 
 try { await startMock(MOCK_PORT); } catch (e) { console.error(`Không mở được API giả lập ở cổng ${MOCK_PORT}: ${e.message}`); process.exit(1); }
 try { await startMockMcp(MCP_PORT); } catch (e) { console.error(`Không mở được máy chủ MCP giả lập ở cổng ${MCP_PORT}: ${e.message}`); process.exit(1); }
@@ -75,6 +75,14 @@ for (const [name, url] of [["Mock Notes", `${MC}/mcp`], ["Mock Status", `${MC}/m
 }
 if (!conns.some((x) => x.dir === "deepwiki")) await call("POST", "/api/connectors", { dir: "deepwiki" }).catch(() => {});
 const connected = ((await call("GET", "/api/connectors")).j?.connectors ?? []).filter((x) => x.status === "ok");
+// Cài đặt → Khả năng: lần chạy đầu bật đủ mọi khả năng (kể cả artifact dùng AI và truy cập mạng) để thử ngay; sau đó giữ lựa chọn của bạn.
+// Code chạy trên máy này trong sandbox của macOS (CODE_RUN=local): không đọc được thư mục cá nhân, mạng chỉ tới kho thư viện.
+const SEEDED = path.join(DATA, ".caps-seeded");
+if (!fs.existsSync(SEEDED)) {
+  const r = await call("PATCH", "/api/caps", { art: true, ai: true, inl: true, code: true, net: true });
+  if (r.status === 200) fs.writeFileSync(SEEDED, new Date().toISOString());
+}
+const caps = (await call("GET", "/api/caps")).j;
 const models = (await call("GET", "/api/models")).j?.providers ?? [];
 
 console.log(`
@@ -86,5 +94,10 @@ console.log(`
   │ Khóa thử:   khóa nào có chữ "mock" đều hợp lệ, API giả lập ở ${M}
   │ Connector:  ${connected.map((x) => x.name).join(", ") || "chưa có"} (đã kết nối sẵn)
   │ Thử:        "Tìm ghi chú về Synchro", "Tạo ghi chú tên Họp thứ Hai", "Xóa ghi chú n2", "Mấy giờ rồi?"
+  │ Khả năng:   ${caps?.caps ? Object.entries({ Artifacts: caps.caps.art, "Artifact dùng AI": caps.caps.ai, "Hình minh họa": caps.caps.inl, "Chạy code": caps.caps.code, "Mạng": caps.caps.net }).map(([k, v]) => `${k} ${v ? "bật" : "tắt"}`).join(" · ") : "?"}
+  │   Artifact: "Tạo ứng dụng todo", "Làm máy tính bỏ túi", "Tạo trang web giới thiệu quán cà phê", "Tạo app dịch", rồi "Đổi màu xanh lá"
+  │   Hình:     "Vẽ biểu đồ doanh thu 6 tháng", "Tỷ lệ doanh thu theo kênh", "Vẽ sơ đồ quy trình đặt hàng", "Mô phỏng tính lãi vay"
+  │   Chạy code:"Tạo file Excel báo cáo doanh thu", "Viết báo cáo tuần ra file Word", "Làm slide PowerPoint", "Xuất hóa đơn PDF",
+  │             "Đếm số nguyên tố dưới 1 triệu", "Cài thư viện humanize bằng pip", "Thử truy cập mạng"
   └─ Ctrl+C để dừng ─────────────────────────────────────────
 `);

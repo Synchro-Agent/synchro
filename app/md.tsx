@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { ChartView, parseChart } from "./charts";
+import { ArtifactFrame, MermaidSvg } from "./artifactui";
 
 function Inline({ t }: { t: string }) {
   const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
@@ -156,7 +158,25 @@ function Widgets({ lang, code }: { lang: string; code: string }) {
   );
 }
 
-export function Markdown({ text: text0, say, dev }: { text: string; say: (m: string) => void; dev?: DevCtx }) {
+// Hình minh họa ngay trong chat (Cài đặt → Khả năng): ```chart, ```mermaid, ```widget. Khối chưa viết xong thì hiện chỗ chờ.
+function Visual({ lang, code, closed, say }: { lang: string; code: string; closed: boolean; say: (m: string) => void }) {
+  const [h, setH] = useState(120);
+  const [err, setErr] = useState("");
+  if (!closed) return <div className="viz-wait"><span className="art-spin sm" />{tr(lang === "chart" ? "Đang vẽ biểu đồ…" : lang === "mermaid" ? "Đang vẽ sơ đồ…" : "Đang tạo hình minh họa…")}</div>;
+  if (lang === "chart") {
+    const spec = parseChart(code);
+    return typeof spec === "string" ? <><div className="viz-note">{tr("Không vẽ được biểu đồ")}: {spec}</div><Code lang="json" code={code} say={say} idx={0} /></> : <ChartView spec={spec} />;
+  }
+  if (lang === "mermaid") return <div className="viz-card"><MermaidSvg code={code} /></div>;
+  return (
+    <div className="viz-card viz-widget">
+      {err && <div className="viz-note">{tr("Hình minh họa gặp lỗi")}: {err}</div>}
+      <ArtifactFrame type="html" content={code} ai={false} title="widget" onError={setErr} onHeight={(v) => setH(Math.min(640, Math.max(48, v)))} style={{ height: h }} className="viz-frame" />
+    </div>
+  );
+}
+
+export function Markdown({ text: text0, say, dev, viz }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean }) {
   let cbi = 0;
   const { text, meta } = dev ? splitMeta(text0) : { text: text0, meta: null };
   const segs = text.split(/(```[\s\S]*?(?:```|$))/g);
@@ -167,6 +187,8 @@ export function Markdown({ text: text0, say, dev }: { text: string; say: (m: str
           const body = s.replace(/^```/, "").replace(/```$/, "");
           const nl = body.indexOf("\n");
           const lang = nl === -1 ? body : body.slice(0, nl);
+          const l = lang.trim().toLowerCase();
+          if (viz && (l === "chart" || l === "mermaid" || l === "widget")) return <Visual key={i} lang={l} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} closed={/```\s*$/.test(s) && s.length > 6} say={say} />;
           return <Code key={i} lang={lang.trim()} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} say={say} dev={dev} idx={cbi++} />;
         }
         const lines = s.split("\n");

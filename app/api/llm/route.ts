@@ -1,10 +1,14 @@
 import { enabledSkills, recordUse } from "../../skillstore";
 import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "../../skillruntime";
-import { can, canModel, current, permsOf } from "../../authstore";
+import { can, canModel, current, limit, permsOf } from "../../authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "../../providers";
 import { ConnectorSession, connectorsPrompt } from "../../connectors";
 import { randomToken } from "../../mcpauth";
+import { capsState, skillsOn } from "../../caps";
+import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "../../coderun";
+import { saveOutputs, type OutFile } from "../../outputs";
+import { ARTIFACT_RULES, VIZ_RULES } from "../../artifacts";
 import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "../../llmcall";
 
 // Cổng duy nhất tới model của chat. Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → API quyết định.
@@ -80,7 +84,8 @@ const mockAdapter = (skills: Skl): Adapter => ({
 });
 
 // ---------------------------------------------------------------- vòng lặp công cụ (skill + connector)
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null };
+// code: công cụ run_code đang bật (net: được tải gói từ kho thư viện); outs: tệp code đã tạo trong lượt này.
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[] };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][] } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -91,9 +96,28 @@ function sweep() {
   for (const [k, p] of pending) if (Date.now() - p.at > PENDING_TTL) { pending.delete(k); p.x.sess?.close(); }
 }
 
+const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+async function runCode(x: Exec, input: Record<string, unknown>): Promise<ToolRun> {
+  const lang = (typeof input.language === "string" && input.language in LANGS ? input.language : "python") as Lang;
+  const used = { kind: "code" as const, name: lang };
+  const code = typeof input.code === "string" ? input.code : "";
+  if (!x.code) return { content: "Chạy code đang tắt trong Cài đặt → Khả năng.", is_error: true, used };
+  if (!code.trim() || code.length > 200_000) return { content: "Thiếu code hoặc code quá dài (tối đa 200.000 ký tự).", is_error: true, used };
+  try {
+    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net });
+    const saved = saveOutputs(x.uid, r.files);
+    x.outs.push(...saved);
+    const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
+    return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}\n</run_result>`, is_error: r.exit !== 0, used };
+  } catch (e) {
+    return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
+  }
+}
+
 async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
+  if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
   const ct = x.sess?.get(c.name);
-  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts);
+  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
   if (d === "deny") return { content: "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.", is_error: true, used };
   return { ...(await x.sess!.call(c.name, c.input)), used };
@@ -102,7 +126,7 @@ const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.na
 
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
   const res = await Promise.all(calls.map((c) => runCall(x, c, d[c.id])));
-  used.push(...res.filter((r) => !r.is_error && r.used.kind !== "search").map((r) => r.used));
+  used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   m.push(...ad.results(calls, res));
 }
 
@@ -164,7 +188,24 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   if ("approval" in out) return Response.json({ model, approval: out.approval });
   x.sess?.close();
   recordUse(c.user.id, out.used.filter((u) => u.kind === "skill").map((u) => u.name));
-  return Response.json({ model, text: out.text, skills: out.used });
+  return Response.json({ model, text: out.text, skills: out.used, files: x.outs });
+}
+
+// Artifact dùng AI: trang trong artifact gọi window.synchro.complete(...) → trình duyệt chuyển tới đây.
+// Không có công cụ, không có skill; chỉ tài khoản đang bật "Artifact dùng AI" mới gọi được.
+const ARTIFACT_SYSTEM = "Bạn là model AI được một ứng dụng nhỏ (artifact) gọi tới từ bên trong Synchro. Trả lời đúng điều được yêu cầu, không chào hỏi hay giải thích thêm. Khi được yêu cầu trả về JSON, chỉ trả JSON hợp lệ, không bọc trong ```.";
+function artifactMessages(raw: unknown): { role: "user" | "assistant"; content: string }[] | null {
+  const list = typeof raw === "string" ? [{ role: "user", content: raw }] : Array.isArray(raw) ? raw : null;
+  if (!list?.length || list.length > 60) return null;
+  let total = 0;
+  const out: { role: "user" | "assistant"; content: string }[] = [];
+  for (const m of list as { role?: unknown; content?: unknown }[]) {
+    const role = m?.role === "assistant" ? "assistant" : m?.role === "user" ? "user" : null;
+    if (!role || typeof m.content !== "string" || !m.content) return null;
+    total += m.content.length;
+    out.push({ role, content: m.content });
+  }
+  return total <= 120_000 && out[out.length - 1].role === "user" ? out : null;
 }
 
 export async function POST(req: Request) {
@@ -204,17 +245,34 @@ export async function POST(req: Request) {
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   // Mức nỗ lực người dùng chọn, hạ xuống giới hạn quản trị viên đặt cho model này (quản trị viên không bị giới hạn).
   const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
+  if (feature === "artifact") {
+    if (!capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
+    limit("artai:" + c.user.id, 120, 10 * 60_000);
+    const am = artifactMessages(body.prompt);
+    if (!am) return Response.json({ error: "Nội dung gửi tới model không hợp lệ." }, { status: 400 });
+    try {
+      if (t.kind === "mock") return Response.json({ model, text: `[mock] ${am[am.length - 1].content.slice(0, 200)}` });
+      return Response.json({ model, text: await chatOnce(t, ARTIFACT_SYSTEM, am, Math.min(Number(max_tokens) || 2000, 4000), undefined, effort) });
+    } catch (e) {
+      if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });
+      return Response.json({ error: String((e as Error).message ?? e) }, { status: 502 });
+    }
+  }
+  // Lượt chat chính (skills = true) áp dụng Cài đặt → Khả năng: Artifacts, hình minh họa trong chat, chạy code.
+  const cs = skills ? capsState(c.user) : null;
+  const capSys = cs ? [cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net) : ""].filter(Boolean).join("\n\n") : "";
   let sess: ConnectorSession | null = null;
   try {
-    const list = skills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
+    const list = skills && can(c.user, "skills") && skillsOn(c.user) ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: typeof conv === "string" && conv.length <= 64 ? conv : undefined, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
-    if (list.length || sess) {
-      // Chạy script của skill chỉ khi máy chủ có sandbox và tài khoản được phép dùng Sandbox.
-      const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
-      const sk = [skillsPrompt(list, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
-      const tools = [...(list.length ? skillTools(list.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
-      const x: Exec = { list, scripts, sess };
+    const code = !!cs?.caps.code && t.kind !== "mock";
+    if (list.length || sess || code) {
+      // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
+      const scripts = code;
+      const sk = [capSys, skillsPrompt(list, scripts), sess ? connectorsPrompt(sess) : ""].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(list.length ? skillTools(list.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : [])];
+      const x: Exec = { list, scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [] };
       const msgs = messages as { role: string; content: unknown }[];
       const out = t.kind === "mock" ? await toolLoop(mockAdapter(list), [...msgs], x, [], c.user.id, model)
         : t.kind === "anthropic" ? await toolLoop(anthropicAdapter(t, system, sk, max_tokens, tools, effort), msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })), x, [], c.user.id, model)
@@ -222,7 +280,7 @@ export async function POST(req: Request) {
       return reply(c, model, out, x);
     }
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
-    return Response.json({ model, text: await chatOnce(t, system, messages, max_tokens, undefined, effort), effort });
+    return Response.json({ model, text: await chatOnce(t, capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, messages, max_tokens, undefined, effort), effort });
   } catch (e) {
     sess?.close();
     if (e instanceof HttpErr) return Response.json({ error: e.message }, { status: e.status >= 500 ? 502 : e.status });

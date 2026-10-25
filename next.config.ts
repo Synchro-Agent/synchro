@@ -9,7 +9,14 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: [
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
-    ] }];
+    ] }, {
+      // Thư viện cho artifact: khung artifact không cùng nguồn gốc (sandbox) nên cần cho phép tải chéo nguồn.
+      source: "/vendor/:path*", headers: [
+        { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+        { key: "Access-Control-Allow-Origin", value: "*" },
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    }];
   },
 };
 
