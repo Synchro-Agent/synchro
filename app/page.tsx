@@ -22,6 +22,7 @@ type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" 
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
+import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
 import { ApprovalCard } from "./connectorsui";
@@ -724,6 +725,12 @@ export default function Home() {
       }
     }, 38);
   };
+  // Mở ứng dụng nội bộ khi chưa đăng nhập: /apps/<id> chuyển về đây kèm ?next=, đăng nhập xong thì quay lại đúng ứng dụng.
+  useEffect(() => {
+    if (!me) return;
+    const n = new URLSearchParams(location.search).get("next");
+    if (n && /^\/apps\/[\w-]{1,40}$/.test(n)) location.replace(n);
+  }, [me]);
   // Mở lại trang khi câu trả lời còn đang chạy ở máy chủ: nối vào lượt đó, hiện bước đang làm, nhận kết quả khi xong.
   const resumed = useRef(false);
   useEffect(() => {
@@ -1172,6 +1179,7 @@ export default function Home() {
             {artOpen && artVersions && (
               <ArtifactPanel versions={artVersions} index={artIndex} setIndex={(v) => setArtSel({ chat: chat.id, ident: artSel!.ident, v, follow: false })} ai={caps.ai} onClose={closeArt}
                 expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />}
+                conv={chat.inc ? undefined : String(chat.id)} extra={(a) => (!chat.inc && PUBLISHABLE.has(a.type) ? <PublishButton conv={String(chat.id)} art={a} say={say} /> : null)}
                 onAsk={busy ? undefined : (text) => send(text)}
                 onFix={busy ? undefined : (a, err) => send(`${tr("Artifact")} “${a.title}” ${tr("gặp lỗi")}: ${err}\n${tr("Hãy sửa lỗi này.")}`)} />
             )}
@@ -1201,7 +1209,7 @@ export default function Home() {
           <div className="page"><div className="page-in">
             <h1 style={{ marginBottom: 24 }}>Artifacts</h1>
             <div className="tabs" style={{ alignItems: "center" }}>
-              {["Tất cả", "Của bạn", "Được chia sẻ với bạn"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
+              {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
               <span className="art-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></span>
             </div>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tạo thứ gì đó mới</div>
@@ -1214,9 +1222,9 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</div>
-            <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
-              onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />
+            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 3 ? "Ứng dụng nội bộ" : tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</div>
+            {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
+              onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
           </div></div>
         )}
 

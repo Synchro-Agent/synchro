@@ -4,6 +4,7 @@ import { removeUserConnectors } from "../../../connectors";
 import { removeUserCaps } from "../../../caps";
 import { removeUserOutputs } from "../../../outputs";
 import { removeUserArtifacts } from "../../../artifactstore";
+import { removeUserApps } from "../../../appstore";
 import { removeUserUsage } from "../../../usage";
 import { removeUserPlugins } from "../../../plugins";
 import { destroyWorkspace } from "../../../workspace";
@@ -20,6 +21,7 @@ export const DELETE = handle(async (req) => {
   removeUserCaps(user.id);
   removeUserOutputs(user.id);
   removeUserArtifacts(user.id);
+  removeUserApps(user.id);
   removeUserUsage(user.id);
   await removeUserPlugins(user.id);
   await destroyWorkspace(user.id);

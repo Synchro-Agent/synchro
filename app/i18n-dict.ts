@@ -1089,3 +1089,19 @@ Object.assign(EN2VI, {
   "Skills and plugins live in the": "Skill và plugin nằm trong",
 });
 Object.assign(VI2EN, { "Kho kỹ năng": "Skill Hub" });
+// Ứng dụng nội bộ (artifact xuất bản)
+Object.assign(VI2EN, {
+  "Ứng dụng": "Apps", "Ứng dụng nội bộ": "Internal apps", "Ứng dụng đã xuất bản": "Published app", "Xuất bản thành ứng dụng": "Publish as an app",
+  "Một địa chỉ riêng để dùng thật: dữ liệu được lưu lại, cả nhóm cùng dùng được.": "A real address to use it: data is saved and your team can use it too.",
+  "Tên ứng dụng": "App name", "Cả tổ chức": "Everyone", "Mọi tài khoản trên Synchro này mở được": "Every account on this Synchro can open it", "Chỉ mình tôi": "Only me", "Chỉ bạn mở được": "Only you can open it",
+  "Mở ứng dụng": "Open app", "Cập nhật": "Update", "Xuất bản": "Publish", "Đã xuất bản ứng dụng, đã chép đường dẫn": "App published, link copied", "Đã cập nhật ứng dụng lên phiên bản đang xem": "App updated to the version you are viewing",
+  "Ứng dụng lưu dữ liệu bằng window.storage. Người dùng ứng dụng gọi AI bằng hạn mức của chính họ.": "Apps save data with window.storage. People using the app call AI on their own limits.",
+  "Chưa có ứng dụng nào": "No apps yet", "Đã gỡ ứng dụng": "App removed", "lượt mở": "opens", "của": "by", "Mở": "Open", "Không có ứng dụng nào khớp.": "No apps match.",
+  "Không mở được ứng dụng": "Couldn't open the app", "Về Synchro": "Back to Synchro", "Đã chép đường dẫn": "Link copied",
+  "Mở một artifact (trang web, ứng dụng React) rồi bấm nút tên lửa trên khung xem trước để xuất bản thành ứng dụng dùng thật, lưu được dữ liệu, chia sẻ cho cả tổ chức.": "Open an artifact (web page, React app) and press the rocket button on its preview to publish it as a real app that saves data and can be shared with everyone.",
+  "Khung này không lưu được dữ liệu. Mở artifact trong khung xem trước hoặc xuất bản thành ứng dụng.": "This frame can't save data. Open the artifact in the preview pane or publish it as an app.",
+  "Tự động": "Auto", "Việc đơn giản dùng model nhanh, việc khó dùng model mạnh nhất": "Simple tasks use a fast model, hard ones the strongest",
+});
+Object.assign(EN2VI, {
+  "Xuất bản thành ứng dụng": "Xuất bản thành ứng dụng", "Chép đường dẫn": "Chép đường dẫn", "Gỡ ứng dụng": "Gỡ ứng dụng",
+});

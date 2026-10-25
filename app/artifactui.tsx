@@ -35,9 +35,13 @@ const esc = (s: string) => s.replace(/</g, "\\u003c").replace(/\u2028/g, "\\u202
 // báo lỗi và chiều cao nội dung về cho Synchro. Chỉ trao đổi qua postMessage với đúng khung cha.
 const bridge = (ch: string, origin: string) => `<script>(function(){var ch=${JSON.stringify(ch)},seq=0,wait={},h2i=${JSON.stringify(libUrls(origin, H2I))};
 function post(m){m.__synchro=ch;try{parent.postMessage(m,"*")}catch(e){}}
-addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch||d.t!=="res"||!wait[d.id])return;var w=wait[d.id];delete wait[d.id];d.error?w[1](new Error(d.error)):w[0](d.text)});
-var api={complete:function(p){return new Promise(function(ok,no){var id=++seq;wait[id]=[ok,no];post({t:"complete",id:id,prompt:p})})}};
-window.synchro=api;window.claude=api;
+addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch||d.t!=="res"||!wait[d.id])return;var w=wait[d.id];delete wait[d.id];d.error?w[1](new Error(d.error)):w[0]("result" in d?d.result:d.text)});
+var ask=function(m){return new Promise(function(ok,no){var id=++seq;wait[id]=[ok,no];m.id=id;post(m)})};
+// Kho dữ liệu của ứng dụng: window.storage.get/set/delete/list(…, shared). shared=true: dữ liệu chung của mọi người dùng ứng dụng.
+var storage={get:function(k,s){return ask({t:"store",op:"get",key:k,shared:!!s})},set:function(k,v,s){return ask({t:"store",op:"set",key:k,value:v,shared:!!s})},
+"delete":function(k,s){return ask({t:"store",op:"delete",key:k,shared:!!s})},list:function(p,s){return ask({t:"store",op:"list",prefix:p||"",shared:!!s})}};
+var api={complete:function(p){return ask({t:"complete",prompt:p})},storage:storage};
+window.synchro=api;window.claude=api;try{window.storage=storage}catch(e){}
 // Synchro yêu cầu: in (lưu PDF) hoặc chụp ảnh PNG phần đang xem (slide hiện tại nếu là bản trình bày).
 function lib(u,cb){if(window.htmlToImage)return cb(true);var n=0;(function tryLoad(){if(n>1)return cb(false);var s=document.createElement("script");s.src=h2i[n++];s.crossOrigin="anonymous";s.integrity=h2i[2];s.onload=function(){cb(true)};s.onerror=function(){s.remove();tryLoad()};document.head.appendChild(s)})()}
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
@@ -124,23 +128,25 @@ const isDark = () => typeof document !== "undefined" && document.documentElement
 // deck: chế độ bản trình bày (xem buildDoc). onMsg: tin khác từ khung (slides, png). ctl: nhận hàm gửi lệnh vào khung.
 export type FrameMsg = { t: string; [k: string]: unknown };
 export type FrameSend = (m: FrameMsg) => void;
-export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl }: {
+// store: nơi lưu dữ liệu cho window.storage ({ app } ứng dụng đã xuất bản, { art } artifact đang thử trong chat); không có thì báo không lưu được.
+export type StoreRef = { app: string } | { art: { conv: string; ident: string } };
+export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl, store }: {
   type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties;
-  deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void;
+  deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void; store?: StoreRef;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
   const deckKey = deck ? String(deck.fixed) : "";
   const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck, title), [type, content, ch, deckKey, title]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cb = useRef({ onError, onHeight, ai, onMsg });
-  cb.current = { onError, onHeight, ai, onMsg };
+  const cb = useRef({ onError, onHeight, ai, onMsg, store });
+  cb.current = { onError, onHeight, ai, onMsg, store };
   useEffect(() => { ctl?.((m) => ref.current?.contentWindow?.postMessage({ ...m, __synchro: ch }, "*"), ref.current); });
   // Gắn trước khi khung kịp tải (khung nhỏ có thể tải xong trước cả useEffect).
   useLayoutEffect(() => {
     const h = async (e: MessageEvent) => {
       const w = ref.current?.contentWindow;
       if (!w || e.source !== w) return;
-      const d = e.data as { __synchro?: string; t?: string; id?: number; prompt?: unknown; message?: string; h?: number };
+      const d = e.data as { __synchro?: string; t?: string; id?: number; prompt?: unknown; message?: string; h?: number; op?: string; key?: unknown; value?: unknown; shared?: boolean; prefix?: unknown };
       if (!d || d.__synchro !== ch) return;
       if (d.t === "height" && typeof d.h === "number") cb.current.onHeight?.(d.h);
       else if (d.t === "slides" || d.t === "png" || d.t === "ready") cb.current.onMsg?.(d as FrameMsg);
@@ -149,6 +155,14 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
         const res = (m: Record<string, unknown>) => w.postMessage({ __synchro: ch, t: "res", id: d.id, ...m }, "*");
         if (!cb.current.ai) return res({ error: tr("Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng.") });
         try { res({ text: await artifactComplete(d.prompt) }); } catch (err) { res({ error: (err as Error).message }); }
+      } else if (d.t === "store") {
+        const res = (m: Record<string, unknown>) => w.postMessage({ __synchro: ch, t: "res", id: d.id, ...m }, "*");
+        if (!cb.current.store) return res({ error: tr("Khung này không lưu được dữ liệu. Mở artifact trong khung xem trước hoặc xuất bản thành ứng dụng.") });
+        try {
+          const r = await fetch("/api/apps/data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: cb.current.store, op: d.op, key: d.key, value: d.value, shared: d.shared, prefix: d.prefix }) });
+          const j = await r.json().catch(() => ({}));
+          res(r.ok ? { result: j.result ?? null } : { error: j.error || `Lỗi ${r.status}` });
+        } catch (err) { res({ error: (err as Error).message }); }
       }
     };
     addEventListener("message", h);
@@ -282,7 +296,7 @@ function DownloadMenu({ items, say }: { items: DlItem[]; say: (m: string) => voi
 }
 
 // Bản trình bày: khung 16:9, chuyển slide, ảnh thu nhỏ từng slide, trình chiếu toàn màn hình.
-function DeckView({ art, ai, onError, onMsg, ctl }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void }) {
+function DeckView({ art, ai, onError, onMsg, ctl, store }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void; store?: StoreRef }) {
   const [st, setSt] = useState({ n: 0, cur: 0 });
   const [full, setFull] = useState(false);
   const send = useRef<FrameSend | null>(null);
@@ -306,7 +320,7 @@ function DeckView({ art, ai, onError, onMsg, ctl }: { art: ArtVersion; ai: boole
   return (
     <div className="deck">
       <div className="deck-stage" ref={stage}>
-        <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError}
+        <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError} store={store}
           onMsg={(d) => { if (d.t === "slides") setSt({ n: Number(d.n) || 0, cur: Number(d.cur) || 0 }); else onMsg(d); }}
           ctl={(s, el) => { send.current = s; frame.current = el; ctl(s); }} />
         {full && st.n > 1 && <div className="deck-hud">{st.cur + 1} / {st.n}</div>}
@@ -333,9 +347,10 @@ function DeckView({ art, ai, onError, onMsg, ctl }: { art: ArtVersion; ai: boole
 }
 
 // ---------------------------------------------------------------- khung xem bên cạnh
-export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher }: {
+// conv: đoạn chat chứa artifact (để artifact lưu được dữ liệu thử bằng window.storage); extra: nút thêm trên đầu khung theo phiên bản đang xem.
+export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher, conv, extra }: {
   versions: ArtVersion[]; index: number; setIndex: (i: number) => void; ai: boolean; onClose: () => void; onFix?: (a: ArtVersion, err: string) => void; onAsk?: (text: string) => void;
-  expanded: boolean; setExpanded: (v: boolean) => void; say: (m: string) => void; footer?: React.ReactNode; switcher?: React.ReactNode;
+  expanded: boolean; setExpanded: (v: boolean) => void; say: (m: string) => void; footer?: React.ReactNode; switcher?: React.ReactNode; conv?: string; extra?: (a: ArtVersion) => React.ReactNode;
 }) {
   const art = versions[Math.min(index, versions.length - 1)];
   const [tab, setTab] = useState<"preview" | "code">("preview");
@@ -409,6 +424,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
         <div className="art-acts">
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.Check size={15} /> : <I.Copy size={15} />}</button>
+          {art.complete && extra?.(art)}
           {art.complete && <DownloadMenu items={items} say={say} />}
           <button className="icon-btn" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "Thu nhỏ" : "Toàn màn hình"} data-tip={expanded ? "Thu nhỏ" : "Toàn màn hình"}>
             {expanded ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" /></svg>
@@ -424,13 +440,13 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
         {showCode ? (
           <pre className="art-code">{lines.map((l, i) => <div key={i}><span>{i + 1}</span>{l || " "}</div>)}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
         ) : deck ? (
-          <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} />
+          <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
         ) : art.type === "markdown" ? (
           <div className="art-md mdx"><Markdown text={art.content} say={say} /></div>
         ) : art.type === "mermaid" ? (
           <div className="art-md"><MermaidSvg code={art.content} onError={setErr} /></div>
         ) : (
-          <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} />
+          <ArtifactFrame key={reload} type={art.type} content={art.content} ai={ai} onError={setErr} title={art.title} className="art-frame" onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} />
         )}
       </div>
       {footer}

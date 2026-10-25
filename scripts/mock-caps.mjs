@@ -272,6 +272,40 @@ export default function Counter() {
 }`;
 const FIXED = BUGGY.replace("const items = undefined;", "const items = [\"Táo\", \"Cam\", \"Xoài\"];");
 
+// Ứng dụng có lưu dữ liệu chung (window.storage, shared = true): thử xuất bản thành ứng dụng cho cả tổ chức.
+const NOTES = `<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Bảng tin nhóm</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#f7f7f5;color:#1f1f1d}
+  main{max-width:560px;margin:32px auto;padding:0 18px}h1{font-size:22px;margin:0 0 4px}p.d{margin:0 0 16px;color:#6b6b66;font-size:14px}
+  form{display:flex;gap:8px}input{flex:1;height:40px;border:1px solid #d8d8d2;border-radius:10px;padding:0 12px;font:inherit}
+  button{height:40px;border:0;border-radius:10px;padding:0 16px;background:#1f1f1d;color:#fff;font:inherit;cursor:pointer}
+  ul{list-style:none;padding:0;margin:18px 0 0;display:flex;flex-direction:column;gap:8px}
+  li{background:#fff;border:1px solid #ecece7;border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;gap:10px}
+  li small{color:#8a8a84}#st{font-size:12.5px;color:#8a8a84;margin-top:10px}
+</style></head><body><main>
+<h1>Bảng tin nhóm</h1><p class="d">Ghi chú dùng chung: ai mở ứng dụng cũng thấy và thêm được.</p>
+<form id="f"><input id="t" placeholder="Viết ghi chú…" maxlength="200" required><button>Đăng</button></form>
+<div id="st">Đang tải…</div><ul id="list"></ul>
+<script>
+const KEY = "notes";
+const list = document.getElementById("list"), st = document.getElementById("st");
+async function load() {
+  try { const r = await window.storage.get(KEY, true); return r ? JSON.parse(r.value) : []; } catch (e) { st.textContent = "Không đọc được dữ liệu: " + e.message; return []; }
+}
+function render(items) {
+  list.innerHTML = "";
+  for (const n of items.slice().reverse()) { const li = document.createElement("li"); li.innerHTML = "<span></span><small></small>"; li.firstChild.textContent = n.text; li.lastChild.textContent = new Date(n.at).toLocaleTimeString("vi-VN"); list.appendChild(li); }
+  st.textContent = items.length + " ghi chú";
+}
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault(); const t = document.getElementById("t"); const text = t.value.trim(); if (!text) return;
+  st.textContent = "Đang lưu…";
+  try { const items = await load(); items.push({ text, at: Date.now() }); await window.storage.set(KEY, JSON.stringify(items), true); t.value = ""; render(items); }
+  catch (err) { st.textContent = "Không lưu được: " + err.message; }
+};
+load().then(render);
+</script></main></body></html>`;
 const art = (ident, type, title, content, extra = "") => `<artifact identifier="${ident}" type="${type}" title="${title}"${extra}>\n${content}\n</artifact>`;
 
 function lastArtifact(msgs) {
@@ -299,6 +333,7 @@ function artifactReply(t, sys, msgs) {
     if (body === prev.body) body = body.replace(/(<\/style>)/, "  body{filter:hue-rotate(110deg)}\n$1");
     return `Đã cập nhật **${prev.title}** sang tông xanh lá. Bạn có thể dùng mũi tên phiên bản ở khung bên phải để so với bản trước.\n\n${art(prev.ident, prev.type, prev.title, body)}`;
   }
+  if (has(t, /\b(bang tin nhom|ghi chu nhom|ghi chu chung)\b/)) return `Mình đã làm bảng tin nhóm, ghi chú được lưu lại và dùng chung cho mọi người (window.storage). Bấm nút tên lửa trên khung xem trước để xuất bản thành ứng dụng cho cả tổ chức.\n\n${art("bang-tin-nhom", "text/html", "Bảng tin nhóm", NOTES)}`;
   if (has(t, /#artbug/)) return `Đây là bộ đếm đơn giản:\n\n${art("bo-dem", "application/vnd.react", "Bộ đếm", BUGGY)}`;
   if (has(t, /\b(dich|translat|tro ly|chatbot)\b/) && has(t, /\b(app|ung dung|cong cu)\b/))
     return ai ? `Mình đã làm ứng dụng dịch dùng model AI ngay bên trong artifact. Nhập câu, chọn ngôn ngữ rồi bấm **Dịch**:\n\n${art("tro-ly-dich", "application/vnd.react", "Trợ lý dịch", TRANSLATOR)}`

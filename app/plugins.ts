@@ -55,7 +55,7 @@ export function parseRepo(raw: string): Source {
 // Commit hiện tại của nhánh (để ghi nhận phiên bản và kiểm tra cập nhật). Lỗi API (giới hạn lượt gọi) thì dùng tên nhánh.
 async function resolveCommit(repo: string, ref = "HEAD"): Promise<string> {
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}/commits/${encodeURIComponent(ref)}`, { headers: { Accept: "application/vnd.github.sha", "User-Agent": "Synchro" }, signal: AbortSignal.timeout(15_000) });
+    const r = await fetch(`https://api.github.com/repos/${repo}/commits/${encodeURIComponent(ref)}`, { headers: { Accept: "application/vnd.github.sha", "User-Agent": "Synchro", ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) }, signal: AbortSignal.timeout(15_000) });
     const t = (await r.text()).trim();
     if (r.ok && /^[0-9a-f]{40}$/.test(t)) return t;
     if (r.status === 404 || r.status === 422) fail(`Không tìm thấy repo hoặc nhánh ${repo}${ref !== "HEAD" ? `@${ref}` : ""} (chỉ hỗ trợ repo công khai).`, 404);
