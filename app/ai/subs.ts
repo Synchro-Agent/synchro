@@ -65,7 +65,8 @@ export async function codexRpc(scope: string, calls: { method: string; params?: 
  */
 type PlanModel = { id: string; name: string; variants?: Record<string, string>; efforts?: string[] };
 type G = {
-  models: Map<string, { at: number; v: PlanModel[] }>;
+  /** src: đầu ra danh sách model của CLI lúc đọc (agy): khác đi là đọc lại ngay, không chờ hết hạn nhớ. */
+  models: Map<string, { at: number; v: PlanModel[]; src?: string }>;
   limits: Map<string, { at: number; plan?: string; credits?: string | null; setup?: boolean; windows: (RateWindow | PlanWindow)[] }>;
   /** Gói báo hết hạn mức mà không kèm mốc đặt lại: tạm coi là hết tới thời điểm này. */
   quota: Map<string, number>;
@@ -158,9 +159,12 @@ async function planModels(cli: Cli, u: UserRow) {
   if (!s?.loggedIn || s.relogin) return null;
   // Đọc lại khi hết hạn nhớ, hoặc khi người dùng vừa đăng nhập lại sau lần đọc trước.
   const k = `${cli}:${u.id}`, hit = g.models.get(k);
-  const fresh = hit && Date.now() - hit.at < MODELS_TTL && hit.at > loginTime(cli, u.id);
+  // agy: trạng thái (`agy models`, đọc lại mỗi phút) cho biết danh sách hiện tại — Google đổi danh sách (vd. gói chuyển từ dùng thử
+  // sang trả phí) thì cập nhật ngay.
+  const src = cli === "agy" ? (s.models ?? []).join("\n") : undefined;
+  const fresh = hit && Date.now() - hit.at < MODELS_TTL && hit.at > loginTime(cli, u.id) && (src === undefined || hit.src === src);
   const models = fresh ? hit.v : await detectModels(cli, u.id, s.models);
-  g.models.set(k, { at: Date.now(), v: models });
+  if (!fresh) g.models.set(k, { at: Date.now(), v: models, src });
   return models.map((m) => ({ key: `${SUB_PREFIX}${cli}/${m.id}`, id: m.id, name: m.name }));
 }
 

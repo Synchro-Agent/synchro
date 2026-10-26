@@ -25,7 +25,9 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
   if (a[0] === "models") {
     console.log("Fetching available models...");
     if (!li) { console.log("Error: Please sign in to view available models. Launch the CLI without arguments to sign in."); process.exit(1); }
-    return console.log(MODELS.map(([id, n]) => `${id}\t${n}`).join("\n"));
+    // Kiểm thử: thêm model như khi Google mở thêm model cho tài khoản (gói chuyển sang trả phí).
+    const extra = (() => { try { return fs.readFileSync(path.join(cli, "mock-extra-models"), "utf8").trim().split("\n"); } catch { return []; } })();
+    return console.log([...MODELS.map(([id, n]) => `${id}\t${n}`), ...extra].join("\n"));
   }
   if (a.includes("-p")) {
     const prompt = C.flag(a, "-p") ?? "", conv = C.flag(a, "--conversation") || C.uuid();

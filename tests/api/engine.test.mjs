@@ -265,6 +265,14 @@ try {
     ok(subs.find((p) => p.id === "anthropic")?.models.some((m) => m.key === "sub-claude/sonnet"), "Claude: opus / sonnet / haiku");
     ok(gem.map((m) => m.id).join() === "gemini-4-argon,gemini-3.8-flash,gemini-3.1-flash-lite" && gem.map((m) => m.name).join() === "Gemini 4 Argon,Gemini 3.8 Flash,Gemini 3.1 Flash Lite",
       "Gemini: chỉ model Gemini (không lẫn Claude / GPT của Antigravity), gộp biến thể High / Medium / Low thành một model, tên chuẩn", JSON.stringify(gem));
+    // Google đổi danh sách model (gói dùng thử → trả phí): bộ chọn model cập nhật theo trạng thái mới, không chờ 10 phút.
+    const before = (await SUBS.mergedProviders(me, await P.catalog())).find((p) => p.id === "google").models.length;
+    const marker = path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "mock-extra-models");
+    fs.writeFileSync(marker, "gemini-4-argon-ultra\tGemini 4 Argon Ultra (High)");
+    await A.status("agy", U, { fresh: true });
+    const after = (await SUBS.mergedProviders(me, await P.catalog())).find((p) => p.id === "google").models;
+    fs.rmSync(marker); await A.status("agy", U, { fresh: true });
+    ok(after.length === before + 1 && after.some((m) => m.id === "gemini-4-argon-ultra"), "danh sách model của Google đổi → bộ chọn model cập nhật ngay", JSON.stringify(after.map((m) => m.id)));
     const AG = SUBS.agyModels(["Fetching available models...", "gemini-3.8-flash-high\tGemini 3.8 Flash (High)", "gemini-3.8-flash-low\tGemini 3.8 Flash (Low)", "claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)", "gpt-oss-120b-medium\tGPT-OSS 120B (Medium)"]);
     ok(AG.length === 1 && AG[0].name === "Gemini 3.8 Flash" && AG[0].variants.high === "gemini-3.8-flash-high", "agyModels: đọc đúng đầu ra thật của agy 1.4.7", JSON.stringify(AG));
     ok(codexModels.includes("gpt-6.1-sol") && !codexModels.includes("codex-internal"), "Codex: danh sách model thật từ app-server (bỏ model ẩn)", codexModels.join());
