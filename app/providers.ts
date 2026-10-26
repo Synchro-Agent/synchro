@@ -70,6 +70,9 @@ const prettyOpenAI = (id: string) => {
   return `${m[1].toLowerCase() === "gpt" ? "GPT" : "ChatGPT"}-${m[2]}${m[3] ? " " + m[3].split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") : ""}`;
 };
 
+/** Tên quyền ElevenLabs còn thiếu trong thông báo lỗi ("…missing the permission convai_write…"), không có thì null. */
+export const elevenMissing = (msg: string) => /missing the permission ([\w.-]+)/i.exec(msg)?.[1] ?? (/missing_permissions/i.test(msg) ? "?" : null);
+
 async function getJson(url: string, headers: Record<string, string>) {
   const r = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) }).catch((e) => { throw new Error(`Không kết nối được tới ${new URL(url).host}: ${(e as Error).message}`); });
   const text = await r.text();
@@ -107,8 +110,10 @@ async function listAll(kind: ProviderKind, base: string, key: string): Promise<{
     return { models: list.filter((m) => m.name.includes("gemini") && (m.supportedGenerationMethods ?? []).includes("generateContent") && !GOOGLE_SKIP.test(m.name)).map((m) => ({ id: m.name.replace(/^models\//, ""), name: m.displayName || m.name })) };
   }
   if (kind === "elevenlabs") {
-    const j = await getJson(`${b}/v1/user`, { "xi-api-key": key });
-    const tier = j.subscription?.tier as string | undefined;
+    // /v1/user chỉ để hiện tên gói. Khóa giới hạn quyền (không bật User) bị báo "missing the permission user_read" nhưng vẫn là khóa đúng
+    // (khóa sai báo invalid_api_key), nên vẫn nhận; quyền còn thiếu cho giọng nói được báo đúng tên khi mở phiên.
+    const j = await getJson(`${b}/v1/user`, { "xi-api-key": key }).catch((e: Error) => { if (elevenMissing(e.message)) return null; throw e; });
+    const tier = j?.subscription?.tier as string | undefined;
     return { models: [], info: tier || undefined };
   }
   const j = await getJson(`${b}/models`, { Authorization: `Bearer ${key}` });

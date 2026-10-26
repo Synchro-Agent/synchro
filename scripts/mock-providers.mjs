@@ -152,6 +152,8 @@ function chatShape(b, google) {
 const readBody = (req) => new Promise((ok) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { ok(JSON.parse(s || "{}")); } catch { ok({}); } }); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const valid = (k) => typeof k === "string" && k.includes("mock");
+// Khóa ElevenLabs giới hạn quyền như thật: "sk_mock_eleven_nouser" thiếu quyền User, "…_noagents" thiếu quyền ElevenLabs Agents.
+const elevenNo = (req, perm) => String(req.headers["xi-api-key"] ?? "").includes(`no${perm}`);
 
 // Chữ của tin nhắn người dùng gần nhất (bỏ qua kết quả công cụ, ảnh, tệp).
 function lastUserFull(msgs = []) {
@@ -478,6 +480,7 @@ async function handler(req, res) {
   // ---- ElevenLabs Realtime: cấp khóa tạm cho phiên (giữ cấu hình để WebSocket giả lập dùng) ----
   if (p === "/elevenlabs/v1/convai/realtime/client_secrets" && req.method === "POST") {
     if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
+    if (elevenNo(req, "agents")) return send(res, 401, { detail: { status: "missing_permissions", message: "The API key you used is missing the permission convai_write to execute this operation." } });
     const sess = b.session ?? {};
     if (sess.model !== "eleven_realtime_v1_max" && sess.model !== "eleven_realtime_v1_mini") return send(res, 422, { detail: { message: "Unknown model" } });
     if (sess.tools && !RT.cfg.tools) return send(res, 422, { detail: { message: "Unknown field: session.tools" } });
@@ -495,6 +498,7 @@ async function handler(req, res) {
   // ---- ElevenLabs (chỉ kiểm tra khóa; giọng nói không giả lập) ----
   if (p === "/elevenlabs/v1/user") {
     if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
+    if (elevenNo(req, "user")) return send(res, 401, { detail: { status: "missing_permissions", message: "The API key you used is missing the permission user_read to execute this operation." } });
     return send(res, 200, { subscription: { tier: "creator" } });
   }
 

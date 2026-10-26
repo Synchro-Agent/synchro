@@ -151,6 +151,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
           return;
         } catch { if (!dead) { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); setMode("rt"); setPhase("paused"); } return; }
       }
+      if (s.error) say(s.error);
       setMode("browser"); setPhase("listen");
     })();
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };

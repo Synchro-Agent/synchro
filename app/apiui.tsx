@@ -40,6 +40,7 @@ function KeyForm({ p, busy, err, onCancel, onSave }: { p: ApiProvider; busy: boo
         <button type="button" className="icon-btn" aria-label={show ? "Hide key" : "Show key"} title={show ? "Hide key" : "Show key"} onClick={() => setShow(!show)}><I.Eye size={16} /></button>
       </div>
       {p.keyUrl && <a className="api-get" href={p.keyUrl} target="_blank" rel="noreferrer">{`Get a key from ${p.vendor}`}<I.External size={12} /></a>}
+      {p.kind === "elevenlabs" && <p className="api-note">Restricted keys work too. Turn on the features you use; User access is optional and only shows your plan here.</p>}
       <button type="button" className="api-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}><I.ChevronR size={13} />Advanced</button>
       {adv && (
         <>

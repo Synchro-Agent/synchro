@@ -1,5 +1,5 @@
 import { can, current, limit, sameOrigin } from "../../../authstore";
-import { serviceKey } from "../../../providers";
+import { elevenMissing, serviceKey } from "../../../providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,8 +62,14 @@ export async function POST(req: Request) {
     r = await mint(false);
   }
   if (!r?.ok) {
-    console.error("voice session", r?.status, await r?.text().catch(() => ""));
-    return Response.json({ fallback: true, error: "Không mở được phiên giọng nói ElevenLabs." });
+    const body = (await r?.text().catch(() => "")) ?? "";
+    console.error("voice session", r?.status, body.slice(0, 300));
+    // Khóa giới hạn quyền: nói rõ quyền nào cần bật, thay vì chỉ báo lỗi chung.
+    const miss = r && (r.status === 401 || r.status === 403) ? elevenMissing(body) : null;
+    const error = miss
+      ? `Khóa ElevenLabs chưa được cấp quyền ${miss === "?" ? "cần cho trò chuyện bằng giọng nói" : `"${miss}"`}. Vào elevenlabs.io → API keys, sửa khóa và bật quyền này (hoặc dùng khóa không giới hạn). Tạm thời dùng giọng của trình duyệt.`
+      : "Không mở được phiên giọng nói ElevenLabs. Tạm thời dùng giọng của trình duyệt.";
+    return Response.json({ fallback: true, error });
   }
   const j = (await r.json()) as { value: string; expires_at: number };
   // Địa chỉ WebSocket theo địa chỉ API đang dùng (mặc định api.elevenlabs.io; bản giả lập chạy ở máy cục bộ).

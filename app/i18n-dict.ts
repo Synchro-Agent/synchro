@@ -1296,3 +1296,12 @@ Object.assign(VI2EN, {
   "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây.": "Synchro is restarting for an update. Try again in a few seconds.",
   "Máy chủ phản hồi quá lâu. Thử lại sau ít phút.": "The server took too long to respond. Try again in a few minutes.",
 });
+// Khóa ElevenLabs giới hạn quyền.
+Object.assign(EN2VI, {
+  "Restricted keys work too. Turn on the features you use; User access is optional and only shows your plan here.": "Khóa giới hạn quyền cũng dùng được. Bật quyền cho các tính năng bạn dùng; quyền User không bắt buộc, chỉ để hiện tên gói ở đây.",
+});
+Object.assign(VI2EN, {
+  "Không mở được phiên giọng nói ElevenLabs. Tạm thời dùng giọng của trình duyệt.": "Couldn't open an ElevenLabs voice session. Using the browser's voice for now.",
+});
+RULES_EN.push([/^Khóa ElevenLabs chưa được cấp quyền (.+)\. Vào elevenlabs\.io → API keys, sửa khóa và bật quyền này \(hoặc dùng khóa không giới hạn\)\. Tạm thời dùng giọng của trình duyệt\.$/,
+  (m) => `The ElevenLabs key doesn't have the ${m[1] === "cần cho trò chuyện bằng giọng nói" ? "permission voice conversation needs" : `${m[1]} permission`}. On elevenlabs.io → API keys, edit the key and turn it on (or use an unrestricted key). Using the browser's voice for now.`]);

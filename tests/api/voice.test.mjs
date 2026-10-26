@@ -93,6 +93,23 @@ r = await api("POST", "/api/voice/session");
 dbg = await fetch(`${LLM}/_debug/rt`).then((x) => x.json());
 ok(r.s === 200 && r.j?.value && r.j.tools === false && dbg.sessions.length === 1 && !dbg.sessions[0].tools, "ElevenLabs chưa nhận công cụ → tự mở phiên thường (vẫn trò chuyện được)", JSON.stringify([r.j, dbg.sessions]));
 await fetch(`${LLM}/_debug/rt`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tools: true }) });
+
+console.log("5. Khóa ElevenLabs giới hạn quyền");
+const elKey = (key) => api("POST", "/api/admin/apikeys", { id: "elevenlabs", kind: "elevenlabs", key, baseUrl: `${LLM}/elevenlabs` });
+const elRow = (j) => j?.providers?.find((p) => p.id === "elevenlabs");
+r = await elKey("sk_mock_eleven_nouser");
+ok(r.s === 200 && elRow(r.j)?.status === "ok" && !elRow(r.j)?.info, "khóa không bật quyền User vẫn được nhận (chỉ không hiện tên gói)", JSON.stringify([r.s, r.j?.error ?? elRow(r.j)]));
+r = await api("POST", "/api/voice/session");
+ok(r.s === 200 && /^ek_mock_/.test(r.j?.value ?? ""), "khóa đó vẫn mở được phiên giọng nói", JSON.stringify(r.j));
+r = await api("POST", "/api/admin/apikeys", { action: "refresh", id: "elevenlabs" });
+ok(r.s === 200 && elRow(r.j)?.status === "ok", "kiểm tra lại khóa không bật quyền User → vẫn ổn", JSON.stringify(elRow(r.j)));
+r = await elKey("sk_mock_eleven_nouser_noagents");
+ok(r.s === 200, "khóa thiếu cả quyền ElevenLabs Agents vẫn lưu được", JSON.stringify(r.j).slice(0, 200));
+r = await api("POST", "/api/voice/session");
+ok(r.s === 200 && r.j?.fallback === true && !r.j.value && /quyền "convai_write"/.test(r.j.error ?? ""), "mở phiên khi thiếu quyền → báo đúng tên quyền cần bật, dùng giọng trình duyệt", JSON.stringify(r.j));
+r = await elKey("sk_wrong_eleven_key");
+ok(r.s >= 400 && /Khóa không hợp lệ/.test(r.j?.error ?? ""), "khóa sai vẫn bị từ chối", JSON.stringify(r.j));
+await elKey("sk_mock_eleven_0001");
 if (!had) await api("DELETE", "/api/admin/apikeys?id=elevenlabs");
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
