@@ -9,7 +9,7 @@ import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../
 import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
-import { engineEnv, everLoggedIn, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
+import { engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
 import { CLIS, type Cli, engineHome, find, makeDir, spawnCli, stripAnsi } from "./cli_runtime";
 import type { RateWindow, TurnRequest } from "./engine";
 import { redact } from "./errors";
@@ -58,22 +58,48 @@ export async function codexRpc(scope: string, calls: { method: string; params?: 
 }
 
 // ---------------------------------------------------------------- danh sách model của gói
+/** Model của gói. variants: biến thể theo mức effort mà CLI tách thành model riêng (agy: gemini-3.8-flash-low / -medium / -high). */
+type PlanModel = { id: string; name: string; variants?: Record<string, string> };
 type G = {
-  models: Map<string, { at: number; v: { id: string; name: string }[] }>;
-  limits: Map<string, { at: number; plan?: string; credits?: string | null; windows: (RateWindow | PlanWindow)[] }>;
+  models: Map<string, { at: number; v: PlanModel[] }>;
+  limits: Map<string, { at: number; plan?: string; credits?: string | null; setup?: boolean; windows: (RateWindow | PlanWindow)[] }>;
   /** Gói báo hết hạn mức mà không kèm mốc đặt lại: tạm coi là hết tới thời điểm này. */
   quota: Map<string, number>;
+  /** Đang đọc bảng /usage của agy (mỗi tài khoản một lượt một lúc). */
+  agyBusy: Map<string, Promise<AgyUsage>>;
 };
-const g: G = ((globalThis as { __synchroSubs?: G }).__synchroSubs ??= { models: new Map(), limits: new Map(), quota: new Map() });
+const g: G = ((globalThis as { __synchroSubs?: G }).__synchroSubs ??= { models: new Map(), limits: new Map(), quota: new Map(), agyBusy: new Map() });
 g.quota ??= new Map();
+g.agyBusy ??= new Map();
 const MODELS_TTL = 10 * 60_000;
 
-async function detectModels(cli: Cli, scope: string, agyModels?: string[]): Promise<{ id: string; name: string }[]> {
+const EFFORT_SUFFIX = /-(minimal|extra-low|low|medium|high|xhigh|max)$/;
+const pretty = (id: string) => id.split("-").map((w) => (/^gpt$/i.test(w) ? "GPT" : w[0].toUpperCase() + w.slice(1))).join(" ");
+
+/**
+ * `agy models` in "mã<TAB>Tên" mỗi dòng (sau dòng "Fetching available models..."), gồm cả model Claude / GPT mà Antigravity cung cấp
+ * kèm. Nhóm Gemini của Synchro chỉ nhận model Gemini; các biến thể theo effort (…-low / -medium / -high) gộp thành một model,
+ * effort chọn ở mục Effort riêng và đổi sang đúng biến thể khi chạy.
+ */
+export function agyModels(lines: string[]): PlanModel[] {
+  const byBase = new Map<string, PlanModel>();
+  for (const raw of lines) {
+    const [id, label = ""] = raw.split("\t").map((x) => x.trim());
+    if (!/^gemini-[\w.-]+$/i.test(id ?? "")) continue;
+    const m = EFFORT_SUFFIX.exec(id);
+    const base = m ? id.slice(0, m.index) : id;
+    const name = label ? label.replace(/\s*\((minimal|extra low|low|medium|high|xhigh|max|thinking)\)\s*$/i, "") : pretty(base);
+    const cur = byBase.get(base) ?? { id: base, name, variants: {} };
+    if (m) cur.variants![m[1]] = id; else cur.variants!.default = id;
+    byBase.set(base, cur);
+  }
+  return [...byBase.values()];
+}
+
+async function detectModels(cli: Cli, scope: string, agyLines?: string[]): Promise<PlanModel[]> {
   if (cli === "agy") {
-    const ids = (agyModels ?? []).map((l) => l.split(/\s+/)[0]).filter((x) => /^[a-z][\w.:/-]{2,60}$/i.test(x));
-    // "gemini-3-pro" → "Gemini 3 Pro", "claude-sonnet-4.5" → "Claude Sonnet 4.5", "gpt-oss-120b" → "GPT Oss 120b".
-    const pretty = (id: string) => id.split("-").map((w) => (/^gpt$/i.test(w) ? "GPT" : w[0].toUpperCase() + w.slice(1))).join(" ");
-    return ids.length ? [...new Set(ids)].map((id) => ({ id, name: pretty(id) })) : SUB.agy.fallback;
+    const list = agyModels(agyLines ?? []);
+    return list.length ? list : SUB.agy.fallback;
   }
   if (cli === "codex") {
     const [r] = await codexRpc(scope, [{ method: "model/list" }]).catch(() => [null]);
@@ -84,6 +110,17 @@ async function detectModels(cli: Cli, scope: string, agyModels?: string[]): Prom
   return SUB.claude.fallback;
 }
 
+/** Model CLI thật sự chạy cho một model gói và mức effort: agy đổi sang biến thể đúng mức; không có biến thể thì truyền effort riêng. */
+export function resolvePlanModel(cli: Cli, uid: string, id: string, effort?: string): { model?: string; effort?: string } {
+  const pm = g.models.get(`${cli}:${uid}`)?.v.find((m) => m.id === id);
+  const v = pm?.variants && Object.keys(pm.variants).some((k) => k !== "default") ? pm.variants : null;
+  if (!v) return { model: pm?.variants?.default ?? (id && id !== "default" ? id : undefined), effort };
+  const want = effort === "extra" ? ["xhigh", "high", "max"] : effort === "max" ? ["max", "xhigh", "high"] : effort === "low" ? ["low", "minimal", "extra-low", "medium"]
+    : effort === "high" ? ["high", "xhigh", "medium"] : ["medium", "default", "high", "low"];
+  const pick = want.map((w) => v[w]).find(Boolean) ?? v.default ?? Object.values(v)[0];
+  return { model: pick };
+}
+
 const VENDOR_CLI: Record<string, Cli> = { anthropic: "claude", openai: "codex", google: "agy" };
 
 /** Model của gói (đã đăng nhập, không cần đăng nhập lại), đọc lại tối đa 10 phút một lần. */
@@ -91,8 +128,10 @@ async function planModels(cli: Cli, u: UserRow) {
   if (!find(cli) || !everLoggedIn(cli, u.id)) return null;
   const s = await status(cli, u.id, { stale: true }).catch(() => null);
   if (!s?.loggedIn || s.relogin) return null;
+  // Đọc lại khi hết hạn nhớ, hoặc khi người dùng vừa đăng nhập lại sau lần đọc trước.
   const k = `${cli}:${u.id}`, hit = g.models.get(k);
-  const models = hit && Date.now() - hit.at < MODELS_TTL ? hit.v : await detectModels(cli, u.id, s.models);
+  const fresh = hit && Date.now() - hit.at < MODELS_TTL && hit.at > loginTime(cli, u.id);
+  const models = fresh ? hit.v : await detectModels(cli, u.id, s.models);
   g.models.set(k, { at: Date.now(), v: models });
   return models.map((m) => ({ key: `${SUB_PREFIX}${cli}/${m.id}`, id: m.id, name: m.name }));
 }
@@ -152,7 +191,8 @@ export const forgetSubModels = (cli: Cli, uid: string) => g.models.delete(`${cli
 // hạn mức tuần về 0% và mốc kế tiếp là đúng một tuần sau mốc cũ.
 export type WindowKind = "session" | "weekly" | "other";
 export type PlanWindow = RateWindow & { label: string; kind: WindowKind; group?: string; idle?: boolean };
-export type SubUsage = { cli: Cli; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null };
+/** setup: CLI đang chờ người dùng hoàn tất bước làm quen (agy) nên chưa đọc được hạn mức. */
+export type SubUsage = { cli: Cli; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
 
 const WINDOW_NAME: Record<string, string> = {
   five_hour: "Current session", seven_day: "Weekly · all models", seven_day_opus: "Weekly · Opus", seven_day_sonnet: "Weekly · Sonnet",
@@ -169,11 +209,11 @@ export function project(w: PlanWindow, now = Date.now()): PlanWindow {
   return { ...w, usedPct: 0, resetsAt: undefined, status: "allowed" };
 }
 
-function saveLimits(cli: Cli, uid: string, windows: PlanWindow[] | RateWindow[], extra: { plan?: string; credits?: string | null } = {}) {
+function saveLimits(cli: Cli, uid: string, windows: PlanWindow[] | RateWindow[], extra: { plan?: string; credits?: string | null; setup?: boolean } = {}) {
   const k = `${cli}:${uid}`, old = g.limits.get(k);
   const merged = new Map((old?.windows ?? []).map((w) => [w.window, w]));
   for (const w of windows) merged.set(w.window, w);
-  g.limits.set(k, { at: Date.now(), plan: extra.plan ?? old?.plan, credits: extra.credits !== undefined ? extra.credits : old?.credits, windows: [...merged.values()] });
+  g.limits.set(k, { at: Date.now(), plan: extra.plan ?? old?.plan, credits: extra.credits !== undefined ? extra.credits : old?.credits, setup: extra.setup ?? old?.setup, windows: [...merged.values()] });
 }
 
 /** codex: cửa sổ ≤ 1 ngày là phiên (5 giờ), dài hơn là tuần. Pro không có phiên 5 giờ nên chỉ còn cửa sổ tuần. */
@@ -219,26 +259,43 @@ export function agyWindows(text: string): PlanWindow[] {
   return out;
 }
 
-/** Mở agy trong terminal giả, gõ /usage, đọc bảng hạn mức rồi thoát. */
-async function agyUsage(scope: string): Promise<PlanWindow[]> {
-  const bin = find("agy");
-  if (!bin) return [];
-  const work = path.join(engineHome(), "work", safeScope(scope));
-  makeDir(work);
-  const p = spawnCli(bin, [], { env: engineEnv("agy", scope), cwd: work, pty: true, timeoutMs: 30_000 });
-  let raw = "", last = Date.now(), asked = false;
-  p.child.stdout!.on("data", (d: Buffer) => { raw = (raw + d.toString()).slice(-200_000); last = Date.now(); });
-  const t0 = Date.now();
-  let windows: PlanWindow[] = [];
-  while (Date.now() - t0 < 25_000) {
-    await new Promise((r) => setTimeout(r, 300));
-    const text = stripAnsi(raw);
-    if (!asked && Date.now() - last > 1200 && Date.now() - t0 > 1500) { p.write("/usage\r"); asked = true; last = Date.now(); continue; }
-    if (asked && /limit\s+remaining/i.test(text) && Date.now() - last > 800) { windows = agyWindows(text.slice(text.search(/\/usage|limit\s+remaining/i))); break; }
-  }
-  p.write("q"); p.kill();
-  await p.done;
-  return windows;
+type AgyUsage = { windows: PlanWindow[]; setup: boolean };
+/** Màn hình làm quen lần đầu của agy (chọn bảng màu, điều khoản và chia sẻ dữ liệu): người dùng phải tự chọn, Synchro không bấm thay. */
+const AGY_ONBOARDING = /Choose your color scheme|Terms of Service & Data Use|I agree to help improve/i;
+
+/**
+ * Mở agy trong terminal giả, gõ /usage, đọc bảng hạn mức rồi thoát bằng /exit. Gặp màn hình làm quen thì dừng ngay, không gõ phím nào
+ * (chọn bảng màu, đồng ý điều khoản, chia sẻ dữ liệu là quyết định của người dùng). Mỗi tài khoản chỉ đọc một lượt một lúc.
+ */
+function agyUsage(scope: string): Promise<AgyUsage> {
+  const busy = g.agyBusy.get(scope);
+  if (busy) return busy;
+  const run = (async (): Promise<AgyUsage> => {
+    const bin = find("agy");
+    if (!bin) return { windows: [], setup: false };
+    const work = path.join(engineHome(), "work", safeScope(scope));
+    makeDir(work);
+    const p = spawnCli(bin, [], { env: engineEnv("agy", scope), cwd: work, pty: true, timeoutMs: 30_000 });
+    let raw = "", last = Date.now(), asked = false, setup = false;
+    p.child.stdout!.on("data", (d: Buffer) => { raw = (raw + d.toString()).slice(-200_000); last = Date.now(); });
+    const t0 = Date.now();
+    let windows: PlanWindow[] = [];
+    while (Date.now() - t0 < 25_000) {
+      await new Promise((r) => setTimeout(r, 300));
+      const text = stripAnsi(raw);
+      if (AGY_ONBOARDING.test(text)) { setup = true; break; }
+      // Chỉ gõ /usage khi đã thấy ô nhập của phiên chat và màn hình đứng yên.
+      if (!asked && Date.now() - last > 1500 && Date.now() - t0 > 2500 && !/sign in|signing in/i.test(text.slice(-400))) { p.write("/usage\r"); asked = true; last = Date.now(); continue; }
+      if (asked && /limit\s+remaining/i.test(text) && Date.now() - last > 800) { windows = agyWindows(text.slice(text.search(/\/usage|limit\s+remaining/i))); break; }
+    }
+    if (!setup) { p.write("\x1b"); p.write("/exit\r"); }
+    const quit = setTimeout(() => p.kill(), setup ? 0 : 4000);
+    await p.done;
+    clearTimeout(quit);
+    return { windows, setup };
+  })().finally(() => g.agyBusy.delete(scope));
+  g.agyBusy.set(scope, run);
+  return run;
 }
 
 /** Gói đang hết hạn mức tới lúc nào (cửa sổ bị từ chối hoặc đã dùng 100% mà chưa tới mốc đặt lại), hoặc null. */
@@ -287,18 +344,24 @@ const NOTE: Record<Cli, string> = {
   agy: "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models have separate quotas.",
 };
 
-export async function subUsage(u: UserRow, cli: Cli): Promise<SubUsage> {
+/** Antigravity đang chờ người dùng hoàn tất bước làm quen (đã thấy ở lần đọc hạn mức gần nhất). */
+export const agySetupPending = (uid: string) => !!g.limits.get(`agy:${uid}`)?.setup;
+
+/** fresh: bỏ qua bộ nhớ (người dùng bấm làm mới). */
+export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean } = {}): Promise<SubUsage> {
   const k = `${cli}:${u.id}`;
   let hit = g.limits.get(k);
   // Claude báo hạn mức trong mỗi lượt chat (rate_limit_event); codex đọc qua app-server (tối đa mỗi phút);
   // agy đọc bảng /usage (tối đa 5 phút một lần vì phải mở cả CLI).
-  if (cli === "codex" && (!hit || Date.now() - hit.at > 60_000)) {
+  const age = hit ? Date.now() - hit.at : Infinity;
+  if (cli === "codex" && (o.fresh || age > 60_000)) {
     const [acc, rl] = await codexRpc(u.id, [{ method: "account/read" }, { method: "account/rateLimits/read" }]).catch(() => [null, null]);
     const c = codexWindows(rl);
     saveLimits(cli, u.id, c.windows, { plan: (typeof acc?.account?.planType === "string" ? acc.account.planType : undefined) ?? c.plan, credits: c.credits });
     hit = g.limits.get(k);
-  } else if (cli === "agy" && (!hit || Date.now() - hit.at > 5 * 60_000)) {
-    saveLimits(cli, u.id, await agyUsage(u.id).catch(() => []));
+  } else if (cli === "agy" && (o.fresh || age > (hit?.setup ? 20_000 : 5 * 60_000))) {
+    const r = await agyUsage(u.id).catch(() => ({ windows: [] as PlanWindow[], setup: false }));
+    saveLimits(cli, u.id, r.windows, { setup: r.setup });
     hit = g.limits.get(k);
   } else if (cli === "claude" && !hit?.plan) {
     const s = await status("claude", u.id).catch(() => null);
@@ -311,8 +374,9 @@ export async function subUsage(u: UserRow, cli: Cli): Promise<SubUsage> {
     .map((w) => project({ ...w, label: "label" in w ? (w as PlanWindow).label : label(w), kind: "kind" in w ? (w as PlanWindow).kind : kindOf(w.window) } as PlanWindow, now))
     .sort((a, b) => order(a) - order(b));
   const plan = hit?.plan ? hit.plan.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : null;
-  return { cli, name: SUB[cli].name, plan, windows, turnsToday: turnsToday(u.id, cli), credits: hit?.credits ?? null, at: hit?.at ?? null,
-    note: windows.length ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
+  return { cli, name: SUB[cli].name, plan, windows, turnsToday: turnsToday(u.id, cli), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup,
+    note: hit?.setup ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits."
+      : windows.length ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
 }
 
 // ---------------------------------------------------------------- phiên CLI theo đoạn chat
@@ -348,7 +412,7 @@ function textOf(c: unknown): string {
     : b.type === "image" ? "[Ảnh đính kèm: gói subscription qua Synchro chưa đọc được ảnh]" : "").filter(Boolean).join("\n\n");
 }
 
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; signal?: AbortSignal; onDelta?: (t: string) => void };
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void };
 export type SubResult = { status: number; json: Json };
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
@@ -367,11 +431,11 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const resume = prev && prev.turns === msgs.length - 1 ? prev.session_id : undefined;
   const history = resume ? "" : msgs.slice(0, -1).map((m) => `[${m.role === "assistant" ? "assistant" : "user"}]\n${textOf(m.content)}`).filter((x) => x.trim()).join("\n\n");
   const prompt = (history ? `<conversation_history>\n${history}\n</conversation_history>\n\n` : "") + textOf(last.content);
-  const id = splitKey(o.model).id;
+  const run = resolvePlanModel(cli, o.user.id, splitKey(o.model).id, o.effort);
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);
   const req: TurnRequest = {
-    prompt, system: o.system || undefined, model: id && id !== "default" ? id : undefined, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal,
+    prompt, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).

@@ -49,7 +49,7 @@ const loginFile = path.join(dir, ".mock-login");
       process.exit(1);
     }
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
-    const text = C.reply("Claude", prompt, turn) + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "");
+    const text = C.reply("Claude", prompt, turn) + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : "");
     for (const ch of C.chunks(text)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); }
     C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] }, session_id: sid });
     result({ subtype: "success", is_error: false, result: text, usage: { input_tokens: prompt.length, output_tokens: text.length, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });

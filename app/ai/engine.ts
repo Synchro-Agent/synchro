@@ -6,6 +6,8 @@ export type TurnRequest = {
   prompt: string;
   system?: string;
   model?: string;
+  /** Mức effort Synchro (low, medium, high, extra, max); mỗi engine đổi sang cách gọi của CLI đó. */
+  effort?: string;
   /** Phiên của engine ở lượt trước (để CLI nối tiếp hội thoại), nếu có. */
   sessionId?: string;
   /** Thư mục làm việc riêng của lượt (tệp đính kèm, đầu ra). */

@@ -1,18 +1,31 @@
 #!/usr/bin/env node
-// Antigravity CLI giả lập (dev:mock): chạy không tham số = đăng nhập trong terminal (menu → link → dán mã), models,
-// --output-format json [--model] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức.
+// Antigravity CLI giả lập (dev:mock), theo đúng hành vi agy 1.4.7 quan sát trên máy chủ thật:
+// - chạy không tham số = đăng nhập trong terminal (menu → link → dán mã); phiên đăng nhập ghi xuống đĩa sau khoảng 1 giây;
+// - lần mở tương tác đầu tiên sau đăng nhập hiện màn hình làm quen (bảng màu, điều khoản, chia sẻ dữ liệu) — mọi phím gõ vào
+//   màn hình đó được ghi lại để kiểm thử chắc chắn Synchro không bấm thay người dùng;
+// - `models` in "mã<TAB>Tên" sau dòng "Fetching available models...", gồm biến thể effort và cả model Claude / GPT;
+// - --output-format json [--model] [--effort] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức.
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
-const home = process.env.HOME || "/tmp", gem = path.join(home, ".gemini"), loginFile = path.join(gem, "mock-login");
+const home = process.env.HOME || "/tmp", gem = path.join(home, ".gemini"), cli = path.join(gem, "antigravity-cli");
+const loginFile = path.join(cli, "antigravity-oauth-token"), onboardFile = path.join(cli, "cache", "onboarding.json"), keysLog = path.join(cli, "onboarding-input.log");
 const usage0 = { input_tokens: 0, output_tokens: 0, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 0 };
+const MODELS = [
+  ["gemini-4-argon-high", "Gemini 4 Argon (High)"], ["gemini-4-argon-medium", "Gemini 4 Argon (Medium)"], ["gemini-4-argon-low", "Gemini 4 Argon (Low)"],
+  ["gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"], ["gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)"], ["gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"],
+  ["gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"],
+  ["claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"], ["claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"], ["gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"],
+];
+const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "utf8")).onboardingComplete === true; } catch { return false; } };
 
 (async () => {
   if (a[0] === "--version") return console.log("1.4.7 [mock]");
   const li = fs.existsSync(loginFile);
   if (a[0] === "models") {
-    if (!li) { console.log("Please sign in to view available models. Launch the CLI without arguments to sign in."); process.exit(1); }
-    return console.log("Available models:\n  gemini-3-pro\n  gemini-3-flash");
+    console.log("Fetching available models...");
+    if (!li) { console.log("Error: Please sign in to view available models. Launch the CLI without arguments to sign in."); process.exit(1); }
+    return console.log(MODELS.map(([id, n]) => `${id}\t${n}`).join("\n"));
   }
   if (a.includes("-p")) {
     const prompt = C.flag(a, "-p") ?? "", conv = C.flag(a, "--conversation") || C.uuid();
@@ -22,32 +35,45 @@ const usage0 = { input_tokens: 0, output_tokens: 0, thinking_tokens: 0, cache_re
       process.exit(1);
     }
     if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
-    const turn = C.bumpSession(gem, conv), text = C.reply("Gemini (Antigravity)", prompt, turn);
+    const turn = C.bumpSession(gem, conv);
+    const model = C.flag(a, "--model"), effort = C.flag(a, "--effort");
+    const text = C.reply("Gemini (Antigravity)", prompt, turn) + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : "");
     await C.sleep(200);
     return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: text, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length, thinking_tokens: 12, cache_read_tokens: 0, total_tokens: prompt.length + text.length + 12 } }));
   }
   if (a.length === 0) {
     if (!process.stdin.isTTY) { console.error("Error: interactive mode requires a terminal."); process.exit(1); }
-    const idle = () => setInterval(() => {}, 1 << 30);
-    // Đã đăng nhập: màn hình chat; gõ /usage (hoặc /quota) hiện bảng hạn mức theo nhóm model, q để đóng.
-    if (li) {
+    const rl = require("readline").createInterface({ input: process.stdin });
+    const lines = [];
+    let waiting = null;
+    rl.on("line", (l) => { if (waiting) { const w = waiting; waiting = null; w(l.trim()); } else lines.push(l.trim()); });
+    const next = (prompt = "") => { process.stdout.write(prompt); return lines.length ? Promise.resolve(lines.shift()) : new Promise((r) => (waiting = r)); };
+    const chat = async () => {
+      if (!onboarded()) {
+        // Màn hình làm quen: chỉ ghi lại phím nhận được, không tự hoàn tất (người dùng phải tự chọn).
+        console.log(" Welcome to Antigravity CLI!\n Choose your color scheme:\n  > terminal\n    light\n    dark\n [Next]\n  ↑/↓ Navigate · enter Confirm");
+        for (;;) { const k = await next(); fs.mkdirSync(cli, { recursive: true }); fs.appendFileSync(keysLog, JSON.stringify(k) + "\n"); console.log(" Terms of Service & Data Use\n  > [x] Yes, I agree to help improve Antigravity CLI\n [Previous]      [Done]"); }
+      }
       console.log(" Welcome back to the Antigravity CLI.\n > Ask anything");
-      const turns = C.totalTurns(gem);
-      require("readline").createInterface({ input: process.stdin }).on("line", (l) => {
-        if (!/^\/(usage|quota)\b/.test(l.trim())) return;
-        const g5 = Math.max(0, 100 - turns * 12), gw = Math.max(0, 100 - turns * 4);
-        console.log(` Model quota\n Gemini Models\n   Five Hour Limit Remaining  ${g5}%  resets in 3h 12m\n   Weekly Limit Remaining     ${gw}%  resets in 5d 2h\n Claude and GPT Models\n   Five Hour Limit Remaining  100%\n   Weekly Limit Remaining     100%\n Press q to close`);
-      });
-      return idle();
-    }
+      for (;;) {
+        const l = await next();
+        if (/^\/(exit|quit)\b/.test(l)) process.exit(0);
+        if (/^\/(usage|quota)\b/.test(l)) {
+          const turns = C.totalTurns(gem), g5 = Math.max(0, 100 - turns * 12), gw = Math.max(0, 100 - turns * 4);
+          console.log(` Model quota\n Gemini Models\n   Five Hour Limit Remaining  ${g5}%  resets in 3h 12m\n   Weekly Limit Remaining     ${gw}%  resets in 5d 2h\n Claude and GPT Models\n   Five Hour Limit Remaining  100%\n   Weekly Limit Remaining     100%\n Press q to close`);
+        }
+      }
+    };
+    if (li) return chat();
     console.log(" Welcome to the Antigravity CLI. You are currently not signed in.\n Select login method:\n > 1. Google OAuth\n   2. Use a Google Cloud project\n ↑/↓ Navigate · enter Select");
-    await C.readLine("");
+    await next();
     console.log(` ⣷  Signing in...\nYour browser should open automatically. If not: ${C.cfg.base}/mock-login/agy?access_type=offline&client_id=mock&state=${C.uuid()}\n`);
-    const code = await C.readLine("If you aren't automatically redirected, paste the authorization code below:\n");
+    const code = await next("If you aren't automatically redirected, paste the authorization code below:\n");
     if (code !== "MOCK-AGY-OK") { console.log("Error: invalid authorization code."); process.exit(1); }
-    fs.mkdirSync(gem, { recursive: true }); fs.writeFileSync(loginFile, "1");
-    console.log("Signed in as owner@example.com\n> ");
-    return idle();
+    // Như agy thật: phiên đăng nhập ghi xuống đĩa ngay sau khi xác thực xong (chậm một chút), rồi vào màn hình làm quen / chat.
+    setTimeout(() => { fs.mkdirSync(cli, { recursive: true }); fs.writeFileSync(loginFile, "mock-token"); }, 1000);
+    await C.sleep(300);
+    return chat();
   }
   console.error(`mock agy: không hỗ trợ "${a.join(" ")}"`);
   process.exit(2);

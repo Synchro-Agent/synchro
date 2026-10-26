@@ -62,6 +62,8 @@ const marker = (cli: Cli, scope: string) => {
   return path.join(d, `${cli}-${safeScope(scope)}.login`);
 };
 export const everLoggedIn = (cli: Cli, scope: string) => fs.existsSync(marker(cli, scope));
+/** Lúc tài khoản đăng nhập CLI gần nhất (để đọc lại danh sách model sau khi đăng nhập lại), hoặc 0. */
+export const loginTime = (cli: Cli, scope: string) => { try { return fs.statSync(marker(cli, scope)).mtimeMs; } catch { return 0; } };
 
 /** Biến môi trường cho CLI của tài khoản này (đi qua bộ lọc của cli_runtime khi spawn). */
 export function engineEnv(cli: Cli, scope: string): Record<string, string> {
@@ -104,7 +106,8 @@ async function probe(cli: Cli, scope: string, bin: string): Promise<Pick<Status,
   const r = await runCli(bin, ["models"], { env, cwd, timeoutMs: 30_000 });
   const out = stripAnsi(r.stdout + r.stderr);
   if (r.code !== 0 || /sign in|not signed in|authentication required/i.test(out)) return { loggedIn: false, method: null };
-  const models = out.split("\n").map((l) => l.trim().replace(/^[-*•]\s*/, "")).filter((l) => l && !/:$/.test(l) && l.length < 80);
+  // Mỗi dòng "mã<TAB>Tên"; bỏ dòng "Fetching available models..." và các dòng thông báo.
+  const models = out.split("\n").map((l) => l.trim()).filter((l) => /^[a-z][\w.-]*(\t|$)/i.test(l) && !/^(fetching|error|warning|please)\b/i.test(l) && l.length < 160);
   return { loggedIn: true, method: "google", models };
 }
 
@@ -204,6 +207,8 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
   });
   void proc.done.then((e) => {
     if (g.pending.get(key(cli, scope)) !== p || p.st.state === "done" || p.st.state === "error") return;
+    // agy: submitCode tự cho tiến trình thoát rồi mới kiểm tra đăng nhập bằng một tiến trình mới.
+    if (cli === "agy" && p.st.state === "verifying") return;
     // codex và `claude auth login` thoát 0 khi đăng nhập xong; setup-token chỉ thành công khi đã đọc được token (xử lý ở trên).
     const ok = e.code === 0 && (cli === "codex" || a.method === "oauth");
     finish(p, ok, e.timedOut ? "Hết thời gian đăng nhập (15 phút). Bắt đầu lại nhé." : undefined);
@@ -242,14 +247,25 @@ export async function submitCode(cli: Cli, scope: string, code: string): Promise
   p.hide.push(c);
   p.proc.write(c + "\r");
   if (cli === "agy") {
-    // agy không tự thoát sau khi đăng nhập (vào luôn màn hình chat): kiểm tra bằng `agy models` cho tới khi thấy đã đăng nhập.
+    // agy không tự thoát sau khi đăng nhập (vào màn hình làm quen hoặc màn hình chat), và chỉ lưu phiên đăng nhập xuống đĩa khi đăng nhập
+    // xong hẳn: kiểm tra bằng `agy models` lúc tiến trình đăng nhập còn chạy có thể báo nhầm. Chờ màn hình đứng yên, cho agy thoát
+    // (/exit ở màn hình chat; màn hình làm quen thì không gõ phím nào vì đó là lựa chọn của người dùng), rồi kiểm tra bằng tiến trình mới.
     const bin = find("agy")!;
-    for (let i = 0; i < 15 && state() === "verifying"; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const s = await probe("agy", scope, bin).catch(() => null);
-      if (s?.loggedIn) { finish(p, true); break; }
+    let size = -1, still = 0;
+    for (let t = 0; t < 30_000 && still < 2500 && p.proc.child.exitCode === null; t += 250) {
+      await new Promise((r) => setTimeout(r, 250));
+      if (p.raw.length === size) still += 250; else { size = p.raw.length; still = 0; }
     }
-    if (state() === "verifying") finish(p, false, tail(p) || "Không xác nhận được đăng nhập. Kiểm tra mã rồi thử lại.");
+    if (p.proc.child.exitCode === null) {
+      const text = stripAnsi(p.raw);
+      const onboarding = /Choose your color scheme|Terms of Service|I agree to help improve/i.test(text);
+      if (!onboarding && !/invalid|error/i.test(text.slice(-300))) { p.proc.write("\x1b"); p.proc.write("/exit\r"); }
+      const exited = !onboarding && (await Promise.race([p.proc.done.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 8000))]));
+      if (!exited) { p.proc.kill(); await p.proc.done; }
+    }
+    const s = await probe("agy", scope, bin).catch(() => null);
+    if (s?.loggedIn) finish(p, true);
+    else finish(p, false, tail(p) || "Antigravity chưa lưu được phiên đăng nhập. Kiểm tra mã rồi thử lại.");
   } else await waitFor(p, () => state() !== "verifying", 60_000);
   if (state() === "verifying") finish(p, false, "CLI không phản hồi sau khi dán mã.");
   return { ...p.st };

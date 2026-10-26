@@ -171,7 +171,9 @@ try {
     ok(l.state === "open_url" && l.needsCode && l.url?.startsWith(`${M}/mock-login/agy`), "agy: qua menu trong terminal tới link đăng nhập", JSON.stringify(l));
     l = await A.submitCode("agy", U, "MOCK-AGY-OK");
     const g1 = await A.status("agy", U, { fresh: true });
-    ok(l.state === "done" && g1.loggedIn && g1.method === "google" && g1.models?.includes("gemini-3-pro"), "agy: đăng nhập xong, đọc được danh sách model", JSON.stringify({ l, g1 }));
+    const keysLog = path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "onboarding-input.log");
+    ok(l.state === "done" && g1.loggedIn && g1.method === "google" && g1.models?.some((x) => x.startsWith("gemini-4-argon-high\t")) && !g1.models.some((x) => /^fetching/i.test(x)), "agy: đăng nhập xong, phiên được lưu, đọc được danh sách model (bỏ dòng Fetching…)", JSON.stringify({ l, g1 }));
+    ok(!fs.existsSync(keysLog), "agy: Synchro không gõ phím nào vào màn hình làm quen (bảng màu, điều khoản)");
     ok(A.engineEnv("agy", U).HOME === A.scopeDir("agy", U), "agy: mỗi tài khoản một thư mục nhà riêng");
   }
 
@@ -250,7 +252,12 @@ try {
     const ids = subs.filter((p) => p.source === "plan").map((p) => `${p.id}:${p.name}`).join();
     const codexModels = subs.find((p) => p.id === "openai")?.models.map((m) => m.id) ?? [];
     ok(ids === "anthropic:Claude,openai:ChatGPT,google:Gemini", "bộ chọn model gộp theo hãng: ba nhóm Claude, ChatGPT, Gemini đều đang hiện model của gói", ids);
-    ok(subs.find((p) => p.id === "anthropic")?.models.some((m) => m.key === "sub-claude/sonnet") && subs.find((p) => p.id === "google")?.models.some((m) => m.id === "gemini-3-pro" && m.name === "Gemini 3 Pro"), "Claude: opus/sonnet/haiku; Gemini: model từ agy models", JSON.stringify(subs.map((p) => p.models.map((m) => m.name))));
+    const gem = subs.find((p) => p.id === "google")?.models ?? [];
+    ok(subs.find((p) => p.id === "anthropic")?.models.some((m) => m.key === "sub-claude/sonnet"), "Claude: opus / sonnet / haiku");
+    ok(gem.map((m) => m.id).join() === "gemini-4-argon,gemini-3.8-flash,gemini-3.1-flash-lite" && gem.map((m) => m.name).join() === "Gemini 4 Argon,Gemini 3.8 Flash,Gemini 3.1 Flash Lite",
+      "Gemini: chỉ model Gemini (không lẫn Claude / GPT của Antigravity), gộp biến thể High / Medium / Low thành một model, tên chuẩn", JSON.stringify(gem));
+    const AG = SUBS.agyModels(["Fetching available models...", "gemini-3.8-flash-high\tGemini 3.8 Flash (High)", "gemini-3.8-flash-low\tGemini 3.8 Flash (Low)", "claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)", "gpt-oss-120b-medium\tGPT-OSS 120B (Medium)"]);
+    ok(AG.length === 1 && AG[0].name === "Gemini 3.8 Flash" && AG[0].variants.high === "gemini-3.8-flash-high", "agyModels: đọc đúng đầu ra thật của agy 1.4.7", JSON.stringify(AG));
     ok(codexModels.includes("gpt-6.1-sol") && !codexModels.includes("codex-internal"), "Codex: danh sách model thật từ app-server (bỏ model ẩn)", codexModels.join());
     // Lượt chat qua gói: lượt đầu mở phiên, lượt sau nối tiếp (resume), sửa lịch sử thì mở phiên mới kèm lịch sử.
     const conv = "conv-sub-1";
@@ -279,8 +286,19 @@ try {
     ok(merged.find((p) => p.id === "anthropic")?.source === "api" && !merged.some((p) => p.id.startsWith("sub-")), "chưa đăng nhập gói: nhóm Claude hiện model API, không có nhóm riêng cho gói", JSON.stringify(merged.map((p) => [p.id, p.source])));
     const no = await SUBS.subTurn({ user: { ...me, id: "chua_dang_nhap" }, model: "sub-codex/default", system: "", messages: [{ role: "user", content: "chào" }] });
     ok(no.status === 409 && no.json.relogin === "codex", "chưa đăng nhập gói → 409, nhắc đăng nhập ở Providers", JSON.stringify(no));
-    const ag2 = await SUBS.subUsage(me, "agy");
-    ok(ag2.windows.length === 4 && ag2.windows.some((w) => w.group === "Gemini models" && w.kind === "session" && w.usedPct > 0), "Antigravity: đọc bảng /usage trong terminal giả", JSON.stringify(ag2));
+    // Effort chọn ở mục Effort riêng: agy đổi sang đúng biến thể model, model không có biến thể thì truyền --effort; Claude --effort; Codex reasoning effort.
+    const eff = async (model, effort) => (await SUBS.subTurn({ user: me, model, system: "", messages: [{ role: "user", content: "chào" }], effort })).json.text ?? "";
+    ok(/\[model gemini-3\.8-flash-high\]/.test(await eff("sub-agy/gemini-3.8-flash", "high")) && /\[model gemini-3\.8-flash-low\]/.test(await eff("sub-agy/gemini-3.8-flash", "low")), "Gemini: effort High / Low → đúng biến thể model của agy");
+    const lite = await eff("sub-agy/gemini-3.1-flash-lite", "high");
+    ok(/\[model gemini-3\.1-flash-lite\]/.test(lite) && /\[effort high\]/.test(lite), "Gemini: model không có biến thể → truyền --effort", lite);
+    ok(/\[model gemini-4-argon-medium\]/.test(await eff("sub-agy/gemini-4-argon")), "Gemini: chưa chọn effort → biến thể Medium");
+    ok(/\[effort xhigh\]/.test(await eff("sub-claude/sonnet", "extra")) && /\[effort xhigh\]/.test(await eff("sub-codex/gpt-6.1-sol", "max")) && /\[effort high\]/.test(await eff("sub-codex/gpt-6.1-sol", "high")), "Claude --effort, Codex model_reasoning_effort theo mục Effort");
+    const ag0 = await SUBS.subUsage(me, "agy");
+    ok(ag0.setup && !ag0.windows.length && !fs.existsSync(path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "onboarding-input.log")), "Antigravity chưa làm quen: báo cần hoàn tất, không gõ phím nào thay người dùng", JSON.stringify(ag0));
+    fs.mkdirSync(path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "cache"), { recursive: true });
+    fs.writeFileSync(path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "cache", "onboarding.json"), JSON.stringify({ onboardingComplete: true }));
+    const ag2 = await SUBS.subUsage(me, "agy", { fresh: true });
+    ok(!ag2.setup && ag2.windows.length === 4 && ag2.windows.some((w) => w.group === "Gemini models" && w.kind === "session" && w.usedPct > 0), "người dùng làm quen xong → đọc bảng /usage trong terminal giả", JSON.stringify(ag2));
     const cu = await SUBS.subUsage(me, "codex");
     ok(cu.plan === "Plus" && cu.windows.some((w) => w.kind === "session") && cu.windows.some((w) => w.kind === "weekly"), "Codex: hạn mức gói đọc qua app-server", JSON.stringify(cu));
   }

@@ -14,7 +14,7 @@ export type Rate = { provider: string; limit: number; remaining: number; resetAt
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
 // Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem app/ai/subs.ts).
 export type PlanWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string; label: string; kind: "session" | "weekly" | "other"; group?: string; idle?: boolean };
-export type SubUsage = { cli: "claude" | "codex" | "agy"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null };
+export type SubUsage = { cli: "claude" | "codex" | "agy"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
 export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage };
 const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
 
@@ -207,7 +207,8 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : sub ? (
           <>
             {sub.windows.map((w) => <PlanRow key={w.window} w={w} />)}
-            {!sub.windows.length && <p className="us-note">{sub.cli === "agy" ? (en() ? "Synchro could not read the plan's quota yet." : "Synchro chưa đọc được hạn mức của gói.") : en() ? "Send a message with this plan to see its limits." : "Gửi một tin nhắn bằng gói này để xem hạn mức."}{sub.turnsToday ? ` ${en() ? `${sub.turnsToday} messages today.` : `Hôm nay: ${sub.turnsToday} tin nhắn.`}` : ""}</p>}
+            {sub.setup && <p className="us-note">{en() ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini." : "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini."}</p>}
+            {!sub.windows.length && !sub.setup && <p className="us-note">{sub.cli === "agy" ? (en() ? "Synchro could not read the plan's quota yet." : "Synchro chưa đọc được hạn mức của gói.") : en() ? "Send a message with this plan to see its limits." : "Gửi một tin nhắn bằng gói này để xem hạn mức."}{sub.turnsToday ? ` ${en() ? `${sub.turnsToday} messages today.` : `Hôm nay: ${sub.turnsToday} tin nhắn.`}` : ""}</p>}
             {sub.credits && <p className="us-note" data-notr>{sub.credits}</p>}
             <p className="us-note">{PLAN_NOTE[sub.cli][en() ? 1 : 0]}</p>
           </>

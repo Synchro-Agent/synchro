@@ -36,6 +36,9 @@ function exitError(cli: Cli, p: Proc, e: Exit, extra = ""): Event {
   return err(msg, classify(msg));
 }
 
+// Mức effort của Synchro → của CLI ("extra" là "xhigh"); Codex chưa có "max" nên dùng "xhigh".
+const cliEffort = (e: string | undefined, max = "max") => (!e ? undefined : e === "extra" ? "xhigh" : e === "max" ? max : /^(low|medium|high)$/.test(e) ? e : undefined);
+
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 /** Thời điểm đặt lại: CLI có thể trả giây hoặc mili giây, hoặc chuỗi ISO. */
 const toMs = (v: unknown) => {
@@ -71,6 +74,8 @@ export class ClaudeCodeEngine implements Engine {
     const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", this.o.tools ?? ""];
     if (req.system) args.push("--append-system-prompt", req.system);
     if (req.model) args.push("--model", req.model);
+    const ce = cliEffort(req.effort);
+    if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--resume", req.sessionId);
     const p = start("claude", args, req, req.prompt);
     if (!p) { yield notInstalled("claude"); return; }
@@ -118,6 +123,8 @@ export class CodexEngine implements Engine {
     const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"'];
     if (req.model) args.push("-m", req.model);
+    const ce = cliEffort(req.effort, "xhigh");
+    if (ce) args.push("-c", `model_reasoning_effort="${ce}"`);
     args.push("-");
     const p = start("codex", args, req, prompt);
     if (!p) { yield notInstalled("codex"); return; }
@@ -155,6 +162,8 @@ export class AntigravityEngine implements Engine {
     const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
     const args = ["--output-format", "json"];
     if (req.model) args.push("--model", req.model);
+    const ce = cliEffort(req.effort);
+    if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--conversation", req.sessionId);
     args.push("-p", prompt);
     const p = start("agy", args, req, "");

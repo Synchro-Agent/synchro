@@ -1285,3 +1285,7 @@ RULES_VI.push(
   [/^(.+) now uses the shared API key until your plan resets$/, (m) => `${m[1]} đang dùng khóa API dùng chung tới khi gói hồi lại`],
   [/^(.+) is back on your plan$/, (m) => `${m[1]} đã quay lại gói của bạn`],
 );
+Object.assign(EN2VI, {
+  "Antigravity is waiting for you to finish its first-run setup: pick a color scheme, then accept its terms and choose whether Google may use your interactions. Synchro never answers these for you. Until then, chat works but plan limits can't be read.":
+    "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu: chọn bảng màu, đồng ý điều khoản và chọn có cho Google dùng dữ liệu tương tác hay không. Synchro không bao giờ chọn thay bạn. Trong lúc chờ, chat vẫn dùng được nhưng chưa đọc được hạn mức của gói.",
+});

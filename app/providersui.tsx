@@ -14,7 +14,7 @@ import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui"
 
 type Cli = "claude" | "codex" | "agy";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
-export type EngineStatus = { cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null };
+export type EngineStatus = { cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
 
 const VENDORS: { id: string; cli: Cli; name: string; vendor: string; plan: string; via: string }[] = [
   { id: "anthropic", cli: "claude", name: "Claude", vendor: "Anthropic", plan: "Claude Pro or Max plan", via: "Claude Code" },
@@ -126,6 +126,9 @@ function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnT
       {st && !st.installed && !admin && <p className="pv-note">{`An administrator needs to install ${v.via} on the server first.`}</p>}
       {busy === "install" && <p className="pv-note">{`Downloading the official ${v.via}. This can take a minute.`}</p>}
       {err && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
+      {st?.loggedIn && !login && st.setup && (
+        <div className="pv-mode warn"><span>Antigravity is waiting for you to finish its first-run setup: pick a color scheme, then accept its terms and choose whether Google may use your interactions. Synchro never answers these for you. Until then, chat works but plan limits can&apos;t be read.</span></div>
+      )}
       {st?.loggedIn && !login && st.usingApiUntil && (
         <div className="pv-mode"><span>{`Using the shared API key instead of your plan until ${when(st.usingApiUntil)}.`}</span><button className="btn" onClick={() => useApi(false)} disabled={!!busy}>Back to my plan</button></div>
       )}

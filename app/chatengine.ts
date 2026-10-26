@@ -494,7 +494,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const planSys = pc ? [feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
     const r = await subTurn({
       user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-      messages: am ?? messages, conv: am ? undefined : typeof conv === "string" ? conv : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
+      messages: am ?? messages, conv: am ? undefined : typeof conv === "string" ? conv : undefined, effort: isEffort(wanted) ? wanted : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
     });
     return Response.json(r.json, { status: r.status });
   }
