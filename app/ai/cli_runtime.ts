@@ -35,6 +35,19 @@ function asEngine(cmd: string, args: string[]) {
   const r = u ? spawnSync("sudo", ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", cmd, ...args], { encoding: "utf8" }) : spawnSync(cmd, args, { encoding: "utf8" });
   if (r.status !== 0) throw new Error(`Không ${cmd === "mkdir" ? "tạo" : "xóa"} được thư mục của engine: ${(r.stderr || r.error?.message || "").trim().slice(0, 200)}`);
 }
+/** Mọi tiến trình con cháu của một tiến trình (đọc cây tiến trình qua ps). */
+export function descendants(root: number): number[] {
+  const r = spawnSync("ps", ["-A", "-o", "pid=,ppid="], { encoding: "utf8" });
+  const kids = new Map<number, number[]>();
+  for (const l of (r.stdout ?? "").split("\n")) {
+    const [p, pp] = l.trim().split(/\s+/).map(Number);
+    if (p && pp) { const k = kids.get(pp) ?? []; k.push(p); kids.set(pp, k); }
+  }
+  const out: number[] = [], stack = [root];
+  while (stack.length) for (const k of kids.get(stack.pop()!) ?? []) { out.push(k); stack.push(k); }
+  return out;
+}
+
 /** Tạo thư mục (quyền 0700) trong nhà engine. */
 export function makeDir(dir: string) {
   if (!engineUser()) { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); fs.chmodSync(dir, 0o700); return; }
@@ -122,8 +135,12 @@ const PY_PTY = [
   "sys.exit(os.WEXITSTATUS(st) if os.WIFEXITED(st) else 128+os.WTERMSIG(st))",
 ].join("\n");
 
-/** Lệnh thật sẽ chạy: qua `script` nếu cần pty, qua `sudo -n -u <user> env -i …` nếu có user hệ thống riêng. */
-function command(bin: string, args: string[], env: Record<string, string>, pty: boolean): { file: string; argv: string[]; env: Record<string, string> } {
+/**
+ * Lệnh thật sẽ chạy: qua `script` nếu cần pty, qua `sudo -n -u <user> -- env -i -C <cwd> …` nếu có user hệ thống riêng.
+ * Khi chạy bằng user riêng, thư mục làm việc (0700, của user đó) Synchro không vào được: tiến trình sudo chạy từ "/",
+ * rồi `env -C` mới chuyển vào thư mục dưới quyền user của engine.
+ */
+export function command(bin: string, args: string[], env: Record<string, string>, pty: boolean, cwd: string): { file: string; argv: string[]; env: Record<string, string>; cwd: string } {
   let file = bin, argv = args;
   if (pty) {
     // Terminal rộng để link đăng nhập không bị xuống dòng. util-linux: script -qfec "<lệnh>" /dev/null;
@@ -133,19 +150,28 @@ function command(bin: string, args: string[], env: Record<string, string>, pty: 
     else { file = "script"; argv = ["-qfec", wide, "/dev/null"]; }
   }
   const user = process.env.SYNCHRO_ENGINE_USER;
-  if (user) return { file: "sudo", argv: ["-n", "-u", user, "--", "env", "-i", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), file, ...argv], env: { PATH: env.PATH ?? basePath() } };
-  return { file, argv, env };
+  if (user) return { file: "sudo", argv: ["-n", "-u", user, "--", "env", "-i", "-C", cwd, ...Object.entries(env).map(([k, v]) => `${k}=${v}`), file, ...argv], env: { PATH: env.PATH ?? basePath() }, cwd: "/" };
+  return { file, argv, env, cwd };
 }
 
 export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
   // Trong pty, chương trình terminal cần TERM để vẽ giao diện đăng nhập (chỉ thêm khi chạy pty).
   ensureNoBrowser();
   const env = { ...cleanEnv(o.env), ...(o.pty ? { TERM: "xterm-256color" } : {}) };
-  const c = command(bin, args, env, !!o.pty);
-  const child = spawn(c.file, c.argv, { cwd: o.cwd ?? engineHome(), env: c.env as NodeJS.ProcessEnv, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+  const c = command(bin, args, env, !!o.pty, o.cwd ?? engineHome());
+  const child = spawn(c.file, c.argv, { cwd: c.cwd, env: c.env as NodeJS.ProcessEnv, detached: true, stdio: ["pipe", "pipe", "pipe"] });
   let err = "", timedOut = false, aborted = false, killer: NodeJS.Timeout | null = null;
   child.stderr!.on("data", (d) => { err = (err + d.toString()).slice(-20_000); });
-  const killGroup = (sig: NodeJS.Signals) => { try { if (child.pid) process.kill(-child.pid, sig); } catch { try { child.kill(sig); } catch {} } };
+  // Chạy bằng user riêng: Synchro không gửi tín hiệu được cho tiến trình của user khác, nên ghi nhớ mọi tiến trình con cháu của sudo
+  // (kể cả khi sudo đã thoát, chúng không còn trong cây) và kill chúng bằng chính user của engine.
+  const owned = new Set<number>();
+  const killGroup = (sig: NodeJS.Signals) => {
+    try { if (child.pid) process.kill(-child.pid, sig); } catch { try { child.kill(sig); } catch {} }
+    const user = engineUser();
+    if (!user || !child.pid) return;
+    for (const p of descendants(child.pid)) owned.add(p);
+    if (owned.size) spawnSync("sudo", ["-n", "-u", user, "--", "env", "-i", "PATH=/usr/bin:/bin", "kill", `-${sig.replace(/^SIG/, "")}`, ...[...owned].map(String)], { stdio: "ignore" });
+  };
   const kill = () => {
     if (child.exitCode !== null || child.signalCode !== null) return;
     killGroup("SIGTERM");

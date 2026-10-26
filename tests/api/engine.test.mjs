@@ -93,6 +93,7 @@ try {
     const child = Number(fs.readFileSync(pidFile, "utf8"));
     const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
     ok(alive(child), "tiến trình cháu (sleep) đang chạy");
+    ok(R.descendants(p.child.pid).includes(child), "đọc được cây tiến trình con cháu (dùng để kill khi chạy bằng user riêng)");
     p.kill();
     const ex = await p.done;
     await sleep(200);
@@ -103,6 +104,16 @@ try {
     const a2 = await R.runCli("/bin/sleep", ["30"], { signal: ac.signal });
     ok(a2.aborted && !a2.timedOut, "AbortSignal → dừng, đánh dấu aborted", JSON.stringify(a2));
     ok(R.MAX_TURN_MS === 30 * 60_000, "trần mỗi lượt 30 phút");
+    // User hệ thống riêng (VPS): sudo chạy từ "/", env -i -C chuyển vào thư mục làm việc dưới quyền user của engine.
+    process.env.SYNCHRO_ENGINE_USER = "synchro-cli";
+    const cmd = R.command("/x/claude", ["-p"], { HOME: "/e", PATH: "/usr/bin:/bin", CLAUDE_CODE_OAUTH_TOKEN: "tok" }, false, "/e/work/u1");
+    const cmdPty = R.command("/x/agy", [], { HOME: "/e/logins/agy/u1", PATH: "/usr/bin" }, true, "/e/logins/agy/u1");
+    delete process.env.SYNCHRO_ENGINE_USER;
+    ok(cmd.file === "sudo" && cmd.cwd === "/" && cmd.argv.slice(0, 8).join(" ") === "-n -u synchro-cli -- env -i -C /e/work/u1" && cmd.argv.includes("CLAUDE_CODE_OAUTH_TOKEN=tok") && cmd.argv.slice(-2).join(" ") === "/x/claude -p" && Object.keys(cmd.env).join() === "PATH",
+      "user riêng: sudo -n -u … -- env -i -C <thư mục làm việc> …, tiến trình sudo chạy từ /, chỉ truyền PATH cho sudo", JSON.stringify(cmd));
+    ok(cmdPty.argv.includes("-C") && cmdPty.argv.includes(process.platform === "darwin" ? "/usr/bin/python3" : "script"), "user riêng + pty: bọc terminal giả bên trong sudo", JSON.stringify(cmdPty));
+    const plain = R.command("/x/claude", ["-p"], { PATH: "/usr/bin" }, false, "/e/work/u1");
+    ok(plain.file === "/x/claude" && plain.cwd === "/e/work/u1", "không có user riêng: chạy thẳng trong thư mục làm việc");
   }
 
   // Cài CLI giả lập như dev:mock (chép vào <home>/.local/bin, kèm địa chỉ máy chủ giả lập).

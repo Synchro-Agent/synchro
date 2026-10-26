@@ -37,15 +37,16 @@ chmod 700 "$ENGINE_HOME/logins" "$ENGINE_HOME/work"
 RULE="/etc/sudoers.d/synchro-cli"
 echo "$APP_USER ALL=($CLI_USER) NOPASSWD: /usr/bin/env" > "$RULE.tmp"
 chmod 440 "$RULE.tmp"
-visudo -cf "$RULE.tmp" >/dev/null
+visudo -c -f "$RULE.tmp" >/dev/null
 mv "$RULE.tmp" "$RULE"
 
 cat <<MSG
 
-Xong. Thêm vào tệp môi trường của Synchro (.env) rồi khởi động lại:
+Xong. Thêm vào tệp môi trường của Synchro (/var/www/synchro/.env.production) rồi khởi động lại:
   SYNCHRO_ENGINE_HOME=$ENGINE_HOME
   SYNCHRO_ENGINE_USER=$CLI_USER
-  pm2 restart synchro --update-env
+  su - $APP_USER -c "pm2 restart synchro"
+Kiểm tra: su - $APP_USER -c "sudo -n -u $CLI_USER -- env -i -C $ENGINE_HOME PATH=/usr/bin:/bin whoami"   (in ra $CLI_USER)
 Sau đó vào Cài đặt → Providers (tài khoản quản trị) bấm Cài cho từng CLI, rồi đăng nhập lại
 (đăng nhập cũ nằm ở thư mục engine trước đây nên không mang sang).
 MSG
