@@ -132,7 +132,8 @@ export async function status(cli: Cli, scope: string, o: { fresh?: boolean; stal
 }
 
 // ---------------------------------------------------------------- đăng nhập
-type Pending = { cli: Cli; scope: string; proc: Proc; raw: string; st: LoginState; timer: NodeJS.Timeout; onChange: Set<() => void>; hide: string[] };
+/** pastedAt: độ dài đầu ra lúc dán mã (chỉ xét lỗi in ra sau đó); tokenSeen: lúc thấy đầu token. */
+type Pending = { cli: Cli; scope: string; proc: Proc; raw: string; st: LoginState; timer: NodeJS.Timeout; onChange: Set<() => void>; hide: string[]; pastedAt: number; tokenSeen: number };
 
 // Link đăng nhập của từng hãng; thêm trang đăng nhập giả lập ở máy cục bộ (scripts/mock-cli, chỉ có khi chạy dev:mock).
 const mock = (cli: Cli) => String.raw`|http:\/\/(?:127\.0\.0\.1|localhost):\d+\/mock-login\/${cli}\S*`;
@@ -142,7 +143,20 @@ const URL_RE: Record<Cli, RegExp> = {
   agy: new RegExp(String.raw`https:\/\/accounts\.google\.com\/o\/oauth2\/\S+` + mock("agy"), "g"),
 };
 const CODE_RE = /\b[A-Z0-9]{4,5}-[A-Z0-9]{4,6}\b/;
-const TOKEN_RE = /sk-ant-oat[0-9A-Za-z_-]{20,}/;
+// Token Claude Code in ra sau "Your OAuth token (valid for …):" và trước "Store this token securely…". Chỉ lấy khi đã in xong
+// (có câu "Store this token" phía sau, hoặc đã quá 2 giây), bỏ khoảng trắng / viền khung nếu bị xuống dòng.
+const TOKEN_END = /Store this token|Use this token|won't be able to see it again/i;
+export function extractToken(text: string, settled = false): string | null {
+  const i = text.search(/sk-ant-oat/);
+  if (i < 0) return null;
+  const rest = text.slice(i, i + 1200);
+  const end = rest.search(TOKEN_END);
+  if (end < 0 && !settled) return null;
+  const tok = (end < 0 ? rest : rest.slice(0, end)).replace(/[\s│┃|]+/g, "").match(/^sk-ant-oat[0-9A-Za-z_-]+/)?.[0];
+  return tok && tok.length >= 40 ? tok : null;
+}
+// Lỗi CLI in ra sau khi dán mã (mã sai, hết hạn, không khớp link đang mở…): báo ngay thay vì chờ hết giờ.
+const CODE_ERROR = /(OAuth error[^\n]*|Invalid code[^\n]*|invalid authorization code[^\n]*|Login failed[^\n]*|Authentication failed[^\n]*)/i;
 
 function loginState(cli: Cli, scope: string): LoginState | null {
   const p = g.pending.get(key(cli, scope));
@@ -186,7 +200,7 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
   // Đăng nhập lại Claude bằng token mới: bỏ token cũ để CLI không dùng nó trong lúc đăng nhập.
   const env = engineEnv(cli, scope); delete env.CLAUDE_CODE_OAUTH_TOKEN;
   const proc = spawnCli(bin, a.args, { env, cwd: dir, pty: a.pty, timeoutMs: LOGIN_TTL_MS });
-  const p: Pending = { cli, scope, proc, raw: "", st: { state: "starting", method: a.method, needsCode: a.needsCode, startedAt: Date.now() }, timer: setTimeout(() => cancelLogin(cli, scope), LOGIN_TTL_MS), onChange: new Set(), hide: [] };
+  const p: Pending = { cli, scope, proc, raw: "", st: { state: "starting", method: a.method, needsCode: a.needsCode, startedAt: Date.now() }, timer: setTimeout(() => cancelLogin(cli, scope), LOGIN_TTL_MS), onChange: new Set(), hide: [], pastedAt: -1, tokenSeen: 0 };
   g.pending.set(key(cli, scope), p);
   let pressed = false;
   proc.child.stdout!.on("data", (d: Buffer) => {
@@ -201,8 +215,22 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
     const at = url ? text.indexOf(url) : -1;
     if (cli === "codex" && at >= 0) { const c = CODE_RE.exec(text.slice(at + url!.length))?.[0]; if (c && c !== p.st.userCode) patch.userCode = c; }
     if (p.st.state === "starting" && (patch.url ?? p.st.url)) patch.state = "open_url";
-    const tok = cli === "claude" && a.method === "token" ? TOKEN_RE.exec(text)?.[0] : undefined;
-    if (tok) { saveToken(scope, tok); p.raw = p.raw.replace(new RegExp(tok, "g"), "[đã che]"); finish(p, true); return; }
+    if (cli === "claude" && a.method === "token" && p.st.state !== "done") {
+      if (!p.tokenSeen && /sk-ant-oat/.test(text)) {
+        p.tokenSeen = Date.now();
+        setTimeout(() => { const t = extractToken(stripAnsi(p.raw), true); if (t && p.st.state !== "done") { saveToken(scope, t); p.raw = p.raw.split(t).join("[đã che]"); finish(p, true); } }, 2000);
+      }
+      const tok = extractToken(text);
+      if (tok) { saveToken(scope, tok); p.raw = p.raw.split(tok).join("[đã che]"); finish(p, true); return; }
+    }
+    // Sau khi dán mã: CLI báo mã sai / hết hạn rồi đứng chờ ("Press Enter to retry") → báo ngay cho người dùng.
+    if (p.pastedAt >= 0 && p.st.state === "verifying") {
+      const err = CODE_ERROR.exec(stripAnsi(p.raw.slice(p.pastedAt)))?.[1];
+      if (err) {
+        finish(p, false, `${err.replace(/Press Enter to retry\.?/i, "").trim()} — mã không đúng, đã hết hạn hoặc là mã của một lần đăng nhập trước. Bấm Đăng nhập để lấy link mới rồi dán mã của đúng trang đó.`);
+        return;
+      }
+    }
     if (Object.keys(patch).length) update(p, patch);
   });
   void proc.done.then((e) => {
@@ -227,6 +255,8 @@ function tail(p: Pending) {
 
 function finish(p: Pending, ok: boolean, message?: string) {
   clearTimeout(p.timer);
+  // Ghi lại đoạn cuối đầu ra (đã che token, mã dán vào) để chẩn đoán khi đăng nhập không thành công.
+  if (!ok) console.warn(`[engine-login] ${p.cli} không thành công: ${message ?? ""}\n${tail(p)}`);
   forget(p.cli, p.scope);
   if (ok) { g.relogin.delete(key(p.cli, p.scope)); fs.writeFileSync(marker(p.cli, p.scope), String(Date.now()), { mode: 0o600 }); }
   update(p, ok ? { state: "done", message: undefined } : { state: "error", message: message ?? (tail(p) || "Đăng nhập không thành công.") });
@@ -245,17 +275,23 @@ export async function submitCode(cli: Cli, scope: string, code: string): Promise
   const state = (): LoginState["state"] => p.st.state;
   update(p, { state: "verifying" });
   p.hide.push(c);
-  p.proc.write(c + "\r");
+  p.pastedAt = p.raw.length;
+  // Gõ mã rồi mới nhấn Enter (giao diện terminal coi chuỗi gõ liền là dán, Enter dính vào chuỗi dán có thể bị bỏ qua).
+  p.proc.write(c);
+  await new Promise((r) => setTimeout(r, 400));
+  p.proc.write("\r");
   if (cli === "agy") {
     // agy không tự thoát sau khi đăng nhập (vào màn hình làm quen hoặc màn hình chat), và chỉ lưu phiên đăng nhập xuống đĩa khi đăng nhập
     // xong hẳn: kiểm tra bằng `agy models` lúc tiến trình đăng nhập còn chạy có thể báo nhầm. Chờ màn hình đứng yên, cho agy thoát
     // (/exit ở màn hình chat; màn hình làm quen thì không gõ phím nào vì đó là lựa chọn của người dùng), rồi kiểm tra bằng tiến trình mới.
     const bin = find("agy")!;
     let size = -1, still = 0;
-    for (let t = 0; t < 30_000 && still < 2500 && p.proc.child.exitCode === null; t += 250) {
+    for (let t = 0; t < 30_000 && still < 2500 && p.proc.child.exitCode === null && state() === "verifying"; t += 250) {
       await new Promise((r) => setTimeout(r, 250));
       if (p.raw.length === size) still += 250; else { size = p.raw.length; still = 0; }
     }
+    // Đã báo lỗi mã (mã sai, hết hạn) trong lúc chờ: dừng ở đây.
+    if (state() !== "verifying") return { ...p.st };
     if (p.proc.child.exitCode === null) {
       const text = stripAnsi(p.raw);
       const onboarding = /Choose your color scheme|Terms of Service|I agree to help improve/i.test(text);
@@ -266,8 +302,8 @@ export async function submitCode(cli: Cli, scope: string, code: string): Promise
     const s = await probe("agy", scope, bin).catch(() => null);
     if (s?.loggedIn) finish(p, true);
     else finish(p, false, tail(p) || "Antigravity chưa lưu được phiên đăng nhập. Kiểm tra mã rồi thử lại.");
-  } else await waitFor(p, () => state() !== "verifying", 60_000);
-  if (state() === "verifying") finish(p, false, "CLI không phản hồi sau khi dán mã.");
+  } else await waitFor(p, () => state() !== "verifying", 45_000);
+  if (state() === "verifying") finish(p, false, "CLI không phản hồi sau khi dán mã. Bấm Đăng nhập để thử lại với link mới.");
   return { ...p.st };
 }
 

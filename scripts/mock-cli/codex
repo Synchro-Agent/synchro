@@ -35,9 +35,10 @@ const authFile = path.join(dir, "auth.json");
       if (m.id === undefined) return;
       if (m.method === "initialize") return reply(m.id, { userAgent: "synchro/0.164.0 (mock)", codexHome: dir });
       if (m.method === "model/list") return reply(m.id, { data: [
-        { id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1-Sol", hidden: false },
-        { id: "gpt-6-astra", model: "gpt-6-astra", displayName: "GPT-6 Astra", hidden: false },
-        { id: "gpt-6.1-luna", model: "gpt-6.1-luna", displayName: "GPT-6.1-Luna", hidden: false },
+        // Như codex thật: mỗi model một bộ mức effort hỗ trợ.
+        { id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1-Sol", hidden: false, supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"].map((e) => ({ reasoningEffort: e })) },
+        { id: "gpt-6-astra", model: "gpt-6-astra", displayName: "GPT-6-Astra", hidden: false, supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"].map((e) => ({ reasoningEffort: e })) },
+        { id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false, supportedReasoningEfforts: ["low", "medium", "high", "xhigh"].map((e) => ({ reasoningEffort: e })) },
         { id: "codex-internal", model: "codex-internal", displayName: "Internal", hidden: true },
       ] });
       if (m.method === "account/read") return reply(m.id, li() ? { account: { type: "chatgpt", email: "owner@example.com", planType: "plus" }, requiresOpenaiAuth: true } : { account: null, requiresOpenaiAuth: true });

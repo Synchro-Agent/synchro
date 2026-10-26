@@ -20,9 +20,16 @@ const loginFile = path.join(dir, ".mock-login");
     console.log("Opening browser to sign in…\nBrowser didn't open? Use the url below to sign in (c to copy)\n");
     console.log(`${C.cfg.base}/mock-login/claude?code=true&client_id=mock&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&state=${C.uuid()}`);
     const code = await C.readLine("\nPaste code here if prompted > ");
-    if (code !== "MOCK-CLAUDE-OK") { console.log("\nOAuth error: Invalid code. Please make sure the full code was copied."); process.exit(1); }
+    // Như Claude Code thật: mã sai thì báo lỗi rồi đứng chờ Enter để thử lại (không thoát).
+    if (code !== "MOCK-CLAUDE-OK") { console.log("\n OAuth error: Request failed with status code 400 Press Enter to retry."); await new Promise(() => {}); }
     if (a[0] === "setup-token") {
-      console.log(`\n✓ Long-lived authentication token created successfully!\n\nYour OAuth token (valid for 1 year):\n\nsk-ant-oat01-MOCK${C.crypto.randomBytes(24).toString("hex")}\n\nStore this token securely. You won't be able to see it again.`);
+      // Token in làm hai đợt (như terminal nhận theo từng gói dữ liệu), rồi mới tới câu "Store this token".
+      const tok = `sk-ant-oat01-MOCK${C.crypto.randomBytes(40).toString("hex")}`;
+      fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, ".mock-last-token"), tok);
+      process.stdout.write(`\n✓ Long-lived authentication token created successfully!\n\nYour OAuth token (valid for 1 year):\n\n${tok.slice(0, 30)}`);
+      await C.sleep(400);
+      process.stdout.write(`${tok.slice(30)}\n\nStore this token securely. You won't be able to see it again.\n`);
+      await C.sleep(100);
     } else { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(loginFile, "1"); console.log("\nLogin successful."); }
     process.exit(0);
   }
@@ -30,7 +37,9 @@ const loginFile = path.join(dir, ".mock-login");
     const prompt = await C.readStdin();
     const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
     const sid = C.flag(a, "--resume") || C.uuid();
-    C.out({ type: "system", subtype: "init", session_id: sid, model: C.flag(a, "--model") || "claude-sonnet-mock", cwd: process.cwd(), tools: [] });
+    // Tên gọi tắt → model thật (như Claude Code báo trong system/init).
+    const ALIAS = { fable: "claude-fable-5-1", opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" };
+    C.out({ type: "system", subtype: "init", session_id: sid, model: ALIAS[C.flag(a, "--model")] ?? C.flag(a, "--model") ?? "claude-sonnet-5-5", cwd: process.cwd(), tools: [] });
     const result = (o) => C.out({ type: "result", session_id: sid, usage: { input_tokens: 0, output_tokens: 0 }, total_cost_usd: 0, ...o });
     if (!ok) { result({ subtype: "success", is_error: true, result: "Not logged in · Please run /login" }); process.exit(1); }
     if (prompt.includes("[mock:auth401]")) { C.out({ type: "system", subtype: "api_retry", attempt: 1, max_retries: 10, retry_delay_ms: 600, error_status: 401, error: "authentication_failed" }); await C.sleep(60_000); return; }

@@ -24,7 +24,8 @@ export const subCli = (key: unknown): Cli | null => {
 
 /** Tên gói, hãng (để hiện logo), và model mặc định khi chưa đọc được danh sách thật. */
 export const SUB: Record<Cli, { name: string; vendor: "anthropic" | "openai" | "google"; label: string; fallback: { id: string; name: string }[] }> = {
-  claude: { name: "Claude", vendor: "anthropic", label: "Claude · Your plan", fallback: [{ id: "opus", name: "Claude Opus" }, { id: "sonnet", name: "Claude Sonnet" }, { id: "haiku", name: "Claude Haiku" }] },
+  // Claude Code nhận tên gọi tắt fable / opus / sonnet / haiku và tự dùng bản mới nhất gói được phép (Fable có thể cần usage credits).
+  claude: { name: "Claude", vendor: "anthropic", label: "Claude · Your plan", fallback: [{ id: "fable", name: "Claude Fable" }, { id: "opus", name: "Claude Opus" }, { id: "sonnet", name: "Claude Sonnet" }, { id: "haiku", name: "Claude Haiku" }] },
   codex: { name: "ChatGPT", vendor: "openai", label: "ChatGPT · Your plan", fallback: [{ id: "default", name: "ChatGPT (plan default)" }] },
   agy: { name: "Gemini", vendor: "google", label: "Gemini · Your plan", fallback: [{ id: "default", name: "Gemini (plan default)" }] },
 };
@@ -58,17 +59,23 @@ export async function codexRpc(scope: string, calls: { method: string; params?: 
 }
 
 // ---------------------------------------------------------------- danh sách model của gói
-/** Model của gói. variants: biến thể theo mức effort mà CLI tách thành model riêng (agy: gemini-3.8-flash-low / -medium / -high). */
-type PlanModel = { id: string; name: string; variants?: Record<string, string> };
+/**
+ * Model của gói. variants: biến thể theo mức effort mà CLI tách thành model riêng (agy: gemini-3.8-flash-low / -medium / -high);
+ * efforts: các mức effort model hỗ trợ (codex: supportedReasoningEfforts).
+ */
+type PlanModel = { id: string; name: string; variants?: Record<string, string>; efforts?: string[] };
 type G = {
   models: Map<string, { at: number; v: PlanModel[] }>;
   limits: Map<string, { at: number; plan?: string; credits?: string | null; setup?: boolean; windows: (RateWindow | PlanWindow)[] }>;
   /** Gói báo hết hạn mức mà không kèm mốc đặt lại: tạm coi là hết tới thời điểm này. */
   quota: Map<string, number>;
+  /** Model thật mà tên gọi tắt của Claude Code đang trỏ tới, theo từng tài khoản ("opus" → "claude-opus-5-5"). */
+  resolved: Map<string, Record<string, string>>;
   /** Đang đọc bảng /usage của agy (mỗi tài khoản một lượt một lúc). */
   agyBusy: Map<string, Promise<AgyUsage>>;
 };
-const g: G = ((globalThis as { __synchroSubs?: G }).__synchroSubs ??= { models: new Map(), limits: new Map(), quota: new Map(), agyBusy: new Map() });
+const g: G = ((globalThis as { __synchroSubs?: G }).__synchroSubs ??= { models: new Map(), limits: new Map(), quota: new Map(), resolved: new Map(), agyBusy: new Map() });
+g.resolved ??= new Map();
 g.quota ??= new Map();
 g.agyBusy ??= new Map();
 const MODELS_TTL = 10 * 60_000;
@@ -103,18 +110,39 @@ async function detectModels(cli: Cli, scope: string, agyLines?: string[]): Promi
   }
   if (cli === "codex") {
     const [r] = await codexRpc(scope, [{ method: "model/list" }]).catch(() => [null]);
-    const list = ((r?.data ?? []) as Json[]).filter((m) => !m.hidden && typeof (m.id ?? m.model) === "string").map((m) => ({ id: String(m.id ?? m.model), name: String(m.displayName ?? m.id) }));
+    const list = ((r?.data ?? []) as Json[]).filter((m) => !m.hidden && typeof (m.id ?? m.model) === "string").map((m) => ({
+      id: String(m.id ?? m.model), name: String(m.displayName ?? m.id).replace(/^GPT-([\d.]+)-/, "GPT-$1 "),
+      efforts: Array.isArray(m.supportedReasoningEfforts) ? (m.supportedReasoningEfforts as Json[]).map((e) => String(e.reasoningEffort ?? e)).filter(Boolean) : undefined,
+    }));
     return list.length ? list : SUB.codex.fallback;
   }
-  // Claude Code nhận tên viết tắt (opus, sonnet, haiku) và tự dùng bản mới nhất mà gói được phép.
-  return SUB.claude.fallback;
+  // Claude Code nhận tên gọi tắt và tự dùng bản mới nhất mà gói được phép: tên hiện theo model thật đã thấy ở lượt chat trước,
+  // không thì theo bản mới nhất cùng dòng trong danh sách khóa API (nếu có), không thì tên chung.
+  const seen = g.resolved.get(`claude:${scope}`) ?? {};
+  const api = (await catalog().catch(() => [])).filter((p) => p.kind === "anthropic").flatMap((p) => p.models);
+  return SUB.claude.fallback.map((m) => {
+    if (seen[m.id]) return { id: m.id, name: claudeName(seen[m.id]) };
+    const latest = api.find((x) => x.id.startsWith(`claude-${m.id}`));
+    return latest ? { id: m.id, name: latest.name } : m;
+  });
 }
+/** "claude-opus-5-5" → "Claude Opus 5.5", "claude-fable-5-1" → "Claude Fable 5.1". */
+const claudeName = (id: string) => id.replace(/\[1m\]$/i, "").replace(/-(\d+)-(\d+)(-\d{8})?$/, " $1.$2").split(/[- ]/).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ").replace(/ (\d+\.\d+)$/, " $1");
 
 /** Model CLI thật sự chạy cho một model gói và mức effort: agy đổi sang biến thể đúng mức; không có biến thể thì truyền effort riêng. */
 export function resolvePlanModel(cli: Cli, uid: string, id: string, effort?: string): { model?: string; effort?: string } {
   const pm = g.models.get(`${cli}:${uid}`)?.v.find((m) => m.id === id);
   const v = pm?.variants && Object.keys(pm.variants).some((k) => k !== "default") ? pm.variants : null;
-  if (!v) return { model: pm?.variants?.default ?? (id && id !== "default" ? id : undefined), effort };
+  if (!v) {
+    // Codex: chọn mức gần nhất trong các mức model này hỗ trợ (Synchro "extra" = xhigh; "max" khi model có, không thì xhigh…).
+    let e = effort;
+    if (effort && pm?.efforts?.length) {
+      const order = ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"], want = effort === "extra" ? "xhigh" : effort;
+      const i = order.indexOf(want);
+      e = i < 0 ? undefined : [...order.slice(0, i + 1)].reverse().find((x) => pm.efforts!.includes(x)) ?? pm.efforts[0];
+    }
+    return { model: pm?.variants?.default ?? (id && id !== "default" ? id : undefined), effort: e };
+  }
   const want = effort === "extra" ? ["xhigh", "high", "max"] : effort === "max" ? ["max", "xhigh", "high"] : effort === "low" ? ["low", "minimal", "extra-low", "medium"]
     : effort === "high" ? ["high", "xhigh", "medium"] : ["medium", "default", "high", "low"];
   const pick = want.map((w) => v[w]).find(Boolean) ?? v.default ?? Object.values(v)[0];
@@ -443,7 +471,14 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null;
   for await (const e of eng.runTurn(req)) {
     if (e.kind === "text") { text += e.text; o.onDelta?.(e.text); }
-    else if (e.kind === "session") session = e.id;
+    else if (e.kind === "session") {
+      session = e.id;
+      // Ghi nhớ model thật của tên gọi tắt Claude (để bộ chọn model hiện "Claude Opus 5.5" thay vì "Claude Opus").
+      if (cli === "claude" && e.model && run.model) {
+        const k = `claude:${o.user.id}`, cur = g.resolved.get(k) ?? {};
+        if (cur[run.model] !== e.model) { g.resolved.set(k, { ...cur, [run.model]: e.model }); g.models.delete(k); }
+      }
+    }
     else if (e.kind === "final") { final = e.text; via = e.via ?? cli; }
     else if (e.kind === "usage" && e.usage.limits?.length) saveLimits(cli, o.user.id, e.usage.limits);
     else if (e.kind === "error") err = { message: e.message, code: e.code };

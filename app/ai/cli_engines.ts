@@ -37,7 +37,7 @@ function exitError(cli: Cli, p: Proc, e: Exit, extra = ""): Event {
 }
 
 // Mức effort của Synchro → của CLI ("extra" là "xhigh"); Codex chưa có "max" nên dùng "xhigh".
-const cliEffort = (e: string | undefined, max = "max") => (!e ? undefined : e === "extra" ? "xhigh" : e === "max" ? max : /^(low|medium|high)$/.test(e) ? e : undefined);
+const cliEffort = (e: string | undefined, max = "max") => (!e ? undefined : e === "extra" ? "xhigh" : e === "max" ? max : /^(minimal|low|medium|high|xhigh|ultra)$/.test(e) ? e : undefined);
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 /** Thời điểm đặt lại: CLI có thể trả giây hoặc mili giây, hoặc chuỗi ISO. */
@@ -82,7 +82,7 @@ export class ClaudeCodeEngine implements Engine {
     let text = "", done = false;
     const limits = new Map<string, RateWindow>();
     for await (const o of objects(p)) {
-      if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id };
+      if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) };
       else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
         text += o.event.delta.text;
         yield { kind: "text", text: o.event.delta.text };
@@ -123,7 +123,8 @@ export class CodexEngine implements Engine {
     const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"'];
     if (req.model) args.push("-m", req.model);
-    const ce = cliEffort(req.effort, "xhigh");
+    // Mức đã được subs.resolvePlanModel chọn theo đúng các mức model này hỗ trợ (low…max, ultra).
+    const ce = cliEffort(req.effort);
     if (ce) args.push("-c", `model_reasoning_effort="${ce}"`);
     args.push("-");
     const p = start("codex", args, req, prompt);

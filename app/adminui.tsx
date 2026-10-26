@@ -28,7 +28,8 @@ type Detail = { sessions: Sess[]; identities: { provider: string; email: string 
 export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method, cache: "no-store", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || "Lỗi máy chủ. Vui lòng thử lại.");
+  // Không có lời nhắn JSON: proxy trả lỗi khi Synchro đang khởi động lại (cập nhật) hoặc phản hồi quá lâu.
+  if (!r.ok) throw new Error(j.error || (r.status === 502 || r.status === 503 ? "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây." : r.status === 504 ? "Máy chủ phản hồi quá lâu. Thử lại sau ít phút." : "Lỗi máy chủ. Vui lòng thử lại."));
   return j as T;
 }
 

@@ -28,7 +28,8 @@ export type ErrorCode = "quota" | "auth" | "other" | "aborted" | "timeout";
 
 export type Event =
   | { kind: "text"; text: string }
-  | { kind: "session"; id: string }
+  /** model: model thật CLI đang dùng khi CLI cho biết (vd. "opus" → "claude-opus-5-5"). */
+  | { kind: "session"; id: string; model?: string }
   | { kind: "usage"; usage: Usage }
   /** via: engine thực sự trả lời (vd. "api:anthropic" khi đã chuyển sang khóa API dự phòng). */
   | { kind: "final"; text: string; via?: string }

@@ -1289,3 +1289,10 @@ Object.assign(EN2VI, {
   "Antigravity is waiting for you to finish its first-run setup: pick a color scheme, then accept its terms and choose whether Google may use your interactions. Synchro never answers these for you. Until then, chat works but plan limits can't be read.":
     "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu: chọn bảng màu, đồng ý điều khoản và chọn có cho Google dùng dữ liệu tương tác hay không. Synchro không bao giờ chọn thay bạn. Trong lúc chờ, chat vẫn dùng được nhưng chưa đọc được hạn mức của gói.",
 });
+Object.assign(EN2VI, {
+  "Use the code from the page you just opened. Each time you press Sign in, a new link is created and older codes stop working.": "Dùng mã của đúng trang vừa mở. Mỗi lần bấm Đăng nhập là một link mới, mã của link cũ không dùng được nữa.",
+});
+Object.assign(VI2EN, {
+  "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây.": "Synchro is restarting for an update. Try again in a few seconds.",
+  "Máy chủ phản hồi quá lâu. Thử lại sau ít phút.": "The server took too long to respond. Try again in a few minutes.",
+});

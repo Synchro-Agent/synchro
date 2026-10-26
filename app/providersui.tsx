@@ -154,6 +154,7 @@ function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnT
             {login.needsCode && (
               <li>
                 <b>Paste the code here</b>
+                <span>Use the code from the page you just opened. Each time you press Sign in, a new link is created and older codes stop working.</span>
                 <form className="pv-paste" onSubmit={(e) => { e.preventDefault(); submit(); }}>
                   <input className="field" autoComplete="off" spellCheck={false} placeholder="Paste the code from the sign-in page" value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
                   <button type="submit" className="btn dark" disabled={!code.trim() || busy === "code"}>{busy === "code" ? <><span className="api-spin" />Checking…</> : "Continue"}</button>

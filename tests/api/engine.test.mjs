@@ -133,8 +133,10 @@ try {
     // Claude setup-token (cần terminal): link → mã sai → bắt đầu lại → mã đúng → token lưu mã hóa.
     let l = await A.startLogin("claude", U);
     ok(l.state === "open_url" && l.method === "token" && l.needsCode && l.url?.startsWith(`${M}/mock-login/claude`), "setup-token: có link đăng nhập, chờ dán mã", JSON.stringify(l));
-    l = await A.submitCode("claude", U, "wrong-code");
-    ok(l.state === "error" && /Invalid code/.test(l.message ?? "") && !(l.message ?? "").includes("wrong-code"), "mã sai → lỗi rõ ràng, không lộ mã đã dán", JSON.stringify(l));
+    const t0w = Date.now();
+    l = await A.submitCode("claude", U, "wrong-code#state");
+    ok(l.state === "error" && /OAuth error/.test(l.message ?? "") && /link mới/.test(l.message ?? "") && !(l.message ?? "").includes("wrong-code") && Date.now() - t0w < 8000,
+      "mã sai (Claude báo lỗi rồi đứng chờ) → báo ngay câu lỗi của Claude, không chờ hết giờ, không lộ mã đã dán", JSON.stringify({ l, ms: Date.now() - t0w }));
     let threw = ""; try { await A.submitCode("claude", U, "x"); } catch (e) { threw = e.message; }
     ok(/Không có lượt đăng nhập/.test(threw), "dán mã khi không có lượt đăng nhập → báo lỗi", threw);
     await A.startLogin("claude", U);
@@ -144,9 +146,9 @@ try {
     ok(l.state === "done", "mã đúng → đăng nhập xong", JSON.stringify(l));
     const tokFile = path.join(process.env.DATA_DIR, "engine-tokens", `claude-${U}.enc`);
     const sealed = fs.readFileSync(tokFile, "utf8");
-    ok(fs.existsSync(tokFile) && !sealed.includes("sk-ant-oat01") && (fs.statSync(tokFile).mode & 0o777) === 0o600 && !fs.readdirSync(dir).some((f) => f.includes("token")), "token lưu mã hóa (0600) trong dữ liệu Synchro, không nằm trong thư mục CLI");
+    ok(fs.existsSync(tokFile) && !sealed.includes("sk-ant-oat01") && (fs.statSync(tokFile).mode & 0o777) === 0o600 && !fs.readdirSync(dir).some((f) => f.includes("token") && f !== ".mock-last-token"), "token lưu mã hóa (0600) trong dữ liệu Synchro, không nằm trong thư mục CLI");
     const env = A.engineEnv("claude", U);
-    ok(env.CLAUDE_CODE_OAUTH_TOKEN?.startsWith("sk-ant-oat01-MOCK") && env.CLAUDE_CONFIG_DIR === dir, "engineEnv: token giải mã chỉ để truyền cho CLI");
+    ok(env.CLAUDE_CODE_OAUTH_TOKEN === fs.readFileSync(path.join(dir, ".mock-last-token"), "utf8") && env.CLAUDE_CONFIG_DIR === dir, "token đọc đủ (Claude in làm hai đợt), giải mã chỉ để truyền cho CLI");
     const s1 = await A.status("claude", U);
     ok(s1.loggedIn && s1.method === "token", "status sau đăng nhập: token", JSON.stringify(s1));
     const s2 = await A.status("claude", U2);
@@ -292,7 +294,10 @@ try {
     const lite = await eff("sub-agy/gemini-3.1-flash-lite", "high");
     ok(/\[model gemini-3\.1-flash-lite\]/.test(lite) && /\[effort high\]/.test(lite), "Gemini: model không có biến thể → truyền --effort", lite);
     ok(/\[model gemini-4-argon-medium\]/.test(await eff("sub-agy/gemini-4-argon")), "Gemini: chưa chọn effort → biến thể Medium");
-    ok(/\[effort xhigh\]/.test(await eff("sub-claude/sonnet", "extra")) && /\[effort xhigh\]/.test(await eff("sub-codex/gpt-6.1-sol", "max")) && /\[effort high\]/.test(await eff("sub-codex/gpt-6.1-sol", "high")), "Claude --effort, Codex model_reasoning_effort theo mục Effort");
+    ok(/\[effort xhigh\]/.test(await eff("sub-claude/sonnet", "extra")) && /\[effort max\]/.test(await eff("sub-codex/gpt-6.1-sol", "max")) && /\[effort high\]/.test(await eff("sub-codex/gpt-6.1-sol", "high")), "Claude --effort, Codex model_reasoning_effort theo mục Effort");
+    ok(/\[effort xhigh\]/.test(await eff("sub-codex/gpt-5.5", "max")), "Codex: model không có mức max → dùng mức cao nhất model hỗ trợ (xhigh)");
+    const clm = (await SUBS.mergedProviders(me, await P.catalog())).find((p) => p.id === "anthropic").models;
+    ok(clm.map((m) => m.id).join() === "fable,opus,sonnet,haiku" && clm.find((m) => m.id === "sonnet").name === "Claude Sonnet 5.5", "Claude: Fable / Opus / Sonnet / Haiku, tên theo model thật Claude Code báo (Sonnet → Claude Sonnet 5.5)", JSON.stringify(clm));
     const ag0 = await SUBS.subUsage(me, "agy");
     ok(ag0.setup && !ag0.windows.length && !fs.existsSync(path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "onboarding-input.log")), "Antigravity chưa làm quen: báo cần hoàn tất, không gõ phím nào thay người dùng", JSON.stringify(ag0));
     fs.mkdirSync(path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "cache"), { recursive: true });
