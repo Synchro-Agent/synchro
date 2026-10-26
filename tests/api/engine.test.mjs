@@ -249,6 +249,10 @@ try {
     const pro = SUBS.codexWindows({ rateLimits: { primary: null, secondary: { usedPercent: 5, windowDurationMins: 10080, resetsAt: sec(now + 6 * 86400e3) }, planType: "pro" } });
     ok(pro.windows.length === 1 && pro.windows[0].window === "seven_day", "Codex Pro: chỉ có hạn mức tuần", JSON.stringify(pro));
     const ag = SUBS.agyWindows(" Model quota\n Gemini Models\n   Five Hour Limit Remaining  64%  resets in 3h 12m\n   Weekly Limit Remaining  90%  resets in 5d 2h\n Claude and GPT Models\n   Five Hour Limit Remaining  100%\n   Weekly Limit Remaining  0%\n");
+    const real = SUBS.agyWindows("└ Models & Quota\n  Account: [email]\nGEMINI MODELS\n  Models within this group: Gemini Flash, Gemini Pro\n  Weekly Limit Remaining\n[██████████░] 99.98%\nRefreshes in 166h 28m\n  Five Hour Limit Remaining\n[██████████] 99.94%\nRefreshes in 3h 28m\nCLAUDE AND GPT MODELS\n  Models within this group: Claude Opus, Claude Sonnet, GPT-OSS\n  Weekly Limit Remaining\n[█████████] 99.38%\nRefreshes in 150h 1m\n  Five Hour Limit Remaining\n[████████░] 98.75%\nRefreshes in 2h 5m\n");
+    const rs = real.find((w) => w.window === "gemini_session"), rw = real.find((w) => w.window === "gemini_weekly"), ow2 = real.find((w) => w.window === "other_session");
+    ok(real.length === 4 && rs.usedPct === 0.06 && Math.abs(rs.resetsAt - (Date.now() + (3 * 60 + 28) * 60e3)) < 5000 && Math.abs(rw.resetsAt - (Date.now() + (166 * 60 + 28) * 60e3)) < 5000 && ow2.usedPct === 1.25,
+      "Antigravity: đọc đúng bố cục thật của bảng /usage (nhãn, thanh %, dòng Refreshes in… trên các dòng riêng)", JSON.stringify(real));
     const g5 = ag.find((w) => w.window === "gemini_session"), ow = ag.find((w) => w.window === "other_weekly");
     ok(ag.length === 4 && g5.usedPct === 36 && Math.abs(g5.resetsAt - (Date.now() + (3 * 60 + 12) * 60e3)) < 5000 && ow.status === "rejected" && ow.usedPct === 100 && /Claude and GPT/.test(ow.label), "Antigravity: hai nhóm model × phiên 5 giờ / tuần từ bảng /usage", JSON.stringify(ag));
 

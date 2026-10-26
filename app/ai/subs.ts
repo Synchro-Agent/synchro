@@ -263,26 +263,34 @@ export function codexWindows(r: Json | null): { windows: RateWindow[]; plan?: st
   };
 }
 
-/** agy: bảng /usage có "Five Hour Limit Remaining" và "Weekly Limit Remaining" cho từng nhóm model (đọc từ terminal giả). */
+/**
+ * agy: bảng /usage ("Models & Quota") có hai nhóm GEMINI MODELS / CLAUDE AND GPT MODELS, mỗi nhóm "Weekly Limit Remaining" và
+ * "Five Hour Limit Remaining", mỗi mục một thanh "[████] 99.94%" rồi dòng "Refreshes in 3h 28m" (agy 1.4.7, đọc qua terminal giả).
+ * Nhận cả kiểu viết gọn trên một dòng ("Five Hour Limit Remaining  64%  resets in 3h 12m").
+ */
 export function agyWindows(text: string): PlanWindow[] {
   const out: PlanWindow[] = [];
-  let group = "", gid = "";
+  let group = "", gid = "", kind: WindowKind | null = null, last: PlanWindow | null = null;
   const dur = (s: string) => {
     let ms = 0;
     for (const [, n, u] of s.matchAll(/(\d+)\s*(d|day|days|h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b/gi)) ms += Number(n) * (/^d/i.test(u) ? 86_400_000 : /^h/i.test(u) ? 3_600_000 : 60_000);
     return ms;
   };
   for (const line of text.split("\n")) {
-    if (/gemini models?/i.test(line)) { group = "Gemini models"; gid = "gemini"; }
-    else if (/claude\b.*\bgpt|gpt\b.*\bclaude/i.test(line) && /models?/i.test(line)) { group = "Claude and GPT models"; gid = "other"; }
-    const m = /(five[ -]?hour|5[ -]?hour|weekly)\s+limit\s+remaining\D*?(\d+(?:\.\d+)?)\s*%/i.exec(line);
-    if (!m) continue;
-    const kind: WindowKind = /week/i.test(m[1]) ? "weekly" : "session";
-    const r = /reset[s]?\s+(?:in\s+)?(.+)$/i.exec(line.slice(m.index + m[0].length));
-    const ms = r ? dur(r[1]) : 0;
-    const remaining = Number(m[2]);
-    out.push({ window: `${gid || "all"}_${kind}`, label: `${kind === "weekly" ? "Weekly" : "Current session"}${group ? ` · ${group}` : ""}`, kind, group: group || undefined,
-      usedPct: Math.max(0, Math.min(100, Math.round((100 - remaining) * 10) / 10)), resetsAt: ms ? Date.now() + ms : undefined, status: remaining <= 0 ? "rejected" : remaining <= 20 ? "allowed_warning" : "allowed" });
+    if (/within this group/i.test(line)) continue;
+    if (/gemini models?/i.test(line)) { group = "Gemini models"; gid = "gemini"; kind = null; last = null; continue; }
+    if (/claude\b.*\bgpt|gpt\b.*\bclaude/i.test(line) && /models?/i.test(line)) { group = "Claude and GPT models"; gid = "other"; kind = null; last = null; continue; }
+    const lab = /(five[ -]?hour|5[ -]?hour|weekly)\s+limit\s+remaining/i.exec(line);
+    if (lab) { kind = /week/i.test(lab[1]) ? "weekly" : "session"; last = null; }
+    const pct = /(\d+(?:\.\d+)?)\s*%/.exec(lab ? line.slice(lab.index + lab[0].length) : line);
+    if (pct && kind && !last) {
+      const remaining = Number(pct[1]);
+      last = { window: `${gid || "all"}_${kind}`, label: `${kind === "weekly" ? "Weekly" : "Current session"}${group ? ` · ${group}` : ""}`, kind, group: group || undefined,
+        usedPct: Math.max(0, Math.min(100, Math.round((100 - remaining) * 100) / 100)), status: remaining <= 0 ? "rejected" : remaining <= 20 ? "allowed_warning" : "allowed" };
+      out.push(last);
+    }
+    const rf = /(?:refreshes|resets?)\s+in\s+(.+)$/i.exec(line);
+    if (rf && last && !last.resetsAt) { const ms = dur(rf[1]); if (ms) last.resetsAt = Date.now() + ms; }
   }
   return out;
 }
@@ -313,10 +321,13 @@ function agyUsage(scope: string): Promise<AgyUsage> {
       const text = stripAnsi(raw);
       if (AGY_ONBOARDING.test(text)) { setup = true; break; }
       // Chỉ gõ /usage khi đã thấy ô nhập của phiên chat và màn hình đứng yên.
-      if (!asked && Date.now() - last > 1500 && Date.now() - t0 > 2500 && !/sign in|signing in/i.test(text.slice(-400))) { p.write("/usage\r"); asked = true; last = Date.now(); continue; }
+      if (!asked && Date.now() - last > 1500 && Date.now() - t0 > 2500 && !/sign in|signing in/i.test(text.slice(-400))) {
+        // Gõ lệnh rồi mới Enter (gõ liền một lần có thể bị coi là dán, Enter không được nhận).
+        p.write("/usage"); await new Promise((r) => setTimeout(r, 400)); p.write("\r"); asked = true; last = Date.now(); continue;
+      }
       if (asked && /limit\s+remaining/i.test(text) && Date.now() - last > 800) { windows = agyWindows(text.slice(text.search(/\/usage|limit\s+remaining/i))); break; }
     }
-    if (!setup) { p.write("\x1b"); p.write("/exit\r"); }
+    if (!setup) { p.write("\x1b"); await new Promise((r) => setTimeout(r, 300)); p.write("/exit"); await new Promise((r) => setTimeout(r, 300)); p.write("\r"); }
     const quit = setTimeout(() => p.kill(), setup ? 0 : 4000);
     await p.done;
     clearTimeout(quit);
