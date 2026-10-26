@@ -4,7 +4,7 @@
 // Quản trị viên đặt hạn mức (USD) cho mọi người, từng người, và sửa bảng giá nếu nhà cung cấp đổi giá.
 // Ngoài ra ghi lại hạn mức gọi API mà nhà cung cấp báo trong header (Anthropic, OpenAI) để biết API còn bao nhiêu.
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, isAdmin, type UserRow } from "./authstore";
+import { db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
@@ -162,9 +162,37 @@ export function noteResponse(provider: string, model: string, body: { usage?: un
   try { recordRate(provider, headers); recordUsage(`${provider}/${model}`, body?.usage); } catch (e) { console.error("[usage]", e); }
 }
 
+// ---------------------------------------------------------------- số dư API đã nạp (quản trị viên nhập)
+// Hãng không có API báo số dư cho khóa, nên quản trị viên nhập số tiền đã nạp; Synchro trừ dần theo chi phí thật
+// của mọi lượt gọi tới hãng đó (của mọi tài khoản) kể từ lúc nhập, để vòng tròn mức dùng báo khi sắp hết hoặc đã hết.
+export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
+type CreditRow = { amount: number; since: number };
+const creditRows = (): Record<string, CreditRow> => { try { const v = JSON.parse(getSetting("api_credit", "{}")); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
+const cents = (v: number) => Math.round(v * 10000) / 10000;
+export function creditOf(provider: string): Credit | null {
+  const r = creditRows()[provider];
+  if (!r) return null;
+  const spent = (init().prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE model LIKE ? AND at >= ?").get(`${provider}/%`, r.since) as { c: number }).c;
+  return { provider, amount: r.amount, since: r.since, spent: cents(spent), remaining: cents(Math.max(0, r.amount - spent)), pct: r.amount > 0 ? Math.min(100, (spent / r.amount) * 100) : 100 };
+}
+export const credits = () => Object.keys(creditRows()).map(creditOf).filter((c): c is Credit => !!c);
+/** amount: đặt lại số dư (null = bỏ theo dõi); add: nạp thêm vào số dư còn lại. */
+export function setCredit(provider: string, o: { amount?: number | null; add?: number }) {
+  if (!/^[a-z0-9-]{1,40}$/.test(provider)) throw new Error("Nhà cung cấp không hợp lệ.");
+  const all = creditRows();
+  if (o.amount === null) delete all[provider];
+  else {
+    const v = typeof o.amount === "number" ? o.amount : (creditOf(provider)?.remaining ?? 0) + (o.add ?? 0);
+    if (!isFinite(v) || v < 0 || v > 1e7) throw new Error("Số tiền không hợp lệ.");
+    all[provider] = { amount: Math.round(v * 100) / 100, since: Date.now() };
+  }
+  setSetting("api_credit", JSON.stringify(all));
+  return creditOf(provider);
+}
+
 // ---------------------------------------------------------------- trạng thái để hiện vòng tròn và để chặn khi hết hạn mức
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
-export type UsageState = { limits: Limit[]; rate: (RateInfo & { pct: number }) | null; admin: boolean; plan: string };
+export type UsageState = { limits: Limit[]; rate: (RateInfo & { pct: number }) | null; admin: boolean; plan: string; credit: Credit | null };
 
 function limitsFor(u: UserRow, cfg: UsageConfig, ov: Override) {
   const exempt = isAdmin(u) && !cfg.admins;
@@ -186,7 +214,7 @@ export function usageState(u: UserRow, provider?: string): UsageState {
   const rate = r && now - r.at < 10 * 60_000 && r.resetAt > now ? { ...r, pct: Math.min(100, Math.max(0, (1 - r.remaining / r.limit) * 100)) } : null;
   return {
     limits: [mk("session", sUsed, lim.session, w.sessionStart ? w.sessionStart + SESSION_MS : null, !!w.sessionStart), mk("weekly", wUsed, lim.weekly, w.weekStart !== null ? w.weekStart + WEEK_MS : null, w.weekStart !== null)],
-    rate, admin: isAdmin(u), plan: "API",
+    rate, admin: isAdmin(u), plan: "API", credit: provider ? creditOf(provider) : null,
   };
 }
 

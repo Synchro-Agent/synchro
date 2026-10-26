@@ -1,5 +1,5 @@
 "use client";
-// Cài đặt → API (chỉ quản trị viên): nhập khóa API của từng nhà cung cấp, xem model lấy được, gửi thử một câu tới model.
+// Cài đặt → Providers (chỉ quản trị viên): nhập khóa API của từng nhà cung cấp, xem model lấy được, gửi thử một câu tới model.
 // Khóa gửi lên máy chủ một lần khi lưu; máy chủ kiểm tra với API của hãng, mã hóa rồi lưu, và chỉ trả về dạng che (sk-ant…a1b2).
 import { useEffect, useMemo, useState } from "react";
 import * as I from "./icons";
@@ -14,7 +14,8 @@ export type ApiProvider = {
   baseUrl: string; defaultBase: string; keyHint: string | null; keyUrl: string | null; prefix: string | null;
   status: "ok" | "error" | null; error: string | null; info: string | null; checkedAt: number | null; models: { key: string; name: string }[];
 };
-export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null };
+export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
+export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null; credits?: Credit[] };
 
 const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation" };
 
@@ -56,7 +57,49 @@ function KeyForm({ p, busy, err, onCancel, onSave }: { p: ApiProvider; busy: boo
   );
 }
 
-function ProviderCard({ p, onChange }: { p: ApiProvider; onChange: (s: ApiState) => void }) {
+const usd = (v: number) => `$${v.toFixed(2)}`;
+// Số dư API đã nạp: hãng không báo số dư cho khóa, nên quản trị viên nhập số tiền đã nạp; Synchro trừ dần theo chi phí thật.
+function CreditRow({ p, credit, onChange }: { p: ApiProvider; credit: Credit | null; onChange: (s: ApiState) => void }) {
+  const app = useApp();
+  const [mode, setMode] = useState<"" | "set" | "add">("");
+  const [v, setV] = useState("");
+  const save = async () => {
+    const n = Number(v.replace(",", "."));
+    if (!isFinite(n) || n < 0) return;
+    try {
+      onChange(await call<ApiState>("POST", "/api/admin/apikeys", { action: "credit", id: p.id, ...(mode === "add" ? { add: n } : { amount: n }) }));
+      app.say(mode === "add" ? `Added ${usd(n)} to ${p.name}` : `${p.name} balance set to ${usd(n)}`); setMode(""); setV("");
+    } catch (e) { app.say((e as Error).message); }
+  };
+  const stop = () => call<ApiState>("POST", "/api/admin/apikeys", { action: "credit", id: p.id, amount: null }).then(onChange).catch((e) => app.say(e.message));
+  const left = credit ? 100 - credit.pct : 0;
+  return (
+    <div className="api-credit">
+      {credit ? (
+        <>
+          <div className="api-credit-t"><b>Prepaid balance</b><span>{`${usd(credit.remaining)} left of ${usd(credit.amount)}`}</span></div>
+          <div className={`us-bar ${left <= 5 ? "hot" : left <= 20 ? "warn" : ""}`}><i style={{ width: `${Math.max(credit.pct, credit.pct > 0 ? 1.5 : 0)}%` }} /></div>
+        </>
+      ) : <div className="api-credit-t"><b>Prepaid balance</b><span>Not tracked. Enter what you loaded into this key to get a warning before it runs out.</span></div>}
+      {mode ? (
+        <form className="api-credit-f" onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <span className="us-money"><i>$</i><input inputMode="decimal" autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder={mode === "add" ? "Amount added" : "Current balance"} aria-label={mode === "add" ? "Amount added" : "Current balance"} /></span>
+          <button type="submit" className="btn dark" disabled={!v.trim()}>Save</button>
+          <button type="button" className="btn" onClick={() => { setMode(""); setV(""); }}>Cancel</button>
+        </form>
+      ) : (
+        <div className="api-credit-b">
+          {credit && <button className="btn" onClick={() => setMode("add")}>Top up</button>}
+          <button className="btn" onClick={() => setMode("set")}>{credit ? "Set balance" : "Track balance"}</button>
+          {credit && <button className="icon-btn" aria-label="Stop tracking balance" data-tip="Stop tracking balance" onClick={stop}><I.X size={14} /></button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** bare: nằm trong mục của hãng ở Cài đặt → Providers (bỏ khung và logo, mục cha đã có). */
+export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProvider; onChange: (s: ApiState) => void; credit?: Credit | null; bare?: boolean }) {
   const app = useApp();
   const [edit, setEdit] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -83,11 +126,11 @@ function ProviderCard({ p, onChange }: { p: ApiProvider; onChange: (s: ApiState)
     : p.status === "error" ? { cls: "bad", text: "Needs attention" }
     : { cls: "ok", text: p.id === "elevenlabs" ? (p.info ? `Connected · ${p.info[0].toUpperCase()}${p.info.slice(1)} plan` : "Connected") : `Connected · ${p.models.length} models` };
   return (
-    <div className={`api-card ${edit ? "open" : ""}`}>
+    <div className={`api-card ${edit ? "open" : ""} ${bare ? "bare" : ""}`}>
       <div className="api-card-h">
-        <Mark p={p} />
+        {!bare && <Mark p={p} />}
         <div className="api-meta">
-          <div className="api-name"><b>{p.name}</b>{p.vendor !== p.name && <span className="api-vendor">{p.vendor}</span>}</div>
+          {!bare && <div className="api-name"><b>{p.name}</b>{p.vendor !== p.name && <span className="api-vendor">{p.vendor}</span>}</div>}
           <div className="api-sub">{ROLE[p.id] ?? "Chat, Code and Projects"}{p.keyHint && <> · <span className="mono-s" data-notr>{p.keyHint}</span></>}{p.source === "env" && <> · from server environment</>}</div>
         </div>
         <span className={`api-badge ${status.cls}`}><i />{status.text}</span>
@@ -104,6 +147,7 @@ function ProviderCard({ p, onChange }: { p: ApiProvider; onChange: (s: ApiState)
       </div>
       {p.status === "error" && p.error && !edit && <div className="api-err in"><I.Alert size={14} /><span>{p.error}</span></div>}
       {edit && <KeyForm p={p} busy={busy} err={err} onCancel={() => setEdit(false)} onSave={save} />}
+      {!edit && p.configured && p.id !== "elevenlabs" && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} />}
       {!edit && p.models.length > 0 && (
         <div className="api-models">
           <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} />{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</button>
@@ -114,7 +158,7 @@ function ProviderCard({ p, onChange }: { p: ApiProvider; onChange: (s: ApiState)
   );
 }
 
-function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
+export function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
   const all = useMemo(() => catalog.flatMap((p) => p.models.map((m) => ({ ...m, pname: p.name }))), [catalog]);
   const [model, setModel] = useState(all[0]?.key ?? "");
   const [q, setQ] = useState("");
@@ -143,7 +187,8 @@ function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
   );
 }
 
-export function ApiPanel() {
+/** embedded: nằm trong Cài đặt → Providers (bỏ phần tiêu đề riêng). */
+export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
   const [s, setS] = useState<ApiState | null>(null);
   const [err, setErr] = useState("");
   const load = () => call<ApiState>("GET", "/api/admin/apikeys").then((x) => { setS(x); setErr(""); }).catch((e) => setErr(e.message));
@@ -156,13 +201,13 @@ export function ApiPanel() {
   const nConn = s.providers.filter((p) => p.configured).length;
   return (
     <>
-      <div className="adm-head">
+      {!embedded && <div className="adm-head">
         <div className="adm-badge"><I.SetKey size={22} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="s-title">API</div>
           <div className="d">Connect Synchro to AI providers with your own API keys. One key unlocks every model that provider offers your account.</div>
         </div>
-      </div>
+      </div>}
       <div className="api-sum">
         <div><b data-notr>{nConn}</b><span>Providers connected</span></div>
         <div><b data-notr>{nModels}</b><span>Chat models available</span></div>
@@ -170,7 +215,7 @@ export function ApiPanel() {
       </div>
 
       <h3 className="sec">Chat models</h3>
-      <div className="api-list">{chat.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
+      <div className="api-list">{chat.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} credit={s.credits?.find((c) => c.provider === p.id) ?? null} />)}</div>
 
       <h3 className="sec">Voice</h3>
       <div className="api-list">{voice.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>

@@ -23,9 +23,10 @@ import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "./coderun";
 import { saveOutputs, type OutFile } from "./outputs";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "./llmcall";
+import { mergedProviders, subCli, subTurn } from "./ai/subs";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
-// Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → API quyết định.
+// Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
 
 // ---------------------------------------------------------------- vòng lặp tool cho skill
 type Call = { id: string; name: string; input: Record<string, unknown> };
@@ -438,7 +439,11 @@ type Who = { user: UserRow };
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (body.model !== AUTO || typeof body.resume === "string") return chatTurn(body, c, scope);
   const cat = await catalog(), main = mainModels();
-  const allowed = cat.flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
+  // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,
+  // không tự chuyển sang khóa API (tierOf xếp hạng được cả "sub-claude/opus", "sub-claude/haiku"…).
+  const shownApi = cat.map((p) => ({ ...p, models: p.models.filter((m) => main.includes(ALL) || main.includes(m.key)) })).filter((p) => p.models.length);
+  const merged = await mergedProviders(c.user, shownApi).catch(() => shownApi);
+  const allowed = merged.flatMap((p) => p.models.map((m) => m.key)).filter((k) => !!subCli(k) || canModel(c.user, k));
   const msgs = Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : [];
   const lastUser = [...msgs].reverse().find((m) => m?.role === "user");
   const attachments = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string }[]).filter((b) => b?.type && b.type !== "text").length : 0;
@@ -478,7 +483,22 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   scope.feature = feature === "artifact" ? "artifact" : feature === "code" ? "code" : skills ? "chat" : "internal";
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
-  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
+  // Model của gói subscription (Cài đặt → Providers): chạy CLI chính chủ bằng gói của chính người dùng, không qua khóa API.
+  if (model && subCli(model)) {
+    if (feature === "artifact" && !capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
+    if (body.estimate === true) return estimate([system], [], pinnedBlock(body.pinned), prepareHistory(messages, [], {}));
+    const am = feature === "artifact" ? artifactMessages(body.prompt) : null;
+    if (feature === "artifact" && !am) return Response.json({ error: "Nội dung gửi tới model không hợp lệ." }, { status: 400 });
+    // Gói chạy qua CLI chưa có công cụ của Synchro: chỉ thêm các hướng dẫn thuần văn bản (hỏi lại, artifact, hình minh họa trong chat).
+    const pc = skills ? capsState(c.user).caps : null;
+    const planSys = pc ? [feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
+    const r = await subTurn({
+      user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
+      messages: am ?? messages, conv: am ? undefined : typeof conv === "string" ? conv : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
+    });
+    return Response.json(r.json, { status: r.status });
+  }
+  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
   const t = await resolveModel(model);
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
@@ -598,7 +618,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
 
 /** Chạy chat ở nền (lượt chạy bền): kiểm tra hạn mức như /api/llm rồi dùng chung chatPost. */
 registerExec("chat", async (body, user) => {
-  const over = overLimit(user);
+  // Gói subscription của chính người dùng không tính vào hạn mức chi phí API của Synchro.
+  const over = subCli(body.model) ? null : overLimit(user);
   if (over) return { http: 429, json: { error: over, usageLimit: true } };
   const scope = { uid: user.id, feature: "chat" };
   const res = await usageScope.run(scope, () => chatPost(body, { user }, scope));

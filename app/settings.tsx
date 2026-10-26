@@ -6,7 +6,7 @@ import { AvatarButton } from "./avatar";
 import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { MODES, PRESETS } from "./codeview";
-import { ApiPanel } from "./apiui";
+import { ProvidersPanel } from "./providersui";
 import { ConnectorsPanel } from "./connectorsui";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
@@ -504,7 +504,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
     case "Administrator": return <AdminPanel Toggle={Toggle} />;
-    case "API": return <ApiPanel />;
+    case "Providers": case "API": return <ProvidersPanel />;
     case "Connectors": return <ConnectorsPanel />;
     case "Skill Hub": case "Skills": case "Plugins": return <SkillHub />;
     case "Account": return <Account />;

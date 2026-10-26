@@ -33,7 +33,7 @@ export const POST = handle(async (req: Request) => {
   const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(user, k));
   const pick = routeModel({ text: "tóm tắt", attachments: 0, turns: 1, studio: false }, allowed);
   const t = pick && (await resolveModel(pick.model));
-  if (!t) return Response.json({ error: "Synchro chưa được kết nối với model nào. Hãy nhập khóa API ở Cài đặt → API." }, { status: 503 });
+  if (!t) return Response.json({ error: "Synchro chưa được kết nối với model nào. Hãy nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
   try {
     const text = await withUsage(user.id, "internal", () => chatOnce(t, COMPACT, [{ role: "user", content: `${prev}Cuộc trò chuyện cần tóm tắt:\n\n${flat}` }], 1200));
     return Response.json({ summary: text.trim().slice(0, 8000), model: pick!.model, chars: flat.length });

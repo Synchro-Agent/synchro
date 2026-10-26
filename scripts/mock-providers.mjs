@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 
-// Khóa mà npm run dev:mock tự nhập vào Cài đặt → API.
+// Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
 
 // Danh sách model như API thật của từng hãng trả về (theo tài liệu tháng 10/2026), gồm cả model không dùng để nhắn tin mà Synchro phải tự lọc bỏ.
@@ -315,6 +315,18 @@ const MEETING_LINES = [
   [1, "Còn ngân sách quảng cáo thì chưa chốt, để tuần sau họp tiếp."],
 ];
 const MEETING_TEXT = MEETING_LINES.map(([, t]) => t).join(" ");
+// Mã thiết bị codex đã được "cho phép" trên trang giả lập (CLI giả hỏi lại mỗi giây).
+const DEVICE_OK = new Set();
+function mockLogin(rest, u, res) {
+  const html = (body) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(`<!doctype html><meta charset="utf-8"><title>Đăng nhập giả lập</title><body style="font:16px system-ui;max-width:520px;margin:60px auto;line-height:1.5">${body}</body>`); };
+  const code = String(u.searchParams.get("code") ?? "").replace(/[^A-Z0-9-]/gi, "");
+  if (rest === "claude" || rest === "agy") return html(`<h2>${rest === "claude" ? "Claude" : "Antigravity"} (giả lập)</h2><p>Đã đăng nhập. Chép mã này rồi dán vào Synchro:</p><p><code id="code" style="font-size:22px">MOCK-${rest.toUpperCase()}-OK</code></p>`);
+  if (rest === "codex") return html(`<h2>ChatGPT (giả lập)</h2><p>Mã thiết bị: <b id="code">${code}</b></p><p><a id="allow" href="/mock-login/codex/approve?code=${code}">Cho phép Codex</a></p>`);
+  if (rest === "codex/approve") { DEVICE_OK.add(code); return html(`<p id="done">Đã cho phép. Quay lại Synchro.</p>`); }
+  if (rest === "codex/status") return send(res, 200, { approved: DEVICE_OK.has(code) });
+  return send(res, 404, { error: "not found" });
+}
+
 async function handler(req, res) {
   const u = new URL(req.url, "http://x");
   const p = u.pathname;
@@ -335,6 +347,9 @@ async function handler(req, res) {
     await sleep(600);
     return send(res, 200, { text: MEETING_TEXT });
   }
+
+  // Trang đăng nhập giả lập của CLI (scripts/mock-cli): claude và agy hiện mã để dán vào Synchro; codex là trang nhập mã thiết bị.
+  if (p.startsWith("/mock-login/")) return mockLogin(p.slice(12), u, res);
 
   // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…), số token ước tính, số luồng.
   if (p === "/_debug/last") return send(res, 200, LAST);

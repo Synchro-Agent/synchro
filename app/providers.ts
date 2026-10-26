@@ -1,5 +1,5 @@
 // Khóa API của các nhà cung cấp model (chỉ chạy ở máy chủ).
-// Quản trị viên nhập khóa ở Cài đặt → API; khóa được mã hóa AES-256-GCM rồi lưu trong SQLite, không bao giờ gửi về trình duyệt.
+// Quản trị viên nhập khóa ở Cài đặt → Providers; khóa được mã hóa AES-256-GCM rồi lưu trong SQLite, không bao giờ gửi về trình duyệt.
 // Khi lưu, máy chủ gọi thử API của hãng để kiểm tra khóa và lấy danh sách model thật mà khóa đó được dùng.
 import crypto from "node:crypto";
 import fs from "node:fs";

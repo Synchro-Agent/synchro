@@ -1,6 +1,7 @@
 import { current, permsOf } from "../../authstore";
 import { ALL } from "../../catalog";
 import { catalog, mainModels, pickDefault } from "../../providers";
+import { mergedProviders } from "../../ai/subs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,5 +14,9 @@ export async function GET(req: Request) {
   const main = mainModels();
   const providers = cat.map((p) => ({ ...p, models: main.includes(ALL) ? p.models : p.models.filter((m) => main.includes(m.key)) })).filter((p) => p.models.length);
   const perms = permsOf(c.user);
-  return Response.json({ providers, default: pickDefault(cat, main), allowed: perms.models, effort: perms.effort ?? {} });
+  // Gộp theo hãng: nhóm Claude / ChatGPT / Gemini hiện model của gói người dùng đã đăng nhập (Cài đặt → Providers), hoặc model của
+  // khóa API dùng chung khi chưa đăng nhập gói hay người dùng đã đồng ý dùng API thay gói. Model của gói luôn dùng được với chính họ.
+  const merged = await mergedProviders(c.user, providers).catch(() => providers);
+  const subKeys = merged.flatMap((p) => p.plan?.models.map((m) => m.key) ?? []);
+  return Response.json({ providers: merged, default: pickDefault(cat, main), allowed: perms.models.includes(ALL) ? perms.models : [...perms.models, ...subKeys], effort: perms.effort ?? {} });
 }

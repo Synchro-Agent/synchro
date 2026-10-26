@@ -54,7 +54,7 @@ const CHECK = `(() => {
   const bad = [...document.fonts].filter((f) => f.status === "error" && !/Fallback/.test(f.family)).map((f) => f.family);
   if (bad.length) out.push("phông lỗi: " + [...new Set(bad)].join(", "));
   // Chữ tiếng Anh sót trong giao diện tiếng Việt (bỏ qua nội dung người dùng, code, tên riêng).
-  const EN = /\\b(the|and|your|with|this|that|from|will|Settings|Search|Delete|Cancel|Save|Close|Enable|Disable|Upload|Download|Loading|Untitled|Add|Remove|Edit|Copy|Share|Retry|Error|Failed|Back|Next|Done|Open|New|Preview|Learn more|Turn on|Turn off)\\b/;
+  const EN = /\\b(the|and|your|with|this|that|from|will|Settings|Search|Delete|Cancel|Save|Close|Enable|Disable|Upload|Download|Loading|Untitled|Add|Remove|Edit|Copy|Share|Retry|Error|Failed|Back|Next(?!\\.js)|Done|Open|New|Preview|Learn more|Turn on|Turn off)\\b/;
   const seen = new Set();
   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walk.nextNode()) {

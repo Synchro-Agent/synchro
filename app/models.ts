@@ -1,7 +1,7 @@
 "use client";
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
-import { allowsModel, splitKey, type Effort, type ProviderInfo } from "./catalog";
+import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "./catalog";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
 type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
@@ -41,6 +41,13 @@ export function fitModel(cur: string, s: State = state) {
   const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));
   const ok = (k: string | null): k is string => !!k && shown.includes(k) && allowsModel(s.allowed, k);
   if (ok(cur) || (cur === AUTO && shown.some((k) => allowsModel(s.allowed, k)))) return cur;
+  // Nhóm của hãng vừa đổi giữa gói subscription và khóa API (người dùng đồng ý dùng API, hoặc gói đã hồi lại): chọn model tương đương.
+  if (cur && cur !== AUTO) {
+    const v = vendorOf(cur);
+    const grp = s.providers.find((p) => p.id === v || (p.models[0] && vendorOf(p.models[0].key) === v));
+    const eq = grp ? equivalentModel(cur, grp.models.filter((m) => allowsModel(s.allowed, m.key))) : null;
+    if (eq) return eq;
+  }
   if (ok(s.default)) return s.default;
   return shown.find((k) => allowsModel(s.allowed, k)) ?? cur;
 }

@@ -759,7 +759,7 @@ Object.assign(EN2VI, {
   "by": "bởi", "Session rail": "Bảng phiên", "File": "Tệp",
 });
 
-// Cài đặt → API, bộ chọn model và mục "Bộ chọn model" của Quản trị viên (giao diện tiếng Việt).
+// Cài đặt → Providers, bộ chọn model và mục "Bộ chọn model" của Quản trị viên (giao diện tiếng Việt).
 Object.assign(EN2VI, {
   "Connect Synchro to AI providers with your own API keys. One key unlocks every model that provider offers your account.": "Kết nối Synchro với các nhà cung cấp AI bằng khóa API của bạn. Mỗi khóa cho phép dùng mọi model mà nhà cung cấp đó cấp cho tài khoản của bạn.",
   "Providers connected": "Nhà cung cấp đã kết nối", "Chat models available": "Model chat dùng được",
@@ -789,7 +789,7 @@ Object.assign(EN2VI, {
   "Default model saved": "Đã lưu model mặc định", "Automatic": "Tự động",
   "All models": "Mọi model", "Includes models added later.": "Gồm cả model được thêm sau này.", "Search models": "Tìm model", "Select all": "Chọn tất cả",
   "No models selected: this person won't be able to chat.": "Chưa chọn model nào: người này sẽ không chat được.",
-  "No models yet. Add an API key in Settings → API first.": "Chưa có model nào. Hãy nhập khóa API ở Cài đặt → API trước.",
+  "No models yet. Add an API key in Settings → Providers first.": "Chưa có model nào. Hãy nhập khóa API ở Cài đặt → Providers trước.",
 });
 RULES_VI.push(
   [/^Connected · (\d+) models?$/, (m) => `Đã kết nối · ${m[1]} model`],
@@ -808,10 +808,10 @@ Object.assign(VI2EN, {
   "Chưa có model": "No model", "Chọn model": "Choose a model", "Chưa kết nối model nào": "No models connected",
   "Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu.": "Add a Claude, ChatGPT or Gemini API key to get started.",
   "Quản trị viên cần nhập khóa API để Synchro dùng được model.": "An administrator needs to add an API key before Synchro can use a model.",
-  "Mở Cài đặt → API": "Open Settings → API",
+  "Mở Cài đặt → Providers": "Open Settings → Providers",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này": "The administrator hasn't allowed your account to use this model",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này.": "The administrator hasn't allowed your account to use this model.",
-  "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API.": "Synchro isn't connected to any model yet. An administrator needs to add an API key in Settings → API.",
+  "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers.": "Synchro isn't connected to any model yet. An administrator needs to add an API key in Settings → Providers.",
   "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác.": "This model is no longer available (the provider's API key was removed). Please choose another model.",
   "Tương thích OpenAI": "OpenAI-compatible", "Biến môi trường máy chủ": "Server environment", "Máy chủ (biến môi trường)": "Server (environment)", "Synchro (thử nghiệm)": "Synchro (test)",
   "Không tìm thấy khóa này.": "Key not found.", "Không tìm thấy nhà cung cấp này.": "Provider not found.", "Hãy đặt tên cho nhà cung cấp.": "Give the provider a name.",
@@ -1168,7 +1168,7 @@ Object.assign(VI2EN, {
   "Thành phần": "Attendees", "Nội dung chính": "Key points", "Quyết định": "Decisions", "Câu hỏi còn mở": "Open questions", "Người phụ trách": "Owner", "hạn": "due", "việc": "items", "đã xong": "done",
   "Cuộc họp không có việc cần làm nào.": "This meeting has no action items.", "Đến hạn mà chưa xong, Synchro gửi lời nhắc vào Hộp thư lúc 8 giờ sáng.": "When an item is due and not done, Synchro sends a reminder to your Inbox at 8 am.",
   "Mở cuộc họp": "Open meeting", "Đã tải biên bản": "Minutes downloaded",
-  "Máy chủ chưa có dịch vụ chép lời (cần khóa ElevenLabs hoặc OpenAI ở Cài đặt → API). Hãy dán nội dung cuộc họp.": "The server has no transcription service yet (needs an ElevenLabs or OpenAI key in Settings → API). Paste the meeting content instead.",
+  "Máy chủ chưa có dịch vụ chép lời (cần khóa ElevenLabs hoặc OpenAI ở Cài đặt → Providers). Hãy dán nội dung cuộc họp.": "The server has no transcription service yet (needs an ElevenLabs or OpenAI key in Settings → Providers). Paste the meeting content instead.",
 });
 // Bảng lệnh ⌘K, điểm skill, lưu cách làm thành skill
 Object.assign(VI2EN, {
@@ -1208,3 +1208,80 @@ RULES_EN.push(
   [/^(.+) bình luận trong (.+)$/, (m) => `${m[1]} commented in ${m[2]}`],
 );
 RULES_VI.push([/^Fixed automatically after (\d+) tr(?:y|ies)(?: · used (\d+) more times)?$/, (m) => `Tự sửa sau ${m[1]} lần thử${m[2] ? ` · đã dùng thêm ${m[2]} lần` : ""}`]);
+
+// Cài đặt → Providers: đăng nhập gói subscription (Claude, ChatGPT, Gemini), khóa API dùng chung, số dư API đã nạp.
+Object.assign(EN2VI, {
+  "Use the AI plans you already pay for. Sign in once and every model your plan allows shows up in the model picker, only for your account.": "Dùng gói AI bạn đang trả tiền. Đăng nhập một lần là mọi model gói cho phép hiện trong bộ chọn model, chỉ cho tài khoản của bạn.",
+  "Your plans": "Gói của bạn", "Shared API keys": "Khóa API dùng chung",
+  "Only administrators see this. Keys here are shared with everyone on this Synchro. Voice (ElevenLabs) works with an API key only.": "Chỉ quản trị viên thấy phần này. Khóa ở đây dùng chung cho mọi người trên Synchro này. Giọng nói (ElevenLabs) chỉ dùng khóa API.",
+  "Shared API keys are managed by an administrator.": "Khóa API dùng chung do quản trị viên quản lý.",
+  "Sign in on the provider's page": "Đăng nhập trên trang của hãng",
+  "Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro.": "Synchro chạy ứng dụng chính chủ của hãng trên máy chủ và hiện link đăng nhập của nó. Mật khẩu của bạn không bao giờ đi qua Synchro.",
+  "Chat with your plan": "Chat bằng gói của bạn",
+  "Pick a model under “Your plan” in the model picker. The usage ring shows your plan's own limits.": "Chọn model trong nhóm “Gói của bạn” ở bộ chọn model. Vòng tròn mức dùng hiện đúng hạn mức của gói.",
+  "Keep going when the plan runs out": "Không bị gián đoạn khi gói hết hạn mức",
+  "If your plan hits its limit and an administrator added an API key for the same provider, Synchro continues with that key.": "Khi gói chạm giới hạn và quản trị viên đã thêm khóa API của cùng hãng, Synchro tự chuyển sang khóa đó.",
+  "Claude Pro or Max plan": "Gói Claude Pro hoặc Max", "ChatGPT Plus, Pro or Business plan": "Gói ChatGPT Plus, Pro hoặc Business", "Google AI Pro or Ultra plan": "Gói Google AI Pro hoặc Ultra",
+  "Checking…": "Đang kiểm tra…", "Not installed": "Chưa cài", "Signed in": "Đã đăng nhập", "Not signed in": "Chưa đăng nhập",
+  "Sign in": "Đăng nhập", "Starting…": "Đang mở…", "Sign out": "Đăng xuất", "Open sign-in page": "Mở trang đăng nhập",
+  "Use claude.ai sign-in instead": "Đăng nhập bằng tài khoản claude.ai", "Copy code": "Sao chép mã", "Copied": "Đã sao chép",
+  "Enter this code": "Nhập mã này", "It expires in 15 minutes. Never share it with anyone.": "Mã hết hạn sau 15 phút. Không chia sẻ mã cho bất kỳ ai.",
+  "Waiting for you to approve…": "Đang chờ bạn cho phép…", "Paste the code here": "Dán mã vào đây", "Paste the code from the sign-in page": "Dán mã từ trang đăng nhập",
+  "Sign in to ChatGPT, then enter the one-time code below.": "Đăng nhập ChatGPT, rồi nhập mã một lần bên dưới.",
+  "Claude Code creates a long-lived sign-in token for this account. Synchro stores it encrypted and only hands it to Claude Code.": "Claude Code tạo token đăng nhập dài hạn cho tài khoản này. Synchro lưu token đã mã hóa và chỉ trao cho Claude Code.",
+  "Sign-in failed.": "Đăng nhập không thành công.", "The code was not accepted.": "Mã không được chấp nhận.", "Install failed.": "Cài đặt không thành công.",
+  "Claude · Your plan": "Claude · Gói của bạn", "ChatGPT · Your plan": "ChatGPT · Gói của bạn", "Gemini · Your plan": "Gemini · Gói của bạn",
+  "ChatGPT (plan default)": "ChatGPT (mặc định của gói)", "Gemini (plan default)": "Gemini (mặc định của gói)",
+  "Prepaid balance": "Số dư đã nạp", "Not tracked. Enter what you loaded into this key to get a warning before it runs out.": "Chưa theo dõi. Nhập số tiền đã nạp cho khóa này để được báo trước khi hết.",
+  "Top up": "Nạp thêm", "Set balance": "Đặt số dư", "Track balance": "Theo dõi số dư", "Stop tracking balance": "Ngừng theo dõi số dư",
+  "Amount added": "Số tiền nạp thêm", "Current balance": "Số dư hiện tại",
+});
+RULES_VI.push(
+  [/^Signed in with your (.+?)(?: · (\d+) models?)?$/, (m) => `Đã đăng nhập bằng ${({ "long-lived token": "token dài hạn", "claude.ai account": "tài khoản claude.ai", "ChatGPT account": "tài khoản ChatGPT", "API key": "khóa API", "Google account": "tài khoản Google", account: "tài khoản" } as Record<string, string>)[m[1]] ?? m[1]}${m[2] ? ` · ${m[2]} model` : ""}`],
+  [/^An administrator needs to install (.+) on the server first\.$/, (m) => `Quản trị viên cần cài ${m[1]} trên máy chủ trước.`],
+  [/^Downloading the official (.+)\. This can take a minute\.$/, (m) => `Đang tải ${m[1]} chính chủ. Có thể mất khoảng một phút.`],
+  [/^Open the (.+) sign-in page$/, (m) => `Mở trang đăng nhập ${m[1]}`],
+  [/^Sign in with the account that has your (.+), then copy the code the page shows you\.$/, (m) => `Đăng nhập bằng tài khoản có ${m[1].replace(/^(Claude|ChatGPT|Google AI) /, "gói $1 ").replace(" or ", " hoặc ")}, rồi chép mã trang đó hiện ra.`],
+  [/^(.+) keeps your sign-in in a folder only your account uses on the server\.$/, (m) => `${m[1]} giữ thông tin đăng nhập trong thư mục chỉ tài khoản của bạn dùng trên máy chủ.`],
+  [/^Sign out of (.+)\?$/, (m) => `Đăng xuất khỏi ${m[1]}?`],
+  [/^Synchro removes this sign-in from the server\. (.+) models from your plan disappear from the model picker until you sign in again\.$/, (m) => `Synchro xóa thông tin đăng nhập này khỏi máy chủ. Model ${m[1]} của gói sẽ biến mất khỏi bộ chọn model cho tới khi bạn đăng nhập lại.`],
+  [/^Signed in to (.+)\. Its models are now in the model picker\.$/, (m) => `Đã đăng nhập ${m[1]}. Model của gói đã có trong bộ chọn model.`],
+  [/^Signed out of (.+)$/, (m) => `Đã đăng xuất khỏi ${m[1]}`],
+  [/^Installed (.+)$/, (m) => `Đã cài ${m[1]}`],
+  [/^(\$[\d.,]+) left of (\$[\d.,]+)$/, (m) => `Còn ${m[1]} / ${m[2]}`],
+  [/^Added (\$[\d.,]+) to (.+)$/, (m) => `Đã nạp thêm ${m[1]} cho ${m[2]}`],
+  [/^(.+) balance set to (\$[\d.,]+)$/, (m) => `Số dư ${m[1]} đặt là ${m[2]}`],
+);
+
+// Cài đặt → Providers gộp theo hãng: chọn đăng nhập gói hay liên kết khóa API; hỏi trước khi dùng khóa API thay gói.
+const viOf = (t: string): string => {
+  if (Object.prototype.hasOwnProperty.call(EN2VI, t)) return EN2VI[t];
+  for (const [re, f] of RULES_VI) { const m = t.match(re); if (m) return f(m); }
+  return t;
+};
+Object.assign(EN2VI, {
+  "Connect Claude, ChatGPT and Gemini with your own plan or with an API key shared by everyone.": "Kết nối Claude, ChatGPT và Gemini bằng gói của chính bạn hoặc bằng khóa API dùng chung cho mọi người.",
+  "Sign in with your plan": "Đăng nhập gói của bạn", "Link an API key": "Liên kết khóa API",
+  "Shared with everyone on this Synchro, billed to the key.": "Dùng chung cho mọi người trên Synchro này, tính tiền vào khóa.",
+  "Sign in again": "Cần đăng nhập lại", "Back to my plan": "Quay lại gói", "Use the shared API key": "Dùng khóa API dùng chung",
+  "Synchro never switches from your plan to an API key on its own. When your plan hits its limit, it asks you first.": "Synchro không bao giờ tự chuyển từ gói sang khóa API. Khi gói chạm giới hạn, Synchro sẽ hỏi bạn trước.",
+  "Other providers": "Nhà cung cấp khác", "API key only. Voice (ElevenLabs) works with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) chỉ dùng khóa API.",
+  "Pick a provider, then how to connect it": "Chọn hãng, rồi chọn cách kết nối",
+  "Sign in with your own plan, or link an API key that everyone on this Synchro can use.": "Đăng nhập gói của chính bạn, hoặc liên kết khóa API để mọi người trên Synchro này cùng dùng.",
+  "Sign in with your own plan. Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro.": "Đăng nhập gói của chính bạn. Synchro chạy ứng dụng chính chủ của hãng trên máy chủ và hiện link đăng nhập của nó. Mật khẩu của bạn không bao giờ đi qua Synchro.",
+  "Chat with it": "Chat với model",
+  "The model picker keeps one group per provider. A group shows your plan's models while you are signed in, otherwise the shared API models.": "Bộ chọn model có một nhóm cho mỗi hãng. Khi bạn đã đăng nhập gói, nhóm hiện model của gói; nếu không thì hiện model của khóa API dùng chung.",
+  "When your plan runs out": "Khi gói hết hạn mức",
+  "Synchro asks before switching to the shared API key. You switch back to your plan automatically when it resets.": "Synchro hỏi bạn trước khi chuyển sang khóa API dùng chung. Khi gói hồi lại, Synchro tự quay về gói.",
+});
+RULES_VI.push(
+  [/^Plan: (.+)$/, (m) => `Gói: ${viOf(m[1])}`],
+  [/^API: (.+)$/, (m) => `API: ${viOf(m[1])}`],
+  [/^Use your own (.+)\. Only your account uses it\.$/, (m) => `Dùng ${viOf(m[1]).replace(/^Gói/, "gói")} của chính bạn. Chỉ tài khoản của bạn dùng.`],
+  [/^How to use (.+)$/, (m) => `Cách dùng ${m[1]}`],
+  [/^(.+ plan) · (.+)$/, (m) => `${viOf(m[1])} · ${m[2]}`],
+  [/^Using the shared API key instead of your plan until (.+)\.$/, (m) => `Đang dùng khóa API dùng chung thay gói tới ${m[1]}.`],
+  [/^Your plan hit its limit\. It resets (.+)\.$/, (m) => `Gói đã hết hạn mức, hồi lại ${m[1]}.`],
+  [/^(.+) now uses the shared API key until your plan resets$/, (m) => `${m[1]} đang dùng khóa API dùng chung tới khi gói hồi lại`],
+  [/^(.+) is back on your plan$/, (m) => `${m[1]} đã quay lại gói của bạn`],
+);

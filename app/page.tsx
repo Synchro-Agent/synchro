@@ -25,6 +25,7 @@ type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" 
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
+import type { ProviderInfo } from "./catalog";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
 import { InboxPage, useInboxCount } from "./tasksui";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
@@ -235,8 +236,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {none && (
           <div className="mempty">
             <b>Chưa kết nối model nào</b>
-            <span>{me?.isAdmin ? "Nhập khóa API của Claude, ChatGPT hoặc Gemini để bắt đầu." : "Quản trị viên cần nhập khóa API để Synchro dùng được model."}</span>
-            {me?.isAdmin && <button className="btn dark" onClick={() => { close(); openSettings?.("API"); }}>Mở Cài đặt → API</button>}
+            <span>{me?.isAdmin ? "Đăng nhập gói Claude, ChatGPT hoặc Gemini của bạn, hoặc nhập khóa API dùng chung." : "Đăng nhập gói Claude, ChatGPT hoặc Gemini của bạn để bắt đầu."}</span>
+            <button className="btn dark" onClick={() => { close(); openSettings?.("Providers"); }}>Mở Cài đặt → Providers</button>
           </div>
         )}
         {!none && (
@@ -268,6 +269,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         </Menu>
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
+            {pv.plan && <PlanNote pv={pv} />}
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
                 <span className="mname-t">{m.name}</span>{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
@@ -278,6 +280,29 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
       </Menu>
     </div>
   );
+}
+
+// Ghi chú gói subscription trong menu con của hãng: gói hết hạn mức (đề nghị dùng khóa API, chỉ chuyển khi người dùng bấm),
+// đang dùng khóa API thay gói (quay lại gói), hay cần đăng nhập lại.
+function PlanNote({ pv }: { pv: ProviderInfo }) {
+  const p = pv.plan!;
+  const en = getLang() === "en";
+  const at = (t: number) => new Date(t).toLocaleString(en ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const set = (on: boolean) => fetch(`/api/engines/${p.cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) }).then(() => refreshModels()).catch(() => {});
+  if (pv.source === "api" && p.usingApiUntil) return (
+    <div className="msub-note msub-plan">
+      <span>{en ? `Using the shared API key instead of your plan until ${at(p.usingApiUntil)}.` : `Đang dùng khóa API dùng chung thay gói tới ${at(p.usingApiUntil)}.`}</span>
+      <button className="lnk" onClick={() => set(false)}>{en ? "Back to my plan" : "Quay lại gói"}</button>
+    </div>
+  );
+  if (p.relogin) return <div className="msub-note msub-plan"><span>{en ? "Your plan needs you to sign in again in Settings → Providers." : "Gói cần đăng nhập lại ở Cài đặt → Providers."}</span></div>;
+  if (p.blockedUntil) return (
+    <div className="msub-note msub-plan">
+      <span>{en ? `Your plan hit its limit. It resets ${at(p.blockedUntil)}.` : `Gói đã hết hạn mức, hồi lại ${at(p.blockedUntil)}.`}</span>
+      <button className="lnk" onClick={() => set(true)}>{en ? "Use the shared API key" : "Dùng khóa API dùng chung"}</button>
+    </div>
+  );
+  return <div className="msub-note msub-plan"><span>{en ? "From your plan" : "Từ gói của bạn"}</span></div>;
 }
 
 type Rec = { lang: string; interimResults: boolean; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void; onend: () => void; start: () => void; stop: () => void };
@@ -757,7 +782,14 @@ export default function Home() {
       via = takeRoute();
       trace = takeTrace();
       cancelled = takeCancelled();
-    } catch (e) { reply = e instanceof LLMError && [400, 401, 403, 404, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."); }
+    } catch (e) {
+      reply = e instanceof LLMError && [400, 401, 403, 404, 409, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
+      // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
+      if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
+        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio); };
+        setTimeout(() => askPlanSwitch(e.data, retry), 300);
+      }
+    }
     if (raf) cancelAnimationFrame(raf);
     // Người dùng đã bấm Dừng: máy chủ trả phần đã viết và dấu vết (công cụ bị dừng ghi cancelled_by_user) — lưu lại cho lượt sau.
     if (gen !== genRef.current) {
@@ -781,6 +813,27 @@ export default function Home() {
       patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
       if (i >= words.length) finishReply(id, reply, pr, history, via);
     }, 38);
+  };
+  // Hỏi Có / Không trước khi dùng khóa API dùng chung thay cho gói đã hết hạn mức. Đồng ý: nhóm model của hãng đó chuyển sang model API
+  // (tới khi gói hồi lại), chọn model tương đương và gửi lại lượt vừa lỗi. Không đồng ý: giữ nguyên gói.
+  const askPlanSwitch = (d: Record<string, unknown>, retry: () => void) => {
+    const cli = String(d.planLimit ?? d.relogin), api = String(d.apiModel), apiName = typeof d.apiModelName === "string" ? d.apiModelName : modelName(api);
+    const name = cli === "claude" ? "Claude" : cli === "codex" ? "ChatGPT" : "Gemini";
+    const at = typeof d.resetsAt === "number" ? new Date(d.resetsAt).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    const en = getLang() === "en";
+    setGc({
+      title: d.relogin ? (en ? `Your ${name} plan needs you to sign in again` : `Gói ${name} cần đăng nhập lại`) : en ? `Your ${name} plan hit its limit` : `Gói ${name} đã hết hạn mức`,
+      text: en
+        ? `Switch to the shared ${name} API key (${apiName})${at ? ` until your plan resets (${at})` : " until your plan is back"}? This message will be sent again with the API key. Choose Cancel to keep your plan.`
+        : `Chuyển sang khóa API ${name} dùng chung (${apiName})${at ? ` cho tới khi gói hồi lại (${at})` : " cho tới khi gói dùng lại được"}? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.`,
+      ok: en ? "Use the API key" : "Dùng khóa API",
+      fn: async () => {
+        await fetch(`/api/engines/${cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true }) }).catch(() => null);
+        await refreshModels();
+        setActiveModel(api); setModel(api);
+        retry();
+      },
+    });
   };
   // Câu trả lời đã hiện xong: lưu artifact (bản đầy đủ, đã áp các bản sửa), thông báo, rút trí nhớ dự án.
   // Artifact trong câu trả lời vừa xong: lưu bản đầy đủ (đã áp các bản sửa) lên máy chủ, rồi nhờ hội đồng phản biện đọc lại

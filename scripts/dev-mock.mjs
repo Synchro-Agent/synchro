@@ -13,7 +13,14 @@ const DATA = path.resolve("data-mock");
 // Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
 const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
 const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
-const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "" };
+const env = { ...process.env, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "" };
+
+// CLI giả lập (claude, codex, agy) cho Cài đặt → Providers: chép vào <engine home>/.local/bin như CLI thật đã cài,
+// kèm địa chỉ máy chủ giả lập (trang đăng nhập /mock-login/…).
+const ENGINE_BIN = path.join(DATA, "engine", ".local", "bin");
+fs.mkdirSync(ENGINE_BIN, { recursive: true });
+for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(ENGINE_BIN, f)); fs.chmodSync(path.join(ENGINE_BIN, f), 0o755); }
+fs.writeFileSync(path.join(ENGINE_BIN, "mock-cli.json"), JSON.stringify({ base: M }));
 
 try { await startMock(MOCK_PORT); } catch (e) { console.error(`Không mở được API giả lập ở cổng ${MOCK_PORT}: ${e.message}`); process.exit(1); }
 try { await startMockMcp(MCP_PORT); } catch (e) { console.error(`Không mở được máy chủ MCP giả lập ở cổng ${MCP_PORT}: ${e.message}`); process.exit(1); }
@@ -29,7 +36,7 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 next.on("exit", (code) => process.exit(code ?? 0));
 
-// Đợi web sẵn sàng, rồi nhập khóa giả lập qua chính Cài đặt → API (máy chủ tự kiểm tra, mã hóa và lấy danh sách model).
+// Đợi web sẵn sàng, rồi nhập khóa giả lập qua chính Cài đặt → Providers (máy chủ tự kiểm tra, mã hóa và lấy danh sách model).
 let cookie = "";
 const call = async (method, p, body) => {
   const r = await fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie }, body: body && JSON.stringify(body) });

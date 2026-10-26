@@ -5,12 +5,17 @@
 // - UsageAdmin: quản trị viên đặt hạn mức (USD), hạn mức riêng từng người và bảng giá model.
 import { useCallback, useEffect, useState } from "react";
 import { Menu } from "./ui";
+import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
 
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type Rate = { provider: string; limit: number; remaining: number; resetAt: number; pct: number };
-export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string };
+export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
+// Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem app/ai/subs.ts).
+export type PlanWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string; label: string; kind: "session" | "weekly" | "other"; group?: string; idle?: boolean };
+export type SubUsage = { cli: "claude" | "codex" | "agy"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null };
+export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage };
 const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
 
 // ---------------------------------------------------------------- dữ liệu dùng chung
@@ -100,6 +105,78 @@ function RateRow({ r }: { r: Rate }) {
   );
 }
 
+// Tên cửa sổ hạn mức của gói theo ngôn ngữ giao diện.
+const WIN: Record<string, [string, string]> = {
+  five_hour: ["Phiên hiện tại", "Current session"], seven_day: ["Hằng tuần · mọi model", "Weekly · all models"], seven_day_opus: ["Hằng tuần · Opus", "Weekly · Opus"],
+  seven_day_sonnet: ["Hằng tuần · Sonnet", "Weekly · Sonnet"], seven_day_overage_included: ["Hằng tuần · giới hạn theo model", "Weekly · model limit"], overage: ["Tín dụng sử dụng", "Usage credits"],
+};
+const GROUP: Record<string, [string, string]> = { "Gemini models": ["model Gemini", "Gemini models"], "Claude and GPT models": ["model Claude và GPT", "Claude and GPT models"] };
+function winLabel(w: PlanWindow) {
+  const i = en() ? 1 : 0;
+  if (w.group) return `${w.kind === "weekly" ? (en() ? "Weekly" : "Hằng tuần") : en() ? "Current session" : "Phiên hiện tại"} · ${GROUP[w.group]?.[i] ?? w.group}`;
+  return WIN[w.window]?.[i] ?? w.label;
+}
+// Cách hãng đặt lại hạn mức (ghi chú dưới các thanh).
+const PLAN_NOTE: Record<SubUsage["cli"], [string, string]> = {
+  claude: ["Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.", "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week."],
+  codex: ["Gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần; gói Pro chỉ có hạn mức tuần.", "Plus has a rolling 5-hour window and a weekly limit. Pro plans only have a weekly limit."],
+  agy: ["Google AI Pro và Ultra hồi quota mỗi 5 giờ cho tới khi chạm hạn mức tuần. Model Gemini và model Claude/GPT tính riêng.", "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models are counted separately."],
+};
+const winLevel = (w: PlanWindow) => (w.status === "rejected" ? "hot" : w.status === "allowed_warning" ? "warn" : level(w.usedPct ?? 0));
+
+function PlanRow({ w }: { w: PlanWindow }) {
+  const pct = w.usedPct ?? 0;
+  return (
+    <div className="us-row">
+      <div className="us-row-t">
+        <b>{winLabel(w)}</b>
+        <span>{w.status === "rejected" && w.resetsAt ? <>{en() ? "Limit reached · " : "Đã chạm giới hạn · "}{resetText(w.resetsAt)}</> : resetText(w.idle ? null : w.resetsAt ?? null, !w.idle && !!w.resetsAt)}<em>{w.usedPct === undefined ? "–" : `${Math.round(pct)}%`}</em></span>
+      </div>
+      <div className={`us-bar ${winLevel(w)}`}><i style={{ width: `${Math.max(pct, pct > 0 ? 1.5 : 0)}%` }} /></div>
+    </div>
+  );
+}
+
+function CreditBar({ c }: { c: Credit }) {
+  const left = 100 - c.pct;
+  return (
+    <div className="us-row" title={`${money(c.spent)} / ${money(c.amount)}`}>
+      <div className="us-row-t">
+        <b>{en() ? `${PROVIDER[c.provider] ?? c.provider} API balance` : `Số dư API ${PROVIDER[c.provider] ?? c.provider}`}</b>
+        <span>{en() ? `${money(c.remaining)} left of ${money(c.amount)}` : `Còn ${money(c.remaining)} / ${money(c.amount)}`}<em>{Math.round(c.pct)}%</em></span>
+      </div>
+      <div className={`us-bar ${left <= 5 ? "hot" : left <= 20 ? "warn" : ""}`}><i style={{ width: `${Math.max(c.pct, c.pct > 0 ? 1.5 : 0)}%` }} /></div>
+    </div>
+  );
+}
+
+// Báo một lần cho mỗi ngưỡng: số dư API còn 20%, 5%, hết; gói chạm giới hạn của một cửa sổ (theo từng mốc đặt lại).
+function useLimitAlerts(st: UsageState | null) {
+  const say = useApp().say;
+  useEffect(() => {
+    const on = (e: Event) => say(String((e as CustomEvent).detail ?? ""));
+    window.addEventListener("synchro:notice", on);
+    return () => window.removeEventListener("synchro:notice", on);
+  }, [say]);
+  useEffect(() => {
+    if (!st) return;
+    const once = (k: string, msg: string) => {
+      try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch { /* bộ nhớ trình duyệt bị chặn: vẫn báo */ }
+      say(msg);
+    };
+    const c = st.credit;
+    if (c && c.amount > 0) {
+      const left = 100 - c.pct, name = PROVIDER[c.provider] ?? c.provider;
+      const lv = left <= 0.01 ? 0 : left <= 5 ? 5 : left <= 20 ? 20 : null;
+      if (lv !== null) once(`credit:${c.provider}:${c.since}:${lv}`, lv === 0
+        ? (en() ? `${name} API balance is used up. Top up the key, then update the balance in Settings → Providers.` : `Số dư API ${name} đã hết. Nạp thêm cho khóa rồi cập nhật số dư ở Cài đặt → Providers.`)
+        : (en() ? `${name} API balance is running low: ${money(c.remaining)} left (${Math.round(left)}%).` : `Số dư API ${name} sắp hết: còn ${money(c.remaining)} (${Math.round(left)}%).`));
+    }
+    for (const w of st.sub?.windows ?? []) if (w.status === "rejected" && w.resetsAt)
+      once(`plan:${st.sub!.cli}:${w.window}:${w.resetsAt}`, en() ? `Your ${st.sub!.name} plan hit its limit (${winLabel(w)}). ${resetText(w.resetsAt)}.` : `Gói ${st.sub!.name} đã chạm giới hạn (${winLabel(w)}). ${resetText(w.resetsAt)}.`);
+  }, [st, say]);
+}
+
 // ---------------------------------------------------------------- vòng tròn cạnh bộ chọn model
 export function UsageRing({ model, extra, onDetails, up = true }: { model?: string; extra?: React.ReactNode; onDetails?: () => void; up?: boolean }) {
   const provider = model?.includes("/") ? model.split("/")[0] : undefined;
@@ -112,8 +189,12 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
     document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
   }, [open]);
+  useLimitAlerts(st);
+  const sub = st?.sub;
   const limited = st?.limits.filter((l) => l.limit !== null) ?? [];
-  const pct = Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0);
+  // Gói subscription: vòng tròn theo cửa sổ đang gần chạm nhất của gói. Khóa API: hạn mức chi phí của Synchro, hạn mức gọi và số dư đã nạp.
+  const pct = sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
+    : Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0, st?.credit?.pct ?? 0);
   const r = 6.4, c = 2 * Math.PI * r;
   const label = st ? `${en() ? "Usage" : "Mức dùng"}: ${Math.round(pct)}%` : en() ? "Usage" : "Mức dùng";
   return (
@@ -122,11 +203,19 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" /></svg>
       </button>
       <Menu open={open} className={`us-pop ${up ? "up" : "down"}`}>
-        <div className="us-h"><span>{en() ? "Usage limits" : "Giới hạn sử dụng"} · API</span><UsageIcon size={15} /></div>
-        {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : (
+        <div className="us-h"><span>{sub ? `${en() ? "Plan limits" : "Giới hạn gói"} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${en() ? "Usage limits" : "Giới hạn sử dụng"} · API`}</span><UsageIcon size={15} /></div>
+        {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : sub ? (
+          <>
+            {sub.windows.map((w) => <PlanRow key={w.window} w={w} />)}
+            {!sub.windows.length && <p className="us-note">{sub.cli === "agy" ? (en() ? "Synchro could not read the plan's quota yet." : "Synchro chưa đọc được hạn mức của gói.") : en() ? "Send a message with this plan to see its limits." : "Gửi một tin nhắn bằng gói này để xem hạn mức."}{sub.turnsToday ? ` ${en() ? `${sub.turnsToday} messages today.` : `Hôm nay: ${sub.turnsToday} tin nhắn.`}` : ""}</p>}
+            {sub.credits && <p className="us-note" data-notr>{sub.credits}</p>}
+            <p className="us-note">{PLAN_NOTE[sub.cli][en() ? 1 : 0]}</p>
+          </>
+        ) : (
           <>
             {st.limits.map((l) => <LimitRow key={l.key} l={l} />)}
             {st.rate && <RateRow r={st.rate} />}
+            {st.credit && <CreditBar c={st.credit} />}
           </>
         )}
         {extra}

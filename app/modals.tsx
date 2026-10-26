@@ -184,7 +184,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ["General", <I.SetGeneral key="g" />], ...(admin ? [["Administrator", <I.SetAdmin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
     ["Capabilities", <I.SetCapabilities key="c" />], ["Usage", <UsageIcon key="u" size={18} />], ["Memory", <I.SetMemory key="m" />],
     ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
-    ...(admin ? [["API", <I.SetKey key="api" />] as [string, React.ReactNode]] : []),
+    ["Providers", <I.SetChip key="pv" />],
   ];
   const custom: [string, React.ReactNode][] = [
     ...(feat?.skills !== false ? [["Skill Hub", <I.Plugins key="pl" />] as [string, React.ReactNode]] : []),

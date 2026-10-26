@@ -4,6 +4,7 @@ import { can, canModel, current, limit, permsOf, sameOrigin } from "../../authst
 import { agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, type AgentEvent } from "../../agentcore";
 import { clampEffort, effortCap, isEffort, legacyModel } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
+import { subCli } from "../../ai/subs";
 import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
 import { exec, sdir, wsAllowed } from "../../workspace";
@@ -27,13 +28,15 @@ export async function POST(req: Request) {
   // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
   // Chế độ Tự động: việc code luôn cần model mạnh nhất tài khoản được dùng.
   let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
+  // Synchro Code cần công cụ (sửa tệp, chạy lệnh) nên chưa chạy bằng gói subscription: dùng model API mạnh nhất tài khoản được dùng.
+  if (chosen && subCli(chosen)) chosen = AUTO;
   if (chosen === AUTO) {
     const main = mainModels();
     const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
     chosen = routeModel({ text: "", attachments: 0, turns: 0, studio: true }, allowed)?.model ?? null;
   }
   const model = chosen || pickDefault(await catalog(), mainModels());
-  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → API." }, { status: 503 });
+  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
   const target = await resolveModel(model);
   if (!target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });

@@ -4,7 +4,7 @@ import { serviceKey } from "../../../providers";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Khóa ElevenLabs lấy từ Cài đặt → API (hoặc ELEVENLABS_API_KEY). Model mặc định: Eleven Realtime v1 Max (giọng tự nhiên nhất, suy luận tốt,
+// Khóa ElevenLabs lấy từ Cài đặt → Providers (hoặc ELEVENLABS_API_KEY). Model mặc định: Eleven Realtime v1 Max (giọng tự nhiên nhất, suy luận tốt,
 // 90+ ngôn ngữ, tự nhận ngôn ngữ người nói). Cố định ở máy chủ, người dùng không tự chọn.
 const MODEL = "eleven_realtime_v1_max";
 const VOICE = process.env.ELEVENLABS_VOICE_MODE_VOICE || "brian";

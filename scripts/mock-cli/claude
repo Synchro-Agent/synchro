@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+// Claude Code giả lập (dev:mock): auth status|login|logout, setup-token (cần terminal), -p --output-format stream-json.
+// Trong prompt: [mock:quota] → hết hạn mức gói, [mock:auth401] → API trả 401 (token bị thu hồi).
+const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
+const { fs, path } = C;
+const a = process.argv.slice(2);
+const dir = process.env.CLAUDE_CONFIG_DIR || path.join(process.env.HOME || "/tmp", ".claude");
+const loginFile = path.join(dir, ".mock-login");
+
+(async () => {
+  if (a[0] === "--version") return console.log("2.1.310 (Claude Code) [mock]");
+  if (a[0] === "auth" && a[1] === "status") {
+    const li = fs.existsSync(loginFile);
+    console.log(JSON.stringify({ loggedIn: li, authMethod: li ? "claude.ai" : "none", apiProvider: "firstParty", configDirectory: dir, ...(li ? { email: "owner@example.com", subscriptionType: "max" } : {}) }));
+    process.exit(li ? 0 : 1);
+  }
+  if (a[0] === "auth" && a[1] === "logout") { fs.rmSync(loginFile, { force: true }); return console.log("Successfully logged out from your Anthropic account."); }
+  if ((a[0] === "auth" && a[1] === "login") || a[0] === "setup-token") {
+    if (a[0] === "setup-token" && !process.stdin.isTTY) { console.error("Error: Raw mode is not supported on the current process.stdin."); process.exit(1); }
+    console.log("Opening browser to sign in…\nBrowser didn't open? Use the url below to sign in (c to copy)\n");
+    console.log(`${C.cfg.base}/mock-login/claude?code=true&client_id=mock&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&state=${C.uuid()}`);
+    const code = await C.readLine("\nPaste code here if prompted > ");
+    if (code !== "MOCK-CLAUDE-OK") { console.log("\nOAuth error: Invalid code. Please make sure the full code was copied."); process.exit(1); }
+    if (a[0] === "setup-token") {
+      console.log(`\n✓ Long-lived authentication token created successfully!\n\nYour OAuth token (valid for 1 year):\n\nsk-ant-oat01-MOCK${C.crypto.randomBytes(24).toString("hex")}\n\nStore this token securely. You won't be able to see it again.`);
+    } else { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(loginFile, "1"); console.log("\nLogin successful."); }
+    process.exit(0);
+  }
+  if (a.includes("-p")) {
+    const prompt = await C.readStdin();
+    const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
+    const sid = C.flag(a, "--resume") || C.uuid();
+    C.out({ type: "system", subtype: "init", session_id: sid, model: C.flag(a, "--model") || "claude-sonnet-mock", cwd: process.cwd(), tools: [] });
+    const result = (o) => C.out({ type: "result", session_id: sid, usage: { input_tokens: 0, output_tokens: 0 }, total_cost_usd: 0, ...o });
+    if (!ok) { result({ subtype: "success", is_error: true, result: "Not logged in · Please run /login" }); process.exit(1); }
+    if (prompt.includes("[mock:auth401]")) { C.out({ type: "system", subtype: "api_retry", attempt: 1, max_retries: 10, retry_delay_ms: 600, error_status: 401, error: "authentication_failed" }); await C.sleep(60_000); return; }
+    const turn = C.bumpSession(dir, sid), lim = C.bumpUsage(dir);
+    // Đúng định dạng của Claude Code: unifiedWindows (utilization 0–1, resetsAt tính bằng giây) và cửa sổ đang gần chạm nhất ở cấp ngoài.
+    const sec = (t) => Math.floor(t / 1000), st = (u) => (u >= 1 ? "rejected" : u >= 0.8 ? "allowed_warning" : "allowed");
+    C.out({ type: "rate_limit_event", uuid: C.uuid(), session_id: sid, rate_limit_info: {
+      status: st(lim.five), rateLimitType: "five_hour", utilization: lim.five, resetsAt: sec(lim.fiveReset),
+      unifiedWindows: { five_hour: { utilization: lim.five, resetsAt: sec(lim.fiveReset), status: st(lim.five) }, seven_day: { utilization: lim.week, resetsAt: sec(lim.weekReset), status: st(lim.week) } },
+    } });
+    if (prompt.includes("[mock:quota]")) {
+      // Như Claude Code thật khi chạm giới hạn phiên: rate_limit_event "rejected" kèm mốc đặt lại, rồi lượt báo lỗi.
+      C.out({ type: "rate_limit_event", uuid: C.uuid(), session_id: sid, rate_limit_info: { status: "rejected", rateLimitType: "five_hour", utilization: 1, resetsAt: sec(lim.fiveReset),
+        unifiedWindows: { five_hour: { utilization: 1, resetsAt: sec(lim.fiveReset), status: "rejected" }, seven_day: { utilization: lim.week, resetsAt: sec(lim.weekReset), status: st(lim.week) } } } });
+      result({ subtype: "success", is_error: true, result: `Claude AI usage limit reached|${sec(lim.fiveReset)}` });
+      process.exit(1);
+    }
+    // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
+    const text = C.reply("Claude", prompt, turn) + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "");
+    for (const ch of C.chunks(text)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); }
+    C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] }, session_id: sid });
+    result({ subtype: "success", is_error: false, result: text, usage: { input_tokens: prompt.length, output_tokens: text.length, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
+    return;
+  }
+  console.error(`mock claude: không hỗ trợ "${a.join(" ")}"`);
+  process.exit(2);
+})();

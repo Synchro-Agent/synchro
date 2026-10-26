@@ -1,9 +1,13 @@
 // Danh mục model và tính năng dùng chung cho giao diện và máy chủ (phân quyền theo tài khoản).
-// Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → API (xem app/providers.ts),
+// Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → Providers (xem app/providers.ts),
 // mỗi model định danh bằng khóa "nhà cung cấp/mã model", ví dụ "anthropic/claude-opus-5-5".
 
 export type ModelInfo = { key: string; id: string; name: string };
-export type ProviderInfo = { id: string; name: string; kind: ProviderKind; models: ModelInfo[] };
+// Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem app/ai/subs.ts):
+// blockedUntil: gói đang hết hạn mức tới lúc nào; usingApiUntil: người dùng đã đồng ý dùng khóa API thay gói tới lúc nào.
+export type PlanInfo = { cli: "claude" | "codex" | "agy"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean };
+/** source: nhóm đang hiện model của gói ("plan") hay của khóa API dùng chung ("api"). */
+export type ProviderInfo = { id: string; name: string; kind: ProviderKind; models: ModelInfo[]; source?: "plan" | "api"; plan?: PlanInfo };
 export type ProviderKind = "anthropic" | "openai" | "google" | "compatible" | "elevenlabs" | "mock";
 
 // Quyền "*" = mọi model, kể cả model hãng mới ra sau này.
@@ -11,6 +15,29 @@ export const ALL = "*";
 export const modelKey = (provider: string, id: string) => `${provider}/${id}`;
 export const splitKey = (key: string) => { const i = key.indexOf("/"); return i < 0 ? { provider: "", id: key } : { provider: key.slice(0, i), id: key.slice(i + 1) }; };
 export const allowsModel = (models: string[], key: string) => models.includes(ALL) || models.includes(key);
+
+// Model tương đương giữa gói subscription và khóa API của cùng hãng ("sub-claude/sonnet" ↔ "anthropic/claude-sonnet-5-5",
+// "sub-codex/gpt-6.1-sol" ↔ "openai/gpt-6.1-sol", "sub-agy/gemini-3-pro" ↔ "google/gemini-3-pro-preview"): trùng mã, rồi mã chứa nhau,
+// rồi cùng dòng model (opus, sonnet, pro, flash…). Danh sách ứng viên xếp mới nhất trước nên hòa điểm thì lấy bản mới nhất.
+const FAMILY = /\b(fable|opus|sonnet|haiku|astra|sol|luna|mini|nano|pro|ultra|flash|lite)\b/g;
+export function equivalentModel(from: string, candidates: { key: string; id: string }[]): string | null {
+  if (!candidates.length) return null;
+  const id = (splitKey(from).id || from).toLowerCase();
+  const fam = new Set(id.replace(/[-_.]/g, " ").match(FAMILY) ?? []);
+  let best = candidates[0].key, score = 0;
+  for (const c of candidates) {
+    const cid = c.id.toLowerCase();
+    const sc = cid === id ? 4 : id.length > 3 && (cid.startsWith(id) || cid.includes(id)) ? 3
+      : [...(cid.replace(/[-_.]/g, " ").match(FAMILY) ?? [])].filter((f) => fam.has(f)).length > 0 ? 2 : 0;
+    if (sc > score) { best = c.key; score = sc; }
+  }
+  return best;
+}
+/** Hãng (nhà cung cấp API tích hợp sẵn) của một khóa model: "sub-claude/…" → "anthropic", "openai/…" → "openai". */
+export const vendorOf = (key: string) => {
+  const p = splitKey(key).provider;
+  return p === "sub-claude" ? "anthropic" : p === "sub-codex" ? "openai" : p === "sub-agy" ? "google" : p;
+};
 
 // Tên model ở bản cũ (trước khi có danh sách thật) → khóa mới, để quyền đã lưu không mất hiệu lực.
 const LEGACY: Record<string, string | null> = {

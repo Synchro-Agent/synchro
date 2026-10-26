@@ -73,7 +73,7 @@ function ModelChips({ catalog, value, onChange, allLabel, allHint, Toggle }: { c
     const cur = all ? keys : value, ks = p.models.map((m) => m.key);
     onChange(on ? [...new Set([...cur, ...ks])] : cur.filter((k) => !ks.includes(k)));
   };
-  if (!catalog.length) return <p className="adm-perm-warn" style={{ color: "var(--text-3)" }}>No models yet. Add an API key in Settings → API first.</p>;
+  if (!catalog.length) return <p className="adm-perm-warn" style={{ color: "var(--text-3)" }}>No models yet. Add an API key in Settings → Providers first.</p>;
   return (
     <>
       <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>

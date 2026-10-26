@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+// Codex CLI giả lập (dev:mock): login status|--device-auth, logout, exec [resume <id>] --json -.
+// Trong prompt: [mock:quota] → hết hạn mức gói ChatGPT.
+const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
+const { fs, path } = C;
+const a = process.argv.slice(2);
+const dir = process.env.CODEX_HOME || path.join(process.env.HOME || "/tmp", ".codex");
+const authFile = path.join(dir, "auth.json");
+
+(async () => {
+  if (a[0] === "--version") return console.log("codex-cli 0.164.0 [mock]");
+  if (a[0] === "login" && a[1] === "status") {
+    if (fs.existsSync(authFile)) { console.error("Logged in using ChatGPT"); process.exit(0); }
+    console.error("Not logged in"); process.exit(1);
+  }
+  if (a[0] === "logout") { fs.rmSync(authFile, { force: true }); return console.error("Successfully logged out"); }
+  if (a[0] === "login" && a[1] === "--device-auth") {
+    const L = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", pick = (n) => Array.from({ length: n }, () => L[C.crypto.randomInt(L.length)]).join("");
+    const code = `${pick(4)}-${pick(5)}`;
+    console.log(`Welcome to Codex [v0.164.0]\n\nFollow these steps to sign in with ChatGPT using device code authorization:\n\n1. Open this link in your browser and sign in to your account\n   ${C.cfg.base}/mock-login/codex?code=${code}\n\n2. Enter this one-time code (expires in 15 minutes)\n   ${code}\n\nDevice codes are a common phishing target. Never share this code.\n`);
+    for (let i = 0; i < 900; i++) {
+      await C.sleep(1000);
+      const r = await fetch(`${C.cfg.base}/mock-login/codex/status?code=${code}`).then((x) => x.json()).catch(() => null);
+      if (r?.approved) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(authFile, JSON.stringify({ mock: true })); console.log("Successfully logged in"); process.exit(0); }
+    }
+    console.error("Device code expired"); process.exit(1);
+  }
+  // app-server: JSON-RPC qua stdin/stdout (danh sách model, tài khoản, hạn mức của gói).
+  if (a[0] === "app-server") {
+    const rl = require("readline").createInterface({ input: process.stdin });
+    const reply = (id, result, error) => process.stdout.write(JSON.stringify({ id, ...(error ? { error } : { result }) }) + "\n");
+    const li = () => fs.existsSync(authFile);
+    rl.on("line", (l) => {
+      let m; try { m = JSON.parse(l); } catch { return; }
+      if (m.id === undefined) return;
+      if (m.method === "initialize") return reply(m.id, { userAgent: "synchro/0.164.0 (mock)", codexHome: dir });
+      if (m.method === "model/list") return reply(m.id, { data: [
+        { id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1-Sol", hidden: false },
+        { id: "gpt-6-astra", model: "gpt-6-astra", displayName: "GPT-6 Astra", hidden: false },
+        { id: "gpt-6.1-luna", model: "gpt-6.1-luna", displayName: "GPT-6.1-Luna", hidden: false },
+        { id: "codex-internal", model: "codex-internal", displayName: "Internal", hidden: true },
+      ] });
+      if (m.method === "account/read") return reply(m.id, li() ? { account: { type: "chatgpt", email: "owner@example.com", planType: "plus" }, requiresOpenaiAuth: true } : { account: null, requiresOpenaiAuth: true });
+      if (m.method === "account/rateLimits/read") {
+        if (!li()) return reply(m.id, null, { code: -32600, message: "codex account authentication required to read rate limits" });
+        const turns = C.totalTurns(dir);
+        const now = Math.floor(Date.now() / 1000);
+        return reply(m.id, { rateLimits: { limitId: "codex", limitName: null, primary: { usedPercent: Math.min(100, turns * 9), windowDurationMins: 300, resetsAt: now + 3 * 3600 + 600 },
+          secondary: { usedPercent: Math.min(100, turns * 3), windowDurationMins: 10080, resetsAt: now + 4 * 86400 }, credits: { hasCredits: false, unlimited: false, balance: null }, planType: "plus", rateLimitReachedType: null }, rateLimitsByLimitId: null });
+      }
+      reply(m.id, null, { code: -32601, message: "method not found" });
+    });
+    return new Promise(() => {});
+  }
+  if (a[0] === "exec") {
+    const resume = a[1] === "resume" ? a[2] : undefined;
+    const prompt = await C.readStdin();
+    const tid = resume || C.uuid();
+    C.out({ type: "thread.started", thread_id: tid });
+    C.out({ type: "turn.started" });
+    if (!fs.existsSync(authFile)) {
+      C.out({ type: "error", message: "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header" });
+      await C.sleep(400);
+      C.out({ type: "turn.failed", error: { message: "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header" } });
+      process.exit(1);
+    }
+    if (prompt.includes("[mock:quota]")) { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
+    const turn = C.bumpSession(dir, tid);
+    await C.sleep(150);
+    C.out({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "**Chào hỏi**" } });
+    const text = C.reply("Codex (ChatGPT)", prompt, turn);
+    C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text } });
+    C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length } });
+    return;
+  }
+  console.error(`mock codex: không hỗ trợ "${a.join(" ")}"`);
+  process.exit(2);
+})();

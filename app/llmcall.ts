@@ -212,7 +212,7 @@ export async function openaiCall(t: Target, body: Record<string, unknown>, signa
   return j;
 }
 
-// Một lượt hỏi đáp không có công cụ: dùng cho chat thường và nút "Gửi thử" ở Cài đặt → API.
+// Một lượt hỏi đáp không có công cụ: dùng cho chat thường và nút "Gửi thử" ở Cài đặt → Providers.
 export async function chatOnce(t: Target, system: string, messages: { role: string; content: unknown }[], maxTokens: number, signal?: AbortSignal, effort?: Effort, onDelta?: OnDelta): Promise<string> {
   const ef = effortParams(t, effort);
   if (t.kind === "mock") return `[mock] ${String(messages[messages.length - 1]?.content ?? "").slice(0, 80)}`;
