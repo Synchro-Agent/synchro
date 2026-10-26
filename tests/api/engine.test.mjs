@@ -148,7 +148,10 @@ try {
     const sealed = fs.readFileSync(tokFile, "utf8");
     ok(fs.existsSync(tokFile) && !sealed.includes("sk-ant-oat01") && (fs.statSync(tokFile).mode & 0o777) === 0o600 && !fs.readdirSync(dir).some((f) => f.includes("token") && f !== ".mock-last-token"), "token lưu mã hóa (0600) trong dữ liệu Synchro, không nằm trong thư mục CLI");
     const env = A.engineEnv("claude", U);
-    ok(env.CLAUDE_CODE_OAUTH_TOKEN === fs.readFileSync(path.join(dir, ".mock-last-token"), "utf8") && env.CLAUDE_CONFIG_DIR === dir, "token đọc đủ (Claude in làm hai đợt), giải mã chỉ để truyền cho CLI");
+    ok(env.CLAUDE_CODE_OAUTH_TOKEN === fs.readFileSync(path.join(dir, ".mock-last-token"), "utf8") && env.CLAUDE_CONFIG_DIR === dir, "token đọc đủ (in làm hai đợt, chữ liền không dấu cách, CLI thoát ngay), giải mã chỉ để truyền cho CLI");
+    const sample = `x${"y".repeat(10)}\nYourOAuthtoken(validfor1year):\n\nsk-ant-oat01-ABCdef_123-${"z".repeat(60)}\n\nStorethistokensecurely.Youwon'tbeabletoseeitagain.`;
+    ok(A.extractToken(sample) === `sk-ant-oat01-ABCdef_123-${"z".repeat(60)}`, "extractToken: đúng ranh giới token khi câu sau in liền không dấu cách");
+    ok(A.extractToken(`sk-ant-oat01-${"a".repeat(50)}`) === null && A.extractToken(`sk-ant-oat01-${"a".repeat(50)}`, true)?.length === 63, "extractToken: chưa in xong thì chờ, đã thoát thì lấy phần đã in");
     const s1 = await A.status("claude", U);
     ok(s1.loggedIn && s1.method === "token", "status sau đăng nhập: token", JSON.stringify(s1));
     const s2 = await A.status("claude", U2);

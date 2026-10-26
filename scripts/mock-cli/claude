@@ -26,10 +26,10 @@ const loginFile = path.join(dir, ".mock-login");
       // Token in làm hai đợt (như terminal nhận theo từng gói dữ liệu), rồi mới tới câu "Store this token".
       const tok = `sk-ant-oat01-MOCK${C.crypto.randomBytes(40).toString("hex")}`;
       fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, ".mock-last-token"), tok);
-      process.stdout.write(`\n✓ Long-lived authentication token created successfully!\n\nYour OAuth token (valid for 1 year):\n\n${tok.slice(0, 30)}`);
-      await C.sleep(400);
-      process.stdout.write(`${tok.slice(30)}\n\nStore this token securely. You won't be able to see it again.\n`);
-      await C.sleep(100);
+      // Như Claude Code thật trong terminal giả: nhiều câu in liền không dấu cách, in xong token là thoát ngay.
+      process.stdout.write(`\n✓ Long-lived authentication token created successfully!\n\nYourOAuthtoken(validfor1year):\n\n${tok.slice(0, 30)}`);
+      await C.sleep(150);
+      process.stdout.write(`${tok.slice(30)}\n\nStorethistokensecurely.Youwon'tbeabletoseeitagain.\nUsethistokenbysetting:exportCLAUDE_CODE_OAUTH_TOKEN=<token>\n`);
     } else { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(loginFile, "1"); console.log("\nLogin successful."); }
     process.exit(0);
   }

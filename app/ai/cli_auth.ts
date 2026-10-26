@@ -145,7 +145,8 @@ const URL_RE: Record<Cli, RegExp> = {
 const CODE_RE = /\b[A-Z0-9]{4,5}-[A-Z0-9]{4,6}\b/;
 // Token Claude Code in ra sau "Your OAuth token (valid for …):" và trước "Store this token securely…". Chỉ lấy khi đã in xong
 // (có câu "Store this token" phía sau, hoặc đã quá 2 giây), bỏ khoảng trắng / viền khung nếu bị xuống dòng.
-const TOKEN_END = /Store this token|Use this token|won't be able to see it again/i;
+// Giao diện terminal của Claude Code có lúc in liền không dấu cách ("Storethistokensecurely"): so khớp bỏ qua khoảng trắng.
+const TOKEN_END = /Store\s*this\s*token|Use\s*this\s*token|won'?t\s*be\s*able\s*to\s*see/i;
 export function extractToken(text: string, settled = false): string | null {
   const i = text.search(/sk-ant-oat/);
   if (i < 0) return null;
@@ -156,7 +157,7 @@ export function extractToken(text: string, settled = false): string | null {
   return tok && tok.length >= 40 ? tok : null;
 }
 // Lỗi CLI in ra sau khi dán mã (mã sai, hết hạn, không khớp link đang mở…): báo ngay thay vì chờ hết giờ.
-const CODE_ERROR = /(OAuth error[^\n]*|Invalid code[^\n]*|invalid authorization code[^\n]*|Login failed[^\n]*|Authentication failed[^\n]*)/i;
+const CODE_ERROR = /(OAuth\s*error[^\n]*|Invalid\s*code[^\n]*|invalid\s*authorization\s*code[^\n]*|Login\s*failed[^\n]*|Authentication\s*failed[^\n]*)/i;
 
 function loginState(cli: Cli, scope: string): LoginState | null {
   const p = g.pending.get(key(cli, scope));
@@ -235,6 +236,11 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
   });
   void proc.done.then((e) => {
     if (g.pending.get(key(cli, scope)) !== p || p.st.state === "done" || p.st.state === "error") return;
+    // setup-token in token xong là thoát ngay: đọc token lần cuối trước khi kết luận.
+    if (cli === "claude" && a.method === "token") {
+      const t = extractToken(stripAnsi(p.raw), true);
+      if (t) { saveToken(scope, t); p.raw = p.raw.split(t).join("[đã che]"); finish(p, true); return; }
+    }
     // agy: submitCode tự cho tiến trình thoát rồi mới kiểm tra đăng nhập bằng một tiến trình mới.
     if (cli === "agy" && p.st.state === "verifying") return;
     // codex và `claude auth login` thoát 0 khi đăng nhập xong; setup-token chỉ thành công khi đã đọc được token (xử lý ở trên).
