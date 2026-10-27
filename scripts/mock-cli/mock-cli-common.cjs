@@ -41,6 +41,11 @@ function mockTitle(prompt) {
   return w[0].toUpperCase() + w.slice(1);
 }
 const isTitleAsk = (prompt) => prompt.includes("Đoạn chat cần đặt tên:");
+/** "#prefs" trong tin nhắn → nhắc lại khối <user_preferences> model nhận được (kiểm thử Hướng dẫn cho Synchro). */
+function prefsEcho(all) {
+  const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(all);
+  return m ? `PREFS: ${m[1].trim().replace(/\s+/g, " ")}` : "PREFS: none";
+}
 function reply(name, prompt, turn) {
   if (isTitleAsk(prompt)) return mockTitle(prompt);
   const last = prompt.trim().split("\n").filter(Boolean).pop() ?? "";
@@ -73,4 +78,4 @@ function toolAsk(prompt) {
   return { name: m[1], args };
 }
 
-module.exports = { mcp, isTitleAsk, mockTitle, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { mcp, isTitleAsk, mockTitle, prefsEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

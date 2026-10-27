@@ -42,6 +42,19 @@ export const deleteMemory = (uid: string, id: string) => t().prepare("DELETE FRO
 export const clearMemory = (uid: string) => t().prepare("DELETE FROM user_memory WHERE user_id = ?").run(uid).changes;
 
 /** Khối bộ nhớ đưa vào lời nhắc hệ thống của lượt chat (rỗng nếu chưa có gì). */
+/**
+ * Hồ sơ và hướng dẫn người dùng tự viết ở Cài đặt → Tài khoản ("Hướng dẫn cho Synchro"): tầng tĩnh của mọi lượt chat,
+ * Synchro Code và trò chuyện bằng giọng nói (gói subscription lẫn khóa API). Không áp dụng cho lời gọi nội bộ.
+ */
+export function profileBlock(u: Pick<UserRow, "full_name" | "nickname" | "occupation" | "instructions">): string {
+  const call = (u.nickname || u.full_name || "").trim(), work = (u.occupation || "").trim(), ins = (u.instructions || "").trim();
+  if (!call && !work && !ins) return "";
+  return `<user_preferences>
+Người dùng tự viết những điều này trong Cài đặt của Synchro để áp dụng ở mọi đoạn chat. Làm theo trong mọi câu trả lời, trừ khi người dùng yêu cầu khác ngay trong đoạn chat; không cần nói là đã đọc phần này.
+${[call && `Tên người dùng muốn được gọi: ${call}`, work && `Công việc: ${work}`].filter(Boolean).join("\n")}${ins ? `${call || work ? "\n" : ""}Hướng dẫn của người dùng:\n${ins}` : ""}
+</user_preferences>`;
+}
+
 export function memoryBlock(uid: string): string {
   const list = listMemory(uid);
   if (!list.length) return "";

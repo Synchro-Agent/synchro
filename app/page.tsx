@@ -548,7 +548,7 @@ export default function Home() {
   const [, setAcct] = usePref("acct", "");
   const [call, setCall] = usePref("call", "Lâm Tùng");
   const [, setWork] = usePref("work", "Data science");
-  const [ins] = usePref("ins", "");
+  const [ins, setIns] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
   const [font] = usePref("font", "Anthropic Sans");
   const [uiFont] = usePref("uiFont", "Anthropic Sans");
@@ -644,6 +644,15 @@ export default function Home() {
     const c = u.profile.nickname || u.profile.fullName?.trim().split(/\s+/).pop();
     if (c) setCall(c);
     if (u.profile.occupation) setWork(u.profile.occupation);
+    // Hướng dẫn cho Synchro trước đây chỉ lưu trong trình duyệt (model không nhận được): đưa lên máy chủ một lần cho tài khoản này.
+    const local = (() => { try { return String(JSON.parse(ls.get("p:ins") || '""') ?? ""); } catch { return ""; } })();
+    if (!u.profile.instructions && local.trim() && !ls.get("p:insSynced")) {
+      fetch("/api/auth/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instructions: local }) })
+        .then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.user) { ls.set("p:insSynced", "true"); setMe(j.user); } }).catch(() => {});
+    } else {
+      ls.set("p:insSynced", "true");
+      setIns(u.profile.instructions ?? "");
+    }
   };
   // Chat, dự án, model đã chọn… của tài khoản đang dùng (localStorage đã tách theo tài khoản).
   const loadLocal = () => {

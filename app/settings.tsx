@@ -129,8 +129,18 @@ function Account() {
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [call, setCall] = usePref("call", "Lâm Tùng");
   const [work, setWork] = usePref("work", "Data science");
-  const [saved0, setSaved0] = usePref("ins", "");
-  const [ins, setIns] = useState(saved0);
+  // Hướng dẫn cho Synchro lưu trên máy chủ (theo tài khoản, mọi thiết bị) và được gửi kèm mọi lượt chat, Synchro Code, giọng nói.
+  const [, setSaved0] = usePref("ins", "");
+  const server = me?.profile.instructions ?? "";
+  const [ins, setIns] = useState(server);
+  const [insBusy, setInsBusy] = useState(false);
+  useEffect(() => { setIns(server); }, [server]);
+  const saveIns = () => {
+    setInsBusy(true);
+    api<{ user: AuthUser }>("POST", "/api/auth/profile", { instructions: ins })
+      .then((r) => { app.setMe(r.user); setSaved0(r.user.profile.instructions ?? ""); setSaved("Instructions saved"); setTimeout(() => setSaved(""), 2000); })
+      .catch((e) => app.say(e.message)).finally(() => setInsBusy(false));
+  };
   const [saved, setSaved] = useState("");
   const [sessions, setSessions] = useState<Sess[] | null>(null);
   const [pw, setPw] = useState<null | { cur: string; next: string; again: string }>(null);
@@ -169,12 +179,13 @@ function Account() {
       <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
-      <p className="d" style={{ margin: "0 0 10px" }}>Synchro keeps these in mind in every chat.</p>
-      <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I primarily code in Python (not a coding beginner)" />
-      {ins !== saved0 && (
+      <p className="d" style={{ margin: "0 0 10px" }}>Synchro follows these in every chat, in Synchro Code and in voice conversations, with every model, on any device. Your name and work above are shared with the model too.</p>
+      <textarea className="textarea" value={ins} maxLength={4000} onChange={(e) => setIns(e.target.value)} placeholder="e.g. Always answer in Vietnamese. I primarily code in Python (not a coding beginner). Keep answers short and get to the point." />
+      <div className="ins-f"><span>{ins.length.toLocaleString()} / 4,000</span></div>
+      {ins.trim() !== server.trim() && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button className="btn dark" onClick={() => { setSaved0(ins); setSaved("Instructions saved"); setTimeout(() => setSaved(""), 2000); }}>Save changes</button>
-          <button className="btn" onClick={() => setIns(saved0)}>Discard</button>
+          <button className="btn dark" disabled={insBusy} onClick={saveIns}>Save changes</button>
+          <button className="btn" disabled={insBusy} onClick={() => setIns(server)}>Discard</button>
         </div>
       )}
       <H>Account</H>
@@ -228,8 +239,6 @@ function Account() {
 
 function Privacy({ go }: { go: (t: string) => void }) {
   const app = useApp();
-  const [a, setA] = usePref("loc", true);
-  const [b, setB] = usePref("improve", true);
   const [panel, setPanel] = useState<"" | "shared" | "artifacts" | "files" | "feedback">("");
   const shared = app.chats.filter((c) => c.shared);
   const files = app.chats.flatMap((c) => c.msgs.flatMap((m) => (m.files ?? []).map((f) => ({ f, c: c.title }))));

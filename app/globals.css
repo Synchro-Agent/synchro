@@ -4051,3 +4051,4 @@ html body .menu.pub-menu::before{background:var(--card)!important}
 .us-old-b{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);padding:4px 0}
 .us-old-b:hover{color:var(--text)}
 .us-old-b[aria-expanded="true"] svg{transform:rotate(180deg)}
+.ins-f{display:flex;justify-content:flex-end;margin-top:4px;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}

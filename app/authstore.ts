@@ -24,6 +24,8 @@ export type UserRow = {
   id: string; email: string; name: string; avatar: string | null; password_hash: string | null; email_verified: number;
   status: "active" | "suspended"; created_at: number; last_login_at: number | null; last_seen_at: number | null;
   full_name: string | null; nickname: string | null; birth_date: string | null; occupation: string | null; perms: string | null;
+  /** Hướng dẫn cho Synchro (Cài đặt → Tài khoản): áp dụng cho mọi lượt chat và Synchro Code của người này. */
+  instructions: string | null;
 };
 export type SessionRow = { id: string; user_id: string; method: string; created_at: number; last_seen_at: number; expires_at: number; ip: string | null; user_agent: string | null };
 
@@ -38,7 +40,7 @@ export function db() {
   d.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
   // Bảng tạo từ bản cũ chưa có các cột hồ sơ: thêm vào (CREATE IF NOT EXISTS không tự làm việc này).
   const cols = new Set((d.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name));
-  for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
+  for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms", "instructions"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
   const sk = new Set((d.prepare("PRAGMA table_info(skills)").all() as { name: string }[]).map((c) => c.name));
   if (!sk.has("use_count")) d.exec("ALTER TABLE skills ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
   if (!sk.has("last_used_at")) d.exec("ALTER TABLE skills ADD COLUMN last_used_at INTEGER");
@@ -147,7 +149,7 @@ export function createUser(o: { email: string; name: string; passwordHash?: stri
 export function publicUser(u: UserRow) {
   return {
     id: u.id, email: u.email, name: u.name, avatar: u.avatar || null, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
-    profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation },
+    profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation, instructions: u.instructions ?? "" },
     needsProfile: !u.full_name || !u.birth_date,
     perms: permsOf(u),
   };
@@ -174,8 +176,8 @@ export function featureGate(req: Request, f: Feature) {
 }
 
 // ---- hồ sơ cá nhân ----
-type ProfileIn = { fullName?: unknown; nickname?: unknown; birthDate?: unknown; occupation?: unknown; avatar?: unknown };
-type ProfileCols = Partial<Pick<UserRow, "full_name" | "nickname" | "birth_date" | "occupation" | "avatar">>;
+type ProfileIn = { fullName?: unknown; nickname?: unknown; birthDate?: unknown; occupation?: unknown; avatar?: unknown; instructions?: unknown };
+type ProfileCols = Partial<Pick<UserRow, "full_name" | "nickname" | "birth_date" | "occupation" | "avatar" | "instructions">>;
 const oneLine = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").replace(/\s+/g, " ").trim() : "");
 
 // Kiểm tra các trường được gửi lên; trường không gửi thì bỏ qua (cho phép cập nhật từng phần).
@@ -207,6 +209,12 @@ export function cleanProfile(p: ProfileIn): ProfileCols {
     const v = oneLine(p.occupation);
     if (v.length > 60) throw new AuthError("Công việc tối đa 60 ký tự.");
     out.occupation = v || null;
+  }
+  // Hướng dẫn cho Synchro: giữ nguyên xuống dòng; chuỗi rỗng = xóa.
+  if (p.instructions !== undefined) {
+    const v = typeof p.instructions === "string" ? p.instructions.normalize("NFC").replace(/\r\n?/g, "\n").replace(/\n{4,}/g, "\n\n\n").trim() : "";
+    if (v.length > 4000) throw new AuthError("Hướng dẫn cho Synchro tối đa 4.000 ký tự.");
+    out.instructions = v || null;
   }
   // Ảnh đại diện tự tải lên: ảnh nhỏ đã cắt ở trình duyệt, lưu dạng data URL. Chuỗi rỗng = xóa ảnh.
   if (p.avatar !== undefined) {

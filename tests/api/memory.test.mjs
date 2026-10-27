@@ -75,6 +75,29 @@ await run("Chào bạn", { web: false });
 L = await last();
 ok(!(L?.tools ?? []).some((t) => /^web_search_/.test(t.type ?? "")), "tắt Tìm kiếm trên web → không gửi công cụ tìm web");
 
+console.log("N. Hướng dẫn cho Synchro (Cài đặt → Tài khoản) tới được model");
+{
+  const INS = "Luôn trả lời bằng tiếng Việt, ngắn gọn.\nGọi tôi là anh Tùng.";
+  const pr = await me("POST", "/api/auth/profile", { instructions: INS, nickname: "Tùng", occupation: "Data science" });
+  ok(pr.s === 200 && pr.j.user.profile.instructions === INS, "lưu hướng dẫn lên máy chủ theo tài khoản (giữ xuống dòng)", JSON.stringify(pr.j?.user?.profile));
+  ok((await me("GET", "/api/auth/me")).j.user.profile.instructions === INS, "thiết bị khác đọc lại được hướng dẫn (qua /api/auth/me)");
+  await run("Viết giúp mình một câu chào");
+  const sys = JSON.stringify((await last())?.system ?? "");
+  ok(sys.includes("<user_preferences>") && sys.includes("Luôn trả lời bằng tiếng Việt") && sys.includes("Tùng") && sys.includes("Data science"), "lượt chat gửi kèm hướng dẫn, tên gọi và công việc cho model", sys.slice(0, 600));
+  const echo = await run("#prefs");
+  ok(/PREFS: .*Gọi tôi là anh Tùng/.test(echo?.result?.text ?? ""), "model nhận được hướng dẫn trong lượt chat", echo?.result?.text);
+  const inc = await me("POST", "/api/llm", { skills: true, incognito: true, system: "", model: MODEL, messages: [{ role: "user", content: "#prefs" }] });
+  ok(/PREFS: .*Gọi tôi là anh Tùng/.test(inc.j?.text ?? ""), "đoạn chat ẩn danh vẫn theo hướng dẫn (chỉ không dùng bộ nhớ)", JSON.stringify(inc.j).slice(0, 300));
+  const raw = await me("POST", "/api/llm", { skills: false, system: "", model: MODEL, messages: [{ role: "user", content: "#prefs" }] });
+  ok(/PREFS: none/.test(raw.j?.text ?? ""), "lời gọi nội bộ (đặt tên, rút bộ nhớ…) không kèm hướng dẫn", JSON.stringify(raw.j).slice(0, 300));
+  const ot = await other("POST", "/api/llm", { skills: true, system: "", model: MODEL, messages: [{ role: "user", content: "#prefs" }] });
+  ok(!/anh Tùng/.test(ot.j?.text ?? ""), "người khác không nhận hướng dẫn của mình", JSON.stringify(ot.j).slice(0, 300));
+  ok((await me("POST", "/api/auth/profile", { instructions: "x".repeat(4001) })).s === 400, "hướng dẫn quá 4.000 ký tự → báo lỗi");
+  await me("POST", "/api/auth/profile", { instructions: "" });
+  const cl = await run("#prefs");
+  ok(!/anh Tùng/.test(cl?.result?.text ?? "") && (await me("GET", "/api/auth/me")).j.user.profile.instructions === "", "xóa hướng dẫn → model không còn nhận", cl?.result?.text);
+}
+
 await me("DELETE", "/api/memory");
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

@@ -274,9 +274,11 @@ function mockTitle(q) {
   const w = first.replace(/^(cho (tôi|mình|em) hỏi|giúp (tôi|mình|em)|làm ơn|hãy|please|can you|could you)\s+/i, "").split(" ").slice(0, 6).join(" ");
   return w[0].toUpperCase() + w.slice(1);
 }
-function reply(provider, id, msgs, maxTokens, effort) {
+function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
+  // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
+  if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
   const name = displayName(provider, id), vendor = VENDOR[provider];
   const short = q.length > 160 ? q.slice(0, 160) + "…" : q;
@@ -414,7 +416,7 @@ async function handler(req, res) {
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err("invalid_request_error", `output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'`));
       const shape = anthropicShape(b);
       if (shape) return send(res, 400, err("invalid_request_error", shape));
-      const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
+      const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef, sysText(b.system));
       const webTool = (b.tools ?? []).find((x) => /^web_search_/.test(x.type ?? ""));
       if (webTool && q.includes("#web") && !JSON.stringify(b.messages).includes("web_search_tool_result")) {
         const id = `srvtoolu_${Date.now()}`;
@@ -464,7 +466,7 @@ async function handler(req, res) {
       if (bad) return send(res, 400, err(`No tool call found for function call output with call_id ${bad.call_id}.`));
       const ef = b.reasoning?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err(`Invalid value for 'reasoning.effort': '${ef}'.`));
-      const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef);
+      const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef, typeof b.instructions === "string" ? b.instructions : "");
       // Tìm web (công cụ phía máy chủ của OpenAI): mục web_search_call rồi câu trả lời, trong cùng một lần gọi.
       if ((b.tools ?? []).some((x) => x.type === "web_search") && q.includes("#web")) {
         await sleep(latency(b.model));

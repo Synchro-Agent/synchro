@@ -1,6 +1,7 @@
 import { can, current, limit, sameOrigin } from "../../../authstore";
 import { serviceKey } from "../../../providers";
 import { SpeechErr, mintRealtime, plan } from "../../../speechapi";
+import { profileBlock } from "../../../memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
   if (p?.connected && (!p.realtime || !p.features.agent) && !p.perms.tts && !p.perms.stt) return Response.json({ fallback: true, cascade: true });
   try {
     // Không đặt ngôn ngữ: Eleven Realtime tự nhận ngôn ngữ người nói và trả lời đúng ngôn ngữ đó.
-    const s = await mintRealtime({ model: MODEL, voice, instructions: INSTRUCTIONS + DELEGATE, eagerness: "medium", maxSeconds: 900, tools: TOOLS });
+    const s = await mintRealtime({ model: MODEL, voice, instructions: [INSTRUCTIONS + DELEGATE, profileBlock(c.user)].filter(Boolean).join("\n\n"), eagerness: "medium", maxSeconds: 900, tools: TOOLS });
     return Response.json({ value: s.value, expiresAt: s.expiresAt, model: s.model, url: s.url, tools: s.tools });
   } catch (e) {
     const err = e as SpeechErr;

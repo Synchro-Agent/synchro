@@ -76,7 +76,7 @@ const SUCCESS_HOLD = 1900; // thời gian giữ màn hình chúc mừng trước
 const DefaultLogo = () => ( <div className="bg-primary text-primary-foreground rounded-md p-1.5"> <Gem className="h-4 w-4" /> </div> );
 
 // --- TYPES + API ---
-export type AuthProfile = { fullName: string | null; nickname: string | null; birthDate: string | null; occupation: string | null };
+export type AuthProfile = { fullName: string | null; nickname: string | null; birthDate: string | null; occupation: string | null; instructions?: string };
 export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean; perms: Perms };
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;

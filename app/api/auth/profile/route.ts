@@ -2,10 +2,10 @@ import { handle, publicUser, requireUser, sameOrigin, updateProfile } from "../.
 
 export const runtime = "nodejs";
 
-// Cập nhật hồ sơ (họ tên, tên gọi, ngày sinh, công việc); chỉ các trường được gửi lên mới bị đổi.
+// Cập nhật hồ sơ (họ tên, tên gọi, ngày sinh, công việc, hướng dẫn cho Synchro); chỉ các trường được gửi lên mới bị đổi.
 export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  const { fullName, nickname, birthDate, occupation, avatar } = await req.json();
-  return Response.json({ user: publicUser(updateProfile(req, user, { fullName, nickname, birthDate, occupation, avatar })) });
+  const { fullName, nickname, birthDate, occupation, avatar, instructions } = await req.json();
+  return Response.json({ user: publicUser(updateProfile(req, user, { fullName, nickname, birthDate, occupation, avatar, instructions })) });
 });
