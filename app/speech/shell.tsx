@@ -22,7 +22,7 @@ export function Head({ tool, title, desc, children }: { tool: Exclude<SpeechTool
         </div>
         <div className="sp-head-a">
           {children}
-          {!open && <button className="btn sp-guide-btn" onClick={() => setHidden({ ...hidden, [tool]: false })}><I.Help size={14} />Hướng dẫn</button>}
+          {!open && <button className="btn sp-guide-btn" onClick={() => setHidden({ ...hidden, [tool]: false })}><I.Help size={14} />Xem hướng dẫn</button>}
         </div>
       </div>
       {open && <GuideCard tool={tool} onClose={() => setHidden({ ...hidden, [tool]: true })} />}
@@ -30,20 +30,31 @@ export function Head({ tool, title, desc, children }: { tool: Exclude<SpeechTool
   );
 }
 
+// Thẻ hướng dẫn: tiêu đề + tính năng là gì, rồi hai cột “Cách dùng” (3 bước nối nhau) và “Mẹo hay” + chi phí.
+// Thẻ hẹp (cột làm việc cạnh bảng Cài đặt, điện thoại) xếp một cột; mẹo và chi phí thu vào nút “Xem mẹo” cho gọn.
 function GuideCard({ tool, onClose }: { tool: Exclude<SpeechTool, "home">; onClose: () => void }) {
   const g = GUIDES[tool], t = toolDef(tool);
+  const [more, setMore] = useState(false);
   return (
-    <section className={`sp-guide ${t.color}`} aria-label={`Hướng dẫn: ${t.label}`}>
+    <section className={`sp-guide ${t.color} ${more ? "more" : ""}`} aria-label={`Hướng dẫn: ${t.label}`}>
       <div className="sp-guide-h">
-        <b><I.Bulb size={15} />{`${t.label} là gì?`}</b>
-        <button className="icon-btn" aria-label="Ẩn hướng dẫn" title="Ẩn hướng dẫn (mở lại bằng nút Hướng dẫn)" onClick={onClose}><I.X size={15} /></button>
+        <span className="sp-guide-ic"><I.Bulb size={15} /></span>
+        <b>{`${t.label} là gì?`}</b>
+        <button className="btn sp-guide-x" title="Mở lại bằng nút Xem hướng dẫn" onClick={onClose}><I.X size={13} />Ẩn hướng dẫn</button>
       </div>
       <p className="sp-guide-what">{g.what}</p>
-      <ol className="sp-guide-steps">{g.steps.map((s, i) => <li key={i}><span>{i + 1}</span>{s}</li>)}</ol>
-      <div className="sp-guide-f">
-        <ul className="sp-guide-tips">{g.tips.map((x) => <li key={x}>{x}</li>)}</ul>
-        <span className="sp-guide-cost"><I.Gauge size={13} />{g.cost}</span>
+      <div className="sp-guide-body">
+        <div className="sp-guide-col">
+          <span className="sp-guide-l">Cách dùng</span>
+          <ol className="sp-guide-steps">{g.steps.map((s, i) => <li key={i}><span>{i + 1}</span><p>{s}</p></li>)}</ol>
+        </div>
+        <div className="sp-guide-col side">
+          <span className="sp-guide-l">Mẹo hay</span>
+          <ul className="sp-guide-tips">{g.tips.map((x) => <li key={x}><I.Check size={13} /><p>{x}</p></li>)}</ul>
+          <div className="sp-guide-cost"><I.Gauge size={15} /><p><b>Chi phí</b>{g.cost}</p></div>
+        </div>
       </div>
+      <button className="sp-guide-more" aria-expanded={more} onClick={() => setMore(!more)}>{more ? "Ẩn mẹo" : "Xem mẹo và chi phí"}<I.Chevron size={12} /></button>
     </section>
   );
 }

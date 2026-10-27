@@ -262,7 +262,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         <button className={`menu-item mline ${sub === "effort" ? "sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
-          <button className="menu-item mline" onClick={() => { setEffort("auto"); close(); }}>
+          <button className="menu-item mline mauto" onClick={() => { setEffort("auto"); close(); }}>
             <span className="mauto-t"><b>Tự động</b><em>Việc dễ trả lời nhanh, việc khó suy nghĩ kỹ</em></span>{autoEff ? <span className="ck"><I.Check /></span> : <span className="mtag">Được đề xuất</span>}
           </button>
           {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => {

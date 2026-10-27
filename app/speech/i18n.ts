@@ -510,7 +510,7 @@ Object.assign(SPEECH_VI2EN, {
   "Ô Hướng nội dung giúp podcast tập trung vào điều bạn quan tâm.": "The Focus field keeps the podcast on what you care about.",
   "Chất lượng càng cao tốn càng nhiều credit.": "Higher quality uses more credits.",
   "Khoảng 1 credit mỗi ký tự": "About 1 credit per character",
-  "Ẩn hướng dẫn": "Hide guide", "Ẩn hướng dẫn (mở lại bằng nút Hướng dẫn)": "Hide guide (reopen it with the Instructions button)", "Đóng bảng": "Close panel",
+  "Ẩn hướng dẫn": "Hide guide", "Xem hướng dẫn": "Show guide", "Mở lại bằng nút Xem hướng dẫn": "Reopen it with the Show guide button", "Cách dùng": "How to use", "Mẹo hay": "Tips", "Chi phí": "Cost", "Xem mẹo và chi phí": "Show tips and cost", "Ẩn mẹo": "Hide tips", "Ẩn hướng dẫn (mở lại bằng nút Hướng dẫn)": "Hide guide (reopen it with the Instructions button)", "Đóng bảng": "Close panel",
 
   // thẻ cảm xúc
   "Cảm xúc": "Emotion", "Âm thanh phát ra": "Vocalizations", "Cách nói": "Delivery", "Nhân vật": "Characters", "Tiếng động": "Sound Effects",
