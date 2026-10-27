@@ -21,9 +21,16 @@ if (adminId) db.prepare("INSERT INTO usage_users (user_id, session_start, week_a
 // nên trình chạy chụp lại trước và trả về như cũ khi xong (kể cả khi lỗi).
 db.exec("CREATE TABLE IF NOT EXISTS user_caps (user_id TEXT PRIMARY KEY, caps TEXT NOT NULL, updated_at INTEGER NOT NULL)");
 const savedCaps = adminId ? db.prepare("SELECT caps FROM user_caps WHERE user_id = ?").get(adminId)?.caps : undefined;
+// Bộ não tổng hợp của tài khoản quản trị: tắt học trong lúc chạy để các bộ khác không bị chen ghi chú liên quan / công cụ bộ não
+// (bộ brain dùng tài khoản riêng), xong thì trả lại như cũ.
+db.exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+const memKey = adminId ? `mem:${adminId}` : null;
+const savedMem = memKey ? db.prepare("SELECT value FROM settings WHERE key = ?").get(memKey)?.value : undefined;
+if (memKey) db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(memKey, JSON.stringify({ ...(savedMem ? JSON.parse(savedMem) : {}), gen: false }));
 const restore = () => {
   if (adminId && saved !== undefined) db.prepare("UPDATE usage_users SET override = ? WHERE user_id = ?").run(saved.override, adminId); else if (adminId) db.prepare("DELETE FROM usage_users WHERE user_id = ?").run(adminId);
   if (adminId) { if (savedCaps === undefined) db.prepare("DELETE FROM user_caps WHERE user_id = ?").run(adminId); else db.prepare("UPDATE user_caps SET caps = ? WHERE user_id = ?").run(savedCaps, adminId); }
+  if (memKey) { if (savedMem === undefined) db.prepare("DELETE FROM settings WHERE key = ?").run(memKey); else db.prepare("UPDATE settings SET value = ? WHERE key = ?").run(savedMem, memKey); }
 };
 process.on("exit", restore);
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));

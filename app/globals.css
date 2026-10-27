@@ -4129,3 +4129,52 @@ a.btn.sm{text-decoration:none;color:inherit}
 .bn-edit-a{display:flex;justify-content:flex-end;gap:8px}
 .bn-mem{min-width:0}
 @media(max-width:900px){.bn-main.split{grid-template-columns:minmax(0,1fr)}}
+/* Bộ não: thuộc tính, gộp, nhúng, việc, thẻ, Bases */
+:root{--bn-daily:#a0785a}[data-theme="dark"]{--bn-daily:#c39a78}
+.k-daily{--k:var(--bn-daily)}
+.bn-props{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;color:var(--text-3)}
+.bn-props-l{font-weight:550;color:var(--text-2)}
+.bn-alias{padding:1px 7px;border-radius:6px;background:color-mix(in srgb,var(--text) 6%,transparent);color:var(--text-2)}
+.bn-props-e{font-style:italic}
+.bn-props-b{font-size:12px;color:var(--bn-topic);padding:0 2px}
+.bn-props-f{flex-basis:100%;display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:color-mix(in srgb,var(--text) 3%,transparent)}
+.bn-props-f label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-2)}
+.bn-props-f .field{margin:0;height:32px}
+.bn-merge{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:color-mix(in srgb,var(--bn-topic) 6%,var(--card));box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--bn-topic) 25%,var(--border))}
+.bn-merge b{font-size:13px;font-weight:550}
+.bn-merge .field{margin:0;height:32px}
+.bn-merge .d{margin:0}
+.icon-btn.on{color:var(--accent)}
+.bn-embed{border-left:2px solid color-mix(in srgb,var(--bn-topic) 50%,transparent);padding:4px 0 4px 10px;margin:4px 0;display:flex;flex-direction:column;gap:4px}
+.bn-embed-h{align-self:flex-start;display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--text-3)}
+.bn-embed-h:hover{color:var(--bn-topic)}
+button.bn-box{display:grid;place-items:center;padding:0;cursor:pointer;color:#fff}
+button.bn-box:disabled{cursor:default}
+.bn-box.on{background:var(--bn-code);box-shadow:none}
+.bn-done{color:var(--text-3);text-decoration:line-through}
+.bn-ref{position:relative}
+.bn-linkbtn{margin-left:auto;flex:none;height:24px;font-size:12px}
+.bn-quick{display:flex;gap:2px;flex-wrap:wrap}
+.bn-tags{display:flex;flex-wrap:wrap;gap:4px;padding:4px 0 8px}
+.bn-tags .bn-tag{cursor:pointer;border:0}
+.bn-tags .bn-tag em{font-style:normal;opacity:.7;margin-left:2px}
+.bn-row.tall{height:auto;padding:6px 8px;align-items:flex-start}
+.bn-row.tall .bn-dot{margin-top:6px}
+.bn-row.tall span:not(.bn-dot){display:flex;flex-direction:column;white-space:normal}
+.bn-row.tall small{font-size:12px;color:var(--text-3);line-height:1.4}
+.bn-row b{font-weight:500}
+.bn-bases{display:flex;flex-direction:column;gap:10px;min-width:0}
+.bn-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);margin-left:4px}
+.bn-tasks{display:flex;flex-direction:column}
+.bn-task{display:flex;align-items:flex-start;gap:9px;padding:8px 4px;border-bottom:.5px solid var(--border);font-size:13px}
+.bn-task>span{flex:1;min-width:0}
+.bn-task.done>span{color:var(--text-3);text-decoration:line-through}
+.bn-task .bn-box{margin-top:2px}
+.bn-task .bn-link{font-size:12px;flex:none;max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bn-table-w{overflow:auto;border-radius:12px;box-shadow:0 0 0 .5px var(--border-strong);max-height:520px}
+.bn-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.bn-table th{position:sticky;top:0;background:var(--card);text-align:left;font-weight:550;color:var(--text-2);padding:8px 10px;border-bottom:.5px solid var(--border-strong);white-space:nowrap}
+.bn-table th button{font:inherit;color:inherit}
+.bn-table td{padding:7px 10px;border-bottom:.5px solid var(--border);vertical-align:top}
+.bn-table td:first-child{min-width:180px}
+.bn-table tr:hover td{background:color-mix(in srgb,var(--text) 3%,transparent)}

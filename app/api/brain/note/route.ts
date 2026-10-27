@@ -14,11 +14,13 @@ export const GET = handle(async (req) => {
 export const PUT = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  const b = (await req.json().catch(() => ({}))) as { title?: unknown; body?: unknown; userNote?: unknown; newTitle?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { title?: unknown; body?: unknown; userNote?: unknown; newTitle?: unknown; aliases?: unknown; tags?: unknown; pinned?: unknown };
+  const strList = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.slice(0, 80)) : undefined);
   const title = typeof b.title === "string" ? b.title.slice(0, 200) : "";
   if (!title) return Response.json({ error: "Thiếu tên ghi chú." }, { status: 400 });
   try {
-    const n = saveNote(user, title, { body: typeof b.body === "string" ? b.body : undefined, userNote: typeof b.userNote === "string" ? b.userNote : undefined, newTitle: typeof b.newTitle === "string" ? b.newTitle : undefined });
+    const n = saveNote(user, title, { body: typeof b.body === "string" ? b.body : undefined, userNote: typeof b.userNote === "string" ? b.userNote : undefined, newTitle: typeof b.newTitle === "string" ? b.newTitle : undefined,
+      aliases: strList(b.aliases), tags: strList(b.tags), pinned: typeof b.pinned === "boolean" ? b.pinned : undefined });
     return Response.json(brainNote(user, n.title));
   } catch (e) { return Response.json({ error: (e as Error).message }, { status: 400 }); }
 });

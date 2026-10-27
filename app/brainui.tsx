@@ -9,26 +9,26 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang } from "./i18n";
 
-type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "skill" | "connector" | "note" | "ghost";
-type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number };
+type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "skill" | "connector" | "note" | "daily" | "ghost";
+type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
 type Graph = { nodes: GNode[]; edges: { s: string; t: string }[]; stats: { notes: number; links: number; chats: number; topics: number; pending: number; memories: number }; cfg: { gen: boolean; sens: boolean } };
 type NoteData = {
-  note: { id: string; kind: Kind; title: string; body: string; props: { date?: number; models?: Record<string, number>; userNote?: string; importance?: number; turns?: number }; createdAt: number; updatedAt: number; editable: boolean; generated: boolean; tags: string[] };
-  outgoing: { title: string; exists: boolean }[]; backlinks: { title: string; kind: Kind; context: string }[]; unlinked: { title: string; kind: Kind; context: string }[];
+  note: { id: string; kind: Kind; title: string; body: string; props: { date?: number; models?: Record<string, number>; userNote?: string; importance?: number; turns?: number; aliases?: string[]; tags?: string[]; pinned?: boolean }; createdAt: number; updatedAt: number; editable: boolean; generated: boolean; canLink: boolean; tags: string[] };
+  outgoing: { title: string; exists: boolean }[]; outUnlinked: { title: string; kind: Kind; matched: string }[]; backlinks: { title: string; kind: Kind; context: string }[]; unlinked: { title: string; kind: Kind; context: string; canLink: boolean }[];
 };
 
 const en = () => getLang() === "en";
 const L = (vi: string, e: string) => (en() ? e : vi);
 const KIND: Record<Kind, [string, string]> = {
   hub: ["Trung tâm", "Hub"], about: ["Về bạn", "About you"], model: ["Bán cầu", "Hemisphere"], chat: ["Đoạn chat", "Chat"], code: ["Synchro Code", "Synchro Code"],
-  topic: ["Chủ đề", "Topic"], skill: ["Skill", "Skill"], connector: ["Connector", "Connector"], note: ["Ghi chú của bạn", "Your note"], ghost: ["Chưa có ghi chú", "Not created yet"],
+  topic: ["Chủ đề", "Topic"], skill: ["Skill", "Skill"], connector: ["Connector", "Connector"], note: ["Ghi chú của bạn", "Your note"], daily: ["Nhật ký", "Daily note"], ghost: ["Chưa có ghi chú", "Not created yet"],
 };
 // Màu theo loại ghi chú (bán cầu theo màu hãng); đọc từ biến CSS để đúng cả giao diện sáng và tối.
-const COLOR_VAR: Record<Kind, string> = { hub: "--bn-hub", about: "--bn-about", model: "--bn-model", chat: "--bn-chat", code: "--bn-code", topic: "--bn-topic", skill: "--bn-tool", connector: "--bn-tool", note: "--bn-note", ghost: "--bn-ghost" };
+const COLOR_VAR: Record<Kind, string> = { hub: "--bn-hub", about: "--bn-about", model: "--bn-model", chat: "--bn-chat", code: "--bn-code", topic: "--bn-topic", skill: "--bn-tool", connector: "--bn-tool", note: "--bn-note", daily: "--bn-daily", ghost: "--bn-ghost" };
 const HEMI_VAR: Record<string, string> = { Claude: "--vc-claude", ChatGPT: "--vc-gpt", Gemini: "--vc-gemini" };
 const FILTERS: { k: string; kinds: Kind[]; label: [string, string] }[] = [
   { k: "chat", kinds: ["chat", "code"], label: ["Đoạn chat", "Chats"] }, { k: "topic", kinds: ["topic"], label: ["Chủ đề", "Topics"] },
-  { k: "tool", kinds: ["skill", "connector"], label: ["Skill & connector", "Skills & connectors"] }, { k: "note", kinds: ["note"], label: ["Ghi chú riêng", "Your notes"] },
+  { k: "tool", kinds: ["skill", "connector"], label: ["Skill & connector", "Skills & connectors"] }, { k: "note", kinds: ["note"], label: ["Ghi chú riêng", "Your notes"] }, { k: "daily", kinds: ["daily"], label: ["Nhật ký", "Daily notes"] },
   { k: "ghost", kinds: ["ghost"], label: ["Chưa có ghi chú", "Not created yet"] },
 ];
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
@@ -254,7 +254,7 @@ function Inline({ t, exists, onOpen }: { t: string; exists: Set<string>; onOpen:
     <>
       {parts.map((p, i) => {
         const m = /^\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]$/.exec(p);
-        if (m) { const title = m[1].trim(), ok = exists.has(fold(title)); return <button key={i} type="button" className={`bn-link ${ok ? "" : "ghost"}`} data-notr title={ok ? title : L("Chưa có ghi chú này. Bấm để tạo.", "This note doesn't exist yet. Click to create it.")} onClick={() => onOpen(title)}>{m[2]?.trim() || title}</button>; }
+        if (m) { const title = m[1].trim(), ok = exists.has(fold(title)) || exists.has(fold(title.split("#")[0])); return <button key={i} type="button" className={`bn-link ${ok ? "" : "ghost"}`} data-notr title={ok ? title : L("Chưa có ghi chú này. Bấm để tạo.", "This note doesn't exist yet. Click to create it.")} onClick={() => onOpen(title)}>{m[2]?.trim() || title}</button>; }
         if (p.startsWith("**") && p.endsWith("**") && p.length > 4) return <strong key={i}>{p.slice(2, -2)}</strong>;
         if (p.startsWith("`") && p.endsWith("`") && p.length > 2) return <code key={i} className="ic">{p.slice(1, -1)}</code>;
         if (/^#[\p{L}\p{N}]/u.test(p)) return <span key={i} className="bn-tag" data-notr>{p}</span>;
@@ -263,15 +263,44 @@ function Inline({ t, exists, onOpen }: { t: string; exists: Set<string>; onOpen:
     </>
   );
 }
-function NoteMd({ text, exists, onOpen }: { text: string; exists: Set<string>; onOpen: (title: string) => void }) {
+// Nhúng ghi chú khác (![[Ghi chú]] / ![[Ghi chú#Mục]]): hiện ngay nội dung, cập nhật theo ghi chú gốc (transclusion của Obsidian).
+function Embed({ target, exists, onOpen, depth }: { target: string; exists: Set<string>; onOpen: (t: string) => void; depth: number }) {
+  const [title, heading] = target.split("#").map((x) => x.trim());
+  const [body, setBody] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`/api/brain/note?title=${encodeURIComponent(title)}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j: NoteData | null) => {
+      if (!j) { setBody(""); return; }
+      let b = j.note.body;
+      if (heading) { const m = new RegExp(`^(#{1,3})\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "im").exec(b); if (m) { const rest = b.slice(m.index + m[0].length); const end = new RegExp(`^#{1,${m[1].length}}\\s`, "m").exec(rest); b = rest.slice(0, end ? end.index : undefined); } }
+      setBody(b.trim());
+    }).catch(() => setBody(""));
+  }, [title, heading]);
+  return (
+    <div className="bn-embed">
+      <button className="bn-embed-h" onClick={() => onOpen(title)} data-notr>{target}<I.ChevronR size={12} /></button>
+      {body === null ? <span className="art-spin sm" /> : body ? <NoteMd text={body} exists={exists} onOpen={onOpen} depth={depth + 1} /> : <p className="d">{L("Chưa có ghi chú này.", "This note doesn't exist yet.")}</p>}
+    </div>
+  );
+}
+function NoteMd({ text, exists, onOpen, depth = 0, onTask }: { text: string; exists: Set<string>; onOpen: (title: string) => void; depth?: number; onTask?: (task: string, done: boolean) => void }) {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
-  let list: { box: boolean; t: string }[] = [];
-  const flush = () => { if (list.length) { out.push(<ul key={`u${out.length}`} className="bn-ul">{list.map((x, i) => <li key={i} className={x.box ? "box" : ""}>{x.box && <span className="bn-box" aria-hidden />}<Inline t={x.t} exists={exists} onOpen={onOpen} /></li>)}</ul>); list = []; } };
+  let list: { box: "" | " " | "x"; t: string }[] = [];
+  const flush = () => {
+    if (!list.length) return;
+    out.push(<ul key={`u${out.length}`} className="bn-ul">{list.map((x, i) => (
+      <li key={i} className={x.box ? "box" : ""}>
+        {x.box && <button type="button" className={`bn-box ${x.box === "x" ? "on" : ""}`} aria-label={x.box === "x" ? L("Đánh dấu chưa xong", "Mark as not done") : L("Đánh dấu đã xong", "Mark as done")} disabled={!onTask} onClick={() => onTask?.(x.t, x.box !== "x")}>{x.box === "x" && <I.Check size={10} />}</button>}
+        <span className={x.box === "x" ? "bn-done" : ""}><Inline t={x.t} exists={exists} onOpen={onOpen} /></span>
+      </li>))}</ul>);
+    list = [];
+  };
   for (const l of lines) {
-    const li = /^\s*[-*]\s+(\[ \]\s+)?(.*)$/.exec(l);
-    if (li) { list.push({ box: !!li[1], t: li[2] }); continue; }
+    const li = /^\s*[-*]\s+(?:\[([ xX])\]\s+)?(.*)$/.exec(l);
+    if (li) { list.push({ box: li[1] === undefined ? "" : li[1].toLowerCase() === "x" ? "x" : " ", t: li[2] }); continue; }
     flush();
+    const em = /^\s*!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s*$/.exec(l);
+    if (em) { out.push(depth < 1 ? <Embed key={out.length} target={em[1]} exists={exists} onOpen={onOpen} depth={depth} /> : <p key={out.length} className="bn-p"><Inline t={`[[${em[1]}]]`} exists={exists} onOpen={onOpen} /></p>); continue; }
     const h = /^(#{1,3})\s+(.*)$/.exec(l);
     if (h) out.push(<div key={out.length} className={`bn-h h${h[1].length}`}><Inline t={h[2]} exists={exists} onOpen={onOpen} /></div>);
     else if (l.trim()) out.push(<p key={out.length} className="bn-p"><Inline t={l} exists={exists} onOpen={onOpen} /></p>);
@@ -286,7 +315,25 @@ function NoteView({ title, graph, onOpen, onClose, onChanged }: { title: string;
   const [missing, setMissing] = useState(false);
   const [edit, setEdit] = useState<{ title: string; body: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const exists = useMemo(() => new Set(graph.nodes.filter((n) => n.kind !== "ghost").map((n) => fold(n.title))), [graph]);
+  const [prop, setProp] = useState<{ aliases: string; tags: string } | null>(null);
+  const [merge, setMerge] = useState<string | null>(null);
+  const exists = useMemo(() => new Set(graph.nodes.filter((n) => n.kind !== "ghost").flatMap((n) => [n.title, ...(n.aliases ?? [])]).map(fold)), [graph]);
+  const titles = useMemo(() => graph.nodes.filter((n) => n.kind === "topic" || n.kind === "note").map((n) => n.title), [graph]);
+  const call = async (method: string, path: string, body: unknown, ok?: string) => {
+    setBusy(true);
+    try { const j = await api<NoteData>(method, path, body); if (j?.note) setD(j); onChanged(); if (ok) say(ok); return j; }
+    catch (e) { say((e as Error).message); return null; } finally { setBusy(false); }
+  };
+  // Nối chỗ nhắc tên thành [[liên kết]] (nút "Nối" như Obsidian).
+  const link = (source: string, target: string) => void call("POST", "/api/brain/link", { source, target, view: d?.note.title ?? title }, L("Đã nối thành liên kết", "Linked"));
+  // Việc trong ghi chú: nhật ký chép việc từ nhánh đoạn chat ("… (từ [[Nhánh]])") nên đánh dấu ở nhánh gốc.
+  const task = (raw: string, done: boolean) => {
+    const from = /\(từ \[\[([^\]|]+)/.exec(raw)?.[1];
+    const text = raw.replace(/\s*\(từ \[\[.*$/, "").trim();
+    void api("POST", "/api/brain/task", { title: from ?? d?.note.title, task: text, done }).then(() => { onChanged(); say(done ? L("Đã đánh dấu xong", "Marked as done") : L("Đã đánh dấu chưa xong", "Marked as not done")); }).catch((e) => say((e as Error).message));
+  };
+  const saveProps = () => { if (!prop || !d) return; void call("PUT", "/api/brain/note", { title: d.note.title, aliases: prop.aliases.split(",").map((x) => x.trim()).filter(Boolean), tags: prop.tags.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) }, L("Đã lưu thuộc tính", "Properties saved")).then((j) => j && setProp(null)); };
+  const doMerge = () => { if (!merge || !d) return; void call("POST", "/api/brain/merge", { from: d.note.title, into: merge }, L(`Đã gộp vào “${merge}”`, `Merged into “${merge}”`)).then((j) => { if (j) { setMerge(null); onOpen(j.note.title); } }); };
   useEffect(() => {
     setD(null); setEdit(null); setMissing(false);
     fetch(`/api/brain/note?title=${encodeURIComponent(title)}`, { cache: "no-store" }).then(async (r) => { if (r.status === 404) { setMissing(true); return; } setD(await r.json()); }).catch(() => {});
@@ -314,6 +361,8 @@ function NoteView({ title, graph, onOpen, onClose, onChanged }: { title: string;
         {missing && <span className="bn-kind k-ghost">{KIND.ghost[en() ? 1 : 0]}</span>}
         <span className="bn-note-x">
           {(n || missing) && !edit && <button className="btn sm" onClick={() => setEdit(missing ? { title, body: "" } : { title: n!.title, body: n!.generated ? n!.props.userNote ?? "" : n!.body })}><I.Pencil size={13} />{missing ? L("Tạo ghi chú", "Create note") : n!.generated ? L("Thêm ghi chú của bạn", "Add your note") : L("Sửa", "Edit")}</button>}
+          {n && !edit && <button className={`icon-btn ${n.props.pinned ? "on" : ""}`} aria-label={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} data-tip={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} onClick={() => void call("PUT", "/api/brain/note", { title: n.title, pinned: !n.props.pinned })}>{n.props.pinned ? <I.PinOff size={14} /> : <I.Pin size={14} />}</button>}
+          {n && (n.kind === "topic" || n.kind === "note") && !edit && <button className="icon-btn" aria-label={L("Gộp vào ghi chú khác", "Merge into another note")} data-tip={L("Gộp vào ghi chú khác", "Merge into another note")} onClick={() => setMerge("")}><I.Merge size={14} /></button>}
           {n && n.editable && !edit && n.kind !== "about" && <button className="icon-btn" aria-label={L("Xóa ghi chú", "Delete note")} onClick={del}><I.Trash size={14} /></button>}
           <button className="icon-btn" aria-label={L("Đóng", "Close")} onClick={onClose}><I.X size={15} /></button>
         </span>
@@ -324,6 +373,27 @@ function NoteView({ title, graph, onOpen, onClose, onChanged }: { title: string;
         {n.props.turns ? <span>{n.props.turns} {L("tin nhắn", "messages")}</span> : null}
         {n.tags.map((t) => <span key={t} className="bn-tag" data-notr>#{t}</span>)}
       </div>}
+      {n && (
+        <div className="bn-props">
+          <span className="bn-props-l">{L("Tên khác", "Aliases")}</span>
+          {prop ? null : n.props.aliases?.length ? n.props.aliases.map((a) => <span key={a} className="bn-alias" data-notr>{a}</span>) : <span className="bn-props-e">{L("chưa có", "none")}</span>}
+          {!prop && <button className="bn-props-b" onClick={() => setProp({ aliases: (n.props.aliases ?? []).join(", "), tags: (n.props.tags ?? []).join(" ") })}>{L("Sửa thuộc tính", "Edit properties")}</button>}
+          {prop && <div className="bn-props-f">
+            <label>{L("Tên khác (cách nhau bằng dấu phẩy)", "Aliases (comma-separated)")}<input className="field" value={prop.aliases} onChange={(e) => setProp({ ...prop, aliases: e.target.value })} placeholder={L("ví dụ: An ninh mạng, ATTT", "e.g. Infosec, Security")} /></label>
+            <label>{L("Thẻ", "Tags")}<input className="field" value={prop.tags} onChange={(e) => setProp({ ...prop, tags: e.target.value })} placeholder="ke-hoach/tuan muc-tieu" /></label>
+            <div className="bn-edit-a"><button className="btn sm" onClick={() => setProp(null)}>{L("Hủy", "Cancel")}</button><button className="btn sm dark" disabled={busy} onClick={saveProps}>{L("Lưu", "Save")}</button></div>
+          </div>}
+        </div>
+      )}
+      {merge !== null && n && (
+        <div className="bn-merge">
+          <b>{L(`Gộp “${n.title}” vào`, `Merge “${n.title}” into`)}</b>
+          <input className="field" list="bn-merge-list" value={merge} onChange={(e) => setMerge(e.target.value)} placeholder={L("Tên ghi chú đích", "Target note")} />
+          <datalist id="bn-merge-list">{titles.filter((x) => x !== n.title).map((x) => <option key={x} value={x} />)}</datalist>
+          <p className="d">{L("Nội dung được nối vào ghi chú đích, tên hiện tại thành tên khác của nó, và mọi liên kết sẽ trỏ về ghi chú đích.", "The content is appended to the target, this name becomes one of its aliases, and every link points to the target.")}</p>
+          <div className="bn-edit-a"><button className="btn sm" onClick={() => setMerge(null)}>{L("Hủy", "Cancel")}</button><button className="btn sm dark" disabled={busy || !merge.trim()} onClick={doMerge}>{L("Gộp", "Merge")}</button></div>
+        </div>
+      )}
       {!d && !missing && <div className="us-empty"><span className="art-spin sm" /></div>}
       {missing && !edit && <p className="d">{L("Ghi chú này chưa có: các ghi chú khác đang trỏ tới nó. Tạo ghi chú để viết về nó; các liên kết sẽ tự nối vào.", "This note doesn't exist yet, but other notes link to it. Create it and those links connect automatically.")}</p>}
       {edit ? (
@@ -334,7 +404,7 @@ function NoteView({ title, graph, onOpen, onClose, onChanged }: { title: string;
           {n?.generated && <p className="d">{L("Synchro tự viết phần còn lại của ghi chú này từ các đoạn chat; phần bạn viết nằm ở mục “Ghi chú của bạn”.", "Synchro writes the rest of this note from your chats; what you write goes under “Your note”.")}</p>}
           <div className="bn-edit-a"><button className="btn" onClick={() => setEdit(null)} disabled={busy}>{L("Hủy", "Cancel")}</button><button className="btn dark" onClick={save} disabled={busy}>{busy ? <span className="art-spin sm" /> : null}{L("Lưu", "Save")}</button></div>
         </div>
-      ) : n && <NoteMd text={n.body} exists={exists} onOpen={onOpen} />}
+      ) : n && <NoteMd text={n.body} exists={exists} onOpen={onOpen} onTask={n.kind === "chat" || n.kind === "code" || n.kind === "daily" || n.editable ? task : undefined} />}
       {d && (
         <>
           <div className="bn-sec">
@@ -345,7 +415,21 @@ function NoteView({ title, graph, onOpen, onClose, onChanged }: { title: string;
           </div>
           {d.unlinked.length > 0 && <div className="bn-sec">
             <b>{L("Nhắc tới mà chưa nối", "Unlinked mentions")} <em>{d.unlinked.length}</em></b>
-            {d.unlinked.map((b) => <button key={b.title} className="bn-ref" onClick={() => onOpen(b.title)}><span className={`bn-dot k-${b.kind}`} /><span><b data-notr>{b.title}</b>{b.context && <small data-notr>{b.context}</small>}</span></button>)}
+            {d.unlinked.map((b) => (
+              <div key={b.title} className="bn-ref" role="button" tabIndex={0} onClick={() => onOpen(b.title)} onKeyDown={(e) => e.key === "Enter" && onOpen(b.title)}>
+                <span className={`bn-dot k-${b.kind}`} /><span><b data-notr>{b.title}</b>{b.context && <small data-notr>{b.context}</small>}</span>
+                {b.canLink && <button className="btn sm bn-linkbtn" disabled={busy} onClick={(e) => { e.stopPropagation(); link(b.title, d.note.title); }}>{L("Nối", "Link")}</button>}
+              </div>
+            ))}
+          </div>}
+          {d.outUnlinked.length > 0 && d.note.canLink && <div className="bn-sec">
+            <b>{L("Ghi chú này nhắc tới mà chưa nối", "Mentions in this note")} <em>{d.outUnlinked.length}</em></b>
+            {d.outUnlinked.map((o) => (
+              <div key={o.title} className="bn-ref" role="button" tabIndex={0} onClick={() => onOpen(o.title)} onKeyDown={(e) => e.key === "Enter" && onOpen(o.title)}>
+                <span className={`bn-dot k-${o.kind}`} /><span><b data-notr>{o.title}</b><small data-notr>“{o.matched}”</small></span>
+                <button className="btn sm bn-linkbtn" disabled={busy} onClick={(e) => { e.stopPropagation(); link(d.note.title, o.title); }}>{L("Nối", "Link")}</button>
+              </div>
+            ))}
           </div>}
           <div className="bn-sec">
             <b>{L("Quanh ghi chú này", "Local graph")}</b>
@@ -357,11 +441,55 @@ function NoteView({ title, graph, onOpen, onClose, onChanged }: { title: string;
   );
 }
 
+// ---------------------------------------------------------------- Bảng (Bases của Obsidian): xem ghi chú theo thuộc tính
+type ChatRow = { title: string; kind: Kind; date: number; models: string[]; topics: string[]; importance: number | null; turns: number; tasks: number; distilled: boolean };
+type TaskRow = { task: string; title: string; kind: Kind; date: number; done?: boolean };
+type TopicRow = { title: string; links: number; aliases: string[]; updatedAt: number; desc: string };
+function Bases({ onOpen, version }: { onOpen: (t: string) => void; version: number }) {
+  const say = useApp().say;
+  const [view, setView] = useState<"tasks" | "chats" | "topics">("tasks");
+  const [rows, setRows] = useState<unknown[] | null>(null);
+  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 }>({ k: "date", dir: -1 });
+  const [showDone, setShowDone] = useState(false);
+  useEffect(() => { setRows(null); fetch(`/api/brain?table=${view}`, { cache: "no-store" }).then((r) => r.json()).then((j) => setRows(j.rows ?? [])).catch(() => setRows([])); }, [view, version]);
+  const toggle = (r: TaskRow) => void api<{ rows: TaskRow[] }>("POST", "/api/brain/task", { title: r.title, task: r.task, done: !r.done }).then((j) => setRows(j.rows)).catch((e) => say((e as Error).message));
+  const sorted = useMemo(() => [...(rows ?? [])].sort((a, b) => { const x = (a as Record<string, unknown>)[sort.k], y = (b as Record<string, unknown>)[sort.k]; return (typeof x === "number" && typeof y === "number" ? x - y : String(x ?? "").localeCompare(String(y ?? ""))) * sort.dir; }), [rows, sort]);
+  const th = (k: string, label: string) => <th><button onClick={() => setSort({ k, dir: sort.k === k ? (sort.dir === 1 ? -1 : 1) : -1 })}>{label}{sort.k === k ? (sort.dir === 1 ? " ↑" : " ↓") : ""}</button></th>;
+  const tasks = (sorted as TaskRow[]).filter((r) => showDone || !r.done);
+  return (
+    <div className="bn-bases">
+      <div className="bn-filter">
+        {([["tasks", L("Việc dang dở", "Open tasks")], ["chats", L("Đoạn chat", "Chats")], ["topics", L("Chủ đề", "Topics")]] as const).map(([k, l]) => <button key={k} className={`bn-chip ${view === k ? "on" : ""}`} aria-pressed={view === k} onClick={() => setView(k)}>{l}</button>)}
+        {view === "tasks" && <label className="bn-check"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />{L("Hiện cả việc đã xong", "Show done")}</label>}
+      </div>
+      {rows === null ? <div className="us-empty"><span className="art-spin sm" /></div> : view === "tasks" ? (
+        tasks.length ? <div className="bn-tasks">{tasks.map((r, i) => (
+          <div key={`${r.title}-${i}`} className={`bn-task ${r.done ? "done" : ""}`}>
+            <button className={`bn-box ${r.done ? "on" : ""}`} aria-label={r.done ? L("Đánh dấu chưa xong", "Mark as not done") : L("Đánh dấu đã xong", "Mark as done")} onClick={() => toggle(r)}>{r.done && <I.Check size={10} />}</button>
+            <span data-notr>{r.task}</span>
+            <button className="bn-link" onClick={() => onOpen(r.title)} data-notr>{r.title}</button>
+          </div>
+        ))}</div> : <p className="d">{L("Không còn việc nào dang dở. Việc còn dở dang trong các đoạn chat sẽ tự hiện ở đây.", "Nothing open. Unfinished tasks from your chats show up here automatically.")}</p>
+      ) : view === "chats" ? (
+        <div className="bn-table-w"><table className="bn-table"><thead><tr>{th("title", L("Đoạn chat", "Chat"))}{th("date", L("Ngày", "Date"))}<th>{L("Model", "Model")}</th><th>{L("Chủ đề", "Topics")}</th>{th("importance", L("Quan trọng", "Importance"))}{th("tasks", L("Việc dở", "Open"))}</tr></thead>
+          <tbody>{(sorted as ChatRow[]).map((r) => <tr key={r.title}><td><button className="bn-link" onClick={() => onOpen(r.title)} data-notr>{r.title}</button></td><td>{dateStr(r.date)}</td><td data-notr>{r.models.join(", ")}</td><td>{r.topics.map((x) => <button key={x} className="bn-link" onClick={() => onOpen(x)} data-notr>{x}</button>).reduce<React.ReactNode[]>((a, x, i) => (i ? [...a, ", ", x] : [x]), [])}</td><td>{r.importance ?? "–"}</td><td>{r.tasks || ""}</td></tr>)}</tbody></table></div>
+      ) : (
+        <div className="bn-table-w"><table className="bn-table"><thead><tr>{th("title", L("Chủ đề", "Topic"))}{th("links", L("Liên kết", "Links"))}<th>{L("Tên khác", "Aliases")}</th><th>{L("Mô tả", "Description")}</th></tr></thead>
+          <tbody>{(sorted as TopicRow[]).map((r) => <tr key={r.title}><td><button className="bn-link" onClick={() => onOpen(r.title)} data-notr>{r.title}</button></td><td>{r.links}</td><td data-notr>{r.aliases.join(", ")}</td><td data-notr>{r.desc}</td></tr>)}</tbody></table></div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- Cài đặt → Bộ não
 export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   const app = useApp();
   const [g, setG] = useState<Graph | null>(null);
-  const [tab, setTab] = useState<"graph" | "notes" | "memory">("graph");
+  const [tab, setTab] = useState<"graph" | "notes" | "bases" | "memory">("graph");
+  const [ver, setVer] = useState(0);
+  const [found, setFound] = useState<{ title: string; kind: Kind; snippet: string }[] | null>(null);
+  const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
+  const vault = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<Kind>>(new Set());
   const [q, setQ] = useState("");
@@ -369,7 +497,25 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   const [imp, setImp] = useState<{ done: number; total: number } | null>(null);
   const [cut, setCut] = useState<number | null>(null);
   const [full, setFull] = useState(false);
-  const load = useCallback(() => fetch("/api/brain", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j?.nodes) setG(j); }).catch(() => {}), []);
+  const load = useCallback(() => { setVer((v) => v + 1); return fetch("/api/brain", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j?.nodes) setG(j); }).catch(() => {}); }, []);
+  // Thẻ (tag pane) và tìm có toán tử (tag:, loai:, task-todo:, [thuộc tính:giá trị]…) ở tab Ghi chú.
+  useEffect(() => { if (tab !== "notes") return; fetch("/api/brain?tags=1", { cache: "no-store" }).then((r) => r.json()).then((j) => setTags(j.tags ?? [])).catch(() => {}); }, [tab, ver]);
+  useEffect(() => {
+    if (tab !== "notes" || q.trim().length < 2) { setFound(null); return; }
+    const t0 = setTimeout(() => { fetch(`/api/brain?q=${encodeURIComponent(q.trim())}`, { cache: "no-store" }).then((r) => r.json()).then((j) => setFound(j.results ?? [])).catch(() => setFound([])); }, 250);
+    return () => clearTimeout(t0);
+  }, [q, tab, ver]);
+  const importVault = async (f: File) => {
+    setBusy("vault");
+    try {
+      const fd = new FormData(); fd.append("file", f);
+      const r = await fetch("/api/brain/vault", { method: "POST", body: fd }), j = await r.json();
+      if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
+      app.say(L(`Đã nhập ${j.created} ghi chú từ thư mục Obsidian${j.skipped ? `, bỏ qua ${j.skipped}` : ""}`, `Imported ${j.created} notes from the Obsidian vault${j.skipped ? `, skipped ${j.skipped}` : ""}`));
+      void load();
+    } catch (e) { app.say((e as Error).message); } finally { setBusy(""); if (vault.current) vault.current.value = ""; }
+  };
+  const today = () => { const d = new Date(); return `Nhật ký ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   useEffect(() => { void load(); }, [load]);
   // Đang có đoạn chat chờ chưng cất: đọc lại mỗi 15 giây để thấy bộ não lớn dần.
   useEffect(() => { if (!g?.stats.pending) return; const t = setInterval(load, 15_000); return () => clearInterval(t); }, [g?.stats.pending, load]);
@@ -408,7 +554,7 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   const toggle = (kinds: Kind[]) => setHidden((h) => { const n = new Set(h); const off = kinds.every((k) => n.has(k)); for (const k of kinds) off ? n.delete(k) : n.add(k); return n; });
   const s = g?.stats;
   const notes = useMemo(() => (g?.nodes ?? []).filter((n) => n.kind !== "ghost" && (!q || fold(n.title).includes(fold(q)))).sort((a, b) => b.created - a.created), [g, q]);
-  const legend: [string, string][] = [["--bn-hub", L("Trung tâm", "Hub")], ["--vc-claude", "Claude"], ["--vc-gpt", "ChatGPT"], ["--vc-gemini", "Gemini"], ["--bn-topic", L("Chủ đề", "Topic")], ["--bn-chat", L("Đoạn chat", "Chat")], ["--bn-tool", "Skill · Connector"], ["--bn-note", L("Ghi chú riêng", "Your note")]];
+  const legend: [string, string][] = [["--bn-hub", L("Trung tâm", "Hub")], ["--vc-claude", "Claude"], ["--vc-gpt", "ChatGPT"], ["--vc-gemini", "Gemini"], ["--bn-topic", L("Chủ đề", "Topic")], ["--bn-chat", L("Đoạn chat", "Chat")], ["--bn-tool", "Skill · Connector"], ["--bn-note", L("Ghi chú riêng", "Your note")], ["--bn-daily", L("Nhật ký", "Daily note")]];
   return (
     <div className="bn">
       <h3 style={{ marginTop: 0 }}>{L("Bộ não", "Brain")}</h3>
@@ -421,12 +567,14 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
       </div>}
       <div className="bn-bar">
         <div className="bn-tabs" role="tablist">
-          {([["graph", L("Đồ thị", "Graph")], ["notes", L("Ghi chú", "Notes")], ["memory", L("Ký ức", "Memory")]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+          {([["graph", L("Đồ thị", "Graph")], ["notes", L("Ghi chú", "Notes")], ["bases", L("Bảng", "Bases")], ["memory", L("Ký ức", "Memory")]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
         </div>
         <div className="bn-acts">
           <button className="btn sm" onClick={distill} disabled={!!busy || !g?.cfg.gen}>{busy === "distill" ? <span className="art-spin sm" /> : <I.Sparkle size={13} />}{L("Chưng cất ngay", "Distill now")}</button>
           <button className="btn sm" onClick={importOld} disabled={!!imp || !g?.cfg.gen}>{imp ? `${imp.done}/${imp.total}` : <><I.Upload size={13} />{L("Nạp đoạn chat cũ", "Import old chats")}</>}</button>
           <a className="btn sm" href="/api/brain/export" download><I.Download size={13} />{L("Tải về cho Obsidian", "Export for Obsidian")}</a>
+          <button className="btn sm" disabled={!!busy} onClick={() => vault.current?.click()}>{busy === "vault" ? <span className="art-spin sm" /> : <I.Upload size={13} />}{L("Nhập thư mục Obsidian", "Import Obsidian vault")}</button>
+          <input ref={vault} type="file" accept=".zip,application/zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importVault(f); }} />
           <button className="icon-btn" aria-label={L("Xóa bộ não", "Delete brain")} data-tip={L("Xóa bộ não", "Delete brain")} onClick={wipe}><I.Trash size={14} /></button>
         </div>
       </div>
@@ -434,7 +582,7 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
       {tab === "memory" ? <div className="bn-mem">{memory}</div> : !g ? <div className="us-empty"><span className="art-spin sm" /></div> : (
         <div className={`bn-main ${open ? "split" : ""} ${full ? "full" : ""}`}>
           <div className="bn-left">
-            {tab === "graph" ? (
+            {tab === "bases" ? <Bases onOpen={(t) => setOpen(t)} version={ver} /> : tab === "graph" ? (
               <>
                 <div className="bn-filter">
                   <span className="bn-search"><I.Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("Tìm ghi chú", "Search notes")} /></span>
@@ -447,9 +595,15 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
               </>
             ) : (
               <div className="bn-list">
-                <span className="bn-search"><I.Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("Tìm ghi chú", "Search notes")} /></span>
-                <button className="bn-new" onClick={() => setOpen(L("Ghi chú mới", "New note"))}><I.Plus size={13} />{L("Ghi chú mới", "New note")}</button>
-                {notes.map((n) => <button key={n.id} className={`bn-row ${open === n.title ? "on" : ""}`} onClick={() => setOpen(n.title)}><span className={`bn-dot k-${n.kind}`} style={n.kind === "model" ? { background: `var(${HEMI_VAR[n.title]})` } : undefined} /><span data-notr>{n.title}</span><em>{n.links}</em></button>)}
+                <span className="bn-search"><I.Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("Tìm: chữ, tag:thẻ, loai:chu-de, task-todo:", "Search: text, tag:x, kind:topic, task-todo:")} /></span>
+                <div className="bn-quick">
+                  <button className="bn-new" onClick={() => setOpen(L("Ghi chú mới", "New note"))}><I.Plus size={13} />{L("Ghi chú mới", "New note")}</button>
+                  {g.nodes.some((n) => n.title === today()) && <button className="bn-new" onClick={() => setOpen(today())}><I.Calendar size={13} />{L("Hôm nay", "Today")}</button>}
+                </div>
+                {tags.length > 0 && !q && <div className="bn-tags">{tags.slice(0, 24).map((t) => <button key={t.tag} className="bn-tag" onClick={() => setQ(`tag:${t.tag}`)} data-notr>#{t.tag} <em>{t.count}</em></button>)}</div>}
+                {found ? (found.length ? found.map((r) => <button key={r.title} className={`bn-row tall ${open === r.title ? "on" : ""}`} onClick={() => setOpen(r.title)}><span className={`bn-dot k-${r.kind}`} /><span><b data-notr>{r.title}</b><small data-notr>{r.snippet}</small></span></button>)
+                  : <p className="d">{L("Không có ghi chú nào khớp.", "No matching notes.")}</p>)
+                  : [...notes].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned)).map((n) => <button key={n.id} className={`bn-row ${open === n.title ? "on" : ""}`} onClick={() => setOpen(n.title)}><span className={`bn-dot k-${n.kind}`} style={n.kind === "model" ? { background: `var(${HEMI_VAR[n.title]})` } : undefined} /><span data-notr>{n.title}</span>{n.pinned && <I.Pin size={11} />}<em>{n.links}</em></button>)}
               </div>
             )}
           </div>

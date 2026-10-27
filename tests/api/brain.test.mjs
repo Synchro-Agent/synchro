@@ -4,12 +4,17 @@ const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = "http://127.0.
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const client = (cookie = "") => async (m, p, b, raw = false) => {
-  const r = await fetch(B + p, { method: m, headers: { "content-type": "application/json", origin: B, cookie }, body: b === undefined ? undefined : JSON.stringify(b) });
-  for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
-  if (raw) return r;
-  let j = null; try { j = await r.json(); } catch {}
-  return { s: r.status, j };
+const client = (cookie = "") => {
+  const f = async (m, p, b, raw = false) => {
+    const r = await fetch(B + p, { method: m, headers: { "content-type": "application/json", origin: B, cookie }, body: b === undefined ? undefined : JSON.stringify(b) });
+    for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
+    if (raw) return r;
+    let j = null; try { j = await r.json(); } catch {}
+    return { s: r.status, j };
+  };
+  // Tải tệp lên (multipart) kèm phiên đăng nhập.
+  f.form = async (p, fd) => { const r = await fetch(B + p, { method: "POST", headers: { origin: B, cookie }, body: fd }); let j = null; try { j = await r.json(); } catch {} return { s: r.status, j }; };
+  return f;
 };
 const me = client();
 await me("POST", "/api/auth/signup", { email: "brain-member@synchro.test", password: "Member-pass-123", profile: { fullName: "Brain Tester", birthDate: "2007-05-01" } });
@@ -86,7 +91,66 @@ ok((await me("DELETE", `/api/brain/note?title=${encodeURIComponent("Bộ não")}
 const sr = (await me("GET", `/api/brain?q=${encodeURIComponent("ielts")}`)).j;
 ok(sr.results?.some((x) => x.title === "IELTS"), "tìm ghi chú trong bộ não", JSON.stringify(sr));
 
-console.log("6. Nạp đoạn chat cũ, tắt học, ẩn danh, xuất cho Obsidian");
+console.log("6. Cơ chế Obsidian: bí danh, nối chỗ nhắc tên, đổi tên, gộp, thẻ, tìm có toán tử, nhật ký, Bases, nhập thư mục");
+r = await me("PUT", "/api/brain/note", { title: "Cyber security", aliases: ["An ninh mạng", "ATTT"] });
+ok(r.s === 200 && r.j.note.props.aliases.includes("An ninh mạng"), "thêm bí danh cho ghi chú", JSON.stringify(r.j?.note?.props));
+r = await me("PUT", "/api/brain/note", { title: "Lộ trình học", body: "Tuần này học [[An ninh mạng]] cơ bản, sau đó luyện IELTS. #ke-hoach/tuan" });
+g = await graph();
+ok(linked(g, "Lộ trình học", "Cyber security") && !g.nodes.some((n) => n.kind === "ghost" && n.title === "An ninh mạng"), "[[bí danh]] trỏ đúng ghi chú gốc (không thành ghi chú chưa có)");
+const cs = await note("ATTT");
+ok(cs?.note?.title === "Cyber security" && cs.backlinks.some((b) => b.title === "Lộ trình học"), "mở ghi chú bằng bí danh; liên kết qua bí danh tính là liên kết đến", JSON.stringify(cs?.backlinks));
+const lt = await note("Lộ trình học");
+ok(lt.outUnlinked?.some((o) => o.title === "IELTS"), "liên kết đi chưa nối: ghi chú nhắc “IELTS” mà chưa nối", JSON.stringify(lt.outUnlinked));
+r = await me("POST", "/api/brain/link", { source: "Lộ trình học", target: "IELTS", view: "Lộ trình học" });
+ok(r.s === 200 && /\[\[IELTS\]\]/.test(r.j.note.body) && !r.j.outUnlinked.some((o) => o.title === "IELTS"), "nút Nối: biến chỗ nhắc tên thành [[liên kết]]", r.j?.note?.body);
+const lpBefore = (await note("Lập trình")).backlinks.length;
+r = await me("PUT", "/api/brain/note", { title: "Lập trình", newTitle: "Lập trình Python" });
+const lp = await note("Lập trình Python");
+g = await graph();
+ok(r.s === 200 && lpBefore > 0 && lp.backlinks.length === lpBefore && !g.nodes.some((n) => n.title === "Lập trình"), "đổi tên ghi chú: mọi liên kết tới nó tự đổi theo", JSON.stringify({ before: lpBefore, after: lp?.backlinks?.length }));
+await me("PUT", "/api/brain/note", { title: "Luyện viết", body: "Viết mỗi ngày một bài [[Ôn thi THPT]]." });
+await me("PUT", "/api/brain/note", { title: "Nhắc nhở", body: "Xem lại [[Luyện viết]] tối nay." });
+r = await me("POST", "/api/brain/merge", { from: "Luyện viết", into: "Lộ trình học" });
+const nh = await note("Nhắc nhở");
+ok(r.s === 200 && /## Gộp từ Luyện viết/.test(r.j.note.body) && r.j.note.props.aliases.includes("Luyện viết") && /\[\[Lộ trình học\]\]/.test(nh.note.body), "gộp ghi chú: nội dung nối vào, tên cũ thành bí danh, liên kết trỏ về ghi chú đích", JSON.stringify({ body: r.j?.note?.body, nh: nh?.note?.body }));
+const tg = (await me("GET", "/api/brain?tags=1")).j.tags;
+ok(tg.some((x) => x.tag === "ke-hoach") && tg.some((x) => x.tag === "ke-hoach/tuan") && tg.some((x) => x.tag === "chu-de"), "thẻ lồng nhau: #ke-hoach/tuan tính cả cho #ke-hoach", JSON.stringify(tg.slice(0, 8)));
+const q1 = (await me("GET", `/api/brain?q=${encodeURIComponent("tag:ke-hoach")}`)).j.results, q2 = (await me("GET", `/api/brain?q=${encodeURIComponent("loai:chu-de ielts")}`)).j.results;
+ok(q1.some((x) => x.title === "Lộ trình học") && q2.length && q2.every((x) => x.kind === "topic") && q2[0].title === "IELTS", "tìm có toán tử: tag:, loai:", JSON.stringify({ q1, q2 }));
+await run("Mai mình làm tiếp bài tập Toán chương đạo hàm nhé, hôm nay chưa xong", { conv: `br-task-${Date.now()}` });
+await me("POST", "/api/brain/distill", {});
+const tasks = (await me("GET", "/api/brain?table=tasks")).j.rows;
+const open1 = tasks.find((x) => !x.done);
+ok(!!open1 && (await me("GET", `/api/brain?q=${encodeURIComponent("task-todo:")}`)).j.results.some((x) => x.title === open1.title), "Bases: bảng việc còn dang dở trên khắp bộ não; tìm task-todo:", JSON.stringify(tasks));
+r = await me("POST", "/api/brain/task", { title: open1?.title, task: open1?.task, done: true });
+ok(r.s === 200 && r.j.rows.some((x) => x.task === open1?.task && x.done) && /\[x\]/.test((await note(open1?.title)).note.body), "đánh dấu xong một việc: ghi chú hiện [x]", JSON.stringify(r.j));
+const chats = (await me("GET", "/api/brain?table=chats")).j.rows;
+ok(chats.length >= 3 && chats.every((c) => "models" in c && "topics" in c), "Bases: bảng đoạn chat theo thuộc tính (ngày, model, chủ đề, độ quan trọng)", JSON.stringify(chats[0]));
+g = await graph();
+const daily = g.nodes.find((n) => n.kind === "daily");
+ok(!!daily && /^Nhật ký \d{4}-\d{2}-\d{2}$/.test(daily.title) && linked(g, chatA?.title, daily.title) && linked(g, daily.title, "Bộ não"), "nhật ký hằng ngày: đoạn chat nối tới ngày của nó", JSON.stringify(daily));
+const JSZip = (await import("jszip")).default;
+const zip = new JSZip();
+zip.file("Vault/Ý tưởng du học.md", "---\ntags: [y-tuong, du-hoc]\naliases:\n  - Kế hoạch du học\n---\n# Ý tưởng du học\n\nCần [[IELTS]] 7.0 và hồ sơ [[Học bổng Orange Tulip]].\n");
+zip.file("Vault/.obsidian/app.json", "{}");
+const fd = new FormData();
+fd.append("file", new Blob([await zip.generateAsync({ type: "uint8array" })], { type: "application/zip" }), "vault.zip");
+const vr = await me.form("/api/brain/vault", fd);
+const yt = await note("Kế hoạch du học");
+ok(vr.s === 200 && vr.j.created === 1 && yt?.note?.title === "Ý tưởng du học" && yt.note.tags.includes("du-hoc") && (await note("IELTS")).backlinks.some((b) => b.title === "Ý tưởng du học"), "nhập thư mục Obsidian (.zip): ghi chú, thẻ, bí danh, liên kết đều nối vào bộ não", JSON.stringify({ vr: vr.j, yt: yt?.note?.props }));
+
+console.log("7. Model dùng bộ não như người dùng Obsidian: tìm, đọc theo liên kết, ghi vào");
+let rr = await run('Nhớ lại giúp mình #tool=brain_search #args={"query":"ielts"}');
+ok(JSON.stringify(rr?.result ?? "").includes("IELTS") && rr?.events?.some((e) => e.kind === "tool" && /Đang nhớ lại/.test(e.text)), "model tìm trong bộ não (brain_search)", JSON.stringify(rr?.result).slice(0, 300));
+rr = await run('Đọc ghi chú #tool=brain_read #args={"title":"ATTT"}');
+ok(JSON.stringify(rr?.result ?? "").includes("Cyber security"), "model đọc ghi chú theo tên hoặc bí danh (brain_read)", JSON.stringify(rr?.result).slice(0, 300));
+rr = await run('Ghi nhớ giúp mình #tool=brain_write #args={"title":"Mục tiêu IELTS","content":"Đạt 7.0 trước tháng 6, liên quan [[IELTS]]."}');
+const mt = await note("Mục tiêu IELTS");
+ok(mt?.note?.kind === "note" && mt.outgoing.some((o) => o.title === "IELTS"), "model ghi vào bộ não khi được nhờ (brain_write), ghi chú tự nối vào mạng lưới", JSON.stringify(mt?.note));
+L = await last();
+ok((L?.tools ?? []).some((t0) => t0.name === "brain_search") && JSON.stringify(L?.system ?? "").includes("<synchro_brain>"), "mọi lượt chat (khi bật bộ não) có công cụ brain_* và hướng dẫn dùng bộ não", JSON.stringify((L?.tools ?? []).map((t0) => t0.name)));
+
+console.log("8. Nạp đoạn chat cũ, tắt học, ẩn danh, xuất cho Obsidian");
 r = await me("POST", "/api/brain/import", { chats: [{ id: "old-1", title: "Lịch tập gym", msgs: [{ role: "user", text: "Lên lịch tập gym 4 buổi một tuần giúp mình" }, { role: "ai", text: "Đây là lịch tập…" }] }, { id: "old-2", msgs: [{ role: "user", text: "hi" }] }] });
 ok(r.s === 200 && r.j.queued === 1, "nạp đoạn chat cũ từ trình duyệt (bỏ đoạn quá ngắn)", JSON.stringify(r.j));
 await me("POST", "/api/brain/distill", {});

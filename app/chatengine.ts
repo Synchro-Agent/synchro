@@ -27,7 +27,7 @@ import { mergedProviders, subCli, subTurn } from "./ai/subs";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
-import { afterTurn, brainRecall } from "./brain";
+import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool } from "./brain";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
 // Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
@@ -248,6 +248,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
     return { content: "Đã cập nhật danh sách việc cho người dùng.", is_error: false, used: { kind: "search", name: "update_plan" } };
   }
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
+  if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return geminiSearch(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
   const ct = x.sess?.get(c.name);
@@ -267,6 +268,9 @@ function describe(x: Exec, c: Call) {
   if (c.name === "run_skill_script") return `Đang chạy script của skill ${n}`;
   if (c.name === "run_code") return `Đang chạy code ${String(c.input?.language ?? "python")}`;
   if (c.name === "web_search" && x.search) return `Đang tìm trên web: ${String(c.input?.query ?? "").slice(0, 120)}`;
+  if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
+  if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
+  if (c.name === "brain_write") return `Đang ghi vào bộ não: ${String(c.input?.title ?? "").slice(0, 80)}`;
   const ct = x.sess?.get(c.name);
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
 }
@@ -598,6 +602,8 @@ const useProfile = (body: Record<string, any>) => !!body.skills && body.feature 
 const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
 // Bộ não tổng hợp: kéo vài ghi chú liên quan nhất tới câu hỏi vào tầng động (chat lẫn Synchro Code; không trong đoạn chat ẩn danh / khi tắt Bộ nhớ).
 const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => (useProfile(body) && body.memory !== false && !body.incognito ? brainRecall(u.id, lastUserText(body.messages), conv) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
+/** Model tự tra, đọc theo liên kết và ghi vào bộ não (công cụ brain_*), cùng điều kiện với phần ghi chú liên quan. */
+const brainOn = (body: Record<string, any>, u: UserRow) => useProfile(body) && body.memory !== false && !body.incognito && brainReady(u.id); // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Gói subscription: ghi chú liên quan ghép vào cuối tin nhắn mới nhất (CLI chỉ nhận lời nhắc hệ thống ở lượt đầu của phiên). */
 function withRecall(messages: unknown, recall: string): unknown {
   if (!recall || !Array.isArray(messages) || !messages.length) return messages;
@@ -706,11 +712,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
-        const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), PLAN_TOOL];
+        const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), PLAN_TOOL];
         const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => bridgeCall(xx, name, input, usedAll) });
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, ss.route].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", ss.route].filter(Boolean).join("\n\n");
       }
       const r = await subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
@@ -772,11 +778,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // "Tìm kiếm trên web" ở khung soạn: công cụ tìm web phía máy chủ của Anthropic / OpenAI; Gemini dùng web_search của Synchro
     // (Google Search qua API gốc của Gemini).
     const web = !!skills && body.web === true && (t.kind === "anthropic" || t.kind === "openai" || t.kind === "google");
-    if (visible.length || sess || code || refs || web) {
+    const brain = t.kind !== "mock" && brainOn(body, c.user);
+    if (visible.length || sess || code || refs || web || brain) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
+      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", pinned].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }

@@ -9,6 +9,8 @@ const S = ({ size = 18, children, fill }: P & { children: React.ReactNode; fill?
 
 export const Plus = (p: P) => <S {...p}><path d="M10 4v12M4 10h12" /></S>;
 export const Minus = (p: P) => <S {...p}><path d="M4.5 10h11" /></S>;
+export const Merge = (p: P) => <S {...p}><path d="M5 4v3.5c0 2 1.5 3 5 3.5M15 4v3.5c0 2-1.5 3-5 3.5v5M7.5 13.5L10 16l2.5-2.5" /></S>;
+export const Calendar = (p: P) => <S {...p}><rect x="3.5" y="4.5" width="13" height="12" rx="2" /><path d="M3.5 8.5h13M7 3v3M13 3v3" /></S>;
 export const Panel = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.5" /><path d="M8 4v12" /></S>;
 export const Layers = (p: P) => <S {...p}><g className="ai-l1"><path d="M7 3.2h6" /></g><g className="ai-l2"><path d="M4.6 5.9h10.8" /></g><path d="M3.6 8.4h12.8M4.6 8.4l.8 6.9a1.8 1.8 0 001.8 1.6h5.6a1.8 1.8 0 001.8-1.6l.8-6.9" /></S>;
 export const Shapes = (p: P) => <S {...p}><g className="ai-q"><path d="M7 2.4a5.4 5.4 0 015.4 5.4H7z" /></g><circle cx="5.6" cy="14" r="3.2" /><g className="ai-sq"><rect x="10.4" y="10.4" width="6.4" height="6.4" rx="1.3" /></g></S>;

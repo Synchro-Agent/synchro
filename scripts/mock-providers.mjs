@@ -237,7 +237,8 @@ function wantTool(q, list) {
   const t = norm(q);
   let best = null;
   for (const tool of tools) {
-    if (SKILL_TOOLS.includes(tool.name)) continue;
+    // Công cụ bộ não (brain_*) chỉ chọn khi ép bằng #tool=, để không tranh với công cụ connector trong các bài kiểm thử khác.
+    if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_")) continue;
     const tn = norm(`${tool.name} ${tool.description ?? ""}`).replace(/[_-]/g, " ");
     let score = 0;
     for (const [re, keys] of INTENTS) if (re.test(t) && keys.some((k) => tn.includes(k))) score += 2;
@@ -331,6 +332,8 @@ function memoryReply(sys, q) {
   return { text: JSON.stringify(out) };
 }
 const capsFor = (sys, q, msgs, tools, none) => {
+  // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
+  if (!none && q.includes("#tool=") && !/#rev\s*\d+/.test(q)) { const w = wantTool(q, tools); if (w) return { tool: w }; }
   const mem = memoryReply(sys, q);
   if (mem) return mem;
   const first = !none && /#rev\s*\d+/.test(q) && !q.includes("#tool") && wantTool(q.replace(/#rev\s*\d+/, ""), tools);
