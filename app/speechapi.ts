@@ -129,7 +129,8 @@ export const jsonBody = (b: unknown): RequestInit => ({ method: "POST", headers:
 
 // ---- quyền của khóa ----
 // Khóa API giới hạn quyền: gửi yêu cầu rỗng tới từng tính năng (không tạo gì, không tốn credit). ElevenLabs kiểm tra quyền trước
-// nội dung nên thiếu quyền trả 401 "missing the permission …", đủ quyền trả lỗi nội dung (422). Nhớ 30 phút, quét mới thì dò lại.
+// nội dung nên thiếu quyền trả 401 "missing the permission …", đủ quyền trả lỗi nội dung (422). Nhớ 30 phút, quét mới thì dò lại;
+// còn thiếu quyền thì chỉ nhớ 3 phút để người dùng bật quyền trên elevenlabs.io xong là tính năng hiện lại ngay.
 const PREMADE = "JBFqnCBsd6RMkjVDRZzb";
 const PROBES: [Feat | "realtime", string, "json" | "form"][] = [
   ["tts", `/v1/text-to-speech/${PREMADE}`, "json"], ["dialogue", "/v1/text-to-dialogue", "json"], ["stt", "/v1/speech-to-text", "form"],
@@ -141,7 +142,8 @@ const PROBES: [Feat | "realtime", string, "json" | "form"][] = [
 ];
 async function probePerms(fresh: boolean) {
   const st = G(), k = conn(), key = k.key.slice(-6);
-  if (!fresh && st.perms && st.perms.key === key && Date.now() - st.perms.at < 30 * 60_000) return st.perms.miss;
+  const keep = st.perms && Object.keys(st.perms.miss).length ? 3 * 60_000 : 30 * 60_000;
+  if (!fresh && st.perms && st.perms.key === key && Date.now() - st.perms.at < keep) return st.perms.miss;
   const miss: Partial<Record<Feat | "realtime", string>> = {};
   await Promise.all(PROBES.map(async ([f, p, kind]) => {
     const init: RequestInit = { method: "POST", headers: { "xi-api-key": k.key }, signal: AbortSignal.timeout(15_000) };
