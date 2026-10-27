@@ -26,7 +26,7 @@ import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr
 import { mergedProviders, subCli, subTurn } from "./ai/subs";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
-import { learnFromTurn, memoryBlock, profileBlock } from "./memory";
+import { learnFromTurn, userContext } from "./memory";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
 // Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
@@ -590,9 +590,11 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
 
 type Who = { user: UserRow };
 // Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
-// Hướng dẫn cho Synchro + tên gọi, công việc (Cài đặt → Tài khoản): mọi lượt người dùng trò chuyện (chat, Synchro Code), kể cả ẩn danh;
-// không áp dụng cho lời gọi nội bộ (đặt tên, rút bộ nhớ…) và artifact có AI.
+// Những gì Synchro biết về người dùng (tên, phần tự giới thiệu / hướng dẫn ở Cài đặt → Tài khoản, bộ nhớ khi bật): mọi lượt người dùng
+// trò chuyện (chat, Synchro Code), kể cả ẩn danh (khi đó không kèm bộ nhớ); không áp dụng cho lời gọi nội bộ (đặt tên, rút bộ nhớ…)
+// và artifact có AI.
 const useProfile = (body: Record<string, any>) => !!body.skills && body.feature !== "artifact"; // eslint-disable-line @typescript-eslint/no-explicit-any
+const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
 const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
@@ -671,7 +673,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   // Model của gói subscription (Cài đặt → Providers): chạy CLI chính chủ bằng gói của chính người dùng, không qua khóa API.
   if (model && subCli(model)) {
     if (feature === "artifact" && !capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
-    if (body.estimate === true) return estimate([system], [], [useProfile(body) ? profileBlock(c.user) : "", pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"), prepareHistory(messages, [], {}));
+    if (body.estimate === true) return estimate([system], [], [contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"), prepareHistory(messages, [], {}));
     const am = feature === "artifact" ? artifactMessages(body.prompt) : null;
     if (feature === "artifact" && !am) return Response.json({ error: "Nội dung gửi tới model không hợp lệ." }, { status: 400 });
     // Hướng dẫn thuần văn bản theo Cài đặt → Khả năng (hỏi lại, artifact, hình minh họa trong chat).
@@ -698,7 +700,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, ss.route].filter(Boolean).join("\n\n");
       }
       const r = await subTurn({
-        user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, useProfile(body) ? profileBlock(c.user) : "", pinnedBlock(body.pinned), useMemory(body, c.user) ? memoryBlock(c.user.id) : ""].filter(Boolean).join("\n\n"),
+        user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         messages: am ?? messages, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
         mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true,
       });
@@ -741,7 +743,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const base = cleanBase(body.artBase);
   const mix = { artifacts: mixer.artifacts !== false, tools: mixer.tools !== false, recent: typeof mixer.recent === "number" ? mixer.recent : undefined, summary: typeof body.summary === "string" ? body.summary : undefined, base };
   // Tài liệu ghim và bộ nhớ của người dùng: tầng tĩnh, ngay sau hướng dẫn hệ thống và danh mục skill (ít đổi nên đọc từ bộ đệm prompt).
-  const pinned = [useProfile(body) ? profileBlock(c.user) : "", pinnedBlock(body.pinned), useMemory(body, c.user) ? memoryBlock(c.user.id) : ""].filter(Boolean).join("\n\n");
+  const pinned = [contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n");
   const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {

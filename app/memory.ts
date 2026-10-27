@@ -41,27 +41,33 @@ export function addMemory(uid: string, items: string[], source = "chat"): Mem[] 
 export const deleteMemory = (uid: string, id: string) => t().prepare("DELETE FROM user_memory WHERE user_id = ? AND id = ?").run(uid, id).changes > 0;
 export const clearMemory = (uid: string) => t().prepare("DELETE FROM user_memory WHERE user_id = ?").run(uid).changes;
 
-/** Khối bộ nhớ đưa vào lời nhắc hệ thống của lượt chat (rỗng nếu chưa có gì). */
 /**
- * Hồ sơ và hướng dẫn người dùng tự viết ở Cài đặt → Tài khoản ("Hướng dẫn cho Synchro"): tầng tĩnh của mọi lượt chat,
- * Synchro Code và trò chuyện bằng giọng nói (gói subscription lẫn khóa API). Không áp dụng cho lời gọi nội bộ.
+ * Những gì Synchro biết về người dùng, đưa vào lời nhắc hệ thống như hiểu biết sẵn có của chính trợ lý (cách Claude dùng bộ nhớ và
+ * "personal preferences"): hồ sơ (tên, tên gọi, lĩnh vực), phần tự giới thiệu / hướng dẫn họ viết ở Cài đặt → Tài khoản, và bộ nhớ
+ * rút từ các cuộc trò chuyện (memory: khi Bộ nhớ đang bật). Kèm quy tắc dùng tự nhiên: nói như người đã quen họ, không như đang
+ * đọc hồ sơ; không nhắc tới cài đặt / bộ nhớ trừ khi được hỏi; thông tin mâu thuẫn thì tin điều cụ thể và mới hơn, không bắt lỗi.
+ * Tầng tĩnh của mọi lượt chat, Synchro Code và giọng nói (gói lẫn khóa API); không dùng cho lời gọi nội bộ.
  */
-export function profileBlock(u: Pick<UserRow, "full_name" | "nickname" | "occupation" | "instructions">): string {
-  const call = (u.nickname || u.full_name || "").trim(), work = (u.occupation || "").trim(), ins = (u.instructions || "").trim();
-  if (!call && !work && !ins) return "";
-  return `<user_preferences>
-Người dùng tự viết những điều này trong Cài đặt của Synchro để áp dụng ở mọi đoạn chat. Làm theo trong mọi câu trả lời, trừ khi người dùng yêu cầu khác ngay trong đoạn chat; không cần nói là đã đọc phần này.
-${[call && `Tên người dùng muốn được gọi: ${call}`, work && `Công việc: ${work}`].filter(Boolean).join("\n")}${ins ? `${call || work ? "\n" : ""}Hướng dẫn của người dùng:\n${ins}` : ""}
-</user_preferences>`;
-}
-
-export function memoryBlock(uid: string): string {
-  const list = listMemory(uid);
-  if (!list.length) return "";
-  return `<user_memory>
-Những điều đã biết về người dùng từ các cuộc trò chuyện trước (dùng khi liên quan, không nhắc lại nguyên văn nếu không cần):
-${list.slice(-80).map((m) => `- ${m.content}`).join("\n")}
-</user_memory>`;
+export function userContext(u: Pick<UserRow, "id" | "full_name" | "nickname" | "occupation" | "instructions">, o: { memory: boolean }): string {
+  const full = (u.full_name || "").trim(), call = (u.nickname || "").trim(), work = (u.occupation || "").trim(), ins = (u.instructions || "").trim();
+  const mem = o.memory ? listMemory(u.id).slice(-80) : [];
+  const facts = [
+    full ? `- Tên: ${full}${call && call !== full ? `; thích được gọi là ${call}` : ""}` : call ? `- Tên gọi: ${call}` : "",
+    work ? `- Lĩnh vực chọn lúc tạo tài khoản: ${work}` : "",
+  ].filter(Boolean);
+  if (!facts.length && !ins && !mem.length) return "";
+  return `<user_context>
+Bạn đã quen người dùng này qua những lần trò chuyện trước. Dưới đây là những gì bạn biết về họ và cách họ muốn bạn làm việc cùng. Hãy coi đó là hiểu biết sẵn có của chính bạn, như một người bạn hay người cộng sự lâu năm vẫn nhớ rõ về họ.
+${facts.length ? `\n<about_user>\n${facts.join("\n")}\n</about_user>\n` : ""}${mem.length ? `\n<user_memory>\nNhững điều bạn nhớ từ các cuộc trò chuyện trước (cũ trước, mới sau):\n${mem.map((m) => `- ${m.content}`).join("\n")}\n</user_memory>\n` : ""}${ins ? `\n<user_preferences>\nNgười dùng tự giới thiệu về mình và dặn cách làm việc (nguyên văn):\n${ins}\n</user_preferences>\n` : ""}
+<how_to_use>
+- Nói chuyện như người đã biết rõ họ: gọi tên tự nhiên, nói đúng hoàn cảnh, mục tiêu và trình độ của họ. Đừng nói như đang đọc hồ sơ của một người lạ: không dùng những cụm như "theo thông tin", "trong phần cài đặt / hồ sơ / bộ nhớ / ghi chú", "mình thấy bạn có ghi", "có thể bạn là", "mình không nhận ra bạn trực tiếp".
+- Khi họ hỏi bạn có biết họ là ai, hay nhớ gì về họ: trả lời tự tin và ấm áp, tóm gọn những điều chính như một người quen. Chỉ khi họ hỏi vì sao bạn biết thì mới nói thật là Synchro ghi nhớ từ phần họ tự giới thiệu và các cuộc trò chuyện.
+- Làm theo cách họ muốn (ngôn ngữ, giọng điệu, độ dài, cách giải thích, cách xưng hô) trong mọi câu trả lời mà không cần nói là đang làm theo.
+- Chỉ đưa chi tiết riêng của họ vào khi nó làm câu trả lời tốt hơn. Lời chào thì chào lại ngắn gọn bằng tên, không kể lại cả tiểu sử.
+- Khi các thông tin khác nhau, tin điều cụ thể và mới hơn: phần họ tự giới thiệu và bộ nhớ gần đây đúng hơn lựa chọn lúc tạo tài khoản. Không chỉ ra sự khác nhau, không bảo họ sửa cài đặt; nếu điều đó thật sự ảnh hưởng tới câu trả lời thì hỏi lại tự nhiên.
+- Không bịa thêm điều không có ở trên; chưa biết thì hỏi như một người quen muốn hiểu thêm. Người dùng yêu cầu khác ngay trong đoạn chat thì làm theo yêu cầu đó.
+</how_to_use>
+</user_context>`;
 }
 
 const EXTRACT = (sens: boolean) => `Bạn trích xuất bộ nhớ dài hạn về NGƯỜI DÙNG từ đoạn hội thoại mới nhất.

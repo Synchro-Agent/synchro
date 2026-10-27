@@ -92,7 +92,16 @@ console.log("N. Hướng dẫn cho Synchro (Cài đặt → Tài khoản) tới 
   ok(/PREFS: none/.test(raw.j?.text ?? ""), "lời gọi nội bộ (đặt tên, rút bộ nhớ…) không kèm hướng dẫn", JSON.stringify(raw.j).slice(0, 300));
   const ot = await other("POST", "/api/llm", { skills: true, system: "", model: MODEL, messages: [{ role: "user", content: "#prefs" }] });
   ok(!/anh Tùng/.test(ot.j?.text ?? ""), "người khác không nhận hướng dẫn của mình", JSON.stringify(ot.j).slice(0, 300));
-  ok((await me("POST", "/api/auth/profile", { instructions: "x".repeat(4001) })).s === 400, "hướng dẫn quá 4.000 ký tự → báo lỗi");
+  const longIns = `${INS}\n${"Mình đang ôn thi THPT Quốc gia môn Toán, Vật lý, Tiếng Anh. ".repeat(120)}Kết thúc phần giới thiệu.`;
+  const lg = await me("POST", "/api/auth/profile", { instructions: longIns });
+  ok(lg.s === 200 && lg.j.user.profile.instructions.length > 4000 && lg.j.user.profile.instructions.endsWith("Kết thúc phần giới thiệu."), "phần giới thiệu dài hơn 4.000 ký tự được lưu trọn vẹn (không bị cắt)", JSON.stringify({ s: lg.s, len: lg.j?.user?.profile?.instructions?.length }));
+  const full = await run("#prefs");
+  ok(/Kết thúc phần giới thiệu\./.test(full?.result?.text ?? ""), "model nhận đủ cả phần giới thiệu dài", (full?.result?.text ?? "").slice(-200));
+  ok((await me("POST", "/api/auth/profile", { instructions: "x".repeat(20001) })).s === 400, "phần giới thiệu quá 20.000 ký tự → báo lỗi");
+  await run("Chào bạn");
+  const ctx = JSON.stringify((await last())?.system ?? "");
+  ok(ctx.includes("<user_context>") && ctx.includes("hiểu biết sẵn có của chính bạn") && ctx.includes("không dùng những cụm như") && ctx.includes("tin điều cụ thể và mới hơn"),
+    "thông tin về người dùng đưa vào như hiểu biết sẵn có, kèm quy tắc nói tự nhiên (không như đọc hồ sơ, không bắt lỗi mâu thuẫn)", ctx.slice(0, 400));
   await me("POST", "/api/auth/profile", { instructions: "" });
   const cl = await run("#prefs");
   ok(!/anh Tùng/.test(cl?.result?.text ?? "") && (await me("GET", "/api/auth/me")).j.user.profile.instructions === "", "xóa hướng dẫn → model không còn nhận", cl?.result?.text);

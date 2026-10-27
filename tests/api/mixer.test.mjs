@@ -12,6 +12,8 @@ const api = async (method, p, body) => {
   return { s: r.status, j };
 };
 if (!cookie) await api("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
+// Việc phụ (nén lịch sử) chọn model nhanh nhất đang dùng được: đăng xuất các gói giả lập để chạy bằng khóa API giả lập, không phụ thuộc bộ khác để lại.
+for (const cli of ["claude", "codex", "agy"]) await api("POST", `/api/engines/${cli}/logout`);
 const last = () => fetch(`${LLM}/_debug/last`).then((r) => r.json());
 const M = "anthropic/claude-sonnet-5-5";
 const ask = (body) => api("POST", "/api/llm", { system: "", max_tokens: 1500, skills: true, model: M, ...body });

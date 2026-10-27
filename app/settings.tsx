@@ -179,12 +179,12 @@ function Account() {
       <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
-      <p className="d" style={{ margin: "0 0 10px" }}>Synchro follows these in every chat, in Synchro Code and in voice conversations, with every model, on any device. Your name and work above are shared with the model too.</p>
-      <textarea className="textarea" value={ins} maxLength={4000} onChange={(e) => setIns(e.target.value)} placeholder="e.g. Always answer in Vietnamese. I primarily code in Python (not a coding beginner). Keep answers short and get to the point." />
-      <div className="ins-f"><span>{ins.length.toLocaleString()} / 4,000</span></div>
+      <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
+      <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
+      <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString()} characters over the limit · ` : ""}{ins.length.toLocaleString()} / 20,000</span></div>
       {ins.trim() !== server.trim() && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button className="btn dark" disabled={insBusy} onClick={saveIns}>Save changes</button>
+          <button className="btn dark" disabled={insBusy || ins.length > 20000} onClick={saveIns}>Save changes</button>
           <button className="btn" disabled={insBusy} onClick={() => setIns(server)}>Discard</button>
         </div>
       )}

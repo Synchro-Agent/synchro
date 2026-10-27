@@ -213,7 +213,7 @@ export function cleanProfile(p: ProfileIn): ProfileCols {
   // Hướng dẫn cho Synchro: giữ nguyên xuống dòng; chuỗi rỗng = xóa.
   if (p.instructions !== undefined) {
     const v = typeof p.instructions === "string" ? p.instructions.normalize("NFC").replace(/\r\n?/g, "\n").replace(/\n{4,}/g, "\n\n\n").trim() : "";
-    if (v.length > 4000) throw new AuthError("Hướng dẫn cho Synchro tối đa 4.000 ký tự.");
+    if (v.length > 20000) throw new AuthError("Phần giới thiệu và hướng dẫn cho Synchro tối đa 20.000 ký tự.");
     out.instructions = v || null;
   }
   // Ảnh đại diện tự tải lên: ảnh nhỏ đã cắt ở trình duyệt, lưu dạng data URL. Chuỗi rỗng = xóa ảnh.
