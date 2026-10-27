@@ -82,7 +82,8 @@ export class ClaudeCodeEngine implements Engine {
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--resume", req.sessionId);
-    const p = start("claude", args, req, req.prompt);
+    // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
+    const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "900000" } } : req, req.prompt);
     if (!p) { yield notInstalled("claude"); return; }
     let text = "", done = false;
     const limits = new Map<string, RateWindow>();
@@ -167,9 +168,47 @@ export class CodexEngine implements Engine {
 }
 
 // ---------------------------------------------------------------- Antigravity
+// Công cụ của Synchro cho Antigravity: agy chỉ đọc máy chủ MCP từ cấu hình chung của tài khoản (~/.gemini/config/mcp_config.json),
+// không có cờ cho từng lượt như Claude Code / Codex. Mỗi lượt có công cụ: thêm cầu nối của lượt bằng chính `agy mcp add`, rồi gỡ
+// khi xong; các lượt có công cụ của cùng một tài khoản chạy lần lượt để cầu nối không lẫn. Ở chế độ -p, agy tự từ chối công cụ cần duyệt;
+// hook PreToolUse (~/.gemini/config/hooks.json, theo tài liệu của agy) chỉ cho phép công cụ của Synchro (mcp_synchro_…),
+// công cụ dựng sẵn của agy (lệnh shell, ghi tệp trên máy chủ) vẫn bị từ chối như trước.
+const agyLocks = new Map<string, Promise<void>>();
+const AGY_HOOK = JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: "mcp_synchro_.*", hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
+async function agyRun(args: string[], req: TurnRequest) {
+  const p = start("agy", args, { ...req, signal: undefined }, "");
+  if (!p) return false;
+  for await (const _ of p.lines) { /* bỏ qua */ }
+  return (await p.done).code === 0;
+}
+async function agyBridge(req: TurnRequest, url: string) {
+  if (!(await agyRun(["mcp", "add", "synchro", url], req))) return false;
+  // Ghi hook bằng đúng user của engine (thư mục đăng nhập 0700 của user đó).
+  const sh = spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: AGY_HOOK });
+  return (await sh.done).code === 0;
+}
+
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
+    if (!req.mcp) { yield* this.turn(req); return; }
+    const home = String(req.env?.HOME ?? "");
+    const prev = agyLocks.get(home) ?? Promise.resolve();
+    let release = () => {};
+    const mine = new Promise<void>((r) => { release = r; });
+    const chain = prev.then(() => mine);
+    agyLocks.set(home, chain);
+    await prev;
+    try {
+      const ok = await agyBridge(req, req.mcp.url).catch(() => false);
+      yield* this.turn(ok ? req : { ...req, mcp: undefined });
+    } finally {
+      await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
+      release();
+      if (agyLocks.get(home) === chain) agyLocks.delete(home);
+    }
+  }
+  private async *turn(req: TurnRequest): AsyncIterable<Event> {
     const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
     const args = ["--output-format", "json"];
     if (req.model) args.push("--model", req.model);

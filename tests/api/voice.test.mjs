@@ -107,7 +107,7 @@ ok(r.s === 200 && elRow(r.j)?.status === "ok", "kiểm tra lại khóa không b�
 r = await elKey("sk_mock_eleven_nouser_noagents");
 ok(r.s === 200, "khóa thiếu cả quyền ElevenLabs Agents vẫn lưu được", JSON.stringify(r.j).slice(0, 200));
 r = await api("POST", "/api/voice/session");
-ok(r.s === 200 && r.j?.fallback === true && !r.j.value && /quyền "convai_write"/.test(r.j.error ?? ""), "mở phiên khi thiếu quyền → báo đúng tên quyền cần bật, dùng giọng trình duyệt", JSON.stringify(r.j));
+ok(r.s === 200 && r.j?.fallback === true && r.j.cascade === true && !r.j.value && !r.j.error, "thiếu quyền Realtime → trò chuyện bằng chế độ nối tiếp (Scribe nghe, giọng ElevenLabs đọc), không hiện lỗi", JSON.stringify(r.j));
 r = await elKey("sk_wrong_eleven_key");
 ok(r.s >= 400 && /Khóa không hợp lệ/.test(r.j?.error ?? ""), "khóa sai vẫn bị từ chối", JSON.stringify(r.j));
 await elKey("sk_mock_eleven_0001");

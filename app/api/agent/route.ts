@@ -1,10 +1,11 @@
 import { AUTO, autoEffort, routeModel } from "../../router";
 import { ALL } from "../../catalog";
 import { can, canModel, current, limit, permsOf, sameOrigin } from "../../authstore";
-import { agentInbox, agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, type AgentEvent } from "../../agentcore";
+import { agentInbox, agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent } from "../../agentcore";
 import { clampEffort, effortCap, isEffort, legacyModel } from "../../catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
 import { subCli } from "../../ai/subs";
+import { usableModels } from "../../ai/anymodel";
 import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
 import { exec, sdir, wsAllowed } from "../../workspace";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 900;
 
 // Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện dạng NDJSON (mỗi dòng một JSON).
+// Gói subscription và khóa API dùng được như nhau: gói chạy CLI chính chủ với cùng bộ công cụ qua cầu nối MCP (runPlanAgent).
 export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
@@ -29,23 +31,23 @@ export async function POST(req: Request) {
   // Chế độ Tự động: việc code luôn cần model mạnh nhất tài khoản được dùng.
   let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
   const lastText = String([...(Array.isArray(messages) ? messages : [])].reverse().find((m: { role?: string }) => m?.role !== "assistant")?.content ?? "").slice(0, 4000);
-  // Synchro Code cần công cụ (sửa tệp, chạy lệnh) nên chưa chạy bằng gói subscription: dùng model API mạnh nhất tài khoản được dùng.
-  if (chosen && subCli(chosen)) chosen = AUTO;
   if (chosen === AUTO) {
-    const main = mainModels();
-    const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(c.user, k));
-    // Chọn theo đúng việc đang nhờ (qua cả ba hãng): sửa nhỏ dùng model vừa đủ cho nhanh, dựng cả ứng dụng dùng model mạnh nhất.
-    chosen = routeModel({ text: lastText, attachments: 0, turns: Array.isArray(messages) ? messages.length : 0, studio: false }, allowed)?.model ?? null;
+    // Chọn theo đúng việc đang nhờ (qua cả ba hãng, trong đúng các model bộ chọn đang hiện: gói hoặc khóa API):
+    // sửa nhỏ dùng model vừa đủ cho nhanh, dựng cả ứng dụng dùng model mạnh nhất.
+    const { allowed, usable } = await usableModels(c.user);
+    chosen = routeModel({ text: lastText, attachments: 0, turns: Array.isArray(messages) ? messages.length : 0, studio: false }, usable.length ? usable : allowed)?.model ?? null;
   }
   const model = chosen || pickDefault(await catalog(), mainModels());
-  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
-  if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
-  const target = await resolveModel(model);
-  if (!target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
+  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Đăng nhập gói ở Cài đặt → Providers, hoặc quản trị viên nhập khóa API." }, { status: 503 });
+  const plan = !!subCli(model);
+  if (!plan && !canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
+  const target = plan ? null : await resolveModel(model);
+  if (!plan && !target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   // Nỗ lực "Tự động": theo độ khó của việc (code luôn ít nhất mức vừa).
   const want = wanted === "auto" ? (() => { const e = autoEffort({ text: lastText, attachments: 0, turns: 0, studio: false }); return e === "low" ? "medium" : e; })() : wanted;
-  const effort = isEffort(want) ? clampEffort(want, effortCap(permsOf(c.user).effort, model), target.kind) : undefined;
-  const over = overLimit(c.user);
+  const effort = isEffort(want) ? (target ? clampEffort(want, effortCap(permsOf(c.user).effort, model), target.kind) : clampEffort(want, effortCap(permsOf(c.user).effort, model), "anthropic")) : undefined;
+  // Hạn mức chi phí chỉ áp cho khóa API (gói tính vào hạn mức của chính gói).
+  const over = plan ? null : overLimit(c.user);
   if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
 
   const enc = new TextEncoder();
@@ -69,10 +71,19 @@ export async function POST(req: Request) {
         const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: String(system).slice(0, 60_000), skills: list.length ? skillsPrompt(list, scripts) : "" });
         const tools = agentTools(list.length, scripts);
         const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
+        if (plan) {
+          const out = await runPlanAgent({ user: c.user, model, effort, conv: `code-${String(sid)}`.slice(0, 64), system: sys, messages: msgs, u: c.user.id, d, skills: list, scripts, tools,
+            emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
+          if (out.skills.length) recordUse(c.user.id, out.skills);
+          const left = agentInbox.get(ibox)?.splice(0) ?? [];
+          emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });
+          return;
+        }
+        const t = target!;
         // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
-        const adapter = target.kind === "mock" ? mockAgent()
-          : target.kind === "anthropic" ? anthropicAgent({ provider: target.provider, key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
-          : (target.kind === "openai" ? responsesAgent : openaiAgent)({ provider: target.provider, key: target.key, base: target.base, model: target.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: target.kind, effort });
+        const adapter = t.kind === "mock" ? mockAgent()
+          : t.kind === "anthropic" ? anthropicAgent({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
+          : (t.kind === "openai" ? responsesAgent : openaiAgent)({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: t.kind, effort });
         const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
         if (out.skills.length) recordUse(c.user.id, out.skills);
         const left = agentInbox.get(ibox)?.splice(0) ?? [];

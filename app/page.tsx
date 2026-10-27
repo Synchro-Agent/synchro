@@ -17,7 +17,7 @@ import { elSpeed, speakAI, type Speaking } from "./speak";
 import { applyEvent, PlanCard, QueueChips, WorkParts, WorkStatus, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
-import { Markdown, makeReply } from "./md";
+import { Markdown } from "./md";
 import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
@@ -377,7 +377,8 @@ function Composer(p: {
     let said = "";
     setRec(true);
     try {
-      const s = await startScribe({ lang: lang.split("-")[0] }, {
+      // Không đặt ngôn ngữ: ElevenLabs tự nhận, nói tiếng nào chép tiếng đó (kể cả đổi tiếng giữa chừng).
+      const s = await startScribe({}, {
         onPartial: (t) => setV(base + said + t),
         onCommit: (t) => { said += t + " "; setV(base + said); },
         onError: (m) => say(m),

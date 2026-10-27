@@ -6,7 +6,8 @@ import crypto from "node:crypto";
 import { currentRun, inRun } from "./runs";
 
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
-type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean }>; exp: number };
+// image: ảnh JPEG (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code.
+type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; image?: string }>; exp: number };
 const g = globalThis as unknown as { __synchroBridges?: Map<string, Bridge> };
 const bridges = (g.__synchroBridges ??= new Map());
 
@@ -46,7 +47,7 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
       const args = (m.params?.arguments && typeof m.params.arguments === "object" ? m.params.arguments : {}) as Record<string, unknown>;
       try {
         const r = await inRun(b.run, () => b.call(name, args));
-        return ok(m.id, { content: [{ type: "text", text: r.content }], isError: r.is_error });
+        return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: "image/jpeg" }] : [])], isError: r.is_error });
       } catch (e) {
         return ok(m.id, { content: [{ type: "text", text: `Lỗi: ${(e as Error).message}` }], isError: true });
       }

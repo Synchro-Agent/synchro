@@ -109,6 +109,11 @@ console.log("4. Thành viên tự đăng nhập gói ChatGPT (mã thiết bị) 
   ok(keys.includes("sub-codex/gpt-6.1-sol") && keys.every((k) => md.allowed.includes(k)) && md.providers.find((p) => p.id === "anthropic")?.source !== "plan", "thành viên: nhóm ChatGPT hiện model gói của mình (được phép dùng); nhóm Claude không lấy gói của người khác", JSON.stringify({ ids: md.providers.map((p) => [p.id, p.source]), allowed: md.allowed }));
   const r = await member("POST", "/api/llm", { model: "sub-codex/gpt-6.1-sol", messages: [{ role: "user", content: "chào" }], skills: true });
   ok(r.s === 200 && /Codex/.test(r.j.text), "thành viên chat bằng gói của mình dù không có quyền model API", JSON.stringify(r.j));
+  // Tính năng phụ chạy bằng gói như bằng khóa API (thành viên này không có quyền model khóa API nào).
+  const br = await member("POST", "/api/voice/brief", { question: "Hỏi thử", answer: "Đây là một câu trả lời khá dài cần tóm tắt lại để đọc to cho người dùng nghe trong chế độ giọng nói." });
+  ok(br.s === 200 && /^sub-codex\//.test(br.j?.model ?? "") && br.j.brief, "tóm tắt để đọc to chạy bằng gói khi không có khóa API", JSON.stringify(br.j));
+  const cp = await member("POST", "/api/context/compact", { messages: [{ role: "user", content: "Mình muốn làm web bán cà phê" }, { role: "assistant", content: "Được, mình làm trang chủ trước." }] });
+  ok(cp.s === 200 && /^sub-codex\//.test(cp.j?.model ?? "") && cp.j.summary, "nén ngữ cảnh chạy bằng gói", JSON.stringify(cp.j));
   const cx = await member("POST", "/api/llm", { model: "sub-codex/gpt-6.1-sol", messages: [{ role: "user", content: 'Tính #tool=run_code #args={"language":"python","code":"print(5*5)"}' }], skills: true });
   ok(cx.s === 200 && (process.platform === "darwin" ? /đã dùng run_code: .*25/ : /đã dùng run_code: .*CODE_RUN=local/).test(cx.j.text) && !/Mình sẽ dùng công cụ/.test(cx.j.text), "gói ChatGPT (Codex) chạy code qua cầu nối; lời dẫn không lặp trong câu trả lời", JSON.stringify(cx.j).slice(0, 300));
   const api = await member("POST", "/api/llm", { model: "anthropic/claude-sonnet-5-5", messages: [{ role: "user", content: "chào" }], skills: true });
@@ -130,6 +135,12 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   ok(r.s === 200 && /Gemini/.test(r.j.text) && /\[model gemini-3\.8-flash-high\]/.test(r.j.text), "chat bằng gói Gemini, effort ở mục Effort → biến thể High", JSON.stringify(r.j));
   const users = (await admin("GET", "/api/admin")).j.users, uid = users.find((x) => x.email === "pv-member@synchro.test").id;
   const agyDir = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/antigravity-cli`;
+  // Công cụ của Synchro cho Gemini qua gói: cầu nối thêm bằng `agy mcp add` cho riêng lượt, hook chỉ cho phép công cụ mcp_synchro_….
+  const at = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc #tool=update_plan #args={"items":[{"content":"Buoc mot","status":"in_progress"}]}' }], skills: true });
+  ok(at.s === 200 && /\[đã dùng update_plan: Đã cập nhật/.test(at.j?.text ?? "") && !/bị từ chối/.test(at.j.text), "Gemini qua gói gọi được công cụ của Synchro (không bị agy từ chối)", JSON.stringify(at.j));
+  const { readFileSync } = await import("node:fs");
+  const cfg = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/config`;
+  ok(!JSON.parse(readFileSync(`${cfg}/mcp_config.json`, "utf8")).mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*"/.test(readFileSync(`${cfg}/hooks.json`, "utf8")), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ của Synchro");
   const pre = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
   ok(pre.sub?.setup && !existsSync(`${agyDir}/onboarding-input.log`), "chưa làm quen: vòng tròn báo cần hoàn tất, Synchro không bấm thay", JSON.stringify(pre.sub));

@@ -4,7 +4,8 @@
 // nhập bằng giọng nói trong khung chat và chế độ trò chuyện khi không mở được Eleven Realtime.
 import type { LevelRef } from "./voicefx";
 
-export type ScribeHandlers = { onPartial?: (t: string) => void; onCommit: (t: string) => void; onError?: (msg: string) => void; onOpen?: () => void; onClose?: () => void };
+// onCommit nhận kèm ngôn ngữ ElevenLabs nhận ra cho câu đó ("vi", "en"…; null khi đã đặt ngôn ngữ cố định).
+export type ScribeHandlers = { onPartial?: (t: string) => void; onCommit: (t: string, lang: string | null) => void; onError?: (msg: string) => void; onOpen?: () => void; onClose?: () => void };
 export type Scribe = { stop: () => void; pause: (on: boolean) => void };
 
 const WORKLET = `class Cap extends AudioWorkletProcessor { process(i) { const c = i[0] && i[0][0]; if (c) this.port.postMessage(c.slice(0)); return true; } } registerProcessor("cap16", Cap);`;
@@ -14,7 +15,8 @@ const ERR: Record<string, string> = {
   session_time_limit_exceeded: "Phiên chép lời đã đạt giới hạn thời gian.", resource_exhausted: "ElevenLabs đang quá tải, thử lại sau.", unaccepted_terms: "Tài khoản ElevenLabs cần đồng ý điều khoản trước khi chép lời trực tiếp.",
 };
 
-/** Có khóa ElevenLabs và quyền Speech thì trả về phiên chép lời; không thì null (nơi gọi tự dùng cách khác). */
+/** Có khóa ElevenLabs và quyền Speech thì trả về phiên chép lời; không thì null (nơi gọi tự dùng cách khác).
+ *  Không truyền lang: ElevenLabs tự nhận ngôn ngữ từng câu (nói tiếng nào chép tiếng đó) và báo lại mã ngôn ngữ. */
 export async function startScribe(o: { lang?: string; level?: LevelRef; keyterms?: string[] }, h: ScribeHandlers): Promise<Scribe | null> {
   const r = await fetch("/api/speech/live/token", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => null);
   if (!r?.ok) {
@@ -34,7 +36,10 @@ export async function startScribe(o: { lang?: string; level?: LevelRef; keyterms
   src.connect(cap);
   const rate = ctx.sampleRate;
   const q = new URLSearchParams({ model_id: "scribe_v2_realtime", token, audio_format: `pcm_${rate}`, commit_strategy: "vad", vad_silence_threshold_secs: "0.8" });
+  // Tự nhận ngôn ngữ: câu chốt kèm language_code chỉ có ở bản có mốc thời gian, nên lấy câu chốt từ bản đó (bỏ bản không có mốc để không gửi hai lần).
+  const auto = !o.lang;
   if (o.lang) q.set("language_code", o.lang);
+  else { q.set("include_language_detection", "true"); q.set("include_timestamps", "true"); }
   for (const k of (o.keyterms ?? []).slice(0, 50)) q.append("keyterms", k);
   const ws = new WebSocket(`${url}?${q}`);
   let open = false, closed = false, paused = false, pending = new Int16Array(0);
@@ -50,10 +55,11 @@ export async function startScribe(o: { lang?: string; level?: LevelRef; keyterms
   };
   ws.onopen = () => { open = true; h.onOpen?.(); };
   ws.onmessage = (ev) => {
-    let m: { message_type?: string; text?: string; error?: string };
+    let m: { message_type?: string; text?: string; error?: string; language_code?: string | null };
     try { m = JSON.parse(String(ev.data)); } catch { return; }
     if (m.message_type === "partial_transcript") h.onPartial?.(m.text ?? "");
-    else if (m.message_type === "committed_transcript" || m.message_type === "committed_transcript_with_timestamps") { if (m.text?.trim()) h.onCommit(m.text.trim()); h.onPartial?.(""); }
+    else if (m.message_type === (auto ? "committed_transcript_with_timestamps" : "committed_transcript")) { if (m.text?.trim()) h.onCommit(m.text.trim(), m.language_code ?? null); h.onPartial?.(""); }
+    else if (m.message_type === "committed_transcript" || m.message_type === "committed_transcript_with_timestamps") return;
     else if (m.message_type && m.message_type !== "session_started" && m.message_type !== "warning" && m.error) h.onError?.(ERR[m.message_type] ?? `Chép lời: ${m.error}`);
   };
   const cleanup = () => {

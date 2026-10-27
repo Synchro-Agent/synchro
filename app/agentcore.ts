@@ -6,6 +6,9 @@ import type { Skill } from "./skillstore";
 import { effortParams, respInput, respParse, respTools } from "./llmcall";
 import { noteResponse } from "./usage";
 import type { Effort } from "./catalog";
+import type { UserRow } from "./authstore";
+import { openBridge } from "./mcpbridge";
+import { subCli, subTurn } from "./ai/subs";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -409,3 +412,50 @@ export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: st
 }
 
 export const agentTools = (skillCount: number, scripts: boolean) => [...AGENT_TOOLS, ...(skillCount ? skillTools(skillCount, scripts) : [])];
+
+// ------------------------------------------------------------------ chạy bằng gói subscription
+// Gói (Claude Code, Codex, Antigravity) làm việc trong workspace bằng đúng bộ công cụ của Synchro Code: CLI gọi các công cụ trên
+// qua cầu nối MCP "synchro" (công cụ dựng sẵn của CLI tắt hoặc chỉ đọc), mỗi lời gọi chạy safeRun như vòng lặp khóa API nên
+// nhật ký, danh sách việc, terminal, trình duyệt, khung Changes và tin nhắn thêm giống hệt nhau.
+const PLAN_NOTE = (cli: string) => `<synchro_tools>
+Các công cụ nói ở trên (bash, read_file, write_file, edit_file, list_files, grep, browser_*, open_pane, update_plan và công cụ skill) nằm trong máy chủ MCP "synchro"${cli === "claude" ? " (tên đầy đủ có tiền tố mcp__synchro__, ví dụ mcp__synchro__bash)" : cli === "agy" ? " (tên đầy đủ có tiền tố mcp_synchro_, ví dụ mcp_synchro_bash)" : ""}. Đó là workspace thật của người dùng: mọi việc đọc, sửa tệp, chạy lệnh, mở trình duyệt đều làm qua các công cụ này.
+Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.
+</synchro_tools>`;
+export async function runPlanAgent(o: {
+  user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: string }[];
+  u: string; d: string; skills: Skill[]; scripts: boolean; tools: { name: string; description: string; input_schema: unknown }[];
+  emit: Emit; signal: AbortSignal; inbox?: () => string[];
+}) {
+  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set() };
+  const cli = subCli(o.model)!;
+  let pending = "", n = 0;
+  // Lời dẫn trước mỗi nhóm công cụ: hiện thành một đoạn chữ riêng như vòng lặp khóa API.
+  const flush = () => { const t = pending.trim(); pending = ""; if (t) o.emit({ t: "text", text: t }); };
+  const bridge = openBridge({
+    uid: o.u, tools: o.tools,
+    call: async (name, input) => {
+      if (o.signal.aborted) return { content: "Người dùng đã dừng.", is_error: true };
+      flush();
+      const id = `plan_${++n}_${Date.now().toString(36)}`;
+      o.emit({ t: "tool", id, name, input: name === "write_file" ? { path: input.path } : input });
+      const out = await safeRun(c, name, input);
+      o.emit({ t: "result", id, ok: !out.is_error, summary: out.summary, output: (out.output ?? out.content).slice(0, 20_000), image: out.image, diff: out.diff });
+      // Người dùng nhắn thêm khi đang làm: ghép vào kết quả công cụ này để model đọc ngay ở bước kế tiếp, không ngắt việc.
+      const more = o.inbox?.() ?? [];
+      for (const t of more) o.emit({ t: "steer", text: t });
+      const note = more.length ? `\n\n<user_followup>\n${more.join("\n\n")}\n</user_followup>` : "";
+      return { content: out.content + note, is_error: out.is_error, image: out.image };
+    },
+  });
+  try {
+    const r = await subTurn({
+      user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages: o.messages, conv: o.conv, effort: o.effort,
+      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url },
+    });
+    const j = r.json as { text?: string; error?: string; cancelled?: boolean };
+    if (r.status !== 200) throw new Error(j.error ?? "Gói subscription báo lỗi.");
+    if (!pending.trim() && j.text) pending = j.text;
+    flush();
+    return { text: j.text ?? "", skills: [...new Set(c.usedSkills)] };
+  } finally { bridge.close(); }
+}

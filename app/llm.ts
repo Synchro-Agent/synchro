@@ -4,7 +4,6 @@
 //
 // Model thật được gọi qua /api/llm; muốn dùng backend riêng thì đặt NEXT_PUBLIC_LLM_ENDPOINT.
 import type { Project } from "./store";
-import { makeReply } from "./md";
 import type { ContentBlock } from "./fileproc/types";
 import type { Effort } from "./catalog";
 import type { TraceItem } from "./transpile";
@@ -167,11 +166,8 @@ export async function attachRun(id: string, onProgress?: (text: string) => void,
 
 export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; onEvent?: (e: RunEv) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
-  if (!hasLLM) {
-    // Chưa có model: trả lời giả lập từ câu hỏi cuối.
-    const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    return makeReply(textOf(last));
-  }
+  // Không bịa câu trả lời khi chưa có model: báo rõ để người dùng kết nối gói hoặc khóa API.
+  if (!hasLLM) throw new LLMError("Synchro chưa được kết nối với model nào. Đăng nhập gói Claude, ChatGPT hoặc Gemini ở Cài đặt → Providers, hoặc nhập khóa API.", 503);
   const r = await fetch(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },

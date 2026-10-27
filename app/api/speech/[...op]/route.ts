@@ -23,12 +23,33 @@ async function voices(fresh = false) {
   return voiceCache.list;
 }
 const forgetVoices = () => { voiceCache.at = 0; };
-// Giọng mặc định khi người dùng chưa chọn: giọng cùng ngôn ngữ với văn bản (có dấu tiếng Việt → giọng Việt), không thì giọng có sẵn đầu tiên.
+/** Giọng dùng được qua API với gói hiện tại (gói Free: bỏ giọng lấy từ Thư viện). */
+async function usableVoices() {
+  const [p, list] = await Promise.all([plan(), voices().catch(() => [] as Awaited<ReturnType<typeof voices>>)]);
+  return p.library ? list : list.filter((v) => !v.lib);
+}
+// Ngôn ngữ của văn bản theo chữ viết (đủ để chọn giọng; model đa ngôn ngữ tự đọc đúng mọi ngôn ngữ nó hỗ trợ).
+function textLang(t: string) {
+  if (/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(t)) return "vi";
+  if (/[\u3040-\u30ff]/.test(t)) return "ja";
+  if (/[\uac00-\ud7af]/.test(t)) return "ko";
+  if (/[\u4e00-\u9fff]/.test(t)) return "zh";
+  if (/[\u0e00-\u0e7f]/.test(t)) return "th";
+  if (/[\u0400-\u04ff]/.test(t)) return "ru";
+  return "en";
+}
+// Giọng có sẵn nghe tự nhiên ở nhiều ngôn ngữ (model đa ngôn ngữ), dùng khi tài khoản không có giọng riêng cho ngôn ngữ đó.
+const PREFER = ["Sarah", "Jessica", "Alice", "Matilda", "Laura", "George", "Brian"];
+// Giọng đọc: giọng người dùng chọn nếu dùng được với gói; không thì giọng cùng ngôn ngữ với văn bản, rồi giọng có sẵn ưu tiên.
 async function pickVoice(text: string, want?: string) {
-  if (want) return want;
-  const list = await voices().catch(() => []);
-  const vi = /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(text);
-  return (vi ? list.find((v) => v.langCode.startsWith("vi")) : null)?.id ?? list.find((v) => v.category === "premade")?.id ?? list[0]?.id ?? "JBFqnCBsd6RMkjVDRZzb";
+  const list = await usableVoices();
+  const p = await plan();
+  if (want && (p.library || list.some((v) => v.id === want) || !(await voices().catch(() => [])).some((v) => v.id === want && v.lib))) return want;
+  const lang = textLang(text);
+  const byName = (n: string) => list.find((v) => v.category === "premade" && v.name.toLowerCase() === n.toLowerCase());
+  return list.find((v) => v.langCode.toLowerCase().startsWith(lang) && v.category !== "premade")?.id
+    ?? list.find((v) => v.langCode.toLowerCase().startsWith(lang))?.id
+    ?? PREFER.map(byName).find(Boolean)?.id ?? list.find((v) => v.category === "premade")?.id ?? list[0]?.id ?? "JBFqnCBsd6RMkjVDRZzb";
 }
 async function file(form: FormData, key: string, max = MAX_UP) {
   const f = form.get(key);
@@ -57,12 +78,15 @@ async function GETop(req: Request, u: UserRow, op: string) {
     if (q.get("lib") === "1") {
       await need("tts");
       const p = await plan();
+      if (!p.library) throw new SpeechErr("Gói ElevenLabs Free không dùng được giọng Thư viện qua API.", 403, "plan");
       const r = await library({ search: str(q.get("q"), 80), language: str(q.get("lang"), 10), gender: str(q.get("gender"), 20), age: str(q.get("age"), 20), use: str(q.get("use"), 40),
         sort: str(q.get("sort"), 30) || "trending", page: num(q.get("page"), 0, 50, 0), free: p.tier === "free" });
       return Response.json(r);
     }
     if (q.get("id")) { const v = await elJson<Parameters<typeof voiceOut>[0] & { fine_tuning?: unknown }>(`/v1/voices/${encodeURIComponent(q.get("id")!)}`); return Response.json({ voice: voiceOut(v), fineTuning: v.fine_tuning ?? null }); }
-    const list = await voices(q.get("fresh") === "1");
+    const p = await plan();
+    // Gói Free: giọng lấy từ Thư viện không dùng được qua API nên không hiện.
+    const list = (await voices(q.get("fresh") === "1")).filter((v) => p.library || !v.lib);
     const s = str(q.get("q"), 80).toLowerCase();
     return Response.json({ voices: s ? list.filter((v) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.use}`.toLowerCase().includes(s)) : list });
   }
@@ -423,12 +447,21 @@ async function projectStatus(u: UserRow, id: string) {
 
 // ---- trò chuyện giọng nói ----
 async function agentSession(u: UserRow, b: Record<string, unknown>) {
-  await need("agent");
+  const p = await need("agent");
   try { limit("voice:" + u.id, 30, 60 * 60_000); } catch { throw new SpeechErr("Bạn đã mở quá nhiều cuộc gọi thử. Hãy thử lại sau.", 429); }
+  // Khóa chưa có quyền Realtime (convai_write) hoặc gói hết phút Realtime: trình duyệt gọi bằng chế độ nối tiếp
+  // (Scribe nghe → model chat trả lời → giọng ElevenLabs đọc), vẫn là giọng AI thật.
+  if (!p.realtime) return Response.json({ cascade: true });
   const instructions = [str(b.prompt, 8000) || "Bạn là trợ lý giọng nói thân thiện.", "Đây là hội thoại bằng giọng nói: trả lời tự nhiên như người thật, câu ngắn; không dùng Markdown, danh sách hay ký hiệu."].join("\n\n");
-  const s = await mintRealtime({ model: str(b.model, 40), voice: str(b.voice, 40), instructions, language: str(b.lang, 8) || undefined,
-    eagerness: (["low", "medium", "high"] as const).find((x) => x === b.eagerness) ?? "medium", interrupt: bool(b.interrupt, true), maxSeconds: num(b.maxMin, 1, 60, 10) * 60 });
-  return Response.json(s);
+  try {
+    const s = await mintRealtime({ model: str(b.model, 40), voice: str(b.voice, 40), instructions, language: str(b.lang, 8) || undefined,
+      eagerness: (["low", "medium", "high"] as const).find((x) => x === b.eagerness) ?? "medium", interrupt: bool(b.interrupt, true), maxSeconds: num(b.maxMin, 1, 60, 10) * 60 });
+    return Response.json(s);
+  } catch (e) {
+    const err = e as SpeechErr;
+    if (err.code === "key" || err.code === "net" || err.code === "no_key") throw e;
+    return Response.json({ cascade: true });
+  }
 }
 
 async function POSTop(req: Request, u: UserRow, op: string[]) {

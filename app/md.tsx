@@ -275,17 +275,3 @@ export function Markdown({ text: text0, say, dev, viz, live }: { text: string; s
   );
 }
 
-export function makeReply(q: string): string {
-  return tr(makeViReply(q));
-}
-
-function makeViReply(q: string): string {
-  const s = q.toLowerCase();
-  if (/code|lập trình|python|javascript|js|hàm|function|react|bug|program/.test(s))
-    return "Dưới đây là một ví dụ ngắn bạn có thể bắt đầu:\n\n```python\ndef chao(ten: str) -> str:\n    return f\"Xin chào, {ten}!\"\n\nprint(chao(\"Synchro\"))\n```\n\nHàm trên nhận một **chuỗi** và trả về lời chào. Bạn muốn tôi:\n\n- giải thích từng dòng\n- thêm kiểm thử đơn vị\n- chuyển sang `TypeScript`";
-  if (/viết|email|thư|bài|write|draft|letter/.test(s))
-    return "Tất nhiên rồi! Để viết tốt hơn, tôi cần biết thêm vài điều:\n\n1. **Mục đích** của nội dung là gì?\n2. **Người đọc** là ai?\n3. Giọng văn bạn muốn: trang trọng hay thân mật?\n\nHãy cho tôi biết và tôi sẽ soạn bản nháp đầu tiên ngay.";
-  if (/học|giải thích|là gì|learn|explain|what is|how/.test(s))
-    return "Câu hỏi hay! Tôi sẽ giải thích theo từng bước:\n\n- Bắt đầu từ **khái niệm cốt lõi**\n- Sau đó là một ví dụ đơn giản\n- Cuối cùng là bài tập nhỏ để bạn luyện tập\n\nBạn muốn tôi bắt đầu từ đâu?";
-  return "Đây là câu trả lời giả lập. Hãy nối API AI thật vào hàm `streamReply` để nhận phản hồi streaming từ mô hình.\n\nTrong lúc này, bạn có thể thử hỏi về **code**, **viết** hoặc **học tập** để xem các kiểu hiển thị khác nhau.";
-}

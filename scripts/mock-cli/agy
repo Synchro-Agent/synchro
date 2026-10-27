@@ -5,6 +5,8 @@
 //   màn hình đó được ghi lại để kiểm thử chắc chắn Synchro không bấm thay người dùng;
 // - `models` in "mã<TAB>Tên" sau dòng "Fetching available models...", gồm biến thể effort và cả model Claude / GPT;
 // - --output-format json [--model] [--effort] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức.
+// - `mcp add|remove|list` ghi ~/.gemini/config/mcp_config.json đúng định dạng của agy ({ mcpServers: { tên: { serverUrl, headers, disabled } } });
+//   ở chế độ -p, công cụ MCP cần duyệt bị tự từ chối trừ khi hook PreToolUse trong ~/.gemini/config/hooks.json trả "allow" (tài liệu của agy).
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
@@ -17,6 +19,12 @@ const MODELS = [
   ["gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"],
   ["claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"], ["claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"], ["gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"],
 ];
+const cfgDir = path.join(gem, "config"), mcpFile = path.join(cfgDir, "mcp_config.json"), hooksFile = path.join(cfgDir, "hooks.json");
+const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8") || "{}"); } catch { return {}; } };
+// Hook PreToolUse có matcher khớp tên công cụ và lệnh in quyết định "allow".
+const hookAllows = (tool) => Object.values(readJson(hooksFile)).some((h) => h?.enabled !== false && (h?.PreToolUse ?? []).some((g) => {
+  try { return new RegExp(`^(?:${g.matcher || ".*"})$`).test(tool) && (g.hooks ?? []).some((x) => /decision[\\"' ]*:[\\"' ]*allow/.test(String(x.command ?? ""))); } catch { return false; }
+}));
 const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "utf8")).onboardingComplete === true; } catch { return false; } };
 
 (async () => {
@@ -29,6 +37,24 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
     const extra = (() => { try { return fs.readFileSync(path.join(cli, "mock-extra-models"), "utf8").trim().split("\n"); } catch { return []; } })();
     return console.log([...MODELS.map(([id, n]) => `${id}\t${n}`), ...extra].join("\n"));
   }
+  if (a[0] === "mcp") {
+    const c = readJson(mcpFile); c.mcpServers ??= {};
+    if (a[1] === "add") {
+      const rest = a.slice(2), headers = {};
+      while (rest[0] === "--header" || rest[0] === "-H") { const [k, ...v] = rest[1].split(":"); headers[k.trim()] = v.join(":").trim(); rest.splice(0, 2); }
+      const [name, url] = rest;
+      if (!name || !url) { console.error("Usage: agy mcp add [flags] <name> <commandOrUrl> [args...]"); process.exit(2); }
+      c.mcpServers[name] = { disabled: false, ...(Object.keys(headers).length ? { headers } : {}), serverUrl: url };
+      fs.mkdirSync(cfgDir, { recursive: true }); fs.writeFileSync(mcpFile, JSON.stringify(c, null, 2));
+      return console.log(`Added MCP server "${name}" (http)`);
+    }
+    if (a[1] === "remove") {
+      if (!c.mcpServers[a[2]]) { console.error(`MCP server "${a[2]}" not found`); process.exit(1); }
+      delete c.mcpServers[a[2]]; fs.writeFileSync(mcpFile, JSON.stringify(c, null, 2));
+      return console.log(`Removed MCP server "${a[2]}"`);
+    }
+    return console.log(["NAME     TYPE  STATUS   COMMAND/URL", ...Object.entries(c.mcpServers).map(([n, v]) => `${n}  http  ${v.disabled ? "disabled" : "enabled"}  ${v.serverUrl}`)].join("\n"));
+  }
   if (a.includes("-p")) {
     const prompt = C.flag(a, "-p") ?? "", conv = C.flag(a, "--conversation") || C.uuid();
     if (!li) {
@@ -39,7 +65,22 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
     if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
     const turn = C.bumpSession(gem, conv);
     const model = C.flag(a, "--model"), effort = C.flag(a, "--effort");
-    const text = C.reply("Gemini (Antigravity)", prompt, turn) + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : "");
+    // Công cụ của Synchro qua máy chủ MCP "synchro" trong cấu hình chung của tài khoản.
+    const srv = readJson(mcpFile).mcpServers?.synchro;
+    let note = "";
+    if (srv && !srv.disabled) {
+      const ask = C.toolAsk(prompt);
+      if (!ask) note = ` [công cụ Synchro: ${(await C.mcp(srv.serverUrl).catch(() => ({ tools: [] }))).tools.length}]`;
+      else if (!hookAllows(`mcp_synchro_${ask.name}`)) {
+        console.error(`the mcp_synchro_${ask.name} tool(s) required approval that headless mode cannot prompt for, so they were auto-denied. Settings allow-rules do not apply; re-run with --dangerously-skip-permissions to auto-approve all tools.`);
+        note = " [công cụ bị từ chối]";
+      } else {
+        const r = await C.mcp(srv.serverUrl, ask).catch((e) => ({ error: { message: String(e) } }));
+        const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n");
+        note = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
+      }
+    }
+    const text = C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : "");
     await C.sleep(200);
     return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: text, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length, thinking_tokens: 12, cache_read_tokens: 0, total_tokens: prompt.length + text.length + 12 } }));
   }

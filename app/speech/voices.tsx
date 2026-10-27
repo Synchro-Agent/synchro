@@ -34,7 +34,9 @@ export function VoicesTool({ say, sub, setSub, go, setVoice, admin }: ToolProps)
   const mine = useMyVoices();
   const can = { design: on(plan, "design"), remix: on(plan, "remix"), ivc: on(plan, "ivc"), pvc: on(plan, "pvc") };
   const creatable = (["design", "ivc", "pvc"] as const).filter((k) => can[k]);
-  const want = (["mine", "library", "create", "ivc", "pvc", "design", "remix"] as const).find((x) => x === sub) ?? "mine";
+  // Gói Free không dùng được giọng Thư viện qua API: không hiện mục Thư viện.
+  const lib = !!plan?.library;
+  const want = (["mine", "library", "create", "ivc", "pvc", "design", "remix"] as const).filter((x) => lib || x !== "library").find((x) => x === sub) ?? "mine";
   const tab: Sub = (want === "create" && !creatable.length && !can.remix) || (["ivc", "pvc", "design", "remix"].includes(want) && !can[want as "ivc"]) ? "mine" : want;
   const top = tab === "mine" || tab === "library" ? tab : "create";
   const [playing, setPlaying] = useState<string | null>(null);
@@ -68,9 +70,9 @@ export function VoicesTool({ say, sub, setSub, go, setVoice, admin }: ToolProps)
   return (
     <div className="sp-wide">
       <ToolHead title={tab === "ivc" ? "Nhân bản nhanh" : tab === "pvc" ? "Nhân bản chuyên sâu" : tab === "design" ? "Thiết kế giọng" : tab === "remix" ? "Remix giọng" : "Giọng nói"}
-        desc={top === "create" && tab !== "create" ? "Làm theo các bước bên dưới. Giọng tạo xong nằm trong Giọng của tôi." : `Giọng trong tài khoản ElevenLabs, thư viện cộng đồng${creatable.length ? " và tạo giọng mới của riêng bạn" : ""}.${slots && slots.limit ? ` Đã dùng ${slots.used}/${slots.limit} chỗ lưu giọng.` : ""}`}>
+        desc={top === "create" && tab !== "create" ? "Làm theo các bước bên dưới. Giọng tạo xong nằm trong Giọng của tôi." : `Giọng trong tài khoản ElevenLabs${lib ? ", thư viện cộng đồng" : ""}${creatable.length ? " và tạo giọng mới của riêng bạn" : ""}.${slots && slots.limit ? ` Đã dùng ${slots.used}/${slots.limit} chỗ lưu giọng.` : ""}`}>
         {tab === "create" || tab === "mine" || tab === "library"
-          ? <Tabs label="Mục" value={top} onChange={(k) => setSub(k)} items={[{ k: "mine", label: "Giọng của tôi" }, { k: "library", label: "Thư viện" }, ...(creatable.length || can.remix ? [{ k: "create" as const, label: "Tạo giọng" }] : [])]} />
+          ? <Tabs label="Mục" value={top} onChange={(k) => setSub(k)} items={[{ k: "mine", label: "Giọng của tôi" }, ...(lib ? [{ k: "library" as const, label: "Thư viện" }] : []), ...(creatable.length || can.remix ? [{ k: "create" as const, label: "Tạo giọng" }] : [])]} />
           : <Back label="Tạo giọng" onClick={() => setSub("create")} />}
       </ToolHead>
 

@@ -3,11 +3,7 @@
 // và tự rút từ cuộc trò chuyện bằng model nhanh (bỏ chủ đề nhạy cảm trừ khi người dùng cho phép).
 import crypto from "node:crypto";
 import { db, getSetting, setSetting, type UserRow } from "./authstore";
-import { catalog, mainModels, resolveModel } from "./providers";
-import { ALL } from "./catalog";
-import { routeModel } from "./router";
-import { chatOnce } from "./llmcall";
-import { canModel } from "./authstore";
+import { quickCall } from "./ai/anymodel";
 
 export type Mem = { id: string; content: string; createdAt: number; source: string };
 export type MemCfg = { gen: boolean; sens: boolean };
@@ -61,17 +57,13 @@ Bỏ qua: yêu cầu một lần, chi tiết của riêng câu hỏi này, đi�
 Viết mỗi mục thành một câu ngắn ở ngôi thứ ba, cùng ngôn ngữ người dùng dùng (ví dụ "Thích câu trả lời ngắn gọn, đi thẳng vào ý chính.").
 Trả về DUY NHẤT một mảng JSON các chuỗi (tối đa 3 mục), hoặc [] nếu không có gì đáng nhớ.`;
 
-/** Rút bộ nhớ từ lượt vừa xong (chạy nền, không làm chậm câu trả lời). Chỉ dùng model khóa API nhanh nhất được phép, không tốn gói. */
+/** Rút bộ nhớ từ lượt vừa xong (chạy nền, không làm chậm câu trả lời) bằng model nhanh nhất đang dùng được: gói subscription
+ *  hoặc khóa API như nhau (gói thì chạy một lượt ngắn của CLI chính chủ). */
 export async function learnFromTurn(user: UserRow, question: string, answer: string) {
   const cfg = memCfg(user.id);
   if (!cfg.gen || question.trim().length < 8) return;
-  const main = mainModels();
-  const allowed = (await catalog()).flatMap((p) => p.models.map((m) => m.key)).filter((k) => (main.includes(ALL) || main.includes(k)) && canModel(user, k));
-  const pick = routeModel({ text: "xin chào", attachments: 0, turns: 1, studio: false }, allowed);
-  const target = pick && (await resolveModel(pick.model));
-  if (!target || target.kind === "mock") return;
   const existing = listMemory(user.id).map((m) => `- ${m.content}`).join("\n") || "(trống)";
-  const text = await chatOnce(target, EXTRACT(cfg.sens), [{ role: "user", content: `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}` }], 400).catch(() => "");
+  const text = await quickCall(user, EXTRACT(cfg.sens), `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}`, { maxTokens: 400 }).then((r) => r.text).catch(() => "");
   const json = /\[[\s\S]*\]/.exec(text)?.[0];
   if (!json) return;
   try {

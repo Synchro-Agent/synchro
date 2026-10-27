@@ -9,6 +9,8 @@ export type Plan = {
   credits: { used: number; limit: number; resetAt: number | null };
   voices: { used: number; limit: number }; pro: { used: number; limit: number };
   features: Record<Feat, boolean>; locked: Partial<Record<Feat, string>>;
+  /** Quyền khóa còn thiếu (tính năng đó bị ẩn); realtime: dùng được Eleven Realtime; library: dùng được giọng Thư viện qua API (gói trả phí). */
+  perms: Partial<Record<Feat, string>>; realtime: boolean; library: boolean;
   formats: { id: string; label: string }[]; tts: ModelOut[]; sts: ModelOut[];
   note: string | null; checkedAt: number;
 };

@@ -22,7 +22,7 @@ const wav = () => new Blob([Buffer.from("RIFF0000WAVEfmt mock-audio")], { type: 
 
 // Gắn khóa ElevenLabs giả lập (dev:mock đã gắn sẵn; bộ khác có thể đã đổi khóa) và bắt đầu ở gói Free sạch.
 await admin("POST", "/api/admin/apikeys", { id: "elevenlabs", kind: "elevenlabs", key: "sk_mock_eleven_0001", baseUrl: `${M}/elevenlabs` });
-await el({ tier: "free", studio: false, lockMusic: false, used: 0, reset: true });
+await el({ tier: "free", studio: false, lockMusic: false, used: 0, reset: true, noPerms: [] });
 
 console.log("1. Quét gói Free");
 let p = (await admin("GET", "/api/speech/plan?fresh=1")).j;
@@ -32,6 +32,7 @@ ok(!p.features.ivc && !p.features.pvc && !p.features.dubClean, "gói Free ẩn n
 ok(!p.features.podcast && !p.features.book, "Studio chưa được ElevenLabs duyệt → ẩn podcast, sách nói");
 ok(!p.formats.some((f) => f.id === "mp3_44100_192" || f.id === "wav_44100") && p.formats.some((f) => f.id === "mp3_44100_128"), "định dạng chất lượng cao chỉ hiện ở gói cao hơn");
 ok(p.tts.some((m) => m.id === "eleven_v4" && m.max === 10000) && p.sts.length > 0, "model đọc và đổi giọng lấy từ ElevenLabs, giới hạn ký tự theo gói", JSON.stringify(p.tts.slice(0, 2)));
+ok(p.library === false && p.realtime === true && Object.keys(p.perms).length === 0, "gói Free: không dùng giọng Thư viện qua API; khóa đủ quyền, có Realtime", JSON.stringify({ library: p.library, realtime: p.realtime, perms: p.perms }));
 
 console.log("2. Giọng");
 let r = await admin("GET", "/api/speech/voices");
@@ -39,12 +40,21 @@ const mine = r.j?.voices ?? [];
 const ngan = mine.find((v) => v.langCode === "vi");
 ok(r.s === 200 && mine.length >= 5 && ngan?.gender === "Nữ" && ngan.preview, "giọng của tài khoản, nhãn tiếng Việt, có bản nghe thử", JSON.stringify(mine[0]));
 r = await admin("GET", "/api/speech/voices?lib=1&lang=vi");
+ok(r.s === 403, "gói Free: không mở Thư viện (ElevenLabs không cho gói Free dùng giọng Thư viện qua API)", JSON.stringify(r.j));
+// Như tài khoản thật: giọng Thư viện đã thêm từ trước (lúc gói khác / trên web ElevenLabs) vẫn chiếm chỗ nhưng không dùng được.
+await el({ tier: "starter" });
+await admin("GET", "/api/speech/plan?fresh=1");
+r = await admin("GET", "/api/speech/voices?lib=1&lang=vi");
 const lib = r.j?.voices ?? [];
-ok(r.s === 200 && lib.length >= 3 && lib.every((v) => v.free !== false), "thư viện ở gói Free chỉ có giọng cho phép người dùng miễn phí", JSON.stringify(lib.map((v) => [v.name, v.free])));
+ok(r.s === 200 && lib.length >= 3, "gói trả phí: có Thư viện", JSON.stringify(r.j).slice(0, 200));
 r = await admin("POST", "/api/speech/voices/add", { owner: lib[0].owner, id: lib[0].id, name: lib[0].name });
 ok(r.s === 200 && r.j.voiceId && r.j.credits, "thêm giọng thư viện vào tài khoản", JSON.stringify(r.j));
+const libVoice = r.j.voiceId;
+await el({ tier: "free" });
 p = (await admin("GET", "/api/speech/plan?fresh=1")).j;
 ok(p.voices.used === 1, "dùng một chỗ lưu giọng", JSON.stringify(p.voices));
+r = await admin("GET", "/api/speech/voices?fresh=1");
+ok(r.s === 200 && !r.j.voices.some((v) => v.id === libVoice), "gói Free: giọng Thư viện trong tài khoản không hiện để chọn");
 
 console.log("3. Đọc văn bản và lịch sử");
 const viIds = ((await admin("GET", "/api/speech/voices")).j?.voices ?? []).filter((v) => v.langCode === "vi").map((v) => v.id);
@@ -63,6 +73,13 @@ r = await admin("POST", "/api/speech/tts", { text: "Định dạng cao", format:
 ok(r.s === 200 && r.j.item.meta.format === "mp3_44100_128", "định dạng gói chưa có → dùng định dạng mặc định thay vì lỗi", JSON.stringify(r.j?.item?.meta));
 r = await admin("POST", "/api/speech/dialogue", { lines: [{ text: "Chào bạn!", voice: mine[0].id, name: mine[0].name }, { text: "Chào lại nhé.", voice: mine[1].id, name: mine[1].name }] });
 ok(r.s === 200 && r.j.item.kind === "dialogue" && r.j.item.meta.speakers.length === 2, "hội thoại hai giọng", JSON.stringify(r.j).slice(0, 200));
+
+r = await admin("POST", "/api/speech/tts", { text: "Xin chào bằng giọng thư viện.", voice: libVoice });
+ok(r.s === 200 && r.j.item.meta.voice !== libVoice && viIds.includes(r.j.item.meta.voice), "giọng đã lưu không dùng được với gói → tự đổi sang giọng dùng được, không báo lỗi", JSON.stringify(r.j?.item?.meta ?? r.j));
+r = await admin("POST", "/api/speech/tts", { text: "Giọng thư viện chưa thêm.", voice: "lib-vi-02" });
+ok(r.s === 402 && r.j.code === "voice", "ElevenLabs từ chối giọng Thư viện → lỗi của giọng", JSON.stringify(r.j));
+p = (await admin("GET", "/api/speech/plan")).j;
+ok(p.features.tts === true && !p.locked.tts, "không khóa cả tính năng Đọc văn bản chỉ vì một giọng", JSON.stringify(p.locked));
 
 console.log("4. Chép lời, căn phụ đề, âm thanh");
 let fd = new FormData(); fd.set("file", wav(), "phong-van.wav"); fd.set("diarize", "true"); fd.set("entities", "true");
@@ -152,15 +169,34 @@ r = await admin("POST", "/api/speech/agent/session", { model: "eleven_realtime_v
 let dbg = await fetch(`${M}/_debug/rt`).then((x) => x.json());
 const sess = dbg.sessions.at(-1);
 ok(r.s === 200 && r.j.value && sess?.model === "eleven_realtime_v1_mini" && sess.voice === ngan.id && sess.language === "vi" && /trợ lý đặt lịch/.test(sess.instructions), "Voice Agent: đúng model, giọng, ngôn ngữ, hướng dẫn", JSON.stringify(sess));
-r = await admin("POST", "/api/voice/session", { lang: "vi", voice: ngan.id });
+r = await admin("POST", "/api/speech/agent/session", { model: "eleven_realtime_v1_mini", voice: ngan.id, prompt: "Bạn là trợ lý.", lang: "" });
+ok(r.s === 200 && r.j.value && !(await fetch(`${M}/_debug/rt`).then((x) => x.json())).sessions.at(-1).language, "Voice Agent ngôn ngữ Tự nhận diện → không ép ngôn ngữ");
+r = await admin("POST", "/api/voice/session", { voice: ngan.id });
 dbg = await fetch(`${M}/_debug/rt`).then((x) => x.json());
-ok(r.s === 200 && r.j.value && dbg.sessions.at(-1).language === "vi" && dbg.sessions.at(-1).voice === ngan.id, "trò chuyện bằng giọng nói nghe đúng tiếng Việt, dùng giọng đã chọn", JSON.stringify(dbg.sessions.at(-1)));
+ok(r.s === 200 && r.j.value && !dbg.sessions.at(-1).language && dbg.sessions.at(-1).voice === ngan.id, "trò chuyện bằng giọng nói: không ép ngôn ngữ (tự nhận người dùng nói tiếng gì), dùng giọng đã chọn", JSON.stringify(dbg.sessions.at(-1)));
 const sp = await admin("POST", "/api/speech/speak", { text: "Đây là **câu trả lời** có `code`.", speed: 1.1 }, { raw: true });
 ok(sp.status === 200 && /audio/.test(sp.headers.get("content-type")) && sp.headers.get("x-accel-buffering") === "no" && (await sp.arrayBuffer()).byteLength > 1000, "đọc to câu trả lời bằng giọng ElevenLabs (phát dần)");
 r = await admin("POST", "/api/speech/live/save", { kind: "call", lines: [{ who: "ai", text: "Xin chào" }, { who: "me", text: "Chào bạn" }], seconds: 12 });
 ok(r.s === 200 && r.j.item.kind === "call" && r.j.item.meta.lines === 2, "lưu lời thoại cuộc gọi thử vào lịch sử");
 
-console.log("11. Quyền");
+console.log("11. Khóa thiếu quyền (như khóa thật: thiếu convai_write, dubbing_write)");
+await el({ noPerms: ["convai_write", "dubbing_write"] });
+p = (await admin("GET", "/api/speech/plan?fresh=1")).j;
+ok(p.features.dub === false && p.perms.dub === "dubbing_write" && p.features.dubClean === false, "thiếu quyền lồng tiếng → ẩn Lồng tiếng, nhớ tên quyền", JSON.stringify(p.perms));
+ok(p.realtime === false && p.features.agent === true && p.features.tts && p.features.stt && p.features.sfx, "thiếu quyền Realtime → Voice Agent vẫn hiện (chạy nối tiếp), các tính năng khác giữ nguyên", JSON.stringify(p.features));
+fd = new FormData(); fd.set("url", "https://youtube.com/watch?v=abc"); fd.set("target", "en");
+r = await admin("POST", "/api/speech/dub", fd);
+ok(r.s === 403 && r.j.code === "perm" && /dubbing_write/.test(r.j.error), "gọi thẳng lồng tiếng → báo đúng quyền còn thiếu", JSON.stringify(r.j));
+r = await admin("POST", "/api/speech/agent/session", { prompt: "Bạn là trợ lý." });
+ok(r.s === 200 && r.j.cascade === true && !r.j.value, "Voice Agent → chế độ nối tiếp (Scribe + model chat + giọng ElevenLabs)", JSON.stringify(r.j));
+r = await admin("POST", "/api/voice/session", {});
+ok(r.s === 200 && r.j.fallback && r.j.cascade && !r.j.error, "trò chuyện giọng nói → chế độ nối tiếp, không hiện lỗi", JSON.stringify(r.j));
+r = await admin("POST", "/api/speech/live/token", {});
+ok(r.s === 200 && r.j.token, "Scribe vẫn dùng được (quyền chép lời còn)");
+await el({ noPerms: [] });
+await admin("GET", "/api/speech/plan?fresh=1");
+
+console.log("12. Quyền");
 const anon = client();
 ok((await anon("GET", "/api/speech/plan")).s === 401, "chưa đăng nhập → 401");
 const member = client();
@@ -174,6 +210,6 @@ ok(r.s === 200, "quản trị viên xóa được giọng tự tạo");
 r = await admin("DELETE", `/api/speech/items?id=${item.id}`);
 ok(r.s === 200 && (await admin("GET", item.url, undefined, { raw: true })).status === 404, "xóa sản phẩm xóa luôn tệp");
 
-await el({ tier: "free", studio: false, lockMusic: false, used: 0, reset: true });
+await el({ tier: "free", studio: false, lockMusic: false, used: 0, reset: true, noPerms: [] });
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

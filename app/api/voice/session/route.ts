@@ -1,6 +1,6 @@
 import { can, current, limit, sameOrigin } from "../../../authstore";
 import { serviceKey } from "../../../providers";
-import { SpeechErr, mintRealtime } from "../../../speechapi";
+import { SpeechErr, mintRealtime, plan } from "../../../speechapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,18 +35,19 @@ export async function POST(req: Request) {
   // Chưa gắn khoá ElevenLabs, hoặc tài khoản chưa được bật Speech: trình duyệt dùng chế độ dự phòng (nhận dạng và đọc bằng trình duyệt).
   if (!serviceKey("elevenlabs") || !can(c.user, "speech")) return Response.json({ fallback: true });
   try { limit("voice:" + c.user.id, 20, 60 * 60_000); } catch { return Response.json({ error: "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau." }, { status: 429 }); }
-  const b = (await req.json().catch(() => ({}))) as { lang?: string; voice?: string };
-  const lang = typeof b.lang === "string" && /^[a-z]{2,3}(-[a-z]{2})?$/i.test(b.lang) ? b.lang.toLowerCase() : "";
+  const b = (await req.json().catch(() => ({}))) as { voice?: string };
   const voice = typeof b.voice === "string" && /^[\w-]{3,40}$/.test(b.voice) ? b.voice : VOICE;
+  // Khóa chưa có quyền Realtime (convai_write): dùng ngay chế độ nối tiếp (Scribe tự nhận ngôn ngữ → model chat → giọng ElevenLabs),
+  // không báo lỗi vì người dùng vẫn trò chuyện bằng giọng AI thật như thường.
+  const p = await plan().catch(() => null);
+  if (p?.connected && (!p.realtime || !p.features.agent) && !p.perms.tts && !p.perms.stt) return Response.json({ fallback: true, cascade: true });
   try {
-    const s = await mintRealtime({ model: MODEL, voice, instructions: INSTRUCTIONS + DELEGATE, language: lang || undefined, eagerness: "medium", maxSeconds: 900, tools: TOOLS });
+    // Không đặt ngôn ngữ: Eleven Realtime tự nhận ngôn ngữ người nói và trả lời đúng ngôn ngữ đó.
+    const s = await mintRealtime({ model: MODEL, voice, instructions: INSTRUCTIONS + DELEGATE, eagerness: "medium", maxSeconds: 900, tools: TOOLS });
     return Response.json({ value: s.value, expiresAt: s.expiresAt, model: s.model, url: s.url, tools: s.tools });
   } catch (e) {
     const err = e as SpeechErr;
-    const why = err.code === "perm" ? err.message.replace(/ \(hoặc dùng khóa không giới hạn\)\.$/, ".")
-      : err.code === "quota" || err.code === "plan" ? "Đã hết phút trò chuyện thời gian thực của gói ElevenLabs."
-      : "Không mở được phiên giọng nói ElevenLabs.";
-    const cascade = err.code !== "key" && err.code !== "net";
-    return Response.json({ fallback: true, cascade, error: `${why} ${cascade ? "Tạm thời Synchro nghe bằng Scribe và đọc bằng giọng ElevenLabs." : "Tạm thời dùng giọng của trình duyệt."}` });
+    const cascade = err.code !== "key" && err.code !== "net" && err.code !== "no_key";
+    return Response.json({ fallback: true, cascade, ...(cascade ? {} : { error: "Không kết nối được tới ElevenLabs. Tạm thời dùng giọng của trình duyệt." }) });
   }
 }

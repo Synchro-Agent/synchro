@@ -6,7 +6,7 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
-import { elevenHandler, scribeConnect } from "./mock-eleven.mjs";
+import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
@@ -506,6 +506,17 @@ async function handler(req, res) {
     if (!valid(u.searchParams.get("key"))) return send(res, 400, { error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } });
     return send(res, 200, { models: GOOGLE.map(([id, displayName, method]) => ({ name: `models/${id}`, displayName, supportedGenerationMethods: [method] })) });
   }
+  // API gốc: generateContent với Google Search (Synchro dùng cho công cụ web_search khi chat Gemini bằng khóa API).
+  const gm = /^\/google\/v1beta\/models\/([\w.-]+):generateContent$/.exec(p);
+  if (gm && req.method === "POST") {
+    if (!valid(req.headers["x-goog-api-key"] ?? u.searchParams.get("key"))) return send(res, 400, { error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } });
+    if (!GOOGLE.some(([id]) => id === gm[1])) return send(res, 404, { error: { code: 404, message: `models/${gm[1]} is not found`, status: "NOT_FOUND" } });
+    const q = (b.contents ?? []).flatMap((c) => c.parts ?? []).map((x) => x.text ?? "").join(" ");
+    const grounded = (b.tools ?? []).some((t) => t.google_search);
+    return send(res, 200, { candidates: [{ content: { role: "model", parts: [{ text: grounded ? `Kết quả Google Search (giả lập) cho “${q.slice(0, 80)}”: tin mới nhất hôm nay.` : `Trả lời (giả lập): ${q.slice(0, 80)}` }] },
+      finishReason: "STOP", ...(grounded ? { groundingMetadata: { webSearchQueries: [q], groundingChunks: [{ web: { uri: "https://example.com/tin-moi", title: "Tin mới (giả lập)" } }] } } : {}) }],
+      usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 30, totalTokenCount: 50 } });
+  }
   if (p === "/google/v1beta/openai/chat/completions") {
     if (!valid(auth)) return send(res, 400, [{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]);
     if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
@@ -524,7 +535,9 @@ async function handler(req, res) {
     }
     const cr = capsFor(b.messages?.find((m) => m.role === "system")?.content, q, b.messages, b.tools, b.tool_choice === "none");
     if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: cr.text }, finish_reason: "stop" }] }); }
-    const want = cr?.tool ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
+    // "#web" và có công cụ web_search của Synchro: model gọi tìm web.
+    const webAsk = q.includes("#web") && normTools(b.tools).some((t) => t.name === "web_search") && b.tool_choice !== "none" ? { name: "web_search", args: { query: q.replace("#web", "").trim().slice(0, 80) } } : null;
+    const want = cr?.tool ?? webAsk ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
     if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } })] }, finish_reason: "tool_calls" }] });
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));
@@ -534,7 +547,7 @@ async function handler(req, res) {
   // ---- ElevenLabs Realtime: cấp khóa tạm cho phiên (giữ cấu hình để WebSocket giả lập dùng) ----
   if (p === "/elevenlabs/v1/convai/realtime/client_secrets" && req.method === "POST") {
     if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
-    if (elevenNo(req, "agents")) return send(res, 401, { detail: { status: "missing_permissions", message: "The API key you used is missing the permission convai_write to execute this operation." } });
+    if (elevenNo(req, "agents") || (EL.cfg.noPerms ?? []).includes("convai_write")) return send(res, 401, { detail: { status: "missing_permissions", message: "The API key you used is missing the permission convai_write to execute this operation." } });
     const sess = b.session ?? {};
     if (sess.model !== "eleven_realtime_v1_max" && sess.model !== "eleven_realtime_v1_mini") return send(res, 422, { detail: { message: "Unknown model" } });
     if (sess.tools && !RT.cfg.tools) return send(res, 422, { detail: { message: "Unknown field: session.tools" } });

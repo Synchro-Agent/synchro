@@ -1,6 +1,7 @@
 // ElevenLabs giả lập cho npm run dev:mock: cùng đường dẫn, tham số, lỗi và giới hạn theo gói như API thật (đặc tả OpenAPI 10/2026),
 // trả âm thanh WAV thật (tiếng ngân nhẹ theo nhịp âm tiết) để trình phát, tải xuống, dạng sóng đều chạy được.
 // Đổi gói để thử giao diện theo gói: POST /_debug/el { tier: "free" | "starter" | "creator" | "pro", studio: true, lockMusic: true, used: 9990 }.
+// Khóa giới hạn quyền như khóa thật: POST /_debug/el { noPerms: ["convai_write", "dubbing_write"] } (ElevenLabs kiểm tra quyền trước nội dung).
 const TIER = {
   free: { chars: 10_000, voices: 3, pro: 0, ivc: false, pvc: false },
   starter: { chars: 30_000, voices: 10, pro: 0, ivc: true, pvc: false },
@@ -27,8 +28,15 @@ const LIB = [
   ["lib-ja-01", "owner-g", "Yuki", "female", "young", "tokyo", "characters", "ja", "Bright, anime", false, 21_000],
   ["lib-ko-01", "owner-h", "Jiwoo", "male", "young", "seoul", "conversational", "ko", "Soft, conversational", true, 9_700],
 ];
+// Quyền của khóa theo đường dẫn (đúng tên quyền của ElevenLabs).
+const PERMS = [
+  [/^\/v1\/text-to-speech\//, "POST", "text_to_speech"], [/^\/v1\/text-to-dialogue/, "POST", "text_to_speech"], [/^\/v1\/speech-to-text$/, "POST", "speech_to_text"],
+  [/^\/v1\/single-use-token\/realtime_scribe/, "POST", "speech_to_text"], [/^\/v1\/sound-generation/, "POST", "sound_generation"], [/^\/v1\/music/, "POST", "music_generation"],
+  [/^\/v1\/audio-isolation/, "POST", "audio_isolation"], [/^\/v1\/speech-to-speech\//, "POST", "speech_to_speech"], [/^\/v1\/forced-alignment/, "POST", "forced_alignment"],
+  [/^\/v1\/text-to-voice/, "POST", "voices_write"], [/^\/v1\/voices\/add/, "POST", "voices_write"], [/^\/v1\/dubbing/, "POST", "dubbing_write"],
+];
 export const EL = {
-  cfg: { tier: "free", studio: false, lockMusic: false },
+  cfg: { tier: "free", studio: false, lockMusic: false, noPerms: [] },
   used: 0, custom: [], dubs: new Map(), projects: new Map(), pvc: new Map(), calls: [],
 };
 const t = () => TIER[EL.cfg.tier] ?? TIER.free;
@@ -88,6 +96,8 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
   const ep = p.replace(/^\/elevenlabs/, ""), m = req.method;
   EL.calls.push(`${m} ${ep}`);
   const missing = (perm) => err(res, 401, "missing_permissions", `The API key you used is missing the permission ${perm} to execute this operation.`);
+  const need = PERMS.find(([re, meth]) => re.test(ep) && (!meth || meth === m))?.[2];
+  if (need && (EL.cfg.noPerms ?? []).includes(need)) return missing(need);
 
   if (ep === "/v1/user") return elevenNo(req, "user") ? missing("user_read") : json(res, 200, { subscription: { tier: EL.cfg.tier }, user_id: "mock-user" });
   if (ep === "/v1/user/subscription") {
@@ -124,6 +134,8 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
     if (EL.cfg.tier === "free" && !lib[9]) return err(res, 403, "free_users_not_allowed", "Free users cannot use this library voice. Please upgrade your subscription.");
     if (EL.custom.length >= t().voices) return err(res, 400, "voice_limit_reached", `You have reached your maximum amount of custom voices (${t().voices}).`);
     const v = voiceRaw([rid("v"), b.new_name || lib[2], lib[3], lib[4], lib[5], lib[6], lib[7]], "professional");
+    // Như API thật: giọng thêm từ Thư viện không thuộc sở hữu của tài khoản (gói Free không đọc được bằng giọng này qua API).
+    v.is_owner = false;
     v.sharing = { original_voice_id: lib[0], public_owner_id: lib[1] };
     EL.custom.unshift(v);
     return json(res, 200, { voice_id: v.voice_id });
@@ -181,6 +193,9 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
   mm = /^\/v1\/text-to-speech\/([\w-]+)(\/stream)?$/.exec(ep);
   if (mm && m === "POST") {
     if (!findVoice(mm[1]) && !LIB.some((x) => x[0] === mm[1])) return err(res, 404, "voice_not_found", "A voice with the voice_id was not found.");
+    const fv = findVoice(mm[1]);
+    if (EL.cfg.tier === "free" && (LIB.some((x) => x[0] === mm[1]) || (fv?.category === "professional" && !fv.is_owner)))
+      return err(res, 402, "payment_required", "Free users cannot use library voices via the API. Please upgrade your subscription to use this voice.");
     const model = MODELS.find((x) => x[0] === (b.model_id ?? "eleven_v4"));
     if (!model || !model[5]) return err(res, 400, "model_not_found", "Model does not support text to speech.");
     const text = String(b.text ?? "");
@@ -273,7 +288,12 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
 export function scribeConnect(ws, req) {
   const u = new URL(req.url, "http://x");
   if (!u.searchParams.get("token")) { ws.send(JSON.stringify({ message_type: "auth_error", error: "Missing token" })); ws.close(4001); return; }
-  const lines = ["Xin chào Synchro", "hôm nay thời tiết thế nào", "và nhắc mình họp lúc ba giờ chiều nhé"];
+  // Không đặt language_code: tự nhận ngôn ngữ; lượt thứ hai nói tiếng Anh để thử đổi tiếng giữa chừng.
+  const fixed = u.searchParams.get("language_code");
+  const lines = fixed === "en" ? ["Hello Synchro", "what's the weather today", "and remind me about the meeting at three"] : fixed ? ["Xin chào Synchro", "hôm nay thời tiết thế nào", "và nhắc mình họp lúc ba giờ chiều nhé"]
+    : ["Xin chào Synchro", "what's the weather in London today", "và nhắc mình họp lúc ba giờ chiều nhé"];
+  const stamps = u.searchParams.get("include_timestamps") === "true";
+  const langOf = (s) => (/[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i.test(s) ? "vi" : "en");
   let chunks = 0, n = 0;
   ws.send(JSON.stringify({ message_type: "session_started", session_id: rid("ses_"), config: { sample_rate: 16000, model_id: u.searchParams.get("model_id"), language_code: u.searchParams.get("language_code") } }));
   ws.on("message", (raw) => {
@@ -282,6 +302,11 @@ export function scribeConnect(ws, req) {
     chunks++;
     if (n >= lines.length) return;
     if (chunks % 6 === 3) ws.send(JSON.stringify({ message_type: "partial_transcript", text: lines[n].split(" ").slice(0, 2).join(" ") }));
-    if (chunks % 6 === 0 || m.commit) ws.send(JSON.stringify({ message_type: "committed_transcript", text: lines[n++] }));
+    if (chunks % 6 === 0 || m.commit) {
+      const text = lines[n++];
+      ws.send(JSON.stringify({ message_type: "committed_transcript", text }));
+      // Như API thật: bật mốc thời gian thì gửi thêm bản có mốc kèm ngôn ngữ nhận ra (null khi đã đặt ngôn ngữ cố định).
+      if (stamps) ws.send(JSON.stringify({ message_type: "committed_transcript_with_timestamps", text, language_code: fixed ? null : langOf(text), words: [] }));
+    }
   });
 }

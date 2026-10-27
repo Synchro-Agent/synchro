@@ -270,7 +270,8 @@ function usePreview() {
   return [cur, toggle] as const;
 }
 
-/** Bộ chọn giọng: “Giọng của tôi” là giọng trong tài khoản ElevenLabs; “Thư viện” là thư viện cộng đồng (gói Free chỉ hiện giọng được phép dùng). */
+/** Bộ chọn giọng: “Giọng của tôi” là giọng trong tài khoản ElevenLabs dùng được với gói; “Thư viện” là thư viện cộng đồng
+ *  (chỉ hiện khi gói dùng được giọng Thư viện qua API — gói Free thì không). */
 export function VoicePicker({ value, onPick, onClose, say }: { value?: string; onPick: (v: Voice) => void; onClose: () => void; say: (m: string) => void }) {
   const plan = usePlan();
   const mine = useMyVoices();
@@ -345,7 +346,7 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
         </aside>
         <div className="sp-pm">
           <div className="sp-pm-h">
-            <Seg label="Nguồn giọng" value={tab} onChange={setTab} items={[{ k: "mine", label: "Giọng của tôi" }, { k: "lib", label: "Thư viện" }]} />
+            {plan?.library && <Seg label="Nguồn giọng" value={tab} onChange={setTab} items={[{ k: "mine", label: "Giọng của tôi" }, { k: "lib", label: "Thư viện" }]} />}
             <label className="sp-search"><I.Search size={15} /><input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm giọng: tên, “ấm áp”, “kể chuyện”…" aria-label="Tìm giọng" /></label>
             <button className={`icon-btn sp-pf-t ${nFilters ? "on" : ""}`} onClick={() => setFilters(true)} aria-label="Bộ lọc"><I.Sliders size={17} />{nFilters > 0 && <i>{nFilters}</i>}</button>
             <button className="icon-btn" onClick={onClose} aria-label="Đóng"><I.X size={18} /></button>
@@ -371,14 +372,15 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
             ))}
             {tab === "lib" && slots && slots.limit > 0 && <p className="sp-vnote">Đã dùng {slots.used}/{slots.limit} chỗ lưu giọng của gói {plan?.tierName}. Nghe thử miễn phí, không tốn credit.</p>}
           </div>
-          <div className="sp-vp-foot">
+          {/* Dán Voice ID từ Thư viện: chỉ có ích khi gói dùng được giọng Thư viện qua API. */}
+          {plan?.library && <div className="sp-vp-foot">
             <label htmlFor="sp-vid">Hoặc dán Voice ID từ ElevenLabs</label>
             <div className="sp-vid">
               <input id="sp-vid" value={vid} onChange={(e) => setVid(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void useId(); }} placeholder="vd. JBFqnCBsd6RMkjVDRZzb" spellCheck={false} />
               <button className="btn dark" onClick={useId} disabled={!vid.trim() || !!busy}>{busy === "id" ? <Spin /> : null}Dùng ID này</button>
             </div>
             <span className="sp-hint"><a href="https://elevenlabs.io/app/voice-library" target="_blank" rel="noreferrer">Mở Thư viện giọng ElevenLabs<I.External size={12} /></a> · chọn giọng, bấm “Copy voice ID”, dán vào đây.</span>
-          </div>
+          </div>}
         </div>
       </div>
     </div>,

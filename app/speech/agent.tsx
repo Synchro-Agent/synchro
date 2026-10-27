@@ -1,28 +1,31 @@
 "use client";
 // Voice Agent: gọi thử thật với Eleven Realtime (nghe, suy nghĩ và nói đều ở ElevenLabs) theo cấu hình của bạn,
-// lời thoại hiện trực tiếp và được lưu vào lịch sử khi kết thúc cuộc gọi.
+// lời thoại hiện trực tiếp và được lưu vào lịch sử khi kết thúc cuộc gọi. Khóa chưa có quyền Realtime: gọi bằng chế độ nối tiếp
+// (Scribe nghe, model chat của Synchro trả lời, giọng ElevenLabs đọc), tự nhận ngôn ngữ người nói.
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as I from "../icons";
 import { usePref } from "../store";
-import { startRealtime, type RtPhase } from "../realtime";
+import { startRealtime, type RtHandlers, type RtPhase } from "../realtime";
+import { startCascade } from "../voicecall";
 import { PearlOrb } from "../pearlorb";
 import { AGENT_MODELS } from "./data";
 import { LANGS, ago, api, del, fmtDur, post, useItems, type Item, type Voice } from "./client";
 import { Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
-type Cfg = { name: string; model: string; first: string; prompt: string; lang: string; voiceId: string; voiceName: string; interrupt: boolean; eager: number; maxMin: number };
+// langSet: người dùng tự chọn ngôn ngữ cố định (bản trước lưu sẵn "vi"; chưa tự chọn thì dùng Tự nhận diện).
+type Cfg = { name: string; model: string; first: string; prompt: string; lang: string; langSet?: boolean; voiceId: string; voiceName: string; interrupt: boolean; eager: number; maxMin: number };
 const CFG0: Cfg = {
   name: "Trợ lý Synchro", model: AGENT_MODELS[0].id, first: "Xin chào! Mình là trợ lý của Synchro. Mình có thể giúp gì cho bạn hôm nay?",
-  prompt: "Bạn là trợ lý thân thiện của Synchro. Trả lời ngắn gọn, tự nhiên như người thật, hỏi lại khi chưa rõ.", lang: "vi", voiceId: "", voiceName: "", interrupt: true, eager: 50, maxMin: 10,
+  prompt: "Bạn là trợ lý thân thiện của Synchro. Trả lời ngắn gọn, tự nhiên như người thật, hỏi lại khi chưa rõ.", lang: "", voiceId: "", voiceName: "", interrupt: true, eager: 50, maxMin: 10,
 };
 type Line = { who: "ai" | "me"; text: string };
-type Conn = Awaited<ReturnType<typeof startRealtime>>;
+type Conn = { close: () => void; sync?: () => void };
 
 export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
   const tab = sub === "hist" ? "hist" : "agent";
   const [cfg, setCfg] = usePref<Cfg>("spAgent", CFG0);
-  const c = { ...CFG0, ...cfg };
+  const c = { ...CFG0, ...cfg, ...(cfg.langSet ? {} : { lang: "" }) };
   const set = (p: Partial<Cfg>) => setCfg({ ...c, ...p });
   const [phase, setPhase] = useState<"idle" | "connecting" | RtPhase>("idle");
   const [lines, setLines] = useState<Line[]>([]);
@@ -38,6 +41,7 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
   const secRef = useRef(0);
   const mutedRef = useRef(false);
   mutedRef.current = muted;
+  useEffect(() => { conn.current?.sync?.(); }, [muted]);
   const scroll = useRef<HTMLDivElement>(null);
   const micLv = useRef(0), aiLv = useRef(0);
   const level = useMemo(() => ({ get current() { return Math.max(micLv.current, aiLv.current); }, set current(_v: number) {} }), []);
@@ -62,16 +66,21 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
   const start = async () => {
     setLines([]); setSec(0); secRef.current = 0; setPhase("connecting");
     try {
-      const s = await post<{ value: string; url: string; model: string; voice: string }>("agent/session", { model: c.model, voice: voiceId, prompt: c.prompt, lang: c.lang, eagerness: c.eager < 34 ? "low" : c.eager < 67 ? "medium" : "high", interrupt: c.interrupt, maxMin: c.maxMin });
-      if (voiceId && !s.voice) say("Giọng đã chọn chưa dùng được cho Realtime, agent dùng giọng mặc định");
-      conn.current = await startRealtime({ url: s.url, model: s.model, secret: s.value, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current, barge: () => c.interrupt, greet: c.first }, {
+      const s = await post<{ value?: string; url: string; model: string; voice: string; cascade?: boolean }>("agent/session", { model: c.model, voice: voiceId, prompt: c.prompt, lang: c.lang, eagerness: c.eager < 34 ? "low" : c.eager < 67 ? "medium" : "high", interrupt: c.interrupt, maxMin: c.maxMin });
+      const handlers: RtHandlers = {
         onPhase: setPhase,
         onCaption: setCaption,
         onUser: setHeard,
         onTurn: (u, a) => { setLines((l) => [...l, ...(u ? [{ who: "me" as const, text: u }] : []), { who: "ai" as const, text: a }]); setCaption(""); setHeard(""); },
         onError: (m) => say(m),
         onClose: () => void end("Cuộc gọi đã kết thúc"),
-      });
+      };
+      if (s.cascade || !s.value) {
+        conn.current = await startCascade({ system: c.prompt, greet: c.first, voice: voiceId || undefined, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current, barge: () => c.interrupt, maxSeconds: c.maxMin * 60 }, handlers);
+      } else {
+        if (voiceId && !s.voice) say("Giọng đã chọn chưa dùng được cho Realtime, agent dùng giọng mặc định");
+        conn.current = await startRealtime({ url: s.url, model: s.model, secret: s.value, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current, barge: () => c.interrupt, greet: c.first }, handlers);
+      }
     } catch (e) { setPhase("idle"); say((e as Error).message || "Không mở được micro: hãy cho phép Synchro dùng micro"); }
   };
   const view = async (it: Item) => {
@@ -118,7 +127,7 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
               <Field label="Tên agent" htmlFor="ag-name"><input id="ag-name" className="sp-input" value={c.name} onChange={(e) => set({ name: e.target.value })} disabled={live} /></Field>
               <Field label="Model"><ModelPick models={AGENT_MODELS} value={c.model} onChange={(model) => set({ model })} /></Field>
               <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick(true)} disabled={live}><VoiceAvatar v={voiceObj} size={30} /><span><b data-notr>{voiceName}</b><small>Giọng trong tài khoản ElevenLabs</small></span><I.Chevron size={14} /></button></Field>
-              <Select id="ag-lang" label="Ngôn ngữ chính" value={c.lang} options={LANGS.filter(([x]) => x)} onChange={(lang) => set({ lang })} />
+              <Select id="ag-lang" label="Ngôn ngữ" value={c.lang} options={LANGS} onChange={(lang) => set({ lang, langSet: true })} />
               <Field label="Lời chào đầu" hint="Để trống thì agent chờ bạn nói trước" htmlFor="ag-first"><textarea id="ag-first" className="sp-input ta" rows={2} value={c.first} onChange={(e) => set({ first: e.target.value })} /></Field>
               <Field label="Hướng dẫn hệ thống" hint={`${c.prompt.length} ký tự`} htmlFor="ag-prompt"><textarea id="ag-prompt" className="sp-input ta" rows={5} value={c.prompt} onChange={(e) => set({ prompt: e.target.value })} /></Field>
               <hr className="sp-hr" />

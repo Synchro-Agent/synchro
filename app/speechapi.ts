@@ -54,22 +54,28 @@ export type Plan = {
   credits: { used: number; limit: number; resetAt: number | null };
   voices: { used: number; limit: number }; pro: { used: number; limit: number };
   features: Record<Feat, boolean>; locked: Partial<Record<Feat, string>>;
+  /** Quyền khóa còn thiếu theo tính năng (tính năng đó bị ẩn); realtime: phiên trò chuyện Eleven Realtime dùng được (cần convai_write). */
+  perms: Partial<Record<Feat, string>>; realtime: boolean;
+  /** Giọng lấy từ Thư viện dùng được qua API (gói trả phí; gói Free chỉ dùng giọng có sẵn và giọng của chính mình). */
+  library: boolean;
   formats: { id: string; label: string }[]; tts: ModelOut[]; sts: ModelOut[];
   note: string | null; checkedAt: number;
 };
 
 // Tính năng ElevenLabs từ chối vì gói (không phải vì khóa thiếu quyền hay hết credit): nhớ theo gói, đổi gói thì quét lại từ đầu.
 type Locks = { tier: string; locks: Partial<Record<Feat, string>> };
-const readLocks = (): Locks => { try { return JSON.parse(getSetting("speech_locks", "{}")) as Locks; } catch { return { tier: "", locks: {} }; } };
+// Khóa mới (speech_locks2): bản cũ khóa cả tính năng chỉ vì một giọng không dùng được, bỏ hết các khóa đó.
+const LOCKS = "speech_locks2";
+const readLocks = (): Locks => { try { return JSON.parse(getSetting(LOCKS, "{}")) as Locks; } catch { return { tier: "", locks: {} }; } };
 function lock(f: Feat, msg: string) {
   const p = G().plan, l = readLocks(), cur = p?.tier ?? l.tier ?? "";
   const locks = l.tier === cur ? { ...l.locks } : {};
   locks[f] = msg.slice(0, 200);
-  setSetting("speech_locks", JSON.stringify({ tier: cur, locks }));
+  setSetting(LOCKS, JSON.stringify({ tier: cur, locks }));
   if (p) { p.features[f] = false; p.locked[f] = locks[f]; }
 }
 
-const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null } };
+const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> } } };
 const G = () => (g.__speech ??= { plan: null, at: 0, busy: null });
 
 // ---- gọi API ----
@@ -93,6 +99,8 @@ export function explain(status: number, text: string, feat?: Feat): SpeechErr {
   const miss = elevenMissing(`${d.status} ${d.message}`);
   if (status === 401 && /invalid_api_key|invalid api key/i.test(`${d.status} ${msg}`)) return new SpeechErr("Khóa ElevenLabs không còn hợp lệ. Quản trị viên vào Cài đặt → Providers để thay khóa.", 401, "key");
   if (miss) return new SpeechErr(`Khóa ElevenLabs chưa được cấp quyền ${miss === "?" ? "cho tính năng này" : `"${miss}"`}. Vào elevenlabs.io → API keys, sửa khóa và bật quyền này (hoặc dùng khóa không giới hạn).`, 403, "perm");
+  // Giọng Thư viện với gói Free: lỗi của giọng, không phải của tính năng (không khóa tính năng).
+  if (/library voices? via the api|cannot use library voices/i.test(msg)) return new SpeechErr("Giọng này lấy từ Thư viện ElevenLabs, gói Free không dùng được qua API. Hãy chọn một giọng khác.", 402, "voice");
   if (/quota_exceeded|insufficient_credits|exceeds_character_limit/i.test(d.status) || (status !== 404 && QUOTA_RE.test(msg) && !PLAN_RE.test(msg))) {
     const p = G().plan, at = p?.credits.resetAt ? new Date(p.credits.resetAt).toLocaleDateString("vi-VN") : "";
     return new SpeechErr(`Đã hết credit ElevenLabs của chu kỳ này${at ? ` (hồi lại ngày ${at})` : ""}. Nâng gói hoặc chờ credit hồi lại.`, 402, "quota");
@@ -119,6 +127,37 @@ export async function el(p: string, init: RequestInit & { feat?: Feat; timeout?:
 export const elJson = async <T = Record<string, unknown>>(p: string, init: RequestInit & { feat?: Feat; timeout?: number } = {}) => (await (await el(p, init)).json()) as T;
 export const jsonBody = (b: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
 
+// ---- quyền của khóa ----
+// Khóa API giới hạn quyền: gửi yêu cầu rỗng tới từng tính năng (không tạo gì, không tốn credit). ElevenLabs kiểm tra quyền trước
+// nội dung nên thiếu quyền trả 401 "missing the permission …", đủ quyền trả lỗi nội dung (422). Nhớ 30 phút, quét mới thì dò lại.
+const PREMADE = "JBFqnCBsd6RMkjVDRZzb";
+const PROBES: [Feat | "realtime", string, "json" | "form"][] = [
+  ["tts", `/v1/text-to-speech/${PREMADE}`, "json"], ["dialogue", "/v1/text-to-dialogue", "json"], ["stt", "/v1/speech-to-text", "form"],
+  ["sfx", "/v1/sound-generation", "json"], ["music", "/v1/music", "json"], ["isolate", "/v1/audio-isolation", "form"],
+  ["changer", `/v1/speech-to-speech/${PREMADE}`, "form"], ["align", "/v1/forced-alignment", "form"], ["design", "/v1/text-to-voice/design", "json"],
+  ["remix", `/v1/text-to-voice/${PREMADE}/remix`, "json"], ["ivc", "/v1/voices/add", "form"], ["dub", "/v1/dubbing", "form"],
+  ["realtime", "/v1/convai/realtime/client_secrets", "json"],
+];
+async function probePerms(fresh: boolean) {
+  const st = G(), k = conn(), key = k.key.slice(-6);
+  if (!fresh && st.perms && st.perms.key === key && Date.now() - st.perms.at < 30 * 60_000) return st.perms.miss;
+  const miss: Partial<Record<Feat | "realtime", string>> = {};
+  await Promise.all(PROBES.map(async ([f, p, kind]) => {
+    const init: RequestInit = { method: "POST", headers: { "xi-api-key": k.key }, signal: AbortSignal.timeout(15_000) };
+    if (kind === "form") init.body = new FormData();
+    else { (init.headers as Record<string, string>)["content-type"] = "application/json"; init.body = "{}"; }
+    const r = await fetch(k.base + p, init).catch(() => null);
+    if (r?.status !== 401 && r?.status !== 403) { await r?.body?.cancel().catch(() => {}); return; }
+    const m = elevenMissing(await r.text().catch(() => ""));
+    if (m) miss[f] = m;
+  }));
+  // Lồng tiếng làm sạch và chép lời trực tiếp dùng chung quyền với lồng tiếng / chép lời.
+  if (miss.dub) miss.dubClean = miss.dub;
+  if (miss.stt) miss.live = miss.stt;
+  st.perms = { at: Date.now(), key, miss };
+  return miss;
+}
+
 // ---- quét gói ----
 type ModelRaw = { model_id: string; name: string; description?: string; can_do_text_to_speech?: boolean; can_do_voice_conversion?: boolean; can_use_style?: boolean; can_use_speaker_boost?: boolean;
   requires_alpha_access?: boolean; max_characters_request_free_user?: number; max_characters_request_subscribed_user?: number; maximum_text_length_per_request?: number;
@@ -126,23 +165,28 @@ type ModelRaw = { model_id: string; name: string; description?: string; can_do_t
 type Sub = { tier: string; status: string; character_count: number; character_limit: number; next_character_count_reset_unix: number | null; voice_slots_used: number; voice_limit: number;
   professional_voice_slots_used: number; professional_voice_limit: number; can_use_instant_voice_cloning: boolean; can_use_professional_voice_cloning: boolean };
 
-async function scan(): Promise<Plan> {
-  const [sub, models, studio] = await Promise.all([
+async function scan(fresh = false): Promise<Plan> {
+  const [sub, models, studio, miss] = await Promise.all([
     elJson<Sub>("/v1/user/subscription", { timeout: 20_000 }).then((s) => ({ s, err: null as SpeechErr | null })).catch((e: SpeechErr) => ({ s: null, err: e })),
     elJson<ModelRaw[]>("/v1/models", { timeout: 20_000 }).catch(() => [] as ModelRaw[]),
     // Studio API (sách nói, podcast) chỉ mở cho tài khoản được ElevenLabs duyệt riêng.
     el("/v1/studio/projects", { timeout: 20_000 }).then(() => true).catch(() => false),
+    probePerms(fresh).catch(() => ({} as Partial<Record<Feat | "realtime", string>>)),
   ]);
   if (sub.err && (sub.err.code === "key" || sub.err.code === "net" || sub.err.code === "no_key")) throw sub.err;
   const s = sub.s;
   const tier = s?.tier ?? "unknown", rank = s ? tierRank(tier) : 2, paid = rank > 0;
   // Đổi gói (nâng / hạ): quên các tính năng gói cũ từ chối, quét lại từ đầu.
   const l = readLocks(), locks = l.tier === tier ? l.locks : {};
-  if (s && l.tier !== tier) setSetting("speech_locks", JSON.stringify({ tier, locks: {} }));
+  if (s && l.tier !== tier) setSetting(LOCKS, JSON.stringify({ tier, locks: {} }));
   const features = Object.fromEntries(FEATS.map((f) => [f, rank >= tierRank(MIN[f])])) as Record<Feat, boolean>;
   if (s) { features.ivc = s.can_use_instant_voice_cloning; features.pvc = s.can_use_professional_voice_cloning; }
   features.podcast = features.book = studio;
   for (const f of Object.keys(locks) as Feat[]) features[f] = false;
+  // Khóa thiếu quyền: ẩn tính năng đó. Voice Agent vẫn chạy được khi thiếu quyền Realtime (nghe bằng Scribe, đọc bằng giọng ElevenLabs).
+  const perms: Partial<Record<Feat, string>> = {};
+  for (const [f, m] of Object.entries(miss) as [Feat | "realtime", string][]) if (f !== "realtime") { perms[f] = m; features[f] = false; }
+  if (miss.tts || miss.stt) { features.agent = false; perms.agent = miss.tts ?? miss.stt; }
   const model = (m: ModelRaw): ModelOut => ({
     id: m.model_id, name: m.name.replace(/^Eleven\s/, "Eleven "), desc: m.description ?? "", langs: (m.languages ?? []).map((x) => ({ id: x.language_id, name: x.name })),
     max: (paid ? m.max_characters_request_subscribed_user : m.max_characters_request_free_user) ?? m.maximum_text_length_per_request ?? 5000,
@@ -153,7 +197,8 @@ async function scan(): Promise<Plan> {
     connected: true, readPlan: !!s, tier, tierName: TIER_NAME[tier] ?? (s ? tier[0].toUpperCase() + tier.slice(1) : "Chưa rõ gói"), status: s?.status ?? "",
     credits: { used: s?.character_count ?? 0, limit: s?.character_limit ?? 0, resetAt: s?.next_character_count_reset_unix ? s.next_character_count_reset_unix * 1000 : null },
     voices: { used: s?.voice_slots_used ?? 0, limit: s?.voice_limit ?? 0 }, pro: { used: s?.professional_voice_slots_used ?? 0, limit: s?.professional_voice_limit ?? 0 },
-    features, locked: locks, formats: FORMATS.filter((f) => rank >= tierRank(f.min)).map((f) => ({ id: f.id, label: f.label })),
+    features, locked: locks, perms, realtime: !miss.realtime, library: paid,
+    formats: FORMATS.filter((f) => rank >= tierRank(f.min)).map((f) => ({ id: f.id, label: f.label })),
     tts: usable.filter((m) => m.can_do_text_to_speech).map(model), sts: usable.filter((m) => m.can_do_voice_conversion).map(model),
     note: s ? null : sub.err?.code === "perm" ? "Khóa chưa bật quyền User nên Synchro chưa đọc được gói và credit. Bật quyền này cho khóa để giao diện khớp đúng gói." : sub.err?.message ?? null,
     checkedAt: Date.now(),
@@ -162,16 +207,20 @@ async function scan(): Promise<Plan> {
 }
 const empty = (note: string | null): Plan => ({
   connected: false, readPlan: false, tier: "", tierName: "", status: "", credits: { used: 0, limit: 0, resetAt: null }, voices: { used: 0, limit: 0 }, pro: { used: 0, limit: 0 },
-  features: Object.fromEntries(FEATS.map((f) => [f, false])) as Record<Feat, boolean>, locked: {}, formats: [], tts: [], sts: [], note, checkedAt: Date.now(),
+  features: Object.fromEntries(FEATS.map((f) => [f, false])) as Record<Feat, boolean>, locked: {}, perms: {}, realtime: false, library: false, formats: [], tts: [], sts: [], note, checkedAt: Date.now(),
 });
 
 /** Gói hiện tại (nhớ 3 phút; fresh để quét lại ngay, ví dụ sau khi đổi khóa hoặc nâng gói). */
 export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   const st = G();
   if (!hasKey()) { st.plan = null; return empty(null); }
-  if (!o.fresh && st.plan && Date.now() - st.at < 180_000) return st.plan;
+  // Quản trị viên đổi khóa (hoặc địa chỉ API): quét lại ngay theo khóa mới.
+  const k = conn(), fp = `${k.base}|${k.key.slice(-8)}`;
+  const fresh = o.fresh || st.fp !== fp;
+  if (fresh && st.fp !== fp) { st.fp = fp; st.busy = null; }
+  if (!fresh && st.plan && Date.now() - st.at < 180_000) return st.plan;
   if (st.busy) return st.busy;
-  st.busy = scan().then((p) => { st.plan = p; st.at = Date.now(); return p; })
+  st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); return p; })
     .catch((e: SpeechErr) => empty(e.message))
     .finally(() => { st.busy = null; });
   return st.busy;
@@ -186,6 +235,7 @@ export function spent(r: Response) {
 export async function need(f: Feat) {
   const p = await plan();
   if (!p.connected) throw new SpeechErr(p.note ?? "Chưa gắn khóa ElevenLabs. Quản trị viên vào Cài đặt → Providers để thêm khóa.", 503, "no_key");
+  if (p.perms[f]) throw new SpeechErr(`Khóa ElevenLabs chưa được cấp quyền "${p.perms[f]}" nên tính năng này đang ẩn. Vào elevenlabs.io → API keys, sửa khóa và bật quyền này.`, 403, "perm");
   if (!p.features[f]) throw new SpeechErr(p.locked[f] ? "Gói ElevenLabs hiện tại chưa có tính năng này." : `Tính năng này cần gói ElevenLabs ${TIER_NAME[MIN[f]] ?? "cao hơn"} trở lên.`, 403, "plan");
   return p;
 }
@@ -194,6 +244,8 @@ export async function need(f: Feat) {
 export type VoiceOut = {
   id: string; name: string; desc: string; lang: string; langCode: string; accent: string; gender: string; age: string; use: string; category: string;
   preview: string | null; mine: boolean; owner?: string; free?: boolean; uses?: number; notice?: number | null; added?: boolean;
+  /** Giọng lấy từ Thư viện (không phải giọng có sẵn hay giọng của chính tài khoản): gói Free không dùng được qua API. */
+  lib?: boolean;
 };
 const LANG_VI: Record<string, string> = { vi: "Tiếng Việt", en: "Tiếng Anh", ja: "Tiếng Nhật", ko: "Tiếng Hàn", zh: "Tiếng Trung", fr: "Tiếng Pháp", de: "Tiếng Đức", es: "Tiếng Tây Ban Nha",
   th: "Tiếng Thái", id: "Tiếng Indonesia", hi: "Tiếng Hindi", pt: "Tiếng Bồ Đào Nha", it: "Tiếng Ý", ru: "Tiếng Nga", ar: "Tiếng Ả Rập", nl: "Tiếng Hà Lan", pl: "Tiếng Ba Lan", tr: "Tiếng Thổ Nhĩ Kỳ",
@@ -211,7 +263,7 @@ const VI_LABEL: Record<string, string> = { female: "Nữ", male: "Nam", neutral:
   educational: "Giáo dục", informative_educational: "Giáo dục", advertisement: "Quảng cáo", entertainment_tv: "Giải trí", entertainment: "Giải trí", meditation: "Thiền", asmr: "ASMR", gaming: "Trò chơi" };
 const vi = (s?: string | null) => (s ? VI_LABEL[s.toLowerCase()] ?? cap(s) : "");
 type VoiceRaw = { voice_id: string; name: string; category?: string; labels?: Record<string, string>; description?: string | null; preview_url?: string | null;
-  verified_languages?: { language?: string; accent?: string; preview_url?: string | null }[] | null; sharing?: { public_owner_id?: string } | null };
+  verified_languages?: { language?: string; accent?: string; preview_url?: string | null }[] | null; sharing?: { public_owner_id?: string } | null; is_owner?: boolean };
 export const voiceOut = (v: VoiceRaw): VoiceOut => {
   const lb = v.labels ?? {}, vl = v.verified_languages?.[0];
   const code = lb.language ?? vl?.language ?? "";
@@ -219,6 +271,7 @@ export const voiceOut = (v: VoiceRaw): VoiceOut => {
     id: v.voice_id, name: v.name.split(" - ")[0].trim(), desc: cap(lb.descriptive ?? lb.description ?? v.description?.split(/[.;\n]/)[0] ?? ""), lang: langName(code), langCode: code,
     accent: cap(lb.accent ?? vl?.accent ?? ""), gender: vi(lb.gender), age: vi(lb.age), use: vi(lb.use_case), category: v.category ?? "premade",
     preview: v.preview_url ?? vl?.preview_url ?? null, mine: true, owner: v.sharing?.public_owner_id,
+    lib: v.is_owner !== true && ["professional", "famous", "high_quality"].includes(v.category ?? ""),
   };
 };
 type LibRaw = { public_owner_id: string; voice_id: string; name: string; accent?: string; gender?: string; age?: string; descriptive?: string; use_case?: string; category?: string;
