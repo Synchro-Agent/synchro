@@ -1,5 +1,6 @@
 import { can, current, limit, sameOrigin } from "../../../authstore";
-import { elevenMissing, serviceKey } from "../../../providers";
+import { serviceKey } from "../../../providers";
+import { SpeechErr, mintRealtime } from "../../../speechapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 // Khóa ElevenLabs lấy từ Cài đặt → Providers (hoặc ELEVENLABS_API_KEY). Model mặc định: Eleven Realtime v1 Max (giọng tự nhiên nhất, suy luận tốt,
 // 90+ ngôn ngữ, tự nhận ngôn ngữ người nói). Cố định ở máy chủ, người dùng không tự chọn.
 const MODEL = "eleven_realtime_v1_max";
-const VOICE = process.env.ELEVENLABS_VOICE_MODE_VOICE || "brian";
+const VOICE = process.env.ELEVENLABS_VOICE_MODE_VOICE || "";
 
 const INSTRUCTIONS = `Bạn là Synchro, trợ lý trò chuyện bằng giọng nói. Luôn trả lời bằng đúng ngôn ngữ người dùng vừa nói (họ nói tiếng Việt thì trả lời tiếng Việt, nói tiếng Anh thì trả lời tiếng Anh, đổi ngôn ngữ thì đổi theo).
 Nói tự nhiên như người thật, câu ngắn, rõ ràng, mạch lạc; đi thẳng vào ý chính rồi mới mở rộng nếu được hỏi thêm.
@@ -25,54 +26,27 @@ const TOOLS = [{
 }];
 
 // Cấp một khoá tạm (client secret) cho trình duyệt nối thẳng tới ElevenLabs Realtime. Khoá API thật không rời máy chủ.
+// Không mở được Realtime (thiếu quyền, hết phút của gói…) nhưng vẫn có khóa: trình duyệt chuyển sang chế độ nối tiếp
+// (Scribe nghe → model chat trả lời → giọng ElevenLabs đọc), vẫn là giọng AI thật chứ không phải giọng của trình duyệt.
 export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
   // Chưa gắn khoá ElevenLabs, hoặc tài khoản chưa được bật Speech: trình duyệt dùng chế độ dự phòng (nhận dạng và đọc bằng trình duyệt).
-  const el = serviceKey("elevenlabs");
-  if (!el || !can(c.user, "speech")) return Response.json({ fallback: true });
+  if (!serviceKey("elevenlabs") || !can(c.user, "speech")) return Response.json({ fallback: true });
   try { limit("voice:" + c.user.id, 20, 60 * 60_000); } catch { return Response.json({ error: "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau." }, { status: 429 }); }
-
-  // Xin phiên có công cụ giao_viec; ElevenLabs chưa nhận công cụ (lỗi 4xx) thì mở phiên thường như trước.
-  const mint = (tools: boolean) => fetch(`${el.base}/v1/convai/realtime/client_secrets`, {
-    method: "POST",
-    headers: { "xi-api-key": el.key, "content-type": "application/json" },
-    body: JSON.stringify({
-      session: {
-        type: "realtime",
-        model: MODEL,
-        instructions: INSTRUCTIONS + (tools ? DELEGATE : ""),
-        output_modalities: ["audio"],
-        max_duration_seconds: 900,
-        audio: {
-          input: { format: { type: "audio/pcm", rate: 24000 }, turn_detection: { type: "semantic_vad", eagerness: "medium" } },
-          output: { format: { type: "audio/pcm" }, voice: VOICE },
-        },
-        ...(tools ? { tools: TOOLS, tool_choice: "auto" } : {}),
-      },
-      expires_after: { anchor: "created_at", seconds: 120 },
-    }),
-  }).catch(() => null);
-  let tools = true;
-  let r = await mint(true);
-  if (r && !r.ok && r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 429) {
-    console.error("voice session (tools)", r.status, await r.text().catch(() => ""));
-    tools = false;
-    r = await mint(false);
+  const b = (await req.json().catch(() => ({}))) as { lang?: string; voice?: string };
+  const lang = typeof b.lang === "string" && /^[a-z]{2,3}(-[a-z]{2})?$/i.test(b.lang) ? b.lang.toLowerCase() : "";
+  const voice = typeof b.voice === "string" && /^[\w-]{3,40}$/.test(b.voice) ? b.voice : VOICE;
+  try {
+    const s = await mintRealtime({ model: MODEL, voice, instructions: INSTRUCTIONS + DELEGATE, language: lang || undefined, eagerness: "medium", maxSeconds: 900, tools: TOOLS });
+    return Response.json({ value: s.value, expiresAt: s.expiresAt, model: s.model, url: s.url, tools: s.tools });
+  } catch (e) {
+    const err = e as SpeechErr;
+    const why = err.code === "perm" ? err.message.replace(/ \(hoặc dùng khóa không giới hạn\)\.$/, ".")
+      : err.code === "quota" || err.code === "plan" ? "Đã hết phút trò chuyện thời gian thực của gói ElevenLabs."
+      : "Không mở được phiên giọng nói ElevenLabs.";
+    const cascade = err.code !== "key" && err.code !== "net";
+    return Response.json({ fallback: true, cascade, error: `${why} ${cascade ? "Tạm thời Synchro nghe bằng Scribe và đọc bằng giọng ElevenLabs." : "Tạm thời dùng giọng của trình duyệt."}` });
   }
-  if (!r?.ok) {
-    const body = (await r?.text().catch(() => "")) ?? "";
-    console.error("voice session", r?.status, body.slice(0, 300));
-    // Khóa giới hạn quyền: nói rõ quyền nào cần bật, thay vì chỉ báo lỗi chung.
-    const miss = r && (r.status === 401 || r.status === 403) ? elevenMissing(body) : null;
-    const error = miss
-      ? `Khóa ElevenLabs chưa được cấp quyền ${miss === "?" ? "cần cho trò chuyện bằng giọng nói" : `"${miss}"`}. Vào elevenlabs.io → API keys, sửa khóa và bật quyền này (hoặc dùng khóa không giới hạn). Tạm thời dùng giọng của trình duyệt.`
-      : "Không mở được phiên giọng nói ElevenLabs. Tạm thời dùng giọng của trình duyệt.";
-    return Response.json({ fallback: true, error });
-  }
-  const j = (await r.json()) as { value: string; expires_at: number };
-  // Địa chỉ WebSocket theo địa chỉ API đang dùng (mặc định api.elevenlabs.io; bản giả lập chạy ở máy cục bộ).
-  const url = `${el.base.replace(/^http/, "ws")}/v1/convai/realtime`;
-  return Response.json({ value: j.value, expiresAt: j.expires_at, model: MODEL, url, tools });
 }

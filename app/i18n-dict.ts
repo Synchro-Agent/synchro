@@ -1305,3 +1305,43 @@ Object.assign(VI2EN, {
 });
 RULES_EN.push([/^Khóa ElevenLabs chưa được cấp quyền (.+)\. Vào elevenlabs\.io → API keys, sửa khóa và bật quyền này \(hoặc dùng khóa không giới hạn\)\. Tạm thời dùng giọng của trình duyệt\.$/,
   (m) => `The ElevenLabs key doesn't have the ${m[1] === "cần cho trò chuyện bằng giọng nói" ? "permission voice conversation needs" : `${m[1]} permission`}. On elevenlabs.io → API keys, edit the key and turn it on (or use an unrestricted key). Using the browser's voice for now.`]);
+// Nhật ký làm việc, nhắn thêm khi đang chạy, chế độ Tự động (model, effort, Code), GitHub trong Dự án, giọng nói trong chat.
+Object.assign(VI2EN, {
+  "công cụ": "tools", "lỗi": "failed", "Đang ghép vào việc đang làm": "Adding to the current task", "Gửi sau khi xong": "Send when done", "Bỏ tin chờ gửi": "Remove queued message",
+  "Danh sách việc": "Tasks", "Bạn nhắn thêm": "You added", "Nhắn thêm khi Synchro đang làm": "Sent while Synchro was working",
+  "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong": "Add a message: ↵ adds it to the current task, ⌘↵ sends it when done", "Gửi thêm": "Send",
+  "Synchro chưa được kết nối với model nào. Quản trị viên vào Cài đặt → Providers để đăng nhập gói Claude / ChatGPT / Gemini hoặc thêm khóa API.": "Synchro isn't connected to any model. An admin can sign in to a Claude / ChatGPT / Gemini plan or add an API key in Settings → Providers.",
+  "Synchro tự chọn và chuyển giai đoạn": "Synchro picks and switches phases on its own",
+  "Tự lập kế hoạch, viết code hay gỡ lỗi theo từng việc, và chuyển qua lại khi đang làm.": "Plans, codes or debugs as each task needs, and switches between them while working.",
+  "Chọn qua cả Claude, ChatGPT, Gemini: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó": "Picks across Claude, ChatGPT and Gemini: quick models for easy tasks, the strongest model suited to the job for hard ones",
+  "Việc dễ trả lời nhanh, việc khó suy nghĩ kỹ": "Answers easy tasks fast and thinks harder on difficult ones",
+  "4 chế độ làm việc": "4 working modes", "Chọn bằng nút chế độ cạnh khung chat. Mặc định là Tự động.": "Pick one with the mode button next to the chat box. Auto is the default.",
+  "Synchro tự lập kế hoạch khi việc lớn, viết code khi việc đã rõ, gỡ lỗi khi gặp lỗi, và chuyển qua lại ngay trong một lượt (ví dụ viết xong chạy thử thấy lỗi thì sửa luôn). Các giai đoạn đã đi qua hiện ở đầu câu trả lời.": "Synchro plans for big tasks, writes code when the task is clear, debugs when something breaks, and switches within a single turn (for example, it fixes errors it finds while testing). The phases it went through appear at the top of the answer.",
+  "Không chụp được màn hình": "Couldn't capture the screen", "Trình duyệt này không hỗ trợ chụp màn hình": "This browser can't capture the screen", "Đã đính kèm ảnh chụp màn hình": "Screenshot attached",
+  "Đoạn chat mới không thuộc dự án nào": "The new chat won't belong to a project", "Tạo dự án để thêm vào": "Create a project to add to",
+  "Thêm từ GitHub": "Add from GitHub", "Đang kiểm tra kết nối GitHub…": "Checking the GitHub connection…", "Máy chủ chưa cấu hình đăng nhập GitHub (GITHUB_CLIENT_ID).": "The server isn't set up for GitHub sign-in (GITHUB_CLIENT_ID).",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code (cần cho GitHub).": "An admin hasn't allowed your account to use Synchro Code (needed for GitHub).",
+  "Kết nối tài khoản GitHub để chọn repo. Synchro chỉ đọc các tệp bạn chọn.": "Connect your GitHub account to pick a repo. Synchro only reads the files you choose.", "Kết nối GitHub": "Connect GitHub",
+  "Đang chờ GitHub…": "Waiting for GitHub…", "Tìm repo…": "Search repos…", "Đang tải repo…": "Loading repos…", "Không có repo khớp.": "No matching repos.", "Repo khác": "Other repo", "Lọc tệp…": "Filter files…",
+  "Đang đọc cây thư mục…": "Reading the file tree…", "Không đọc được trạng thái GitHub.": "Couldn't read the GitHub status.", "Không lấy được tệp nào.": "Couldn't fetch any files.", "Đang lấy tệp…": "Fetching files…", "Riêng tư": "Private",
+  "Kết nối GitHub đã hết hạn. Hãy kết nối lại.": "The GitHub connection is no longer valid. Please reconnect.",
+  "Đã hết giờ chép lời của gói ElevenLabs.": "Your ElevenLabs plan is out of transcription hours.", "Phiên chép lời hết hạn, hãy bật lại micro.": "The transcription session expired; turn the mic on again.",
+  "Không nối được tới ElevenLabs để chép lời.": "Couldn't connect to ElevenLabs for transcription.", "Không mở được chép lời trực tiếp.": "Couldn't start live transcription.",
+  "Đã hết phút trò chuyện thời gian thực của gói ElevenLabs. Tạm thời Synchro nghe bằng Scribe và đọc bằng giọng ElevenLabs.": "Your ElevenLabs plan is out of real-time conversation minutes. For now Synchro listens with Scribe and speaks with an ElevenLabs voice.",
+  "Không mở được phiên giọng nói ElevenLabs. Tạm thời Synchro nghe bằng Scribe và đọc bằng giọng ElevenLabs.": "Couldn't open an ElevenLabs voice session. For now Synchro listens with Scribe and speaks with an ElevenLabs voice.",
+  "Không mở được phiên giọng nói ElevenLabs. Tạm thời dùng giọng của trình duyệt.": "Couldn't open an ElevenLabs voice session. Using the browser's voice for now.",
+});
+Object.assign(EN2VI, {
+  "ElevenLabs voice for reading answers aloud and voice conversation. Auto picks a voice in the answer's language.": "Giọng ElevenLabs để đọc to câu trả lời và trò chuyện bằng giọng nói. Tự động: chọn giọng theo ngôn ngữ của câu trả lời.",
+  "Using your browser's voice. Add an ElevenLabs key in Settings → Providers for natural AI voices.": "Đang dùng giọng của trình duyệt. Thêm khóa ElevenLabs ở Cài đặt → Providers để có giọng AI tự nhiên.",
+  "Browser": "Trình duyệt",
+});
+RULES_EN.push(
+  [/^Đã thêm vào "(.+)"$/, (m) => `Added to "${m[1]}"`],
+  [/^Đoạn chat mới sẽ nằm trong "(.+)"$/, (m) => `The new chat will be in "${m[1]}"`],
+  [/^Đã thêm (\d+) tệp từ (.+)$/, (m) => `Added ${m[1]} files from ${m[2]}`],
+  [/^Thêm (\d+) tệp$/, (m) => `Add ${m[1]} files`],
+  [/^Tự động chọn (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · effort ${m[2]}`],
+  [/^(.+) đang bận, chuyển sang (.+)$/, (m) => `${m[1]} is busy, switching to ${m[2]}`],
+  [/^Chép lời: (.+)$/, (m) => `Transcription: ${m[1]}`],
+);

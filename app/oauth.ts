@@ -65,7 +65,7 @@ async function call<T>(url: string, init: RequestInit, what: string): Promise<T>
 const form = (o: Record<string, string>) => ({ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, body: new URLSearchParams(o) });
 
 // Đổi code lấy hồ sơ người dùng. `params` là query (Google/GitHub) hoặc form POST (Apple).
-export type OAuthResult = OAuthProfile & { token?: string; login?: string; scopes?: string };
+export type OAuthResult = OAuthProfile & { token?: string; login?: string; scopes?: string; refresh?: string; expiresIn?: number; refreshExpiresIn?: number };
 export async function finish(req: Request, p: Provider, params: URLSearchParams): Promise<OAuthResult> {
   if (params.get("error")) throw new AuthError(params.get("error") === "access_denied" || params.get("error") === "user_cancelled_authorize" ? "Bạn đã hủy đăng nhập." : "Nhà cung cấp đăng nhập báo lỗi. Vui lòng thử lại.");
   const [state, verifier, nonce] = (readCookie(req, stateCookie(p)) ?? "").split(".");
@@ -80,12 +80,13 @@ export async function finish(req: Request, p: Provider, params: URLSearchParams)
   }
 
   if (p === "github") {
-    const t = await call<{ access_token: string; scope?: string }>("https://github.com/login/oauth/access_token", form({ code, client_id: id, client_secret: env("GITHUB_CLIENT_SECRET"), redirect_uri }), "github token");
+    const t = await call<{ access_token: string; scope?: string; refresh_token?: string; expires_in?: number; refresh_token_expires_in?: number }>("https://github.com/login/oauth/access_token", form({ code, client_id: id, client_secret: env("GITHUB_CLIENT_SECRET"), redirect_uri }), "github token");
     const h = { headers: { Authorization: `Bearer ${t.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "Synchro" } };
     const u = await call<{ id: number; login: string; name?: string; avatar_url?: string }>("https://api.github.com/user", h, "github user");
     const emails = await call<{ email: string; primary: boolean; verified: boolean }[]>("https://api.github.com/user/emails", h, "github emails");
     const e = emails.find((x) => x.primary && x.verified) ?? emails.find((x) => x.verified);
-    return { provider: p, subject: String(u.id), email: e?.email ?? null, emailVerified: !!e, name: u.name || u.login, avatar: u.avatar_url ?? null, token: t.access_token, login: u.login, scopes: t.scope ?? "" };
+    return { provider: p, subject: String(u.id), email: e?.email ?? null, emailVerified: !!e, name: u.name || u.login, avatar: u.avatar_url ?? null, token: t.access_token, login: u.login, scopes: t.scope ?? "",
+      refresh: t.refresh_token, expiresIn: t.expires_in, refreshExpiresIn: t.refresh_token_expires_in };
   }
 
   const t = await call<{ id_token: string }>("https://appleid.apple.com/auth/token", form({ code, client_id: id, client_secret: appleSecret(), redirect_uri, grant_type: "authorization_code" }), "apple token");

@@ -66,14 +66,23 @@ let lastCancelled = false;
 export const takeCancelled = () => { const c = lastCancelled; lastCancelled = false; return c; };
 /** Nút Dừng: hủy lượt đang chạy ở máy chủ (không chỉ ngừng hiển thị) để không tốn thêm token. */
 export const cancelRun = (id: string) => fetch(`/api/runs/${encodeURIComponent(id)}`, { method: "DELETE" }).then(() => undefined, () => undefined);
-type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void };
+// onEvent: mọi bước của lượt (lời dẫn, công cụ, kết quả, danh sách việc, tin nhắn thêm đã ghép) để dựng nhật ký làm việc.
+export type RunEv = { seq: number; at: number; kind: string; text: string };
+type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void; onEvent?: (e: RunEv) => void };
+// Tin nhắn thêm tới lúc model đã ở bước trả lời cuối (chưa ghép được): trả về để gửi thành lượt tiếp theo (đọc một lần).
+let lastSteer: string[] = [];
+export const takeSteer = () => { const s = lastSteer; lastSteer = []; return s; };
+/** Nhắn thêm vào lượt đang chạy; queued = false nghĩa là lượt đã xong, hãy gửi thành tin mới. */
+export const steerRun = (id: string, text: string) => fetch(`/api/runs/${encodeURIComponent(id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) })
+  .then((r) => r.json()).then((j) => !!j.queued, () => false);
 
 // Model đang chọn trong giao diện; máy chủ kiểm tra tài khoản có được phép dùng model này không.
 let activeModel = "";
 export const setActiveModel = (m: string) => { activeModel = m; };
 // Mức nỗ lực đang dùng (đã hạ theo giới hạn của quản trị viên); máy chủ vẫn kiểm tra lại.
-let activeEffort: Effort | undefined;
-export const setActiveEffort = (e: Effort) => { activeEffort = e; };
+// "auto": máy chủ chọn mức nỗ lực theo độ khó của từng yêu cầu.
+let activeEffort: Effort | "auto" | undefined;
+export const setActiveEffort = (e: Effort | "auto") => { activeEffort = e; };
 export const getActiveEffort = () => activeEffort;
 // data: phần còn lại của phản hồi lỗi (vd. planLimit, apiModel khi gói subscription hết hạn mức).
 export class LLMError extends Error { constructor(m: string, public status: number, public data: Record<string, unknown> = {}) { super(m); } }
@@ -82,12 +91,18 @@ export class LLMError extends Error { constructor(m: string, public status: numb
 // Lượt chạy bền: máy chủ chạy câu trả lời ở nền, trình duyệt theo dõi qua SSE (tự nối lại khi rớt mạng).
 // onProgress nhận các bước đang làm ("Đang đọc skill …"); kết quả cuối giống hệt /api/llm trả về.
 // onDelta nhận toàn bộ chữ model đã viết ở bước hiện tại mỗi khi có thêm chữ (truyền theo thời gian thực).
-export function waitRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void): Promise<{ http: number; result: Record<string, unknown> }> {
+export function waitRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void): Promise<{ http: number; result: Record<string, unknown> }> {
   return new Promise((ok, no) => {
     let settled = false;
     const es = new EventSource(`/api/runs/${encodeURIComponent(id)}`);
     const end = (f: () => void) => { if (settled) return; settled = true; es.close(); f(); };
-    es.addEventListener("step", (e) => { try { onProgress?.(JSON.parse((e as MessageEvent).data).text); } catch {} });
+    es.addEventListener("step", (e) => {
+      try {
+        const ev = JSON.parse((e as MessageEvent).data) as RunEv;
+        onEvent?.(ev);
+        if (ev.kind === "step" || ev.kind === "tool" || ev.kind === "note") onProgress?.(ev.text);
+      } catch {}
+    });
     let step = -1, text = "";
     const take = (d: { s: number; t?: string; text?: string; reset?: boolean }) => {
       if (d.s !== step || d.reset) { step = d.s; text = ""; }
@@ -102,7 +117,7 @@ export function waitRun(id: string, onProgress?: (text: string) => void, onDelta
       if (es.readyState !== EventSource.CLOSED) return;
       fetch(`/api/runs/${encodeURIComponent(id)}?json=1`).then((r) => r.json().then((j) => ({ r, j }))).then(({ r, j }) => {
         if (!r.ok) return end(() => no(new LLMError(j.error || `Run ${r.status}`, r.status, j)));
-        if (j.run.status === "running") return end(() => ok(waitRun(id, onProgress, onDelta) as never));
+        if (j.run.status === "running") return end(() => ok(waitRun(id, onProgress, onDelta, onEvent) as never));
         end(() => ok({ http: j.run.http ?? 502, result: j.run.result ?? {} }));
       }, (x) => end(() => no(x)));
     };
@@ -121,12 +136,13 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
     j = await r2.json();
     if (typeof j.run === "string") {
       cb.onRun?.(j.run);
-      const { http, result } = await waitRun(j.run, cb.onProgress, cb.onDelta);
+      const { http, result } = await waitRun(j.run, cb.onProgress, cb.onDelta, cb.onEvent);
       if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http, result);
       j = result;
     }
   }
   lastTrace = Array.isArray(j.trace) ? j.trace : [];
+  lastSteer = Array.isArray(j.steer) ? j.steer.filter((x: unknown) => typeof x === "string") : [];
   lastCancelled = j.cancelled === true;
   lastSkills = Array.isArray(j.skills) ? j.skills : [];
   lastLibs = Array.isArray(j.libs) ? j.libs : [];
@@ -142,14 +158,14 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
 }
 
 /** Mở lại một lượt đang chạy (sau khi tải lại trang): chờ kết quả rồi trả lời như callLLM. */
-export async function attachRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void): Promise<string> {
+export async function attachRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = [];
-  const { http, result } = await waitRun(id, onProgress, onDelta);
+  const { http, result } = await waitRun(id, onProgress, onDelta, onEvent);
   if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http, result);
-  return absorb(result, { onProgress, onDelta });
+  return absorb(result, { onProgress, onDelta, onEvent });
 }
 
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; onEvent?: (e: RunEv) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
   if (!hasLLM) {
     // Chưa có model: trả lời giả lập từ câu hỏi cuối.
@@ -165,7 +181,7 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   const j = await r.json();
   if (typeof j.run === "string") {
     opts.onRun?.(j.run);
-    const { http, result } = await waitRun(j.run, opts.onProgress, opts.onDelta);
+    const { http, result } = await waitRun(j.run, opts.onProgress, opts.onDelta, opts.onEvent);
     if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http, result);
     return absorb(result, opts);
   }

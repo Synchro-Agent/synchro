@@ -38,6 +38,17 @@ ok(r.s === 200 && r.j.auto && r.j.auto.tier !== "strong", `câu hỏi kiến th�
 r = await ask(member, "Đọc giúp tôi tệp này", { messages: [{ role: "user", content: [{ type: "text", text: "Tóm tắt tài liệu đính kèm" }, { type: "image", media_type: "image/png", data: "iVBORw0KGgo=" }] }] });
 ok(r.s === 200 && r.j.auto?.why?.includes("có tệp đính kèm"), `có tệp đính kèm được tính là khó hơn: ${r.j?.model}`, JSON.stringify(r.j?.auto));
 
+console.log("1b. Chọn qua cả ba hãng theo thế mạnh, kèm mức nỗ lực theo độ khó");
+r = await ask(member, "Dịch sang tiếng Anh: Hôm nay trời đẹp, mình đi dạo bờ hồ.");
+ok(r.s === 200 && r.j.auto?.vendor === "google" && r.j.auto.task === "translate" && r.j.auto.effort === "low", `dịch câu ngắn → Gemini nhanh, nỗ lực thấp: ${r.j?.model} · ${r.j?.auto?.effort}`, JSON.stringify(r.j?.auto));
+r = await ask(member, "Chứng minh rằng căn bậc hai của 2 là số vô tỉ");
+ok(r.s === 200 && r.j.auto?.vendor === "openai" && r.j.auto.task === "reason" && r.j.auto.effort === "high", `chứng minh toán → ChatGPT, nỗ lực cao: ${r.j?.model} · ${r.j?.auto?.effort}`, JSON.stringify(r.j?.auto));
+r = await ask(member, "Viết code Python đọc file CSV và in tổng từng cột");
+ok(r.s === 200 && r.j.auto?.vendor === "anthropic" && r.j.auto.task === "code" && r.j.auto.tier !== "strong", `code vừa sức → Claude hạng vừa: ${r.j?.model} · ${r.j?.auto?.effort}`, JSON.stringify(r.j?.auto));
+const first = r.j.model;
+r = await ask(member, "Sai rồi, làm lại đi", { messages: [{ role: "user", content: "Viết code Python đọc file CSV và in tổng từng cột" }, { role: "assistant", content: "..." }, { role: "user", content: "Sai rồi, làm lại đi" }], prevModel: first });
+ok(r.s === 200 && r.j.model !== first && r.j.auto?.why?.some((w) => /chưa hài lòng/.test(w)), `chê câu trả lời → nâng độ khó, đổi model: ${first} → ${r.j?.model}`, JSON.stringify(r.j?.auto));
+
 console.log("2. Chỉ chọn trong model được phép");
 // Danh sách được phép chỉ có model nhanh và model cân bằng: việc khó dùng model mạnh nhất có trong danh sách.
 await setPerms(["anthropic/claude-haiku-5-5", "openai/gpt-6.1-sol"]);

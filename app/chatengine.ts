@@ -8,12 +8,12 @@ import { ConnectorSession, connectorsPrompt } from "./connectors";
 import { randomToken } from "./mcpauth";
 import { capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { delta, deltaStep, liveNow, progress, registerExec, runSignal } from "./runs";
+import { delta, deltaStep, liveNow, progress, registerExec, runSignal, takeInbox } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { splitArtifacts } from "./artifacts";
-import { AUTO, routeModel } from "./router";
+import { AUTO, autoEffort, routeModel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { STUDIO_LABEL } from "./plugindir";
@@ -152,7 +152,34 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<ToolRun
   }
 }
 
+// Danh sách việc cho người dùng theo dõi khi model làm việc nhiều bước (hiện như bảng việc, tự đánh dấu xong).
+const PLAN_TOOL = {
+  name: "update_plan",
+  description: "Hiện cho người dùng danh sách các bước bạn sẽ làm và trạng thái từng bước. Dùng khi việc cần 3 bước trở lên (nhiều lần gọi công cụ): gọi một lần lúc bắt đầu với toàn bộ kế hoạch, rồi gọi lại mỗi khi xong một bước. Luôn gửi lại cả danh sách. Không dùng cho câu hỏi đơn giản.",
+  input_schema: { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { content: { type: "string", description: "Bước, ngắn gọn (dưới 10 từ)" }, status: { type: "string", enum: ["pending", "in_progress", "completed"] } }, required: ["content", "status"] } } }, required: ["items"] },
+};
+// Cách làm việc khi có công cụ: nói cho người dùng biết đang làm gì như một người thật, thay vì im lặng tới khi xong.
+const NARRATE_RULES = `<working_out_loud>
+Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
+- Trước mỗi lần gọi công cụ, viết 1 câu ngắn nói bạn sắp làm gì và vì sao (ví dụ "Mình sẽ đọc tài liệu của skill trước để làm đúng định dạng.").
+- Có kết quả rồi thì nói ngắn điều vừa tìm thấy trước khi làm bước tiếp theo.
+- Việc có từ 3 bước trở lên: gọi update_plan để hiện danh sách việc và cập nhật khi xong từng bước.
+- Nếu có khối <user_followup>: đó là tin người dùng nhắn thêm khi bạn đang làm. Ghép yêu cầu đó vào việc đang làm (ưu tiên nếu nó đổi yêu cầu), nói ngắn rằng bạn đã nhận và sẽ làm thế nào, rồi làm tiếp — không bỏ dở việc trước.
+- Câu trả lời cuối vẫn đầy đủ như bình thường.
+</working_out_loud>`;
+// Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ).
+function addFollowup(m: unknown[], text: string) {
+  const note = `<user_followup>\n${text}\n</user_followup>`;
+  const last = m[m.length - 1] as { role?: string; content?: unknown };
+  if (last?.role === "user" && Array.isArray(last.content)) (last.content as unknown[]).push({ type: "text", text: note });
+  else m.push({ role: "user", content: note });
+}
 async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
+  if (c.name === "update_plan") {
+    const items = (Array.isArray(c.input?.items) ? c.input.items : []).map((i: { content?: unknown; status?: unknown }) => ({ content: String(i.content ?? "").slice(0, 120), status: ["pending", "in_progress", "completed"].includes(String(i.status)) ? String(i.status) : "pending" })).slice(0, 12);
+    progress("plan", JSON.stringify(items));
+    return { content: "Đã cập nhật danh sách việc cho người dùng.", is_error: false, used: { kind: "search", name: "update_plan" } };
+  }
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
   const ct = x.sess?.get(c.name);
@@ -189,7 +216,7 @@ function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
 }
 const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSignal()?.aborted;
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
-  for (const c of calls) progress("tool", describe(x, c));
+  const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
   let res: ToolRun[];
   try {
     res = await abortable(Promise.all(calls.map((c) => runCall(x, c, d[c.id]))), runSignal());
@@ -207,7 +234,12 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
     x.trace.push({ id: c.id, name: c.name, label: label(x, c), input: JSON.stringify(c.input ?? {}).slice(0, 300), status: d[c.id] === "deny" ? "denied" : r.is_error ? "error" : "ok", summary, ...(big.ref ? { ref: big.ref } : {}) });
   });
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
+  // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: String(r.content ?? "").replace(/\s+/g, " ").slice(0, 140) })); });
   m.push(...ad.results(calls, res));
+  // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
+  const more = takeInbox();
+  if (more.length) { for (const t of more) progress("steer", t); addFollowup(m, more.join("\n\n")); }
 }
 
 async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
@@ -225,6 +257,8 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     const r = await ad.step(m, i === MAX_STEPS - 1);
     m.push(r.assistant);
     if (!r.calls.length) return { text: r.text, used };
+    // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
+    if (r.text.trim()) progress("say", r.text.trim());
     const ask = r.calls.filter((c) => needsAsk(x, c));
     if (ask.length) {
       sweep();
@@ -444,14 +478,44 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   const shownApi = cat.map((p) => ({ ...p, models: p.models.filter((m) => main.includes(ALL) || main.includes(m.key)) })).filter((p) => p.models.length);
   const merged = await mergedProviders(c.user, shownApi).catch(() => shownApi);
   const allowed = merged.flatMap((p) => p.models.map((m) => m.key)).filter((k) => !!subCli(k) || canModel(c.user, k));
+  // Gói subscription đang hết hạn mức (hoặc cần đăng nhập lại) thì không chọn.
+  const blocked = new Set(merged.flatMap((p) => ((p as { plan?: { blockedUntil?: number | null; relogin?: boolean } }).plan?.blockedUntil || (p as { plan?: { relogin?: boolean } }).plan?.relogin ? p.models.map((m) => m.key) : [])));
+  const usable = allowed.filter((k) => !blocked.has(k));
+  const q = routeInput(body);
+  const r = routeModel(q, usable.length ? usable : allowed);
+  if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
+  // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
+  const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
+  progress("note", `Tự động chọn ${r.model.split("/").pop()} · nỗ lực ${effort}`);
+  let res = await chatTurn({ ...body, model: r.model, effort }, c, scope);
+  let used = r.model;
+  // Model đầu lỗi / quá tải / hết hạn mức: chuyển một lần sang model dự phòng (ưu tiên hãng khác) mà người dùng không phải làm gì.
+  // Gói subscription chỉ chuyển sang gói khác, không tự sang khóa API (luôn hỏi người dùng trước khi dùng khóa API).
+  if ([429, 500, 502, 503, 529].includes(res.status) && !runSignal()?.aborted) {
+    const fromSub = !!subCli(r.model);
+    const next = r.alt.find((k) => !blocked.has(k) && (!fromSub || !!subCli(k)));
+    if (next) {
+      const j0 = await res.clone().json().catch(() => ({}));
+      if (!(j0 as { usageLimit?: boolean }).usageLimit) {
+        progress("note", `${r.model.split("/").pop()} đang bận, chuyển sang ${next.split("/").pop()}`);
+        deltaStep();
+        res = await chatTurn({ ...body, model: next, effort }, c, scope);
+        used = next;
+      }
+    }
+  }
+  const j = await res.json().catch(() => ({}));
+  return Response.json({ ...j, model: j.model ?? used, auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
+}
+// Thông tin của yêu cầu mới nhất cho bộ định tuyến: chữ, tệp / ảnh đính kèm, độ dài tài liệu, model của câu trả lời trước.
+function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-line @typescript-eslint/no-explicit-any
   const msgs = Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : [];
   const lastUser = [...msgs].reverse().find((m) => m?.role === "user");
-  const attachments = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string }[]).filter((b) => b?.type && b.type !== "text").length : 0;
-  const r = routeModel({ text: lastUserText(msgs), attachments, turns: msgs.length, studio: !!studioOf(body.studio) }, allowed);
-  if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
-  const res = await chatTurn({ ...body, model: r.model }, c, scope);
-  const j = await res.json().catch(() => ({}));
-  return Response.json({ ...j, model: j.model ?? r.model, auto: { tier: r.tier, why: r.why } }, { status: res.status });
+  const blocks = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string; text?: string }[]) : [];
+  const attachments = blocks.filter((b) => b?.type && b.type !== "text").length;
+  const images = blocks.filter((b) => b?.type === "image" || b?.type === "image_url").length;
+  const docChars = blocks.reduce((n, b) => n + (b?.type === "text" || b?.type === "document" ? JSON.stringify(b).length : 0), 0);
+  return { text: lastUserText(msgs), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, docChars, prev: typeof body.prevModel === "string" ? body.prevModel : null };
 }
 
 async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -494,7 +558,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const planSys = pc ? [feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
     const r = await subTurn({
       user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-      messages: am ?? messages, conv: am ? undefined : typeof conv === "string" ? conv : undefined, effort: isEffort(wanted) ? wanted : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
+      messages: am ?? messages, conv: am ? undefined : typeof conv === "string" ? conv : undefined, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
     });
     return Response.json(r.json, { status: r.status });
   }
@@ -503,7 +567,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const t = await resolveModel(model);
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   // Mức nỗ lực người dùng chọn, hạ xuống giới hạn quản trị viên đặt cho model này (quản trị viên không bị giới hạn).
-  const effort = isEffort(wanted) ? clampEffort(wanted, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
+  // "auto": mức nỗ lực theo độ khó của yêu cầu (việc dễ trả lời nhanh, việc khó suy nghĩ kỹ).
+  const want = wanted === "auto" ? autoEffort(routeInput(body)) : wanted;
+  const effort = isEffort(want) ? clampEffort(want, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
   if (feature === "artifact") {
     if (!capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
     limit("artai:" + c.user.id, 120, 10 * 60_000);
@@ -588,8 +654,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (visible.length || sess || code || refs) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : [])];
+      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", pinned].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(skills ? [PLAN_TOOL] : [])];
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
       const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined };
       const msgs = prep.messages;

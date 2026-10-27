@@ -11,12 +11,17 @@ import { HalftoneBg } from "./halftone";
 import { CodeView } from "./codeview";
 import { VoiceMode } from "./voicemode";
 import { SpeechView, TOOL_ICON } from "./speech/view";
-import { TOOLS as SP_TOOLS, type SpeechTool } from "./speech/data";
+import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
+import { usePlan as useSpeechPlan } from "./speech/client";
+import { elSpeed, speakAI, type Speaking } from "./speak";
+import { applyEvent, PlanCard, QueueChips, WorkParts, WorkStatus, type Queued, type RunEv } from "./worklog";
+import { startScribe, type Scribe } from "./scribe";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown, makeReply } from "./md";
 import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
+import { steerRun, takeSteer } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
@@ -176,16 +181,18 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const [sub, setSub] = useState<null | string>(null);
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
   const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
-  const [effort, setEffort] = usePref("effort", "medium");
+  const [effort, setEffort] = usePref("effort", "auto");
   const { say, me, openSettings } = useApp();
   const { providers, allowed, loaded, effort: caps } = useModels();
   // Mức nỗ lực thật sự dùng: mức người dùng chọn, hạ theo giới hạn quản trị viên đặt cho model và các mức model hỗ trợ.
   const kind = providers.find((p) => p.models.some((m) => m.key === model))?.kind;
   const cap = effortCap(caps, model);
+  // "Tự động": máy chủ chọn mức theo độ khó của từng việc (vẫn trong giới hạn quản trị viên đặt).
+  const autoEff = effort === "auto";
   const eff = clampEffort(isEffort(effort) ? effort : "medium", cap, kind);
   const capped = cap !== "max";
   const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
-  useEffect(() => { setActiveEffort(eff); }, [eff]);
+  useEffect(() => { setActiveEffort(autoEff ? "auto" : eff); }, [eff, autoEff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
   const hoverProv = (id: string, el: HTMLElement) => {
     setSub(id);
@@ -227,7 +234,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
     setModel(k); close();
   };
-  const eLabel = levelName(eff);
+  const eLabel = autoEff ? "Tự động" : levelName(eff);
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }}>
@@ -242,7 +249,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         )}
         {!none && (
           <button className="menu-item mline mauto" onClick={() => pick(AUTO)} onMouseEnter={() => setSub(null)}>
-            <span className="mauto-t"><b>Tự động</b><em>Việc đơn giản dùng model nhanh, việc khó dùng model mạnh nhất</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
+            <span className="mauto-t"><b>Tự động</b><em>Chọn qua cả Claude, ChatGPT, Gemini: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
           </button>
         )}
         {!none && <hr />}
@@ -255,13 +262,16 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         <button className={`menu-item mline ${sub === "effort" ? "sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
+          <button className="menu-item mline" onClick={() => { setEffort("auto"); close(); }}>
+            <span className="mauto-t"><b>Tự động</b><em>Việc dễ trả lời nhanh, việc khó suy nghĩ kỹ</em></span>{autoEff ? <span className="ck"><I.Check /></span> : <span className="mtag">Được đề xuất</span>}
+          </button>
           {EFFORTS.filter(([k]) => effortsFor(kind).includes(k as Effort)).map(([k, l]) => {
             const locked = clampEffort(k as Effort, cap, kind) !== k;
             return (
               <button key={k} className={`menu-item mline ${locked ? "locked" : ""}`} aria-disabled={locked} title={locked ? "Quản trị viên đã khóa mức này" : undefined}
                 onClick={() => { if (locked) { say(`Quản trị viên giới hạn ${modelName(model)} tối đa ở mức ${levelName(cap)}`); return; } setEffort(k); if (k === "max") say("Mức Tối đa dùng giới hạn nhanh hơn từ 5 lần"); close(); }}>
-                {l}{k === "medium" && !locked && <span className="mtag">Được đề xuất</span>}
-                {eff === k ? <span className="ck"><I.Check /></span> : locked && <span className="sc"><I.Lock size={14} /></span>}
+                {l}
+                {!autoEff && eff === k ? <span className="ck"><I.Check /></span> : locked && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             );
           })}
@@ -312,6 +322,9 @@ function Composer(p: {
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
   model: string; setModel: (m: string) => void; goCustom: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
   onVoice?: () => void; extra?: React.ReactNode;
+  projects?: { id: number; name: string }[]; project?: number; onProject?: (id: number | undefined) => void;
+  /** Đang chạy mà gửi thêm: later = false ghép vào việc đang làm, true = gửi sau khi xong. */
+  onSteer?: (text: string, later: boolean) => void;
 }) {
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
@@ -342,32 +355,70 @@ function Composer(p: {
   }, []);
 
   const canSend = !!(v.trim() || files.length);
-  const submit = () => {
+  const submit = (later = false) => {
+    // Đang chạy: không ngắt — Enter ghép tin vào việc đang làm, ⌘/Ctrl + Enter xếp hàng gửi sau khi xong.
+    if (busy && p.onSteer && v.trim()) { p.onSteer(v.trim(), later); setV(""); return; }
     if (!canSend || busy) return;
     onSend(v.trim() || "Xem tệp đính kèm", files);
     setV("");
   };
   const keys = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(e.metaKey || e.ctrlKey); }
   };
   const [vlang] = usePref("vlang", "Vietnamese");
   usePref("uilang", "vi");
-  const mic = () => {
+  // Nhập bằng giọng nói: ElevenLabs Scribe Realtime (chữ hiện ngay khi nói); chưa có ElevenLabs thì dùng nhận dạng của trình duyệt.
+  const scribeRef = useRef<Scribe | null>(null);
+  const mic = async () => {
+    if (rec) { scribeRef.current?.stop(); scribeRef.current = null; recRef.current?.stop(); setRec(false); return; }
+    const lang = VOICE_LANG[vlang] ?? "vi-VN";
+    const base = v.trim() ? v.trimEnd() + " " : "";
+    let said = "";
+    setRec(true);
+    try {
+      const s = await startScribe({ lang: lang.split("-")[0] }, {
+        onPartial: (t) => setV(base + said + t),
+        onCommit: (t) => { said += t + " "; setV(base + said); },
+        onError: (m) => say(m),
+        onClose: () => { scribeRef.current = null; setRec(false); },
+      });
+      if (s) { scribeRef.current = s; return; }
+    } catch { setRec(false); return say("Không mở được micro: hãy cho phép Synchro dùng micro"); }
     const SR = (window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Rec }).webkitSpeechRecognition;
-    if (!SR) return say("Trình duyệt này không hỗ trợ nhập bằng giọng nói");
-    if (rec) { recRef.current?.stop(); return; }
+    if (!SR) { setRec(false); return say("Trình duyệt này không hỗ trợ nhập bằng giọng nói"); }
     const r = new SR();
-    r.lang = VOICE_LANG[vlang] ?? "vi-VN"; r.interimResults = true;
-    r.onresult = (e) => setV(Array.from(e.results).map((x) => x[0].transcript).join(""));
+    r.lang = lang; r.interimResults = true;
+    r.onresult = (e) => setV(base + Array.from(e.results).map((x) => x[0].transcript).join(""));
     r.onend = () => setRec(false);
-    recRef.current = r; setRec(true); r.start();
+    recRef.current = r; r.start();
   };
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fl = Array.from(e.target.files ?? []); fl.forEach((x) => saveBlob(x.name, x)); const n = fl.map((f) => f.name);
     if (n.length) setFiles([...files, ...n]);
     e.target.value = "";
   };
-  const soon = (m = "Tính năng này sẽ sớm ra mắt") => { setMenu(false); say(m); };
+  const [projOpen, setProjOpen] = useState(false);
+  // Chụp màn hình thật: trình duyệt hỏi chọn màn hình / cửa sổ / tab, chụp một khung hình rồi đính kèm như ảnh tải lên.
+  const shot = async () => {
+    setMenu(false);
+    if (!navigator.mediaDevices?.getDisplayMedia) return say("Trình duyệt này không hỗ trợ chụp màn hình");
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const vid = document.createElement("video");
+      vid.srcObject = stream; vid.muted = true; await vid.play();
+      await new Promise((r) => setTimeout(r, 300));
+      const c = document.createElement("canvas");
+      c.width = vid.videoWidth; c.height = vid.videoHeight;
+      c.getContext("2d")!.drawImage(vid, 0, 0);
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
+      if (!blob) return say("Không chụp được màn hình");
+      const d = new Date(), name = `Ảnh chụp màn hình ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}.png`;
+      saveBlob(name, new File([blob], name, { type: "image/png" }));
+      setFiles([...files, name]);
+      say("Đã đính kèm ảnh chụp màn hình");
+    } catch (e) { if ((e as Error).name !== "NotAllowedError") say("Không chụp được màn hình"); }
+  };
 
   const plus = (
     <div ref={ref} style={{ position: "relative" }}>
@@ -375,11 +426,15 @@ function Composer(p: {
       <button className="icon-btn" onClick={() => setMenu(!menu)} aria-label="Thêm"><I.Plus /></button>
         <Menu open={!!(menu)} className="" style={{ bottom: 40, left: 0, width: 264 }}>
           {perms?.features.files !== false && <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>}
-          <button className="menu-item" onClick={() => { setMenu(false); setFiles([...files, "Ảnh chụp màn hình.png"]); say("Đã chụp ảnh màn hình"); }}><I.Camera />Chụp ảnh màn hình</button>
-          <button className="menu-item" onClick={() => soon("Hãy tạo dự án trước ở mục Dự án")}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
+          {perms?.features.files !== false && <button className="menu-item" onClick={shot}><I.Camera />Chụp ảnh màn hình</button>}
+          {p.onProject && perms?.features.projects !== false && (p.projects?.length ? (
+            <>
+              <button className="menu-item" aria-expanded={projOpen} onClick={() => setProjOpen(!projOpen)}><I.Layers />Thêm vào dự án<span className="sc">{projOpen ? <I.Chevron size={16} /> : <I.ChevronR size={16} />}</span></button>
+              {projOpen && p.projects.map((pr) => <button key={pr.id} className="menu-item sub" onClick={() => { setMenu(false); setProjOpen(false); p.onProject!(p.project === pr.id ? undefined : pr.id); }}><span data-notr>{pr.name}</span>{p.project === pr.id && <span className="ck"><I.Check /></span>}</button>)}
+            </>
+          ) : <button className="menu-item" onClick={() => { setMenu(false); p.onProject!(undefined); }}><I.Layers />Tạo dự án để thêm vào</button>)}
           <hr />
           {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom(); }}><I.Plugins />Skill Hub<span className="sc"><I.ChevronR size={16} /></span></button>}
-          <button className="menu-item" onClick={() => soon("Chưa có hệ thống thiết kế nào")}><I.Palette />Hệ thống thiết kế<span className="sc"><I.ChevronR size={16} /></span></button>
           <hr />
           {perms?.features.web !== false && <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>}
           <button className="menu-item" onClick={() => { setMem(!mem); say(mem ? "Đã tắt bộ nhớ" : "Đã bật bộ nhớ"); }}><I.History />Bộ nhớ{mem && <span className="ck"><I.Check /></span>}</button>
@@ -388,8 +443,8 @@ function Composer(p: {
   );
 
   const sendBtn = (
-    <button className="send" disabled={!busy && !canSend} onClick={busy ? onStop : submit} aria-label="Gửi">
-      {busy ? <I.Stop /> : dock ? <I.Enter /> : <I.Arrow />}
+    <button className="send" disabled={!busy && !canSend} onClick={busy ? (v.trim() && p.onSteer ? () => submit() : onStop) : () => submit()} aria-label={busy ? (v.trim() && p.onSteer ? "Gửi thêm" : "Dừng") : "Gửi"}>
+      {busy ? (v.trim() && p.onSteer ? <I.Arrow /> : <I.Stop />) : dock ? <I.Enter /> : <I.Arrow />}
     </button>
   );
   const micBtn = <MicPicker say={say} rec={rec} onMic={mic} />;
@@ -403,7 +458,7 @@ function Composer(p: {
       <div className="composer" style={{ flexWrap: "wrap" }}>
         {chips && <div style={{ width: "100%" }}>{chips}</div>}
         {plus}
-        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
+        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
         {p.extra}
         {micBtn}
         {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
@@ -413,7 +468,7 @@ function Composer(p: {
   return (
     <div className="composer">
       {chips}
-      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
+      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
       <div className="comp-row">
         {plus}
         <div className="model">
@@ -493,6 +548,7 @@ export default function Home() {
   const [vlang] = usePref("vlang", "Vietnamese");
   usePref("uilang", "vi");
   const [vspeed] = usePref("vspeed", "Normal");
+  const [vvoice] = usePref("vvoice", "");
   const [breakH] = usePref("breakH", "–");
   const [breakM] = usePref("breakM", "–");
   const [qdays] = usePref<number[]>("qdays", []);
@@ -504,7 +560,8 @@ export default function Home() {
     r.dataset.chatFont = font;
     r.dataset.uiFont = uiFont;
     r.dataset.textSize = size;
-    r.style.setProperty("--thread-w", { Narrow: "640px", Medium: "760px", Wide: "900px" }[width] ?? "640px");
+    // Mặc định bằng cột chat của Claude (48rem = 768px); Vừa / Rộng cho màn hình lớn.
+    r.style.setProperty("--thread-w", { Narrow: "768px", Medium: "880px", Wide: "1040px" }[width] ?? "768px");
   }, [motion, font, uiFont, size, width]);
   const [view, setView] = useState<View>("new");
   const [open, setOpen] = useState(true);
@@ -525,6 +582,8 @@ export default function Home() {
     return () => setApprover(null);
   }, []);
   const [curProj, setCurProj] = useState<number | null>(null);
+  // Dự án chọn từ khung soạn trước khi gửi tin đầu tiên của đoạn chat mới.
+  const [nextProj, setNextProj] = useState<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const fm = useFileMenu((m) => say(m));
   const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
@@ -538,6 +597,8 @@ export default function Home() {
   const [spOpen, setSpOpen] = usePref("spOpen", false);
   // Rời Speech sang mục khác thì tự thu gọn danh sách công cụ.
   useEffect(() => { if (view !== "speech") setSpOpen(false); }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Công cụ Speech ở thanh bên hiện theo gói ElevenLabs (chỉ quét khi đã mở Speech).
+  const spPlan = useSpeechPlan(view === "speech" || spOpen);
   const [codeRen, setCodeRen] = useState<number | null>(null);
   const [codeMenu, setCodeMenu] = useState<number | null>(null);
   const [pickProj, setPickProj] = useState(false);
@@ -726,6 +787,17 @@ export default function Home() {
   // user = false: câu trả lời vừa hiện xong. Mặc định (nút Dừng, đổi đoạn chat…): hủy luôn lượt ở máy chủ để không tốn thêm token,
   // phần đã viết được giữ lại và đánh dấu đã dừng (lượt sau model biết câu trả lời này chưa hoàn chỉnh).
   const runRef = useRef<string | null>(null);
+  // Tin nhắn gửi trong lúc đang chạy: "steer" đang chờ ghép vào lượt, "later" gửi thành lượt mới khi xong.
+  const [queued, setQueued] = useState<Queued[]>([]);
+  const onSteer = async (text: string, later: boolean) => {
+    const chatId = cur;
+    if (chatId === null) return;
+    const qid = Date.now() + Math.random();
+    const run = runRef.current;
+    if (later || !run) { setQueued((q) => [...q, { id: qid, chat: chatId, text, mode: "later" }]); return; }
+    setQueued((q) => [...q, { id: qid, chat: chatId, text, mode: "steer" }]);
+    if (!(await steerRun(run, text))) setQueued((q) => q.map((x) => (x.id === qid ? { ...x, mode: "later" } : x)));
+  };
   const stop = (user: unknown = true) => {
     approvalRef.current?.resolve({});
     setApproval(null);
@@ -750,6 +822,7 @@ export default function Home() {
   chatsRef.current = chats;
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
+  const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
   const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"]) => {
     const gen = ++genRef.current;
     setBusy(true);
@@ -763,6 +836,22 @@ export default function Home() {
     let streamed = false, pend: string | null = null, raf = 0;
     const flush = () => { raf = 0; if (pend === null || gen !== genRef.current) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
     const onDelta = (t: string) => { streamed = true; pend = t; if (!raf) raf = requestAnimationFrame(flush); };
+    // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
+    // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
+    const onEvent = (ev: RunEv) => {
+      if (gen !== genRef.current) return;
+      if (ev.kind === "steer") {
+        patch(id, (ms) => {
+          const last = ms[ms.length - 1];
+          if (!last || last.role !== "ai" || (last.seq ?? 0) >= ev.seq) return ms;
+          return [...ms.slice(0, -1), { ...last, done: true, prog: undefined, run: undefined, seq: ev.seq }, { role: "user", text: ev.text, time: Date.now(), steer: true }, { role: "ai", text: "", time: Date.now(), run: last.run, seq: ev.seq }];
+        });
+        setQueued((q) => { const k = q.findIndex((x) => x.chat === id && x.mode === "steer" && x.text === ev.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
+        return;
+      }
+      if (ev.kind === "say") pend = null;
+      patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], ...applyEvent(ms[ms.length - 1], ev), ...(ev.kind === "say" ? { text: "" } : {}) }] : ms));
+    };
     try {
       // Skill hai câu trả lời gần nhất đã dùng: lượt tiếp nối (sửa, thêm, đổi) đọc lại để giữ cùng phong cách.
       const recentSkills = [...new Set((chatsRef.current.find((c) => c.id === id)?.msgs ?? []).filter((m) => m.role === "ai" && (m.skills?.length || m.libs?.length)).slice(-2)
@@ -770,8 +859,9 @@ export default function Home() {
       // Lượt chạy bền: máy chủ trả lời ở nền; mã lượt lưu vào tin nhắn để tải lại trang vẫn nhận được kết quả.
       const lastMsg = (f: (m: Msg) => Msg) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills,
-        onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta,
-        extra: mixExtra(chatsRef.current.find((c) => c.id === id)) });
+        onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta, onEvent,
+        // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
+        extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via } });
       const used = takeSkillsUsed();
       libs = takeLibsUsed();
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -782,7 +872,15 @@ export default function Home() {
       via = takeRoute();
       trace = takeTrace();
       cancelled = takeCancelled();
+      // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: gửi thành lượt tiếp theo ngay khi xong (không mất tin).
+      const left = takeSteer();
+      setQueued((q) => {
+        const mine = q.map((x) => (x.chat === id && x.mode === "steer" ? { ...x, mode: "later" as const } : x));
+        const extra = left.filter((t) => !mine.some((x) => x.chat === id && x.text === t)).map((t, k) => ({ id: Date.now() + k + Math.random(), chat: id, text: t, mode: "later" as const }));
+        return [...mine, ...extra];
+      });
     } catch (e) {
+      setQueued((q) => q.map((x) => (x.chat === id && x.mode === "steer" ? { ...x, mode: "later" as const } : x)));
       reply = e instanceof LLMError && [400, 401, 403, 404, 409, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
@@ -798,7 +896,7 @@ export default function Home() {
     }
     if (streamed || cancelled) {
       // Đã hiện dần theo thời gian thực: hiện bản cuối ngay, không giả lập gõ chữ.
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: reply, done: true, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
       finishReply(id, reply, pr, history, via);
       return;
     }
@@ -810,7 +908,7 @@ export default function Home() {
     timer.current = setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
       if (i >= words.length) finishReply(id, reply, pr, history, via);
     }, 38);
   };
@@ -904,7 +1002,7 @@ export default function Home() {
       const set = (f: (m: Msg) => Msg) => patch(c.id, (ms) => (ms.length && ms[ms.length - 1].run === run ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       set((m) => ({ ...m, done: false }));
       runRef.current = run;
-      attachRun(run, (prog) => set((m) => ({ ...m, prog })), (text) => set((m) => ({ ...m, text, prog: undefined }))).then((text) => {
+      attachRun(run, (prog) => set((m) => ({ ...m, prog })), (text) => set((m) => ({ ...m, text, prog: undefined })), (ev) => { if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }).then((text) => {
         const used = takeSkillsUsed(), libs = takeLibsUsed(), outs = takeOutputs(), trace = takeTrace(), stopped = takeCancelled();
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
@@ -928,7 +1026,8 @@ export default function Home() {
     if (view !== "chat" || id === null) {
       id = Date.now();
       const nid = id;
-      setChats((cs) => [{ id: nid, title: t.slice(0, 40), msgs, inc: incog || undefined, project: view === "project" ? curProj ?? undefined : undefined, studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      setChats((cs) => [{ id: nid, title: t.slice(0, 40), msgs, inc: incog || undefined, project: nextProj ?? (view === "project" ? curProj ?? undefined : undefined), studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      setNextProj(undefined);
       setCur(id);
       setView("chat");
     } else patch(id, (m) => [...m, ...msgs]);
@@ -957,17 +1056,24 @@ export default function Home() {
     setCopied(key); say("Đã sao chép");
     setTimeout(() => setCopied(null), 1500);
   };
-  const speak = (key: string, text: string) => {
+  // Đọc to câu trả lời bằng giọng ElevenLabs (giọng chọn ở Cài đặt → Giọng nói); chưa có ElevenLabs thì dùng giọng của trình duyệt.
+  const aiSpeak = useRef<Speaking | null>(null);
+  const stopSpeak = () => { aiSpeak.current?.stop(); aiSpeak.current = null; window.speechSynthesis?.cancel(); };
+  const speak = async (key: string, text: string) => {
+    if (speaking === key) { stopSpeak(); setSpeaking(null); return; }
+    stopSpeak();
+    setSpeaking(key);
+    const clean = text.replace(/```[\s\S]*?```/g, " ");
+    const ai = await speakAI(clean, { voice: vvoice, speed: elSpeed(VOICE_RATE[vspeed] ?? 1) });
+    if (ai) { aiSpeak.current = ai; void ai.done.then(() => { if (aiSpeak.current === ai) aiSpeak.current = null; setSpeaking((k) => (k === key ? null : k)); }); return; }
     const s = window.speechSynthesis;
-    if (!s) return say("Trình duyệt không hỗ trợ đọc to");
-    if (speaking === key) { s.cancel(); setSpeaking(null); return; }
-    s.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, " "));
+    if (!s) { setSpeaking(null); return say("Trình duyệt không hỗ trợ đọc to"); }
+    const u = new SpeechSynthesisUtterance(clean);
     // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt.
     const vi = /[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i.test(text);
     const pref = VOICE_LANG[vlang] ?? "vi-VN";
     u.lang = vi ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref; u.rate = VOICE_RATE[vspeed] ?? 1; u.onend = () => setSpeaking(null);
-    setSpeaking(key); s.speak(u);
+    s.speak(u);
   };
   const like = (i: number, v: 1 | -1) => {
     if (!chat) return;
@@ -981,7 +1087,7 @@ export default function Home() {
 
   const goNew = () => {
     if (busy) stop();
-    window.speechSynthesis?.cancel();
+    stopSpeak(); setSpeaking(null);
     setChats((cs) => cs.filter((c) => !c.inc));
     setView("new"); setCur(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
   };
@@ -1069,7 +1175,23 @@ export default function Home() {
     setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: `${tr("Tác vụ nền")}: ${title}`, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
     setCur(id); setView("chat");
   };
-  const composerProps = { onSend: send, busy, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload"), onVoice: () => { window.speechSynthesis?.cancel(); setVoiceOn(true); } };
+  // Lượt xong: gửi lần lượt các tin đã xếp hàng của đoạn chat đang mở.
+  useEffect(() => {
+    if (busy || cur === null || view !== "chat") return;
+    const next = queued.find((q) => q.chat === cur && q.mode === "later");
+    if (!next) return;
+    const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); send(next.text); }, 250);
+    return () => clearTimeout(t);
+  }, [busy, queued, cur, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  const composerProps = { onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
+    projects: projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })),
+    project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
+    onProject: (pid: number | undefined) => {
+      if (!projects.length) { setModal("proj"); return; }
+      const name = projects.find((x) => x.id === pid)?.name;
+      if (view === "chat" && chat) { setChats((cs) => cs.map((x) => (x.id === chat.id ? { ...x, project: pid } : x))); say(pid ? `Đã thêm vào "${name}"` : "Đã gỡ khỏi dự án"); }
+      else { setNextProj(pid); say(pid ? `Đoạn chat mới sẽ nằm trong "${name}"` : "Đoạn chat mới không thuộc dự án nào"); }
+    } };
   const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
   // Lượt hỏi đáp từ Eleven Realtime được lưu vào đoạn chat như tin nhắn thường.
   const voiceTurn = (u: string, a: string) => {
@@ -1162,7 +1284,7 @@ export default function Home() {
               </div>
               <div className={`fold ${spOpen ? "open" : ""}`}>
                 <div className="nav-sub" aria-label="Công cụ Speech">
-                  {SP_TOOLS.filter((t) => t.k !== "home").map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={spOpen ? 0 : -1} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
+                  {SP_TOOLS.filter((t) => t.k !== "home" && toolOn(spPlan, t.k)).map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={spOpen ? 0 : -1} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
                 </div>
               </div>
             </>
@@ -1187,7 +1309,6 @@ export default function Home() {
                       <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên<span className="sc">R</span></button>
                       <button className="menu-item" onClick={() => (projects.length ? setPickProj(true) : (say("Hãy tạo dự án trước ở mục Dự án"), setChatMenu(null)))}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
                       {c.project !== undefined && <button className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: undefined } : x))); setChatMenu(null); say("Đã gỡ khỏi dự án"); }}><I.Layers />Gỡ khỏi dự án</button>}
-                      <button className="menu-item" onClick={() => { say("Nhóm đoạn chat sẽ sớm ra mắt"); setChatMenu(null); }}><I.Folder />Chuyển vào nhóm<span className="sc"><I.ChevronR size={16} /></span></button>
                       <hr />
                       <button className="menu-item del" onClick={() => { setDelId(c.id); setChatMenu(null); }}><I.Trash />Xóa<span className="sc">D</span></button>
                     </>
@@ -1346,18 +1467,19 @@ export default function Home() {
                   m.role === "user" ? (
                     <div key={i} className="user-wrap">
                       {m.files && <div className="attach" style={{ justifyContent: "flex-end" }}>{m.files.map((f, k) => <FileCard key={k} name={f} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
+                      {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
                       <div className="user-msg"><UserText text={m.text} /></div>
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
+                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.parts?.length ? <WorkParts parts={m.parts} live={!m.done} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
                         const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
                         const full = arts.map.get(sg.art.ident)?.[v];
                         return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : !m.done ? <Thinking label="Đang suy nghĩ…" text={m.prog} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{m.plan?.length ? <PlanCard plan={m.plan} live={!m.done} /> : null}{!m.done ? <WorkStatus label={m.prog} since={m.time} chars={m.text.length + (m.parts ?? []).reduce((n, p) => n + (p.k === "say" ? p.text.length : 0), 0)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
@@ -1394,6 +1516,7 @@ export default function Home() {
               {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
                   onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
+              <QueueChips items={queued.filter((q) => q.chat === chat.id)} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
               <Composer {...composerProps} dock extra={<ContextMixer chat={chat} studio={chat.studio} busy={busy} say={say} recentSkills={[...new Set(chat.msgs.filter((m) => m.role === "ai").slice(-2).flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))]}
                 onChange={(p) => setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, ...p } : c)))} />} />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
@@ -1441,7 +1564,7 @@ export default function Home() {
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
-      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} say={say} />}
+      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>

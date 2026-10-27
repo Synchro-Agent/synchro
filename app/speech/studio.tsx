@@ -1,192 +1,185 @@
 "use client";
-// Lồng tiếng & Studio: lồng tiếng video, sách nói theo chương, podcast hai người dẫn, avatar nhép môi.
-import { useState } from "react";
+// Lồng tiếng & Studio: lồng tiếng video / âm thanh (ElevenLabs Dubbing), podcast và sách nói (Studio API, chỉ hiện khi tài khoản được ElevenLabs duyệt).
+// Các việc này chạy lâu ở ElevenLabs: tạo xong thì Synchro tự hỏi lại trạng thái tới khi có âm thanh.
+import { useEffect, useState } from "react";
 import * as I from "../icons";
-import { DUB_LANGS, LANGS, VOICES, type Voice } from "./data";
-import { Drop, Field, Player, Seg, Select, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
+import { DUB_LANGS } from "./data";
+import { LANGS, ago, api, del, on, post, postForm, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
+import { Drop, ErrBox, Field, Player, Seg, Select, Spin, Tabs, Toggle, VoiceChip, VoicePicker } from "./parts";
 import { ToolHead, type ToolProps } from "./view";
 
-const DUBS = [
-  { name: "gioi-thieu-san-pham.mp4", langs: ["Tiếng Anh", "Tiếng Nhật"], pct: 100, when: "Hôm nay" },
-  { name: "Hướng dẫn sử dụng tập 3 (YouTube)", langs: ["Tiếng Hàn"], pct: 64, when: "Đang xử lý" },
-];
-const CHAPTERS = [
-  { t: "Chương 1. Thành phố trong sương", words: 3120, st: "done" },
-  { t: "Chương 2. Người lạ ở bến tàu", words: 2870, st: "done" },
-  { t: "Chương 3. Lá thư không ký tên", words: 3410, st: "run" },
-  { t: "Chương 4. Đêm trước bão", words: 2990, st: "todo" },
-];
+type Tab = "dub" | "podcast" | "book";
 
-export function StudioTool({ say, demo, sub, setSub }: ToolProps) {
-  const tab = (["dub", "book", "podcast", "avatar"] as const).find((x) => x === sub) ?? "dub";
+// Hỏi lại trạng thái các dự án đang chạy mỗi 15 giây.
+function usePoll(items: Item[] | null, setItems: (f: (l: Item[] | null) => Item[] | null) => void, op: "dub" | "project") {
+  useEffect(() => {
+    const busy = (items ?? []).filter((x) => ["dubbing", "converting"].includes(String(x.meta.status)));
+    if (!busy.length) return;
+    const t = setTimeout(async () => {
+      for (const it of busy) {
+        const j = await api<{ item: Item }>(`${op}?id=${it.id}`).catch(() => null);
+        if (j) setItems((l) => l?.map((x) => (x.id === it.id ? j.item : x)) ?? null);
+      }
+    }, 15_000);
+    return () => clearTimeout(t);
+  }, [items, setItems, op]);
+}
+
+export function StudioTool({ say, sub, setSub }: ToolProps) {
+  const plan = usePlan();
+  const tabs = ([["dub", "Lồng tiếng"], ["podcast", "Podcast"], ["book", "Sách nói"]] as [Tab, string][]).filter(([k]) => on(plan, k));
+  const tab = tabs.find(([k]) => k === sub)?.[0] ?? tabs[0]?.[0] ?? "dub";
   return (
     <div className="sp-wide">
-      <ToolHead title="Lồng tiếng & Studio" desc="Dịch và lồng tiếng video, chuyển sách thành sách nói, tạo podcast và avatar nói chuyện.">
-        <Tabs label="Công cụ" value={tab} onChange={setSub} items={[{ k: "dub", label: "Lồng tiếng" }, { k: "book", label: "Sách nói" }, { k: "podcast", label: "Podcast" }, { k: "avatar", label: "Avatar" }]} />
+      <ToolHead title="Lồng tiếng & Studio" desc="Dịch và lồng tiếng video, âm thanh sang ngôn ngữ khác; tạo podcast và sách nói khi tài khoản có Studio.">
+        {tabs.length > 1 && <Tabs label="Công cụ" value={tab} onChange={setSub} items={tabs.map(([k, label]) => ({ k, label }))} />}
       </ToolHead>
-      {tab === "dub" && <Dub demo={demo} say={say} />}
-      {tab === "book" && <Book demo={demo} say={say} />}
-      {tab === "podcast" && <Podcast demo={demo} say={say} />}
-      {tab === "avatar" && <Avatar demo={demo} say={say} />}
+      {tab === "dub" && <Dub say={say} />}
+      {tab === "podcast" && <Podcast say={say} />}
+      {tab === "book" && <Book say={say} />}
     </div>
   );
 }
 
-function Dub({ demo, say }: { demo: () => void; say: (m: string) => void }) {
-  const [file, setFile] = useState<string | null>(null);
+function Projects({ items, setItems, say, kind }: { items: Item[] | null; setItems: (f: (l: Item[] | null) => Item[] | null) => void; say: (m: string) => void; kind: string }) {
+  const list = (items ?? []).filter((x) => x.kind === kind);
+  const remove = (it: Item) => del("items", it.id).then(() => setItems((l) => l?.filter((x) => x.id !== it.id) ?? null)).catch((e: Error) => say(e.message));
+  return (
+    <div className="sp-card">
+      <div className="sp-card-h">{kind === "dub" ? "Dự án lồng tiếng" : kind === "podcast" ? "Tập podcast" : "Sách nói"}</div>
+      {items === null && <div className="sp-empty"><Spin /></div>}
+      {items && !list.length && <div className="sp-empty">Chưa có dự án nào.</div>}
+      {list.map((d) => {
+        const st = String(d.meta.status);
+        return (
+          <div key={d.id} className="sp-proj">
+            <div className="sp-proj-t"><I.Film size={16} /><b data-notr>{d.title}</b>{d.meta.targetName ? <span className="sp-pill">{String(d.meta.targetName)}</span> : null}<span className="sp-muted">{ago(d.createdAt)}</span><button className="icon-btn" aria-label="Xóa" onClick={() => remove(d)}><I.Trash size={14} /></button></div>
+            {st === "failed" ? <div className="api-err in"><I.Alert size={14} /><span>{String(d.meta.error ?? "ElevenLabs không hoàn thành được dự án này.")}</span></div>
+              : d.url ? <Player src={d.url} dl={d.url} />
+              : <div className="sp-progress ind"><i /><span>{kind === "dub" ? "Đang dịch và lồng tiếng" : "Đang tạo âm thanh"}… Synchro tự cập nhật khi xong.</span></div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Dub({ say }: { say: (m: string) => void }) {
+  const plan = usePlan();
+  const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
-  const [src, setSrc] = useState("Tự nhận diện");
-  const [to, setTo] = useState<string[]>(["Tiếng Anh"]);
-  const [nsp, setNsp] = useState("Tự động");
+  const [src, setSrc] = useState("");
+  const [to, setTo] = useState("en");
+  const [nsp, setNsp] = useState("");
   const [bg, setBg] = useState(true);
-  const [wm, setWm] = useState(false);
-  const [review, setReview] = useState(false);
-  const [list, setList] = useState(DUBS);
+  const [wm, setWm] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [items, setItems] = useItems(["dub"]);
+  usePoll(items, setItems, "dub");
+  const clean = on(plan, "dubClean");
+  const go = async () => {
+    setBusy(true); setErr("");
+    const fd = new FormData();
+    if (file) fd.set("file", file, file.name); else fd.set("url", url.trim());
+    fd.set("target", to); fd.set("source", src); fd.set("speakers", nsp); fd.set("keepBackground", String(bg)); fd.set("watermark", String(!clean || wm));
+    try { const j = await postForm<{ item: Item }>("dub", fd); setItems((l) => [j.item, ...(l ?? [])]); setFile(null); setUrl(""); say("Đã gửi sang ElevenLabs. Synchro tự cập nhật khi lồng tiếng xong."); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
   return (
     <div className="sp-two">
       <div className="sp-card">
-        <Drop title="Thả video hoặc âm thanh cần lồng tiếng" sub="MP4, MOV, MP3, WAV… tối đa 1 GB, 2,5 giờ" accept="audio/*,video/*" file={file} onFile={(f) => setFile(f[0].name)} />
+        <Drop title="Thả video hoặc âm thanh cần lồng tiếng" sub="MP4, MOV, MP3, WAV… tối đa 40 MB khi tải lên" accept="audio/*,video/*" file={file} onFile={(f) => { setFile(f[0]); setUrl(""); }} say={say} />
         <div className="sp-or"><span>hoặc dán liên kết</span></div>
-        <input className="sp-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube, TikTok, X, Vimeo…" aria-label="Liên kết video" />
+        <input className="sp-input" value={url} onChange={(e) => { setUrl(e.target.value); if (e.target.value) setFile(null); }} placeholder="YouTube, TikTok, X, Vimeo, liên kết tệp…" aria-label="Liên kết video" />
         <Select id="db-src" label="Ngôn ngữ gốc" value={src} options={LANGS} onChange={setSrc} />
-        <Field label="Lồng sang" hint={`${to.length} ngôn ngữ`}>
-          <div className="sp-fchips">{DUB_LANGS.map((l) => <button key={l} className={`sp-fchip ${to.includes(l) ? "on" : ""}`} aria-pressed={to.includes(l)} onClick={() => setTo(to.includes(l) ? to.filter((x) => x !== l) : [...to, l])}>{to.includes(l) && <I.Check size={11} />}{l}</button>)}</div>
-        </Field>
-        <Select id="db-n" label="Số người nói" value={nsp} options={["Tự động", "1", "2", "3", "4", "5", "6", "8", "10"]} onChange={setNsp} inline />
+        <Select id="db-to" label="Lồng sang" value={to} options={DUB_LANGS} onChange={setTo} />
+        <Select id="db-n" label="Số người nói" value={nsp} options={[["", "Tự động"], ...["1", "2", "3", "4", "5", "6", "8", "10"].map((x) => [x, x] as [string, string])]} onChange={setNsp} inline />
         <Toggle checked={bg} onChange={setBg} label="Giữ nhạc nền và tiếng động" />
-        <Toggle checked={wm} onChange={setWm} label="Gắn watermark" hint="Gói Pro có thể tắt watermark" />
-        <Toggle checked={review} onChange={setReview} label="Duyệt trước khi xuất" hint="Sửa lời dịch và giọng từng câu" />
-        <div className="sp-gen"><span className="sp-muted">Tính theo phút video × số ngôn ngữ</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={(!file && !url.trim()) || !to.length}
-          onClick={() => { setList([{ name: file ?? url, langs: to, pct: 8, when: "Đang xử lý" }, ...list]); setFile(null); setUrl(""); demo(); }}><I.Globe size={14} />Lồng tiếng</button></div>
+        {clean ? <Toggle checked={wm} onChange={setWm} label="Gắn watermark" /> : <p className="sp-note">Gói {plan?.tierName} lồng tiếng có watermark (ElevenLabs bắt buộc). Gói Starter trở lên tắt được.</p>}
+        <div className="sp-gen"><span className="sp-muted">Tính theo phút</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={(!file && !/^https?:\/\//.test(url.trim())) || busy} onClick={go}>{busy ? <Spin /> : <I.Globe size={14} />}Lồng tiếng</button></div>
+        <ErrBox msg={err} />
       </div>
-      <div className="sp-card">
-        <div className="sp-card-h">Dự án lồng tiếng</div>
-        {list.map((d, i) => (
-          <div key={i} className="sp-proj">
-            <div className="sp-proj-t"><I.Film size={16} /><b>{d.name}</b><span className="sp-muted">{d.when}</span></div>
-            {d.pct < 100 ? <div className="sp-progress"><i style={{ width: `${d.pct}%` }} /><span>Đang dịch và lồng tiếng · {d.pct}%</span></div> : (
-              <div className="sp-proj-l">{d.langs.map((l) => <div key={l} className="sp-proj-row"><span className="sp-pill">{l}</span><Player dur={95} seed={l.length * 5} onDemo={demo} /></div>)}</div>
-            )}
-            {d.pct === 100 && <button className="sp-link" onClick={() => say("Mở trình sửa lời dịch từng câu (mẫu)")}>Sửa lời dịch và giọng</button>}
-          </div>
-        ))}
-      </div>
+      <Projects items={items} setItems={setItems} say={say} kind="dub" />
     </div>
   );
 }
 
-function Book({ demo, say }: { demo: () => void; say: (m: string) => void }) {
-  const [file, setFile] = useState<string | null>("thanh-pho-trong-suong.epub");
-  const [narr, setNarr] = useState<Voice>(VOICES[5]);
-  const [pick, setPick] = useState(false);
-  const [chars, setChars] = useState(true);
-  const [q, setQ] = useState("Cao");
-  const [out, setOut] = useState("M4B có mốc chương");
-  return (
-    <div className="sp-two">
-      <div className="sp-card">
-        <Drop title="Thả sách hoặc tài liệu" sub="EPUB, PDF, DOCX, TXT, HTML · hoặc dán URL bài viết" accept=".epub,.pdf,.docx,.txt,.html" file={file} onFile={(f) => setFile(f[0].name)} compact />
-        <Field label="Người đọc chính"><VoiceChip v={narr} onClick={() => setPick(true)} /></Field>
-        <Toggle checked={chars} onChange={setChars} label="Tự gán giọng cho nhân vật" hint="Mỗi nhân vật trong lời thoại một giọng riêng" />
-        <Select id="bk-q" label="Chất lượng" value={q} options={["Chuẩn", "Cao", "Siêu cao", "Không nén (lossless)"]} onChange={setQ} inline />
-        <Select id="bk-o" label="Xuất ra" value={out} options={["M4B có mốc chương", "MP3 từng chương", "Một tệp MP3"]} onChange={setOut} inline />
-        <div className="sp-gen"><span className="sp-muted">12.390 từ · ≈ 61.000 credit</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!file} onClick={demo}><I.Book size={14} />Chuyển cả sách</button></div>
-      </div>
-      <div className="sp-card">
-        <div className="sp-card-h">Chương{file && <span className="sp-muted">{file}</span>}</div>
-        {CHAPTERS.map((c, i) => (
-          <div key={i} className="sp-chap">
-            <span className={`sp-stepn ${c.st}`}>{c.st === "done" ? <I.Check size={13} /> : i + 1}</span>
-            <div className="sp-chap-t"><b>{c.t}</b><span className="sp-muted">{c.words.toLocaleString("vi-VN")} từ · {c.st === "done" ? "Đã chuyển" : c.st === "run" ? "Đang chuyển…" : "Chưa chuyển"}</span></div>
-            {c.st === "done" ? <button className="icon-btn" aria-label={`Nghe ${c.t}`} onClick={demo}><I.Play size={14} /></button> : c.st === "todo" ? <button className="btn" onClick={demo}>Chuyển</button> : <span className="sp-spin" />}
-          </div>
-        ))}
-        <button className="sp-link" onClick={() => say("Mở trình biên tập: sửa câu, đổi giọng từng đoạn, thêm khoảng lặng (mẫu)")}>Mở trình biên tập chi tiết</button>
-      </div>
-      {pick && <VoicePicker value={narr.id} onPick={setNarr} onClose={() => setPick(false)} say={say} />}
-    </div>
-  );
-}
-
-function Podcast({ demo, say }: { demo: () => void; say: (m: string) => void }) {
-  const [srcKind, setSrcKind] = useState<"text" | "url" | "file">("url");
+function Podcast({ say }: { say: (m: string) => void }) {
+  const mine = useMyVoices();
+  const [srcKind, setSrcKind] = useState<"url" | "text">("url");
   const [src, setSrc] = useState("");
   const [fmt, setFmt] = useState<"conv" | "bulletin">("conv");
-  const [host, setHost] = useState<Voice>(VOICES[0]);
-  const [guest, setGuest] = useState<Voice>(VOICES[1]);
+  const [host, setHost] = useState<Voice | null>(null);
+  const [guest, setGuest] = useState<Voice | null>(null);
   const [pick, setPick] = useState<null | "host" | "guest">(null);
   const [len, setLen] = useState<"short" | "default" | "long">("default");
-  const [lang, setLang] = useState("Tiếng Việt");
+  const [lang, setLang] = useState("vi");
   const [focus, setFocus] = useState("");
-  const [music, setMusic] = useState(true);
-  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [items, setItems] = useItems(["podcast"]);
+  usePoll(items, setItems, "project");
+  const h = host ?? mine?.[0] ?? null, g = guest ?? mine?.[1] ?? null;
+  const go = async () => {
+    setBusy(true); setErr("");
+    try {
+      const j = await post<{ item: Item }>("podcast", { source: srcKind === "url" ? { type: "url", url: src } : { type: "text", text: src }, mode: fmt === "bulletin" ? "bulletin" : "conversation", host: h?.id, guest: g?.id, length: len, lang, focus });
+      setItems((l) => [j.item, ...(l ?? [])]); setSrc(""); say("Đang tạo podcast ở ElevenLabs.");
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
   return (
     <div className="sp-two">
       <div className="sp-card">
-        <Field label="Nguồn nội dung"><Seg small label="Nguồn" value={srcKind} onChange={setSrcKind} items={[{ k: "url", label: "Liên kết" }, { k: "text", label: "Văn bản" }, { k: "file", label: "Tệp" }]} /></Field>
-        {srcKind === "file" ? <Drop compact title="Thả PDF, DOCX, TXT" sub="ElevenLabs tóm ý và viết kịch bản" onFile={(f) => setSrc(f[0].name)} file={src || null} /> :
-          srcKind === "url" ? <input className="sp-input" value={src} onChange={(e) => setSrc(e.target.value)} placeholder="Bài báo, blog, trang tài liệu…" aria-label="Liên kết nguồn" /> :
-          <textarea className="sp-input ta" rows={4} value={src} onChange={(e) => setSrc(e.target.value)} placeholder="Dán nội dung cần biến thành podcast…" aria-label="Văn bản nguồn" />}
+        <Field label="Nguồn nội dung"><Seg small label="Nguồn" value={srcKind} onChange={setSrcKind} items={[{ k: "url", label: "Liên kết" }, { k: "text", label: "Văn bản" }]} /></Field>
+        {srcKind === "url" ? <input className="sp-input" value={src} onChange={(e) => setSrc(e.target.value)} placeholder="Bài báo, blog, trang tài liệu…" aria-label="Liên kết nguồn" />
+          : <textarea className="sp-input ta" rows={4} value={src} onChange={(e) => setSrc(e.target.value)} placeholder="Dán nội dung cần biến thành podcast…" aria-label="Văn bản nguồn" />}
         <Field label="Kiểu"><Seg label="Kiểu podcast" value={fmt} onChange={setFmt} items={[{ k: "conv", label: "Hai người trò chuyện" }, { k: "bulletin", label: "Một người bình luận" }]} /></Field>
         <div className="sp-hosts">
-          <Field label="Người dẫn"><VoiceChip small v={host} onClick={() => setPick("host")} /></Field>
-          {fmt === "conv" && <Field label="Khách mời"><VoiceChip small v={guest} onClick={() => setPick("guest")} /></Field>}
+          <Field label="Người dẫn"><VoiceChip small v={h} onClick={() => setPick("host")} /></Field>
+          {fmt === "conv" && <Field label="Khách mời"><VoiceChip small v={g} onClick={() => setPick("guest")} /></Field>}
         </div>
-        <Field label="Độ dài"><Seg small label="Độ dài" value={len} onChange={setLen} items={[{ k: "short", label: "Ngắn ~3 phút" }, { k: "default", label: "Vừa ~7 phút" }, { k: "long", label: "Dài ~12 phút" }]} /></Field>
-        <Select id="pc-l" label="Ngôn ngữ" value={lang} options={LANGS.slice(1)} onChange={setLang} inline />
+        <Field label="Độ dài"><Seg small label="Độ dài" value={len} onChange={setLen} items={[{ k: "short", label: "Ngắn" }, { k: "default", label: "Vừa" }, { k: "long", label: "Dài" }]} /></Field>
+        <Select id="pc-l" label="Ngôn ngữ" value={lang} options={LANGS.filter(([c]) => c)} onChange={setLang} inline />
         <Field label="Hướng nội dung" hint="Không bắt buộc" htmlFor="pc-f"><input id="pc-f" className="sp-input" value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="vd. Tập trung vào lợi ích cho sinh viên" /></Field>
-        <Toggle checked={music} onChange={setMusic} label="Nhạc mở đầu và kết thúc" />
-        <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!src.trim()} onClick={() => { setDone(true); demo(); }}><I.Bars size={14} />Tạo podcast</button></div>
+        <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!src.trim() || !h || busy} onClick={go}>{busy ? <Spin /> : <I.Bars size={14} />}Tạo podcast</button></div>
+        <ErrBox msg={err} />
       </div>
-      <div className="sp-card">
-        <div className="sp-card-h">Tập podcast</div>
-        {done ? (
-          <>
-            <Player title="Tập mới · bản nháp" dur={len === "short" ? 190 : len === "long" ? 730 : 430} seed={27} onDemo={demo} />
-            <div className="sp-script">
-              <p><VoiceAvatar v={host} size={18} /><b>{host.name}:</b> Chào mừng các bạn quay lại với chương trình! Hôm nay chúng ta có một chủ đề rất thú vị.</p>
-              {fmt === "conv" && <p><VoiceAvatar v={guest} size={18} /><b>{guest.name}:</b> Đúng vậy, [laughs] tôi đã đọc bài này hai lần rồi đấy.</p>}
-            </div>
-            <button className="sp-link" onClick={() => say("Sửa kịch bản rồi tạo lại (mẫu)")}>Sửa kịch bản</button>
-          </>
-        ) : <div className="sp-empty">ElevenLabs (GenFM) đọc nguồn, viết kịch bản tự nhiên rồi thu âm với giọng bạn chọn.</div>}
-      </div>
-      {pick && <VoicePicker value={(pick === "host" ? host : guest).id} onPick={pick === "host" ? setHost : setGuest} onClose={() => setPick(null)} say={say} />}
+      <Projects items={items} setItems={setItems} say={say} kind="podcast" />
+      {pick && <VoicePicker value={(pick === "host" ? h : g)?.id} onPick={pick === "host" ? setHost : setGuest} onClose={() => setPick(null)} say={say} />}
     </div>
   );
 }
 
-function Avatar({ demo, say }: { demo: () => void; say: (m: string) => void }) {
-  const [img, setImg] = useState<string | null>(null);
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [srcKind, setSrcKind] = useState<"text" | "audio">("text");
-  const [text, setText] = useState("Xin chào, mình là trợ lý ảo của Synchro. Hôm nay mình sẽ hướng dẫn bạn ba bước để bắt đầu.");
-  const [voice, setVoice] = useState<Voice>(VOICES[4]);
+function Book({ say }: { say: (m: string) => void }) {
+  const mine = useMyVoices();
+  const [file, setFile] = useState<File | null>(null);
+  const [narr, setNarr] = useState<Voice | null>(null);
   const [pick, setPick] = useState(false);
-  const [ratio, setRatio] = useState<"16:9" | "9:16" | "1:1">("9:16");
-  const [res, setRes] = useState("1080p");
+  const [q, setQ] = useState("high");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [items, setItems] = useItems(["book"]);
+  usePoll(items, setItems, "project");
+  const v = narr ?? mine?.[0] ?? null;
+  const go = async () => {
+    if (!file || !v) return;
+    setBusy(true); setErr("");
+    const fd = new FormData(); fd.set("file", file, file.name); fd.set("voice", v.id); fd.set("quality", q);
+    try { const j = await postForm<{ item: Item }>("book", fd); setItems((l) => [j.item, ...(l ?? [])]); setFile(null); say("Đang chuyển sách thành sách nói ở ElevenLabs."); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
   return (
     <div className="sp-two">
       <div className="sp-card">
-        <Drop compact title="Ảnh chân dung" sub="JPG, PNG · nhìn thẳng, rõ mặt" accept="image/*" file={img} onFile={(f) => { setImg(f[0].name); setImgUrl(URL.createObjectURL(f[0])); }} />
-        <Field label="Lời nói"><Seg small label="Nguồn lời nói" value={srcKind} onChange={setSrcKind} items={[{ k: "text", label: "Từ văn bản" }, { k: "audio", label: "Tải âm thanh" }]} /></Field>
-        {srcKind === "text" ? (
-          <>
-            <textarea className="sp-input ta" rows={4} value={text} onChange={(e) => setText(e.target.value)} aria-label="Lời avatar nói" />
-            <Field label="Giọng"><VoiceChip small v={voice} onClick={() => setPick(true)} /></Field>
-          </>
-        ) : <Drop compact title="Thả tệp âm thanh" sub="Tối đa 5 phút" accept="audio/*" onFile={() => say("Đã chọn âm thanh")} />}
-        <Field label="Khung hình"><Seg small label="Khung hình" value={ratio} onChange={setRatio} items={[{ k: "9:16", label: "Dọc 9:16" }, { k: "16:9", label: "Ngang 16:9" }, { k: "1:1", label: "Vuông 1:1" }]} /></Field>
-        <Select id="av-r" label="Độ phân giải" value={res} options={["720p", "1080p"]} onChange={setRes} inline />
-        <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!img} onClick={demo}><I.Film size={14} />Tạo video</button></div>
+        <Drop title="Thả sách hoặc tài liệu" sub="EPUB, PDF, DOCX, TXT, HTML · tối đa 40 MB" accept=".epub,.pdf,.docx,.txt,.html" file={file} onFile={(f) => setFile(f[0])} compact say={say} />
+        <Field label="Người đọc"><VoiceChip v={v} onClick={() => setPick(true)} /></Field>
+        <Select id="bk-q" label="Chất lượng" value={q} options={[["standard", "Chuẩn"], ["high", "Cao"], ["ultra", "Siêu cao"], ["ultra_lossless", "Không nén"]]} onChange={setQ} inline />
+        <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!file || !v || busy} onClick={go}>{busy ? <Spin /> : <I.Book size={14} />}Chuyển cả sách</button></div>
+        <ErrBox msg={err} />
       </div>
-      <div className="sp-card sp-avstage">
-        <div className={`sp-avframe r-${ratio.replace(":", "x")}`}>
-          {imgUrl ? <img src={imgUrl} alt="Ảnh avatar" /> : <span className="sp-avph"><I.User size={42} /><small>Xem trước avatar</small></span>}
-          <span className="sp-avcap" data-notr>{srcKind === "text" ? text.slice(0, 60) + (text.length > 60 ? "…" : "") : "Âm thanh tải lên"}</span>
-        </div>
-      </div>
-      {pick && <VoicePicker value={voice.id} onPick={setVoice} onClose={() => setPick(false)} say={say} />}
+      <Projects items={items} setItems={setItems} say={say} kind="book" />
+      {pick && <VoicePicker value={v?.id} onPick={setNarr} onClose={() => setPick(false)} say={say} />}
     </div>
   );
 }

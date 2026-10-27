@@ -1,167 +1,154 @@
 "use client";
-// Voice Agent: gọi thử thời gian thực, cấu hình agent, công cụ, kiến thức, triển khai và lịch sử cuộc gọi.
+// Voice Agent: gọi thử thật với Eleven Realtime (nghe, suy nghĩ và nói đều ở ElevenLabs) theo cấu hình của bạn,
+// lời thoại hiện trực tiếp và được lưu vào lịch sử khi kết thúc cuộc gọi.
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as I from "../icons";
-import { AGENT_MODELS, LANGS, VOICES, type Voice } from "./data";
-import { Drop, Field, ModelPick, Range, Select, Toggle, VoiceAvatar, VoicePicker } from "./parts";
-import { ToolHead, type ToolProps } from "./view";
-import { startMicLevel, useSpeakingLevel } from "../voicefx";
+import { usePref } from "../store";
+import { startRealtime, type RtPhase } from "../realtime";
 import { PearlOrb } from "../pearlorb";
+import { AGENT_MODELS } from "./data";
+import { LANGS, ago, api, del, fmtDur, post, useItems, type Item, type Voice } from "./client";
+import { Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";
+import { ToolHead, type ToolProps } from "./view";
 
-const SCRIPT: { who: "ai" | "me"; text: string }[] = [
-  { who: "ai", text: "Xin chào! Mình là trợ lý của Synchro. Mình có thể giúp gì cho bạn hôm nay?" },
-  { who: "me", text: "Mình muốn đặt lịch hẹn tư vấn vào chiều thứ Sáu." },
-  { who: "ai", text: "Được ạ. Chiều thứ Sáu còn trống lúc 14 giờ và 16 giờ 30. Bạn chọn giờ nào?" },
-  { who: "me", text: "16 giờ 30 nhé." },
-  { who: "ai", text: "Mình đã đặt lịch 16 giờ 30 thứ Sáu và gửi xác nhận qua email cho bạn rồi." },
-];
-const TOOLS0 = [
-  { k: "end", name: "Kết thúc cuộc gọi", desc: "Agent tự cúp máy khi xong việc", on: true },
-  { k: "lang", name: "Chuyển ngôn ngữ", desc: "Đổi ngôn ngữ theo người gọi", on: true },
-  { k: "transfer", name: "Chuyển máy cho người thật", desc: "Chuyển sang số tổng đài khi cần", on: false },
-  { k: "web", name: "Tra cứu web", desc: "Tìm thông tin mới trên Internet", on: false },
-  { k: "book", name: "Đặt lịch hẹn (webhook)", desc: "POST https://api.vidu.vn/lich-hen", on: true },
-];
-const DOCS0 = [
-  { name: "bang-gia-2026.pdf", size: "1,2 MB", rag: true },
-  { name: "https://synchro.net.nz/huong-dan", size: "14 trang", rag: true },
-  { name: "cau-hoi-thuong-gap.docx", size: "86 KB", rag: false },
-];
-const CALLS = [
-  { when: "Hôm nay 10:12", dur: "3:41", ok: true, sum: "Khách đặt lịch tư vấn chiều thứ Sáu, đã gửi email xác nhận." },
-  { when: "Hôm qua 16:05", dur: "1:18", ok: true, sum: "Hỏi giá gói Pro, agent gửi bảng giá." },
-  { when: "Hôm qua 09:47", dur: "0:22", ok: false, sum: "Người gọi cúp máy giữa chừng." },
-];
+type Cfg = { name: string; model: string; first: string; prompt: string; lang: string; voiceId: string; voiceName: string; interrupt: boolean; eager: number; maxMin: number };
+const CFG0: Cfg = {
+  name: "Trợ lý Synchro", model: AGENT_MODELS[0].id, first: "Xin chào! Mình là trợ lý của Synchro. Mình có thể giúp gì cho bạn hôm nay?",
+  prompt: "Bạn là trợ lý thân thiện của Synchro. Trả lời ngắn gọn, tự nhiên như người thật, hỏi lại khi chưa rõ.", lang: "vi", voiceId: "", voiceName: "", interrupt: true, eager: 50, maxMin: 10,
+};
+type Line = { who: "ai" | "me"; text: string };
+type Conn = Awaited<ReturnType<typeof startRealtime>>;
 
-export function AgentTool({ say, demo, sub, setSub }: ToolProps) {
-  const tab = (["agent", "tools", "kb", "deploy", "hist"] as const).find((x) => x === sub) ?? "agent";
-  const [state, setState] = useState<"idle" | "listen" | "speak">("idle");
-  const [lines, setLines] = useState<typeof SCRIPT>([]);
+export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
+  const tab = sub === "hist" ? "hist" : "agent";
+  const [cfg, setCfg] = usePref<Cfg>("spAgent", CFG0);
+  const c = { ...CFG0, ...cfg };
+  const set = (p: Partial<Cfg>) => setCfg({ ...c, ...p });
+  const [phase, setPhase] = useState<"idle" | "connecting" | RtPhase>("idle");
+  const [lines, setLines] = useState<Line[]>([]);
+  const [caption, setCaption] = useState("");
+  const [heard, setHeard] = useState("");
   const [sec, setSec] = useState(0);
   const [muted, setMuted] = useState(false);
-  const [model, setModel] = useState(AGENT_MODELS[0].id);
-  const [name, setName] = useState("Trợ lý Synchro");
-  const [first, setFirst] = useState(SCRIPT[0].text);
-  const [prompt, setPrompt] = useState("Bạn là trợ lý đặt lịch thân thiện của Synchro. Trả lời ngắn gọn, tự nhiên như người thật, luôn xác nhận lại ngày giờ trước khi đặt.");
-  const [voice, setVoice] = useState<Voice>(VOICES[4]);
-  const [lang, setLang] = useState("Tiếng Việt");
-  const [interrupt, setInterrupt] = useState(true);
-  const [eager, setEager] = useState(50);
-  const [timeout_, setTimeout_] = useState(7);
-  const [maxDur, setMaxDur] = useState("10 phút");
-  const [tools, setTools] = useState(TOOLS0);
-  const [docs, setDocs] = useState(DOCS0);
   const [pick, setPick] = useState(false);
+  const [hist, setHist] = useItems(["call"]);
+  const [open, setOpen] = useState<{ item: Item; lines: Line[] } | null>(null);
+  const conn = useRef<Conn | null>(null);
+  const linesRef = useRef<Line[]>([]);
+  const secRef = useRef(0);
+  const mutedRef = useRef(false);
+  mutedRef.current = muted;
   const scroll = useRef<HTMLDivElement>(null);
-  // Quả cầu phản ứng theo micro khi đến lượt người gọi, và nhấp nhô theo giọng agent khi agent nói.
   const micLv = useRef(0), aiLv = useRef(0);
   const level = useMemo(() => ({ get current() { return Math.max(micLv.current, aiLv.current); }, set current(_v: number) {} }), []);
-  useSpeakingLevel(state === "speak", aiLv);
+  const voiceId = c.voiceId || shared?.id || "", voiceName = c.voiceName || shared?.name || "mặc định";
+  useEffect(() => { linesRef.current = lines; scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: "smooth" }); }, [lines]);
   useEffect(() => {
-    if (state === "idle" || muted) return;
-    let stop: (() => void) | null = null, dead = false;
-    startMicLevel(micLv).then((s) => { if (dead) s(); else stop = s; }).catch(() => {});
-    return () => { dead = true; stop?.(); };
-  }, [state === "idle", muted]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (state === "idle") return;
-    const a = setInterval(() => setSec((s) => s + 1), 1000);
-    const b = setInterval(() => setLines((l) => (l.length >= SCRIPT.length ? l : [...l, SCRIPT[l.length]])), 2600);
-    return () => { clearInterval(a); clearInterval(b); };
-  }, [state === "idle"]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const l = lines[lines.length - 1]; if (l) setState((s) => (s === "idle" ? s : l.who === "ai" ? "speak" : "listen")); }, [lines]);
-  useEffect(() => { scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: "smooth" }); }, [lines]);
-  const start = () => { setLines([SCRIPT[0]]); setSec(0); setState("speak"); demo(); };
-  const end = () => { setState("idle"); say(`Đã kết thúc cuộc gọi thử · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`); };
+    if (phase === "idle" || phase === "connecting") return;
+    const t = setInterval(() => setSec((s) => { secRef.current = s + 1; return s + 1; }), 1000);
+    return () => clearInterval(t);
+  }, [phase === "idle" || phase === "connecting"]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => conn.current?.close(), []);
+
+  const end = async (why?: string) => {
+    conn.current?.close(); conn.current = null;
+    setPhase("idle"); setCaption(""); setHeard("");
+    if (why) say(why);
+    const ls = linesRef.current;
+    if (ls.length) {
+      try { const j = await post<{ item: Item }>("live/save", { kind: "call", title: `${c.name} · ${new Date().toLocaleString("vi-VN")}`, lines: ls, seconds: secRef.current, lang: c.lang }); setHist((h) => [j.item, ...(h ?? [])]); } catch {}
+    }
+  };
+  const start = async () => {
+    setLines([]); setSec(0); secRef.current = 0; setPhase("connecting");
+    try {
+      const s = await post<{ value: string; url: string; model: string; voice: string }>("agent/session", { model: c.model, voice: voiceId, prompt: c.prompt, lang: c.lang, eagerness: c.eager < 34 ? "low" : c.eager < 67 ? "medium" : "high", interrupt: c.interrupt, maxMin: c.maxMin });
+      if (voiceId && !s.voice) say("Giọng đã chọn chưa dùng được cho Realtime, agent dùng giọng mặc định");
+      conn.current = await startRealtime({ url: s.url, model: s.model, secret: s.value, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current, barge: () => c.interrupt, greet: c.first }, {
+        onPhase: setPhase,
+        onCaption: setCaption,
+        onUser: setHeard,
+        onTurn: (u, a) => { setLines((l) => [...l, ...(u ? [{ who: "me" as const, text: u }] : []), { who: "ai" as const, text: a }]); setCaption(""); setHeard(""); },
+        onError: (m) => say(m),
+        onClose: () => void end("Cuộc gọi đã kết thúc"),
+      });
+    } catch (e) { setPhase("idle"); say((e as Error).message || "Không mở được micro: hãy cho phép Synchro dùng micro"); }
+  };
+  const view = async (it: Item) => {
+    try { const j = await api<{ data: { lines: Line[] } }>(`items?id=${it.id}`); setOpen({ item: it, lines: j.data?.lines ?? [] }); } catch (e) { say((e as Error).message); }
+  };
+  const live = phase !== "idle";
+  const model = AGENT_MODELS.find((x) => x.id === c.model) ?? AGENT_MODELS[0];
+  const voiceObj = { id: voiceId || "default" };
 
   return (
     <div className="sp-split">
       <div className="sp-main">
-        <ToolHead title="Voice Agent" desc="Agent giọng nói trò chuyện hai chiều thời gian thực: tự nhận lượt nói, cho phép ngắt lời, gọi công cụ." />
-        <div className={`sp-call ${state}`}>
-          <div className="sp-agent-orb"><PearlOrb level={level} active={state !== "idle"} /></div>
-          <b className="sp-call-n">{name}</b>
-          <span className="sp-muted">{state === "idle" ? `${AGENT_MODELS.find((x) => x.id === model)?.name} · giọng ${voice.name} · ${lang}` : `${state === "speak" ? "Đang nói" : "Đang nghe"} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`}</span>
+        <ToolHead title="Voice Agent" desc="Agent giọng nói trò chuyện hai chiều thời gian thực: tự nhận lượt nói, cho phép ngắt lời. Tốn phút trò chuyện của gói ElevenLabs." />
+        <div className={`sp-call ${phase === "speak" ? "speak" : live ? "listen" : "idle"}`}>
+          <div className="sp-agent-orb"><PearlOrb level={level} active={live} /></div>
+          <b className="sp-call-n" data-notr>{c.name}</b>
+          <span className="sp-muted">{!live ? `${model.name} · giọng ${voiceName} · ${LANGS.find((x) => x[0] === c.lang)?.[1] ?? c.lang}` : phase === "connecting" ? "Đang kết nối…" : `${phase === "speak" ? "Đang nói" : phase === "think" ? "Đang nghĩ" : "Đang nghe"} · ${fmtDur(sec)}`}</span>
           <div className="sp-call-a">
-            {state === "idle" ? (
+            {!live ? (
               <button className="btn dark sp-go" onClick={start}><I.Mic size={15} />Gọi thử</button>
             ) : (
               <>
                 <button className={`sp-round ${muted ? "on" : ""}`} aria-pressed={muted} aria-label={muted ? "Bật micro" : "Tắt micro"} onClick={() => setMuted(!muted)}><I.Mic size={18} /></button>
-                <button className="sp-round end" aria-label="Kết thúc" onClick={end}><I.X size={18} /></button>
+                <button className="sp-round end" aria-label="Kết thúc" onClick={() => void end()}><I.X size={18} /></button>
               </>
             )}
           </div>
         </div>
         <div className="sp-ctrans" ref={scroll} aria-live="polite">
-          {lines.length === 0 && <div className="sp-empty">Bấm “Gọi thử” để nói chuyện với agent bằng micro. Lời thoại sẽ hiện ở đây.</div>}
-          {lines.map((l, i) => <div key={i} className={`sp-bub ${l.who}`}>{l.who === "ai" && <VoiceAvatar v={voice} size={20} />}<p>{l.text}</p></div>)}
-          {lines.length >= 3 && <div className="sp-toolcall"><I.Plug size={13} />Đã gọi công cụ <b>Đặt lịch hẹn</b> · 214 ms</div>}
+          {!lines.length && !caption && !heard && <div className="sp-empty">Bấm “Gọi thử” để nói chuyện với agent bằng micro. Lời thoại sẽ hiện ở đây.</div>}
+          {lines.map((l, i) => <div key={i} className={`sp-bub ${l.who}`}>{l.who === "ai" && <VoiceAvatar v={voiceObj} size={20} />}<p data-notr>{l.text}</p></div>)}
+          {heard && <div className="sp-bub me partial"><p data-notr>{heard}</p></div>}
+          {caption && <div className="sp-bub ai partial"><VoiceAvatar v={voiceObj} size={20} playing /><p data-notr>{caption}</p></div>}
         </div>
       </div>
 
       <aside className="sp-aside wide">
         <div className="sp-atabs" role="tablist" aria-label="Cấu hình agent">
-          {([["agent", "Agent"], ["tools", "Công cụ"], ["kb", "Kiến thức"], ["deploy", "Triển khai"], ["hist", "Lịch sử"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}
+          {([["agent", "Agent"], ["hist", "Lịch sử"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}
         </div>
         <div className="sp-aside-in">
-          {tab === "agent" && (
+          {tab === "agent" ? (
             <>
-              <Field label="Tên agent" htmlFor="ag-name"><input id="ag-name" className="sp-input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
-              <Field label="Model"><ModelPick models={AGENT_MODELS} value={model} onChange={setModel} /></Field>
-              <p className="sp-note">Toàn bộ agent chạy trên ElevenLabs: nghe, suy nghĩ và nói đều do model Eleven Realtime đảm nhận.</p>
-              <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick(true)}><VoiceAvatar v={voice} size={30} /><span><b>{voice.name}</b><small>{voice.desc}</small></span><I.Chevron size={14} /></button></Field>
-              <Select id="ag-lang" label="Ngôn ngữ chính" value={lang} options={LANGS.slice(1)} onChange={setLang} />
-              <Field label="Lời chào đầu" htmlFor="ag-first"><textarea id="ag-first" className="sp-input ta" rows={2} value={first} onChange={(e) => setFirst(e.target.value)} /></Field>
-              <Field label="Hướng dẫn hệ thống" hint={`${prompt.length} ký tự`} htmlFor="ag-prompt"><textarea id="ag-prompt" className="sp-input ta" rows={5} value={prompt} onChange={(e) => setPrompt(e.target.value)} /></Field>
+              <Field label="Tên agent" htmlFor="ag-name"><input id="ag-name" className="sp-input" value={c.name} onChange={(e) => set({ name: e.target.value })} disabled={live} /></Field>
+              <Field label="Model"><ModelPick models={AGENT_MODELS} value={c.model} onChange={(model) => set({ model })} /></Field>
+              <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick(true)} disabled={live}><VoiceAvatar v={voiceObj} size={30} /><span><b data-notr>{voiceName}</b><small>Giọng trong tài khoản ElevenLabs</small></span><I.Chevron size={14} /></button></Field>
+              <Select id="ag-lang" label="Ngôn ngữ chính" value={c.lang} options={LANGS.filter(([x]) => x)} onChange={(lang) => set({ lang })} />
+              <Field label="Lời chào đầu" hint="Để trống thì agent chờ bạn nói trước" htmlFor="ag-first"><textarea id="ag-first" className="sp-input ta" rows={2} value={c.first} onChange={(e) => set({ first: e.target.value })} /></Field>
+              <Field label="Hướng dẫn hệ thống" hint={`${c.prompt.length} ký tự`} htmlFor="ag-prompt"><textarea id="ag-prompt" className="sp-input ta" rows={5} value={c.prompt} onChange={(e) => set({ prompt: e.target.value })} /></Field>
               <hr className="sp-hr" />
-              <Toggle checked={interrupt} onChange={setInterrupt} label="Cho phép ngắt lời" hint="Người gọi nói chen thì agent dừng lại" />
-              <Range id="ag-eager" label="Độ nhanh nhận lượt" value={eager} onChange={setEager} left="Kiên nhẫn" right="Nhanh nhảu" show={eager < 34 ? "Thấp" : eager < 67 ? "Vừa" : "Cao"} />
-              <Range id="ag-to" label="Hỏi lại khi im lặng sau" value={timeout_} min={3} max={30} onChange={setTimeout_} show={`${timeout_} giây`} />
-              <Select id="ag-max" label="Thời lượng tối đa mỗi cuộc gọi" value={maxDur} options={["5 phút", "10 phút", "30 phút", "60 phút"]} onChange={setMaxDur} inline />
+              <Toggle checked={c.interrupt} onChange={(interrupt) => set({ interrupt })} label="Cho phép ngắt lời" hint="Bạn nói chen thì agent dừng lại" />
+              <Range id="ag-eager" label="Độ nhanh nhận lượt" value={c.eager} onChange={(eager) => set({ eager })} left="Kiên nhẫn" right="Nhanh nhảu" show={c.eager < 34 ? "Thấp" : c.eager < 67 ? "Vừa" : "Cao"} />
+              <Select id="ag-max" label="Thời lượng tối đa mỗi cuộc gọi" value={String(c.maxMin)} options={[["3", "3 phút"], ["5", "5 phút"], ["10", "10 phút"], ["30", "30 phút"]]} onChange={(v) => set({ maxMin: Number(v) })} inline />
+              <button className="sp-link" onClick={() => setCfg(CFG0)}>Đặt lại mặc định</button>
             </>
-          )}
-          {tab === "tools" && (
+          ) : open ? (
             <>
-              {tools.map((t) => <Toggle key={t.k} checked={t.on} onChange={(v) => setTools(tools.map((x) => (x.k === t.k ? { ...x, on: v } : x)))} label={t.name} hint={t.desc} />)}
-              <button className="sp-add" onClick={() => say("Thêm webhook, công cụ phía trình duyệt hoặc máy chủ MCP (mẫu)")}><I.Plus size={14} />Thêm công cụ</button>
-              <p className="sp-note">Công cụ dạng webhook gọi từ máy chủ Synchro, khóa bí mật không bao giờ lộ ra trình duyệt.</p>
+              <button className="sp-back" onClick={() => setOpen(null)}><I.Back size={15} />Lịch sử</button>
+              <b data-notr>{open.item.title}</b>
+              {open.lines.map((l, i) => <div key={i} className={`sp-bub ${l.who}`}><p data-notr>{l.text}</p></div>)}
             </>
-          )}
-          {tab === "kb" && (
+          ) : (
             <>
-              <Drop compact title="Thêm tài liệu" sub="PDF, DOCX, TXT, HTML, EPUB · hoặc dán URL" onFile={(f) => setDocs([...docs, ...f.map((x) => ({ name: x.name, size: `${Math.max(1, Math.round(x.size / 1024))} KB`, rag: true }))])} multiple />
-              {docs.map((d, i) => (
-                <div key={d.name + i} className="sp-doc">
-                  <I.File size={16} /><span className="sp-doc-n"><b>{d.name}</b><small>{d.size}</small></span>
-                  <button role="switch" aria-checked={d.rag} aria-label="Dùng RAG" className={`sp-tg ${d.rag ? "on" : ""}`} onClick={() => setDocs(docs.map((x, j) => (j === i ? { ...x, rag: !x.rag } : x)))} />
-                  <button className="icon-btn" aria-label="Xóa" onClick={() => setDocs(docs.filter((_, j) => j !== i))}><I.Trash size={14} /></button>
+              {hist === null && <div className="sp-empty"><Spin /></div>}
+              {hist?.length === 0 && <div className="sp-empty">Chưa có cuộc gọi thử nào.</div>}
+              {hist?.map((h) => (
+                <div key={h.id} className="sp-hrow">
+                  <div className="sp-hrow-t"><b data-notr>{h.title}</b><span className="sp-muted">{fmtDur(Number(h.meta.seconds ?? 0))} · {ago(h.createdAt)}</span></div>
+                  <p data-notr>{String(h.meta.preview ?? "")}</p>
+                  <div className="sp-hrow-a"><button className="sp-link" onClick={() => view(h)}>Xem lời thoại</button><button className="icon-btn" aria-label="Xóa" onClick={() => del("items", h.id).then(() => setHist((x) => x?.filter((y) => y.id !== h.id) ?? null))}><I.Trash size={14} /></button></div>
                 </div>
               ))}
-              <p className="sp-note">Bật RAG để agent chỉ tra phần liên quan, giữ câu trả lời nhanh với tài liệu dài.</p>
             </>
           )}
-          {tab === "deploy" && (
-            <>
-              <Field label="Nhúng vào website">
-                <pre className="sp-code">{`<elevenlabs-convai agent-id="agent_demo_8f2c"></elevenlabs-convai>\n<script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async></script>`}</pre>
-              </Field>
-              <button className="btn" onClick={() => say("Đã sao chép mã nhúng")}><I.Copy size={14} />Sao chép mã</button>
-              <hr className="sp-hr" />
-              <Field label="Số điện thoại"><button className="sp-vbig" onClick={() => say("Kết nối Twilio hoặc SIP trunk (mẫu)")}><span><b>Chưa gắn số</b><small>Twilio hoặc SIP trunk · nhận và gọi ra</small></span><I.Plus size={14} /></button></Field>
-              <Field label="Gọi hàng loạt"><button className="sp-vbig" onClick={() => say("Tải danh sách CSV để gọi hàng loạt (mẫu)")}><span><b>Tải danh sách CSV</b><small>Nhắc lịch, khảo sát, chăm sóc khách</small></span><I.Upload size={14} /></button></Field>
-            </>
-          )}
-          {tab === "hist" && CALLS.map((c, i) => (
-            <div key={i} className="sp-hrow">
-              <div className="sp-hrow-t"><span className={`sp-dot ${c.ok ? "ok" : "bad"}`} /><b>{c.when}</b><span className="sp-muted">{c.dur} · {c.ok ? "Thành công" : "Chưa xong"}</span></div>
-              <p>{c.sum}</p>
-              <button className="sp-link" onClick={() => say("Mở bản ghi và lời thoại cuộc gọi (mẫu)")}>Nghe lại và xem lời thoại</button>
-            </div>
-          ))}
         </div>
       </aside>
-      {pick && <VoicePicker value={voice.id} onPick={setVoice} onClose={() => setPick(false)} say={say} />}
+      {pick && <VoicePicker value={voiceId} onPick={(v: Voice) => set({ voiceId: v.id, voiceName: v.name })} onClose={() => setPick(false)} say={say} />}
     </div>
   );
 }

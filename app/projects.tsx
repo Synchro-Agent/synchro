@@ -8,6 +8,7 @@ import { useApp, type Chat, type Project } from "./store";
 import { chunkText, extractText } from "./llm";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
+import { ghConnect } from "./wsclient";
 
 type Say = (t: string) => void;
 
@@ -272,6 +273,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const pct = Math.max(1, Math.ceil(ctx.reduce((n, c) => n + (c.chars ?? 0), 0) / 10000));
   const [memOpen, setMemOpen] = useState(false);
   const [upl, setUpl] = useState(false);
+  const [ghOpen, setGhOpen] = useState(false);
   const fm = useFileMenu(say);
   const addCtx = (n: string, kind: "file" | "text", text: string) => patch(proj.id, { ctx: [...(proj.ctx ?? []), { id: Date.now() + Math.random(), name: n, kind, text, chars: text.length, chunks: chunkText(text) }] });
   const addFiles = async (fs: File[]) => {
@@ -338,7 +340,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
                       <button className="menu-item" onClick={() => { setAdd(false); setUpl(true); }}><Clipx />Tải lên từ thiết bị</button>
                       <button className="menu-item" onClick={() => { setAdd(false); setTxt(true); }}><TextIn />Thêm nội dung văn bản</button>
                       <hr />
-                      <button className="menu-item" onClick={() => { setAdd(false); say("Kết nối GitHub chưa khả dụng trong bản demo"); }}><Github />GitHub</button>
+                      <button className="menu-item" onClick={() => { setAdd(false); setGhOpen(true); }}><Github />GitHub</button>
                     </Menu>
                   </div>
                 </>
@@ -347,6 +349,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
             <input ref={fRef} type="file" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (fs.length) addFiles(fs); }} />
             {fm.node}
             {upl && <UploadModal say={say} onClose={() => setUpl(false)} onFiles={(f) => { setUpl(false); addFiles(f); }} />}
+            {ghOpen && <GitHubImport say={say} onClose={() => setGhOpen(false)} onFiles={(f) => void addFiles(f)} />}
             {sq !== null && ctx.length > 0 && <input className="pj-fsearch" autoFocus placeholder="Tìm kiếm tệp..." value={sq} onChange={(e) => setSq(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setSq(null)} />}
             {ctx.length > 0 && (
               <div className="pj-usage">
@@ -393,5 +396,88 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
       <Fade show={memOpen}><MemModal mem={mem} onClose={() => setMemOpen(false)} onDelete={(id) => patch(proj.id, { mem: mem.filter((m) => m.id !== id) })} /></Fade>
       <Fade show={txt}><TextCtxModal onClose={() => setTxt(false)} onSave={(n, t) => { addCtx(n, "text", t); setTxt(false); say("Đã thêm nội dung văn bản"); }} /></Fade>
     </div></div>
+  );
+}
+
+// Thêm tệp từ repo GitHub vào ngữ cảnh dự án: kết nối GitHub (nếu chưa), chọn repo, chọn tệp (sẵn README, tài liệu và tệp nhỏ ở gốc).
+type GhFile = { path: string; size: number };
+function GitHubImport({ onClose, onFiles, say }: { onClose: () => void; onFiles: (f: File[]) => void; say: Say }) {
+  const [st, setSt] = useState<{ linked: boolean; configured: boolean; allowed: boolean } | null>(null);
+  const [repos, setRepos] = useState<{ full: string; branch: string; desc: string | null; private: boolean }[] | null>(null);
+  const [q, setQ] = useState("");
+  const [repo, setRepo] = useState<{ full: string; branch: string } | null>(null);
+  const [files, setFiles] = useState<GhFile[] | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [fq, setFq] = useState("");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const load = () => fetch("/api/github", { cache: "no-store" }).then((r) => r.json()).then(setSt).catch(() => setErr("Không đọc được trạng thái GitHub."));
+  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (!st?.linked || repo) return;
+    const t = setTimeout(() => fetch(`/api/github?repos=1&q=${encodeURIComponent(q)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => setRepos(j.repos ?? [])).catch(() => setRepos([])), 250);
+    return () => clearTimeout(t);
+  }, [st?.linked, q, repo]);
+  const open = async (r: { full: string; branch: string }) => {
+    setRepo(r); setFiles(null); setErr("");
+    try {
+      const j = await fetch(`/api/github?tree=${encodeURIComponent(r.full)}&ref=${encodeURIComponent(r.branch)}`, { cache: "no-store" }).then((x) => x.json());
+      if (j.error) throw new Error(j.error);
+      const list: GhFile[] = j.files ?? [];
+      setFiles(list);
+      // Chọn sẵn: README, tài liệu (docs/), tệp cấu hình ở gốc — tối đa 25 tệp, mỗi tệp dưới 60 KB.
+      const pre = list.filter((f) => f.size < 60_000 && (/(^|\/)readme/i.test(f.path) || /^docs?\//i.test(f.path) || !f.path.includes("/"))).slice(0, 25);
+      setSel(new Set(pre.map((f) => f.path)));
+    } catch (e) { setErr((e as Error).message); }
+  };
+  const add = async () => {
+    if (!repo) return;
+    setBusy("add"); setErr("");
+    try {
+      const r = await fetch("/api/github", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repo: repo.full, ref: repo.branch, paths: [...sel] }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
+      const out = (j.files as { path: string; text: string }[]).map((f) => new File([f.text], `${repo.full.split("/")[1]}/${f.path}`, { type: "text/plain" }));
+      if (!out.length) throw new Error("Không lấy được tệp nào.");
+      onFiles(out); say(`Đã thêm ${out.length} tệp từ ${repo.full}`); onClose();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(""); }
+  };
+  const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
+  const shown = (files ?? []).filter((f) => !fq || f.path.toLowerCase().includes(fq.toLowerCase())).slice(0, 400);
+  const total = (files ?? []).filter((f) => sel.has(f.path)).reduce((n, f) => n + f.size, 0);
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal gh-imp" role="dialog" aria-modal="true" aria-label="Thêm từ GitHub">
+        <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
+        <h2 style={{ fontSize: 16 }}>{repo ? repo.full : "Thêm từ GitHub"}</h2>
+        {!st ? <p className="d">Đang kiểm tra kết nối GitHub…</p> : !st.configured ? <p className="d">Máy chủ chưa cấu hình đăng nhập GitHub (GITHUB_CLIENT_ID).</p> : !st.allowed ? <p className="d">Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code (cần cho GitHub).</p> : !st.linked ? (
+          <>
+            <p className="d">Kết nối tài khoản GitHub để chọn repo. Synchro chỉ đọc các tệp bạn chọn.</p>
+            <div className="modal-foot"><button className="btn dark" disabled={!!busy} onClick={async () => { setBusy("link"); const e = await ghConnect(); setBusy(""); if (e && e !== "timeout") setErr(e); void load(); }}>{busy === "link" ? "Đang chờ GitHub…" : "Kết nối GitHub"}</button></div>
+          </>
+        ) : !repo ? (
+          <>
+            <input className="field" autoFocus placeholder="Tìm repo…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <div className="gh-list">
+              {repos === null && <p className="d">Đang tải repo…</p>}
+              {repos?.length === 0 && <p className="d">Không có repo khớp.</p>}
+              {repos?.map((r) => <button key={r.full} className="gh-row" onClick={() => open(r)}><b data-notr>{r.full}</b>{r.private && <span className="pill">Riêng tư</span>}<small data-notr>{r.desc ?? ""}</small></button>)}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 8 }}><button className="btn" onClick={() => { setRepo(null); setFiles(null); }}><I.Back size={14} />Repo khác</button><input className="field" style={{ flex: 1 }} placeholder="Lọc tệp…" value={fq} onChange={(e) => setFq(e.target.value)} /></div>
+            <div className="gh-list">
+              {files === null && !err && <p className="d">Đang đọc cây thư mục…</p>}
+              {shown.map((f) => (
+                <label key={f.path} className="gh-file"><input type="checkbox" checked={sel.has(f.path)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(f.path); else n.delete(f.path); setSel(n); }} /><span data-notr>{f.path}</span><small>{kb(f.size)}</small></label>
+              ))}
+            </div>
+            <div className="modal-foot"><span className="d" style={{ marginRight: "auto" }}>{sel.size} tệp · {kb(total)} {sel.size > 80 || total > 2_000_000 ? "· tối đa 80 tệp, 2 MB" : ""}</span><button className="btn dark" disabled={!sel.size || sel.size > 80 || !!busy} onClick={add}>{busy === "add" ? "Đang lấy tệp…" : `Thêm ${sel.size} tệp`}</button></div>
+          </>
+        )}
+        {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
+      </div>
+    </div>
   );
 }

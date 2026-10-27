@@ -1,5 +1,5 @@
 import { current, sameOrigin } from "../../../authstore";
-import { cancelRun, getRun, liveText, watch, type Delta, type PublicRun, type RunEvent } from "../../../runs";
+import { cancelRun, getRun, liveText, pushInbox, watch, type Delta, type PublicRun, type RunEvent } from "../../../runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,4 +52,19 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const run = getRun(id, c.user.id);
   if (!run) return Response.json({ error: "Không tìm thấy lượt trả lời này." }, { status: 404 });
   return Response.json({ ok: true, cancelled: run.status === "running" && cancelRun(id, c.user.id) });
+}
+
+// Nhắn thêm khi lượt đang chạy: không ngắt việc đang làm; model nhận tin ở bước kế tiếp. Lượt đã xong (hoặc đang ở bước
+// trả lời cuối) thì trình duyệt gửi tin thành lượt mới ngay sau đó — trả queued: false để trình duyệt biết.
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const c = current(req);
+  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
+  const { id } = await ctx.params;
+  const run = getRun(id, c.user.id);
+  if (!run) return Response.json({ error: "Không tìm thấy lượt trả lời này." }, { status: 404 });
+  const b = (await req.json().catch(() => ({}))) as { text?: unknown };
+  const text = typeof b.text === "string" ? b.text.trim() : "";
+  if (!text) return Response.json({ error: "Tin nhắn trống." }, { status: 400 });
+  return Response.json({ queued: run.status === "running" && pushInbox(id, c.user.id, text) });
 }

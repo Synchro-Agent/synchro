@@ -6,6 +6,7 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
+import { elevenHandler, scribeConnect } from "./mock-eleven.mjs";
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
@@ -149,7 +150,12 @@ function chatShape(b, google) {
   }
   return null;
 }
-const readBody = (req) => new Promise((ok) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { ok(JSON.parse(s || "{}")); } catch { ok({}); } }); });
+// Giữ nguyên byte của body (tệp tải lên dạng multipart) ở req.__raw; body JSON thì đọc sẵn.
+const readBody = (req) => new Promise((ok) => {
+  const parts = [];
+  req.on("data", (d) => parts.push(d));
+  req.on("end", () => { req.__raw = Buffer.concat(parts); if (/multipart/.test(String(req.headers["content-type"] ?? ""))) return ok({}); try { ok(JSON.parse(req.__raw.toString("utf8") || "{}")); } catch { ok({}); } });
+});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const valid = (k) => typeof k === "string" && k.includes("mock");
 // Khóa ElevenLabs giới hạn quyền như thật: "sk_mock_eleven_nouser" thiếu quyền User, "…_noagents" thiếu quyền ElevenLabs Agents.
@@ -181,7 +187,7 @@ function dynOf(msgs = []) {
 
 // Model giả lập tự chọn công cụ như model thật: đoán ý định từ câu hỏi (tìm, tạo, xóa, sửa, xem…) và đối tượng nhắc tới
 // (ghi chú, wiki, repo…), khớp với tên + mô tả công cụ, rồi điền tham số theo schema. "#tool=tên" và "#args={...}" vẫn dùng được để ép chọn.
-const SKILL_TOOLS = ["load_skill", "read_skill_file", "search_skills", "run_skill_script"];
+const SKILL_TOOLS = ["load_skill", "read_skill_file", "search_skills", "run_skill_script", "update_plan"];
 const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
 const INTENTS = [
   [/\b(tim|tim kiem|search|find|tra cuu|tra|lookup|hoi)\b/, ["search", "find", "lookup", "query", "ask", "resolve"]],
@@ -287,9 +293,21 @@ function reply(provider, id, msgs, maxTokens, effort) {
 // Câu trả lời theo Cài đặt → Khả năng (artifact, hình minh họa, chạy code) nếu system prompt có hướng dẫn tương ứng.
 // Yêu cầu vừa lấy dữ liệu vừa sửa artifact (#rev): như model thật, gọi công cụ trước, sửa sau khi có kết quả.
 // tool_choice "none" (bước cuối, bước tự vá): vẫn trả lời bằng chữ / artifact như model thật, chỉ không gọi công cụ.
+// Chế độ Tự động của Code: như model thật, đánh dấu từng giai đoạn đã đi qua (<!-- mode:… -->) và đổi giai đoạn giữa chừng.
+const AUTO_STEP = {
+  plan: "Việc này chạm nhiều phần nên mình lập kế hoạch trước:\n1. Tách phần xử lý dữ liệu ra hàm riêng.\n2. Viết hàm chính và kiểm thử nhỏ.\n3. Chạy thử, sửa nếu có lỗi.",
+  debug: "Đọc lỗi: `TypeError: Cannot read properties of undefined`. Giả thuyết theo khả năng: (1) dữ liệu chưa tải xong, (2) sai tên trường, (3) mảng rỗng. Kiểm chứng thấy (1) đúng, nên sửa bằng cách kiểm tra trước khi đọc.",
+  code: "```ts\n// filepath: src/lib/greet.ts\nexport function greet(name?: string) {\n  return `Xin chào, ${name ?? \"bạn\"}!`;\n}\n```",
+};
+function autoReply(sys, q) {
+  const start = /Gợi ý giai đoạn mở đầu cho yêu cầu này: (plan|code|debug)/.exec(sys)?.[1] ?? "code";
+  const steps = start === "code" ? ["code"] : [start, "code"];
+  return steps.map((k) => `<!-- mode:${k} -->\n${AUTO_STEP[k]}`).join("\n\n") + `\n\n— Trả lời giả lập (chế độ Tự động) cho: “${q.slice(0, 80)}”.`;
+}
 const capsFor = (sys, q, msgs, tools, none) => {
   const first = !none && /#rev\s*\d+/.test(q) && !q.includes("#tool") && wantTool(q.replace(/#rev\s*\d+/, ""), tools);
   if (first) return { tool: first };
+  if (/Chế độ Tự động/.test(sys ?? "") && !wantTool(q, tools)) return { text: autoReply(sys, q) };
   const r = capsReply(`${sys ?? ""}\n${dynOf(msgs)}`, q, msgs, normTools(tools).map((t) => t.name));
   return none ? (r?.text ? { text: r.text } : null) : r;
 };
@@ -337,13 +355,9 @@ async function handler(req, res) {
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : null;
 
-  // Chép lời: ElevenLabs Scribe (từ kèm người nói) và OpenAI Whisper (văn bản).
-  if (p === "/elevenlabs/v1/speech-to-text" && req.method === "POST") {
-    if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
-    await sleep(600);
-    const words = MEETING_LINES.flatMap(([sp, t]) => t.split(" ").flatMap((w, i, a) => [{ text: w, type: "word", speaker_id: `speaker_${sp}` }, ...(i < a.length - 1 ? [{ text: " ", type: "spacing", speaker_id: `speaker_${sp}` }] : [])]));
-    return send(res, 200, { language_code: "vie", text: MEETING_TEXT, words });
-  }
+  // ElevenLabs (Speech): mọi đường dẫn trừ Realtime nằm ở mock-eleven.mjs.
+  if (await elevenHandler(req, res, p, b, req.__raw ?? Buffer.alloc(0), valid, elevenNo)) return;
+  // Chép lời OpenAI Whisper (văn bản).
   if (p === "/openai/v1/audio/transcriptions" && req.method === "POST") {
     if (!valid(auth)) return send(res, 401, { error: { message: "Incorrect API key provided.", type: "invalid_api_key" } });
     await sleep(600);
@@ -487,19 +501,12 @@ async function handler(req, res) {
     if (sess.tools && !(Array.isArray(sess.tools) && sess.tools.every((t) => t.type === "function" && t.name && t.parameters?.type === "object"))) return send(res, 422, { detail: { message: "Invalid tools" } });
     const value = `ek_mock_${Math.random().toString(36).slice(2, 10)}`;
     RT.secrets.set(value, sess);
-    RT.sessions.push({ tools: !!sess.tools, instructions: String(sess.instructions ?? "") });
+    RT.sessions.push({ tools: !!sess.tools, instructions: String(sess.instructions ?? ""), voice: sess.audio?.output?.voice ?? "", language: sess.audio?.input?.transcription?.language ?? "", model: sess.model });
     return send(res, 200, { value, expires_at: Math.floor(Date.now() / 1000) + 120 });
   }
   if (p === "/_debug/rt") {
     if (req.method === "POST") { RT.cfg = { ...RT.cfg, ...b }; RT.log = []; RT.sessions = []; }
     return send(res, 200, { cfg: RT.cfg, sessions: RT.sessions, log: RT.log });
-  }
-
-  // ---- ElevenLabs (chỉ kiểm tra khóa; giọng nói không giả lập) ----
-  if (p === "/elevenlabs/v1/user") {
-    if (!valid(req.headers["xi-api-key"])) return send(res, 401, { detail: { status: "invalid_api_key", message: "Invalid API key" } });
-    if (elevenNo(req, "user")) return send(res, 401, { detail: { status: "missing_permissions", message: "The API key you used is missing the permission user_read to execute this operation." } });
-    return send(res, 200, { subscription: { tier: "creator" } });
   }
 
   send(res, 404, { error: { message: `Không có đường dẫn ${p} trên máy chủ giả lập` } });
@@ -559,7 +566,9 @@ export function startMock(port = 4010) {
   return new Promise((ok, fail) => {
     const s = http.createServer((req, res) => handler(req, res).catch((e) => send(res, 500, { error: { message: String(e) } })));
     const wss = new WebSocketServer({ noServer: true, handleProtocols: (ps) => (ps.has("realtime") ? "realtime" : false) });
+    const scribe = new WebSocketServer({ noServer: true });
     s.on("upgrade", (req, sock, head) => {
+      if (String(req.url).startsWith("/elevenlabs/v1/speech-to-text/realtime")) { scribe.handleUpgrade(req, sock, head, (ws) => scribeConnect(ws, req)); return; }
       if (!String(req.url).startsWith("/elevenlabs/v1/convai/realtime")) { sock.destroy(); return; }
       wss.handleUpgrade(req, sock, head, (ws) => rtConnect(ws, req));
     });

@@ -21,6 +21,7 @@ import { AgentSteps, GitHubButton, StatusLine, TaskCard, type AStep } from "./ag
 import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
+import { QueueChips, type Queued } from "./worklog";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
 type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?: Pill[] };
@@ -31,6 +32,7 @@ type Say = (m: string) => void;
 
 const MAX_TOK = 128_000;
 export const MODES = [
+  { k: "auto", label: "Tự động", short: "Auto", desc: "Tự lập kế hoạch, viết code hay gỡ lỗi theo từng việc, và chuyển qua lại khi đang làm." },
   { k: "plan", label: "Architect / Plan", short: "Plan", desc: "Chỉ phân tích cấu trúc và lập kế hoạch, không viết code dài." },
   { k: "code", label: "Write / Code", short: "Code", desc: "Tập trung sinh code hoàn chỉnh, sẵn sàng chạy ngay." },
   { k: "debug", label: "Debug", short: "Debug", desc: "Đọc lỗi, truy nguyên nhân gốc và đề xuất cách sửa." },
@@ -45,10 +47,30 @@ const GUIDE_TABS = [
   { k: "safe", l: "Bảo mật", i: <I.Shield size={16} /> },
 ];
 const MODE_SYS: Record<string, string> = {
+  // Tự động: làm như một kỹ sư giàu kinh nghiệm, tự chọn và đổi giai đoạn theo diễn biến công việc.
+  auto: [
+    "Chế độ Tự động: tự quyết cách làm cho từng yêu cầu như một kỹ sư phần mềm giàu kinh nghiệm, và chuyển giai đoạn bất cứ lúc nào công việc đòi hỏi.",
+    "- Lập kế hoạch (plan): yêu cầu lớn, mơ hồ, chạm nhiều tệp hoặc cần chọn kiến trúc → nêu kế hoạch ngắn gọn từng bước (dùng update_plan nếu có), rồi thực hiện ngay, không chờ hỏi lại trừ khi thật sự thiếu thông tin quan trọng.",
+    "- Viết code (code): việc đã rõ → viết code hoàn chỉnh, chạy được; có workspace thì sửa tệp và chạy thử để chắc chắn.",
+    "- Gỡ lỗi (debug): có lỗi, log, stack trace, test hỏng, hoặc chạy thử thấy sai → đọc kỹ lỗi, nêu các giả thuyết theo khả năng, kiểm chứng, sửa nhỏ nhất, chạy lại để xác nhận đã hết lỗi.",
+    "- Chuyển linh hoạt trong cùng một lượt: viết xong chạy thử thấy lỗi thì gỡ lỗi luôn; đang làm mà phát hiện việc lớn hơn dự tính thì dừng lại lập kế hoạch rồi làm tiếp. Không dừng giữa chừng chỉ để hỏi xin chuyển chế độ.",
+    "- Mỗi khi bắt đầu hoặc đổi giai đoạn, đặt một dòng ẩn riêng đúng dạng <!-- mode:plan -->, <!-- mode:code --> hoặc <!-- mode:debug --> ngay trước phần đó để giao diện hiện đúng giai đoạn.",
+  ].join("\n"),
   plan: "Chế độ Architect/Plan: chỉ phân tích cấu trúc, đề xuất kế hoạch từng bước. TUYỆT ĐỐI không viết code dài (tối đa vài dòng minh họa).",
   code: "Chế độ Write/Code: sinh code hoàn chỉnh, chạy được, kèm ghi chú ngắn.",
   debug: "Chế độ Debug: đọc kỹ lỗi/log. Trước hết liệt kê 3 giả thuyết nguyên nhân (xếp theo khả năng), rồi mới đề xuất bản sửa nhỏ nhất.",
 };
+/** Giai đoạn mở đầu đoán từ yêu cầu (model vẫn tự đổi khi làm). */
+export function guessMode(text: string, atts: { k?: string; text?: string }[] = []): "plan" | "code" | "debug" {
+  const t = text.toLowerCase();
+  if (atts.some((a) => a.k === "error") || /(lỗi|error|exception|traceback|stack ?trace|bug|crash|fail|không chạy|ko chạy|chạy sai|bị sai|undefined is not|cannot read|segfault|panic|debug|sửa lỗi|fix)/.test(t)) return "debug";
+  if (/(kế hoạch|lập kế hoạch|kiến trúc|thiết kế hệ thống|plan\b|architect|roadmap|nên dùng|so sánh|phân tích|đề xuất cách|cấu trúc dự án|how should|trade-?off|chiến lược)/.test(t) || (t.length > 600 && (t.match(/\n\s*[-*\d]/g)?.length ?? 0) >= 4)) return "plan";
+  return "code";
+}
+const PHASE_RE = /<!--\s*mode:\s*(plan|code|debug)\s*-->/g;
+/** Các giai đoạn model đã đi qua trong câu trả lời, theo thứ tự (bỏ trùng liền kề). */
+export const phasesOf = (text: string) => [...text.matchAll(PHASE_RE)].map((m) => m[1]).filter((x, i, a) => x !== a[i - 1]);
+
 const RULES_SYS = [
   "Mọi code block PHẢI có dòng đầu tiên là `// filepath: đường/dẫn/tệp.ext` (dùng `# filepath:` cho Python/shell).",
   "Khi chỉ sửa một phần tệp có sẵn, được phép dùng `// ... existing code ...` cho phần không đổi.",
@@ -91,52 +113,6 @@ function useClickAway(fn: () => void) {
   return ref;
 }
 
-const V1 = `// src/lib/auth.ts
-export async function login(email: string, password: string) {
-  const res = await fetch("/api/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-  return res.json();
-}`;
-const V2 = `// src/lib/auth.ts
-export class AuthError extends Error {}
-
-export async function login(email: string, password: string) {
-  if (!email || !password) throw new AuthError("Thiếu email hoặc mật khẩu");
-  const res = await fetch("/api/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) throw new AuthError(\`Đăng nhập thất bại (\${res.status})\`);
-  return res.json();
-}`;
-
-function mockReply(mode: string, text: string, hasPrev: boolean, atts: Att[], rules: string, ctx: Ctx[]): string {
-  const head = [rules && `Quy tắc dự án: ${rules.slice(0, 70)}${rules.length > 70 ? "…" : ""}`, ctx.length && `Ngữ cảnh: ${ctx.length} tệp đang bật`].filter(Boolean).join("\n");
-  const pre = head ? head + "\n\n" : "";
-  const t = text.toLowerCase();
-  if (mode === "plan")
-    return pre + "Đây là kế hoạch kiến trúc đề xuất:\n\n### 1. Phân lớp\n- **UI**: các component thuần hiển thị\n- **Domain**: logic nghiệp vụ, không phụ thuộc framework\n- **Data**: client gọi API, cache bằng `SWR`\n\n### 2. Luồng dữ liệu\n1. Người dùng thao tác trên UI\n2. Action gọi service trong `src/lib`\n3. Service trả dữ liệu đã chuẩn hóa về UI\n\n### 3. Các bước thực hiện\n1. Dựng khung thư mục và cấu hình lint\n2. Viết service và kiểu dữ liệu\n3. Làm màn hình chính, rồi kiểm thử\n\nBạn muốn tôi chuyển sang chế độ **Code** để viết bước 2 không?";
-  if (mode === "debug") {
-    const e = atts.find((a) => a.k === "error");
-    return pre + (e ? "Tôi đã đọc log lỗi bạn gửi. " : "") + "**Nguyên nhân gốc:** hàm `login` không kiểm tra `res.ok` và không gửi header `content-type`, nên server trả 400 nhưng code vẫn cố parse JSON.\n\n**Cách sửa nhỏ nhất:**\n\n```ts\n" + V2 + "\n```\n\nSau khi sửa, lỗi sẽ được ném ra dưới dạng `AuthError` để UI hiển thị thông báo rõ ràng.";
-  }
-  if (/cài|install|npm|pip/.test(t)) return pre + "Cài các gói sau:\n\n```bash\nnpm install axios zod @synchro/ghost-pkg-xyz\n```\n\nLịch chạy job dọn dẹp:\n\n```bash\n# crontab\n30 2 * * 1-5 node clean.js\n```\n\n<!-- meta:{\"time\":\"O(n)\",\"space\":\"O(1)\",\"canOptimize\":true} -->";
-  if (/node|require/.test(t)) return pre + "Script Node chạy trong WebContainer:\n\n```js\n// os.js\nconst os = require(\"os\");\nconsole.log(\"Nền tảng:\", os.platform());\n```\n";
-  if (/python|\bpy\b/.test(t)) return pre + "Script Python chạy thử ngay trong trình duyệt (Pyodide):\n\n```python\n# calc.py\nxs = [1, 2, 3]\nprint(\"Tổng:\", sum(xs))\nprint(undefined_var)\n```\n";
-  if (/sơ đồ|mermaid|diagram|flow/.test(t)) return pre + "Luồng đăng nhập:\n\n```mermaid\nflowchart TD\n  A[Người dùng] --> B{Hợp lệ?}\n  B -- Có --> C[Vào app]\n  B -- Không --> D[Báo lỗi]\n```\n";
-  const wantsHtml = /html|demo|giao diện|preview|nút/.test(t);
-  const wantsJs = /\bjs\b|javascript|script|chạy/.test(t);
-  const edit = hasPrev || /sửa|fix|refactor|cải thiện|thêm|update/.test(t);
-  let out = pre + (edit ? "Tôi đã cập nhật hàm theo yêu cầu. Bấm **Diff** để xem chính xác dòng nào được thêm hoặc xóa:\n\n" : "Đây là bản triển khai đầu tiên:\n\n");
-  out += "```ts\n" + (edit ? V2 : V1) + "\n```\n";
-  if (wantsHtml) out += "\nBản demo có thể bấm **Chạy** để xem ngay:\n\n```html\n<!-- demo.html -->\n<button id=\"b\" style=\"padding:8px 14px;font:14px system-ui\">Bấm thử</button>\n<p id=\"o\" style=\"font:14px system-ui\"></p>\n<script>b.onclick=()=>o.textContent=\"Xin chào từ Synchro Code · \"+new Date().toLocaleTimeString()</script>\n```\n";
-  if (wantsJs) out += "\nĐoạn script chạy thử trong sandbox:\n\n```js\n// sum.js\nconst xs = [1, 2, 3, 4];\nconsole.log(\"Tổng:\", xs.reduce((a, b) => a + b, 0));\n```\n";
-  return out + "\nBạn muốn tôi thêm kiểm thử đơn vị hoặc tách thành hook `useAuth`?";
-}
-
 function ErrView({ text }: { text: string }) {
   return (
     <pre className="cv-trace">
@@ -175,7 +151,10 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [sel, setSel] = useState<Record<number, number>>({});
   const [ctx, setCtx] = useState<Ctx[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [mode, setMode] = usePref("codeMode", "code");
+  const [mode, setMode] = usePref("codeMode", "auto");
+  // Tin nhắn gửi trong lúc agent đang làm (ghép vào lượt / gửi sau) và phiên của lượt agent đang chạy.
+  const [cq, setCq] = useState<Queued[]>([]);
+  const agentSid = useRef<number | string | null>(null);
   const [cf] = usePref("codeFont", "");
   const [csz] = usePref("codeSize", "13");
   const [rules, setRules] = usePref("codeRules", { preset: "next", custom: "" });
@@ -362,6 +341,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     activeRef.current = id;
     setBusy(true);
     const s = ensureSid(userText);
+    agentSid.current = s;
     setWsUsed(true);
     const live = ctxRef.current.filter((c) => !c.off);
     const messages = hist.flatMap((n) => [
@@ -370,6 +350,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     ]);
     const system = [
       MODE_SYS[md],
+      md === "auto" && `Gợi ý giai đoạn mở đầu cho yêu cầu này: ${guessMode(userText)} (tự đổi nếu thấy cần).`,
       strictRef.current && STRICT_SYS,
       SLASH.find((x) => userText.trimStart() === x.cmd || userText.trimStart().startsWith(x.cmd + " "))?.sys,
       rule && `Luật dự án: ${rule}`,
@@ -394,7 +375,16 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
             openPane(e.open);
             if (e.open === "terminal") showTerm(e.tab ?? "log");
             if (e.open === "files" && e.path) showFile(e.path);
-          } else if (e.t === "done") { if (e.skills.length) patchNode(id, (n) => ({ ...n, skills: e.skills })); refreshUsage(); }
+          } else if (e.t === "steer") {
+            patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "steer", text: e.text }] }));
+            setCq((q) => { const k = q.findIndex((x) => x.mode === "steer" && x.text === e.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
+          } else if (e.t === "done") {
+            if (e.skills.length) patchNode(id, (n) => ({ ...n, skills: e.skills }));
+            refreshUsage();
+            // Tin nhắn thêm tới sau bước cuối: gửi thành lượt mới ngay khi xong.
+            const left = e.steer ?? [];
+            setCq((q) => [...q.map((x) => (x.mode === "steer" ? { ...x, mode: "later" as const } : x)), ...left.filter((t) => !q.some((x) => x.text === t)).map((t, k) => ({ id: Date.now() + k, chat: 0, text: t, mode: "later" as const }))]);
+          }
           else if (e.t === "error") patchNode(id, (n) => addText(n, `⚠️ ${e.error}`));
         }, ac.signal);
       } catch (e) {
@@ -424,6 +414,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const buildSystem = (snips: { file: string; name: string; code: string }[]) => [
       "Bạn là Synchro Code, trợ lý lập trình.",
       MODE_SYS[md],
+      md === "auto" && `Gợi ý giai đoạn mở đầu cho yêu cầu này: ${guessMode(userText, userAtts)} (tự đổi nếu thấy cần).`,
       RULES_SYS,
       strictRef.current && STRICT_SYS,
       SLASH.find((x) => userText.trimStart() === x.cmd || userText.trimStart().startsWith(x.cmd + " "))?.sys,
@@ -442,11 +433,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
           usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))];
         } catch (e) { reply = e instanceof LLMError && e.status === 403 ? e.message : "Không thể kết nối tới model. Vui lòng thử lại."; }
       }
-      else {
-        await new Promise((r) => setTimeout(r, 650));
-        const hasPrev = hist.slice(0, -1).some((n) => blocksOf(n.ai).length > 0);
-        reply = mockReply(md, userText, hasPrev, userAtts, rule ? ruleLabel : "", live);
-      }
+      else reply = "Synchro chưa được kết nối với model nào. Quản trị viên vào Cài đặt → Providers để đăng nhập gói Claude / ChatGPT / Gemini hoặc thêm khóa API.";
       if (gen !== genRef.current) return;
       if (usedSk.length) patchNode(id, (n) => ({ ...n, skills: usedSk }));
       let i = 0;
@@ -624,7 +611,25 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   };
 
   const slashItems = /^\/[a-z]*$/.test(v) && !mention ? SLASH.filter((x) => x.cmd.startsWith(v)) : [];
+  // Đang chạy mà gõ thêm: Enter ghép vào việc agent đang làm, ⌘/Ctrl + Enter gửi sau khi xong (giống khung chat chính).
+  const steer = async (text: string, later: boolean) => {
+    const qid = Date.now() + Math.random();
+    setV("");
+    if (later || !agentSid.current || !activeRef.current || !status?.available) { setCq((q) => [...q, { id: qid, chat: 0, text, mode: "later" }]); return; }
+    setCq((q) => [...q, { id: qid, chat: 0, text, mode: "steer" }]);
+    const ok = await fetch("/api/agent/steer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sid: String(agentSid.current), text }) })
+      .then((r) => r.json()).then((j) => !!j.queued, () => false);
+    if (!ok) setCq((q) => q.map((x) => (x.id === qid ? { ...x, mode: "later" } : x)));
+  };
+  useEffect(() => {
+    if (busy) return;
+    const next = cq.find((x) => x.mode === "later");
+    if (!next) return;
+    const t = setTimeout(() => { setCq((q) => q.filter((x) => x.id !== next.id)); send(next.text, []); }, 250);
+    return () => clearTimeout(t);
+  }, [busy, cq]); // eslint-disable-line react-hooks/exhaustive-deps
   const onKey = (e: React.KeyboardEvent) => {
+    if (busy && v.trim() && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void steer(v.trim(), e.metaKey || e.ctrlKey); return; }
     if (slashItems.length) {
       if (e.key === "ArrowDown") { e.preventDefault(); setSi((si + 1) % slashItems.length); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); setSi((si - 1 + slashItems.length) % slashItems.length); return; }
@@ -791,8 +796,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   };
 
   const lastId = path.length ? path[path.length - 1].id : -1;
-  const m = MODES.find((x) => x.k === mode) ?? MODES[1];
-  const modeIcon = (k: string, s = 16) => (k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.Alert size={s} /> : <I.Code size={s} />);
+  const m = MODES.find((x) => x.k === mode) ?? MODES[0];
+  const modeIcon = (k: string, s = 16) => (k === "auto" ? <I.Sparkle size={s} /> : k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.Alert size={s} /> : <I.Code size={s} />);
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
   // Kéo đường chia để đổi độ rộng khung bên phải.
   const startDrag = (e: React.MouseEvent) => {
@@ -930,7 +935,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                       )}
                     </div>
                     <div className="cv-ai">
-                      <div className="cv-ai-h"><span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span></div>
+                      <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
                       <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
@@ -975,6 +980,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                 )}
               </div>
             )}
+            <QueueChips items={cq} onCancel={(qid) => setCq((q) => q.filter((x) => x.id !== qid))} />
             <div className="composer cv-composer" data-drag={dragOn ? "1" : undefined}>
               {errOpen && (
                 <div className="cv-errbox">
@@ -1008,7 +1014,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   {atts.flatMap((a) => a.pills ?? []).map((p) => <button key={p.label} onClick={() => send(p.label, atts, p.prompt)}>{p.label}</button>)}
                 </div>
               )}
-              <textarea ref={ta} rows={1} value={v} onChange={onChange} onKeyDown={onKey} onPaste={onPaste} placeholder="Viết tin nhắn…  gõ @ để chọn tệp, hàm hoặc tài liệu" />
+              <textarea ref={ta} rows={1} value={v} onChange={onChange} onKeyDown={onKey} onPaste={onPaste} placeholder={busy ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : "Viết tin nhắn…  gõ @ để chọn tệp, hàm hoặc tài liệu"} />
               <div className="cv-tools">
                 <div style={{ position: "relative" }}>
                   <button className="icon-btn" onClick={() => setMenu(menu === "plus" ? "" : "plus")} aria-label="Thêm ngữ cảnh"><I.Plus /></button>
@@ -1118,10 +1124,11 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   <div className="cvg-card"><h4><I.Sliders size={16} />Luật dự án</h4><p>Nút bên trái <b>Phiên mới</b> cho chọn stack có sẵn hoặc tự viết luật riêng (ví dụ “luôn dùng pnpm”). Luật được gắn vào mọi yêu cầu.</p></div>
                 </>}
                 {gt === "modes" && <>
-                  <div className="cvg-hero"><b>3 chế độ làm việc</b><span>Chọn bằng nút chế độ cạnh khung chat.</span></div>
+                  <div className="cvg-hero"><b>4 chế độ làm việc</b><span>Chọn bằng nút chế độ cạnh khung chat. Mặc định là Tự động.</span></div>
+                  <div className="cvg-card"><h4><I.Sparkle size={16} />Tự động</h4><p>Synchro tự lập kế hoạch khi việc lớn, viết code khi việc đã rõ, gỡ lỗi khi gặp lỗi, và chuyển qua lại ngay trong một lượt (ví dụ viết xong chạy thử thấy lỗi thì sửa luôn). Các giai đoạn đã đi qua hiện ở đầu câu trả lời.</p></div>
                   <div className="cvg-grid3">
                     <div className="cvg-mode"><span className="ic b"><I.Layers size={20} /></span><b>Plan</b><span>Chỉ phân tích cấu trúc và lập kế hoạch từng bước, không viết code. Hợp khi bắt đầu dự án.</span></div>
-                    <div className="cvg-mode"><span className="ic g"><I.Code size={20} /></span><b>Code</b><span>Sinh code hoàn chỉnh, chạy được, kèm ghi chú ngắn. Chế độ mặc định.</span></div>
+                    <div className="cvg-mode"><span className="ic g"><I.Code size={20} /></span><b>Code</b><span>Sinh code hoàn chỉnh, chạy được, kèm ghi chú ngắn.</span></div>
                     <div className="cvg-mode"><span className="ic r"><I.Alert size={20} /></span><b>Debug</b><span>Đọc kỹ lỗi/log, liệt kê 3 giả thuyết nguyên nhân rồi mới đề xuất cách sửa.</span></div>
                   </div>
                   <div className="cvg-card"><h4><I.Enter size={16} />Chế độ nghiêm ngặt</h4><p>Nhấn <kbd>Ctrl/⌘</kbd>+<kbd>↵</kbd> để gửi — Synchro chỉ trả lời đúng yêu cầu, không giải thích thừa.</p></div>

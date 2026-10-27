@@ -8,8 +8,10 @@ const STOPPED = { id: "stop", name: "(dừng)", label: "Câu trả lời", input
 
 export function chatHistory(msgs: Msg[], compact?: Chat["compact"]): LLMMsg[] {
   const from = compact ? Math.min(Math.max(0, compact.upto), msgs.length) : 0;
-  return msgs.slice(from).filter((m) => m.text || m.stopped).map((m): LLMMsg => (m.role === "ai"
-    ? { role: "assistant", content: m.text, ...(m.trace?.length || m.stopped ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : [])] } : {}) }
+  // Câu trả lời bị tách vì người dùng nhắn thêm giữa chừng: phần trước chỉ có lời dẫn (nằm trong nhật ký làm việc).
+  const said = (m: Msg) => m.text || (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
+  return msgs.slice(from).filter((m) => said(m) || m.stopped).map((m): LLMMsg => (m.role === "ai"
+    ? { role: "assistant", content: said(m), ...(m.trace?.length || m.stopped ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : [])] } : {}) }
     : { role: "user", content: m.text }));
 }
 

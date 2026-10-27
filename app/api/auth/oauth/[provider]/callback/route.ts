@@ -19,7 +19,7 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       const c = current(req);
       if (!c) throw new AuthError("Bạn cần đăng nhập trước khi kết nối GitHub.", 401);
       if (!r.token || !r.login) throw new AuthError("GitHub không trả về quyền truy cập.", 502);
-      saveLink(c.user.id, { id: r.subject, login: r.login, token: r.token, scopes: r.scopes ?? "" });
+      saveLink(c.user.id, { id: r.subject, login: r.login, token: r.token, scopes: r.scopes ?? "", refresh: r.refresh, expiresIn: r.expiresIn, refreshExpiresIn: r.refreshExpiresIn });
       audit("github_link", { actor: c.user, target: c.user, detail: r.login });
       h.set("Location", `${appUrl(req)}/api/github/done`);
       return new Response(null, { status: 303, headers: h });

@@ -150,7 +150,9 @@ export type Complexity = { time: string; space: string; canOptimize?: boolean };
 const META_RE = /<!--\s*meta:\s*(\{[\s\S]*?\})\s*-->/g;
 export function splitMeta(text: string): { text: string; meta: Complexity | null } {
   let meta: Complexity | null = null;
-  const clean = text.replace(META_RE, (_m, j: string) => { try { meta = JSON.parse(j); } catch { /* bỏ qua */ } return ""; }).replace(/<!--\s*meta:[^>]*$/, "");
+  const clean = text.replace(META_RE, (_m, j: string) => { try { meta = JSON.parse(j); } catch { /* bỏ qua */ } return ""; }).replace(/<!--\s*meta:[^>]*$/, "")
+    // Dấu giai đoạn của chế độ Tự động (<!-- mode:debug -->) chỉ để giao diện đọc, không hiện ra.
+    .replace(/<!--\s*mode:\s*\w*\s*-->\n?/g, "").replace(/<!--\s*mode:[^>]*$/, "");
   return { text: clean, meta };
 }
 

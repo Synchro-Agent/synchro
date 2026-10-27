@@ -15,6 +15,8 @@ import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
 import { SkillHub } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
+import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
+const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -76,8 +78,12 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
   const [size, setSize] = usePref("size", "Medium");
   const [motion, setMotion] = usePref("motion", "System");
   const [lang, setLang] = usePref("vlang", "Vietnamese");
-  const [style, setStyle] = usePref("vstyle", "Buttery");
+  const [voice, setVoice] = usePref("vvoice", "");
   const [speed, setSpeed] = usePref("vspeed", "Normal");
+  // Giọng đọc thật từ tài khoản ElevenLabs (chỉ khi tài khoản được dùng Speech và đã gắn khóa).
+  const speechOk = app.me?.perms.features.speech !== false;
+  const plan = useSpeechPlan(speechOk);
+  const voices = useMyVoices(speechOk && !!plan?.connected);
   const [tg, setTg] = usePref("notif", [false, true, true, true]);
   const set = (i: number) => (v: boolean) => {
     if (i === 0 && v) {
@@ -102,7 +108,12 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
       <Row t="Motion" d="Reduce animation in streaming responses and other interface elements."><Seg value={motion} onChange={setMotion} options={["System", "Reduced"]} /></Row>
       <H>Voice</H>
       <Row t="Language" top><Select value={lang} onChange={setLang} options={["English", "Vietnamese"]} /></Row>
-      <Row t="Style"><Select value={style} onChange={setStyle} options={["Buttery", "Airy", "Mellow", "Glassy", "Rounded"]} /></Row>
+      {plan?.connected && voices && (
+        <Row t="Voice" d="ElevenLabs voice for reading answers aloud and voice conversation. Auto picks a voice in the answer's language.">
+          <Select search width={260} value={voiceLabel(voices.find((x) => x.id === voice))} options={[voiceLabel(undefined), ...voices.map((x) => voiceLabel(x))]} onChange={(l) => setVoice(voices.find((x) => voiceLabel(x) === l)?.id ?? "")} />
+        </Row>
+      )}
+      {plan && !plan.connected && <Row t="Voice" d="Using your browser's voice. Add an ElevenLabs key in Settings → Providers for natural AI voices."><span className="d">Browser</span></Row>}
       <Row t="Speed"><Select value={speed} onChange={setSpeed} options={["Slow", "Normal", "Fast"]} /></Row>
       <H>Notifications</H>
       <Row t="Response completions" d="Get notified when Synchro has finished a response. Useful for long-running tasks." top><Toggle on={tg[0]} set={set(0)} /></Row>

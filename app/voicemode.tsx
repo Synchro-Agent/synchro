@@ -1,6 +1,7 @@
 "use client";
 // Chế độ trò chuyện bằng giọng nói: làm mờ toàn màn hình, chỉ còn sóng Siri.
-// Mặc định dùng Eleven Realtime v1 Max (máy chủ cấp khoá tạm): tự nhận ngôn ngữ, trả lời bằng giọng ElevenLabs, nói chen được.
+// Mặc định dùng Eleven Realtime v1 Max (máy chủ cấp khoá tạm): nghe đúng ngôn ngữ đã chọn, trả lời bằng giọng ElevenLabs, nói chen được.
+// Không mở được Realtime (hết phút của gói, khóa thiếu quyền) nhưng có ElevenLabs: chế độ nối tiếp, Scribe nghe → model chat → giọng ElevenLabs đọc.
 // Khi máy chủ chưa có khoá ElevenLabs: dự phòng bằng nhận dạng giọng nói + đọc to của trình duyệt, câu hỏi đi qua model chat.
 // Hai luồng: nói ngay một câu xác nhận, việc chính chạy trong khung chat; xong thì đọc bản tóm tắt vài câu (bản đầy đủ ở khung chat).
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,6 +11,8 @@ import { getLang } from "./i18n";
 import { usePref } from "./store";
 import { SiriWave, startMicLevel, useSpeakingLevel } from "./voicefx";
 import { startRealtime, type RtPhase } from "./realtime";
+import { startScribe, type Scribe } from "./scribe";
+import { elSpeed, speakAI, type Speaking } from "./speak";
 import { createVad } from "./vad";
 import { ACK_DELAY, ackPlan, localBrief, spokenPlan, toSpeech, VI, type Lang } from "./voiceflow";
 
@@ -30,12 +33,13 @@ async function briefOf(q: string, answer: string, lang: Lang): Promise<string> {
   return localBrief(answer, lang);
 }
 
-export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
+export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, say }: {
   onClose: () => void; onAsk: (t: string) => void; onTurn: (user: string, ai: string) => void; busy: boolean; reply: { text: string; time: number } | null;
-  rate: number; say: (m: string) => void;
+  rate: number; voice?: string; say: (m: string) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("connecting");
-  const [mode, setMode] = useState<"rt" | "browser" | null>(null);
+  // rt: Eleven Realtime; ai: Scribe + giọng ElevenLabs (nối tiếp); browser: giọng của trình duyệt.
+  const [mode, setMode] = useState<"rt" | "ai" | "browser" | null>(null);
   const [heard, setHeard] = useState("");
   const [caption, setCaption] = useState("");
   const [working, setWorking] = useState(false);
@@ -62,8 +66,11 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
   modeRef.current = mode;
   const go = (p: Phase) => { phaseRef.current = p; setPhase(p); };
   useSpeakingLevel(mode === "browser" && phase === "speak", aiLv);
+  const scribe = useRef<Scribe | null>(null);
+  const voiceOut = useRef<Speaking | null>(null);
+  const stopVoice = () => { voiceOut.current?.stop(); voiceOut.current = null; window.speechSynthesis?.cancel(); };
 
-  const close = () => { setOut(true); job.current?.done?.(""); job.current = null; window.speechSynthesis?.cancel(); recRef.current?.abort(); rt.current?.close(); rt.current = null; setTimeout(onClose, 220); };
+  const close = () => { setOut(true); job.current?.done?.(""); job.current = null; stopVoice(); recRef.current?.abort(); scribe.current?.stop(); scribe.current = null; rt.current?.close(); rt.current = null; setTimeout(onClose, 220); };
 
   // ---- Việc chính (luồng thứ hai) ----
   // Gửi câu hỏi vào khung chat; chế độ trình duyệt thì nói câu xác nhận (ngay nếu là việc cần làm, hoặc khi trả lời lâu hơn 1,2 giây).
@@ -106,8 +113,28 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
     return () => clearTimeout(t);
   }, [phase, working]);
 
-  // Đọc to bằng trình duyệt (xếp hàng sau câu đang đọc, không cắt câu xác nhận).
+  // Đọc to: chế độ nối tiếp dùng giọng ElevenLabs (xếp hàng sau câu đang đọc); không được thì giọng của trình duyệt.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   const speak = (chunks: string[], l: Lang, onEnd: () => void) => {
+    if (modeRef.current === "ai" && chunks.length) {
+      go("speak");
+      const my = gen.current;
+      queue.current = queue.current.then(async () => {
+        if (!alive.current || gen.current !== my) return;
+        const text = chunks.join(" ");
+        setCaption(text);
+        const v = await speakAI(text, { voice, speed: elSpeed(rate), level: aiLv });
+        if (!v) { browserSpeak(chunks, l, onEnd); return; }
+        voiceOut.current = v;
+        const ok = await v.done;
+        if (voiceOut.current === v) voiceOut.current = null;
+        if (ok && alive.current && gen.current === my) onEnd();
+      });
+      return;
+    }
+    browserSpeak(chunks, l, onEnd);
+  };
+  const browserSpeak = (chunks: string[], l: Lang, onEnd: () => void) => {
     const s = window.speechSynthesis;
     if (!s || !chunks.length) { onEnd(); return; }
     const voice = s.getVoices().find((v) => v.lang.toLowerCase().startsWith(l));
@@ -127,7 +154,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
     alive.current = true;
     let dead = false;
     (async () => {
-      const s = await fetch("/api/voice/session", { method: "POST" }).then((r) => r.json()).catch(() => ({ fallback: true }));
+      const s = await fetch("/api/voice/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lang: lang.split("-")[0], voice }) }).then((r) => r.json()).catch(() => ({ fallback: true }));
       if (dead) return;
       if (s.value) {
         try {
@@ -152,12 +179,30 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
         } catch { if (!dead) { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); setMode("rt"); setPhase("paused"); } return; }
       }
       if (s.error) say(s.error);
-      setMode("browser"); setPhase("listen");
+      setMode(s.cascade ? "ai" : "browser"); setPhase("listen");
     })();
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
     window.addEventListener("keydown", h, true);
-    return () => { dead = true; alive.current = false; window.removeEventListener("keydown", h, true); recRef.current?.abort(); window.speechSynthesis?.cancel(); rt.current?.close(); rt.current = null; };
+    return () => { dead = true; alive.current = false; window.removeEventListener("keydown", h, true); recRef.current?.abort(); scribe.current?.stop(); scribe.current = null; stopVoice(); rt.current?.close(); rt.current = null; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- Chế độ nối tiếp (Scribe + giọng ElevenLabs) ----
+  useEffect(() => {
+    if (mode !== "ai") return;
+    let dead = false;
+    startScribe({ lang: lang.split("-")[0], level: micLv }, {
+      onPartial: (t) => { if (phaseRef.current === "listen") setHeard(t); },
+      onCommit: (t) => { if (phaseRef.current === "listen" && t.trim()) startJob(t.trim()); },
+      onError: (m) => say(m),
+    }).then((x) => {
+      if (dead) { x?.stop(); return; }
+      if (!x) { setMode("browser"); return; }
+      scribe.current = x;
+    }).catch(() => { if (!dead) { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); go("paused"); } });
+    return () => { dead = true; scribe.current?.stop(); scribe.current = null; };
+  }, [mode, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Chỉ gửi âm thanh lên khi đang nghe (tránh chép lại chính giọng Synchro đang đọc).
+  useEffect(() => { scribe.current?.pause(mode === "ai" && phase !== "listen"); }, [phase, mode]);
 
   // ---- Chế độ trình duyệt ----
   const listen = () => {
@@ -200,7 +245,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
   // Nói chen để ngắt (chế độ trình duyệt): đo micro trong lúc đọc, VAD tại chỗ phát hiện người dùng nói trong ~150 ms.
   // Giọng đọc của trình duyệt không đo được nên ngưỡng học theo tiếng vọng nghe thấy lúc mới đọc.
   useEffect(() => {
-    if (mode !== "browser" || phase !== "speak" || !barge) return;
+    if ((mode !== "browser" && mode !== "ai") || phase !== "speak" || !barge) return;
     let stop: (() => void) | null = null, dead = false, raf = 0;
     const vad = createVad({ floor: 0.18, calibMs: 500 });
     const mic = { current: 0 };
@@ -221,13 +266,13 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
       const j = job.current;
       if (j) { clearTimeout(j.ackT); job.current = null; }
       gen.current++;
-      window.speechSynthesis?.cancel(); go("listen");
+      stopVoice(); go("listen");
     }
     setCaption("");
   };
   const toggleMic = () => {
     if (mode === "rt") { mutedRef.current = !mutedRef.current; setPhase(mutedRef.current ? "paused" : "listen"); return; }
-    if (phase === "paused") go("listen"); else { recRef.current?.abort(); window.speechSynthesis?.cancel(); setCaption(""); go("paused"); }
+    if (phase === "paused") go("listen"); else { recRef.current?.abort(); stopVoice(); setCaption(""); go("paused"); }
   };
 
   // Chế độ realtime: model giọng nói đã xác nhận, Synchro đang làm việc chính trong lúc chờ.
@@ -236,7 +281,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, say }: {
     <div className={`vm ${out ? "out" : ""}`} role="dialog" aria-modal="true" aria-label="Trò chuyện bằng giọng nói">
       <div className="vm-top">
         <span className={`vm-state ${shown}`}><i />{LABEL[shown]}</span>
-        {mode === "browser" && (
+        {(mode === "browser" || mode === "ai") && (
           <span className="vm-lang" role="group" aria-label="Ngôn ngữ nhận dạng">
             {(["vi-VN", "en-US"] as const).map((l) => <button key={l} className={lang === l ? "on" : ""} aria-pressed={lang === l} onClick={() => { setLang(l); recRef.current?.abort(); }}>{l === "vi-VN" ? "VI" : "EN"}</button>)}
           </span>

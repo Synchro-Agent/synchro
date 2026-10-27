@@ -5,7 +5,9 @@ import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getUser, type UserRow } from "./authstore";
 
-export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note"; text: string };
+// say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
+// plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
+export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note" | "say" | "res" | "plan" | "steer"; text: string };
 export type RunStatus = "running" | "done" | "error";
 type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number };
 export type PublicRun = { id: string; status: RunStatus; conv: string | null; kind: string; events: RunEvent[]; result: unknown; http: number | null; createdAt: number; updatedAt: number };
@@ -35,7 +37,8 @@ function init() {
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
-const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, { s: number; text: string; ctl: AbortController; conv: string | null; uid: string }> };
+type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[] };
+const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
 // Lượt đang chạy trong tiến trình này: chữ đang viết (để người mở lại trang thấy ngay phần đã có) và bộ hủy.
 const live = (g.__synchroRunLive ??= new Map());
@@ -84,17 +87,35 @@ export function cancelRun(id: string, uid: string): boolean {
   l.ctl.abort();
   return true;
 }
-export function progress(kind: RunEvent["kind"], text: string) {
+/** Ghi một bước của lượt đang chạy (lưu để mở lại trang vẫn thấy đủ) và gửi cho người đang theo dõi. Trả về số thứ tự bước. */
+export function progress(kind: RunEvent["kind"], text: string): number {
   const s = scope.getStore();
-  if (!s) return;
+  if (!s) return 0;
   const d = init();
   const r = d.prepare("SELECT events FROM runs WHERE id = ?").get(s.id) as { events: string } | undefined;
-  if (!r) return;
+  if (!r) return 0;
   const list = JSON.parse(r.events) as RunEvent[];
-  const ev: RunEvent = { seq: list.length + 1, at: Date.now(), kind, text: text.slice(0, 300) };
+  const seq = (list.at(-1)?.seq ?? 0) + 1;
+  const ev: RunEvent = { seq, at: Date.now(), kind, text: text.slice(0, kind === "say" || kind === "steer" ? 4000 : kind === "plan" ? 6000 : 300) };
   list.push(ev);
-  d.prepare("UPDATE runs SET events = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(list.slice(-200)), Date.now(), s.id);
+  d.prepare("UPDATE runs SET events = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(list.slice(-400)), Date.now(), s.id);
   notify(s.id, { event: ev });
+  return seq;
+}
+
+// ---- nhắn thêm khi lượt đang chạy ----
+/** Người dùng nhắn thêm trong lúc lượt đang chạy: xếp vào hộp thư của lượt, vòng lặp công cụ ghép vào ở bước kế tiếp. */
+export function pushInbox(id: string, uid: string, text: string): boolean {
+  const l = live.get(id);
+  if (!l || l.uid !== uid || l.ctl.signal.aborted) return false;
+  l.inbox.push(text.slice(0, 20_000));
+  return true;
+}
+/** Lấy (và xóa) các tin nhắn thêm đang chờ của lượt hiện tại. */
+export function takeInbox(): string[] {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l || !l.inbox.length) return [];
+  return l.inbox.splice(0);
 }
 
 export type Exec = (body: Record<string, unknown>, user: UserRow) => Promise<{ http: number; json: unknown }>;
@@ -114,6 +135,9 @@ if (!gs.__synchroStopHook) {
 
 function finish(id: string, http: number, json: unknown) {
   if (gs.__synchroStopping && http >= 500) return;
+  // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: trả về để trình duyệt gửi ngay thành lượt tiếp theo (không mất tin).
+  const left = live.get(id)?.inbox ?? [];
+  if (left.length && json && typeof json === "object" && !Array.isArray(json)) json = { ...(json as Record<string, unknown>), steer: left };
   live.delete(id);
   const status: RunStatus = http >= 200 && http < 300 ? "done" : "error";
   // Lượt xong thì bỏ nội dung yêu cầu (có thể chứa ảnh, tệp) cho nhẹ cơ sở dữ liệu.
@@ -123,7 +147,7 @@ function finish(id: string, http: number, json: unknown) {
 }
 
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null) {
-  live.set(id, { s: 0, text: "", ctl: new AbortController(), conv, uid: user.id });
+  live.set(id, { s: 0, text: "", ctl: new AbortController(), conv, uid: user.id, inbox: [] });
   scope.run({ id }, () => {
     (async () => {
       // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.

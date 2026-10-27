@@ -58,6 +58,8 @@ const add = [
   ["anthropic", { id: "anthropic", key: MOCK_KEYS.anthropic, baseUrl: `${M}/anthropic` }],
   ["openai", { id: "openai", key: MOCK_KEYS.openai, baseUrl: `${M}/openai/v1` }],
   ["google", { id: "google", key: MOCK_KEYS.google, baseUrl: `${M}/google/v1beta/openai` }],
+  // Speech, đọc to và trò chuyện bằng giọng nói dùng ElevenLabs giả lập (gói Free như tài khoản thật; đổi gói ở /_debug/el).
+  ["elevenlabs", { id: "elevenlabs", kind: "elevenlabs", key: MOCK_KEYS.elevenlabs, baseUrl: `${M}/elevenlabs` }],
 ];
 for (const [id, body] of add) {
   if (has(id)) continue;

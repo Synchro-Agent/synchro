@@ -9,7 +9,8 @@ import { FluidDots } from "./fluid-dots";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
-export type AStep = { k: "text"; text: string } | ToolStep;
+// steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được).
+export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | ToolStep;
 type Say = (m: string) => void;
 
 const base = (p: string) => p.split("/").pop() || p;
@@ -104,9 +105,9 @@ function ToolGroup({ ts, live, onFile }: { ts: ToolStep[]; live: boolean; onFile
 export function AgentSteps({ steps, live, say }: { steps: AStep[]; live: boolean; say: Say }) {
   const showFile = useCodeUi((s) => s.showFile);
   const blocks = useMemo(() => {
-    const out: ({ k: "text"; text: string } | { k: "tools"; ts: ToolStep[] })[] = [];
+    const out: ({ k: "text"; text: string } | { k: "steer"; text: string } | { k: "tools"; ts: ToolStep[] })[] = [];
     for (const s of steps) {
-      if (s.k === "text") out.push(s);
+      if (s.k === "text" || s.k === "steer") out.push(s);
       else if (s.name !== "update_plan") {
         const last = out[out.length - 1];
         if (last?.k === "tools") last.ts.push(s); else out.push({ k: "tools", ts: [s] });
@@ -116,7 +117,9 @@ export function AgentSteps({ steps, live, say }: { steps: AStep[]; live: boolean
   }, [steps]);
   return (
     <div className="ag">
-      {blocks.map((b, i) => b.k === "text"
+      {blocks.map((b, i) => b.k === "steer"
+        ? <div key={i} className="ag-steer"><span>Bạn nhắn thêm</span><p data-notr>{b.text}</p></div>
+        : b.k === "text"
         ? <Markdown key={i} text={b.text} say={say} />
         : <ToolGroup key={i} ts={b.ts} live={live && i === blocks.length - 1} onFile={(p) => showFile(p)} />)}
     </div>

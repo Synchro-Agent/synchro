@@ -24,7 +24,7 @@ const DUCK = 0.12, DUCK_WAIT = 900;
 const b64 = (bytes: Uint8Array) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 const unb64 = (s: string) => { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; };
 
-export async function startRealtime(opts: { url: string; model: string; secret: string; micLevel: LevelRef; outLevel: LevelRef; muted: () => boolean; barge?: () => boolean }, h: RtHandlers) {
+export async function startRealtime(opts: { url: string; model: string; secret: string; micLevel: LevelRef; outLevel: LevelRef; muted: () => boolean; barge?: () => boolean; greet?: string }, h: RtHandlers) {
   const ctx = new AudioContext({ sampleRate: 24000 });
   if (ctx.state === "suspended") await ctx.resume();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
@@ -94,7 +94,8 @@ export async function startRealtime(opts: { url: string; model: string; secret: 
     h.onTask(req.trim()).then((tom_tat) => reply(JSON.stringify({ tom_tat })), (e) => reply(JSON.stringify({ loi: String((e as Error)?.message ?? e) })));
   };
 
-  ws.onopen = () => { open = true; set("listen"); };
+  // Lời chào đầu (Voice Agent): agent nói trước, đúng câu đã cấu hình.
+  ws.onopen = () => { open = true; set("listen"); if (opts.greet?.trim()) send({ type: "response.create", response: { instructions: `Chào người dùng bằng đúng câu sau, không thêm gì khác: "${opts.greet.trim().slice(0, 500)}"` } }); };
   ws.onmessage = (ev) => {
     let m: { type: string; delta?: string; transcript?: string; error?: { message?: string }; call_id?: string; name?: string; arguments?: string; item?: { type?: string; call_id?: string; name?: string; arguments?: string } };
     try { m = JSON.parse(String(ev.data)); } catch { return; }
