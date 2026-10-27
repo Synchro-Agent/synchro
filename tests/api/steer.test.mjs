@@ -1,6 +1,8 @@
 // Làm việc "thành tiếng" và nhắn thêm khi đang chạy (npm run dev:mock): lượt có công cụ ghi lời dẫn, công cụ, kết quả, danh sách việc;
 // tin nhắn thêm được ghép vào bước kế tiếp mà không ngắt lượt; tin tới lúc model đã ở bước trả lời cuối thì trả về để gửi thành lượt mới.
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
+// Chạy code cục bộ dùng sandbox-exec của macOS: trên máy khác (CI Linux) công cụ báo lỗi, phần nhắn thêm vẫn kiểm đủ.
+const MAC = process.platform === "darwin";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
 const client = (cookie = "") => async (m, p, b) => {
@@ -26,8 +28,8 @@ const wait = async (id, ms = 60_000) => {
 };
 
 console.log("1. Lời dẫn, công cụ, kết quả và tin nhắn thêm ghép giữa chừng");
-// Bước công cụ chạy 3 giây: đủ để tin nhắn thêm tới khi lượt còn đang chạy.
-let r = await ask('Tính 21 nhân 2 #tool=run_code #args={"language":"python","code":"import time; time.sleep(3); print(21*2)"}');
+// Bước gọi công cụ của model mất 2,5 giây (#waittool): tin nhắn thêm tới khi lượt còn đang chạy.
+let r = await ask('Tính 21 nhân 2 #waittool #tool=run_code #args={"language":"python","code":"print(21*2)"}');
 const id = r.j?.run;
 ok(r.s === 200 && typeof id === "string", "tạo lượt chạy nền", JSON.stringify(r.j));
 await new Promise((x) => setTimeout(x, 500));
@@ -39,9 +41,9 @@ let run = await wait(id);
 const kinds = (run?.events ?? []).map((e) => e.kind);
 const say = run?.events.find((e) => e.kind === "say"), tool = run?.events.find((e) => e.kind === "tool"), res = run?.events.find((e) => e.kind === "res"), steer = run?.events.find((e) => e.kind === "steer");
 ok(run?.status === "done" && !!say && /công cụ/.test(say.text), `lời dẫn trước khi dùng công cụ được giữ lại: “${say?.text}”`, JSON.stringify(kinds));
-ok(!!tool && !!res && JSON.parse(res.text).ref === tool.seq && JSON.parse(res.text).ok === true, "kết quả công cụ gắn đúng dòng công cụ", JSON.stringify([tool, res]));
+ok(!!tool && !!res && JSON.parse(res.text).ref === tool.seq && JSON.parse(res.text).ok === MAC, "kết quả công cụ gắn đúng dòng công cụ", JSON.stringify([tool, res]));
 ok(!!steer && steer.text === "Nhân thêm 10 nữa nhé" && steer.seq > res.seq, "tin nhắn thêm được ghép ngay sau kết quả công cụ", JSON.stringify(kinds));
-ok(!run?.result?.steer && /42/.test(run?.result?.text ?? ""), "lượt chạy tiếp tới hết, không còn tin chờ", JSON.stringify(run?.result).slice(0, 300));
+ok(!run?.result?.steer && (!MAC || /42/.test(run?.result?.text ?? "")), "lượt chạy tiếp tới hết, không còn tin chờ", JSON.stringify(run?.result).slice(0, 300));
 r = await me("POST", `/api/runs/${id}`, { text: "muộn rồi" });
 ok(r.s === 200 && r.j.queued === false, "lượt đã xong → queued: false (trình duyệt gửi thành tin mới)", JSON.stringify(r.j));
 

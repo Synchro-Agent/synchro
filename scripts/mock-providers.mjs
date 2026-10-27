@@ -1,7 +1,7 @@
 // Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, ElevenLabs) để thử Synchro ở máy cục bộ mà không cần khóa thật.
 // Kiểm tra khóa và tham số giống API thật, trả lời bằng nội dung mẫu kèm tên model để thấy rõ đang dùng model nào.
 // Dùng: npm run dev:mock (tự chạy cùng web), hoặc riêng: node scripts/mock-providers.mjs [cổng, mặc định 4010]
-// Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi.
+// Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi; #waittool làm chậm bước gọi công cụ.
 import http from "node:http";
 import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
@@ -386,7 +386,11 @@ async function handler(req, res) {
   if (p === "/_debug/streams") return send(res, 200, STREAMS);
   // 30 yêu cầu gần nhất của từng hãng (khi có lời gọi chạy nền sau lượt chat, như rút bộ nhớ, đè lên "gần nhất").
   if (p === "/_debug/hist") return send(res, 200, HIST);
-  if (res.__prov) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 30); }
+  // Lời gọi rút bộ nhớ chạy nền sau lượt chat không tính là "gần nhất" (chỉ ghi vào lịch sử) để kiểm thử đọc đúng lượt chat.
+  if (res.__prov) {
+    if (!JSON.stringify(b).includes("Bạn trích xuất bộ nhớ dài hạn")) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); }
+    (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 30);
+  }
   res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
 
   // ---- Anthropic (/v1/models, /v1/messages) ----
@@ -428,6 +432,8 @@ async function handler(req, res) {
       const cr = capsFor(sysText(b.system), q, b.messages, b.tools, b.tool_choice?.type === "none");
       if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: cr.text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(cr.text.length / 4) } }); }
       const want = cr?.tool ?? (b.tool_choice?.type === "none" ? null : wantTool(q, b.tools));
+      // #waittool: bước gọi công cụ mất 2,5 giây (thử nhắn thêm khi lượt đang chạy, không cần code chạy chậm).
+      if (want && q.includes("#waittool")) await sleep(2500);
       if (want) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ dùng công cụ." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: want.name, input: want.args }], stop_reason: "tool_use", usage: { input_tokens: 40, output_tokens: 20 } });
       if (await trap(res, q, (m) => err("api_error", m))) return;
       await sleep(latency(b.model));

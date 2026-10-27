@@ -67,7 +67,8 @@ if (!cookie) await api("POST", "/api/auth/login", { email: "admin@synchro.test",
 const ANS = `Mình đã làm trang giới thiệu quán cà phê Lumen với ba phần: giới thiệu, điểm nổi bật và đặt bàn.\n\n<artifact identifier="lumen" type="text/html" title="Trang Lumen">\n<!doctype html><h1>Lumen</h1>${"<p>nội dung dài</p>".repeat(300)}\n</artifact>\n\n\`\`\`css\nh1{color:red}\n\`\`\``;
 let r = await api("POST", "/api/voice/brief", { question: "Làm trang web cho quán cà phê", answer: ANS });
 ok(r.s === 200 && /khung chat/.test(r.j?.brief ?? "") && r.j.brief.length < 300 && !/[<#*`]/.test(r.j.brief), `tóm tắt ngắn, không ký hiệu, nhắc xem chi tiết: “${r.j?.brief}”`, JSON.stringify(r.j));
-const L = (await fetch(`${LLM}/_debug/last`).then((x) => x.json())).anthropic;
+// Tìm đúng yêu cầu tóm tắt trong lịch sử (lời gọi nền khác, như rút bộ nhớ, có thể tới sau nó).
+const L = [...((await fetch(`${LLM}/_debug/hist`).then((x) => x.json())).anthropic ?? [])].reverse().find((b) => JSON.stringify(b.system ?? "").includes("<voice_brief>"));
 const sent = JSON.stringify(L?.messages ?? []);
 ok(JSON.stringify(L?.system ?? "").includes("<voice_brief>") && sent.includes('[sản phẩm \\"Trang Lumen\\"]') && sent.includes("[khối code]") && !sent.includes("nội dung dài"), "model chỉ nhận tên sản phẩm, không nhận nội dung artifact hay code", sent.slice(0, 300));
 r = await api("POST", "/api/voice/brief", { question: "x", answer: "  " });
