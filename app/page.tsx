@@ -26,6 +26,15 @@ import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, take
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
+// Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): câu đầu của tin nhắn, bỏ ký hiệu Markdown và tham số công cụ.
+const roughTitle = (t: string) => {
+  const s = t.replace(/#(?:tool|args)=\S+/g, "").replace(/https?:\/\/(?:www\.)?([^/\s]+)\S*/g, "$1").replace(/[*_`#>~|[\]]+/g, " ").replace(/\s+/g, " ").trim();
+  const first = /^(.{8,60}?)[.!?…](\s|$)/.exec(s)?.[1] ?? s;
+  const cut = first.length > 48 ? `${first.slice(0, 48).replace(/\s+\S*$/, "")}…` : first;
+  return cut ? cut[0].toUpperCase() + cut.slice(1) : t.slice(0, 40);
+};
+// Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
+const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
@@ -972,8 +981,29 @@ export default function Home() {
     say(tr("Đã áp dụng bản sửa, tạo phiên bản mới"));
     setTimeout(() => afterArtifacts(id, ai), 0);
   };
+  // Tự đặt tên đoạn chat theo nội dung (như Claude): sau câu trả lời đầu tiên; tin đầu chỉ là lời chào thì đặt lại sau tin thứ ba.
+  // Người dùng đã tự đổi tên thì giữ nguyên; force: người dùng bấm "Đặt tên tự động".
+  const titling = useRef(new Set<number>());
+  const autoTitle = (id: number, force = false) => {
+    const c = chatsRef.current.find((x) => x.id === id);
+    if (!c || c.inc || titling.current.has(id) || (c.named && !force)) return;
+    const users = c.msgs.filter((m) => m.role === "user" && !m.steer && m.text.trim());
+    const n = users.length;
+    if (!n || (!force && c.titled !== undefined && !(c.titled < 3 && n >= 3 && vagueMsg(users[0].text)))) return;
+    titling.current.add(id);
+    const messages = c.msgs.filter((m) => m.text.trim() && (m.role === "user" || m.done)).slice(0, 6).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", text: m.text.slice(0, 4000) }));
+    fetch("/api/title", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages }) })
+      .then(async (r) => { const j = await r.json().catch(() => null); return r.ok && typeof j?.title === "string" ? (j.title as string) : ""; })
+      .catch(() => "")
+      .then((t) => {
+        setChats((cs) => cs.map((x) => (x.id === id ? { ...x, titled: n, ...(t && (force || !x.named) ? { title: t, named: undefined } : {}) } : x)));
+        if (force && !t) say("Chưa đặt được tên tự động. Thử lại sau.");
+      })
+      .finally(() => titling.current.delete(id));
+  };
   const finishReply = (id: number, reply: string, pr: Project | undefined, history: LLMMsg[], via?: string | null) => {
     stop(false);
+    setTimeout(() => autoTitle(id), 300);
     const q = [...history].reverse().find((m) => m.role === "user");
     afterArtifacts(id, reply, via || (model !== AUTO ? model : ""), typeof q?.content === "string" ? q.content : "");
     if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: "Câu trả lời đã hoàn tất." });
@@ -1012,6 +1042,7 @@ export default function Home() {
         const via = takeRoute();
         set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined }));
         if (runRef.current === run) runRef.current = null;
+        setTimeout(() => autoTitle(c.id), 300);
       }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1028,7 +1059,7 @@ export default function Home() {
     if (view !== "chat" || id === null) {
       id = Date.now();
       const nid = id;
-      setChats((cs) => [{ id: nid, title: t.slice(0, 40), msgs, inc: incog || undefined, project: nextProj ?? (view === "project" ? curProj ?? undefined : undefined), studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: nextProj ?? (view === "project" ? curProj ?? undefined : undefined), studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
       setNextProj(undefined);
       setCur(id);
       setView("chat");
@@ -1298,10 +1329,10 @@ export default function Home() {
             <div key={c.id} className="chat-wrap">
               {renaming === c.id ? (
                 <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
-                  onBlur={(e) => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, title: e.target.value || x.title } : x))); setRenaming(null); }}
+                  onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { if (busy) stop(); setCur(c.id); setView("chat"); }}>{c.title}</button>
+                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { if (busy) stop(); setCur(c.id); setView("chat"); }}><span key={c.title} className="ct-t" data-notr>{c.title}</span></button>
               )}
               <button className="dots" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
@@ -1425,6 +1456,7 @@ export default function Home() {
                   <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
                     <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.PinOff /> : <I.Pin />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
+                    <button className="menu-item" onClick={() => { setTitleMenu(false); autoTitle(chat.id, true); }}><I.Sparkle />Đặt tên tự động</button>
                     <hr />
                     <button className="menu-item del" onClick={() => { setDelId(chat.id); setTitleMenu(false); }}><I.Trash />Xóa</button>
                   </Menu>

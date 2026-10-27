@@ -80,7 +80,7 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
         note = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
       }
     }
-    const text = C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : "");
+    const text = C.isTitleAsk(prompt) ? C.mockTitle(prompt) : C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : "");
     await C.sleep(200);
     return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: text, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length, thinking_tokens: 12, cache_read_tokens: 0, total_tokens: prompt.length + text.length + 12 } }));
   }

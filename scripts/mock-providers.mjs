@@ -267,8 +267,16 @@ const pro = (id) => /-pro$/.test(id);
 // Model lớn trả lời chậm hơn model nhỏ, để thấy trạng thái đang trả lời.
 const latency = (id) => (/astra|argon|opus|fable|pro|o3/.test(id) ? 1600 : /luna|mini|nano|flash|haiku|lite/.test(id) ? 450 : 900) + Math.random() * 300;
 
+// Lời gọi đặt tên đoạn chat (app/api/title): trả về một tên ngắn như model thật.
+function mockTitle(q) {
+  const first = (/\[Người dùng\]\n([^\n]+)/.exec(q)?.[1] ?? "").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  if (!first || (/^(xin )?ch[àa]o|^(hi|hello|hey)\b/i.test(first) && first.split(" ").length <= 3)) return /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(first) || !first ? "Lời chào" : "Greeting";
+  const w = first.replace(/^(cho (tôi|mình|em) hỏi|giúp (tôi|mình|em)|làm ơn|hãy|please|can you|could you)\s+/i, "").split(" ").slice(0, 6).join(" ");
+  return w[0].toUpperCase() + w.slice(1);
+}
 function reply(provider, id, msgs, maxTokens, effort) {
   const q = lastUserText(msgs).trim();
+  if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
   const name = displayName(provider, id), vendor = VENDOR[provider];
   const short = q.length > 160 ? q.slice(0, 160) + "…" : q;

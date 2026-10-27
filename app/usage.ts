@@ -5,6 +5,7 @@
 // Ngoài ra ghi lại hạn mức gọi API mà nhà cung cấp báo trong header (Anthropic, OpenAI) để biết API còn bao nhiêu.
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
+import { vendorOf } from "./router";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
@@ -263,11 +264,17 @@ export function usageDetails(uid: string, tzOffsetMin = 0) {
     FROM usage_events WHERE user_id = ? AND at >= ? GROUP BY model ORDER BY cost DESC`).all(uid, since) as { model: string; calls: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number }[];
   const byFeature = d.prepare("SELECT feature, COUNT(*) AS calls, SUM(cost) AS cost FROM usage_events WHERE user_id = ? AND at >= ? GROUP BY feature ORDER BY cost DESC").all(uid, since) as { feature: string; calls: number; cost: number }[];
   const off = Math.max(-840, Math.min(840, Math.round(tzOffsetMin))) * 60_000;
-  const rows = d.prepare("SELECT at, cost, input + cache_read + cache_write AS i, output AS o FROM usage_events WHERE user_id = ? AND at >= ?").all(uid, since) as { at: number; cost: number; i: number; o: number }[];
+  const rows = d.prepare("SELECT at, model, feature, cost, input + cache_read + cache_write AS i, output AS o FROM usage_events WHERE user_id = ? AND at >= ?").all(uid, since) as { at: number; model: string; feature: string; cost: number; i: number; o: number }[];
   const day = (t: number) => Math.floor((t - off) / 86_400_000);
   const today = day(Date.now());
-  const days = Array.from({ length: 30 }, (_, k) => ({ day: (today - 29 + k) * 86_400_000 + off, cost: 0, input: 0, output: 0 }));
-  for (const r of rows) { const k = day(r.at) - (today - 29); if (k >= 0 && k < 30) { days[k].cost += r.cost; days[k].input += r.i; days[k].output += r.o; } }
+  // calls: lượt gọi model theo hãng (không tính lời gọi nội bộ như đặt tên đoạn chat, rút bộ nhớ, thử khóa).
+  const days = Array.from({ length: 30 }, (_, k) => ({ day: (today - 29 + k) * 86_400_000 + off, cost: 0, input: 0, output: 0, calls: {} as Record<string, number> }));
+  for (const r of rows) {
+    const k = day(r.at) - (today - 29);
+    if (k < 0 || k >= 30) continue;
+    days[k].cost += r.cost; days[k].input += r.i; days[k].output += r.o;
+    if (r.feature !== "internal" && r.feature !== "test") { const v = vendorOf(r.model); days[k].calls[v] = (days[k].calls[v] ?? 0) + 1; }
+  }
   const cfg = getConfig();
-  return { byModel: byModel.map((m) => ({ ...m, price: priceOf(m.model, cfg) })), byFeature, days };
+  return { byModel: byModel.map((m) => ({ ...m, price: priceOf(m.model, cfg) })), byFeature, days, dayOf: (t: number) => day(t) - (today - 29) };
 }

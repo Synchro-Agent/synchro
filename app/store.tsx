@@ -12,7 +12,8 @@ export type Msg = { role: "user" | "ai"; text: string; done?: boolean; trace?: T
   parts?: import("./worklog").Part[]; plan?: import("./worklog").PlanItem[]; seq?: number; steer?: boolean };
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;
 // pins: tài liệu ghim (chữ đã đọc từ tệp, luôn có trong ngữ cảnh của đoạn chat). critic: kết quả hội đồng phản biện theo từng phiên bản artifact.
-export type Chat = { id: number; title: string; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean; studio?: "design" | "slides" | "docs";
+// named: người dùng tự đổi tên (không tự đặt tên nữa); titled: số tin của người dùng lúc Synchro tự đặt tên gần nhất.
+export type Chat = { id: number; title: string; named?: boolean; titled?: number; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean; studio?: "design" | "slides" | "docs";
   mixer?: { artifacts?: boolean; tools?: boolean; recent?: number }; compact?: { upto: number; text: string; at: number }; pins?: { name: string; text: string }[];
   critic?: Record<string, CriticEntry> };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };

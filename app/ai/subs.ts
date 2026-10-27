@@ -431,11 +431,23 @@ function sessDb() {
       CREATE TABLE IF NOT EXISTS engine_turns (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, cli TEXT NOT NULL, at INTEGER NOT NULL, via TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS engine_turns_user ON engine_turns(user_id, cli, at);
       CREATE TABLE IF NOT EXISTS engine_api_optin (user_id TEXT NOT NULL, cli TEXT NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (user_id, cli))`);
+    // Model của từng lượt (cho Cài đặt → Usage theo model); bảng cũ chưa có cột này.
+    if (!(d.prepare("PRAGMA table_info(engine_turns)").all() as { name: string }[]).some((c) => c.name === "model")) d.exec("ALTER TABLE engine_turns ADD COLUMN model TEXT");
     d.prepare("DELETE FROM engine_sessions WHERE updated_at < ?").run(Date.now() - 90 * 86_400_000);
     d.prepare("DELETE FROM engine_turns WHERE at < ?").run(Date.now() - 30 * 86_400_000);
     ready = true;
   }
   return d;
+}
+/** Các lượt chạy bằng gói từ mốc since (Cài đặt → Usage: theo ngày, theo model). model trống: lượt ghi trước khi có cột model. */
+export const planTurns = (uid: string, since: number) =>
+  sessDb().prepare("SELECT cli, COALESCE(model, '') AS model, at FROM engine_turns WHERE user_id = ? AND at >= ?").all(uid, since) as { cli: Cli; model: string; at: number }[];
+/** Tên model của gói đã đọc được ("sub-claude/opus" → "Claude Opus 5.5"), hoặc null khi chưa đọc danh sách model. */
+export function planModelName(uid: string, key: string): string | null {
+  const cli = subCli(key);
+  if (!cli) return null;
+  const id = splitKey(key).id;
+  return g.models.get(`${cli}:${uid}`)?.v.find((m: { id: string; name: string }) => m.id === id)?.name ?? SUB[cli].fallback.find((m) => m.id === id)?.name ?? null;
 }
 export function removeUserSubs(uid: string) {
   const d = sessDb();
@@ -515,7 +527,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     return { status: 502, json: { error: redact(err.message).slice(0, 500) || "Gói subscription báo lỗi." } };
   }
   g.quota.delete(`${cli}:${o.user.id}`);
-  d.prepare("INSERT INTO engine_turns (user_id, cli, at, via) VALUES (?, ?, ?, ?)").run(o.user.id, cli, Date.now(), via ?? cli);
+  d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), via ?? cli, o.model);
   if (conv && session) {
     d.prepare(`INSERT INTO engine_sessions (user_id, conv, cli, session_id, turns, updated_at) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at`)

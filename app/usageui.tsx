@@ -8,6 +8,8 @@ import { Menu } from "./ui";
 import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
+import { BrandLogo } from "./brands";
+import { vendorOf } from "./router";
 
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type Rate = { provider: string; limit: number; remaining: number; resetAt: number; pct: number };
@@ -15,27 +17,32 @@ export type Credit = { provider: string; amount: number; since: number; spent: n
 // Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem app/ai/subs.ts).
 export type PlanWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string; label: string; kind: "session" | "weekly" | "other"; group?: string; idle?: boolean };
 export type SubUsage = { cli: "claude" | "codex" | "agy"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
-export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage };
+/** Một hãng trong chế độ Tự động / Cài đặt → Usage: Synchro tự nhận đang chạy bằng gói đã đăng nhập (plan) hay khóa API. */
+export type VendorUsage = { vendor: "anthropic" | "openai" | "google"; cli: SubUsage["cli"]; name: string; models: number; mode: "plan" | "api" | "none"; provider: string | null;
+  sub?: SubUsage; rate?: Rate | null; credit?: Credit | null; usingApiUntil?: number | null };
+export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage; vendors?: VendorUsage[] };
 const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
 
 // ---------------------------------------------------------------- dữ liệu dùng chung
 let cache: { key: string; v: UsageState } | null = null;
 const listeners = new Set<() => void>();
-// Gọi sau mỗi lượt chat / Synchro Code để vòng tròn cập nhật ngay.
-export const refreshUsage = () => { if (typeof window !== "undefined") window.dispatchEvent(new Event("synchro:usage")); };
+// Gọi sau mỗi lượt chat / Synchro Code để vòng tròn cập nhật ngay; fresh: đọc lại hạn mức của gói từ hãng ngay (nút Làm mới).
+export const refreshUsage = (fresh = false) => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("synchro:usage", { detail: { fresh } })); };
 
+/** provider: hãng / gói của model đang chọn; "*" = mọi hãng (chế độ Tự động, Cài đặt → Usage). */
 export function useUsage(provider?: string) {
   const key = provider ?? "";
   const [st, setSt] = useState<UsageState | null>(cache?.key === key ? cache.v : null);
   const [, tick] = useState(0);
-  const load = useCallback(() => {
-    fetch(`/api/usage${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  const load = useCallback((fresh = false) => {
+    const q = provider === "*" ? "?all=1" : provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    fetch(`/api/usage${q}${fresh ? `${q ? "&" : "?"}fresh=1` : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
       if (j?.limits) { cache = { key, v: j }; setSt(j); listeners.forEach((f) => f()); }
     }).catch(() => {});
   }, [provider, key]);
   useEffect(() => {
     load();
-    const on = () => load();
+    const on = (e: Event) => load(!!(e as CustomEvent).detail?.fresh);
     const vis = () => { if (!document.hidden) load(); };
     window.addEventListener("synchro:usage", on);
     document.addEventListener("visibilitychange", vis);
@@ -178,8 +185,43 @@ function useLimitAlerts(st: UsageState | null) {
 }
 
 // ---------------------------------------------------------------- vòng tròn cạnh bộ chọn model
+const L = (vi: string, e: string) => (en() ? e : vi);
+// Màu cố định theo hãng (bảng màu phân loại đã kiểm tra mù màu; màu đi theo hãng, không theo thứ hạng).
+export const VENDOR_COLOR: Record<VendorUsage["vendor"] | "other", string> = { anthropic: "var(--vc-claude)", openai: "var(--vc-gpt)", google: "var(--vc-gemini)", other: "var(--vc-other)" };
+const planName = (sub?: SubUsage) => (sub?.plan ? (en() ? `${sub.plan} plan` : `Gói ${sub.plan}`) : L("Gói subscription", "Subscription plan"));
+// Mức đã dùng của một hãng (cửa sổ gần chạm nhất của gói; với khóa API: hạn mức gọi / số dư).
+const vendorPct = (v: VendorUsage) => v.mode === "plan" ? Math.max(0, ...(v.sub?.windows ?? []).map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
+  : v.mode === "api" ? Math.max(0, v.rate?.pct ?? 0, v.credit?.pct ?? 0) : 0;
+const hasApi = (st: UsageState | null) => !!st?.vendors?.some((v) => v.mode === "api");
+
+/** Huy hiệu cách hãng đang chạy: gói đã đăng nhập, khóa API, hoặc chưa kết nối. */
+function ModeTag({ v }: { v: VendorUsage }) {
+  if (v.mode === "plan") return <span className="us-tag plan">{planName(v.sub)}</span>;
+  if (v.mode === "api") return <span className="us-tag api">{v.usingApiUntil ? L("Khóa API · gói tạm hết", "API key · plan paused") : L("Khóa API", "API key")}</span>;
+  return <span className="us-tag none">{L("Chưa kết nối", "Not connected")}</span>;
+}
+
+/** Một hãng trong vòng tròn của chế độ Tự động: tên, cách đang chạy, các thanh hạn mức. */
+function VendorBlock({ v }: { v: VendorUsage }) {
+  const wins = v.sub?.windows ?? [];
+  return (
+    <div className="us-v">
+      <div className="us-v-h"><i style={{ background: VENDOR_COLOR[v.vendor] }} /><b data-notr>{v.name}</b><ModeTag v={v} /></div>
+      {v.mode === "plan" ? (wins.length ? wins.filter((w) => w.kind !== "other").map((w) => <PlanRow key={w.window} w={w} />)
+        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.", "Antigravity is waiting for its first-run setup.") : v.cli === "agy" ? L("Synchro chưa đọc được hạn mức của gói này.", "Synchro could not read this plan's quota yet.") : L("Gửi một tin nhắn bằng gói này để xem hạn mức.", "Send a message with this plan to see its limits.")}</p>)
+        : <>
+          {v.rate && <RateRow r={v.rate} />}
+          {v.credit && <CreditBar c={v.credit} />}
+          {!v.rate && !v.credit && <p className="us-note">{L("Tính theo chi phí API thật, trong giới hạn chung bên dưới.", "Billed by real API cost, within the shared limits below.")}</p>}
+        </>}
+    </div>
+  );
+}
+
 export function UsageRing({ model, extra, onDetails, up = true }: { model?: string; extra?: React.ReactNode; onDetails?: () => void; up?: boolean }) {
-  const provider = model?.includes("/") ? model.split("/")[0] : undefined;
+  // Chế độ Tự động (hoặc chưa chọn model): Synchro có thể chạy bằng bất kỳ hãng nào nên hiện mọi hãng đã kết nối.
+  const auto = !model?.includes("/");
+  const provider = auto ? "*" : model!.split("/")[0];
   const st = useUsage(provider);
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -192,23 +234,34 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
   useLimitAlerts(st);
   const sub = st?.sub;
   const limited = st?.limits.filter((l) => l.limit !== null) ?? [];
+  const live = st?.vendors?.filter((v) => v.mode !== "none") ?? [];
   // Gói subscription: vòng tròn theo cửa sổ đang gần chạm nhất của gói. Khóa API: hạn mức chi phí của Synchro, hạn mức gọi và số dư đã nạp.
-  const pct = sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
+  // Tự động: hãng gần chạm giới hạn nhất (cùng hạn mức chi phí chung nếu có hãng chạy bằng khóa API).
+  const pct = auto ? Math.max(0, ...live.map(vendorPct), ...(hasApi(st) ? limited.map((l) => l.pct) : []))
+    : sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
     : Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0, st?.credit?.pct ?? 0);
   const r = 6.4, c = 2 * Math.PI * r;
-  const label = st ? `${en() ? "Usage" : "Mức dùng"}: ${Math.round(pct)}%` : en() ? "Usage" : "Mức dùng";
+  const label = st ? `${L("Mức dùng", "Usage")}: ${Math.round(pct)}%` : L("Mức dùng", "Usage");
+  const head = auto ? L("Mức dùng · Tự động chọn hãng", "Usage · Auto picks the provider")
+    : sub ? `${L("Giới hạn gói", "Plan limits")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${L("Giới hạn sử dụng", "Usage limits")} · ${L("Khóa API", "API key")}`;
   return (
     <div className="us-wrap">
       <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>
         <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" /></svg>
       </button>
       <Menu open={open} className={`us-pop ${up ? "up" : "down"}`}>
-        <div className="us-h"><span>{sub ? `${en() ? "Plan limits" : "Giới hạn gói"} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${en() ? "Usage limits" : "Giới hạn sử dụng"} · API`}</span><UsageIcon size={15} /></div>
-        {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : sub ? (
+        <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
+        {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
+          <>
+            {live.map((v) => <VendorBlock key={v.vendor} v={v} />)}
+            {hasApi(st) && limited.length > 0 && <div className="us-v"><div className="us-v-h"><b>{L("Giới hạn chung của khóa API", "Shared API key limits")}</b></div>{limited.map((l) => <LimitRow key={l.key} l={l} />)}</div>}
+            {!live.length && <p className="us-note">{L("Chưa kết nối hãng AI nào. Đăng nhập gói hoặc thêm khóa API ở Cài đặt → Providers.", "No AI provider is connected yet. Sign in to a plan or add an API key in Settings → Providers.")}</p>}
+          </>
+        ) : sub ? (
           <>
             {sub.windows.map((w) => <PlanRow key={w.window} w={w} />)}
-            {sub.setup && <p className="us-note">{en() ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini." : "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini."}</p>}
-            {!sub.windows.length && !sub.setup && <p className="us-note">{sub.cli === "agy" ? (en() ? "Synchro could not read the plan's quota yet." : "Synchro chưa đọc được hạn mức của gói.") : en() ? "Send a message with this plan to see its limits." : "Gửi một tin nhắn bằng gói này để xem hạn mức."}{sub.turnsToday ? ` ${en() ? `${sub.turnsToday} messages today.` : `Hôm nay: ${sub.turnsToday} tin nhắn.`}` : ""}</p>}
+            {sub.setup && <p className="us-note">{L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.", "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.")}</p>}
+            {!sub.windows.length && !sub.setup && <p className="us-note">{sub.cli === "agy" ? L("Synchro chưa đọc được hạn mức của gói.", "Synchro could not read the plan's quota yet.") : L("Gửi một tin nhắn bằng gói này để xem hạn mức.", "Send a message with this plan to see its limits.")}{sub.turnsToday ? ` ${L(`Hôm nay: ${sub.turnsToday} tin nhắn.`, `${sub.turnsToday} messages today.`)}` : ""}</p>}
             {sub.credits && <p className="us-note" data-notr>{sub.credits}</p>}
             <p className="us-note">{PLAN_NOTE[sub.cli][en() ? 1 : 0]}</p>
           </>
@@ -220,7 +273,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
           </>
         )}
         {extra}
-        {onDetails && <button className="us-more" onClick={() => { setOpen(false); onDetails(); }}>{en() ? "View usage details" : "Xem chi tiết mức dùng"}<I.ChevronR size={13} /></button>}
+        {onDetails && <button className="us-more" onClick={() => { setOpen(false); onDetails(); }}>{L("Xem chi tiết mức dùng", "View usage details")}<I.ChevronR size={13} /></button>}
       </Menu>
     </div>
   );
@@ -229,82 +282,189 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
 // ---------------------------------------------------------------- Cài đặt → Usage
 type Details = {
   byModel: { model: string; calls: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; price: { in: number; out: number; cache: number; src: string } }[];
+  byPlan: { model: string; cli: SubUsage["cli"]; name: string; turns: number; last: number }[];
   byFeature: { feature: string; calls: number; cost: number }[];
-  days: { day: number; cost: number; input: number; output: number }[];
+  days: { day: number; cost: number; input: number; output: number; calls: Partial<Record<VendorUsage["vendor"] | "other", number>> }[];
 };
-const FEATURE: Record<string, string> = { chat: "Chat", code: "Synchro Code", artifact: "AI-powered artifacts", internal: "Memory and titles", test: "API key tests" };
+const FEATURE: Record<string, [string, string]> = { chat: ["Chat", "Chat"], code: ["Synchro Code", "Synchro Code"], artifact: ["Artifact có AI", "AI-powered artifacts"], internal: ["Bộ nhớ và đặt tên đoạn chat", "Memory and chat titles"], test: ["Thử khóa API", "API key tests"] };
 // "anthropic/claude-sonnet-5-5" → "Claude Sonnet 5.5", "openai/gpt-6-astra" → "GPT-6 Astra", "google/gemini-3.8-flash" → "Gemini 3.8 Flash".
 const modelName = (k: string) => {
   const id = k.split("/").slice(1).join("/");
   if (id.startsWith("gpt-")) return "GPT-" + id.slice(4).split("-").map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
   return id.replace(/-(\d+)-(\d+)$/, " $1.$2").split("-").map((w) => (/^\d/.test(w) ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
 };
+const SUB_NAME: Record<SubUsage["cli"], string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini" };
+const vendorKey = (model: string) => { const v = vendorOf(model); return v === "other" ? "other" : v; };
+const SERIES: [VendorUsage["vendor"] | "other", string][] = [["anthropic", "Claude"], ["openai", "ChatGPT"], ["google", "Gemini"], ["other", "Khác"]];
+const CLI_VENDOR: Record<SubUsage["cli"], VendorUsage["vendor"]> = { claude: "anthropic", codex: "openai", agy: "google" };
+const num = (n: number) => n.toLocaleString(en() ? "en-US" : "vi-VN");
+
+/** Thẻ của một hãng trong Cài đặt → Usage: cách đang chạy, hạn mức của gói hoặc của khóa API, số lượt 30 ngày. */
+function VendorCard({ v, turns, cost, go }: { v: VendorUsage; turns: number; cost: number; go?: (t: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const wins = v.sub?.windows ?? [];
+  return (
+    <div className={`us-card us-vc ${v.mode}`}>
+      <div className="us-vc-h">
+        <span className="us-vc-logo" data-notr><BrandLogo id={v.vendor} size={18} /></span>
+        <div className="us-vc-t"><b data-notr>{v.name}</b><span>{v.mode === "plan" ? L("Chạy bằng gói bạn đã đăng nhập; hạn mức do hãng báo về.", "Runs on the plan you signed in to; limits come from the provider.")
+          : v.mode === "api" ? L("Chạy bằng khóa API; tính theo chi phí token thật.", "Runs on an API key; billed by real token cost.") : L("Chưa đăng nhập gói hay thêm khóa API.", "No plan sign-in or API key yet.")}</span></div>
+        <ModeTag v={v} />
+        {v.mode === "plan" && <button className="icon-btn" aria-label={L("Đọc lại hạn mức", "Reload limits")} data-tip={L("Đọc lại hạn mức", "Reload limits")} disabled={busy}
+          onClick={() => { setBusy(true); refreshUsage(true); setTimeout(() => setBusy(false), 2500); }}>{busy ? <span className="art-spin sm" /> : <I.Retry size={14} />}</button>}
+      </div>
+      {v.mode === "plan" && (wins.length ? wins.map((w) => <PlanRow key={w.window} w={w} />)
+        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (Cài đặt → Providers → Gemini).", "Antigravity is waiting for its first-run setup (Settings → Providers → Gemini).") : v.cli === "agy" ? L("Synchro chưa đọc được hạn mức của gói này. Bấm nút đọc lại ở góc thẻ để thử lại.", "Synchro could not read this plan's quota yet. Use the reload button on this card to try again.") : L("Gửi một tin nhắn bằng gói này để Synchro đọc hạn mức.", "Send a message with this plan so Synchro can read its limits.")}</p>)}
+      {v.mode === "api" && <>
+        {v.rate && <RateRow r={v.rate} />}
+        {v.credit && <CreditBar c={v.credit} />}
+        {v.usingApiUntil && <p className="us-note">{L(`Gói tạm hết hạn mức nên bạn đã chọn dùng khóa API tới ${new Date(v.usingApiUntil).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "numeric" })}; sau đó Synchro tự quay lại gói.`, `The plan hit its limit, so you chose the API key until ${new Date(v.usingApiUntil).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}; then Synchro switches back to the plan.`)}</p>}
+      </>}
+      {v.mode === "none" ? (
+        go && <button className="btn us-vc-go" onClick={() => go("Providers")}>{L("Kết nối ở Providers", "Connect in Providers")}<I.ChevronR size={13} /></button>
+      ) : (
+        <div className="us-vc-f">
+          {v.mode === "plan" && v.sub && <span>{L(`Hôm nay: ${num(v.sub.turnsToday)} tin nhắn`, `${num(v.sub.turnsToday)} messages today`)}</span>}
+          <span>{L(`30 ngày: ${num(turns)} lượt`, `30 days: ${num(turns)} calls`)}</span>
+          {v.mode === "api" && <span>{L(`Chi phí 30 ngày: ${money(cost)}`, `30-day cost: ${money(cost)}`)}</span>}
+        </div>
+      )}
+      {v.mode === "plan" && v.sub && <p className="us-note">{PLAN_NOTE[v.sub.cli][en() ? 1 : 0]}</p>}
+    </div>
+  );
+}
+
+/** Lượt dùng model mỗi ngày, chồng theo hãng (gói lẫn khóa API), có chú thích và bảng chi tiết khi rê chuột. */
+function DailyChart({ d, cost }: { d: Details | null; cost: boolean }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const days: Details["days"] = d?.days ?? Array.from({ length: 30 }, () => ({ day: 0, cost: 0, input: 0, output: 0, calls: {} }));
+  const tot = (x: Details["days"][number]) => SERIES.reduce((a, [k]) => a + (x.calls[k] ?? 0), 0);
+  const max = Math.max(1, ...days.map(tot));
+  const used = SERIES.filter(([k]) => days.some((x) => x.calls[k]));
+  const h = hover !== null && d ? d.days[hover] : null;
+  const fmtDay = (t: number) => new Date(t).toLocaleDateString(en() ? "en-US" : "vi-VN", { day: "numeric", month: "short" });
+  return (
+    <div className="us-card us-chart" onMouseLeave={() => setHover(null)}>
+      <div className="us-chart-h">
+        <b>{L("Lượt dùng model mỗi ngày", "Model calls per day")}</b>
+        <span>{h ? <>{fmtDay(h.day)} · {SERIES.filter(([k]) => h.calls[k]).map(([k, n]) => `${k === "other" ? L("Khác", "Other") : n} ${h.calls[k]}`).join(" · ") || L("không có lượt nào", "no calls")}{cost && h.cost ? ` · ${money(h.cost)}` : ""}</> : L("Rê chuột vào một ngày để xem chi tiết", "Hover a day for details")}</span>
+      </div>
+      <div className="us-cols" role="img" aria-label={L("Biểu đồ lượt dùng model 30 ngày qua theo hãng", "Model calls over the last 30 days by provider")}>
+        {days.map((x, i) => {
+          const t = tot(x);
+          return (
+            <div key={i} className={`us-col ${hover === i ? "on" : ""}`} onMouseEnter={() => setHover(i)}>
+              <div className="us-stack" style={{ height: `${t ? Math.max(4, (t / max) * 100) : 0}%` }}>
+                {SERIES.filter(([k]) => x.calls[k]).map(([k]) => <i key={k} style={{ flexGrow: x.calls[k], background: VENDOR_COLOR[k] }} />)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="us-axis"><span>{L("30 ngày trước", "30 days ago")}</span><span>{L("Hôm nay", "Today")}</span></div>
+      {used.length > 0 && <div className="us-legend">{used.map(([k, n]) => <span key={k}><i style={{ background: VENDOR_COLOR[k] }} />{k === "other" ? L("Khác", "Other") : n} <em>{num(days.reduce((a, x) => a + (x.calls[k] ?? 0), 0))}</em></span>)}</div>}
+    </div>
+  );
+}
 
 export function UsageSettings({ go }: { go?: (t: string) => void }) {
-  const st = useUsage();
+  const st = useUsage("*");
   const [d, setD] = useState<Details | null>(null);
-  const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     const load = () => fetch(`/api/usage/details?tz=${new Date().getTimezoneOffset()}`, { cache: "no-store" }).then((r) => r.json()).then(setD).catch(() => {});
     load();
     window.addEventListener("synchro:usage", load);
     return () => window.removeEventListener("synchro:usage", load);
   }, []);
+  const vendors = st?.vendors ?? [];
+  const callsOf = (v: VendorUsage["vendor"]) => d?.days.reduce((a, x) => a + (x.calls[v] ?? 0), 0) ?? 0;
+  const costOf = (v: VendorUsage) => d?.byModel.filter((m) => m.model.split("/")[0] === v.provider).reduce((a, m) => a + m.cost, 0) ?? 0;
   const total = d?.days.reduce((a, x) => a + x.cost, 0) ?? 0;
+  const calls = d?.days.reduce((a, x) => a + Object.values(x.calls).reduce((b, n) => b + (n ?? 0), 0), 0) ?? 0;
+  const planTurns = d?.byPlan.reduce((a, m) => a + m.turns, 0) ?? 0;
   const tokIn = d?.byModel.reduce((a, m) => a + m.input + m.cacheRead + m.cacheWrite, 0) ?? 0;
   const tokOut = d?.byModel.reduce((a, m) => a + m.output, 0) ?? 0;
-  const cached = d?.byModel.reduce((a, m) => a + m.cacheRead, 0) ?? 0;
-  const max = Math.max(...(d?.days.map((x) => x.cost) ?? [0]), 0.0001);
-  const top = d?.byModel[0]?.cost || 1;
+  const top = Math.max(d?.byModel[0]?.cost || 0, 0.0001);
+  const topTurns = Math.max(1, ...(d?.byPlan.map((m) => m.turns) ?? [1]));
+  // Hiện theo đúng cách từng hãng đang kết nối: có hãng chạy bằng gói thì có phần của gói, có hãng chạy bằng khóa API thì mới có
+  // hạn mức chi phí, chi phí và token của khóa API. Chi phí khóa API từ trước (nay đã chuyển sang gói) thu gọn ở cuối danh sách model.
+  const planNow = vendors.some((v) => v.mode === "plan"), apiNow = hasApi(st);
+  const [oldApi, setOldApi] = useState(false);
+  const today = vendors.reduce((a, v) => a + (v.mode === "plan" ? v.sub?.turnsToday ?? 0 : 0), 0);
+  const stats: [string, string][] = [[num(calls), L("Lượt dùng model", "Model calls")]];
+  if (planNow) stats.push([num(planTurns), L("Qua gói subscription", "On subscription plans")], [num(today), L("Tin nhắn hôm nay qua gói", "Plan messages today")]);
+  if (apiNow) stats.push([money(total), L("Chi phí khóa API", "API key cost")], [kTok(tokIn + tokOut), L("Token qua khóa API", "API key tokens")]);
+  const apiRows = (d?.byModel ?? []).map((m) => {
+    const vc = VENDOR_COLOR[vendorKey(m.model)];
+    return (
+      <div key={m.model} className="us-li">
+        <div className="us-li-t"><b data-notr><i className="us-dot" style={{ background: vc }} />{modelName(m.model)}</b><span>{L(`Khóa API · ${num(m.calls)} lần gọi · vào ${kTok(m.input + m.cacheRead + m.cacheWrite)} · ra ${kTok(m.output)} · $${m.price.in} / $${m.price.out} mỗi 1 triệu token${m.price.src === "estimate" ? " (giá ước tính)" : ""}`, `API key · ${num(m.calls)} calls · ${kTok(m.input + m.cacheRead + m.cacheWrite)} in · ${kTok(m.output)} out · $${m.price.in} / $${m.price.out} per 1M tokens${m.price.src === "estimate" ? " (estimated price)" : ""}`)}</span></div>
+        <em>{money(m.cost)}</em>
+        <div className="us-li-bar"><i style={{ width: `${(m.cost / top) * 100}%`, background: vc }} /></div>
+      </div>
+    );
+  });
+  const lead = !st ? "" : planNow && apiNow ? L("Hãng chạy bằng gói hiện hạn mức của gói (phiên 5 giờ, hằng tuần); hãng chạy bằng khóa API hiện chi phí và hạn mức của khóa.", "Providers on a plan show the plan's limits (5-hour session, weekly); providers on an API key show the key's cost and limits.")
+    : planNow ? L("Các hãng đang chạy bằng gói subscription bạn đã đăng nhập, nên mức dùng hiện theo hạn mức của gói (phiên 5 giờ, hằng tuần) do hãng báo về.", "Your providers run on the subscription plans you signed in to, so usage follows each plan's limits (5-hour session, weekly) as the provider reports them.")
+    : apiNow ? L("Các hãng đang chạy bằng khóa API, nên mức dùng tính theo chi phí token thật và hạn mức chi phí của Synchro.", "Your providers run on API keys, so usage is measured in real token cost against Synchro's cost limits.")
+    : L("Chưa có hãng nào được kết nối.", "No provider is connected yet.");
   return (
-    <>
-      <h3 style={{ marginTop: 0 }}>Usage limits</h3>
-      <p className="d" style={{ margin: "-4px 0 14px" }}>Synchro uses AI models through their APIs, so usage is measured in real API cost: the tokens each model reads and writes, at that model&apos;s price.</p>
-      <div className="us-card">
-        {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : st.limits.map((l) => (
-          <div key={l.key} className="us-big">
-            <div className="us-big-t"><b>{l.key === "session" ? "Current session" : "Weekly · all models"}</b><span>{l.key === "session" ? "Starts with your first message and lasts 5 hours." : "Resets at the same time every week."}</span></div>
-            <div className="us-big-v">{l.limit === null ? <><b>{money(l.used)}</b><span>No limit</span></> : <><b>{Math.round(l.pct)}%</b><span>{money(l.used)} of {money(l.limit)}</span></>}</div>
-            <Bar pct={l.pct} unlimited={l.limit === null} />
-            <div className="us-big-r">{resetText(l.resetAt, l.active)}</div>
-          </div>
-        ))}
-      </div>
-      {st?.rate && <div className="us-card"><RateRow r={st.rate} /><p className="d" style={{ margin: "8px 0 0" }}>Rate limit reported by the provider for the whole Synchro server. When it runs out, replies wait until it resets.</p></div>}
+    <div className="us-page">
+      <h3 style={{ marginTop: 0 }}>{L("Mức dùng", "Usage")}</h3>
+      <p className="d" style={{ margin: "-4px 0 14px" }}>{L("Synchro tự nhận ra mỗi hãng đang chạy bằng gói subscription hay khóa API và hiện mức dùng theo đúng cách đó.", "Synchro detects whether each provider runs on a subscription plan or an API key and shows usage the matching way.")} {lead}</p>
+      {!st ? <div className="us-card"><div className="us-empty"><span className="art-spin sm" /></div></div>
+        : <div className="us-vgrid">{vendors.map((v) => <VendorCard key={v.vendor} v={v} turns={callsOf(v.vendor)} cost={costOf(v)} go={go} />)}</div>}
 
-      <h3 className="sec">Last 30 days</h3>
-      <div className="us-stats">
-        <div><b>{money(total)}</b><span>API cost</span></div>
-        <div><b>{kTok(tokIn)}</b><span>Input tokens</span></div>
-        <div><b>{kTok(tokOut)}</b><span>Output tokens</span></div>
-        <div><b>{tokIn ? Math.round((cached / tokIn) * 100) : 0}%</b><span>Read from cache</span></div>
-      </div>
-      <div className="us-card us-chart" onMouseLeave={() => setHover(null)}>
-        <div className="us-chart-h"><b>Daily cost</b><span>{hover !== null && d ? `${new Date(d.days[hover].day).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })} · ${money(d.days[hover].cost)} · ${kTok(d.days[hover].input + d.days[hover].output)} token` : "Hover a day for details"}</span></div>
-        <div className="us-cols">{(d?.days ?? Array.from({ length: 30 }, () => ({ cost: 0 }))).map((x, i) => <div key={i} className={`us-col ${hover === i ? "on" : ""}`} onMouseEnter={() => setHover(i)}><i style={{ height: `${x.cost ? Math.max(4, (x.cost / max) * 100) : 0}%` }} /></div>)}</div>
-        <div className="us-axis"><span>30 days ago</span><span>Today</span></div>
-      </div>
-
-      <h3 className="sec">By model</h3>
-      {!d?.byModel.length ? <p className="d">No usage yet. Start a chat and it shows up here.</p> : (
-        <div className="us-card us-list">
-          {d.byModel.map((m) => (
-            <div key={m.model} className="us-li">
-              <div className="us-li-t"><b data-notr>{modelName(m.model)}</b><span>{en() ? `${m.calls.toLocaleString()} calls · ${kTok(m.input + m.cacheRead + m.cacheWrite)} in · ${kTok(m.output)} out · $${m.price.in} / $${m.price.out} per 1M tokens${m.price.src === "estimate" ? " (estimated price)" : ""}` : `${m.calls.toLocaleString("vi-VN")} lần gọi · vào ${kTok(m.input + m.cacheRead + m.cacheWrite)} · ra ${kTok(m.output)} · $${m.price.in} / $${m.price.out} mỗi 1 triệu token${m.price.src === "estimate" ? " (giá ước tính)" : ""}`}</span></div>
-              <em>{money(m.cost)}</em>
-              <div className="us-li-bar"><i style={{ width: `${(m.cost / top) * 100}%` }} /></div>
-            </div>
-          ))}
-        </div>
-      )}
-      {!!d?.byFeature.length && (
+      {st && apiNow && (
         <>
-          <h3 className="sec">By feature</h3>
-          <div className="us-card us-list">{d.byFeature.map((f) => <div key={f.feature} className="us-li"><div className="us-li-t"><b>{FEATURE[f.feature] ?? f.feature}</b><span>{en() ? `${f.calls.toLocaleString()} calls` : `${f.calls.toLocaleString("vi-VN")} lần gọi`}</span></div><em>{money(f.cost)}</em></div>)}</div>
+          <h3 className="sec">{L("Giới hạn chi phí khóa API", "API key cost limits")}</h3>
+          <div className="us-card">
+            {st.limits.map((l) => (
+              <div key={l.key} className="us-big">
+                <div className="us-big-t"><b>{l.key === "session" ? L("Phiên hiện tại", "Current session") : L("Hằng tuần · mọi model", "Weekly · all models")}</b><span>{l.key === "session" ? L("Bắt đầu từ tin nhắn đầu tiên, kéo dài 5 giờ. Chỉ tính các lượt chạy bằng khóa API.", "Starts with your first message and lasts 5 hours. Only API key calls count.") : L("Đặt lại vào cùng giờ mỗi tuần.", "Resets at the same time every week.")}</span></div>
+                <div className="us-big-v">{l.limit === null ? <><b>{money(l.used)}</b><span>{L("Không giới hạn", "No limit")}</span></> : <><b>{Math.round(l.pct)}%</b><span>{L(`${money(l.used)} trên ${money(l.limit)}`, `${money(l.used)} of ${money(l.limit)}`)}</span></>}</div>
+                <Bar pct={l.pct} unlimited={l.limit === null} />
+                <div className="us-big-r">{resetText(l.resetAt, l.active)}</div>
+              </div>
+            ))}
+          </div>
         </>
       )}
-      <p className="d" style={{ marginTop: 16 }}>Cost is estimated from each provider&apos;s list price, including cache reads and writes. Your provider&apos;s invoice is the final amount.{st?.admin && go && <> Administrators can change limits and prices in <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")}>Administrator → Usage limits</a>.</>}</p>
-    </>
+
+      <h3 className="sec">{L("30 ngày qua", "Last 30 days")}</h3>
+      <div className="us-stats" style={{ "--n": Math.min(stats.length, 4) } as React.CSSProperties}>{stats.slice(0, 4).map(([v, t]) => <div key={t}><b>{v}</b><span>{t}</span></div>)}</div>
+      <DailyChart d={d} cost={apiNow} />
+
+      <h3 className="sec">{L("Theo model", "By model")}</h3>
+      {!d ? null : !d.byPlan.length && !(apiNow && d.byModel.length) ? <p className="d">{L("Chưa có lượt dùng nào. Bắt đầu một đoạn chat là số liệu hiện ở đây.", "No usage yet. Start a chat and it shows up here.")}</p> : (
+        <div className="us-card us-list">
+          {d.byPlan.map((m) => (
+            <div key={m.model} className="us-li">
+              <div className="us-li-t"><b data-notr><i className="us-dot" style={{ background: VENDOR_COLOR[CLI_VENDOR[m.cli]] }} />{m.model.endsWith("/") ? L(`${m.name} (lượt cũ, chưa ghi tên model)`, `${m.name} (earlier calls, model not recorded)`) : m.name}</b><span>{L(`Gói ${SUB_NAME[m.cli]} · ${num(m.turns)} lượt`, `${SUB_NAME[m.cli]} plan · ${num(m.turns)} calls`)}</span></div>
+              <em className="us-incl">{L("Trong gói", "Included")}</em>
+              <div className="us-li-bar"><i style={{ width: `${(m.turns / topTurns) * 100}%`, background: VENDOR_COLOR[CLI_VENDOR[m.cli]] }} /></div>
+            </div>
+          ))}
+          {apiNow && apiRows}
+        </div>
+      )}
+      {!apiNow && !!d?.byModel.length && (
+        <div className="us-old">
+          <button className="us-old-b" aria-expanded={oldApi} onClick={() => setOldApi(!oldApi)}>{L(`Khóa API dùng trước đây: ${num(d.byModel.reduce((a, m) => a + m.calls, 0))} lần gọi · ${money(total)}`, `Earlier API key use: ${num(d.byModel.reduce((a, m) => a + m.calls, 0))} calls · ${money(total)}`)}<I.Chevron size={12} /></button>
+          {oldApi && <div className="us-card us-list">{apiRows}</div>}
+        </div>
+      )}
+      {apiNow && !!d?.byFeature.length && (
+        <>
+          <h3 className="sec">{L("Khóa API theo tính năng", "API key cost by feature")}</h3>
+          <div className="us-card us-list">{d.byFeature.map((f) => <div key={f.feature} className="us-li"><div className="us-li-t"><b>{FEATURE[f.feature]?.[en() ? 1 : 0] ?? f.feature}</b><span>{L(`${num(f.calls)} lần gọi`, `${num(f.calls)} calls`)}</span></div><em>{money(f.cost)}</em></div>)}</div>
+        </>
+      )}
+      <p className="d" style={{ marginTop: 16 }}>
+        {planNow && L("Gói subscription tính theo hạn mức hãng báo về; hãng không báo số token của gói nên Synchro đếm theo lượt. ", "Plans follow the limits each provider reports; providers don't report plan tokens, so Synchro counts calls. ")}
+        {apiNow && L("Khóa API tính theo giá niêm yết của từng hãng, gồm cả đọc và ghi cache; hóa đơn của hãng là số cuối cùng.", "API keys are billed at each provider's list price, including cache reads and writes; the provider's invoice is final.")}
+        {st?.admin && go && apiNow && <> {L("Quản trị viên đổi hạn mức và bảng giá ở", "Administrators can change limits and prices in")} <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")}>{L("Quản trị → Hạn mức sử dụng", "Administrator → Usage limits")}</a>.</>}</p>
+    </div>
   );
 }
 

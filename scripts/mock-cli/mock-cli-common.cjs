@@ -32,7 +32,17 @@ function bumpUsage(dir) {
   writeJson(f, u);
   return { five: Math.min(1, u.n * 0.07), week: Math.min(1, u.n * 0.02), fiveReset: u.five, weekReset: u.week };
 }
+/** Lời gọi đặt tên đoạn chat (app/api/title): tên ngắn từ tin đầu của người dùng, như model thật. */
+function mockTitle(prompt) {
+  const m = /\[Người dùng\]\n([^\n]+)/.exec(prompt);
+  const first = (m?.[1] ?? "").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  if (!first || /^(xin )?ch[àa]o|^(hi|hello|hey)\b/i.test(first) && first.split(" ").length <= 3) return /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(first) || !first ? "Lời chào" : "Greeting";
+  const w = first.replace(/^(cho (tôi|mình|em) hỏi|giúp (tôi|mình|em)|làm ơn|hãy|please|can you|could you)\s+/i, "").split(" ").slice(0, 6).join(" ");
+  return w[0].toUpperCase() + w.slice(1);
+}
+const isTitleAsk = (prompt) => prompt.includes("Đoạn chat cần đặt tên:");
 function reply(name, prompt, turn) {
+  if (isTitleAsk(prompt)) return mockTitle(prompt);
   const last = prompt.trim().split("\n").filter(Boolean).pop() ?? "";
   return `Chào bạn! Mình là ${name} chạy qua CLI giả lập (lượt ${turn} của hội thoại). Bạn vừa nói: "${last.slice(0, 120)}".`;
 }
@@ -63,4 +73,4 @@ function toolAsk(prompt) {
   return { name: m[1], args };
 }
 
-module.exports = { mcp, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { mcp, isTitleAsk, mockTitle, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

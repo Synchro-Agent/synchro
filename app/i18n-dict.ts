@@ -2,6 +2,7 @@ import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
+  "Đặt tên tự động": "Name automatically", "Chưa đặt được tên tự động. Thử lại sau.": "Couldn't name the chat automatically. Try again later.",
   // Synchro Code: workspace, agent, GitHub
   "Phiên code mới": "New code session",
   "Phiên mới": "New session",
