@@ -365,7 +365,7 @@ async function handler(req, res) {
   const u = new URL(req.url, "http://x");
   const p = u.pathname;
   const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
-  const b = req.method === "POST" ? await readBody(req) : {};
+  const b = req.method === "POST" || req.method === "PATCH" ? await readBody(req) : {};
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : null;
 

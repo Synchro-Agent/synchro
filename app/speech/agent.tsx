@@ -8,16 +8,17 @@ import { usePref } from "../store";
 import { startRealtime, type RtHandlers, type RtPhase } from "../realtime";
 import { startCascade } from "../voicecall";
 import { PearlOrb } from "../pearlorb";
-import { AGENT_MODELS } from "./data";
-import { LANGS, ago, api, del, fmtDur, post, useItems, type Item, type Voice } from "./client";
+import { tr } from "../i18n";
+import { AGENT_MODELS, AGENT_TEMPLATES } from "./data";
+import { LANGS, ago, api, del, fmtDur, post, useItems, usePlan, type Item, type Voice } from "./client";
 import { Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";
-import { ToolHead, type ToolProps } from "./view";
+import { Head, Split } from "./shell";
+import type { ToolProps } from "./view";
 
 // langSet: người dùng tự chọn ngôn ngữ cố định (bản trước lưu sẵn "vi"; chưa tự chọn thì dùng Tự nhận diện).
 type Cfg = { name: string; model: string; first: string; prompt: string; lang: string; langSet?: boolean; voiceId: string; voiceName: string; interrupt: boolean; eager: number; maxMin: number };
 const CFG0: Cfg = {
-  name: "Trợ lý Synchro", model: AGENT_MODELS[0].id, first: "Xin chào! Mình là trợ lý của Synchro. Mình có thể giúp gì cho bạn hôm nay?",
-  prompt: "Bạn là trợ lý thân thiện của Synchro. Trả lời ngắn gọn, tự nhiên như người thật, hỏi lại khi chưa rõ.", lang: "", voiceId: "", voiceName: "", interrupt: true, eager: 50, maxMin: 10,
+  name: AGENT_TEMPLATES[0].name, model: AGENT_MODELS[0].id, first: AGENT_TEMPLATES[0].first, prompt: AGENT_TEMPLATES[0].prompt, lang: "", voiceId: "", voiceName: "", interrupt: true, eager: 50, maxMin: 10,
 };
 type Line = { who: "ai" | "me"; text: string };
 type Conn = { close: () => void; sync?: () => void };
@@ -90,42 +91,17 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
   const model = AGENT_MODELS.find((x) => x.id === c.model) ?? AGENT_MODELS[0];
   const voiceObj = { id: voiceId || "default" };
 
+  const rt = !!usePlan()?.realtime;
+  const tpl = AGENT_TEMPLATES.find((t) => (t.prompt === c.prompt || tr(t.prompt) === c.prompt) && (t.first === c.first || tr(t.first) === c.first))?.label;
   return (
-    <div className="sp-split">
-      <div className="sp-main">
-        <ToolHead title="Voice Agent" desc="Agent giọng nói trò chuyện hai chiều thời gian thực: tự nhận lượt nói, cho phép ngắt lời. Tốn phút trò chuyện của gói ElevenLabs." />
-        <div className={`sp-call ${phase === "speak" ? "speak" : live ? "listen" : "idle"}`}>
-          <div className="sp-agent-orb"><PearlOrb level={level} active={live} /></div>
-          <b className="sp-call-n" data-notr>{c.name}</b>
-          <span className="sp-muted">{!live ? `${model.name} · giọng ${voiceName} · ${LANGS.find((x) => x[0] === c.lang)?.[1] ?? c.lang}` : phase === "connecting" ? "Đang kết nối…" : `${phase === "speak" ? "Đang nói" : phase === "think" ? "Đang nghĩ" : "Đang nghe"} · ${fmtDur(sec)}`}</span>
-          <div className="sp-call-a">
-            {!live ? (
-              <button className="btn dark sp-go" onClick={start}><I.Mic size={15} />Gọi thử</button>
-            ) : (
-              <>
-                <button className={`sp-round ${muted ? "on" : ""}`} aria-pressed={muted} aria-label={muted ? "Bật micro" : "Tắt micro"} onClick={() => setMuted(!muted)}><I.Mic size={18} /></button>
-                <button className="sp-round end" aria-label="Kết thúc" onClick={() => void end()}><I.X size={18} /></button>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="sp-ctrans" ref={scroll} aria-live="polite">
-          {!lines.length && !caption && !heard && <div className="sp-empty">Bấm “Gọi thử” để nói chuyện với agent bằng micro. Lời thoại sẽ hiện ở đây.</div>}
-          {lines.map((l, i) => <div key={i} className={`sp-bub ${l.who}`}>{l.who === "ai" && <VoiceAvatar v={voiceObj} size={20} />}<p data-notr>{l.text}</p></div>)}
-          {heard && <div className="sp-bub me partial"><p data-notr>{heard}</p></div>}
-          {caption && <div className="sp-bub ai partial"><VoiceAvatar v={voiceObj} size={20} playing /><p data-notr>{caption}</p></div>}
-        </div>
-      </div>
-
-      <aside className="sp-aside wide">
-        <div className="sp-atabs" role="tablist" aria-label="Cấu hình agent">
-          {([["agent", "Agent"], ["hist", "Lịch sử"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}
-        </div>
-        <div className="sp-aside-in">
+    <Split head={<Head tool="agent" />} tab={tab} setTab={setSub} wide
+      tabs={[{ k: "agent", label: "Agent", icon: <I.Sliders size={14} /> }, { k: "hist", label: "Lịch sử", icon: <I.History size={14} /> }]}
+      side={<>
           {tab === "agent" ? (
             <>
               <Field label="Tên agent" htmlFor="ag-name"><input id="ag-name" className="sp-input" value={c.name} onChange={(e) => set({ name: e.target.value })} disabled={live} /></Field>
-              <Field label="Model"><ModelPick models={AGENT_MODELS} value={c.model} onChange={(model) => set({ model })} /></Field>
+              {rt ? <Field label="Model"><ModelPick models={AGENT_MODELS} value={c.model} onChange={(model) => set({ model })} /></Field>
+                : <p className="sp-hint">Khóa ElevenLabs chưa có quyền Eleven Realtime, nên agent chạy nối tiếp: Scribe nghe bạn nói, model chat của Synchro trả lời, giọng ElevenLabs đọc lên.</p>}
               <Field label="Giọng"><button className="sp-vbig" onClick={() => setPick(true)} disabled={live}><VoiceAvatar v={voiceObj} size={30} /><span><b data-notr>{voiceName}</b><small>Giọng trong tài khoản ElevenLabs</small></span><I.Chevron size={14} /></button></Field>
               <Select id="ag-lang" label="Ngôn ngữ" value={c.lang} options={LANGS} onChange={(lang) => set({ lang, langSet: true })} />
               <Field label="Lời chào đầu" hint="Để trống thì agent chờ bạn nói trước" htmlFor="ag-first"><textarea id="ag-first" className="sp-input ta" rows={2} value={c.first} onChange={(e) => set({ first: e.target.value })} /></Field>
@@ -155,9 +131,35 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
               ))}
             </>
           )}
+      </>}>
+      {!live && (
+        <div className="sp-tpls" aria-label="Mẫu agent">
+          <span>Chọn mẫu</span>
+          {AGENT_TEMPLATES.map((t) => <button key={t.label} className={`sp-tag ${tpl === t.label ? "on" : ""}`} onClick={() => set({ name: tr(t.name), first: tr(t.first), prompt: tr(t.prompt) })}>{t.label}</button>)}
         </div>
-      </aside>
+      )}
+        <div className={`sp-call ${phase === "speak" ? "speak" : live ? "listen" : "idle"}`}>
+          <div className="sp-agent-orb"><PearlOrb level={level} active={live} /></div>
+          <b className="sp-call-n" data-notr>{c.name}</b>
+          <span className="sp-muted">{!live ? `${rt ? model.name : "Scribe + Synchro + ElevenLabs"} · giọng ${voiceName} · ${LANGS.find((x) => x[0] === c.lang)?.[1] ?? c.lang}` : phase === "connecting" ? "Đang kết nối…" : `${phase === "speak" ? "Đang nói" : phase === "think" ? "Đang nghĩ" : "Đang nghe"} · ${fmtDur(sec)}`}</span>
+          <div className="sp-call-a">
+            {!live ? (
+              <button className="btn dark sp-go" onClick={start}><I.Mic size={15} />Gọi thử</button>
+            ) : (
+              <>
+                <button className={`sp-round ${muted ? "on" : ""}`} aria-pressed={muted} aria-label={muted ? "Bật micro" : "Tắt micro"} onClick={() => setMuted(!muted)}><I.Mic size={18} /></button>
+                <button className="sp-round end" aria-label="Kết thúc" onClick={() => void end()}><I.X size={18} /></button>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="sp-ctrans" ref={scroll} aria-live="polite">
+          {!lines.length && !caption && !heard && <div className="sp-empty">Bấm “Gọi thử” để nói chuyện với agent bằng micro. Lời thoại sẽ hiện ở đây.</div>}
+          {lines.map((l, i) => <div key={i} className={`sp-bub ${l.who}`}>{l.who === "ai" && <VoiceAvatar v={voiceObj} size={20} />}<p data-notr>{l.text}</p></div>)}
+          {heard && <div className="sp-bub me partial"><p data-notr>{heard}</p></div>}
+          {caption && <div className="sp-bub ai partial"><VoiceAvatar v={voiceObj} size={20} playing /><p data-notr>{caption}</p></div>}
+        </div>
       {pick && <VoicePicker value={voiceId} onPick={(v: Voice) => set({ voiceId: v.id, voiceName: v.name })} onClose={() => setPick(false)} say={say} />}
-    </div>
+    </Split>
   );
 }

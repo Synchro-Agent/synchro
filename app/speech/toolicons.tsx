@@ -1,6 +1,7 @@
 // Bộ icon riêng của Speech: lưới 24px, nét mảnh 1.25, đầu tròn. Các nhóm <g className="ti-*"> có chuyển động khi rê chuột
 // (định nghĩa trong globals.css), dùng chung cho trang chính, tab trên điện thoại và mục con ở thanh bên.
 import React from "react";
+import type { SpeechTool } from "./data";
 
 type P = { size?: number };
 const S = ({ size = 20, children }: P & { children: React.ReactNode }) => (
@@ -33,3 +34,16 @@ export const Audiobook = (p: P) => <S {...p}><path d="M12 9.5c-2-1.4-4.6-1.8-8-1
 export const Podcast = (p: P) => <S {...p}><rect x="8.5" y="2.8" width="7" height="11" rx="3.5" /><path d="M8.5 7h2.2M8.5 9.6h2.2M13.3 7h2.2M13.3 9.6h2.2M5.5 11.5a6.5 6.5 0 0013 0M12 18v3M9 21h6" /><g className="ti-w2"><path d="M20.6 6.2a4 4 0 010 4.6M3.4 6.2a4 4 0 000 4.6" /></g></S>;
 // Trang chính của Speech: lưới ô.
 export const Home = (p: P) => <S {...p}><rect x="3.5" y="3.5" width="7" height="7" rx="2" /><rect x="13.5" y="3.5" width="7" height="7" rx="2" /><rect x="3.5" y="13.5" width="7" height="7" rx="2" /><g className="ti-spin"><rect x="13.5" y="13.5" width="7" height="7" rx="3.5" /></g></S>;
+// Nhạc: hai nốt nhạc nối nhau.
+export const Music = (p: P) => <S {...p}><path d="M9 17.5V5.5l11-2.2v11.9" /><circle cx="6.5" cy="17.5" r="2.5" /><g className="ti-w1"><circle cx="17.5" cy="15.2" r="2.5" /></g><path d="M9 9.2l11-2.2" /></S>;
+// Từ điển phát âm: sách mở có chữ Aa.
+export const Dictionary = (p: P) => <S {...p}><path d="M4 4.5h11a3 3 0 013 3v12H7a3 3 0 01-3-3z" /><path d="M4 16.5a3 3 0 013-3h11" /><g className="ti-spark"><path d="M8 11l1.8-4.6L11.6 11M8.6 9.5h2.4M13 9.6a1.3 1.3 0 102.6 0v-1.3M15.6 11V8.3" /></g></S>;
+// Audio Native: khung trang web có nút phát.
+export const AudioNative = (p: P) => <S {...p}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 8h18" /><circle cx="5.6" cy="6" r=".4" /><circle cx="7.4" cy="6" r=".4" /><g className="ti-w1"><path d="M10.5 11.3v5.4l4.4-2.7z" /></g></S>;
+// Giọng nói (thư viện): ba quả cầu xếp chồng.
+export const Voices = (p: P) => <S {...p}><circle cx="8" cy="14" r="5" /><g className="ti-ghost"><circle cx="15.5" cy="9.5" r="4.5" /></g><g className="ti-w2"><path d="M6 14h.01M8 12.5v3M10 13.3v1.4" /></g></S>;
+
+export const TOOL_ICON: Record<SpeechTool, (p: P) => React.ReactNode> = {
+  home: Home, tts: TextToSpeech, changer: VoiceChanger, agent: Agent, voices: Voices, create: VoiceClone, stt: SpeechToText, dub: Dubbing,
+  music: Music, sfx: SoundEffects, isolate: Isolator, dict: Dictionary, native: AudioNative, studio: Audiobook,
+};

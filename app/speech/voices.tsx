@@ -1,16 +1,17 @@
 "use client";
-// Giọng nói: giọng của tài khoản ElevenLabs, thư viện cộng đồng, và trang Tạo giọng (thiết kế, remix, nhân bản nhanh, nhân bản chuyên sâu).
+// Giọng nói (giọng của tài khoản ElevenLabs, thư viện cộng đồng) và Tạo giọng (thiết kế, remix, nhân bản nhanh, nhân bản chuyên sâu).
 // Nhân bản chỉ hiện khi gói cho phép (cờ của chính gói ElevenLabs); thư viện ở gói Free chỉ có giọng cho phép người dùng miễn phí.
 import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
 import { CAT_LABEL, LANGS, api, del, fmtNum, hueOf, on, post, postForm, reloadVoices, useMyVoices, usePlan, type Voice } from "./client";
-import { AGES, GENDERS } from "./data";
+import { getLang, tr } from "../i18n";
+import { AGES, DESIGN_PRESETS, GENDERS, REMIX_IDEAS } from "./data";
 import { Drop, ErrBox, Field, OrbStage, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker, voiceLine } from "./parts";
-import { ToolHead, type ToolProps } from "./view";
+import { Head, Wide } from "./shell";
+import type { ToolProps } from "./view";
 
 type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 type Prev = { id: string; audio: string; dur: number };
-const DESIGN_EX = ["Nữ miền Nam, ngoài 20 tuổi, giọng ngọt, nói nhanh, hợp video mạng xã hội", "Ông lão miền Trung trầm ấm, kể chuyện cổ tích chậm rãi", "Nam phát thanh viên Hà Nội, rõ ràng, chuẩn mực, hơi nghiêm"];
 
 function Back({ onClick, label }: { onClick: () => void; label: string }) {
   return <button className="sp-back" onClick={onClick}><I.Back size={15} />{label}</button>;
@@ -29,16 +30,19 @@ function Previews({ list, onSave, busy }: { list: Prev[]; onSave: (p: Prev, i: n
   );
 }
 
-export function VoicesTool({ say, sub, setSub, go, setVoice, admin }: ToolProps) {
+export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area }: ToolProps & { area: "voices" | "create" }) {
   const plan = usePlan();
   const mine = useMyVoices();
   const can = { design: on(plan, "design"), remix: on(plan, "remix"), ivc: on(plan, "ivc"), pvc: on(plan, "pvc") };
   const creatable = (["design", "ivc", "pvc"] as const).filter((k) => can[k]);
   // Gói Free không dùng được giọng Thư viện qua API: không hiện mục Thư viện.
   const lib = !!plan?.library;
-  const want = (["mine", "library", "create", "ivc", "pvc", "design", "remix"] as const).filter((x) => lib || x !== "library").find((x) => x === sub) ?? "mine";
-  const tab: Sub = (want === "create" && !creatable.length && !can.remix) || (["ivc", "pvc", "design", "remix"].includes(want) && !can[want as "ivc"]) ? "mine" : want;
-  const top = tab === "mine" || tab === "library" ? tab : "create";
+  const subs: Sub[] = area === "voices" ? (lib ? ["mine", "library"] : ["mine"]) : ["create", "ivc", "pvc", "design", "remix"];
+  const want = subs.find((x) => x === sub) ?? subs[0];
+  const tab: Sub = ["ivc", "pvc", "design", "remix"].includes(want) && !can[want as "ivc"] ? subs[0] : want;
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState<"" | "premade" | "own">("");
+  const [gender, setGender] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
   const el = useRef<HTMLAudioElement | null>(null);
   useEffect(() => () => el.current?.pause(), []);
@@ -53,7 +57,7 @@ export function VoicesTool({ say, sub, setSub, go, setVoice, admin }: ToolProps)
   const own = (mine ?? []).filter((v) => v.category !== "premade");
   const [src, setSrc] = useState<Voice | null>(null);
   const remove = (v: Voice) => {
-    if (!confirm(`Xóa giọng “${v.name}” khỏi tài khoản ElevenLabs? Không hoàn tác được.`)) return;
+    if (!confirm(tr(`Xóa giọng “${v.name}” khỏi tài khoản ElevenLabs? Không hoàn tác được.`))) return;
     del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
   };
   const card = (v: Voice, extra?: React.ReactNode) => (
@@ -67,51 +71,69 @@ export function VoicesTool({ say, sub, setSub, go, setVoice, admin }: ToolProps)
     </div>
   );
 
-  return (
-    <div className="sp-wide">
-      <ToolHead title={tab === "ivc" ? "Nhân bản nhanh" : tab === "pvc" ? "Nhân bản chuyên sâu" : tab === "design" ? "Thiết kế giọng" : tab === "remix" ? "Remix giọng" : "Giọng nói"}
-        desc={top === "create" && tab !== "create" ? "Làm theo các bước bên dưới. Giọng tạo xong nằm trong Giọng của tôi." : `Giọng trong tài khoản ElevenLabs${lib ? ", thư viện cộng đồng" : ""}${creatable.length ? " và tạo giọng mới của riêng bạn" : ""}.${slots && slots.limit ? ` Đã dùng ${slots.used}/${slots.limit} chỗ lưu giọng.` : ""}`}>
-        {tab === "create" || tab === "mine" || tab === "library"
-          ? <Tabs label="Mục" value={top} onChange={(k) => setSub(k)} items={[{ k: "mine", label: "Giọng của tôi" }, ...(lib ? [{ k: "library" as const, label: "Thư viện" }] : []), ...(creatable.length || can.remix ? [{ k: "create" as const, label: "Tạo giọng" }] : [])]} />
-          : <Back label="Tạo giọng" onClick={() => setSub("create")} />}
-      </ToolHead>
+  const shown = (mine ?? []).filter((v) => {
+    const w = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return w.every((x) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.gender} ${v.age} ${v.use}`.toLowerCase().includes(x))
+      && (!kind || (kind === "premade" ? v.category === "premade" : v.category !== "premade")) && (!gender || v.gender === GENDERS.find((g) => g[1] === gender)?.[0]);
+  });
+  const sub2 = { ivc: "Nhân bản nhanh", pvc: "Nhân bản chuyên sâu", design: "Thiết kế giọng", remix: "Remix giọng" } as Record<string, string>;
 
+  if (area === "voices") return (
+    <Wide>
+      <Head tool="voices" desc={`Giọng trong tài khoản ElevenLabs${lib ? " và thư viện cộng đồng" : ""}.${slots && slots.limit ? ` Đã dùng ${slots.used}/${slots.limit} chỗ lưu giọng.` : ""}`}>
+        {lib && <Tabs label="Mục" value={tab} onChange={(k) => setSub(k)} items={[{ k: "mine", label: "Giọng của tôi" }, { k: "library", label: "Thư viện" }]} />}
+      </Head>
       {tab === "mine" && (
-        <div className="sp-vgrid">
-          {mine === null && <div className="sp-empty"><Spin /> Đang tải giọng…</div>}
-          {mine?.map((v) => card(v, (
-            <div className="sp-vcard-a">
-              <button className="btn dark" onClick={() => { setVoice(v); go("tts", "single"); }}>Dùng để đọc</button>
-              {can.remix && v.category !== "premade" && <button className="btn" onClick={() => { setSrc(v); setSub("remix"); }}>Remix</button>}
-              {admin && v.category !== "premade" && <button className="icon-btn" aria-label={`Xóa ${v.name}`} onClick={() => remove(v)}><I.Trash size={15} /></button>}
-            </div>
-          )))}
-          {(creatable.length > 0) && <button className="sp-vcard sp-vnew" onClick={() => setSub("create")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>{creatable.map((k) => ({ design: "thiết kế", ivc: "nhân bản", pvc: "nhân bản chuyên sâu" })[k]).join(", ")}</span></button>}
-        </div>
+        <>
+          <div className="sp-libf">
+            <label className="sp-search"><I.Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm theo tên, phong cách, ngôn ngữ…" aria-label="Tìm giọng" /></label>
+            <Seg small label="Loại giọng" value={kind} onChange={setKind} items={[{ k: "", label: "Tất cả" }, { k: "premade", label: "Có sẵn" }, { k: "own", label: "Tự tạo" }]} />
+            <Seg small label="Giới tính" value={gender} onChange={setGender} items={[{ k: "", label: "Mọi giới tính" }, ...GENDERS.map(([l, k]) => ({ k, label: l }))]} />
+          </div>
+          <div className="sp-vgrid">
+            {mine === null && <div className="sp-empty"><Spin /> Đang tải giọng…</div>}
+            {mine && !shown.length && <div className="sp-empty">Không có giọng khớp.</div>}
+            {shown.map((v) => card(v, (
+              <div className="sp-vcard-a">
+                <button className="btn dark" onClick={() => { setVoice(v); go("tts", "single"); }}>Dùng giọng</button>
+                {can.remix && v.category !== "premade" && <button className="btn" onClick={() => { setVoice(v); go("create", "remix"); }}>Remix</button>}
+                {admin && v.category !== "premade" && <button className="icon-btn" aria-label={`Xóa ${v.name}`} onClick={() => remove(v)}><I.Trash size={15} /></button>}
+              </div>
+            )))}
+            {(creatable.length > 0 || can.remix) && <button className="sp-vcard sp-vnew" onClick={() => go("create")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>Nhân bản giọng của bạn hoặc thiết kế từ mô tả</span></button>}
+          </div>
+        </>
       )}
-
       {tab === "library" && <LibraryGrid say={say} card={card} onUse={(v) => { setVoice(v); go("tts", "single"); }} />}
+    </Wide>
+  );
 
+  return (
+    <Wide>
+      <Head tool="create" title={sub2[tab]} desc={tab === "create" ? undefined : "Làm theo các bước bên dưới. Giọng tạo xong nằm trong Giọng nói."}>
+        {tab !== "create" && <Back label="Tạo giọng" onClick={() => setSub("create")} />}
+      </Head>
       {tab === "create" && (
         <>
           <div className="sp-create">
             {can.ivc && <CreateCard hue={185} title="Nhân bản nhanh" desc="Nhân bản giọng của bạn từ vài phút âm thanh. Tải tệp lên hoặc ghi âm trực tiếp." min="10 giây" best="3 phút" onGo={() => setSub("ivc")} />}
             {can.pvc && <CreateCard hue={322} title="Nhân bản chuyên sâu" desc="Bản nhân bản giống thật nhất. Tốt nhất với 30 phút mẫu trở lên, có xác minh chính chủ." min="10 phút" best="2 giờ" onGo={() => setSub("pvc")} />}
-            {can.design && <CreateCard hue={32} title="Thiết kế giọng" desc="Tạo giọng cho người hay nhân vật từ một câu mô tả, nghe thử 3 bản rồi lưu bản ưng nhất." tags={["Giám đốc", "Cô gái miền Tây", "Lồng tiếng trailer", "Ông kể chuyện"]} onGo={() => setSub("design")} />}
+            {can.design && <CreateCard hue={32} title="Thiết kế giọng" desc="Tạo giọng cho người hay nhân vật từ một câu mô tả, nghe thử 3 bản rồi lưu bản ưng nhất." tags={DESIGN_PRESETS.slice(0, 4).map((x) => x[0])} onGo={() => setSub("design")} />}
           </div>
           {can.remix && (
             <div className="sp-card sp-remixcard">
-              <div><b>Remix giọng</b><p>Biến đổi giọng bạn đã thiết kế hoặc nhân bản bằng câu mô tả để ra giọng mới.{own.length ? "" : " Cần có ít nhất một giọng tự tạo."}</p><button className="btn dark" disabled={!own.length} onClick={() => setSub("remix")}>Tạo mới</button></div>
+              <div><b>Remix giọng</b><p>Biến đổi giọng bạn đã thiết kế hoặc nhân bản bằng câu mô tả để ra giọng mới: trẻ hơn, vùng miền khác, cảm xúc khác.{own.length ? "" : " Cần có ít nhất một giọng tự tạo."}</p></div>
+              <div className="sp-exs">{REMIX_IDEAS.slice(0, 4).map((x) => <span key={x} className="sp-pill">{x}</span>)}</div>
+              <button className="btn dark" disabled={!own.length} onClick={() => setSub("remix")}>Tạo mới</button>
             </div>
           )}
         </>
       )}
-
-      {tab === "ivc" && <Ivc say={say} done={() => setSub("mine")} />}
-      {tab === "pvc" && <Pvc say={say} done={() => setSub("mine")} />}
-      {tab === "design" && <Design say={say} done={() => setSub("mine")} />}
-      {tab === "remix" && <Remix say={say} own={own} src={src ?? own[0] ?? null} setSrc={setSrc} done={() => setSub("mine")} />}
-    </div>
+      {tab === "ivc" && <Ivc say={say} done={() => go("voices", "mine")} />}
+      {tab === "pvc" && <Pvc say={say} done={() => go("voices", "mine")} />}
+      {tab === "design" && <Design say={say} done={() => go("voices", "mine")} />}
+      {tab === "remix" && <Remix say={say} own={own} src={src ?? own.find((x) => x.id === voice?.id) ?? own[0] ?? null} setSrc={setSrc} done={() => go("voices", "mine")} />}
+    </Wide>
   );
 }
 
@@ -192,6 +214,8 @@ function Design({ say, done }: { say: (m: string) => void; done: () => void }) {
   const [guide, setGuide] = useState(30);
   const [enhance, setEnhance] = useState(false);
   const [list, setList] = useState<Prev[]>([]);
+  const [shift, setShift] = useState(0);
+  const presets = Array.from({ length: 4 }, (_, i) => DESIGN_PRESETS[(shift + i) % DESIGN_PRESETS.length]);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -209,7 +233,10 @@ function Design({ say, done }: { say: (m: string) => void; done: () => void }) {
     <div className="sp-two">
       <div className="sp-card">
         <Field label="Mô tả giọng" hint={`${desc.length}/1000`} htmlFor="vd-desc"><textarea id="vd-desc" className="sp-input ta" rows={4} maxLength={1000} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Giới tính, độ tuổi, vùng miền, chất giọng, cảm xúc, tốc độ nói…" /></Field>
-        <div className="sp-exs">{DESIGN_EX.map((x) => <button key={x} className="sp-tag" onClick={() => setDesc(x)}>{x}</button>)}</div>
+        <div className="sp-exs">
+          {presets.map(([l, d]) => <button key={l} className="sp-tag" title={d} onClick={() => setDesc(tr(d))}>{l}</button>)}
+          <button className="sp-tag" aria-label="Gợi ý khác" title="Gợi ý khác" onClick={() => setShift((x) => x + 4)}><I.Retry size={12} /></button>
+        </div>
         <Toggle checked={auto} onChange={setAuto} label="Tự viết câu nghe thử" hint="Hoặc tự nhập câu bên dưới" />
         {!auto && <Field label="Câu nghe thử" hint={`${text.length} · cần 100–1000 ký tự`} htmlFor="vd-prev"><textarea id="vd-prev" className="sp-input ta" rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} /></Field>}
         <Range id="vd-guide" label="Bám sát mô tả" value={guide} onChange={setGuide} left="Sáng tạo" right="Bám sát" show={`${guide}%`} />
@@ -250,7 +277,7 @@ function Remix({ say, own, src, setSrc, done }: { say: (m: string) => void; own:
         <Field label="Giọng gốc"><VoiceChip v={src} onClick={() => setPick(true)} /></Field>
         <p className="sp-note">Remix được với giọng bạn tự tạo (thiết kế, nhân bản).</p>
         <Field label="Muốn đổi thế nào?" htmlFor="rx-p"><textarea id="rx-p" className="sp-input ta" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="vd. Trầm hơn, thêm chút khàn, nói chậm và thì thầm hơn" /></Field>
-        <div className="sp-exs">{["Trẻ hơn 10 tuổi", "Giọng miền Nam", "Vui tươi hơn", "Thêm chút khàn"].map((x) => <button key={x} className="sp-tag" onClick={() => setDesc((p) => (p ? p + ", " : "") + x.toLowerCase())}>{x}</button>)}</div>
+        <div className="sp-exs">{REMIX_IDEAS.map((x) => <button key={x} className="sp-tag" onClick={() => setDesc((p) => (p ? p + ", " : "") + tr(x).toLowerCase())}>{x}</button>)}</div>
         <Range id="rx-s" label="Mức thay đổi" value={strength} onChange={setStrength} left="Nhẹ" right="Mạnh" show={`${strength}%`} />
         <div className="sp-gen"><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!src || desc.trim().length < 5 || !!busy} onClick={gen}>{busy === "gen" ? <Spin /> : <I.Swap size={14} />}Remix</button></div>
         <ErrBox msg={err} />
@@ -282,6 +309,33 @@ function useSamples() {
   const add = async (fl: File[]) => { const out = await Promise.all(fl.map(async (f) => ({ f, sec: await durOf(f) }))); setSamples((s) => [...s, ...out]); };
   return [samples, add, setSamples] as const;
 }
+// Đoạn văn để đọc to khi ghi âm mẫu (như ElevenLabs): AI viết đoạn mới, đọc xong một đoạn thì tự đổi sang đoạn khác cho lần ghi tiếp theo.
+function ScriptRecorder({ say, onDone, max = 180 }: { say: (m: string) => void; onDone: (f: File) => void; max?: number }) {
+  const [lang, setLang] = useState<"vi" | "en">(getLang() === "en" ? "en" : "vi");
+  const [s, setS] = useState<{ text: string; source: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [n, setN] = useState(0);
+  const load = async (avoid = "") => {
+    setBusy(true);
+    try { setS(await post<{ text: string; source: string }>("script", { lang, avoid })); } catch (e) { say((e as Error).message); } finally { setBusy(false); }
+  };
+  useEffect(() => { void load(); }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="sp-script">
+      <div className="sp-script-h">
+        <b><I.Mic size={14} />Đọc to đoạn này khi ghi âm</b>
+        <Seg small label="Ngôn ngữ đoạn văn" value={lang} onChange={setLang} items={[{ k: "vi", label: "Tiếng Việt" }, { k: "en", label: "Tiếng Anh" }]} />
+        <button className="sp-link" disabled={busy} onClick={() => void load(s?.text ?? "")}><I.Retry size={12} />Đoạn khác</button>
+      </div>
+      <p className={`sp-script-t ${busy ? "busy" : ""}`} data-notr>{s?.text ?? "AI đang viết đoạn văn cho bạn đọc…"}</p>
+      <div className="sp-script-f">
+        <span className="sp-hint">{`Đọc tự nhiên như khi nói chuyện, nơi yên tĩnh, micro cách miệng khoảng một gang tay. Mỗi đoạn khoảng một phút${n ? ` · đã ghi ${n} đoạn` : ""}.`}</span>
+        <Recorder say={say} label="Ghi âm và đọc" max={max} onDone={(f) => { onDone(f); setN((x) => x + 1); void load(s?.text ?? ""); }} />
+      </div>
+    </div>
+  );
+}
+
 const CONSENT = "Tôi xác nhận đây là giọng của tôi hoặc tôi có quyền và sự đồng ý để nhân bản giọng này, và sẽ không dùng để lừa đảo hay mạo danh.";
 function SampleList({ samples, setSamples }: { samples: { f: File; sec: number }[]; setSamples: (s: { f: File; sec: number }[]) => void }) {
   return samples.length ? <div className="sp-samples">{samples.map((x, i) => <div key={i} className="sp-doc"><I.Wave size={16} /><span className="sp-doc-n"><b data-notr>{x.f.name}</b><small>{x.sec ? fmtSec(x.sec) : "—"}</small></span><button className="icon-btn" aria-label="Bỏ mẫu" onClick={() => setSamples(samples.filter((_, j) => j !== i))}><I.X size={14} /></button></div>)}</div> : null;
@@ -308,8 +362,9 @@ function Ivc({ say, done }: { say: (m: string) => void; done: () => void }) {
       <div className="sp-clone">
         <div className="sp-card sp-clone-l">
           <Drop title="Tải tệp âm thanh mẫu lên" sub="Tối đa 10 MB mỗi tệp · tối đa 25 tệp · một người nói, ít tạp âm" accept="audio/*,video/*" multiple max={10 * 1024 * 1024} say={say} onFile={add} />
+          <div className="sp-or"><span>hoặc ghi âm trực tiếp</span></div>
+          <ScriptRecorder say={say} max={180} onDone={(f) => void add([f])} />
           <SampleList samples={samples} setSamples={setSamples} />
-          <div className="sp-clone-btns"><Recorder say={say} label="Ghi âm mẫu" max={180} onDone={(f) => void add([f])} /></div>
         </div>
         <div className="sp-card sp-clone-r">
           <OrbStage hue={185} progress={total / 180} min="10 giây" best="3 phút" active={samples.length > 0} />
@@ -359,6 +414,7 @@ function Pvc({ say, done }: { say: (m: string) => void; done: () => void }) {
       <div className="sp-clone">
         <div className="sp-card sp-clone-l">
           <Drop title="Tải tệp âm thanh mẫu lên" sub="Một người nói, ít tạp âm · tối đa 40 MB mỗi lần tải" accept="audio/*,video/*" multiple say={say} onFile={add} />
+          {step === 0 && <><div className="sp-or"><span>hoặc ghi âm trực tiếp</span></div><ScriptRecorder say={say} max={600} onDone={(f) => void add([f])} /></>}
           <SampleList samples={samples} setSamples={setSamples} />
         </div>
         <div className="sp-card sp-clone-r">

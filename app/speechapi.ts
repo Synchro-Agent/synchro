@@ -19,13 +19,13 @@ const conn = () => {
 export const hasKey = () => !!serviceKey("elevenlabs");
 
 // ---- tính năng và gói ----
-export const FEATS = ["tts", "dialogue", "stt", "live", "agent", "sfx", "isolate", "changer", "align", "music", "design", "remix", "ivc", "pvc", "dub", "dubClean", "podcast", "book"] as const;
+export const FEATS = ["tts", "dialogue", "stt", "live", "agent", "sfx", "isolate", "changer", "align", "music", "design", "remix", "ivc", "pvc", "dub", "dubClean", "podcast", "book", "dict", "native"] as const;
 export type Feat = (typeof FEATS)[number];
 // Gói thấp nhất có tính năng (bảng giá API của ElevenLabs, 10/2026). Nhân bản dùng cờ của chính gói; Studio cần được ElevenLabs duyệt riêng.
 const TIERS = ["free", "starter", "creator", "pro", "scale", "business", "enterprise"];
 const MIN: Record<Feat, string> = {
   tts: "free", dialogue: "free", stt: "free", live: "free", agent: "free", sfx: "free", isolate: "free", changer: "free", align: "free", music: "free",
-  design: "free", remix: "free", ivc: "starter", pvc: "creator", dub: "free", dubClean: "starter", podcast: "free", book: "free",
+  design: "free", remix: "free", ivc: "starter", pvc: "creator", dub: "free", dubClean: "starter", podcast: "free", book: "free", dict: "free", native: "free",
 };
 const tierRank = (t: string) => {
   const s = t.toLowerCase();
@@ -136,6 +136,7 @@ const PROBES: [Feat | "realtime", string, "json" | "form"][] = [
   ["sfx", "/v1/sound-generation", "json"], ["music", "/v1/music", "json"], ["isolate", "/v1/audio-isolation", "form"],
   ["changer", `/v1/speech-to-speech/${PREMADE}`, "form"], ["align", "/v1/forced-alignment", "form"], ["design", "/v1/text-to-voice/design", "json"],
   ["remix", `/v1/text-to-voice/${PREMADE}/remix`, "json"], ["ivc", "/v1/voices/add", "form"], ["dub", "/v1/dubbing", "form"],
+  ["dict", "/v1/pronunciation-dictionaries/add-from-rules", "json"], ["native", "/v1/audio-native", "form"],
   ["realtime", "/v1/convai/realtime/client_secrets", "json"],
 ];
 async function probePerms(fresh: boolean) {
@@ -156,6 +157,29 @@ async function probePerms(fresh: boolean) {
   if (miss.stt) miss.live = miss.stt;
   st.perms = { at: Date.now(), key, miss };
   return miss;
+}
+
+// ---- hiệu ứng âm thanh (Đọc văn bản, Hội thoại) ----
+// Danh mục bộ lọc, không gian vang và tiếng nền lấy từ ElevenLabs (nhớ 6 giờ); API chưa trả được thì dùng danh mục đã biết.
+export type Effect = { id: string; name: string; desc: string };
+export type EffectsCatalog = { filters: Effect[]; spaces: Effect[]; noises: Effect[] };
+const FALLBACK_EFFECTS: EffectsCatalog = {
+  filters: [["old_radio", "Old Radio"], ["robot", "Robot"], ["cheap_microphone", "Cheap Microphone"], ["phone", "Phone"], ["low_quality_phone", "Low Quality Phone"], ["bright_phone", "Bright Phone"]].map(([id, name]) => ({ id, name, desc: "" })),
+  spaces: [["small_room", "Small Room"], ["big_room", "Big Room"], ["hall", "Hall"], ["tunnel", "Tunnel"], ["street", "Street"], ["valley", "Valley"], ["forest", "Forest"]].map(([id, name]) => ({ id, name, desc: "" })),
+  noises: [["call_center", "Call center"], ["cafe", "Café"], ["city", "City"], ["keyboard", "Keyboard"]].map(([id, name]) => ({ id, name, desc: "" })),
+};
+const fx = globalThis as unknown as { __speechFx?: { at: number; v: EffectsCatalog } };
+export async function effectsCatalog(): Promise<EffectsCatalog> {
+  if (fx.__speechFx && Date.now() - fx.__speechFx.at < 6 * 3600_000) return fx.__speechFx.v;
+  type Raw = { filter_presets?: { filter_preset_id: string; name: string; description?: string | null }[]; environments?: { environment_id: string; name: string; description?: string | null }[]; background_noises?: { background_noise_id: string; name: string; description?: string | null }[] };
+  const j = await elJson<Raw>("/v1/audio-effects/catalog", { timeout: 20_000 }).catch(() => null);
+  const v: EffectsCatalog = j?.filter_presets ? {
+    filters: j.filter_presets.map((x) => ({ id: x.filter_preset_id, name: x.name, desc: x.description ?? "" })),
+    spaces: (j.environments ?? []).map((x) => ({ id: x.environment_id, name: x.name, desc: x.description ?? "" })),
+    noises: (j.background_noises ?? []).map((x) => ({ id: x.background_noise_id, name: x.name, desc: x.description ?? "" })),
+  } : FALLBACK_EFFECTS;
+  if (j) fx.__speechFx = { at: Date.now(), v };
+  return v;
 }
 
 // ---- quét gói ----

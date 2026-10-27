@@ -34,13 +34,28 @@ const PERMS = [
   [/^\/v1\/single-use-token\/realtime_scribe/, "POST", "speech_to_text"], [/^\/v1\/sound-generation/, "POST", "sound_generation"], [/^\/v1\/music/, "POST", "music_generation"],
   [/^\/v1\/audio-isolation/, "POST", "audio_isolation"], [/^\/v1\/speech-to-speech\//, "POST", "speech_to_speech"], [/^\/v1\/forced-alignment/, "POST", "forced_alignment"],
   [/^\/v1\/text-to-voice/, "POST", "voices_write"], [/^\/v1\/voices\/add/, "POST", "voices_write"], [/^\/v1\/dubbing/, "POST", "dubbing_write"],
+  [/^\/v1\/pronunciation-dictionaries/, null, "pronunciation_dictionaries_write"], [/^\/v1\/audio-native/, null, "audio_native_write"],
 ];
+// Hiệu ứng âm thanh (GET /v1/audio-effects/catalog) như API thật.
+const FX = {
+  filter_presets: [["old_radio", "Old Radio"], ["robot", "Robot"], ["cheap_microphone", "Cheap Microphone"], ["phone", "Phone"], ["low_quality_phone", "Low Quality Phone"], ["bright_phone", "Bright Phone"]].map(([filter_preset_id, name]) => ({ filter_preset_id, name, description: `${name} (giả lập)` })),
+  environments: [["small_room", "Small Room"], ["big_room", "Big Room"], ["hall", "Hall"], ["tunnel", "Tunnel"], ["street", "Street"], ["valley", "Valley"], ["forest", "Forest"]].map(([environment_id, name]) => ({ environment_id, name, description: `${name} (giả lập)` })),
+  background_noises: [["call_center", "Call center"], ["cafe", "Café"], ["city", "City"], ["keyboard", "Keyboard"]].map(([background_noise_id, name]) => ({ background_noise_id, name, description: `${name} (giả lập)` })),
+};
+// Kiểm tra audio_effects như API thật: ID lạ → 404 kèm tên trường; vang / lệch kênh với PCM / μ-law → 400.
+function badEffects(res, fx, fmt) {
+  if (!fx) return false;
+  const chk = [["filter_preset_id", FX.filter_presets.map((x) => x.filter_preset_id)], ["environment_id", FX.environments.map((x) => x.environment_id)], ["background_noise_id", FX.background_noises.map((x) => x.background_noise_id)]];
+  for (const [k, ids] of chk) if (fx[k] && !ids.includes(fx[k])) return err(res, 404, "not_found", `audio_effects.${k}: unknown id ${fx[k]}`);
+  if ((fx.environment_id || fx.pan) && /^(pcm|ulaw|alaw)/.test(fmt)) return err(res, 400, "invalid", "Stereo effects are not supported for this output format.");
+  return false;
+}
 export const EL = {
   cfg: { tier: "free", studio: false, lockMusic: false, noPerms: [] },
-  used: 0, custom: [], dubs: new Map(), projects: new Map(), pvc: new Map(), calls: [],
+  used: 0, custom: [], dubs: new Map(), projects: new Map(), pvc: new Map(), calls: [], dicts: new Map(), natives: new Map(), last: {},
 };
 const t = () => TIER[EL.cfg.tier] ?? TIER.free;
-const reset = () => { EL.used = 0; EL.custom = []; EL.dubs.clear(); EL.projects.clear(); EL.pvc.clear(); EL.calls = []; };
+const reset = () => { EL.used = 0; EL.custom = []; EL.dubs.clear(); EL.projects.clear(); EL.pvc.clear(); EL.calls = []; EL.dicts.clear(); EL.natives.clear(); EL.last = {}; };
 
 // WAV 16 kHz mono: tiếng ngân có nhịp âm tiết, đủ để nghe thấy và vẽ dạng sóng.
 export function wav(sec, seed = 1) {
@@ -86,7 +101,7 @@ const previews = (desc) => ({ text: `Xin chào, đây là bản nghe thử cho g
 export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
   if (p === "/_debug/el") {
     if (req.method === "POST") { EL.cfg = { ...EL.cfg, ...b }; if (b.used !== undefined) EL.used = Number(b.used) || 0; if (b.reset) reset(); }
-    return json(res, 200, { cfg: EL.cfg, used: EL.used, custom: EL.custom.map((v) => v.voice_id), dubs: [...EL.dubs.keys()], calls: EL.calls.slice(-30) });
+    return json(res, 200, { cfg: EL.cfg, used: EL.used, custom: EL.custom.map((v) => v.voice_id), dubs: [...EL.dubs.keys()], calls: EL.calls.slice(-30), last: EL.last });
   }
   if (!p.startsWith("/elevenlabs/")) return false;
   if (p.startsWith("/elevenlabs/_preview/")) return audio(res, 2, p.length);
@@ -204,11 +219,16 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
     if (text.length > max) return err(res, 400, "max_character_limit_exceeded", `Text is too long (${text.length} > ${max}).`);
     const fmt = new URL(req.url, "http://x").searchParams.get("output_format") ?? "mp3_44100_128";
     if (/192/.test(fmt) && !["creator", "pro"].includes(EL.cfg.tier)) return err(res, 403, "output_format_not_allowed", "mp3_44100_192 requires a Creator subscription or above. Please upgrade.");
+    if (badEffects(res, b.audio_effects, fmt)) return true;
+    for (const d of b.pronunciation_dictionary_locators ?? []) if (!EL.dicts.has(d.pronunciation_dictionary_id)) return err(res, 404, "not_found", "pronunciation dictionary not found");
+    EL.last.tts = { model_id: b.model_id, audio_effects: b.audio_effects ?? null, dicts: b.pronunciation_dictionary_locators ?? null };
     const cost = charge(res, text.length, model[4]);
     if (cost < 0) return true;
     return audio(res, text.length / 14, text.length, cost);
   }
   if (ep === "/v1/text-to-dialogue" && m === "POST") {
+    if (badEffects(res, b.audio_effects, new URL(req.url, "http://x").searchParams.get("output_format") ?? "mp3_44100_128")) return true;
+    EL.last.dialogue = { audio_effects: b.audio_effects ?? null };
     const inputs = Array.isArray(b.inputs) ? b.inputs : [];
     if (!inputs.length) return err(res, 422, "invalid", "inputs: field required");
     for (const x of inputs) if (!findVoice(x.voice_id)) return err(res, 404, "voice_not_found", `Voice ${x.voice_id} not found.`);
@@ -219,16 +239,21 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
   if (ep === "/v1/speech-to-text" && m === "POST") {
     const f = await formOf(req, raw);
     if (!f.get("file") && !f.get("source_url")) return err(res, 422, "invalid", "Either file or source_url must be provided.");
+    if (!["scribe_v2", "scribe_v2_turbo", "scribe_v2_medical", "scribe_v1"].includes(String(f.get("model_id")))) return err(res, 422, "invalid", `model_id: unknown ${f.get("model_id")}`);
+    EL.last.stt = { model_id: f.get("model_id"), detect_speaker_roles: f.get("detect_speaker_roles"), use_speaker_library: f.get("use_speaker_library"), transcript_edit: f.get("transcript_edit") };
     const lines = [[0, "Xin chào, cảm ơn chị Hà đã dành thời gian cho buổi phỏng vấn hôm nay."], [1, "Dạ không có gì, tôi rất vui được chia sẻ về dự án ở Đà Nẵng."], [0, "Dự án bắt đầu từ khi nào ạ?"], [1, "Chúng tôi bắt đầu từ tháng 3 năm 2025."]];
     let at = 0;
     const words = lines.flatMap(([sp, line]) => line.split(" ").flatMap((w, i, a) => { const s = at; at += 0.32; const out = [{ text: w, start: s, end: s + 0.28, type: "word", speaker_id: `speaker_${sp}`, logprob: -0.1 }]; if (i < a.length - 1) out.push({ text: " ", start: s + 0.28, end: s + 0.32, type: "spacing", speaker_id: `speaker_${sp}` }); return out; }).concat([{ text: " ", start: at, end: at + 0.4, type: "spacing", speaker_id: `speaker_${sp}` }]));
     const redact = f.get("entity_redaction");
     const text = lines.map(([, l]) => l).join(" ");
     return json(res, 200, { language_code: f.get("language_code") || "vie", language_probability: 0.98, text: redact ? text.replace("Đà Nẵng", "{LOCATION}").replace("chị Hà", "{PERSON_NAME}") : text, words,
+      ...(f.get("transcript_edit") ? { edited_transcript: { text: `${text} (đã chỉnh: ${f.get("transcript_edit")})` } } : {}),
       ...(f.get("entity_detection") && !redact ? { entities: [{ text: "chị Hà", entity_type: "person_name", start_char: 17, end_char: 23 }, { text: "Đà Nẵng", entity_type: "location", start_char: 120, end_char: 127 }] } : {}) });
   }
   if (ep === "/v1/sound-generation" && m === "POST") {
     if (!b.text) return err(res, 422, "invalid", "text: field required");
+    if (b.model_id && !["eleven_text_to_sound_v2", "eleven_text_to_sound_v3"].includes(b.model_id)) return err(res, 422, "invalid", `model_id: unknown ${b.model_id}`);
+    EL.last.sfx = { model_id: b.model_id ?? null };
     const sec = b.duration_seconds ?? 4;
     const cost = charge(res, Math.round(sec * 40));
     if (cost < 0) return true;
@@ -236,9 +261,62 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
   }
   if (ep === "/v1/music" && m === "POST") {
     if (EL.cfg.lockMusic) return err(res, 403, "subscription_required", "Music generation is not available on your plan. Please upgrade your subscription.");
+    if (b.model_id && !["music_v1", "music_v2", "music_v2_5"].includes(b.model_id)) return err(res, 422, "invalid", `model_id: unknown ${b.model_id}`);
+    if (b.lyrics_text && b.force_instrumental) return err(res, 422, "invalid", "lyrics_text cannot be used with force_instrumental");
+    EL.last.music = { model_id: b.model_id ?? null, lyrics_text: b.lyrics_text ?? null };
     const sec = (b.music_length_ms ?? 15000) / 1000, cost = charge(res, Math.round(sec * 30));
     if (cost < 0) return true;
     return audio(res, sec, 9, cost);
+  }
+  if (ep === "/v1/music/video-to-music" && m === "POST") {
+    const f = await formOf(req, raw);
+    if (!f.getAll("videos").length) return err(res, 422, "invalid", "videos: field required");
+    EL.last.videoMusic = { description: f.get("description"), tags: f.getAll("tags"), add_sfx: f.get("add_sfx") };
+    const cost = charge(res, 600); if (cost < 0) return true;
+    return audio(res, 8, 11, cost);
+  }
+  if (ep === "/v1/music/stem-separation" && m === "POST") {
+    const f = await formOf(req, raw);
+    if (!f.get("file")) return err(res, 422, "invalid", "file: field required");
+    if (!["two_stems_v1", "six_stems_v1"].includes(String(f.get("stem_variation_id")))) return err(res, 422, "invalid", "stem_variation_id: invalid");
+    const cost = charge(res, 300); if (cost < 0) return true;
+    // ZIP rỗng hợp lệ (chỉ cần để trình duyệt tải về).
+    const zip = Buffer.from("504b0506000000000000000000000000000000000000", "hex");
+    res.writeHead(200, { "content-type": "application/zip", "content-length": zip.length, "character-cost": String(cost) }); res.end(zip); return true;
+  }
+  // ---- từ điển phát âm ----
+  if (ep === "/v1/audio-effects/catalog" && m === "GET") return json(res, 200, FX);
+  const dictOut = (d) => ({ id: d.id, name: d.name, description: d.description ?? null, latest_version_id: d.version, latest_version_rules_num: d.rules.length, creation_time_unix: d.at, created_by: "mock-user", permission_on_resource: "admin", archived_time_unix: null, rules: d.rules });
+  if (ep === "/v1/pronunciation-dictionaries/add-from-rules" && m === "POST") {
+    if (!b.name || !Array.isArray(b.rules)) return err(res, 422, "invalid", "name and rules are required");
+    for (const r of b.rules) if (!r.string_to_replace || !["alias", "phoneme"].includes(r.type) || (r.type === "alias" ? !r.alias : !r.phoneme)) return err(res, 422, "invalid", "invalid rule");
+    const d = { id: rid("pd_"), name: b.name, description: b.description ?? null, version: rid("v_"), rules: b.rules, at: Math.floor(Date.now() / 1000) };
+    EL.dicts.set(d.id, d);
+    return json(res, 200, { id: d.id, name: d.name, created_by: "mock-user", creation_time_unix: d.at, version_id: d.version, version_rules_num: d.rules.length, description: d.description, permission_on_resource: "admin" });
+  }
+  if (ep === "/v1/pronunciation-dictionaries" && m === "GET") return json(res, 200, { pronunciation_dictionaries: [...EL.dicts.values()].filter((d) => !d.archived).reverse().map(dictOut), next_cursor: null, has_more: false });
+  mm = /^\/v1\/pronunciation-dictionaries\/([\w-]+)(?:\/(set-rules))?$/.exec(ep);
+  if (mm) {
+    const d = EL.dicts.get(mm[1]);
+    if (!d) return err(res, 404, "not_found", "Pronunciation dictionary not found");
+    if (mm[2] && m === "POST") { d.rules = b.rules ?? []; d.version = rid("v_"); return json(res, 200, { id: d.id, version_id: d.version, version_rules_num: d.rules.length }); }
+    if (m === "PATCH") { if (b.archived) d.archived = true; if (b.name) d.name = b.name; return json(res, 200, dictOut(d)); }
+    if (m === "GET") return json(res, 200, dictOut(d));
+  }
+  // ---- Audio Native ----
+  if (ep === "/v1/audio-native" && m === "POST") {
+    const f = await formOf(req, raw);
+    if (!f.get("name") || !f.get("file")) return err(res, 422, "invalid", "name and file are required");
+    const id = rid("an_");
+    EL.natives.set(id, { polls: 0, title: f.get("title") });
+    return json(res, 200, { project_id: id, converting: true, html_snippet: `<div id="elevenlabs-audionative-widget" data-height="90" data-width="100%" data-frameborder="no" data-scrolling="no" data-publicuserid="mock-user" data-playerurl="https://elevenlabs.io/player/index.html" data-projectid="${id}">Loading the <a href="https://elevenlabs.io/text-to-speech" target="_blank" rel="noopener">Elevenlabs Text to Speech</a> AudioNative Player...</div><script src="https://elevenlabs.io/player/audioNativeHelper.js" type="text/javascript"></script>` });
+  }
+  mm = /^\/v1\/audio-native\/([\w-]+)\/settings$/.exec(ep);
+  if (mm && m === "GET") {
+    const n = EL.natives.get(mm[1]);
+    if (!n) return err(res, 404, "not_found", "Project not found");
+    n.polls++;
+    return json(res, 200, { enabled: true, snapshot_id: n.polls > 1 ? rid("snap_") : null, settings: { title: n.title, image: null, author: null, small: false, text_color: "#000000", background_color: "#ffffff", sessionization: 0, audio_path: null, audio_url: n.polls > 1 ? `http://127.0.0.1:4010/elevenlabs/_preview/${mm[1]}.wav` : null, status: n.polls > 1 ? "ready" : "processing" } });
   }
   if (ep === "/v1/audio-isolation" && m === "POST") { const f = await formOf(req, raw); if (!f.get("audio")) return err(res, 422, "invalid", "audio: field required"); return audio(res, 3, 5, 100); }
   mm = /^\/v1\/voice-changer\/([\w-]+)$/.exec(ep);

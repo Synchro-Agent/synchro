@@ -1,14 +1,15 @@
 "use client";
-// Lồng tiếng & Studio: lồng tiếng video / âm thanh (ElevenLabs Dubbing), podcast và sách nói (Studio API, chỉ hiện khi tài khoản được ElevenLabs duyệt).
+// Lồng tiếng (ElevenLabs Dubbing) và Podcast & Sách nói (Studio API, chỉ hiện khi tài khoản được ElevenLabs duyệt).
 // Các việc này chạy lâu ở ElevenLabs: tạo xong thì Synchro tự hỏi lại trạng thái tới khi có âm thanh.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
 import { DUB_LANGS } from "./data";
 import { LANGS, ago, api, del, on, post, postForm, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
 import { Drop, ErrBox, Field, Player, Seg, Select, Spin, Tabs, Toggle, VoiceChip, VoicePicker } from "./parts";
-import { ToolHead, type ToolProps } from "./view";
+import { Head, Wide } from "./shell";
+import type { ToolProps } from "./view";
 
-type Tab = "dub" | "podcast" | "book";
+type Tab = "podcast" | "book";
 
 // Hỏi lại trạng thái các dự án đang chạy mỗi 15 giây.
 function usePoll(items: Item[] | null, setItems: (f: (l: Item[] | null) => Item[] | null) => void, op: "dub" | "project") {
@@ -27,18 +28,19 @@ function usePoll(items: Item[] | null, setItems: (f: (l: Item[] | null) => Item[
 
 export function StudioTool({ say, sub, setSub }: ToolProps) {
   const plan = usePlan();
-  const tabs = ([["dub", "Lồng tiếng"], ["podcast", "Podcast"], ["book", "Sách nói"]] as [Tab, string][]).filter(([k]) => on(plan, k));
-  const tab = tabs.find(([k]) => k === sub)?.[0] ?? tabs[0]?.[0] ?? "dub";
+  const tabs = ([["podcast", "Podcast"], ["book", "Sách nói"]] as [Tab, string][]).filter(([k]) => on(plan, k));
+  const tab = tabs.find(([k]) => k === sub)?.[0] ?? tabs[0]?.[0] ?? "podcast";
   return (
-    <div className="sp-wide">
-      <ToolHead title="Lồng tiếng & Studio" desc="Dịch và lồng tiếng video, âm thanh sang ngôn ngữ khác; tạo podcast và sách nói khi tài khoản có Studio.">
-        {tabs.length > 1 && <Tabs label="Công cụ" value={tab} onChange={setSub} items={tabs.map(([k, label]) => ({ k, label }))} />}
-      </ToolHead>
-      {tab === "dub" && <Dub say={say} />}
+    <Wide>
+      <Head tool="studio">{tabs.length > 1 && <Tabs label="Công cụ" value={tab} onChange={setSub} items={tabs.map(([k, label]) => ({ k, label }))} />}</Head>
       {tab === "podcast" && <Podcast say={say} />}
       {tab === "book" && <Book say={say} />}
-    </div>
+    </Wide>
   );
+}
+
+export function DubTool({ say }: ToolProps) {
+  return <Wide><Head tool="dub" /><Dub say={say} /></Wide>;
 }
 
 function Projects({ items, setItems, say, kind }: { items: Item[] | null; setItems: (f: (l: Item[] | null) => Item[] | null) => void; say: (m: string) => void; kind: string }) {
@@ -73,6 +75,11 @@ function Dub({ say }: { say: (m: string) => void }) {
   const [nsp, setNsp] = useState("");
   const [bg, setBg] = useState(true);
   const [wm, setWm] = useState(true);
+  const [adv, setAdv] = useState(false);
+  const [hd, setHd] = useState(false);
+  const [noClone, setNoClone] = useState(false);
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [items, setItems] = useItems(["dub"]);
@@ -83,6 +90,7 @@ function Dub({ say }: { say: (m: string) => void }) {
     const fd = new FormData();
     if (file) fd.set("file", file, file.name); else fd.set("url", url.trim());
     fd.set("target", to); fd.set("source", src); fd.set("speakers", nsp); fd.set("keepBackground", String(bg)); fd.set("watermark", String(!clean || wm));
+    fd.set("hd", String(hd)); fd.set("noClone", String(noClone)); fd.set("start", String(secOf(start))); fd.set("end", String(secOf(end)));
     try { const j = await postForm<{ item: Item }>("dub", fd); setItems((l) => [j.item, ...(l ?? [])]); setFile(null); setUrl(""); say("Đã gửi sang ElevenLabs. Synchro tự cập nhật khi lồng tiếng xong."); }
     catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
@@ -97,6 +105,17 @@ function Dub({ say }: { say: (m: string) => void }) {
         <Select id="db-n" label="Số người nói" value={nsp} options={[["", "Tự động"], ...["1", "2", "3", "4", "5", "6", "8", "10"].map((x) => [x, x] as [string, string])]} onChange={setNsp} inline />
         <Toggle checked={bg} onChange={setBg} label="Giữ nhạc nền và tiếng động" />
         {clean ? <Toggle checked={wm} onChange={setWm} label="Gắn watermark" /> : <p className="sp-note">Gói {plan?.tierName} lồng tiếng có watermark (ElevenLabs bắt buộc). Gói Starter trở lên tắt được.</p>}
+        <button className="sp-fsec-h sp-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}>Tùy chọn nâng cao<span className={`sec-chev ${adv ? "open" : ""}`}>{adv ? <I.Chevron size={14} /> : <I.ChevronR size={14} />}</span></button>
+        {adv && (
+          <>
+            <div className="sp-two flat">
+              <Field label="Bắt đầu từ" hint="phút:giây" htmlFor="db-st"><input id="db-st" className="sp-input" value={start} onChange={(e) => setStart(e.target.value)} placeholder="0:00" /></Field>
+              <Field label="Kết thúc ở" hint="để trống = hết video" htmlFor="db-en"><input id="db-en" className="sp-input" value={end} onChange={(e) => setEnd(e.target.value)} placeholder="1:30" /></Field>
+            </div>
+            <Toggle checked={hd} onChange={setHd} label="Độ phân giải cao nhất" hint="Video lồng tiếng giữ chất lượng gốc, xử lý lâu hơn" />
+            <Toggle checked={noClone} onChange={setNoClone} label="Không nhân bản giọng gốc" hint="Dùng giọng có sẵn thay vì giọng người nói trong video" />
+          </>
+        )}
         <div className="sp-gen"><span className="sp-muted">Tính theo phút</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={(!file && !/^https?:\/\//.test(url.trim())) || busy} onClick={go}>{busy ? <Spin /> : <I.Globe size={14} />}Lồng tiếng</button></div>
         <ErrBox msg={err} />
       </div>
@@ -104,6 +123,9 @@ function Dub({ say }: { say: (m: string) => void }) {
     </div>
   );
 }
+
+// “1:30” → 90 giây; “90” → 90 giây.
+const secOf = (t: string) => { const p = t.trim().split(":").map(Number); if (p.some((x) => !Number.isFinite(x))) return 0; return p.reduce((a, x) => a * 60 + x, 0); };
 
 function Podcast({ say }: { say: (m: string) => void }) {
   const mine = useMyVoices();

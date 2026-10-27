@@ -2,7 +2,7 @@
 // Phía trình duyệt của Speech: gọi /api/speech, giữ gói ElevenLabs (credit, tính năng) dùng chung cho mọi công cụ và thanh bên.
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-export type Feat = "tts" | "dialogue" | "stt" | "live" | "agent" | "sfx" | "isolate" | "changer" | "align" | "music" | "design" | "remix" | "ivc" | "pvc" | "dub" | "dubClean" | "podcast" | "book";
+export type Feat = "tts" | "dialogue" | "stt" | "live" | "agent" | "sfx" | "isolate" | "changer" | "align" | "music" | "design" | "remix" | "ivc" | "pvc" | "dub" | "dubClean" | "podcast" | "book" | "dict" | "native";
 export type ModelOut = { id: string; name: string; desc: string; langs: { id: string; name: string }[]; max: number; rate: number; style: boolean; boost: boolean };
 export type Plan = {
   connected: boolean; readPlan: boolean; tier: string; tierName: string; status: string;
@@ -20,6 +20,9 @@ export type Voice = {
 };
 export type Item = { id: string; kind: string; title: string; meta: Record<string, unknown>; mime: string | null; size: number; createdAt: number; url: string | null };
 export type Credits = Plan["credits"];
+export type Dict = { id: string; name: string; desc: string; version: string; count: number; createdAt?: number; rules?: Rule[] };
+export type Rule = { word: string; type: "alias" | "phoneme"; say: string; alphabet?: string; cs?: boolean };
+export type Effects = { filters: { id: string; name: string }[]; spaces: { id: string; name: string }[]; noises: { id: string; name: string }[] };
 
 export class SpeechError extends Error { constructor(msg: string, public code?: string, public status = 0) { super(msg); } }
 
@@ -82,6 +85,23 @@ export function useItems(kinds: string[], dep = 0) {
   return [items, setItems] as const;
 }
 
+// ---- danh mục hiệu ứng và từ điển phát âm (dùng chung giữa Đọc văn bản và trang Từ điển) ----
+let fxCat: Effects | null = null;
+export function useEffectsCatalog(enabled: boolean) {
+  const [v, setV] = useState<Effects | null>(fxCat);
+  useEffect(() => { if (enabled && !fxCat) api<Effects>("effects").then((j) => { fxCat = j; setV(j); }).catch(() => {}); }, [enabled]);
+  return v;
+}
+let dicts: Dict[] | null = null;
+const dsubs = new Set<() => void>();
+export async function reloadDicts() { try { dicts = (await api<{ dicts: Dict[] }>("dicts")).dicts; } catch { dicts = dicts ?? []; } dsubs.forEach((f) => f()); }
+export function setDicts(f: (l: Dict[]) => Dict[]) { dicts = f(dicts ?? []); dsubs.forEach((x) => x()); }
+export function useDicts(enabled: boolean) {
+  const v = useSyncExternalStore((f) => { dsubs.add(f); return () => dsubs.delete(f); }, () => dicts, () => null);
+  useEffect(() => { if (enabled && !dicts) void reloadDicts(); }, [enabled]);
+  return v;
+}
+
 // ---- định dạng ----
 export const fmtNum = (n: number) => Math.round(n).toLocaleString("vi-VN");
 export const fmtDur = (s: number) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
@@ -98,7 +118,10 @@ export const hueOf = (id: string) => { let h = 0; for (let i = 0; i < id.length;
 export const LANGS: [string, string][] = [["", "Tự nhận diện"], ["vi", "Tiếng Việt"], ["en", "Tiếng Anh"], ["ja", "Tiếng Nhật"], ["ko", "Tiếng Hàn"], ["zh", "Tiếng Trung"], ["fr", "Tiếng Pháp"],
   ["de", "Tiếng Đức"], ["es", "Tiếng Tây Ban Nha"], ["th", "Tiếng Thái"], ["id", "Tiếng Indonesia"], ["hi", "Tiếng Hindi"], ["pt", "Tiếng Bồ Đào Nha"], ["it", "Tiếng Ý"], ["ru", "Tiếng Nga"]];
 export const KIND_LABEL: Record<string, string> = { tts: "Đọc văn bản", dialogue: "Hội thoại", stt: "Chép lời", sfx: "Tiếng động", music: "Nhạc", isolate: "Lọc tạp âm", changer: "Đổi giọng",
-  align: "Căn phụ đề", dub: "Lồng tiếng", podcast: "Podcast", book: "Sách nói", call: "Cuộc gọi thử", live: "Chép lời trực tiếp" };
+  align: "Căn phụ đề", dub: "Lồng tiếng", podcast: "Podcast", book: "Sách nói", call: "Cuộc gọi thử", live: "Chép lời trực tiếp", stems: "Tách stem", native: "Audio Native" };
+/** Công cụ mở lại một sản phẩm trong lịch sử. */
+export const KIND_TOOL: Record<string, string> = { tts: "tts", dialogue: "tts", stt: "stt", live: "stt", align: "stt", sfx: "sfx", music: "music", stems: "music", isolate: "isolate", changer: "changer",
+  dub: "dub", podcast: "studio", book: "studio", call: "agent", native: "native" };
 export const CAT_LABEL: Record<string, string> = { premade: "Có sẵn", cloned: "Nhân bản nhanh", generated: "Thiết kế", professional: "Thư viện / chuyên sâu", famous: "Nổi tiếng", high_quality: "Chất lượng studio" };
 export const download = (url: string) => { const a = document.createElement("a"); a.href = url + (url.includes("?") ? "&" : "?") + "dl=1"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); };
 export const saveText = (name: string, text: string, mime = "text/plain") => {

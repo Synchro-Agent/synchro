@@ -1,6 +1,6 @@
 "use client";
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
@@ -110,6 +110,13 @@ export function Recorder({ onDone, say, label = "Ghi âm", max = 300 }: { onDone
 // ---- trình phát ----
 const peaksCache = new Map<string, number[]>();
 let playingEl: HTMLAudioElement | null = null;
+// Bản đang phát, cho trình phát chung ở đáy trang (như ElevenLabs): vẫn điều khiển được khi đã cuộn khỏi thẻ kết quả.
+type Now = { el: HTMLAudioElement; title: string; dl: string | null } | null;
+let nowPlaying: Now = null;
+const nowSubs = new Set<() => void>();
+const setNow = (n: Now) => { nowPlaying = n; nowSubs.forEach((f) => f()); };
+export const useNowPlaying = () => useSyncExternalStore((f) => { nowSubs.add(f); return () => nowSubs.delete(f); }, () => nowPlaying, () => null);
+export const closeNowPlaying = () => { nowPlaying?.el.pause(); setNow(null); };
 async function peaksOf(src: string, n: number): Promise<number[]> {
   const k = `${n}:${src}`;
   if (peaksCache.has(k)) return peaksCache.get(k)!;
@@ -143,7 +150,7 @@ export function Wave({ src, n = 56, progress = 0, h = 26, onSeek }: { src?: stri
   );
 }
 /** Trình phát âm thanh thật: phát / tạm dừng, tua trên dạng sóng, tải xuống. Mỗi lúc chỉ một trình phát chạy. */
-export function Player({ src, title, dl, name, seekTo, onTime }: { src: string | null; title?: string; dl?: string | null; name?: string; seekTo?: { t: number; n: number }; onTime?: (t: number) => void }) {
+export function Player({ src, title, label, dl, name, seekTo, onTime }: { src: string | null; title?: string; label?: string; dl?: string | null; name?: string; seekTo?: { t: number; n: number }; onTime?: (t: number) => void }) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const [play, setPlay] = useState(false);
   const [t, setT] = useState(0);
@@ -155,20 +162,15 @@ export function Player({ src, title, dl, name, seekTo, onTime }: { src: string |
     ref.current = a;
     a.onloadedmetadata = () => setDur(Number.isFinite(a.duration) ? a.duration : 0);
     a.ontimeupdate = () => { setT(a.currentTime); onTime?.(a.currentTime); };
-    a.onplay = () => { if (playingEl && playingEl !== a) playingEl.pause(); playingEl = a; setPlay(true); };
+    a.onplay = () => { if (playingEl && playingEl !== a) playingEl.pause(); playingEl = a; setPlay(true); if (nowPlaying?.el !== a) setNow({ el: a, title: label ?? title ?? name ?? "Âm thanh", dl: dl ?? null }); };
     a.onpause = () => setPlay(false);
     a.onended = () => { setPlay(false); setT(0); };
-    return () => { a.pause(); a.src = ""; if (playingEl === a) playingEl = null; };
+    return () => { a.pause(); a.src = ""; if (playingEl === a) playingEl = null; if (nowPlaying?.el === a) setNow(null); };
   }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const a = ref.current; if (a && seekTo) { a.currentTime = seekTo.t; void a.play().catch(() => {}); } }, [seekTo]);
   const toggle = () => { const a = ref.current; if (!a) return; if (a.paused) void a.play().catch(() => {}); else a.pause(); };
   const seek = (f: number) => { const a = ref.current; if (a && dur) { a.currentTime = f * dur; setT(a.currentTime); } };
-  const save = () => {
-    if (!dl) return;
-    const a = document.createElement("a");
-    if (dl.startsWith("data:") || dl.startsWith("blob:")) { a.href = dl; a.download = name ?? "synchro-audio"; } else a.href = dl + (dl.includes("?") ? "&" : "?") + "dl=1";
-    document.body.appendChild(a); a.click(); a.remove();
-  };
+  const save = () => { if (dl) saveUrl(dl, name); };
   return (
     <div className="sp-player">
       <button className="sp-pbtn" aria-label={play ? "Tạm dừng" : "Phát"} onClick={toggle} disabled={!src}>{play ? <I.Pause size={14} /> : <I.Play size={14} />}</button>
@@ -182,19 +184,60 @@ export function Player({ src, title, dl, name, seekTo, onTime }: { src: string |
   );
 }
 
-// Ô chọn model ElevenLabs có mô tả ngắn, dùng chung cho Đọc văn bản và Voice Agent.
-export function ModelPick({ models, value, onChange }: { models: { id: string; name: string; note: string }[]; value: string; onChange: (id: string) => void }) {
+const saveUrl = (dl: string, name?: string) => {
+  const a = document.createElement("a");
+  if (dl.startsWith("data:") || dl.startsWith("blob:")) { a.href = dl; a.download = name ?? "synchro-audio"; } else a.href = dl + (dl.includes("?") ? "&" : "?") + "dl=1";
+  document.body.appendChild(a); a.click(); a.remove();
+};
+/** Trình phát chung ở đáy trang Speech: hiện bản đang phát, phát / tạm dừng, tua, tải xuống, đóng. */
+export function Dock() {
+  const now = useNowPlaying();
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!now) return;
+    const f = () => tick((x) => x + 1);
+    for (const e of ["timeupdate", "play", "pause", "ended", "loadedmetadata"]) now.el.addEventListener(e, f);
+    return () => { for (const e of ["timeupdate", "play", "pause", "ended", "loadedmetadata"]) now.el.removeEventListener(e, f); };
+  }, [now]);
+  if (!now) return null;
+  const a = now.el, dur = Number.isFinite(a.duration) ? a.duration : 0, p = dur ? a.currentTime / dur : 0;
+  return (
+    <div className="sp-dock" role="region" aria-label="Trình phát">
+      <button className="sp-pbtn" aria-label={a.paused ? "Phát" : "Tạm dừng"} onClick={() => (a.paused ? void a.play().catch(() => {}) : a.pause())}>{a.paused ? <I.Play size={14} /> : <I.Pause size={14} />}</button>
+      <span className="sp-dock-t" data-notr>{now.title}</span>
+      <input className="sp-range sp-dock-r" type="range" min={0} max={1000} value={Math.round(p * 1000)} aria-label="Tua" style={{ "--p": `${p * 100}%` } as React.CSSProperties}
+        onChange={(e) => { if (dur) a.currentTime = (Number(e.target.value) / 1000) * dur; }} />
+      <span className="sp-time">{fmtDur(a.currentTime)} / {fmtDur(dur)}</span>
+      {now.dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={() => saveUrl(now.dl!)}><I.Download size={16} /></button>}
+      <button className="icon-btn" aria-label="Đóng trình phát" onClick={closeNowPlaying}><I.X size={16} /></button>
+    </div>
+  );
+}
+
+// Ô chọn model ElevenLabs có mô tả ngắn, dùng chung cho Đọc văn bản, Chép lời, Nhạc, Voice Agent: nhãn “Khuyên dùng”, vài ngôn ngữ hỗ trợ.
+export type ModelOpt = { id: string; name: string; note: string; badge?: string; langs?: string[] };
+export function ModelPick({ models, value, onChange, label = "Model" }: { models: ModelOpt[]; value: string; onChange: (id: string) => void; label?: string }) {
   const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
   const m = models.find((x) => x.id === value) ?? models[0];
   if (!m) return <div className="sp-note">Chưa có model nào.</div>;
+  const langs = (l?: string[]) => (l?.length ? <span className="sp-mlangs">{l.slice(0, 5).map((x) => <i key={x}>{x}</i>)}{l.length > 5 && <i>+{l.length - 5}</i>}</span> : null);
   return (
-    <div className="sp-mpick">
-      <button className="sp-vbig" aria-expanded={open} onClick={() => setOpen(!open)}><span><b>{m.name}</b><small>{m.note}</small></span><I.Chevron size={14} /></button>
+    <div className="sp-mpick" ref={box}>
+      <button className="sp-vbig sp-mcard" aria-expanded={open} aria-label={`${label}: ${m.name}`} onClick={() => setOpen(!open)}>
+        <span><b>{m.name}{m.badge && <em className="sp-badge-r">{m.badge}</em>}</b><small>{m.note}</small></span><I.Chevron size={14} />
+      </button>
       {open && (
-        <div className="sp-mmenu" role="listbox" aria-label="Model">
+        <div className="sp-mmenu" role="listbox" aria-label={label}>
           {models.map((x) => (
             <button key={x.id} role="option" aria-selected={x.id === value} className={x.id === value ? "on" : ""} onClick={() => { onChange(x.id); setOpen(false); }}>
-              <span><b>{x.name}</b><small>{x.note}</small></span>{x.id === value && <I.Check size={15} />}
+              <span><b>{x.name}{x.badge && <em className="sp-badge-r">{x.badge}</em>}</b><small>{x.note}</small>{langs(x.langs)}</span>{x.id === value && <I.Check size={15} />}
             </button>
           ))}
         </div>
