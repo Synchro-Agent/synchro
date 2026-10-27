@@ -22,15 +22,18 @@ import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "./coderun";
 import { saveOutputs, type OutFile } from "./outputs";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
-import { anthropicCall, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "./llmcall";
+import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "./llmcall";
 import { mergedProviders, subCli, subTurn } from "./ai/subs";
+import { openBridge } from "./mcpbridge";
+import { learnFromTurn, memoryBlock } from "./memory";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
 // Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
 
 // ---------------------------------------------------------------- vòng lặp tool cho skill
 type Call = { id: string; name: string; input: Record<string, unknown> };
-type Step = { text: string; calls: Call[]; assistant: unknown };
+// pause: công cụ phía máy chủ của hãng (tìm web) chưa chạy xong trong một lần gọi — gửi lại để model làm tiếp.
+type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean };
 type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: ToolRun[]) => unknown[] };
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
@@ -55,16 +58,25 @@ const live = () => (runSignal() ? delta : undefined);
 
 const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort, hist = -1): Adapter => ({
   step: async (msgs, noTools) => {
+    // Tìm web (công cụ phía máy chủ của Anthropic): ghi vào nhật ký làm việc như công cụ thường, ngay khi model bắt đầu tìm.
+    const seen = new Set<string>();
+    const searched = (b: ABlock) => {
+      if (b.type !== "server_tool_use" || b.name !== "web_search" || seen.has(String(b.id))) return;
+      seen.add(String(b.id));
+      progress("tool", `Đang tìm trên web: ${String((b.input as { query?: string } | undefined)?.query ?? "").slice(0, 120)}`);
+    };
     const j = await anthropicCall(t, {
       max_tokens: outCap(t, max_tokens), ...effortParams(t, effort),
       system: [{ type: "text", text: system || "Bạn là một trợ lý AI hữu ích." }, { type: "text", text: skillSys, cache_control: { type: "ephemeral" } }],
       tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: withCacheMark(msgs, hist),
-    }, runSignal(), live());
-    const blocks: { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }[] = j.content ?? [];
+    }, runSignal(), live(), (b) => searched(b));
+    const blocks: (ABlock & { input?: Record<string, unknown> })[] = j.content ?? [];
+    for (const b of blocks) searched(b);
     return {
-      text: blocks.filter((b) => b.type === "text").map((b) => b.text).join(""),
+      text: blocksText(blocks),
       calls: blocks.filter((b) => b.type === "tool_use").map((b) => ({ id: b.id!, name: b.name!, input: b.input ?? {} })),
       assistant: { role: "assistant", content: blocks },
+      pause: j.stop_reason === "pause_turn",
     };
   },
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
@@ -89,9 +101,18 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
 });
 
 // OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
-const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
+const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort, web = false): Adapter => ({
   step: async (msgs, noTools) => {
-    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: respTools(tools), ...(noTools ? { tool_choice: "none" } : {}) }, runSignal(), live()));
+    // Tìm web của OpenAI (mục web_search_call): ghi vào nhật ký làm việc ngay khi mục xong.
+    const seen = new Set<string>();
+    const searched = (it: Record<string, unknown>) => {
+      if (it.type !== "web_search_call" || seen.has(String(it.id))) return;
+      seen.add(String(it.id));
+      const a = it.action as { query?: string; url?: string } | undefined;
+      progress("tool", a?.url && !a.query ? `Đang đọc trang web: ${a.url.slice(0, 120)}` : `Đang tìm trên web: ${String(a?.query ?? "").slice(0, 120)}`);
+    };
+    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: [...respTools(tools), ...(web ? [{ type: "web_search" }] : [])], ...(noTools ? { tool_choice: "none" } : {}) }, runSignal(), live(), searched));
+    for (const it of r.items) searched(it);
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
   results: (calls, res) => calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })),
@@ -167,6 +188,27 @@ Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ
 - Nếu có khối <user_followup>: đó là tin người dùng nhắn thêm khi bạn đang làm. Ghép yêu cầu đó vào việc đang làm (ưu tiên nếu nó đổi yêu cầu), nói ngắn rằng bạn đã nhận và sẽ làm thế nào, rồi làm tiếp — không bỏ dở việc trước.
 - Câu trả lời cuối vẫn đầy đủ như bình thường.
 </working_out_loud>`;
+// Gói chạy qua CLI (Claude Code, Codex) gọi công cụ của Synchro qua cầu nối MCP "synchro".
+const BRIDGE_CLIS = new Set(["claude", "codex"]);
+const CLI_TOOLS_NOTE = (cli: string) => `<synchro_tools>
+Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.
+</synchro_tools>`;
+/** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
+async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>, usedAll: ToolRun["used"][]) {
+  const said = liveNow().trim();
+  if (said) progress("say", said);
+  deltaStep();
+  const c: Call = { id: `mcp_${randomToken(8)}`, name, input };
+  // Công cụ connector để chế độ "Hỏi trước mỗi lần": CLI không hỏi duyệt giữa chừng được, nên báo rõ thay vì tự chạy.
+  if (needsAsk(x, c)) return { content: "Công cụ này đang để chế độ hỏi duyệt trước mỗi lần dùng; gói chạy qua CLI chưa hỏi duyệt được. Hãy cho người dùng biết: đổi quyền công cụ thành \"Luôn cho phép\" trong Connectors, hoặc dùng model khóa API cho việc này.", is_error: true };
+  let res: ToolRun | null = null;
+  const m: unknown[] = [];
+  const cap: Adapter = { step: async () => { throw new Error("không dùng"); }, results: (_calls, r) => { res = r[0]; return []; } };
+  await execute(cap, m, x, [c], usedAll, {});
+  const follow = (m.find((v) => (v as { role?: string }).role === "user") as { content?: unknown } | undefined)?.content;
+  const r = (res as ToolRun | null) ?? { content: "Không có kết quả.", is_error: true };
+  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error };
+}
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ).
 function addFollowup(m: unknown[], text: string) {
   const note = `<user_followup>\n${text}\n</user_followup>`;
@@ -256,7 +298,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     if (i > 0) { progress("step", "Đang viết câu trả lời"); deltaStep(); }
     const r = await ad.step(m, i === MAX_STEPS - 1);
     m.push(r.assistant);
-    if (!r.calls.length) return { text: r.text, used };
+    if (!r.calls.length) { if (r.pause) continue; return { text: r.text, used }; }
     // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
     if (r.text.trim()) progress("say", r.text.trim());
     const ask = r.calls.filter((c) => needsAsk(x, c));
@@ -467,7 +509,62 @@ function estimate(sys: string[], skills: string[], pinned: string, prep: ReturnT
   return Response.json({ blocks, total: blocks.reduce((n, b) => n + b.tokens, 0), dropped: z.dropped });
 }
 
+// Bộ skill của một lượt: skill đã bật (dự án, mọi nơi), thư viện studio và plugin (mục lục, mở khi cần), gợi ý định tuyến theo yêu cầu mới nhất.
+// Dùng chung cho model khóa API (vòng lặp công cụ) và gói subscription (cầu nối MCP).
+async function skillSet(user: UserRow, body: Record<string, any>, messages: unknown, studio: Studio | null, st: ReturnType<typeof studioSkills> | null) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const c = { user };
+  const { skills, project } = body;
+  const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
+  // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
+  for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
+  for (let i = list.length - 1; i >= 0; i--) if (list.findIndex((x) => x.name === list[i].name) !== i) list.splice(i, 1);
+  // Mọi thư viện đã cài đều tự dùng được: mỗi studio là một mục "studio-…", mỗi plugin khác là một mục "lib-…" trong available_skills.
+  // Model tự mở thư viện khi việc cần tới (load_skill), rồi chọn skill cụ thể bên trong. Prompt chỉ thêm một dòng mỗi thư viện,
+  // các skill trong thư viện không chiếm chỗ cho tới khi được mở. Khi bấm nút studio, thư viện của studio đó đã mở sẵn.
+  const visible = [...list];
+  const hidden = (ks: Skill[]) => { for (const k of ks) if (!list.some((x) => x.name === k.name)) list.push(k); };
+  // Một skill có thể nằm trong nhiều thư viện (theme-factory ở cả Thiết kế và Trình bày): giữ đủ để gán đúng thư viện đã mở.
+  const libs: Record<string, Lib[]> = {};
+  const tag = (lib: Lib, ks: Skill[]) => { libs[lib.key] = [lib]; for (const k of ks) (libs[k.name] ??= []).push(lib); };
+  if (studio) tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
+  if (skills && can(c.user, "skills") && skillsOn(c.user)) {
+    for (const s of STUDIOS) {
+      const lib = s === studio ? null : studioSkills(c.user.id, s);
+      if (!lib?.skills.length) continue;
+      visible.push(studioIndex(s, lib.plugins, lib.skills));
+      hidden(lib.skills);
+      tag({ key: `studio-${s}`, label: STUDIO_LABEL[s] }, lib.skills);
+    }
+    for (const l of libraryPlugins(c.user.id)) {
+      const fresh = l.skills.filter((k) => !list.some((x) => x.name === k.name));
+      if (!fresh.length) continue;
+      tag({ key: `lib-${l.slug}`, label: l.name }, fresh);
+      if (fresh.length <= 2) { visible.push(...fresh); list.push(...fresh); continue; }
+      visible.push(libIndex({ ...l, skills: fresh }));
+      hidden(fresh);
+    }
+  }
+  // Định tuyến: chấm điểm toàn bộ kho skill theo yêu cầu mới nhất. Skill có ở nhiều thư viện được gán vào thư viện
+  // mà các gợi ý khác cùng thuộc về (đề xuất dự án → Tài liệu, không phải Trình bày).
+  let route = "";
+  const prefer: Record<string, string> = {};
+  if (list.length) {
+    const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k })));
+    const votes = new Map<string, number>();
+    for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
+    const pick = (n: string) => (libs[n] ?? []).slice().sort((a, b) => (votes.get(b.key) ?? 0) - (votes.get(a.key) ?? 0))[0];
+    const hits = raw.map((h) => ({ ...h, lib: pick(h.skill.name) }));
+    for (const h of hits) if (h.lib) prefer[h.skill.name] = h.lib.key;
+    const recentNames = Array.isArray(body.recentSkills) ? [...new Set((body.recentSkills as unknown[]).filter((n): n is string => typeof n === "string"))].slice(0, 6) : [];
+    const recent = recentNames.filter((n) => list.some((k) => k.name === n) && !hits.some((h) => h.skill.name === n)).map((n) => ({ name: n, lib: libs[n]?.[0] }));
+    route = routingPrompt(hits, recent);
+  }
+  return { list, visible, libs, prefer, route };
+}
+
 type Who = { user: UserRow };
+// Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
+const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -553,14 +650,40 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (body.estimate === true) return estimate([system], [], pinnedBlock(body.pinned), prepareHistory(messages, [], {}));
     const am = feature === "artifact" ? artifactMessages(body.prompt) : null;
     if (feature === "artifact" && !am) return Response.json({ error: "Nội dung gửi tới model không hợp lệ." }, { status: 400 });
-    // Gói chạy qua CLI chưa có công cụ của Synchro: chỉ thêm các hướng dẫn thuần văn bản (hỏi lại, artifact, hình minh họa trong chat).
+    // Hướng dẫn thuần văn bản theo Cài đặt → Khả năng (hỏi lại, artifact, hình minh họa trong chat).
     const pc = skills ? capsState(c.user).caps : null;
     const planSys = pc ? [feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
-    const r = await subTurn({
-      user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-      messages: am ?? messages, conv: am ? undefined : typeof conv === "string" ? conv : undefined, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
-    });
-    return Response.json(r.json, { status: r.status });
+    // Công cụ của Synchro cho gói (Claude Code, Codex): skill, thư viện plugin, connector, chạy code, dữ liệu đã lưu, danh sách việc —
+    // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
+    const cli = subCli(model)!;
+    const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
+    let bridge: { url: string; close: () => void } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "";
+    const usedAll: ToolRun["used"][] = [];
+    try {
+      if (pc && !am && BRIDGE_CLIS.has(cli)) {
+        const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
+        const st = studio ? studioSkills(c.user.id, studio) : null;
+        const ss = await skillSet(c.user, body, messages, studio, st);
+        if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
+        const code = pc.code;
+        const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
+        const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), PLAN_TOOL];
+        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId };
+        x = xx;
+        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => bridgeCall(xx, name, input, usedAll) });
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, ss.route].filter(Boolean).join("\n\n");
+      }
+      const r = await subTurn({
+        user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, pinnedBlock(body.pinned), useMemory(body, c.user) ? memoryBlock(c.user.id) : ""].filter(Boolean).join("\n\n"),
+        messages: am ?? messages, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
+        mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true,
+      });
+      if (!x || r.status !== 200) return Response.json(r.json, { status: r.status });
+      // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).
+      const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);
+      recordUse(c.user.id, names);
+      return Response.json({ ...(r.json as Record<string, unknown>), skills: usedAll, files: x.outs, libs: usedLibs(x, names), ...(x.trace.length ? { trace: x.trace } : {}) });
+    } finally { bridge?.close(); sess?.close(); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
@@ -593,56 +716,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const mixer = (body.mixer && typeof body.mixer === "object" ? body.mixer : {}) as { artifacts?: unknown; tools?: unknown; recent?: unknown };
   const base = cleanBase(body.artBase);
   const mix = { artifacts: mixer.artifacts !== false, tools: mixer.tools !== false, recent: typeof mixer.recent === "number" ? mixer.recent : undefined, summary: typeof body.summary === "string" ? body.summary : undefined, base };
-  // Tài liệu ghim: tầng tĩnh, ngay sau hướng dẫn hệ thống và danh mục skill (không đổi giữa các lượt nên đọc từ bộ đệm prompt).
-  const pinned = pinnedBlock(body.pinned);
+  // Tài liệu ghim và bộ nhớ của người dùng: tầng tĩnh, ngay sau hướng dẫn hệ thống và danh mục skill (ít đổi nên đọc từ bộ đệm prompt).
+  const pinned = [pinnedBlock(body.pinned), useMemory(body, c.user) ? memoryBlock(c.user.id) : ""].filter(Boolean).join("\n\n");
   const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {
-    const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
-    // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
-    for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
-    for (let i = list.length - 1; i >= 0; i--) if (list.findIndex((x) => x.name === list[i].name) !== i) list.splice(i, 1);
-    // Mọi thư viện đã cài đều tự dùng được: mỗi studio là một mục "studio-…", mỗi plugin khác là một mục "lib-…" trong available_skills.
-    // Model tự mở thư viện khi việc cần tới (load_skill), rồi chọn skill cụ thể bên trong. Prompt chỉ thêm một dòng mỗi thư viện,
-    // các skill trong thư viện không chiếm chỗ cho tới khi được mở. Khi bấm nút studio, thư viện của studio đó đã mở sẵn.
-    const visible = [...list];
-    const hidden = (ks: Skill[]) => { for (const k of ks) if (!list.some((x) => x.name === k.name)) list.push(k); };
-    // Một skill có thể nằm trong nhiều thư viện (theme-factory ở cả Thiết kế và Trình bày): giữ đủ để gán đúng thư viện đã mở.
-    const libs: Record<string, Lib[]> = {};
-    const tag = (lib: Lib, ks: Skill[]) => { libs[lib.key] = [lib]; for (const k of ks) (libs[k.name] ??= []).push(lib); };
-    if (studio) tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
-    if (skills && can(c.user, "skills") && skillsOn(c.user)) {
-      for (const s of STUDIOS) {
-        const lib = s === studio ? null : studioSkills(c.user.id, s);
-        if (!lib?.skills.length) continue;
-        visible.push(studioIndex(s, lib.plugins, lib.skills));
-        hidden(lib.skills);
-        tag({ key: `studio-${s}`, label: STUDIO_LABEL[s] }, lib.skills);
-      }
-      for (const l of libraryPlugins(c.user.id)) {
-        const fresh = l.skills.filter((k) => !list.some((x) => x.name === k.name));
-        if (!fresh.length) continue;
-        tag({ key: `lib-${l.slug}`, label: l.name }, fresh);
-        if (fresh.length <= 2) { visible.push(...fresh); list.push(...fresh); continue; }
-        visible.push(libIndex({ ...l, skills: fresh }));
-        hidden(fresh);
-      }
-    }
-    // Định tuyến: chấm điểm toàn bộ kho skill theo yêu cầu mới nhất. Skill có ở nhiều thư viện được gán vào thư viện
-    // mà các gợi ý khác cùng thuộc về (đề xuất dự án → Tài liệu, không phải Trình bày).
-    let route = "";
-    const prefer: Record<string, string> = {};
-    if (list.length) {
-      const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k })));
-      const votes = new Map<string, number>();
-      for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
-      const pick = (n: string) => (libs[n] ?? []).slice().sort((a, b) => (votes.get(b.key) ?? 0) - (votes.get(a.key) ?? 0))[0];
-      const hits = raw.map((h) => ({ ...h, lib: pick(h.skill.name) }));
-      for (const h of hits) if (h.lib) prefer[h.skill.name] = h.lib.key;
-      const recentNames = Array.isArray(body.recentSkills) ? [...new Set((body.recentSkills as unknown[]).filter((n): n is string => typeof n === "string"))].slice(0, 6) : [];
-      const recent = recentNames.filter((n) => list.some((k) => k.name === n) && !hits.some((h) => h.skill.name === n)).map((n) => ({ name: n, lib: libs[n]?.[0] }));
-      route = routingPrompt(hits, recent);
-    }
+    const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
     const prep = prepareHistory(messages, [route], mix);
@@ -651,17 +730,22 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const code = !!cs?.caps.code && t.kind !== "mock";
     // read_ref: đọc dữ liệu lớn đã lưu theo tham chiếu (ở lượt này hoặc các lượt trước, kể cả khi đổi model).
     const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));
-    if (visible.length || sess || code || refs) {
+    // "Tìm kiếm trên web" ở khung soạn: công cụ tìm web phía máy chủ của Anthropic / OpenAI (Gemini qua API tương thích chưa có).
+    const web = !!skills && body.web === true && (t.kind === "anthropic" || t.kind === "openai");
+    if (visible.length || sess || code || refs || web) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", pinned].filter(Boolean).join("\n\n");
       const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(skills ? [PLAN_TOOL] : [])];
+      // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
+      const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
       const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
-        : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, tools, effort, prep.historyEnd)
-        : (t.kind === "openai" ? responsesAdapter : openaiAdapter)(t, `${system}\n\n${sk}`, max_tokens, tools, effort);
+        : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)
+        : t.kind === "openai" ? responsesAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort, web)
+        : openaiAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort);
       const m0: unknown[] = t.kind === "mock" ? [...msgs] : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
       // Kiểm tra bản sửa trên lịch sử gốc (bản đã rút gọn không còn nội dung artifact cũ).
       const raw = (Array.isArray(messages) ? messages : []) as { role: string; content: unknown }[];
@@ -689,5 +773,8 @@ registerExec("chat", async (body, user) => {
   if (over) return { http: 429, json: { error: over, usageLimit: true } };
   const scope = { uid: user.id, feature: "chat" };
   const res = await usageScope.run(scope, () => chatPost(body, { user }, scope));
-  return { http: res.status, json: await res.json() };
+  const json = await res.json();
+  // Rút bộ nhớ từ lượt vừa xong ở nền (không làm chậm câu trả lời).
+  if (res.status === 200 && useMemory(body, user) && typeof json?.text === "string") void learnFromTurn(user, lastUserText(body.messages), json.text).catch(() => {});
+  return { http: res.status, json };
 });

@@ -1345,3 +1345,12 @@ RULES_EN.push(
   [/^(.+) đang bận, chuyển sang (.+)$/, (m) => `${m[1]} is busy, switching to ${m[2]}`],
   [/^Chép lời: (.+)$/, (m) => `Transcription: ${m[1]}`],
 );
+// Bộ nhớ (Cài đặt → Bộ nhớ, giao diện tiếng Việt).
+Object.assign(EN2VI, {
+  "Allow Synchro to remember lasting details from your chats (name, work, preferences) and use them in later chats.": "Cho phép Synchro ghi nhớ những điều lâu dài từ các đoạn chat (tên, công việc, sở thích) và dùng lại trong các đoạn chat sau.",
+});
+RULES_VI.push(
+  [/^Added (\d+) memories$/, (m) => `Đã thêm ${m[1]} mục vào bộ nhớ`],
+  [/^(\d)\s+Copy this prompt into a chat with your other AI provider$/, (m) => `${m[1]}  Chép câu lệnh này vào một đoạn chat với nhà cung cấp AI kia`],
+  [/^(\d)\s+Paste results below to add to Synchro's memory$/, (m) => `${m[1]}  Dán kết quả vào bên dưới để thêm vào bộ nhớ của Synchro`],
+);

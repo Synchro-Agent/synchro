@@ -57,9 +57,28 @@ const loginFile = path.join(dir, ".mock-login");
       result({ subtype: "success", is_error: true, result: `Claude AI usage limit reached|${sec(lim.fiveReset)}` });
       process.exit(1);
     }
+    const delta = async (t) => { for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
+    // Như Claude Code thật với --mcp-config: nối máy chủ MCP "synchro", gọi công cụ (mcp__synchro__…) khi cần.
+    const cfgJson = (() => { try { return JSON.parse(C.flag(a, "--mcp-config") ?? "null"); } catch { return null; } })();
+    const mcpUrl = cfgJson?.mcpServers?.synchro?.url;
+    const ask = C.toolAsk(prompt), allowed = (C.flag(a, "--allowedTools") ?? "").split(",");
+    let mcpNote = "";
+    if (mcpUrl) {
+      if (ask && allowed.includes("mcp__synchro")) {
+        await delta(`Mình sẽ dùng công cụ ${ask.name} của Synchro.`);
+        C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_mock", name: `mcp__synchro__${ask.name}`, input: ask.args }] }, session_id: sid });
+        const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
+        const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).map((c) => c.text).join("\n");
+        mcpNote = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
+      } else {
+        const r = await C.mcp(mcpUrl).catch(() => ({ tools: [] }));
+        mcpNote = ` [công cụ Synchro: ${r.tools.length}]`;
+      }
+    }
+    const web = (C.flag(a, "--tools") ?? "").includes("WebSearch") ? " [tìm web]" : "";
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
-    const text = C.reply("Claude", prompt, turn) + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : "");
-    for (const ch of C.chunks(text)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); }
+    const text = C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : "");
+    await delta(text);
     C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] }, session_id: sid });
     result({ subtype: "success", is_error: false, result: text, usage: { input_tokens: prompt.length, output_tokens: text.length, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
     return;

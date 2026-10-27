@@ -27,7 +27,7 @@ import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox";
-import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
+import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
 import type { ProviderInfo } from "./catalog";
@@ -331,9 +331,10 @@ function Composer(p: {
   const [v, setV] = useState("");
   const [foc, setFoc] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [web, setWeb] = useState(true);
+  // Tìm web và bộ nhớ: lưu theo người dùng, gửi kèm mỗi lượt chat.
+  const [web, setWeb] = usePref("webSearch", true);
   const perms = useApp().me?.perms;
-  const [mem, setMem] = useState(true);
+  const [mem, setMem] = usePref("chatMemory", true);
   const [rec, setRec] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
@@ -861,7 +862,7 @@ export default function Home() {
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills,
         onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta, onEvent,
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
-        extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via } });
+        extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via } });
       const used = takeSkillsUsed();
       libs = takeLibsUsed();
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.

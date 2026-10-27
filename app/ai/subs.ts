@@ -455,7 +455,7 @@ function textOf(c: unknown): string {
     : b.type === "image" ? "[Ảnh đính kèm: gói subscription qua Synchro chưa đọc được ảnh]" : "").filter(Boolean).join("\n\n");
 }
 
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void };
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string }; web?: boolean };
 export type SubResult = { status: number; json: Json };
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
@@ -478,7 +478,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);
   const req: TurnRequest = {
-    prompt, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal,
+    prompt, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal, mcp: o.mcp, web: o.web,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).

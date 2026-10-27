@@ -338,24 +338,42 @@ function Capabilities({ go }: { go: (t: string) => void }) {
   );
 }
 
+// Bộ nhớ lưu ở máy chủ (app/memory.ts): Synchro tự rút từ các cuộc trò chuyện và đưa vào mỗi lượt chat khi nút "Bộ nhớ" bật.
+type MemItem = { id: string; content: string; createdAt: number; source: string };
 function Memory() {
   const app = useApp();
-  const [gen, setGen] = usePref("memGen", true);
-  const [sens, setSens] = usePref("memSens", false);
-  const [mems, setMems] = usePref<string[]>("memories", []);
+  const [st, setSt] = useState<{ items: MemItem[]; cfg: { gen: boolean; sens: boolean } } | null>(null);
   const [imp, setImp] = useState(false);
   const [txt, setTxt] = useState("");
+  const call = async (method: string, body?: unknown, q = "") => {
+    try {
+      const r = await fetch(`/api/memory${q}`, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
+      setSt(j);
+      return j as { added?: number };
+    } catch (e) { app.say((e as Error).message); return null; }
+  };
+  // Bản cũ chỉ lưu bộ nhớ trong cài đặt cá nhân (model không dùng tới): chuyển một lần lên máy chủ.
+  const [old, setOld] = usePref<string[]>("memories", []);
+  useEffect(() => {
+    if (!old.length) { void call("GET"); return; }
+    void call("POST", { items: old }).then((j) => { if (j) setOld([]); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const cfg = st?.cfg ?? { gen: true, sens: false };
+  const mems = st?.items ?? [];
+  const PROMPT = "Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences.";
   return (
     <>
       <H first>Memory</H>
-      <Row t="Generate memory from chats" d={<>Allow Synchro to generate memory from your chats.</>} top><Toggle on={gen} set={setGen} /></Row>
-      <Row t="Include sensitive topics in memory" d={<>Allow Synchro to save details about sensitive topics like health conditions or religious beliefs to memory.</>}><Toggle on={sens} set={setSens} /></Row>
+      <Row t="Generate memory from chats" d={<>Allow Synchro to remember lasting details from your chats (name, work, preferences) and use them in later chats.</>} top><Toggle on={cfg.gen} set={(v) => void call("POST", { cfg: { gen: v } })} /></Row>
+      <Row t="Include sensitive topics in memory" d={<>Allow Synchro to save details about sensitive topics like health conditions or religious beliefs to memory.</>}><Toggle on={cfg.sens} set={(v) => void call("POST", { cfg: { sens: v } })} /></Row>
       <Row t="Import memory from other AI providers" d={<>Bring relevant context and data from another AI provider to Synchro. We&apos;ll provide a prompt you can use to fetch the memory from your other account.</>}><button className="btn" onClick={() => setImp(true)}>Start import</button></Row>
-      {mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No memories yet</div> : (
+      {st === null ? <div className="empty" style={{ marginTop: 100 }}>Loading…</div> : mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No memories yet</div> : (
         <>
           <H>Stored memories <span className="muted" style={{ fontWeight: 360 }}>({mems.length})</span></H>
-          {mems.map((m, i) => <div key={i} className="item-row"><span style={{ flex: 1 }}>{m}</span><button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Delete memory" onClick={() => setMems((o) => o.filter((_, j) => j !== i))}><I.Trash size={14} /></button></div>)}
-          <button className="btn danger" style={{ marginTop: 12 }} onClick={() => app.confirm("Delete all memory?", "Synchro will forget everything it has stored about you.", "Delete", () => { setMems([]); app.say("Memory cleared"); })}>Delete all</button>
+          {mems.map((m) => <div key={m.id} className="item-row"><span style={{ flex: 1 }} data-notr>{m.content}</span><button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Delete memory" onClick={() => void call("DELETE", undefined, `?id=${encodeURIComponent(m.id)}`)}><I.Trash size={14} /></button></div>)}
+          <button className="btn danger" style={{ marginTop: 12 }} onClick={() => app.confirm("Delete all memory?", "Synchro will forget everything it has stored about you.", "Delete", () => { void call("DELETE").then(() => app.say("Memory cleared")); })}>Delete all</button>
         </>
       )}
       <Fade show={imp}>
@@ -364,10 +382,10 @@ function Memory() {
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setImp(false)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Import memory to Synchro</h2>
             <p className="d" style={{ margin: "0 0 8px" }}>1&nbsp; Copy this prompt into a chat with your other AI provider</p>
-            <div className="codebox cb-copy">Export all of my stored memories and any context you&apos;ve learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences.<button className="btn cb-btn" onClick={() => { navigator.clipboard?.writeText("Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences."); app.say("Prompt copied"); }}>Copy</button></div>
+            <div className="codebox cb-copy">{PROMPT}<button className="btn cb-btn" onClick={() => { navigator.clipboard?.writeText(PROMPT); app.say("Prompt copied"); }}>Copy</button></div>
             <p className="d" style={{ margin: "14px 0 8px" }}>2&nbsp; Paste results below to add to Synchro&apos;s memory</p>
             <textarea className="textarea" value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="Paste your memory details here" />
-            <div className="modal-foot"><button className="btn" onClick={() => setImp(false)}>Cancel</button><button className="btn dark" disabled={!txt.trim()} style={!txt.trim() ? { opacity: 0.4 } : undefined} onClick={() => { const items = txt.split(/\n+/).map((x) => x.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean); setMems((o) => [...o, ...items]); app.say(`Added ${items.length} memories`); setImp(false); setTxt(""); }}>Add to memory</button></div>
+            <div className="modal-foot"><button className="btn" onClick={() => setImp(false)}>Cancel</button><button className="btn dark" disabled={!txt.trim()} style={!txt.trim() ? { opacity: 0.4 } : undefined} onClick={async () => { const j = await call("POST", { text: txt }); if (j) { app.say(`Added ${j.added ?? 0} memories`); setImp(false); setTxt(""); } }}>Add to memory</button></div>
           </div>
         </div>
       </Fade>

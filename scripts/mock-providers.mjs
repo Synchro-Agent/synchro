@@ -73,10 +73,10 @@ async function streamOut(res, obj) {
       if (blk.type === "text") {
         ev("content_block_start", { type: "content_block_start", index: i, content_block: { type: "text", text: "" } });
         for (const p of pieces(blk.text ?? "", 12)) { if (await tick()) return quit(); ev("content_block_delta", { type: "content_block_delta", index: i, delta: { type: "text_delta", text: p } }); }
-      } else if (blk.type === "tool_use") {
-        ev("content_block_start", { type: "content_block_start", index: i, content_block: { type: "tool_use", id: blk.id, name: blk.name, input: {} } });
+      } else if (blk.type === "tool_use" || blk.type === "server_tool_use") {
+        ev("content_block_start", { type: "content_block_start", index: i, content_block: { type: blk.type, id: blk.id, name: blk.name, input: {} } });
         for (const p of pieces(JSON.stringify(blk.input ?? {}), 16)) { if (await tick()) return quit(); ev("content_block_delta", { type: "content_block_delta", index: i, delta: { type: "input_json_delta", partial_json: p } }); }
-      }
+      } else ev("content_block_start", { type: "content_block_start", index: i, content_block: blk });
       ev("content_block_stop", { type: "content_block_stop", index: i });
     }
     ev("message_delta", { type: "message_delta", delta: { stop_reason: obj.stop_reason, stop_sequence: null }, usage: { output_tokens: obj.usage?.output_tokens ?? 0 } });
@@ -84,7 +84,7 @@ async function streamOut(res, obj) {
   } else if (obj.object === "response") {
     ev("response.created", { type: "response.created", response: { ...obj, status: "in_progress", output: [] } });
     for (const [oi, item] of (obj.output ?? []).entries()) {
-      if (item.type !== "message") continue;
+      if (item.type !== "message") { ev("response.output_item.done", { type: "response.output_item.done", output_index: oi, item }); continue; }
       for (const p of pieces(item.content?.[0]?.text ?? "", 12)) { if (await tick()) return quit(); ev("response.output_text.delta", { type: "response.output_text.delta", item_id: item.id, output_index: oi, content_index: 0, delta: p }); }
     }
     ev("response.completed", { type: "response.completed", response: obj });
@@ -199,7 +199,8 @@ const INTENTS = [
   [/\b(lap lai|nhac lai|echo)\b/, ["echo"]],
 ];
 const TOPICS = [["don hang", "order"], ["ghi chu", "note"], ["wiki", "wiki"], ["repo", "repo"], ["kho ma", "repo"], ["thu vien", "librar"], ["tai lieu", "doc"], ["vung", "region"], ["gio", "time"], ["echo", "echo"]];
-const normTools = (list) => (list ?? []).map((x) => (x.function ? { name: x.function.name, description: x.function.description, schema: x.function.parameters } : { name: x.name, description: x.description, schema: x.input_schema ?? x.parameters })).filter((x) => x.name);
+// Công cụ phía máy chủ của hãng (tìm web: type "web_search_…" của Anthropic, "web_search" của OpenAI) không phải công cụ của Synchro.
+const normTools = (list) => (list ?? []).filter((x) => !x.type || x.type === "function" || x.type === "custom").map((x) => (x.function ? { name: x.function.name, description: x.function.description, schema: x.function.parameters } : { name: x.name, description: x.description, schema: x.input_schema ?? x.parameters })).filter((x) => x.name);
 function buildArgs(tool, q) {
   const props = tool.schema?.properties ?? {};
   const keys = tool.schema?.required?.length ? tool.schema.required : Object.keys(props).slice(0, 1);
@@ -304,7 +305,20 @@ function autoReply(sys, q) {
   const steps = start === "code" ? ["code"] : [start, "code"];
   return steps.map((k) => `<!-- mode:${k} -->\n${AUTO_STEP[k]}`).join("\n\n") + `\n\n— Trả lời giả lập (chế độ Tự động) cho: “${q.slice(0, 80)}”.`;
 }
+// Synchro nhờ rút bộ nhớ (memory.ts): trả mảng JSON các điều bền vững về người dùng rút từ câu của họ.
+function memoryReply(sys, q) {
+  if (!/trích xuất bộ nhớ dài hạn về NGƯỜI DÙNG/.test(sys ?? "")) return null;
+  const said = (/\[người dùng\] ([^\n]*)/.exec(q) ?? [])[1] ?? "";
+  const out = [];
+  const name = /tên (?:mình |tôi )?là ([\p{L} ]{2,40})/iu.exec(said);
+  if (name) out.push(`Tên là ${name[1].trim()}`);
+  const like = /(?:mình|tôi) thích ([^.,!?]{3,80})/iu.exec(said);
+  if (like) out.push(`Thích ${like[1].trim()}`);
+  return { text: JSON.stringify(out) };
+}
 const capsFor = (sys, q, msgs, tools, none) => {
+  const mem = memoryReply(sys, q);
+  if (mem) return mem;
   const first = !none && /#rev\s*\d+/.test(q) && !q.includes("#tool") && wantTool(q.replace(/#rev\s*\d+/, ""), tools);
   if (first) return { tool: first };
   if (/Chế độ Tự động/.test(sys ?? "") && !wantTool(q, tools)) return { text: autoReply(sys, q) };
@@ -325,7 +339,7 @@ async function trap(res, q, fmt) {
   return true;
 }
 
-const LAST = {};
+const LAST = {}, HIST = {};
 // Chép lời giả lập: một cuộc họp ngắn tiếng Việt, 3 người nói (dùng cho tính năng Cuộc họp).
 const MEETING_LINES = [
   [0, "Chào mọi người, hôm nay mình chốt kế hoạch ra mắt ứng dụng Synchro bản di động."],
@@ -370,7 +384,9 @@ async function handler(req, res) {
   // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…), số token ước tính, số luồng.
   if (p === "/_debug/last") return send(res, 200, LAST);
   if (p === "/_debug/streams") return send(res, 200, STREAMS);
-  if (res.__prov) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); }
+  // 30 yêu cầu gần nhất của từng hãng (khi có lời gọi chạy nền sau lượt chat, như rút bộ nhớ, đè lên "gần nhất").
+  if (p === "/_debug/hist") return send(res, 200, HIST);
+  if (res.__prov) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 30); }
   res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
 
   // ---- Anthropic (/v1/models, /v1/messages) ----
@@ -387,6 +403,16 @@ async function handler(req, res) {
       const shape = anthropicShape(b);
       if (shape) return send(res, 400, err("invalid_request_error", shape));
       const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef);
+      const webTool = (b.tools ?? []).find((x) => /^web_search_/.test(x.type ?? ""));
+      if (webTool && q.includes("#web") && !JSON.stringify(b.messages).includes("web_search_tool_result")) {
+        const id = `srvtoolu_${Date.now()}`;
+        return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, stop_reason: "end_turn", usage: { input_tokens: 60, output_tokens: 40, server_tool_use: { web_search_requests: 1 } }, content: [
+          { type: "text", text: "Mình sẽ tìm trên web." },
+          { type: "server_tool_use", id, name: "web_search", input: { query: q.replace("#web", "").trim().slice(0, 80) } },
+          { type: "web_search_tool_result", tool_use_id: id, content: [{ type: "web_search_result", url: "https://example.com/tin-moi", title: "Tin mới (giả lập)", encrypted_content: "x" }] },
+          { type: "text", text: `Theo kết quả tìm web (${webTool.type}): đây là tin mới nhất (giả lập).` },
+        ] });
+      }
       const sst = studioStep(`${sysText(b.system)}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ đọc skill trong thư viện trước." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: sst.text }], stop_reason: "end_turn" }); }
@@ -425,6 +451,14 @@ async function handler(req, res) {
       const ef = b.reasoning?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err(`Invalid value for 'reasoning.effort': '${ef}'.`));
       const { text, q } = reply("openai", b.model, input, b.max_output_tokens, ef);
+      // Tìm web (công cụ phía máy chủ của OpenAI): mục web_search_call rồi câu trả lời, trong cùng một lần gọi.
+      if ((b.tools ?? []).some((x) => x.type === "web_search") && q.includes("#web")) {
+        await sleep(latency(b.model));
+        return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [
+          { type: "web_search_call", id: `ws_mock${Date.now()}`, status: "completed", action: { type: "search", query: q.replace("#web", "").trim().slice(0, 80) } },
+          { type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: "Theo kết quả tìm web (web_search của OpenAI): đây là tin mới nhất (giả lập).", annotations: [] }] },
+        ], usage: { input_tokens: 60, output_tokens: 30 } });
+      }
       const sst = studioStep(`${b.instructions ?? ""}\n${dynOf(input)}`, JSON.stringify(input), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: sst.tool.name, arguments: JSON.stringify(sst.tool.args), status: "completed" }] });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: sst.text, annotations: [] }] }] }); }

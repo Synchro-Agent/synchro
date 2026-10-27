@@ -34,6 +34,8 @@ function read(k: string): unknown {
   return v;
 }
 
+/** Đọc cài đặt ngoài React (lúc gửi tin): giá trị đã lưu, không có thì mặc định. */
+export const readPref = <T,>(k: string, d: T): T => { const v = read(k); return v === undefined ? d : (v as T); };
 export function usePref<T>(k: string, d: T): [T, (v: T | ((o: T) => T)) => void] {
   if (!defs.has(k)) defs.set(k, d);
   const v = useSyncExternalStore(subscribe, () => (typeof window === "undefined" ? defs.get(k) : read(k)), () => defs.get(k)) as T;

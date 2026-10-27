@@ -62,24 +62,40 @@ const parse = (s: string) => { try { return JSON.parse(s); } catch { return null
 // Lỗi giữa luồng (ví dụ quá tải): báo như lỗi HTTP để người dùng thấy câu dễ hiểu.
 const midErr = (e: { type?: string; message?: string; code?: string } | undefined) => new HttpErr(e?.type === "overloaded_error" ? 529 : 502, e?.message ?? "Kết nối tới model bị ngắt giữa chừng.");
 
-type ABlock = { type: string; text?: string; id?: string; name?: string; input?: unknown; thinking?: string; signature?: string; data?: string; _json?: string; [k: string]: unknown };
-async function anthropicStream(r: Response, onDelta: OnDelta, signal?: AbortSignal) {
+export type ABlock = { type: string; text?: string; id?: string; name?: string; input?: unknown; thinking?: string; signature?: string; data?: string; _json?: string; [k: string]: unknown };
+/** Chữ của lượt trả lời: các khối chữ liền nhau (bị cắt bởi trích dẫn) nối thẳng, khối chữ sau một bước khác (tìm web…) sang đoạn mới. */
+export function blocksText(blocks: ABlock[]): string {
+  let out = "", prev = "";
+  for (const b of blocks) {
+    if (b.type === "text" && b.text) out += (prev && prev !== "text" && out ? "\n\n" : "") + b.text;
+    if (b.type !== "thinking" && b.type !== "redacted_thinking") prev = b.type;
+  }
+  return out;
+}
+// onBlock: báo từng khối khi đã nhận đủ (ví dụ công cụ phía máy chủ bắt đầu tìm web) để nhật ký làm việc hiện đúng lúc.
+async function anthropicStream(r: Response, onDelta: OnDelta, signal?: AbortSignal, onBlock?: (b: ABlock) => void) {
   let msg: Record<string, unknown> & { content: ABlock[]; usage?: Record<string, number> } = { content: [] };
+  let prev = "", wrote = false;
   for await (const ev of sse(r, signal)) {
     const d = parse(ev.data);
     if (!d) continue;
     if (d.type === "message_start") msg = { ...d.message, content: [] };
-    else if (d.type === "content_block_start") msg.content[d.index] = { ...d.content_block, ...(d.content_block.type === "tool_use" ? { _json: "" } : {}) };
-    else if (d.type === "content_block_delta") {
+    else if (d.type === "content_block_start") {
+      const t = d.content_block.type;
+      msg.content[d.index] = { ...d.content_block, ...(t === "tool_use" || t === "server_tool_use" ? { _json: "" } : {}) };
+      if (t === "text" && wrote && prev !== "text") onDelta("\n\n");
+      if (t !== "thinking" && t !== "redacted_thinking") prev = t;
+    } else if (d.type === "content_block_delta") {
       const b = msg.content[d.index], x = d.delta ?? {};
       if (!b) continue;
-      if (x.type === "text_delta") { b.text = (b.text ?? "") + x.text; onDelta(x.text); }
+      if (x.type === "text_delta") { b.text = (b.text ?? "") + x.text; if (x.text) { wrote = true; onDelta(x.text); } }
       else if (x.type === "input_json_delta") b._json = (b._json ?? "") + (x.partial_json ?? "");
       else if (x.type === "thinking_delta") b.thinking = (b.thinking ?? "") + x.thinking;
       else if (x.type === "signature_delta") b.signature = x.signature;
     } else if (d.type === "content_block_stop") {
       const b = msg.content[d.index];
       if (b && b._json !== undefined) { b.input = b._json ? parse(b._json) ?? {} : {}; delete b._json; }
+      if (b) onBlock?.(b);
     } else if (d.type === "message_delta") { Object.assign(msg, d.delta ?? {}); if (d.usage) msg.usage = { ...msg.usage, ...d.usage }; }
     else if (d.type === "error") throw midErr(d.error);
   }
@@ -87,14 +103,14 @@ async function anthropicStream(r: Response, onDelta: OnDelta, signal?: AbortSign
   return msg;
 }
 
-export async function anthropicCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta) {
+export async function anthropicCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta, onBlock?: (b: ABlock) => void) {
   const r = await fetch(`${t.base}/v1/messages`, {
     method: "POST", signal,
     headers: { "x-api-key": t.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model: t.model, ...body, ...(onDelta ? { stream: true } : {}) }),
   });
   if (!r.ok) await fail(r);
-  const j = onDelta ? await anthropicStream(r, onDelta, signal) : await r.json();
+  const j = onDelta ? await anthropicStream(r, onDelta, signal, onBlock) : await r.json();
   noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
   return j;
 }
@@ -136,12 +152,13 @@ export function respParse(j: { output?: RespOut[]; status?: string; incomplete_d
 }
 export const respTools = (tools: { name: string; description: string; input_schema: unknown }[]) => tools.map((x) => ({ type: "function", name: x.name, description: x.description, parameters: x.input_schema }));
 // Responses: chữ đến qua response.output_text.delta, đối tượng hoàn chỉnh nằm trong response.completed.
-async function responsesStream(r: Response, onDelta: OnDelta, signal?: AbortSignal) {
+async function responsesStream(r: Response, onDelta: OnDelta, signal?: AbortSignal, onItem?: (it: Item) => void) {
   let done: Record<string, unknown> | null = null;
   for await (const ev of sse(r, signal)) {
     const d = parse(ev.data);
     if (!d) continue;
     if (d.type === "response.output_text.delta" && typeof d.delta === "string") onDelta(d.delta);
+    else if (d.type === "response.output_item.done" && d.item) onItem?.(d.item);
     else if (d.type === "response.completed" || d.type === "response.incomplete") done = d.response;
     else if (d.type === "response.failed") throw midErr(d.response?.error);
     else if (d.type === "error") throw midErr(d.error ?? d);
@@ -149,14 +166,14 @@ async function responsesStream(r: Response, onDelta: OnDelta, signal?: AbortSign
   if (!done) throw midErr(undefined);
   return done;
 }
-export async function responsesCall(t: { base: string; key: string; model: string; provider?: string }, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta) {
+export async function responsesCall(t: { base: string; key: string; model: string; provider?: string }, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta, onItem?: (it: Item) => void) {
   const r = await fetch(`${t.base}/responses`, {
     method: "POST", signal,
     headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
     body: JSON.stringify({ model: t.model, ...body, ...(onDelta ? { stream: true } : {}) }),
   });
   if (!r.ok) await fail(r);
-  const j = onDelta ? await responsesStream(r, onDelta, signal) : await r.json();
+  const j = onDelta ? await responsesStream(r, onDelta, signal, onItem) : await r.json();
   noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
   return j;
 }

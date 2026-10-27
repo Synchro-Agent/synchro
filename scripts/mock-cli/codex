@@ -70,7 +70,19 @@ const authFile = path.join(dir, "auth.json");
     await C.sleep(150);
     C.out({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "**Chào hỏi**" } });
     const eff = (a.find((x) => x.startsWith("model_reasoning_effort=")) ?? "").split("=")[1];
-    const text = C.reply("Codex (ChatGPT)", prompt, turn) + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : "");
+    // Như codex thật với -c mcp_servers.synchro.url=…: lời dẫn, mcp_tool_call, rồi câu trả lời.
+    const mcpUrl = (() => { const x = a.find((v) => v.startsWith("mcp_servers.synchro.url=")); try { return x ? JSON.parse(x.slice(x.indexOf("=") + 1)) : null; } catch { return null; } })();
+    const ask = C.toolAsk(prompt);
+    let note = "";
+    if (mcpUrl && ask) {
+      C.out({ type: "item.completed", item: { id: "item_n", type: "agent_message", text: `Mình sẽ dùng công cụ ${ask.name} của Synchro.` } });
+      C.out({ type: "item.started", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name } });
+      const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
+      C.out({ type: "item.completed", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name, status: r.error ? "failed" : "completed" } });
+      note = ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
+    } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
+    if (a.includes("tools.web_search=true")) note += " [tìm web]";
+    const text = C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : "");
     C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text } });
     C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length } });
     return;

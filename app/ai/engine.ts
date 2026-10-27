@@ -14,6 +14,10 @@ export type TurnRequest = {
   workdir?: string;
   /** Lịch sử hội thoại cho engine không giữ phiên (khóa API); engine CLI dùng sessionId. */
   history?: { role: "user" | "assistant"; content: unknown }[];
+  /** Cầu nối MCP của Synchro cho lượt này (công cụ skill, plugin, connector…); CLI gọi tới địa chỉ nội bộ này. */
+  mcp?: { url: string };
+  /** Người dùng bật "Tìm kiếm trên web": bật công cụ tìm web dựng sẵn của CLI. */
+  web?: boolean;
   /** Biến môi trường thêm cho tiến trình (đã qua bộ lọc của cli_runtime). */
   env?: Record<string, string>;
   signal?: AbortSignal;

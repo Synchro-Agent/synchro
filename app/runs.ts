@@ -57,7 +57,13 @@ export function getRun(id: string, uid?: string): PublicRun | null {
 export const listRuns = (uid: string, limit = 50) => (init().prepare("SELECT * FROM runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?").all(uid, limit) as Row[]).map(pub);
 
 // Tiến độ của lượt đang chạy: toolLoop gọi progress(...) mà không cần truyền id đi khắp nơi.
-const scope = new AsyncLocalStorage<{ id: string }>();
+// Toàn cục: mỗi route của Next được đóng gói riêng; cầu nối MCP (route khác) chạy công cụ trong ngữ cảnh lượt của route chat.
+const gsc = globalThis as unknown as { __synchroRunScope?: AsyncLocalStorage<{ id: string }> };
+const scope = (gsc.__synchroRunScope ??= new AsyncLocalStorage<{ id: string }>());
+/** Lượt đang chạy ở ngữ cảnh hiện tại (null nếu không có). */
+export const currentRun = () => scope.getStore()?.id ?? null;
+/** Chạy f trong ngữ cảnh của lượt id (cầu nối MCP nhận lời gọi công cụ ngoài lượt: progress, takeInbox vẫn ghi đúng lượt). */
+export const inRun = <T>(id: string | null, f: () => T): T => (id ? scope.run({ id }, f) : f());
 /** Chữ đang viết của lượt (null nếu lượt không chạy trong tiến trình này). */
 export const liveText = (id: string) => { const l = live.get(id); return l ? { s: l.s, text: l.text } : null; };
 /** Lượt đang chạy của một đoạn chat (để người xem chung nhận chữ đang viết). */

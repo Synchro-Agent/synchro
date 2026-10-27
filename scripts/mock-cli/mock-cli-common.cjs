@@ -40,4 +40,27 @@ function reply(name, prompt, turn) {
 const totalTurns = (dir) => Object.values(readJson(path.join(dir, "mock-sessions.json"), {})).reduce((x, y) => x + y, 0);
 const chunks = (t, n = 12) => Array.from({ length: Math.ceil(t.length / n) }, (_, i) => t.slice(i * n, i * n + n));
 
-module.exports = { cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+// Gọi cầu nối MCP của Synchro như CLI thật (Streamable HTTP, JSON-RPC): initialize → tools/list → (tools/call).
+async function mcp(url, call) {
+  const rpc = async (method, params, id) => {
+    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
+    return r.json();
+  };
+  await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mock-cli", version: "1" } }, 1);
+  await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });
+  const tools = (await rpc("tools/list", {}, 2)).result?.tools ?? [];
+  if (!call) return { tools };
+  const r = await rpc("tools/call", { name: call.name, arguments: call.args ?? {} }, 3);
+  return { tools, result: r.result, error: r.error };
+}
+/** "#tool=tên #args={...}" trong prompt → lời gọi công cụ giả lập. */
+function toolAsk(prompt) {
+  const m = /#tool=([\w.-]+)/.exec(prompt);
+  if (!m) return null;
+  let args = {};
+  const a = /#args=(\{.*\})/.exec(prompt);
+  if (a) { try { args = JSON.parse(a[1]); } catch {} }
+  return { name: m[1], args };
+}
+
+module.exports = { mcp, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

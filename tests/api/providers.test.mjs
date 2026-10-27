@@ -68,6 +68,25 @@ console.log("3. Model của gói trong bộ chọn model và chat bằng gói");
   ok(auto.s === 200 && auto.j.model?.startsWith("sub-claude/") && auto.j.auto, "chế độ Tự động chọn model của gói đang dùng, không tự sang khóa API", JSON.stringify({ s: auto.s, model: auto.j?.model, auto: auto.j?.auto }));
   const art = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "vẽ biểu đồ" }], skills: true });
   ok(art.s === 200 && /có hướng dẫn artifact/.test(art.j.text), "lượt chat bằng gói được gửi kèm hướng dẫn artifact / biểu đồ của Synchro", JSON.stringify(art.j).slice(0, 200));
+  // Cầu nối MCP: gói Claude dùng được công cụ của Synchro (skill, chạy code, danh sách việc…) như model khóa API.
+  const tl = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "chào" }], skills: true });
+  const n = Number(/\[công cụ Synchro: (\d+)\]/.exec(tl.j?.text ?? "")?.[1] ?? 0);
+  ok(tl.s === 200 && n >= 5, `gói Claude nối được ${n} công cụ của Synchro qua cầu nối MCP`, JSON.stringify(tl.j).slice(0, 300));
+  const waitRun = async (id) => { for (let i = 0; i < 60 && id; i++) { const x = await admin("GET", `/api/runs/${id}?json=1`); if (x.j?.run?.status && x.j.run.status !== "running") return x.j.run; await sleep(300); } return null; };
+  const rc = await admin("POST", "/api/llm", { async: true, model: "sub-claude/sonnet", messages: [{ role: "user", content: 'Tính giúp #tool=run_code #args={"language":"python","code":"print(6*7)"}' }], conv: `${conv}-mcp`, skills: true });
+  const rr = await waitRun(rc.j?.run);
+  const ev = rr?.events ?? [];
+  const say = ev.find((e) => e.kind === "say"), tool = ev.find((e) => e.kind === "tool"), done = ev.find((e) => e.kind === "res");
+  ok(rr?.http === 200 && /đã dùng run_code: .*42/.test(rr.result?.text ?? "") && !!say && /run_code/.test(say.text) && !!tool && JSON.parse(done?.text ?? "{}").ok === true,
+    "gói Claude chạy code qua Synchro: lời dẫn, công cụ, kết quả vào nhật ký làm việc", JSON.stringify({ text: rr?.result?.text, ev: ev.map((e) => e.kind) }));
+  ok(rr?.result?.trace?.some((t) => t.name === "run_code" && t.status === "ok"), "dấu vết công cụ được giữ cho lượt sau (đổi model vẫn biết đã làm gì)", JSON.stringify(rr?.result?.trace));
+  const pl = await admin("POST", "/api/llm", { async: true, model: "sub-claude/sonnet", messages: [{ role: "user", content: 'Theo doi #tool=update_plan #args={"items":[{"content":"Buoc mot","status":"in_progress"}]}' }], conv: `${conv}-plan`, skills: true });
+  const pr = await waitRun(pl.j?.run);
+  ok(pr?.events?.some((e) => e.kind === "plan" && /Buoc mot/.test(e.text)), "gói Claude cập nhật danh sách việc qua cầu nối", JSON.stringify(pr?.events));
+  const wb = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "tin mới hôm nay" }], skills: true, web: true });
+  ok(wb.s === 200 && /\[tìm web\]/.test(wb.j.text), "bật Tìm kiếm trên web → Claude Code bật WebSearch / WebFetch", JSON.stringify(wb.j).slice(0, 200));
+  const off = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "chào" }], skills: true });
+  ok(!/\[tìm web\]/.test(off.j.text), "tắt Tìm kiếm trên web → không bật công cụ tìm web");
   const nologin = await member("POST", "/api/llm", { model: "sub-claude/sonnet", messages: msgs, skills: true });
   ok(nologin.s === 409 && /Providers/.test(nologin.j.error), "thành viên chưa đăng nhập gói → 409, nhắc vào Providers", JSON.stringify(nologin.j));
 }
@@ -88,6 +107,8 @@ console.log("4. Thành viên tự đăng nhập gói ChatGPT (mã thiết bị) 
   ok(keys.includes("sub-codex/gpt-6.1-sol") && keys.every((k) => md.allowed.includes(k)) && md.providers.find((p) => p.id === "anthropic")?.source !== "plan", "thành viên: nhóm ChatGPT hiện model gói của mình (được phép dùng); nhóm Claude không lấy gói của người khác", JSON.stringify({ ids: md.providers.map((p) => [p.id, p.source]), allowed: md.allowed }));
   const r = await member("POST", "/api/llm", { model: "sub-codex/gpt-6.1-sol", messages: [{ role: "user", content: "chào" }], skills: true });
   ok(r.s === 200 && /Codex/.test(r.j.text), "thành viên chat bằng gói của mình dù không có quyền model API", JSON.stringify(r.j));
+  const cx = await member("POST", "/api/llm", { model: "sub-codex/gpt-6.1-sol", messages: [{ role: "user", content: 'Tính #tool=run_code #args={"language":"python","code":"print(5*5)"}' }], skills: true });
+  ok(cx.s === 200 && /đã dùng run_code: .*25/.test(cx.j.text) && !/Mình sẽ dùng công cụ/.test(cx.j.text), "gói ChatGPT (Codex) chạy code qua cầu nối; lời dẫn không lặp trong câu trả lời", JSON.stringify(cx.j).slice(0, 300));
   const api = await member("POST", "/api/llm", { model: "anthropic/claude-sonnet-5-5", messages: [{ role: "user", content: "chào" }], skills: true });
   ok(api.s === 403, "model API dùng chung vẫn theo quyền quản trị viên đặt", JSON.stringify(api.j));
   const us = (await member("GET", "/api/usage?provider=sub-codex")).j;
