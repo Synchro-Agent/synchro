@@ -312,6 +312,7 @@ export const VI2EN: Record<string, string> = {
 
 // Chuỗi gốc tiếng Anh (Cài đặt, Skills…) → tiếng Việt
 export const EN2VI: Record<string, string> = {
+  "Brain": "Bộ não", "Long-term memory": "Ký ức dài hạn", "Lasting facts Synchro remembers about you (name, work, preferences). They feed the brain’s “About you” note and every chat.": "Những điều bền vững Synchro nhớ về bạn (tên, công việc, sở thích). Chúng nuôi ghi chú “Về bạn” của bộ não và mọi đoạn chat.",
   "Get started": "Bắt đầu",
   "Continue with": "Tiếp tục với",
   "OR": "HOẶC",

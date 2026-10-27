@@ -3,6 +3,7 @@ import { overLimit, usageScope } from "../../usage";
 import { chatPost } from "../../chatengine";
 import { startRun } from "../../runs";
 import { subCli } from "../../ai/subs";
+import { afterTurn } from "../../brain";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.
@@ -19,5 +20,8 @@ export async function POST(req: Request) {
     return Response.json({ run: startRun(c.user, "chat", rest, typeof body.conv === "string" ? body.conv.slice(0, 64) : null) });
   }
   const scope = { uid: c.user.id, feature: "chat" };
-  return usageScope.run(scope, () => chatPost(body, c, scope));
+  const res = await usageScope.run(scope, () => chatPost(body, c, scope));
+  // Bộ não tổng hợp: lượt chat chạy thẳng (không nền) cũng được ghi nhận để chưng cất.
+  if (res.status === 200 && body?.skills) void res.clone().json().then((j) => afterTurn(c.user, body, j)).catch(() => {});
+  return res;
 }

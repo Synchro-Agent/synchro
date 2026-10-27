@@ -10,6 +10,8 @@ export async function register() {
       if (n) console.log(`[runs] chạy lại ${n} lượt bị gián đoạn`);
       // Bộ hẹn giờ tác vụ nền (mỗi 30 giây xem tác vụ nào đến hạn).
       (await import("./app/tasks")).startScheduler(Number(process.env.SYNCHRO_TASK_TICK_MS) || 30_000);
+      // Bộ não tổng hợp: chưng cất đoạn chat theo nhịp của bộ hẹn giờ.
+      await import("./app/brain");
       // Giữ kết nối GitHub luôn dùng được: làm mới token có hạn, dùng token định kỳ (mỗi 30 phút xem một lượt).
       const { keepLinksAlive } = await import("./app/github");
       const keep = () => keepLinksAlive().catch((e) => console.error("[github]", e));

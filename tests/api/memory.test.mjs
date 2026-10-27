@@ -17,7 +17,8 @@ await other("POST", "/api/auth/signup", { email: "mem-other@synchro.test", passw
 await other("POST", "/api/auth/login", { email: "mem-other@synchro.test", password: "Member-pass-123" });
 const MODEL = "anthropic/claude-haiku-5-5";
 // Yêu cầu chat gần nhất (bỏ lời gọi rút bộ nhớ chạy nền sau lượt).
-const last = async () => [...((await (await fetch(`${M}/_debug/hist`)).json()).anthropic ?? [])].reverse().find((b) => !JSON.stringify(b.system ?? "").includes("trích xuất bộ nhớ"));
+// (bỏ cả lời gọi chưng cất của bộ não chạy nền).
+const last = async () => [...((await (await fetch(`${M}/_debug/hist`)).json()).anthropic ?? [])].reverse().find((b) => !/trích xuất bộ nhớ|<brain_(distill|core)>/.test(JSON.stringify(b.system ?? "")));
 const run = async (text, extra = {}) => {
   const r = await me("POST", "/api/llm", { async: true, skills: true, system: "", model: MODEL, messages: [{ role: "user", content: text }], conv: `mem-${Date.now()}`, ...extra });
   for (let i = 0; i < 60 && r.j?.run; i++) { const x = await me("GET", `/api/runs/${r.j.run}?json=1`); if (x.j?.run?.status && x.j.run.status !== "running") return x.j.run; await sleep(300); }
@@ -68,7 +69,7 @@ const wt = (L?.tools ?? []).find((t) => /^web_search_/.test(t.type ?? ""));
 ok(!!wt && wt.name === "web_search" && wt.max_uses === 5, `bật Tìm kiếm trên web → gửi công cụ ${wt?.type} của Anthropic`, JSON.stringify(L?.tools?.map((t) => t.type ?? t.name)));
 ok(wr?.events?.some((e) => e.kind === "tool" && /Đang tìm trên web: Tin mới/.test(e.text)) && /kết quả tìm web/.test(wr?.result?.text ?? ""), "lượt tìm web hiện trong nhật ký và có câu trả lời", JSON.stringify({ ev: wr?.events, t: wr?.result?.text }));
 const ow = await run("Tin mới hôm nay về AI #web", { web: true, model: "openai/gpt-6-luna" });
-const oreq = ((await (await fetch(`${M}/_debug/hist`)).json()).openai ?? []).at(-1);
+const oreq = [...((await (await fetch(`${M}/_debug/hist`)).json()).openai ?? [])].reverse().find((b) => !/trích xuất bộ nhớ|<brain_(distill|core)>/.test(JSON.stringify(b.instructions ?? b.messages ?? "")));
 ok((oreq?.tools ?? []).some((t) => t.type === "web_search") && ow?.events?.some((e) => e.kind === "tool" && /Đang tìm trên web: Tin mới/.test(e.text)) && /web_search của OpenAI/.test(ow?.result?.text ?? ""), "OpenAI: gửi công cụ web_search, hiện dòng tìm web và có câu trả lời", JSON.stringify({ tools: oreq?.tools?.map((t) => t.type ?? t.name), ev: ow?.events, t: ow?.result?.text }));
 ok(/\n\nTheo kết quả/.test(wr?.result?.text ?? ""), "chữ trước và sau khi tìm web tách thành hai đoạn", JSON.stringify(wr?.result?.text));
 await run("Chào bạn", { web: false });

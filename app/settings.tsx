@@ -13,6 +13,7 @@ import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
+import { BrainSettings } from "./brainui";
 import { SkillHub } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
@@ -254,7 +255,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
       <Row t="Shared artifacts"><button className="btn" onClick={() => setPanel("artifacts")}>Manage</button></Row>
       <Row t="Uploaded files"><button className="btn" onClick={() => setPanel("files")}>Manage</button></Row>
       <Row t="Your feedback"><button className="btn" onClick={() => setPanel("feedback")}>Manage</button></Row>
-      <Row t="Memory preferences"><button className="btn" onClick={() => go("Memory")}>Manage ↗</button></Row>
+      <Row t="Memory preferences"><button className="btn" onClick={() => go("Brain")}>Manage ↗</button></Row>
       <Fade show={!!panel}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPanel("")}>
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>
@@ -374,7 +375,8 @@ function Memory() {
   const PROMPT = "Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim, especially for instructions and preferences.";
   return (
     <>
-      <H first>Memory</H>
+      <H first>Long-term memory</H>
+      <p className="d" style={{ margin: "-4px 0 10px" }}>Lasting facts Synchro remembers about you (name, work, preferences). They feed the brain’s “About you” note and every chat.</p>
       <Row t="Generate memory from chats" d={<>Allow Synchro to remember lasting details from your chats (name, work, preferences) and use them in later chats.</>} top><Toggle on={cfg.gen} set={(v) => void call("POST", { cfg: { gen: v } })} /></Row>
       <Row t="Include sensitive topics in memory" d={<>Allow Synchro to save details about sensitive topics like health conditions or religious beliefs to memory.</>}><Toggle on={cfg.sens} set={(v) => void call("POST", { cfg: { sens: v } })} /></Row>
       <Row t="Import memory from other AI providers" d={<>Bring relevant context and data from another AI provider to Synchro. We&apos;ll provide a prompt you can use to fetch the memory from your other account.</>}><button className="btn" onClick={() => setImp(true)}>Start import</button></Row>
@@ -550,7 +552,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
     case "Billing": return <Billing />;
     case "Capabilities": return <Capabilities go={go} />;
     case "Usage": return <UsageSettings go={go} />;
-    case "Memory": return <Memory />;
+    case "Brain": case "Memory": return <BrainSettings memory={<Memory />} />;
     case "Reflect": return <Reflect />;
     case "Time and focus": return <Focus />;
     case "Synchro Code": return <CodeTab />;

@@ -41,6 +41,34 @@ function mockTitle(prompt) {
   return w[0].toUpperCase() + w.slice(1);
 }
 const isTitleAsk = (prompt) => prompt.includes("Đoạn chat cần đặt tên:");
+/**
+ * Bộ não tổng hợp (app/brain.ts): chưng cất một đoạn chat thành JSON ghi chú, hoặc tổng hợp trung tâm, như model thật.
+ * Trả về null khi không phải lời gọi của bộ não.
+ */
+function mockBrain(prompt) {
+  if (prompt.includes("Đoạn chat cần chưng cất:")) {
+    const body = prompt.split("Đoạn chat cần chưng cất:")[1] ?? "";
+    const users = [...body.matchAll(/\[Người dùng\]\n([^\n]+)/g)].map((m) => m[1].trim()).filter(Boolean);
+    const first = (users[0] ?? "Đoạn chat").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim() || "Đoạn chat";
+    const all = users.join(" ");
+    const KNOWN = [["IELTS", /ielts/i], ["Ôn thi THPT", /thpt|ôn thi|đề thi/i], ["Toán", /\btoán\b|phương trình|đạo hàm/i], ["Lập trình", /python|javascript|\bcode\b|lập trình/i], ["Gym", /\bgym\b|tập luyện/i], ["Du học", /du học/i], ["Cyber security", /cyber|bảo mật/i]];
+    const topics = KNOWN.filter(([, r]) => r.test(all)).map(([n]) => ({ name: n, desc: `Chủ đề ${n}.` })).slice(0, 3);
+    const NAMES = ["Python", "Hà Lan", "IELTS Writing", "Casio", "Synchro", "JavaScript", "Next.js"];
+    const entities = NAMES.filter((n) => all.toLowerCase().includes(n.toLowerCase())).slice(0, 4);
+    const title = first.split(" ").slice(0, 6).join(" ");
+    return JSON.stringify({
+      title: title[0].toUpperCase() + title.slice(1), gist: `Người dùng hỏi: ${first.slice(0, 120)}. Trợ lý đã trả lời và gợi ý cách làm.`,
+      points: users.slice(0, 3).map((u) => u.slice(0, 100)), decisions: [], tasks: /mai|làm tiếp|chưa xong/i.test(all) ? [`Làm tiếp: ${first.slice(0, 60)}`] : [],
+      topics: topics.length ? topics : [{ name: "Chung", desc: "Những câu hỏi chung." }], entities, importance: users.length > 1 ? 4 : 3,
+    });
+  }
+  if (prompt.includes("Các đoạn chat gần đây (mới trước):")) {
+    const chats = [...prompt.matchAll(/^- \S+ ([^:\n]+):/gm)].map((m) => m[1]).slice(0, 3);
+    const topics = (/Chủ đề: ([^\n]+)/.exec(prompt)?.[1] ?? "").split(", ").filter((x) => x && x !== "(chưa có)").slice(0, 4);
+    return JSON.stringify({ overview: `Người dùng đang dùng Synchro cho ${topics.join(", ") || "nhiều việc"}. Gần đây họ làm: ${chats.join("; ") || "chưa có"}.`, focus: topics.length ? topics.map((x) => `Tiến bộ về ${x}`) : ["Làm quen Synchro"] });
+  }
+  return null;
+}
 /** "#prefs" trong tin nhắn → nhắc lại khối <user_preferences> model nhận được (kiểm thử Hướng dẫn cho Synchro). */
 function prefsEcho(all) {
   const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(all);
@@ -78,4 +106,4 @@ function toolAsk(prompt) {
   return { name: m[1], args };
 }
 
-module.exports = { mcp, isTitleAsk, mockTitle, prefsEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

@@ -4,9 +4,11 @@
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi; #waittool làm chậm bước gọi công cụ.
 import http from "node:http";
 import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
+const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
 export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
@@ -277,6 +279,8 @@ function mockTitle(q) {
 function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
+  const brain = CLI.mockBrain(q);
+  if (brain) return { text: brain, q };
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
@@ -341,6 +345,8 @@ const sysText = (x) => (typeof x === "string" ? x : Array.isArray(x) ? x.map((b)
 
 // Lỗi thử nghiệm theo từ khóa trong tin nhắn; trả về true nếu đã trả lỗi.
 async function trap(res, q, fmt) {
+  // Lời gọi chưng cất / tổng hợp của bộ não và đặt tên đoạn chat chép lại cả đoạn chat (có thể chứa chữ "#429" của câu trả lời giả lập).
+  if (/^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:)/.test(q)) return false;
   if (q.includes("#slow")) await sleep(8000);
   const code = q.includes("#401") ? 401 : q.includes("#404") ? 404 : q.includes("#429") ? 429 : q.includes("#500") ? 500 : 0;
   if (!code) return false;

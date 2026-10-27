@@ -4,6 +4,7 @@
 import crypto from "node:crypto";
 import { db, getSetting, setSetting, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
+import { brainCore } from "./brain";
 
 export type Mem = { id: string; content: string; createdAt: number; source: string };
 export type MemCfg = { gen: boolean; sens: boolean };
@@ -51,14 +52,15 @@ export const clearMemory = (uid: string) => t().prepare("DELETE FROM user_memory
 export function userContext(u: Pick<UserRow, "id" | "full_name" | "nickname" | "occupation" | "instructions">, o: { memory: boolean }): string {
   const full = (u.full_name || "").trim(), call = (u.nickname || "").trim(), work = (u.occupation || "").trim(), ins = (u.instructions || "").trim();
   const mem = o.memory ? listMemory(u.id).slice(-80) : [];
+  const core = o.memory ? brainCore(u.id) : "";
   const facts = [
     full ? `- Tên: ${full}${call && call !== full ? `; thích được gọi là ${call}` : ""}` : call ? `- Tên gọi: ${call}` : "",
     work ? `- Lĩnh vực chọn lúc tạo tài khoản: ${work}` : "",
   ].filter(Boolean);
-  if (!facts.length && !ins && !mem.length) return "";
+  if (!facts.length && !ins && !mem.length && !core) return "";
   return `<user_context>
 Bạn đã quen người dùng này qua những lần trò chuyện trước. Dưới đây là những gì bạn biết về họ và cách họ muốn bạn làm việc cùng. Hãy coi đó là hiểu biết sẵn có của chính bạn, như một người bạn hay người cộng sự lâu năm vẫn nhớ rõ về họ.
-${facts.length ? `\n<about_user>\n${facts.join("\n")}\n</about_user>\n` : ""}${mem.length ? `\n<user_memory>\nNhững điều bạn nhớ từ các cuộc trò chuyện trước (cũ trước, mới sau):\n${mem.map((m) => `- ${m.content}`).join("\n")}\n</user_memory>\n` : ""}${ins ? `\n<user_preferences>\nNgười dùng tự giới thiệu về mình và dặn cách làm việc (nguyên văn):\n${ins}\n</user_preferences>\n` : ""}
+${facts.length || core ? `\n<about_user>\n${[...facts, core].filter(Boolean).join("\n")}\n</about_user>\n` : ""}${mem.length ? `\n<user_memory>\nNhững điều bạn nhớ từ các cuộc trò chuyện trước (cũ trước, mới sau):\n${mem.map((m) => `- ${m.content}`).join("\n")}\n</user_memory>\n` : ""}${ins ? `\n<user_preferences>\nNgười dùng tự giới thiệu về mình và dặn cách làm việc (nguyên văn):\n${ins}\n</user_preferences>\n` : ""}
 <how_to_use>
 - Nói chuyện như người đã biết rõ họ: gọi tên tự nhiên, nói đúng hoàn cảnh, mục tiêu và trình độ của họ. Đừng nói như đang đọc hồ sơ của một người lạ: không dùng những cụm như "theo thông tin", "trong phần cài đặt / hồ sơ / bộ nhớ / ghi chú", "mình thấy bạn có ghi", "có thể bạn là", "mình không nhận ra bạn trực tiếp".
 - Khi họ hỏi bạn có biết họ là ai, hay nhớ gì về họ: trả lời tự tin và ấm áp, tóm gọn những điều chính như một người quen. Chỉ khi họ hỏi vì sao bạn biết thì mới nói thật là Synchro ghi nhớ từ phần họ tự giới thiệu và các cuộc trò chuyện.

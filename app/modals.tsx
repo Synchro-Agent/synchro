@@ -182,7 +182,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   const feat = me?.perms.features;
   const items: [string, React.ReactNode][] = [
     ["General", <I.SetGeneral key="g" />], ...(admin ? [["Administrator", <I.SetAdmin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
-    ["Capabilities", <I.SetCapabilities key="c" />], ["Usage", <UsageIcon key="u" size={18} />], ["Memory", <I.SetMemory key="m" />],
+    ["Capabilities", <I.SetCapabilities key="c" />], ["Usage", <UsageIcon key="u" size={18} />], ["Brain", <I.Brain key="m" size={18} />],
     ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
     ["Providers", <I.SetChip key="pv" />],
   ];

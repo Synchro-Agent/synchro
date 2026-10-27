@@ -82,7 +82,7 @@ const authFile = path.join(dir, "auth.json");
       note = ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
     } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
     if (a.includes("tools.web_search=true")) note += " [tìm web]";
-    const text = C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : "");
+    const text = C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : ""));
     C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text } });
     C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length } });
     return;

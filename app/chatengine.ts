@@ -27,6 +27,7 @@ import { mergedProviders, subCli, subTurn } from "./ai/subs";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
+import { afterTurn, brainRecall } from "./brain";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
 // Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
@@ -595,6 +596,18 @@ type Who = { user: UserRow };
 // và artifact có AI.
 const useProfile = (body: Record<string, any>) => !!body.skills && body.feature !== "artifact"; // eslint-disable-line @typescript-eslint/no-explicit-any
 const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
+// Bộ não tổng hợp: kéo vài ghi chú liên quan nhất tới câu hỏi vào tầng động (chat lẫn Synchro Code; không trong đoạn chat ẩn danh / khi tắt Bộ nhớ).
+const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => (useProfile(body) && body.memory !== false && !body.incognito ? brainRecall(u.id, lastUserText(body.messages), conv) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
+/** Gói subscription: ghi chú liên quan ghép vào cuối tin nhắn mới nhất (CLI chỉ nhận lời nhắc hệ thống ở lượt đầu của phiên). */
+function withRecall(messages: unknown, recall: string): unknown {
+  if (!recall || !Array.isArray(messages) || !messages.length) return messages;
+  const out = [...messages] as { role?: string; content?: unknown }[];
+  const i = out.map((m) => m?.role).lastIndexOf("user");
+  if (i < 0) return messages;
+  const c = out[i].content;
+  out[i] = { ...out[i], content: typeof c === "string" ? `${c}\n\n${recall}` : Array.isArray(c) ? [...c, { type: "text", text: recall }] : c };
+  return out;
+}
 const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
@@ -701,7 +714,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       }
       const r = await subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-        messages: am ?? messages, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
+        messages: am ?? withRecall(messages, recallOf(body, c.user, convId)), conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
         mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true,
       });
       if (!x || r.status !== 200) return Response.json(r.json, { status: r.status });
@@ -750,7 +763,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const prep = prepareHistory(messages, [route], mix);
+    const prep = prepareHistory(messages, [route, recallOf(body, c.user, convId)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
@@ -803,5 +816,7 @@ registerExec("chat", async (body, user) => {
   const json = await res.json();
   // Rút bộ nhớ từ lượt vừa xong ở nền (không làm chậm câu trả lời).
   if (res.status === 200 && useMemory(body, user) && typeof json?.text === "string") void learnFromTurn(user, lastUserText(body.messages), json.text).catch(() => {});
+  // Bộ não tổng hợp: ghi nhận đoạn chat để chưng cất thành một nhánh (chạy nền, không làm chậm câu trả lời).
+  if (res.status === 200 && json && typeof json === "object") try { afterTurn(user, body, json); } catch (e) { console.error("[brain]", e); }
   return { http: res.status, json };
 });
