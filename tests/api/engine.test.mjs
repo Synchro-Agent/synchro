@@ -263,8 +263,8 @@ try {
     ok(ids === "anthropic:Claude,openai:ChatGPT,google:Gemini", "bộ chọn model gộp theo hãng: ba nhóm Claude, ChatGPT, Gemini đều đang hiện model của gói", ids);
     const gem = subs.find((p) => p.id === "google")?.models ?? [];
     ok(subs.find((p) => p.id === "anthropic")?.models.some((m) => m.key === "sub-claude/sonnet"), "Claude: opus / sonnet / haiku");
-    ok(gem.map((m) => m.id).join() === "gemini-4-argon,gemini-3.8-flash,gemini-3.1-flash-lite" && gem.map((m) => m.name).join() === "Gemini 4 Argon,Gemini 3.8 Flash,Gemini 3.1 Flash Lite",
-      "Gemini: chỉ model Gemini (không lẫn Claude / GPT của Antigravity), gộp biến thể High / Medium / Low thành một model, tên chuẩn", JSON.stringify(gem));
+    ok(gem.map((m) => m.id).join() === "gemini-4-argon,gemini-3.8-flash,gemini-3.1-flash-lite,claude-sonnet-4-6,claude-opus-4-6-thinking,gpt-oss-120b" && gem.map((m) => m.name).join() === "Gemini 4 Argon,Gemini 3.8 Flash,Gemini 3.1 Flash Lite,Claude Sonnet 4.6 (Antigravity),Claude Opus 4.6 (Antigravity),GPT-OSS 120B (Antigravity)",
+      "Gemini: đủ mọi model gói Google cấp qua Antigravity (Gemini trước, Claude / GPT ghi rõ Antigravity), gộp biến thể High / Medium / Low thành một model", JSON.stringify(gem));
     // Google đổi danh sách model (gói dùng thử → trả phí): bộ chọn model cập nhật theo trạng thái mới, không chờ 10 phút.
     const before = (await SUBS.mergedProviders(me, await P.catalog())).find((p) => p.id === "google").models.length;
     const marker = path.join(HOME, "logins", "agy", U, ".gemini", "antigravity-cli", "mock-extra-models");
@@ -274,7 +274,8 @@ try {
     fs.rmSync(marker); await A.status("agy", U, { fresh: true });
     ok(after.length === before + 1 && after.some((m) => m.id === "gemini-4-argon-ultra"), "danh sách model của Google đổi → bộ chọn model cập nhật ngay", JSON.stringify(after.map((m) => m.id)));
     const AG = SUBS.agyModels(["Fetching available models...", "gemini-3.8-flash-high\tGemini 3.8 Flash (High)", "gemini-3.8-flash-low\tGemini 3.8 Flash (Low)", "claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)", "gpt-oss-120b-medium\tGPT-OSS 120B (Medium)"]);
-    ok(AG.length === 1 && AG[0].name === "Gemini 3.8 Flash" && AG[0].variants.high === "gemini-3.8-flash-high", "agyModels: đọc đúng đầu ra thật của agy 1.4.7", JSON.stringify(AG));
+    ok(AG.length === 3 && AG[0].name === "Gemini 3.8 Flash" && AG[0].variants.high === "gemini-3.8-flash-high" && AG[1].name === "Claude Sonnet 4.6 (Antigravity)" && AG[1].variants.default === "claude-sonnet-4-6"
+      && AG[2].id === "gpt-oss-120b" && AG[2].name === "GPT-OSS 120B (Antigravity)" && AG[2].variants.medium === "gpt-oss-120b-medium", "agyModels: hiện đủ mọi model agy trả về (Gemini trước, Claude / GPT qua Antigravity sau), gộp biến thể effort", JSON.stringify(AG));
     ok(codexModels.includes("gpt-6.1-sol") && !codexModels.includes("codex-internal"), "Codex: danh sách model thật từ app-server (bỏ model ẩn)", codexModels.join());
     // Lượt chat qua gói: lượt đầu mở phiên, lượt sau nối tiếp (resume), sửa lịch sử thì mở phiên mới kèm lịch sử.
     const conv = "conv-sub-1";

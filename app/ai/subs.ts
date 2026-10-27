@@ -85,24 +85,29 @@ const EFFORT_SUFFIX = /-(minimal|extra-low|low|medium|high|xhigh|max)$/;
 const pretty = (id: string) => id.split("-").map((w) => (/^gpt$/i.test(w) ? "GPT" : w[0].toUpperCase() + w.slice(1))).join(" ");
 
 /**
- * `agy models` in "mã<TAB>Tên" mỗi dòng (sau dòng "Fetching available models..."), gồm cả model Claude / GPT mà Antigravity cung cấp
- * kèm. Nhóm Gemini của Synchro chỉ nhận model Gemini; các biến thể theo effort (…-low / -medium / -high) gộp thành một model,
- * effort chọn ở mục Effort riêng và đổi sang đúng biến thể khi chạy.
+ * `agy models` in "mã<TAB>Tên" mỗi dòng (sau dòng "Fetching available models..."). Hiện đủ mọi model gói Google cấp qua Antigravity
+ * (như chính agy): model Gemini trước, rồi model Claude / GPT mà Antigravity cung cấp kèm (tên có "(Antigravity)" để phân biệt với
+ * model của gói Claude / ChatGPT; hạn mức tính riêng nhóm Claude / GPT của gói Google). Các biến thể theo effort (…-low / -medium /
+ * -high) gộp thành một model; effort chọn ở mục Effort riêng và đổi sang đúng biến thể (--model <mã>) khi chạy.
  */
 export function agyModels(lines: string[]): PlanModel[] {
   const byBase = new Map<string, PlanModel>();
   for (const raw of lines) {
     const [id, label = ""] = raw.split("\t").map((x) => x.trim());
-    if (!/^gemini-[\w.-]+$/i.test(id ?? "")) continue;
+    if (!/^[a-z][\w.-]*$/i.test(id ?? "") || /^(fetching|error|warning|please)$/i.test(id)) continue;
     const m = EFFORT_SUFFIX.exec(id);
     const base = m ? id.slice(0, m.index) : id;
-    const name = label ? label.replace(/\s*\((minimal|extra low|low|medium|high|xhigh|max|thinking)\)\s*$/i, "") : pretty(base);
+    const plain = label ? label.replace(/\s*\((minimal|extra low|low|medium|high|xhigh|max|thinking)\)\s*$/i, "") : pretty(base);
+    const name = isGeminiId(base) ? plain : `${plain} (Antigravity)`;
     const cur = byBase.get(base) ?? { id: base, name, variants: {} };
     if (m) cur.variants![m[1]] = id; else cur.variants!.default = id;
     byBase.set(base, cur);
   }
-  return [...byBase.values()];
+  const list = [...byBase.values()];
+  return [...list.filter((x) => isGeminiId(x.id)), ...list.filter((x) => !isGeminiId(x.id))];
 }
+/** Model Gemini của gói Google (khác nhóm Claude / GPT mà Antigravity cung cấp kèm, có hạn mức riêng). */
+export const isGeminiId = (id: string) => /^gemini-/i.test(id);
 
 async function detectModels(cli: Cli, scope: string, agyLines?: string[]): Promise<PlanModel[]> {
   if (cli === "agy") {
@@ -518,6 +523,8 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
       return { status: 409, json: { error: `Phiên đăng nhập gói ${SUB[cli].name} không còn hợp lệ. Đăng nhập lại ở Cài đặt → Providers.`, relogin: cli, apiModel, apiModelName: apiName, detail: redact(err.message).slice(0, 300) } };
     }
     if (err.code === "quota") {
+      // Gói Google: model Claude / GPT qua Antigravity có hạn mức riêng; hết nhóm đó thì model Gemini của gói vẫn dùng được.
+      if (cli === "agy" && !isGeminiId(splitKey(o.model).id)) return { status: 429, json: { error: "Hạn mức model Claude / GPT trong gói Google (Antigravity) đã hết. Model Gemini của gói vẫn dùng được.", detail: redact(err.message).slice(0, 200) } };
       // Gói không báo mốc đặt lại thì tạm coi là hết trong 30 phút; codex đọc lại hạn mức ở lần mở vòng tròn sau.
       if (!planBlock(cli, o.user.id)) g.quota.set(`${cli}:${o.user.id}`, Date.now() + 30 * 60_000);
       if (cli === "codex") { const h = g.limits.get(`${cli}:${o.user.id}`); if (h) h.at = 0; }
