@@ -68,3 +68,17 @@ terminal thật, trình duyệt Chromium dùng chung giữa người dùng và a
 - `app/api/agent`: vòng lặp agent (model + công cụ bash, file, trình duyệt, danh sách việc), trả sự kiện NDJSON.
   Chưa có `LLM_API_KEY` thì chạy kịch bản mô phỏng.
 - Quyền: tài khoản cần tính năng **Synchro Code** và **Cloud sandbox** (quản trị viên bật/tắt trong tab Quản trị viên).
+
+## Chrome của bạn (tiện ích Synchro)
+
+Ngoài trình duyệt riêng trong workspace, Synchro điều khiển được cả Chrome / Edge / Brave của chính người dùng (giống Claude trong Chrome), với mọi model.
+
+- `extension/`: tiện ích Manifest V3. `control.js` chạy thao tác bằng `chrome.debugger` với đúng lõi thao tác của trình duyệt Synchro
+  (`workspace/browser-act.mjs`, chép vào tiện ích thành `act.js`); `link.js` giữ kết nối tới Synchro; `overlay.js` là dải "Synchro đang điều khiển tab này" + nút Dừng.
+  Mặc định toàn quyền (mọi tab); người dùng chọn "Chỉ nhóm tab Synchro" trong cửa sổ tiện ích. Không bao giờ điều khiển chính trang Synchro.
+- Người dùng tải bản đóng gói ở **Cài đặt → Khả năng → Trình duyệt của bạn** (`/api/browser/ext/download`, gắn sẵn địa chỉ máy chủ), cài bằng Developer mode → Load unpacked
+  (hướng dẫn trong app và trong `extension/README.md`), rồi ghép nối bằng mã 8 ký tự dùng một lần. Mỗi tài khoản ghép nối trình duyệt của mình; máy chủ chỉ giữ bản băm của khóa.
+- Đường đi: tiện ích xin vé (`/api/browser/ext/connect`) → WebSocket `/ws-agent/ext` của dịch vụ workspace (`workspace/ext-relay.mjs`, nginx mở thêm đường này)
+  → máy chủ Next gửi lệnh `browser_*` qua HTTP `/ext`. Model chọn trình duyệt bằng tham số `browser` ("user" khi người dùng nói "Chrome của tôi"); không nói thì theo lựa chọn ở khung trình duyệt.
+- dev:mock: bản giải nén sẵn ở `data-mock/extension` (Load unpacked trong Chrome của bạn), hoặc tiện ích giả lập `node scripts/mock-extension.mjs --code <mã>`
+  (đúng mã của tiện ích trên Chrome thật, cửa sổ riêng). Kiểm thử: `node tests/run-all.mjs ext browser`.

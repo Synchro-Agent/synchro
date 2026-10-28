@@ -8,6 +8,7 @@ import path from "node:path";
 import { MOCK_KEYS, startMock } from "./mock-providers.mjs";
 import { startMockMcp } from "./mock-mcp.mjs";
 import { startMockWs } from "./mock-workspace.mjs";
+import { writeExtension } from "../extension/build.mjs";
 
 const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011), WS_PORT = Number(process.env.WS_PORT ?? 4012);
 // Workspace giả lập cho Synchro Code (khóa chỉ dùng trên máy này).
@@ -28,6 +29,8 @@ fs.writeFileSync(path.join(ENGINE_BIN, "mock-cli.json"), JSON.stringify({ base: 
 try { await startMock(MOCK_PORT); } catch (e) { console.error(`Không mở được API giả lập ở cổng ${MOCK_PORT}: ${e.message}`); process.exit(1); }
 try { await startMockMcp(MCP_PORT); } catch (e) { console.error(`Không mở được máy chủ MCP giả lập ở cổng ${MCP_PORT}: ${e.message}`); process.exit(1); }
 try { await startMockWs(WS_PORT, path.join(DATA, "ws"), WS_SECRET); } catch (e) { console.error(`Không mở được workspace giả lập ở cổng ${WS_PORT}: ${e.message}`); process.exit(1); }
+// Tiện ích Synchro cho Chrome của bạn, bản giải nén trỏ tới máy này: chrome://extensions → bật Developer mode → Load unpacked → chọn thư mục.
+const EXT_DIR = writeExtension(process.cwd(), B, path.join(DATA, "extension"));
 
 if (!fs.existsSync(path.join(DATA, "synchro.db"))) {
   const r = spawnSync(process.execPath, ["scripts/create-admin.mjs", ADMIN.email], { env, input: `${ADMIN.password}\n${ADMIN.password}\n`, encoding: "utf8" });
@@ -166,6 +169,10 @@ console.log(`
   │             "Đếm số nguyên tố dưới 1 triệu", "Cài thư viện humanize bằng pip", "Thử truy cập mạng"
   │ Plugins:    ${plugins.map((p) => `${p.name} (${p.skills.length} skill${p.studio ? `, nút ${p.studio === "design" ? "Thiết kế" : p.studio === "slides" ? "Trình bày" : "Tài liệu"}` : ""})`).join(", ") || "chưa có"}
   │   Thử:     Artifacts → bấm "Thiết kế" rồi gõ "Làm trang web cho quán cà phê"; "Trang trình bày" → "Báo cáo quý"; "Tài liệu" → "Viết đề xuất"
+  │ Chrome:     Cài đặt → Khả năng → Trình duyệt của bạn → Ghép nối, rồi một trong hai:
+  │   - tiện ích giả lập (Chrome thật, cửa sổ riêng): node scripts/mock-extension.mjs --code <mã>
+  │   - tiện ích thật trong Chrome của bạn: chrome://extensions → Developer mode → Load unpacked → ${path.relative(process.cwd(), EXT_DIR)}
+  │   Thử:     "#browser mở ${M}/_fixture/browser-quiz trên Chrome của tôi rồi làm bài giúp mình"
   │ Mức dùng:   ${usage?.limits ? usage.limits.map((l) => `${l.key === "session" ? "phiên" : "tuần"} ${Math.round(l.pct)}% ($${l.used.toFixed(2)}${l.limit ? `/$${l.limit}` : ""})`).join(" · ") : "?"} — bấm vòng tròn cạnh tên model, hoặc Cài đặt → Usage
   └─ Ctrl+C để dừng ─────────────────────────────────────────
 `);

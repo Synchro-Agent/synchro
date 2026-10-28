@@ -6,7 +6,7 @@ import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort 
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
 import { ConnectorSession, connectorsPrompt } from "./connectors";
 import { randomToken } from "./mcpauth";
-import { capsState, skillsOn } from "./caps";
+import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
 import { delta, deltaStep, liveNow, progress, registerExec, runSignal, takeInbox } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
@@ -28,7 +28,7 @@ import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool } from "./brain";
-import { BROWSER_RULES, BROWSER_TOOLS, describeBrowser, isBrowserTool, runBrowserTool } from "./browsertools";
+import { BROWSER_RULES, BROWSER_TOOLS, browserTargetOf, describeBrowser, isBrowserTool, releaseBrowser, runBrowserTool, type BrowserCtx } from "./browsertools";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
 // Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
@@ -154,9 +154,10 @@ type Lib = { key: string; label: string };
 // trace: dấu vết công cụ của lượt theo chuẩn Synchro (trả về trình duyệt, lượt sau gửi lại để model nào cũng biết đã làm gì).
 // heal: model của lượt này, dùng để tự sửa script của skill khi script hỏng (skillheal.ts).
 // search: model Gemini (khóa API) để tìm web bằng Google Search qua API gốc của Gemini (công cụ web_search của Synchro).
-// browse: công cụ trình duyệt đang bật (Cài đặt → Khả năng); shown: đã mở khung trình duyệt cho người dùng ở lượt này;
+// browse: công cụ trình duyệt đang bật (Cài đặt → Khả năng); bctx: trình duyệt của lượt (của Synchro / Chrome của người dùng, browsertools.ts);
+// shown: trình duyệt đã mở khung cho người dùng ở lượt này;
 // heavy: id các lượt đọc trang / chụp màn hình (lược bớt bản cũ để ngữ cảnh không phình khi thao tác dài).
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; shown?: boolean; heavy?: string[] };
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[] };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -261,9 +262,11 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return geminiSearch(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
   if (x.browse && isBrowserTool(c.name) && !x.sess?.get(c.name)) {
-    // Lần đầu dùng trình duyệt trong lượt: mở khung trình duyệt cạnh khung chat để người dùng xem trực tiếp.
-    if (!x.shown) { x.shown = true; progress("ui", "browser"); }
-    const r = await runBrowserTool(x.uid, c.name, c.input ?? {});
+    // Lần đầu dùng trình duyệt trong lượt (hoặc đổi sang trình duyệt kia): mở khung trình duyệt cạnh khung chat để người dùng xem
+    // trực tiếp ("browser"), hoặc khung trạng thái Chrome của họ kèm nút Dừng ("browser:user").
+    const where = browserTargetOf(c.input, x.bctx);
+    if (x.shown !== where) { x.shown = where; progress("ui", where === "user" ? "browser:user" : "browser"); }
+    const r = await runBrowserTool(x.uid, c.name, c.input ?? {}, x.bctx);
     if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
     return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
   }
@@ -287,7 +290,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
   if (c.name === "brain_write") return `Đang ghi vào bộ não: ${String(c.input?.title ?? "").slice(0, 80)}`;
-  if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {});
+  if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {}, browserTargetOf(c.input, x.bctx));
   const ct = x.sess?.get(c.name);
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
 }
@@ -339,6 +342,9 @@ async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"
     // Dừng giữa chừng: giữ phần đã viết, lượt kết thúc bình thường (không phải lỗi).
     x.sess?.close();
     return { text: liveNow(), used, cancelled: true };
+  } finally {
+    // Hết lượt: thôi điều khiển Chrome của người dùng (gỡ dải "Synchro đang điều khiển").
+    releaseBrowser(uid, x.bctx);
   }
 }
 // Thao tác trình duyệt dài (làm cả bài kiểm tra, điền nhiều trang biểu mẫu) cần nhiều bước hơn một lượt chat thường.
@@ -764,8 +770,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
         // Công cụ và hướng dẫn trình duyệt luôn có khi tính năng bật (phần đầu prompt ổn định, đọc lại từ bộ đệm).
         const browse = !!pc.browse && feature !== "artifact";
+        const bst = capsState(c.user);
         const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
-        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse };
+        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, bctx: browse ? { def: browserDefault(bst), synchro: !bst.locks.browse } : undefined };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => bridgeCall(xx, name, input, usedAll) });
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", ss.route].filter(Boolean).join("\n\n");
@@ -780,7 +787,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);
       recordUse(c.user.id, names);
       return Response.json({ ...(r.json as Record<string, unknown>), skills: usedAll, files: x.outs, libs: usedLibs(x, names), ...(x.trace.length ? { trace: x.trace } : {}) });
-    } finally { bridge?.close(); sess?.close(); }
+    } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
   if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
@@ -842,7 +849,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined, browse };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined, browse, bctx: browse && cs ? { def: browserDefault(cs), synchro: !cs.locks.browse } : undefined };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)

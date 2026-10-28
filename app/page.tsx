@@ -27,7 +27,7 @@ import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, take
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { BrainWorkspace, useBrainSync } from "./brainui";
-import { BrowserPane } from "./codepanes";
+import { BrowserHub } from "./browserhub";
 
 // Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
 const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
@@ -760,15 +760,20 @@ export default function Home() {
   const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
   const [artFull, setArtFull] = useState(false);
   // Trình duyệt cạnh đoạn chat (như khung trình duyệt của Synchro Code): chỉ hiện ở đoạn chat có việc cần thao tác trên web,
-  // tự mở khi Synchro bắt đầu dùng trình duyệt; đoạn chat đó giữ nút quả địa cầu để mở lại. brwFor: đoạn chat đang mở khung.
+  // tự mở khi Synchro bắt đầu dùng trình duyệt (của Synchro, hoặc Chrome của bạn qua tiện ích); đoạn chat đó giữ nút quả địa cầu
+  // để mở lại. brwFor: đoạn chat đang mở khung.
   const [brwFor, setBrwFor] = useState<number | null>(null);
-  const [brw, setBrw] = useState<{ available: boolean; reason?: string; control?: boolean } | null>(null);
+  const [brw, setBrw] = useState<{ available: boolean; reason?: string; control?: boolean; ext?: { allowed: boolean; paired: boolean }; target?: "synchro" | "user" } | null>(null);
+  // Synchro vừa bắt đầu làm ở trình duyệt nào (của Synchro / Chrome của bạn): khung trình duyệt chuyển sang đó.
+  const [brwPrefer, setBrwPrefer] = useState<{ v: "synchro" | "user"; n: number } | null>(null);
   useEffect(() => { fetch("/api/browser").then((r) => (r.ok ? r.json() : null)).then((j) => j && setBrw(j)).catch(() => {}); }, []);
   const openBrowser = (ev: RunEv, chatId: number) => {
-    if (ev.kind !== "ui" || ev.text !== "browser") return;
+    if (ev.kind !== "ui" || !ev.text.startsWith("browser")) return;
+    setBrwPrefer((p) => ({ v: ev.text === "browser:user" ? "user" : "synchro", n: (p?.n ?? 0) + 1 }));
     setChats((cs) => cs.map((c) => (c.id === chatId && !c.browser ? { ...c, browser: true } : c)));
     setArtSel(null); setFileSel(null); setBrwFor(chatId);
   };
+  const brwOk = !!(brw?.available || brw?.ext?.allowed);
   // Tệp do code tạo đang xem trước (cùng khung bên cạnh với artifact; mở cái này thì đóng cái kia).
   const [fileSel, setFileSel] = useState<{ chat: number; file: OutFile } | null>(null);
   const artDismissed = useRef("");
@@ -801,7 +806,7 @@ export default function Home() {
     if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) { setFileSel(null); setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true }); }
   }, [chat?.id, lastIdx, liveArt?.ident, liveArt?.v]); // eslint-disable-line react-hooks/exhaustive-deps
   const fileOpen = view === "chat" && !!chat && fileSel?.chat === chat.id && !artOpen;
-  const brwShow = view === "chat" && !!chat?.browser && brwFor === chat.id && !artOpen && !fileOpen && !!brw?.available;
+  const brwShow = view === "chat" && !!chat?.browser && brwFor === chat.id && !artOpen && !fileOpen && brwOk;
   const panelOpen = artOpen || fileOpen || brwShow;
   useEffect(() => { if (!panelOpen) setArtFull(false); }, [panelOpen]);
   const openArt = (s: { chat: number; ident: string; v: number; follow: boolean }) => { setFileSel(null); setArtSel(s); };
@@ -1517,7 +1522,7 @@ export default function Home() {
           <div className="right">
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
             {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
-            {view === "chat" && chat?.browser && brw?.available && <button className={`icon-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt của Synchro"}><I.Globe size={17} /></button>}
+            {view === "chat" && chat?.browser && brwOk && <button className={`icon-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} /></button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
         </div>}
@@ -1596,7 +1601,7 @@ export default function Home() {
             )}
             {brwShow && (
               <div className="brw-panel">
-                <BrowserPane ticket={browserTicket} visible say={say} onClose={() => setBrwFor(null)} onExpand={() => setArtFull(!artFull)} expanded={artFull}
+                <BrowserHub ticket={browserTicket} synchro={{ available: !!brw?.available, reason: brw?.reason }} prefer={brwPrefer} visible say={say} onClose={() => setBrwFor(null)} onExpand={() => setArtFull(!artFull)} expanded={artFull} busy={busy}
                   onStop={busy ? () => stop() : undefined} />
               </div>
             )}

@@ -3,7 +3,7 @@
 // tests/fixtures/browser-quiz.html (máy chủ giả lập phục vụ ở /_fixture/browser-quiz). Máy không có Chrome thì bỏ qua phần chạy thật.
 import { findChrome } from "../../scripts/mock-workspace.mjs";
 
-const B = "http://localhost:3200", MOCK = "http://127.0.0.1:4010", PAGE = `${MOCK}/_fixture/browser-quiz`;
+const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", MOCK = process.env.MOCK_URL ?? "http://127.0.0.1:4010", PAGE = `${MOCK}/_fixture/browser-quiz`;
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
 function client(init = "") {

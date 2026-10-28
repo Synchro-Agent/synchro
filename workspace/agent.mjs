@@ -11,6 +11,7 @@ import { lookup } from "node:dns/promises";
 import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
+import { createRelay } from "./ext-relay.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const PORT = Number(env("WS_AGENT_PORT", 3555));
@@ -368,6 +369,8 @@ const B = createBrowser({
   },
 });
 const browserTool = (u, a) => B.tool(u, a);
+// Chrome / Edge / Brave của chính người dùng: tiện ích Synchro nối WebSocket /ws-agent/ext, lệnh browser_* chuyển qua đây (workspace/ext-relay.mjs).
+const X = createRelay({ log });
 
 // ------------------------------------------------------------------ vé truy cập WebSocket (do Next ký)
 const b64 = (b) => Buffer.from(b).toString("base64url");
@@ -445,6 +448,7 @@ const server = http.createServer(async (req, res) => {
       case "/exec": return reply(res, 200, await exec(b.u, b));
       case "/run": return reply(res, 200, await runOnce(b.u, b));
       case "/browser": return reply(res, 200, await browserTool(b.u, b));
+      case "/ext": return reply(res, 200, await X.http(b));
       case "/stop": await stop(b.u); return reply(res, 200, { ok: true });
       case "/destroy": await destroy(b.u); return reply(res, 200, { ok: true });
       default: return reply(res, 404, { error: "not found" });
@@ -457,12 +461,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+// Tiện ích gửi về ảnh chụp màn hình, nội dung trang dài: cho phép tin lớn hơn.
+const wssExt = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 * 1024 });
 server.on("upgrade", (req, sock, head) => {
   const url = new URL(req.url, "http://x");
   const path = url.pathname.replace(/^\/ws-agent/, "");
   const t = ticket(url.searchParams.get("t"));
-  const kind = path === "/term" ? (t?.k === "term" || t?.k === "log" ? t.k : null) : path === "/screen" && t?.k === "screen" ? "screen" : null;
+  const kind = path === "/term" ? (t?.k === "term" || t?.k === "log" ? t.k : null) : path === "/screen" && t?.k === "screen" ? "screen" : path === "/ext" && t?.k === "ext" ? "ext" : null;
   if (!t || !kind) { sock.write("HTTP/1.1 401 Unauthorized\r\n\r\n"); return sock.destroy(); }
+  if (kind === "ext") return wssExt.handleUpgrade(req, sock, head, (ws) => X.attach(ws, t.u, t.d));
   wss.handleUpgrade(req, sock, head, (ws) => {
     const fail = (e) => { try { ws.send(JSON.stringify({ t: "error", error: e.message || String(e) })); } catch {} ws.close(1011, "error"); };
     (kind === "screen" ? B.screen(ws, t.u) : terminal(ws, t, url.searchParams)).catch(fail);

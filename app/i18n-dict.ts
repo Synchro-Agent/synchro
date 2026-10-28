@@ -1831,3 +1831,55 @@ RULES_EN.push(
   [/^Nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Bấm (.+)$/, (m) => `Clicking ${m[1]}`], [/^Rê chuột (.+)$/, (m) => `Hovering ${m[1]}`], [/^Kéo thả (.+)$/, (m) => `Dragging ${m[1]}`], [/^Tải tệp (.+)$/, (m) => `Uploading ${m[1]}`],
   [/^(.+) cho biết$/, (m) => `${m[1]} says`],
 );
+// Chrome của bạn (tiện ích Synchro): khung trình duyệt, cài tiện ích + ghép nối, Cài đặt → Khả năng, lỗi ghép nối, nhật ký thao tác.
+Object.assign(VI2EN, {
+  "Chrome của bạn": "Your Chrome", "Ghép nối với tài khoản của bạn": "Pair with your account",
+  "Từ giờ cứ nhờ Synchro trong khung chat, ví dụ “mở Gmail trên Chrome của tôi”.": "From now on just ask Synchro in the chat, for example “open Gmail in my Chrome”.",
+  "Bấm biểu tượng Synchro trên thanh công cụ của Chrome, nhập mã này rồi bấm Kết nối. Mã dùng một lần, hết hạn sau": "Click the Synchro icon in Chrome's toolbar, enter this code, then click Connect. The code works once and expires in",
+  "Đang chờ trình duyệt kết nối…": "Waiting for the browser to connect…",
+  "Mỗi tài khoản Synchro ghép nối trình duyệt của mình bằng một mã riêng; trên máy khác cứ đăng nhập tài khoản của bạn rồi làm lại các bước này.": "Each Synchro account pairs its own browsers with its own code; on another computer, just sign in to your account and repeat these steps.",
+  "Lấy mã mới": "Get a new code", "Lấy mã ghép nối": "Get a pairing code", "Tải tiện ích Synchro": "Download the Synchro extension",
+  "Dùng cho Chrome, Microsoft Edge, Brave và các trình duyệt nhân Chromium khác.": "Works with Chrome, Microsoft Edge, Brave and other Chromium-based browsers.",
+  "Tải tiện ích (.zip)": "Download extension (.zip)", "Cài vào trình duyệt": "Install it in your browser", "Giải nén tệp vừa tải, được thư mục": "Unzip the downloaded file to get the folder",
+  "Mở trang quản lý tiện ích:": "Open the extensions page:", "Sao chép, rồi dán vào thanh địa chỉ": "Copy, then paste into the address bar",
+  "Bật Developer mode (Chế độ dành cho nhà phát triển) ở góc trên bên phải.": "Turn on Developer mode in the top right corner.",
+  "Bấm Load unpacked (Tải tiện ích đã giải nén) rồi chọn thư mục": "Click Load unpacked and choose the folder",
+  "Bấm biểu tượng mảnh ghép trên thanh công cụ và ghim Synchro để dễ mở.": "Click the puzzle-piece icon in the toolbar and pin Synchro so it's easy to open.",
+  "Máy chủ chưa bật dịch vụ workspace nên chưa nối được trình duyệt của bạn.": "This server has no workspace service yet, so it can't connect to your browser.",
+  "Cho Synchro làm việc trên Chrome của bạn": "Let Synchro work in your Chrome",
+  "Giống Claude trong Chrome: cài tiện ích Synchro một lần, rồi cứ nhờ trong khung chat. Synchro tự mở trang, bấm, gõ, điền biểu mẫu ngay trên trình duyệt của bạn, với các tài khoản bạn đã đăng nhập sẵn, với mọi model.":
+    "Like Claude in Chrome: install the Synchro extension once, then just ask in the chat. Synchro opens pages, clicks, types and fills in forms right in your browser, with the accounts you're already signed in to, with any model.",
+  "Synchro đang điều khiển": "Synchro is in control", "Chưa kết nối: mở trình duyệt có cài tiện ích Synchro, tiện ích tự kết nối.": "Not connected: open the browser that has the Synchro extension, and it connects by itself.",
+  "Đổi trong cửa sổ tiện ích Synchro trên Chrome": "Change it in the Synchro extension window in Chrome", "Nhóm tab Synchro": "Synchro tab group", "Toàn quyền · mọi tab": "Full control · all tabs",
+  "Thao tác gần nhất": "Last action",
+  "Bạn xem trực tiếp ngay trên trình duyệt của mình. Tab Synchro đang làm có viền cam và dải “Synchro đang điều khiển tab này” với nút Dừng; Synchro tự mở trang ở tab riêng (nhóm tab “Synchro”), không đè lên tab bạn đang xem.":
+    "You watch it live in your own browser. The tab Synchro is working in has an orange border and a “Synchro is controlling this tab” bar with a Stop button; Synchro opens pages in its own tabs (the “Synchro” tab group), never over the tab you're looking at.",
+  "Thử nhờ trong khung chat": "Try asking in the chat", "Mở Gmail trên Chrome của tôi và tóm tắt các thư chưa đọc": "Open Gmail in my Chrome and summarize my unread emails",
+  "Đọc trang tôi đang mở trên Chrome rồi tóm tắt": "Read the page I have open in Chrome and summarize it", "Điền biểu mẫu đang mở trong tab của tôi bằng thông tin của tôi": "Fill in the form open in my tab with my details",
+  "Trình duyệt đã ghép nối": "Paired browsers", "Thêm trình duyệt": "Add a browser", "Ngoại tuyến": "Offline", "Gỡ trình duyệt này": "Remove this browser",
+  "Synchro làm việc trong trình duyệt riêng của nó, bạn xem trực tiếp ở đây": "Synchro works in its own browser and you watch it live here",
+  "Synchro làm việc ngay trên Chrome / Edge / Brave của bạn, với các tài khoản bạn đã đăng nhập": "Synchro works right in your Chrome / Edge / Brave, with the accounts you're signed in to",
+  "Đã kết nối · toàn quyền": "Connected · full control", "Đã kết nối · nhóm tab Synchro": "Connected · Synchro tab group",
+  "Chrome chưa kết nối": "Chrome not connected", "Trình duyệt của Synchro bị khóa": "Synchro's browser is locked",
+  "Mã ghép nối gồm 8 ký tự, ví dụ ABCD-EFGH.": "The pairing code has 8 characters, like ABCD-EFGH.",
+  "Mã ghép nối không đúng hoặc đã hết hạn. Lấy mã mới trong Synchro: Cài đặt → Khả năng → Trình duyệt của bạn.": "That pairing code is wrong or has expired. Get a new one in Synchro: Settings → Capabilities → Your browser.",
+  "Tài khoản không còn dùng được.": "This account can no longer be used.", "Thiếu khóa của tiện ích.": "The extension key is missing.",
+  "Trình duyệt này đã bị gỡ khỏi Synchro. Ghép nối lại bằng mã mới.": "This browser was removed from Synchro. Pair it again with a new code.",
+  "Không tìm thấy trình duyệt này.": "Browser not found.", "Máy chủ Synchro này chưa bật dịch vụ workspace.": "This Synchro server has no workspace service yet.",
+  "Máy chủ Synchro này chưa bật dịch vụ workspace nên chưa nối được trình duyệt.": "This Synchro server has no workspace service yet, so it can't connect to browsers.",
+});
+Object.assign(EN2VI, {
+  "Synchro can open websites and click, type, fill in forms, and finish tasks on the web for you, with any model: in its own browser, which you watch live next to the chat, or in your own Chrome through the Synchro extension. You can take over or stop it at any time. Sign-ins are kept for next time.":
+    "Synchro mở trang web rồi tự bấm, gõ, điền biểu mẫu và làm xong việc trên web cho bạn, với mọi model: trong trình duyệt của nó (bạn xem trực tiếp cạnh khung chat), hoặc ngay trên Chrome của bạn qua tiện ích Synchro. Bạn giành lại quyền điều khiển hay dừng bất cứ lúc nào. Các lần đăng nhập được giữ cho lần sau.",
+  "Your administrator has not enabled Synchro Code and Cloud sandbox for your account, so Synchro's own browser is off. Your own Chrome still works through the extension.":
+    "Quản trị viên chưa bật Synchro Code và Cloud sandbox cho tài khoản của bạn nên trình duyệt của Synchro đang tắt. Chrome của bạn vẫn dùng được qua tiện ích.",
+  "Your browser": "Trình duyệt của bạn",
+  "Like Claude in Chrome: install the Synchro extension in Chrome, Edge or Brave and pair it with your account. Synchro then works right in your browser, with the sites you are already signed in to. It has full control of every tab by default; you can limit it to the Synchro tab group in the extension. Each Synchro account pairs its own browsers, on any computer.":
+    "Giống Claude trong Chrome: cài tiện ích Synchro vào Chrome, Edge hoặc Brave rồi ghép nối với tài khoản của bạn. Từ đó Synchro làm việc ngay trên trình duyệt của bạn, với các trang bạn đã đăng nhập sẵn. Mặc định Synchro có toàn quyền trên mọi tab; bạn có thể giới hạn chỉ nhóm tab Synchro trong cửa sổ tiện ích. Mỗi tài khoản Synchro ghép nối trình duyệt của mình, trên bất kỳ máy nào.",
+  "When this is on, Synchro works in your browser unless you ask for its own browser. You can also just say “on my Chrome” in a message.":
+    "Khi bật, Synchro làm trên trình duyệt của bạn trừ khi bạn nhờ dùng trình duyệt của Synchro. Bạn cũng có thể chỉ cần nói “trên Chrome của tôi” trong tin nhắn.",
+});
+RULES_EN.push(
+  [/^(Đang )?mở (\S+) trên Chrome của bạn$/, (m) => `${m[1] ? "Opening" : "Opened"} ${m[2]} in your Chrome`],
+  [/^Đã sao chép (\w+:\/\/extensions)$/, (m) => `Copied ${m[1]}`],
+);

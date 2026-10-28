@@ -45,9 +45,9 @@ systemctl daemon-reload
 systemctl enable -q synchro-ws
 systemctl restart synchro-ws
 
-# 4. nginx: chỉ mở hai đường WebSocket (terminal, màn hình trình duyệt); API còn lại chỉ nghe ở 127.0.0.1.
+# 4. nginx: chỉ mở ba đường WebSocket (terminal, màn hình trình duyệt, tiện ích Synchro trong Chrome của người dùng); API còn lại chỉ nghe ở 127.0.0.1.
 cat > /etc/nginx/snippets/synchro-ws.conf <<'EOF'
-location ~ ^/ws-agent/(term|screen)$ {
+location ~ ^/ws-agent/(term|screen|ext)$ {
     proxy_pass http://127.0.0.1:3555;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;

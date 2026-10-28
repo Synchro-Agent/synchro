@@ -2,6 +2,7 @@ import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, r
 import { removeUserSkillFiles } from "../../../../skillstore";
 import { removeUserConnectors } from "../../../../connectors";
 import { removeUserCaps } from "../../../../caps";
+import { removeUserDevices } from "../../../../browserext";
 import { removeUserOutputs } from "../../../../outputs";
 import { removeUserArtifacts } from "../../../../artifactstore";
 import { removeUserApps } from "../../../../appstore";
@@ -44,6 +45,7 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   await removeUserSkillFiles(id);
   removeUserConnectors(id);
   removeUserCaps(id);
+  await removeUserDevices(id);
   removeUserOutputs(id);
   removeUserArtifacts(id);
   removeUserApps(id);
