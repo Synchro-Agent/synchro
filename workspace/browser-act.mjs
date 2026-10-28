@@ -20,7 +20,7 @@ export class BrowserError extends Error { constructor(status, m) { super(m); thi
 // Đặt một lần cho mỗi tài liệu (window.__syn): gán [ref] bền (cùng phần tử giữ nguyên số qua các lần đọc), đọc trang thành cây chữ,
 // tìm phần tử, lấy tọa độ để bấm (kể cả trong iframe cùng nguồn và shadow DOM mở), đặt giá trị ô chọn / ô nhập theo cách React nhận.
 export const HELPER = String.raw`(() => {
-  if (window.__syn && window.__syn.v === 3) return window.__syn;
+  if (window.__syn && window.__syn.v === 4) return window.__syn;
   const top = window;
   if (!top.__srefMap) { top.__srefMap = new Map(); top.__srefOf = new WeakMap(); top.__srefN = 0; }
   const refOf = (el) => { let r = top.__srefOf.get(el); if (!r) { r = ++top.__srefN; top.__srefOf.set(el, r); } top.__srefMap.set(r, el); return r; };
@@ -159,7 +159,7 @@ export const HELPER = String.raw`(() => {
   };
   const fold = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
   const S = {
-    v: 3,
+    v: 4,
     read(filter, max) {
       const o = outline(filter, max);
       const se = document.scrollingElement || document.documentElement;
@@ -243,6 +243,19 @@ export const HELPER = String.raw`(() => {
       if (el && !dx && !dy) { el.scrollIntoView({ block: "center" }); return true; }
       return false;
     },
+    // Điểm để cuộn cả trang bằng con lăn: chỗ không nằm trên khung cuộn riêng (danh sách, bảng, iframe), như người thật đặt chuột ra lề trang.
+    pagePoint() {
+      const w = innerWidth, h = innerHeight;
+      const inner = (el) => { for (let e = el; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+        if (e.tagName === "IFRAME") return true;
+        const st = cs(e); if (st && /(auto|scroll)/.test(st.overflowY + st.overflowX) && (e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1)) return true;
+      } return false; };
+      for (const [x, y] of [[w / 2, h / 2], [12, h / 2], [w - 24, h / 2], [w / 2, h * 0.3], [w / 2, h * 0.7], [12, h * 0.3], [w - 24, h * 0.7]]) {
+        const el = document.elementFromPoint(x, y);
+        if (el && !inner(el)) return { x, y };
+      }
+      return { x: w / 2, y: h / 2 };
+    },
     has(text, sel) {
       if (sel) { try { return !!document.querySelector(sel); } catch { return false; } }
       return fold(document.body ? document.body.innerText : "").includes(fold(text));
@@ -259,6 +272,19 @@ const KEYS = {
   F1: [112], F2: [113], F3: [114], F4: [115], F5: [116], F6: [117], F7: [118], F8: [119], F9: [120], F10: [121], F11: [122], F12: [123],
 };
 const MODS = { alt: 1, option: 1, ctrl: 2, control: 2, meta: 4, cmd: 4, command: 4, win: 4, shift: 8 };
+// Gõ chữ như người thật: ký tự có trên bàn phím (chữ không dấu, số, dấu câu, cách, xuống dòng) gửi đủ keydown / keyup cho từng phím;
+// chữ có dấu tiếng Việt, emoji… gửi như bộ gõ (insertText). [key, code, mã phím, cần Shift].
+const PUNCT = { ".": ["Period", 190], ",": ["Comma", 188], "-": ["Minus", 189], "/": ["Slash", 191], ";": ["Semicolon", 186], "'": ["Quote", 222], "[": ["BracketLeft", 219], "]": ["BracketRight", 221], "=": ["Equal", 187], "\\": ["Backslash", 220], "`": ["Backquote", 192] };
+const SHIFTED = { "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0", "_": "-", "+": "=", ":": ";", '"': "'", "<": ",", ">": ".", "?": "/", "{": "[", "}": "]", "|": "\\", "~": "`" };
+function keyOf(ch) {
+  if (/^[a-z]$/.test(ch)) return [ch, "Key" + ch.toUpperCase(), ch.toUpperCase().charCodeAt(0), false];
+  if (/^[A-Z]$/.test(ch)) return [ch, "Key" + ch, ch.charCodeAt(0), true];
+  if (/^[0-9]$/.test(ch)) return [ch, "Digit" + ch, ch.charCodeAt(0), false];
+  if (ch === " ") return [" ", "Space", 32, false];
+  if (PUNCT[ch]) return [ch, PUNCT[ch][0], PUNCT[ch][1], false];
+  if (SHIFTED[ch]) { const b = SHIFTED[ch], k = /[0-9]/.test(b) ? ["Digit" + b, b.charCodeAt(0)] : PUNCT[b]; return [ch, k[0], k[1], true]; }
+  return null;
+}
 const BUTTONS = { left: "left", right: "right", middle: "middle" };
 
 export function createActor(env) {
@@ -345,6 +371,22 @@ export function createActor(env) {
     await c.send("Input.dispatchKeyEvent", { type: useText ? "keyDown" : "rawKeyDown", key: k, windowsVirtualKeyCode: code, text: useText ? (modifiers & 8 && text.length === 1 ? text.toUpperCase() : text) : undefined, modifiers });
     await c.send("Input.dispatchKeyEvent", { type: "keyUp", key: k, windowsVirtualKeyCode: code, modifiers });
   }
+  async function typeText(c, text) {
+    // Chữ rất dài (dán cả đoạn văn): đưa vào một lần cho nhanh, như dán.
+    if (text.length > 400) { await c.send("Input.insertText", { text }); return; }
+    let ime = "";
+    const flush = async () => { if (ime) { await c.send("Input.insertText", { text: ime }); ime = ""; } };
+    for (const ch of text) {
+      if (ch === "\n" || ch === "\r") { await flush(); if (ch === "\n") await pressKey(c, "Enter"); continue; }
+      const k = keyOf(ch);
+      if (!k) { ime += ch; continue; }
+      await flush();
+      const [key, code, vk, shift] = k, modifiers = shift ? 8 : 0;
+      await c.send("Input.dispatchKeyEvent", { type: "keyDown", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, text: ch, unmodifiedText: ch, modifiers });
+      await c.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers });
+    }
+    await flush();
+  }
   async function mouseClick(c, x, y, o = {}) {
     const button = BUTTONS[o.button] ?? "left", count = Math.max(1, Math.min(Number(o.count) || 1, 3));
     let modifiers = 0;
@@ -367,12 +409,15 @@ export function createActor(env) {
     return { x, y, label: "", cover: "" };
   }
   // Thao tác làm trang mở tab mới (target=_blank, window.open): chuyển sang tab đó để làm tiếp, người xem cũng chuyển theo.
+  // Các tab đã dùng gần đây: đóng tab đang làm thì quay về tab dùng trước đó (như Chrome), không nhảy sang tab đầu tiên.
+  const remember = (s, id) => { if (s.tab && s.tab !== id) { s.hist = (s.hist ?? []).filter((x) => x !== s.tab); s.hist.push(s.tab); if (s.hist.length > 20) s.hist.shift(); } };
   async function followNewTab(u, before) {
     const s = st(u);
     await sleep(250);
     const now = await pages(u).catch(() => []);
     const fresh = now.find((x) => !before.includes(x.id));
     if (!fresh) return null;
+    remember(s, fresh.id);
     s.tab = fresh.id;
     await env.switched(u, fresh.id);
     const c = await env.session(u);
@@ -385,6 +430,7 @@ export function createActor(env) {
     const list = await pages(u);
     const t = list.find((x) => x.id === id) ?? list[Number(id) - 1];
     if (!t) throw new BrowserError(400, `Không có tab ${id}. Gọi browser_tabs với action "list" để xem các tab.`);
+    remember(s, t.id);
     s.tab = t.id;
     await env.switched(u, t.id);
     await env.activate?.(u, t.id)?.catch?.(() => {});
@@ -429,7 +475,11 @@ export function createActor(env) {
         const t = list.find((x) => x.id === String(a.id)) ?? list[Number(a.id ?? a.index) - 1] ?? list.find((x) => x.id === s.tab);
         if (t) {
           if (list.length <= 1 && env.keepOne !== false) await env.newTab(u, "about:blank");
-          if (t.id === s.tab) { const next = (await pages(u)).find((x) => x.id !== t.id); if (next) await switchTab(u, next.id); else { s.tab = ""; await env.switched(u, ""); } }
+          if (t.id === s.tab) {
+            const open = (await pages(u)).filter((x) => x.id !== t.id);
+            const next = [...(s.hist ?? [])].reverse().map((id) => open.find((x) => x.id === id)).find(Boolean) ?? open[0];
+            if (next) await switchTab(u, next.id); else { s.tab = ""; await env.switched(u, ""); }
+          }
           await Promise.resolve(env.closeTab(u, t.id)).catch(() => {});
         }
         return { tabs: await tabsNow(u) };
@@ -509,7 +559,7 @@ export function createActor(env) {
         await evaluate(c, call(`focus(${a.ref != null && a.ref !== "" ? Number(String(a.ref).replace(/\D/g, "")) : "null"}, ${a.clear ? "true" : "false"})`)).catch(() => {});
         if (a.clear) await pressKey(c, "Backspace");
         const text = String(a.text ?? "");
-        if (text) await c.send("Input.insertText", { text });
+        if (text) await typeText(c, text);
         if (a.submit) { const before = (await pages(u).catch(() => [])).map((x) => x.id); await pressKey(c, "Enter"); await settle(c, 600); const nt = await followNewTab(u, before); if (nt) return { ...nt, ...extra(u) }; }
         return { ...(await info(c)), ...extra(u) };
       }
@@ -537,10 +587,16 @@ export function createActor(env) {
         const dx = Number(a.dx) || 0, dy = a.dy == null && !dx && ref == null ? 600 : Number(a.dy) || 0;
         if (ref != null && !dx && !dy) { const ok = await evaluate(c, call(`scrollBy(${ref}, 0, 0)`)); if (!ok) throw new BrowserError(400, `Không còn phần tử [${ref}] trên trang.`); await sleep(250); return { ...(await info(c)) }; }
         let x, y;
-        if (ref != null) { const p = await point(u, c, { ref }); x = p.x; y = p.y; } else if (a.x != null && a.y != null) { x = Number(a.x); y = Number(a.y); }
-        else { const v = await evaluate(c, "({ w: innerWidth, h: innerHeight })"); x = v.w / 2; y = v.h / 2; }
+        const page = ref == null && (a.x == null || a.y == null);
+        if (ref != null) { const p = await point(u, c, { ref }); x = p.x; y = p.y; } else if (!page) { x = Number(a.x); y = Number(a.y); }
+        else ({ x, y } = await evaluate(c, call("pagePoint()")));
+        const where = "(() => { const s = document.scrollingElement || document.documentElement; return [Math.round(s.scrollLeft), Math.round(s.scrollTop)]; })()";
+        const was = page ? await evaluate(c, where).catch(() => null) : null;
+        await c.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
         await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: dx, deltaY: dy });
         await sleep(350);
+        // Cuộn cả trang mà con lăn không làm trang nhúc nhích (trang chặn sự kiện con lăn): cuộn thẳng trang.
+        if (was) { const now = await evaluate(c, where).catch(() => was); if (now[0] === was[0] && now[1] === was[1]) await evaluate(c, `(document.scrollingElement || document.documentElement).scrollBy(${dx}, ${dy})`).catch(() => {}); }
         const pos = await evaluate(c, "(() => { const s = document.scrollingElement || document.documentElement; return Math.round(s.scrollTop) + '/' + Math.max(0, s.scrollHeight - innerHeight); })()").catch(() => "");
         return { ...(await info(c)), scroll: pos };
       }

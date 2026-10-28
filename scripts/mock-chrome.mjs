@@ -66,8 +66,13 @@ export async function createChrome(base) {
   const chrome = {
     debugger: dbg,
     tabs: {
-      async query(q = {}) { return [...tabs.values()].filter((t) => (q.active == null || t.active === q.active)).sort((a, b) => a.index - b.index).map(pub); },
-      async get(id) { return pub(get(id)); },
+      // Như Chrome: tiêu đề, địa chỉ luôn mới (sự kiện của DevTools không báo khi trang đổi tiêu đề).
+      async query(q = {}) {
+        const live = await devJson(`${base}/json/list`).catch(() => []);
+        for (const x of live) { const t = tabs.get(ids.get(x.id)); if (t) { t.title = x.title; t.url = x.url; } }
+        return [...tabs.values()].filter((t) => (q.active == null || t.active === q.active)).sort((a, b) => a.index - b.index).map(pub);
+      },
+      async get(id) { const t = get(id); const x = (await devJson(`${base}/json/list`).catch(() => [])).find((y) => y.id === t.targetId); if (x) { t.title = x.title; t.url = x.url; } return pub(t); },
       async create({ url = "about:blank", active = true } = {}) {
         const { targetId } = await bc.send("Target.createTarget", { url });
         const id = await waitTab(targetId);
@@ -84,7 +89,8 @@ export async function createChrome(base) {
         }
         return pub(t);
       },
-      async remove(id) { const t = get(id); await bc.send("Target.closeTarget", { targetId: t.targetId }); },
+      // Như Chrome: xong khi tab đã đóng hẳn.
+      async remove(id) { const t = get(id); await bc.send("Target.closeTarget", { targetId: t.targetId }); for (let i = 0; i < 50 && tabs.has(t.id); i++) await new Promise((r) => setTimeout(r, 40)); },
       async group({ tabIds, groupId }) {
         const gid = groupId ?? nextGroup++;
         if (!groups.has(gid)) groups.set(gid, { id: gid, title: "", color: "grey", windowId: 1 });

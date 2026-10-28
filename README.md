@@ -81,4 +81,6 @@ Ngoài trình duyệt riêng trong workspace, Synchro điều khiển được c
 - Đường đi: tiện ích xin vé (`/api/browser/ext/connect`) → WebSocket `/ws-agent/ext` của dịch vụ workspace (`workspace/ext-relay.mjs`, nginx mở thêm đường này)
   → máy chủ Next gửi lệnh `browser_*` qua HTTP `/ext`. Model chọn trình duyệt bằng tham số `browser` ("user" khi người dùng nói "Chrome của tôi"); không nói thì theo lựa chọn ở khung trình duyệt.
 - dev:mock: bản giải nén sẵn ở `data-mock/extension` (Load unpacked trong Chrome của bạn), hoặc tiện ích giả lập `node scripts/mock-extension.mjs --code <mã>`
-  (đúng mã của tiện ích trên Chrome thật, cửa sổ riêng). Kiểm thử: `node tests/run-all.mjs ext browser`.
+  (đúng mã của tiện ích trên Chrome thật, cửa sổ riêng). Kiểm thử: `node tests/run-all.mjs ext browser`; `ext-lab` chạy mọi thao tác như người thật
+  (gõ từng phím, chọn, chuột, cuộn, kéo thả, tải lên / về, hộp thoại, khung con, shadow DOM, tab, biểu mẫu…) trên trang `tests/fixtures/browser-lab.html`
+  ở tiện ích giả lập, tiện ích thật trong Chrome thật (màn hình tỉ lệ 2) và trình duyệt của Synchro.

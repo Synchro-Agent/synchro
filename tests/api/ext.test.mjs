@@ -137,6 +137,19 @@ if (!chrome) {
     await ctl("/scope", { scope: "all" });
     r = await ask("sub-claude/sonnet", `#tool=browser_navigate #args={"url":"${PAGE}?mcp=1","browser":"user"}`);
     ok(/đã dùng browser_navigate: Đã mở trang\..*Bài kiểm tra thử/.test(r.j?.text ?? ""), "Claude Code mở trang trên Chrome của người dùng qua mcp__synchro__browser_navigate", JSON.stringify(r.j).slice(0, 300));
+    // Gói Codex và Antigravity: cùng công cụ qua cầu nối MCP, làm trên Chrome của người dùng.
+    for (const cli of ["codex", "agy"]) await me("POST", `/api/engines/${cli}/logout`);
+    const cx = await me("POST", "/api/engines/codex/login/start", {});
+    await fetch(`${MOCK}/mock-login/codex/approve?code=${cx.j?.userCode}`);
+    for (let i = 0; i < 20 && !(await me("GET", "/api/engines/codex/status?fresh=1")).j?.loggedIn; i++) await sleep(500);
+    await me("POST", "/api/engines/agy/login/start", {});
+    const agyCode = /id="code"[^>]*>([^<]+)</.exec(await fetch(`${MOCK}/mock-login/agy`).then((x) => x.text()))?.[1];
+    ok((await me("POST", "/api/engines/agy/login/code", { code: agyCode })).j?.state === "done", "đăng nhập gói Codex và Antigravity (giả lập)");
+    for (const [model, tag] of [["sub-codex/gpt-6.1-sol", "codex"], ["sub-agy/gemini-3.8-flash", "agy"]]) {
+      r = await ask(model, `#tool=browser_navigate #args={"url":"${PAGE}?${tag}=1","browser":"user"}`);
+      const tabsNow = (await ctl("/state")).tabs;
+      ok(/browser_navigate/.test(r.j?.text ?? "") && tabsNow.some((t) => t.url.includes(`${tag}=1`)), `${model} mở trang trên Chrome của người dùng qua cầu nối MCP`, JSON.stringify(r.j).slice(0, 300));
+    }
 
     console.log("6. Dừng ngay trong Chrome (nút Dừng trên dải điều khiển) dừng cả lượt; lượt sau làm tiếp được");
     const runOf = async (text) => (await me("POST", "/api/llm", { system: "", model: "anthropic/claude-haiku-5-5", skills: true, async: true, messages: [{ role: "user", content: text }] })).j?.run;
@@ -144,13 +157,16 @@ if (!chrome) {
     let t0 = Date.now();
     let run = await runOf(`#tool=browser_wait #args={"ms":25000,"browser":"user"}`);
     for (let i = 0; i < 40; i++) { const c = (await ctl("/state")).control; if (c.acting && c.attached.length) break; await sleep(200); }
-    const shown = await inTab((u) => u.includes("mcp=1"), "!!document.querySelector('synchro-control')");
+    // Tab Synchro đang làm (theo tiện ích).
+    const st6 = await ctl("/state"), curUrl = st6.tabs.find((t) => String(t.id) === st6.control.tab)?.url ?? "";
+    const here = (u) => u === curUrl;
+    const shown = await inTab(here, "!!document.querySelector('synchro-control')");
     ok(shown === true, "đang điều khiển: trang có dải “Synchro đang điều khiển tab này”");
-    await inTab((u) => u.includes("mcp=1"), "window.__synchroStop && (window.__synchroStop('stop'), true)");
+    await inTab(here, "window.__synchroStop && (window.__synchroStop('stop'), true)");
     let done = await waitRun(run);
     ok(done?.result?.cancelled === true && Date.now() - t0 < 15_000, `bấm Dừng trong trang → lượt dừng ngay (${Date.now() - t0} ms, không chờ hết 25 giây)`, JSON.stringify(done).slice(0, 400));
     ok(done?.events?.some((e) => e.kind === "ui" && e.text === "browser:user"), "khung chat được báo Synchro làm trên Chrome của bạn (mở khung trạng thái)");
-    ok((await inTab((u) => u.includes("mcp=1"), "!!document.querySelector('synchro-control')")) === false && (await ctl("/state")).control.attached.length === 0, "dừng xong: gỡ dải điều khiển, ngắt chrome.debugger");
+    ok((await inTab(here, "!!document.querySelector('synchro-control')")) === false && (await ctl("/state")).control.attached.length === 0, "dừng xong: gỡ dải điều khiển, ngắt chrome.debugger");
     r = await ask("anthropic/claude-haiku-5-5", MINE);
     ok(/Đã làm xong trên Chrome của bạn/.test(r.j?.text ?? ""), "lượt mới sau khi dừng: làm bình thường", JSON.stringify(r.j).slice(0, 200));
     t0 = Date.now();

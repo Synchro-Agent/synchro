@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Phòng thử trình duyệt</title>
+<!-- Trang thử mọi kiểu thao tác người thật gặp trên web (tests/api/ext-lab.test.mjs). Mỗi ô ghi lại sự kiện nhận được vào window.__ev,
+     window.lab() trả trạng thái để kiểm tra Synchro thao tác có giống người thật không (sự kiện thật isTrusted, đúng thứ tự, đúng phím). -->
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 24px 24px 160px; max-width: 900px; }
+  section { border: 1px solid #ddd; border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 8px 12px; cursor: pointer; user-select: none; }
+  #list { height: 150px; overflow: auto; border: 1px solid #ccc; border-radius: 8px; }
+  #list div { padding: 4px 10px; cursor: pointer; }
+  .menu { position: relative; display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 8px; }
+  .menu .sub { display: none; position: absolute; left: 0; top: 100%; background: #fff; border: 1px solid #ccc; padding: 6px 10px; min-width: 180px; z-index: 5; }
+  .menu:hover .sub { display: block; }
+  #drop { width: 220px; height: 70px; border: 2px dashed #888; border-radius: 8px; display: grid; place-items: center; }
+  #drag { width: 120px; padding: 8px; background: #e0ecff; border-radius: 8px; cursor: grab; }
+  #track { position: relative; width: 300px; height: 12px; background: #eee; border-radius: 6px; }
+  #knob { position: absolute; top: -6px; left: 0; width: 24px; height: 24px; border-radius: 50%; background: #2f7bf6; cursor: grab; }
+  #pad { border: 1px solid #ccc; border-radius: 8px; display: block; }
+  #ctxmenu { display: none; position: absolute; background: #fff; border: 1px solid #ccc; padding: 6px 10px; z-index: 9; }
+  #fixed { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); padding: 10px 28px; z-index: 3; }
+  #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); place-items: center; z-index: 8; }
+  #modal > div { background: #fff; padding: 20px; border-radius: 12px; }
+  #palette { display: none; }
+  .opt[aria-selected="true"] { background: #dfe8ff; }
+</style></head>
+<body>
+<h1 id="h">Phòng thử trình duyệt</h1>
+<div id="page-info"></div>
+
+<section id="s-input"><h2>1. Gõ chữ</h2>
+  <div class="row"><label>Họ và tên (React) <input id="react" placeholder="Nhập họ tên"></label></div>
+  <div class="row"><label>Ô thường <input id="plain" placeholder="Gõ phím"></label></div>
+  <div class="row"><label>Ghi chú <textarea id="area" rows="3"></textarea></label></div>
+  <div class="row"><span>Soạn thư:</span><div id="rich" contenteditable="true" aria-label="Nội dung thư" style="border:1px solid #ccc;min-height:40px;min-width:280px;padding:6px"></div></div>
+  <div class="row"><label>Ô 1 <input id="f1"></label><label>Ô 2 <input id="f2"></label></div>
+</section>
+
+<section id="s-choose"><h2>2. Chọn</h2>
+  <div class="row"><label>Tỉnh / thành <select id="city"><option value="">-- chọn --</option><option value="hn">Hà Nội</option><option value="hcm">TP. Hồ Chí Minh</option><option value="dn">Đà Nẵng</option></select></label></div>
+  <div class="row"><button id="bank" aria-haspopup="listbox" aria-expanded="false" type="button">Chọn ngân hàng</button>
+    <ul id="banks" role="listbox" hidden><li class="opt" role="option" data-v="vcb">Vietcombank</li><li class="opt" role="option" data-v="tcb">Techcombank</li><li class="opt" role="option" data-v="mb">MB Bank</li></ul></div>
+  <div class="row"><label><input type="checkbox" id="chk"> Nhận bản tin</label>
+    <label><input type="radio" name="ship" value="fast" id="r-fast"> Giao nhanh</label><label><input type="radio" name="ship" value="eco" id="r-eco"> Tiết kiệm</label>
+    <button id="sw" role="switch" aria-checked="false" type="button">Chế độ tối</button></div>
+  <div class="row"><label>Âm lượng <input type="range" id="range" min="0" max="100" value="20"></label></div>
+</section>
+
+<section id="s-mouse"><h2>3. Chuột</h2>
+  <div class="row"><div class="card" id="dbl">Bấm đúp để sửa</div><div class="card" id="ctx">Chuột phải vào đây</div><div class="card" id="shift">Giữ Shift khi bấm</div></div>
+  <div id="ctxmenu" role="menu"><div class="card" id="ctx-del" role="menuitem">Xóa mục này</div></div>
+  <div class="row"><div class="menu" id="menu">Tài khoản ▾<div class="sub"><a href="#adv" id="adv">Cài đặt nâng cao</a></div></div></div>
+  <div class="row"><canvas id="pad" width="240" height="120" aria-label="Bảng vẽ"></canvas></div>
+</section>
+
+<section id="s-scroll"><h2>4. Cuộn</h2>
+  <div id="list"></div>
+</section>
+
+<section id="s-drag"><h2>5. Kéo thả</h2>
+  <div class="row"><div id="drag" draggable="true">Thẻ công việc</div><div id="drop">Thả vào đây</div></div>
+  <div class="row"><div id="track"><div id="knob" aria-label="Nút kéo"></div></div><span id="knob-v">0</span></div>
+</section>
+
+<section id="s-file"><h2>6. Tải tệp lên, tải về</h2>
+  <div class="row"><label>Ảnh đại diện <input type="file" id="file" multiple></label></div>
+  <div class="row"><a id="dl" download="ghi-chu-synchro.txt" href="data:text/plain;charset=utf-8,Xin%20ch%C3%A0o%20t%E1%BB%AB%20Synchro">Tải ghi chú</a></div>
+</section>
+
+<section id="s-dialog"><h2>7. Hộp thoại, chờ</h2>
+  <div class="row"><button id="b-alert" type="button">Thông báo</button><button id="b-confirm" type="button">Xác nhận</button><button id="b-prompt" type="button">Nhập mã</button></div>
+  <div class="row"><button id="load" type="button">Tải dữ liệu</button><span id="spin" hidden>Đang tải…</span><span id="loaded"></span></div>
+  <div class="row"><button id="open-modal" type="button">Mở hộp</button></div>
+</section>
+
+<section id="s-frame"><h2>8. Khung con, shadow DOM</h2>
+  <iframe id="frame" title="Thanh toán" style="width:100%;height:80px;border:1px solid #ccc;border-radius:8px" srcdoc="<label>Mã giảm giá <input id='coupon'></label> <button id='apply' onclick=&quot;parent.__ev.push('apply:'+document.getElementById('coupon').value)&quot;>Áp dụng</button>"></iframe>
+  <lab-card></lab-card>
+</section>
+
+<section id="s-nav"><h2>9. Trang, tab, biểu mẫu</h2>
+  <div class="row"><a href="?page=new" target="_blank" id="newtab">Mở trang khuyến mãi</a> <button id="win" type="button">Mở cửa sổ</button> <button id="net" type="button">Gọi máy chủ</button></div>
+  <form id="search" action="" method="get"><input type="hidden" name="page" value="search"><label>Tìm sản phẩm <input name="q" id="q"></label> <button>Tìm</button></form>
+</section>
+
+<section id="s-more"><h2>10. Cuộn vô tận</h2><div id="feed"></div><div id="sentinel">…</div></section>
+
+<button id="fixed" type="button">Thanh toán</button>
+<div id="modal" role="dialog" aria-label="Hộp thoại"><div>Hộp đang mở. Nhấn Esc để đóng. <button id="m-ok" type="button">Đồng ý</button></div></div>
+<div id="palette" role="dialog">Bảng lệnh</div>
+
+<script>
+const ev = window.__ev = [];
+const S = window.__lab = { react: "", keys: [], focus: [], city: "", bank: "", chk: false, ship: "", sw: false, range: 20, dbl: 0, ctx: false, shift: false, ctxDel: false, adv: false,
+  pad: null, listClick: "", drop: false, knob: 0, files: [], dialogs: {}, loaded: false, modal: false, palette: false, fixed: 0, clickOrder: [], card: "", feed: 10 };
+const $ = (id) => document.getElementById(id);
+const page = new URLSearchParams(location.search).get("page");
+if (page === "new") { document.title = "Khuyến mãi"; $("h").textContent = "Trang khuyến mãi"; }
+if (page === "search") { document.title = "Kết quả tìm kiếm"; $("page-info").textContent = "Kết quả cho: " + new URLSearchParams(location.search).get("q"); }
+// 1. Ô kiểu React: giá trị lưu ở trạng thái, cập nhật theo sự kiện input.
+$("react").addEventListener("input", (e) => { S.react = e.target.value; });
+$("plain").addEventListener("keydown", (e) => S.keys.push((e.isTrusted ? "" : "untrusted:") + e.key));
+for (const id of ["f1", "f2", "react", "plain"]) $(id).addEventListener("focus", () => S.focus.push(id));
+// Thứ tự sự kiện của một cú bấm thật: pointerdown → mousedown → (focus) → pointerup → mouseup → click.
+for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) $("react").addEventListener(t, (e) => { if (e.isTrusted) S.clickOrder.push(t); });
+// 2. Chọn.
+$("city").addEventListener("change", (e) => { S.city = e.target.value; });
+$("bank").addEventListener("click", () => { const h = $("banks").hidden = !$("banks").hidden; $("bank").setAttribute("aria-expanded", String(!h)); });
+document.querySelectorAll("#banks .opt").forEach((o) => o.addEventListener("click", () => { S.bank = o.dataset.v; $("bank").textContent = o.textContent; $("banks").hidden = true; document.querySelectorAll("#banks .opt").forEach((x) => x.setAttribute("aria-selected", String(x === o))); }));
+$("chk").addEventListener("change", (e) => { S.chk = e.target.checked; });
+document.querySelectorAll("input[name=ship]").forEach((r) => r.addEventListener("change", (e) => { S.ship = e.target.value; }));
+$("sw").addEventListener("click", (e) => { S.sw = !S.sw; e.currentTarget.setAttribute("aria-checked", String(S.sw)); });
+$("range").addEventListener("input", (e) => { S.range = Number(e.target.value); });
+// 3. Chuột.
+$("dbl").addEventListener("dblclick", (e) => { if (e.isTrusted) S.dbl++; });
+$("ctx").addEventListener("contextmenu", (e) => { e.preventDefault(); S.ctx = true; const m = $("ctxmenu"); m.style.display = "block"; m.style.left = e.pageX + "px"; m.style.top = e.pageY + "px"; });
+$("ctx-del").addEventListener("click", () => { S.ctxDel = true; $("ctxmenu").style.display = "none"; });
+$("shift").addEventListener("click", (e) => { S.shift = e.shiftKey; });
+$("adv").addEventListener("click", (e) => { e.preventDefault(); S.adv = true; });
+$("pad").addEventListener("click", (e) => { const r = e.target.getBoundingClientRect(); S.pad = { x: Math.round(e.clientX - r.left), y: Math.round(e.clientY - r.top) }; });
+(() => { const c = $("pad").getContext("2d"); c.fillStyle = "#f4f4f4"; c.fillRect(0, 0, 240, 120); c.fillStyle = "#d33"; c.beginPath(); c.arc(180, 80, 14, 0, 7); c.fill(); })();
+// 4. Danh sách cuộn riêng.
+for (let i = 1; i <= 60; i++) { const d = document.createElement("div"); d.textContent = "Mục " + i; d.onclick = () => { S.listClick = d.textContent; }; $("list").append(d); }
+// 5. Kéo thả: HTML5 (kéo thẻ công việc) và kéo bằng chuột (nút trượt).
+$("drag").addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", "the-cong-viec"); });
+$("drop").addEventListener("dragover", (e) => e.preventDefault());
+$("drop").addEventListener("drop", (e) => { e.preventDefault(); S.drop = e.dataTransfer.getData("text/plain") || true; $("drop").textContent = "Đã thả"; });
+(() => {
+  let down = false;
+  const set = (x) => { const r = $("track").getBoundingClientRect(); const v = Math.max(0, Math.min(100, Math.round(((x - r.left) / r.width) * 100))); S.knob = v; $("knob").style.left = (v / 100) * (r.width - 24) + "px"; $("knob-v").textContent = v; };
+  $("knob").addEventListener("mousedown", (e) => { down = true; e.preventDefault(); });
+  window.addEventListener("mousemove", (e) => { if (down) set(e.clientX); });
+  window.addEventListener("mouseup", () => { down = false; });
+})();
+// 6. Tệp.
+$("file").addEventListener("change", (e) => { S.files = [...e.target.files].map((f) => f.name + ":" + f.size); });
+// 7. Hộp thoại, nội dung đến chậm, hộp mở / đóng bằng phím.
+$("b-alert").onclick = () => { alert("Đã lưu thay đổi"); S.dialogs.alert = true; };
+$("b-confirm").onclick = () => { S.dialogs.confirm = confirm("Xóa đơn hàng này?"); };
+$("b-prompt").onclick = () => { S.dialogs.prompt = prompt("Nhập mã OTP", "000000"); };
+$("load").onclick = () => { $("spin").hidden = false; setTimeout(() => { $("spin").hidden = true; $("loaded").textContent = "Đã tải xong 42 mục"; S.loaded = true; }, 1200); };
+$("open-modal").onclick = () => { $("modal").style.display = "grid"; S.modal = true; };
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("modal").style.display === "grid") { $("modal").style.display = "none"; S.modal = false; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("palette").style.display = "block"; S.palette = true; }
+});
+// 8. Shadow DOM.
+customElements.define("lab-card", class extends HTMLElement {
+  constructor() { super(); const r = this.attachShadow({ mode: "open" }); const i = document.createElement("input"); i.placeholder = "Số điện thoại"; const b = document.createElement("button"); b.textContent = "Gửi mã"; b.onclick = () => { S.card = i.value; }; r.append(i, b); }
+});
+// 9. Tab, mạng.
+$("win").onclick = () => window.open("?page=new&from=window", "_blank");
+$("net").onclick = () => fetch("/_fixture/browser-quiz").then((r) => console.log("lab fetch " + r.status));
+$("fixed").onclick = () => { S.fixed++; };
+// 10. Cuộn vô tận.
+const feed = (n) => { for (let i = 0; i < n; i++) { const p = document.createElement("p"); p.textContent = "Bài viết " + (document.querySelectorAll("#feed p").length + 1); $("feed").append(p); } S.feed = document.querySelectorAll("#feed p").length; };
+feed(10);
+new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) feed(10); }).observe($("sentinel"));
+console.log("lab ready");
+window.lab = () => JSON.parse(JSON.stringify(S));
+</script>
+</body>
+</html>
