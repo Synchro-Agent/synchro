@@ -26,6 +26,19 @@ const me = client();
 const EMAIL = "ext-member@synchro.test";
 await me("POST", "/api/auth/signup", { email: EMAIL, password: "Member-pass-123", profile: { fullName: "Ext Member", birthDate: "2000-01-01" } });
 await me("POST", "/api/auth/login", { email: EMAIL, password: "Member-pass-123" });
+// Quyền rõ ràng (không dựa vào quyền mặc định của tài khoản mới, có thể đã bị bộ kiểm thử khác đổi): mọi model, mọi tính năng
+// (Synchro Code + Cloud sandbox để có trình duyệt của Synchro).
+{
+  let cookie = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
+  const admin = async (method, p, body) => {
+    const r = await fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
+    for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
+    return r.json().catch(() => null);
+  };
+  if (!cookie) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
+  const u = (await admin("GET", "/api/admin")).users.find((x) => x.email === EMAIL);
+  await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } });
+}
 // Bắt đầu sạch: gỡ trình duyệt còn lại của lần chạy trước, dùng trình duyệt của Synchro làm mặc định.
 for (const d of (await me("GET", "/api/browser/ext")).j?.devices ?? []) await me("POST", "/api/browser/ext", { op: "remove", id: d.id });
 await me("PATCH", "/api/caps", { browse: true, mine: false });

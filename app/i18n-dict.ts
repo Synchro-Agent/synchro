@@ -1883,3 +1883,5 @@ RULES_EN.push(
   [/^(Đang )?mở (\S+) trên Chrome của bạn$/, (m) => `${m[1] ? "Opening" : "Opened"} ${m[2]} in your Chrome`],
   [/^Đã sao chép (\w+:\/\/extensions)$/, (m) => `Copied ${m[1]}`],
 );
+// Nhật ký quản trị: ghép nối trình duyệt qua tiện ích Synchro.
+EN2VI["Paired a browser (Synchro extension)"] = "Ghép nối trình duyệt (tiện ích Synchro)";
