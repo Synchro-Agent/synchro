@@ -1770,3 +1770,11 @@ RULES_EN.push(
   [/^Không chuyển được tệp đính kèm cho (.+?): (.*)$/, (m) => `Couldn't pass the attachments to ${m[1]}: ${m[2]}`],
   [/^Không ghi được tệp đính kèm cho engine: (.*)$/, (m) => `Couldn't write the attachments for the engine: ${m[1]}`],
 );
+// Bộ não tự học, Hướng dẫn cho Synchro tự cập nhật (Cài đặt → Tài khoản).
+Object.assign(VI2EN, { "Không tìm thấy bản này.": "This version wasn't found.", "Bộ não": "Brain" });
+Object.assign(EN2VI, {
+  "Restored this version": "Đã quay lại bản này", "Synchro keeps this up to date from what it learns in your chats": "Synchro tự cập nhật phần này từ những gì học được trong các đoạn chat",
+  "Automatic updates from your chats are off": "Đang tắt tự cập nhật từ các đoạn chat", "Update automatically from my chats": "Tự cập nhật từ các đoạn chat của tôi",
+  "Hide history": "Ẩn lịch sử", "History": "Lịch sử", "Written by Synchro": "Synchro viết", "Written by you": "Bạn viết", "Use this version": "Dùng bản này", "Current": "Đang dùng",
+});
+RULES_VI.push([/^Synchro updated this from your chats on (.+)$/, (m) => `Synchro đã cập nhật phần này từ các đoạn chat lúc ${m[1]}`]);

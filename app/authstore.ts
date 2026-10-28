@@ -235,6 +235,12 @@ function writeProfile(id: string, c: ProfileCols) {
   db().prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...vals, id);
 }
 
+/** Synchro tự viết lại "Hướng dẫn cho Synchro" từ những gì bộ não học được (brain.ts); cùng giới hạn độ dài với bản người dùng tự viết. */
+export function setInstructions(uid: string, text: string) {
+  const c = cleanProfile({ instructions: text });
+  writeProfile(uid, c);
+}
+
 export function updateProfile(req: Request, u: UserRow, p: ProfileIn) {
   limit("profile:" + u.id, 30, 15 * MIN);
   const c = cleanProfile(p);

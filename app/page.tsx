@@ -25,6 +25,7 @@ import { steerRun, takeSteer } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
+import { BrainWorkspace, useBrainSync } from "./brainui";
 
 // Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): câu đầu của tin nhắn, bỏ ký hiệu Markdown và tham số công cụ.
 const roughTitle = (t: string) => {
@@ -35,7 +36,7 @@ const roughTitle = (t: string) => {
 };
 // Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
-type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox";
+type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
@@ -1192,6 +1193,14 @@ export default function Home() {
     <button data-nav={v} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
   );
   const [voiceOn, setVoiceOn] = useState(false);
+  // Bộ não: mở từ Cài đặt → Bộ não (kèm ghi chú cần mở), và tự nạp dần các đoạn chat cũ của trình duyệt này lên bộ não.
+  const [brainAt, setBrainAt] = useState<string | null>(null);
+  useEffect(() => {
+    const h = (e: Event) => { const t = (e as CustomEvent).detail?.title as string | null; setModal(null); setView("brain"); setBrainAt(t ?? null); };
+    window.addEventListener("synchro:brain", h);
+    return () => window.removeEventListener("synchro:brain", h);
+  }, []);
+  useBrainSync(chats, !!me);
   const inboxN = useInboxCount(!!me);
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
@@ -1318,6 +1327,7 @@ export default function Home() {
           {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
           <Nav v="inbox" icon={<I.Inbox />} label="Hộp thư" badge={inboxN} />
+          <Nav v="brain" icon={<I.Brain />} label="Bộ não" />
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
           {me?.perms.features.speech !== false && (
             <>
@@ -1457,7 +1467,7 @@ export default function Home() {
       {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
       <main className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
-        {view !== "code" && view !== "speech" && <div className="topbar">
+        {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
             {view === "chat" && chat && (
@@ -1603,6 +1613,7 @@ export default function Home() {
         {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
+        {view === "brain" && <BrainWorkspace initial={brainAt} onInitial={() => setBrainAt(null)} sideOpen={open} onSide={() => setOpen(true)} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
       </main>
 

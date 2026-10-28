@@ -342,8 +342,10 @@ function memoryReply(sys, q) {
   if (like) out.push(`Thích ${like[1].trim()}`);
   return { text: JSON.stringify(out) };
 }
+// Lời gọi của bộ não / đặt tên (chưng cất, biên soạn, gộp, bản đồ, hồ sơ, hướng dẫn): trả lời bằng mockBrain, không qua skill / công cụ.
+const SIDE = /^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/;
 const capsFor = (sys, q, msgs, tools, none) => {
-  if (q.includes("#media")) return null; // lệnh thử: chỉ mô tả tệp nhận được (xem reply)
+  if (q.includes("#media") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
   // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
   if (!none && q.includes("#tool=") && !/#rev\s*\d+/.test(q)) { const w = wantTool(q, tools); if (w) return { tool: w }; }
   const mem = memoryReply(sys, q);
@@ -361,7 +363,7 @@ const sysText = (x) => (typeof x === "string" ? x : Array.isArray(x) ? x.map((b)
 // Lỗi thử nghiệm theo từ khóa trong tin nhắn; trả về true nếu đã trả lỗi.
 async function trap(res, q, fmt) {
   // Lời gọi chưng cất / tổng hợp của bộ não và đặt tên đoạn chat chép lại cả đoạn chat (có thể chứa chữ "#429" của câu trả lời giả lập).
-  if (/^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:)/.test(q)) return false;
+  if (/^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/.test(q)) return false;
   if (q.includes("#slow")) await sleep(8000);
   const code = q.includes("#401") ? 401 : q.includes("#404") ? 404 : q.includes("#429") ? 429 : q.includes("#500") ? 500 : 0;
   if (!code) return false;

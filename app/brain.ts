@@ -1,36 +1,49 @@
-// Bộ não tổng hợp của Synchro (thay Cài đặt → Bộ nhớ), liên kết thông tin theo cách của Obsidian: mỗi thứ là một ghi chú Markdown,
-// ghi chú nối với nhau bằng [[liên kết]], mỗi ghi chú biết những ghi chú nào trỏ về nó (backlink) và chỗ nào nhắc tên nó mà chưa nối;
-// cả mạng lưới vẽ thành đồ thị. Lưu ở máy chủ (SQLite trên VPS), xuất được thành thư mục Obsidian (.zip các tệp .md).
-//
-// Cấu trúc: [[Bộ não]] là trung tâm. Ba bán cầu [[Claude]] · [[ChatGPT]] · [[Gemini]] nối về trung tâm (ba hãng dùng chung một bộ não).
-// Mỗi đoạn chat sau khi xong được chưng cất thành một ghi chú nhánh: tóm tắt, điều đáng nhớ, quyết định, việc dang dở, và liên kết
-// tới chủ đề (ghi chú chủ đề nối về trung tâm), tên riêng, model đã nghĩ cùng, skill / connector đã dùng, các đoạn chat liên quan.
-// [[Về bạn]] gom hồ sơ và ký ức dài hạn. Trung tâm được tổng hợp lại định kỳ từ tất cả: model nào cũng đọc phần tổng quan này,
-// và mỗi câu hỏi kéo theo vài ghi chú liên quan nhất (tầng động của prompt).
+// Bộ não tổng hợp của Synchro (thay Cài đặt → Bộ nhớ). Synchro tự xây và tự chăm sóc một mạng ghi chú Markdown về người dùng:
+// - Mỗi thứ là một ghi chú; ghi chú nối nhau bằng [[liên kết]] (cả #mục, ^khối, |chữ hiện, ![[nhúng]]); mỗi ghi chú biết ghi chú nào
+//   trỏ về nó (liên kết đến đây) và chỗ nào nhắc tên nó; cả mạng vẽ thành đồ thị. Nội dung là văn bản thuần, tải về thành thư mục .md.
+// - Học (sau mỗi đoạn chat, tự động): đoạn chat được chưng cất thành một ghi chú nhánh, đồng thời cập nhật kiến thức vào trang chủ đề,
+//   trang tên riêng và hồ sơ [[Về bạn]] (mỗi điều ghi kèm nguồn là đoạn chat). Một đoạn chat có thể chạm tới nhiều trang.
+// - Chăm sóc (định kỳ, tự động): biên soạn lại trang có điều mới (gộp trùng, điều mới thay điều cũ), gộp chủ đề trùng nhau, tự nối
+//   chỗ nhắc tên thành liên kết, xếp chủ đề vào bản đồ theo lĩnh vực, viết [[Mục lục]], ghi [[Hoạt động bộ não]], tổng hợp trung tâm,
+//   và tự viết lại "Hướng dẫn cho Synchro" từ hồ sơ (có lịch sử để quay lại bản cũ). Người dùng không phải bấm gì.
+// - Dùng (mọi model): phần tổng quan đi vào lời nhắc hệ thống, vài trang liên quan đi kèm mỗi câu hỏi, và công cụ brain_search /
+//   brain_read / brain_write để model tự tra, đọc theo liên kết và ghi nhớ.
+// Cấu trúc: [[Bộ não]] là trung tâm; ba bán cầu [[Claude]] · [[ChatGPT]] · [[Gemini]] (ba hãng dùng chung một bộ não).
 import crypto from "node:crypto";
-import { db, getUser, type UserRow } from "./authstore";
+import { db, getUser, setInstructions, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
 import { listMemory, memCfg } from "./memory";
 import { splitArtifacts } from "./artifacts";
 import { vendorOf } from "./router";
 import { onTick } from "./tasks";
 
-export type NoteKind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "skill" | "connector" | "note" | "daily";
+export type NoteKind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily";
 type Row = { id: string; user_id: string; kind: NoteKind; title: string; tkey: string; conv: string | null; body: string; props: string; created_at: number; updated_at: number };
 export type Note = { id: string; kind: NoteKind; title: string; conv: string | null; body: string; props: Props; createdAt: number; updatedAt: number };
+/** Một điều đã biết trên trang chủ đề / tên riêng / hồ sơ: src là đoạn chat sinh ra nó. */
+type Fact = { t: string; src?: string; at: number };
+type ProfileFact = Fact & { cat: string };
 type Props = {
   tags?: string[]; date?: number; turns?: number; models?: Record<string, number>; skills?: string[]; connectors?: string[];
   gist?: string; points?: string[]; decisions?: string[]; tasks?: string[]; topics?: string[]; entities?: string[]; related?: string[];
   importance?: number; distilledAt?: number; userNote?: string; overview?: string; focus?: string[]; desc?: string; auto?: boolean;
-  /** Tên khác của ghi chú (như aliases của Obsidian): liên kết và chỗ nhắc tên đều nhận. */ aliases?: string[];
-  /** Việc đã xong (Bases → Việc dang dở). */ done?: string[]; pinned?: boolean; day?: string;
+  /** Tên khác của ghi chú: liên kết và chỗ nhắc tên đều nhận. */ aliases?: string[];
+  /** Việc đã xong (Bảng → Việc dang dở). */ done?: string[]; pinned?: boolean; day?: string;
+  /** Trang chủ đề / tên riêng: tóm lược, các điều đã biết, loại tên riêng, bản đồ chứa nó, cần biên soạn lại. */
+  summary?: string; facts?: Fact[]; etype?: string; up?: string; stale?: boolean;
+  /** Về bạn: chân dung và các điều biết về người dùng theo nhóm. */ portrait?: string; profile?: ProfileFact[];
 };
 
-export const HUB = "Bộ não", ABOUT = "Về bạn";
+export const HUB = "Bộ não", ABOUT = "Về bạn", INDEX = "Mục lục", LOG = "Hoạt động bộ não";
+const MAP_PREFIX = "Bản đồ · ";
 const HEMI: Record<string, string> = { anthropic: "Claude", openai: "ChatGPT", google: "Gemini" };
-/** Ghi chú Synchro tự viết lại toàn bộ: người dùng chỉ sửa phần "Ghi chú của bạn". */
-const GENERATED: NoteKind[] = ["hub", "about", "model", "chat", "code", "skill", "connector", "daily"];
-const SYSTEM_NOTES: NoteKind[] = ["hub", "about", "model", "daily"];
+/** Ghi chú Synchro tự viết (nội dung dựng lại từ thuộc tính): người dùng chỉ thêm phần "Ghi chú của bạn". */
+const GENERATED: NoteKind[] = ["hub", "about", "model", "chat", "code", "topic", "entity", "map", "index", "log", "skill", "connector", "daily"];
+/** Ghi chú khung của bộ não: không xóa được. */
+const SYSTEM_NOTES: NoteKind[] = ["hub", "about", "model", "daily", "map", "index", "log"];
+const WIKI: NoteKind[] = ["topic", "entity"];
+/** Nhóm của hồ sơ Về bạn (cũng là các mục của Hướng dẫn tự viết). */
+const PROFILE_CATS: Record<string, string> = { who: "Bạn là ai", work: "Công việc & chuyên môn", habit: "Thói quen & cách làm việc", interest: "Mối quan tâm", style: "Cách bạn muốn được trả lời" };
 
 // ---------------------------------------------------------------- lưu trữ
 let ready = false;
@@ -44,12 +57,29 @@ function t() {
       CREATE INDEX IF NOT EXISTS brain_links_dst ON brain_links(user_id, dkey);
       CREATE TABLE IF NOT EXISTS brain_queue (user_id TEXT NOT NULL, conv TEXT NOT NULL, feature TEXT NOT NULL, snapshot TEXT NOT NULL, updated_at INTEGER NOT NULL,
         tries INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, conv));
-      CREATE TABLE IF NOT EXISTS brain_state (user_id TEXT PRIMARY KEY, dirty INTEGER NOT NULL DEFAULT 0, hub_at INTEGER NOT NULL DEFAULT 0)`);
+      CREATE TABLE IF NOT EXISTS brain_state (user_id TEXT PRIMARY KEY, dirty INTEGER NOT NULL DEFAULT 0, hub_at INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS brain_log (user_id TEXT NOT NULL, at INTEGER NOT NULL, text TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS brain_log_user ON brain_log(user_id, at);
+      CREATE TABLE IF NOT EXISTS instructions_history (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, at INTEGER NOT NULL, source TEXT NOT NULL, text TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS instructions_history_user ON instructions_history(user_id, at)`);
+    // Mốc của các việc chăm sóc định kỳ (thêm cột cho bảng đã có từ bản trước).
+    const cols = new Set((d.prepare("PRAGMA table_info(brain_state)").all() as { name: string }[]).map((c) => c.name));
+    for (const c of ["garden_at", "merge_at", "maps_at", "ins_at", "profile_dirty", "maps_n"]) if (!cols.has(c)) d.exec(`ALTER TABLE brain_state ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
     ready = true;
   }
   return d;
 }
-/** Khóa so khớp tiêu đề: không phân biệt hoa thường, dấu, khoảng trắng (như Obsidian không phân biệt hoa thường). */
+type State = { dirty: number; hub_at: number; garden_at: number; merge_at: number; maps_at: number; ins_at: number; profile_dirty: number; maps_n: number };
+const state = (uid: string): State => {
+  t().prepare("INSERT OR IGNORE INTO brain_state (user_id) VALUES (?)").run(uid);
+  return t().prepare("SELECT * FROM brain_state WHERE user_id = ?").get(uid) as State;
+};
+const setState = (uid: string, p: Partial<State>) => {
+  state(uid);
+  const ks = Object.keys(p) as (keyof State)[];
+  if (ks.length) t().prepare(`UPDATE brain_state SET ${ks.map((k) => `${k} = ?`).join(", ")} WHERE user_id = ?`).run(...ks.map((k) => p[k]), uid);
+};
+/** Khóa so khớp tiêu đề: không phân biệt hoa thường, dấu, khoảng trắng. */
 export const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
 const parse = (r: Row): Note => {
   let props: Props = {};
@@ -61,7 +91,7 @@ const byConv = (uid: string, conv: string) => t().prepare("SELECT * FROM brain_n
 export const getNote = (uid: string, title: string) => { const r = byKey(uid, title); return r ? parse(r) : null; };
 export const allNotes = (uid: string) => (t().prepare("SELECT * FROM brain_notes WHERE user_id = ? ORDER BY created_at").all(uid) as Row[]).map(parse);
 
-// [[Tiêu đề]], [[Tiêu đề|chữ hiện]], [[Tiêu đề#mục]] và #thẻ (không tính tiêu đề Markdown "# ").
+// [[Tiêu đề]], [[Tiêu đề|chữ hiện]], [[Tiêu đề#mục]], [[Tiêu đề#^khối]] và #thẻ (không tính tiêu đề Markdown "# ").
 const LINK = /\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|([^\]\n]*))?\]\]/g;
 export const linksIn = (body: string) => [...new Set([...body.matchAll(LINK)].map((m) => m[1].trim()).filter(Boolean))];
 export const tagsIn = (body: string) => [...new Set([...body.replace(/```[\s\S]*?```/g, "").matchAll(/(^|[\s(])#([\p{L}\p{N}][\p{L}\p{N}_\-/]*)/gu)].map((m) => m[2].toLowerCase()))];
@@ -72,15 +102,16 @@ function index(uid: string, id: string, body: string) {
   const ins = d.prepare("INSERT OR IGNORE INTO brain_links (user_id, src, dkey, dtitle) VALUES (?, ?, ?, ?)");
   for (const l of linksIn(body)) ins.run(uid, id, fold(l), l.slice(0, 200));
 }
-/** Tạo hoặc cập nhật một ghi chú theo tiêu đề (hoặc theo đoạn chat), rồi lập lại chỉ mục liên kết của nó. */
+/** Tạo hoặc cập nhật một ghi chú theo tiêu đề (hoặc theo id), rồi lập lại chỉ mục liên kết của nó. */
 function put(uid: string, n: { kind: NoteKind; title: string; body: string; props?: Props; conv?: string | null; id?: string }): Note {
   const d = t(), now = Date.now();
   const cur = n.id ? (d.prepare("SELECT * FROM brain_notes WHERE id = ? AND user_id = ?").get(n.id, uid) as Row | undefined) : byKey(uid, n.title);
   const props = JSON.stringify(n.props ?? (cur ? parse(cur).props : {}));
   if (cur) {
+    if (cur.kind === n.kind && cur.title === n.title && cur.body === n.body && cur.props === props && (n.conv === undefined || n.conv === cur.conv)) return parse(cur);
     d.prepare("UPDATE brain_notes SET kind = ?, title = ?, tkey = ?, conv = ?, body = ?, props = ?, updated_at = ? WHERE id = ?")
       .run(n.kind, n.title, fold(n.title), n.conv ?? cur.conv, n.body, props, now, cur.id);
-    index(uid, cur.id, n.body);
+    if (cur.body !== n.body) index(uid, cur.id, n.body);
     return parse(d.prepare("SELECT * FROM brain_notes WHERE id = ?").get(cur.id) as Row);
   }
   const id = "bn_" + crypto.randomBytes(8).toString("base64url");
@@ -91,7 +122,7 @@ function put(uid: string, n: { kind: NoteKind; title: string; body: string; prop
 }
 /** Tiêu đề chưa ai dùng (đoạn chat trùng tên chủ đề hay đoạn chat khác thì thêm ngày). */
 function freeTitle(uid: string, want: string, selfId?: string, date = Date.now()) {
-  const base = want.replace(/[[\]|#\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Đoạn chat";
+  const base = want.replace(/[[\]|#^\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Đoạn chat";
   const taken = (s: string) => { const r = byKey(uid, s); return !!r && r.id !== selfId; };
   if (!taken(base)) return base;
   const d = new Date(date), tag = `${d.getDate()}/${d.getMonth() + 1}`;
@@ -100,6 +131,27 @@ function freeTitle(uid: string, want: string, selfId?: string, date = Date.now()
 }
 const L = (x: string) => `[[${x}]]`;
 const day = (ms: number) => { const d = new Date(ms); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
+const hhmm = (ms: number) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const strs = (v: unknown, n: number, len = 240) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.replace(/[[\]]/g, "").trim().slice(0, len)).slice(0, n) : []);
+const cleanName = (s: string) => s.replace(/[[\]|#^\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+const jsonOf = (text: string) => { const raw = /\{[\s\S]*\}/.exec(text)?.[0]; if (!raw) throw new Error("no json"); return JSON.parse(raw) as Record<string, unknown>; };
+const userPart = (p: Props) => (p.userNote?.trim() ? `\n## Ghi chú của bạn\n${p.userNote.trim()}\n` : "");
+
+// ---------------------------------------------------------------- hoạt động (nhật ký thay đổi của bộ não)
+function logEvent(uid: string, text: string) {
+  t().prepare("INSERT INTO brain_log (user_id, at, text) VALUES (?, ?, ?)").run(uid, Date.now(), text.slice(0, 600));
+  t().prepare("DELETE FROM brain_log WHERE user_id = ? AND at < (SELECT at FROM brain_log WHERE user_id = ? ORDER BY at DESC LIMIT 1 OFFSET 499)").run(uid, uid);
+}
+export const brainLog = (uid: string, n = 120) => t().prepare("SELECT at, text FROM brain_log WHERE user_id = ? ORDER BY at DESC LIMIT ?").all(uid, n) as { at: number; text: string }[];
+function refreshLog(uid: string) {
+  const rows = brainLog(uid, 120);
+  const byDay = new Map<string, { at: number; text: string }[]>();
+  for (const r of rows) { const k = day(r.at); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k)!.push(r); }
+  const body = `Những gì ${L(HUB)} đã tự học, sắp xếp và cập nhật, mới nhất trước.\n${[...byDay].map(([k, rs]) => `\n## ${k}\n${rs.map((r) => `- ${hhmm(r.at)} · ${r.text}`).join("\n")}`).join("\n")}\n`;
+  const cur = getNote(uid, LOG);
+  if (!cur || cur.body !== body) put(uid, { id: cur?.id, kind: "log", title: LOG, body, props: { ...(cur?.props ?? {}), auto: true, tags: ["bo-nao"] } });
+}
 
 // ---------------------------------------------------------------- ghi chú Synchro tự viết
 function chatBody(p: Props): string {
@@ -115,14 +167,27 @@ function chatBody(p: Props): string {
     p.distilledAt && p.date ? `- Ngày: ${L(dailyTitle(p.date))}` : "",
   ].filter(Boolean);
   return [
-    p.gist ? `**Tóm tắt:** ${p.gist}\n` : "_Đang chưng cất đoạn chat này…_\n",
+    p.gist ? `**Tóm tắt:** ${p.gist}\n` : "_Synchro đang chưng cất đoạn chat này…_\n",
     sec("Điểm chính", p.points), sec("Đã quyết định", p.decisions), sec("Còn dang dở", p.tasks, true),
-    `\n## Liên kết\n${links.join("\n")}\n`,
-    p.userNote?.trim() ? `\n## Ghi chú của bạn\n${p.userNote.trim()}\n` : "",
+    `\n## Liên kết\n${links.join("\n")}\n`, userPart(p),
   ].join("");
 }
+/** Trang chủ đề / tên riêng: tóm lược, các điều đã biết (kèm nguồn), liên quan, bản đồ chứa nó. */
+function wikiBody(n: { kind: NoteKind; title: string; body?: string }, p: Props): string {
+  const lead = p.summary || p.desc || (n.kind === "entity" ? `${p.etype ? `${p.etype[0].toUpperCase()}${p.etype.slice(1)} ` : ""}**${n.title}**.` : `Chủ đề **${n.title}**.`);
+  const facts = (p.facts ?? []).map((f) => `- ${f.t}${f.src ? ` (${L(f.src)})` : ""}`);
+  return [
+    `${lead}\n`,
+    facts.length ? `\n## Điều đã biết\n${facts.join("\n")}\n` : "",
+    p.related?.length ? `\n## Liên quan\n${p.related.map((x) => `- ${L(x)}`).join("\n")}\n` : "",
+    `\nThuộc ${L(p.up || HUB)}.\n`, userPart(p),
+  ].join("");
+}
+function mapBody(p: Props, topics: Note[]): string {
+  return `${p.desc || "Bản đồ gom các chủ đề cùng một lĩnh vực."}\n\n## Chủ đề\n${topics.map((x) => `- ${L(x.title)}${x.props.summary || x.props.desc ? `: ${(x.props.summary || x.props.desc)!.split(/(?<=[.!?])\s/)[0].slice(0, 160)}` : ""}`).join("\n")}\n\nThuộc ${L(HUB)}.\n${userPart(p)}`;
+}
 const hemiOf = (model: string) => HEMI[vendorOf(model)] ?? "Claude";
-/** Ghi chú hằng ngày (Daily notes của Obsidian): trục thời gian của bộ não. */
+/** Ghi chú hằng ngày: trục thời gian của bộ não. */
 const dayKey = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 export const dailyTitle = (ms: number) => `Nhật ký ${dayKey(ms)}`;
 const hemis = (p: Props) => [...new Set(Object.keys(p.models ?? {}).map(hemiOf))];
@@ -131,8 +196,28 @@ const MODEL_INTRO: Record<string, string> = {
   ChatGPT: "Bán cầu **ChatGPT** của [[Bộ não]]: các đoạn chat ChatGPT đã cùng bạn suy nghĩ.",
   Gemini: "Bán cầu **Gemini** của [[Bộ não]]: các đoạn chat Gemini đã cùng bạn suy nghĩ.",
 };
+function aboutBody(u: Pick<UserRow, "id" | "full_name" | "nickname" | "occupation">, p: Props): string {
+  const who = [u.full_name && `- Tên: ${u.full_name}${u.nickname && u.nickname !== u.full_name ? ` (gọi là ${u.nickname})` : ""}`, u.occupation && `- Lĩnh vực chọn lúc tạo tài khoản: ${u.occupation}`].filter(Boolean).join("\n");
+  const prof = Object.entries(PROFILE_CATS).map(([k, h]) => { const xs = (p.profile ?? []).filter((f) => f.cat === k); return xs.length ? `\n## ${h}\n${xs.map((f) => `- ${f.t}${f.src ? ` (${L(f.src)})` : ""}`).join("\n")}\n` : ""; }).join("");
+  const mem = listMemory(u.id);
+  return `${p.portrait || `Những điều ${L(HUB)} biết về bạn, rút ra từ hồ sơ và các đoạn chat.`}\n${who ? `\n## Hồ sơ\n${who}\n` : ""}${prof}${mem.length ? `\n## Ký ức dài hạn\n${mem.map((m) => `- ${m.content}`).join("\n")}\n` : ""}${userPart(p)}`;
+}
+/** Dựng lại nội dung của ghi chú Synchro tự viết từ thuộc tính (sau khi đổi tên, gộp, nối liên kết…). */
+function rebuild(uid: string, n: Note, props: Props): Note {
+  if (n.kind === "chat" || n.kind === "code") return put(uid, { id: n.id, kind: n.kind, title: n.title, conv: n.conv, body: chatBody(props), props });
+  if (WIKI.includes(n.kind)) {
+    // Trang chủ đề của bản trước (người dùng từng sửa thẳng nội dung): giữ phần chữ của họ trong "Ghi chú của bạn" ở lần viết lại đầu tiên.
+    if (n.props.facts === undefined && n.props.summary === undefined) {
+      const own = n.body.replace(/\n*Thuộc \[\[Bộ não\]\]\.?\s*$/, "").trim();
+      if (own && ![props.desc ?? "", `Chủ đề ${n.title}.`].some((x) => fold(x) === fold(own))) props = { ...props, userNote: [own, props.userNote].filter((x) => x?.trim()).join("\n\n") };
+      props = { ...props, facts: props.facts ?? [] };
+    }
+    return put(uid, { id: n.id, kind: n.kind, title: n.title, body: wikiBody(n, props), props });
+  }
+  return put(uid, { id: n.id, kind: n.kind, title: n.title, body: n.body, props });
+}
 
-/** Trung tâm, ba bán cầu và [[Về bạn]] luôn có; [[Về bạn]] đọc lại từ hồ sơ và ký ức dài hạn mỗi lần. */
+/** Trung tâm, ba bán cầu, [[Về bạn]], [[Mục lục]], [[Hoạt động bộ não]] luôn có. */
 export function ensureBase(u: Pick<UserRow, "id" | "full_name" | "nickname" | "occupation">) {
   const uid = u.id;
   if (!byKey(uid, HUB)) put(uid, { kind: "hub", title: HUB, body: hubBody({}, uid), props: { auto: true, tags: ["bo-nao"] } });
@@ -140,30 +225,33 @@ export function ensureBase(u: Pick<UserRow, "id" | "full_name" | "nickname" | "o
     const cur = getNote(uid, name);
     const models = cur?.props.models ?? {};
     const used = Object.entries(models).sort((a, b) => b[1] - a[1]).map(([k, n]) => `- ${k.split("/").slice(1).join("/") || k} · ${n} lượt`).join("\n");
-    const body = `${MODEL_INTRO[name]} Ba bán cầu dùng chung một bộ não, nên điều ${name} học được thì các model khác cũng biết.\n${used ? `\n## Model đã dùng\n${used}\n` : ""}${cur?.props.userNote?.trim() ? `\n## Ghi chú của bạn\n${cur.props.userNote.trim()}\n` : ""}`;
+    const body = `${MODEL_INTRO[name]} Ba bán cầu dùng chung một bộ não, nên điều ${name} học được thì các model khác cũng biết.\n${used ? `\n## Model đã dùng\n${used}\n` : ""}${userPart(cur?.props ?? {})}`;
     if (!cur || cur.body !== body) put(uid, { kind: "model", title: name, body, props: { ...(cur?.props ?? {}), auto: true, tags: ["model"] } });
   }
-  const mem = listMemory(uid);
   const cur = getNote(uid, ABOUT);
-  const who = [u.full_name && `- Tên: ${u.full_name}${u.nickname && u.nickname !== u.full_name ? ` (gọi là ${u.nickname})` : ""}`, u.occupation && `- Lĩnh vực chọn lúc tạo tài khoản: ${u.occupation}`].filter(Boolean).join("\n");
-  const body = `Những điều [[Bộ não]] biết chắc về bạn: hồ sơ, phần bạn tự giới thiệu và ký ức rút ra từ các đoạn chat.\n${who ? `\n## Hồ sơ\n${who}\n` : ""}${mem.length ? `\n## Ký ức dài hạn\n${mem.map((m) => `- ${m.content}`).join("\n")}\n` : ""}${cur?.props.userNote?.trim() ? `\n## Ghi chú của bạn\n${cur.props.userNote.trim()}\n` : ""}`;
-  if (!cur || cur.body !== body) put(uid, { kind: "about", title: ABOUT, body, props: { ...(cur?.props ?? {}), auto: true, tags: ["ve-ban"] } });
+  const props = { ...(cur?.props ?? {}), auto: true, tags: ["ve-ban"] };
+  const body = aboutBody(u, props);
+  if (!cur || cur.body !== body) put(uid, { kind: "about", title: ABOUT, body, props });
+  if (!byKey(uid, INDEX)) refreshIndex(uid);
+  if (!byKey(uid, LOG)) refreshLog(uid);
 }
 
 function hubBody(p: Props, uid: string): string {
   const notes = uid ? allNotes(uid) : [];
   const deg = backlinkCounts(uid);
-  const topics = notes.filter((n) => n.kind === "topic").sort((a, b) => (deg.get(fold(b.title)) ?? 0) - (deg.get(fold(a.title)) ?? 0)).slice(0, 15);
+  const maps = notes.filter((n) => n.kind === "map");
+  const loose = notes.filter((n) => n.kind === "topic" && !n.props.up).sort((a, b) => (deg.get(fold(b.title)) ?? 0) - (deg.get(fold(a.title)) ?? 0)).slice(0, 15);
   const recent = notes.filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.gist).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10);
   return [
-    "Trung tâm của mọi thứ Synchro biết về bạn: mọi đoạn chat, chủ đề, model, skill và connector đều nối về đây.\n",
+    "Trung tâm của mọi thứ Synchro biết về bạn: mọi đoạn chat, chủ đề, tên riêng, model, skill và connector đều nối về đây.\n",
     p.overview ? `\n## Tổng quan\n${p.overview}\n` : "",
     p.focus?.length ? `\n## Đang theo đuổi\n${p.focus.map((x) => `- ${x}`).join("\n")}\n` : "",
     `\n## Ba bán cầu\n${Object.values(HEMI).map(L).join(" · ")}: ba hãng model dùng chung bộ não này.\n`,
-    `\n## Về bạn\n${L(ABOUT)}\n`,
-    topics.length ? `\n## Chủ đề lớn\n${topics.map((n) => `- ${L(n.title)} · ${deg.get(fold(n.title)) ?? 0} liên kết`).join("\n")}\n` : "",
+    `\n## Lối vào\n- ${L(ABOUT)}: chân dung và thói quen của bạn\n- ${L(INDEX)}: danh mục mọi trang\n- ${L(LOG)}: những gì bộ não vừa học\n`,
+    maps.length ? `\n## Bản đồ\n${maps.map((n) => `- ${L(n.title)}`).join("\n")}\n` : "",
+    loose.length ? `\n## ${maps.length ? "Chủ đề khác" : "Chủ đề lớn"}\n${loose.map((n) => `- ${L(n.title)} · ${deg.get(fold(n.title)) ?? 0} liên kết`).join("\n")}\n` : "",
     recent.length ? `\n## Gần đây\n${recent.map((n) => `- ${L(n.title)}: ${n.props.gist}`).join("\n")}\n` : "",
-    p.userNote?.trim() ? `\n## Ghi chú của bạn\n${p.userNote.trim()}\n` : "",
+    userPart(p),
   ].join("");
 }
 const backlinkCounts = (uid: string) => {
@@ -176,6 +264,20 @@ const refreshHub = (uid: string, patch: Props = {}) => {
   const props = { ...(cur?.props ?? {}), ...patch, auto: true, tags: ["bo-nao"] };
   put(uid, { kind: "hub", title: HUB, body: hubBody(props, uid), props });
 };
+/** Mục lục: mỗi trang một dòng tóm tắt, theo nhóm. Model đọc trang này trước khi tìm sâu. */
+function refreshIndex(uid: string) {
+  const notes = allNotes(uid);
+  const one = (n: Note) => (n.props.summary || n.props.desc || n.props.gist || n.body.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "").replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, a, b) => b || a).replace(/\*\*/g, "").split(/(?<=[.!?])\s/)[0].slice(0, 150);
+  const sec = (h: string, xs: Note[]) => (xs.length ? `\n## ${h}\n${xs.map((n) => `- ${L(n.title)}${one(n) ? `: ${one(n)}` : ""}`).join("\n")}\n` : "");
+  const by = (k: NoteKind) => notes.filter((n) => n.kind === k).sort((a, b) => a.title.localeCompare(b.title, "vi"));
+  const body = [
+    `Danh mục mọi trang trong ${L(HUB)}, mỗi trang một dòng. Bắt đầu từ đây để tìm điều đã biết về bạn.\n`,
+    sec("Bản đồ", by("map")), sec("Chủ đề", by("topic")), sec("Tên riêng", by("entity")), sec("Ghi chú của bạn", by("note")),
+    sec("Đoạn chat gần đây", notes.filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.gist).sort((a, b) => (b.props.date ?? b.createdAt) - (a.props.date ?? a.createdAt)).slice(0, 30)),
+  ].join("");
+  const cur = getNote(uid, INDEX);
+  if (!cur || cur.body !== body) put(uid, { id: cur?.id, kind: "index", title: INDEX, body, props: { ...(cur?.props ?? {}), auto: true, tags: ["bo-nao"] } });
+}
 
 // ---------------------------------------------------------------- sau mỗi lượt chat
 type Snap = { r: "u" | "a"; t: string }[];
@@ -227,23 +329,55 @@ function bumpModel(uid: string, model: string) {
   t().prepare("UPDATE brain_notes SET props = ? WHERE id = ?").run(JSON.stringify(props), cur.id);
 }
 
-// ---------------------------------------------------------------- chưng cất
-const DISTILL = (sens: boolean, topics: string[]) => `<brain_distill>
-Bạn là phần "chưng cất" của bộ não Synchro. Đọc một đoạn chat giữa người dùng và trợ lý, giữ lại phần tinh túy nhất để làm một ghi chú trong bộ não của người dùng (giống một ghi chú Obsidian nối với các ghi chú khác bằng liên kết).
+// ---------------------------------------------------------------- học: chưng cất một đoạn chat
+const DISTILL = (sens: boolean, topics: string[], entities: string[]) => `<brain_distill>
+Bạn là phần "học" của bộ não Synchro: một mạng ghi chú về người dùng, nối nhau bằng liên kết. Đọc một đoạn chat giữa người dùng và trợ lý, rồi rút ra phần tinh túy để cập nhật bộ não. Bạn toàn quyền chọn điều đáng giữ; bỏ chào hỏi, chi tiết vụn, điều chỉ đúng trong câu hỏi này.
 Trả về DUY NHẤT một JSON, không gì khác:
-{"title":"...","gist":"...","points":["..."],"decisions":["..."],"tasks":["..."],"topics":[{"name":"...","desc":"...","aliases":["..."]}],"entities":["..."],"importance":3}
+{"title":"...","gist":"...","points":["..."],"decisions":["..."],"tasks":["..."],"topics":[{"name":"...","desc":"...","aliases":["..."],"facts":["..."]}],"entities":[{"name":"...","type":"...","desc":"...","facts":["..."]}],"profile":[{"cat":"who|work|habit|interest|style","text":"..."}],"importance":3}
 - title: 2–7 từ, nói đúng việc cụ thể của đoạn chat, cùng ngôn ngữ người dùng.
 - gist: 1–3 câu: người dùng cần gì, đã làm được gì, kết luận ra sao.
-- points: tối đa 5 điều đáng nhớ lâu dài (sự thật, số liệu, kết quả, kiến thức người dùng vừa học); bỏ chi tiết vụn.
-- decisions: điều người dùng đã chọn hoặc chốt. tasks: việc còn dang dở hay hẹn làm tiếp. Không có thì [].
-- topics: 1–3 chủ đề chung và bền (ví dụ "IELTS", "Ôn thi THPT", "Cyber security"). Nếu hợp với một chủ đề đã có thì dùng ĐÚNG tên đó để các ghi chú nối vào nhau. desc: một câu mô tả chủ đề. aliases: tên khác hay viết tắt của chủ đề (ví dụ "An ninh mạng" cho "Cyber security"), có thể để [].
-- entities: tối đa 6 tên riêng quan trọng (dự án, sản phẩm, công cụ, người, nơi chốn, tài liệu), viết như tên ghi chú.
+- points: tối đa 5 điều đáng nhớ lâu dài của riêng đoạn chat này. decisions: điều người dùng đã chọn hoặc chốt. tasks: việc còn dang dở hay hẹn làm tiếp. Không có thì [].
+- topics: 1–3 chủ đề chung và bền (ví dụ "IELTS", "Ôn thi THPT", "Cyber security"). Nếu hợp với chủ đề đã có thì dùng ĐÚNG tên đó. desc: một câu mô tả chủ đề. aliases: tên khác, viết tắt. facts: tối đa 3 kiến thức hay sự thật đáng giữ về chủ đề này rút ra từ đoạn chat, mỗi điều một câu tự đủ nghĩa (không viết "người dùng hỏi…").
+- entities: tối đa 5 tên riêng quan trọng (người, dự án, sản phẩm, công cụ, tổ chức, nơi chốn, tài liệu). type: một từ như "người", "dự án", "công cụ", "nơi chốn". Nếu trùng tên đã có thì dùng ĐÚNG tên đó. facts: tối đa 2 điều về tên riêng này (có thể []).
+- profile: điều đoạn chat cho thấy về CHÍNH người dùng và còn đúng lâu dài: who (họ là ai, đang học / làm gì), work (công việc, chuyên ngành, kỹ năng), habit (thói quen, lịch sinh hoạt, cách làm việc), interest (mối quan tâm, sở thích, mục tiêu), style (cách họ muốn được trả lời: ngôn ngữ, độ dài, giọng). Mỗi điều một câu ngôi thứ ba. Không đoán; không có thì [].
 - importance: 1 = chào hỏi hay thử vu vơ, 3 = việc bình thường, 5 = quan trọng lâu dài với người dùng.
-Chủ đề đã có trong bộ não: ${topics.length ? topics.join(", ") : "(chưa có)"}.${sens ? "" : "\nKhông ghi chi tiết nhạy cảm (sức khỏe, tôn giáo, chính trị, tài chính cá nhân, đời tư)."}
+Chủ đề đã có: ${topics.length ? topics.join(", ") : "(chưa có)"}.
+Tên riêng đã có: ${entities.length ? entities.join(", ") : "(chưa có)"}.${sens ? "" : "\nKhông ghi chi tiết nhạy cảm (sức khỏe, tôn giáo, chính trị, tài chính cá nhân, đời tư)."}
 </brain_distill>`;
-type Distilled = { title?: unknown; gist?: unknown; points?: unknown; decisions?: unknown; tasks?: unknown; topics?: unknown; entities?: unknown; importance?: unknown };
-const strs = (v: unknown, n: number, len = 240) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.replace(/[[\]]/g, "").trim().slice(0, len)).slice(0, n) : []);
-const cleanName = (s: string) => s.replace(/[[\]|#\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+type Distilled = { title?: unknown; gist?: unknown; points?: unknown; decisions?: unknown; tasks?: unknown; topics?: unknown; entities?: unknown; profile?: unknown; importance?: unknown };
+type Item = { name?: unknown; desc?: unknown; aliases?: unknown; facts?: unknown; type?: unknown };
+const items = (v: unknown, n: number) => (Array.isArray(v) ? v : []).map((x) => (typeof x === "string" ? { name: x } : (x ?? {}) as Item)).filter((x) => typeof x.name === "string" && cleanName(x.name)).slice(0, n);
+
+/** Thêm điều đã biết vào trang (bỏ điều trùng), đánh dấu cần biên soạn lại. */
+function addFacts(p: Props, facts: string[], src: string) {
+  const have = new Set((p.facts ?? []).map((f) => fold(f.t)));
+  const add = facts.filter((f) => !have.has(fold(f))).map((f) => ({ t: f, src, at: Date.now() }));
+  if (add.length) { p.facts = [...(p.facts ?? []), ...add].slice(-40); p.stale = true; }
+  return add.length;
+}
+/** Tìm hoặc tạo trang chủ đề / tên riêng cho một tên; trả về tiêu đề thật (theo tên khác nếu khớp). */
+function upsertWiki(uid: string, kind: "topic" | "entity", it: Item, src: string): { title: string; touched: boolean } {
+  const name = cleanName(String(it.name));
+  const found = byKey(uid, name) ? getNote(uid, name) : resolver(allNotes(uid)).get(fold(name)) ?? null;
+  const facts = strs(it.facts, kind === "topic" ? 3 : 2, 300);
+  const desc = typeof it.desc === "string" ? it.desc.replace(/[[\]]/g, "").trim().slice(0, 300) : "";
+  if (found && !WIKI.includes(found.kind)) return { title: found.title, touched: false };
+  if (found) {
+    const p = { ...found.props };
+    const n = addFacts(p, facts, src);
+    if (!p.desc && desc) { p.desc = desc; p.stale = true; }
+    if (n || p.stale !== found.props.stale) rebuild(uid, found, p);
+    return { title: found.title, touched: n > 0 };
+  }
+  // Tên riêng chỉ thành trang khi có điều để nói; còn lại để là liên kết chờ (ghi chú chưa có) cho tới khi được nhắc lại.
+  if (kind === "entity" && !facts.length && !desc) return { title: name, touched: false };
+  const al = strs(it.aliases, 5, 60).map(cleanName).filter((a) => a && fold(a) !== fold(name) && !byKey(uid, a));
+  const p: Props = { tags: [kind === "topic" ? "chu-de" : "ten-rieng"], desc, aliases: al, ...(kind === "entity" && typeof it.type === "string" ? { etype: cleanName(it.type).toLowerCase().slice(0, 20) } : {}) };
+  addFacts(p, facts, src);
+  p.stale = true;
+  put(uid, { kind, title: name, body: wikiBody({ kind, title: name }, p), props: p });
+  return { title: name, touched: true };
+}
 
 async function distillOne(row: { user_id: string; conv: string; feature: string; snapshot: string; updated_at: number }) {
   const user = getUser(row.user_id);
@@ -251,42 +385,291 @@ async function distillOne(row: { user_id: string; conv: string; feature: string;
   const snap = JSON.parse(row.snapshot) as Snap;
   const uid = user.id, sens = memCfg(uid).sens;
   const notes = allNotes(uid);
-  const topics = notes.filter((n) => n.kind === "topic").map((n) => n.title).slice(-60);
+  const topics = notes.filter((n) => n.kind === "topic").map((n) => n.title).slice(-80);
+  const entities = notes.filter((n) => n.kind === "entity").map((n) => n.title).slice(-80);
   const transcript = snap.map((m) => `[${m.r === "u" ? "Người dùng" : "Trợ lý"}]\n${m.t}`).join("\n\n").slice(-24_000);
-  const { text } = await quickCall(user, DISTILL(sens, topics), `Đoạn chat cần chưng cất:\n\n${transcript}`, { maxTokens: 900 });
-  const raw = /\{[\s\S]*\}/.exec(text)?.[0];
-  if (!raw) throw new Error("no json");
-  const j = JSON.parse(raw) as Distilled;
+  const { text } = await quickCall(user, DISTILL(sens, topics, entities), `Đoạn chat cần chưng cất:\n\n${transcript}`, { maxTokens: 1400 });
+  const j = jsonOf(text) as Distilled;
   const cur = byConv(uid, row.conv);
   const p: Props = { ...(cur ? parse(cur).props : { date: row.updated_at, tags: [row.feature] }) };
   p.gist = typeof j.gist === "string" ? j.gist.replace(/[[\]]/g, "").trim().slice(0, 600) : p.gist;
   p.points = strs(j.points, 5); p.decisions = strs(j.decisions, 5); p.tasks = strs(j.tasks, 5);
   p.importance = Math.max(1, Math.min(5, Math.round(Number(j.importance) || 3)));
   p.distilledAt = Date.now();
-  // Chủ đề: tên trùng (không phân biệt hoa thường, dấu) với chủ đề đã có thì nối vào đó; chưa có thì tạo ghi chú chủ đề nối về trung tâm.
-  const tps = (Array.isArray(j.topics) ? j.topics : []).map((x) => (typeof x === "string" ? { name: x, desc: "" } : x as { name?: unknown; desc?: unknown }))
-    .filter((x) => typeof x.name === "string" && cleanName(x.name)).slice(0, 3);
-  p.topics = [];
-  for (const tp of tps) {
-    const name = cleanName(String(tp.name)), have0 = byKey(uid, name);
-    const viaAlias = !have0 ? resolver(allNotes(uid)).get(fold(name)) : undefined;
-    if (viaAlias) { p.topics.push(viaAlias.title); continue; }
-    const have = have0;
-    if (have && have.kind !== "topic") { p.topics.push(have.title); continue; }
-    const al = strs((tp as { aliases?: unknown }).aliases, 5, 60).map(cleanName).filter((a) => a && fold(a) !== fold(name) && !byKey(uid, a));
-    if (!have) put(uid, { kind: "topic", title: name, body: `${typeof tp.desc === "string" && tp.desc.trim() ? tp.desc.replace(/[[\]]/g, "").trim().slice(0, 300) : `Chủ đề ${name}.`}\n\nThuộc [[Bộ não]].`, props: { tags: ["chu-de"], desc: typeof tp.desc === "string" ? tp.desc.slice(0, 300) : "", aliases: al } });
-    p.topics.push(have?.title ?? name);
-  }
-  p.entities = strs(j.entities, 6, 60).map(cleanName).filter((e) => e && !p.topics!.some((x) => fold(x) === fold(e)));
   const title = typeof j.title === "string" && cleanName(j.title) ? freeTitle(uid, cleanName(j.title), cur?.id, p.date) : cur?.title ?? freeTitle(uid, "Đoạn chat");
-  // Liên quan: hai ghi chú đoạn chat gần nghĩa nhất (cùng chủ đề, cùng tên riêng, cùng từ khóa).
+  // Một đoạn chat cập nhật nhiều trang: chủ đề, tên riêng (kèm điều đã biết, nguồn là đoạn chat này) và hồ sơ Về bạn.
+  const touched: string[] = [];
+  p.topics = [];
+  for (const it of items(j.topics, 3)) { const r = upsertWiki(uid, "topic", it, title); p.topics.push(r.title); if (r.touched) touched.push(r.title); }
+  p.entities = [];
+  for (const it of items(j.entities, 5)) {
+    const r = upsertWiki(uid, "entity", it, title);
+    if (!p.topics.some((x) => fold(x) === fold(r.title))) p.entities.push(r.title);
+    if (r.touched) touched.push(r.title);
+  }
+  const prof = (Array.isArray(j.profile) ? j.profile : []).map((x) => x as { cat?: unknown; text?: unknown })
+    .filter((x) => typeof x.text === "string" && x.text.trim() && typeof x.cat === "string" && PROFILE_CATS[x.cat]).slice(0, 6);
+  if (prof.length) {
+    const about = getNote(uid, ABOUT);
+    if (about) {
+      const ap = { ...about.props }, have = new Set((ap.profile ?? []).map((f) => fold(f.t)));
+      const add = prof.filter((x) => !have.has(fold(String(x.text)))).map((x) => ({ cat: String(x.cat), t: String(x.text).replace(/[[\]]/g, "").trim().slice(0, 300), src: title, at: Date.now() }));
+      if (add.length) { ap.profile = [...(ap.profile ?? []), ...add].slice(-80); ap.stale = true; put(uid, { id: about.id, kind: "about", title: ABOUT, body: aboutBody(user, ap), props: ap }); setState(uid, { profile_dirty: state(uid).profile_dirty + add.length }); touched.push(ABOUT); }
+    }
+  }
+  // Liên quan: hai đoạn chat gần nghĩa nhất (cùng chủ đề, cùng tên riêng, cùng từ khóa).
   const others = allNotes(uid).filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.gist && n.id !== cur?.id);
   const q = [title, p.gist, ...(p.points ?? []), ...(p.topics ?? []), ...(p.entities ?? [])].join(" ");
   p.related = rankNotes(others, q, 2, 2.2).map((n) => n.title);
   put(uid, { id: cur?.id, kind: row.feature === "code" ? "code" : "chat", title, conv: row.conv, body: chatBody(p), props: p });
   refreshDaily(uid, p.date ?? row.updated_at);
-  t().prepare("UPDATE brain_state SET dirty = dirty + 1 WHERE user_id = ?").run(uid);
-  t().prepare("INSERT OR IGNORE INTO brain_state (user_id, dirty, hub_at) VALUES (?, 1, 0)").run(uid);
+  logEvent(uid, `Học từ ${L(title)}${touched.length ? `: cập nhật ${[...new Set(touched)].map(L).join(", ")}` : ""}`);
+  setState(uid, { dirty: state(uid).dirty + 1 });
+}
+
+// ---------------------------------------------------------------- chăm sóc: biên soạn, gộp, nối, bản đồ, hồ sơ, hướng dẫn
+const COMPILE = `<brain_compile>
+Bạn biên soạn các trang trong bộ não Synchro của người dùng (mỗi trang là một chủ đề hoặc một tên riêng). Với mỗi trang: viết "summary" 1–3 câu tóm lược điều quan trọng nhất đã biết; gộp "facts" trùng ý thành một, điều mới hơn thay điều cũ mâu thuẫn với nó, bỏ điều vụn vặt; giữ nguyên nguồn (src) của điều được giữ. Chỉ dùng thông tin có sẵn, không bịa.
+Trả về DUY NHẤT JSON: {"pages":[{"title":"...","summary":"...","facts":[{"t":"...","src":"..."}]}]}
+</brain_compile>`;
+/** Biên soạn lại các trang có điều mới (tối đa 6 trang mỗi lần, một lời gọi model). */
+async function compilePages(user: UserRow) {
+  const uid = user.id;
+  const pages = allNotes(uid).filter((n) => WIKI.includes(n.kind) && (n.props.stale || (n.props.summary === undefined && (n.props.facts?.length ?? 0) > 0))).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6);
+  if (!pages.length) return 0;
+  const data = pages.map((n) => ({ title: n.title, kind: n.kind === "topic" ? "chủ đề" : `tên riêng${n.props.etype ? ` (${n.props.etype})` : ""}`, summary: n.props.summary ?? n.props.desc ?? "", facts: (n.props.facts ?? []).map((f) => ({ t: f.t, src: f.src })) }));
+  const { text } = await quickCall(user, COMPILE, `Trang cần biên soạn:\n${JSON.stringify(data)}`, { maxTokens: 2400 });
+  const j = jsonOf(text) as { pages?: { title?: unknown; summary?: unknown; facts?: unknown }[] };
+  let n = 0;
+  for (const pg of j.pages ?? []) {
+    const note = pages.find((x) => typeof pg.title === "string" && fold(x.title) === fold(pg.title));
+    if (!note) continue;
+    const old = new Map((note.props.facts ?? []).map((f) => [fold(f.t), f]));
+    const facts = (Array.isArray(pg.facts) ? pg.facts : []).map((f) => (typeof f === "string" ? { t: f } : f as { t?: unknown; src?: unknown }))
+      .filter((f) => typeof f.t === "string" && f.t.trim()).slice(0, 20)
+      .map((f) => ({ t: String(f.t).replace(/[[\]]/g, "").trim().slice(0, 300), src: typeof f.src === "string" && f.src ? f.src : old.get(fold(String(f.t)))?.src, at: old.get(fold(String(f.t)))?.at ?? Date.now() }));
+    const p: Props = { ...note.props, summary: typeof pg.summary === "string" && pg.summary.trim() ? pg.summary.replace(/[[\]]/g, "").trim().slice(0, 600) : note.props.summary ?? note.props.desc, facts: facts.length ? facts : note.props.facts, stale: false };
+    rebuild(uid, note, p);
+    n++;
+  }
+  // Trang model không trả lại: vẫn bỏ cờ để không gọi lại mãi.
+  for (const note of pages) { const cur = getNote(uid, note.title); if (cur?.props.stale) rebuild(uid, cur, { ...cur.props, stale: false, summary: cur.props.summary ?? cur.props.desc }); }
+  if (n) logEvent(uid, `Biên soạn lại ${pages.map((x) => L(x.title)).join(", ")}`);
+  return n;
+}
+
+const MERGE = `<brain_merge>
+Bạn giữ bộ não Synchro gọn gàng. Dưới đây là các trang chủ đề và tên riêng (kèm tên khác). Tìm những trang nói về CÙNG một thứ (khác cách viết, viết tắt, số ít / số nhiều, tiếng Việt / tiếng Anh, hoặc một trang chỉ là cách gọi khác của trang kia). Chỉ gộp khi chắc chắn; hai thứ liên quan nhưng khác nhau thì không gộp.
+Trả về DUY NHẤT JSON: {"groups":[{"keep":"tên trang giữ lại","merge":["tên trang gộp vào"]}]} (không có thì "groups":[]).
+</brain_merge>`;
+/** Gộp trang trùng: điều đã biết, tên khác, ghi chú của bạn chuyển sang trang giữ lại; mọi liên kết trỏ về trang giữ lại. */
+function absorb(user: UserRow, from: Note, into: Note) {
+  const uid = user.id;
+  const p: Props = {
+    ...into.props,
+    aliases: [...new Set([...(into.props.aliases ?? []), from.title, ...(from.props.aliases ?? [])])].filter((x) => fold(x) !== fold(into.title)).slice(0, 20),
+    tags: [...new Set([...(into.props.tags ?? []), ...(from.props.tags ?? [])])],
+    facts: [...(into.props.facts ?? []), ...(from.props.facts ?? []).filter((f) => !(into.props.facts ?? []).some((g) => fold(g.t) === fold(f.t)))].slice(-40),
+    desc: into.props.desc || from.props.desc, userNote: [into.props.userNote, from.props.userNote].filter((x) => x?.trim()).join("\n\n") || undefined, stale: true,
+  };
+  t().prepare("DELETE FROM brain_links WHERE src = ?").run(from.id);
+  t().prepare("DELETE FROM brain_notes WHERE id = ?").run(from.id);
+  rebuild(uid, into, p);
+  relink(user, from.title, into.title);
+  logEvent(uid, `Gộp “${from.title}” vào ${L(into.title)} (cùng một thứ; tên cũ thành tên khác)`);
+}
+async function mergeDupes(user: UserRow) {
+  const uid = user.id;
+  const pages = allNotes(uid).filter((n) => WIKI.includes(n.kind));
+  let merged = 0;
+  // Trùng hiển nhiên (cùng chữ khi bỏ dấu, dấu câu, khoảng trắng): gộp ngay, không cần model.
+  const key = (s: string) => fold(s).replace(/[^\p{L}\p{N}]+/gu, "");
+  const seen = new Map<string, Note>();
+  for (const n of pages.sort((a, b) => (b.props.facts?.length ?? 0) - (a.props.facts?.length ?? 0))) {
+    const k = key(n.title), hit = seen.get(k);
+    if (hit && hit.kind === n.kind) { absorb(user, n, getNote(uid, hit.title)!); merged++; } else seen.set(k, n);
+  }
+  const left = allNotes(uid).filter((n) => WIKI.includes(n.kind));
+  if (left.length >= 4) {
+    const list = left.map((n) => `- ${n.title} (${n.kind === "topic" ? "chủ đề" : "tên riêng"})${n.props.aliases?.length ? ` · còn gọi: ${n.props.aliases.join(", ")}` : ""}`).join("\n");
+    const { text } = await quickCall(user, MERGE, `Các tên trong bộ não:\n${list}`, { maxTokens: 800 });
+    const j = jsonOf(text) as { groups?: { keep?: unknown; merge?: unknown }[] };
+    for (const g of j.groups ?? []) {
+      const keep = typeof g.keep === "string" ? findNote(uid, g.keep) : null;
+      if (!keep || !WIKI.includes(keep.kind)) continue;
+      for (const m of strs(g.merge, 5, 80)) {
+        const from = findNote(uid, m), into = getNote(uid, keep.title);
+        if (!from || !into || from.id === into.id || !WIKI.includes(from.kind)) continue;
+        absorb(user, from, into); merged++;
+      }
+    }
+  }
+  return merged;
+}
+
+/** Tự nối chỗ nhắc tên thành liên kết trong các ghi chú Synchro tự viết (đoạn chat → "Nhắc tới", trang → "Liên quan"). */
+function autoLink(uid: string) {
+  const notes = allNotes(uid);
+  const targets = notes.filter((n) => WIKI.includes(n.kind) || n.kind === "note").flatMap((n) => [n.title, ...(n.props.aliases ?? [])].filter((x) => x.length >= 4 && !/^\d+$/.test(x)).map((nm) => ({ n, nm, re: new RegExp(`(^|[^\\p{L}\\p{N}])${esc(fold(nm))}($|[^\\p{L}\\p{N}])`, "u") })));
+  let n0 = 0;
+  for (const src of notes) {
+    if (src.kind === "chat" || src.kind === "code") {
+      if (!src.props.distilledAt) continue;
+      const text = fold([src.props.gist, ...(src.props.points ?? []), ...(src.props.decisions ?? []), ...(src.props.tasks ?? [])].join(" \n "));
+      const have = new Set([...(src.props.topics ?? []), ...(src.props.entities ?? []), ...(src.props.related ?? [])].map(fold));
+      const add = [...new Set(targets.filter((x) => !have.has(fold(x.n.title)) && x.re.test(text)).map((x) => x.n.title))].filter((x) => !have.has(fold(x)));
+      if (add.length) { rebuild(uid, src, { ...src.props, entities: [...(src.props.entities ?? []), ...add].slice(0, 12) }); n0 += add.length; }
+    } else if (WIKI.includes(src.kind)) {
+      const text = fold([src.props.summary ?? src.props.desc ?? "", ...(src.props.facts ?? []).map((f) => f.t)].join(" \n "));
+      const have = new Set([src.title, ...(src.props.related ?? [])].map(fold));
+      const add = [...new Set(targets.filter((x) => x.n.id !== src.id && !have.has(fold(x.n.title)) && x.re.test(text)).map((x) => x.n.title))];
+      if (add.length) { rebuild(uid, src, { ...src.props, related: [...(src.props.related ?? []), ...add].slice(0, 15) }); n0 += add.length; }
+    }
+  }
+  if (n0) logEvent(uid, `Tự nối ${n0} chỗ nhắc tên thành liên kết`);
+  return n0;
+}
+
+const MAPS = `<brain_maps>
+Bạn sắp xếp bộ não Synchro: xếp các chủ đề vào 2–6 bản đồ theo lĩnh vực lớn trong đời người dùng (ví dụ "Học tập", "Công việc", "Sức khỏe", "Lập trình"). Mỗi chủ đề vào đúng một bản đồ; bản đồ nào cũng có ít nhất 2 chủ đề; chủ đề lẻ loi thì để ngoài. Tên bản đồ 1–3 từ, cùng ngôn ngữ người dùng.
+Trả về DUY NHẤT JSON: {"maps":[{"name":"...","desc":"một câu","topics":["..."]}]}
+</brain_maps>`;
+/** Bản đồ theo lĩnh vực: gom chủ đề cùng mảng đời sống, trung tâm trỏ tới bản đồ thay vì liệt kê hết chủ đề. */
+async function buildMaps(user: UserRow) {
+  const uid = user.id;
+  const topics = allNotes(uid).filter((n) => n.kind === "topic");
+  if (topics.length < 6) return 0;
+  const list = topics.map((n) => `- ${n.title}: ${(n.props.summary || n.props.desc || "").slice(0, 140)}`).join("\n");
+  const { text } = await quickCall(user, MAPS, `Các chủ đề cần xếp bản đồ:\n${list}`, { maxTokens: 900 });
+  const j = jsonOf(text) as { maps?: { name?: unknown; desc?: unknown; topics?: unknown }[] };
+  const keep = new Set<string>(), up = new Map<string, string>();
+  for (const m of j.maps ?? []) {
+    const name = typeof m.name === "string" ? cleanName(m.name).slice(0, 30) : "";
+    const ts = strs(m.topics, 40, 80).map((x) => topics.find((n) => fold(n.title) === fold(x))).filter((x): x is Note => !!x && !up.has(x.id));
+    if (!name || ts.length < 2) continue;
+    const title = `${MAP_PREFIX}${name}`, cur = getNote(uid, title);
+    const p: Props = { ...(cur?.props ?? {}), desc: typeof m.desc === "string" ? m.desc.replace(/[[\]]/g, "").trim().slice(0, 200) : cur?.props.desc, auto: true, tags: ["ban-do"] };
+    put(uid, { id: cur?.id, kind: "map", title, body: mapBody(p, ts), props: p });
+    keep.add(fold(title));
+    for (const x of ts) up.set(x.id, title);
+  }
+  if (!keep.size) return 0;
+  // Bản đồ cũ không còn: xóa; chủ đề trỏ lên bản đồ mới (hoặc về trung tâm).
+  for (const n of allNotes(uid)) if (n.kind === "map" && !keep.has(fold(n.title))) { t().prepare("DELETE FROM brain_links WHERE src = ?").run(n.id); t().prepare("DELETE FROM brain_notes WHERE id = ?").run(n.id); }
+  for (const n of allNotes(uid).filter((x) => x.kind === "topic")) { const u = up.get(n.id); if ((n.props.up ?? "") !== (u ?? "")) rebuild(uid, n, { ...n.props, up: u }); }
+  setState(uid, { maps_at: Date.now(), maps_n: topics.length });
+  logEvent(uid, `Xếp chủ đề vào ${keep.size} bản đồ: ${[...allNotes(uid).filter((n) => n.kind === "map")].map((n) => L(n.title)).join(", ")}`);
+  return keep.size;
+}
+
+const PROFILE = `<brain_profile>
+Bạn biên soạn trang "Về bạn" trong bộ não Synchro: chân dung người dùng rút ra từ các đoạn chat. Gộp điều trùng ý, điều mới hơn thay điều cũ mâu thuẫn, bỏ điều không còn đúng hay chỉ là chuyện một lần. Giữ nguồn (src) của điều được giữ. Viết "portrait": 2–4 câu ngôi thứ hai ("Bạn …") như người hiểu rõ họ.
+Nhóm (cat): who (họ là ai), work (công việc, chuyên môn, kỹ năng), habit (thói quen, cách làm việc), interest (mối quan tâm, mục tiêu), style (cách họ muốn được trả lời).
+Trả về DUY NHẤT JSON: {"portrait":"...","profile":[{"cat":"...","t":"...","src":"..."}]}
+</brain_profile>`;
+async function compileProfile(user: UserRow) {
+  const uid = user.id, about = getNote(uid, ABOUT);
+  if (!about?.props.profile?.length) return false;
+  const data = { profile: about.props.profile.map((f) => ({ cat: f.cat, t: f.t, src: f.src })), memories: listMemory(uid).map((m) => m.content).slice(0, 40) };
+  const { text } = await quickCall(user, PROFILE, `Những điều đã biết về người dùng:\n${JSON.stringify(data)}`, { maxTokens: 1600 });
+  const j = jsonOf(text) as { portrait?: unknown; profile?: unknown };
+  const old = new Map(about.props.profile.map((f) => [fold(f.t), f]));
+  const prof = (Array.isArray(j.profile) ? j.profile : []).map((x) => x as { cat?: unknown; t?: unknown; src?: unknown })
+    .filter((x) => typeof x.t === "string" && x.t.trim() && typeof x.cat === "string" && PROFILE_CATS[x.cat]).slice(0, 40)
+    .map((x) => ({ cat: String(x.cat), t: String(x.t).replace(/[[\]]/g, "").trim().slice(0, 300), src: typeof x.src === "string" && x.src ? x.src : old.get(fold(String(x.t)))?.src, at: old.get(fold(String(x.t)))?.at ?? Date.now() }));
+  const p: Props = { ...about.props, portrait: typeof j.portrait === "string" && j.portrait.trim() ? j.portrait.replace(/[[\]]/g, "").trim().slice(0, 900) : about.props.portrait, profile: prof.length ? prof : about.props.profile, stale: false };
+  put(uid, { id: about.id, kind: "about", title: ABOUT, body: aboutBody(user, p), props: p });
+  logEvent(uid, `Viết lại chân dung trong ${L(ABOUT)}`);
+  return true;
+}
+
+// ---- Hướng dẫn cho Synchro tự cập nhật (lịch sử để quay lại bản cũ)
+const INSTRUCT = `<brain_instructions>
+Bạn viết lại phần "Hướng dẫn cho Synchro" của người dùng: đoạn tự giới thiệu mà mọi model đọc trước mỗi cuộc trò chuyện. Viết bằng ngôi thứ nhất như chính người dùng viết ("Tôi …"), cùng ngôn ngữ với bản họ tự viết (mặc định tiếng Việt).
+Cấu trúc gợi ý (bỏ mục không có gì): "## Về tôi", "## Công việc & chuyên môn", "## Thói quen & cách tôi làm việc", "## Mối quan tâm hiện nay", "## Cách tôi muốn Synchro trả lời".
+Quy tắc:
+- Giữ đủ ý của bản người dùng tự viết (đó là điều họ chủ động nói); chỉ thay khi thông tin mới hơn và cụ thể hơn cho thấy điều cũ không còn đúng.
+- Thêm những gì đã biết chắc về họ từ hồ sơ; không bịa, không suy đoán, không thêm chi tiết nhạy cảm.
+- Gọn, rõ, dưới 3500 ký tự; không nhắc tới bộ não, việc AI học hay nguồn thông tin.
+Trả về đúng nội dung phần hướng dẫn (Markdown), không thêm lời dẫn.
+</brain_instructions>`;
+export function recordInstructions(uid: string, source: "user" | "auto", text: string) {
+  const d = t(), last = d.prepare("SELECT text FROM instructions_history WHERE user_id = ? ORDER BY at DESC LIMIT 1").get(uid) as { text: string } | undefined;
+  if (last && last.text === text) return;
+  d.prepare("INSERT INTO instructions_history (id, user_id, at, source, text) VALUES (?, ?, ?, ?, ?)").run("ih_" + crypto.randomBytes(6).toString("hex"), uid, Date.now(), source, text);
+  d.prepare("DELETE FROM instructions_history WHERE user_id = ? AND at < (SELECT at FROM instructions_history WHERE user_id = ? ORDER BY at DESC LIMIT 1 OFFSET 39)").run(uid, uid);
+}
+export function instructionsInfo(uid: string) {
+  const rows = t().prepare("SELECT id, at, source, text FROM instructions_history WHERE user_id = ? ORDER BY at DESC LIMIT 40").all(uid) as { id: string; at: number; source: string; text: string }[];
+  return { auto: memCfg(uid).autoIns, lastAuto: rows.find((r) => r.source === "auto")?.at ?? null, history: rows.map((r) => ({ id: r.id, at: r.at, source: r.source, text: r.text })) };
+}
+export function restoreInstructions(user: UserRow, id: string) {
+  const r = t().prepare("SELECT text FROM instructions_history WHERE user_id = ? AND id = ?").get(user.id, id) as { text: string } | undefined;
+  if (!r) throw new Error("Không tìm thấy bản này.");
+  setInstructions(user.id, r.text);
+  recordInstructions(user.id, "user", r.text);
+  return instructionsInfo(user.id);
+}
+async function autoInstructions(user: UserRow) {
+  const uid = user.id;
+  if (!memCfg(uid).autoIns) return false;
+  const about = getNote(uid, ABOUT), mem = listMemory(uid);
+  if (!about?.props.profile?.length && !mem.length) return false;
+  // Bản gốc là lần cuối người dùng tự viết; chưa có lịch sử thì lấy bản hiện tại làm gốc (không để mất chữ của họ).
+  const anchorRow = t().prepare("SELECT text FROM instructions_history WHERE user_id = ? AND source = 'user' ORDER BY at DESC LIMIT 1").get(uid) as { text: string } | undefined;
+  if (!anchorRow && user.instructions) recordInstructions(uid, "user", user.instructions);
+  const anchor = anchorRow?.text ?? user.instructions ?? "";
+  const hub = getNote(uid, HUB);
+  const data = [
+    `Bản người dùng tự viết:\n${anchor || "(chưa viết gì)"}`,
+    `Hồ sơ tài khoản: ${[user.full_name, user.nickname && `gọi là ${user.nickname}`, user.occupation].filter(Boolean).join(", ") || "(trống)"}`,
+    about?.props.portrait ? `Chân dung: ${about.props.portrait}` : "",
+    `Điều đã biết về họ:\n${(about?.props.profile ?? []).map((f) => `- [${f.cat}] ${f.t}`).join("\n") || "(chưa có)"}`,
+    mem.length ? `Ký ức dài hạn:\n${mem.map((m) => `- ${m.content}`).join("\n")}` : "",
+    hub?.props.focus?.length ? `Đang theo đuổi: ${hub.props.focus.join("; ")}` : "",
+  ].filter(Boolean).join("\n\n");
+  const { text } = await quickCall(user, INSTRUCT, data, { maxTokens: 2000 });
+  const out = text.replace(/^```(?:markdown|md)?\s*/i, "").replace(/```\s*$/, "").trim();
+  // Chỉ nhận đúng một bản hướng dẫn: có mục "## …", không kèm code, không quá dài (model trả lời lạc đề thì bỏ qua, giữ bản cũ).
+  if (out.length < 40 || out.length > 8000 || /^\s*\{/.test(out) || /```/.test(out) || !/^##\s+\S/m.test(out)) return false;
+  setState(uid, { ins_at: Date.now(), profile_dirty: 0 });
+  if (out === (user.instructions ?? "").trim()) return false;
+  setInstructions(uid, out);
+  recordInstructions(uid, "auto", out);
+  logEvent(uid, `Tự cập nhật Hướng dẫn cho Synchro từ ${L(ABOUT)}`);
+  return true;
+}
+
+/**
+ * Một vòng chăm sóc bộ não của một người: tự nối liên kết, biên soạn trang có điều mới, gộp trang trùng (mỗi 12 giờ),
+ * xếp bản đồ (khi số chủ đề đổi), viết lại hồ sơ và hướng dẫn (khi có điều mới về người dùng, tối đa mỗi 3 giờ),
+ * rồi dựng lại mục lục, nhật ký hoạt động và trung tâm. now: làm hết ngay (kiểm thử).
+ */
+export async function garden(uid: string, o: { now?: boolean } = {}) {
+  const user = getUser(uid);
+  if (!user || !learning(uid)) return;
+  ensureBase(user);
+  const st = state(uid), now = Date.now();
+  const step = async (name: string, f: () => Promise<unknown>) => { try { await f(); } catch (e) { if (!/no json|503/.test(String((e as Error).message))) console.error(`[brain] ${name}`, (e as Error).message); } };
+  autoLink(uid);
+  await step("biên soạn", () => compilePages(user));
+  const wiki = allNotes(uid).filter((n) => WIKI.includes(n.kind)).length;
+  if (o.now || (now - st.merge_at > 12 * 3600_000 && wiki >= 4)) { await step("gộp", () => mergeDupes(user)); setState(uid, { merge_at: now }); }
+  const topics = allNotes(uid).filter((n) => n.kind === "topic").length;
+  if (topics >= 6 && (o.now || Math.abs(topics - st.maps_n) >= 3 || now - st.maps_at > 3 * 86400_000)) await step("bản đồ", () => buildMaps(user));
+  const about = getNote(uid, ABOUT);
+  if (about?.props.stale && (o.now || st.profile_dirty >= 3 || now - st.ins_at > 3 * 3600_000)) {
+    await step("hồ sơ", () => compileProfile(user));
+    await step("hướng dẫn", () => autoInstructions(getUser(uid)!));
+    setState(uid, { profile_dirty: 0 });
+  }
+  autoLink(uid);
+  refreshIndex(uid);
+  const s2 = state(uid);
+  if (s2.dirty > 0 && (o.now || s2.dirty >= 3 || now - s2.hub_at > 6 * 3600_000)) await step("tổng hợp", () => consolidate(uid));
+  else refreshHub(uid);
+  refreshLog(uid);
+  setState(uid, { garden_at: Date.now() });
 }
 
 const CORE = `<brain_core>
@@ -301,28 +684,31 @@ async function consolidate(uid: string) {
   ensureBase(user);
   const notes = allNotes(uid);
   const chats = notes.filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.gist).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 25);
+  const about = getNote(uid, ABOUT);
   const data = [
     `Hồ sơ: ${[user.full_name, user.nickname && `gọi là ${user.nickname}`, user.occupation].filter(Boolean).join(", ") || "(trống)"}`,
     user.instructions ? `Người dùng tự giới thiệu:\n${user.instructions.slice(0, 6000)}` : "",
+    about?.props.portrait ? `Chân dung: ${about.props.portrait}` : "",
     `Ký ức dài hạn:\n${listMemory(uid).map((m) => `- ${m.content}`).join("\n") || "(trống)"}`,
     `Chủ đề: ${notes.filter((n) => n.kind === "topic").map((n) => n.title).join(", ") || "(chưa có)"}`,
     `Các đoạn chat gần đây (mới trước):\n${chats.map((n) => `- ${day(n.updatedAt)} ${n.title}: ${n.props.gist}${n.props.tasks?.length ? ` Dang dở: ${n.props.tasks.join("; ")}` : ""}`).join("\n") || "(chưa có)"}`,
   ].filter(Boolean).join("\n\n");
   const { text } = await quickCall(user, CORE, data, { maxTokens: 700 });
-  const raw = /\{[\s\S]*\}/.exec(text)?.[0];
-  if (!raw) throw new Error("no json");
-  const j = JSON.parse(raw) as { overview?: unknown; focus?: unknown };
+  const j = jsonOf(text) as { overview?: unknown; focus?: unknown };
   refreshHub(uid, { overview: typeof j.overview === "string" ? j.overview.replace(/[[\]]/g, "").trim().slice(0, 1500) : undefined, focus: strs(j.focus, 6) });
-  t().prepare("INSERT INTO brain_state (user_id, dirty, hub_at) VALUES (?, 0, ?) ON CONFLICT(user_id) DO UPDATE SET dirty = 0, hub_at = excluded.hub_at").run(uid, Date.now());
+  setState(uid, { dirty: 0, hub_at: Date.now() });
+  logEvent(uid, `Tổng hợp lại ${L(HUB)}`);
 }
 
 const IDLE = Number(process.env.SYNCHRO_BRAIN_IDLE_MS) || 45_000;
 const g = globalThis as unknown as { __brainBusy?: boolean };
 /**
- * Chưng cất các đoạn chat đã ngừng một lúc (mặc định 45 giây sau lượt cuối) và tổng hợp lại trung tâm khi có từ 3 nhánh mới
- * (hoặc sau 6 giờ). now: chạy ngay cho một người (nút "Chưng cất ngay", kiểm thử).
+ * Mỗi nhịp của bộ lập lịch: chưng cất các đoạn chat đã ngừng một lúc (mặc định 45 giây sau lượt cuối), rồi chăm sóc bộ não của
+ * những người vừa có điều mới (hoặc có trang chờ biên soạn quá 30 phút). now: làm hết ngay cho một người (kiểm thử).
  */
 export async function distillPending(o: { uid?: string; now?: boolean; max?: number } = {}) {
+  // Gọi riêng cho một người (chạy ngay): chờ vòng nền đang chạy xong rồi làm, không bỏ qua.
+  for (let i = 0; o.uid && g.__brainBusy && i < 600; i++) await new Promise((r) => setTimeout(r, 200));
   if (g.__brainBusy) return 0;
   g.__brainBusy = true;
   let done = 0;
@@ -342,18 +728,19 @@ export async function distillPending(o: { uid?: string; now?: boolean; max?: num
         if (!/no json|503/.test(String((e as Error).message))) console.error("[brain]", (e as Error).message);
       }
     }
-    const users = o.uid ? [o.uid] : [...new Set(rows.map((r) => r.user_id))];
-    for (const uid of users) {
-      const st = d.prepare("SELECT dirty, hub_at FROM brain_state WHERE user_id = ?").get(uid) as { dirty: number; hub_at: number } | undefined;
-      if (st && st.dirty > 0 && (o.now || st.dirty >= 3 || Date.now() - st.hub_at > 6 * 3600_000)) await consolidate(uid).catch((e) => console.error("[brain] tổng hợp", (e as Error).message));
-      else refreshHub(uid);
+    // Chăm sóc: người vừa học thêm (khi hàng chờ của họ đã hết), và người còn trang chờ biên soạn đã lâu.
+    const touched = new Set(o.uid ? [o.uid] : rows.map((r) => r.user_id));
+    if (!o.uid) for (const r of d.prepare("SELECT user_id FROM brain_state WHERE garden_at < ? AND (dirty > 0 OR profile_dirty > 0)").all(Date.now() - 30 * 60_000) as { user_id: string }[]) touched.add(r.user_id);
+    for (const uid of touched) {
+      const waiting = (d.prepare("SELECT COUNT(*) AS n FROM brain_queue WHERE user_id = ?").get(uid) as { n: number }).n;
+      if (o.now || !waiting) await garden(uid, { now: o.now });
     }
   } finally { g.__brainBusy = false; }
   return done;
 }
 onTick("brain", () => { void distillPending().catch((e) => console.error("[brain]", e)); });
 
-/** Nạp các đoạn chat cũ (đang nằm trong trình duyệt) vào hàng chờ chưng cất. */
+/** Nạp các đoạn chat cũ (đang nằm trong trình duyệt) vào hàng chờ chưng cất; trình duyệt tự gửi dần ở nền. */
 export function importChats(user: UserRow, chats: { id: string; title?: string; msgs: { role: string; text: string }[] }[]) {
   const d = t();
   let n = 0;
@@ -378,7 +765,7 @@ const words = (s: string) => fold(s).split(/[^\p{L}\p{N}]+/u).filter((w) => w.le
 function rankNotes(notes: Note[], query: string, k: number, min = 1.2): Note[] {
   const q = [...new Set(words(query))];
   if (!q.length || !notes.length) return [];
-  const docs = notes.map((n) => [...words(n.title), ...words(n.title), ...words(n.body)]);
+  const docs = notes.map((n) => [...words(n.title), ...words(n.title), ...words(n.body), ...(n.props.aliases ?? []).flatMap(words)]);
   const avg = docs.reduce((a, d) => a + d.length, 0) / docs.length || 1;
   const df = new Map<string, number>();
   for (const d of docs) for (const w of new Set(d)) df.set(w, (df.get(w) ?? 0) + 1);
@@ -399,14 +786,15 @@ export function brainCore(uid: string): string {
   if (!hub?.props.overview && !hub?.props.focus?.length) return "";
   return `${hub.props.overview ? `Tổng quan bạn đã đúc kết về họ: ${hub.props.overview}` : ""}${hub.props.focus?.length ? `\nHọ đang theo đuổi: ${hub.props.focus.join("; ")}.` : ""}`.trim();
 }
-/** Vài ghi chú trong bộ não liên quan nhất tới câu hỏi (tầng động, cuối prompt). */
+/** Vài trang trong bộ não liên quan nhất tới câu hỏi (tầng động, cuối prompt). */
 export function brainRecall(uid: string, query: string, conv?: string): string {
   if (!query.trim() || !learning(uid)) return "";
-  const notes = allNotes(uid).filter((n) => (n.kind === "chat" || n.kind === "code" || n.kind === "topic" || n.kind === "note") && n.conv !== conv && (n.kind !== "chat" && n.kind !== "code" || n.props.gist));
-  const hits = rankNotes(notes, query, 3, 1.6);
+  const notes = allNotes(uid).filter((n) => (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && n.conv !== conv && (n.kind !== "chat" && n.kind !== "code" || n.props.gist));
+  const hits = rankNotes(notes, query, 4, 1.6);
   if (!hits.length) return "";
-  const line = (n: Note) => n.kind === "topic" || n.kind === "note"
-    ? `- [[${n.title}]] (chủ đề): ${n.body.replace(/\n+/g, " ").replace(/\[\[|\]\]/g, "").slice(0, 300)}`
+  const line = (n: Note) => WIKI.includes(n.kind)
+    ? `- [[${n.title}]] (${n.kind === "topic" ? "chủ đề" : "tên riêng"}): ${(n.props.summary || n.props.desc || "").slice(0, 300)}${n.props.facts?.length ? ` Đã biết: ${n.props.facts.slice(-4).map((f) => f.t).join("; ").slice(0, 400)}.` : ""}`
+    : n.kind === "note" ? `- [[${n.title}]] (ghi chú của họ): ${n.body.replace(/\n+/g, " ").replace(/\[\[|\]\]/g, "").slice(0, 300)}`
     : `- [[${n.title}]] (${day(n.props.date ?? n.createdAt)}): ${n.props.gist}${n.props.points?.length ? ` Điểm chính: ${n.props.points.slice(0, 3).join("; ")}.` : ""}${n.props.tasks?.length ? ` Còn dang dở: ${n.props.tasks.slice(0, 2).join("; ")}.` : ""}`;
   return `<brain_recall>
 Từ bộ não chung của Synchro, những ghi chú liên quan tới câu hỏi này (bạn nhớ chúng như chuyện đã cùng người dùng trải qua; dùng khi hữu ích, không cần nói là đang nhớ lại):
@@ -414,8 +802,8 @@ ${hits.map(line).join("\n")}
 </brain_recall>`;
 }
 
-// ---------------------------------------------------------------- tên và bí danh
-/** Tên → ghi chú, gồm cả bí danh (liên kết [[bí danh]] trỏ đúng ghi chú, như Obsidian). */
+// ---------------------------------------------------------------- tên và tên khác
+/** Tên → ghi chú, gồm cả tên khác (liên kết [[tên khác]] trỏ đúng ghi chú). */
 function resolver(notes: Note[]) {
   const m = new Map<string, Note>();
   for (const n of notes) m.set(fold(n.title), n);
@@ -423,67 +811,34 @@ function resolver(notes: Note[]) {
   return m;
 }
 const namesOf = (n: Note) => [n.title, ...(n.props.aliases ?? [])].filter((x) => x.trim().length >= 2);
-/** Tìm ghi chú theo tên hoặc bí danh. */
+/** Tìm ghi chú theo tên hoặc tên khác. */
 export function findNote(uid: string, name: string): Note | null { return getNote(uid, name) ?? resolver(allNotes(uid)).get(fold(name)) ?? null; }
-const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Thay mọi [[Cũ…]] bằng [[Mới…]] (giữ #mục và |chữ hiện). */
 const swapLinks = (body: string, from: string, to: string) => body.replace(new RegExp(`\\[\\[\\s*${esc(from)}\\s*((?:#[^\\]|\\n]*)?(?:\\|[^\\]\\n]*)?)\\]\\]`, "giu"), (_m, rest) => `[[${to}${rest}]]`);
 
-/** Đổi tên ghi chú: mọi liên kết tới nó ở các ghi chú khác tự đổi theo (như Obsidian). */
+/** Đổi tên (hoặc gộp) ghi chú: mọi liên kết tới nó ở các ghi chú khác tự đổi theo. */
 function relink(user: UserRow, from: string, to: string) {
   const uid = user.id, k = fold(from);
   const srcs = new Set((t().prepare("SELECT src FROM brain_links WHERE user_id = ? AND dkey = ?").all(uid, k) as { src: string }[]).map((r) => r.src));
   for (const n of allNotes(uid)) {
-    const inProps = [...(n.props.topics ?? []), ...(n.props.entities ?? []), ...(n.props.related ?? [])].some((x) => fold(x) === k);
+    const inProps = [...(n.props.topics ?? []), ...(n.props.entities ?? []), ...(n.props.related ?? []), n.props.up ?? "", ...(n.props.facts ?? []).map((f) => f.src ?? ""), ...(n.props.profile ?? []).map((f) => f.src ?? "")].some((x) => fold(x) === k);
     if (!srcs.has(n.id) && !inProps) continue;
-    const swap = (xs?: string[]) => xs?.map((x) => (fold(x) === k ? to : x));
-    if (n.kind === "chat" || n.kind === "code") {
-      const props = { ...n.props, topics: swap(n.props.topics), entities: swap(n.props.entities), related: swap(n.props.related), userNote: n.props.userNote ? swapLinks(n.props.userNote, from, to) : n.props.userNote };
-      put(uid, { id: n.id, kind: n.kind, title: n.title, conv: n.conv, body: chatBody(props), props });
-    } else if (!GENERATED.includes(n.kind)) put(uid, { id: n.id, kind: n.kind, title: n.title, body: swapLinks(n.body, from, to), props: n.props });
-    else if (n.props.userNote) { const props = { ...n.props, userNote: swapLinks(n.props.userNote, from, to) }; put(uid, { id: n.id, kind: n.kind, title: n.title, body: swapLinks(n.body, from, to), props }); }
+    const swap = (xs?: string[]) => (xs ? [...new Set(xs.map((x) => (fold(x) === k ? to : x)))] : xs);
+    const props: Props = {
+      ...n.props, topics: swap(n.props.topics), entities: swap(n.props.entities), related: swap(n.props.related)?.filter((x) => fold(x) !== fold(n.title)),
+      up: n.props.up && fold(n.props.up) === k ? to : n.props.up, userNote: n.props.userNote ? swapLinks(n.props.userNote, from, to) : n.props.userNote,
+      facts: n.props.facts?.map((f) => (f.src && fold(f.src) === k ? { ...f, src: to } : f)), profile: n.props.profile?.map((f) => (f.src && fold(f.src) === k ? { ...f, src: to } : f)),
+    };
+    if (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind)) rebuild(uid, n, props);
+    else if (n.kind === "about") put(uid, { id: n.id, kind: n.kind, title: n.title, body: aboutBody(user, props), props });
+    else put(uid, { id: n.id, kind: n.kind, title: n.title, body: swapLinks(n.body, from, to), props });
   }
   // Nhật ký và trung tâm viết lại từ các nhánh (đã đổi tên ở trên).
   for (const n of allNotes(uid)) if (n.kind === "daily" && n.props.date) refreshDaily(uid, n.props.date);
   refreshHub(uid);
 }
 
-/** Gộp ghi chú (Note composer của Obsidian): nội dung nối vào ghi chú đích, tên cũ thành bí danh, mọi liên kết trỏ về ghi chú đích. */
-export function mergeNotes(user: UserRow, from: string, into: string) {
-  const a = findNote(user.id, from), b = findNote(user.id, into);
-  if (!a || !b || a.id === b.id) throw new Error("Chọn hai ghi chú khác nhau để gộp.");
-  if (!["topic", "note"].includes(a.kind) || !["topic", "note"].includes(b.kind)) throw new Error("Chỉ gộp được ghi chú chủ đề và ghi chú riêng.");
-  const body = `${b.body.trimEnd()}\n\n## Gộp từ ${a.title}\n${a.body.replace(/\n?Thuộc \[\[Bộ não\]\]\.?\s*$/, "").trim()}\n`;
-  const aliases = [...new Set([...(b.props.aliases ?? []), a.title, ...(a.props.aliases ?? [])])].filter((x) => fold(x) !== fold(b.title));
-  put(user.id, { id: b.id, kind: b.kind, title: b.title, body, props: { ...b.props, aliases, tags: [...new Set([...(b.props.tags ?? []), ...(a.props.tags ?? [])])] } });
-  t().prepare("DELETE FROM brain_links WHERE src = ?").run(a.id);
-  t().prepare("DELETE FROM brain_notes WHERE id = ?").run(a.id);
-  relink(user, a.title, b.title);
-  return getNote(user.id, b.title)!;
-}
-
-/** Nối một chỗ nhắc tên thành liên kết: ghi chú nguồn sửa được thì thay chữ đầu tiên bằng [[Tên]]; nhánh đoạn chat thì thêm vào "Nhắc tới". */
-export function linkMention(user: UserRow, source: string, target: string) {
-  const src = findNote(user.id, source), dst = findNote(user.id, target);
-  if (!src || !dst) throw new Error("Không tìm thấy ghi chú.");
-  if (src.kind === "chat" || src.kind === "code") {
-    const props = { ...src.props, entities: [...new Set([...(src.props.entities ?? []), dst.title])] };
-    return put(user.id, { id: src.id, kind: src.kind, title: src.title, conv: src.conv, body: chatBody(props), props });
-  }
-  if (GENERATED.includes(src.kind)) throw new Error("Ghi chú này do Synchro tự viết; hãy thêm liên kết ở phần “Ghi chú của bạn”.");
-  for (const name of namesOf(dst)) {
-    const re = new RegExp(`(^|[^\\p{L}\\p{N}\\[])(${esc(name)})(?=$|[^\\p{L}\\p{N}\\]])`, "iu");
-    const plainBody = src.body.replace(LINK, (m0) => "\u0000".repeat(m0.length));
-    const m = re.exec(plainBody);
-    if (!m) continue;
-    const at = m.index + m[1].length, word = src.body.slice(at, at + m[2].length);
-    const link = word === dst.title ? `[[${dst.title}]]` : `[[${dst.title}|${word}]]`;
-    return put(user.id, { id: src.id, kind: src.kind, title: src.title, body: src.body.slice(0, at) + link + src.body.slice(at + m[2].length), props: src.props });
-  }
-  throw new Error("Không còn chỗ nhắc tên nào chưa nối.");
-}
-
-// ---------------------------------------------------------------- thẻ, tìm kiếm có toán tử, bảng (Bases)
+// ---------------------------------------------------------------- thẻ, tìm kiếm có toán tử, bảng
 const tagsOf = (n: Note) => [...new Set([...(n.props.tags ?? []), ...tagsIn(n.body)])];
 /** Thẻ và số ghi chú; thẻ lồng (#a/b) tính cả cho thẻ cha #a. */
 export function tagCounts(uid: string) {
@@ -491,11 +846,11 @@ export function tagCounts(uid: string) {
   for (const n of allNotes(uid)) { const seen = new Set<string>(); for (const t0 of tagsOf(n)) { const parts = t0.split("/"); for (let i = 1; i <= parts.length; i++) seen.add(parts.slice(0, i).join("/")); } for (const x of seen) m.set(x, (m.get(x) ?? 0) + 1); }
   return [...m.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
-const KIND_WORD: Record<string, NoteKind[]> = { chat: ["chat", "code"], "doan-chat": ["chat", "code"], code: ["code"], topic: ["topic"], "chu-de": ["topic"], note: ["note"], "ghi-chu": ["note"], daily: ["daily"], "nhat-ky": ["daily"], skill: ["skill"], connector: ["connector"], model: ["model"], hub: ["hub"] };
+const KIND_WORD: Record<string, NoteKind[]> = { chat: ["chat", "code"], "doan-chat": ["chat", "code"], code: ["code"], topic: ["topic"], "chu-de": ["topic"], entity: ["entity"], "ten-rieng": ["entity"], map: ["map"], "ban-do": ["map"], note: ["note"], "ghi-chu": ["note"], daily: ["daily"], "nhat-ky": ["daily"], skill: ["skill"], connector: ["connector"], model: ["model"], hub: ["hub"] };
 // Việc dang dở: của nhánh đoạn chat (chưng cất) và các dòng "- [ ]" trong ghi chú người dùng tự viết (nhật ký chỉ chép lại, không tính).
 const openTasks = (n: Note) => { const done = new Set((n.props.done ?? []).map(fold)); return [...(n.props.tasks ?? []).filter((x) => !done.has(fold(x))), ...(GENERATED.includes(n.kind) ? [] : [...n.body.matchAll(/^\s*[-*]\s+\[ \]\s+(.+)$/gm)].map((m) => m[1]))]; };
 /**
- * Tìm như Obsidian: chữ thường (xếp hạng BM25), "cụm từ", -loại trừ, tag:thẻ (gồm thẻ con), loai:chu-de / doan-chat / ghi-chu / nhat-ky,
+ * Tìm: chữ thường (xếp hạng BM25), "cụm từ", -loại trừ, tag:thẻ (gồm thẻ con), loai:chu-de / ten-rieng / ban-do / doan-chat / ghi-chu / nhat-ky,
  * file:tên, task-todo: (ghi chú còn việc chưa xong), [thuộc tính] / [thuộc tính:giá trị] (vd. [model:claude], [importance:5]).
  */
 export function queryNotes(uid: string, raw: string, k = 40) {
@@ -518,14 +873,14 @@ export function queryNotes(uid: string, raw: string, k = 40) {
   }
   const list = terms.length ? rankNotes(notes, terms.join(" "), k, 0.2) : notes.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, k);
   const first = terms[0] ? fold(terms[0]) : "";
-  return list.map((n) => ({ note: n, snippet: (n.body.split("\n").find((l) => first && fold(l).includes(first)) ?? n.props.gist ?? n.body.split("\n").find((l) => l.trim()) ?? "").replace(/^[-*#\s]+/, "").slice(0, 200) }));
+  return list.map((n) => ({ note: n, snippet: (n.body.split("\n").find((l) => first && fold(l).includes(first)) ?? n.props.summary ?? n.props.gist ?? n.body.split("\n").find((l) => l.trim()) ?? "").replace(/^[-*#\s]+/, "").slice(0, 200) }));
 }
-/** Bảng kiểu Bases: đoạn chat, chủ đề, việc còn dang dở trên khắp bộ não. */
+/** Bảng: việc dang dở, đoạn chat, chủ đề, tên riêng trên khắp bộ não. */
 export function brainTable(uid: string, view: string) {
   const notes = allNotes(uid), deg = backlinkCounts(uid);
   if (view === "tasks") return notes.flatMap((n) => openTasks(n).map((task) => ({ task, title: n.title, kind: n.kind, date: n.props.date ?? n.createdAt })))
     .concat(notes.flatMap((n) => (n.props.done ?? []).map((task) => ({ task, title: n.title, kind: n.kind, date: n.props.date ?? n.createdAt, done: true } as never)))).sort((a, b) => b.date - a.date);
-  if (view === "topics") return notes.filter((n) => n.kind === "topic").map((n) => ({ title: n.title, links: deg.get(fold(n.title)) ?? 0, aliases: n.props.aliases ?? [], updatedAt: n.updatedAt, desc: n.props.desc || n.body.split("\n")[0].slice(0, 160) })).sort((a, b) => b.links - a.links);
+  if (view === "topics" || view === "entities") return notes.filter((n) => n.kind === (view === "topics" ? "topic" : "entity")).map((n) => ({ title: n.title, links: deg.get(fold(n.title)) ?? 0, aliases: n.props.aliases ?? [], updatedAt: n.updatedAt, facts: n.props.facts?.length ?? 0, type: n.props.etype ?? "", up: n.props.up ?? "", desc: (n.props.summary || n.props.desc || n.body.split("\n")[0]).slice(0, 160) })).sort((a, b) => b.links - a.links);
   return notes.filter((n) => n.kind === "chat" || n.kind === "code").map((n) => ({ title: n.title, kind: n.kind, date: n.props.date ?? n.createdAt, models: Object.keys(n.props.models ?? {}).map((m) => m.split("/").slice(1).join("/") || m), topics: n.props.topics ?? [], importance: n.props.importance ?? null, turns: n.props.turns ?? 0, tasks: openTasks(n).length, distilled: !!n.props.distilledAt })).sort((a, b) => b.date - a.date);
 }
 /** Đánh dấu một việc đã xong / chưa xong (ghi chú đoạn chat viết lại ô [x]; ghi chú riêng sửa thẳng dòng "- [ ]"). */
@@ -535,9 +890,9 @@ export function setTask(user: UserRow, title: string, task: string, done: boolea
   if (n.kind === "chat" || n.kind === "code") {
     const cur = new Set((n.props.done ?? []).map(fold)), list = (n.props.done ?? []).filter((x) => fold(x) !== fold(task));
     if (done && !cur.has(fold(task))) list.push(task);
-    const props = { ...n.props, done: done ? list : list };
-    put(user.id, { id: n.id, kind: n.kind, title: n.title, conv: n.conv, body: chatBody(props), props });
-  } else if (!GENERATED.includes(n.kind)) {
+    rebuild(user.id, n, { ...n.props, done: list });
+    if (n.props.date) refreshDaily(user.id, n.props.date);
+  } else if (n.kind === "note") {
     const re = new RegExp(`^(\\s*[-*]\\s+)\\[${done ? " " : "x"}\\](\\s+${esc(task)}\\s*)$`, "imu");
     put(user.id, { id: n.id, kind: n.kind, title: n.title, body: n.body.replace(re, `$1[${done ? "x" : " "}]$2`), props: n.props });
   } else throw new Error("Không sửa được việc trong ghi chú này.");
@@ -553,53 +908,18 @@ function refreshDaily(uid: string, ms: number) {
   const tasks = chats.flatMap((n) => openTasks(n).map((x) => `- [ ] ${x} (từ ${L(n.title)})`));
   const cur = getNote(uid, title);
   const d = new Date(ms);
-  const body = `Những gì bạn đã cùng Synchro làm ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}. Thuộc ${L(HUB)}.\n\n## Đoạn chat\n${chats.map((n) => `- ${L(n.title)}: ${n.props.gist ?? ""}`).join("\n")}\n${topics.length ? `\n## Chủ đề đã chạm tới\n${topics.map(L).join(" · ")}\n` : ""}${tasks.length ? `\n## Còn dang dở\n${tasks.join("\n")}\n` : ""}${cur?.props.userNote?.trim() ? `\n## Ghi chú của bạn\n${cur.props.userNote.trim()}\n` : ""}`;
+  const body = `Những gì bạn đã cùng Synchro làm ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}. Thuộc ${L(HUB)}.\n\n## Đoạn chat\n${chats.map((n) => `- ${L(n.title)}: ${n.props.gist ?? ""}`).join("\n")}\n${topics.length ? `\n## Chủ đề đã chạm tới\n${topics.map(L).join(" · ")}\n` : ""}${tasks.length ? `\n## Còn dang dở\n${tasks.join("\n")}\n` : ""}${userPart(cur?.props ?? {})}`;
   if (!cur || cur.body !== body) put(uid, { id: cur?.id, kind: "daily", title, body, props: { ...(cur?.props ?? {}), day: key, date: ms, tags: ["nhat-ky"], auto: true } });
 }
 
-// ---------------------------------------------------------------- nhập thư mục Obsidian (.zip)
-/** Nhập ghi chú từ một thư mục Obsidian (hoặc bộ não đã tải về): mỗi tệp .md thành một ghi chú, giữ thẻ, bí danh và [[liên kết]]. */
-export async function importVault(user: UserRow, data: ArrayBuffer) {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(data);
-  let created = 0, skipped = 0;
-  const files = Object.values(zip.files).filter((f) => !f.dir && /\.md$/i.test(f.name) && !/(^|\/)\./.test(f.name)).slice(0, 2000);
-  for (const f of files) {
-    const text = (await f.async("string")).replace(/\r\n?/g, "\n");
-    const title = cleanName(f.name.split("/").pop()!.replace(/\.md$/i, ""));
-    if (!title || SYSTEM_TITLES.has(fold(title)) || /^nhat ky \d{4}-\d{2}-\d{2}$/.test(fold(title))) { skipped++; continue; }
-    const fm = /^---\n([\s\S]*?)\n---\n?/.exec(text);
-    const meta = fm?.[1] ?? "", list = (key: string) => {
-      const inline = new RegExp(`^${key}:\\s*\\[(.*)\\]\\s*$`, "m").exec(meta)?.[1];
-      if (inline !== undefined) return inline.split(",").map((x) => x.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
-      const block = new RegExp(`^${key}:\\s*\\n((?:\\s*-\\s*.+\\n?)+)`, "m").exec(meta)?.[1];
-      if (block) return block.split("\n").map((x) => x.replace(/^\s*-\s*/, "").trim().replace(/^["']|["']$/g, "")).filter(Boolean);
-      const one = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(meta)?.[1];
-      return one ? [one.trim().replace(/^["']|["']$/g, "")] : [];
-    };
-    let body = text.slice(fm ? fm[0].length : 0).replace(new RegExp(`^#\\s+${esc(title)}\\s*\\n+`), "");
-    const kindRaw = list("kind")[0] as NoteKind | undefined;
-    const kind: NoteKind = kindRaw === "topic" ? "topic" : "note";
-    const have = getNote(user.id, title);
-    if (have && have.kind !== "note" && have.kind !== "topic") { skipped++; continue; }
-    if (have && fold(have.body) === fold(body)) { skipped++; continue; }
-    body = body.slice(0, 50_000);
-    put(user.id, { id: have?.id, kind: have?.kind ?? kind, title: have?.title ?? title, body, props: { ...(have?.props ?? {}), tags: [...new Set([...(have?.props.tags ?? []), ...list("tags").map((x) => x.replace(/^#/, "").toLowerCase())])], aliases: [...new Set([...(have?.props.aliases ?? []), ...list("aliases")])] } });
-    created++;
-  }
-  refreshHub(user.id);
-  return { created, skipped, files: files.length };
-}
-const SYSTEM_TITLES = new Set([fold(HUB), fold(ABOUT), "claude", "chatgpt", "gemini"]);
-
 // ---------------------------------------------------------------- công cụ cho model (model nào cũng đọc, ghi được bộ não)
 export const BRAIN_TOOLS = [
-  { name: "brain_search", description: "Tìm trong bộ não chung của Synchro: ghi chú chưng cất từ các đoạn chat cũ, chủ đề, nhật ký hằng ngày, ghi chú riêng của người dùng. Dùng khi người dùng nhắc chuyện đã làm trước đây (\"lần trước\", \"hôm qua\", \"kế hoạch của mình\"), hay khi cần bối cảnh dài hạn của họ. query hỗ trợ tag:thẻ, loai:chu-de|doan-chat|ghi-chu|nhat-ky, task-todo:, [thuộc tính:giá trị], \"cụm từ\", -loại trừ.", input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
-  { name: "brain_read", description: "Đọc đầy đủ một ghi chú trong bộ não theo tên hoặc bí danh, kèm danh sách ghi chú nó liên kết tới và các ghi chú trỏ về nó; đi theo [[liên kết]] bằng cách đọc tiếp ghi chú khác.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
+  { name: "brain_search", description: "Tìm trong bộ não chung của Synchro: trang chủ đề và tên riêng (điều đã biết, có nguồn), ghi chú chưng cất từ các đoạn chat cũ, nhật ký hằng ngày, ghi chú riêng của người dùng. Dùng khi người dùng nhắc chuyện đã làm trước đây (\"lần trước\", \"hôm qua\", \"kế hoạch của mình\"), hay khi cần bối cảnh dài hạn của họ. query hỗ trợ tag:thẻ, loai:chu-de|ten-rieng|ban-do|doan-chat|ghi-chu|nhat-ky, task-todo:, [thuộc tính:giá trị], \"cụm từ\", -loại trừ.", input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+  { name: "brain_read", description: "Đọc đầy đủ một ghi chú trong bộ não theo tên hoặc tên khác, kèm các ghi chú trỏ về nó; đi theo [[liên kết]] bằng cách đọc tiếp ghi chú khác. Chưa biết bắt đầu từ đâu thì đọc \"Mục lục\" (danh mục mọi trang) hoặc \"Về bạn\" (chân dung người dùng).", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
   { name: "brain_write", description: "Ghi vào bộ não khi người dùng bảo nhớ, lưu hay ghi lại điều gì: tạo hoặc nối thêm vào một ghi chú riêng của họ (Markdown; dùng [[Tên ghi chú]] để nối tới ghi chú khác, #thẻ để gắn thẻ). Không tự ý ghi khi người dùng không yêu cầu.", input_schema: { type: "object", properties: { title: { type: "string" }, content: { type: "string" }, mode: { type: "string", enum: ["append", "replace"] } }, required: ["title", "content"] } },
 ];
 export const BRAIN_RULES = `<synchro_brain>
-Bạn dùng chung bộ não của Synchro với mọi model khác (Claude, ChatGPT, Gemini). Khi người dùng nhắc tới chuyện cũ, kế hoạch, mục tiêu hay điều họ từng nói mà phần đã biết chưa đủ, dùng brain_search rồi brain_read (đi theo [[liên kết]]) để nhớ lại trước khi trả lời. Khi họ bảo ghi nhớ hay lưu lại, dùng brain_write. Nói như người tự nhớ ra, không nhắc tên công cụ.
+Bạn dùng chung bộ não của Synchro với mọi model khác (Claude, ChatGPT, Gemini). Khi người dùng nhắc tới chuyện cũ, kế hoạch, mục tiêu hay điều họ từng nói mà phần đã biết chưa đủ, dùng brain_search rồi brain_read (đi theo [[liên kết]]; "Mục lục" liệt kê mọi trang) để nhớ lại trước khi trả lời. Khi họ bảo ghi nhớ hay lưu lại, dùng brain_write. Nói như người tự nhớ ra, không nhắc tên công cụ.
 </synchro_brain>`;
 export function runBrainTool(uid: string, name: string, input: Record<string, unknown>): { content: string; is_error: boolean } {
   const user = getUser(uid);
@@ -619,7 +939,7 @@ export function runBrainTool(uid: string, name: string, input: Record<string, un
       const title = cleanName(String(input.title ?? "")), content = String(input.content ?? "").slice(0, 20_000);
       if (!title || !content.trim()) return { content: "Cần tên ghi chú và nội dung.", is_error: true };
       const n = findNote(uid, title);
-      if (n && !["note", "topic"].includes(n.kind)) {
+      if (n && n.kind !== "note") {
         const r = saveNote(user, n.title, { userNote: `${n.props.userNote ? `${n.props.userNote}\n\n` : ""}${content}` });
         return { content: `Đã thêm vào phần ghi chú của bạn trong [[${r.title}]].`, is_error: false };
       }
@@ -632,7 +952,7 @@ export function runBrainTool(uid: string, name: string, input: Record<string, un
 }
 export const brainReady = (uid: string) => learning(uid);
 
-// ---------------------------------------------------------------- xem và sửa (Cài đặt → Bộ não)
+// ---------------------------------------------------------------- xem và sửa (không gian Bộ não)
 export type GraphNode = { id: string; title: string; kind: NoteKind | "ghost"; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
 export function brainGraph(user: UserRow) {
   ensureBase(user);
@@ -641,19 +961,23 @@ export function brainGraph(user: UserRow) {
   const links = t().prepare("SELECT src, dkey, dtitle FROM brain_links WHERE user_id = ?").all(uid) as { src: string; dkey: string; dtitle: string }[];
   const ghosts = new Map<string, GraphNode>();
   const edges: { s: string; t: string }[] = [];
+  const seen = new Set<string>();
   const deg = new Map<string, number>();
   for (const l of links) {
     const dst = byK.get(l.dkey);
     let to = dst?.id;
     if (!to) { to = `ghost:${l.dkey}`; if (!ghosts.has(to)) ghosts.set(to, { id: to, title: l.dtitle, kind: "ghost", tags: [], created: Date.now(), links: 0 }); }
-    if (to === l.src || edges.some((e) => e.s === l.src && e.t === to)) continue;
+    const k = `${l.src}>${to}`;
+    if (to === l.src || seen.has(k)) continue;
+    seen.add(k);
     edges.push({ s: l.src, t: to });
     deg.set(to, (deg.get(to) ?? 0) + 1); deg.set(l.src, (deg.get(l.src) ?? 0) + 1);
   }
   const nodes: GraphNode[] = [...notes.map((n) => ({ id: n.id, title: n.title, kind: n.kind, tags: tagsOf(n), created: n.createdAt, links: deg.get(n.id) ?? 0, aliases: n.props.aliases ?? [], pinned: !!n.props.pinned })), ...[...ghosts.values()].map((x) => ({ ...x, links: deg.get(x.id) ?? 0 }))];
-  return { nodes, edges, stats: { notes: notes.length, links: edges.length, chats: notes.filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.distilledAt).length, topics: notes.filter((n) => n.kind === "topic").length, pending: pendingCount(uid), memories: listMemory(uid).length } };
+  const st = state(uid), last = brainLog(uid, 1)[0];
+  return { nodes, edges, stats: { notes: notes.length, links: edges.length, chats: notes.filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.distilledAt).length, topics: notes.filter((n) => n.kind === "topic").length, entities: notes.filter((n) => n.kind === "entity").length, maps: notes.filter((n) => n.kind === "map").length, pending: pendingCount(uid), memories: listMemory(uid).length, learnedAt: last?.at ?? null, gardenAt: st.garden_at || null } };
 }
-/** Một ghi chú kèm liên kết đi (có / chưa có ghi chú), liên kết đến đây và chỗ nhắc tên mà chưa nối (như Obsidian). */
+/** Một ghi chú kèm liên kết đi, liên kết đến đây, chỗ nhắc tên mà chưa nối và các ghi chú gần nghĩa. */
 export function brainNote(user: UserRow, title: string) {
   ensureBase(user);
   const uid = user.id, n = findNote(uid, title);
@@ -668,20 +992,19 @@ export function brainNote(user: UserRow, title: string) {
   };
   const back = srcs.map((s) => notes.find((x) => x.id === s.src)).filter((x): x is Note => !!x && x.id !== n.id).map((x) => ({ title: x.title, kind: x.kind, context: namesOf(n).map((nm) => around(x.body, `[[${nm}`)).find(Boolean) || around(x.body, n.title) }));
   const linked = new Set(back.map((b) => b.title));
-  // Nhắc tên mà chưa nối (gồm cả bí danh), trong chữ thường của ghi chú khác.
+  // Nhắc tên mà chưa nối (gồm cả tên khác), trong chữ thường của ghi chú khác.
   const mention = (body: string, names: string[]) => { const b = fold(body.replace(LINK, " ")); return names.find((nm) => nm.length >= 3 && new RegExp(`(^|[^\\p{L}\\p{N}])${esc(fold(nm))}($|[^\\p{L}\\p{N}])`, "u").test(b)); };
-  const unlinked = notes.filter((x) => x.id !== n.id && !linked.has(x.title) && mention(x.body, namesOf(n)))
-    .slice(0, 20).map((x) => ({ title: x.title, kind: x.kind, context: around(x.body.replace(LINK, (_m, a, b) => b || a), mention(x.body, namesOf(n))!), canLink: !GENERATED.includes(x.kind) || x.kind === "chat" || x.kind === "code" }));
-  // Liên kết đi chưa nối: tên ghi chú khác xuất hiện trong ghi chú này mà chưa thành liên kết (Outgoing links của Obsidian).
-  const outKeys = new Set(out.map((o) => fold(o.title)));
-  const outUnlinked = n.kind === "hub" || n.kind === "daily" ? [] : notes.filter((x) => x.id !== n.id && !outKeys.has(fold(x.title)) && x.kind !== "hub" && mention(n.body, namesOf(x)))
-    .slice(0, 15).map((x) => ({ title: x.title, kind: x.kind, matched: mention(n.body, namesOf(x))! }));
-  return { note: { ...n, editable: !SYSTEM_NOTES.includes(n.kind), generated: GENERATED.includes(n.kind), tags: tagsOf(n), canLink: !GENERATED.includes(n.kind) || n.kind === "chat" || n.kind === "code" }, outgoing: out, outUnlinked, backlinks: back, unlinked };
+  const unlinked = notes.filter((x) => x.id !== n.id && !linked.has(x.title) && x.kind !== "index" && x.kind !== "log" && mention(x.body, namesOf(n)))
+    .slice(0, 20).map((x) => ({ title: x.title, kind: x.kind, context: around(x.body.replace(LINK, (_m, a, b) => b || a), mention(x.body, namesOf(n))!) }));
+  // Gần nghĩa (chưa nối với nhau): xếp hạng theo từ khóa chung.
+  const near = new Set([n.id, ...back.map((b) => notes.find((x) => x.title === b.title)?.id), ...out.map((o) => byK.get(fold(o.title))?.id)].filter(Boolean) as string[]);
+  const similar = n.kind === "hub" || n.kind === "index" || n.kind === "log" ? [] : rankNotes(notes.filter((x) => !near.has(x.id) && !["hub", "index", "log", "daily", "model"].includes(x.kind)), `${n.title} ${n.props.summary ?? n.props.gist ?? ""} ${(n.props.facts ?? []).map((f) => f.t).join(" ")}`, 6, 1.4).map((x) => ({ title: x.title, kind: x.kind }));
+  return { note: { ...n, editable: !SYSTEM_NOTES.includes(n.kind), generated: GENERATED.includes(n.kind), tags: tagsOf(n) }, outgoing: out, backlinks: back, unlinked, similar };
 }
-/** Sửa ghi chú: ghi chú Synchro tự viết thì chỉ sửa phần "Ghi chú của bạn"; ghi chú chủ đề / ghi chú riêng thì sửa cả nội dung. */
+/** Sửa ghi chú: ghi chú Synchro tự viết thì chỉ sửa phần "Ghi chú của bạn" và thuộc tính; ghi chú riêng thì sửa cả nội dung. */
 export function saveNote(user: UserRow, title: string, patch: { body?: string; userNote?: string; newTitle?: string; aliases?: string[]; tags?: string[]; pinned?: boolean }) {
   const n0 = findNote(user.id, title);
-  // Thuộc tính (bí danh, thẻ, ghim) sửa được ở mọi ghi chú.
+  // Thuộc tính (tên khác, thẻ, ghim) sửa được ở mọi ghi chú.
   if (n0 && (patch.aliases || patch.tags || patch.pinned !== undefined)) {
     const props = { ...n0.props, ...(patch.aliases ? { aliases: [...new Set(patch.aliases.map(cleanName).filter((a) => a && fold(a) !== fold(n0.title)))].slice(0, 20) } : {}), ...(patch.tags ? { tags: [...new Set(patch.tags.map((x) => x.replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")).filter(Boolean))].slice(0, 30) } : {}), ...(patch.pinned !== undefined ? { pinned: patch.pinned } : {}) };
     put(user.id, { id: n0.id, kind: n0.kind, title: n0.title, conv: n0.conv, body: n0.body, props });
@@ -695,7 +1018,8 @@ export function saveNote(user: UserRow, title: string, patch: { body?: string; u
   }
   if (GENERATED.includes(n.kind)) {
     const props = { ...n.props, userNote: (patch.userNote ?? "").slice(0, 20_000) };
-    const body = n.kind === "chat" || n.kind === "code" ? chatBody(props) : n.kind === "hub" ? hubBody(props, user.id) : n.body.replace(/\n## Ghi chú của bạn\n[\s\S]*$/, "") + (props.userNote.trim() ? `\n## Ghi chú của bạn\n${props.userNote.trim()}\n` : "");
+    if (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind)) return rebuild(user.id, n, props);
+    const body = n.kind === "hub" ? hubBody(props, user.id) : n.kind === "about" ? aboutBody(user, props) : n.body.replace(/\n## Ghi chú của bạn\n[\s\S]*$/, "") + userPart(props);
     return put(user.id, { id: n.id, kind: n.kind, title: n.title, body, props });
   }
   const newTitle = patch.newTitle ? freeTitle(user.id, cleanName(patch.newTitle), n.id) : n.title;
@@ -713,15 +1037,12 @@ export function deleteNote(user: UserRow, title: string) {
 }
 export function wipeBrain(uid: string) {
   const d = t();
-  d.prepare("DELETE FROM brain_links WHERE user_id = ?").run(uid);
-  d.prepare("DELETE FROM brain_notes WHERE user_id = ?").run(uid);
-  d.prepare("DELETE FROM brain_queue WHERE user_id = ?").run(uid);
-  d.prepare("DELETE FROM brain_state WHERE user_id = ?").run(uid);
+  for (const tb of ["brain_links", "brain_notes", "brain_queue", "brain_state", "brain_log"]) d.prepare(`DELETE FROM ${tb} WHERE user_id = ?`).run(uid);
 }
 
-// ---------------------------------------------------------------- xuất thành thư mục Obsidian
-const FOLDER: Record<NoteKind, string> = { hub: "", about: "", model: "Bán cầu", chat: "Đoạn chat", code: "Synchro Code", topic: "Chủ đề", skill: "Skill", connector: "Connector", note: "Ghi chú", daily: "Nhật ký" };
-export async function exportVault(user: UserRow): Promise<ArrayBuffer> {
+// ---------------------------------------------------------------- tải về thành thư mục Markdown
+const FOLDER: Record<NoteKind, string> = { hub: "", about: "", index: "", log: "", model: "Bán cầu", chat: "Đoạn chat", code: "Synchro Code", topic: "Chủ đề", entity: "Tên riêng", map: "Bản đồ", skill: "Skill", connector: "Connector", note: "Ghi chú", daily: "Nhật ký" };
+export async function exportBrain(user: UserRow): Promise<ArrayBuffer> {
   ensureBase(user);
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip(), root = zip.folder("Bộ não Synchro")!;
@@ -730,7 +1051,7 @@ export async function exportVault(user: UserRow): Promise<ArrayBuffer> {
     const fm = [`kind: ${n.kind}`, `created: ${new Date(n.createdAt).toISOString()}`, `updated: ${new Date(n.updatedAt).toISOString()}`,
       n.props.tags?.length ? `tags: [${n.props.tags.join(", ")}]` : "", n.props.importance ? `importance: ${n.props.importance}` : "",
       n.props.models ? `models: [${Object.keys(n.props.models).join(", ")}]` : "", n.props.aliases?.length ? `aliases: [${n.props.aliases.map((a) => JSON.stringify(a)).join(", ")}]` : "",
-      n.props.date ? `date: ${dayKey(n.props.date)}` : ""].filter(Boolean).join("\n");
+      n.props.etype ? `type: ${JSON.stringify(n.props.etype)}` : "", n.props.up ? `up: "[[${n.props.up}]]"` : "", n.props.date ? `date: ${dayKey(n.props.date)}` : ""].filter(Boolean).join("\n");
     const dir = FOLDER[n.kind];
     root.file(`${dir ? `${dir}/` : ""}${safe(n.title)}.md`, `---\n${fm}\n---\n# ${n.title}\n\n${n.body}`);
   }

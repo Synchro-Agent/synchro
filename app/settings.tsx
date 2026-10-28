@@ -144,6 +144,15 @@ function Account() {
       .catch((e) => app.say(e.message)).finally(() => setInsBusy(false));
   };
   const [saved, setSaved] = useState("");
+  // Synchro tự cập nhật phần hướng dẫn từ bộ não (Cài đặt → Bộ não): trạng thái, lịch sử các bản và quay lại một bản cũ.
+  type InsInfo = { auto: boolean; lastAuto: number | null; history: { id: string; at: number; source: string; text: string }[] };
+  const [ia, setIa] = useState<InsInfo | null>(null);
+  const [hist, setHist] = useState(false);
+  useEffect(() => { api<InsInfo>("GET", "/api/brain/instructions").then(setIa).catch(() => {}); }, [server]);
+  const setAuto = (auto: boolean) => api<InsInfo>("PUT", "/api/brain/instructions", { auto }).then(setIa).catch((e) => app.say(e.message));
+  const restore = (id: string) => api<InsInfo & { instructions: string }>("POST", "/api/brain/instructions", { restore: id })
+    .then((r) => { setIa(r); if (me) app.setMe({ ...me, profile: { ...me.profile, instructions: r.instructions } }); setIns(r.instructions); app.say("Restored this version"); })
+    .catch((e) => app.say(e.message));
   const [sessions, setSessions] = useState<Sess[] | null>(null);
   const [pw, setPw] = useState<null | { cur: string; next: string; again: string }>(null);
   const [del, setDel] = useState<null | string>(null);
@@ -188,6 +197,23 @@ function Account() {
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button className="btn dark" disabled={insBusy || ins.length > 20000} onClick={saveIns}>Save changes</button>
           <button className="btn" disabled={insBusy} onClick={() => setIns(server)}>Discard</button>
+        </div>
+      )}
+      {ia && (
+        <div className="ins-auto">
+          <span className="ins-auto-t"><I.Brain size={14} />{ia.auto ? (ia.lastAuto ? `Synchro updated this from your chats on ${fmtDate(ia.lastAuto)}` : "Synchro keeps this up to date from what it learns in your chats") : "Automatic updates from your chats are off"}</span>
+          <button role="switch" aria-checked={ia.auto} aria-label="Update automatically from my chats" className={`bg-sw ${ia.auto ? "on" : ""}`} onClick={() => void setAuto(!ia.auto)}><i /></button>
+          {ia.history.length > 0 && <button className="btn sm" onClick={() => setHist(!hist)}><I.History size={13} />{hist ? "Hide history" : "History"}</button>}
+        </div>
+      )}
+      {ia && hist && (
+        <div className="ins-hist">
+          {ia.history.map((h, i) => (
+            <div key={h.id} className="ins-h">
+              <div className="ins-h-t"><b>{h.source === "auto" ? "Written by Synchro" : "Written by you"}</b><span className="muted">{fmtDate(h.at)}</span>{i === 0 ? <span className="adm-chip">Current</span> : <button className="btn sm" onClick={() => void restore(h.id)}>Use this version</button>}</div>
+              <p data-notr>{h.text.slice(0, 280)}{h.text.length > 280 ? "…" : ""}</p>
+            </div>
+          ))}
         </div>
       )}
       <H>Account</H>

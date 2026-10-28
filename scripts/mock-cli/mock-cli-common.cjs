@@ -45,22 +45,64 @@ const isTitleAsk = (prompt) => prompt.includes("Đoạn chat cần đặt tên:"
  * Bộ não tổng hợp (app/brain.ts): chưng cất một đoạn chat thành JSON ghi chú, hoặc tổng hợp trung tâm, như model thật.
  * Trả về null khi không phải lời gọi của bộ não.
  */
+// Bộ não (dev:mock): trả JSON đúng định dạng cho từng bước học / chăm sóc, suy ra từ chính dữ liệu được gửi (không bịa thêm).
+const fold = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
+const AREAS = [["Học tập", /ielts|thpt|toan|du hoc|tieng anh|on thi/], ["Lập trình", /lap trinh|python|javascript|cyber|code|bao mat/], ["Sức khỏe", /gym|tap luyen|suc khoe|chay bo/]];
 function mockBrain(prompt) {
   if (prompt.includes("Đoạn chat cần chưng cất:")) {
     const body = prompt.split("Đoạn chat cần chưng cất:")[1] ?? "";
     const users = [...body.matchAll(/\[Người dùng\]\n([^\n]+)/g)].map((m) => m[1].trim()).filter(Boolean);
     const first = (users[0] ?? "Đoạn chat").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim() || "Đoạn chat";
     const all = users.join(" ");
-    const KNOWN = [["IELTS", /ielts/i], ["Ôn thi THPT", /thpt|ôn thi|đề thi/i], ["Toán", /\btoán\b|phương trình|đạo hàm/i], ["Lập trình", /python|javascript|\bcode\b|lập trình/i], ["Gym", /\bgym\b|tập luyện/i], ["Du học", /du học/i], ["Cyber security", /cyber|bảo mật/i]];
-    const topics = KNOWN.filter(([, r]) => r.test(all)).map(([n]) => ({ name: n, desc: `Chủ đề ${n}.` })).slice(0, 3);
-    const NAMES = ["Python", "Hà Lan", "IELTS Writing", "Casio", "Synchro", "JavaScript", "Next.js"];
-    const entities = NAMES.filter((n) => all.toLowerCase().includes(n.toLowerCase())).slice(0, 4);
+    const KNOWN = [["Luyện IELTS", /luyện ielts/i], ["IELTS", /ielts/i], ["Ôn thi THPT", /thpt|ôn thi|đề thi/i], ["Toán", /\btoán\b|phương trình|đạo hàm/i], ["Lập trình", /python|javascript|\bcode\b|lập trình/i], ["Gym", /\bgym\b|tập luyện/i], ["Du học", /du học/i], ["Cyber security", /cyber|bảo mật/i]];
+    // Điều đã biết về chủ đề: câu của người dùng có nhắc chủ đề đó (đúng như nội dung đoạn chat).
+    const topics = KNOWN.filter(([, r]) => r.test(all)).map(([n, r]) => ({ name: n, desc: `Chủ đề ${n}.`, facts: users.filter((u) => r.test(u)).slice(0, 2).map((u) => `Đã bàn: ${u.slice(0, 90)}`) })).slice(0, 3);
+    const NAMES = [["Python", "công cụ"], ["Hà Lan", "nơi chốn"], ["IELTS Writing", "tài liệu"], ["Casio", "công cụ"], ["Synchro", "công cụ"], ["JavaScript", "công cụ"], ["Next.js", "công cụ"]];
+    const entities = NAMES.filter(([n]) => all.toLowerCase().includes(n.toLowerCase())).slice(0, 4).map(([n, type]) => ({ name: n, type, desc: "", facts: users.filter((u) => u.toLowerCase().includes(n.toLowerCase())).slice(0, 1).map((u) => `Được nhắc khi: ${u.slice(0, 80)}`) }));
+    // Hồ sơ: câu tự giới thiệu ("mình là / mình đang / mình thích / mỗi sáng…") thành điều biết về người dùng.
+    const profile = [];
+    for (const u of users) {
+      const m = /(?:mình|tôi|em) (là|đang|thích|muốn|hay|thường) ([^.,!?]{3,80})/iu.exec(u);
+      if (m) profile.push({ cat: /thích|muốn/.test(m[1]) ? "interest" : /hay|thường/.test(m[1]) ? "habit" : /đang/.test(m[1]) ? "work" : "who", text: `Người dùng ${m[1]} ${m[2].trim()}.` });
+      if (/trả lời ngắn|ngắn gọn|không giải thích/i.test(u)) profile.push({ cat: "style", text: "Người dùng muốn được trả lời ngắn gọn, đi thẳng vào ý." });
+    }
     const title = first.split(" ").slice(0, 6).join(" ");
     return JSON.stringify({
       title: title[0].toUpperCase() + title.slice(1), gist: `Người dùng hỏi: ${first.slice(0, 120)}. Trợ lý đã trả lời và gợi ý cách làm.`,
       points: users.slice(0, 3).map((u) => u.slice(0, 100)), decisions: [], tasks: /mai|làm tiếp|chưa xong/i.test(all) ? [`Làm tiếp: ${first.slice(0, 60)}`] : [],
-      topics: topics.length ? topics : [{ name: "Chung", desc: "Những câu hỏi chung." }], entities, importance: users.length > 1 ? 4 : 3,
+      topics: topics.length ? topics : [{ name: "Chung", desc: "Những câu hỏi chung.", facts: [] }], entities, profile: profile.slice(0, 4), importance: users.length > 1 ? 4 : 3,
     });
+  }
+  if (prompt.includes("Trang cần biên soạn:")) {
+    const pages = JSON.parse(prompt.split("Trang cần biên soạn:")[1].trim());
+    return JSON.stringify({ pages: pages.map((p) => {
+      const seen = new Set(), facts = p.facts.filter((f) => { const k = fold(f.t); if (seen.has(k)) return false; seen.add(k); return true; });
+      return { title: p.title, summary: `${p.title}: ${facts.length} điều đã biết${facts[0] ? `, mới nhất là “${facts[facts.length - 1].t.slice(0, 60)}”` : ""}.`, facts };
+    }) });
+  }
+  if (prompt.includes("Các tên trong bộ não:")) {
+    // Trùng: một tên chứa trọn tên kia (vd. "Luyện IELTS" và "IELTS"), cùng loại.
+    const rows = [...prompt.matchAll(/^- (.+?) \((chủ đề|tên riêng)\)/gm)].map((m) => ({ name: m[1], kind: m[2] }));
+    const groups = [];
+    for (const a of rows) for (const b of rows) if (a !== b && a.kind === b.kind && fold(b.name).length >= 3 && fold(a.name) !== fold(b.name) && fold(a.name).split(/\s+/).includes(fold(b.name))) groups.push({ keep: b.name, merge: [a.name] });
+    return JSON.stringify({ groups });
+  }
+  if (prompt.includes("Các chủ đề cần xếp bản đồ:")) {
+    const names = [...prompt.matchAll(/^- ([^:\n]+):/gm)].map((m) => m[1].trim());
+    const maps = AREAS.map(([name, re]) => ({ name, desc: `Các chủ đề về ${name.toLowerCase()}.`, topics: names.filter((n) => re.test(fold(n))) })).filter((m) => m.topics.length >= 2);
+    return JSON.stringify({ maps });
+  }
+  if (prompt.includes("Những điều đã biết về người dùng:")) {
+    const d = JSON.parse(prompt.split("Những điều đã biết về người dùng:")[1].trim());
+    const seen = new Set(), profile = d.profile.filter((f) => { const k = fold(f.t); if (seen.has(k)) return false; seen.add(k); return true; });
+    return JSON.stringify({ portrait: `Bạn là người ${profile.map((f) => f.t.replace(/^Người dùng /, "").replace(/\.$/, "")).slice(0, 3).join(", ") || "đang làm quen Synchro"}.`, profile });
+  }
+  if (prompt.includes("Bản người dùng tự viết:")) {
+    const own = (/Bản người dùng tự viết:\n([\s\S]*?)\n\n(?:Hồ sơ tài khoản|Chân dung|Điều đã biết)/.exec(prompt)?.[1] ?? "").trim();
+    const facts = [...prompt.matchAll(/^- \[(\w+)\] (.+)$/gm)].map((m) => ({ cat: m[1], t: m[2].replace(/^Người dùng /, "Tôi ") }));
+    const sec = (h, cat) => { const xs = facts.filter((f) => f.cat === cat); return xs.length ? `\n\n## ${h}\n${xs.map((f) => `- ${f.t}`).join("\n")}` : ""; };
+    const who = facts.filter((f) => f.cat === "who").map((f) => f.t).join(" ");
+    return `## Về tôi\n${own && own !== "(chưa viết gì)" ? own : "Tôi dùng Synchro hằng ngày."}${who ? `\n${who}` : ""}${sec("Công việc & chuyên môn", "work")}${sec("Thói quen & cách tôi làm việc", "habit")}${sec("Mối quan tâm hiện nay", "interest")}${sec("Cách tôi muốn Synchro trả lời", "style")}`;
   }
   if (prompt.includes("Các đoạn chat gần đây (mới trước):")) {
     const chats = [...prompt.matchAll(/^- \S+ ([^:\n]+):/gm)].map((m) => m[1]).slice(0, 3);

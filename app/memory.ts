@@ -7,7 +7,8 @@ import { quickCall } from "./ai/anymodel";
 import { brainCore } from "./brain";
 
 export type Mem = { id: string; content: string; createdAt: number; source: string };
-export type MemCfg = { gen: boolean; sens: boolean };
+/** gen: học từ đoạn chat; sens: được ghi chi tiết nhạy cảm; autoIns: Synchro tự cập nhật "Hướng dẫn cho Synchro" từ bộ não. */
+export type MemCfg = { gen: boolean; sens: boolean; autoIns: boolean };
 let ready = false;
 const t = () => {
   const d = db();
@@ -19,7 +20,7 @@ const t = () => {
   return d;
 };
 const MAX = 200;
-export const memCfg = (uid: string): MemCfg => { try { return { gen: true, sens: false, ...(JSON.parse(getSetting(`mem:${uid}`, "{}")) as Partial<MemCfg>) }; } catch { return { gen: true, sens: false }; } };
+export const memCfg = (uid: string): MemCfg => { try { return { gen: true, sens: false, autoIns: true, ...(JSON.parse(getSetting(`mem:${uid}`, "{}")) as Partial<MemCfg>) }; } catch { return { gen: true, sens: false, autoIns: true }; } };
 export const setMemCfg = (uid: string, p: Partial<MemCfg>) => setSetting(`mem:${uid}`, JSON.stringify({ ...memCfg(uid), ...p }));
 export const listMemory = (uid: string): Mem[] =>
   (t().prepare("SELECT * FROM user_memory WHERE user_id = ? ORDER BY created_at").all(uid) as { id: string; content: string; created_at: number; source: string }[]).map((r) => ({ id: r.id, content: r.content, createdAt: r.created_at, source: r.source }));

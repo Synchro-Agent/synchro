@@ -12,8 +12,8 @@ export const GET = handle(async (req) => {
 export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  const b = (await req.json().catch(() => ({}))) as { items?: unknown; text?: unknown; cfg?: { gen?: unknown; sens?: unknown } };
-  if (b.cfg) setMemCfg(user.id, { ...(typeof b.cfg.gen === "boolean" ? { gen: b.cfg.gen } : {}), ...(typeof b.cfg.sens === "boolean" ? { sens: b.cfg.sens } : {}) });
+  const b = (await req.json().catch(() => ({}))) as { items?: unknown; text?: unknown; cfg?: { gen?: unknown; sens?: unknown; autoIns?: unknown } };
+  if (b.cfg) setMemCfg(user.id, { ...(typeof b.cfg.gen === "boolean" ? { gen: b.cfg.gen } : {}), ...(typeof b.cfg.sens === "boolean" ? { sens: b.cfg.sens } : {}), ...(typeof b.cfg.autoIns === "boolean" ? { autoIns: b.cfg.autoIns } : {}) });
   // Nhập: mỗi dòng (hoặc mỗi gạch đầu dòng) là một mục.
   const raw = Array.isArray(b.items) ? b.items : typeof b.text === "string" ? b.text.split(/\n+/) : [];
   const items = raw.filter((x): x is string => typeof x === "string").map((x) => x.replace(/^\s*[-*•\d.)]+\s*/, "").trim()).filter(Boolean).slice(0, 200);

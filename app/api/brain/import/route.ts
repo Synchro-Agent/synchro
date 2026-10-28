@@ -1,14 +1,17 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
 import { importChats, pendingCount } from "../../../brain";
+import { memCfg } from "../../../memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Nạp các đoạn chat cũ đang lưu trong trình duyệt vào bộ não (mỗi lần tối đa 50 đoạn; trình duyệt gửi từng đợt).
+// Nạp các đoạn chat cũ đang lưu trong trình duyệt vào bộ não (mỗi lần tối đa 50 đoạn; trình duyệt tự gửi từng đợt ở nền).
+// Đang tắt học: không nhận, trả off để trình duyệt gửi lại khi bật học.
 export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  limit("brainimport:" + user.id, 60, 60 * 60_000);
+  if (!memCfg(user.id).gen) return Response.json({ queued: 0, pending: pendingCount(user.id), off: true });
+  limit("brainimport:" + user.id, 120, 60 * 60_000);
   const b = (await req.json().catch(() => ({}))) as { chats?: unknown };
   const chats = (Array.isArray(b.chats) ? b.chats : []).flatMap((c) => {
     const o = c as { id?: unknown; title?: unknown; msgs?: unknown };

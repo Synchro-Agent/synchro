@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// "Chưng cất ngay": chưng cất mọi đoạn chat đang chờ của người dùng và tổng hợp lại trung tâm, không chờ bộ hẹn giờ.
+// Chạy ngay một vòng học và chăm sóc cho người dùng này (bộ lập lịch vẫn tự làm ở nền; đường này cho kiểm thử và công cụ quản trị).
 export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
