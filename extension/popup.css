@@ -1,14 +1,15 @@
 /* Cửa sổ tiện ích Synchro: cùng bảng màu với Synchro, tự theo giao diện sáng / tối của trình duyệt. */
 :root { --bg: #fcfcfa; --card: #ffffff; --fg: #141413; --fg2: #545452; --mut: #87867f; --line: #ebeae6; --line2: #dcdad4; --soft: #f3f2ee;
-  --acc: #2f7bf6; --act: #d97757; --ok: #16a34a; --err: #c2410c; --btn: #141413; --btn-fg: #faf9f5; color-scheme: light dark; }
+  --acc: #2f7bf6; --act: #d97757; --ok: #16a34a; --err: #c2410c; --btn: #141413; --btn-fg: #faf9f5; --ink: #000; color-scheme: light dark; }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #121212; --card: #1b1b1b; --fg: #faf9f5; --fg2: #b0aea5; --mut: #87867f; --line: #2d2d2d; --line2: #3a3a38; --soft: #1f1f1f;
-    --acc: #6fa0f0; --ok: #4ade80; --err: #fb923c; --btn: #faf9f5; --btn-fg: #141413; }
+    --acc: #6fa0f0; --ok: #4ade80; --err: #fb923c; --btn: #faf9f5; --btn-fg: #141413; --ink: #f5f4ef; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; width: 340px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
 header { display: flex; gap: 11px; align-items: center; padding: 14px 16px 13px; border-bottom: 1px solid var(--line); }
-.mark, .mark img { display: block; width: 30px; height: 30px; flex: none; }
+/* Logo Synchro (vân mực sần) làm mặt nạ, tô bằng màu mực của theme: đen ở giao diện sáng, sáng ở giao diện tối (như trong app). */
+.mark { display: block; width: 50px; height: 28px; flex: none; background: var(--ink); -webkit-mask: url(logo.png) center / contain no-repeat; mask: url(logo.png) center / contain no-repeat; }
 .hd { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .wm { font: 500 19px/1.15 Georgia, "Times New Roman", Times, serif; letter-spacing: -.02em; }
 .wm small { font: 400 12.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0; color: var(--mut); margin-left: 2px; }

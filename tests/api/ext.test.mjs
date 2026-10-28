@@ -193,7 +193,7 @@ ok(manifest.manifest_version === 3 && manifest.permissions?.includes("debugger")
 ok((await file("act.js")) === fs.readFileSync("workspace/browser-act.mjs", "utf8"), "act.js đúng là lõi thao tác của trình duyệt Synchro (workspace/browser-act.mjs)");
 ok((await file("config.js"))?.includes(JSON.stringify(B)), "config.js ghi sẵn địa chỉ Synchro", await file("config.js"));
 ok(!!(await file("background.js")) && !!(await file("popup.html")) && !!(await file("_locales/vi/messages.json")) && !zip?.file("synchro-chrome/build.mjs"), "đủ tệp của tiện ích, không kèm công cụ đóng gói");
-const icons = [...Object.values(manifest.icons ?? {}), ...Object.values(manifest.action?.default_icon ?? {}), ...[16, 24, 32].map((n) => `icons/toolbar-dark-${n}.png`), "logo.svg", "logo-dark.svg"];
+const icons = [...Object.values(manifest.icons ?? {}), ...Object.values(manifest.action?.default_icon ?? {}), ...[16, 24, 32].map((n) => `icons/toolbar-dark-${n}.png`), "logo.png", "logo-mask.js"];
 ok(icons.length >= 12 && icons.every((p) => !!zip?.file(`synchro-chrome/${p}`)), "logo Synchro: biểu tượng tiện ích, biểu tượng thanh công cụ bản sáng và bản tối, logo cho cửa sổ tiện ích", icons.filter((p) => !zip?.file(`synchro-chrome/${p}`)).join(", "));
 ok(manifest.permissions?.includes("offscreen") && /MATCH_MEDIA/.test((await file("background.js")) ?? "") && !!(await file("theme.html")), "đổi logo trên thanh công cụ theo theme sáng / tối của trình duyệt");
 
