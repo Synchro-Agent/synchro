@@ -4545,6 +4545,10 @@ button.bn-box:disabled{cursor:default}
 .bp-dialog p{margin:0;font-size:14px;line-height:1.5;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}
 .bp-dialog .field{margin:0;height:34px}
 .bp-dialog-a{display:flex;justify-content:flex-end;gap:8px}
+/* Khung bên phải đang mở (trình duyệt, artifact, tệp): thanh trên hẹp lại, tên đoạn chat cắt gọn để không đè các nút bên phải. */
+.main.has-art .topbar .left{right:210px}
+.main.has-art .topbar .title-wrap{min-width:0}
+.main.has-art .topbar .title-wrap .sel{max-width:100%;min-width:0}
 /* Khung trình duyệt cạnh đoạn chat */
 .brw-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
 .main.art-full .brw-panel{width:100%;border-left:0}
