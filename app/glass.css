@@ -101,8 +101,7 @@ html body .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0
 .btn.dark:hover{background:var(--btn-dark)}
 .btn.danger{background:rgba(198,66,47,.9);color:#fff;box-shadow:var(--gl-shadow-small)}
 .send{color:#fff}
-html body button.send.send{--gl-fill:rgba(47,123,246,.78);color:#fff}
-[data-theme="dark"] body button.send.send{--gl-fill:rgba(47,123,246,.6)}
+html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
 .dock .send:disabled{opacity:.45}
 
 /* ---- accessibility (Apple: honour reduce transparency / reduce motion) ---- */
@@ -215,8 +214,8 @@ html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
 .chat-scroll .fold>*{transition:padding .28s}
 
 /* "Mới" plus bubble */
-html body .nav-item .plus{position:relative;background:transparent;isolation:isolate;box-shadow:0 0 0 .5px rgba(255,255,255,.25),0 2px 6px rgba(30,80,200,.3)}
-html body .nav-item .plus::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:-1;background:rgba(47,123,246,.72);-webkit-backdrop-filter:blur(2px) saturate(1.7);backdrop-filter:blur(2px) saturate(1.7);box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,.6),inset -1px -1.5px 2px -1px rgba(255,255,255,.35),inset 0 0 8px -2px rgba(255,255,255,.15)}
+html body .nav-item .plus{position:relative;background:transparent;isolation:isolate;box-shadow:0 0 0 .5px rgba(255,255,255,.25),0 2px 6px var(--ink-glow)}
+html body .nav-item .plus::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:-1;background:var(--ink-glass);-webkit-backdrop-filter:blur(2px) saturate(1.7);backdrop-filter:blur(2px) saturate(1.7);box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,.6),inset -1px -1.5px 2px -1px rgba(255,255,255,.35),inset 0 0 8px -2px rgba(255,255,255,.15)}
 html body .nav-item .plus::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;padding:.75px;opacity:.7;background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(255,255,255,.1) 30%,rgba(255,255,255,.05) 60%,rgba(255,255,255,.7));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 html body .nav-item:hover .plus{scale:1.08}
 html body .nav-item:active .plus{scale:.94}
@@ -264,3 +263,18 @@ html body :is(.btn.dark,.btn.danger):active{scale:.97;filter:none}
 .nav .fold>*{min-height:0;overflow:hidden;transition:padding .28s}
 .nav .fold.open>*{overflow:visible}
 .nav .fold:not(.open)>*{padding-block:0}
+
+/* ===== Kính mực: nút mang màu logo (nút gửi, "+" của Mới) =====
+   Giao diện sáng: khối mực đen hơi trong, sâu dần xuống dưới, vệt sáng bóng phía trên, viền phản quang và bóng đổ;
+   giao diện tối: cùng cấu trúc nhưng là kính sáng màu ngà. Lớp khúc xạ (#container-glass) vẫn giữ ở ::before. */
+:root{--ink-g-top:rgba(74,74,82,.6);--ink-g-mid:rgba(18,18,22,.72);--ink-g-bot:rgba(0,0,0,.84);--ink-g-hi:rgba(255,255,255,.78);--ink-g-rim:rgba(255,255,255,.2);--ink-g-sheen:rgba(255,255,255,.46);--ink-g-glow:rgba(255,255,255,.22);--ink-g-shadow:0 8px 20px rgba(0,0,0,.24),0 1px 3px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.35)}
+[data-theme="dark"]{--ink-g-top:rgba(255,255,255,.94);--ink-g-mid:rgba(238,237,232,.84);--ink-g-bot:rgba(205,204,198,.8);--ink-g-hi:rgba(255,255,255,1);--ink-g-rim:rgba(0,0,0,.22);--ink-g-sheen:rgba(255,255,255,.9);--ink-g-glow:rgba(255,255,255,.5);--ink-g-shadow:0 8px 22px rgba(0,0,0,.55),0 1px 3px rgba(0,0,0,.45),0 0 0 .5px rgba(255,255,255,.12)}
+html body button.send.send{box-shadow:var(--ink-g-shadow)!important}
+html body button.send.send::before{background:linear-gradient(180deg,var(--ink-g-top),var(--ink-g-mid) 50%,var(--ink-g-bot))!important;
+  box-shadow:inset 0 1px .5px var(--ink-g-hi),inset 0 0 0 .75px var(--ink-g-rim),inset 0 -1.5px 1.5px -.5px var(--ink-g-rim),inset 0 12px 12px -9px var(--ink-g-sheen),inset 0 -7px 9px -6px var(--ink-g-glow)!important}
+html body button.send.send::after{display:block!important;content:"";position:absolute;inset:1.5px 3px auto;height:46%;padding:0;border-radius:inherit;pointer-events:none;opacity:.5;
+  background:linear-gradient(180deg,var(--ink-g-sheen),rgba(255,255,255,0));-webkit-mask:none;mask:none}
+html body button.send.send:disabled::after{opacity:.3}
+html body .nav-item .plus{box-shadow:0 0 0 .5px var(--ink-g-rim),0 3px 8px var(--ink-glow)}
+html body .nav-item .plus::before{background:linear-gradient(180deg,var(--ink-g-top),var(--ink-g-mid) 50%,var(--ink-g-bot));
+  box-shadow:inset 0 1px .5px var(--ink-g-hi),inset 0 -1px 1px -.5px var(--ink-g-rim),inset 0 7px 7px -5px var(--ink-g-sheen),inset 0 -4px 5px -4px var(--ink-g-glow)}

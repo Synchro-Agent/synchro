@@ -52,7 +52,7 @@ function DesktopArt() {
           </div>
         </div>
       </div>
-      <div className="dl-dock"><i /><i /><span><I.Spark size={26} /></span><i /><i /></div>
+      <div className="dl-dock"><i /><i /><span><I.Spark size={16} /></span><i /><i /></div>
     </div>
   );
 }

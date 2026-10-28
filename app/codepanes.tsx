@@ -146,23 +146,31 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   const lastMove = useRef(0);
   const vpRef = useRef(vp); vpRef.current = vp;
   const send = (o: Record<string, unknown>) => { if (ws.current?.readyState === 1) ws.current.send(JSON.stringify(o)); };
-  const sendSize = () => {
+  const sendSize = (to?: WebSocket) => {
+    const out = (o: Record<string, unknown>) => (to ? to.readyState === 1 && to.send(JSON.stringify(o)) : send(o));
     const v = VIEWPORTS.find((x) => x.k === vpRef.current);
-    if (v?.w) return send({ t: "size", w: v.w, h: v.h, mobile: v.mobile });
+    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile });
     const r = view.current?.getBoundingClientRect();
-    if (r && r.width > 50) send({ t: "size", w: Math.round(r.width), h: Math.round(r.height) });
+    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height) });
   };
+  // Mỗi lần kết nối có một số thứ tự: lần kết nối cũ (vé về muộn, hiệu ứng chạy hai lần) tự hủy, không để lại kết nối
+  // "mồ côi" vẫn đẩy hình khổ mặc định vào khung.
+  const gen = useRef(0);
 
   const connect = useCallback(async () => {
+    const my = ++gen.current;
     ws.current?.close();
+    ws.current = null;
     setSt("connecting");
     setNavd(false);
     try {
       const u = ticket ? await ticket() : (await wsOp<{ url: string }>("ticket", sid!, { kind: "screen" })).url;
+      if (my !== gen.current) return;
       const s = new WebSocket(u);
       ws.current = s;
-      s.onopen = () => { setSt("open"); sendSize(); };
+      s.onopen = () => { if (ws.current !== s) return s.close(); setSt("open"); sendSize(s); };
       s.onmessage = (e) => {
+        if (ws.current !== s) return;
         let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string };
         try { j = JSON.parse(String(e.data)); } catch { return; }
         if (j.t === "frame" && img.current) { img.current.src = `data:image/jpeg;base64,${j.data}`; setBlank(false); }
@@ -193,14 +201,14 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         }
       };
       s.onclose = () => { if (ws.current === s) setSt("closed"); };
-    } catch (e) { say((e as Error).message); setSt("closed"); }
+    } catch (e) { if (my === gen.current) { say((e as Error).message); setSt("closed"); } }
   }, [sid, ticket, say]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chỉ nhận hình khi khung đang hiện (tiết kiệm băng thông); ẩn thì ngắt.
   useEffect(() => {
-    if (!visible) { const s = ws.current; ws.current = null; s?.close(); return; }
+    if (!visible) { gen.current++; const s = ws.current; ws.current = null; s?.close(); return; }
     connect();
-    return () => { const s = ws.current; ws.current = null; s?.close(); };
+    return () => { gen.current++; const s = ws.current; ws.current = null; s?.close(); };
   }, [visible, connect]);
 
   useEffect(() => {
