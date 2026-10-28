@@ -106,4 +106,13 @@ function toolAsk(prompt) {
   return { name: m[1], args };
 }
 
-module.exports = { mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+// "#media": model giả mô tả đúng các tệp nhận được (loại, kích thước ảnh đọc từ chính các byte) — chứng minh ảnh / PDF tới nơi nguyên vẹn.
+function mediaDesc(buf, hint = "") {
+  if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) return `image/png ${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}`;
+  if (buf[0] === 0xff && buf[1] === 0xd8) return "image/jpeg";
+  if (buf.slice(0, 5).toString() === "%PDF-") return `application/pdf ${buf.length}B`;
+  return `${hint || "unknown"} ${buf.length}B`;
+}
+const mediaReply = (items) => `MEDIA: ${items.length ? items.join("; ") : "không có tệp nào"}`;
+
+module.exports = { mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

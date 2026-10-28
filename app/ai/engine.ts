@@ -2,8 +2,16 @@
 // chạy bằng gói subscription của người dùng, engine khóa API làm dự phòng, và EchoEngine để kiểm thử.
 // Mỗi engine nhận một TurnRequest và trả về luồng sự kiện, nên lõi chat không cần biết bên dưới là CLI hay API.
 
+/**
+ * Tệp gửi kèm nguyên dạng (ảnh, PDF) để model tự đọc như khi dùng ứng dụng của hãng: n là số thứ tự trong prompt ("[Ảnh đính kèm 1]"),
+ * path là bản đã ghi vào thư mục làm việc của engine (cho CLI nhận tệp theo đường dẫn), pages là ảnh từng trang của PDF scan.
+ */
+export type Attachment = { n: number; kind: "image" | "pdf"; mime: string; data: string; name: string; path?: string; pages?: { mime: string; path?: string; data: string }[] };
+
 export type TurnRequest = {
   prompt: string;
+  /** Ảnh, PDF của tin nhắn (và của lịch sử khi mở phiên mới), theo đúng thứ tự nhắc tới trong prompt. */
+  attachments?: Attachment[];
   system?: string;
   model?: string;
   /** Mức effort Synchro (low, medium, high, extra, max); mỗi engine đổi sang cách gọi của CLI đó. */

@@ -2,7 +2,7 @@
 // Engine không biết tài khoản là ai: biến môi trường đăng nhập (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME…) do cli_auth.engineEnv()
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng hoặc quá 30 phút.
 import path from "node:path";
-import type { Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage } from "./engine";
+import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage } from "./engine";
 import { type Cli, engineHome, find, makeDir, type Proc, spawnCli, stripAnsi, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 
@@ -15,6 +15,25 @@ function start(cli: Cli, args: string[], req: TurnRequest, stdin: string): Proc 
   const cwd = req.workdir ?? path.join(engineHome(), "work");
   makeDir(cwd);
   return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal });
+}
+
+// ---------------------------------------------------------------- tệp đính kèm
+/** Claude Code (--input-format stream-json): một tin nhắn người dùng gồm khối ảnh / PDF gốc rồi tới chữ, đúng như Messages API. */
+function claudeInput(prompt: string, atts: Attachment[]) {
+  const content = [
+    ...atts.map((a) => a.kind === "image"
+      ? { type: "image", source: { type: "base64", media_type: a.mime, data: a.data } }
+      : { type: "document", title: a.name, source: { type: "base64", media_type: "application/pdf", data: a.data } }),
+    { type: "text", text: prompt },
+  ];
+  return JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n";
+}
+/** Ảnh gửi bằng --image (Codex): ảnh đính kèm và ảnh từng trang của PDF scan. */
+const imagePaths = (atts: Attachment[]) => atts.flatMap((a) => (a.kind === "image" ? [a.path] : (a.pages ?? []).map((p) => p.path))).filter((x): x is string => !!x);
+/** Danh sách tệp đã lưu trong thư mục làm việc, để model tự mở (Antigravity: print mode chỉ nhận chữ). */
+function fileList(atts: Attachment[], how: string) {
+  const lines = atts.filter((a) => a.path).map((a) => `${a.n}. ${a.path} (${a.kind === "image" ? "ảnh" : "PDF"})${a.pages?.length ? `, ảnh từng trang: ${a.pages.map((p) => p.path).join(", ")}` : ""}`);
+  return lines.length ? `\n\n<attachments>\nNgười dùng gửi kèm các tệp dưới đây, đã lưu nguyên dạng trong thư mục làm việc. ${how}\n${lines.join("\n")}\n</attachments>` : "";
 }
 
 async function* objects(p: Proc): AsyncIterable<Json> {
@@ -82,8 +101,11 @@ export class ClaudeCodeEngine implements Engine {
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--resume", req.sessionId);
+    // Có ảnh / PDF: gửi tin nhắn dạng stream-json để kèm khối ảnh, PDF gốc (model đọc trực tiếp, không qua chữ trích ra).
+    const atts = req.attachments ?? [];
+    if (atts.length) args.push("--input-format", "stream-json");
     // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
-    const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "900000" } } : req, req.prompt);
+    const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "900000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
     if (!p) { yield notInstalled("claude"); return; }
     let text = "", done = false;
     const limits = new Map<string, RateWindow>();
@@ -135,8 +157,12 @@ export class CodexEngine implements Engine {
     // Mức đã được subs.resolvePlanModel chọn theo đúng các mức model này hỗ trợ (low…max, ultra).
     const ce = cliEffort(req.effort);
     if (ce) args.push("-c", `model_reasoning_effort="${ce}"`);
+    // Ảnh gửi kèm (cả khi nối tiếp phiên): --image=<tệp>; PDF gốc nằm trong thư mục làm việc, chữ trích ra đã có trong prompt.
+    const atts = req.attachments ?? [];
+    for (const f of imagePaths(atts)) args.push(`--image=${f}`);
     args.push("-");
-    const p = start("codex", args, req, prompt);
+    const pdfs = atts.filter((a) => a.kind === "pdf");
+    const p = start("codex", args, req, prompt + (pdfs.length ? fileList(pdfs, "Ảnh đính kèm đã được gửi kèm tin nhắn; PDF gốc ở đường dẫn dưới đây nếu cần đọc thêm.") : ""));
     if (!p) { yield notInstalled("codex"); return; }
     const parts: string[] = [];
     let done = false, lastErr = "", tools = false;
@@ -209,7 +235,9 @@ export class AntigravityEngine implements Engine {
     }
   }
   private async *turn(req: TurnRequest): AsyncIterable<Event> {
-    const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
+    // Print mode của agy chỉ nhận chữ: tệp gửi kèm đã lưu trong thư mục làm việc, model mở bằng công cụ xem tệp (đọc được ảnh, PDF).
+    const files = fileList(req.attachments ?? [], "Hãy mở từng tệp bằng công cụ xem tệp để thấy đúng nội dung (ảnh, PDF) trước khi trả lời; không đoán nội dung tệp.");
+    const prompt = (req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt) + files;
     const args = ["--output-format", "json"];
     if (req.model) args.push("--model", req.model);
     const ce = cliEffort(req.effort);

@@ -277,8 +277,19 @@ function mockTitle(q) {
   const w = first.replace(/^(cho (tôi|mình|em) hỏi|giúp (tôi|mình|em)|làm ơn|hãy|please|can you|could you)\s+/i, "").split(" ").slice(0, 6).join(" ");
   return w[0].toUpperCase() + w.slice(1);
 }
+// Các tệp trong tin nhắn người dùng gần nhất, theo đúng định dạng từng API (Anthropic, OpenAI Responses, chat/completions).
+function mediaOf(msgs = []) {
+  const m = [...msgs].reverse().find((x) => x.role === "user" && Array.isArray(x.content));
+  const b64 = (u = "") => Buffer.from(String(u).replace(/^data:[^,]*,/, ""), "base64");
+  return (m?.content ?? []).flatMap((b) =>
+    (b.type === "image" || b.type === "document") && b.source?.data ? [`${CLI.mediaDesc(b64(b.source.data), b.source.media_type)} (${b.type})`]
+    : b.type === "input_image" ? [`${CLI.mediaDesc(b64(b.image_url))} (input_image)`]
+    : b.type === "input_file" ? [`${CLI.mediaDesc(b64(b.file_data))} (input_file)`]
+    : b.type === "image_url" ? [`${CLI.mediaDesc(b64(b.image_url?.url))} (image_url)`] : []);
+}
 function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
+  if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
   const brain = CLI.mockBrain(q);
   if (brain) return { text: brain, q };
@@ -332,6 +343,7 @@ function memoryReply(sys, q) {
   return { text: JSON.stringify(out) };
 }
 const capsFor = (sys, q, msgs, tools, none) => {
+  if (q.includes("#media")) return null; // lệnh thử: chỉ mô tả tệp nhận được (xem reply)
   // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
   if (!none && q.includes("#tool=") && !/#rev\s*\d+/.test(q)) { const w = wantTool(q, tools); if (w) return { tool: w }; }
   const mem = memoryReply(sys, q);

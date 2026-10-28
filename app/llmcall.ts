@@ -15,6 +15,10 @@ export const toAnthropic = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).
 export const toOpenAI = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).map((b) =>
   b.type === "image" ? { type: "image_url", image_url: { url: `data:${b.media_type};base64,${b.data}` } }
   : b.type === "document" ? { type: "text", text: `<file name="${b.name}">\n${b.fallbackText ?? "(PDF scan: xem các ảnh trang đính kèm)"}\n</file>` } : b);
+// API Responses của OpenAI đọc thẳng PDF gốc (chữ và hình từng trang, kể cả PDF scan): gửi tệp nguyên dạng, không đổi thành chữ.
+export const toResponses = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).map((b) =>
+  b.type === "image" ? { type: "image_url", image_url: { url: `data:${b.media_type};base64,${b.data}` } }
+  : b.type === "document" ? { type: "input_file", filename: b.name ?? "file.pdf", file_data: `data:${b.media_type ?? "application/pdf"};base64,${b.data}` } : b);
 export const withPages = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).flatMap((b) => b.type === "document" && b.fallbackImages ? [b, ...b.fallbackImages.map((d) => ({ type: "image", media_type: "image/jpeg", data: d }))] : [b]);
 
 // Model có suy luận (Claude, GPT, Gemini) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
@@ -126,7 +130,7 @@ export function effortParams(t: Pick<Target, "kind">, e?: Effort): Record<string
 
 // ---- OpenAI Responses API ----
 type Item = Record<string, unknown>;
-type Part = { type: string; text?: string; image_url?: { url: string } };
+type Part = { type: string; text?: string; image_url?: { url: string }; filename?: string; file_data?: string };
 // Tin nhắn dạng chat (role + content) → đầu vào của Responses. Lượt trả lời trước của model ({ items }) và kết quả công cụ được giữ nguyên.
 export function respInput(msgs: unknown[]): Item[] {
   return msgs.flatMap((m) => {
@@ -135,7 +139,7 @@ export function respInput(msgs: unknown[]): Item[] {
     if (!x.role) return [x as Item];
     if (!Array.isArray(x.content)) return [{ role: x.role, content: String(x.content ?? "") }];
     const out = x.role === "assistant" ? "output_text" : "input_text";
-    return [{ role: x.role, content: (x.content as Part[]).map((p) => (p.type === "image_url" ? { type: "input_image", image_url: p.image_url?.url } : { type: out, text: p.text ?? "" })) }];
+    return [{ role: x.role, content: (x.content as Part[]).map((p) => (p.type === "image_url" ? { type: "input_image", image_url: p.image_url?.url } : p.type === "input_file" ? { type: "input_file", filename: p.filename, file_data: p.file_data } : { type: out, text: p.text ?? "" })) }];
   });
 }
 type RespOut = { type: string; content?: { type: string; text?: string }[]; call_id?: string; name?: string; arguments?: string };
@@ -242,7 +246,7 @@ export async function chatOnce(t: Target, system: string, messages: { role: stri
     return (j.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("");
   }
   if (t.kind === "openai") {
-    const j = await responsesCall(t, { max_output_tokens: outCap(t, maxTokens), ...ef, ...(system ? { instructions: system } : {}), input: respInput(messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))) }, signal, onDelta);
+    const j = await responsesCall(t, { max_output_tokens: outCap(t, maxTokens), ...ef, ...(system ? { instructions: system } : {}), input: respInput(messages.map((m) => ({ ...m, content: toResponses(m.content) }))) }, signal, onDelta);
     return respParse(j).text;
   }
   const j = await openaiCall(t, { max_tokens: outCap(t, maxTokens), ...ef, messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }))] }, signal, onDelta);

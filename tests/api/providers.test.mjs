@@ -173,6 +173,33 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   ok((await member("DELETE", "/api/engines/agy/login/start")).j?.ok, "hủy lượt đăng nhập đang chờ");
 }
 
+console.log("5b. Ảnh và PDF gửi kèm nguyên dạng tới model (gói subscription và khóa API)");
+{
+  // Ảnh PNG 2×3 thật và một PDF nhỏ: model giả đọc kích thước ảnh từ chính các byte nhận được, nên sai một byte là lộ.
+  const { deflateSync, crc32 } = await import("node:zlib");
+  const chunk = (t, d) => { const len = Buffer.alloc(4); len.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc32(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(2, 0); ihdr.writeUInt32BE(3, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const rows = Buffer.alloc(3 * 7, 200); for (let y = 0; y < 3; y++) rows[y * 7] = 0;
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]).toString("base64");
+  const pdfBuf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"), pdf = pdfBuf.toString("base64"), P = `application/pdf ${pdfBuf.length}B`;
+  const msg = (text) => [{ role: "user", content: [{ type: "text", text }, { type: "image", media_type: "image/png", data: png }, { type: "document", media_type: "application/pdf", data: pdf, name: "đề bài.pdf", fallbackText: "Câu 1: chọn đáp án đúng" }] }];
+  const conv = `pv-media-${Date.now()}`;
+  const cl = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: msg("#media xem đề bài"), conv, skills: true });
+  ok(cl.j?.text === `MEDIA: image/png 2x3 (image); ${P} (document)`, "gói Claude: ảnh và PDF gốc tới model (khối ảnh / PDF qua stream-json)", JSON.stringify(cl.j).slice(0, 300));
+  const cl2 = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [...msg("#media xem đề bài"), { role: "assistant", content: cl.j.text }, ...msg("#media thêm ảnh này")], conv, skills: true });
+  ok(cl2.j?.text === `MEDIA: image/png 2x3 (image); ${P} (document)`, "gói Claude, lượt nối tiếp phiên: ảnh mới vẫn tới model", JSON.stringify(cl2.j).slice(0, 300));
+  const cx = await member("POST", "/api/llm", { model: "sub-codex/gpt-6.1-sol", messages: msg("#media xem đề bài"), skills: true });
+  ok(cx.j?.text === "MEDIA: image/png 2x3 (--image)", "gói ChatGPT (Codex): ảnh gửi bằng --image, PDF kèm chữ trích ra và tệp gốc", JSON.stringify(cx.j).slice(0, 300));
+  const ag = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: msg("#media xem đề bài"), skills: true });
+  ok(ag.j?.text === `MEDIA: image/png 2x3 (view_file); ${P} (view_file)`, "gói Gemini (Antigravity): model mở được ảnh và PDF trong thư mục làm việc", JSON.stringify(ag.j).slice(0, 300));
+  const an = await admin("POST", "/api/llm", { model: "anthropic/claude-haiku-5-5", messages: msg("#media xem đề bài"), skills: true });
+  ok(an.j?.text === `MEDIA: image/png 2x3 (image); ${P} (document)`, "khóa API Anthropic: ảnh và PDF gốc", JSON.stringify(an.j).slice(0, 300));
+  const oa = await admin("POST", "/api/llm", { model: "openai/gpt-6.1-sol", messages: msg("#media xem đề bài"), skills: true });
+  ok(oa.j?.text === `MEDIA: image/png 2x3 (input_image); ${P} (input_file)`, "khóa API OpenAI (Responses): ảnh và PDF gốc (input_file), không chỉ chữ trích ra", JSON.stringify(oa.j).slice(0, 300));
+  const gg = await admin("POST", "/api/llm", { model: "google/gemini-3.8-flash", messages: msg("#media xem đề bài"), skills: true });
+  ok(gg.j?.text === "MEDIA: image/png 2x3 (image_url)", "khóa API Gemini: ảnh tới model", JSON.stringify(gg.j).slice(0, 300));
+}
+
 console.log("6. Hết hạn mức gói → hỏi trước khi dùng khóa API; số dư API đã nạp");
 {
   const q = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "[mock:quota] chào" }], skills: true });

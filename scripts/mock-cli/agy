@@ -80,7 +80,12 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
         note = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
       }
     }
-    const text = C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : ""));
+    // Như agy thật ở print mode: không có cờ gửi tệp; model mở tệp trong thư mục làm việc bằng công cụ xem tệp (view_file).
+    // Giả lập: đọc đúng các đường dẫn trong khối <attachments> (chỉ nhận tệp nằm trong thư mục làm việc).
+    const att = /<attachments>([\s\S]*?)<\/attachments>/.exec(prompt)?.[1] ?? "";
+    const files = [...att.matchAll(/^\d+\. (\S+) \(/gm)].map((m) => m[1]);
+    const seen = files.map((f) => !path.resolve(f).startsWith(process.cwd() + path.sep) ? `ngoài thư mục làm việc: ${f}` : !fs.existsSync(f) ? `không có tệp: ${f}` : `${C.mediaDesc(fs.readFileSync(f))} (view_file)`);
+    const text = /#media/.test(prompt) ? C.mediaReply(seen) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : ""));
     await C.sleep(200);
     return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: text, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length, thinking_tokens: 12, cache_read_tokens: 0, total_tokens: prompt.length + text.length + 12 } }));
   }

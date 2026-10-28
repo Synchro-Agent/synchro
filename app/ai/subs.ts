@@ -3,6 +3,7 @@
 // Khóa model: "sub-claude/sonnet", "sub-codex/gpt-6.1-sol", "sub-agy/gemini-3-pro" ("default" = model mặc định của gói).
 // Bộ chọn model gộp theo hãng (Claude, ChatGPT, Gemini): đã đăng nhập gói thì nhóm hiện model của gói; gói hết hạn mức thì
 // Synchro KHÔNG tự chuyển sang khóa API mà hỏi người dùng. Đồng ý thì nhóm đó hiện model của khóa API cho tới khi gói hồi lại.
+import crypto from "node:crypto";
 import path from "node:path";
 import { db, type UserRow } from "../authstore";
 import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../catalog";
@@ -10,8 +11,8 @@ import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
 import { engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
-import { CLIS, type Cli, engineHome, find, makeDir, spawnCli, stripAnsi } from "./cli_runtime";
-import type { RateWindow, TurnRequest } from "./engine";
+import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
+import type { Attachment, RateWindow, TurnRequest } from "./engine";
 import { redact } from "./errors";
 
 export const SUB_PREFIX = "sub-";
@@ -462,14 +463,61 @@ export function removeUserSubs(uid: string) {
 }
 
 type Msg = { role?: string; content?: unknown };
-/** Chữ của một tin nhắn (khối văn bản, chữ đọc được từ tài liệu; ảnh chưa gửi được qua CLI). */
-function textOf(c: unknown): string {
+type Blk = { type?: string; text?: string; name?: string; media_type?: string; data?: string; fallbackText?: string; fallbackImages?: string[] };
+const IMG_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+/** Gom ảnh / PDF gửi kèm nguyên dạng: atts nhận tệp theo thứ tự, keep lọc khối được gửi (tệp cũ trong lịch sử có giới hạn), nativePdf: CLI đọc thẳng PDF. */
+type Collect = { atts: Attachment[]; keep?: (b: Blk) => boolean; nativePdf?: boolean };
+/**
+ * Chữ của một tin nhắn: khối văn bản, chữ đọc được từ tài liệu; ảnh và PDF được đánh số ("[Ảnh đính kèm 1]") và gửi kèm nguyên dạng
+ * cho CLI (xem subTurn). Không gom (lịch sử cho engine khóa API, hoặc tệp cũ vượt giới hạn) thì chỉ còn dòng ghi chú.
+ */
+function textOf(c: unknown, col?: Collect): string {
   if (typeof c === "string") return c;
   if (!Array.isArray(c)) return "";
-  return (c as { type?: string; text?: string; name?: string; fallbackText?: string }[]).map((b) =>
-    b.type === "text" ? b.text ?? ""
-    : b.type === "document" ? `<file name="${b.name ?? "tệp"}">\n${b.fallbackText ?? ""}\n</file>`
-    : b.type === "image" ? "[Ảnh đính kèm: gói subscription qua Synchro chưa đọc được ảnh]" : "").filter(Boolean).join("\n\n");
+  return (c as Blk[]).map((b) => {
+    if (b.type === "text") return b.text ?? "";
+    const take = !!(col && b.data && (col.keep?.(b) ?? true));
+    if (b.type === "image") {
+      if (!take) return "[Ảnh đính kèm ở lượt trước]";
+      const n = col!.atts.length + 1, mime = b.media_type ?? "image/png";
+      col!.atts.push({ n, kind: "image", mime, data: b.data!, name: `anh-${n}.${IMG_EXT[mime] ?? "png"}` });
+      return `[Ảnh đính kèm ${n}]`;
+    }
+    if (b.type === "document") {
+      const name = b.name ?? "tệp.pdf", file = `<file name="${name}">\n${b.fallbackText ?? ""}\n</file>`;
+      if (!take) return file;
+      const n = col!.atts.length + 1;
+      col!.atts.push({ n, kind: "pdf", mime: b.media_type ?? "application/pdf", data: b.data!, name: `${n}-${name.replace(/[^\p{L}\p{N}._-]+/gu, "_").slice(-80)}`,
+        pages: (b.fallbackImages ?? []).map((d) => ({ mime: "image/jpeg", data: d })) });
+      return col!.nativePdf ? `[Tệp PDF đính kèm ${n}: ${name}]` : `[Tệp PDF đính kèm ${n}: ${name}]\n${file}`;
+    }
+    return "";
+  }).filter(Boolean).join("\n\n");
+}
+/** Ảnh / PDF trong lịch sử gửi lại khi mở phiên mới: tối đa 8 tệp gần nhất (phiên nối tiếp đã có sẵn tệp cũ). */
+function recentMedia(msgs: Msg[], max = 8): Set<Blk> {
+  const out = new Set<Blk>();
+  for (let i = msgs.length - 1; i >= 0 && out.size < max; i--) {
+    if (msgs[i].role !== "user" || !Array.isArray(msgs[i].content)) continue;
+    const bs = (msgs[i].content as Blk[]).filter((b) => (b.type === "image" || b.type === "document") && b.data);
+    for (let j = bs.length - 1; j >= 0 && out.size < max; j--) out.add(bs[j]);
+  }
+  return out;
+}
+/**
+ * Ghi tệp đính kèm vào thư mục làm việc của engine (att/<ngày>/<lượt>/) cho CLI nhận tệp theo đường dẫn (Codex --image, Antigravity mở bằng
+ * công cụ xem tệp); thư mục quá 7 ngày được dọn.
+ */
+function saveAttachments(work: string, atts: Attachment[]) {
+  const root = path.join(work, "att"), day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const dir = path.join(root, day, crypto.randomBytes(6).toString("hex"));
+  for (const a of atts) {
+    a.path = path.join(dir, a.name);
+    writeEngineFile(a.path, Buffer.from(a.data, "base64"));
+    a.pages?.forEach((p, i) => { p.path = path.join(dir, `${a.name.replace(/\.pdf$/i, "")}-trang-${i + 1}.jpg`); writeEngineFile(p.path, Buffer.from(p.data, "base64")); });
+  }
+  const old = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10).replace(/-/g, "");
+  for (const d of listEngineDir(root)) if (/^\d{8}$/.test(d) && d < old) { try { removeDir(path.join(root, d)); } catch {} }
 }
 
 export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string }; web?: boolean };
@@ -489,13 +537,21 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const prev = conv ? (d.prepare("SELECT session_id, turns FROM engine_sessions WHERE user_id = ? AND conv = ? AND cli = ?").get(o.user.id, conv, cli) as { session_id: string; turns: number } | undefined) : undefined;
   // Nối tiếp phiên của CLI khi lịch sử khớp đúng lượt trước (không sửa, không tạo lại câu trả lời); ngược lại mở phiên mới kèm lịch sử.
   const resume = prev && prev.turns === msgs.length - 1 ? prev.session_id : undefined;
-  const history = resume ? "" : msgs.slice(0, -1).map((m) => `[${m.role === "assistant" ? "assistant" : "user"}]\n${textOf(m.content)}`).filter((x) => x.trim()).join("\n\n");
-  const prompt = (history ? `<conversation_history>\n${history}\n</conversation_history>\n\n` : "") + textOf(last.content);
+  // Ảnh, PDF gửi kèm nguyên dạng như khi dùng ứng dụng của hãng (không đổi thành chữ): Claude Code nhận khối ảnh / PDF qua stream-json,
+  // Codex nhận ảnh bằng --image, Antigravity mở tệp trong thư mục làm việc bằng công cụ xem tệp của nó.
+  const col: Collect = { atts: [], nativePdf: cli === "claude" };
+  const old = resume ? null : recentMedia(msgs.slice(0, -1));
+  const history = resume ? "" : msgs.slice(0, -1).map((m) => `[${m.role === "assistant" ? "assistant" : "user"}]\n${textOf(m.content, m.role === "user" ? { ...col, keep: (b) => old!.has(b) } : undefined)}`).filter((x) => x.trim()).join("\n\n");
+  const prompt = (history ? `<conversation_history>\n${history}\n</conversation_history>\n\n` : "") + textOf(last.content, col);
   const run = resolvePlanModel(cli, o.user.id, splitKey(o.model).id, o.effort);
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);
+  if (col.atts.length && cli !== "claude") {
+    try { saveAttachments(work, col.atts); }
+    catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
+  }
   const req: TurnRequest = {
-    prompt, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal, mcp: o.mcp, web: o.web,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal, mcp: o.mcp, web: o.web,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).

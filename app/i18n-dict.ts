@@ -1766,3 +1766,7 @@ Object.assign(VI2EN, {
   "ElevenLabs không tìm thấy mục này.": "ElevenLabs couldn't find this item.", "Kết nối tới model bị ngắt giữa chừng.": "The connection to the model dropped midway.",
 });
 RULES_EN.push([/^Khóa ElevenLabs chưa được cấp quyền (.*)\. Vào elevenlabs\.io → API keys, sửa khóa và bật quyền này \(hoặc dùng khóa không giới hạn\)\.$/, (m) => `The ElevenLabs key lacks ${m[1] === "cho tính năng này" ? "the permission for this feature" : `the ${m[1]} permission`}. Go to elevenlabs.io → API keys, edit the key and turn this permission on (or use an unrestricted key).`]);
+RULES_EN.push(
+  [/^Không chuyển được tệp đính kèm cho (.+?): (.*)$/, (m) => `Couldn't pass the attachments to ${m[1]}: ${m[2]}`],
+  [/^Không ghi được tệp đính kèm cho engine: (.*)$/, (m) => `Couldn't write the attachments for the engine: ${m[1]}`],
+);

@@ -53,6 +53,22 @@ export function makeDir(dir: string) {
   if (!engineUser()) { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); fs.chmodSync(dir, 0o700); return; }
   if (!fs.existsSync(dir)) asEngine("mkdir", ["-p", "-m", "700", dir]);
 }
+/** Ghi một tệp (quyền 0600) trong nhà engine bằng user của engine, tạo thư mục cha nếu chưa có (tệp đính kèm cho CLI đọc). */
+export function writeEngineFile(file: string, data: Buffer) {
+  const home = path.resolve(engineHome());
+  if (!path.resolve(file).startsWith(home + path.sep)) throw new Error("Đường dẫn nằm ngoài thư mục engine.");
+  const u = engineUser();
+  if (!u) { fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 }); fs.writeFileSync(file, data, { mode: 0o600 }); return; }
+  const r = spawnSync("sudo", ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "sh", "-c", 'umask 077 && mkdir -p "$(dirname "$1")" && cat > "$1"', "sh", file], { input: data });
+  if (r.status !== 0) throw new Error(`Không ghi được tệp đính kèm cho engine: ${String(r.stderr ?? r.error?.message ?? "").trim().slice(0, 200)}`);
+}
+/** Tên các mục trong một thư mục của nhà engine (rỗng nếu chưa có). */
+export function listEngineDir(dir: string): string[] {
+  const u = engineUser();
+  if (!u) { try { return fs.readdirSync(dir); } catch { return []; } }
+  const r = spawnSync("sudo", ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "ls", "-1", dir], { encoding: "utf8" });
+  return r.status === 0 ? r.stdout.split("\n").filter(Boolean) : [];
+}
 /** Xóa hẳn một thư mục trong nhà engine (chỉ nhận đường dẫn nằm trong nhà engine). */
 export function removeDir(dir: string) {
   const home = path.resolve(engineHome());

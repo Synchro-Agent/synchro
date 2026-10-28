@@ -22,7 +22,7 @@ import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, type Lang } from "./coderun";
 import { saveOutputs, type OutFile } from "./outputs";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
-import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, withPages } from "./llmcall";
+import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, subCli, subTurn } from "./ai/subs";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
@@ -793,7 +793,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)
         : t.kind === "openai" ? responsesAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort, web)
         : openaiAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort);
-      const m0: unknown[] = t.kind === "mock" ? [...msgs] : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
+      const m0: unknown[] = t.kind === "mock" ? [...msgs] : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) }))
+        : t.kind === "openai" ? msgs.map((m) => ({ ...m, content: toResponses(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
       // Kiểm tra bản sửa trên lịch sử gốc (bản đã rút gọn không còn nội dung artifact cũ).
       const raw = (Array.isArray(messages) ? messages : []) as { role: string; content: unknown }[];
       const out = await healPatch(ad, m0, raw, await toolLoop(ad, m0, x, [], c.user.id, model), base);
