@@ -113,13 +113,15 @@ export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
 // sw: đổi model khi tin nhắn bị gắn cờ · art: Artifacts · ai: artifact gọi được model · inl: biểu đồ / sơ đồ ngay trong chat
 // code: chạy code và tạo tệp (Skills cần bật) · net: khi chạy code được tải gói từ các kho thư viện bên dưới
 // crit: hội đồng phản biện tự đọc lại code, trang web, ứng dụng vừa viết.
-// browse: Synchro tự thao tác trên trình duyệt của mình (mở trang, bấm, gõ, điền biểu mẫu) khi người dùng nhờ, với mọi model.
-export type Caps = { sw: boolean; art: boolean; ai: boolean; inl: boolean; code: boolean; net: boolean; crit: boolean; browse: boolean };
-export const DEFAULT_CAPS: Caps = { sw: true, art: true, ai: false, inl: true, code: true, net: false, crit: true, browse: true };
+// browse: Synchro tự thao tác trên trình duyệt (mở trang, bấm, gõ, điền biểu mẫu) khi người dùng nhờ, với mọi model.
+// mine: mặc định làm trên Chrome / Edge / Brave của chính người dùng (qua tiện ích Synchro) thay cho trình duyệt của Synchro.
+export type Caps = { sw: boolean; art: boolean; ai: boolean; inl: boolean; code: boolean; net: boolean; crit: boolean; browse: boolean; mine: boolean };
+export const DEFAULT_CAPS: Caps = { sw: true, art: true, ai: false, inl: true, code: true, net: false, crit: true, browse: true, mine: false };
 export const CAP_KEYS = Object.keys(DEFAULT_CAPS) as (keyof Caps)[];
 // Lý do một khả năng đang bị khóa: quản trị viên không cho (Cloud sandbox) hoặc máy chủ chưa có nơi chạy code.
 export type CapLock = "admin" | "server";
-export type CapsState = { caps: Caps; locks: Partial<Record<keyof Caps, CapLock>>; runner: "e2b" | "workspace" | "local" | null };
+// paired: đã ghép nối ít nhất một trình duyệt của người dùng (tiện ích Synchro).
+export type CapsState = { caps: Caps; locks: Partial<Record<keyof Caps, CapLock>>; runner: "e2b" | "workspace" | "local" | null; paired?: boolean };
 
 // Tên miền kho thư viện được phép khi bật "Cho phép truy cập mạng" (mọi tên miền con cũng được phép).
 export const PKG_DOMAINS: { group: string; hosts: string[] }[] = [

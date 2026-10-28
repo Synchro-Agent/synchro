@@ -4,6 +4,8 @@
 // thao tác tệp dùng đúng workspace/fsop.js của container. Trình duyệt: Chrome / Chromium thật trên máy này (mỗi người dùng một hồ sơ
 // riêng trong data-mock/ws/<id>/.browser), điều khiển bằng đúng lõi workspace/browser-core.mjs như trên VPS, kèm màn hình trực tiếp
 // qua WebSocket /ws-agent/screen. Máy không có Chrome thì trình duyệt trả trang giả lập như trước.
+// Chrome của chính người dùng: cầu nối tới tiện ích Synchro (/ext và WebSocket /ws-agent/ext) giống hệt dịch vụ thật (workspace/ext-relay.mjs);
+// tiện ích giả lập là scripts/mock-extension.mjs.
 import http from "node:http";
 import net from "node:net";
 import fs from "node:fs";
@@ -11,6 +13,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { WebSocketServer } from "ws";
 import { BrowserError, createBrowser, devJson, verifyTicket } from "../workspace/browser-core.mjs";
+import { createRelay } from "../workspace/ext-relay.mjs";
 
 // Chrome thật: CHROME_PATH, bản cài trên macOS, hoặc lệnh trong PATH (máy Linux / CI).
 export function findChrome() {
@@ -61,6 +64,7 @@ export function startMockWs(port, root, secret) {
     throw new BrowserError(500, "Không bật được Chrome trên máy này.");
   };
   const core = createBrowser({ up, downloads: (u) => path.join(dirOf(u), "Downloads"), allowFile: true });
+  const relay = createRelay();
   const killAll = () => { for (const { proc } of procs.values()) proc.kill("SIGKILL"); };
   process.on("exit", killAll);
   const exec = (u, b) => new Promise((ok) => {
@@ -100,16 +104,19 @@ export function startMockWs(port, root, secret) {
         case "/status": return json(res, 200, { running: true, idleMin: 0 });
         case "/exec": return json(res, 200, await exec(b.u, b));
         case "/browser": return json(res, 200, CHROME ? await core.tool(String(b.u), b) : fake(b.u, b));
+        case "/ext": dirOf(b.u); return json(res, 200, await relay.http(b));
         case "/stop": case "/destroy": return json(res, 200, { ok: true });
       }
       return json(res, 404, { error: "Không có đường dẫn này" });
     } catch (e) { return json(res, e.code === 400 ? 400 : e instanceof BrowserError ? e.status : 500, { error: e.message }); }
   });
-  // Màn hình trình duyệt trực tiếp (vé ký HMAC như dịch vụ workspace thật); terminal chưa có ở bản giả lập.
+  // Màn hình trình duyệt trực tiếp và tiện ích Chrome (vé ký HMAC như dịch vụ workspace thật); terminal chưa có ở bản giả lập.
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  const wssExt = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 * 1024 });
   server.on("upgrade", (req, sock, head) => {
     const url = new URL(req.url ?? "/", "http://x");
     const t = verifyTicket(secret, url.searchParams.get("t"), (u) => /^[\w-]{1,80}$/.test(String(u)), (d) => /^[\w-]{1,64}$/.test(String(d)));
+    if (t?.k === "ext" && url.pathname.replace(/^\/ws-agent/, "") === "/ext") return wssExt.handleUpgrade(req, sock, head, (ws) => relay.attach(ws, String(t.u), String(t.d)));
     if (!CHROME || !t || t.k !== "screen" || url.pathname.replace(/^\/ws-agent/, "") !== "/screen") { sock.write("HTTP/1.1 401 Unauthorized\r\n\r\n"); return sock.destroy(); }
     wss.handleUpgrade(req, sock, head, (ws) => core.screen(ws, String(t.u)).catch((e) => { try { ws.send(JSON.stringify({ t: "error", error: e.message })); } catch {} ws.close(1011, "error"); }));
   });

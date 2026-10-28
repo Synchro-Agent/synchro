@@ -60,12 +60,13 @@ export function cleanPath(p: unknown, d?: string) {
   return parts.join("/") || ".";
 }
 
-// Vé WebSocket ngắn hạn cho trình duyệt (terminal / màn hình trình duyệt), ký bằng khóa chung với dịch vụ workspace.
-export function ticket(req: Request, u: string, d: string, k: "term" | "log" | "screen") {
+// Vé WebSocket ngắn hạn cho trình duyệt (terminal / màn hình trình duyệt / tiện ích Synchro trong Chrome của người dùng: d là id thiết bị),
+// ký bằng khóa chung với dịch vụ workspace.
+export function ticket(req: Request, u: string, d: string, k: "term" | "log" | "screen" | "ext") {
   const body = Buffer.from(JSON.stringify({ u, d, k, exp: Date.now() + 60_000 })).toString("base64url");
   const sig = crypto.createHmac("sha256", SECRET).update(body).digest("base64url");
   const base = (process.env.WS_PUBLIC_URL ?? appUrl(req).replace(/^http/, "ws") + "/ws-agent").replace(/\/$/, "");
-  return `${base}/${k === "screen" ? "screen" : "term"}?t=${body}.${sig}`;
+  return `${base}/${k === "screen" || k === "ext" ? k : "term"}?t=${body}.${sig}`;
 }
 
 export const shq = (x: string) => `'${x.replace(/'/g, "'\\''")}'`;

@@ -2,6 +2,7 @@ import { clearSessionCookie, deleteOwnAccount, handle, requireUser, sameOrigin, 
 import { removeUserSkillFiles } from "../../../skillstore";
 import { removeUserConnectors } from "../../../connectors";
 import { removeUserCaps } from "../../../caps";
+import { removeUserDevices } from "../../../browserext";
 import { removeUserOutputs } from "../../../outputs";
 import { removeUserArtifacts } from "../../../artifactstore";
 import { removeUserApps } from "../../../appstore";
@@ -22,6 +23,7 @@ export const DELETE = handle(async (req) => {
   await removeUserSkillFiles(user.id);
   removeUserConnectors(user.id);
   removeUserCaps(user.id);
+  await removeUserDevices(user.id);
   removeUserOutputs(user.id);
   removeUserArtifacts(user.id);
   removeUserApps(user.id);

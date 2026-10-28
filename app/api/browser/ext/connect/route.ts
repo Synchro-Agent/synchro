@@ -1,0 +1,16 @@
+import { AuthError, handle } from "../../../../authstore";
+import { deviceOf, extAllowed, touchDevice } from "../../../../browserext";
+import { ticket } from "../../../../workspace";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// Tiện ích Synchro (Authorization: Bearer <khóa của trình duyệt>) xin vé WebSocket một phút để nối tới /ws-agent/ext.
+// Trình duyệt đã bị gỡ hoặc tài khoản bị khóa: 401, tiện ích quay về màn hình ghép nối.
+export const POST = handle(async (req) => {
+  const { row, user } = deviceOf(req);
+  if (!extAllowed()) throw new AuthError("Máy chủ Synchro này chưa bật dịch vụ workspace.", 501);
+  const b = (await req.json().catch(() => ({}))) as { name?: string; browser?: string };
+  touchDevice(row.id, { name: b.name, browser: b.browser });
+  return Response.json({ url: ticket(req, user.id, row.id, "ext"), device: { id: row.id, name: row.name }, user: { name: user.full_name || user.name, email: user.email } });
+});

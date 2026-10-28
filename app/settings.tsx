@@ -12,6 +12,7 @@ import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { OCCUPATIONS, type AuthUser } from "./auth";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
+import { ExtSettings } from "./browserhub";
 import { UsageSettings } from "./usageui";
 import { BrainSettings } from "./brainui";
 import { SkillHub } from "./pluginsui";
@@ -342,8 +343,15 @@ function Capabilities({ go }: { go: (t: string) => void }) {
       <Row t="Inline visualizations" d="Allow Synchro to create interactive visuals, charts, and diagrams within the conversation.">{t("inl")}</Row>
       <Row t="Critic council" d={<>After Synchro writes code, a web page, or an app, one or two models from other providers review it in the background and point out bugs by line, with a fix you can apply.{!v.art && <span className="cap-note">Turn on Artifacts first.</span>}</>}>{t("crit", !v.art)}</Row>
       <H>Browser</H>
-      <Row t="Browser control" d={<>Synchro can open websites in its own browser and click, type, fill in forms, and finish tasks on the web for you, with any model. You watch it live next to the chat and can take over or stop it at any time. Sign-ins you make there are kept for next time.
-        {locks.browse === "admin" ? <span className="cap-note warn">Your administrator has not enabled Synchro Code and Cloud sandbox for your account.</span> : locks.browse === "server" ? <span className="cap-note warn">This server has no workspace service yet, so there is no browser.</span> : null}</>} top>{t("browse")}</Row>
+      <Row t="Browser control" d={<>Synchro can open websites and click, type, fill in forms, and finish tasks on the web for you, with any model: in its own browser, which you watch live next to the chat, or in your own Chrome through the Synchro extension. You can take over or stop it at any time. Sign-ins are kept for next time.
+        {locks.browse === "admin" ? <span className="cap-note warn">Your administrator has not enabled Synchro Code and Cloud sandbox for your account, so Synchro&apos;s own browser is off. Your own Chrome still works through the extension.</span> : locks.browse === "server" ? <span className="cap-note warn">This server has no workspace service yet, so there is no browser.</span> : null}</>} top>
+        <Toggle on={v.browse} set={(x) => set("browse", x)} disabled={locks.browse === "server" || (!!locks.browse && !v.browse && !v.mine)} /></Row>
+      {locks.mine !== "server" && <>
+        <Row t="Your browser" d={<>Like Claude in Chrome: install the Synchro extension in Chrome, Edge or Brave and pair it with your account. Synchro then works right in your browser, with the sites you are already signed in to. It has full control of every tab by default; you can limit it to the Synchro tab group in the extension. Each Synchro account pairs its own browsers, on any computer.
+          <span className="cap-note">When this is on, Synchro works in your browser unless you ask for its own browser. You can also just say “on my Chrome” in a message.</span></>}>
+          <Toggle on={v.mine} set={(x) => set("mine", x)} disabled={!v.browse || (!v.mine && !st.paired)} /></Row>
+        <ExtSettings say={app.say} />
+      </>}
       <H>Code execution and file creation</H>
       <Row t="Code execution and file creation" d={<>Synchro can execute code and create and edit docs, spreadsheets, presentations, PDFs, and data reports. Required for skills.
         {lockNote("code") ? <span className="cap-note warn">{lockNote("code")}</span> : st.runner && v.code ? <span className="cap-note">{RUNNER[st.runner]}</span> : null}</>} top>{t("code")}</Row>

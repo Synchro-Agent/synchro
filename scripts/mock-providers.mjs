@@ -223,7 +223,8 @@ function buildArgs(tool, q) {
 }
 // Model giả lập điều khiển trình duyệt (gõ #browser kèm địa chỉ trang, khi có công cụ browser_*): mở trang → đọc trang →
 // điền / chọn / bấm cả biểu mẫu bằng một browser_batch → chụp màn hình → báo kết quả. Câu hỏi lấy từ tin người dùng thật
-// (bỏ qua tin ảnh chụp trình duyệt và kết quả cũ đã lược mà Synchro chèn thêm).
+// (bỏ qua tin ảnh chụp trình duyệt và kết quả cũ đã lược mà Synchro chèn thêm). Nhắc "Chrome của tôi" / "trình duyệt của tôi" / "my Chrome"
+// thì mở trang với browser="user" (Chrome của người dùng qua tiện ích Synchro), như model thật làm theo hướng dẫn <browser>.
 function browserQ(msgs = []) {
   for (const m of [...msgs].reverse()) {
     if (m.role !== "user") continue;
@@ -238,11 +239,15 @@ function browserStep(msgs, names) {
   const flat = JSON.stringify(msgs);
   const used = [...flat.matchAll(/"name":"(browser_\w+)"/g)].map((m) => m[1]);
   const url = /(https?:\/\/[^\s"'<>]+)/.exec(q)?.[1] ?? "https://example.com/";
-  if (!used.includes("browser_navigate")) return { tool: { name: "browser_navigate", args: { url } } };
-  if (!used.includes("browser_read")) return { tool: { name: "browser_read", args: {} } };
+  const mine = /(chrome|trình duyệt|tab) của (tôi|mình|em)|my (chrome|browser)/i.test(q);
+  if (!used.includes("browser_navigate")) return { tool: { name: "browser_navigate", args: { url, ...(mine ? { browser: "user" } : {}) } } };
   const texts = [];
   const walk = (v) => { if (typeof v === "string") texts.push(v); else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
   walk(msgs);
+  // Chrome của người dùng chưa kết nối / người dùng bấm Dừng: thôi, báo lại (như model thật làm theo kết quả công cụ).
+  const err = texts.filter((t) => /^(Chrome của người dùng chưa kết nối|Người dùng đã bấm Dừng|Trình duyệt của Synchro chưa dùng được)/.test(t)).pop();
+  if (err) return { text: `[mock] Chưa làm được trên trình duyệt: ${err.split("\n")[0]}` };
+  if (!used.includes("browser_read")) return { tool: { name: "browser_read", args: {} } };
   if (!used.includes("browser_batch")) {
     const tree = texts.filter((t) => t.includes("phần tử tương tác")).pop() ?? "";
     const lines = tree.split("\n");
@@ -263,7 +268,7 @@ function browserStep(msgs, names) {
   const last = texts.filter((t) => t.includes("Trang hiện tại:") || /^Ảnh chụp (https?|about|data):/.test(t)).pop() ?? "";
   const title = /"([^"]+)"/.exec(last)?.[1] ?? "";
   const done = /Đã làm (\d+\/\d+) thao tác/.exec(texts.join("\n"))?.[1] ?? "?";
-  return { text: `[mock] Đã làm xong trên trình duyệt: mở ${url}, làm ${done} thao tác trên trang và chụp màn hình kiểm tra. Trang cuối: ${title || "(không rõ)"}.` };
+  return { text: `[mock] Đã làm xong trên ${mine ? "Chrome của bạn" : "trình duyệt"}: mở ${url}, làm ${done} thao tác trên trang và chụp màn hình kiểm tra. Trang cuối: ${title || "(không rõ)"}.` };
 }
 function wantTool(q, list) {
   const tools = normTools(list);
