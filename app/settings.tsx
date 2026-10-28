@@ -341,6 +341,9 @@ function Capabilities({ go }: { go: (t: string) => void }) {
       <Row t="AI-powered artifacts" d={<>Build apps and interactive documents that use Synchro inside the artifact.{!v.art && <span className="cap-note">Turn on Artifacts first.</span>}</>}>{t("ai", !v.art)}</Row>
       <Row t="Inline visualizations" d="Allow Synchro to create interactive visuals, charts, and diagrams within the conversation.">{t("inl")}</Row>
       <Row t="Critic council" d={<>After Synchro writes code, a web page, or an app, one or two models from other providers review it in the background and point out bugs by line, with a fix you can apply.{!v.art && <span className="cap-note">Turn on Artifacts first.</span>}</>}>{t("crit", !v.art)}</Row>
+      <H>Browser</H>
+      <Row t="Browser control" d={<>Synchro can open websites in its own browser and click, type, fill in forms, and finish tasks on the web for you, with any model. You watch it live next to the chat and can take over or stop it at any time. Sign-ins you make there are kept for next time.
+        {locks.browse === "admin" ? <span className="cap-note warn">Your administrator has not enabled Synchro Code and Cloud sandbox for your account.</span> : locks.browse === "server" ? <span className="cap-note warn">This server has no workspace service yet, so there is no browser.</span> : null}</>} top>{t("browse")}</Row>
       <H>Code execution and file creation</H>
       <Row t="Code execution and file creation" d={<>Synchro can execute code and create and edit docs, spreadsheets, presentations, PDFs, and data reports. Required for skills.
         {lockNote("code") ? <span className="cap-note warn">{lockNote("code")}</span> : st.runner && v.code ? <span className="cap-note">{RUNNER[st.runner]}</span> : null}</>} top>{t("code")}</Row>

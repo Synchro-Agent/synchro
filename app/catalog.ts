@@ -113,8 +113,9 @@ export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
 // sw: đổi model khi tin nhắn bị gắn cờ · art: Artifacts · ai: artifact gọi được model · inl: biểu đồ / sơ đồ ngay trong chat
 // code: chạy code và tạo tệp (Skills cần bật) · net: khi chạy code được tải gói từ các kho thư viện bên dưới
 // crit: hội đồng phản biện tự đọc lại code, trang web, ứng dụng vừa viết.
-export type Caps = { sw: boolean; art: boolean; ai: boolean; inl: boolean; code: boolean; net: boolean; crit: boolean };
-export const DEFAULT_CAPS: Caps = { sw: true, art: true, ai: false, inl: true, code: true, net: false, crit: true };
+// browse: Synchro tự thao tác trên trình duyệt của mình (mở trang, bấm, gõ, điền biểu mẫu) khi người dùng nhờ, với mọi model.
+export type Caps = { sw: boolean; art: boolean; ai: boolean; inl: boolean; code: boolean; net: boolean; crit: boolean; browse: boolean };
+export const DEFAULT_CAPS: Caps = { sw: true, art: true, ai: false, inl: true, code: true, net: false, crit: true, browse: true };
 export const CAP_KEYS = Object.keys(DEFAULT_CAPS) as (keyof Caps)[];
 // Lý do một khả năng đang bị khóa: quản trị viên không cho (Cloud sandbox) hoặc máy chủ chưa có nơi chạy code.
 export type CapLock = "admin" | "server";

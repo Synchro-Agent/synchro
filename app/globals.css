@@ -4523,3 +4523,31 @@ button.bn-box:disabled{cursor:default}
 .bn label.bn-auto{display:flex}
 /* Tệp trong tin nhắn đã gửi: xuống dòng, căn phải (không cuộn ngang: phần tràn bên trái từng bị cắt mất khi gửi nhiều ảnh). */
 .attach.sent{flex-wrap:wrap;justify-content:flex-end;overflow:visible;margin:0;padding:0 0 8px}
+/* Trình duyệt của Synchro: dải "đang điều khiển", chấm sáng chỗ vừa bấm, hộp thoại của trang */
+.bp-agent{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:6px 6px 6px 12px;border-radius:12px;background:color-mix(in srgb,var(--card) 94%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 0 0 .5px var(--border-strong),0 8px 24px rgba(0,0,0,.14);animation:bnPeek .16s ease-out;cursor:default}
+.bp-agent-dot{width:8px;height:8px;border-radius:50%;flex:none;background:#d97757;box-shadow:0 0 0 0 rgba(217,119,87,.5);animation:bpPulse 1.4s ease-out infinite}
+@keyframes bpPulse{0%{box-shadow:0 0 0 0 rgba(217,119,87,.55)}100%{box-shadow:0 0 0 9px rgba(217,119,87,0)}}
+.bp-agent-t{display:flex;flex-direction:column;min-width:0;font-size:12px;line-height:1.35}
+.bp-agent-t b{font-weight:600;color:var(--text);white-space:nowrap}
+.bp-agent-t span{color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46ch}
+.bp-agent .btn.sm{flex:none;height:28px;gap:5px}
+.bp-ripple{position:absolute;z-index:5;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;border:2px solid #d97757;background:rgba(217,119,87,.18);animation:bpRipple .85s ease-out forwards}
+@keyframes bpRipple{0%{transform:scale(.35);opacity:1}70%{opacity:.9}100%{transform:scale(1.35);opacity:0}}
+.bp-dialog-w{position:absolute;inset:0;z-index:7;display:flex;align-items:flex-start;justify-content:center;padding-top:48px;background:rgba(0,0,0,.18)}
+.bp-dialog{width:min(420px,calc(100% - 32px));padding:16px 18px 14px;border-radius:14px;background:var(--card);box-shadow:0 0 0 .5px var(--border-strong),0 18px 44px rgba(0,0,0,.22);display:flex;flex-direction:column;gap:10px;animation:bnPeek .14s ease-out}
+.bp-dialog-h{font-size:12px;color:var(--text-3)}
+.bp-dialog p{margin:0;font-size:14px;line-height:1.5;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}
+.bp-dialog .field{margin:0;height:34px}
+.bp-dialog-a{display:flex;justify-content:flex-end;gap:8px}
+/* Khung trình duyệt cạnh khung chat và trang Trình duyệt */
+.brw-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
+.main.art-full .brw-panel{width:100%;border-left:0}
+.brw-page{flex:1;min-height:0;display:flex;flex-direction:column}
+.brw-page .bp{border-top:.5px solid var(--border)}
+.brw-page-h{display:flex;align-items:center;gap:10px;padding:10px 14px}
+.brw-page-h b{font-size:14px;font-weight:600}
+.brw-page-h span{font-size:12.5px;color:var(--text-3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brw-off{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--text-2);font-size:13.5px;line-height:1.55}
+.brw-off b{font-size:15px;color:var(--text)}
+@media (max-width:760px){.brw-panel{position:fixed;inset:0;width:100%;z-index:60;border-left:0}}
+@media (prefers-reduced-motion:reduce){.bp-agent,.bp-agent-dot,.bp-ripple,.bp-dialog,.brw-panel{animation:none}}

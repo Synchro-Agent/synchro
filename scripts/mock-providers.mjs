@@ -221,6 +221,50 @@ function buildArgs(tool, q) {
   if (props.body && args.body === undefined) args.body = "Tạo từ Synchro (giả lập)";
   return args;
 }
+// Model giả lập điều khiển trình duyệt (gõ #browser kèm địa chỉ trang, khi có công cụ browser_*): mở trang → đọc trang →
+// điền / chọn / bấm cả biểu mẫu bằng một browser_batch → chụp màn hình → báo kết quả. Câu hỏi lấy từ tin người dùng thật
+// (bỏ qua tin ảnh chụp trình duyệt và kết quả cũ đã lược mà Synchro chèn thêm).
+function browserQ(msgs = []) {
+  for (const m of [...msgs].reverse()) {
+    if (m.role !== "user") continue;
+    const t = typeof m.content === "string" ? m.content : (m.content ?? []).filter((x) => x.type === "text" || x.type === "input_text").map((x) => x.text).join("\n");
+    if (t && !/^(Ảnh chụp màn hình trình duyệt|\[Đã lược)/.test(t)) return t;
+  }
+  return "";
+}
+function browserStep(msgs, names) {
+  const q = browserQ(msgs);
+  if (!names.includes("browser_navigate") || !q.includes("#browser")) return null;
+  const flat = JSON.stringify(msgs);
+  const used = [...flat.matchAll(/"name":"(browser_\w+)"/g)].map((m) => m[1]);
+  const url = /(https?:\/\/[^\s"'<>]+)/.exec(q)?.[1] ?? "https://example.com/";
+  if (!used.includes("browser_navigate")) return { tool: { name: "browser_navigate", args: { url } } };
+  if (!used.includes("browser_read")) return { tool: { name: "browser_read", args: {} } };
+  const texts = [];
+  const walk = (v) => { if (typeof v === "string") texts.push(v); else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(msgs);
+  if (!used.includes("browser_batch")) {
+    const tree = texts.filter((t) => t.includes("phần tử tương tác")).pop() ?? "";
+    const lines = tree.split("\n");
+    const ref = (l) => Number(/^\[(\d+)\]/.exec(l)?.[1]);
+    const actions = [];
+    for (const l of lines) {
+      if (/^\[\d+\] textbox/.test(l)) actions.push({ action: "type", ref: ref(l), text: /Câu/.test(l) ? "an" : "Nguyễn Văn A", clear: true });
+      else if (/^\[\d+\] combobox/.test(l)) { const opts = (/options: (.*)$/.exec(l)?.[1] ?? "").split(" | ").filter((o) => o && !/^--/.test(o)); if (opts.length) actions.push({ action: "select", ref: ref(l), value: opts[opts.length - 1] }); }
+      else if (/^\[\d+\] checkbox .*unchecked/.test(l)) actions.push({ action: "select", ref: ref(l), value: "true" });
+      else if (/^\[\d+\] clickable "B\./.test(l)) actions.push({ action: "click", ref: ref(l) });
+    }
+    const submit = lines.find((l) => /^\[\d+\] button "(Nộp|Gửi|Submit|Send)/i.test(l));
+    if (submit) actions.push({ action: "click", ref: ref(submit) });
+    if (!actions.length) actions.push({ action: "scroll", dy: 400 });
+    return { tool: { name: "browser_batch", args: { actions } } };
+  }
+  if (!used.includes("browser_screenshot")) return { tool: { name: "browser_screenshot", args: {} } };
+  const last = texts.filter((t) => t.includes("Trang hiện tại:") || /^Ảnh chụp (https?|about|data):/.test(t)).pop() ?? "";
+  const title = /"([^"]+)"/.exec(last)?.[1] ?? "";
+  const done = /Đã làm (\d+\/\d+) thao tác/.exec(texts.join("\n"))?.[1] ?? "?";
+  return { text: `[mock] Đã làm xong trên trình duyệt: mở ${url}, làm ${done} thao tác trên trang và chụp màn hình kiểm tra. Trang cuối: ${title || "(không rõ)"}.` };
+}
 function wantTool(q, list) {
   const tools = normTools(list);
   if (!tools.length) return null;
@@ -238,7 +282,7 @@ function wantTool(q, list) {
   let best = null;
   for (const tool of tools) {
     // Công cụ bộ não (brain_*) chỉ chọn khi ép bằng #tool=, để không tranh với công cụ connector trong các bài kiểm thử khác.
-    if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_")) continue;
+    if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_") || tool.name.startsWith("browser_")) continue;
     const tn = norm(`${tool.name} ${tool.description ?? ""}`).replace(/[_-]/g, " ");
     let score = 0;
     for (const [re, keys] of INTENTS) if (re.test(t) && keys.some((k) => tn.includes(k))) score += 2;
@@ -414,6 +458,12 @@ async function handler(req, res) {
   // Trang đăng nhập giả lập của CLI (scripts/mock-cli): claude và agy hiện mã để dán vào Synchro; codex là trang nhập mã thiết bị.
   if (p.startsWith("/mock-login/")) return mockLogin(p.slice(12), u, res);
 
+  // Trang mẫu cho trình duyệt của Synchro (tests/fixtures/<tên>.html): bài kiểm tra thử để model giả lập điền và nộp.
+  if (p.startsWith("/_fixture/") && req.method === "GET") {
+    const name = p.slice(10).replace(/[^\w-]/g, "");
+    let html; try { html = (await import("node:fs")).readFileSync(new URL(`../tests/fixtures/${name}.html`, import.meta.url)); } catch { return send(res, 404, { error: "not found" }); }
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(html);
+  }
   // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…), số token ước tính, số luồng.
   if (p === "/_debug/last") return send(res, 200, LAST);
   if (p === "/_debug/streams") return send(res, 200, STREAMS);
@@ -450,6 +500,9 @@ async function handler(req, res) {
           { type: "text", text: `Theo kết quả tìm web (${webTool.type}): đây là tin mới nhất (giả lập).` },
         ] });
       }
+      const bst = browserStep(b.messages, normTools(b.tools).map((t) => t.name));
+      if (bst?.tool) { await sleep(150); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình làm trên trình duyệt." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: bst.tool.name, input: bst.tool.args }], stop_reason: "tool_use", usage: { input_tokens: 60, output_tokens: 20 } }); }
+      if (bst?.text) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: bst.text }], stop_reason: "end_turn", usage: { input_tokens: 60, output_tokens: 30 } });
       const sst = studioStep(`${sysText(b.system)}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ đọc skill trong thư viện trước." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: sst.text }], stop_reason: "end_turn" }); }
@@ -498,6 +551,9 @@ async function handler(req, res) {
           { type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: "Theo kết quả tìm web (web_search của OpenAI): đây là tin mới nhất (giả lập).", annotations: [] }] },
         ], usage: { input_tokens: 60, output_tokens: 30 } });
       }
+      const bst = browserStep(input, normTools(b.tools).map((t) => t.name));
+      if (bst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: bst.tool.name, arguments: JSON.stringify(bst.tool.args), status: "completed" }] });
+      if (bst?.text) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: bst.text, annotations: [] }] }] });
       const sst = studioStep(`${b.instructions ?? ""}\n${dynOf(input)}`, JSON.stringify(input), q, normTools(b.tools).map((t) => t.name));
       if (sst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: sst.tool.name, arguments: JSON.stringify(sst.tool.args), status: "completed" }] });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: sst.text, annotations: [] }] }] }); }
@@ -558,6 +614,9 @@ async function handler(req, res) {
     if (shape) return send(res, 400, [{ error: { code: 400, message: shape, status: "INVALID_ARGUMENT" } }]);
     const { text, q } = reply("google", b.model, b.messages, b.max_tokens, b.reasoning_effort);
     const sig = (call) => (geminiThinks(b.model) ? { ...call, extra_content: { google: { thought_signature: `sig_${Date.now().toString(36)}` } } } : call);
+    const bst = browserStep(b.messages, normTools(b.tools).map((t) => t.name));
+    if (bst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: bst.tool.name, arguments: JSON.stringify(bst.tool.args) } })] }, finish_reason: "tool_calls" }] });
+    if (bst?.text) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: bst.text }, finish_reason: "stop" }] });
     const sst = studioStep(`${b.messages?.find((m) => m.role === "system")?.content ?? ""}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
     if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } })] }, finish_reason: "tool_calls" }] });
     if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: sst.text }, finish_reason: "stop" }] }); }

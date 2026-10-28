@@ -3,6 +3,7 @@
 import { can, db, type UserRow } from "./authstore";
 import { CAP_KEYS, DEFAULT_CAPS, type Caps, type CapsState } from "./catalog";
 import { runner } from "./coderun";
+import { wsConfigured } from "./workspace";
 
 let ready = false;
 function init() {
@@ -35,7 +36,8 @@ export function removeUserCaps(uid: string) {
 }
 
 // Khả năng thực sự dùng được: chạy code cần quản trị viên cho phép Cloud sandbox và máy chủ có nơi chạy code;
-// artifact dùng AI cần bật Artifacts; truy cập mạng cần bật chạy code.
+// artifact dùng AI cần bật Artifacts; truy cập mạng cần bật chạy code; trình duyệt chạy trong workspace của người dùng
+// nên cần máy chủ có dịch vụ workspace và quản trị viên cho phép Synchro Code + Cloud sandbox.
 export function capsState(u: UserRow): CapsState {
   const mine = userCaps(u.id);
   const locks: CapsState["locks"] = {};
@@ -43,7 +45,10 @@ export function capsState(u: UserRow): CapsState {
   if (!can(u, "sandbox")) { locks.code = "admin"; locks.net = "admin"; }
   else if (!run) { locks.code = "server"; locks.net = "server"; }
   const caps: Caps = { ...mine };
+  if (!can(u, "code") || !can(u, "sandbox")) locks.browse = "admin";
+  else if (!wsConfigured()) locks.browse = "server";
   if (locks.code) { caps.code = false; caps.net = false; }
+  if (locks.browse) caps.browse = false;
   if (!caps.code) caps.net = false;
   if (!caps.art) caps.ai = false;
   return { caps, locks, runner: run };

@@ -1,6 +1,6 @@
 // Agent lập trình của Synchro Code: vòng lặp model + công cụ chạy trong workspace (container) của người dùng.
 // Mỗi bước gửi sự kiện (văn bản, công cụ, kết quả, danh sách việc, mở pane) về trình duyệt theo thời gian thực.
-import { agent as wsAgent, cleanPath, exec, fsop, WORK } from "./workspace";
+import { cleanPath, exec, fsop, WORK } from "./workspace";
 import { runSkillTool, skillTools } from "./skillruntime";
 import type { Skill } from "./skillstore";
 import { effortParams, respInput, respParse, respTools } from "./llmcall";
@@ -9,6 +9,7 @@ import type { Effort } from "./catalog";
 import type { UserRow } from "./authstore";
 import { openBridge } from "./mcpbridge";
 import { subCli, subTurn } from "./ai/subs";
+import { BROWSER_TOOLS, isBrowserTool, runBrowserTool } from "./browsertools";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -42,17 +43,8 @@ export const AGENT_TOOLS = [
     input_schema: obj({ path: { type: "string", description: "Thư mục, mặc định là thư mục làm việc" } }) },
   { name: "grep", description: "Tìm theo regex trong file (ripgrep). Trả về file:dòng:nội dung.",
     input_schema: obj({ pattern: { type: "string" }, path: { type: "string" }, glob: { type: "string", description: "Lọc file, vd. *.tsx" } }, ["pattern"]) },
-  { name: "browser_navigate", description: "Mở một địa chỉ trong trình duyệt của workspace (người dùng thấy trực tiếp). Server dev trong workspace mở bằng http://localhost:<cổng>.",
-    input_schema: obj({ url: { type: "string" } }, ["url"]) },
-  { name: "browser_read", description: "Đọc nội dung chữ của trang hiện tại và danh sách phần tử tương tác dạng [ref] để click/gõ.", input_schema: obj({}) },
-  { name: "browser_screenshot", description: "Chụp màn hình trang hiện tại để xem giao diện.", input_schema: obj({}) },
-  { name: "browser_click", description: "Click vào phần tử theo ref (từ browser_read) hoặc theo tọa độ x, y.",
-    input_schema: obj({ ref: { type: "number" }, x: { type: "number" }, y: { type: "number" } }) },
-  { name: "browser_type", description: "Gõ chữ vào phần tử (ref) hoặc phần tử đang focus. clear=true để xóa nội dung cũ, submit=true để nhấn Enter sau khi gõ.",
-    input_schema: obj({ text: { type: "string" }, ref: { type: "number" }, clear: { type: "boolean" }, submit: { type: "boolean" } }, ["text"]) },
-  { name: "browser_key", description: "Nhấn một phím: Enter, Tab, Escape, Backspace, ArrowDown…", input_schema: obj({ key: { type: "string" } }, ["key"]) },
-  { name: "browser_scroll", description: "Cuộn trang theo chiều dọc (dy dương là cuộn xuống, tính bằng pixel).", input_schema: obj({ dy: { type: "number" } }, ["dy"]) },
-  { name: "browser_console", description: "Xem log console và lỗi JavaScript gần đây của trang.", input_schema: obj({}) },
+  // Trình duyệt của workspace: cùng bộ công cụ với khung chat (browsertools.ts). Server dev trong workspace mở bằng http://localhost:<cổng>.
+  ...BROWSER_TOOLS,
   { name: "open_pane", description: "Mở một khung bên cạnh khung chat cho người dùng xem: terminal (nhật ký lệnh của bạn), browser hoặc files (kèm path để mở một file).",
     input_schema: obj({ pane: { type: "string", enum: ["terminal", "browser", "files"] }, path: { type: "string" } }, ["pane"]) },
 ];
@@ -78,11 +70,6 @@ const open = (c: Ctx, pane: Pane, extra: Partial<Extract<AgentEvent, { t: "ui" }
   c.opened.add(pane);
   c.emit({ t: "ui", open: pane, ...extra });
 };
-
-async function browser(c: Ctx, action: string, args: Record<string, unknown> = {}) {
-  open(c, "browser");
-  return wsAgent<Record<string, unknown>>("/browser", { u: c.u, action, ...args }, 60_000);
-}
 
 async function runTool(c: Ctx, name: string, a: Record<string, unknown>): Promise<Out> {
   const s = (k: string) => (typeof a[k] === "string" ? (a[k] as string) : "");
@@ -153,30 +140,6 @@ async function runTool(c: Ctx, name: string, a: Record<string, unknown>): Promis
       if (r.code === 1) return { content: "Không có kết quả.", is_error: false, summary: s("pattern") };
       return { content: clip(r.out || r.err, 20_000), is_error: r.code > 1, summary: s("pattern") };
     }
-    case "browser_navigate": {
-      const r = await browser(c, "navigate", { url: s("url") });
-      return { content: r.error ? String(r.error) : `Đã mở ${r.url} — "${r.title}"`, is_error: !!r.error, summary: String(r.url || s("url")) };
-    }
-    case "browser_read": {
-      const r = await browser(c, "read");
-      const els = (r.elements as string[] | undefined) ?? [];
-      return { content: `URL: ${r.url}\nTiêu đề: ${r.title}\n\n${r.text}\n\nPhần tử tương tác:\n${els.join("\n") || "(không có)"}`, is_error: false, summary: String(r.url) };
-    }
-    case "browser_screenshot": {
-      const r = await browser(c, "screenshot");
-      return { content: `Ảnh chụp ${r.url}`, is_error: false, summary: String(r.url), image: String(r.image ?? "") };
-    }
-    case "browser_click": case "browser_type": case "browser_key": case "browser_scroll": {
-      const action = name.slice(8);
-      const r = await browser(c, action, a);
-      const what = name === "browser_type" ? `"${one(s("text"), 40)}"` : name === "browser_key" ? s("key") : name === "browser_click" ? (a.ref != null ? `ref ${a.ref}` : `${a.x}, ${a.y}`) : `${a.dy}px`;
-      return { content: `Xong. Trang hiện tại: ${r.url} — "${r.title}". Dùng browser_read hoặc browser_screenshot để xem kết quả.`, is_error: false, summary: what };
-    }
-    case "browser_console": {
-      const r = await browser(c, "console", { limit: 60 });
-      const logs = (r.logs as string[] | undefined) ?? [];
-      return { content: logs.join("\n") || "(không có log)", is_error: false, summary: `${logs.length} log` };
-    }
     case "open_pane": {
       const pane = (["terminal", "browser", "files"] as const).find((x) => x === a.pane) ?? "files";
       c.opened.delete(pane);
@@ -184,6 +147,11 @@ async function runTool(c: Ctx, name: string, a: Record<string, unknown>): Promis
       return { content: "Đã mở.", is_error: false, summary: pane };
     }
     default: {
+      if (isBrowserTool(name)) {
+        open(c, "browser");
+        const r = await runBrowserTool(c.u, name, a);
+        return { content: r.content, is_error: r.is_error, summary: r.summary, ...(r.image ? { image: r.image } : {}) };
+      }
       // Công cụ skill (load_skill, read_skill_file, search_skills, run_skill_script).
       const r = await runSkillTool(c.skills, name, a, c.scripts);
       if (!r.is_error && r.used.kind === "skill") c.usedSkills.push(r.used.name);

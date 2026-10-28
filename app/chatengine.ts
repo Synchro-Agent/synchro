@@ -28,6 +28,7 @@ import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool } from "./brain";
+import { BROWSER_RULES, BROWSER_TOOLS, describeBrowser, isBrowserTool, runBrowserTool } from "./browsertools";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
 // Model nào gọi tới nhà cung cấp nào do khóa API quản trị viên nhập ở Cài đặt → Providers quyết định.
@@ -36,7 +37,12 @@ import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainT
 type Call = { id: string; name: string; input: Record<string, unknown> };
 // pause: công cụ phía máy chủ của hãng (tìm web) chưa chạy xong trong một lần gọi — gửi lại để model làm tiếp.
 type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean };
-type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: ToolRun[]) => unknown[] };
+// image: ảnh JPEG (base64) đi kèm kết quả công cụ, ví dụ ảnh chụp trình duyệt; mỗi hãng nhận theo cách riêng.
+type Run = ToolRun & { image?: string };
+type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[] };
+// Ảnh chụp trình duyệt cho model dùng Chat Completions / Responses: tin nhắn công cụ chỉ nhận chữ, nên ảnh đi kèm một tin người dùng ngay sau.
+const SHOT = (id: string) => `Ảnh chụp màn hình trình duyệt (kết quả công cụ ${id}).`;
+const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${r.image}` } }] }] : []);
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
 // Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
@@ -81,7 +87,8 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
       pause: j.stop_reason === "pause_turn",
     };
   },
-  results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, content: res[i].content, is_error: res[i].is_error })) }],
+  results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, is_error: res[i].is_error,
+    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: "image/jpeg", data: res[i].image } }] : res[i].content })) }],
 });
 
 const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
@@ -99,7 +106,7 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
     });
     return { text: m.content ?? "", calls, assistant: m };
   },
-  results: (calls, res) => calls.map((c, i) => ({ role: "tool", tool_call_id: c.id, content: res[i].content })),
+  results: (calls, res) => [...calls.map((c, i) => ({ role: "tool", tool_call_id: c.id, content: res[i].content })), ...shotMsgs(calls, res)],
 });
 
 // OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
@@ -117,7 +124,7 @@ const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: 
     for (const it of r.items) searched(it);
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
-  results: (calls, res) => calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })),
+  results: (calls, res) => [...calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })), ...shotMsgs(calls, res)],
 });
 
 // Model giả lập (LLM_PROVIDER=mock) để thử vòng lặp khi chưa có API key.
@@ -147,7 +154,9 @@ type Lib = { key: string; label: string };
 // trace: dấu vết công cụ của lượt theo chuẩn Synchro (trả về trình duyệt, lượt sau gửi lại để model nào cũng biết đã làm gì).
 // heal: model của lượt này, dùng để tự sửa script của skill khi script hỏng (skillheal.ts).
 // search: model Gemini (khóa API) để tìm web bằng Google Search qua API gốc của Gemini (công cụ web_search của Synchro).
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target };
+// browse: công cụ trình duyệt đang bật (Cài đặt → Khả năng); shown: đã mở khung trình duyệt cho người dùng ở lượt này;
+// heavy: id các lượt đọc trang / chụp màn hình (lược bớt bản cũ để ngữ cảnh không phình khi thao tác dài).
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; shown?: boolean; heavy?: string[] };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -194,7 +203,7 @@ Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ
 // Gói chạy qua CLI (Claude Code, Codex, Antigravity) gọi công cụ của Synchro qua cầu nối MCP "synchro".
 const BRIDGE_CLIS = new Set(["claude", "codex", "agy"]);
 const CLI_TOOLS_NOTE = (cli: string) => `<synchro_tools>
-Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.
+Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.
 </synchro_tools>`;
 /** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
 async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>, usedAll: ToolRun["used"][]) {
@@ -209,8 +218,8 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   const cap: Adapter = { step: async () => { throw new Error("không dùng"); }, results: (_calls, r) => { res = r[0]; return []; } };
   await execute(cap, m, x, [c], usedAll, {});
   const follow = (m.find((v) => (v as { role?: string }).role === "user") as { content?: unknown } | undefined)?.content;
-  const r = (res as ToolRun | null) ?? { content: "Không có kết quả.", is_error: true };
-  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error };
+  const r = (res as Run | null) ?? { content: "Không có kết quả.", is_error: true };
+  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image } : {}) };
 }
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ).
 function addFollowup(m: unknown[], text: string) {
@@ -241,7 +250,7 @@ async function geminiSearch(t: Target, query: string): Promise<ToolRun> {
   const src = (c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri?: string; title?: string } => !!w?.uri).slice(0, 8).map((w, i) => `[${i + 1}] ${w.title ?? ""} — ${w.uri}`).join("\n");
   return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src || "(không có)"}`, is_error: false, used };
 }
-async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
+async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "update_plan") {
     const items = (Array.isArray(c.input?.items) ? c.input.items : []).map((i: { content?: unknown; status?: unknown }) => ({ content: String(i.content ?? "").slice(0, 120), status: ["pending", "in_progress", "completed"].includes(String(i.status)) ? String(i.status) : "pending" })).slice(0, 12);
     progress("plan", JSON.stringify(items));
@@ -251,6 +260,13 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<ToolRun> {
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return geminiSearch(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
+  if (x.browse && isBrowserTool(c.name) && !x.sess?.get(c.name)) {
+    // Lần đầu dùng trình duyệt trong lượt: mở khung trình duyệt cạnh khung chat để người dùng xem trực tiếp.
+    if (!x.shown) { x.shown = true; progress("ui", "browser"); }
+    const r = await runBrowserTool(x.uid, c.name, c.input ?? {});
+    if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
+    return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
+  }
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
@@ -271,6 +287,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
   if (c.name === "brain_write") return `Đang ghi vào bộ não: ${String(c.input?.title ?? "").slice(0, 80)}`;
+  if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {});
   const ct = x.sess?.get(c.name);
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
 }
@@ -290,7 +307,7 @@ function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
 const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSignal()?.aborted;
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
   const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
-  let res: ToolRun[];
+  let res: Run[];
   try {
     res = await abortable(Promise.all(calls.map((c) => runCall(x, c, d[c.id]))), runSignal());
   } catch (e) {
@@ -324,10 +341,30 @@ async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"
     return { text: liveNow(), used, cancelled: true };
   }
 }
+// Thao tác trình duyệt dài (làm cả bài kiểm tra, điền nhiều trang biểu mẫu) cần nhiều bước hơn một lượt chat thường.
+const BROWSE_STEPS = 200;
+// Giữ nguyên hai kết quả đọc trang / ảnh chụp gần nhất; bản cũ hơn thay bằng một dòng ngắn (model đọc lại trang khi cần).
+const PRUNED = "[Đã lược kết quả cũ của công cụ trình duyệt để gọn ngữ cảnh; đọc lại trang nếu cần.]";
+function pruneBrowser(m: unknown[], x: Exec) {
+  const old = new Set((x.heavy ?? []).slice(0, -2));
+  if (!old.size) return;
+  for (const v of m) {
+    const o = v as { role?: string; type?: string; tool_call_id?: string; call_id?: string; content?: unknown; output?: unknown };
+    if (o.type === "function_call_output" && o.call_id && old.has(o.call_id)) { o.output = PRUNED; continue; }
+    if (o.role === "tool" && o.tool_call_id && old.has(o.tool_call_id)) { o.content = PRUNED; continue; }
+    if (o.role !== "user" || !Array.isArray(o.content)) continue;
+    const first = o.content[0] as { type?: string; text?: string } | undefined;
+    const shot = first?.type === "text" && [...old].find((id) => first.text === SHOT(id));
+    if (shot) { o.content = PRUNED; continue; }
+    for (const b of o.content as { type?: string; tool_use_id?: string; content?: unknown }[]) if (b.type === "tool_result" && b.tool_use_id && old.has(b.tool_use_id)) b.content = PRUNED;
+  }
+}
 async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
-  for (let i = start; i < MAX_STEPS; i++) {
+  const steps = x.browse ? BROWSE_STEPS : MAX_STEPS;
+  for (let i = start; i < steps; i++) {
     if (i > 0) { progress("step", "Đang viết câu trả lời"); deltaStep(); }
-    const r = await ad.step(m, i === MAX_STEPS - 1);
+    if (x.browse) pruneBrowser(m, x);
+    const r = await ad.step(m, i === steps - 1);
     m.push(r.assistant);
     if (!r.calls.length) { if (r.pause) continue; return { text: r.text, used }; }
     // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
@@ -725,11 +762,13 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
-        const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), PLAN_TOOL];
-        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId };
+        // Công cụ và hướng dẫn trình duyệt luôn có khi tính năng bật (phần đầu prompt ổn định, đọc lại từ bộ đệm).
+        const browse = !!pc.browse && feature !== "artifact";
+        const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
+        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => bridgeCall(xx, name, input, usedAll) });
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", ss.route].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", ss.route].filter(Boolean).join("\n\n");
       }
       const r = await subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
@@ -792,15 +831,18 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // (Google Search qua API gốc của Gemini).
     const web = !!skills && body.web === true && (t.kind === "anthropic" || t.kind === "openai" || t.kind === "google");
     const brain = t.kind !== "mock" && brainOn(body, c.user);
-    if (visible.length || sess || code || refs || web || brain) {
+    // Trình duyệt của Synchro (Cài đặt → Khả năng → Điều khiển trình duyệt): model nào cũng thao tác được trên web khi người dùng nhờ.
+    // Luôn kèm khi bật, không đoán theo từng câu hỏi: công cụ nằm ở phần đầu prompt, đổi qua lại sẽ làm hỏng bộ đệm prompt.
+    const browse = !!skills && t.kind !== "mock" && !!cs?.caps.browse;
+    if (visible.length || sess || code || refs || web || brain || browse) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
+      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", pinned].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined, browse };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><title>Bài kiểm tra thử</title>
+<style>
+  body { font: 15px system-ui, sans-serif; margin: 24px; }
+  .opt { border: 1px solid #ccc; border-radius: 8px; padding: 8px 12px; margin: 6px 0; cursor: pointer; }
+  .opt.on { background: #dfe8ff; }
+  #more { margin-top: 1400px; }
+</style></head>
+<body>
+  <h1>Bài kiểm tra thử</h1>
+  <form id="f" onsubmit="event.preventDefault(); done();">
+    <label>Họ và tên <input id="name" name="name" placeholder="Nhập họ tên" required></label><br>
+    <label>Lớp <select id="cls"><option value="">-- chọn --</option><option value="12a1">12A1</option><option value="12a2">12A2</option></select></label><br>
+    <label><input type="checkbox" id="agree"> Tôi đồng ý nội quy</label>
+    <p>Câu 1. Chọn đáp án đúng: She ___ to school every day.</p>
+    <div class="opt" data-q="1" data-v="A">A. go</div>
+    <div class="opt" data-q="1" data-v="B">B. goes</div>
+    <div class="opt" data-q="1" data-v="C">C. going</div>
+    <p>Câu 2. Nhập từ còn thiếu: I have ___ apple.</p>
+    <input id="q2" aria-label="Câu 2" />
+    <button type="submit">Nộp bài</button>
+  </form>
+  <a href="#" id="newtab" onclick="window.open('about:blank#tab-moi'); return false;">Mở tab mới</a>
+  <button id="ask" onclick="document.getElementById('res').dataset.c = confirm('Chắc chắn chưa?') ? 'yes' : 'no'">Hỏi xác nhận</button>
+  <div id="res"></div>
+  <p id="more">Đoạn cuối trang</p>
+  <script>
+    let pick = {};
+    document.querySelectorAll('.opt').forEach((o) => o.onclick = () => { document.querySelectorAll('.opt[data-q="' + o.dataset.q + '"]').forEach((x) => x.classList.remove('on')); o.classList.add('on'); pick[o.dataset.q] = o.dataset.v; });
+    function done() {
+      const r = { name: document.getElementById('name').value, cls: document.getElementById('cls').value, agree: document.getElementById('agree').checked, q1: pick[1] || '', q2: document.getElementById('q2').value };
+      document.getElementById('res').textContent = 'Đã nộp: ' + JSON.stringify(r);
+      document.title = 'Đã nộp bài';
+    }
+  </script>
+</body>
+</html>

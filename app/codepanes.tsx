@@ -112,9 +112,13 @@ const VIEWPORTS: { k: Viewport; label: string; w?: number; h?: number; mobile?: 
 const blankUrl = (u: string) => !u || u === "about:blank" || u.startsWith("chrome://newtab");
 const hostOf = (u: string) => { try { const x = new URL(u); return x.host || u; } catch { return u; } };
 
-// Trình duyệt của workspace (giống trình duyệt tích hợp của Claude): hàng tab, thanh địa chỉ, trang tab mới gợi ý server đang chạy,
-// menu ⋮ (mở bằng trình duyệt của bạn, sao chép URL, lưu ảnh chụp, mở file HTML, khung nhìn, xóa dữ liệu) và nút phóng to.
-export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, autoOpen, setAutoOpen }: { sid: number; visible: boolean; say: Say; onClose: () => void; onExpand: () => void; expanded: boolean; autoOpen: boolean; setAutoOpen: (v: boolean) => void }) {
+// Trình duyệt của workspace (giống trình duyệt tích hợp của Claude): hàng tab, thanh địa chỉ, trang tab mới (gợi ý server đang chạy
+// ở Synchro Code), menu ⋮ (mở bằng trình duyệt của bạn, sao chép URL, lưu ảnh chụp, mở file HTML, khung nhìn, xóa dữ liệu) và nút phóng to.
+// Dùng ở Synchro Code (sid: phiên code) và ở khung chat / trang Trình duyệt (ticket: vé của /api/browser). Khi Synchro đang tự thao tác:
+// dải "Synchro đang điều khiển" (nút Dừng), chấm sáng ở chỗ vừa bấm; hộp thoại của trang hiện cho người dùng tự chọn khi Synchro không thao tác.
+type AgentAct = { kind: string; label?: string; x?: number; y?: number; at: number };
+type PageDialog = { type: string; message: string; def: string };
+export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expanded, autoOpen, setAutoOpen, onStop, busy }: { sid?: number; ticket?: () => Promise<string>; visible: boolean; say: Say; onClose?: () => void; onExpand?: () => void; expanded?: boolean; autoOpen?: boolean; setAutoOpen?: (v: boolean) => void; onStop?: () => void; busy?: boolean }) {
   const [url, setUrl] = useState("");
   const [addr, setAddr] = useState("");
   const [focus, setFocus] = useState(false);
@@ -127,6 +131,11 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
   const [menu, setMenu] = useState(false);
   const [vp, setVp] = useState<Viewport>("responsive");
   const [navd, setNavd] = useState(false); // đã nhận địa chỉ thật của tab (tránh coi nhầm là tab mới lúc vừa kết nối)
+  const [agentOn, setAgentOn] = useState(false);
+  const [act, setAct] = useState<AgentAct | null>(null);
+  const [dialog, setDialog] = useState<PageDialog | null>(null);
+  const [promptText, setPromptText] = useState("");
+  const idleT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ws = useRef<WebSocket | null>(null);
   const view = useRef<HTMLDivElement>(null);
   const img = useRef<HTMLImageElement>(null);
@@ -149,7 +158,7 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
     setSt("connecting");
     setNavd(false);
     try {
-      const { url: u } = await wsOp<{ url: string }>("ticket", sid, { kind: "screen" });
+      const u = ticket ? await ticket() : (await wsOp<{ url: string }>("ticket", sid!, { kind: "screen" })).url;
       const s = new WebSocket(u);
       ws.current = s;
       s.onopen = () => { setSt("open"); sendSize(); };
@@ -168,10 +177,24 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
         else if (j.t === "loading") setLoading(!!j.on);
         else if (j.t === "cleared") say("Đã xóa dữ liệu duyệt web");
         else if (j.t === "error" && j.error) say(j.error);
+        else if (j.t === "agent") {
+          const a = j as unknown as AgentAct & { kind: string };
+          if (a.kind === "start") { clearTimeout(idleT.current); setAgentOn(true); }
+          else if (a.kind === "idle") { clearTimeout(idleT.current); idleT.current = setTimeout(() => setAgentOn(false), 1500); }
+          else { setAgentOn(true); setAct({ kind: a.kind, label: a.label, x: a.x, y: a.y, at: Date.now() }); }
+        }
+        else if (j.t === "dialog") {
+          const d = j as unknown as PageDialog & { closed?: boolean };
+          if (d.closed) setDialog(null); else { setDialog({ type: d.type, message: d.message, def: d.def }); setPromptText(d.def ?? ""); }
+        }
+        else if (j.t === "download") {
+          const d = j as unknown as { name: string; state: string };
+          say(d.state === "inProgress" ? `Đang tải về: ${d.name}` : d.state === "completed" ? `Đã tải về ${d.name} (thư mục Downloads của workspace)` : `Không tải được ${d.name}`);
+        }
       };
       s.onclose = () => { if (ws.current === s) setSt("closed"); };
     } catch (e) { say((e as Error).message); setSt("closed"); }
-  }, [sid, say]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sid, ticket, say]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chỉ nhận hình khi khung đang hiện (tiết kiệm băng thông); ẩn thì ngắt.
   useEffect(() => {
@@ -195,7 +218,7 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
   // Trang tab mới: gợi ý các server đang chạy trong workspace, cập nhật vài giây một lần.
   const isNew = st === "open" && navd && blankUrl(url);
   useEffect(() => {
-    if (!isNew || !visible) return;
+    if (!isNew || !visible || sid == null) return;
     send({ t: "ports" });
     const i = setInterval(() => send({ t: "ports" }), 4000);
     setTimeout(() => addrIn.current?.focus(), 50);
@@ -254,8 +277,8 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
         </div>
         <div className="bp-acts" ref={menuRef}>
           <button className={`icon-btn ${menu ? "on" : ""}`} onClick={() => setMenu(!menu)} aria-label="Tùy chọn trình duyệt" title="Tùy chọn"><I.Dots size={16} /></button>
-          <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} title={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>
-          <button className="icon-btn" onClick={onClose} aria-label="Đóng trình duyệt" title="Đóng"><I.X size={15} /></button>
+          {onExpand && <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} title={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>}
+          {onClose && <button className="icon-btn" onClick={onClose} aria-label="Đóng trình duyệt" title="Đóng"><I.X size={15} /></button>}
           {menu && (
             <div className="menu bp-menu">
               {item("Mở trong trình duyệt của bạn", () => window.open(url, "_blank", "noopener"), { disabled: local, icon: <I.External size={15} /> })}
@@ -266,8 +289,7 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
               <div className="cv-mh">Khung nhìn</div>
               {VIEWPORTS.map((v) => <div key={v.k}>{item(v.label, () => setVp(v.k), { check: vp === v.k })}</div>)}
               <hr />
-              {item("Tự mở trình duyệt khi agent dùng", () => setAutoOpen(!autoOpen), { check: autoOpen })}
-              <hr />
+              {setAutoOpen && <>{item(sid == null ? "Tự mở khi Synchro dùng trình duyệt" : "Tự mở trình duyệt khi agent dùng", () => setAutoOpen(!autoOpen), { check: autoOpen })}<hr /></>}
               {item("Xóa dữ liệu duyệt web", () => send({ t: "clear" }), { danger: true })}
             </div>
           )}
@@ -288,7 +310,41 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
         onKeyDown={key("down")} onKeyUp={key("up")} onPaste={(e) => { e.preventDefault(); send({ t: "text", text: e.clipboardData.getData("text") }); }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img ref={img} alt="" draggable={false} style={{ visibility: blank || isNew ? "hidden" : "visible", width: fixed ? `min(100%, ${fixed}px)` : undefined }} />
-        {isNew && (
+        {act && Date.now() - act.at < 900 && act.x != null && img.current?.naturalWidth ? (() => {
+          const im = img.current!.getBoundingClientRect(), vr = view.current!.getBoundingClientRect();
+          return <span key={act.at} className="bp-ripple" style={{ left: im.left - vr.left + (act.x! / img.current!.naturalWidth) * im.width, top: im.top - vr.top + (act.y! / img.current!.naturalHeight) * im.height }} />;
+        })() : null}
+        {(agentOn || busy) && (
+          <div className="bp-agent" onMouseDown={(e) => e.stopPropagation()}>
+            <span className="bp-agent-dot" />
+            <span className="bp-agent-t"><b>Synchro đang điều khiển trình duyệt</b>{act?.label ? <span data-notr>{act.kind === "type" ? `Gõ “${act.label}”` : act.kind === "navigate" ? `Mở ${hostOf(act.label)}` : act.kind === "key" ? `Nhấn ${act.label}` : act.kind === "select" ? `Chọn “${act.label}”` : `${act.kind === "hover" ? "Rê chuột" : act.kind === "drag" ? "Kéo thả" : act.kind === "upload" ? "Tải tệp" : "Bấm"} ${act.label}`}</span> : null}</span>
+            {onStop && <button className="btn sm" onClick={onStop}><I.Stop size={12} />Dừng</button>}
+          </div>
+        )}
+        {dialog && (
+          <div className="bp-dialog-w" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <div className="bp-dialog" role="alertdialog" aria-label="Hộp thoại của trang">
+              <span className="bp-dialog-h">{hostOf(url)} cho biết</span>
+              <p data-notr>{dialog.message}</p>
+              {dialog.type === "prompt" && <input className="field" autoFocus value={promptText} onChange={(e) => setPromptText(e.target.value)} />}
+              <div className="bp-dialog-a">
+                {dialog.type !== "alert" && <button className="btn sm" onClick={() => { send({ t: "dialog", accept: false }); setDialog(null); }}>Hủy</button>}
+                <button className="btn sm dark" autoFocus={dialog.type !== "prompt"} onClick={() => { send({ t: "dialog", accept: true, text: promptText }); setDialog(null); }}>OK</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {isNew && sid == null && (
+          <div className="bp-newtab" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="bp-nt-in">
+              <p className="bp-nt-note txt">Gõ địa chỉ hoặc từ khóa ở thanh trên (từ khóa sẽ tìm trên Google). Hoặc nhờ Synchro trong khung chat, ví dụ “mở trang … rồi điền biểu mẫu giúp mình”: Synchro tự thao tác ngay tại đây, bạn xem và giành lại quyền điều khiển bất cứ lúc nào.</p>
+              {[["google.com", "Google"], ["youtube.com", "YouTube"], ["vi.wikipedia.org", "Wikipedia"]].map(([h, n]) => (
+                <div key={h} className="bp-nt-row"><div><span>{n}</span><code data-notr>{h}</code></div><button className="btn" onClick={() => go(`https://${h}`)}>Mở</button></div>
+              ))}
+            </div>
+          </div>
+        )}
+        {isNew && sid != null && (
           <div className="bp-newtab" onMouseDown={(e) => e.stopPropagation()}>
             <div className="bp-nt-in">
               {ports === null ? <p className="bp-nt-note"><span className="ag-spin" />Đang tìm server trong workspace…</p>
@@ -301,7 +357,7 @@ export function BrowserPane({ sid, visible, say, onClose, onExpand, expanded, au
             </div>
           </div>
         )}
-        {blank && !isNew && st !== "closed" && <div className="bp-empty"><span className="ag-spin" />Đang bật trình duyệt của workspace…</div>}
+        {blank && !isNew && st !== "closed" && <div className="bp-empty"><span className="ag-spin" />{sid == null ? "Đang bật trình duyệt…" : "Đang bật trình duyệt của workspace…"}</div>}
         {st === "closed" && <div className="bp-empty"><span>Đã ngắt kết nối trình duyệt.</span><button className="btn" onClick={connect}><I.Retry size={14} />Kết nối lại</button></div>}
       </div>
     </div>

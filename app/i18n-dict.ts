@@ -1787,3 +1787,47 @@ RULES_EN.push(
   [/^Các tệp đính kèm quá nặng để gửi một lần \((\d+) MB, tối đa (\d+) MB\)\. Hãy chia ra nhiều tin nhắn\.$/, (m) => `The attachments are too large to send at once (${m[1]} MB, ${m[2]} MB max). Split them across several messages.`],
   [/^⚠️ (.+)$/, (m) => `⚠️ ${enOf(m[1])}`],
 );
+// Trình duyệt của Synchro: khung cạnh chat, trang Trình duyệt, Cài đặt → Khả năng, nhật ký thao tác của model.
+Object.assign(VI2EN, {
+  "Tự mở khi Synchro dùng trình duyệt": "Open automatically when Synchro uses the browser", "Synchro đang điều khiển trình duyệt": "Synchro is controlling the browser",
+  "Hộp thoại của trang": "Page dialog", "cho biết": "says", "Không mở được trình duyệt.": "Couldn't open the browser.", "Mở trình duyệt": "Open the browser",
+  "Trình duyệt của Synchro": "Synchro's browser", "Trình duyệt": "Browser", "Đang bật trình duyệt…": "Starting the browser…", "Dừng": "Stop",
+  "Gõ địa chỉ hoặc từ khóa ở thanh trên (từ khóa sẽ tìm trên Google). Hoặc nhờ Synchro trong khung chat, ví dụ “mở trang … rồi điền biểu mẫu giúp mình”: Synchro tự thao tác ngay tại đây, bạn xem và giành lại quyền điều khiển bất cứ lúc nào.":
+    "Type an address or keywords in the bar above (keywords search Google). Or ask Synchro in the chat, for example “open … and fill in the form for me”: Synchro works right here while you watch, and you can take over at any time.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code và Cloud sandbox, nên chưa dùng được trình duyệt.": "Your administrator hasn't enabled Synchro Code and Cloud sandbox for your account, so the browser isn't available.",
+  "Máy chủ chưa bật dịch vụ workspace nên chưa có trình duyệt.": "This server has no workspace service yet, so there is no browser.", "Đang kiểm tra…": "Checking…",
+  "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang chụp màn hình trang": "Taking a screenshot of the page", "Đang cuộn trang": "Scrolling the page",
+  "Đang kéo thả trên trang": "Dragging on the page", "Đang mở tab mới": "Opening a new tab", "Đang chuyển tab": "Switching tabs", "Đang đóng tab": "Closing a tab", "Đang xem các tab": "Listing tabs",
+  "Đang trả lời hộp thoại của trang": "Answering the page dialog", "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
+  "Đang quay lại trang trước": "Going back", "Đang tới trang sau": "Going forward", "Đang tải lại trang": "Reloading the page", "Đang chờ trang": "Waiting for the page", "Đang dùng trình duyệt": "Using the browser",
+  "đọc chữ trên trang": "read the page text", "chụp màn hình trang": "took a screenshot", "kéo thả trên trang": "dragged on the page", "mở tab mới": "opened a new tab", "chuyển tab": "switched tabs", "đóng tab": "closed a tab",
+  "xem các tab": "listed tabs", "trả lời hộp thoại của trang": "answered a page dialog", "chạy JavaScript trên trang": "ran JavaScript on the page", "xem log của trang": "read the page log",
+  "quay lại trang trước": "went back", "tới trang sau": "went forward", "tải lại trang": "reloaded the page", "chờ trang": "waited for the page", "dùng trình duyệt": "used the browser",
+});
+Object.assign(EN2VI, {
+  "Browser": "Trình duyệt", "Browser control": "Điều khiển trình duyệt",
+  "Synchro can open websites in its own browser and click, type, fill in forms, and finish tasks on the web for you, with any model. You watch it live next to the chat and can take over or stop it at any time. Sign-ins you make there are kept for next time.":
+    "Synchro mở trang web trong trình duyệt của mình rồi tự bấm, gõ, điền biểu mẫu và làm xong việc trên web cho bạn, với mọi model. Bạn xem trực tiếp cạnh khung chat và giành lại quyền điều khiển hay dừng bất cứ lúc nào. Các lần đăng nhập ở đó được giữ cho lần sau.",
+  "Your administrator has not enabled Synchro Code and Cloud sandbox for your account.": "Quản trị viên chưa bật Synchro Code và Cloud sandbox cho tài khoản của bạn.",
+  "This server has no workspace service yet, so there is no browser.": "Máy chủ chưa bật dịch vụ workspace nên chưa có trình duyệt.",
+});
+for (const w of ["YouTube", "Wikipedia", "Google"]) SAME_WORDS.add(w);
+RULES_EN.push(
+  [/^(Đang )?mở (\S+)$/, (m) => `${m[1] ? "Opening" : "Opened"} ${m[2]}`],
+  [/^(Đang )?bấm (phần tử \[(\d+)\]|vị trí (.+))$/, (m) => `${m[1] ? "Clicking" : "Clicked"} ${m[3] ? `element [${m[3]}]` : `at ${m[4]}`}`],
+  [/^(Đang )?rê chuột lên (phần tử \[(\d+)\]|vị trí (.+))$/, (m) => `${m[1] ? "Hovering over" : "Hovered over"} ${m[3] ? `element [${m[3]}]` : m[4]}`],
+  [/^(Đang )?gõ “(.*)”$/, (m) => `${m[1] ? "Typing" : "Typed"} “${m[2]}”`],
+  [/^(Đang )?nhấn (.+)$/, (m) => `${m[1] ? "Pressing" : "Pressed"} ${m[2]}`],
+  [/^(Đang )?chọn “(.*)”$/, (m) => `${m[1] ? "Selecting" : "Selected"} “${m[2]}”`],
+  [/^(Đang )?tìm “(.*)” trên trang$/, (m) => `${m[1] ? "Finding" : "Found"} “${m[2]}” on the page`],
+  [/^(Đang )?chờ trang hiện “(.*)”$/, (m) => `${m[1] ? "Waiting for" : "Waited for"} “${m[2]}”`],
+  [/^(Đang )?tải tệp (.+) lên trang$/, (m) => `${m[1] ? "Uploading" : "Uploaded"} ${m[2]}`],
+  [/^(Đang )?làm (\d+) thao tác trên trang$/, (m) => `${m[1] ? "Doing" : "Did"} ${m[2]} actions on the page`],
+  [/^(\d+)\/(\d+) thao tác$/, (m) => `${m[1]}/${m[2]} actions`],
+  [/^Đang tải về: (.+)$/, (m) => `Downloading: ${m[1]}`],
+  [/^Đã tải về (.+) \(thư mục Downloads của workspace\)$/, (m) => `Downloaded ${m[1]} (workspace Downloads folder)`],
+  [/^Không tải được (.+)$/, (m) => `Couldn't download ${m[1]}`],
+  [/^Gõ “(.*)”$/, (m) => `Typing “${m[1]}”`], [/^Chọn “(.*)”$/, (m) => `Selecting “${m[1]}”`], [/^Mở (\S+)$/, (m) => `Opening ${m[1]}`],
+  [/^Nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Bấm (.+)$/, (m) => `Clicking ${m[1]}`], [/^Rê chuột (.+)$/, (m) => `Hovering ${m[1]}`], [/^Kéo thả (.+)$/, (m) => `Dragging ${m[1]}`], [/^Tải tệp (.+)$/, (m) => `Uploading ${m[1]}`],
+  [/^(.+) cho biết$/, (m) => `${m[1]} says`],
+);

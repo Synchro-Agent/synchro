@@ -16,7 +16,7 @@ const DATA = path.resolve("data-mock");
 // Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
 const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
 const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
-const env = { ...process.env, WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "" };
+const env = { ...process.env, WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, WS_PUBLIC_URL: `ws://localhost:${WS_PORT}/ws-agent`, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "" };
 
 // CLI giả lập (claude, codex, agy) cho Cài đặt → Providers: chép vào <engine home>/.local/bin như CLI thật đã cài,
 // kèm địa chỉ máy chủ giả lập (trang đăng nhập /mock-login/…).

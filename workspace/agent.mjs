@@ -10,6 +10,7 @@ import path from "node:path";
 import { lookup } from "node:dns/promises";
 import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
+import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const PORT = Number(env("WS_AGENT_PORT", 3555));
@@ -184,7 +185,7 @@ async function ensure(u) {
         log("bật workspace", u);
       }
       c = await inspect(name);
-      st(u).cdp?.close(); st(u).cdp = null;
+      B.reset(u);
     }
     const s = st(u);
     s.ip = c.NetworkSettings.Networks[NET]?.IPAddress ?? "";
@@ -197,8 +198,8 @@ async function ensure(u) {
 
 async function stop(u) {
   const s = live.get(u);
-  s?.cdp?.close();
-  if (s) { s.cdp = null; s.dirs.clear(); }
+  B.reset(u);
+  if (s) s.dirs.clear();
   await run("docker", ["stop", "-t", "3", cname(u)], { timeout: 30_000 });
   log("dừng workspace", u);
 }
@@ -341,180 +342,32 @@ function startProxy() {
 // Dọn thư mục chạy dở còn sót (dịch vụ khởi động lại giữa chừng).
 fs.rmSync(`${ROOT}/_runs`, { recursive: true, force: true });
 
-// ------------------------------------------------------------------ trình duyệt (Chromium qua CDP)
-class CDP {
-  constructor(ws) { this.ws = ws; this.id = 0; this.wait = new Map(); this.subs = new Map(); this.closed = false;
-    ws.on("message", (m) => {
-      let j; try { j = JSON.parse(m.toString()); } catch { return; }
-      if (j.id && this.wait.has(j.id)) { const w = this.wait.get(j.id); this.wait.delete(j.id); j.error ? w.rej(new Error(j.error.message)) : w.res(j.result); }
-      else if (j.method) for (const f of this.subs.get(j.method) ?? []) f(j.params);
-    });
-    ws.on("close", () => { this.closed = true; for (const w of this.wait.values()) w.rej(new Error("Trình duyệt đã ngắt kết nối")); this.wait.clear(); for (const f of this.subs.get("close") ?? []) f(); });
-    ws.on("error", () => {});
-  }
-  static open(url) {
-    return new Promise((res, rej) => {
-      const ws = new WebSocket(url, { perMessageDeflate: false, maxPayload: 64 * 1024 * 1024 });
-      const t = setTimeout(() => { ws.terminate(); rej(new Error("Không kết nối được trình duyệt")); }, 8000);
-      ws.once("open", () => { clearTimeout(t); res(new CDP(ws)); });
-      ws.once("error", (e) => { clearTimeout(t); rej(e); });
-    });
-  }
-  send(method, params = {}, timeout = 20_000) {
-    if (this.closed) return Promise.reject(new Error("Trình duyệt đã ngắt kết nối"));
-    const id = ++this.id;
-    return new Promise((res, rej) => {
-      const t = setTimeout(() => { this.wait.delete(id); rej(new Error(`${method}: quá thời gian`)); }, timeout);
-      this.wait.set(id, { res: (v) => { clearTimeout(t); res(v); }, rej: (e) => { clearTimeout(t); rej(e); } });
-      this.ws.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  on(ev, f) { if (!this.subs.has(ev)) this.subs.set(ev, []); this.subs.get(ev).push(f); return () => this.subs.set(ev, this.subs.get(ev).filter((x) => x !== f)); }
-  once(ev, ms) { return new Promise((res) => { const off = this.on(ev, (p) => { off(); clearTimeout(t); res(p); }); const t = setTimeout(() => { off(); res(null); }, ms); }); }
-  close() { try { this.ws.close(); } catch {} }
-}
-
-async function devtools(u, path, method = "GET") {
-  const s = st(u);
-  const r = await fetch(`http://${s.ip}:9223${path}`, { method, signal: AbortSignal.timeout(4000) });
-  if (!r.ok) throw new Error(`DevTools ${r.status}`);
-  return r.json();
-}
-
-const pages = async (u) => (await devtools(u, "/json/list")).filter((t) => t.type === "page");
-const tabOf = (x) => ({ id: x.id, title: x.title, url: x.url });
-const wsOf = (u, id) => `ws://${st(u).ip}:9223/devtools/page/${id}`;
-
-// Bật Chromium nếu chưa chạy; trả về tab đang dùng (tab người dùng chọn gần nhất, mặc định tab đầu).
-async function activeTab(u) {
-  const s = await ensure(u);
-  let ok = false;
-  try { await devtools(u, "/json/version"); ok = true; } catch {}
-  if (!ok) {
-    const r = await run("docker", ["exec", "-u", UID, "-e", `HOME=${HOME}`, cname(u), "/opt/synchro/browser.sh"], { timeout: 30_000 });
-    if (r.code) throw new E(500, "Không bật được trình duyệt: " + (r.err || r.out).trim().slice(0, 300));
-  }
-  let list = await pages(u);
-  if (!list.length) { await devtools(u, "/json/new?about:blank", "PUT"); list = await pages(u); }
-  touch(u);
-  const t = list.find((x) => x.id === s.tab) ?? list[0];
-  s.tab = t.id;
-  return t;
-}
-
-// Kết nối điều khiển dùng chung của agent (giữ log console để agent đọc lại).
-async function agentCdp(u) {
-  const s = st(u);
-  if (s.cdp && !s.cdp.closed && s.cdp.tid === s.tab) return s.cdp;
-  s.cdp?.close();
-  const t = await activeTab(u);
-  const c = await CDP.open(wsOf(u, t.id));
-  c.tid = t.id;
-  c.logs = [];
-  const push = (l) => { c.logs.push(l.slice(0, 2000)); if (c.logs.length > 200) c.logs.shift(); };
-  c.on("Runtime.consoleAPICalled", (p) => push(`[${p.type}] ${p.args.map((a) => a.value ?? a.description ?? a.type).join(" ")}`));
-  c.on("Runtime.exceptionThrown", (p) => push(`[exception] ${p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text}`));
-  c.on("Log.entryAdded", (p) => push(`[${p.entry.level}] ${p.entry.text}${p.entry.url ? " (" + p.entry.url + ")" : ""}`));
-  await Promise.all([c.send("Page.enable"), c.send("Runtime.enable"), c.send("Log.enable")]);
-  s.cdp = c;
-  return c;
-}
-
-const READ_JS = `(() => {
-  const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
-  const sel = 'a[href],button,input:not([type=hidden]),textarea,select,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=switch],[contenteditable=""],[contenteditable=true],summary';
-  document.querySelectorAll("[data-sref]").forEach((e) => e.removeAttribute("data-sref"));
-  let n = 0; const els = [];
-  for (const el of document.querySelectorAll(sel)) {
-    if (els.length >= 200 || !vis(el)) continue;
-    const ref = String(++n); el.setAttribute("data-sref", ref);
-    const tag = el.tagName.toLowerCase(), type = el.getAttribute("type"), role = el.getAttribute("role");
-    const label = (el.getAttribute("aria-label") || el.innerText || el.value || el.placeholder || el.title || el.getAttribute("name") || "").trim().replace(/\\s+/g, " ").slice(0, 80);
-    els.push("[" + ref + "] " + tag + (type ? "[" + type + "]" : "") + (role ? " role=" + role : "") + ' "' + label + '"' + (tag === "a" ? " -> " + el.getAttribute("href") : ""));
-  }
-  return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : "").slice(0, 15000), elements: els };
-})()`;
-
-const KEYS = { Enter: [13, "\r"], Tab: [9], Escape: [27], Backspace: [8], Delete: [46], ArrowUp: [38], ArrowDown: [40], ArrowLeft: [37], ArrowRight: [39], PageUp: [33], PageDown: [34], Home: [36], End: [35], " ": [32, " "], Space: [32, " "] };
-async function pressKey(c, key, modifiers = 0) {
-  const [code, text] = KEYS[key] ?? [key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0, key.length === 1 ? key : undefined];
-  const k = key === "Space" ? " " : key;
-  await c.send("Input.dispatchKeyEvent", { type: text && !modifiers ? "keyDown" : "rawKeyDown", key: k, windowsVirtualKeyCode: code, text: modifiers ? undefined : text, modifiers });
-  await c.send("Input.dispatchKeyEvent", { type: "keyUp", key: k, windowsVirtualKeyCode: code, modifiers });
-}
-async function clickAt(c, x, y) {
-  await c.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
-  await c.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
-  await c.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
-}
-const evaluate = async (c, expression) => {
-  const r = await c.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, 15_000);
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
-  return r.result.value;
-};
-const info = (c) => evaluate(c, "({ url: location.href, title: document.title })").catch(() => ({ url: "", title: "" }));
-const settle = (ms) => new Promise((r) => setTimeout(r, ms));
-async function refPoint(c, ref) {
-  const p = await evaluate(c, `(() => { const el = document.querySelector('[data-sref="${String(ref).replace(/\D/g, "")}"]'); if (!el) return null; el.scrollIntoView({ block: "center", inline: "center" }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-  if (!p) throw new E(400, `Không còn phần tử ref ${ref} trên trang. Hãy gọi browser_read để lấy lại danh sách.`);
-  return p;
-}
-
-async function browserTool(u, a) {
-  const c = await agentCdp(u);
-  touch(u);
-  switch (a.action) {
-    case "navigate": {
-      let url = String(a.url ?? "").trim();
-      if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = (/^(localhost|127\.|0\.0\.0\.0)/.test(url) ? "http://" : "https://") + url;
-      if (!/^(https?|about):/i.test(url)) throw new E(400, "Chỉ mở được địa chỉ http(s)");
-      const load = c.once("Page.loadEventFired", 15_000);
-      const r = await c.send("Page.navigate", { url });
-      if (r.errorText) return { error: `Không mở được ${url}: ${r.errorText}`, ...(await info(c)) };
-      await load; await settle(300);
-      return await info(c);
+// ------------------------------------------------------------------ trình duyệt (Chromium trong container, điều khiển qua CDP)
+// Phần điều khiển dùng chung với workspace giả lập (workspace/browser-core.mjs); ở đây chỉ lo bật Chromium trong container.
+const B = createBrowser({
+  async up(u) {
+    const s = await ensure(u);
+    const base = `http://${s.ip}:9223`;
+    const alive = await devJson(`${base}/json/version`, "GET", 3000).then(() => true, () => false);
+    if (!alive) {
+      const r = await run("docker", ["exec", "-u", UID, "-e", `HOME=${HOME}`, cname(u), "/opt/synchro/browser.sh"], { timeout: 30_000 });
+      if (r.code) throw new E(500, "Không bật được trình duyệt: " + (r.err || r.out).trim().slice(0, 300));
+      B.reset(u);
     }
-    case "read": return await evaluate(c, READ_JS);
-    case "screenshot": {
-      const { data } = await c.send("Page.captureScreenshot", { format: "jpeg", quality: 70 });
-      return { image: data, ...(await info(c)) };
-    }
-    case "click": {
-      const p = a.ref != null ? await refPoint(c, a.ref) : { x: Number(a.x), y: Number(a.y) };
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) throw new E(400, "Thiếu ref hoặc tọa độ x, y");
-      await clickAt(c, p.x, p.y);
-      await settle(600);
-      return await info(c);
-    }
-    case "type": {
-      if (a.ref != null) { const p = await refPoint(c, a.ref); await clickAt(c, p.x, p.y); }
-      if (a.clear) await evaluate(c, `(() => { const el = document.activeElement; if (el && "value" in el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); } })()`);
-      await c.send("Input.insertText", { text: String(a.text ?? "") });
-      if (a.submit) { await pressKey(c, "Enter"); await settle(800); }
-      return await info(c);
-    }
-    case "key": await pressKey(c, String(a.key ?? "Enter")); await settle(300); return await info(c);
-    case "scroll": {
-      const { w, h } = await evaluate(c, "({ w: innerWidth, h: innerHeight })");
-      await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: w / 2, y: h / 2, deltaX: 0, deltaY: Number(a.dy ?? 600) });
-      await settle(300);
-      return await info(c);
-    }
-    case "back": case "forward": {
-      const h = await c.send("Page.getNavigationHistory");
-      const e = h.entries[h.currentIndex + (a.action === "back" ? -1 : 1)];
-      if (e) { const load = c.once("Page.loadEventFired", 10_000); await c.send("Page.navigateToHistoryEntry", { entryId: e.id }); await load; }
-      return await info(c);
-    }
-    case "reload": { const load = c.once("Page.loadEventFired", 15_000); await c.send("Page.reload"); await load; return await info(c); }
-    case "console": { const logs = c.logs.slice(-Number(a.limit ?? 50)); if (a.clear) c.logs = []; return { logs }; }
-    case "eval": {
-      const v = await evaluate(c, String(a.expression ?? ""));
-      return { value: JSON.stringify(v ?? null).slice(0, 20_000) };
-    }
-    default: throw new E(400, "Thao tác trình duyệt không hợp lệ");
-  }
-}
+    return base;
+  },
+  touch: (u) => touch(u),
+  sock: (u, d) => { st(u).socks += d; },
+  // Tệp trình duyệt tải về nằm trong thư mục làm việc (giữ lại khi container được tạo lại).
+  downloads: () => `${WORK}/Downloads`,
+  // Server đang nghe trong workspace (đọc /proc/net/tcp*), trừ cổng nội bộ của trình duyệt và DNS của Docker (127.0.0.11).
+  ports: async (u) => {
+    const r = await run("docker", ["exec", cname(u), "cat", "/proc/net/tcp", "/proc/net/tcp6"], { timeout: 10_000 });
+    return [...new Set(r.out.split("\n").map((l) => l.trim().split(/\s+/)).filter((f) => f[3] === "0A" && !f[1].startsWith("0B00007F:")).map((f) => parseInt(f[1].split(":").pop(), 16)))]
+      .filter((p) => p && p !== 9222 && p !== 9223).sort((a, b) => a - b);
+  },
+});
+const browserTool = (u, a) => B.tool(u, a);
 
 // ------------------------------------------------------------------ vé truy cập WebSocket (do Next ký)
 const b64 = (b) => Buffer.from(b).toString("base64url");
@@ -563,117 +416,6 @@ async function terminal(ws, t, q) {
   });
 }
 
-// ------------------------------------------------------------------ màn hình trình duyệt (screencast + điều khiển)
-async function screen(ws, t) {
-  // Tin nhắn đến trong lúc đang bật trình duyệt (vd. kích thước khung) được giữ lại rồi xử lý sau.
-  const queue = [];
-  let handle = null, gone = false;
-  ws.on("message", (m) => (handle ? handle(m) : queue.push(m)));
-  ws.on("close", () => { gone = true; });
-  const s = st(t.u);
-  await activeTab(t.u);
-  if (gone) return;
-  s.socks++;
-  let size = { w: 1280, h: 800, mobile: false };
-  let c = null, lastTabs = "";
-  const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
-  const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
-  const pushTabs = async () => {
-    try {
-      const list = (await pages(t.u)).map(tabOf);
-      const j = JSON.stringify([list, s.tab]);
-      if (j !== lastTabs) { lastTabs = j; send({ t: "tabs", list, active: s.tab }); }
-    } catch {}
-  };
-  const metrics = () => c.send("Emulation.setDeviceMetricsOverride", { width: size.w, height: size.h, deviceScaleFactor: 1, mobile: size.mobile }).catch(() => {});
-  const startCast = () => c.send("Page.startScreencast", { format: "jpeg", quality: 65, maxWidth: size.w, maxHeight: size.h, everyNthFrame: 1 }).catch(() => {});
-  // Gắn màn hình vào một tab (đổi tab = đóng kết nối cũ, mở kết nối tới tab mới). Agent cũng làm việc trên tab này.
-  const attach = async (id) => {
-    const list = await pages(t.u);
-    let target = list.find((x) => x.id === id) ?? list.find((x) => x.id === s.tab) ?? list[0];
-    if (!target) target = await devtools(t.u, "/json/new?about:blank", "PUT");
-    const old = c;
-    if (old) { old.switching = true; old.close(); }
-    const n = await CDP.open(wsOf(t.u, target.id));
-    c = n; s.tab = target.id;
-    n.on("Page.screencastFrame", (p) => {
-      send({ t: "frame", data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight });
-      n.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
-    });
-    n.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) { send({ t: "nav", url: p.frame.url }); pushTabs(); } });
-    n.on("Page.loadEventFired", () => { sendInfo(); pushTabs(); });
-    n.on("Page.frameStartedLoading", () => send({ t: "loading", on: true }));
-    n.on("Page.frameStoppedLoading", () => send({ t: "loading", on: false }));
-    // Tab bị đóng (vd. trang tự đóng): chuyển sang tab còn lại.
-    n.on("close", () => { if (!n.switching && !gone) attach().catch(() => ws.close(1011, "browser closed")); });
-    await n.send("Page.enable");
-    await metrics();
-    await startCast();
-    await sendInfo();
-    await pushTabs();
-  };
-  await attach(s.tab);
-  // Tab mới do trang mở (window.open, target=_blank) hoặc do agent: cập nhật danh sách định kỳ.
-  const poll = setInterval(pushTabs, 2000);
-  let lastTouch = 0;
-  handle = async (m) => {
-    const now = Date.now(); if (now - lastTouch > 10_000) { lastTouch = now; touch(t.u); }
-    let j; try { j = JSON.parse(m.toString()); } catch { return; }
-    try {
-      if (j.t === "size") {
-        size = { w: Math.max(320, Math.min(j.w | 0, 2560)), h: Math.max(240, Math.min(j.h | 0, 1600)), mobile: !!j.mobile };
-        await metrics();
-        await c.send("Page.stopScreencast").catch(() => {});
-        await startCast();
-      } else if (j.t === "mouse") {
-        await c.send("Input.dispatchMouseEvent", { type: j.type, x: +j.x, y: +j.y, button: j.button ?? "left", buttons: j.buttons ?? 0, clickCount: j.clickCount ?? 0, modifiers: j.mod ?? 0 });
-      } else if (j.t === "wheel") {
-        await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +j.x, y: +j.y, deltaX: +j.dx || 0, deltaY: +j.dy || 0 });
-      } else if (j.t === "key") {
-        await c.send("Input.dispatchKeyEvent", { type: j.type, key: j.key, code: j.code, text: j.text, unmodifiedText: j.text, windowsVirtualKeyCode: j.kc ?? 0, modifiers: j.mod ?? 0 });
-      } else if (j.t === "text") {
-        await c.send("Input.insertText", { text: String(j.text ?? "") });
-      } else if (j.t === "go") {
-        await browserTool(t.u, { action: "navigate", url: j.url }).catch((e) => send({ t: "error", error: e.message }));
-      } else if (j.t === "html") {
-        // Mở file HTML người dùng chọn trên máy (gửi nội dung lên, hiển thị bằng data URL).
-        const html = String(j.html ?? "").slice(0, 5_000_000);
-        await c.send("Page.navigate", { url: "data:text/html;charset=utf-8;base64," + Buffer.from(html).toString("base64") });
-      } else if (j.t === "back" || j.t === "forward" || j.t === "reload") {
-        await browserTool(t.u, { action: j.t });
-      } else if (j.t === "tab") {
-        if (j.id !== s.tab) await attach(String(j.id));
-      } else if (j.t === "newtab") {
-        const u = String(j.url ?? "about:blank");
-        const nt = await devtools(t.u, `/json/new?${encodeURIComponent(u)}`, "PUT");
-        await attach(nt.id);
-      } else if (j.t === "closetab") {
-        const id = String(j.id);
-        const list = await pages(t.u);
-        if (list.length <= 1) { await devtools(t.u, "/json/new?about:blank", "PUT"); }
-        const next = (await pages(t.u)).find((x) => x.id !== id);
-        if (id === s.tab && next) await attach(next.id);
-        await fetch(`http://${s.ip}:9223/json/close/${id}`, { signal: AbortSignal.timeout(4000) }).catch(() => {});
-        lastTabs = ""; await pushTabs();
-      } else if (j.t === "clear") {
-        await c.send("Network.clearBrowserCookies").catch(() => {});
-        await c.send("Network.clearBrowserCache").catch(() => {});
-        await c.send("Storage.clearDataForOrigin", { origin: "*", storageTypes: "all" }).catch(() => {});
-        send({ t: "cleared" });
-      } else if (j.t === "ports") {
-        // Server đang nghe trong workspace (đọc /proc/net/tcp*), trừ cổng nội bộ của trình duyệt và DNS của Docker (127.0.0.11).
-        const r = await run("docker", ["exec", cname(t.u), "cat", "/proc/net/tcp", "/proc/net/tcp6"], { timeout: 10_000 });
-        const ports = [...new Set(r.out.split("\n").map((l) => l.trim().split(/\s+/)).filter((f) => f[3] === "0A" && !f[1].startsWith("0B00007F:")).map((f) => parseInt(f[1].split(":").pop(), 16)))]
-          .filter((p) => p && p !== 9222 && p !== 9223).sort((a, b) => a - b);
-        send({ t: "ports", list: ports });
-      }
-    } catch (e) { send({ t: "error", error: e.message }); }
-  };
-  for (const m of queue.splice(0)) handle(m);
-  const bye = () => { s.socks--; clearInterval(poll); if (c) { c.switching = true; c.send("Page.stopScreencast").catch(() => {}).finally(() => c.close()); } };
-  if (gone) bye(); else ws.on("close", bye);
-}
-
 // ------------------------------------------------------------------ máy chủ HTTP + WebSocket
 const authed = (req) => {
   const h = String(req.headers.authorization ?? "");
@@ -708,8 +450,9 @@ const server = http.createServer(async (req, res) => {
       default: return reply(res, 404, { error: "not found" });
     }
   } catch (e) {
-    if (!(e instanceof E)) log("lỗi", url.pathname, e);
-    reply(res, e instanceof E ? e.status : 500, { error: e.message || String(e) });
+    const known = e instanceof E || e instanceof BrowserError;
+    if (!known) log("lỗi", url.pathname, e);
+    reply(res, known ? e.status : 500, { error: e.message || String(e) });
   }
 });
 
@@ -722,7 +465,7 @@ server.on("upgrade", (req, sock, head) => {
   if (!t || !kind) { sock.write("HTTP/1.1 401 Unauthorized\r\n\r\n"); return sock.destroy(); }
   wss.handleUpgrade(req, sock, head, (ws) => {
     const fail = (e) => { try { ws.send(JSON.stringify({ t: "error", error: e.message || String(e) })); } catch {} ws.close(1011, "error"); };
-    (kind === "screen" ? screen(ws, t) : terminal(ws, t, url.searchParams)).catch(fail);
+    (kind === "screen" ? B.screen(ws, t.u) : terminal(ws, t, url.searchParams)).catch(fail);
   });
 });
 
