@@ -1348,7 +1348,7 @@ export default function Home() {
       }}>
         <div className="side-top">
           <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Đóng thanh bên"><I.Panel /></button>
-          <span className="brand-lock"><I.Spark size={20} /><span className="logo">Synchro</span></span>
+          <span className="logo">Synchro</span>
         </div>
         <div className="nav">
           <button className={`nav-item ${view === "new" ? "active" : ""}`} onClick={goNew}>
