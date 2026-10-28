@@ -106,7 +106,7 @@ for (const lang of LANGS) {
     await until(`!document.querySelector(".thinking") && !document.querySelector(".art-card.busy") && !document.querySelector("[aria-label='Dừng'], [aria-label='Stop']")`, 90000, "reply");
     await sleep(1500); await look("chat + artifact");
   });
-  for (const v of ["projects", "artifacts", "inbox", "code", "browser", "customize"]) await step(v, async () => { await nav(v); await look(v); });
+  for (const v of ["projects", "artifacts", "inbox", "code", "customize"]) await step(v, async () => { await nav(v); await look(v); });
   await step("skill hub · connectors", async () => { await click(`[...document.querySelectorAll("button, [role=tab]")].find((e) => /^(Connectors|Kết nối)$/.test(e.textContent.trim()))`, "connectors tab"); await sleep(1200); await look("skill hub · connectors"); });
   // Bộ não: đồ thị, ô tìm nhanh, một ghi chú (kèm cột liên kết), Bảng, Hoạt động.
   await step("bộ não", async () => { await nav("brain"); await sleep(1500); await look("bộ não · đồ thị"); });

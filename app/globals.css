@@ -4539,15 +4539,8 @@ button.bn-box:disabled{cursor:default}
 .bp-dialog p{margin:0;font-size:14px;line-height:1.5;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}
 .bp-dialog .field{margin:0;height:34px}
 .bp-dialog-a{display:flex;justify-content:flex-end;gap:8px}
-/* Khung trình duyệt cạnh khung chat và trang Trình duyệt */
+/* Khung trình duyệt cạnh đoạn chat */
 .brw-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
 .main.art-full .brw-panel{width:100%;border-left:0}
-.brw-page{flex:1;min-height:0;display:flex;flex-direction:column}
-.brw-page .bp{border-top:.5px solid var(--border)}
-.brw-page-h{display:flex;align-items:center;gap:10px;padding:10px 14px}
-.brw-page-h b{font-size:14px;font-weight:600}
-.brw-page-h span{font-size:12.5px;color:var(--text-3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.brw-off{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--text-2);font-size:13.5px;line-height:1.55}
-.brw-off b{font-size:15px;color:var(--text)}
 @media (max-width:760px){.brw-panel{position:fixed;inset:0;width:100%;z-index:60;border-left:0}}
 @media (prefers-reduced-motion:reduce){.bp-agent,.bp-agent-dot,.bp-ripple,.bp-dialog,.brw-panel{animation:none}}
