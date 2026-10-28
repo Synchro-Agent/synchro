@@ -31,6 +31,19 @@ const api = async (method, p, body) => {
 const EMAIL = "ext-lab@synchro.test";
 await api("POST", "/api/auth/signup", { email: EMAIL, password: "Member-pass-123", profile: { fullName: "Ext Lab", birthDate: "2000-01-01" } });
 await api("POST", "/api/auth/login", { email: EMAIL, password: "Member-pass-123" });
+// Quyền rõ ràng (không dựa vào quyền mặc định của tài khoản mới, có thể đã bị bộ kiểm thử khác đổi): mọi model, mọi tính năng
+// (Synchro Code + Cloud sandbox để có trình duyệt của Synchro).
+{
+  let ac = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
+  const admin = async (method, p, body) => {
+    const r = await fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie: ac }, body: body === undefined ? undefined : JSON.stringify(body) });
+    for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) ac = c.split(";")[0];
+    return r.json().catch(() => null);
+  };
+  if (!ac) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
+  const u = (await admin("GET", "/api/admin")).users.find((x) => x.email === EMAIL);
+  await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])) } });
+}
 const U = (await api("GET", "/api/auth/me")).j?.user?.id;
 if (!U) { console.error("Không đăng nhập được tài khoản thử."); process.exit(1); }
 const removeAll = async () => { for (const d of (await api("GET", "/api/browser/ext")).j?.devices ?? []) await api("POST", "/api/browser/ext", { op: "remove", id: d.id }); };
