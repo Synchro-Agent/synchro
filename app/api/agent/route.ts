@@ -30,12 +30,15 @@ export async function POST(req: Request) {
   // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
   // Chế độ Tự động: việc code luôn cần model mạnh nhất tài khoản được dùng.
   let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
-  const lastText = String([...(Array.isArray(messages) ? messages : [])].reverse().find((m: { role?: string }) => m?.role !== "assistant")?.content ?? "").slice(0, 4000);
+  const asks = (Array.isArray(messages) ? messages : []).filter((m: { role?: string }) => m?.role !== "assistant").map((m: { content?: unknown }) => String(m?.content ?? "").slice(0, 8000));
+  const lastText = asks[asks.length - 1] ?? "";
+  // Lời nhờ mới nhất (kèm lời nhờ trước để câu nối tiếp như "làm lại", "tiếp đi" giữ loại việc) cho bộ chọn model và mức nỗ lực.
+  const ask = { text: lastText, attachments: 0, turns: Array.isArray(messages) ? messages.length : 0, studio: false, prevAsk: asks[asks.length - 2] };
   if (chosen === AUTO) {
     // Chọn theo đúng việc đang nhờ (qua cả ba hãng, trong đúng các model bộ chọn đang hiện: gói hoặc khóa API):
     // sửa nhỏ dùng model vừa đủ cho nhanh, dựng cả ứng dụng dùng model mạnh nhất.
     const { allowed, usable } = await usableModels(c.user);
-    chosen = routeModel({ text: lastText, attachments: 0, turns: Array.isArray(messages) ? messages.length : 0, studio: false }, usable.length ? usable : allowed)?.model ?? null;
+    chosen = routeModel(ask, usable.length ? usable : allowed)?.model ?? null;
   }
   const model = chosen || pickDefault(await catalog(), mainModels());
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Đăng nhập gói ở Cài đặt → Providers, hoặc quản trị viên nhập khóa API." }, { status: 503 });
@@ -44,7 +47,7 @@ export async function POST(req: Request) {
   const target = plan ? null : await resolveModel(model);
   if (!plan && !target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   // Nỗ lực "Tự động": theo độ khó của việc (code luôn ít nhất mức vừa).
-  const want = wanted === "auto" ? (() => { const e = autoEffort({ text: lastText, attachments: 0, turns: 0, studio: false }); return e === "low" ? "medium" : e; })() : wanted;
+  const want = wanted === "auto" ? (() => { const e = autoEffort(ask); return e === "low" ? "medium" : e; })() : wanted;
   const effort = isEffort(want) ? (target ? clampEffort(want, effortCap(permsOf(c.user).effort, model), target.kind) : clampEffort(want, effortCap(permsOf(c.user).effort, model), "anthropic")) : undefined;
   // Hạn mức chi phí chỉ áp cho khóa API (gói tính vào hạn mức của chính gói).
   const over = plan ? null : overLimit(c.user);

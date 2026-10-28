@@ -13,7 +13,7 @@ import { prepareHistory, type TraceItem } from "./transpile";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { splitArtifacts } from "./artifacts";
-import { AUTO, autoEffort, routeModel, type RouteInput } from "./router";
+import { AUTO, autoEffort, effortLabel, routeModel, taskLabel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { STUDIO_LABEL } from "./plugindir";
@@ -628,7 +628,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
-  progress("note", `Tự động chọn ${r.model.split("/").pop()} · nỗ lực ${effort}`);
+  progress("note", `Tự động chọn ${r.model.split("/").pop()} · việc ${taskLabel(r.task)} · nỗ lực ${effortLabel(effort)}`);
   let res = await chatTurn({ ...body, model: r.model, effort }, c, scope);
   let used = r.model;
   // Model đầu lỗi / quá tải / hết hạn mức: chuyển một lần sang model dự phòng (ưu tiên hãng khác) mà người dùng không phải làm gì.
@@ -650,14 +650,27 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   return Response.json({ ...j, model: j.model ?? used, auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
 }
 // Thông tin của yêu cầu mới nhất cho bộ định tuyến: chữ, tệp / ảnh đính kèm, độ dài tài liệu, model của câu trả lời trước.
+// Chỉ chữ người dùng gõ mới quyết định loại việc; nội dung tệp đính kèm (ghi chú "Các khối <file>…", nhãn [File: …], <file>…</file>)
+// chỉ tính số tệp và độ dài, để từ khóa nằm trong tệp không đẩy độ khó lên.
+const FILE_TEXT = /^(?:Các khối <file>|\[File: )/;
+function typedText(m: { content?: unknown } | undefined): string {
+  if (!m) return "";
+  if (typeof m.content === "string") return m.content.slice(0, 8000);
+  const b = Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).find((x) => x?.type === "text" && typeof x.text === "string" && !FILE_TEXT.test(x.text)) : undefined;
+  return (b?.text ?? "").slice(0, 8000);
+}
 function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-line @typescript-eslint/no-explicit-any
   const msgs = Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : [];
-  const lastUser = [...msgs].reverse().find((m) => m?.role === "user");
-  const blocks = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string; text?: string }[]) : [];
+  const users = msgs.filter((m) => m?.role === "user");
+  const lastUser = users[users.length - 1];
+  const blocks = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string; text?: string; fallbackText?: string }[]) : [];
   const attachments = blocks.filter((b) => b?.type && b.type !== "text").length;
   const images = blocks.filter((b) => b?.type === "image" || b?.type === "image_url").length;
-  const docChars = blocks.reduce((n, b) => n + (b?.type === "text" || b?.type === "document" ? JSON.stringify(b).length : 0), 0);
-  return { text: lastUserText(msgs), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, docChars, prev: typeof body.prevModel === "string" ? body.prevModel : null };
+  const files = blocks.filter((b) => b?.type === "text" && typeof b.text === "string" && b.text.startsWith("[File: ")).length;
+  // Độ dài nội dung tệp: chữ trích ra trong <file>, PDF gửi nguyên dạng thì theo chữ dự phòng (không có thì ước chừng một tài liệu vừa).
+  const docChars = blocks.reduce((n, b) => n + (b?.type === "text" && typeof b.text === "string" && b.text.includes("<file") ? b.text.length : b?.type === "document" ? (b.fallbackText?.length ?? 8000) : 0), 0);
+  return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, files, docChars,
+    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk: typedText(users[users.length - 2]) || undefined };
 }
 
 async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any

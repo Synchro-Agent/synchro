@@ -1341,6 +1341,8 @@ RULES_EN.push(
   [/^Đoạn chat mới sẽ nằm trong "(.+)"$/, (m) => `The new chat will be in "${m[1]}"`],
   [/^Đã thêm (\d+) tệp từ (.+)$/, (m) => `Added ${m[1]} files from ${m[2]}`],
   [/^Thêm (\d+) tệp$/, (m) => `Add ${m[1]} files`],
+  // Dòng tiến trình của chế độ Tự động: "Tự động chọn <model> · việc <loại việc> · nỗ lực <mức>".
+  [/^Tự động chọn (.+) · việc (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · ${({ "trò chuyện": "chat", "hỏi đáp": "Q&A", "học ngôn ngữ": "language help", "dịch": "translation", "tóm tắt": "summary", "viết": "writing", "viết code": "coding", "gỡ lỗi": "debugging", "suy luận": "reasoning", "phân tích": "analysis", "tạo sản phẩm": "building", "đọc ảnh": "image reading", "tài liệu dài": "long document", "số liệu": "data" } as Record<string, string>)[m[2]] ?? m[2]} · effort ${({ "thấp": "low", "trung bình": "medium", "cao": "high", "cao hơn": "extra high", "tối đa": "max" } as Record<string, string>)[m[3]] ?? m[3]}`],
   [/^Tự động chọn (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · effort ${m[2]}`],
   [/^(.+) đang bận, chuyển sang (.+)$/, (m) => `${m[1]} is busy, switching to ${m[2]}`],
   [/^Chép lời: (.+)$/, (m) => `Transcription: ${m[1]}`],
