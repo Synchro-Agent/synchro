@@ -1331,7 +1331,7 @@ export default function Home() {
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving ? (
-    <AuthComponent key="auth" brandName="Synchro" logo={null} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
+    <AuthComponent key="auth" brandName="Synchro" logo={<I.Spark size={24} />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
       onDone={(u) => { enterAccount(u); syncProfile(u); setMe(u); if (!u.needsProfile) setAuthLeaving(true); }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
   ) : null;
   if (!me || needProfile) return <>{null}{authEl}</>;
@@ -1348,7 +1348,7 @@ export default function Home() {
       }}>
         <div className="side-top">
           <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Đóng thanh bên"><I.Panel /></button>
-          <span className="logo">Synchro</span>
+          <span className="brand-lock"><I.Spark size={20} /><span className="logo">Synchro</span></span>
         </div>
         <div className="nav">
           <button className={`nav-item ${view === "new" ? "active" : ""}`} onClick={goNew}>

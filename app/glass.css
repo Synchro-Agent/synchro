@@ -101,8 +101,7 @@ html body .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0
 .btn.dark:hover{background:var(--btn-dark)}
 .btn.danger{background:rgba(198,66,47,.9);color:#fff;box-shadow:var(--gl-shadow-small)}
 .send{color:#fff}
-html body button.send.send{--gl-fill:rgba(47,123,246,.78);color:#fff}
-[data-theme="dark"] body button.send.send{--gl-fill:rgba(47,123,246,.6)}
+html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
 .dock .send:disabled{opacity:.45}
 
 /* ---- accessibility (Apple: honour reduce transparency / reduce motion) ---- */
@@ -215,8 +214,8 @@ html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
 .chat-scroll .fold>*{transition:padding .28s}
 
 /* "Mới" plus bubble */
-html body .nav-item .plus{position:relative;background:transparent;isolation:isolate;box-shadow:0 0 0 .5px rgba(255,255,255,.25),0 2px 6px rgba(30,80,200,.3)}
-html body .nav-item .plus::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:-1;background:rgba(47,123,246,.72);-webkit-backdrop-filter:blur(2px) saturate(1.7);backdrop-filter:blur(2px) saturate(1.7);box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,.6),inset -1px -1.5px 2px -1px rgba(255,255,255,.35),inset 0 0 8px -2px rgba(255,255,255,.15)}
+html body .nav-item .plus{position:relative;background:transparent;isolation:isolate;box-shadow:0 0 0 .5px rgba(255,255,255,.25),0 2px 6px var(--ink-glow)}
+html body .nav-item .plus::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:-1;background:var(--ink-glass);-webkit-backdrop-filter:blur(2px) saturate(1.7);backdrop-filter:blur(2px) saturate(1.7);box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,.6),inset -1px -1.5px 2px -1px rgba(255,255,255,.35),inset 0 0 8px -2px rgba(255,255,255,.15)}
 html body .nav-item .plus::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;padding:.75px;opacity:.7;background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(255,255,255,.1) 30%,rgba(255,255,255,.05) 60%,rgba(255,255,255,.7));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 html body .nav-item:hover .plus{scale:1.08}
 html body .nav-item:active .plus{scale:.94}

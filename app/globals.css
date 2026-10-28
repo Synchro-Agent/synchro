@@ -103,7 +103,7 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .nav-item:hover{background:var(--hover)}
 .nav-item.active{background:var(--active)}
 .nav-item .tag{margin-left:auto;font-size:12px;color:var(--link)}
-.nav-item .plus{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#2f7bf6;color:#fff;margin-left:-2px;margin-right:-2px}
+.nav-item .plus{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--ink-glass);color:var(--ink-glass-fg);margin-left:-2px;margin-right:-2px}
 .section-label{display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 18px;margin-top:18px;font-size:var(--fs-label);font-weight:var(--fw-ui);color:var(--text-3);height:26px}
 .chat-list{flex:1;overflow:auto;padding:4px 8px}
 .chat-item{display:block;width:100%;text-align:left;height:var(--row-chat);line-height:var(--row-chat);padding:0 10px;border-radius:8px;font-size:var(--fs-chat);font-weight:var(--fw-ui);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:fadeIn .3s var(--ease)}
@@ -130,8 +130,12 @@ input,textarea{font:inherit;color:inherit;outline:0}
 
 .hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:12vh}
 .greeting{display:flex;align-items:center;gap:12px;font-family:var(--font-serif);font-size:33px;letter-spacing:-.02em;margin-bottom:22px;animation:rise .6s var(--ease) both}
-.spark{filter:drop-shadow(0 3px 8px rgba(60,70,255,.32));animation:spin 1.2s var(--ease) both}
-[data-theme="dark"] .spark{filter:drop-shadow(0 3px 12px rgba(80,100,255,.5))}
+/* Logo Synchro: ảnh vân mực sần làm mặt nạ, tô bằng màu mực của giao diện (đen ở giao diện sáng, sáng ở giao diện tối).
+   --ink-glass: lớp kính màu mực cho các nút mang màu thương hiệu (nút "+" của Mới, nút gửi); --ink-glass-fg: biểu tượng trên đó. */
+:root{--logo-ink:#000;--ink-glass:rgba(12,12,12,.84);--ink-glass-fg:#fff;--ink-glow:rgba(0,0,0,.24)}
+[data-theme="dark"]{--logo-ink:#f5f4ef;--ink-glass:rgba(245,244,239,.9);--ink-glass-fg:#141413;--ink-glow:rgba(0,0,0,.5)}
+.spark{display:inline-block;flex:none;vertical-align:middle;background:var(--logo-ink);-webkit-mask:url(/brand/synchro-logo.png) center/contain no-repeat;mask:url(/brand/synchro-logo.png) center/contain no-repeat}
+.brand-lock{display:inline-flex;align-items:center;gap:8px;min-width:0}
 .composer{width:min(768px,calc(100% - 48px));border-radius:20px;background:var(--input);box-shadow:var(--shadow-input);padding:14px 16px 12px;transition:box-shadow .2s;animation:rise .6s .08s var(--ease) both}
 .composer:focus-within{box-shadow:0 4px 20px rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.2)}
 .composer textarea{width:100%;border:0;background:transparent;resize:none;font-size:16px;line-height:1.5;min-height:26px;max-height:240px;display:block;margin-bottom:10px}
@@ -1301,7 +1305,7 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 
 /* ---- Trang pháp lý (/privacy, /terms) ---- */
 .legal{max-width:720px;margin:0 auto;padding:48px 20px 80px;color:var(--text);font-size:15px;line-height:1.7}
-.legal-brand{display:inline-block;margin-bottom:36px;color:var(--text);text-decoration:none}
+.legal-brand{display:inline-flex;margin-bottom:36px;color:var(--text);text-decoration:none}
 .legal h1{font-family:var(--font-serif);font-weight:360;font-size:34px;letter-spacing:-.02em;margin:0}
 .legal h2{font-size:16px;font-weight:560;margin:28px 0 6px}
 .legal p,.legal li{color:var(--text-2)}
@@ -2711,6 +2715,8 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .dl-dock i{width:34px;height:34px;border-radius:9px;background:linear-gradient(160deg,rgba(255,255,255,.55),rgba(255,255,255,.22))}
 .dl-dock i:nth-child(2){background:linear-gradient(160deg,#9fd0ff,#5d8dff)}.dl-dock i:nth-child(4){background:linear-gradient(160deg,#ffd27a,#ff9b5c)}
 .dl-dock span{position:relative;width:40px;height:40px;border-radius:11px;background:#fff;display:grid;place-items:center;box-shadow:0 6px 14px rgba(8,16,70,.3)}
+/* Ô ứng dụng trong thanh dock luôn nền trắng: logo giữ mực đen ở cả hai giao diện. */
+.dl-dock span .spark{background:#000}
 .dl-dock span::after{content:"";position:absolute;bottom:-6px;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.9)}
 .dl-phone{width:44%;aspect-ratio:9/19;background:var(--bg);color:var(--text);border-radius:30px;display:flex;flex-direction:column;overflow:hidden;transform:translateY(14%);
   box-shadow:0 0 0 5px #0d0d12,0 0 0 6px rgba(255,255,255,.25),0 34px 60px -12px rgba(8,16,70,.65)}
