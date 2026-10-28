@@ -17,13 +17,13 @@ const base = (p: string) => p.split("/").pop() || p;
 const host = (u: string) => { try { const x = new URL(/^[a-z]+:/i.test(u) ? u : "http://" + u); return x.host + (x.pathname !== "/" ? x.pathname : ""); } catch { return u; } };
 const VERB: Record<string, string> = {
   bash: "Chạy lệnh", read_file: "Đọc", write_file: "Tạo / ghi", edit_file: "Sửa", list_files: "Liệt kê file", grep: "Tìm",
-  browser_navigate: "Mở trang", browser_read: "Đọc trang", browser_screenshot: "Chụp màn hình", browser_click: "Click", browser_type: "Gõ", browser_key: "Nhấn phím",
+  browser_navigate: "Mở trang", browser_read: "Đọc trang", browser_screenshot: "Chụp màn hình", browser_click: "Bấm", browser_type: "Gõ", browser_key: "Nhấn phím",
   browser_scroll: "Cuộn trang", browser_console: "Xem console", open_pane: "Mở khung", load_skill: "Dùng skill", read_skill_file: "Đọc file skill", search_skills: "Tìm skill", run_skill_script: "Chạy script skill",
 };
 // Động từ cho dòng trạng thái kiểu Claude ("Clicking, waiting, capturing page").
 const DOING: Record<string, string> = {
   bash: "chạy lệnh", read_file: "đọc file", write_file: "ghi file", edit_file: "sửa file", list_files: "xem thư mục", grep: "tìm trong code",
-  browser_navigate: "mở trang", browser_read: "đọc trang", browser_screenshot: "chụp trang", browser_click: "click", browser_type: "gõ", browser_key: "nhấn phím",
+  browser_navigate: "mở trang", browser_read: "đọc trang", browser_screenshot: "chụp trang", browser_click: "bấm", browser_type: "gõ", browser_key: "nhấn phím",
   browser_scroll: "cuộn trang", browser_console: "xem console", open_pane: "mở khung", update_plan: "cập nhật danh sách việc", load_skill: "đọc skill", read_skill_file: "đọc file skill",
   search_skills: "tìm skill", run_skill_script: "chạy script",
 };

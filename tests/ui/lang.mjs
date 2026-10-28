@@ -1,0 +1,133 @@
+// Soát ngôn ngữ toàn trang bằng Chrome ẩn trên npm run dev:mock: đi qua mọi màn hình ở giao diện tiếng Việt rồi tiếng Anh,
+// gom chữ sai ngôn ngữ (tiếng Anh sót trong giao diện tiếng Việt, tiếng Việt sót trong giao diện tiếng Anh) theo từng màn hình.
+// Bỏ qua nội dung người dùng (tin nhắn, code, tên đoạn chat, [data-notr]). Chạy tay: node tests/ui/lang.mjs [vi|en]
+import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { loadTs } from "../lib/ts.mjs";
+
+const B = "http://localhost:3200";
+const LANGS = process.argv[2] ? [process.argv[2]] : ["vi", "en"];
+const PROF = tmpdir() + "/synchro-ui/chrome-prof-lang";
+const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
+const SAME_WORDS = [...D.SAME_WORDS];
+const SAME = [...D.SAME];
+
+let cookie = "";
+{
+  const r = await fetch(B + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: "admin@synchro.test", password: "synchro-mock-123" }) });
+  for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
+  if (!cookie) throw new Error("login failed");
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Gom chữ sai ngôn ngữ đang hiện trên trang (chữ và các thuộc tính placeholder / title / aria-label / data-tip).
+const COLLECT = (lang) => `(() => {
+  const lang = ${JSON.stringify(lang)};
+  const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+  const EN = /\\b(the|and|or|of|for|with|your|you|this|that|from|will|is|are|was|be|been|has|have|not|yes|all|any|more|less|new|add|added|remove|delete|deleted|edit|save|saved|cancel|close|open|show|hide|view|search|settings|loading|error|failed|retry|back|done|create|created|update|updated|upload|download|copy|copied|share|enable|enabled|disable|disabled|turn|learn|select|choose|pick|start|stop|running|send|sent|sign|account|password|name|file|files|folder|used|left|limit|limits|resets|reset|plan|plans|key|keys|balance|usage|today|yesterday|week|month|day|days|hour|hours|minute|minutes|seconds|ago|none|empty|untitled|recent|help|about|privacy|terms|message|messages|session|sessions|project|projects|task|tasks|note|notes|link|links|connect|connected|disconnect|install|installed|uninstall|default|custom|general|appearance|language|theme|dark|light|automatic|members|member|role|invite|people|user|users|details|paid|price|cost|total|input|output|now|later|never|always|only|also|before|after|while|when|what|which|who|how|why|here|there|then|than|into|over|under|between|each|every|other|another|same|first|last|next|previous|page|pages|item|items|result|results|preview|rename|duplicate|move|archive|restore|unpin|export|import|generate|try|again|continue|submit|confirm|apply|clear|refresh|reload|check|checking|working|thinking|waiting|ready|available|unavailable|status|history|activity|logs|feedback|report|voices|text|audio|sound|music|record|recording|play|pause|listen|today|week|weekly|daily|graph|tables?|topics?|memory|brain|hub|connectors? hub)\\b/i;
+  const sameW = new Set(${JSON.stringify(SAME_WORDS)});
+  const same = new Set(${JSON.stringify(SAME)});
+  const strip = (v) => v.split(/[\\s+&/()·:;,.\\-–—|•@#'"“”!?…×=*%$€£¥→←↑↓~≈]+/).filter((w) => w && !sameW.has(w)).join(" ");
+  const SKIP = "script,style,pre,code,textarea,input,[data-notr],.ai-msg,.user-msg,.mdx,.art-code,.sk-pre,.chat-item,.title-edit,iframe,.cr-by,.pl-row2-h b,.cm-editor,.monaco-editor,.xterm,.codebox";
+  const out = new Set();
+  const where = ${JSON.stringify(!!process.env.WHERE)};
+  const hint = (el) => { const parts = []; for (let e = el; e && e !== document.body && parts.length < 3; e = e.parentElement) parts.push(e.tagName.toLowerCase() + (typeof e.className === "string" && e.className ? "." + e.className.trim().split(/\s+/)[0] : "")); return parts.join(" < "); };
+  const bad = (v) => {
+    v = v.trim();
+    if (v.length < 2 || same.has(v) || !/\\p{L}{2}/u.test(v)) return false;
+    const w = strip(v);
+    return lang === "en" ? VI.test(w) : !VI.test(v) && EN.test(w);
+  };
+  const shown = (el) => { for (let e = el; e && e !== document.body; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === "none" || cs.visibility === "hidden") return false; } return true; };
+  const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (tw.nextNode()) {
+    const t = tw.currentNode, p = t.parentElement, v = t.nodeValue;
+    if (!p || p.closest(SKIP) || !bad(v) || !shown(p)) continue;
+    out.add(v.trim().slice(0, 110) + (where ? "   ‹" + hint(p) + "›" : ""));
+  }
+  // Thuộc tính nhắc lại nội dung người dùng (aria-label = tên artifact…) thì bỏ qua.
+  const content = new Set([...document.querySelectorAll("[data-notr]")].map((e) => e.textContent.trim()));
+  for (const el of document.querySelectorAll("[placeholder],[title],[aria-label],[data-tip]")) {
+    if (el.closest(SKIP.replace("textarea,input,", "")) || !shown(el)) continue;
+    for (const a of ["placeholder", "title", "aria-label", "data-tip"]) { const v = el.getAttribute(a); if (v && !content.has(v.trim()) && bad(v)) out.add("[" + a + "] " + v.trim().slice(0, 100) + (where ? "   ‹" + hint(el) + "›" : "")); }
+  }
+  return [...out];
+})()`;
+
+const report = new Map();
+for (const lang of LANGS) {
+  console.log(`\n━━ ${lang}`);
+  rmSync(PROF, { recursive: true, force: true });
+  const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ["--headless=new", "--remote-debugging-port=9341", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
+  let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9341/json/version").then((r) => r.json()).catch(() => null); }
+  const ws = new WebSocket(ver.webSocketDebuggerUrl);
+  await new Promise((r) => ws.addEventListener("open", r));
+  let seq = 0; const waits = new Map();
+  ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.id && waits.has(m.id)) { const [ok, no] = waits.get(m.id); waits.delete(m.id); m.error ? no(new Error(JSON.stringify(m.error))) : ok(m.result); } });
+  const send = (method, params = {}, sessionId) => new Promise((ok, no) => { const id = ++seq; waits.set(id, [ok, no]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
+  const { targetId } = await send("Target.createTarget", { url: "about:blank" });
+  const { sessionId: S } = await send("Target.attachToTarget", { targetId, flatten: true });
+  const P = (method, params) => send(method, params, S);
+  await P("Runtime.enable"); await P("Page.enable");
+  await P("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("p:uilang", ${JSON.stringify(JSON.stringify(lang))}); } catch {}` });
+  const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
+  const until = async (expr, ms = 30000, what = expr) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return; await sleep(200); } throw new Error("timeout: " + what); };
+  const click = async (expr, what) => {
+    const r = await ev(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "center" }); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
+    if (!r) throw new Error("not found: " + what);
+    for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await P("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", clickCount: 1 });
+  };
+  const key = (k, code, vk, mods = 0) => P("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: mods, ...(k === "Enter" ? { text: "\r" } : {}) }).then(() => P("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers: mods }));
+  const esc = () => key("Escape", "Escape", 27);
+  const look = async (name) => {
+    await sleep(700);
+    const found = await ev(COLLECT(lang)).catch((e) => ["(lỗi kiểm tra: " + e.message.slice(0, 80) + ")"]);
+    const k = `${lang} · ${name}`;
+    report.set(k, found);
+    console.log(`  ${found.length ? "✗" : "✓"} ${name}${found.length ? ` (${found.length})` : ""}`);
+  };
+  const step = async (name, fn) => { try { await fn(); } catch (e) { report.set(`${lang} · ${name}`, ["(không chạy được: " + e.message.split("\n")[0].slice(0, 100) + ")"]); console.log("  ! " + name + ": " + e.message.split("\n")[0].slice(0, 100)); } };
+  const nav = async (v) => { await click(`document.querySelector('[data-nav="${v}"]')`, v); await sleep(1500); };
+
+  await step("đăng nhập", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000); await look("đăng nhập"); });
+  await step("điều khoản", async () => { await P("Page.navigate", { url: B + "/terms" }); await sleep(1500); await look("điều khoản"); });
+  await step("quyền riêng tư", async () => { await P("Page.navigate", { url: B + "/privacy" }); await sleep(1500); await look("quyền riêng tư"); });
+  await P("Network.enable");
+  await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
+  await step("trang chủ", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(1500); await look("trang chủ"); });
+  await step("menu model", async () => { await click(`document.querySelector(".model-btn")`, "model"); await look("menu model"); await esc(); });
+  await step("menu thêm", async () => { await click(`document.querySelector(".plus-btn, [aria-label='Thêm'], [aria-label='Add']")`, "plus"); await look("menu thêm"); await esc(); });
+  await step("bảng lệnh", async () => { await key("k", "KeyK", 75, 4); await look("bảng lệnh"); await esc(); });
+  await step("chat", async () => {
+    await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm trang web cho quán cà phê" }); await key("Enter", "Enter", 13);
+    await until(`!document.querySelector(".thinking") && !document.querySelector(".art-card.busy") && !document.querySelector("[aria-label='Dừng'], [aria-label='Stop']")`, 90000, "reply");
+    await sleep(1500); await look("chat + artifact");
+  });
+  for (const v of ["projects", "artifacts", "inbox", "code", "customize"]) await step(v, async () => { await nav(v); await look(v); });
+  await step("skill hub · connectors", async () => { await click(`[...document.querySelectorAll("button, [role=tab]")].find((e) => /^(Connectors|Kết nối)$/.test(e.textContent.trim()))`, "connectors tab"); await sleep(1200); await look("skill hub · connectors"); });
+  await step("speech", async () => { await nav("speech"); await look("speech"); });
+  const spTools = await ev(`[...document.querySelectorAll('[data-nav^="sp-"]')].map((e) => e.dataset.nav)`).catch(() => []);
+  for (const t of spTools) await step(t, async () => { await nav(t); await look(t); });
+  await step("menu người dùng", async () => { await click(`document.querySelector(".side-bottom .user")`, "user"); await sleep(500); await look("menu người dùng"); });
+  await step("cài đặt", async () => {
+    await click(`[...document.querySelectorAll(".menu-item")].find((e) => /^(Cài đặt|Settings)/.test(e.textContent.trim()))`, "settings"); await sleep(1200);
+    const n = await ev(`document.querySelectorAll(".modal.settings .s-item").length`);
+    for (let i = 0; i < n; i++) {
+      await click(`document.querySelectorAll(".modal.settings .s-item")[${i}]`, "tab " + i); await sleep(1300);
+      const t = await ev(`document.querySelectorAll(".modal.settings .s-item")[${i}].textContent.trim()`);
+      await look("cài đặt · " + t);
+      const sub = await ev(`document.querySelectorAll(".modal.settings .bn-tabs button").length`).catch(() => 0);
+      for (let j = 1; j < sub; j++) { await click(`document.querySelectorAll(".modal.settings .bn-tabs button")[${j}]`, "sub " + j); await sleep(900); await look(`cài đặt · ${t} · ` + (await ev(`document.querySelectorAll(".modal.settings .bn-tabs button")[${j}].textContent.trim()`))); }
+    }
+    await esc();
+  });
+  ws.close(); chrome.kill(); await sleep(500);
+}
+
+let total = 0;
+console.log("\n━━ Chữ sai ngôn ngữ");
+for (const [k, v] of report) { if (!v.length) continue; total += v.length; console.log(`\n${k}`); for (const x of v) console.log("   ·", x); }
+console.log(total ? `\n${total} chỗ cần xem` : "\nKhông còn chữ sai ngôn ngữ");

@@ -2,6 +2,7 @@
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
 import { CAT_LABEL, LANGS, api, fmtDur, fmtNum, hueOf, on, post, reloadVoices, useMyVoices, usePlan, type Voice } from "./client";
@@ -259,9 +260,10 @@ export function Tabs<T extends string>({ items, value, onChange, label }: { item
 export function VoiceAvatar({ v, size = 22, playing }: { v: { id: string } | null; size?: number; playing?: boolean }) {
   return <span className={`sp-av ${playing ? "on" : ""}`} style={{ width: size, height: size }}><LiquidOrb hue={v ? hueOf(v.id) : 210} activity={playing ? talking : 0} /></span>;
 }
-export const voiceLine = (v: Voice) => [v.desc, v.lang, v.accent].filter(Boolean).join(" · ");
+// Tên giọng là tên riêng (giữ nguyên); mô tả, ngôn ngữ, giọng vùng dịch theo giao diện.
+export const voiceLine = (v: Voice) => [v.desc, v.lang, v.accent].filter(Boolean).map((x) => tr(x as string)).join(" · ");
 export function VoiceChip({ v, onClick, small }: { v: Voice | null; onClick: () => void; small?: boolean }) {
-  return <button type="button" className={`sp-vchip ${small ? "sm" : ""}`} onClick={onClick}><VoiceAvatar v={v} size={small ? 18 : 22} /><span>{v ? `${v.name}${v.desc ? ` · ${v.desc}` : ""}` : "Chọn giọng"}</span><I.Chevron size={12} /></button>;
+  return <button type="button" className={`sp-vchip ${small ? "sm" : ""}`} onClick={onClick}><VoiceAvatar v={v} size={small ? 18 : 22} /><span>{v ? <><span data-notr>{v.name}</span>{v.desc ? ` · ${tr(v.desc)}` : ""}</> : "Chọn giọng"}</span><I.Chevron size={12} /></button>;
 }
 
 // Quả cầu giọng nói lớn kèm nút phát và vòng tiến độ “tối thiểu / tốt nhất” như trang tạo giọng.
@@ -402,7 +404,7 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
                 <button className="sp-avbtn" aria-label={playing === v.id ? `Dừng nghe ${v.name}` : `Nghe thử ${v.name}`} onClick={() => toggle(v)} disabled={!v.preview}>
                   <VoiceAvatar v={v} size={34} playing={playing === v.id} /><span className="sp-avplay">{playing === v.id ? <I.Pause size={12} /> : <I.Play size={12} />}</span>
                 </button>
-                <div className="sp-vmeta"><b data-notr>{v.name}{v.desc ? ` · ${v.desc}` : ""}</b><span>{v.mine ? CAT_LABEL[v.category] ?? v.category : [v.use, v.gender, v.age].filter(Boolean).join(" · ")}</span></div>
+                <div className="sp-vmeta"><b><span data-notr>{v.name}</span>{v.desc ? ` · ${tr(v.desc)}` : ""}</b><span>{v.mine ? CAT_LABEL[v.category] ?? v.category : [v.use, v.gender, v.age].filter(Boolean).join(" · ")}</span></div>
                 <span className="sp-vlang"><span className="sp-flag">{flag(v.langCode)}</span>{v.lang || "Đa ngôn ngữ"}{v.accent && <em>{v.accent}</em>}</span>
                 {!v.mine && <span className="sp-vnum" title="Lượt nhân bản"><I.User size={13} />{fmtNum(v.uses ?? 0)}</span>}
                 <span className="sp-vact">

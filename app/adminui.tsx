@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { Avatar } from "./avatar";
 import { Fade } from "./ui";
 import { useApp } from "./store";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, locale } from "./i18n";
 import * as I from "./icons";
 import { UsageAdmin, UsageIcon } from "./usageui";
 import type { AuthUser, Providers } from "./auth";
@@ -33,7 +33,6 @@ export async function call<T>(method: string, url: string, body?: unknown): Prom
   return j as T;
 }
 
-const locale = () => (getLang() === "vi" ? "vi-VN" : "en-US");
 export const fmtDate = (t: number | null) => (t ? new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeStyle: "short" }).format(t) : "—");
 export function ago(t: number | null) {
   if (!t) return "—";
@@ -41,7 +40,7 @@ export function ago(t: number | null) {
   for (const [u, n] of [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60]] as const) if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), u);
   return rtf.format(0, "second");
 }
-export const METHOD: Record<string, string> = { password: "Password", google: "Google", github: "GitHub", apple: "Apple", cli: "Server script" };
+export const METHOD: Record<string, string> = { password: "Password", google: "Google", github: "GitHub", apple: "Apple", cli: "Server script", custom: "Custom access", default: "Default access" };
 
 const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   signup: ["Signed up", "ok"], login: ["Signed in", ""], login_failed: ["Failed sign-in", "bad"], login_blocked: ["Blocked sign-in", "bad"],

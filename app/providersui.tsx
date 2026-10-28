@@ -11,6 +11,7 @@ import { call } from "./adminui";
 import { refreshModels, useModels } from "./models";
 import { BrandLogo } from "./brands";
 import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui";
+import { locale } from "./i18n";
 
 type Cli = "claude" | "codex" | "agy";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
@@ -23,7 +24,7 @@ const VENDORS: { id: string; cli: Cli; name: string; vendor: string; plan: strin
 ];
 type Vendor = (typeof VENDORS)[number];
 const METHOD: Record<string, string> = { token: "long-lived token", oauth: "claude.ai account", chatgpt: "ChatGPT account", apikey: "API key", google: "Google account" };
-const when = (t: number) => new Date(t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const when = (t: number) => new Date(t).toLocaleString(locale(), { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
 /** Trạng thái CLI của chính tài khoản cho một hãng. */
 function usePlan(cli: Cli) {

@@ -1370,8 +1370,8 @@ Object.assign(EN2VI, {
 });
 RULES_VI.push(
   [/^Default: (\$[\d.,]+)$/, (m) => `Mặc định: ${m[1]}`],
-  [/^Add a file to (.+)$/, (m) => `Thêm tệp vào ${m[1]}`],
-  [/^More options for (.+)$/, (m) => `Tùy chọn khác cho ${m[1]}`],
+  [/^Add a file to (.+)$/, (m) => `Thêm tệp vào ${viOf(m[1])}`],
+  [/^More options for (.+)$/, (m) => `Tùy chọn khác cho ${viOf(m[1])}`],
 );
 // Giao diện tiếng Anh: chữ tiếng Việt còn thiếu bản dịch (rà bằng scripts/i18n-audit.mjs).
 Object.assign(VI2EN, {
@@ -1554,3 +1554,215 @@ RULES_EN.push(
 );
 // Bộ đếm ký tự của phần giới thiệu (Cài đặt → Tài khoản) khi dán quá dài.
 RULES_VI.push([/^([\d,]+) characters over the limit · ([\d,]+) \/ 20,000$/, (m) => `Quá giới hạn ${m[1].replace(/,/g, ".")} ký tự · ${m[2].replace(/,/g, ".")} / 20.000`]);
+
+// Giữ nguyên ở cả hai ngôn ngữ: tên riêng, sản phẩm, thuật ngữ quen dùng trong tiếng Việt, tên phím.
+// Chuỗi chỉ gồm các từ này (cùng số, chữ viết tắt, phím tắt) không cần bản dịch; bộ kiểm thử i18n dựa vào đây.
+export const SAME_WORDS = new Set([
+  "Synchro", "Claude", "ChatGPT", "Gemini", "Opus", "Sonnet", "Haiku", "Fable", "GPT", "Codex", "Antigravity", "OSS", "Flash", "Pro", "Mini", "Nano", "Lite", "Turbo",
+  "Anthropic", "OpenAI", "Google", "GitHub", "GitLab", "Apple", "Microsoft", "ElevenLabs", "Eleven", "Multilingual", "Scribe", "Notion", "Linear", "Jira", "Confluence",
+  "Figma", "Canva", "Miro", "Sentry", "Vercel", "Supabase", "Hugging", "Face", "Cloudflare", "Stripe", "Shopify", "Intercom", "Slack", "Gmail", "Drive", "Asana", "Airtable",
+  "Todoist", "Monday", "Fireflies", "Context7", "DeepWiki", "PayPal", "Square", "Zapier", "Obsidian", "Docs", "Sheets", "Word", "Excel", "PowerPoint", "Markdown",
+  "Next", "js", "React", "Vite", "TypeScript", "JavaScript", "Python", "FastAPI", "Node", "Express", "Go", "Tailwind", "Vue", "Svelte", "Monaco", "WebContainer", "E2B",
+  "Mermaid", "Chart", "Pydantic", "Rust", "Java", "Kotlin", "Swift", "Ruby", "PHP", "Bash", "Shell", "Docker", "Linux", "macOS", "Windows", "iOS", "Android", "Chrome",
+  "Safari", "Firefox", "Edge", "WebGL", "Metal", "Pixi", "Excalidraw", "Bases", "Canvas", "Wiki", "WikiAI", "Gemma", "Llama", "Mistral", "DeepSeek", "Qwen", "Grok", "xAI",
+  "Artifacts", "Artifact", "Speech", "Code", "Skill", "Skills", "Plugin", "Plugins", "Connector", "Connectors", "Terminal", "Workspace", "Sandbox", "Commit", "Logo",
+  "Video", "Email", "Chat", "Web", "Online", "Studio", "Voice", "Agent", "Dubbing", "Debug", "Git", "Repo", "Token", "Tokens", "Prompt", "Slides", "Design",
+  "Shift", "Ctrl", "Alt", "Enter", "Tab", "Esc", "Space", "Cmd", "Option", "Backspace", "Delete", "Return", "Home", "End",
+  "Lan", "Minh", "Hà", "Nội", "Sài", "Gòn", "Đà", "Nẵng", "Huế", "Cas",
+]);
+export const SAME = new Set<string>([
+  "Synchro clone UI",
+]);
+
+// ---------------------------------------------------------------- Đồng bộ ngôn ngữ toàn web (2026-10-28)
+// Các chuỗi còn sót sau khi quét toàn bộ app/ bằng tests/lib/i18n-scan.mjs: thông báo lỗi từ máy chủ, Speech, Code, Kho kỹ năng, bộ não, mức dùng.
+Object.assign(VI2EN, {
+  // Nhãn, động từ trong nhật ký công cụ
+  "Bấm": "Click", "bấm": "clicked", "ghi file": "writing a file", "xem console": "checking the console", "Ghim": "Pin", "Xem": "View", "Cao": "High",
+  "Ghi chú": "Notes", "không dùng": "not used", "không rõ": "unknown", "tóm tắt": "summary", "suy luận": "reasoning", "xóa": "delete", "cao hơn": "higher",
+  "Câu trả lời": "Answer", "Thử Nghiệm": "Beta",
+  // Synchro Code: chế độ, công cụ lập trình
+  "Chỉ phân tích cấu trúc và lập kế hoạch, không viết code dài.": "Only analyzes structure and plans; doesn't write long code.",
+  "Tập trung sinh code hoàn chỉnh, sẵn sàng chạy ngay.": "Focuses on complete code that's ready to run.",
+  "Đọc lỗi, truy nguyên nhân gốc và đề xuất cách sửa.": "Reads the error, traces the root cause and proposes a fix.",
+  "Giải thích đoạn này giúp tôi": "Explain this snippet", "Dòng này bị lỗi, hãy tìm nguyên nhân và sửa:": "This line has an error, find the cause and fix it:", "Sửa lại đoạn này:": "Rewrite this snippet:",
+  "Tạo TS Interface": "Create a TS interface", "Tạo Zod Schema": "Create a Zod schema", "Chuyển sang Fetch/Axios": "Convert to Fetch/Axios", "Chuyển sang Python Requests": "Convert to Python Requests",
+  "Tối ưu & gợi ý Index": "Optimize & suggest indexes", "Chuyển sang Prisma/Drizzle": "Convert to Prisma/Drizzle", "Tìm nguyên nhân gốc": "Find the root cause", "Viết try-catch xử lý": "Add try-catch handling",
+  "Chuyển sang Tailwind": "Convert to Tailwind", "Tách CSS variables": "Extract CSS variables", "Viết commit message (Conventional Commits)": "Write a commit message (Conventional Commits)",
+  "Review code: bug, bảo mật, hiệu năng": "Review code: bugs, security, performance", "Viết unit test": "Write unit tests", "Viết tài liệu / JSDoc": "Write docs / JSDoc", "Refactor cho sạch và gọn hơn": "Refactor to be cleaner and leaner",
+  "Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)": "Point at the part to change (or hold Alt and click)",
+  "CODE_RUN=local chỉ chạy được trên macOS (sandbox-exec).": "CODE_RUN=local only works on macOS (sandbox-exec).",
+  "Đường dẫn nằm ngoài thư mục engine.": "The path is outside the engine folder.", "Đường dẫn không được ra ngoài thư mục làm việc.": "The path can't leave the working folder.",
+  "Lỗi thao tác file": "File operation failed", "Workspace phản hồi quá lâu.": "The workspace took too long to respond.", "Không kết nối được workspace.": "Couldn't connect to the workspace.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox).": "An administrator hasn't allowed your account to use the workspace (Cloud sandbox).",
+  "Phiên không hợp lệ.": "Invalid session.", "Nội dung không hợp lệ.": "Invalid content.", "Tên nhánh không hợp lệ.": "Invalid branch name.", "Thao tác git không hợp lệ.": "Invalid git action.",
+  "Hãy kết nối GitHub trước (nút GitHub bên dưới khung chat).": "Connect GitHub first (the GitHub button under the chat box).",
+  "Phiên này đã có file. Hãy tạo phiên mới để clone repo khác.": "This session already has files. Start a new session to clone another repo.",
+  "Không tìm thấy repo hoặc tài khoản GitHub của bạn không có quyền với repo này.": "Repo not found, or your GitHub account has no access to it.",
+  "Repo riêng tư hoặc không tồn tại. Hãy kết nối GitHub để clone repo riêng tư.": "The repo is private or doesn't exist. Connect GitHub to clone private repos.",
+  "Hãy nhập nội dung commit.": "Enter a commit message.", "Phiên này chưa gắn với repo GitHub.": "This session isn't linked to a GitHub repo.",
+  "Chưa kết nối GitHub.": "GitHub isn't connected.", "Tên repo không hợp lệ.": "Invalid repo name.",
+  "Không tìm thấy repo (hoặc bạn chưa cấp quyền cho repo này).": "Repo not found (or you haven't granted access to it).",
+  "Link repo GitHub không hợp lệ. Ví dụ: owner/repo hoặc https://github.com/owner/repo": "Invalid GitHub repo link. Example: owner/repo or https://github.com/owner/repo",
+  "Bạn cần đăng nhập trước khi kết nối GitHub.": "Sign in before connecting GitHub.", "GitHub không trả về quyền truy cập.": "GitHub didn't return an access grant.",
+  "Chưa cấu hình E2B_API_KEY nên chưa dùng được sandbox server.": "E2B_API_KEY isn't set, so the server sandbox isn't available.", "Code không hợp lệ": "Invalid code",
+  // Gói, model, engine
+  "Gói subscription báo lỗi.": "The subscription plan reported an error.", "Gói subscription chưa trả lời được.": "The subscription plan couldn't answer yet.",
+  "Model này không còn dùng được.": "This model is no longer available.", "Đã dừng.": "Stopped.",
+  "Synchro chưa được kết nối với model nào (chưa đăng nhập gói hoặc chưa có khóa API).": "Synchro isn't connected to any model yet (no plan signed in and no API key).",
+  "Synchro chưa được kết nối với model nào.": "Synchro isn't connected to any model yet.",
+  "Synchro chưa được kết nối với model nào. Đăng nhập gói ở Cài đặt → Providers, hoặc quản trị viên nhập khóa API.": "Synchro isn't connected to any model yet. Sign in to a plan in Settings → Providers, or ask an administrator to add an API key.",
+  "CLI chưa được cài trên máy chủ.": "The CLI isn't installed on the server.", "CLI không in link đăng nhập.": "The CLI didn't print a sign-in link.", "Đăng nhập không thành công.": "Sign-in failed.",
+  "Không có lượt đăng nhập nào đang chờ mã. Bắt đầu lại nhé.": "No sign-in is waiting for a code. Please start again.", "Mã không hợp lệ.": "Invalid code.",
+  "Thiếu tin nhắn của người dùng.": "The user's message is missing.", "Lượt này chạy quá 30 phút nên đã dừng.": "This turn ran for over 30 minutes and was stopped.",
+  "Hạn mức model Claude / GPT trong gói Google (Antigravity) đã hết. Model Gemini của gói vẫn dùng được.": "The Claude / GPT quota in your Google (Antigravity) plan is used up. The plan's Gemini models still work.",
+  "Chỉ quản trị viên mới cài được CLI.": "Only administrators can install CLIs.", "CLI này đang được cài, đợi một chút nhé.": "This CLI is being installed, please wait a moment.",
+  "Không có CLI này.": "No such CLI.", "Thao tác không thành công.": "The action failed.",
+  "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên.": "Your account can't use any model yet. Contact an administrator.",
+  "Nội dung gửi tới model không hợp lệ.": "The content sent to the model is invalid.",
+  "Đã đạt giới hạn số bước gọi công cụ trong một lượt. Hãy hỏi lại cụ thể hơn để Synchro làm tiếp.": "Reached the limit of tool steps in one turn. Ask again more specifically so Synchro can continue.",
+  "Người dùng đã dừng khi công cụ đang chạy; chưa có kết quả.": "The user stopped while the tool was running; no result yet.",
+  "Người dùng đã bấm Dừng giữa chừng; câu trả lời trên chưa hoàn chỉnh.": "The user pressed Stop midway; the answer above is incomplete.",
+  "[ảnh cũ đã lược bỏ]": "[older image removed]", "(PDF scan: xem các ảnh trang đính kèm)": "(scanned PDF: see the attached page images)", "[mock] Không có skill nào đang bật.": "[mock] No skills are turned on.",
+  "Lượt trả lời bị gián đoạn khi máy chủ khởi động lại. Hãy gửi lại tin nhắn.": "The reply was interrupted when the server restarted. Please send the message again.",
+  "Không tìm thấy lượt trả lời này.": "This reply wasn't found.", "Tin nhắn trống.": "The message is empty.",
+  // Lỗi chung từ máy chủ
+  "Lỗi máy chủ": "Server error", "Không tìm thấy tài khoản.": "Account not found.", "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút.": "Too many requests. Try again in a few minutes.",
+  "Dữ liệu không hợp lệ.": "Invalid data.", "Yêu cầu không hợp lệ": "Invalid request", "URL không hợp lệ": "Invalid URL", "Thiếu tệp": "File missing", "Thiếu ids": "ids missing", "Chưa chọn file": "No file selected",
+  "Nhà cung cấp không hợp lệ.": "Invalid provider.", "Số tiền không hợp lệ.": "Invalid amount.", "Synchro không hỗ trợ yêu cầu này.": "Synchro doesn't support this request.",
+  "Không tìm thấy ứng dụng hoặc bạn không có quyền dùng.": "App not found, or you don't have access to it.", "Không tìm thấy ứng dụng của bạn.": "Your app wasn't found.",
+  "Không tìm thấy artifact.": "Artifact not found.", "Không tìm thấy tác vụ.": "Task not found.", "Kết quả đã quá 7 ngày nên không còn lưu.": "The result is over 7 days old and is no longer kept.",
+  "Chưa đủ nội dung để nén.": "Not enough content to compact yet.", "Chưa có nội dung để đặt tên.": "Nothing to name yet.", "Model không trả về tên hợp lệ.": "The model didn't return a valid name.",
+  "Chưa có câu trả lời để tóm tắt.": "No answer to summarize yet.", "Chưa có nội dung để phản biện.": "Nothing to critique yet.", "Sản phẩm quá dài để phản biện.": "The work is too long to critique.",
+  "Hội đồng phản biện chưa trả lời được. Hãy thử lại.": "The critic panel couldn't answer. Please try again.",
+  "Phần giới thiệu và hướng dẫn cho Synchro tối đa 20.000 ký tự.": "Your introduction and instructions for Synchro can be up to 20,000 characters.",
+  "Nội dung văn bản không phải JSON hợp lệ.": "The document content isn't valid JSON.",
+  // Tệp, MarkItDown
+  "Chưa cài MarkItDown. Chạy: python3 -m venv .mkvenv && .mkvenv/bin/pip install 'markitdown[all]'": "MarkItDown isn't installed. Run: python3 -m venv .mkvenv && .mkvenv/bin/pip install 'markitdown[all]'",
+  "Tệp quá lớn (tối đa 50MB)": "File too large (50MB max)", "Không chuyển được:": "Couldn't convert:",
+  // Skill, plugin
+  "Không tìm thấy plugin.": "Plugin not found.", "Chỉ quản trị viên mới đổi được plugin của tổ chức.": "Only administrators can change organization plugins.",
+  "Chỉ quản trị viên mới gỡ được plugin của tổ chức.": "Only administrators can remove organization plugins.", "Chỉ quản trị viên mới cập nhật được plugin của tổ chức.": "Only administrators can update organization plugins.",
+  "Thiếu file zip.": "The zip file is missing.", "Quản trị viên chưa cho phép tài khoản của bạn dùng Skills và Plugins.": "An administrator hasn't allowed your account to use Skills and Plugins.",
+  "Chỉ quản trị viên mới cài được plugin cho cả tổ chức.": "Only administrators can install plugins for the whole organization.",
+  "Không có skill này": "No such skill", "Bản sửa này không còn ở trạng thái đó.": "This fix is no longer in that state.", "Lỗi máy chủ khi xử lý skill": "Server error while processing the skill",
+  "Mọi kiến thức thiết kế trong một nút: giao diện, thẩm mỹ, chuyển động, thương hiệu, minh họa.": "All design know-how in one button: interface, aesthetics, motion, branding, illustration.",
+  "Bản trình bày có câu chuyện, bố cục và chủ đề đẹp; xuất HTML hoặc PowerPoint.": "Presentations with a story, a strong layout and a polished theme; export to HTML or PowerPoint.",
+  "Tài liệu rõ ràng, đúng giọng văn, trình bày đẹp; xuất Word, PDF hoặc Markdown.": "Clear documents in the right voice, beautifully laid out; export to Word, PDF or Markdown.",
+  "Kiểm thử giao diện bằng trình duyệt thật, xây máy chủ MCP, tối ưu React.": "Test interfaces in a real browser, build MCP servers, optimize React.",
+  "Độ tinh tế của giao diện và animation, từ tác giả Sonner và Vaul.": "Interface and animation polish, from the author of Sonner and Vaul.",
+  "Design intelligence: style, bảng màu, font, design system, thương hiệu.": "Design intelligence: styles, palettes, fonts, design systems, branding.",
+  "Gu thẩm mỹ cho frontend: tránh giao diện AI chung chung.": "Taste for frontends: avoid generic AI-looking interfaces.", "118 mẫu trang HTML đơn để tham khảo phong cách.": "118 single-page HTML samples for style reference.",
+  "Trang ảnh chụp App Store / Google Play xuất được.": "Exportable App Store / Google Play screenshot pages.", "Hướng dẫn và phản biện UX/UI cho giao diện và code frontend.": "UX/UI guidance and critique for interfaces and frontend code.",
+  "React, Next.js, giao diện web và triển khai lên Vercel.": "React, Next.js, web interfaces and deploying to Vercel.", "Skill mẫu của Anthropic có giấy phép Apache-2.0.": "Anthropic's sample skills, Apache-2.0 licensed.",
+  // Bộ não
+  "Chưa có ghi chú này.": "This note doesn't exist yet.", "Thiếu tên ghi chú.": "The note name is missing.", "Không xóa được ghi chú này.": "This note can't be deleted.",
+  "Chọn tệp .zip của thư mục Obsidian.": "Choose the .zip of an Obsidian folder.", "Tệp quá lớn (tối đa 25 MB).": "File too large (25 MB max).", "Không đọc được tệp .zip này.": "Couldn't read this .zip file.",
+  "Chọn hai ghi chú khác nhau để gộp.": "Choose two different notes to merge.", "Chỉ gộp được ghi chú chủ đề và ghi chú riêng.": "Only topic notes and your own notes can be merged.",
+  "Không tìm thấy ghi chú.": "Note not found.", "Ghi chú này do Synchro tự viết; hãy thêm liên kết ở phần “Ghi chú của bạn”.": "Synchro writes this note itself; add links under “Your note”.",
+  "Không còn chỗ nhắc tên nào chưa nối.": "No unlinked mentions left.", "Không sửa được việc trong ghi chú này.": "Tasks in this note can't be changed.", "Ghi chú cần có tên.": "A note needs a name.",
+  // Speech (ElevenLabs)
+  "Không tìm thấy mục này.": "Item not found.", "Không có thao tác này.": "No such action.", "Không tìm thấy tệp âm thanh.": "Audio file not found.", "Hãy nhập văn bản cần đọc.": "Enter the text to read.",
+  "ElevenLabs chưa trả về model đọc văn bản nào cho khóa này.": "ElevenLabs returned no text-to-speech model for this key.",
+  "Hiệu ứng vang và lệch kênh cần định dạng MP3, Opus hoặc WAV. Đổi định dạng rồi thử lại.": "Reverb and panning need MP3, Opus or WAV. Change the format and try again.",
+  "Thêm ít nhất một lời thoại và chọn giọng cho người nói.": "Add at least one line and choose a voice for each speaker.",
+  "Hội thoại nhiều giọng cần model Eleven v3 hoặc v4, khóa này chưa có.": "Multi-voice dialogue needs the Eleven v3 or v4 model, which this key doesn't have yet.",
+  "Không có nội dung để đọc.": "Nothing to read.", "Chọn tệp âm thanh / video hoặc dán liên kết.": "Choose an audio / video file or paste a link.", "Liên kết phải bắt đầu bằng http:// hoặc https://": "The link must start with http:// or https://",
+  "Mô tả âm thanh cần tạo.": "Describe the sound to create.", "Mô tả bản nhạc bạn muốn.": "Describe the music you want.", "Chọn video cần làm nhạc nền.": "Choose the video to score.",
+  "Chọn bài hát hoặc tệp âm thanh cần tách.": "Choose the song or audio file to split.", "Chọn tệp âm thanh hoặc video cần lọc.": "Choose the audio or video file to clean.",
+  "Chọn hoặc ghi âm đoạn giọng cần đổi.": "Choose or record the voice clip to change.", "Chọn giọng muốn đổi sang.": "Choose the voice to change to.", "Cần cả tệp âm thanh và văn bản để căn.": "Alignment needs both the audio file and the text.",
+  "Mô tả giọng cần ít nhất 20 ký tự.": "The voice description needs at least 20 characters.", "Câu nghe thử cần 100–1000 ký tự, hoặc bật “Tự viết câu nghe thử”.": "The preview text needs 100–1000 characters, or turn on “Write the preview text for me”.",
+  "Chọn giọng gốc và mô tả cách đổi.": "Choose the source voice and describe the change.", "Chọn bản nghe thử muốn lưu.": "Choose the preview to save.", "Đặt tên cho giọng.": "Name the voice.",
+  "Thêm ít nhất một đoạn âm thanh mẫu.": "Add at least one audio sample.", "Thêm tệp âm thanh mẫu.": "Add an audio sample file.", "Ghi âm câu xác minh trước.": "Record the verification sentence first.", "Thiếu thông tin giọng.": "Voice details are missing.",
+  "Chọn video / âm thanh hoặc dán liên kết.": "Choose a video / audio file or paste a link.", "Chọn ngôn ngữ muốn lồng tiếng sang.": "Choose the language to dub into.", "Không tìm thấy dự án lồng tiếng.": "Dubbing project not found.",
+  "Thêm nội dung nguồn cho podcast.": "Add source content for the podcast.", "Chọn giọng người dẫn": "Choose the host voice", "và khách mời.": "and the guest voice.",
+  "Chọn tệp sách (EPUB, PDF, DOCX, TXT, HTML).": "Choose a book file (EPUB, PDF, DOCX, TXT, HTML).", "Chọn giọng người đọc.": "Choose the narrator voice.", "Không tìm thấy dự án.": "Project not found.",
+  "Đặt tên cho từ điển.": "Name the dictionary.", "Thêm ít nhất một quy tắc: từ cần đọc và cách đọc.": "Add at least one rule: the word and how to say it.", "Thiếu từ điển.": "The dictionary is missing.",
+  "Dán nội dung bài viết cần đọc.": "Paste the article text to read.", "Không tìm thấy trình phát Audio Native.": "Audio Native player not found.", "Bạn đã mở quá nhiều cuộc gọi thử. Hãy thử lại sau.": "You've opened too many test calls. Try again later.",
+  "Không đọc được tệp tải lên (tệp quá lớn hoặc bị ngắt giữa chừng).": "Couldn't read the upload (the file is too large or the upload was cut off).", "Bạn tạo quá nhiều trong thời gian ngắn. Thử lại sau ít phút.": "You've generated too much in a short time. Try again in a few minutes.",
+  "Đọc to quá nhiều lần trong thời gian ngắn.": "Read aloud too many times in a short time.", "Chưa có lời nào để lưu.": "No transcript to save yet.", "Quản trị viên chưa cho phép tài khoản của bạn dùng Speech.": "An administrator hasn't allowed your account to use Speech.",
+  "Chỉ quản trị viên được xóa giọng khỏi tài khoản ElevenLabs.": "Only administrators can delete voices from the ElevenLabs account.", "Lỗi máy chủ khi xử lý âm thanh. Thử lại sau.": "Server error while processing audio. Try again later.",
+  "ElevenLabs phản hồi quá lâu. Thử lại sau.": "ElevenLabs took too long to respond. Try again later.", "Gói ElevenLabs hiện tại chưa có tính năng này.": "Your current ElevenLabs plan doesn't include this feature.",
+  "Không mở được nghe bằng ElevenLabs Scribe.": "Couldn't start listening with ElevenLabs Scribe.", "MP4, MOV, WEBM · tối đa 40 MB": "MP4, MOV, WEBM · up to 40 MB", "MP3, WAV, M4A · tối đa 40 MB": "MP3, WAV, M4A · up to 40 MB",
+  "MP3 22 kHz · 32 kbps (nhẹ)": "MP3 22 kHz · 32 kbps (small)", "PCM 44,1 kHz (thô)": "PCM 44.1 kHz (raw)", "và thư viện cộng đồng": "and the community library", "ây ai": "ay eye",
+  "Gói Free chỉ hiện các giọng thư viện cho phép người dùng miễn phí. Mỗi giọng thêm vào dùng một chỗ lưu giọng (": "The Free plan only shows library voices open to free users. Each voice you add uses one voice slot (",
+});
+Object.assign(EN2VI, {
+  "Updated the task list": "Đã cập nhật danh sách việc", "Ran a command": "Đã chạy một lệnh", "Weekly": "Hằng tuần", "Gemini models": "Model Gemini", "· admin": "· quản trị",
+  "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits.": "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu) rồi mới hiện hạn mức của gói.",
+  "Synchro could not read the quota panel yet.": "Synchro chưa đọc được bảng hạn mức.",
+  "Architect / Plan": "Kiến trúc / Kế hoạch", "Write / Code": "Viết code", "sandbox server": "sandbox máy chủ", "🔧 Auto-Fix": "🔧 Tự sửa", "E2B (server)": "E2B (máy chủ)", "Format": "Định dạng",
+  "24 images": "24 ảnh", "My Files": "Tệp của tôi", "Close folder": "Đóng thư mục", "Open folder": "Mở thư mục",
+  "⏱ Time": "⏱ Thời gian", "▤ Space": "▤ Bộ nhớ", "ChatGPT account": "tài khoản ChatGPT", "Google account": "tài khoản Google", "claude.ai account": "tài khoản claude.ai", "long-lived token": "token dài hạn",
+  "· updated": "· cập nhật", "to": "đến", "next day": "hôm sau", "(binary file)": "(tệp nhị phân)", "warning": "cảnh báo",
+});
+SAME.add("Skill & connector").add("Skills & connectors").add("Go (net/http)").add("OAuth Client ID").add("OAuth Client Secret").add("GlassButton").add("EaseMize").add("no json").add("not a paragraph")
+  .add('"vi"').add("AbortError").add("English (US)").add("Anthropic Sans").add("© 2026 Synchro").add("Scribe v2 Realtime").add("WebVTT (.vtt)").add("App Store").add("Google Play").add("Cron").add("esc")
+  .add("GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET").add("GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET").add("APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY").add("Jina").add("Pyodide");
+for (const w of ["Clone", "Pull", "Push", "token", "tokens", "skill", "skills", "studio", "credit", "credits", "Free", "Max", "Plus", "Providers", "kHz", "kbps", "Slide", "pptx", "docx", "doc", "md", "vtt", "srt", "Micro"]) SAME_WORDS.add(w);
+RULES_EN.push(
+  [/^Giọng trong tài khoản ElevenLabs( và thư viện cộng đồng)?\.(?: Đã dùng (\d+)\/(\d+) chỗ lưu giọng\.)?$/, (m) => `Voices in your ElevenLabs account${m[1] ? " and the community library" : ""}.${m[2] ? ` ${m[2]}/${m[3]} voice slots used.` : ""}`],
+  [/^Đọc tự nhiên như khi nói chuyện, nơi yên tĩnh, micro cách miệng khoảng một gang tay\. Mỗi đoạn khoảng một phút(?: · đã ghi (\d+) đoạn)?\.$/, (m) => `Read naturally, as if talking, somewhere quiet with the mic about a hand's width from your mouth. About one minute per clip${m[1] ? ` · ${m[1]} clips recorded` : ""}.`],
+  [/^Chưa có khóa API (.*) dùng được \(quản trị viên thêm ở Cài đặt → Providers\)\.$/, (m) => `No usable ${m[1]} API key yet (an administrator adds one in Settings → Providers).`],
+  [/^Không (.*) được thư mục của engine: (.*)$/, (m) => `Couldn't ${m[1] === "xóa" ? "delete" : m[1]} the engine folder: ${m[2]}`],
+  [/^Chưa có engine cho nhà cung cấp "(.*)"\.$/, (m) => `No engine for provider "${m[1]}" yet.`],
+  [/^(.*) CLI chưa được cài trên máy chủ\. Quản trị viên cài ở Cài đặt → Providers\.$/, (m) => `${m[1]} CLI isn't installed on the server. An administrator installs it in Settings → Providers.`],
+  [/^Bạn chưa đăng nhập gói (.*)\. Đăng nhập ở Cài đặt → Providers\.$/, (m) => `You haven't signed in to the ${m[1]} plan. Sign in at Settings → Providers.`],
+  [/^Phiên đăng nhập gói (.*) không còn hợp lệ\. Đăng nhập lại ở Cài đặt → Providers\.$/, (m) => `Your ${m[1]} plan sign-in is no longer valid. Sign in again at Settings → Providers.`],
+  [/^Gói (.*) của bạn đã hết hạn mức\.$/, (m) => `Your ${m[1]} plan has hit its limit.`],
+  [/^Model báo lỗi \((.*)\): (.*)$/, (m) => `The model reported an error (${m[1]}): ${m[2]}`], [/^Lỗi không mong muốn: (.*)$/, (m) => `Unexpected error: ${m[1]}`],
+  [/^Không xử lý được "(.*)": (.*)$/, (m) => `Couldn't process "${m[1]}": ${m[2]}`],
+  [/^Tệp "(.*)" lớn hơn (.*) MB\. Dán liên kết tới tệp thay vì tải lên, hoặc cắt ngắn tệp\.$/, (m) => `"${m[1]}" is larger than ${m[2]} MB. Paste a link to the file instead of uploading it, or shorten it.`],
+  [/^Mẫu "(.*)" lớn hơn 10 MB\.$/, (m) => `Sample "${m[1]}" is larger than 10 MB.`], [/^Clone thất bại: (.*)$/, (m) => `Clone failed: ${m[1]}`],
+  [/^Đang ở nhánh (.*)\. Hãy tạo nhánh mới trước khi mở pull request\.$/, (m) => `You're on branch ${m[1]}. Create a new branch before opening a pull request.`],
+  [/^Mật khẩu cần ít nhất (\d+) ký tự\.$/, (m) => `The password needs at least ${m[1]} characters.`], [/^Nhật ký (\d+-\d+-\d+)$/, (m) => `Daily note ${m[1]}`],
+  [/^Đường dẫn tệp không hợp lệ: (.*)$/, (m) => `Invalid file path: ${m[1]}`], [/^\(Tài liệu liên kết\) (.*)$/, (m) => `(Linked document) ${m[1]}`],
+  [/^"(.*)" là tệp nén\/định dạng Office không được hỗ trợ \(chỉ nhận \.docx, \.xlsx, \.pptx\)\.$/, (m) => `"${m[1]}" is an unsupported archive / Office format (only .docx, .xlsx, .pptx are accepted).`],
+  [/^"(.*)" là định dạng Office cũ \(\.doc\/\.xls\/\.ppt\)\. Hãy lưu lại thành \.docx\/\.xlsx\/\.pptx rồi tải lên\.$/, (m) => `"${m[1]}" is an old Office format (.doc/.xls/.ppt). Save it as .docx/.xlsx/.pptx, then upload it.`],
+  [/^Không hỗ trợ loại tệp của "(.*)"\.$/, (m) => `The file type of "${m[1]}" isn't supported.`], [/^"(.*)" là tệp rỗng\.$/, (m) => `"${m[1]}" is empty.`],
+  [/^"(.*)" vượt quá giới hạn (.*)MB\.$/, (m) => `"${m[1]}" is over the ${m[2]}MB limit.`], [/^Không trích được nội dung từ "(.*)"\.$/, (m) => `Couldn't extract content from "${m[1]}".`],
+  [/^Máy chủ đăng nhập từ chối đăng ký Synchro(?: \(lỗi (.*)\))?\.$/, (m) => `The sign-in server refused to register Synchro${m[1] ? ` (error ${m[1]})` : ""}.`],
+  [/^Lỗi: (.*)$/, (m) => `Error: ${m[1]}`], [/^Đăng nhập bằng (.*) chưa được cấu hình trên máy chủ\.$/, (m) => `Sign-in with ${m[1]} isn't set up on the server.`],
+  [/^Không có bộ chạy cho loại "(.*)"\.$/, (m) => `No runner for type "${m[1]}".`], [/^Đọc thử: (.*)\.$/, (m) => `Preview: ${m[1]}.`],
+  [/^Khóa ElevenLabs chưa được cấp quyền "(.*)" nên tính năng này đang ẩn\. Vào elevenlabs\.io → API keys, sửa khóa và bật quyền này\.$/, (m) => `The ElevenLabs key lacks the "${m[1]}" permission, so this feature is hidden. Go to elevenlabs.io → API keys, edit the key and turn this permission on.`],
+  [/^Tính năng này cần gói ElevenLabs (.*) trở lên\.$/, (m) => `This feature needs the ElevenLabs ${m[1] === "cao hơn" ? "higher" : m[1]} plan or above.`],
+  [/^Thiếu "loai" \(một trong: (.*)\)\.$/, (m) => `"loai" is missing (one of: ${m[1]}).`], [/^Thiếu trường bắt buộc: (.*)\.$/, (m) => `Required field missing: ${m[1]}.`],
+  [/^Workspace lỗi (.*)$/, (m) => `Workspace error ${m[1]}`], [/^Gói (.*) cần đăng nhập lại$/, (m) => `Your ${m[1]} plan needs you to sign in again`],
+);
+RULES_VI.push(
+  [/^(.*) Synchro could not read the quota panel yet\.$/, (m) => `${viOf(m[1])} Synchro chưa đọc được bảng hạn mức.`],
+  [/^Send a message with this plan to see its limits\. (.*)$/, (m) => `Gửi một tin nhắn bằng gói này để xem hạn mức. ${viOf(m[1])}`],
+  [/^Added (.+) to (.+)$/, (m) => `Đã cộng ${m[1]} vào ${m[2]}`], [/^(.+) balance set to (.+)$/, (m) => `Đã đặt số dư ${m[1]} thành ${m[2]}`], [/^(.+) left of (.+)$/, (m) => `Còn ${m[1]} / ${m[2]}`],
+  [/^Error (\d+)$/, (m) => `Lỗi ${m[1]}`], [/^Run (\d+)$/, (m) => `Lỗi ${m[1]}`], [/^Install (.+)$/, (m) => `Cài ${m[1]}`],
+  [/^Signed in with your (.+?)(?: · (\d+) models)?$/, (m) => `Đã đăng nhập bằng ${viOf(m[1]) === m[1] && m[1] === "account" ? "tài khoản" : viOf(m[1])}${m[2] ? ` · ${m[2]} model` : ""}`],
+);
+Object.assign(VI2EN, {
+  "Thư viện thiết kế cho nút Thiết kế: frontend-design, canvas-design và theme-factory của Anthropic; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); triết lý design engineering và animation của Emil Kowalski; Web Interface Guidelines của Vercel; UX Designer; 118 mẫu HTML của Awesome Design HTML; ảnh chụp App Store. Model tự chọn skill phù hợp cho từng việc.":
+    "Design library for the Design button: Anthropic's frontend-design, canvas-design and theme-factory; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); Emil Kowalski's design engineering and animation philosophy; Vercel's Web Interface Guidelines; UX Designer; Awesome Design HTML's 118 HTML samples; App Store screenshots. The model picks the right skill for each job.",
+  "Cho nút Trình bày: slides (HTML có Chart.js, công thức viết slide) và design-system của UI/UX Pro Max, theme-factory và frontend-design của Anthropic, writing-guidelines của Vercel. Tệp .pptx được tạo bằng chạy code (python-pptx).":
+    "For the Presentation button: UI/UX Pro Max's slides (HTML with Chart.js, slide-writing formulas) and design-system, Anthropic's theme-factory and frontend-design, Vercel's writing-guidelines. .pptx files are made by running code (python-pptx).",
+  "Cho nút Tài liệu: internal-comms và theme-factory của Anthropic, writing-guidelines của Vercel, brand (giọng văn thương hiệu) của UI/UX Pro Max. Tệp .docx / .pdf được tạo bằng chạy code (python-docx, reportlab).":
+    "For the Document button: Anthropic's internal-comms and theme-factory, Vercel's writing-guidelines, UI/UX Pro Max's brand (brand voice). .docx / .pdf files are made by running code (python-docx, reportlab).",
+  "playwright-cli của Microsoft, webapp-testing, mcp-builder và skill-creator của Anthropic, react-best-practices và composition-patterns của Vercel. Hợp với Synchro Code.":
+    "Microsoft's playwright-cli, Anthropic's webapp-testing, mcp-builder and skill-creator, Vercel's react-best-practices and composition-patterns. A good fit for Synchro Code.",
+  "Các skill độc quyền (docx, pdf, pptx, xlsx) bị bỏ qua vì giấy phép không cho sao chép.": "Proprietary skills (docx, pdf, pptx, xlsx) are skipped because their license doesn't allow copying.",
+  "Nhiều tác giả": "Various authors", "15 skill về animation, độ mượt, cảm giác native, rà soát chuyển động.": "15 skills on animation, smoothness, native feel and motion review.",
+  "Gồm ui-ux-pro-max, design, design-system, ui-styling, brand, banner-design, slides.": "Includes ui-ux-pro-max, design, design-system, ui-styling, brand, banner-design, slides.",
+  "Bộ tham chiếu thiết kế trang đơn.": "A reference set of single-page designs.", "Tạo ảnh marketing cho ứng dụng di động.": "Create marketing images for mobile apps.",
+  "Nhờ hội đồng phản biện đọc lại": "Ask the critic panel to review", "Hội đồng phản biện không thấy lỗi": "The critic panel found no problems", "Hội đồng phản biện": "Critic panel",
+  "Ngữ cảnh gửi cho model": "Context sent to the model", "12 tin gần nhất": "Last 12 messages", "6 tin gần nhất": "Last 6 messages",
+  "Quay lại xem trước": "Back to preview", "Xem trong mã": "View in code", "Chạy server tĩnh cho trang demo": "Run a static server for the demo page",
+  "Không kết nối được tới ElevenLabs. Tạm thời dùng giọng của trình duyệt.": "Couldn't connect to ElevenLabs. Using the browser's voice for now.",
+  "Đã thêm tài liệu vào ngữ cảnh": "Added the document to the context", "Cập nhật lần cuối:": "Last updated:", "Không kết nối được tới máy chủ.": "Couldn't connect to the server.",
+  "Không kết nối được tới Synchro. Kiểm tra mạng rồi thử lại.": "Couldn't connect to Synchro. Check your network and try again.",
+});
+EN2VI["Default access"] = "Quyền mặc định";
+SAME.add("Audio Native");
+EN2VI["Web design guidelines, React best practices, view transitions, deploy."] = "Hướng dẫn thiết kế web, React best practices, view transitions, triển khai.";
+for (const w of ["Emil", "Kowalski", "Level", "Builder", "Leonxlnx", "Parth", "Jadhav", "Szilárd", "Hajba", "Ngân"]) SAME_WORDS.add(w);
+RULES_EN.push([/^Cài từ github\.com\/(.*)$/, (m) => `Installed from github.com/${m[1]}`]);
+Object.assign(VI2EN, {
+  "Không tìm thấy giọng này (có thể đã bị xóa hoặc chưa được thêm vào tài khoản).": "This voice wasn't found (it may have been deleted or never added to the account).",
+  "ElevenLabs không tìm thấy mục này.": "ElevenLabs couldn't find this item.", "Kết nối tới model bị ngắt giữa chừng.": "The connection to the model dropped midway.",
+});
+RULES_EN.push([/^Khóa ElevenLabs chưa được cấp quyền (.*)\. Vào elevenlabs\.io → API keys, sửa khóa và bật quyền này \(hoặc dùng khóa không giới hạn\)\.$/, (m) => `The ElevenLabs key lacks ${m[1] === "cho tính năng này" ? "the permission for this feature" : `the ${m[1]} permission`}. Go to elevenlabs.io → API keys, edit the key and turn this permission on (or use an unrestricted key).`]);

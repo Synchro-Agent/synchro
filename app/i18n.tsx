@@ -11,6 +11,8 @@ if (typeof window !== "undefined") {
   try { const v = JSON.parse(localStorage.getItem("p:uilang") ?? '"vi"'); cur = v === "en" ? "en" : "vi"; } catch {}
 }
 export const getLang = () => cur;
+/** Định dạng ngày giờ, con số theo ngôn ngữ giao diện (không theo ngôn ngữ của trình duyệt). */
+export const locale = () => (cur === "en" ? "en-US" : "vi-VN");
 export const LANG_NAMES: Record<Lang, string> = { vi: "Tiếng Việt", en: "English" };
 
 export function tr(s: string, lang: Lang = cur): string {

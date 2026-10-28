@@ -130,7 +130,7 @@ export function InboxPage({ say, model, onOpenChat }: { say: (m: string) => void
               <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""}`}>
                 <button className="tk-row" onClick={() => toggle(x)}>
                   <span className={`tk-dot ${x.status}`} />
-                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy…") : x.status === "error" ? tr("Lỗi") : (x.text.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>]/g, "").trim().slice(0, 140) || tr("Xong"))}</em></span>
+                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy…") : x.status === "error" ? tr("Lỗi") : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(x.text.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>]/g, "").trim().slice(0, 140))}</em></span>
                   <span className="tk-when">{when(x.at)}</span>
                 </button>
                 {open === x.run && (

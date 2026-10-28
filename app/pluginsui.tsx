@@ -275,7 +275,7 @@ export function SkillHub() {
         <PlugMark id={p.catalogId} size={36} />
         <div className="pl-row2-t">
           <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
-          <span>{p.author ? `${tr("từ")} ${p.author} · ` : ""}{p.description}</span>
+          <span>{p.author ? <>{tr("từ")} {tr(p.author)} · </> : ""}{p.description}</span>
         </div>
         <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>
         <RowMenu p={p} manage={manage} onOpen={() => setOpen(p.id)} onAct={(a) => act(p, a)} />

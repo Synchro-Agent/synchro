@@ -1,6 +1,7 @@
 "use client";
 // Phía trình duyệt của Speech: gọi /api/speech, giữ gói ElevenLabs (credit, tính năng) dùng chung cho mọi công cụ và thanh bên.
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { locale } from "../i18n";
 
 export type Feat = "tts" | "dialogue" | "stt" | "live" | "agent" | "sfx" | "isolate" | "changer" | "align" | "music" | "design" | "remix" | "ivc" | "pvc" | "dub" | "dubClean" | "podcast" | "book" | "dict" | "native";
 export type ModelOut = { id: string; name: string; desc: string; langs: { id: string; name: string }[]; max: number; rate: number; style: boolean; boost: boolean };
@@ -103,7 +104,7 @@ export function useDicts(enabled: boolean) {
 }
 
 // ---- định dạng ----
-export const fmtNum = (n: number) => Math.round(n).toLocaleString("vi-VN");
+export const fmtNum = (n: number) => Math.round(n).toLocaleString(locale());
 export const fmtDur = (s: number) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
 export function ago(t: number) {
   const s = (Date.now() - t) / 1000;
@@ -111,7 +112,7 @@ export function ago(t: number) {
   if (s < 3600) return `${Math.floor(s / 60)} phút trước`;
   if (s < 86400) return `${Math.floor(s / 3600)} giờ trước`;
   if (s < 7 * 86400) return `${Math.floor(s / 86400)} ngày trước`;
-  return new Date(t).toLocaleDateString("vi-VN");
+  return new Date(t).toLocaleDateString(locale());
 }
 // Màu quả cầu của giọng: ổn định theo id, không phụ thuộc thứ tự.
 export const hueOf = (id: string) => { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360; return h; };

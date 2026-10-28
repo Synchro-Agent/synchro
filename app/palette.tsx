@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
 
-export type PaletteCmd = { id: string; label: string; icon: ReactNode; keys?: string; hint?: string; run: () => void };
+export type PaletteCmd = { id: string; label: string; icon: ReactNode; keys?: string; hay?: string; run: () => void };
 export type PaletteGo = {
   chat: (id: number) => void;
   artifact: (conv: string, title: string) => void;
@@ -50,7 +50,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     const out: Row[] = [];
     const words = fold(q).split(/\s+/).filter(Boolean);
     const add = (r: Omit<Row, "hay"> & { hay?: string }) => out.push({ ...r, hay: fold(`${r.label} ${r.sub ?? ""} ${r.hay ?? ""}`) });
-    for (const c of cmds) add({ key: "cmd:" + c.id, group: "Lệnh", label: c.label, icon: c.icon, keys: c.keys, hay: c.hint, run: c.run });
+    for (const c of cmds) add({ key: "cmd:" + c.id, group: "Lệnh", label: c.label, icon: c.icon, keys: c.keys, hay: c.hay, run: c.run });
     for (const c of chats) {
       const hit = words.length ? c.msgs.find((m) => words.every((w) => fold(m.text).includes(w)))?.text : undefined;
       add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: hit ? hit.replace(/\s+/g, " ").slice(0, 80) : undefined, icon: <I.History size={16} />, hay: hit, run: () => go.chat(c.id) });

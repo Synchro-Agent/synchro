@@ -499,14 +499,15 @@ function ago(t: number): string {
   return fmt(t);
 }
 
-function greeting(call: string): string {
+// Lời chào và tên gọi tách riêng: lời chào dịch theo giao diện, tên giữ nguyên.
+function greeting(call: string): [string, string] {
   const n = call.trim().split(/\s+/).pop() || "";
   const h = new Date().getHours();
-  if (h < 5) return "Khuya rồi, bạn chưa ngủ à?";
-  if (h < 11) return `Chào buổi sáng${n ? ", " + n : ""}`;
-  if (h < 14) return `Chào buổi trưa${n ? ", " + n : ""}`;
-  if (h < 18) return `Chiều tốt lành${n ? ", " + n : ""}`;
-  return "Tối rồi, mọi thứ thế nào?";
+  if (h < 5) return ["Khuya rồi, bạn chưa ngủ à?", ""];
+  if (h < 11) return ["Chào buổi sáng", n];
+  if (h < 14) return ["Chào buổi trưa", n];
+  if (h < 18) return ["Chiều tốt lành", n];
+  return ["Tối rồi, mọi thứ thế nào?", ""];
 }
 const fmt = (t: number) => new Date(t).toLocaleTimeString(getLang() === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" });
 
@@ -629,7 +630,7 @@ export default function Home() {
   const [incog, setIncog] = useState(false);
   const [files, setFiles] = useState<string[]>([]);
   const [prefill, setPrefill] = useState({ t: "", n: 0 });
-  const [greet, setGreet] = useState("");
+  const [greet, setGreet] = useState<[string, string]>(["", ""]);
   const [drag, setDrag] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState<string | null>(null);
@@ -1188,22 +1189,22 @@ export default function Home() {
   }, [say]);
 
   const Nav = ({ v, icon, label, tag, plus, badge }: { v: View; icon: React.ReactNode; label: string; tag?: string; plus?: () => void; badge?: number }) => (
-    <button className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
+    <button data-nav={v} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
   );
   const [voiceOn, setVoiceOn] = useState(false);
   const inboxN = useInboxCount(!!me);
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
-    { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hint: "new chat tao moi", run: goNew },
-    { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hint: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
-    { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hint: "skill hub plugin thu vien", run: goCustom },
-    { id: "connectors", label: "Kết nối", icon: <I.Connectors size={16} />, hint: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
-    ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hint: "ung dung apps", run: () => setView("artifacts") }] : []),
-    { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hint: "projects", run: () => { setCurProj(null); setView("projects"); } },
-    { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hint: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
-    { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.Sun size={16} /> : <I.Moon size={16} />, hint: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
-    { id: "sidebar", label: "Ẩn / hiện thanh bên", icon: <I.Panel size={16} />, keys: "⌘.", hint: "sidebar", run: () => setOpen((o) => !o) },
-    { id: "keys", label: "Phím tắt", icon: <I.Keyboard size={16} />, keys: "⌘/", hint: "shortcuts", run: () => setModal("keys") },
+    { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hay: "new chat tao moi", run: goNew },
+    { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hay: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
+    { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hay: "skill hub plugin thu vien", run: goCustom },
+    { id: "connectors", label: "Kết nối", icon: <I.Connectors size={16} />, hay: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
+    ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
+    { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hay: "projects", run: () => { setCurProj(null); setView("projects"); } },
+    { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hay: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
+    { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.Sun size={16} /> : <I.Moon size={16} />, hay: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
+    { id: "sidebar", label: "Ẩn / hiện thanh bên", icon: <I.Panel size={16} />, keys: "⌘.", hay: "sidebar", run: () => setOpen((o) => !o) },
+    { id: "keys", label: "Phím tắt", icon: <I.Keyboard size={16} />, keys: "⌘/", hay: "shortcuts", run: () => setModal("keys") },
   ];
   const paletteGo: PaletteGo = {
     chat: (id) => { setCur(id); setView("chat"); },
@@ -1321,12 +1322,12 @@ export default function Home() {
           {me?.perms.features.speech !== false && (
             <>
               <div className="nav-row">
-                <button className={`nav-item ${view === "speech" && (spTool === "home" || !spOpen) ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Speech />Speech</button>
+                <button data-nav="speech" className={`nav-item ${view === "speech" && (spTool === "home" || !spOpen) ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Speech />Speech</button>
                 <button className={`nav-chev ${spOpen ? "open" : ""}`} aria-expanded={spOpen} aria-label={spOpen ? "Thu gọn công cụ Speech" : "Mở công cụ Speech"} onClick={() => setSpOpen(!spOpen)}><I.ChevronR size={14} /></button>
               </div>
               <div className={`fold ${spOpen ? "open" : ""}`}>
                 <div className="nav-sub" aria-label="Công cụ Speech">
-                  {SP_TOOLS.filter((t) => t.k !== "home" && toolOn(spPlan, t.k)).map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={spOpen ? 0 : -1} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
+                  {SP_TOOLS.filter((t) => t.k !== "home" && toolOn(spPlan, t.k)).map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} data-nav={`sp-${t.k}`} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={spOpen ? 0 : -1} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
                 </div>
               </div>
             </>
@@ -1436,7 +1437,7 @@ export default function Home() {
         <div className="side-bottom">
           <div ref={userRef} style={{ flex: 1, position: "relative" }}>
             <button className="user" style={{ width: "100%" }} onClick={() => setUserMenu(!userMenu)}>
-              <Avatar name={name} /><span title={name}>{shortName(name)}</span><span style={{ marginLeft: "auto" }} className="muted"><I.Chevron size={14} /></span>
+              <Avatar name={name} /><span title={name} data-notr>{shortName(name)}</span><span style={{ marginLeft: "auto" }} className="muted"><I.Chevron size={14} /></span>
             </button>
               <Menu open={!!(userMenu)} style={{ bottom: 44, left: 0, width: 300 }} className="usermenu">
                 <div className="muted" style={{ fontSize: 13, padding: "6px 10px" }}>{me.email}</div>
@@ -1461,7 +1462,7 @@ export default function Home() {
             {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
             {view === "chat" && chat && (
               <div className="title-wrap" style={{ position: "relative" }}>
-                <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t">{chat.title}</span><I.Chevron size={14} /></button>
+                <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
                   <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
                     <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.PinOff /> : <I.Pin />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
@@ -1482,7 +1483,7 @@ export default function Home() {
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
-            <div className="greeting">{incog && <I.Ghost size={26} />}{incog ? "Đoạn chat ẩn danh" : greet}</div>
+            <div className="greeting">{incog && <I.Ghost size={26} />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
               <div className="modewrap" key={tplMode}>

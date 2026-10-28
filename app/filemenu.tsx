@@ -5,6 +5,7 @@ import * as I from "./icons";
 import { Markdown } from "./md";
 
 import { docText, getBlob, hasBlob } from "./filestate";
+import { locale } from "./i18n";
 export { saveBlob, saveDoc, fileContext } from "./filestate";
 
 function NoText({ name }: { name: string }) {
@@ -57,7 +58,7 @@ export function useFileMenu(say: (m: string) => void) {
             <div className="upl-res">
               <div className="upl-bar">
                 <div className="seg"><button className={!raw ? "on" : ""} onClick={() => setRaw(false)}>Xem</button><button className={raw ? "on" : ""} onClick={() => setRaw(true)}>Mã nguồn</button></div>
-                <span className="upl-meta">{view.text.length.toLocaleString()} ký tự</span>
+                <span className="upl-meta">{view.text.length.toLocaleString(locale())} ký tự</span>
               </div>
               <div className="upl-doc">{!view.text ? <NoText name={view.name} /> : raw || !/\.(md|markdown)$/i.test(view.name) ? <pre>{view.text}</pre> : <Markdown text={view.text} say={say} />}</div>
             </div>

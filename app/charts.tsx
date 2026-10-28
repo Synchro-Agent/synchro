@@ -3,7 +3,7 @@
 // ở đây vẽ bằng SVG. Theo quy tắc trực quan hóa dữ liệu: bảng màu phân loại cố định thứ tự (đã kiểm tra mù màu),
 // một trục, cột ≤ 24px bo 4px ở đầu, đường 2px, chú giải khi ≥ 2 chuỗi, tooltip khi rê chuột, và chế độ xem bảng.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 
 export type ChartSpec = { type: "bar" | "line" | "area" | "pie" | "donut" | "scatter"; title?: string; x: string; y: string[]; unit?: string; stacked?: boolean; data: Record<string, unknown>[] };
 const SLOTS = 8;
@@ -30,7 +30,7 @@ const compact = (v: number) => {
   const f = (n: number, s: string) => `${(v / n).toFixed(Math.abs(v / n) < 10 ? 1 : 0).replace(/\.0$/, "")}${s}`;
   return a >= 1e9 ? f(1e9, "B") : a >= 1e6 ? f(1e6, "M") : a >= 1e3 ? f(1e3, "K") : String(Math.round(v * 100) / 100);
 };
-const full = (v: number | null) => (v === null ? "–" : v.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+const full = (v: number | null) => (v === null ? "–" : v.toLocaleString(locale(), { maximumFractionDigits: 2 }));
 function niceTicks(lo: number, hi: number, n = 5) {
   if (lo === hi) { hi = lo + 1; }
   const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)), r = step0 / mag;

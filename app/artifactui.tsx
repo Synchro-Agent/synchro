@@ -568,7 +568,7 @@ Yêu cầu: ${req.trim()}`);
     <aside className={`art-panel ${expanded ? "full" : ""}`} aria-label={art.title}>
       <header className="art-head">
         <span className="art-head-ic"><ArtIcon type={art.type} /></span>
-        <div className="art-head-t"><b title={art.title}>{art.title}</b><span>{deck ? tr("Bản trình bày") : tr(ART_LABEL[art.type])}{art.type === "code" && art.lang ? ` · ${art.lang}` : ""}</span></div>
+        <div className="art-head-t"><b title={art.title} data-notr>{art.title}</b><span>{deck ? tr("Bản trình bày") : tr(ART_LABEL[art.type])}{art.type === "code" && art.lang ? ` · ${art.lang}` : ""}</span></div>
         {switcher}
         {versions.length > 1 && (
           <div className="art-ver">
@@ -698,7 +698,7 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
                 <Thumb a={a} />
                 <div className="art-tile-meta">
                   <span className="art-tile-ic"><ArtIcon type={a.type} size={15} /></span>
-                  <div><b>{a.title}</b><span>{tr(ART_LABEL[a.type])} · {when(a.updated_at)}{a.count > 1 ? ` · ${a.count} ${tr("phiên bản")}` : ""}</span></div>
+                  <div><b data-notr>{a.title}</b><span>{tr(ART_LABEL[a.type])} · {when(a.updated_at)}{a.count > 1 ? ` · ${a.count} ${tr("phiên bản")}` : ""}</span></div>
                   <button className="icon-btn" aria-label="Xóa artifact" onClick={(e) => { e.stopPropagation(); del(a.id); }}><I.Trash size={14} /></button>
                 </div>
               </div>

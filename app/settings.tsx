@@ -17,6 +17,7 @@ import { BrainSettings } from "./brainui";
 import { SkillHub } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
+import { locale } from "./i18n";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
 function useAway(close: () => void) {
@@ -438,7 +439,7 @@ function Reflect() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{gen.words.length ? gen.words.map(([w, n]) => <span key={w} className="chip-s">{w} · {n}</span>) : <span className="d">Not enough data yet.</span>}</div>
           <H>Recent topics</H>
           {gen.titles.map((x, i) => <div key={i} className="item-row">{x}</div>)}
-          <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>{r} · updated {new Date(gen.at).toLocaleTimeString()}</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>{r} · updated {new Date(gen.at).toLocaleTimeString(locale())}</div>
         </div>
       )}
     </>

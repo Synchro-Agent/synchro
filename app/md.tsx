@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { ChartView, parseChart } from "./charts";
 import { ArtifactFrame, MermaidSvg } from "./artifactui";
 import { AskCard } from "./askcard";
@@ -153,7 +153,7 @@ function Widgets({ lang, code }: { lang: string; code: string }) {
     <div className="cb-widgets">
       {isMm && <MermaidView code={code} />}
       {pk.length > 0 && <div className="cb-w"><b>Kiểm tra gói</b>{pk.map((p) => <PkgBadge key={p.eco + p.name} p={p} />)}</div>}
-      {ci && <div className="cb-w"><b>Cron</b><span>{ci.text}</span><em>Lần chạy kế: {ci.next.map((d) => d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })).join(" · ")}</em></div>}
+      {ci && <div className="cb-w"><b>Cron</b><span>{ci.text}</span><em>Lần chạy kế: {ci.next.map((d) => d.toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })).join(" · ")}</em></div>}
       {isRx && <div className="cb-w col"><b>Thử regex</b><input value={rx} placeholder={code.trim().split("\n")[0]} onChange={(e) => setRx(e.target.value)} /><input value={sample} placeholder="Chuỗi mẫu để kiểm tra…" onChange={(e) => setSample(e.target.value)} />{bad ? <em>Regex không hợp lệ</em> : sample && <em>{hits.length} kết quả{hits.length ? ": " + hits.slice(0, 8).join(" · ") : ""}</em>}</div>}
     </div>
   );
