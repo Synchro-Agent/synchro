@@ -43,7 +43,7 @@ export function ago(t: number | null) {
 export const METHOD: Record<string, string> = { password: "Password", google: "Google", github: "GitHub", apple: "Apple", cli: "Server script", custom: "Custom access", default: "Default access" };
 
 const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
-  signup: ["Signed up", "ok"], login: ["Signed in", ""], login_failed: ["Failed sign-in", "bad"], login_blocked: ["Blocked sign-in", "bad"],
+  signup: ["Signed up", "ok"], login: ["Signed in", ""], browser_ext_pair: ["Paired a browser (Synchro extension)", ""], login_failed: ["Failed sign-in", "bad"], login_blocked: ["Blocked sign-in", "bad"],
   logout: ["Signed out", ""], oauth_link: ["Linked sign-in method", ""], password_changed: ["Changed password", ""],
   session_revoked: ["Ended a session", ""], sessions_revoked: ["Signed out other devices", ""], account_deleted: ["Deleted own account", "bad"],
   admin_suspend: ["Suspended account", "adm"], admin_restore: ["Restored account", "adm"], admin_signout: ["Signed user out everywhere", "adm"],
@@ -389,7 +389,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         return (
           <div key={l.id} className="adm-log">
             <span className="tm" data-notr>{fmtDate(l.at)}</span>
-            <span><span className={kind === "bad" ? "bad" : kind === "adm" ? "adm" : ""}>{label}</span>{l.detail && <span className="adm-chip" style={{ marginLeft: 6 }}>{METHOD[l.detail] ?? l.detail}</span>}<br /><span className="muted" data-notr>{who}</span></span>
+            <span><span className={kind === "bad" ? "bad" : kind === "adm" ? "adm" : ""}>{label}</span>{l.detail && (METHOD[l.detail] ? <span className="adm-chip" style={{ marginLeft: 6 }}>{METHOD[l.detail]}</span> : <span className="adm-chip" style={{ marginLeft: 6 }} data-notr>{l.detail}</span>)}<br /><span className="muted" data-notr>{who}</span></span>
             <span className="ip" data-notr>{l.ip ?? ""}</span>
           </div>
         );
