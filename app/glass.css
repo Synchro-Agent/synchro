@@ -205,6 +205,8 @@ html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
 .sec-toggle:hover .sec-chev,.sec-btn:focus-visible .sec-chev{opacity:1}
 .fold{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.3,.9,.3,1)}
 .fold.open{grid-template-rows:1fr}
+/* Ô lưới không được rộng hơn khung (mặc định min-width:auto theo chữ dài nhất): tên dài hiện "…", góc bo tròn không bị cắt. */
+.fold>*{min-width:0}
 .chat-scroll .fold>*{min-height:0;overflow:hidden}
 .chat-scroll .fold.open>*{overflow:visible}
 .chat-wrap{animation:gRowIn .32s var(--gl-spring) backwards}

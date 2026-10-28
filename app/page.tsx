@@ -6,6 +6,7 @@ import { Avatar } from "./avatar";
 import { getLang, tr } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
+import { capFiles } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
 import { HalftoneBg } from "./halftone";
 import { CodeView } from "./codeview";
@@ -404,9 +405,19 @@ function Composer(p: {
     r.onend = () => setRec(false);
     recRef.current = r; r.start();
   };
+  // Dán ảnh / tệp từ bộ nhớ tạm (⌘V) như Claude, ChatGPT: thành tệp đính kèm; ảnh dán không tên thì đặt tên theo giờ.
+  const paste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const fl = Array.from(e.clipboardData?.files ?? []);
+    if (!fl.length) return;
+    e.preventDefault();
+    const d = new Date(), stamp = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}`;
+    const named = fl.map((f, i) => (f.name && f.name !== "image.png" ? f : new File([f], `Ảnh dán ${stamp}${fl.length > 1 ? `-${i + 1}` : ""}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })));
+    named.forEach((x) => saveBlob(x.name, x));
+    setFiles(capFiles(files, named.map((x) => x.name), say));
+  };
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fl = Array.from(e.target.files ?? []); fl.forEach((x) => saveBlob(x.name, x)); const n = fl.map((f) => f.name);
-    if (n.length) setFiles([...files, ...n]);
+    if (n.length) setFiles(capFiles(files, n, say));
     e.target.value = "";
   };
   const [projOpen, setProjOpen] = useState(false);
@@ -427,7 +438,7 @@ function Composer(p: {
       if (!blob) return say("Không chụp được màn hình");
       const d = new Date(), name = `Ảnh chụp màn hình ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}.png`;
       saveBlob(name, new File([blob], name, { type: "image/png" }));
-      setFiles([...files, name]);
+      setFiles(capFiles(files, [name], say));
       say("Đã đính kèm ảnh chụp màn hình");
     } catch (e) { if ((e as Error).name !== "NotAllowedError") say("Không chụp được màn hình"); }
   };
@@ -470,7 +481,7 @@ function Composer(p: {
       <div className="composer" style={{ flexWrap: "wrap" }}>
         {chips && <div style={{ width: "100%" }}>{chips}</div>}
         {plus}
-        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
+        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
         {p.extra}
         {micBtn}
         {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
@@ -480,7 +491,7 @@ function Composer(p: {
   return (
     <div className="composer">
       {chips}
-      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
+      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
       <div className="comp-row">
         {plus}
         <div className="model">
@@ -1082,8 +1093,10 @@ export default function Home() {
     // Lịch sử theo chuẩn Synchro (history.ts): kèm dấu vết công cụ, đánh dấu câu trả lời bị dừng, bỏ phần đã nén.
     const hist: LLMMsg[] = [...chatHistory(prior, chatsRef.current.find((c) => c.id === id)?.compact), { role: "user", content: t }];
     const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
-    fileContext(f, t).then(({ blocks, errors }) => {
+    fileContext(f, t).then(({ blocks, errors, failed }) => {
       errors.forEach((m) => say(m));
+      // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
+      if (failed) { patch(id!, (m) => [...m.slice(0, -1), { role: "ai", text: `⚠️ ${tr(errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.")}`, time: Date.now(), done: true }]); return; }
       if (blocks.length) hist[hist.length - 1] = { role: "user", content: [{ type: "text", text: t || "Hãy xem các tệp đính kèm." }, ...blocks] };
       streamReply(id, t, hist, pid, tp ? STUDIO_OF[tp.k] : undefined);
     });
@@ -1181,7 +1194,7 @@ export default function Home() {
       e.preventDefault(); n = 0; setDrag(false);
       if (document.querySelector("[data-av]")) return;
       const fl = Array.from(e.dataTransfer?.files ?? []); fl.forEach((x) => saveBlob(x.name, x)); const f = fl.map((x) => x.name);
-      if (f.length) { setFiles((o) => [...o, ...f]); setModal((m) => (m === "upload" ? null : m)); say(`Đã thêm ${f.length} tệp`); }
+      if (f.length) { setFiles((o) => capFiles(o, f, say)); setModal((m) => (m === "upload" ? null : m)); say(`Đã thêm ${f.length} tệp`); }
     };
     const prevent = (e: DragEvent) => e.preventDefault();
     window.addEventListener("dragenter", over); window.addEventListener("dragleave", leave);
@@ -1520,7 +1533,7 @@ export default function Home() {
                 {chat.msgs.map((m, i) => <Fragment key={i}>{chat.compact?.upto === i && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}{
                   m.role === "user" ? (
                     <div key={i} className="user-wrap">
-                      {m.files && <div className="attach" style={{ justifyContent: "flex-end" }}>{m.files.map((f, k) => <FileCard key={k} name={f} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
+                      {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
                       {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
                       <div className="user-msg"><UserText text={m.text} /></div>
                     </div>
@@ -1625,7 +1638,7 @@ export default function Home() {
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}><ShareModal title={chat?.title ?? ""} onClose={() => setModal(null)} say={say} onCopy={() => chat && setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, shared: true } : c)))} /></Fade>
       {fm.node}
-      <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => [...o, f.name]); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
+      <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>

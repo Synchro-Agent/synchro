@@ -4334,3 +4334,5 @@ button.bn-box:disabled{cursor:default}
 .bn-ul li.box{display:flex}
 .bw-graph[hidden]{display:none}
 .bn label.bn-auto{display:flex}
+/* Tệp trong tin nhắn đã gửi: xuống dòng, căn phải (không cuộn ngang: phần tràn bên trái từng bị cắt mất khi gửi nhiều ảnh). */
+.attach.sent{flex-wrap:wrap;justify-content:flex-end;overflow:visible;margin:0;padding:0 0 8px}

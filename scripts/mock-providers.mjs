@@ -289,10 +289,10 @@ function mediaOf(msgs = []) {
 }
 function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
-  if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
   const brain = CLI.mockBrain(q);
   if (brain) return { text: brain, q };
+  if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;

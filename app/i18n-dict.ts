@@ -1778,3 +1778,10 @@ Object.assign(EN2VI, {
   "Hide history": "Ẩn lịch sử", "History": "Lịch sử", "Written by Synchro": "Synchro viết", "Written by you": "Bạn viết", "Use this version": "Dùng bản này", "Current": "Đang dùng",
 });
 RULES_VI.push([/^Synchro updated this from your chats on (.+)$/, (m) => `Synchro đã cập nhật phần này từ các đoạn chat lúc ${m[1]}`]);
+// Tệp đính kèm: giới hạn số tệp, quá nặng, không lấy được nội dung.
+VI2EN["Không lấy được nội dung tệp đính kèm. Hãy gửi lại."] = "Couldn't read the attached files. Please send again.";
+RULES_EN.push(
+  [/^Mỗi tin nhắn gửi được tối đa (\d+) tệp: đã bỏ bớt (\d+) tệp cuối, hãy gửi phần còn lại ở tin nhắn sau\.$/, (m) => `Each message can carry up to ${m[1]} files: the last ${m[2]} were left out, send them in your next message.`],
+  [/^Các tệp đính kèm quá nặng để gửi một lần \((\d+) MB, tối đa (\d+) MB\)\. Hãy chia ra nhiều tin nhắn\.$/, (m) => `The attachments are too large to send at once (${m[1]} MB, ${m[2]} MB max). Split them across several messages.`],
+  [/^⚠️ (.+)$/, (m) => `⚠️ ${enOf(m[1])}`],
+);

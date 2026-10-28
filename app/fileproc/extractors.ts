@@ -8,7 +8,7 @@ import sharp from "sharp";
 import jschardet from "jschardet";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
-import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_EDGE } from "./types";
+import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE } from "./types";
 
 const run = promisify(execFile);
 const PDF_NATIVE = process.env.LLM_PDF_NATIVE ? process.env.LLM_PDF_NATIVE === "1" : (process.env.LLM_PROVIDER ?? "anthropic") === "anthropic";
@@ -30,9 +30,14 @@ const imageExtractor: Extractor = {
   async run(buf, { kind }) {
     const meta = await sharp(buf).metadata();
     const big = Math.max(meta.width ?? 0, meta.height ?? 0) > IMAGE_MAX_EDGE;
-    if (!big) return [{ type: "image", media_type: kind, data: buf.toString("base64") }];
-    const out = await sharp(buf).resize({ width: IMAGE_MAX_EDGE, height: IMAGE_MAX_EDGE, fit: "inside" }).toBuffer();
-    const mt = kind === "image/gif" ? "image/png" : kind;
+    if (!big && buf.length <= IMAGE_MAX_BYTES) return [{ type: "image", media_type: kind, data: buf.toString("base64") }];
+    let out = big ? await sharp(buf).resize({ width: IMAGE_MAX_EDGE, height: IMAGE_MAX_EDGE, fit: "inside" }).toBuffer() : buf;
+    let mt = kind === "image/gif" ? "image/png" : kind;
+    // Ảnh chụp màn hình PNG vẫn nặng sau khi thu nhỏ: nén JPEG chất lượng cao (nền trắng cho phần trong suốt) để 20 ảnh vẫn gửi được một lần.
+    if (out.length > IMAGE_MAX_BYTES) {
+      const jpg = await sharp(out).flatten({ background: "#ffffff" }).jpeg({ quality: 88, chromaSubsampling: "4:4:4" }).toBuffer();
+      if (jpg.length < out.length) { out = jpg; mt = "image/jpeg"; }
+    }
     return [{ type: "image", media_type: mt, data: out.toString("base64") }];
   },
 };

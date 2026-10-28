@@ -86,7 +86,7 @@ const authFile = path.join(dir, "auth.json");
     const imgs = a.flatMap((x, i) => (x.startsWith("--image=") ? [x.slice(8)] : x === "-i" || x === "--image" ? [a[i + 1]] : []));
     const missing = imgs.find((f) => !fs.existsSync(f));
     if (missing) { C.out({ type: "turn.failed", error: { message: `Failed to read image ${missing}: No such file or directory` } }); process.exit(1); }
-    const text = /#media/.test(prompt) ? C.mediaReply(imgs.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : ""));
+    const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(imgs.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : ""));
     C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text } });
     C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length } });
     return;

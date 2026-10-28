@@ -196,6 +196,26 @@ console.log("5b. Ảnh và PDF gửi kèm nguyên dạng tới model (gói subsc
   ok(an.j?.text === `MEDIA: image/png 2x3 (image); ${P} (document)`, "khóa API Anthropic: ảnh và PDF gốc", JSON.stringify(an.j).slice(0, 300));
   const oa = await admin("POST", "/api/llm", { model: "openai/gpt-6.1-sol", messages: msg("#media xem đề bài"), skills: true });
   ok(oa.j?.text === `MEDIA: image/png 2x3 (input_image); ${P} (input_file)`, "khóa API OpenAI (Responses): ảnh và PDF gốc (input_file), không chỉ chữ trích ra", JSON.stringify(oa.j).slice(0, 300));
+  // Đường tải tệp thật của giao diện: /api/files (mỗi ảnh) → /api/files/context → khối gửi model. Bộ đề 13 ảnh chụp màn hình phải đi đủ;
+  // trước đây giới hạn 10 tệp làm cả lượt mất hết ảnh mà model không biết.
+  const pngOf = (w, h, seed) => { const ih = Buffer.alloc(13); ih.writeUInt32BE(w, 0); ih.writeUInt32BE(h, 4); ih[8] = 8; ih[9] = 2; const row = Buffer.alloc(1 + w * 3, seed & 255); const raw = Buffer.concat(Array.from({ length: h }, (_, y) => { const r = Buffer.from(row); r[0] = 0; r[1 + (y % w) * 3] = y & 255; return r; })); return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ih), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]); };
+  const up = async (buf, name) => { const fd = new FormData(); fd.append("file", new Blob([buf], { type: "image/png" }), name); const r = await fetch(`${B}/api/files`, { method: "POST", headers: { origin: B, cookie: process.env.SYNCHRO_ADMIN_COOKIE ?? "" }, body: fd }); return r.json(); };
+  const ids = [], names = {};
+  for (let i = 0; i < 13; i++) { const j = await up(pngOf(40 + i, 30 + i, i * 7 + 1), `Screenshot ${i}.png`); ids.push(j.id); names[j.id] = `Screenshot ${i}.png`; }
+  const ctx = await admin("POST", "/api/files/context", { ids, names, query: "đáp án" });
+  ok(ctx.s === 200 && ctx.j.blocks.filter((b) => b.type === "image").length === 13, "13 ảnh chụp màn hình qua đường tải tệp của giao diện: đủ 13 khối ảnh", JSON.stringify({ s: ctx.s, n: ctx.j?.blocks?.filter((b) => b.type === "image").length, e: ctx.j?.error }));
+  const viaPlan = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: [{ type: "text", text: "#media cho tôi đáp án" }, ...ctx.j.blocks] }], skills: true });
+  ok((viaPlan.j?.text ?? "").split("; ").length === 13 && /image\/png 52x42/.test(viaPlan.j.text), "cả 13 ảnh tới model qua gói (đúng từng ảnh)", (viaPlan.j?.text ?? "").slice(0, 300));
+  const twenty = await admin("POST", "/api/files/context", { ids: Array.from({ length: 20 }, (_, i) => ids[i % 13]), names, query: "" });
+  ok(twenty.s === 200, "nhận tới 20 tệp mỗi tin nhắn (như Claude)", twenty.s);
+  const over = await admin("POST", "/api/files/context", { ids: Array.from({ length: 21 }, (_, i) => ids[i % 13]), names, query: "" });
+  ok(over.s === 413 && /20 tệp/.test(over.j?.error ?? ""), "quá 20 tệp: báo rõ (giao diện chặn từ lúc đính kèm, không gửi lượt thiếu ảnh)", JSON.stringify(over.j));
+  // Ảnh chụp màn hình lớn và nặng: thu nhỏ cạnh dài 1568px, còn nặng thì nén JPEG (20 ảnh vẫn gửi được dưới giới hạn 40 MB của máy chủ web).
+  const noisy = (() => { const w = 2000, h = 1600, ih = Buffer.alloc(13); ih.writeUInt32BE(w, 0); ih.writeUInt32BE(h, 4); ih[8] = 8; ih[9] = 2; const raw = Buffer.alloc(h * (1 + w * 3)); for (let i = 0; i < raw.length; i++) raw[i] = (i * 2654435761) >>> 24; for (let y = 0; y < h; y++) raw[y * (1 + w * 3)] = 0; return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ih), chunk("IDAT", deflateSync(raw, { level: 1 })), chunk("IEND", Buffer.alloc(0))]); })();
+  const big = await up(noisy, "Screenshot big.png");
+  const bigCtx = await admin("POST", "/api/files/context", { ids: [big.id], names: { [big.id]: "Screenshot big.png" }, query: "" });
+  const bimg = bigCtx.j?.blocks?.find((b) => b.type === "image");
+  ok(bimg?.media_type === "image/jpeg" && bimg.data.length * 0.75 < noisy.length, "ảnh chụp màn hình lớn, nặng: thu nhỏ rồi nén JPEG chất lượng cao", JSON.stringify({ mt: bimg?.media_type, kb: bimg ? Math.round(bimg.data.length * 0.75 / 1024) : null, src: Math.round(noisy.length / 1024) }));
   const gg = await admin("POST", "/api/llm", { model: "google/gemini-3.8-flash", messages: msg("#media xem đề bài"), skills: true });
   ok(gg.j?.text === "MEDIA: image/png 2x3 (image_url)", "khóa API Gemini: ảnh tới model", JSON.stringify(gg.j).slice(0, 300));
 }
