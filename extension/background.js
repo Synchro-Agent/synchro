@@ -1,5 +1,5 @@
 // Service worker của tiện ích Synchro: giữ kết nối tới máy chủ Synchro (link.js), chạy thao tác trên trình duyệt (control.js),
-// trả lời cửa sổ bật lên (popup.js) và hiện huy hiệu trên biểu tượng (đang kết nối / Synchro đang điều khiển).
+// trả lời cửa sổ bật lên (popup.js), hiện logo Synchro trên thanh công cụ theo theme và huy hiệu (mất kết nối / Synchro đang điều khiển).
 import { SERVER } from "./config.js";
 import { createControl } from "./control.js";
 import { t } from "./i18n.js";
@@ -23,13 +23,34 @@ function device() {
   return { name: `${browser} · ${os}`, browser, version, ext: chrome.runtime.getManifest().version };
 }
 
-let acting = false, linkState = { state: "unpaired", error: "" };
+let acting = false, linkState = { state: "unpaired", error: "" }, theme = "light";
 function badge() {
   const on = linkState.state === "online";
   chrome.action.setBadgeText({ text: acting ? "●" : on ? "" : linkState.state === "unpaired" ? "" : "!" });
-  chrome.action.setBadgeBackgroundColor({ color: acting ? "#d97706" : "#78716c" });
+  chrome.action.setBadgeBackgroundColor({ color: acting ? "#d97757" : theme === "dark" ? "#5c5b57" : "#87867f" });
+  chrome.action.setBadgeTextColor?.({ color: "#ffffff" });
   chrome.action.setTitle({ title: `Synchro · ${acting ? t("acting") : on ? t("online") : linkState.state === "unpaired" ? t("pair") : t("offline")}` });
 }
+
+// Logo Synchro trên thanh công cụ theo theme sáng / tối của trình duyệt: bản sáng (tia sáng xanh đậm) trên thanh sáng, bản tối (màu sáng hơn,
+// viền sáng mờ) trên thanh tối. Service worker không đọc được theme, nên tài liệu ẩn theme.html đọc rồi báo về; nhớ lại lựa chọn gần nhất.
+const icon = (t) => ({ 16: `icons/toolbar-${t}-16.png`, 24: `icons/toolbar-${t}-24.png`, 32: `icons/toolbar-${t}-32.png` });
+function setTheme(dark) {
+  const t = dark ? "dark" : "light";
+  if (t === theme) return;
+  theme = t;
+  chrome.action.setIcon({ path: icon(t) }).catch(() => {});
+  chrome.storage.local.set({ theme: t });
+  badge();
+}
+chrome.storage.local.get(["theme"]).then((c) => { if (c.theme === "dark") setTheme(true); });
+async function watchTheme() {
+  try {
+    if (!chrome.offscreen || (await chrome.offscreen.hasDocument?.())) return;
+    await chrome.offscreen.createDocument({ url: "theme.html", reasons: ["MATCH_MEDIA"], justification: "Đổi logo Synchro trên thanh công cụ theo giao diện sáng / tối của trình duyệt." });
+  } catch {}
+}
+watchTheme();
 
 const control = createControl(chrome, {
   server: () => server,
@@ -43,7 +64,7 @@ const link = createLink({ store, control, device, revoked: t("revoked"), onState
 chrome.storage.local.get(["scope"]).then((c) => { if (c.scope) control.setScope(c.scope); });
 chrome.storage.session.get(["shared"]).then((c) => { for (const id of c.shared ?? []) control.share(id, true); }).catch(() => {});
 
-chrome.runtime.onStartup.addListener(() => link.connect());
+chrome.runtime.onStartup.addListener(() => { link.connect(); watchTheme(); });
 chrome.runtime.onInstalled.addListener(() => { link.connect(); chrome.alarms.create("synchro-link", { periodInMinutes: 1 }); });
 // Dự phòng: mỗi phút kiểm tra một lần, mất kết nối thì nối lại (báo thức cũng đánh thức service worker nếu Chrome đã tắt nó).
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === "synchro-link" && !link.online()) link.connect(); });
@@ -51,6 +72,8 @@ link.connect();
 
 // Cửa sổ bật lên.
 chrome.runtime.onMessage.addListener((m, _sender, reply) => {
+  if (m?.op === "theme") { setTheme(!!m.dark); return false; }
+  if (m?.op === "changed") return false;
   (async () => {
     const cfg = await store.get();
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });

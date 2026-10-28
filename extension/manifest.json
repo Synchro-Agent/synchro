@@ -5,9 +5,35 @@
   "version": "1.0.0",
   "default_locale": "vi",
   "minimum_chrome_version": "116",
-  "permissions": ["debugger", "tabs", "tabGroups", "storage", "alarms", "downloads"],
-  "host_permissions": ["<all_urls>"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "Synchro", "default_icon": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png" } },
-  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
+  "permissions": [
+    "debugger",
+    "tabs",
+    "tabGroups",
+    "storage",
+    "alarms",
+    "downloads",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Synchro",
+    "default_icon": {
+      "16": "icons/toolbar-light-16.png",
+      "24": "icons/toolbar-light-24.png",
+      "32": "icons/toolbar-light-32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
 }

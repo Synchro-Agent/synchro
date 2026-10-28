@@ -2,6 +2,7 @@
 // Lỗi gửi về cho model luôn bằng tiếng Việt (giống phần còn lại của Synchro).
 const VI = {
   title: "Synchro cho Chrome",
+  forChrome: "cho Chrome",
   sub: "Synchro tự làm việc trên trình duyệt này khi bạn nhờ trong khung chat.",
   server: "Địa chỉ Synchro",
   code: "Mã ghép nối",
@@ -35,6 +36,7 @@ const VI = {
 };
 const EN = {
   title: "Synchro for Chrome",
+  forChrome: "for Chrome",
   sub: "Synchro works in this browser for you when you ask in the chat.",
   server: "Synchro address",
   code: "Pairing code",

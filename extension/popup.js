@@ -7,6 +7,8 @@ const $ = (s) => document.querySelector(s);
 const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === "on") for (const [ev, f] of Object.entries(v)) e.addEventListener(ev, f); else if (v !== undefined && v !== false) e[k] = v; } e.append(...kids.flat().filter((x) => x != null && x !== false)); return e; };
 const ask = (m) => chrome.runtime.sendMessage(m);
 for (const el of document.querySelectorAll("[data-t]")) el.textContent = t(el.dataset.t);
+// Báo theme cho background (dự phòng khi trình duyệt không có chrome.offscreen): logo trên thanh công cụ đổi theo.
+chrome.runtime.sendMessage({ op: "theme", dark: matchMedia("(prefers-color-scheme: dark)").matches }).catch(() => {});
 
 let busy = false, err = "";
 async function render(s) {

@@ -9,7 +9,7 @@ Tiện ích này cho Synchro tự làm việc ngay trên trình duyệt của b�
 3. **Mở trang quản lý tiện ích:** gõ `chrome://extensions` vào thanh địa chỉ (Edge: `edge://extensions`, Brave: `brave://extensions`).
 4. **Bật Developer mode** (Chế độ dành cho nhà phát triển) ở góc trên bên phải trang.
 5. Bấm **Load unpacked** (Tải tiện ích đã giải nén) rồi chọn thư mục `synchro-chrome`.
-6. Bấm biểu tượng mảnh ghép trên thanh công cụ, **ghim Synchro** để dễ mở.
+6. Bấm biểu tượng mảnh ghép trên thanh công cụ, **ghim Synchro** để dễ mở. Logo Synchro trên thanh công cụ tự đổi theo giao diện sáng / tối của trình duyệt.
 
 ## Ghép nối với tài khoản Synchro
 
@@ -37,6 +37,7 @@ Synchro → **Cài đặt → Khả năng → Trình duyệt của bạn** → b
 - `tabs`, `tabGroups`: biết các tab, mở tab mới trong nhóm "Synchro".
 - `downloads`: báo cho Synchro biết tệp vừa tải về.
 - `storage`, `alarms`: lưu khóa ghép nối của trình duyệt này, tự nối lại khi mất kết nối.
+- `offscreen`: một trang ẩn đọc giao diện sáng / tối của trình duyệt để logo Synchro trên thanh công cụ đổi theo (bản sáng cho thanh sáng, bản tối cho thanh tối).
 - Truy cập mọi trang (`<all_urls>`): kết nối tới máy chủ Synchro của bạn, ở bất kỳ địa chỉ nào.
 
 Khóa ghép nối chỉ lưu trong trình duyệt này; máy chủ Synchro chỉ giữ bản băm và gỡ được bất cứ lúc nào.
