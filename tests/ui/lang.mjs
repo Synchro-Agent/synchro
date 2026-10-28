@@ -108,6 +108,11 @@ for (const lang of LANGS) {
   });
   for (const v of ["projects", "artifacts", "inbox", "code", "customize"]) await step(v, async () => { await nav(v); await look(v); });
   await step("skill hub · connectors", async () => { await click(`[...document.querySelectorAll("button, [role=tab]")].find((e) => /^(Connectors|Kết nối)$/.test(e.textContent.trim()))`, "connectors tab"); await sleep(1200); await look("skill hub · connectors"); });
+  // Bộ não: đồ thị, ô tìm nhanh, một ghi chú (kèm cột liên kết), Bảng, Hoạt động.
+  await step("bộ não", async () => { await nav("brain"); await sleep(1500); await look("bộ não · đồ thị"); });
+  await step("bộ não · tìm", async () => { await click(`document.querySelector(".bw-find input")`, "brain search"); await sleep(600); await look("bộ não · tìm"); await esc(); });
+  await step("bộ não · ghi chú", async () => { await click(`document.querySelector(".bw-entry .bw-item")`, "brain note"); await sleep(2000); await look("bộ não · ghi chú"); });
+  for (const [i, name] of [[2, "bảng"], [3, "hoạt động"]]) await step(`bộ não · ${name}`, async () => { await click(`document.querySelectorAll(".bw-views button")[${i}]`, name); await sleep(1800); await look(`bộ não · ${name}`); });
   await step("speech", async () => { await nav("speech"); await look("speech"); });
   const spTools = await ev(`[...document.querySelectorAll('[data-nav^="sp-"]')].map((e) => e.dataset.nav)`).catch(() => []);
   for (const t of spTools) await step(t, async () => { await nav(t); await look(t); });
