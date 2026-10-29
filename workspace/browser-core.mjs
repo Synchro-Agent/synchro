@@ -285,5 +285,36 @@ export function createBrowser(host) {
 
   /** Trình duyệt / container vừa khởi động lại: bỏ các kết nối cũ. */
   const reset = (u) => { const s = st(u); s.cdp?.close(); s.cdp = null; s.bc?.close(); s.bc = null; s.dialog = null; };
-  return { tool: A.tool, screen, reset, state: st };
+
+  // ---------------------------------------------------------------- cookie và đăng nhập
+  // Xóa sạch dữ liệu duyệt web: mọi cookie, bộ nhớ của các trang đã mở (localStorage, IndexedDB, service worker…), đóng mọi tab.
+  const origins = (u) => (st(u).origins ??= new Set());
+  async function wipe(u) {
+    const s = st(u);
+    s.base = await host.up(u);
+    const bc = await browserLevel(u);
+    await bc.send("Storage.clearCookies", {}).catch(() => {});
+    for (const o of origins(u)) await bc.send("Storage.clearDataForOrigin", { origin: o, storageTypes: "all" }).catch(() => {});
+    origins(u).clear();
+    // Quyền đã cấp cho trang (vị trí, thông báo…), tệp đã tải, tab vừa dùng, chữ đã chép của phiên trước cũng không theo sang phiên sau.
+    await bc.send("Browser.resetPermissions", {}).catch(() => {});
+    s.downloads = []; s.hist = []; s.chooser = null; s.clip = undefined;
+    const list = await pages(u);
+    const blank = await devtools(u, "/json/new?about:blank", "PUT");
+    for (const t of list) await devtools(u, `/json/close/${t.id}`).catch(() => {});
+    s.tab = blank.id; s.cdp?.close(); s.cdp = null; s.dialog = null;
+    for (const v of s.viewers) v.follow?.(blank.id);
+    return { ok: true, wiped: true, url: "about:blank" };
+  }
+  // Thao tác của model. cookies = "session": mỗi phiên (scope) dùng trình duyệt sạch, phiên sau không thấy đăng nhập của phiên trước.
+  async function tool(u, b) {
+    if (b.action === "wipe") return wipe(u);
+    const s = st(u);
+    if (b.cookies === "session" && b.scope && s.scope !== b.scope) await wipe(u);
+    if (b.scope) s.scope = b.scope;
+    const r = await A.tool(u, b);
+    try { const o = new URL(String(r?.url ?? "")).origin; if (/^https?:/.test(o)) origins(u).add(o); } catch {}
+    return r;
+  }
+  return { tool, screen, reset, wipe, state: st };
 }

@@ -376,7 +376,7 @@ export const EN2VI: Record<string, string> = {
   "Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.": "Giới thiệu về bạn và dặn Synchro cách làm việc với bạn. Synchro coi đây là những gì nó vốn đã biết về bạn, cùng với tên gọi ở trên và những điều nó nhớ từ các cuộc trò chuyện, trong mọi đoạn chat, trong Synchro Code và khi trò chuyện bằng giọng nói, với mọi model, trên mọi thiết bị.",
   "e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point.": "Ví dụ: Mình là học sinh lớp 12 đang ôn thi THPT và IELTS. Luôn trả lời bằng tiếng Việt, giải thích từng bước, ngắn gọn và đi thẳng vào ý chính.",
   "> Fix the auth bug in signup flow": "> Sửa lỗi đăng nhập ở bước đăng ký",
-  "Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server. What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.": "Synchro chạy trên máy chủ riêng của chủ sở hữu. Đoạn chat của bạn lưu trong trình duyệt này; tệp, skill, connector và ứng dụng của bạn lưu trên máy chủ Synchro đó. Nội dung gửi cho model đi thẳng tới nhà cung cấp (Anthropic, OpenAI, Google) qua khóa API của máy chủ.",
+  "Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.": "Synchro chạy trên máy chủ riêng của chủ sở hữu. Đoạn chat của bạn lưu trong trình duyệt này; tệp, skill, connector và ứng dụng của bạn lưu trên máy chủ Synchro đó, phiên Synchro Code cũng vậy khi bật đồng bộ (Cài đặt → Synchro Code). Nội dung gửi cho model đi thẳng tới nhà cung cấp (Anthropic, OpenAI, Google) qua khóa API của máy chủ.",
   "Rate limit reported by the provider for your API key. When it runs out, replies wait until it resets.": "Hạn mức do nhà cung cấp báo cho khóa API của bạn. Hết hạn mức thì câu trả lời chờ tới khi được đặt lại.",
   "Optional spending caps for yourself. Leave empty for no limit. When a cap is reached, chats pause until it resets.": "Giới hạn chi tiêu tự đặt (không bắt buộc). Để trống là không giới hạn. Chạm giới hạn thì chat tạm dừng tới khi được đặt lại.",
   "Starts with your first message.": "Bắt đầu từ tin nhắn đầu tiên.",
@@ -1888,6 +1888,102 @@ RULES_EN.push(
 );
 // Nhật ký quản trị: ghép nối trình duyệt qua tiện ích Synchro.
 EN2VI["Paired a browser (Synchro extension)"] = "Ghép nối trình duyệt (tiện ích Synchro)";
+// Synchro Code: chế độ quyền, thẻ duyệt, kiểu xem / kiểu trả lời, trạng thái phiên, đồng bộ, trang được phép, cookie, tự sửa / tự lưu trữ PR.
+// Chỉ thêm mục chưa có (không ghi đè bản dịch sẵn có của cùng chữ ở chỗ khác).
+const addNew = (d: Record<string, string>, o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) if (!Object.prototype.hasOwnProperty.call(d, k)) d[k] = v; };
+// Dịch một mảnh chèn trong chuỗi ghép (qua từ điển rồi luật dịch).
+const enDeep = (s: string): string => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s]; for (const [re, f] of RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
+addNew(VI2EN, {
+  "Không được phép": "Not allowed", "Gặp lỗi": "Hit an error", "Đã dừng giữa chừng": "Stopped partway", "Đang hỏi bạn": "Asking you",
+  "Bình thường": "Normal", "Suy nghĩ": "Thinking", "Chi tiết": "Verbose",
+  "Đã từ chối": "Denied", "Không còn chờ": "No longer waiting", "Luôn cho phép trang này": "Always allowed for this site", "Luôn cho phép trong phiên": "Always allowed in this session",
+  "Đã cho phép": "Allowed", "Cho phép mọi lần sửa tệp": "Allow all file edits", "Luôn cho phép lệnh này": "Always allow this command",
+  "Cho Synchro dùng trình duyệt trên trang này?": "Let Synchro use the browser on this site?", "Cho Synchro sửa tệp này?": "Let Synchro edit this file?",
+  "Cho Synchro chạy lệnh này?": "Let Synchro run this command?", "Bảo Synchro nên làm thế nào thay vào đó…": "Tell Synchro what to do instead…",
+  "Cho phép": "Allow", "Bảo làm khác…": "Do something else…", "Đang chờ bạn duyệt": "Waiting for your approval", "Synchro đang chờ bạn duyệt": "Synchro is waiting for your approval",
+  "Thiếu câu hỏi.": "Missing question.", "Câu hỏi này không còn chờ trả lời.": "This question is no longer waiting for an answer.",
+  "Không tìm thấy phiên.": "Session not found.", "Phiên quá lớn để đồng bộ.": "This session is too large to sync.", "Đồng bộ phiên Code đang tắt.": "Code session sync is off.",
+  "Không tạo được nhánh mới.": "Couldn't create a new branch.", "Người dùng đã dừng.": "Stopped by the user.", "Chạy script của skill": "Run a skill script",
+  "Hỏi trước": "Ask first", "Tự sửa tệp": "Edit files",
+  "Hỏi bạn trước mỗi lần sửa tệp hay chạy lệnh (lệnh chỉ đọc như xem, tìm, git status thì không hỏi).": "Asks before every file edit or command (read-only commands like viewing, searching or git status don't ask).",
+  "Tự sửa tệp, chỉ hỏi trước khi chạy lệnh có thể thay đổi máy (cài gói, xóa, push…).": "Edits files on its own and asks only before commands that can change things (installing packages, deleting, pushing…).",
+  "Không hỏi gì: Synchro tự sửa tệp và chạy lệnh để làm xong việc.": "Never asks: Synchro edits files and runs commands on its own to finish the job.",
+  "Kiểu xem": "Transcript view", "Kiểu trả lời": "Output style", "Gợi ý: bấm Tab để dùng": "Suggestion: press Tab to use it",
+  "Chế độ quyền": "Permission mode", "Quyền của Synchro trong phiên này": "Synchro's permissions in this session",
+  "Đang tắt ở Cài đặt → Synchro Code (Cho phép chế độ Tự động).": "Turned off in Settings → Synchro Code (Allow auto mode).",
+  "Đã bỏ các quyền \"luôn cho phép\" của phiên": "Cleared this session's \"always allow\" permissions", "Bỏ": "Clear", "quyền \"luôn cho phép\"": "\"always allow\" permissions",
+  "Đang chạy": "Running", "Cần bạn": "Needs you", "Chờ xem lại": "Ready for review", "Xong": "Done",
+  "Đã khôi phục phiên code": "Code session restored", "Đã lưu trữ phiên code": "Code session archived", "Khôi phục": "Restore", "Code đã lưu trữ ·": "Archived code ·",
+  "Đã gộp": "Merged", "Đã đóng": "Closed",
+  "Bật \"Cho phép chế độ Tự động\" để Synchro tự sửa PR (lượt chạy nền không có ai bấm duyệt).": "Turn on \"Allow auto mode\" so Synchro can fix pull requests (background runs have nobody to approve them).",
+  "Mặc định": "Default", "Giải thích": "Explanatory", "Học cùng": "Learning",
+  "Làm việc gọn, tập trung vào kết quả.": "Works concisely and focuses on the result.",
+  "Vừa làm vừa giải thích lựa chọn trong code và cách code này chạy.": "Explains the choices in the code and how it works as it goes.",
+  "Cùng làm: Synchro để lại vài phần nhỏ, có ý nghĩa cho bạn tự viết, rồi xem lại giúp bạn.": "Works with you: Synchro leaves a few small, meaningful parts for you to write, then reviews them.",
+});
+RULES_EN.push(
+  [/^Dùng trình duyệt trên (\S+)$/, (m) => `Use the browser on ${m[1]}`],
+  [/^Ghi tệp (.+)$/, (m) => `Write file ${m[1]}`],
+  [/^Sửa tệp (.+)$/, (m) => `Edit file ${m[1]}`],
+  [/^Luôn cho phép (\S+)$/, (m) => `Always allow ${m[1]}`],
+  [/^Chờ bạn duyệt: ([\s\S]+)$/, (m) => `Waiting for your approval: ${enDeep(m[1])}`],
+  [/^Kiểu trả lời: (.+)$/, (m) => `Output style: ${enDeep(m[1])}`],
+  [/^Chế độ quyền: (.+)$/, (m) => `Permission mode: ${enDeep(m[1])}`],
+  [/^CI vẫn lỗi sau (\d+) lần tự sửa, chờ bạn xem$/, (m) => `CI still failing after ${m[1]} automatic fixes, waiting for you`],
+  [/^CI của PR #(\d+) vẫn lỗi, cần bạn xem$/, (m) => `CI on PR #${m[1]} is still failing and needs you`],
+  [/^không chuẩn bị được nhánh (\S*): ([\s\S]*)$/, (m) => `couldn't prepare branch ${m[1]}: ${m[2]}`],
+  [/^Đang tự sửa PR #(\d+)$/, (m) => `Fixing PR #${m[1]}`],
+  [/^push lỗi: ([\s\S]*)$/, (m) => `push failed: ${m[1]}`],
+  [/^Đã tự sửa PR #(\d+), chờ CI$/, (m) => `Fixed PR #${m[1]}, waiting for CI`],
+  [/^Đã xem PR #(\d+), không cần đổi code$/, (m) => `Reviewed PR #${m[1]}, no code changes needed`],
+  [/^Đã tự sửa và đẩy (\d+) commit lúc (.+)$/, (m) => `Fixed and pushed ${m[1]} commit${m[1] === "1" ? "" : "s"} at ${m[2]}`],
+  [/^Đã xem, không cần đổi code lúc (.+)$/, (m) => `Reviewed, no code changes needed, at ${m[1]}`],
+  [/^PR #(\d+) đã gộp$/, (m) => `PR #${m[1]} merged`],
+  [/^PR #(\d+) đã đóng$/, (m) => `PR #${m[1]} closed`],
+);
+addNew(EN2VI, {
+  "Transcript width": "Độ rộng khung hội thoại", "Narrow": "Hẹp", "Wide": "Rộng",
+  "Maximum width of the conversation and the message box, in chat and in Synchro Code.": "Độ rộng tối đa của đoạn hội thoại và ô soạn tin, ở khung chat và Synchro Code.",
+  "Sessions": "Phiên làm việc", "Classify session states": "Tự phân loại trạng thái phiên",
+  "After every turn, a fast model marks the session in the sidebar as needs you, ready for review, or done. Counts toward your usage.": "Sau mỗi lượt, một model nhanh đánh dấu phiên ở thanh bên là cần bạn, chờ xem lại hay đã xong. Tính vào mức dùng của bạn.",
+  "Sync sessions across devices": "Đồng bộ phiên giữa các thiết bị",
+  "Keep Code sessions on this Synchro server so you can continue them on another computer or your phone. Work Synchro does in the background, like fixing a pull request, also shows up in the session.": "Lưu phiên Code trên máy chủ Synchro này để mở tiếp ở máy tính khác hay trên điện thoại. Việc Synchro làm nền, như tự sửa pull request, cũng hiện trong phiên.",
+  "Allow auto mode": "Cho phép chế độ Tự động",
+  "Let sessions run in Auto mode, where Synchro edits files and runs commands without asking. Needed for auto-fixing pull requests, which run while you're away.": "Cho phép phiên chạy ở chế độ Tự động: Synchro tự sửa tệp và chạy lệnh mà không hỏi. Cần cho việc tự sửa pull request, vốn chạy khi bạn vắng mặt.",
+  "Default permission mode": "Chế độ quyền mặc định",
+  "Ask first: Synchro asks before every file edit and every command that can change something. Edit files: edits freely, asks before such commands. Auto: never asks. Change it for one session from the message box.": "Hỏi trước: Synchro hỏi trước mỗi lần sửa tệp và mỗi lệnh có thể thay đổi gì đó. Tự sửa tệp: tự sửa tệp, chỉ hỏi trước những lệnh như vậy. Tự động: không bao giờ hỏi. Đổi cho từng phiên ngay dưới ô soạn tin.",
+  "Ask first": "Hỏi trước", "Edit files": "Tự sửa tệp",
+  "Prompt suggestions": "Gợi ý câu nhắn",
+  "After Synchro replies, show a suggested next message in the message box. Press Tab to use it. Adds a little to your usage.": "Sau khi Synchro trả lời, hiện gợi ý câu nhắn tiếp theo trong ô soạn tin. Bấm Tab để dùng. Tốn thêm một chút mức dùng.",
+  "Archive inactive sessions": "Tự lưu trữ phiên không hoạt động",
+  "Move Code sessions with no activity for this long to Archived in the sidebar. Running and pinned sessions are never archived. Opening an archived session brings it back.": "Chuyển phiên Code không hoạt động quá thời gian này vào mục Code đã lưu trữ ở thanh bên. Phiên đang chạy hay đã ghim không bao giờ bị lưu trữ. Mở phiên đã lưu trữ là phiên quay lại danh sách.",
+  "Never": "Không bao giờ", "After 1 day": "Sau 1 ngày", "After 3 days": "Sau 3 ngày", "After 7 days": "Sau 7 ngày", "After 30 days": "Sau 30 ngày",
+  "Output style": "Kiểu trả lời",
+  "How Synchro writes its responses in new Code sessions. Explanatory adds short notes on why the code is written that way. Learning leaves small, meaningful parts for you to write and reviews them. The session menu can change it for one session.": "Cách Synchro viết câu trả lời ở phiên Code mới. Giải thích: thêm ghi chú ngắn vì sao code viết như vậy. Học cùng: để lại vài phần nhỏ, có ý nghĩa cho bạn tự viết rồi xem lại giúp bạn. Menu của phiên đổi được cho từng phiên.",
+  "Explanatory": "Giải thích", "Learning": "Học cùng",
+  "Default transcript view": "Kiểu xem mặc định",
+  "Normal keeps tool steps folded. Thinking also shows the model's reasoning when the model returns it. Verbose opens every step with its input and output. The session menu can change it for one session.": "Bình thường: gọn các bước dùng công cụ. Suy nghĩ: hiện thêm phần suy nghĩ của model khi model trả về. Chi tiết: mở mọi bước kèm đầu vào và đầu ra. Menu của phiên đổi được cho từng phiên.",
+  "Thinking": "Suy nghĩ", "Verbose": "Chi tiết",
+  "Keep cookies": "Giữ cookie",
+  "How Synchro's browser keeps cookies and sign-ins. Always: until you clear them. Until the browser stops: cleared each time it starts again (it stops after a while without use). Per session: each chat or Code session starts signed out, so sessions never see each other's sign-ins.": "Cách trình duyệt của Synchro giữ cookie và đăng nhập. Luôn giữ: tới khi bạn xóa. Đến khi trình duyệt tắt: xóa mỗi lần trình duyệt bật lại (trình duyệt tự tắt sau một lúc không dùng). Riêng từng phiên: mỗi đoạn chat hay phiên Code bắt đầu ở trạng thái chưa đăng nhập, phiên này không thấy đăng nhập của phiên khác.",
+  "Always": "Luôn giữ", "Until the browser stops": "Đến khi trình duyệt tắt", "Per session": "Riêng từng phiên",
+  "Clear browsing data": "Xóa dữ liệu duyệt web", "Sign Synchro's browser out of every site and clear its cookies and site data now.": "Đăng xuất trình duyệt của Synchro khỏi mọi trang và xóa ngay cookie cùng dữ liệu trang.",
+  "Clear now": "Xóa ngay", "Clearing…": "Đang xóa…", "Browsing data cleared": "Đã xóa dữ liệu duyệt web", "Couldn't clear browsing data": "Không xóa được dữ liệu duyệt web",
+  "Ask before using new sites": "Hỏi trước khi dùng trang mới",
+  "In chat and in Code, Synchro asks before using its browser on a site that isn't in your allowed sites. Blocked sites are always refused, even when this is off. Your workspace's local servers never ask.": "Ở khung chat và Code, Synchro hỏi trước khi dùng trình duyệt trên trang chưa có trong danh sách trang được phép. Trang bị chặn luôn bị từ chối, kể cả khi tắt mục này. Server chạy trong workspace của bạn không bao giờ hỏi.",
+  "Allowed and blocked sites": "Trang được phép và bị chặn", "Allowed sites": "Trang được phép", "Blocked sites": "Trang bị chặn",
+  "No sites yet. Sites you allow with “Always allow” appear here.": "Chưa có trang nào. Trang bạn chọn “Luôn cho phép” sẽ hiện ở đây.", "No blocked sites.": "Chưa chặn trang nào.",
+  "Added to the branches Synchro creates, for example synchro/fix-login.": "Thêm vào đầu tên nhánh Synchro tạo, ví dụ synchro/fix-login.",
+  "When you push from a Code session, Synchro opens a pull request without asking. Pushing from the default branch first moves the work to a new branch with your prefix.": "Khi bạn push từ phiên Code, Synchro tự mở pull request mà không hỏi. Push từ nhánh chính thì Synchro chuyển thay đổi sang nhánh mới theo tiền tố của bạn trước.",
+  "Synchro watches the pull requests it opened. When CI fails or someone leaves a comment, it works on the fix in the same session, pushes to the branch, and replies on the pull request.": "Synchro theo dõi các pull request nó đã mở. Khi CI lỗi hay có người góp ý, Synchro sửa ngay trong phiên đó, đẩy lên nhánh và trả lời trên pull request.",
+  "Turn on Allow auto mode above: fixes run while you're away, with nobody to approve them.": "Bật Cho phép chế độ Tự động ở trên: việc tự sửa chạy khi bạn vắng mặt, không có ai bấm duyệt.",
+  "Archive after merge or close": "Tự lưu trữ khi PR được gộp hay đóng",
+  "When a pull request is merged or closed, archive its session. After a merge Synchro also deletes the branch on GitHub and the session's workspace folder, unless something there isn't pushed yet.": "Khi pull request được gộp hay đóng, lưu trữ phiên của nó. Sau khi gộp, Synchro xóa luôn nhánh trên GitHub và thư mục workspace của phiên, trừ khi trong đó còn thay đổi chưa đẩy.",
+});
+RULES_VI.push([/^(\d+) allowed · (\d+) blocked$/, (m) => `${m[1]} được phép · ${m[2]} bị chặn`]);
+addNew(VI2EN, { "Synchro đang tự sửa": "Synchro is fixing it", "Đang mở": "Open" });
+RULES_EN.push([/^Đã push · pull request #(\d+)$/, (m) => `Pushed · pull request #${m[1]}`]);
+addNew(EN2VI, { "Pull request": "Pull request" });
 // Tệp gửi kèm trong Synchro Code (thẻ tệp giống Claude, thư mục / .zip nguyên khối vào workspace).
 Object.assign(VI2EN, { "Thả tệp, thư mục hoặc .zip để gửi kèm tin nhắn": "Drop files, folders or .zip files to attach them", "giải nén lỗi": "extraction failed" });
 RULES_EN.push(

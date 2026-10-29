@@ -27,7 +27,13 @@ db.exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT N
 const memKey = adminId ? `mem:${adminId}` : null;
 const savedMem = memKey ? db.prepare("SELECT value FROM settings WHERE key = ?").get(memKey)?.value : undefined;
 if (memKey) db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(memKey, JSON.stringify({ ...(savedMem ? JSON.parse(savedMem) : {}), gen: false }));
+// Cài đặt Synchro Code của tài khoản thử nghiệm (chế độ quyền, trang được phép…): chạy với mặc định, xong trả lại như cũ
+// (để một lần thử tay chọn "Hỏi trước" không làm các bộ khác dừng chờ duyệt).
+db.exec("CREATE TABLE IF NOT EXISTS code_prefs (user_id TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+const savedCode = adminId ? db.prepare("SELECT json FROM code_prefs WHERE user_id = ?").get(adminId)?.json : undefined;
+if (adminId) db.prepare("DELETE FROM code_prefs WHERE user_id = ?").run(adminId);
 const restore = () => {
+  if (adminId && savedCode !== undefined) db.prepare("INSERT INTO code_prefs (user_id, json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json").run(adminId, savedCode, Date.now());
   if (adminId && saved !== undefined) db.prepare("UPDATE usage_users SET override = ? WHERE user_id = ?").run(saved.override, adminId); else if (adminId) db.prepare("DELETE FROM usage_users WHERE user_id = ?").run(adminId);
   if (adminId) { if (savedCaps === undefined) db.prepare("DELETE FROM user_caps WHERE user_id = ?").run(adminId); else db.prepare("UPDATE user_caps SET caps = ? WHERE user_id = ?").run(savedCaps, adminId); }
   if (memKey) { if (savedMem === undefined) db.prepare("DELETE FROM settings WHERE key = ?").run(memKey); else db.prepare("UPDATE settings SET value = ? WHERE key = ?").run(savedMem, memKey); }

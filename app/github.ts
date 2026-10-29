@@ -7,6 +7,17 @@ import crypto from "node:crypto";
 import { AuthError, db } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
 
+// Địa chỉ GitHub: mặc định github.com; dev:mock trỏ vào GitHub giả lập (scripts/mock-github.mjs) để chạy thử đủ luồng repo / PR.
+export const GH_WEB = (process.env.GITHUB_WEB_URL || "https://github.com").replace(/\/$/, "");
+export const GH_API = (process.env.GITHUB_API_URL || "https://api.github.com").replace(/\/$/, "");
+export const GH_GIT = (process.env.GITHUB_GIT_URL || GH_WEB).replace(/\/$/, "");
+/** "owner/name" của remote git (https://github.com/…, git@github.com:…, hay địa chỉ GH_GIT), null nếu không phải GitHub. */
+export function repoOfRemote(remote: string | null | undefined) {
+  const r = String(remote ?? "").trim().replace(/^https?:\/\/[^@/]*@/, (m) => m.replace(/[^/]*@$/, ""));
+  if (r.startsWith(GH_GIT + "/")) return /^([^/]+\/[^/]+?)(\.git)?\/?$/.exec(r.slice(GH_GIT.length + 1))?.[1] ?? null;
+  return /github\.com[/:]([^/]+\/[^/.\s]+)/.exec(r)?.[1] ?? null;
+}
+
 // Khóa cũ (theo GITHUB_CLIENT_SECRET): chỉ còn để đọc token lưu từ trước rồi mã hóa lại bằng khóa dữ liệu.
 const OLD_KEY = crypto.createHash("sha256").update(`synchro-gh:${process.env.DATA_KEY ?? process.env.GITHUB_CLIENT_SECRET ?? "dev"}`).digest();
 const enc = (s: string) => sealSecret(s);
@@ -56,7 +67,7 @@ export const removeLink = (uid: string) => links().prepare("DELETE FROM github_l
 // Làm mới token có hạn bằng refresh token (mỗi lần làm mới GitHub cấp refresh token mới, nên kết nối tự gia hạn mãi).
 async function refreshLink(r: Row): Promise<boolean> {
   if (!r.refresh) return false;
-  const res = await fetch("https://github.com/login/oauth/access_token", {
+  const res = await fetch(`${GH_WEB}/login/oauth/access_token`, {
     method: "POST", headers: { Accept: "application/json", "content-type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(15_000),
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: dec(r.refresh), client_id: process.env.GITHUB_CLIENT_ID ?? "", client_secret: process.env.GITHUB_CLIENT_SECRET ?? "" }),
   }).catch(() => null);
@@ -73,7 +84,7 @@ export async function keepLinksAlive() {
     try {
       if (r.refresh && r.expires_at && r.expires_at - now < 60 * 60_000) { if (await refreshLink(r)) continue; }
       if (r.checked_at && now - r.checked_at < 7 * 86400_000) continue;
-      const res = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${dec(r.token)}`, Accept: "application/vnd.github+json", "User-Agent": "Synchro" }, signal: AbortSignal.timeout(15_000) });
+      const res = await fetch(`${GH_API}/user`, { headers: { Authorization: `Bearer ${dec(r.token)}`, Accept: "application/vnd.github+json", "User-Agent": "Synchro" }, signal: AbortSignal.timeout(15_000) });
       if (res.status === 401 && (await refreshLink(r))) continue;
       if (res.ok || res.status === 401) links().prepare("UPDATE github_links SET checked_at = ?, broken = ? WHERE user_id = ?").run(now, res.status === 401 ? 1 : 0, r.user_id);
     } catch (e) { console.warn("[github] giữ kết nối", (e as Error).message); }
@@ -81,7 +92,7 @@ export async function keepLinksAlive() {
 }
 
 export async function gh<T = unknown>(token: string | null, path: string, init: RequestInit = {}): Promise<T> {
-  const r = await fetch(`https://api.github.com${path}`, {
+  const r = await fetch(`${GH_API}${path}`, {
     ...init,
     headers: { Accept: "application/vnd.github+json", "User-Agent": "Synchro", "X-GitHub-Api-Version": "2022-11-28", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init.body ? { "Content-Type": "application/json" } : {}) },
     signal: AbortSignal.timeout(15_000), cache: "no-store",
@@ -96,7 +107,8 @@ export async function gh<T = unknown>(token: string | null, path: string, init: 
 
 // "owner/name", "https://github.com/owner/name(.git)", "git@github.com:owner/name.git" -> { owner, name }
 export function parseRepo(s: unknown) {
-  const t = String(s ?? "").trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  let t = String(s ?? "").trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  if (t.startsWith(GH_WEB + "/")) t = t.slice(GH_WEB.length + 1);
   const m = t.match(/^(?:https?:\/\/(?:www\.)?github\.com\/|git@github\.com:)?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})(?:\/(?:tree|blob)\/.*)?$/);
   if (!m) throw new AuthError("Link repo GitHub không hợp lệ. Ví dụ: owner/repo hoặc https://github.com/owner/repo", 400);
   return { owner: m[1], name: m[2] };
@@ -106,6 +118,6 @@ export function parseRepo(s: unknown) {
 export const gitAuthEnv = (token: string): Record<string, string> => ({
   GIT_TERMINAL_PROMPT: "0",
   GIT_CONFIG_COUNT: "1",
-  GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+  GIT_CONFIG_KEY_0: `http.${GH_GIT}/.extraheader`,
   GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
 });

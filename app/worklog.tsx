@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { FluidDots } from "./fluid-dots";
 import { tr } from "./i18n";
+import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string };
-export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] };
+// ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép).
+export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -33,6 +35,14 @@ export function applyEvent(w: Work, ev: RunEv): Work {
     } catch {}
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
+  } else if (ev.kind === "ask") {
+    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, state: "wait" }); } catch {}
+  } else if (ev.kind === "asked") {
+    try {
+      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean };
+      const i = parts.findIndex((p) => p.k === "ask" && p.id === a.id);
+      if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.ok ? (a.always ? "always" : "ok") : "no" };
+    } catch {}
   } else return { ...w, seq: ev.seq };
   return { parts, plan, seq: ev.seq };
 }
@@ -81,8 +91,10 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
 }
 
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
-export function WorkParts({ parts, live, render }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode }) {
-  return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div> : <ToolGroup key={i} items={p.items} live={live} />))}</>;
+export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
+  return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
+    : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
+    : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 
 const dur = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };

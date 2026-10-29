@@ -4608,6 +4608,74 @@ html body .btn.dark.ext-stop:hover{background:#c4613f;opacity:1}
 
 @media (prefers-reduced-motion:reduce){.bp-agent,.bp-agent-dot,.bp-ripple,.bp-dialog,.brw-panel{animation:none}}
 
+/* ===== Synchro Code: trạng thái phiên, duyệt, suy nghĩ, chế độ quyền, gợi ý câu nhắn, độ rộng khung hội thoại ===== */
+/* Độ rộng khung hội thoại (Cài đặt → Chung → Giao diện) */
+html[data-tw="narrow"]{--thread-w:680px}
+html[data-tw="wide"]{--thread-w:1040px}
+html[data-tw="narrow"] .cv-thread{--thread-w:700px}
+html[data-tw="wide"] .cv-thread{--thread-w:1080px}
+html[data-tw="narrow"] .cv-wrap{width:min(760px,100%)}
+html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
+/* Trạng thái phiên ở thanh bên */
+.chat-item.code-item{display:flex;align-items:center;gap:8px;min-width:0}
+.chat-item.code-item .cv-ell{flex:1;min-width:0}
+.cb{flex:none;width:7px;height:7px;border-radius:50%;margin-right:2px}
+.cb.blocked{background:#e8833a;box-shadow:0 0 0 3px rgba(232,131,58,.18)}
+.cb.review{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.cb.done{background:#2f9e5b;opacity:.7}
+.cb.run{width:12px;height:12px;display:grid;place-items:center}
+.cb.run .wl-spin{width:11px;height:11px}
+.code-arch .chat-item{color:var(--text-3)}
+/* Thẻ hỏi duyệt */
+.ag-ask{margin:8px 0;padding:12px 14px 12px;border-radius:14px;background:var(--card);border:.5px solid color-mix(in srgb,#e8833a 45%,var(--border-strong));box-shadow:0 6px 22px -14px rgba(232,131,58,.6),0 1px 2px rgba(0,0,0,.04);display:flex;flex-direction:column;gap:10px;animation:askIn .22s var(--ease)}
+@keyframes askIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.ag-ask-h{display:flex;gap:10px;align-items:flex-start}
+.ag-ask-h>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ag-ask-h b{font-weight:560;font-size:14px}
+.ag-ask-h span:not(.ag-ask-ic){font-size:13px;color:var(--text-2);overflow-wrap:anywhere}
+.ag-ask-ic{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:rgba(232,131,58,.13);color:#c66a22}
+[data-theme="dark"] .ag-ask-ic{color:#ffb27a}
+.ag-ask-d{margin:0;max-height:180px;overflow:auto;padding:9px 11px;border-radius:10px;background:color-mix(in srgb,var(--text) 5%,transparent);font:11.5px/1.5 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+.ag-ask-a{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ag-ask-a .btn{height:32px;font-size:13px}
+.ag-ask-other{font-size:13px;color:var(--text-3);padding:0 4px;text-decoration:underline;text-underline-offset:2px}
+.ag-ask-other:hover{color:var(--text)}
+.ag-ask-note{display:flex;gap:8px}
+.ag-ask-note input{flex:1;height:34px;padding:0 12px;border-radius:10px;border:.5px solid var(--border-strong);background:var(--input);color:var(--text);font:inherit;font-size:13.5px;outline:none}
+.ag-ask-note input:focus{border-color:var(--text-3)}
+.ag-asked{display:flex;align-items:center;gap:7px;margin:6px 0;font-size:12.5px;color:var(--text-2)}
+.ag-asked svg{color:#2f9e5b}.ag-asked.no svg{color:#c4452e}
+.ag-asked b{font-weight:500;color:var(--text)}
+/* Suy nghĩ của model */
+.ag-think{margin:6px 0;padding:6px 0 6px 12px;border-left:2px solid var(--border-strong);color:var(--text-3)}
+.ag-think-h{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--text-3)}
+.ag-think-h:hover{color:var(--text-2)}
+.ag-think-b{margin-top:4px;font-size:13px;line-height:1.55;white-space:pre-wrap}
+.ag-think-1{margin-top:2px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ag-in{margin:0 0 6px;max-height:200px;overflow:auto;padding:8px 10px;border-radius:9px;background:color-mix(in srgb,var(--accent) 6%,transparent);font:11px/1.45 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+/* Chế độ quyền */
+.cv-perm.p-ask{color:#c66a22}.cv-perm.p-edits{color:var(--accent-deep)}
+[data-theme="dark"] .cv-perm.p-ask{color:#ffb27a}[data-theme="dark"] .cv-perm.p-edits{color:#8db8ff}
+.cv-mode-ic.p-ask{background:rgba(232,131,58,.14);color:#c66a22}.cv-mode-ic.p-edits{background:rgba(47,123,246,.13);color:var(--accent-deep)}.cv-mode-ic.p-auto{background:rgba(47,158,91,.13);color:#2b8a50}
+[data-theme="dark"] .cv-mode-ic.p-ask{color:#ffb27a}[data-theme="dark"] .cv-mode-ic.p-auto{color:#7fd6a0}
+.cv-mode-item:disabled{opacity:.45;cursor:not-allowed}
+.cv-mi-opt{justify-content:space-between}
+/* Gợi ý câu nhắn tiếp (chữ mờ trong ô soạn tin, Tab để dùng) */
+.cv-composer textarea.cv-sugg-on::placeholder{color:color-mix(in srgb,var(--text-2) 70%,transparent);font-style:italic}
+/* Cài đặt → Synchro Code → Trình duyệt: trang được phép / bị chặn */
+.sites-box{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 0 16px;border-top:.5px solid var(--border)}
+@media(max-width:720px){.sites-box{grid-template-columns:1fr}}
+.sites-col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.sites-h{font-size:13px;font-weight:560}
+.sites-add{display:flex;gap:6px}.sites-add .field{margin:0;flex:1;min-width:0;height:32px}
+.sites-list{display:flex;flex-wrap:wrap;gap:6px}
+.site-chip{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 4px 0 10px;border-radius:999px;background:var(--pill);border:.5px solid var(--border-strong);font-size:12.5px}
+.site-chip button{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:var(--text-3)}
+.site-chip button:hover{background:var(--hover);color:var(--text)}
+/* Session rail: pull request của phiên */
+.sr-pr+.sr-pr{margin-top:6px}
+.sr-pr .wl-spin{width:14px;height:14px}
+.sr-pr-note{margin:2px 0 0 26px;font-size:12px}
 /* Thẻ tệp đính kèm giống hệt Claude (khung soạn, tin đã gửi; chat thường và Synchro Code) */
 :root{--ft-bg:#fff;--ft-ring:rgba(31,30,29,.15);--ft-pill:rgba(31,30,29,.15);--ft-mute:#73726c;--ft-pdf:#f0eee6;--ft-tag:rgba(255,255,255,.88);--ft-x:#fff}
 [data-theme="dark"]{--ft-bg:#191919;--ft-ring:rgba(255,255,255,.2);--ft-pill:rgba(255,255,255,.2);--ft-mute:rgba(255,255,255,.57);--ft-pdf:#303030;--ft-tag:rgba(56,56,56,.7);--ft-x:#303030}

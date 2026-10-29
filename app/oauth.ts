@@ -2,6 +2,7 @@
 // Mỗi nhà cung cấp chỉ bật khi biến môi trường tương ứng đã được đặt trong .env.production.
 import crypto from "node:crypto";
 import { appUrl, AuthError, cookie, readCookie, type OAuthProfile } from "./authstore";
+import { GH_API, GH_WEB } from "./github";
 
 export const PROVIDERS = ["google", "github", "apple"] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -39,7 +40,7 @@ export function start(req: Request, p: Provider, purpose: Purpose = "login") {
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + q;
   } else if (p === "github") {
     q.set("scope", purpose === "link" ? "repo read:user user:email" : "read:user user:email");
-    url = "https://github.com/login/oauth/authorize?" + q;
+    url = `${GH_WEB}/login/oauth/authorize?` + q;
   } else {
     q.set("response_type", "code");
     q.set("response_mode", "form_post");
@@ -80,10 +81,10 @@ export async function finish(req: Request, p: Provider, params: URLSearchParams)
   }
 
   if (p === "github") {
-    const t = await call<{ access_token: string; scope?: string; refresh_token?: string; expires_in?: number; refresh_token_expires_in?: number }>("https://github.com/login/oauth/access_token", form({ code, client_id: id, client_secret: env("GITHUB_CLIENT_SECRET"), redirect_uri }), "github token");
+    const t = await call<{ access_token: string; scope?: string; refresh_token?: string; expires_in?: number; refresh_token_expires_in?: number }>(`${GH_WEB}/login/oauth/access_token`, form({ code, client_id: id, client_secret: env("GITHUB_CLIENT_SECRET"), redirect_uri }), "github token");
     const h = { headers: { Authorization: `Bearer ${t.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "Synchro" } };
-    const u = await call<{ id: number; login: string; name?: string; avatar_url?: string }>("https://api.github.com/user", h, "github user");
-    const emails = await call<{ email: string; primary: boolean; verified: boolean }[]>("https://api.github.com/user/emails", h, "github emails");
+    const u = await call<{ id: number; login: string; name?: string; avatar_url?: string }>(`${GH_API}/user`, h, "github user");
+    const emails = await call<{ email: string; primary: boolean; verified: boolean }[]>(`${GH_API}/user/emails`, h, "github emails");
     const e = emails.find((x) => x.primary && x.verified) ?? emails.find((x) => x.verified);
     return { provider: p, subject: String(u.id), email: e?.email ?? null, emailVerified: !!e, name: u.name || u.login, avatar: u.avatar_url ?? null, token: t.access_token, login: u.login, scopes: t.scope ?? "",
       refresh: t.refresh_token, expiresIn: t.expires_in, refreshExpiresIn: t.refresh_token_expires_in };

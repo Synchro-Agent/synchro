@@ -19,6 +19,7 @@ import { SkillHub } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
 import { locale } from "./i18n";
+import { saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
 function useAway(close: () => void) {
@@ -69,6 +70,33 @@ function Row({ t, d, children, top }: { t: React.ReactNode; d?: React.ReactNode;
   );
 }
 const H = ({ children, first }: { children: React.ReactNode; first?: boolean }) => <h3 className={first ? "" : "sec"}>{children}</h3>;
+const TW_LABEL = { narrow: "Narrow", medium: "Medium", wide: "Wide" };
+// Nhãn cài đặt Synchro Code (giá trị lưu ở máy chủ ↔ chữ hiện trên giao diện).
+const PERM_L: Record<CodePrefs["permMode"], string> = { ask: "Ask first", edits: "Edit files", auto: "Auto" };
+const ARCH_L: Record<number, string> = { 0: "Never", 1: "After 1 day", 3: "After 3 days", 7: "After 7 days", 30: "After 30 days" };
+const STYLE_L: Record<CodePrefs["style"], string> = { default: "Default", explain: "Explanatory", learn: "Learning" };
+const COOKIE_L: Record<CodePrefs["cookies"], string> = { keep: "Always", "until-stop": "Until the browser stops", session: "Per session" };
+const VIEW_L = { normal: "Normal", thinking: "Thinking", verbose: "Verbose" };
+const keyOf = <K extends string | number>(m: Record<K, string>, l: string) => (Object.keys(m) as string[]).find((k) => m[k as K] === l);
+
+// Danh sách trang được phép / bị chặn cho công cụ trình duyệt.
+function SitesEditor({ cp, save }: { cp: CodePrefs; save: (p: Partial<CodePrefs>) => void }) {
+  const [a, setA] = useState(""), [b, setB] = useState("");
+  const list = (k: "sites" | "blocked", v: string, setV: (s: string) => void, ph: string) => (
+    <div className="sites-col">
+      <div className="sites-h">{k === "sites" ? "Allowed sites" : "Blocked sites"} <span className="muted">· {cp[k].length}</span></div>
+      <div className="sites-add">
+        <input className="field" value={v} placeholder={ph} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && v.trim()) { save({ [k]: [...cp[k], v.trim()] }); setV(""); } }} />
+        <button className="btn" disabled={!v.trim()} onClick={() => { save({ [k]: [...cp[k], v.trim()] }); setV(""); }}>Add</button>
+      </div>
+      <div className="sites-list">
+        {cp[k].length === 0 && <div className="muted" style={{ fontSize: 13 }}>{k === "sites" ? "No sites yet. Sites you allow with “Always allow” appear here." : "No blocked sites."}</div>}
+        {cp[k].map((h) => <span key={h} className="site-chip" data-notr>{h}<button aria-label="Remove" onClick={() => save({ [k]: cp[k].filter((x) => x !== h) })}><I.X size={11} /></button></span>)}
+      </div>
+    </div>
+  );
+  return <div className="sites-box">{list("sites", a, setA, "example.com")}{list("blocked", b, setB, "ads.example.com")}</div>;
+}
 const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={(e) => e.key === "Enter" && onClick?.()}>{children}</a>;
 
 function Toasts({ msg }: { msg: string }) {
@@ -100,6 +128,7 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
     setTg((o) => o.map((x, j) => (j === i ? v : x)));
   };
   const themes = [["auto", <I.Monitor key="1" size={16} />, "System"], ["light", <I.Sun key="2" size={16} />, "Light"], ["dark", <I.Moon key="3" size={16} />, "Dark"]] as const;
+  const [tw, setTw] = usePref<keyof typeof TW_LABEL>("threadWidth", "medium");
   return (
     <>
       <H first>Appearance</H>
@@ -109,6 +138,7 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
       <Row t="Chat font"><Select value={font} onChange={setFont} options={["Anthropic Sans", "System", "Serif"]} /></Row>
       <Row t="Transcript text size" d="Size of the conversation transcript text."><Seg value={size} onChange={setSize} options={["Small", "Medium", "Large"]} /></Row>
       <Row t="Motion" d="Reduce animation in streaming responses and other interface elements."><Seg value={motion} onChange={setMotion} options={["System", "Reduced"]} /></Row>
+      <Row t="Transcript width" d="Maximum width of the conversation and the message box, in chat and in Synchro Code."><Seg value={TW_LABEL[tw]} onChange={(l) => setTw((Object.keys(TW_LABEL) as (keyof typeof TW_LABEL)[]).find((k) => TW_LABEL[k] === l) ?? "medium")} options={Object.values(TW_LABEL)} /></Row>
       <H>Voice</H>
       <Row t="Language" top><Select value={lang} onChange={setLang} options={["English", "Vietnamese"]} /></Row>
       {plan?.connected && voices && (
@@ -276,7 +306,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
   return (
     <>
       <H first>Privacy</H>
-      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server. What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
+      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
       <H>Your data</H>
       <Row t="Export data" top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
@@ -528,6 +558,17 @@ function Focus() {
 
 function CodeTab() {
   const app = useApp();
+  const cp = useCodePrefs();
+  const save = async (p: Partial<CodePrefs>) => { const e = await saveCodePrefs(p); if (e) app.say(e); };
+  const [tview, setTview] = usePref<keyof typeof VIEW_L>("codeView", "normal");
+  const [sitesOpen, setSitesOpen] = useState(false);
+  const [wiping, setWiping] = useState(false);
+  const wipe = async () => {
+    setWiping(true);
+    const r = await fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "wipe" }) }).catch(() => null);
+    setWiping(false);
+    app.say(r?.ok ? "Browsing data cleared" : ((await r?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Couldn't clear browsing data");
+  };
   const [mode, setMode] = usePref("codeMode", "code");
   const [rules, setRules] = usePref("codeRules", { preset: "next", custom: "" });
   const [edTheme, setEdTheme] = usePref("codeEdTheme", "Auto");
@@ -552,6 +593,28 @@ function CodeTab() {
       <Row t="Default mode" d="Mode used when you open Synchro Code. Plan only outlines steps, Code writes full files, Debug traces errors to the root cause." top><Seg value={modeLabel(mode)} onChange={(l) => setMode(MODES.find((m) => m.short === l)?.k ?? "code")} options={MODES.map((m) => m.short)} /></Row>
       <Row t="Tech stack rules" d="Added to every Code request so answers follow your stack."><Select value={presetLabel(rules.preset)} width={260} onChange={(l) => setRules({ ...rules, preset: presetKey(l) })} options={[...PRESETS.map((p) => p.label), "Custom rules", "No rules"]} /></Row>
       {rules.preset === "custom" && <textarea className="textarea" style={{ marginTop: 4 }} placeholder="e.g. Use Go 1.22, no global state, return errors explicitly" value={rules.custom} onChange={(e) => setRules({ ...rules, custom: e.target.value })} />}
+      <H>Sessions</H>
+      {cp ? <>
+        <Row t="Classify session states" d="After every turn, a fast model marks the session in the sidebar as needs you, ready for review, or done. Counts toward your usage." top><Toggle on={cp.classify} set={(v) => save({ classify: v })} /></Row>
+        <Row t="Sync sessions across devices" d="Keep Code sessions on this Synchro server so you can continue them on another computer or your phone. Work Synchro does in the background, like fixing a pull request, also shows up in the session."><Toggle on={cp.sync} set={(v) => save({ sync: v })} /></Row>
+        <Row t="Allow auto mode" d="Let sessions run in Auto mode, where Synchro edits files and runs commands without asking. Needed for auto-fixing pull requests, which run while you're away."><Toggle on={cp.allowBypass} set={(v) => save({ allowBypass: v })} /></Row>
+        <Row t="Default permission mode" d="Ask first: Synchro asks before every file edit and every command that can change something. Edit files: edits freely, asks before such commands. Auto: never asks. Change it for one session from the message box."><Seg value={PERM_L[cp.permMode]} onChange={(l) => save({ permMode: keyOf(PERM_L, l) as CodePrefs["permMode"] })} options={Object.entries(PERM_L).filter(([k]) => k !== "auto" || cp.allowBypass).map(([, l]) => l)} /></Row>
+        <Row t="Prompt suggestions" d="After Synchro replies, show a suggested next message in the message box. Press Tab to use it. Adds a little to your usage."><Toggle on={cp.suggest} set={(v) => save({ suggest: v })} /></Row>
+        <Row t="Archive inactive sessions" d="Move Code sessions with no activity for this long to Archived in the sidebar. Running and pinned sessions are never archived. Opening an archived session brings it back."><Select value={ARCH_L[cp.archiveAfter] ?? "Never"} onChange={(l) => save({ archiveAfter: Number(keyOf(ARCH_L, l) ?? 0) })} options={Object.values(ARCH_L)} /></Row>
+        <Row t="Output style" d="How Synchro writes its responses in new Code sessions. Explanatory adds short notes on why the code is written that way. Learning leaves small, meaningful parts for you to write and reviews them. The session menu can change it for one session."><Select value={STYLE_L[cp.style]} onChange={(l) => save({ style: keyOf(STYLE_L, l) as CodePrefs["style"] })} options={Object.values(STYLE_L)} /></Row>
+        <Row t="Default transcript view" d="Normal keeps tool steps folded. Thinking also shows the model's reasoning when the model returns it. Verbose opens every step with its input and output. The session menu can change it for one session."><Seg value={VIEW_L[tview]} onChange={(l) => setTview((keyOf(VIEW_L, l) ?? "normal") as keyof typeof VIEW_L)} options={Object.values(VIEW_L)} /></Row>
+        <H>Browser</H>
+        <Row t="Keep cookies" d="How Synchro's browser keeps cookies and sign-ins. Always: until you clear them. Until the browser stops: cleared each time it starts again (it stops after a while without use). Per session: each chat or Code session starts signed out, so sessions never see each other's sign-ins." top><Select width={230} value={COOKIE_L[cp.cookies]} onChange={(l) => save({ cookies: keyOf(COOKIE_L, l) as CodePrefs["cookies"] })} options={Object.values(COOKIE_L)} /></Row>
+        <Row t="Clear browsing data" d="Sign Synchro's browser out of every site and clear its cookies and site data now."><button className="btn" disabled={wiping} onClick={wipe}>{wiping ? "Clearing…" : "Clear now"}</button></Row>
+        <Row t="Ask before using new sites" d="In chat and in Code, Synchro asks before using its browser on a site that isn't in your allowed sites. Blocked sites are always refused, even when this is off. Your workspace's local servers never ask."><Toggle on={cp.siteAsk} set={(v) => save({ siteAsk: v })} /></Row>
+        <Row t="Allowed and blocked sites" d={<>{`${cp.sites.length} allowed · ${cp.blocked.length} blocked`}</>}><button className="btn" onClick={() => setSitesOpen(!sitesOpen)}>{sitesOpen ? "Done" : "Manage"}</button></Row>
+        {sitesOpen && <SitesEditor cp={cp} save={save} />}
+        <H>Pull requests</H>
+        <Row t="Branch prefix" d="Added to the branches Synchro creates, for example synchro/fix-login." top><input className="field" style={{ width: 180, margin: 0 }} defaultValue={cp.branchPrefix} key={cp.branchPrefix} placeholder="synchro" onBlur={(e) => e.target.value !== cp.branchPrefix && save({ branchPrefix: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></Row>
+        <Row t="Create pull requests automatically" d="When you push from a Code session, Synchro opens a pull request without asking. Pushing from the default branch first moves the work to a new branch with your prefix."><Toggle on={cp.autoPr} set={(v) => save({ autoPr: v })} /></Row>
+        <Row t="Auto-fix pull requests" d={<>Synchro watches the pull requests it opened. When CI fails or someone leaves a comment, it works on the fix in the same session, pushes to the branch, and replies on the pull request.{!cp.allowBypass && <span className="cap-note warn">Turn on Allow auto mode above: fixes run while you're away, with nobody to approve them.</span>}</>}><Toggle on={cp.autoFix} set={(v) => save({ autoFix: v })} /></Row>
+        <Row t="Archive after merge or close" d="When a pull request is merged or closed, archive its session. After a merge Synchro also deletes the branch on GitHub and the session's workspace folder, unless something there isn't pushed yet."><Toggle on={cp.autoArchivePr} set={(v) => save({ autoArchivePr: v })} /></Row>
+      </> : <Row t="Loading…" top />}
       <H>Safety and context</H>
       <Row t="Secret redaction" d="API keys, tokens and passwords are masked before anything is sent, then restored in the code you get back." top><Badge ok>Always on</Badge></Row>
       <Row t="Context window" d="Attached files and conversation history count toward this limit. Large files are trimmed to the most relevant parts."><Badge>128k tokens</Badge></Row>

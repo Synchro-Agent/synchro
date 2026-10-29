@@ -17,7 +17,10 @@ import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc } from "./filemenu";
 import { capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
-import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, type AStep } from "./agentui";
+import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABEL, type AStep, type OnAnswer, type TView } from "./agentui";
+import { answerAsk, codePrefsNow, getServerSession, mergeSession, pushSession, sessionBase, setSessionBase, useCodePrefs, type SessionState } from "./codesync";
+import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "./codestyle";
+import type { PermMode } from "./codestore";
 import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
@@ -28,7 +31,15 @@ type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?:
 // steps/plan: lượt trả lời do agent (có workspace) làm: đoạn văn xen kẽ công cụ, và danh sách việc.
 /** files: tệp / thư mục gửi kèm (tên trong filestate; Synchro Code chép nguyên vào workspace .synchro/uploads). */
 type Sent = { name: string; folder?: boolean; count?: number; id?: string };
-type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; files?: Sent[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number } };
+type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; files?: Sent[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number }; auto?: boolean };
+// Chế độ quyền của phiên: hỏi trước mọi thay đổi / tự sửa tệp (hỏi trước khi chạy lệnh) / tự động (không hỏi).
+const PERMS: { k: PermMode; label: string; short: string; desc: string }[] = [
+  { k: "ask", label: "Hỏi trước", short: "Hỏi trước", desc: "Hỏi bạn trước mỗi lần sửa tệp hay chạy lệnh (lệnh chỉ đọc như xem, tìm, git status thì không hỏi)." },
+  { k: "edits", label: "Tự sửa tệp", short: "Tự sửa tệp", desc: "Tự sửa tệp, chỉ hỏi trước khi chạy lệnh có thể thay đổi máy (cài gói, xóa, push…)." },
+  { k: "auto", label: "Tự động", short: "Tự động", desc: "Không hỏi gì: Synchro tự sửa tệp và chạy lệnh để làm xong việc." },
+];
+const permIcon = (k: PermMode, s = 14) => (k === "ask" ? <I.Shield size={s} /> : k === "edits" ? <I.Pencil size={s} /> : <I.Rocket size={s} />);
+export type CodeMeta = { state?: SessionState; reason?: string | null; running?: boolean };
 type Ctx = { id: number; name: string; text: string; size: number; kind: "file" | "doc"; pinned?: boolean; off?: boolean };
 type Say = (m: string) => void;
 
@@ -152,13 +163,27 @@ function workLog(steps?: AStep[]) {
   return `\n\n<tool_activity>\nỞ lượt này đã dùng công cụ trong workspace (tóm tắt, không cần làm lại):\n${rows.join("\n")}\n</tool_activity>`;
 }
 
-export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; modelPicker: React.ReactNode; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void }) {
+export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide, onCreate, onNew, onEmpty, onMeta }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; modelPicker: React.ReactNode; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void; onMeta?: (id: number, m: CodeMeta) => void }) {
   const app = useApp();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [sel, setSel] = useState<Record<number, number>>({});
   const [ctx, setCtx] = useState<Ctx[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mode, setMode] = usePref("codeMode", "auto");
+  // Chế độ quyền, kiểu trả lời, kiểu xem của phiên (null: theo mặc định ở Cài đặt → Synchro Code); gợi ý câu nhắn tiếp sau mỗi lượt.
+  const cp = useCodePrefs();
+  const cpRef = useRef(cp); cpRef.current = cp;
+  const [perm, setPerm] = useState<{ mode: PermMode; allow: string[] } | null>(null);
+  const [style, setStyle] = useState<CodeStyle | null>(null);
+  const [viewDef] = usePref<TView>("codeView", "normal");
+  const [view, setView] = useState<TView | null>(null);
+  const [suggest, setSuggest] = useState("");
+  const permNow = perm ?? { mode: cp ? (cp.permMode === "auto" && !cp.allowBypass ? "edits" : cp.permMode) : "auto", allow: [] };
+  const permRef = useRef(permNow); permRef.current = permNow;
+  const styleNow: CodeStyle = style ?? cp?.style ?? "default";
+  const viewNow: TView = view ?? viewDef;
+  const titleRef = useRef(title); titleRef.current = title;
+  const skipPush = useRef(false), pushed = useRef("");
   // Tin nhắn gửi trong lúc agent đang làm (ghép vào lượt / gửi sau) và phiên của lượt agent đang chạy.
   const [cq, setCq] = useState<Queued[]>([]);
   const agentSid = useRef<number | string | null>(null);
@@ -175,7 +200,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   useDev((s) => s.encVer);
   useEffect(() => { loadEncoder(); }, []);
   const snapRef = useRef<Map<number, Ctx[]>>(new Map());
-  const [menu, setMenu] = useState<"" | "plus" | "mode" | "ctx" | "rules" | "more">("");
+  const [menu, setMenu] = useState<"" | "plus" | "mode" | "ctx" | "rules" | "more" | "perm">("");
   const menuRef = useRef(menu); menuRef.current = menu;
   const [errOpen, setErrOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -235,6 +260,20 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const awayTop = useClickAway(() => { if (TOP_MENUS.includes(menuRef.current)) setMenu(""); });
 
   useEffect(() => { if (loaded) onEmpty(nodes.length === 0); }, [loaded, nodes.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nạp nội dung một phiên (từ trình duyệt hay máy chủ). Lượt đã dừng giữa chừng coi như xong; câu hỏi duyệt cũ không còn chờ.
+  // Lượt chạy nền ở máy chủ (auto) giữ nguyên trạng thái: máy chủ còn đang cập nhật nó.
+  const applyData = (s: Record<string, unknown> | null) => {
+    skipPush.current = true;
+    const ns = (s?.nodes as Node[] | undefined) ?? [];
+    setNodes(ns.map((n) => (n.auto && !n.done ? n : { ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" ? { ...x, done: true } : x.k === "ask" && x.state === "wait" ? { ...x, state: "gone" as const } : x)) })));
+    setSel((s?.sel as Record<number, number>) ?? {}); setCtx((s?.ctx as Ctx[]) ?? []); setWsUsed(!!s?.ws);
+    const pm = s?.perm as { mode?: PermMode; allow?: string[] } | undefined;
+    setPerm(pm?.mode ? { mode: pm.mode, allow: pm.allow ?? [] } : null);
+    setStyle(isStyle(s?.style) ? s.style : null);
+    setView(s?.view === "normal" || s?.view === "thinking" || s?.view === "verbose" ? s.view : null);
+    setSuggest(typeof s?.suggest === "string" ? s.suggest : "");
+  };
+  const busyRef = useRef(false); busyRef.current = busy;
   const loadedSid = useRef<number | null | undefined>(undefined);
   useEffect(() => {
     if (loadedSid.current === sid) return;
@@ -242,11 +281,16 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     stopGen();
     setAtts([]); setFiles([]); setV(""); setPanel(null); setMountedP([]);
     if (sid === null) setPane(null);
-    try {
-      const s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null");
-      setNodes(s ? (s.nodes ?? []).map((n: Node) => ({ ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" ? { ...x, done: true } : x)) })) : []);
-      setSel(s?.sel ?? {}); setCtx(s?.ctx ?? []); setWsUsed(!!s?.ws);
-    } catch { setNodes([]); setSel({}); setCtx([]); setWsUsed(false); }
+    let s: Record<string, unknown> | null = null;
+    try { s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null"); } catch {}
+    applyData(s);
+    // Phiên chưa có ở thiết bị này (mở từ thiết bị khác, hay vừa tự sửa PR ở máy chủ): tải từ máy chủ.
+    if (sid !== null && !s && codePrefsNow()?.sync !== false) getServerSession(sid).then((r) => {
+      if (!r?.data || loadedSid.current !== sid) return;
+      setSessionBase(sid, r.updated);
+      applyData(r.data);
+      if (r.suggest) setSuggest(r.suggest);
+    });
     setLoaded(true);
   }, [sid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -260,8 +304,35 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     }
     // Ảnh chụp màn hình của agent chỉ giữ trong bộ nhớ, không lưu vào trình duyệt.
     const lean = nodes.map((n) => (n.steps ? { ...n, steps: n.steps.map((x) => (x.k === "tool" && x.image ? { ...x, image: undefined } : x)) } : n));
-    ls.set("codeS:" + id, JSON.stringify({ nodes: lean, sel, ctx, ws: wsUsed || undefined }));
-  }, [nodes, sel, ctx, loaded, wsUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+    const data = { nodes: lean, sel, ctx, ws: wsUsed || undefined, perm: perm ?? undefined, style: style ?? undefined, view: view ?? undefined, suggest: suggest || undefined, model: model || undefined };
+    const json = JSON.stringify(data);
+    ls.set("codeS:" + id, json);
+    // Đồng bộ lên máy chủ (Cài đặt → Synchro Code → Đồng bộ phiên): chỉ khi nội dung thật sự đổi, không gửi lại bản vừa tải về.
+    if (skipPush.current) { skipPush.current = false; pushed.current = json; return; }
+    if (!cpRef.current?.sync || json === pushed.current) return;
+    pushed.current = json;
+    const sidNow = id;
+    pushSession(id, titleRef.current || nodes[0]?.user.slice(0, 40) || "Phiên code", data as Record<string, unknown>, (merged) => {
+      if (loadedSid.current !== sidNow || busyRef.current) return;
+      applyData(merged);
+    });
+  }, [nodes, sel, ctx, loaded, wsUsed, perm, style, view, suggest, model]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Phiên đang mở: nhận lượt mới từ máy chủ (thiết bị khác, lượt tự sửa PR chạy nền) khi không có lượt nào đang chạy ở đây.
+  useEffect(() => {
+    if (sid === null || !cp?.sync) return;
+    let stop = false;
+    const tick = async () => {
+      if (stop || busyRef.current || document.hidden || loadedSid.current !== sid) return;
+      const r = await getServerSession(sid, sessionBase(sid));
+      if (!r || stop || busyRef.current || loadedSid.current !== sid || r.same || !r.data) return;
+      setSessionBase(sid, r.updated);
+      const cur = JSON.parse(ls.get("codeS:" + sid) ?? "null") as Record<string, unknown> | null;
+      applyData(mergeSession(cur, r.data));
+      if (r.suggest) setSuggest(r.suggest);
+    };
+    const t = setInterval(tick, 5000);
+    return () => { stop = true; clearInterval(t); };
+  }, [sid, cp?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tạo phiên ngay khi cần thư mục workspace (mở terminal, clone repo, gửi tin nhắn đầu tiên).
   const ensureSid = useCallback((t = "Phiên code mới") => {
@@ -362,6 +433,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const system = [
       MODE_SYS[md],
       md === "auto" && `Gợi ý giai đoạn mở đầu cho yêu cầu này: ${guessMode(userText)} (tự đổi nếu thấy cần).`,
+      STYLE_SYS[styleNow],
       strictRef.current && STRICT_SYS,
       SLASH.find((x) => userText.trimStart() === x.cmd || userText.trimStart().startsWith(x.cmd + " "))?.sys,
       rule && `Luật dự án: ${rule}`,
@@ -372,6 +444,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     abortRef.current = ac;
     const addText = (n: Node, text: string): Node => ({ ...n, steps: [...(n.steps ?? []), { k: "text", text }], ai: n.ai ? `${n.ai}\n\n${text}` : text });
     patchNode(id, (n) => ({ ...n, steps: [] }));
+    onMeta?.(s, { running: true, state: null, reason: null });
+    const setAsk = (aid: string, st: "ok" | "always" | "no" | "gone") => patchNode(id, (n) => ({ ...n, steps: (n.steps ?? []).map((x) => (x.k === "ask" && x.id === aid ? { ...x, state: st } : x)) }));
     (async () => {
       try {
         const cur = hist[hist.length - 1];
@@ -381,9 +455,18 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
         if (up.ok.length) patchNode(id, (n) => ({ ...n, files: n.files?.map((f) => ({ ...f, id: up.ok.find((o) => o.name === f.name)?.id ?? f.id })) }));
         for (const err of up.errors) patchNode(id, (n) => addText(n, `⚠️ ${err}`));
         if (gen !== genRef.current) return;
-        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort(), files: up.ok }, (e) => {
+        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort(), files: up.ok, perm: permRef.current }, (e) => {
           if (gen !== genRef.current) return;
           if (e.t === "text") patchNode(id, (n) => addText(n, e.text));
+          else if (e.t === "think") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "think", text: e.text }] }));
+          else if (e.t === "ask") {
+            patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "ask", id: e.id, kind: e.kind, title: e.title, detail: e.detail, host: e.host, state: "wait" }] }));
+            onMeta?.(s, { running: true, state: "blocked", reason: `Chờ bạn duyệt: ${e.title}` });
+            say("Synchro đang chờ bạn duyệt");
+          }
+          else if (e.t === "asked") { setAsk(e.id, e.ok ? (e.always ? "always" : "ok") : "no"); onMeta?.(s, { running: true, state: null, reason: null }); }
+          else if (e.t === "perm") setPerm({ mode: permRef.current.mode, allow: e.allow });
+          else if (e.t === "meta") { if (e.suggest) setSuggest(e.suggest); onMeta?.(s, { state: e.state as SessionState, reason: e.reason, running: false }); }
           else if (e.t === "tool") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "tool", id: e.id, name: e.name, input: e.input }] }));
           else if (e.t === "result") patchNode(id, (n) => ({ ...n, steps: (n.steps ?? []).map((x) => (x.k === "tool" && x.id === e.id ? { ...x, done: true, ok: e.ok, summary: e.summary, output: e.output, diff: e.diff, image: e.image } : x)) }));
           else if (e.t === "plan") patchNode(id, (n) => ({ ...n, plan: e.items }));
@@ -411,8 +494,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       if (gen !== genRef.current) return;
       activeRef.current = null;
       abortRef.current = null;
-      patchNode(id, (n) => ({ ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" && !x.done ? { ...x, done: true } : x)) }));
+      patchNode(id, (n) => ({ ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" && !x.done ? { ...x, done: true } : x.k === "ask" && x.state === "wait" ? { ...x, state: "gone" as const } : x)) }));
       setBusy(false);
+      onMeta?.(s, { running: false });
       refreshGit(s);
       wsStatus().then(setStatus).catch(() => {});
     })();
@@ -432,6 +516,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const buildSystem = (snips: { file: string; name: string; code: string }[]) => [
       "Bạn là Synchro Code, trợ lý lập trình.",
       MODE_SYS[md],
+      STYLE_SYS[styleNow],
       md === "auto" && `Gợi ý giai đoạn mở đầu cho yêu cầu này: ${guessMode(userText, userAtts)} (tự đổi nếu thấy cần).`,
       RULES_SYS,
       strictRef.current && STRICT_SYS,
@@ -486,6 +571,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const sent: Sent[] = typed ? files.map((name) => ({ name, folder: getStatus(name)?.folder || undefined, count: getStatus(name)?.count })) : [];
     if (!t && !extra.length && !sent.length) return;
     stick.current = true;
+    setSuggest("");
     const parent = path.length ? path[path.length - 1].id : 0;
     const n: Node = { id: Date.now(), parent, user: t || "Xem nội dung đính kèm", hid, atts: extra, files: sent.length ? sent : undefined, ai: "", done: false, mode, time: Date.now() };
     snapRef.current.set(n.id, ctxRef.current);
@@ -669,7 +755,17 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickMention(mentionItems[mi]); return; }
       if (e.key === "Escape") { setMention(null); return; }
     }
+    // Gợi ý câu nhắn tiếp (hiện mờ trong ô soạn tin): Tab để dùng.
+    if (e.key === "Tab" && !e.shiftKey && !v && suggest && !busy) { e.preventDefault(); setV(suggest); return; }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+  };
+  // Trả lời câu hỏi duyệt của lượt đang chạy.
+  const onAnswer: OnAnswer = (aid, ok, o) => {
+    answerAsk(aid, ok, o).then((err) => {
+      if (!err) return;
+      say(err);
+      setNodes((ns) => ns.map((n) => (n.steps?.some((x) => x.k === "ask" && x.id === aid) ? { ...n, steps: n.steps.map((x) => (x.k === "ask" && x.id === aid ? { ...x, state: "gone" as const } : x)) } : n)));
+    });
   };
 
   const onPaste = (e: React.ClipboardEvent) => {
@@ -900,10 +996,19 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
           <button className={`icon-btn cv-tb ${pane === "files" ? "on" : ""}`} onClick={() => wsPane("files")} aria-label="File" title="File"><I.Folder /></button>
           <div style={{ position: "relative" }}>
             <button className={`icon-btn cv-tb ${menu === "more" || menu === "rules" ? "on" : ""}`} onClick={() => setMenu(menu === "more" ? "" : "more")} aria-label="Thêm" title="Thêm"><I.Dots /></button>
-            <Menu open={menu === "more"} style={{ top: 38, right: 0, width: 230 }}>
+            <Menu open={menu === "more"} style={{ top: 38, right: 0, width: 250 }}>
               <button className="menu-item" onClick={() => { setMenu(""); newSession(); }}><I.Plus />Phiên mới</button>
               <button className="menu-item" onClick={() => setMenu("rules")}><I.Sliders />Luật dự án<span className="cv-mi-r cv-ell">{ruleLabel}</span></button>
               <button className="menu-item" onClick={() => { setMenu(""); exportMd(); }}><I.Download />Xuất cuộc trò chuyện (.md)</button>
+              <hr />
+              <div className="cv-mh">Kiểu xem</div>
+              {(["normal", "thinking", "verbose"] as TView[]).map((k) => (
+                <button key={k} className="menu-item cv-mi-opt" onClick={() => { setView(k === viewDef ? null : k); setMenu(""); }}>{TVIEW_LABEL[k]}{viewNow === k && <span className="ck"><I.Check /></span>}</button>
+              ))}
+              <div className="cv-mh">Kiểu trả lời</div>
+              {(["default", "explain", "learn"] as CodeStyle[]).map((k) => (
+                <button key={k} className="menu-item cv-mi-opt" title={STYLE_DESC[k]} onClick={() => { setStyle(k); setMenu(""); say(`Kiểu trả lời: ${STYLE_LABEL[k]}`); }}>{STYLE_LABEL[k]}{styleNow === k && <span className="ck"><I.Check /></span>}</button>
+              ))}
               <hr />
               <button className="menu-item" onClick={() => { setMenu(""); setGuide(true); }}><I.Help />Hướng dẫn</button>
             </Menu>
@@ -971,7 +1076,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
-                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">
@@ -1044,7 +1149,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   {atts.flatMap((a) => a.pills ?? []).map((p) => <button key={p.label} onClick={() => send(p.label, atts, p.prompt)}>{p.label}</button>)}
                 </div>
               )}
-              <textarea ref={ta} rows={1} value={v} onChange={onChange} onKeyDown={onKey} onPaste={onPaste} placeholder={busy ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : "Viết tin nhắn…  gõ @ để chọn tệp, hàm hoặc tài liệu"} />
+              <textarea ref={ta} rows={1} value={v} onChange={onChange} onKeyDown={onKey} onPaste={onPaste} placeholder={busy ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : suggest ? `${suggest}    ⇥ Tab` : "Viết tin nhắn…  gõ @ để chọn tệp, hàm hoặc tài liệu"} className={!busy && suggest && !v ? "cv-sugg-on" : undefined} title={!busy && suggest && !v ? "Gợi ý: bấm Tab để dùng" : undefined} />
               <div className="cv-tools">
                 <div style={{ position: "relative" }}>
                   <button className="icon-btn" onClick={() => setMenu(menu === "plus" ? "" : "plus")} aria-label="Thêm ngữ cảnh"><I.Plus /></button>
@@ -1080,6 +1185,24 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                       {mode === x.k && <span className="ck"><I.Check /></span>}
                     </button>
                   ))}
+                </Menu>
+              </div>
+              {/* Chế độ quyền của phiên: hỏi trước / tự sửa tệp / tự động (Cài đặt → Synchro Code đặt mặc định và cho phép chế độ tự động). */}
+              <div style={{ position: "relative" }}>
+                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} title="Chế độ quyền">{permIcon(permNow.mode)}{PERMS.find((x) => x.k === permNow.mode)?.short}<I.Chevron size={12} /></button>
+                <Menu open={menu === "perm"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
+                  <div className="cv-mh">Quyền của Synchro trong phiên này</div>
+                  {PERMS.map((x) => {
+                    const off = x.k === "auto" && !!cp && !cp.allowBypass;
+                    return (
+                      <button key={x.k} disabled={off} className={`cv-mode-item ${permNow.mode === x.k ? "sel" : ""}`} onClick={() => { setPerm({ mode: x.k, allow: permNow.allow }); setMenu(""); say(`Chế độ quyền: ${x.label}`); }}>
+                        <span className={`cv-mode-ic p-${x.k}`}>{permIcon(x.k, 18)}</span>
+                        <span className="cv-opt-t">{x.label}<small>{off ? "Đang tắt ở Cài đặt → Synchro Code (Cho phép chế độ Tự động)." : x.desc}</small></span>
+                        {permNow.mode === x.k && <span className="ck"><I.Check /></span>}
+                      </button>
+                    );
+                  })}
+                  {permNow.allow.length > 0 && <><hr /><button className="menu-item" onClick={() => { setPerm({ mode: permNow.mode, allow: [] }); setMenu(""); say("Đã bỏ các quyền \"luôn cho phép\" của phiên"); }}><I.Retry />Bỏ {permNow.allow.length} quyền "luôn cho phép"</button></>}
                 </Menu>
               </div>
               <div className="cv-sp" />

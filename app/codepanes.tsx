@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import "@xterm/xterm/css/xterm.css";
 import * as I from "./icons";
-import { gitOp, isLocalUrl, useCodeUi, wsOp, type GitState, type WsStatus } from "./wsclient";
+import { gitOp, isLocalUrl, useCodeUi, wsOp, type GitState, type PrInfo, type WsStatus } from "./wsclient";
 
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 type Say = (m: string) => void;
@@ -497,12 +497,18 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
       const g = await gitOp(sid, action, body);
       onGit(g);
       if (action === "commit") setMsg("");
-      if (g.git && g.pr) { say(`Đã tạo pull request #${g.pr.number}`); window.open(g.pr.url, "_blank", "noopener"); }
+      if (g.git && g.pr?.created !== false && g.pr) { say(`Đã tạo pull request #${g.pr.number}`); window.open(g.pr.url, "_blank", "noopener"); loadPrs(); }
+      else if (g.git && g.pr) { say(`Đã push · pull request #${g.pr.number}`); loadPrs(); }
       else if (ok) say(ok);
     } catch (e) { say((e as Error).message); }
     setBusy("");
   };
   const stop = async () => { setBusy("stop"); try { await wsOp("stop", null); say("Đã dừng workspace (file vẫn được giữ)"); } catch (e) { say((e as Error).message); } setBusy(""); };
+  // Pull request của phiên: trạng thái và việc Synchro tự sửa (cập nhật mỗi 15 giây khi khung đang mở).
+  const [prs, setPrs] = useState<PrInfo[]>([]);
+  const loadPrs = useCallback(() => { if (sid !== null && status?.available) wsOp<{ prs: PrInfo[] }>("git", sid, { action: "prs" }).then((j) => setPrs(j.prs ?? [])).catch(() => {}); }, [sid, status?.available]);
+  useEffect(() => { loadPrs(); const t = setInterval(loadPrs, 15_000); return () => clearInterval(t); }, [loadPrs]);
+  const prState = (p: PrInfo) => (p.busy ? "Synchro đang tự sửa" : p.state === "merged" ? "Đã gộp" : p.state === "closed" ? "Đã đóng" : "Đang mở");
   const files = git?.git ? git.files : [];
   const add = files.reduce((n, f) => n + f.add, 0), del = files.reduce((n, f) => n + f.del, 0);
   const ready = sid !== null && !!status?.available;
@@ -517,6 +523,18 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
           {git?.git && git.repo && <div className="sr-row"><I.GitHub size={15} /><a className="cv-ell" href={`https://github.com/${git.repo}`} target="_blank" rel="noreferrer" data-notr>{git.repo}</a></div>}
         </>}
       </Sec>
+      {prs.length > 0 && (
+        <Sec id="pr" title="Pull request" open={!closed.includes("pr")} onToggle={toggle}>
+          {prs.map((p) => (
+            <div key={p.repo + p.number} className="sr-pr">
+              <div className="sr-row">{p.busy ? <span className="wl-spin" /> : <I.Branch size={16} />}
+                <a className="cv-ell" href={p.url ?? undefined} target="_blank" rel="noreferrer"><span data-notr>#{p.number}</span> · {prState(p)}</a>
+              </div>
+              {p.note && <p className="sr-note sr-pr-note">{p.note}</p>}
+            </div>
+          ))}
+        </Sec>
+      )}
       <Sec id="ctx" title="Ngữ cảnh" open={!closed.includes("ctx")} onToggle={toggle}>{context}</Sec>
       <Sec id="chg" title="Thay đổi" open={!closed.includes("chg")} onToggle={toggle}
         right={ready && git?.git ? <button className="icon-btn sr-mini" onClick={() => run("status")} aria-label="Làm mới" title="Làm mới"><I.Retry size={13} /></button> : undefined}>

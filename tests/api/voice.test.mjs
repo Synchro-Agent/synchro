@@ -68,9 +68,12 @@ const ANS = `Mình đã làm trang giới thiệu quán cà phê Lumen với ba 
 let r = await api("POST", "/api/voice/brief", { question: "Làm trang web cho quán cà phê", answer: ANS });
 ok(r.s === 200 && /khung chat/.test(r.j?.brief ?? "") && r.j.brief.length < 300 && !/[<#*`]/.test(r.j.brief), `tóm tắt ngắn, không ký hiệu, nhắc xem chi tiết: “${r.j?.brief}”`, JSON.stringify(r.j));
 // Tìm đúng yêu cầu tóm tắt trong lịch sử (lời gọi nền khác, như rút bộ nhớ, có thể tới sau nó).
-const L = [...((await fetch(`${LLM}/_debug/hist`).then((x) => x.json())).anthropic ?? [])].reverse().find((b) => JSON.stringify(b.system ?? "").includes("<voice_brief>"));
-const sent = JSON.stringify(L?.messages ?? []);
-ok(JSON.stringify(L?.system ?? "").includes("<voice_brief>") && sent.includes('[sản phẩm \\"Trang Lumen\\"]') && sent.includes("[khối code]") && !sent.includes("nội dung dài"), "model chỉ nhận tên sản phẩm, không nhận nội dung artifact hay code", sent.slice(0, 300));
+// Model nhanh nhất có thể là của bất kỳ hãng nào (bộ chọn model quyết định): tìm ở mọi hãng.
+const H = await fetch(`${LLM}/_debug/hist`).then((x) => x.json());
+const brief = (b) => JSON.stringify([b.system ?? "", b.instructions ?? "", b.messages?.[0] ?? "", b.input?.[0] ?? ""]).includes("<voice_brief>");
+const L = [...(H.anthropic ?? []), ...(H.openai ?? []), ...(H.google ?? [])].reverse().find(brief);
+const sent = JSON.stringify(L?.messages ?? L?.input ?? []);
+ok(!!L && sent.includes('[sản phẩm \\"Trang Lumen\\"]') && sent.includes("[khối code]") && !sent.includes("nội dung dài"), "model chỉ nhận tên sản phẩm, không nhận nội dung artifact hay code", sent.slice(0, 300));
 r = await api("POST", "/api/voice/brief", { question: "x", answer: "  " });
 ok(r.s === 400, "không có câu trả lời → 400");
 ok((await fetch(`${B}/api/voice/brief`, { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ answer: "x" }) })).status === 401, "chưa đăng nhập → 401");

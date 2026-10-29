@@ -101,7 +101,7 @@ Cách thao tác:
 </browser>`;
 
 type R = Record<string, unknown>;
-export type BrowserOut = { content: string; is_error: boolean; image?: string; summary: string };
+export type BrowserOut = { content: string; is_error: boolean; image?: string; summary: string; url?: string };
 const host = (u: unknown) => { try { return new URL(String(u)).host || String(u); } catch { return String(u ?? ""); } };
 const q = (s: unknown, n = 60) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 const page = (r: R) => (r.url ? `Trang hiện tại: ${r.title ? `"${q(r.title, 100)}" — ` : ""}${r.url}` : "");
@@ -201,7 +201,9 @@ export type BrowserTarget = "synchro" | "user";
 export type ChatFile = { name: string; mime: string; data: Buffer };
 /** Trình duyệt của một lượt: def = theo lựa chọn của người dùng (caps.browserDefault), target = trình duyệt đã dùng trong lượt,
  *  files = tệp người dùng đính kèm trong đoạn chat (và tệp Synchro tạo ra) để browser_upload tải lên trang. */
-export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; turn?: string; files?: () => Promise<ChatFile[]> };
+// scope: phiên dùng trình duyệt ("code:<id>", "chat:<id>"); cookies: cách giữ cookie / đăng nhập của trình duyệt Synchro
+// (Cài đặt → Synchro Code → Trình duyệt: luôn giữ, đến khi trình duyệt tắt, riêng từng phiên).
+export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]> };
 
 /** Tệp của đoạn chat cho browser_upload: tệp người dùng đính kèm (ảnh, PDF giữ nguyên trong tin nhắn; tệp khác lấy bản gốc theo id trong <file … id>)
  *  và tệp Synchro tạo ra (outs của lượt, liên kết /api/outputs/… trong các câu trả lời trước). Tệp mới hơn đứng trước khi trùng tên. */
@@ -297,9 +299,9 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
   try {
     const r = target === "user"
       ? await wsAgent<R>("/ext", { u, op: "call", a: { ...args, action }, turn, timeout: ms - 5_000 }, ms)
-      : await wsAgent<R>("/browser", { ...args, u, action }, ms);
+      : await wsAgent<R>("/browser", { ...args, u, action, ...(ctx?.scope ? { scope: ctx.scope } : {}), ...(ctx?.cookies ? { cookies: ctx.cookies } : {}) }, ms);
     if (name === "browser_downloads" && typeof r.data === "string") return await downloaded(r);
-    return format(name, r);
+    return { ...format(name, r), url: typeof r.url === "string" ? r.url : undefined };
   } catch (e) {
     const m = (e as Error).message || String(e);
     const st = e instanceof AuthError ? e.status : 0;

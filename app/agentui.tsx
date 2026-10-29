@@ -9,8 +9,14 @@ import { FluidDots } from "./fluid-dots";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
-// steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được).
-export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | ToolStep;
+// Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
+export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site"; title: string; detail: string; host?: string; state: "wait" | "ok" | "always" | "no" | "gone" };
+// steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được); think: suy nghĩ của model.
+export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | ToolStep;
+/** Kiểu xem lượt của agent: bình thường (gọn), kèm suy nghĩ, chi tiết (mọi công cụ mở sẵn, kèm đầu vào / đầu ra). */
+export type TView = "normal" | "thinking" | "verbose";
+export const TVIEW_LABEL: Record<TView, string> = { normal: "Bình thường", thinking: "Suy nghĩ", verbose: "Chi tiết" };
+export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; note?: string }) => void;
 type Say = (m: string) => void;
 
 const base = (p: string) => p.split("/").pop() || p;
@@ -61,8 +67,8 @@ function groupLabel(ts: ToolStep[]) {
   return parts.map((p, i) => <span key={i}>{i ? ", " : "Đã "}{p}</span>);
 }
 
-function ToolRow({ t, onFile }: { t: ToolStep; onFile: (p: string) => void }) {
-  const [open, setOpen] = useState(false);
+function ToolRow({ t, onFile, verbose }: { t: ToolStep; onFile: (p: string) => void; verbose?: boolean }) {
+  const [open, setOpen] = useState(!!verbose);
   const label = t.summary || String(t.input.command ?? t.input.path ?? t.input.url ?? "");
   const path = t.name === "write_file" || t.name === "edit_file" || t.name === "read_file" ? String(t.diff?.path ?? t.input.path ?? "") : "";
   return (
@@ -77,6 +83,7 @@ function ToolRow({ t, onFile }: { t: ToolStep; onFile: (p: string) => void }) {
       </button>
       {open && (
         <div className="ag-out">
+          {verbose && Object.keys(t.input).length > 0 && <pre className="ag-in" data-notr>{JSON.stringify(t.input, null, 2).slice(0, 4000)}</pre>}
           {path && <button className="ag-link" onClick={() => onFile(path)}><I.File size={13} />Mở {base(path)}</button>}
           {t.image && <img className="ag-shot" src={`data:image/jpeg;base64,${t.image}`} alt="Ảnh chụp màn hình" />}
           {t.output && <pre data-notr>{t.output}</pre>}
@@ -86,8 +93,9 @@ function ToolRow({ t, onFile }: { t: ToolStep; onFile: (p: string) => void }) {
   );
 }
 
-function ToolGroup({ ts, live, onFile }: { ts: ToolStep[]; live: boolean; onFile: (p: string) => void }) {
-  const [open, setOpen] = useState(false);
+function ToolGroup({ ts, live, onFile, verbose }: { ts: ToolStep[]; live: boolean; onFile: (p: string) => void; verbose?: boolean }) {
+  const [open, setOpen] = useState(!!verbose);
+  useEffect(() => { if (verbose) setOpen(true); }, [verbose]);
   const run = ts.find((t) => !t.done);
   const shot = ts.filter((t) => t.image).pop();
   return (
@@ -97,34 +105,85 @@ function ToolGroup({ ts, live, onFile }: { ts: ToolStep[]; live: boolean; onFile
           : ts.length === 1 && desc(ts[0]) ? <span>{desc(ts[0])}</span> : <span>{groupLabel(ts)}</span>}
         <span className={`ag-chev ${open ? "on" : ""}`}><I.ChevronR size={12} /></span>
       </button>
-      {open ? <div className="ag-list">{ts.map((t) => <ToolRow key={t.id} t={t} onFile={onFile} />)}</div>
+      {open ? <div className="ag-list">{ts.map((t) => <ToolRow key={t.id + (verbose ? "v" : "")} t={t} onFile={onFile} verbose={verbose} />)}</div>
         : shot && <img className="ag-shot sm" src={`data:image/jpeg;base64,${shot.image}`} alt="Ảnh chụp màn hình" onClick={() => setOpen(true)} />}
     </div>
   );
 }
 
+// Suy nghĩ của model: chữ mờ, thu gọn được.
+function Think({ text, open: init }: { text: string; open: boolean }) {
+  const [open, setOpen] = useState(init);
+  return (
+    <div className={`ag-think ${open ? "on" : ""}`}>
+      <button className="ag-think-h" onClick={() => setOpen(!open)}><I.Bulb size={13} /><span>Suy nghĩ</span><span className={`ag-chev ${open ? "on" : ""}`}><I.ChevronR size={12} /></span></button>
+      {open ? <div className="ag-think-b" data-notr>{text}</div> : <div className="ag-think-1" data-notr>{text.split("\n")[0].slice(0, 160)}</div>}
+    </div>
+  );
+}
+
+/** Thẻ hỏi duyệt: Synchro dừng chờ bạn cho phép sửa tệp, chạy lệnh, hay dùng trình duyệt trên một trang chưa được phép. */
+export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnAnswer }) {
+  const [note, setNote] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const go = (ok: boolean, o?: { always?: boolean; note?: string }) => { if (!onAnswer || sending) return; setSending(true); onAnswer(a.id, ok, o); };
+  if (a.state !== "wait") return (
+    <div className={`ag-asked ${a.state === "no" || a.state === "gone" ? "no" : ""}`}>
+      {a.state === "no" || a.state === "gone" ? <I.X size={13} /> : <I.Check size={13} />}
+      <span>{a.state === "no" ? "Đã từ chối" : a.state === "gone" ? "Không còn chờ" : a.state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : "Luôn cho phép trong phiên") : "Đã cho phép"}: <b data-notr>{a.title}</b></span>
+    </div>
+  );
+  const always = a.kind === "site" ? `Luôn cho phép ${a.host ?? "trang này"}` : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này";
+  return (
+    <div className="ag-ask" role="alertdialog" aria-label={a.title}>
+      <div className="ag-ask-h"><span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.Pencil size={15} /> : <I.Terminal size={15} />}</span>
+        <div><b>{a.kind === "site" ? "Cho Synchro dùng trình duyệt trên trang này?" : a.kind === "edit" ? "Cho Synchro sửa tệp này?" : "Cho Synchro chạy lệnh này?"}</b><span data-notr>{a.title}</span></div></div>
+      {a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
+      {note !== null ? (
+        <div className="ag-ask-note">
+          <input autoFocus value={note} placeholder="Bảo Synchro nên làm thế nào thay vào đó…" onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") go(false, { note }); if (e.key === "Escape") setNote(null); }} />
+          <button className="btn dark" disabled={sending} onClick={() => go(false, { note })}>Gửi</button>
+        </div>
+      ) : (
+        <div className="ag-ask-a">
+          <button className="btn dark" disabled={sending || !onAnswer} onClick={() => go(true)}>Cho phép</button>
+          <button className="btn" disabled={sending || !onAnswer} onClick={() => go(true, { always: true })} data-notr={a.kind === "site" ? true : undefined}>{always}</button>
+          <button className="btn" disabled={sending || !onAnswer} onClick={() => go(false)}>Từ chối</button>
+          <button className="ag-ask-other" disabled={sending || !onAnswer} onClick={() => setNote("")}>Bảo làm khác…</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Nội dung một lượt trả lời của agent: đoạn văn xen kẽ nhóm công cụ (danh sách việc hiện ở thẻ riêng).
-export function AgentSteps({ steps, live, say }: { steps: AStep[]; live: boolean; say: Say }) {
+export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { steps: AStep[]; live: boolean; say: Say; view?: TView; onAnswer?: OnAnswer }) {
   const showFile = useCodeUi((s) => s.showFile);
   const blocks = useMemo(() => {
-    const out: ({ k: "text"; text: string } | { k: "steer"; text: string } | { k: "tools"; ts: ToolStep[] })[] = [];
+    const out: ({ k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | { k: "tools"; ts: ToolStep[] })[] = [];
     for (const s of steps) {
-      if (s.k === "steer") out.push(s);
+      if (s.k === "steer" || s.k === "ask") out.push(s);
       else if (s.k === "text") { const text = stripPhases(s.text); if (text) out.push({ k: "text", text }); }
+      else if (s.k === "think") { if (view !== "normal") out.push(s); }
       else if (s.name !== "update_plan") {
         const last = out[out.length - 1];
         if (last?.k === "tools") last.ts.push(s); else out.push({ k: "tools", ts: [s] });
       }
     }
     return out;
-  }, [steps]);
+  }, [steps, view]);
   return (
     <div className="ag">
       {blocks.map((b, i) => b.k === "steer"
         ? <div key={i} className="ag-steer"><span>Bạn nhắn thêm</span><p data-notr>{b.text}</p></div>
         : b.k === "text"
         ? <Markdown key={i} text={b.text} say={say} />
-        : <ToolGroup key={i} ts={b.ts} live={live && i === blocks.length - 1} onFile={(p) => showFile(p)} />)}
+        : b.k === "think"
+        ? <Think key={i} text={b.text} open={view === "verbose" || (view === "thinking" && live && i === blocks.length - 1)} />
+        : b.k === "ask"
+        ? <AskCard key={b.id} a={b} onAnswer={live ? onAnswer : undefined} />
+        : <ToolGroup key={i + view} ts={b.ts} live={live && (i === blocks.length - 1 || b.ts.some((t) => !t.done))} onFile={(p) => showFile(p)} verbose={view === "verbose"} />)}
     </div>
   );
 }
@@ -141,7 +200,8 @@ export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: nu
   const running = steps.some((x) => x.k === "tool" && !x.done);
   let label = "Đang suy nghĩ";
   const cur = [...steps].reverse().find((x): x is ToolStep => x.k === "tool" && !x.done);
-  if (cur && desc(cur)) label = desc(cur);
+  if (steps.some((x) => x.k === "ask" && x.state === "wait")) label = "Đang chờ bạn duyệt";
+  else if (cur && desc(cur)) label = desc(cur);
   else if (running) {
     const tail: string[] = [];
     for (let i = steps.length - 1; i >= 0; i--) {

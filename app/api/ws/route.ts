@@ -1,6 +1,7 @@
 import { EXCLUDE_SYNCHRO } from "../../uploads";
 import { AuthError, can, handle, requireUser, sameOrigin, type UserRow } from "../../authstore";
-import { getLink, gh, gitAuthEnv, parseRepo } from "../../github";
+import { getLink, gh, GH_GIT, gitAuthEnv, parseRepo, repoOfRemote } from "../../github";
+import { getPrefs, prsOf, trackPr } from "../../codestore";
 import { agent, exec, fsop, requireWs, sdir, ticket, wsConfigured } from "../../workspace";
 
 export const runtime = "nodejs";
@@ -77,9 +78,36 @@ async function status(u: string, d: string) {
     }
   }
   const remote = val("R");
-  return { git: true as const, branch: val("B"), remote, repo: /github\.com[/:]([^/]+\/[^/.]+)/.exec(remote)?.[1] ?? null, ahead: val("A") === "-" ? null : Number(val("A")), files: [...files.values()] };
+  return { git: true as const, branch: val("B"), remote, repo: repoOfRemote(remote), ahead: val("A") === "-" ? null : Number(val("A")), files: [...files.values()] };
 }
 
+const sidOf = (b: Record<string, unknown>) => Number(String(b.sid ?? "").replace(/\D/g, "")) || 0;
+// Tên nhánh mới: tiền tố + nội dung commit gần nhất (bỏ dấu tiếng Việt), kèm đuôi ngắn để không trùng.
+const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+async function newBranch(u: string, d: string, prefix: string) {
+  const subj = (await exec(u, d, { cmd: "git log -1 --format=%s 2>/dev/null", timeout: 15 })).out.trim();
+  const name = `${prefix ? prefix + "/" : ""}${slug(subj) || "thay-doi"}-${Date.now().toString(36).slice(-4)}`;
+  fail(await exec(u, d, { cmd: 'git checkout -q -b "$BR"', env: { BR: name }, timeout: 30 }), "Tạo nhánh");
+  return status(u, d);
+}
+// PR đang mở của nhánh (mở mới nếu chưa có); Synchro ghi lại để tự sửa CI / góp ý và tự lưu trữ phiên khi PR xong.
+async function ensurePr(user: UserRow, d: string, sid: number, repo: string, branch: string, base: string, token: string, title = "", body = "") {
+  const owner = repo.split("/")[0];
+  type Pr = { html_url: string; number: number; head: { sha: string } };
+  let pr = (await gh<Pr[]>(token, `/repos/${repo}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}`))[0];
+  let created = false;
+  if (!pr) {
+    const log = await exec(user.id, d, { cmd: 'git log -1 --format=%s; echo "---"; git log --format="- %s" "origin/$B..HEAD" 2>/dev/null | head -30', env: { B: base }, timeout: 20 });
+    const [subj, list = ""] = log.out.split("\n---\n");
+    pr = await gh<Pr>(token, `/repos/${repo}/pulls`, { method: "POST", body: JSON.stringify({
+      title: title || subj.trim() || branch, head: branch, base,
+      body: body || `${list.trim() ? `Thay đổi:\n${list.trim()}\n\n` : ""}Tạo từ Synchro Code.`,
+    }) });
+    created = true;
+  }
+  if (sid) trackPr(user.id, sid, { repo, number: pr.number, url: pr.html_url, branch, base, head: pr.head?.sha });
+  return { url: pr.html_url, number: pr.number, created };
+}
 const okBranch = (s: string) => /^[A-Za-z0-9._/-]{1,100}$/.test(s) && !s.includes("..") && !s.startsWith("-");
 const tokenOf = (u: UserRow, need: boolean) => {
   const l = getLink(u.id);
@@ -113,8 +141,8 @@ async function git(user: UserRow, d: string, b: Record<string, unknown>) {
     const empty = await exec(u, d, { cmd: "ls -A | grep -vx '.synchro' | head -1", timeout: 10 });
     if (empty.out.trim()) throw new AuthError("Phiên này đã có file. Hãy tạo phiên mới để clone repo khác.", 409);
     const r = await exec(u, d, {
-      cmd: `k=""; if [ -e .synchro ]; then k="../.synchro-giu-$$"; mv .synchro "$k"; fi; git clone --quiet ${branch ? '--branch "$BR" ' : ""}"https://github.com/$REPO.git" . 2>&1; c=$?; if [ -n "$k" ]; then mv "$k" .synchro; fi; ${EXCLUDE_SYNCHRO}; exit $c`,
-      env: { REPO: `${owner}/${name}`, BR: branch, ...(l ? gitAuthEnv(l.token) : { GIT_TERMINAL_PROMPT: "0" }) }, timeout: 300,
+      cmd: `k=""; if [ -e .synchro ]; then k="../.synchro-giu-$$"; mv .synchro "$k"; fi; git clone --quiet ${branch ? '--branch "$BR" ' : ""}"$GH/$REPO.git" . 2>&1; c=$?; if [ -n "$k" ]; then mv "$k" .synchro; fi; ${EXCLUDE_SYNCHRO}; exit $c`,
+      env: { GH: GH_GIT, REPO: `${owner}/${name}`, BR: branch, ...(l ? gitAuthEnv(l.token) : { GIT_TERMINAL_PROMPT: "0" }) }, timeout: 300,
     });
     if (r.code) throw new AuthError(/not found|could not read Username|Authentication/i.test(r.out + r.err) ? (l ? "Không tìm thấy repo hoặc tài khoản GitHub của bạn không có quyền với repo này." : "Repo riêng tư hoặc không tồn tại. Hãy kết nối GitHub để clone repo riêng tư.") : `Clone thất bại: ${(r.out || r.err).trim().slice(-300)}`, 400);
     await exec(u, d, { cmd: 'git config user.name "$N" && git config user.email "$M"', env: ident(user), timeout: 10 });
@@ -139,21 +167,43 @@ async function git(user: UserRow, d: string, b: Record<string, unknown>) {
     fail(r, "Đổi nhánh");
     return status(u, d);
   }
-  if (sub === "push" || sub === "pull") {
+  if (sub === "pull") {
     const l = tokenOf(user, true)!;
-    const r = await exec(u, d, { cmd: sub === "push" ? "git push -u origin HEAD 2>&1" : "git pull --ff-only 2>&1", env: gitAuthEnv(l.token), timeout: 180 });
-    fail(r, sub === "push" ? "Push" : "Pull");
+    const r = await exec(u, d, { cmd: "git pull --ff-only 2>&1", env: gitAuthEnv(l.token), timeout: 180 });
+    fail(r, "Pull");
     return { ...(await status(u, d)), output: r.out.slice(-2000) };
   }
+  // Push. Bật "Tự tạo pull request" (Cài đặt → Synchro Code): đang ở nhánh chính thì đẩy sang nhánh mới theo tiền tố, rồi mở PR nếu chưa có.
+  if (sub === "push") {
+    const l = tokenOf(user, true)!;
+    const prefs = getPrefs(u);
+    let s = await status(u, d);
+    let base: string | null = null;
+    if (prefs.autoPr && s.git && s.repo) {
+      base = (await gh<{ default_branch: string }>(l.token, `/repos/${s.repo}`)).default_branch;
+      if (s.branch === base) s = await newBranch(u, d, prefs.branchPrefix);
+    }
+    const r = await exec(u, d, { cmd: "git push -u origin HEAD 2>&1", env: gitAuthEnv(l.token), timeout: 180 });
+    fail(r, "Push");
+    const pr = base && s.git && s.repo && s.branch !== base ? await ensurePr(user, d, sidOf(b), s.repo, s.branch, base, l.token) : null;
+    return { ...(await status(u, d)), output: r.out.slice(-2000), ...(pr ? { pr } : {}) };
+  }
+  // Mở pull request. Đang ở nhánh chính thì tạo nhánh mới theo tiền tố và đẩy lên trước.
   if (sub === "pr") {
     const l = tokenOf(user, true)!;
-    const s = await status(u, d);
+    let s = await status(u, d);
     if (!s.git || !s.repo) throw new AuthError("Phiên này chưa gắn với repo GitHub.", 400);
     const repo = await gh<{ default_branch: string }>(l.token, `/repos/${s.repo}`);
     const base = str(b.base, 100) || repo.default_branch;
-    if (s.branch === base) throw new AuthError(`Đang ở nhánh ${base}. Hãy tạo nhánh mới trước khi mở pull request.`, 400);
-    const pr = await gh<{ html_url: string; number: number }>(l.token, `/repos/${s.repo}/pulls`, { method: "POST", body: JSON.stringify({ title: str(b.title, 200) || s.branch, body: str(b.body, 20_000), head: s.branch, base }) });
-    return { ...s, pr: { url: pr.html_url, number: pr.number } };
+    if (s.branch === base) {
+      s = await newBranch(u, d, getPrefs(u).branchPrefix);
+      if (!s.git) throw new AuthError("Không tạo được nhánh mới.", 400);
+    }
+    if (s.ahead === null || s.ahead > 0) fail(await exec(u, d, { cmd: "git push -u origin HEAD 2>&1", env: gitAuthEnv(l.token), timeout: 180 }), "Push");
+    const pr = await ensurePr(user, d, sidOf(b), s.repo!, s.branch, base, l.token, str(b.title, 200), str(b.body, 20_000));
+    return { ...(await status(u, d)), pr };
   }
+  // Pull request của phiên (Synchro theo dõi để tự sửa / tự lưu trữ).
+  if (sub === "prs") return { prs: prsOf(u, sidOf(b)).map((p) => ({ repo: p.repo, number: p.number, url: p.url, branch: p.branch, state: p.state, fixes: p.fixes, note: p.note, busy: !!p.busy })) };
   throw new AuthError("Thao tác git không hợp lệ.", 400);
 }

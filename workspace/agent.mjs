@@ -345,12 +345,16 @@ fs.rmSync(`${ROOT}/_runs`, { recursive: true, force: true });
 
 // ------------------------------------------------------------------ trình duyệt (Chromium trong container, điều khiển qua CDP)
 // Phần điều khiển dùng chung với workspace giả lập (workspace/browser-core.mjs); ở đây chỉ lo bật Chromium trong container.
+// Cookie và đăng nhập đến khi trình duyệt tắt (Cài đặt → Synchro Code → Trình duyệt): xóa trước mỗi lần bật lại Chromium.
+const cookieMode = new Map();
+const WIPE_SH = `cd "$HOME/work/.browser/profile/Default" 2>/dev/null && rm -rf Cookies Cookies-journal Network "Local Storage" "Session Storage" IndexedDB "Service Worker" "Login Data" "Login Data-journal" "Web Data" "Web Data-journal"; true`;
 const B = createBrowser({
   async up(u) {
     const s = await ensure(u);
     const base = `http://${s.ip}:9223`;
     const alive = await devJson(`${base}/json/version`, "GET", 3000).then(() => true, () => false);
     if (!alive) {
+      if (cookieMode.get(u) === "until-stop") await run("docker", ["exec", "-u", UID, "-e", `HOME=${HOME}`, cname(u), "sh", "-c", WIPE_SH], { timeout: 20_000 });
       const r = await run("docker", ["exec", "-u", UID, "-e", `HOME=${HOME}`, cname(u), "/opt/synchro/browser.sh"], { timeout: 30_000 });
       if (r.code) throw new E(500, "Không bật được trình duyệt: " + (r.err || r.out).trim().slice(0, 300));
       B.reset(u);
@@ -369,7 +373,7 @@ const B = createBrowser({
       .filter((p) => p && p !== 9222 && p !== 9223).sort((a, b) => a - b);
   },
 });
-const browserTool = (u, a) => B.tool(u, a);
+const browserTool = (u, a) => { if (a.cookies) cookieMode.set(u, a.cookies); return B.tool(u, a); };
 // Chrome / Edge / Brave của chính người dùng: tiện ích Synchro nối WebSocket /ws-agent/ext, lệnh browser_* chuyển qua đây (workspace/ext-relay.mjs).
 const X = createRelay({ log });
 
