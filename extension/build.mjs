@@ -1,5 +1,6 @@
 // Đóng gói tiện ích Synchro cho một máy chủ: các tệp trong extension/ (trừ tệp này), lõi thao tác workspace/browser-act.mjs chép thành act.js
-// (cùng mã với trình duyệt của Synchro), và config.js ghi sẵn địa chỉ máy chủ. Dùng ở
+// (cùng mã với trình duyệt của Synchro), phông Anthropic Sans / Serif của app (public/fonts) cho cửa sổ tiện ích, và config.js ghi sẵn
+// địa chỉ máy chủ. Dùng ở
 // - /api/browser/ext/download (nút "Tải tiện ích" trong Cài đặt → Khả năng → Trình duyệt của bạn) → tệp .zip;
 // - npm run dev:mock (ghi sẵn bản giải nén vào data-mock/extension để "Load unpacked") và tiện ích giả lập (scripts/mock-extension.mjs).
 // Chạy tay: node extension/build.mjs <địa chỉ Synchro> <thư mục ra>
@@ -23,6 +24,7 @@ export function extensionFiles(root, server) {
   const dir = path.join(root, "extension");
   const files = walk(dir).map((f) => [f, fs.readFileSync(path.join(dir, f))]);
   files.push(["act.js", fs.readFileSync(path.join(root, "workspace", "browser-act.mjs"))]);
+  for (const f of ["AnthropicSans", "AnthropicSerif"]) files.push([`fonts/${f}.woff2`, fs.readFileSync(path.join(root, "public", "fonts", `${f}-Variable.woff2`))]);
   files.push(["config.js", `// Địa chỉ máy chủ Synchro mà tiện ích này nối tới (đổi được trong cửa sổ tiện ích trước khi ghép nối).\nexport const SERVER = ${JSON.stringify(String(server ?? "").replace(/\/$/, ""))};\n`]);
   return files;
 }

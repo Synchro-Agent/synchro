@@ -187,6 +187,15 @@ r = R.routeModel(q("Chứng minh bất đẳng thức Cauchy-Schwarz cho n số,
 ok(r.tier === "strong", `bài chứng minh thi học sinh giỏi → model mạnh: ${r.model} · ${r.effort}`, JSON.stringify(r));
 r = R.routeModel(q("Sai rồi, làm lại đi", { turns: 3, prevAsk: "Viết code Python đọc file CSV và in tổng từng cột", prev: "anthropic/claude-sonnet-5-5" }), ALL);
 ok(r.model !== "anthropic/claude-sonnet-5-5" && r.task === "code", `chê câu trả lời → đổi model, vẫn là việc code: ${r.model}`, JSON.stringify(r));
+// Nối mạch (chế độ Tự động): câu nối tiếp ngắn giữ model của lượt trước nếu model đó vẫn đủ sức, không đổi chỉ vì rẻ hơn.
+const prevQ = "Viết code Python đọc file CSV và in tổng từng cột";
+const first = R.routeModel(q(prevQ), ALL);
+r = R.routeModel(q("Giải thích thêm đoạn đó đi", { turns: 3, prevAsk: prevQ, prev: "anthropic/claude-opus-5-5" }), ALL);
+ok(r.model === "anthropic/claude-opus-5-5" && r.task === "code" && r.why.includes("nối tiếp việc đang làm với model trước"), `câu nối tiếp giữ model đang làm (Opus) thay vì đổi sang ${first.model}: ${r.model}`, JSON.stringify(r));
+r = R.routeModel(q("Giải thích thêm đoạn đó đi", { turns: 3, prevAsk: prevQ, prev: "openai/model-da-go" }), ALL);
+ok(r.model === first.model, `model trước không còn trong danh sách được dùng thì chọn như thường: ${r.model}`, JSON.stringify(r));
+r = R.routeModel(q("Viết bài thơ về mùa thu", { turns: 3, prevAsk: prevQ, prev: "anthropic/claude-opus-5-5" }), ALL);
+ok(!r.why.includes("nối tiếp việc đang làm với model trước"), `câu hỏi mới (không nối tiếp) chọn lại từ đầu: ${r.model}`, JSON.stringify(r));
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

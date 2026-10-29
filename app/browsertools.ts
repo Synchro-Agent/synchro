@@ -220,7 +220,7 @@ export function chatFiles(messages: unknown, uid: string, outs?: () => { id: str
           for (const fm of b.text.matchAll(/<file name="([^"]+)" id="([a-f0-9]{40})"/g)) {
             if (seen.has(fm[1])) continue;
             const f = await storedFile(fm[2]);
-            if (f) add({ name: fm[1], mime: mimeOf(fm[1]), data: f.data });
+            if (f) add({ name: fm[1], mime: mimeOf(fm[1]), data: f.buf });
           }
           for (const om of b.text.matchAll(/\/api\/outputs\/([\w-]{8,40})/g)) { const o = readOutput(uid, om[1]); if (o) add({ name: o.name, mime: o.mime, data: o.data }); }
         } else if ((b?.type === "image" || b?.type === "document") && label) {

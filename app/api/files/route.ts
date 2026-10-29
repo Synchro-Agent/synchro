@@ -11,9 +11,10 @@ export async function POST(req: Request) {
   const f = form?.get("file");
   if (!(f instanceof File)) return Response.json({ error: "Thiếu tệp" }, { status: 400 });
   try {
-    const r = await processFile(Buffer.from(await f.arrayBuffer()), f.name);
+    // ?raw=1 (Synchro Code): nhận mọi loại tệp, tệp không đọc được chữ vẫn được giữ để chép nguyên vào workspace.
+    const r = await processFile(Buffer.from(await f.arrayBuffer()), f.name, { raw: new URL(req.url).searchParams.get("raw") === "1" });
     const text = r.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).filter(Boolean).join("\n\n");
-    return Response.json({ id: r.id, name: f.name, kind: r.kind, tokens: r.tokens, large: r.large, preview: text.slice(0, 200_000), images: r.blocks.filter((b) => b.type === "image").length });
+    return Response.json({ id: r.id, name: f.name, kind: r.kind, tokens: r.tokens, large: r.large, preview: r.raw ? "" : text.slice(0, 200_000), images: r.blocks.filter((b) => b.type === "image").length, ...(r.raw ? { raw: true } : {}) });
   } catch (e) {
     const user = e instanceof FileError;
     return Response.json({ error: user ? e.message : `Không xử lý được "${f.name}": ${(e as Error).message.slice(0, 200)}` }, { status: user ? 422 : 500 });

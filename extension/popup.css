@@ -1,44 +1,150 @@
-/* Cửa sổ tiện ích Synchro: cùng bảng màu với Synchro, tự theo giao diện sáng / tối của trình duyệt. */
-:root { --bg: #fcfcfa; --card: #ffffff; --fg: #141413; --fg2: #545452; --mut: #87867f; --line: #ebeae6; --line2: #dcdad4; --soft: #f3f2ee;
-  --acc: #2f7bf6; --act: #d97757; --ok: #16a34a; --err: #c2410c; --btn: #141413; --btn-fg: #faf9f5; --ink: #000; color-scheme: light dark; }
+/* Cửa sổ tiện ích Synchro: cùng phông chữ (Anthropic Sans / Serif), bảng màu và nút kính màu mực với app Synchro,
+   tự theo giao diện sáng / tối của trình duyệt. Phông chép từ public/fonts khi đóng gói (extension/build.mjs). */
+@font-face { font-family: "Anthropic Sans"; src: url(fonts/AnthropicSans.woff2) format("woff2"); font-weight: 300 800; font-display: block; }
+@font-face { font-family: "Anthropic Serif"; src: url(fonts/AnthropicSerif.woff2) format("woff2"); font-weight: 300 800; font-display: block; }
+
+:root {
+  --bg: #fcfcfa; --card: #fff; --soft: #f4f3ef; --seg-on: #fff; --fg: #141413; --fg2: #545452; --mut: #87867f; --line: #ebeae6; --line2: #dcdad4;
+  --acc: #2f7bf6; --act: #d97757; --ok: #1f9d55; --err: #c2410c; --on: #2c6ecb; --ink: #000;
+  --sh: 0 1px 2px rgba(20, 20, 19, .04), 0 0 0 .5px rgba(20, 20, 19, .1);
+  /* Kính màu mực (như nút gửi trong app): đen bóng ở giao diện sáng, sáng bóng ở giao diện tối. */
+  --g-top: rgba(78, 78, 86, .94); --g-mid: rgba(24, 24, 28, .97); --g-bot: #000; --g-fg: #fff; --g-hi: rgba(255, 255, 255, .5); --g-rim: rgba(255, 255, 255, .14);
+  --g-sheen: rgba(255, 255, 255, .2); --g-sh: 0 6px 16px -4px rgba(0, 0, 0, .3), 0 1px 2px rgba(0, 0, 0, .25); --g-hover: brightness(1.18);
+  color-scheme: light dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #121212; --card: #1b1b1b; --fg: #faf9f5; --fg2: #b0aea5; --mut: #87867f; --line: #2d2d2d; --line2: #3a3a38; --soft: #1f1f1f;
-    --acc: #6fa0f0; --ok: #4ade80; --err: #fb923c; --btn: #faf9f5; --btn-fg: #141413; --ink: #f5f4ef; }
+  :root {
+    --bg: #131313; --card: #1c1c1c; --soft: #222221; --seg-on: #31312f; --fg: #faf9f5; --fg2: #b0aea5; --mut: #8a8983; --line: #2a2a29; --line2: #393937;
+    --acc: #6fa0f0; --ok: #4ade80; --err: #fb923c; --on: #4b8bf0; --ink: #f5f4ef;
+    --sh: 0 1px 2px rgba(0, 0, 0, .4), 0 0 0 .5px rgba(255, 255, 255, .08);
+    --g-top: #fff; --g-mid: rgba(238, 237, 232, .97); --g-bot: rgba(206, 205, 199, .97); --g-fg: #141413; --g-hi: #fff; --g-rim: rgba(0, 0, 0, .16);
+    --g-sheen: rgba(255, 255, 255, .7); --g-sh: 0 6px 18px -4px rgba(0, 0, 0, .6), 0 1px 2px rgba(0, 0, 0, .4); --g-hover: brightness(.94);
+  }
 }
 * { box-sizing: border-box; }
-body { margin: 0; width: 340px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
-header { display: flex; gap: 11px; align-items: center; padding: 14px 16px 13px; border-bottom: 1px solid var(--line); }
-/* Logo Synchro (vân mực sần) làm mặt nạ, tô bằng màu mực của theme: đen ở giao diện sáng, sáng ở giao diện tối (như trong app). */
-.mark { display: block; width: 50px; height: 28px; flex: none; background: var(--ink); -webkit-mask: url(logo.png) center / contain no-repeat; mask: url(logo.png) center / contain no-repeat; }
-.hd { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.wm { font: 500 19px/1.15 Georgia, "Times New Roman", Times, serif; letter-spacing: -.02em; }
-.wm small { font: 400 12.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0; color: var(--mut); margin-left: 2px; }
-.st { display: inline-flex; align-items: center; gap: 6px; color: var(--mut); font-size: 12px; }
-.st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line2); }
-.st.online::before { background: var(--ok); }
-.st.acting::before { background: var(--act); box-shadow: 0 0 0 3px color-mix(in srgb, var(--act) 25%, transparent); }
+html { background: var(--bg); }
+body { margin: 0; width: 360px; background: var(--bg); color: var(--fg); font: 13px/1.5 "Anthropic Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: .6; }
+button:focus-visible, input:focus-visible { outline: 2px solid color-mix(in srgb, var(--acc) 55%, transparent); outline-offset: 2px; }
+.ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* Đầu cửa sổ: logo (mặt nạ tô màu mực của theme), tên, trạng thái. */
+header { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 14px 0 16px; border-bottom: .5px solid var(--line2); }
+.mark { width: 40px; height: 22px; flex: none; background: var(--ink); -webkit-mask: url(logo.png) center / contain no-repeat; mask: url(logo.png) center / contain no-repeat; }
+.wm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 500 19px/1 "Anthropic Serif", Georgia, serif; letter-spacing: -.015em; white-space: nowrap; }
+.wm small { font: 550 10.5px/1 "Anthropic Sans", system-ui, sans-serif; letter-spacing: .01em; color: var(--mut); padding: 4px 6px; border-radius: 6px;
+  background: var(--soft); box-shadow: inset 0 0 0 .5px var(--line2); }
+.st { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 8px; border-radius: 999px; flex: none;
+  background: var(--card); box-shadow: var(--sh); color: var(--fg2); font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+.st:empty { display: none; }
+.st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mut); }
+.st.online::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.st.connecting::before { background: var(--acc); animation: blink 1.2s ease-in-out infinite; }
+.st.offline { color: var(--err); }
 .st.offline::before { background: var(--err); }
-main { padding: 14px 16px 16px; display: grid; gap: 12px; }
-p { margin: 0; color: var(--fg2); }
-label { display: grid; gap: 5px; font-weight: 550; }
-input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 8px; background: var(--card); color: var(--fg); font: inherit; }
-input[type=text]:focus { outline: 2px solid color-mix(in srgb, var(--acc) 40%, transparent); border-color: var(--acc); }
-#code { font: 600 16px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
-button { font: inherit; font-weight: 600; border: 1px solid var(--line2); background: var(--card); color: var(--fg); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-button:hover { background: var(--soft); }
-button.pri { background: var(--btn); color: var(--btn-fg); border-color: var(--btn); }
-button.pri:hover { opacity: .88; background: var(--btn); }
-button.stop { background: var(--act); border-color: var(--act); color: #fff; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
-button.stop::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
-button.stop:hover { background: #c4613f; }
-button.link { background: none; border: none; padding: 0; color: var(--mut); font-weight: 500; text-decoration: underline; }
-button:disabled { opacity: .55; cursor: default; }
-.err { color: var(--err); }
-.box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; background: var(--card); }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.k { color: var(--mut); font-size: 12px; }
-.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.opt { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; cursor: pointer; }
-.opt input { margin-top: 3px; accent-color: var(--acc); }
-.opt small { display: block; color: var(--mut); font-weight: 400; }
-footer { display: flex; justify-content: space-between; }
+.st.acting { color: var(--act); background: color-mix(in srgb, var(--act) 9%, var(--card)); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--act) 40%, transparent); }
+.st.acting::before { background: var(--act); animation: ring 1.4s ease-out infinite; }
+
+main { padding: 16px; display: grid; gap: 14px; }
+p { margin: 0; }
+
+/* Chưa ghép nối. */
+h1 { margin: 0; font: 450 22px/1.2 "Anthropic Serif", Georgia, serif; letter-spacing: -.015em; }
+.hero p { margin-top: 6px; color: var(--fg2); }
+.steps { list-style: none; margin: 0; padding: 2px 14px; border-radius: 14px; background: var(--card); box-shadow: var(--sh); }
+.steps li { display: flex; gap: 11px; align-items: flex-start; padding: 9px 0; color: var(--fg2); font-size: 12.5px; }
+.steps li + li { border-top: .5px solid var(--line); }
+.steps b { color: var(--fg); font-weight: 600; }
+.steps .n { flex: none; width: 20px; height: 20px; margin-top: -1px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 650;
+  color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-bot)); box-shadow: inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim); }
+.field { display: grid; gap: 6px; }
+.field > label, .sec-h { font-size: 12px; font-weight: 600; color: var(--fg2); }
+input[type=text] { width: 100%; height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--card); color: var(--fg); font: inherit; outline: none;
+  box-shadow: inset 0 0 0 .5px var(--line2), 0 1px 2px rgba(0, 0, 0, .03); transition: box-shadow .15s; }
+input[type=text]:focus { box-shadow: inset 0 0 0 1px var(--acc), 0 0 0 3px color-mix(in srgb, var(--acc) 20%, transparent); }
+input.code { height: 52px; text-align: center; font: 600 22px/1 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .22em;
+  text-transform: uppercase; padding: 0 0 0 .22em; }
+input.code::placeholder { color: color-mix(in srgb, var(--mut) 50%, transparent); }
+.srv { display: flex; align-items: center; gap: 7px; margin-top: -4px; color: var(--mut); font-size: 12px; }
+.srv .ell { flex: 1; }
+.srv b { color: var(--fg2); font-weight: 550; }
+.err { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: 10px; font-size: 12.5px; color: var(--err);
+  background: color-mix(in srgb, var(--err) 7%, var(--card)); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--err) 32%, transparent); }
+.err .ic { margin-top: 2px; }
+
+/* Nút chính: kính màu mực. */
+.pri { height: 42px; width: 100%; border: 0; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 13.5px; font-weight: 600; color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-mid) 52%, var(--g-bot));
+  box-shadow: var(--g-sh), inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim), inset 0 12px 12px -10px var(--g-sheen); transition: filter .15s, transform .1s; }
+.pri:hover:not(:disabled) { filter: var(--g-hover); }
+.pri:active:not(:disabled) { transform: translateY(.5px); }
+.pri .ic { width: 16px; height: 16px; transition: transform .15s; }
+.pri:hover:not(:disabled) .ic { transform: translateX(2px); }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
+.link { border: 0; background: none; padding: 0; color: var(--fg2); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px;
+  text-decoration-color: var(--line2); }
+.link:hover { color: var(--fg); text-decoration-color: currentColor; }
+
+/* Đã ghép nối: Synchro đang điều khiển. */
+.live { display: grid; gap: 11px; padding: 13px; border-radius: 14px; background: color-mix(in srgb, var(--act) 8%, var(--card));
+  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--act) 42%, transparent), 0 8px 22px -12px color-mix(in srgb, var(--act) 60%, transparent); }
+.live-h { display: flex; gap: 11px; align-items: center; min-width: 0; }
+.live-h > div { display: grid; min-width: 0; }
+.live-h b { font-weight: 600; font-size: 13.5px; }
+.live-h small { color: var(--fg2); font-size: 12px; }
+.pulse { width: 10px; height: 10px; margin: 0 2px 0 3px; border-radius: 50%; flex: none; background: var(--act); animation: ring 1.4s ease-out infinite; }
+.stop { height: 38px; width: 100%; border: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; color: #fff;
+  background: linear-gradient(180deg, #e68e6f, #d26c4a); box-shadow: 0 6px 14px -6px rgba(210, 108, 74, .7), inset 0 1px .5px rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(0, 0, 0, .1);
+  transition: filter .15s; }
+.stop:hover { filter: brightness(1.06); }
+.stop i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+
+/* Tài khoản đã ghép nối. */
+.card { background: var(--card); border-radius: 14px; box-shadow: var(--sh); }
+.who { display: flex; align-items: center; gap: 11px; padding: 12px 14px; }
+.av { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12.5px; font-weight: 650; letter-spacing: .02em;
+  color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-bot)); box-shadow: inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim); }
+.who-t { display: grid; min-width: 0; }
+.who-t b { font-size: 13.5px; font-weight: 600; }
+.who-t small { display: flex; align-items: center; gap: 5px; color: var(--mut); font-size: 12px; }
+.who-t small .ic { width: 12px; height: 12px; }
+.note { display: flex; gap: 9px; align-items: flex-start; padding: 10px 14px 12px; border-top: .5px solid var(--line); color: var(--fg2); font-size: 12.5px; }
+.note .ic { margin-top: 2px; color: var(--mut); }
+.note b { color: var(--fg); font-weight: 600; }
+.note.bad, .note.bad .ic { color: var(--err); }
+
+/* Quyền điều khiển: nút phân đoạn (radio ẩn bên trong để dùng được bằng bàn phím). */
+.sec { display: grid; gap: 8px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; border-radius: 11px; background: var(--soft); box-shadow: inset 0 0 0 .5px var(--line2); }
+.seg label { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; border-radius: 8px; color: var(--fg2);
+  font-size: 12.5px; font-weight: 550; cursor: pointer; transition: background .15s, color .15s, box-shadow .15s; }
+.seg label:hover { color: var(--fg); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--seg-on); color: var(--fg); box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 0 0 .5px var(--line2); }
+.seg label:has(input:focus-visible) { outline: 2px solid color-mix(in srgb, var(--acc) 55%, transparent); outline-offset: 1px; }
+.seg .ic { width: 14px; height: 14px; }
+.hint { color: var(--mut); font-size: 12px; }
+.tabrow { display: flex; align-items: center; gap: 11px; padding: 10px 12px 10px 13px; }
+.tabrow > .ic { width: 16px; height: 16px; color: var(--mut); }
+.tabrow .tt { display: grid; flex: 1; min-width: 0; }
+.tabrow .tt b { font-size: 12.5px; font-weight: 600; }
+.tabrow .tt small { color: var(--mut); font-size: 11.5px; }
+.sw { position: relative; width: 34px; height: 20px; flex: none; padding: 0; border: 0; border-radius: 999px; background: var(--line2); transition: background .18s; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+  transition: transform .18s; }
+.sw[aria-checked="true"] { background: var(--on); }
+.sw[aria-checked="true"]::after { transform: translateX(14px); }
+
+footer { display: flex; justify-content: space-between; align-items: center; margin: 0 -16px -16px; padding: 8px 8px 10px; border-top: .5px solid var(--line2); }
+.ghost { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--fg2);
+  font-size: 12.5px; font-weight: 550; transition: background .15s, color .15s; }
+.ghost:hover { background: var(--soft); color: var(--fg); }
+.ghost.danger:hover { color: var(--err); background: color-mix(in srgb, var(--err) 8%, transparent); }
+
+@keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(217, 119, 87, .55); } 100% { box-shadow: 0 0 0 7px rgba(217, 119, 87, 0); } }
+@keyframes blink { 50% { opacity: .35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

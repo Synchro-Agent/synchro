@@ -564,14 +564,6 @@ html body .tpl-menu::before{background:var(--card)!important}
 .att-x{position:absolute;top:5px;right:5px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);opacity:0;transition:opacity .15s}
 .att-card:hover .att-x{opacity:1}
 
-.fc{width:84px;animation:pop .22s var(--ease) both}
-.fc-doc{position:relative;width:84px;height:107px;border-radius:12px;background:var(--hover);border:.5px solid var(--border);--fa:rgba(0,0,0,.16);--fb:#c9a46f}
-[data-theme="dark"] .fc-doc{--fa:rgba(255,255,255,.2);--fb:#85603f}
-.fc-doc svg{position:absolute;inset:0;width:100%;height:100%}
-.fc-badge{position:absolute;right:-4px;bottom:8px;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:560;color:#fff;letter-spacing:.02em;line-height:14px}
-.fc-name{display:block;margin-top:5px;font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fc .att-x{top:-6px;right:-6px;font-size:13px;line-height:1;z-index:2}
-.fc:hover .att-x{opacity:1}
 .attach{gap:12px}
 
 /* avatar */
@@ -1159,19 +1151,11 @@ html body .cv-card,html[data-theme=dark] body .cv-card{background:var(--gl-fill)
 .md-tbl th{background:var(--hover);font-weight:560}
 .upl-bar .upl-meta{margin-left:auto}
 .upl-doc{min-height:0}
-.fc-thumb{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
-.fc-prog{position:absolute;left:8px;right:8px;bottom:8px;height:4px;border-radius:3px;background:rgba(127,127,127,.3);overflow:hidden}
-.fc-prog i{display:block;height:100%;background:var(--accent);transition:width .2s}
-.fc-bad{position:absolute;left:6px;bottom:6px;width:18px;height:18px;border-radius:50%;background:#e5484d;color:#fff;font-size:12px;font-weight:660;display:grid;place-items:center}
-.fc-err .fc-doc{outline:1.5px solid #e5484d}
-.fc-err .fc-name{color:#e5484d}
 
 /* Danh sách tệp đính kèm: một hàng, lướt ngang khi có nhiều tệp (chat thường + Code) */
 .attach{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:8px 8px 8px 2px;margin:-8px -8px 0 -2px;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .attach::-webkit-scrollbar{height:6px}.attach::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
-.attach>.fc,.attach>.cv-fc{flex:0 0 auto}
-.cv-fc{position:relative;transition:opacity .15s}.cv-fc.off{opacity:.4}
-.cv-fc-pin{position:absolute;left:-4px;top:-4px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);color:var(--accent);z-index:2}
+.attach>.ft{flex:0 0 auto}
 .cv-pills:has(.cv-attach){max-height:none;overflow:visible;display:block}
 .cv-pills .cv-attach{padding-top:10px;margin-top:-4px}
 .cv-pills .cv-pill{margin-top:6px;display:inline-flex}
@@ -4553,6 +4537,9 @@ button.bn-box:disabled{cursor:default}
 .brw-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
 .main.art-full .brw-panel{width:100%;border-left:0}
 @media (max-width:760px){.brw-panel{position:fixed;inset:0;width:100%;z-index:60;border-left:0}}
+/* Nút quả địa cầu ở đầu đoạn chat; chấm xanh: Synchro đã dùng trình duyệt trong đoạn chat này. */
+.brw-btn{position:relative}
+.brw-dot{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px var(--bg)}
 /* Khung trình duyệt: chọn trình duyệt của Synchro / Chrome của bạn; Chrome của bạn: cài tiện ích, ghép nối, trạng thái, Dừng */
 .bh{flex:1;min-height:0;display:flex;flex-direction:column}
 .bh-h{display:flex;align-items:center;gap:8px;height:42px;padding:0 6px 0 8px;border-bottom:.5px solid var(--border);flex:none}
@@ -4620,3 +4607,35 @@ html body .btn.dark.ext-stop:hover{background:#c4613f;opacity:1}
 @media (prefers-reduced-motion:reduce){.ext-dot.acting,.ext-card.acting .ext-dev>.ext-dot{animation:none}}
 
 @media (prefers-reduced-motion:reduce){.bp-agent,.bp-agent-dot,.bp-ripple,.bp-dialog,.brw-panel{animation:none}}
+
+/* Thẻ tệp đính kèm giống hệt Claude (khung soạn, tin đã gửi; chat thường và Synchro Code) */
+:root{--ft-bg:#fff;--ft-ring:rgba(31,30,29,.15);--ft-pill:rgba(31,30,29,.15);--ft-mute:#73726c;--ft-pdf:#f0eee6;--ft-tag:rgba(255,255,255,.88);--ft-x:#fff}
+[data-theme="dark"]{--ft-bg:#191919;--ft-ring:rgba(255,255,255,.2);--ft-pill:rgba(255,255,255,.2);--ft-mute:rgba(255,255,255,.57);--ft-pdf:#303030;--ft-tag:rgba(56,56,56,.7);--ft-x:#303030}
+.attach{gap:8px;padding:10px 10px 8px 8px;margin:-10px -10px 0 -8px}
+.ft{position:relative;flex:0 0 auto;width:120px;height:120px;border-radius:12px;animation:pop .22s var(--ease) both}
+.ft-card{position:relative;display:block;width:100%;height:100%;padding:0;border:0;border-radius:10px;background:var(--ft-bg);box-shadow:inset 0 0 0 .5px var(--ft-ring),0 1px 2px rgba(0,0,0,.05);overflow:hidden;text-align:left;color:var(--text);font:inherit;cursor:default}
+.ft-card[tabindex="0"]{cursor:pointer}
+.ft-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ft-img .ft-card img{width:100%;height:100%;object-fit:contain;display:block;border-radius:10px}
+.ft-pdf .ft-card{border-radius:8px;background:var(--ft-pdf)}
+.ft-pdf .ft-card img{position:absolute;inset:1px;width:calc(100% - 2px);height:calc(100% - 2px);object-fit:contain;display:block}
+.ft-body{position:absolute;inset:12px;display:flex;flex-direction:column;min-width:0}
+.ft-name{font-size:13px;line-height:17px;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.ft-sub{font-size:11px;line-height:17px;color:var(--ft-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ft-ext{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:9px;border:1.5px solid var(--ft-pill);font-size:11px;line-height:14px;font-weight:540;color:var(--ft-mute);letter-spacing:.01em;box-sizing:border-box}
+.ft-tag{position:absolute;left:10px;bottom:8px;height:18px;padding:0 5px;border-radius:4px;background:var(--ft-tag);font-size:11px;line-height:18px;font-weight:435;color:var(--ft-mute);text-transform:uppercase;box-shadow:0 0 0 .5px var(--ft-ring)}
+.ft-x{position:absolute;top:-8px;right:-8px;z-index:2;width:20px;height:20px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ft-x);color:var(--ft-mute);box-shadow:0 0 0 .5px var(--ft-ring),0 1px 2px rgba(0,0,0,.08);opacity:0;transition:opacity .15s;cursor:pointer}
+.ft:hover .ft-x,.ft:focus-within .ft-x{opacity:1}
+.ft-x:hover{color:var(--text)}
+.ft-prog{position:absolute;left:12px;right:12px;bottom:12px;height:4px;border-radius:3px;background:rgba(127,127,127,.25);overflow:hidden}
+.ft-prog i{display:block;height:100%;background:var(--text-3);transition:width .2s}
+.ft-doc .ft-prog{left:auto;width:44px;bottom:19px}
+.ft-bad{position:absolute;right:10px;bottom:10px;width:18px;height:18px;border-radius:50%;background:#e5484d;color:#fff;font-size:12px;font-weight:660;display:grid;place-items:center}
+.ft-err .ft-card{box-shadow:inset 0 0 0 1.5px #e5484d}
+.ft-err .ft-name{color:#e5484d}
+@media (prefers-reduced-motion:reduce){.ft{animation:none}}
+/* Lightbox xem ảnh khi bấm thẻ ảnh */
+.ft-lightbox{position:fixed;inset:0;z-index:420;display:grid;place-items:center;background:rgba(0,0,0,.72);padding:32px;cursor:zoom-out}
+.ft-lightbox img{max-width:min(1200px,100%);max-height:100%;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.4);cursor:default}
+.ft-lightbox .icon-btn{position:absolute;top:16px;right:16px;color:#fff;background:rgba(0,0,0,.4)}
+

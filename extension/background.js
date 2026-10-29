@@ -95,9 +95,11 @@ chrome.runtime.onMessage.addListener((m, _sender, reply) => {
     }
     const st = control.status();
     const c2 = await store.get();
+    // Tab Synchro đang làm, để cửa sổ tiện ích ghi "Đang làm trên: …".
+    const at = st.acting && Number(st.tab) ? await chrome.tabs.get(Number(st.tab)).catch(() => null) : null;
     return {
       link: link.state(), server: c2.server || server || "", user: c2.user ?? null, device: c2.device ?? null,
-      scope: control.scope(), acting: st.acting, tab: tab ? { id: tab.id, title: tab.title, url: tab.url, shared: control.isShared(tab.id) } : null,
+      scope: control.scope(), acting: st.acting, actTab: at ? { title: at.title, url: at.url } : null, tab: tab ? { id: tab.id, title: tab.title, url: tab.url, shared: control.isShared(tab.id) } : null,
       paired: !!(cfg.token || c2.token),
     };
   })().then(reply, (e) => reply({ error: String(e?.message ?? e) }));

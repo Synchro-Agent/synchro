@@ -150,8 +150,11 @@ export class CodexEngine implements Engine {
     // Codex không có tham số system riêng: đặt system lên đầu prompt ở lượt mở hội thoại (lượt resume đã có trong lịch sử).
     const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"'];
-    // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật.
-    if (req.mcp) args.push("-c", `mcp_servers.synchro.url=${JSON.stringify(req.mcp.url)}`, "-c", "mcp_servers.synchro.startup_timeout_sec=20", "-c", "mcp_servers.synchro.tool_timeout_sec=600");
+    // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật. codex exec không có ai bấm duyệt
+    // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
+    // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho
+    // lệnh dựng sẵn của Codex trên máy chủ: việc thật đều chạy trong workspace qua công cụ của Synchro.
+    if (req.mcp) args.push("-c", `mcp_servers.synchro.url=${JSON.stringify(req.mcp.url)}`, "-c", "mcp_servers.synchro.startup_timeout_sec=20", "-c", "mcp_servers.synchro.tool_timeout_sec=600", "-c", 'mcp_servers.synchro.default_tools_approval_mode="approve"');
     if (req.web) args.push("-c", "tools.web_search=true");
     if (req.model) args.push("-m", req.model);
     // Mức đã được subs.resolvePlanModel chọn theo đúng các mức model này hỗ trợ (low…max, ultra).

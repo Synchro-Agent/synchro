@@ -14,6 +14,8 @@ export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } |
 type Say = (m: string) => void;
 
 const base = (p: string) => p.split("/").pop() || p;
+/** Dòng ẩn đánh dấu giai đoạn (<!-- mode:debug -->) chỉ để giao diện đổi nhãn, không hiện ra trong câu trả lời. */
+export const stripPhases = (t: string) => t.replace(/<!--\s*mode:\s*(plan|code|debug)\s*-->[ \t]*\n?/g, "").trim();
 const host = (u: string) => { try { const x = new URL(/^[a-z]+:/i.test(u) ? u : "http://" + u); return x.host + (x.pathname !== "/" ? x.pathname : ""); } catch { return u; } };
 const VERB: Record<string, string> = {
   bash: "Chạy lệnh", read_file: "Đọc", write_file: "Tạo / ghi", edit_file: "Sửa", list_files: "Liệt kê file", grep: "Tìm",
@@ -107,7 +109,8 @@ export function AgentSteps({ steps, live, say }: { steps: AStep[]; live: boolean
   const blocks = useMemo(() => {
     const out: ({ k: "text"; text: string } | { k: "steer"; text: string } | { k: "tools"; ts: ToolStep[] })[] = [];
     for (const s of steps) {
-      if (s.k === "text" || s.k === "steer") out.push(s);
+      if (s.k === "steer") out.push(s);
+      else if (s.k === "text") { const text = stripPhases(s.text); if (text) out.push({ k: "text", text }); }
       else if (s.name !== "update_plan") {
         const last = out[out.length - 1];
         if (last?.k === "tools") last.ts.push(s); else out.push({ k: "tools", ts: [s] });

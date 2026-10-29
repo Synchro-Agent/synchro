@@ -1888,3 +1888,18 @@ RULES_EN.push(
 );
 // Nhật ký quản trị: ghép nối trình duyệt qua tiện ích Synchro.
 EN2VI["Paired a browser (Synchro extension)"] = "Ghép nối trình duyệt (tiện ích Synchro)";
+// Tệp gửi kèm trong Synchro Code (thẻ tệp giống Claude, thư mục / .zip nguyên khối vào workspace).
+Object.assign(VI2EN, { "Thả tệp, thư mục hoặc .zip để gửi kèm tin nhắn": "Drop files, folders or .zip files to attach them", "giải nén lỗi": "extraction failed" });
+RULES_EN.push(
+  [/^Thư mục "(.+)" trống$/, (m) => `Folder "${m[1]}" is empty`],
+  [/^Không nén được thư mục "(.+)"$/, (m) => `Couldn't compress the folder "${m[1]}"`],
+  [/^"(.+)" là tệp nén bị hỏng, không mở được\.$/, (m) => `"${m[1]}" is a damaged archive and can't be opened.`],
+  [/^\(Tệp "(.+)", (.+) byte: không đọc được nội dung dạng chữ\. ?(.*)\)$/, (m) => `(File "${m[1]}", ${m[2]} bytes: its content can't be read as text. ${m[3]})`],
+  [/^Không chép được (.+) vào workspace: (.*)$/, (m) => `Couldn't copy ${m[1]} into the workspace: ${m[2]}`],
+  [/^"(.+)" không còn trên máy chủ, hãy tải lên lại\.$/, (m) => `"${m[1]}" is no longer on the server, please upload it again.`],
+  [/^"(.+)" chưa tải lên được$/, (m) => `"${m[1]}" couldn't be uploaded`],
+  [/^"(.+)" vượt quá giới hạn (\d+)MB \(sau khi nén\)$/, (m) => `"${m[1]}" exceeds the ${m[2]}MB limit (after compression)`],
+  [/^Xóa (.+\.[A-Za-z0-9]{1,8})$/, (m) => `Remove ${m[1]}`],
+  [/^\[Tệp đã gửi ở lượt trước: (.+) \(không còn trên máy chủ\)\]$/, (m) => `[File sent in an earlier turn: ${m[1]} (no longer on the server)]`],
+  [/^\[Ảnh đã gửi ở lượt trước: (.+)\]$/, (m) => `[Image sent in an earlier turn: ${m[1]}]`],
+);

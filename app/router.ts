@@ -170,7 +170,8 @@ export type RouteInput = {
   /** Lời nhờ trước đó của người dùng: câu nối tiếp ngắn ("giải thích thêm", "làm lại") giữ loại việc của nó. */
   prevAsk?: string;
 };
-type Read = { task: Task; score: number; why: string[]; retry: boolean; think: boolean };
+/** follow: câu nối tiếp ngắn theo việc của yêu cầu trước ("tiếp đi", "giải thích thêm"). */
+type Read = { task: Task; score: number; why: string[]; retry: boolean; think: boolean; follow?: boolean };
 const LABEL: Record<Task, string> = { chat: "trò chuyện", qa: "hỏi đáp", language: "học ngôn ngữ", translate: "dịch", summarize: "tóm tắt", write: "viết", code: "viết code", debug: "gỡ lỗi", reason: "suy luận", analyze: "phân tích", build: "tạo sản phẩm", vision: "đọc ảnh", longdoc: "tài liệu dài", data: "số liệu" };
 export const taskLabel = (t: Task) => LABEL[t];
 // Điểm gốc theo loại việc: ≤ 0 dễ, 1-2 vừa, 3-4 khó, ≥ 5 rất khó.
@@ -227,7 +228,7 @@ function read(q: RouteInput, depth = 0): Read {
       s = p.score; why.push(...p.why.filter((w) => w !== "bạn chưa hài lòng với câu trả lời trước"));
       task = p.task;
       if (retry) add(2, "bạn chưa hài lòng với câu trả lời trước");
-      return { task, score: s, why, retry, think: p.think };
+      return { task, score: s, why, retry, think: p.think, follow: true };
     }
   }
   // Studio (Tài liệu, Slide, Thiết kế): luôn là tạo ra cả một sản phẩm.
@@ -294,7 +295,7 @@ export type Route = { model: string; tier: Tier; vendor: Vendor; task: Task; eff
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */
 export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[] } = {}): Route | null {
   if (!allowed.length) return null;
-  const { task, score, why, retry, think } = readOf(q);
+  const { task, score, why, retry, think, follow } = readOf(q);
   const needQ = need(score, task);
   const avoid = new Set([...(o.avoid ?? []), ...(retry && q.prev ? [q.prev] : [])]);
   const all = allowed.map((k, i) => ({ p: profileOf(k), i })).map((x) => ({ ...x, q: quality(x.p, task) }));
@@ -304,7 +305,11 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   const rank = ok.length
     ? ok.sort((a, b) => a.p.cost - b.p.cost || b.q - a.q || a.i - b.i)
     : pool.sort((a, b) => b.q - a.q || a.p.cost - b.p.cost || a.i - b.i);
-  const pick = rank[0];
+  // Câu nối tiếp (không phải chê câu trả lời): model của lượt trước vẫn đủ sức thì giữ nguyên, để nối đúng mạch việc đang làm
+  // (phiên làm việc của gói, bộ nhớ đệm) thay vì đổi sang model khác chỉ vì rẻ hơn một chút.
+  const keep = follow && !retry && q.prev ? ok.find((x) => x.p.key === q.prev) : undefined;
+  if (keep) why.push("nối tiếp việc đang làm với model trước");
+  const pick = keep ?? rank[0];
   // Dự phòng khi model đã chọn lỗi / hết hạn mức: model tốt kế tiếp, ưu tiên hãng khác.
   const alt = [...ok, ...pool.filter((x) => !ok.includes(x)).sort((a, b) => b.q - a.q)].filter((x) => x.p.key !== pick.p.key)
     .sort((a, b) => Number(a.p.vendor === pick.p.vendor) - Number(b.p.vendor === pick.p.vendor)).map((x) => x.p.key);

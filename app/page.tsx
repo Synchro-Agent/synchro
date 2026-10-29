@@ -6,7 +6,7 @@ import { Avatar } from "./avatar";
 import { getLang, tr } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
-import { capFiles } from "./filestate";
+import { capFiles, getStatus } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
 import { HalftoneBg } from "./halftone";
 import { CodeView } from "./codeview";
@@ -478,7 +478,7 @@ function Composer(p: {
   const micBtn = <MicPicker say={say} rec={rec} onMic={mic} />;
   const modelPicker = <ModelPicker model={model} setModel={setModel} />;
   const chips = files.length > 0 && (
-    <div className="attach">{fm.node}{files.map((f, i) => <FileCard key={f + i} name={f} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
+    <div className="attach">{fm.node}{files.map((f, i) => <FileCard key={f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
   );
 
   if (dock)
@@ -759,9 +759,9 @@ export default function Home() {
   // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
   const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
   const [artFull, setArtFull] = useState(false);
-  // Trình duyệt cạnh đoạn chat (như khung trình duyệt của Synchro Code): chỉ hiện ở đoạn chat có việc cần thao tác trên web,
-  // tự mở khi Synchro bắt đầu dùng trình duyệt (của Synchro, hoặc Chrome của bạn qua tiện ích); đoạn chat đó giữ nút quả địa cầu
-  // để mở lại. brwFor: đoạn chat đang mở khung.
+  // Trình duyệt cạnh đoạn chat (như khung trình duyệt của Synchro Code): nút quả địa cầu ở đầu mọi đoạn chat mở / đóng khung;
+  // khung tự mở khi Synchro bắt đầu dùng trình duyệt (của Synchro, hoặc Chrome của bạn qua tiện ích), và đoạn chat đó được đánh
+  // dấu (chấm trên nút quả địa cầu). brwFor: đoạn chat đang mở khung.
   const [brwFor, setBrwFor] = useState<number | null>(null);
   const [brw, setBrw] = useState<{ available: boolean; reason?: string; control?: boolean; ext?: { allowed: boolean; paired: boolean }; target?: "synchro" | "user" } | null>(null);
   // Synchro vừa bắt đầu làm ở trình duyệt nào (của Synchro / Chrome của bạn): khung trình duyệt chuyển sang đó.
@@ -806,7 +806,7 @@ export default function Home() {
     if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) { setFileSel(null); setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true }); }
   }, [chat?.id, lastIdx, liveArt?.ident, liveArt?.v]); // eslint-disable-line react-hooks/exhaustive-deps
   const fileOpen = view === "chat" && !!chat && fileSel?.chat === chat.id && !artOpen;
-  const brwShow = view === "chat" && !!chat?.browser && brwFor === chat.id && !artOpen && !fileOpen && brwOk;
+  const brwShow = view === "chat" && !!chat && brwFor === chat.id && !artOpen && !fileOpen && brwOk;
   const panelOpen = artOpen || fileOpen || brwShow;
   useEffect(() => { if (!panelOpen) setArtFull(false); }, [panelOpen]);
   const openArt = (s: { chat: number; ident: string; v: number; follow: boolean }) => { setFileSel(null); setArtSel(s); };
@@ -1117,6 +1117,9 @@ export default function Home() {
     const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
     fileContext(f, t).then(({ blocks, errors, failed }) => {
       errors.forEach((m) => say(m));
+      // Nhớ mã tệp trên máy chủ: các lượt sau (kể cả khi chế độ Tự động đổi model) gửi lại tệp này cùng lịch sử.
+      const fids = Object.fromEntries(f.flatMap((n) => { const x = getStatus(n)?.id; return x ? [[n, x]] : []; }));
+      if (Object.keys(fids).length) patch(id!, (ms) => ms.map((m, k) => (k === ms.length - 2 && m.role === "user" ? { ...m, fids } : m)));
       // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
       if (failed) { patch(id!, (m) => [...m.slice(0, -1), { role: "ai", text: `⚠️ ${tr(errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.")}`, time: Date.now(), done: true }]); return; }
       if (blocks.length) hist[hist.length - 1] = { role: "user", content: [{ type: "text", text: t || "Hãy xem các tệp đính kèm." }, ...blocks] };
@@ -1522,7 +1525,7 @@ export default function Home() {
           <div className="right">
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
             {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
-            {view === "chat" && chat?.browser && brwOk && <button className={`icon-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} /></button>}
+            {view === "chat" && chat && brwOk && <button className={`icon-btn brw-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} />{chat.browser && <span className="brw-dot" aria-hidden />}</button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
         </div>}
@@ -1556,7 +1559,7 @@ export default function Home() {
                 {chat.msgs.map((m, i) => <Fragment key={i}>{chat.compact?.upto === i && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}{
                   m.role === "user" ? (
                     <div key={i} className="user-wrap">
-                      {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
+                      {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => fm.show(f, m.fids?.[f])} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
                       {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
                       <div className="user-msg"><UserText text={m.text} /></div>
                     </div>

@@ -162,8 +162,31 @@ const textExtractor: Extractor = {
   async run(buf) { return [{ type: "text", text: decodeText(buf) }]; },
 };
 
+// ---- 7. ZIP (cả thư mục tải lên ở Synchro Code cũng đi dạng .zip): danh sách tệp kèm nội dung các tệp chữ ----
+const ZIP_TEXT = /\.(txt|md|markdown|mdx|log|csv|tsv|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|kt|kts|swift|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|ps1|sql|html?|css|scss|sass|less|json|jsonl|ya?ml|toml|ini|cfg|conf|xml|svg|vue|svelte|lua|r|dart|scala|gradle|properties|env|gitignore|dockerfile|makefile)$|(^|\/)(Dockerfile|Makefile|LICENSE|README)$/i;
+const zipExtractor: Extractor = {
+  name: "zip",
+  match: (k) => k === "zip",
+  async run(buf, { name }) {
+    const z = await JSZip.loadAsync(buf);
+    const files = Object.values(z.files).filter((f) => !f.dir && !/(^|\/)(__MACOSX|\.DS_Store$)/.test(f.name));
+    const list = files.map((f) => f.name).sort();
+    const parts = [`Tệp nén ${name}: ${files.length} tệp\n${list.slice(0, 400).join("\n")}${list.length > 400 ? `\n… và ${list.length - 400} tệp khác` : ""}`];
+    let budget = 400_000;
+    for (const f of files.filter((x) => ZIP_TEXT.test(x.name)).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (budget <= 0) { parts.push("(… còn các tệp khác, đã lược bớt cho gọn)"); break; }
+      const t = decodeText(Buffer.from(await f.async("uint8array")));
+      if (/\u0000/.test(t.slice(0, 2000))) continue;
+      const part = t.slice(0, Math.min(budget, 60_000));
+      budget -= part.length;
+      parts.push(`--- ${f.name} ---\n${part}${part.length < t.length ? "\n…[đã cắt]" : ""}`);
+    }
+    return [{ type: "text", text: parts.join("\n\n") }];
+  },
+};
+
 // Strategy: thêm loại mới chỉ cần thêm một extractor vào mảng này.
-export const EXTRACTORS: Extractor[] = [imageExtractor, pdfExtractor, docxExtractor, sheetExtractor, pptxExtractor, textExtractor];
+export const EXTRACTORS: Extractor[] = [imageExtractor, pdfExtractor, docxExtractor, sheetExtractor, pptxExtractor, textExtractor, zipExtractor];
 
 export function pickExtractor(kind: string, name: string): Extractor {
   const e = EXTRACTORS.find((x) => x.match(kind));

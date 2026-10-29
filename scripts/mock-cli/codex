@@ -74,10 +74,12 @@ const authFile = path.join(dir, "auth.json");
     const mcpUrl = (() => { const x = a.find((v) => v.startsWith("mcp_servers.synchro.url=")); try { return x ? JSON.parse(x.slice(x.indexOf("=") + 1)) : null; } catch { return null; } })();
     const ask = C.toolAsk(prompt);
     let note = "";
+    // Như codex 0.164 thật: codex exec không có ai duyệt, công cụ MCP chỉ chạy khi máy chủ được duyệt sẵn (default_tools_approval_mode="approve").
+    const approved = a.includes('mcp_servers.synchro.default_tools_approval_mode="approve"');
     if (mcpUrl && ask) {
       C.out({ type: "item.completed", item: { id: "item_n", type: "agent_message", text: `Mình sẽ dùng công cụ ${ask.name} của Synchro.` } });
       C.out({ type: "item.started", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name } });
-      const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
+      const r = approved ? await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } })) : { error: { message: "MCP tool call requires approval, but approval policy is never" } };
       C.out({ type: "item.completed", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name, status: r.error ? "failed" : "completed" } });
       note = ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
     } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;

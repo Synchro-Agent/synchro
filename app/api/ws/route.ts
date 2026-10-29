@@ -1,3 +1,4 @@
+import { EXCLUDE_SYNCHRO } from "../../uploads";
 import { AuthError, can, handle, requireUser, sameOrigin, type UserRow } from "../../authstore";
 import { getLink, gh, gitAuthEnv, parseRepo } from "../../github";
 import { agent, exec, fsop, requireWs, sdir, ticket, wsConfigured } from "../../workspace";
@@ -108,10 +109,11 @@ async function git(user: UserRow, d: string, b: Record<string, unknown>) {
     const l = tokenOf(user, false);
     const branch = str(b.branch, 100);
     if (branch && !okBranch(branch)) throw new AuthError("Tên nhánh không hợp lệ.", 400);
-    const empty = await exec(u, d, { cmd: "ls -A | head -1", timeout: 10 });
+    // Tệp người dùng gửi kèm (.synchro/uploads) không tính là "đã có file": cất tạm ra ngoài khi clone rồi đưa lại, git bỏ qua.
+    const empty = await exec(u, d, { cmd: "ls -A | grep -vx '.synchro' | head -1", timeout: 10 });
     if (empty.out.trim()) throw new AuthError("Phiên này đã có file. Hãy tạo phiên mới để clone repo khác.", 409);
     const r = await exec(u, d, {
-      cmd: `git clone --quiet ${branch ? '--branch "$BR" ' : ""}"https://github.com/$REPO.git" . 2>&1`,
+      cmd: `k=""; if [ -e .synchro ]; then k="../.synchro-giu-$$"; mv .synchro "$k"; fi; git clone --quiet ${branch ? '--branch "$BR" ' : ""}"https://github.com/$REPO.git" . 2>&1; c=$?; if [ -n "$k" ]; then mv "$k" .synchro; fi; ${EXCLUDE_SYNCHRO}; exit $c`,
       env: { REPO: `${owner}/${name}`, BR: branch, ...(l ? gitAuthEnv(l.token) : { GIT_TERMINAL_PROMPT: "0" }) }, timeout: 300,
     });
     if (r.code) throw new AuthError(/not found|could not read Username|Authentication/i.test(r.out + r.err) ? (l ? "Không tìm thấy repo hoặc tài khoản GitHub của bạn không có quyền với repo này." : "Repo riêng tư hoặc không tồn tại. Hãy kết nối GitHub để clone repo riêng tư.") : `Clone thất bại: ${(r.out || r.err).trim().slice(-300)}`, 400);
@@ -119,7 +121,7 @@ async function git(user: UserRow, d: string, b: Record<string, unknown>) {
     return status(u, d);
   }
   if (sub === "init") {
-    const r = await exec(u, d, { cmd: `git init -q -b main && git config user.name "$N" && git config user.email "$M" && git add -A && (git commit -qm 'Khởi tạo' || true)`, env: ident(user), timeout: 30 });
+    const r = await exec(u, d, { cmd: `git init -q -b main && ${EXCLUDE_SYNCHRO} && git config user.name "$N" && git config user.email "$M" && git add -A && (git commit -qm 'Khởi tạo' || true)`, env: ident(user), timeout: 30 });
     fail(r, "Khởi tạo git");
     return status(u, d);
   }
