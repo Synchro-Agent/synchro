@@ -245,7 +245,7 @@ function browserStep(msgs, names) {
   const walk = (v) => { if (typeof v === "string") texts.push(v); else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
   walk(msgs);
   // Chrome của người dùng chưa kết nối / người dùng bấm Dừng: thôi, báo lại (như model thật làm theo kết quả công cụ).
-  const err = texts.filter((t) => /^(Chrome của người dùng chưa kết nối|Người dùng đã bấm Dừng|Trình duyệt của Synchro chưa dùng được)/.test(t)).pop();
+  const err = texts.filter((t) => /^(Chrome của người dùng chưa kết nối|Người dùng đã bấm Dừng|Trình duyệt của Synchro chưa dùng được|Trang \S+ chưa có trong danh sách trang được phép|Trang \S+ nằm trong danh sách chặn|Người dùng không cho phép dùng trình duyệt)/.test(t)).pop();
   if (err) return { text: `[mock] Chưa làm được trên trình duyệt: ${err.split("\n")[0]}` };
   if (!used.includes("browser_read")) return { tool: { name: "browser_read", args: {} } };
   if (!used.includes("browser_batch")) {
@@ -269,6 +269,36 @@ function browserStep(msgs, names) {
   const title = /"([^"]+)"/.exec(last)?.[1] ?? "";
   const done = /Đã làm (\d+\/\d+) thao tác/.exec(texts.join("\n"))?.[1] ?? "?";
   return { text: `[mock] Đã làm xong trên ${mine ? "Chrome của bạn" : "trình duyệt"}: mở ${url}, làm ${done} thao tác trên trang và chụp màn hình kiểm tra. Trang cuối: ${title || "(không rõ)"}.` };
+}
+// Kịch bản nhiều bước của agent Synchro Code (kiểm thử chế độ quyền, tự sửa PR):
+// - "#seq=[{"tool":"write_file","args":{…}},{"tool":"bash","args":{…}}]": gọi lần lượt từng công cụ, mỗi bước một lượt, rồi tóm tắt kết quả.
+// - Lượt tự sửa PR ("[Tự sửa PR #n] …"): CI lỗi vì tệp BROKEN thì xóa tệp đó rồi commit; góp ý "thêm tệp X" thì tạo X rồi commit.
+// "#think": kèm khối suy nghĩ (thinking) như model thật bật suy nghĩ.
+function seqPlan(q) {
+  const m = /#seq=(\[.*\])/s.exec(q);
+  if (m) { try { return JSON.parse(m[1]); } catch { return null; } }
+  if (!q.startsWith("[Tự sửa PR")) return null;
+  const steps = [];
+  if (/BROKEN/.test(q)) steps.push({ tool: "bash", args: { command: "rm -f BROKEN && git add -A && git commit -qm 'Sửa lỗi CI: bỏ tệp BROKEN làm hỏng bản build'", description: "Sửa lỗi CI và commit" } });
+  const add = /thêm tệp ([\w./-]+)/i.exec(q)?.[1];
+  if (add) steps.push({ tool: "write_file", args: { path: add, content: `# ${add}\n\nThêm theo góp ý review.\n` } }, { tool: "bash", args: { command: `git add -A && git commit -qm 'Thêm ${add} theo góp ý review'`, description: "Commit theo góp ý" } });
+  return steps;
+}
+function seqStep(q, msgs) {
+  const steps = seqPlan(q);
+  if (!steps) return null;
+  const i = msgs.findLastIndex((x) => x.role === "user" && (typeof x.content === "string" || (Array.isArray(x.content) && !x.content.some((c) => c.type === "tool_result"))));
+  const after = msgs.slice(i + 1);
+  const k = after.filter((x) => x.role === "assistant").length;
+  const think = q.includes("#think") ? `Suy nghĩ bước ${k + 1}: xem lại yêu cầu và chọn công cụ phù hợp.` : "";
+  if (k < steps.length) return { tool: { name: steps[k].tool, args: steps[k].args ?? {} }, think };
+  const outs = after.filter((x) => x.role === "user" && Array.isArray(x.content)).flatMap((x) => x.content.filter((c) => c.type === "tool_result"))
+    .map((c) => (typeof c.content === "string" ? c.content : (c.content ?? []).map((y) => y.text ?? "").join(" ")));
+  const denied = outs.filter((o) => /^Người dùng không cho phép/.test(o));
+  const text = q.startsWith("[Tự sửa PR")
+    ? `Đã sửa xong: ${steps.map((x) => x.args?.description ?? x.tool).join(", ")}. Kiểm thử chạy lại sẽ đạt vì đã xử lý đúng nguyên nhân.`
+    : `[mock] Đã chạy ${steps.length} bước. ${denied.length ? `Bị từ chối ${denied.length} bước: ${denied.map((d) => d.split(".")[0]).join("; ")}.` : "Mọi bước đều được làm."} Kết quả: ${outs.map((o) => o.split("\n")[0].slice(0, 80)).join(" | ")}`;
+  return { text, think };
 }
 function wantTool(q, list) {
   const tools = normTools(list);
@@ -326,6 +356,16 @@ function mockTitle(q) {
   const w = first.replace(/^(cho (tôi|mình|em) hỏi|giúp (tôi|mình|em)|làm ơn|hãy|please|can you|could you)\s+/i, "").split(" ").slice(0, 6).join(" ");
   return w[0].toUpperCase() + w.slice(1);
 }
+// Đánh giá phiên Synchro Code (app/agentturn.ts sessionMeta): trả về JSON như model thật.
+function mockMeta(q) {
+  const reply = /\[Trợ lý trả lời cuối lượt\]\n([\s\S]*?)(\n\n\[|\n\nGit:|$)/.exec(q)?.[1]?.trim() ?? "";
+  const edited = (/Tệp đã sửa trong lượt này: ([^\n]*)/.exec(q)?.[1] ?? "").split(", ").filter(Boolean).length;
+  const files = Math.max(Number(/Git: (\d+) tệp/.exec(q)?.[1] ?? 0), edited), unpushed = /nhánh chưa push|[1-9]\d* commit chưa push/.test(q);
+  const state = /\[Lỗi\]|\[Người dùng đã bấm Dừng/.test(q) || /[?？]\s*$/.test(reply) ? "blocked" : files > 0 || unpushed ? "review" : "done";
+  const reason = state === "blocked" ? (/Dừng/.test(q) ? "Đã dừng giữa chừng" : /\[Lỗi\]/.test(q) ? "Gặp lỗi khi chạy" : "Đang hỏi bạn") : state === "review" ? (files ? `Sửa ${files} tệp, chưa commit` : "Có commit chưa push") : "Đã xong việc";
+  const suggest = state === "review" ? (files ? "Commit các thay đổi này giúp mình" : "Push lên GitHub và mở pull request") : state === "blocked" ? "Làm tiếp đi" : "Viết kiểm thử cho phần vừa làm";
+  return JSON.stringify({ state, reason, suggest });
+}
 // Các tệp trong tin nhắn người dùng gần nhất, theo đúng định dạng từng API (Anthropic, OpenAI Responses, chat/completions).
 function mediaOf(msgs = []) {
   const m = [...msgs].reverse().find((x) => x.role === "user" && Array.isArray(x.content));
@@ -339,6 +379,7 @@ function mediaOf(msgs = []) {
 function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
+  if (q.startsWith("Phiên code cần đánh giá:")) return { text: mockMeta(q), q };
   const brain = CLI.mockBrain(q);
   if (brain) return { text: brain, q };
   if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
@@ -495,6 +536,10 @@ async function handler(req, res) {
       const shape = anthropicShape(b);
       if (shape) return send(res, 400, err("invalid_request_error", shape));
       const { text, q } = reply("anthropic", b.model, b.messages, b.max_tokens, ef, sysText(b.system));
+      const sq = seqStep(q, b.messages ?? []);
+      const thk = (t) => (t ? [{ type: "thinking", thinking: t, signature: "mock-signature" }] : []);
+      if (sq?.tool) { await sleep(120); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [...thk(sq.think), { type: "text", text: `Bước tiếp: ${sq.tool.name}.` }, { type: "tool_use", id: `toolu_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: sq.tool.name, input: sq.tool.args }], stop_reason: "tool_use", usage: { input_tokens: 80, output_tokens: 30 } }); }
+      if (sq?.text) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [...thk(sq.think), { type: "text", text: sq.text }], stop_reason: "end_turn", usage: { input_tokens: 80, output_tokens: Math.ceil(sq.text.length / 4) } });
       const webTool = (b.tools ?? []).find((x) => /^web_search_/.test(x.type ?? ""));
       if (webTool && q.includes("#web") && !JSON.stringify(b.messages).includes("web_search_tool_result")) {
         const id = `srvtoolu_${Date.now()}`;

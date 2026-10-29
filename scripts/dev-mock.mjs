@@ -8,16 +8,20 @@ import path from "node:path";
 import { MOCK_KEYS, startMock } from "./mock-providers.mjs";
 import { startMockMcp } from "./mock-mcp.mjs";
 import { startMockWs } from "./mock-workspace.mjs";
+import { startMockGithub } from "./mock-github.mjs";
 import { writeExtension } from "../extension/build.mjs";
 
-const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011), WS_PORT = Number(process.env.WS_PORT ?? 4012);
+const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011), WS_PORT = Number(process.env.WS_PORT ?? 4012), GH_PORT = Number(process.env.GH_PORT ?? 4013);
 // Workspace giả lập cho Synchro Code (khóa chỉ dùng trên máy này).
 const WS_SECRET = "mock-workspace-secret-for-dev-only-0123456789";
 const DATA = path.resolve("data-mock");
 // Tài khoản quản trị chỉ tồn tại trong data-mock/ trên máy này.
 const ADMIN = { email: "admin@synchro.test", password: "synchro-mock-123", fullName: "Quản trị thử nghiệm" };
 const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
-const env = { ...process.env, WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, WS_PUBLIC_URL: `ws://localhost:${WS_PORT}/ws-agent`, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "" };
+// GitHub giả lập (scripts/mock-github.mjs): kết nối GitHub, clone / push, pull request, CI và góp ý review chạy hoàn toàn trên máy này.
+const GH = `http://127.0.0.1:${GH_PORT}`;
+const ghEnv = { GITHUB_CLIENT_ID: "mock-github-client", GITHUB_CLIENT_SECRET: "mock-github-secret", GITHUB_WEB_URL: GH, GITHUB_API_URL: `${GH}/api`, GITHUB_GIT_URL: `${GH}/git`, SYNCHRO_PR_TICK_MS: "3000" };
+const env = { ...process.env, ...ghEnv, WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, WS_PUBLIC_URL: `ws://localhost:${WS_PORT}/ws-agent`, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "" };
 
 // CLI giả lập (claude, codex, agy) cho Cài đặt → Providers: chép vào <engine home>/.local/bin như CLI thật đã cài,
 // kèm địa chỉ máy chủ giả lập (trang đăng nhập /mock-login/…).
@@ -28,6 +32,7 @@ fs.writeFileSync(path.join(ENGINE_BIN, "mock-cli.json"), JSON.stringify({ base: 
 
 try { await startMock(MOCK_PORT); } catch (e) { console.error(`Không mở được API giả lập ở cổng ${MOCK_PORT}: ${e.message}`); process.exit(1); }
 try { await startMockMcp(MCP_PORT); } catch (e) { console.error(`Không mở được máy chủ MCP giả lập ở cổng ${MCP_PORT}: ${e.message}`); process.exit(1); }
+try { await startMockGithub(GH_PORT, path.join(DATA, "github")); } catch (e) { console.error(`Không mở được GitHub giả lập ở cổng ${GH_PORT}: ${e.message}`); process.exit(1); }
 try { await startMockWs(WS_PORT, path.join(DATA, "ws"), WS_SECRET); } catch (e) { console.error(`Không mở được workspace giả lập ở cổng ${WS_PORT}: ${e.message}`); process.exit(1); }
 // Tiện ích Synchro cho Chrome của bạn, bản giải nén trỏ tới máy này: chrome://extensions → bật Developer mode → Load unpacked → chọn thư mục.
 const EXT_DIR = writeExtension(process.cwd(), B, path.join(DATA, "extension"));

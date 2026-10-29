@@ -16,6 +16,8 @@ export async function register() {
       const { keepLinksAlive } = await import("./app/github");
       const keep = () => keepLinksAlive().catch((e) => console.error("[github]", e));
       setTimeout(keep, 20_000); setInterval(keep, 30 * 60_000);
+      // Pull request của Synchro Code: tự sửa CI lỗi / góp ý mới và tự lưu trữ phiên khi PR xong (theo cài đặt của từng người).
+      (await import("./app/prwatch")).startPrWatch(Number(process.env.SYNCHRO_PR_TICK_MS) || 90_000);
     } catch (e) { console.error("[runs]", e); }
   }, 1500);
   if (process.env.SYNCHRO_DEFAULT_PLUGINS === "0") return;

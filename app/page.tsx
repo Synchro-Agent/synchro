@@ -9,7 +9,8 @@ import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
 import { HalftoneBg } from "./halftone";
-import { CodeView } from "./codeview";
+import { CodeView, type CodeMeta } from "./codeview";
+import { answerAsk, deleteServerSession, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
 import { VoiceMode } from "./voicemode";
 import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
@@ -561,6 +562,16 @@ function UserText({ text }: { text: string }) {
   );
 }
 
+// Phiên Synchro Code ở thanh bên (danh sách lưu ở trình duyệt, đồng bộ với máy chủ khi bật).
+type CodeItem = { id: number; title: string; pinned?: boolean; archived?: boolean; state?: SessionState; reason?: string | null; running?: boolean; upd?: number; pr?: { number: number; url: string | null; state: string } | null };
+// Trạng thái phiên: đang chạy, cần bạn (hỏi lại / chờ duyệt / gặp lỗi / bị dừng), chờ xem lại (có thay đổi chưa commit / chưa push / PR chờ duyệt), xong.
+function CodeBadge({ c }: { c: CodeItem }) {
+  if (c.running && c.state !== "blocked") return <span className="cb run" title={tr("Đang chạy")} aria-label={tr("Đang chạy")}><span className="wl-spin" /></span>;
+  if (!c.state) return null;
+  const t = tr(c.state === "blocked" ? "Cần bạn" : c.state === "review" ? "Chờ xem lại" : "Xong");
+  return <span className={`cb ${c.state}`} title={c.reason ? `${t}: ${c.reason}` : t} aria-label={t} />;
+}
+
 export default function Home() {
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [, setAcct] = usePref("acct", "");
@@ -618,7 +629,34 @@ export default function Home() {
   const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
   const [userMenu, setUserMenu] = useState(false);
   const [chatMenu, setChatMenu] = useState<number | null>(null);
-  const [codeList, setCodeList] = usePref<{ id: number; title: string; pinned?: boolean }[]>("codeList", []);
+  const [codeList, setCodeList] = usePref<CodeItem[]>("codeList", []);
+  const codeListRef = useRef(codeList); codeListRef.current = codeList;
+  const [archOpen, setArchOpen] = useState(false);
+  const cpPage = useCodePrefs();
+  // Độ rộng khung hội thoại (Cài đặt → Chung → Giao diện): áp cho khung chat và Synchro Code.
+  const [tw] = usePref<"narrow" | "medium" | "wide">("threadWidth", "medium");
+  useEffect(() => { document.documentElement.dataset.tw = tw; }, [tw]);
+  // Trạng thái phiên Code (đang chạy / cần bạn / chờ xem lại / xong) do khung Code báo về.
+  const onCodeMeta = useCallback((id: number, m: CodeMeta) => {
+    setCodeList((l) => l.map((x) => (x.id === id ? { ...x, ...(m.state !== undefined ? { state: m.state, reason: m.reason ?? null } : {}), ...(m.running !== undefined ? { running: m.running } : {}), upd: Date.now(), archived: false } : x)));
+  }, [setCodeList]);
+  const listAt = useRef(0);
+  // Tự lưu trữ phiên Code không hoạt động khi không đồng bộ (đồng bộ thì máy chủ tự làm).
+  useEffect(() => {
+    const days = cpPage?.archiveAfter ?? 0;
+    if (!days || cpPage?.sync) return;
+    const run = () => {
+      const before = Date.now() - days * 86_400_000;
+      setCodeList((l) => (l.some((x) => !x.archived && !x.pinned && !x.running && (x.upd ?? x.id) < before) ? l.map((x) => (!x.archived && !x.pinned && !x.running && (x.upd ?? x.id) < before ? { ...x, archived: true } : x)) : l));
+    };
+    run();
+    const t = setInterval(run, 3600_000);
+    return () => clearInterval(t);
+  }, [cpPage?.archiveAfter, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
+  const codePatch = (id: number, p: Partial<CodeItem>) => {
+    setCodeList((l) => l.map((x) => (x.id === id ? { ...x, ...p } : x)));
+    if (cpPage?.sync) patchServerSession(id, { ...(p.title !== undefined ? { title: p.title } : {}), ...(p.pinned !== undefined ? { pinned: p.pinned } : {}), ...(p.archived !== undefined ? { archived: p.archived } : {}) });
+  };
   const [codeCur, setCodeCur] = useState<number | null>(null);
   const [codeEmpty, setCodeEmpty] = useState(false);
   const [codeOpen, setCodeOpen] = useState(true);
@@ -653,6 +691,40 @@ export default function Home() {
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
+  // Đồng bộ danh sách phiên Code với máy chủ (Cài đặt → Synchro Code → Đồng bộ phiên): phiên mở ở thiết bị khác, trạng thái mới,
+  // phiên đã xóa / lưu trữ ở nơi khác. Lần đầu đẩy các phiên chỉ có ở thiết bị này lên.
+  useEffect(() => {
+    if (!me || !cpPage?.sync) return;
+    let stop = false;
+    const tick = async () => {
+      const j = await listServerSessions(listAt.current ? listAt.current - 3000 : 0);
+      if (!j || stop || !j.sync) return;
+      const first = !listAt.current;
+      listAt.current = j.now;
+      const remote = new Map(j.sessions.map((x) => [x.id, x]));
+      for (const x of j.sessions) if (x.deleted) ls.remove("codeS:" + x.id);
+      setCodeList((l) => {
+        let next = l.filter((x) => !remote.get(x.id)?.deleted);
+        for (const x of j.sessions) {
+          if (x.deleted) continue;
+          const item: CodeItem = { id: x.id, title: x.title || next.find((y) => y.id === x.id)?.title || "Phiên code", pinned: x.pinned, archived: x.archived, state: x.state, reason: x.reason, running: x.running, upd: x.touched, pr: x.pr };
+          const i = next.findIndex((y) => y.id === x.id);
+          if (i < 0) next = [item, ...next]; else next = next.map((y, k) => (k === i ? { ...y, ...item } : y));
+        }
+        return next;
+      });
+      if (first) for (const x of codeListRef.current) if (!remote.has(x.id)) {
+        let data: Record<string, unknown> | null = null;
+        try { data = JSON.parse(ls.get("codeS:" + x.id) ?? "null"); } catch {}
+        if (data) pushSession(x.id, x.title, data, undefined, !!x.pinned);
+      }
+    };
+    tick();
+    const t = setInterval(tick, 15_000);
+    const onFocus = () => { tick(); };
+    window.addEventListener("focus", onFocus);
+    return () => { stop = true; clearInterval(t); window.removeEventListener("focus", onFocus); };
+  }, [me?.id, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [providers, setProviders] = useState<Providers>();
   const [authLeaving, setAuthLeaving] = useState(false);
   // Hồ sơ trên máy chủ là nguồn chính; các ô trong Cài đặt → Tài khoản đọc từ đây.
@@ -687,6 +759,8 @@ export default function Home() {
     setUserScope(u.id);
     if (u.isAdmin) adoptLegacyData(u.id);
     reloadPrefs();
+    resetCodePrefs();
+    listAt.current = 0;
     loadLocal();
     setCur(null); setView("new");
   };
@@ -1319,7 +1393,7 @@ export default function Home() {
   // Xóa phiên trên máy chủ. Dữ liệu của tài khoản vẫn được giữ (đã tách theo tài khoản) cho lần đăng nhập sau.
   const logout = () => {
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    setUserScope(null); reloadPrefs();
+    setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
   const api = {
@@ -1411,21 +1485,24 @@ export default function Home() {
                 </Menu>
             </div>
           );
-          const codeRow = (c: { id: number; title: string; pinned?: boolean }) => (
+          const codeRow = (c: CodeItem) => (
             <div key={"code" + c.id} className="chat-wrap">
               {codeRen === c.id ? (
                 <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
-                  onBlur={(e) => { setCodeList((l) => l.map((x) => (x.id === c.id ? { ...x, title: e.target.value || x.title } : x))); setCodeRen(null); }}
+                  onBlur={(e) => { codePatch(c.id, { title: e.target.value || c.title }); setCodeRen(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "code" && codeCur === c.id ? "active" : ""}`} onClick={() => { setCodeCur(c.id); setView("code"); }}>{c.title}</button>
+                <button className={`chat-item code-item ${view === "code" && codeCur === c.id ? "active" : ""}`} onClick={() => { setCodeCur(c.id); setView("code"); if (c.archived) codePatch(c.id, { archived: false }); }}>
+                  <span className="cv-ell">{c.title}</span><CodeBadge c={c} />
+                </button>
               )}
               <button className="dots" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>
               <Menu open={codeMenu === c.id} className="down" style={{ top: 34, right: 0, width: 220 }}>
-                <button className="menu-item" onClick={() => { setCodeList((l) => l.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x))); setCodeMenu(null); }}>{c.pinned ? <I.PinOff /> : <I.Pin />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
+                <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.PinOff /> : <I.Pin />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
+                <button className="menu-item" onClick={() => { codePatch(c.id, { archived: !c.archived }); setCodeMenu(null); say(c.archived ? "Đã khôi phục phiên code" : "Đã lưu trữ phiên code"); }}>{c.archived ? <I.Retry /> : <I.Inbox />}{c.archived ? "Khôi phục" : "Lưu trữ"}</button>
                 <hr />
-                <button className="menu-item del" onClick={() => { setCodeMenu(null); setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); }}><I.Trash />Xóa</button>
+                <button className="menu-item del" onClick={() => { setCodeMenu(null); setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (cpPage?.sync) deleteServerSession(c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); }}><I.Trash />Xóa</button>
               </Menu>
             </div>
           );
@@ -1456,8 +1533,9 @@ export default function Home() {
           };
           const pinned = visible.filter((c) => c.pinned && !nested(c));
           const rest = visible.filter((c) => !c.pinned && !nested(c));
-          const codePinned = codeList.filter((c) => c.pinned);
-          const codeRest = codeList.filter((c) => !c.pinned);
+          const codePinned = codeList.filter((c) => c.pinned && !c.archived);
+          const codeRest = codeList.filter((c) => !c.pinned && !c.archived);
+          const codeArch = codeList.filter((c) => c.archived);
           return (
             <div className="chat-scroll">
               {(pinned.length > 0 || pinProjs.length > 0 || codePinned.length > 0) && (
@@ -1470,6 +1548,12 @@ export default function Home() {
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setCodeOpen(!codeOpen)}><span>Code</span><span className={`sec-chev ${codeOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
                   <div className={`fold ${codeOpen ? "open" : ""}`}><div className="chat-list">{codeRest.map(codeRow)}</div></div>
+                </>
+              )}
+              {codeArch.length > 0 && (
+                <>
+                  <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setArchOpen(!archOpen)}><span>Code đã lưu trữ · {codeArch.length}</span><span className={`sec-chev ${archOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
+                  <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{codeArch.map(codeRow)}</div></div>
                 </>
               )}
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setModal("search")}><I.Sliders size={16} /></button></div>
@@ -1565,14 +1649,14 @@ export default function Home() {
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.parts?.length ? <WorkParts parts={m.parts} live={!m.done} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
+                      <div className="ai-msg">{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.parts?.length ? <WorkParts parts={m.parts} live={!m.done} onAnswer={(id, ok, o) => { answerAsk(id, ok, o).then((err) => err && say(err)); }} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
                         const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
                         const full = arts.map.get(sg.art.ident)?.[v];
                         return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{m.plan?.length ? <PlanCard plan={m.plan} live={!m.done} /> : null}{!m.done ? <WorkStatus label={m.prog} since={m.time} chars={m.text.length + (m.parts ?? []).reduce((n, p) => n + (p.k === "say" ? p.text.length : 0), 0)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{m.plan?.length ? <PlanCard plan={m.plan} live={!m.done} /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} chars={m.text.length + (m.parts ?? []).reduce((n, p) => n + (p.k === "say" ? p.text.length : 0), 0)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
@@ -1657,7 +1741,7 @@ export default function Home() {
 
         {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
-        {view === "code" && <CodeView say={say} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
+        {view === "code" && <CodeView say={say} onMeta={onCodeMeta} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "brain" && <BrainWorkspace initial={brainAt} onInitial={() => setBrainAt(null)} sideOpen={open} onSide={() => setOpen(true)} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
       </main>

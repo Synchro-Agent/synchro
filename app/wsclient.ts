@@ -6,7 +6,9 @@ import type { AgentEvent, PlanItem } from "./agentcore";
 export type { AgentEvent, PlanItem };
 export type WsStatus = { available: boolean; reason?: string; running?: boolean; idleMin?: number };
 export type GitFile = { path: string; status: string; add: number; del: number };
-export type GitState = { git: false } | { git: true; branch: string; remote: string; repo: string | null; ahead: number | null; files: GitFile[]; output?: string; pr?: { url: string; number: number } };
+export type GitState = { git: false } | { git: true; branch: string; remote: string; repo: string | null; ahead: number | null; files: GitFile[]; output?: string; pr?: { url: string; number: number; created?: boolean } };
+// Pull request của phiên mà Synchro theo dõi (tự sửa CI / góp ý, tự lưu trữ khi xong).
+export type PrInfo = { repo: string; number: number; url: string | null; branch: string | null; state: string; fixes: number; note: string | null; busy: boolean };
 export type GhStatus = { configured: boolean; allowed: boolean; linked: boolean; login: string | null; repoScope: boolean };
 export type GhRepo = { full: string; private: boolean; branch: string; desc: string | null; pushed: string; url: string; push: boolean };
 

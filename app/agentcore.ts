@@ -9,7 +9,9 @@ import type { Effort } from "./catalog";
 import type { UserRow } from "./authstore";
 import { openBridge } from "./mcpbridge";
 import { subCli, subTurn } from "./ai/subs";
-import { BROWSER_TOOLS, isBrowserTool, runBrowserTool } from "./browsertools";
+import { BROWSER_TOOLS, isBrowserTool, runBrowserTool, type BrowserCtx } from "./browsertools";
+import type { Gate } from "./agentgate";
+import type { Ask } from "./approvals";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -23,6 +25,13 @@ export type AgentEvent =
   | { t: "usage"; input: number; output: number }
   | { t: "steer"; text: string }
   | { t: "done"; text: string; skills: string[]; steer?: string[] }
+  // think: suy nghĩ của model (khi model trả về); ask / asked: hỏi người dùng trước khi làm (chế độ quyền, trang web chưa được phép);
+  // perm: khóa "luôn cho phép trong phiên này" vừa thêm; meta: trạng thái phiên và gợi ý câu nhắn tiếp sau khi lượt xong.
+  | { t: "think"; text: string }
+  | ({ t: "ask" } & Ask)
+  | { t: "asked"; id: string; ok: boolean; always?: boolean }
+  | { t: "perm"; allow: string[] }
+  | { t: "meta"; state: string | null; reason: string | null; suggest: string | null }
   | { t: "error"; error: string };
 type Emit = (e: AgentEvent) => void;
 
@@ -50,8 +59,8 @@ export const AGENT_TOOLS = [
 ];
 
 // ------------------------------------------------------------------ chạy công cụ
-type Out = { content: string; is_error: boolean; summary: string; output?: string; image?: string; diff?: { path: string; add: number; del: number } };
-type Ctx = { u: string; d: string; emit: Emit; skills: Skill[]; scripts: boolean; usedSkills: string[]; opened: Set<Pane> };
+type Out = { content: string; is_error: boolean; summary: string; output?: string; image?: string; diff?: { path: string; add: number; del: number }; url?: string };
+type Ctx = { u: string; d: string; emit: Emit; skills: Skill[]; scripts: boolean; usedSkills: string[]; opened: Set<Pane>; bctx?: BrowserCtx };
 
 const clip = (s: string, max = 30_000) => (s.length <= max ? s : `${s.slice(0, 5000)}\n…[đã cắt ${s.length - max} ký tự]…\n${s.slice(-(max - 5000))}`);
 const one = (s: string, n = 80) => { const l = s.trim().split("\n")[0]; return l.length > n ? l.slice(0, n - 1) + "…" : l; };
@@ -149,8 +158,8 @@ async function runTool(c: Ctx, name: string, a: Record<string, unknown>): Promis
     default: {
       if (isBrowserTool(name)) {
         open(c, "browser");
-        const r = await runBrowserTool(c.u, name, a);
-        return { content: r.content, is_error: r.is_error, summary: r.summary, ...(r.image ? { image: r.image } : {}) };
+        const r = await runBrowserTool(c.u, name, a, c.bctx);
+        return { content: r.content, is_error: r.is_error, summary: r.summary, ...(r.image ? { image: r.image } : {}), url: r.url };
       }
       // Công cụ skill (load_skill, read_skill_file, search_skills, run_skill_script).
       const r = await runSkillTool(c.skills, name, a, c.scripts);
@@ -164,10 +173,18 @@ async function safeRun(c: Ctx, name: string, input: Record<string, unknown>): Pr
   try { return await runTool(c, name, input ?? {}); }
   catch (e) { return { content: `Lỗi: ${(e as Error).message}`, is_error: true, summary: String((e as Error).message).slice(0, 80) }; }
 }
+// Qua chốt chặn (chế độ quyền, trang web được phép) rồi mới chạy; bị từ chối thì model nhận lý do thay cho kết quả.
+async function gatedRun(c: Ctx, gate: Gate | undefined, name: string, input: Record<string, unknown>): Promise<Out> {
+  const no = gate ? await gate.check(name, input ?? {}) : null;
+  if (no) return { content: no, is_error: true, summary: "Không được phép" };
+  const out = await safeRun(c, name, input);
+  if (out.url) gate?.seen(out.url);
+  return out;
+}
 
 // ------------------------------------------------------------------ bộ chuyển đổi nhà cung cấp model
 type Call = { id: string; name: string; input: Record<string, unknown> };
-type Step = { text: string; calls: Call[]; assistant: unknown; usage?: { input: number; output: number } };
+type Step = { text: string; calls: Call[]; assistant: unknown; usage?: { input: number; output: number }; think?: string };
 export type Adapter = { step: (msgs: unknown[], last: boolean) => Promise<Step>; results: (calls: Call[], res: Out[]) => unknown[] };
 export class ModelError extends Error { constructor(public status: number, m: string) { super(m); } }
 
@@ -198,9 +215,10 @@ export function anthropicAgent(o: { provider?: string; key: string; base?: strin
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
       noteResponse(o.provider ?? "anthropic", o.model, j, r.headers);
-      const blocks: { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }[] = j.content ?? [];
+      const blocks: { type: string; text?: string; thinking?: string; id?: string; name?: string; input?: Record<string, unknown> }[] = j.content ?? [];
       return {
         text: blocks.filter((b) => b.type === "text").map((b) => b.text).join(""),
+        think: blocks.filter((b) => b.type === "thinking" && b.thinking).map((b) => b.thinking).join("\n\n"),
         calls: blocks.filter((b) => b.type === "tool_use").map((b) => ({ id: b.id!, name: b.name!, input: b.input ?? {} })),
         assistant: { role: "assistant", content: blocks },
         usage: { input: (j.usage?.input_tokens ?? 0) + (j.usage?.cache_read_input_tokens ?? 0) + (j.usage?.cache_creation_input_tokens ?? 0), output: j.usage?.output_tokens ?? 0 },
@@ -229,7 +247,9 @@ export function responsesAgent(o: { provider?: string; key: string; base: string
       const j = await r.json();
       noteResponse(o.provider ?? "openai", o.model, j, r.headers);
       const p = respParse(j);
-      return { text: p.text, calls: p.calls, assistant: { items: p.items }, usage: { input: j.usage?.input_tokens ?? 0, output: j.usage?.output_tokens ?? 0 } };
+      // Tóm tắt suy nghĩ (mục reasoning) nếu model trả về.
+      const think = (p.items as { type?: string; summary?: { text?: string }[] }[]).filter((x) => x.type === "reasoning").flatMap((x) => (x.summary ?? []).map((y) => y.text ?? "")).filter(Boolean).join("\n\n");
+      return { text: p.text, calls: p.calls, assistant: { items: p.items }, usage: { input: j.usage?.input_tokens ?? 0, output: j.usage?.output_tokens ?? 0 }, think };
     },
     results: (calls, res) => {
       const out: unknown[] = calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content }));
@@ -258,7 +278,7 @@ export function openaiAgent(o: { provider?: string; key: string; base: string; m
         try { input = JSON.parse(c.function.arguments || "{}"); } catch {}
         return { id: c.id, name: c.function.name, input };
       });
-      return { text: m.content ?? "", calls, assistant: m, usage: { input: j.usage?.prompt_tokens ?? 0, output: j.usage?.completion_tokens ?? 0 } };
+      return { text: m.content ?? "", calls, assistant: m, usage: { input: j.usage?.prompt_tokens ?? 0, output: j.usage?.completion_tokens ?? 0 }, think: typeof m.reasoning_content === "string" ? m.reasoning_content : undefined };
     },
     results: (calls, res) => {
       const out: unknown[] = calls.map((c, i) => ({ role: "tool", tool_call_id: c.id, content: res[i].content }));
@@ -353,14 +373,15 @@ function followup(msgs: unknown[], text: string) {
   if (last?.role === "user" && Array.isArray(last.content)) (last.content as unknown[]).push({ type: "text", text: note });
   else msgs.push({ role: "user", content: note });
 }
-export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: string; d: string; skills: Skill[]; scripts: boolean; emit: Emit; signal: AbortSignal; inbox?: () => string[] }) {
-  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set() };
+export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: string; d: string; skills: Skill[]; scripts: boolean; emit: Emit; signal: AbortSignal; inbox?: () => string[]; gate?: Gate; bctx?: BrowserCtx }) {
+  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx };
   const msgs = [...o.messages];
   let text = "";
   for (let i = 0; i < AGENT_MAX_STEPS; i++) {
     if (o.signal.aborted) break;
     const r = await o.adapter.step(msgs, i === AGENT_MAX_STEPS - 1);
     if (r.usage) o.emit({ t: "usage", ...r.usage });
+    if (r.think?.trim()) o.emit({ t: "think", text: r.think.trim() });
     if (r.text.trim()) { o.emit({ t: "text", text: r.text }); text = r.text; }
     msgs.push(r.assistant);
     if (!r.calls.length) break;
@@ -368,7 +389,7 @@ export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: st
     for (const call of r.calls) {
       if (o.signal.aborted) break;
       o.emit({ t: "tool", id: call.id, name: call.name, input: call.name === "write_file" ? { path: call.input.path } : call.input });
-      const out = await safeRun(c, call.name, call.input);
+      const out = await gatedRun(c, o.gate, call.name, call.input);
       o.emit({ t: "result", id: call.id, ok: !out.is_error, summary: out.summary, output: (out.output ?? out.content).slice(0, 20_000), image: out.image, diff: out.diff });
       res.push(out);
     }
@@ -394,9 +415,9 @@ Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, khô
 export async function runPlanAgent(o: {
   user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: unknown }[];
   u: string; d: string; skills: Skill[]; scripts: boolean; tools: { name: string; description: string; input_schema: unknown }[];
-  emit: Emit; signal: AbortSignal; inbox?: () => string[];
+  emit: Emit; signal: AbortSignal; inbox?: () => string[]; gate?: Gate; bctx?: BrowserCtx;
 }) {
-  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set() };
+  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx };
   const cli = subCli(o.model)!;
   let pending = "", n = 0;
   // Lời dẫn trước mỗi nhóm công cụ: hiện thành một đoạn chữ riêng như vòng lặp khóa API.
@@ -408,7 +429,7 @@ export async function runPlanAgent(o: {
       flush();
       const id = `plan_${++n}_${Date.now().toString(36)}`;
       o.emit({ t: "tool", id, name, input: name === "write_file" ? { path: input.path } : input });
-      const out = await safeRun(c, name, input);
+      const out = await gatedRun(c, o.gate, name, input);
       o.emit({ t: "result", id, ok: !out.is_error, summary: out.summary, output: (out.output ?? out.content).slice(0, 20_000), image: out.image, diff: out.diff });
       // Người dùng nhắn thêm khi đang làm: ghép vào kết quả công cụ này để model đọc ngay ở bước kế tiếp, không ngắt việc.
       const more = o.inbox?.() ?? [];

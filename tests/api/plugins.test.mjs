@@ -57,9 +57,11 @@ ok(r.s === 404, "repo không tồn tại: báo rõ", JSON.stringify(r.j));
 console.log("3. Plugin cá nhân và quyền");
 r = await member("POST", "/api/plugins", { action: "install", url: "https://github.com/emilkowalski/skills", scope: "org" });
 ok(r.s === 403, "người thường không cài được cho cả tổ chức");
+// Repo thật trên GitHub (số skill đổi theo tác giả): đếm từ bản xem trước rồi trừ skill đã bỏ chọn.
+const total = (await member("POST", "/api/plugins", { action: "preview", url: "https://github.com/emilkowalski/skills" })).j?.preview?.skills?.filter((s) => !s.blocked).length ?? 0;
 r = await member("POST", "/api/plugins", { action: "install", url: "https://github.com/emilkowalski/skills", scope: "personal", skip: ["write-swift"] });
 const mine = r.j?.plugin;
-ok(r.s === 200 && mine.scope === "personal" && mine.skills.length === 14 && !mine.skills.some((s) => s.name === "write-swift"), `cài từ link GitHub: ${mine?.skills.length} skill, bỏ skill đã bỏ chọn`, JSON.stringify(r.j).slice(0, 300));
+ok(r.s === 200 && mine.scope === "personal" && total > 1 && mine.skills.length === total - 1 && !mine.skills.some((s) => s.name === "write-swift"), `cài từ link GitHub: ${mine?.skills.length}/${total} skill, bỏ skill đã bỏ chọn`, JSON.stringify(r.j).slice(0, 300));
 r = await member("GET", "/api/plugins");
 ok(r.j.plugins.some((p) => p.id === mine.id) && r.j.plugins.some((p) => p.studio === "design"), "người thường thấy plugin của tổ chức và của mình");
 r = await admin("GET", "/api/plugins");

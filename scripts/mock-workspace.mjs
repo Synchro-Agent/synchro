@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { WebSocketServer } from "ws";
-import { BrowserError, createBrowser, devJson, verifyTicket } from "../workspace/browser-core.mjs";
+import { BrowserError, CDP, createBrowser, devJson, verifyTicket } from "../workspace/browser-core.mjs";
 import { createRelay } from "../workspace/ext-relay.mjs";
 
 // Chrome thật: CHROME_PATH, bản cài trên macOS, hoặc lệnh trong PATH (máy Linux / CI).
@@ -38,6 +38,7 @@ export function startMockWs(port, root, secret) {
     return p;
   };
   const pages = new Map();
+  const cookieMode = new Map();
   const CHROME = process.env.MOCK_BROWSER === "fake" ? null : findChrome();
   const procs = new Map(); // u -> { proc, base }
   const alive = (base) => devJson(`${base}/json/version`, "GET", 1500).then(() => true, () => false);
@@ -51,6 +52,8 @@ export function startMockWs(port, root, secret) {
     fs.mkdirSync(path.join(home, "Downloads"), { recursive: true });
     // Chrome cũ còn giữ hồ sơ (dev:mock bị tắt đột ngột): dừng nó trước.
     spawnSync("pkill", ["-f", `--user-data-dir=${prof}`]);
+    // Cookie đến khi trình duyệt tắt: xóa dữ liệu đăng nhập trước khi bật lại (như workspace/agent.mjs).
+    if (cookieMode.get(u) === "until-stop") for (const f of ["Cookies", "Cookies-journal", "Network", "Local Storage", "Session Storage", "IndexedDB", "Service Worker", "Login Data", "Web Data"]) fs.rmSync(path.join(prof, "Default", f), { recursive: true, force: true });
     for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) fs.rmSync(path.join(prof, f), { force: true });
     const port = await freePort();
     const proc = spawn(CHROME, ["--headless=new", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-blink-features=AutomationControlled",
@@ -103,9 +106,20 @@ export function startMockWs(port, root, secret) {
         case "/ensure": dirOf(b.u); return json(res, 200, { ok: true, running: true, socks: {} });
         case "/status": return json(res, 200, { running: true, idleMin: 0 });
         case "/exec": return json(res, 200, await exec(b.u, b));
-        case "/browser": return json(res, 200, CHROME ? await core.tool(String(b.u), b) : fake(b.u, b));
+        case "/browser": if (b.cookies) cookieMode.set(String(b.u), b.cookies); return json(res, 200, CHROME ? await core.tool(String(b.u), b) : fake(b.u, b));
         case "/ext": dirOf(b.u); return json(res, 200, await relay.http(b));
-        case "/stop": case "/destroy": return json(res, 200, { ok: true });
+        // Dừng workspace như container bị tắt: trình duyệt của người dùng tắt theo.
+        case "/stop": case "/destroy": {
+          const p = procs.get(String(b.u));
+          if (p) {
+            procs.delete(String(b.u));
+            // Đóng êm (Chrome ghi cookie xuống đĩa như khi container dừng), quá 3 giây thì buộc tắt.
+            try { const v = await devJson(`${p.base}/json/version`, "GET", 1500); const c = await CDP.open(v.webSocketDebuggerUrl); await c.send("Browser.close").catch(() => {}); } catch {}
+            await new Promise((r) => { const t = setTimeout(r, 3000); p.proc.once("exit", () => { clearTimeout(t); r(); }); });
+            p.proc.kill("SIGKILL"); core.reset(String(b.u));
+          }
+          return json(res, 200, { ok: true });
+        }
       }
       return json(res, 404, { error: "Không có đường dẫn này" });
     } catch (e) { return json(res, e.code === 400 ? 400 : e instanceof BrowserError ? e.status : 500, { error: e.message }); }

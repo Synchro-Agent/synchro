@@ -1,19 +1,11 @@
-import { AUTO, autoEffort, routeModel } from "../../router";
-import { ALL } from "../../catalog";
-import { can, canModel, current, limit, permsOf, sameOrigin } from "../../authstore";
-import { agentInbox, agentSystem, agentTools, anthropicAgent, mockAgent, ModelError, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent } from "../../agentcore";
-import { clampEffort, effortCap, isEffort, legacyModel } from "../../catalog";
-import { catalog, mainModels, pickDefault, resolveModel } from "../../providers";
-import { subCli } from "../../ai/subs";
-import { usableModels } from "../../ai/anymodel";
-import { enabledSkills, recordUse } from "../../skillstore";
-import { skillsPrompt } from "../../skillruntime";
-import { exec, sdir, wsAllowed } from "../../workspace";
-import { overLimit, withUsage } from "../../usage";
-import { buildContext } from "../../fileproc";
+import { current, limit, sameOrigin } from "../../authstore";
+import { agentInbox, ModelError, type AgentEvent } from "../../agentcore";
+import { effectivePerm, pickAgentModel, runAgentTurn, sessionMeta } from "../../agentturn";
+import { getPrefs, patchSession } from "../../codestore";
+import { sdir, wsAllowed } from "../../workspace";
+import { withUsage } from "../../usage";
 import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
-import { toAnthropic, toOpenAI, toResponses, withPages } from "../../llmcall";
-import { placeUploads, type Upload } from "../../uploads";
+import type { Upload } from "../../uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +13,7 @@ export const maxDuration = 900;
 
 // Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện dạng NDJSON (mỗi dòng một JSON).
 // Gói subscription và khóa API dùng được như nhau: gói chạy CLI chính chủ với cùng bộ công cụ qua cầu nối MCP (runPlanAgent).
+// files: tệp gửi kèm tin nhắn mới nhất. perm: chế độ quyền của phiên ({ mode: "ask" | "edits" | "auto", allow: khóa "luôn cho phép" }); lượt dừng chờ người dùng duyệt qua /api/approve.
 export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
@@ -28,37 +21,15 @@ export async function POST(req: Request) {
   if (!wsAllowed(c.user)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." }, { status: 403 });
   try { limit("agent:" + c.user.id, 30, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
 
-  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted, files } = await req.json();
+  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted, perm, files } = await req.json();
   // Tệp / thư mục / .zip gửi kèm tin nhắn mới nhất (đã tải lên /api/files?raw=1): chép nguyên vào workspace, ảnh / PDF / chữ gửi thẳng cho model.
   const ups: Upload[] = (Array.isArray(files) ? files : []).filter((f) => f && typeof f.id === "string" && typeof f.name === "string").slice(0, MAX_FILES_PER_MESSAGE)
     .map((f) => ({ id: f.id, name: String(f.name).slice(0, 200), folder: f.folder === true }));
-  let d: string;
-  try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
-  // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
-  // Chế độ Tự động: việc code luôn cần model mạnh nhất tài khoản được dùng.
-  let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
-  const asks = (Array.isArray(messages) ? messages : []).filter((m: { role?: string }) => m?.role !== "assistant").map((m: { content?: unknown }) => String(m?.content ?? "").slice(0, 8000));
-  const lastText = asks[asks.length - 1] ?? "";
-  // Lời nhờ mới nhất (kèm lời nhờ trước để câu nối tiếp như "làm lại", "tiếp đi" giữ loại việc) cho bộ chọn model và mức nỗ lực.
-  const ask = { text: lastText, attachments: ups.length, turns: Array.isArray(messages) ? messages.length : 0, studio: false, prevAsk: asks[asks.length - 2] };
-  if (chosen === AUTO) {
-    // Chọn theo đúng việc đang nhờ (qua cả ba hãng, trong đúng các model bộ chọn đang hiện: gói hoặc khóa API):
-    // sửa nhỏ dùng model vừa đủ cho nhanh, dựng cả ứng dụng dùng model mạnh nhất.
-    const { allowed, usable } = await usableModels(c.user);
-    chosen = routeModel(ask, usable.length ? usable : allowed)?.model ?? null;
-  }
-  const model = chosen || pickDefault(await catalog(), mainModels());
-  if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Đăng nhập gói ở Cài đặt → Providers, hoặc quản trị viên nhập khóa API." }, { status: 503 });
-  const plan = !!subCli(model);
-  if (!plan && !canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
-  const target = plan ? null : await resolveModel(model);
-  if (!plan && !target) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
-  // Nỗ lực "Tự động": theo độ khó của việc (code luôn ít nhất mức vừa).
-  const want = wanted === "auto" ? (() => { const e = autoEffort(ask); return e === "low" ? "medium" : e; })() : wanted;
-  const effort = isEffort(want) ? (target ? clampEffort(want, effortCap(permsOf(c.user).effort, model), target.kind) : clampEffort(want, effortCap(permsOf(c.user).effort, model), "anthropic")) : undefined;
-  // Hạn mức chi phí chỉ áp cho khóa API (gói tính vào hạn mức của chính gói).
-  const over = plan ? null : overLimit(c.user);
-  if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
+  try { sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
+  const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
+  const pick = await pickAgentModel(c.user, picked, msgs, wanted, ups.length);
+  if ("error" in pick) return Response.json({ error: pick.error, ...(pick.usageLimit ? { usageLimit: true } : {}) }, { status: pick.status });
+  const p = effectivePerm(c.user.id, perm);
 
   const enc = new TextEncoder();
   const ac = new AbortController();
@@ -66,57 +37,38 @@ export async function POST(req: Request) {
   const stream = new ReadableStream({
     // Mọi lời gọi model của lượt này được tính vào mức dùng của tài khoản (Synchro Code).
     start: (ctl) => withUsage(c.user.id, "code", async () => {
-      const emit = (e: AgentEvent) => { try { ctl.enqueue(enc.encode(JSON.stringify(e) + "\n")); } catch {} };
-      // Giữ kết nối qua proxy khi một lệnh chạy lâu.
+      // Tệp agent đã sửa trong lượt (để đánh giá phiên cuối lượt, kể cả thư mục chưa phải repo git).
+      const edited = new Set<string>();
+      const emit = (e: AgentEvent) => { if (e.t === "result" && e.ok && e.diff?.path) edited.add(e.diff.path); try { ctl.enqueue(enc.encode(JSON.stringify(e) + "\n")); } catch {} };
+      // Giữ kết nối qua proxy khi một lệnh chạy lâu (hay khi đang chờ người dùng duyệt).
       const ping = setInterval(() => { try { ctl.enqueue(enc.encode("\n")); } catch {} }, 15_000);
       // Hộp thư nhắn thêm của lượt này: tin tới sau bước cuối thì trả về trong "done" để trình duyệt gửi thành lượt mới.
       const ibox = `${c.user.id}:${sid}`;
       agentInbox.set(ibox, []);
+      const ask = String(msgs.filter((m) => m.role === "user").at(-1)?.content ?? "");
+      let text = "", d: string | undefined, error = "";
       try {
-        const info = await exec(c.user.id, d, { cmd: "git rev-parse --abbrev-ref HEAD 2>/dev/null; git remote get-url origin 2>/dev/null | sed -E 's#https://[^@/]*@#https://#'", timeout: 20 });
-        const [branch, remote] = info.out.split("\n");
-        const repo = /github\.com[/:]([^/]+\/[^/.\s]+)/.exec(remote ?? "")?.[1] ?? null;
-        const list = wantSkills && can(c.user, "skills") ? await enabledSkills(c.user.id, project ? String(project) : null) : [];
-        const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
-        const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: String(system).slice(0, 60_000), skills: list.length ? skillsPrompt(list, scripts) : "" });
-        const tools = agentTools(list.length, scripts);
-        const msgs: { role: string; content: unknown }[] = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
-        const last = msgs[msgs.length - 1];
-        if (ups.length && last?.role === "user") {
-          const placed = await placeUploads(c.user.id, d, ups);
-          for (const e of placed.errors) emit({ t: "text", text: `⚠️ ${e}` });
-          const one = ups.filter((f) => !f.folder);
-          const blocks = await buildContext(one.map((f) => f.id), Object.fromEntries(one.map((f) => [f.id, f.name])), lastText);
-          const note = placed.lines.length ? `\n\n<attachments>\nNgười dùng gửi kèm, đã chép nguyên vẹn vào workspace (dùng được bằng mọi công cụ: đọc, giải nén, chạy):\n${placed.lines.join("\n")}${blocks.length ? "\nẢnh, PDF và nội dung tệp chữ gửi kèm ngay bên dưới." : ""}\n</attachments>` : "";
-          last.content = [{ type: "text", text: String(last.content) + note }, ...blocks];
-        }
-        if (plan) {
-          const out = await runPlanAgent({ user: c.user, model, effort, conv: `code-${String(sid)}`.slice(0, 64), system: sys, messages: msgs, u: c.user.id, d, skills: list, scripts, tools,
-            emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
-          if (out.skills.length) recordUse(c.user.id, out.skills);
-          const left = agentInbox.get(ibox)?.splice(0) ?? [];
-          emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });
-          return;
-        }
-        const t = target!;
-        // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
-        const adapter = t.kind === "mock" ? mockAgent()
-          : t.kind === "anthropic" ? anthropicAgent({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
-          : (t.kind === "openai" ? responsesAgent : openaiAgent)({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: t.kind, effort });
-        // Khối ảnh / PDF theo đúng định dạng của từng hãng (như khung chat).
-        const conv = t.kind === "mock" ? msgs : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) }))
-          : t.kind === "openai" ? msgs.map((m) => ({ ...m, content: toResponses(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
-        const out = await runAgent({ adapter, messages: conv, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
-        if (out.skills.length) recordUse(c.user.id, out.skills);
+        const out = await runAgentTurn({ user: c.user, sid, pick, system: String(system), messages: msgs, project, skills: !!wantSkills, emit, signal: ac.signal,
+          inbox: () => agentInbox.get(ibox)?.splice(0) ?? [], perm: p, files: ups });
+        text = out.text; d = out.d;
         const left = agentInbox.get(ibox)?.splice(0) ?? [];
         emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });
       } catch (e) {
-        if (!ac.signal.aborted) emit({ t: "error", error: e instanceof ModelError ? `Model báo lỗi (${e.status}): ${e.message.slice(0, 300)}` : (e as Error).message || "Lỗi máy chủ" });
+        error = e instanceof ModelError ? `Model báo lỗi (${e.status}): ${e.message.slice(0, 300)}` : (e as Error).message || "Lỗi máy chủ";
+        if (!ac.signal.aborted) emit({ t: "error", error });
       } finally {
         agentInbox.delete(ibox);
-        clearInterval(ping);
-        try { ctl.close(); } catch {}
       }
+      // Xếp phiên (cần bạn / chờ xem lại / xong) và gợi ý câu nhắn tiếp: người dùng thấy ngay ở danh sách phiên và khung soạn tin.
+      try {
+        const m = await sessionMeta(c.user, { d: d ?? sdir(sid), ask, reply: text, stopped: ac.signal.aborted, error, edited: [...edited] });
+        if (m) {
+          if (getPrefs(c.user.id).sync) patchSession(c.user.id, Number(sid), { state: m.state, reason: m.reason, suggest: m.suggest });
+          emit({ t: "meta", state: m.state, reason: m.reason, suggest: m.suggest });
+        }
+      } catch (e) { console.warn("[agent] đánh giá phiên", (e as Error).message); }
+      clearInterval(ping);
+      try { ctl.close(); } catch {}
     }),
     cancel() { ac.abort(); },
   });

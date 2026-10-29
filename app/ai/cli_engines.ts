@@ -105,7 +105,8 @@ export class ClaudeCodeEngine implements Engine {
     const atts = req.attachments ?? [];
     if (atts.length) args.push("--input-format", "stream-json");
     // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
-    const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "900000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
+    // Công cụ của Synchro có thể dừng chờ người dùng duyệt (chế độ quyền, trang web chưa được phép): chờ được tới hết 30 phút của lượt.
+    const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
     if (!p) { yield notInstalled("claude"); return; }
     let text = "", done = false;
     const limits = new Map<string, RateWindow>();
@@ -154,7 +155,7 @@ export class CodexEngine implements Engine {
     // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
     // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho
     // lệnh dựng sẵn của Codex trên máy chủ: việc thật đều chạy trong workspace qua công cụ của Synchro.
-    if (req.mcp) args.push("-c", `mcp_servers.synchro.url=${JSON.stringify(req.mcp.url)}`, "-c", "mcp_servers.synchro.startup_timeout_sec=20", "-c", "mcp_servers.synchro.tool_timeout_sec=600", "-c", 'mcp_servers.synchro.default_tools_approval_mode="approve"');
+    if (req.mcp) args.push("-c", `mcp_servers.synchro.url=${JSON.stringify(req.mcp.url)}`, "-c", "mcp_servers.synchro.startup_timeout_sec=20", "-c", "mcp_servers.synchro.tool_timeout_sec=1800", "-c", 'mcp_servers.synchro.default_tools_approval_mode="approve"');
     if (req.web) args.push("-c", "tools.web_search=true");
     if (req.model) args.push("-m", req.model);
     // Mức đã được subs.resolvePlanModel chọn theo đúng các mức model này hỗ trợ (low…max, ultra).
