@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><title>Đăng nhập</title></head>
+<!-- Cửa sổ đăng nhập bật lên của tests/fixtures/browser-lab.html (như "Đăng nhập bằng Google"): bấm Cho phép thì báo trang mở nó rồi tự đóng. -->
+<body style="font:15px/1.5 system-ui,sans-serif;margin:24px">
+<h1>Synchro ID</h1>
+<p>Trang thử muốn dùng tài khoản của bạn.</p>
+<button id="allow" type="button">Cho phép</button>
+<script>
+document.getElementById("allow").onclick = () => { if (window.opener) window.opener.postMessage({ login: "ok" }, "*"); setTimeout(() => window.close(), 60); };
+</script>
+</body>
+</html>

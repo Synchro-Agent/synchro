@@ -7,12 +7,17 @@
 //   máy chủ → tiện ích: { t: "call", id, a, turn } · { t: "stop" } · { t: "release" } · { t: "bye", reason }
 //   tiện ích → máy chủ: { t: "hello", name, browser, version, ext, scope } · { t: "status", … } · { t: "res", id, r } hoặc { t: "res", id, error, status }
 //                       { t: "act", kind, label } (đang làm gì) · { t: "stopped" } (người dùng bấm Dừng trong Chrome) · { t: "ka" } (giữ kết nối)
+// Tiện ích mất kết nối giữa chừng (Chrome tắt service worker của tiện ích, mạng chập chờn): thao tác đang chờ báo lỗi rõ để model kiểm tra
+// lại trang; thao tác mới trong lúc đó đợi tiện ích nối lại (tối đa RECONNECT_MS) thay vì báo "chưa kết nối".
 import { BrowserError } from "./browser-act.mjs";
 
 export const STOPPED = 499;
+// Báo thức của tiện ích đánh thức service worker mỗi 30 giây: chờ lâu hơn một chút.
+const RECONNECT_MS = 40_000, RECENT_MS = 3 * 60_000;
 
 export function createRelay({ log = () => {} } = {}) {
   const users = new Map(); // u -> Map<d, conn>
+  const gone = new Map(), waiting = new Map(); // u -> lúc mất kết nối gần nhất · u -> Set<hàm báo đã nối lại>
   let seq = 0;
   const conns = (u) => [...(users.get(u)?.values() ?? [])];
   // Thiết bị nhận lệnh: thiết bị kết nối gần nhất (người dùng vừa mở trình duyệt đó).
@@ -26,6 +31,8 @@ export function createRelay({ log = () => {} } = {}) {
     if (old) { send(old, { t: "bye", reason: "replaced" }); old.ws.close(4000, "replaced"); }
     const c = { ws, u, d, at: Date.now(), seen: Date.now(), hello: {}, status: {}, last: null, pending: new Map() };
     map.set(d, c);
+    for (const f of waiting.get(u) ?? []) f();
+    waiting.delete(u);
     ws.on("message", (m) => {
       c.seen = Date.now();
       let j; try { j = JSON.parse(m.toString()); } catch { return; }
@@ -39,9 +46,9 @@ export function createRelay({ log = () => {} } = {}) {
       }
     });
     ws.on("close", () => {
-      if (map.get(d) === c) map.delete(d);
-      if (!map.size) users.delete(u);
-      for (const p of c.pending.values()) p.no(new BrowserError(502, "Tiện ích Synchro trong Chrome đã ngắt kết nối giữa chừng."));
+      if (map.get(d) === c) { map.delete(d); gone.set(u, Date.now()); }
+      if (!map.size && users.get(u) === map) users.delete(u);
+      for (const p of c.pending.values()) p.no(new BrowserError(503, "Tiện ích Synchro trong Chrome vừa mất kết nối giữa chừng (Chrome tạm tắt tiện ích hoặc mạng chập chờn), thao tác này có thể đã xong hoặc chưa. Synchro tự nối lại: đọc lại trang (browser_read hoặc browser_screenshot) rồi làm tiếp từ chỗ đang dở."));
       c.pending.clear();
     });
     ws.on("error", () => {});
@@ -57,9 +64,21 @@ export function createRelay({ log = () => {} } = {}) {
   };
 
   // Một thao tác browser_* trên trình duyệt của người dùng. Kết quả cùng dạng với browser-core.tool().
-  function call(u, a, { turn = "", timeout = 90_000 } = {}) {
-    const c = pick(u);
-    if (!c) return Promise.reject(new BrowserError(409, "Chrome của người dùng chưa kết nối với Synchro."));
+  // Chờ tiện ích vừa mất kết nối nối lại (service worker được Chrome đánh thức, kết nối lại sau vài giây).
+  const reconnect = (u, ms) => new Promise((ok) => {
+    if (pick(u)) return ok(true);
+    if (Date.now() - (gone.get(u) ?? 0) > RECENT_MS) return ok(false);
+    const set = waiting.get(u) ?? new Set();
+    waiting.set(u, set);
+    const done = (v) => { clearTimeout(t); set.delete(f); ok(v); };
+    const f = () => done(true);
+    const t = setTimeout(() => done(false), ms);
+    set.add(f);
+  });
+  async function call(u, a, { turn = "", timeout = 90_000 } = {}) {
+    let c = pick(u);
+    if (!c && (await reconnect(u, Math.min(RECONNECT_MS, timeout)))) c = pick(u);
+    if (!c) throw new BrowserError(409, "Chrome của người dùng chưa kết nối với Synchro.");
     const id = ++seq;
     return new Promise((ok, no) => {
       const t = setTimeout(() => { c.pending.delete(id); no(new BrowserError(504, "Chrome của người dùng phản hồi quá lâu.")); }, timeout);

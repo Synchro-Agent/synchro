@@ -361,6 +361,7 @@ const B = createBrowser({
   sock: (u, d) => { st(u).socks += d; },
   // Tệp trình duyệt tải về nằm trong thư mục làm việc (giữ lại khi container được tạo lại).
   downloads: () => `${WORK}/Downloads`,
+  readDownload: (u, name) => fs.promises.readFile(path.join(ROOT, u, "Downloads", path.basename(String(name)))),
   // Server đang nghe trong workspace (đọc /proc/net/tcp*), trừ cổng nội bộ của trình duyệt và DNS của Docker (127.0.0.11).
   ports: async (u) => {
     const r = await run("docker", ["exec", cname(u), "cat", "/proc/net/tcp", "/proc/net/tcp6"], { timeout: 10_000 });

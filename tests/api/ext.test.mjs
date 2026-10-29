@@ -14,12 +14,14 @@ const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : " 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function client() {
   let cookie = "";
-  return async (method, p, body, headers = {}) => {
+  const f = async (method, p, body, headers = {}) => {
     const r = await fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
     for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
     let j = null; try { j = await r.json(); } catch {}
     return { s: r.status, j };
   };
+  f.cookie = () => cookie;
+  return f;
 }
 const raw = (p, body, headers = {}) => fetch(B + p, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body ?? {}) }).then(async (r) => ({ s: r.status, j: await r.json().catch(() => null) }));
 const me = client();
@@ -162,6 +164,30 @@ if (!chrome) {
       r = await ask(model, `#tool=browser_navigate #args={"url":"${PAGE}?${tag}=1","browser":"user"}`);
       const tabsNow = (await ctl("/state")).tabs;
       ok(/browser_navigate/.test(r.j?.text ?? "") && tabsNow.some((t) => t.url.includes(`${tag}=1`)), `${model} mở trang trên Chrome của người dùng qua cầu nối MCP`, JSON.stringify(r.j).slice(0, 300));
+    }
+
+    console.log("5b. Tệp đính kèm trong chat → tải lên trang trên Chrome của người dùng; tải về rồi đọc nội dung");
+    {
+      const LABP = `${MOCK}/_fixture/browser-lab`, M = "anthropic/claude-haiku-5-5", CV = "Họ tên: Nguyễn Thị Hương\nKinh nghiệm: 5 năm\n";
+      // Đính kèm như khung chat: tải tệp lên /api/files rồi lấy khối nội dung (/api/files/context) gửi cùng tin nhắn.
+      const fd = new FormData(); fd.append("file", new Blob([CV], { type: "text/plain" }), "cv-huong.txt");
+      const up = await fetch(B + "/api/files", { method: "POST", headers: { origin: B, cookie: me.cookie() }, body: fd }).then((x) => x.json());
+      const blocks = (await me("POST", "/api/files/context", { ids: [up.id], names: { [up.id]: "cv-huong.txt" }, query: "" })).j?.blocks ?? [];
+      const turn = (text) => me("POST", "/api/llm", { system: "", model: M, skills: true, messages: [{ role: "user", content: [...blocks, { type: "text", text }] }] });
+      await ask(M, `#tool=browser_navigate #args={"url":"${LABP}","browser":"user"}`);
+      r = await ask(M, `#tool=browser_find #args={"query":"Chọn tệp CV","browser":"user"}`);
+      const cvRef = Number(/\[(\d+)\] button "Chọn tệp CV"/.exec(r.j?.text ?? "")?.[1]);
+      r = await turn(`#tool=browser_upload #args={"ref":${cvRef},"file":"cv-huong.txt","browser":"user"}`);
+      const cvNow = await inTab((u) => u.startsWith(LABP), "JSON.stringify(window.lab().cv)");
+      ok(/Đã chọn tệp: cv-huong\.txt/.test(r.j?.text ?? "") && cvNow === JSON.stringify([`cv-huong.txt:${Buffer.byteLength(CV)}`]), "tệp người dùng đính kèm trong chat được tải lên trang trên Chrome của họ (nút tải lên mở ô chọn tệp ẩn)", `${cvNow} ${JSON.stringify(r.j).slice(0, 300)}`);
+      r = await turn(`#tool=browser_upload #args={"ref":${cvRef},"file":"khong-co.pdf","browser":"user"}`);
+      ok(/Không thấy tệp "khong-co\.pdf".*cv-huong\.txt/.test(r.j?.text ?? ""), "tệp không có trong đoạn chat: báo rõ, kèm tên các tệp đang có", JSON.stringify(r.j).slice(0, 300));
+      r = await ask(M, `#tool=browser_find #args={"query":"Tải bảng giá","browser":"user"}`);
+      const dlRef = Number(/\[(\d+)\] link "Tải bảng giá"/.exec(r.j?.text ?? "")?.[1]);
+      await ask(M, `#tool=browser_click #args={"ref":${dlRef},"browser":"user"}`);
+      await sleep(800);
+      r = await ask(M, `#tool=browser_downloads #args={"op":"read","name":"bang-gia.csv","browser":"user"}`);
+      ok(/Tệp đã tải về: bang-gia\.csv/.test(r.j?.text ?? "") && /Áo khoác/.test(r.j?.text ?? "") && /450000/.test(r.j?.text ?? ""), "tải tệp về trên Chrome rồi đọc nội dung cho model (bảng giá CSV)", JSON.stringify(r.j).slice(0, 400));
     }
 
     console.log("6. Dừng ngay trong Chrome (nút Dừng trên dải điều khiển) dừng cả lượt; lượt sau làm tiếp được");

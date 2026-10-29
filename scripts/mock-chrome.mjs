@@ -1,12 +1,14 @@
-// Lớp giả chrome.* (debugger, tabs, tabGroups, windows) trên một Chrome thật điều khiển qua DevTools, để chạy đúng mã của tiện ích Synchro
-// (extension/control.js, link.js) bên ngoài Chrome: tiện ích giả lập khi chạy dev:mock (scripts/mock-extension.mjs) và kiểm thử.
+// Lớp giả chrome.* (debugger, tabs, tabGroups, windows, downloads, contentSettings) trên một Chrome thật điều khiển qua DevTools, để chạy đúng
+// mã của tiện ích Synchro (extension/control.js, link.js) bên ngoài Chrome: tiện ích giả lập khi chạy dev:mock (scripts/mock-extension.mjs) và kiểm thử.
 // Chỉ có phần tiện ích dùng tới; một cửa sổ (id 1). Tab id là số như Chrome thật, ánh xạ tới target id của DevTools.
+// o.downloads: thư mục tải về (chrome.downloads báo tệp tải như Chrome thật).
+import path from "node:path";
 import { WebSocket } from "ws";
 import { CDP, devJson } from "../workspace/browser-core.mjs";
 
 const ev = () => { const fs = new Set(); return { addListener: (f) => fs.add(f), removeListener: (f) => fs.delete(f), fire: (...a) => { for (const f of fs) { try { f(...a); } catch {} } } }; };
 
-export async function createChrome(base) {
+export async function createChrome(base, o = {}) {
   const ver = await devJson(`${base}/json/version`);
   const bc = await CDP.open(ver.webSocketDebuggerUrl.replace(/\/\/[^/]+/, `//${new URL(base).host}`));
   const ids = new Map(), tids = new Map(); // targetId <-> tab id
@@ -46,25 +48,46 @@ export async function createChrome(base) {
       ws.on("message", (m) => {
         let j; try { j = JSON.parse(m.toString()); } catch { return; }
         if (j.id && s.wait.has(j.id)) { const w = s.wait.get(j.id); s.wait.delete(j.id); j.error ? w.no(new Error(j.error.message)) : w.ok(j.result); }
-        else if (j.method) onEvent.fire({ tabId }, j.method, j.params);
+        // Phiên con (khung con khác nguồn, chrome.debugger từ Chrome 125): src kèm sessionId.
+        else if (j.method) onEvent.fire(j.sessionId ? { tabId, sessionId: j.sessionId } : { tabId }, j.method, j.params);
       });
       ws.on("close", () => { for (const w of s.wait.values()) w.no(new Error("Detached while handling command.")); s.wait.clear(); if (att.get(tabId) === s) { att.delete(tabId); onDetach.fire({ tabId }, "target_closed"); } });
       att.set(tabId, s);
     },
     async detach({ tabId }) { const s = att.get(tabId); if (!s) throw new Error("Debugger is not attached to the tab with id: " + tabId); att.delete(tabId); s.close(); },
-    sendCommand({ tabId }, method, params = {}) {
+    sendCommand({ tabId, sessionId }, method, params = {}) {
       const s = att.get(tabId);
       if (!s) return Promise.reject(new Error(`Debugger is not attached to the tab with id: ${tabId}.`));
       const id = ++s.n;
-      return new Promise((ok, no) => { s.wait.set(id, { ok, no }); s.ws.send(JSON.stringify({ id, method, params })); });
+      return new Promise((ok, no) => { s.wait.set(id, { ok, no }); s.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); });
     },
     onEvent, onDetach,
     // Người dùng bấm "Hủy" trên thanh gỡ lỗi của Chrome (kiểm thử gọi để giả lập).
     cancelByUser(tabId) { const s = att.get(tabId); if (!s) return; att.delete(tabId); s.close(); onDetach.fire({ tabId }, "canceled_by_user"); },
   };
 
+  // chrome.downloads: tệp tải về thư mục o.downloads.
+  const dls = new Map(); let nextDl = 1;
+  const onDlCreated = ev(), onDlChanged = ev();
+  if (o.downloads) {
+    await bc.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: o.downloads, eventsEnabled: true });
+    bc.on("Browser.downloadWillBegin", (p) => { const d = { id: nextDl++, url: p.url, finalUrl: p.url, filename: "", mime: "", state: "in_progress", fileSize: 0, totalBytes: 0, name: p.suggestedFilename }; dls.set(p.guid, d); onDlCreated.fire({ id: d.id, url: d.url, filename: "", state: "in_progress" }); });
+    bc.on("Browser.downloadProgress", (p) => {
+      const d = dls.get(p.guid); if (!d || p.state === "inProgress") return;
+      d.state = p.state === "completed" ? "complete" : "interrupted"; d.filename = path.join(o.downloads, d.name); d.fileSize = d.totalBytes = p.totalBytes;
+      onDlChanged.fire({ id: d.id, filename: { current: d.filename }, state: { current: d.state } });
+    });
+  }
+  // chrome.contentSettings: quyền theo trang (Chrome thật lưu ở cài đặt trang web; ở đây đặt thẳng bằng Browser.setPermission).
+  const perm = (names) => ({ async set({ primaryPattern, setting }) {
+    const origin = String(primaryPattern).replace(/\/\*$/, "");
+    for (const name of names) await bc.send("Browser.setPermission", { permission: { name }, setting: setting === "allow" ? "granted" : setting === "block" ? "denied" : "prompt", origin });
+  } });
+
   const chrome = {
     debugger: dbg,
+    downloads: { onCreated: onDlCreated, onChanged: onDlChanged, async search({ id } = {}) { return [...dls.values()].filter((d) => id == null || d.id === id).map(({ name, ...d }) => d); } },
+    contentSettings: { notifications: perm(["notifications"]), location: perm(["geolocation"]), camera: perm(["camera"]), microphone: perm(["microphone"]), clipboard: perm(["clipboard-read", "clipboard-write"]) },
     tabs: {
       // Như Chrome: tiêu đề, địa chỉ luôn mới (sự kiện của DevTools không báo khi trang đổi tiêu đề).
       async query(q = {}) {

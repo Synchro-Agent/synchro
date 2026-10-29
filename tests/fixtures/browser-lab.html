@@ -85,7 +85,43 @@
   <form id="search" action="" method="get"><input type="hidden" name="page" value="search"><label>Tìm sản phẩm <input name="q" id="q"></label> <button>Tìm</button></form>
 </section>
 
-<section id="s-more"><h2>10. Cuộn vô tận</h2><div id="feed"></div><div id="sentinel">…</div></section>
+
+<section id="s-xframe"><h2>10. Khung con khác nguồn</h2>
+  <iframe id="xframe" title="Đăng ký nhận tin" style="width:100%;height:90px;border:1px solid #ccc;border-radius:8px"></iframe>
+</section>
+
+<section id="s-upload2"><h2>11. Tải lên kiểu ứng dụng web</h2>
+  <div class="row"><button id="cv-btn" type="button">Chọn tệp CV</button><input type="file" id="cv" hidden><span id="cv-name"></span></div>
+  <div class="row"><div id="dz" style="width:260px;height:56px;border:2px dashed #888;border-radius:8px;display:grid;place-items:center">Kéo tệp vào đây</div></div>
+  <div class="row"><a id="dl2" download="bang-gia.csv" href="data:text/csv;charset=utf-8,S%E1%BA%A3n%20ph%E1%BA%A9m%2CGi%C3%A1%0A%C3%81o%20kho%C3%A1c%2C450000%0AQu%E1%BA%A7n%20jean%2C320000%0A">Tải bảng giá</a></div>
+</section>
+
+<section id="s-date"><h2>12. Ngày giờ</h2>
+  <div class="row"><label>Ngày sinh <input type="date" id="dob"></label><label>Giờ hẹn <input type="time" id="appt"></label><label>Lịch hẹn <input type="datetime-local" id="meet"></label></div>
+  <div class="row"><button id="cal-btn" type="button">Chọn ngày giao</button><span id="cal-v"></span></div>
+  <div id="cal" hidden><div class="row"><button id="cal-prev" type="button">Tháng trước</button><b id="cal-m"></b><button id="cal-next" type="button">Tháng sau</button></div><div id="cal-days" style="display:grid;grid-template-columns:repeat(7,36px);gap:4px"></div></div>
+</section>
+
+<section id="s-editors"><h2>13. Trình soạn thảo</h2>
+  <div class="row"><div id="lex" contenteditable="true" aria-label="Trình soạn thảo khối" style="border:1px solid #ccc;min-width:280px;min-height:30px;padding:6px"></div></div>
+  <div class="row"><canvas id="doc" width="360" height="60" style="border:1px solid #ccc;cursor:text"></canvas><textarea id="doc-input" aria-hidden="true" tabindex="-1" style="position:absolute;opacity:0;width:1px;height:1px;left:-100px"></textarea></div>
+  <div class="row"><textarea id="chat" aria-label="Nhắn tin" rows="2"></textarea></div>
+  <div class="row"><div id="pastebox" contenteditable="true" aria-label="Ghi chú có định dạng" style="border:1px solid #ccc;min-width:280px;min-height:30px;padding:6px"></div></div>
+</section>
+
+<section id="s-clip"><h2>14. Sao chép, dán, menu chuột phải</h2>
+  <div class="row"><label>Mã ưu đãi <input id="code-src" value="MA-GIAM-2026" readonly></label><label>Dán mã vào đây <input id="code-dst"></label></div>
+  <p id="plain-text">Đoạn chữ thường không có menu riêng.</p>
+</section>
+
+<section id="s-popup"><h2>15. Cửa sổ bật lên, quyền, trang ở nền</h2>
+  <div class="row"><button id="login" type="button">Đăng nhập bằng Synchro ID</button><span id="login-v"></span></div>
+  <div class="row"><button id="geo" type="button">Tìm cửa hàng gần tôi</button><button id="notif" type="button">Bật thông báo</button></div>
+  <div class="row"><button id="anim" type="button">Chạy hoạt ảnh</button><span id="anim-v"></span></div>
+</section>
+
+<!-- Cuộn vô tận ở cuối trang: cuộn tới cuối là tải thêm. -->
+<section id="s-more"><h2>16. Cuộn vô tận</h2><div id="feed"></div><div id="sentinel">…</div></section>
 
 <button id="fixed" type="button">Thanh toán</button>
 <div id="modal" role="dialog" aria-label="Hộp thoại"><div>Hộp đang mở. Nhấn Esc để đóng. <button id="m-ok" type="button">Đồng ý</button></div></div>
@@ -94,7 +130,9 @@
 <script>
 const ev = window.__ev = [];
 const S = window.__lab = { react: "", keys: [], focus: [], city: "", bank: "", chk: false, ship: "", sw: false, range: 20, dbl: 0, ctx: false, shift: false, ctxDel: false, adv: false,
-  pad: null, listClick: "", drop: false, knob: 0, files: [], dialogs: {}, loaded: false, modal: false, palette: false, fixed: 0, clickOrder: [], card: "", feed: 10 };
+  pad: null, listClick: "", drop: false, knob: 0, files: [], dialogs: {}, loaded: false, modal: false, palette: false, fixed: 0, clickOrder: [], card: "", feed: 10,
+  sub: "", freq: "", cv: [], dropped: [], dob: "", appt: "", meet: "", ship: "", lex: "", lexTrusted: null, doc: "", sent: [], paste: null, pasted: "", nativeCtx: 0,
+  login: "", geo: null, geoErr: null, notif: "", anim: 0 };
 const $ = (id) => document.getElementById(id);
 const page = new URLSearchParams(location.search).get("page");
 if (page === "new") { document.title = "Khuyến mãi"; $("h").textContent = "Trang khuyến mãi"; }
@@ -158,6 +196,60 @@ $("fixed").onclick = () => { S.fixed++; };
 const feed = (n) => { for (let i = 0; i < n; i++) { const p = document.createElement("p"); p.textContent = "Bài viết " + (document.querySelectorAll("#feed p").length + 1); $("feed").append(p); } S.feed = document.querySelectorAll("#feed p").length; };
 feed(10);
 new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) feed(10); }).observe($("sentinel"));
+// 11. Khung con khác nguồn (127.0.0.1 ↔ localhost): biểu mẫu nhúng báo kết quả về trang chính.
+$("xframe").src = location.protocol + "//" + (location.hostname === "127.0.0.1" ? "localhost" : "127.0.0.1") + ":" + location.port + "/_fixture/browser-lab-frame";
+window.addEventListener("message", (e) => {
+  if (e.data && e.data.sub !== undefined) { S.sub = e.data.sub; S.freq = e.data.freq; }
+  if (e.data && e.data.login) { S.login = e.data.login; $("login-v").textContent = "Đã đăng nhập"; }
+});
+// 12. Nút tải lên mở ô chọn tệp ẩn (như hầu hết ứng dụng web), vùng kéo thả tệp không có ô chọn tệp.
+$("cv-btn").onclick = () => $("cv").click();
+$("cv").addEventListener("change", (e) => { S.cv = [...e.target.files].map((f) => f.name + ":" + f.size); $("cv-name").textContent = S.cv.join(", "); });
+$("dz").addEventListener("dragover", (e) => e.preventDefault());
+$("dz").addEventListener("drop", (e) => { e.preventDefault(); S.dropped = [...e.dataTransfer.files].map((f) => f.name + ":" + f.size); $("dz").textContent = "Đã nhận " + S.dropped.length + " tệp"; });
+// 13. Ô ngày / giờ của trình duyệt (kiểu React nghe sự kiện input), lịch chọn ngày tự làm.
+for (const id of ["dob", "appt", "meet"]) $(id).addEventListener("input", (e) => { S[id] = e.target.value; });
+(() => {
+  let base = new Date(2026, 9, 1);
+  const render = () => {
+    $("cal-m").textContent = "Tháng " + (base.getMonth() + 1) + "/" + base.getFullYear();
+    const d = $("cal-days"); d.innerHTML = "";
+    for (let i = 1, n = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate(); i <= n; i++) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = i; b.setAttribute("aria-label", i + "/" + (base.getMonth() + 1) + "/" + base.getFullYear());
+      b.onclick = () => { S.ship = base.getFullYear() + "-" + String(base.getMonth() + 1).padStart(2, "0") + "-" + String(i).padStart(2, "0"); $("cal-v").textContent = S.ship; $("cal").hidden = true; };
+      d.append(b);
+    }
+  };
+  $("cal-btn").onclick = () => { $("cal").hidden = !$("cal").hidden; render(); };
+  $("cal-next").onclick = () => { base = new Date(base.getFullYear(), base.getMonth() + 1, 1); render(); };
+  $("cal-prev").onclick = () => { base = new Date(base.getFullYear(), base.getMonth() - 1, 1); render(); };
+})();
+// 14. Trình soạn thảo kiểu Lexical / Slate (tự giữ nội dung theo beforeinput), kiểu Google Docs (vẽ chữ trên canvas, phím vào ô ẩn),
+// ô chat Enter là gửi, ô nhận dán có định dạng.
+$("lex").addEventListener("beforeinput", (e) => {
+  e.preventDefault(); S.lexTrusted = e.isTrusted;
+  if (/^insert(Text|CompositionText|ReplacementText)$/.test(e.inputType)) S.lex += e.data ?? "";
+  else if (e.inputType === "deleteContentBackward") S.lex = S.lex.slice(0, -1);
+  else if (e.inputType === "insertParagraph" || e.inputType === "insertLineBreak") S.lex += "\n";
+  $("lex").textContent = S.lex;
+});
+(() => {
+  const cv = $("doc"), ti = $("doc-input"), g = cv.getContext("2d");
+  const draw = () => { g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = "#111"; g.font = "16px sans-serif"; g.fillText(S.doc, 8, 34); };
+  draw();
+  cv.addEventListener("mousedown", (e) => { e.preventDefault(); ti.focus(); });
+  ti.addEventListener("input", () => { S.doc = ti.value; draw(); });
+})();
+$("chat").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); S.sent.push(e.target.value); e.target.value = ""; } });
+$("pastebox").addEventListener("paste", (e) => { const h = e.clipboardData.getData("text/html"), t = e.clipboardData.getData("text/plain"); S.paste = { html: h, text: t }; if (h) { e.preventDefault(); $("pastebox").innerHTML = h; } });
+// 15. Dán, chuột phải chỗ trang không có menu riêng.
+$("code-dst").addEventListener("input", (e) => { S.pasted = e.target.value; });
+document.addEventListener("contextmenu", (e) => { if (e.target.id === "plain-text") S.nativeCtx++; });
+// 16. Cửa sổ đăng nhập bật lên, quyền vị trí / thông báo, hoạt ảnh (đếm khung hình: trang ở nền thì trình duyệt ngừng vẽ).
+$("login").onclick = () => window.open("/_fixture/browser-lab-popup", "synlogin", "popup,width=480,height=560");
+$("geo").onclick = () => navigator.geolocation.getCurrentPosition((p) => { S.geo = { lat: +p.coords.latitude.toFixed(4), lng: +p.coords.longitude.toFixed(4) }; S.geoErr = null; }, (e) => { S.geoErr = e.code; }, { timeout: 4000 });
+$("notif").onclick = () => Notification.requestPermission().then((p) => { S.notif = p; });
+$("anim").onclick = () => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 600) requestAnimationFrame(f); else { S.anim = n; $("anim-v").textContent = n + " khung hình"; } }; requestAnimationFrame(f); };
 console.log("lab ready");
 window.lab = () => JSON.parse(JSON.stringify(S));
 </script>

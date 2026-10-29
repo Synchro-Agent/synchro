@@ -47,14 +47,23 @@ export async function buildContext(ids: string[], names: Record<string, string>,
       const text = rec.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join("\n\n");
       const chunks = chunkForRag(text);
       const picked = rank(chunks, query, 12).map((i) => `(đoạn ${i + 1}/${chunks.length})\n${chunks[i]}`);
-      out.push({ type: "text", text: `${label}\n<file name="${name}" note="tệp lớn, chỉ hiện các đoạn liên quan nhất">\n${esc(picked.join("\n\n…\n\n"))}\n</file>` });
+      out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}" note="tệp lớn, chỉ hiện các đoạn liên quan nhất">\n${esc(picked.join("\n\n…\n\n"))}\n</file>` });
       continue;
     }
     for (const b of rec.blocks) {
-      if (b.type === "text") out.push({ type: "text", text: `${label}\n<file name="${name}">\n${esc(b.text)}\n</file>` });
+      if (b.type === "text") out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}">\n${esc(b.text)}\n</file>` });
       else if (b.type === "image") { out.push({ type: "text", text: label }); out.push(b); }
       else out.push({ type: "text", text: label }, { ...b, name });
     }
   }
   return out;
+}
+
+// Tệp gốc đã tải lên (theo id trong <file … id="…">): để Synchro tải đúng tệp người dùng đính kèm lên trang web (browser_upload).
+export async function storedFile(id: string): Promise<{ name: string; kind: string; data: Buffer } | null> {
+  if (!safeId(id)) return null;
+  try {
+    const rec = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")) as Stored;
+    return { name: rec.name, kind: rec.kind, data: await readFile(path.join(DIR, id + ".bin")) };
+  } catch { return null; }
 }

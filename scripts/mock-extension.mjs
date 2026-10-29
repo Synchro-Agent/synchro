@@ -6,7 +6,8 @@
 //   Đã ghép nối thì chạy lại không cần --code (khóa lưu trong hồ sơ, mặc định data-mock/ext-chrome).
 // Sẵn sàng thì in một dòng JSON { ready, control, devtools }: cổng HTTP điều khiển (127.0.0.1, cho kiểm thử) và cổng DevTools của Chrome.
 // Cổng điều khiển: GET /state · POST /stop (như bấm Dừng) · POST /cancel (như bấm Hủy trên thanh gỡ lỗi của Chrome) · POST /scope { scope }
-//   · POST /share { tab, on } · POST /open { url } (người dùng tự mở một tab) · POST /quit.
+//   · POST /share { tab, on } · POST /open { url } (người dùng tự mở một tab) · POST /drop { ms } (mất kết nối giữa chừng, nối lại sau ms)
+//   · POST /quit.
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
@@ -40,6 +41,14 @@ const { createLink } = await import(pathToFileURL(path.join(EXT, "link.js")).hre
 const prof = path.join(PROFILE, "chrome");
 spawnSync("pkill", ["-f", `--user-data-dir=${prof}`]);
 for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) fs.rmSync(path.join(prof, f), { force: true });
+// Tệp tải về vào thư mục của tiện ích giả lập (không lẫn vào thư mục Tải xuống của máy), kể cả trước khi lớp giả chrome.downloads kịp đặt.
+{
+  const pf = path.join(prof, "Default", "Preferences"), dl = path.join(PROFILE, "Downloads");
+  let pref = {}; try { pref = JSON.parse(fs.readFileSync(pf, "utf8")); } catch {}
+  pref.download = { ...(pref.download ?? {}), default_directory: dl, prompt_for_download: false, directory_upgrade: true };
+  pref.savefile = { ...(pref.savefile ?? {}), default_directory: dl };
+  fs.mkdirSync(path.dirname(pf), { recursive: true }); fs.writeFileSync(pf, JSON.stringify(pref));
+}
 const proc = spawn(CHROME, [...(HEADLESS ? ["--headless=new"] : []), "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--use-mock-keychain", "--password-store=basic",
   "--remote-debugging-port=0", "--remote-allow-origins=*", `--user-data-dir=${prof}`, "--window-size=1280,860", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
 const port = await new Promise((ok, no) => {
@@ -50,7 +59,7 @@ const port = await new Promise((ok, no) => {
 });
 const base = `http://127.0.0.1:${port}`;
 await devJson(`${base}/json/version`);
-const shim = await createChrome(base);
+const shim = await createChrome(base, { downloads: path.join(PROFILE, "Downloads") });
 const quit = () => { try { shim.close(); } catch {} proc.kill("SIGTERM"); setTimeout(() => process.exit(0), 300); };
 process.on("SIGINT", quit); process.on("SIGTERM", quit);
 proc.on("exit", () => process.exit(0));
@@ -64,7 +73,8 @@ const store = {
   remove: async (keys) => { const c = read(); for (const k of keys) delete c[k]; fs.writeFileSync(STORE, JSON.stringify(c, null, 2)); },
 };
 let link;
-const control = createControl(shim.chrome, { server: () => SERVER, scope: read().scope, notify: (m) => link?.send(m) });
+const control = createControl(shim.chrome, { server: () => SERVER, scope: read().scope, notify: (m) => link?.send(m), save: (v) => store.set({ ctl: v }) });
+control.restore(read().ctl);
 const device = () => ({ name: `Chrome giả lập · ${os.type() === "Darwin" ? "macOS" : os.type()}`, browser: "Google Chrome", version: "mock", ext: "mock" });
 let last = "";
 link = createLink({ store, control, device, WebSocket, revoked: "Trình duyệt này đã bị gỡ khỏi Synchro.", onState: (s) => { const k = `${s.state} ${s.error}`; if (k !== last) { last = k; say(s.state === "online" ? "đã kết nối với Synchro" : s.state, s.error || ""); } } });
@@ -87,6 +97,7 @@ const ctl = http.createServer(async (req, res) => {
       case "/scope": control.setScope(b.scope); await store.set({ scope: control.scope() }); link.send({ t: "status", scope: control.scope() }); return json(res, 200, { scope: control.scope() });
       case "/share": await control.share(Number(b.tab), b.on !== false); return json(res, 200, control.status());
       case "/open": { const t = await shim.chrome.tabs.create({ url: b.url || "about:blank", active: true }); return json(res, 200, { tab: t.id, target: shim.targetOf(t.id) }); }
+      case "/drop": link.close(); setTimeout(() => link.connect(), Number(b.ms) || 1500); return json(res, 200, { ok: true });
       case "/quit": json(res, 200, { ok: true }); return quit();
     }
     json(res, 404, { error: "not found" });

@@ -8,7 +8,7 @@
 // - screen(ws, u): truyền hình trực tiếp tới khung trình duyệt của người dùng, nhận chuột / bàn phím của họ, và báo cho
 //   người xem biết Synchro đang làm gì (điểm bấm, chữ đang gõ) để họ theo dõi hoặc giành lại quyền điều khiển bất cứ lúc nào.
 // host: { up(u) → "http://host:cổng" của DevTools (bật trình duyệt nếu chưa chạy); touch(u); sock(u, ±1); downloads(u) → thư mục tải về
-//         trong máy chạy trình duyệt; ports?(u) → cổng server đang chạy (trang tab mới) }.
+//         trong máy chạy trình duyệt; readDownload?(u, tên) → nội dung tệp đã tải (Buffer); ports?(u) → cổng server đang chạy (trang tab mới) }.
 import crypto from "node:crypto";
 import http from "node:http";
 import { WebSocket } from "ws";
@@ -17,6 +17,8 @@ import { BrowserError, createActor } from "./browser-act.mjs";
 export { BrowserError };
 
 const DEBUG = !!process.env.SYNCHRO_BROWSER_DEBUG;
+// Tệp đã tải về đọc lại được cho model (browser_downloads op "read").
+const MAX_READ = 15 * 1024 * 1024;
 
 export class CDP {
   constructor(ws) {
@@ -24,7 +26,8 @@ export class CDP {
     ws.on("message", (m) => {
       let j; try { j = JSON.parse(m.toString()); } catch { return; }
       if (j.id && this.wait.has(j.id)) { const w = this.wait.get(j.id); this.wait.delete(j.id); j.error ? w.rej(new Error(j.error.message)) : w.res(j.result); }
-      else if (j.method) for (const f of this.subs.get(j.method) ?? []) f(j.params);
+      // Sự kiện của phiên con (khung con khác nguồn, nối bằng Target.setAutoAttach flatten) kèm sessionId.
+      else if (j.method) for (const f of this.subs.get(j.method) ?? []) f(j.params, j.sessionId);
     });
     ws.on("close", () => { this.closed = true; for (const w of this.wait.values()) w.rej(new Error("Trình duyệt đã ngắt kết nối")); this.wait.clear(); for (const f of this.subs.get("close") ?? []) f(); });
     ws.on("error", () => {});
@@ -37,7 +40,7 @@ export class CDP {
       ws.once("error", (e) => { clearTimeout(t); rej(e); });
     });
   }
-  send(method, params = {}, timeout = 20_000) {
+  send(method, params = {}, timeout = 20_000, sessionId) {
     if (this.closed) return Promise.reject(new Error("Trình duyệt đã ngắt kết nối"));
     const id = ++this.id;
     const t0 = Date.now();
@@ -45,7 +48,7 @@ export class CDP {
     return new Promise((res, rej) => {
       const t = setTimeout(() => { this.wait.delete(id); slow(); rej(new Error(`${method}: quá thời gian`)); }, timeout);
       this.wait.set(id, { res: (v) => { clearTimeout(t); slow(); res(v); }, rej: (e) => { clearTimeout(t); slow(); rej(e); } });
-      this.ws.send(JSON.stringify({ id, method, params }));
+      this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
     });
   }
   on(ev, f) { if (!this.subs.has(ev)) this.subs.set(ev, []); this.subs.get(ev).push(f); return () => this.subs.set(ev, (this.subs.get(ev) ?? []).filter((x) => x !== f)); }
@@ -108,7 +111,7 @@ export function createBrowser(host) {
     const dir = host.downloads?.(u);
     if (dir) {
       await bc.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dir, eventsEnabled: true }).catch(() => {});
-      bc.on("Browser.downloadWillBegin", (p) => { s.downloads.unshift({ id: p.guid, name: p.suggestedFilename, url: p.url, state: "inProgress", at: Date.now() }); s.downloads.length = Math.min(s.downloads.length, 30); emit(u, { t: "download", name: p.suggestedFilename, state: "inProgress" }); });
+      bc.on("Browser.downloadWillBegin", (p) => { s.downloads.unshift({ id: p.guid, name: p.suggestedFilename, url: p.url, path: `${dir}/${p.suggestedFilename}`, state: "inProgress", at: Date.now() }); s.downloads.length = Math.min(s.downloads.length, 30); emit(u, { t: "download", name: p.suggestedFilename, state: "inProgress" }); });
       bc.on("Browser.downloadProgress", (p) => { const d = s.downloads.find((x) => x.id === p.guid); if (d && p.state !== "inProgress") { d.state = p.state; d.bytes = p.totalBytes; emit(u, { t: "download", name: d.name, state: p.state }); } });
     }
     return bc;
@@ -122,7 +125,8 @@ export function createBrowser(host) {
     let list = await pages(u);
     if (!list.length) { await devtools(u, "/json/new?about:blank", "PUT"); list = await pages(u); }
     host.touch?.(u);
-    const t = list.find((x) => x.id === s.tab) ?? list[0];
+    // Tab đang dùng đã đóng (cửa sổ bật lên tự đóng): quay về tab dùng trước đó.
+    const t = list.find((x) => x.id === s.tab) ?? [...(s.hist ?? [])].reverse().map((id) => list.find((x) => x.id === id)).find(Boolean) ?? list[0];
     s.tab = t.id;
     return t;
   }
@@ -138,6 +142,17 @@ export function createBrowser(host) {
     session: (u) => agentCdp(u),
     touch: host.touch, downloadsDir: host.downloads, allowFile: !!host.allowFile,
     humanize: true, ua: (u) => st(u).ua, timezone: host.timezone,
+    // Quyền của trang (thông báo, vị trí, micro / camera, bộ nhớ tạm): đặt ở cấp trình duyệt, như người dùng bấm Cho phép / Chặn.
+    permission: async (u, { origin, name, setting }) => {
+      const bc = await browserLevel(u);
+      for (const n of name === "clipboard" ? ["clipboard-read", "clipboard-write"] : [name]) await bc.send("Browser.setPermission", { permission: { name: n }, setting: setting === "allow" ? "granted" : "denied", origin });
+    },
+    readDownload: async (u, d) => {
+      if (!host.readDownload) throw new BrowserError(400, "Nơi này chưa đọc lại được tệp đã tải.");
+      const buf = await host.readDownload(u, d.name);
+      if (buf.length > MAX_READ) throw new BrowserError(413, `Tệp "${d.name}" lớn quá (${Math.round(buf.length / 1048576)} MB) để đọc lại; tối đa ${MAX_READ / 1048576} MB.`);
+      return { data: buf.toString("base64"), size: buf.length, mime: "" };
+    },
   });
 
   // Kết nối điều khiển dùng chung của agent: giữ log console và yêu cầu mạng gần đây để model đọc lại.

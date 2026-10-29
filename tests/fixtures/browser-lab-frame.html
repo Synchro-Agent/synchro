@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><title>Đăng ký nhận tin</title></head>
+<!-- Khung con khác nguồn của tests/fixtures/browser-lab.html (mở từ localhost khi trang chính ở 127.0.0.1 và ngược lại): biểu mẫu nhúng. -->
+<body style="font:14px/1.5 system-ui,sans-serif;margin:8px">
+<label>Email nhận tin <input id="email" type="email"></label>
+<label>Tần suất <select id="freq"><option value="">--</option><option value="d">Hằng ngày</option><option value="w">Hằng tuần</option></select></label>
+<button id="sub" type="button">Đăng ký</button> <span id="ok"></span>
+<script>
+document.getElementById("sub").onclick = () => {
+  const v = document.getElementById("email").value, f = document.getElementById("freq").value;
+  document.getElementById("ok").textContent = "Đã đăng ký " + v;
+  parent.postMessage({ sub: v, freq: f }, "*");
+};
+</script>
+</body>
+</html>

@@ -84,3 +84,10 @@ Ngoài trình duyệt riêng trong workspace, Synchro điều khiển được c
   (đúng mã của tiện ích trên Chrome thật, cửa sổ riêng). Kiểm thử: `node tests/run-all.mjs ext browser`; `ext-lab` chạy mọi thao tác như người thật
   (gõ từng phím, chọn, chuột, cuộn, kéo thả, tải lên / về, hộp thoại, khung con, shadow DOM, tab, biểu mẫu…) trên trang `tests/fixtures/browser-lab.html`
   ở tiện ích giả lập, tiện ích thật trong Chrome thật (màn hình tỉ lệ 2) và trình duyệt của Synchro.
+- Làm như người thật để người dùng chỉ việc ngồi chờ: khung con khác nguồn (biểu mẫu nhúng) đọc và bấm được như trang thường (phiên CDP con);
+  nút "Tải lên" mở ô chọn tệp ẩn thì hộp chọn tệp của máy bị chặn và Synchro điền tệp vào (tệp đính kèm trong chat, tệp Synchro tạo ra, hay tệp trên máy),
+  vùng kéo thả tệp nhận tệp kéo vào; tải về rồi đọc nội dung (`browser_downloads`); ô ngày / giờ / ô chọn của trình duyệt đặt giá trị thẳng, không mở
+  cửa sổ bật lên của hệ điều hành; ctrl+a / c / v chạy đúng trên mọi máy; chuột phải chỗ không có menu riêng không để menu của trình duyệt che màn hình;
+  cửa sổ đăng nhập bật lên tự đóng thì quay về tab trước; hộp hỏi quyền của trang (vị trí, thông báo, micro / camera, bộ nhớ tạm) trả lời bằng
+  `browser_permission`; tab ở nền hay cửa sổ thu nhỏ vẫn chạy (giữ trang "đang hiện" bằng luồng hình nhỏ, không chuyển tab của người dùng);
+  service worker của tiện ích bị Chrome tắt giữa chừng thì thao tác đang chạy báo rõ, thao tác sau đợi tiện ích nối lại rồi làm tiếp đúng tab.

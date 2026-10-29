@@ -7,6 +7,9 @@
 // - Khi điều khiển: dải "Synchro đang điều khiển tab này" + nút Dừng trong trang; Dừng (trong trang, trong cửa sổ tiện ích, hoặc nút Hủy
 //   trên thanh gỡ lỗi của Chrome) hủy thao tác đang chạy và mọi thao tác còn lại của lượt đó.
 // - Hết lượt (máy chủ gửi release) hoặc rảnh 2 phút: gỡ dải điều khiển và ngắt chrome.debugger (thanh "đang gỡ lỗi" của Chrome biến mất).
+// - Làm được khi cửa sổ Chrome ở nền hay thu nhỏ: không chuyển tab, không kéo cửa sổ lên trước (act.js giữ trang "đang hiện" khi cần).
+// - Service worker bị Chrome tắt giữa chừng: o.save giữ tab đang làm, tab của Synchro (chrome.storage.session); lần chạy sau restore()
+//   lấy lại và gỡ dải điều khiển còn sót.
 import { BrowserError, createActor } from "./act.js";
 import { overlayScript } from "./overlay.js";
 import { strings } from "./i18n.js";
@@ -18,6 +21,11 @@ const GROUP = "Synchro";
 const RESTRICTED = /^(chrome|edge|brave|opera|vivaldi|about|chrome-extension|moz-extension|devtools|view-source|chrome-search|chrome-untrusted):|^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com|microsoftedge\.microsoft\.com\/addons)/i;
 const BLANK = /^(about:blank|chrome:\/\/newtab|chrome:\/\/new-tab-page|edge:\/\/newtab|brave:\/\/newtab|chrome-search:\/\/local-ntp)/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Tệp đã tải về đọc lại được cho model (browser_downloads op "read").
+const MAX_READ = 15 * 1024 * 1024;
+const b64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+// Tên quyền của Synchro → chrome.contentSettings.
+const SETTING = { notifications: "notifications", geolocation: "location", camera: "camera", microphone: "microphone", clipboard: "clipboard" };
 const withTimeout = (p, ms, msg) => new Promise((ok, no) => { const t = setTimeout(() => no(new Error(msg)), ms); p.then((v) => { clearTimeout(t); ok(v); }, (e) => { clearTimeout(t); no(e); }); });
 
 export function createControl(chrome, o = {}) {
@@ -32,7 +40,8 @@ export function createControl(chrome, o = {}) {
   let running = null; // { reject } của thao tác đang chạy
 
   // ---------------------------------------------------------------- phiên chrome.debugger theo tab (giống lớp CDP của browser-core)
-  chrome.debugger.onEvent.addListener((src, method, params) => { const s = sessions.get(src.tabId); if (s) s.emit(method, params ?? {}); });
+  // Sự kiện của phiên con (khung con khác nguồn) kèm src.sessionId.
+  chrome.debugger.onEvent.addListener((src, method, params) => { const s = sessions.get(src.tabId); if (s) s.emit(method, params ?? {}, src.sessionId); });
   chrome.debugger.onDetach.addListener((src, reason) => {
     const s = sessions.get(src.tabId);
     if (!s) return;
@@ -43,17 +52,17 @@ export function createControl(chrome, o = {}) {
   });
   function session(tabId) {
     const subs = new Map();
-    const raw = (method, params = {}, timeout = 20_000) => withTimeout(chrome.debugger.sendCommand({ tabId }, method, params), timeout, `${method}: quá thời gian`);
+    const raw = (method, params = {}, timeout = 20_000, sessionId) => withTimeout(chrome.debugger.sendCommand(sessionId ? { tabId, sessionId } : { tabId }, method, params), timeout, `${method}: quá thời gian`);
     const s = {
       tabId, closed: false,
-      emit(ev, p) { for (const f of subs.get(ev) ?? []) { try { f(p); } catch {} } },
+      emit(ev, p, sid) { for (const f of subs.get(ev) ?? []) { try { f(p, sid); } catch {} } },
       on(ev, f) { if (!subs.has(ev)) subs.set(ev, []); subs.get(ev).push(f); return () => subs.set(ev, (subs.get(ev) ?? []).filter((x) => x !== f)); },
       once(ev, ms) { return new Promise((res) => { const off = s.on(ev, (p) => { off(); clearTimeout(t); res(p); }); const t = setTimeout(() => { off(); res(null); }, ms); }); },
-      async send(method, params = {}, timeout = 20_000) {
+      async send(method, params = {}, timeout = 20_000, sid) {
         if (s.closed) throw new Error("Tab đã đóng hoặc Synchro đã thôi điều khiển tab này.");
         // Ngay trước cú bấm của Synchro: dải điều khiển tạm không nhận chuột (cú bấm không trúng nút Dừng).
         if (method === "Input.dispatchMouseEvent" && (params.type === "mousePressed" || params.type === "mouseWheel")) await raw("Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.guard()" }, 3000).catch(() => {});
-        return raw(method, params, timeout);
+        return raw(method, params, timeout, sid);
       },
       close() {},
     };
@@ -76,6 +85,9 @@ export function createControl(chrome, o = {}) {
     }
     const s = session(tab.id);
     sessions.set(tab.id, s);
+    save();
+    // Chrome tiết kiệm bộ nhớ không được bỏ tab Synchro đang làm (trang tải lại, mất việc đang dở).
+    chrome.tabs.update(tab.id, { autoDiscardable: false }).catch(() => {});
     await A.prepare("me", s);
     // Dải điều khiển trong trang (cả các trang mở sau trong tab này) và nút Dừng.
     const src = overlayScript(strings());
@@ -132,8 +144,10 @@ export function createControl(chrome, o = {}) {
     const windowId = await windowFor();
     let tab;
     if (windowId != null) tab = await chrome.tabs.create({ url: url || "about:blank", active: true, windowId });
-    else { const w = await chrome.windows.create({ url: url || "about:blank", focused: true }); tab = w.tabs?.[0] ?? (await chrome.tabs.query({ windowId: w.id }))[0]; }
+    // Chưa có cửa sổ nào: mở cửa sổ mới nhưng không giành focus của người dùng (họ đang làm việc ở ứng dụng khác).
+    else { const w = await chrome.windows.create({ url: url || "about:blank", focused: false }); tab = w.tabs?.[0] ?? (await chrome.tabs.query({ windowId: w.id }))[0]; }
     mine.add(tab.id);
+    save();
     await group(tab.id);
     return tab;
   }
@@ -176,14 +190,38 @@ export function createControl(chrome, o = {}) {
       if (!(await allowed(tab))) { tab = await pick(); S.tab = String(tab.id); }
       return attach(tab);
     },
-    // Chụp màn hình: tab phải đang hiện trong cửa sổ; tạm ẩn dải điều khiển để ảnh là trang thật.
+    // Chụp màn hình (chụp được cả tab ở nền, cửa sổ thu nhỏ: không chuyển tab của người dùng); tạm ẩn dải điều khiển để ảnh là trang thật.
     capture: async (_u, c, phase) => {
       if (phase === "start") {
-        const tab = await chrome.tabs.get(c.tabId).catch(() => null);
-        if (tab && !tab.active) { await chrome.tabs.update(c.tabId, { active: true }).catch(() => {}); await sleep(250); }
         await c.send("Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.pause(true)" }, 3000).catch(() => {});
         await sleep(60);
       } else await c.send("Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.pause(false)" }, 3000).catch(() => {});
+    },
+    // Quyền của trang: như người dùng bấm Cho phép / Chặn trên hộp hỏi quyền của Chrome (cài đặt theo trang).
+    permission: async (_u, { origin, name, setting }) => {
+      const cs = chrome.contentSettings?.[SETTING[name]];
+      if (!cs) throw new BrowserError(400, `Trình duyệt này chưa cho tiện ích đặt quyền "${name}".`);
+      await cs.set({ primaryPattern: `${origin}/*`, setting });
+    },
+    // Đọc lại tệp đã tải về: lấy lại từ địa chỉ tải (kèm đăng nhập của trình duyệt); tệp blob: đọc trong trang đã tạo ra nó.
+    readDownload: async (_u, d) => {
+      const [item] = (await chrome.downloads?.search({ id: d.id }).catch(() => [])) ?? [];
+      if (!item) throw new BrowserError(404, `Không còn tệp "${d.name}" trong danh sách tải xuống của trình duyệt.`);
+      if (item.fileSize > MAX_READ || item.totalBytes > MAX_READ) throw new BrowserError(413, `Tệp "${d.name}" lớn quá để đọc lại; tối đa ${MAX_READ / 1048576} MB.`);
+      const url = item.finalUrl || item.url;
+      const fail = () => new BrowserError(422, `Không đọc lại được "${d.name}" từ trình duyệt (tệp tạo ra từ biểu mẫu hay liên kết dùng một lần). Tệp đã lưu ở ${item.filename || "thư mục Tải xuống"}.`);
+      if (/^blob:/i.test(url)) {
+        const s = sessions.get(Number(S.tab));
+        if (!s) throw fail();
+        const r = await s.send("Runtime.evaluate", { expression: `fetch(${JSON.stringify(url)}).then((r) => r.blob()).then((b) => new Promise((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result).split(",")[1] || ""); f.onerror = no; f.readAsDataURL(b); }))`, awaitPromise: true, returnByValue: true }, 30_000).catch(() => null);
+        if (!r?.result?.value && r?.result?.value !== "") throw fail();
+        return { data: r.result.value, size: Math.floor(r.result.value.length * 0.75), mime: item.mime ?? "" };
+      }
+      const res = await fetch(url, { credentials: "include" }).catch(() => null);
+      if (!res?.ok) throw fail();
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.length > MAX_READ) throw new BrowserError(413, `Tệp "${d.name}" lớn quá để đọc lại; tối đa ${MAX_READ / 1048576} MB.`);
+      return { data: b64(buf), size: buf.length, mime: item.mime || res.headers.get("content-type") || "" };
     },
     allowFile: false, humanize: false, nativeDialogs: true, keepOne: false,
   });
@@ -195,6 +233,25 @@ export function createControl(chrome, o = {}) {
     const cur = tab ? { title: (page?.url && page.title) || tab.title || "", url: page?.url || tab.url || "" } : null;
     notify({ t: "status", scope, tab: cur, tabs: list.length, acting: S.acting > 0 });
     o.onStatus?.(status());
+    save();
+  }
+  // Giữ qua lần service worker khởi động lại: tab đang làm, các tab vừa dùng, tab Synchro mở, tab đang gắn dải điều khiển.
+  let saveT = 0;
+  function save() { clearTimeout(saveT); saveT = setTimeout(() => o.save?.({ tab: S.tab, hist: S.hist ?? [], mine: [...mine], attached: [...sessions.keys()] }), 50); }
+  async function restore(v) {
+    if (!v || typeof v !== "object") return;
+    if (!S.tab && v.tab) S.tab = String(v.tab);
+    if (!S.hist?.length && Array.isArray(v.hist)) S.hist = v.hist.map(String).slice(-20);
+    for (const id of v.mine ?? []) mine.add(Number(id));
+    // Dải "Synchro đang điều khiển" còn sót trên tab từ lần chạy trước (service worker bị tắt giữa chừng): gỡ đi.
+    for (const tabId of (v.attached ?? []).map(Number)) {
+      if (sessions.has(tabId)) continue;
+      const rm = () => chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.remove()" });
+      try { await rm(); }
+      catch { try { await chrome.debugger.attach({ tabId }, "1.3"); await rm().catch(() => {}); } catch { continue; } }
+      if (!sessions.has(tabId)) await chrome.debugger.detach({ tabId }).catch(() => {});
+    }
+    save();
   }
   const status = () => ({ scope, acting: S.acting > 0, tab: S.tab, attached: [...sessions.keys()], shared: [...shared], halted: !!halt });
 
@@ -233,13 +290,23 @@ export function createControl(chrome, o = {}) {
 
   // Tab Synchro mở ra (trang mở tab mới, window.open) thuộc về Synchro; tab đóng thì quên.
   chrome.tabs.onCreated?.addListener((t) => { if (t.openerTabId != null && (mine.has(t.openerTabId) || sessions.has(t.openerTabId))) { mine.add(t.id); group(t.id); } });
-  chrome.tabs.onRemoved?.addListener((id) => { mine.delete(id); shared.delete(id); sessions.delete(id); if (Number(S.tab) === id) S.tab = ""; o.onShared?.([...shared]); });
+  // Tab đang làm đóng (cửa sổ đăng nhập bật lên tự đóng): làm tiếp ở tab dùng trước đó.
+  chrome.tabs.onRemoved?.addListener((id) => {
+    const ss = sessions.get(id);
+    if (ss) { ss.closed = true; ss.emit("close"); }
+    mine.delete(id); shared.delete(id); sessions.delete(id);
+    if (Number(S.tab) === id) S.tab = [...(S.hist ?? [])].reverse().find((x) => Number(x) !== id) ?? "";
+    o.onShared?.([...shared]); save();
+  });
+  // Chrome đánh thức service worker khi tab đổi (kể cả lúc nó vừa bị tắt giữa việc dài): kết nối lại Synchro sớm, không đợi báo thức.
+  chrome.tabs.onUpdated?.addListener(() => {});
+  chrome.tabs.onActivated?.addListener(() => {});
   // Tệp tải về (thư mục Tải xuống của người dùng): báo lại cho model khi Synchro đang điều khiển.
-  chrome.downloads?.onCreated?.addListener((d) => { if (!sessions.size) return; S.downloads ??= []; S.downloads.unshift({ id: d.id, name: String(d.filename || d.url || "").split(/[\\/]/).pop(), url: d.url, state: "inProgress" }); S.downloads.length = Math.min(S.downloads.length, 30); });
-  chrome.downloads?.onChanged?.addListener((d) => { const x = S.downloads?.find((y) => y.id === d.id); if (!x) return; if (d.filename?.current) x.name = d.filename.current.split(/[\\/]/).pop(); if (d.state?.current === "complete") x.state = "completed"; else if (d.state?.current === "interrupted") x.state = "canceled"; });
+  chrome.downloads?.onCreated?.addListener((d) => { if (!sessions.size) return; S.downloads ??= []; S.downloads.unshift({ id: d.id, name: String(d.filename || d.url || "").split(/[\\/]/).pop(), url: d.url, ...(d.filename ? { path: d.filename } : {}), state: "inProgress" }); S.downloads.length = Math.min(S.downloads.length, 30); });
+  chrome.downloads?.onChanged?.addListener((d) => { const x = S.downloads?.find((y) => y.id === d.id); if (!x) return; if (d.filename?.current) { x.name = d.filename.current.split(/[\\/]/).pop(); x.path = d.filename.current; } if (d.state?.current === "complete") x.state = "completed"; else if (d.state?.current === "interrupted") x.state = "canceled"; });
 
   return {
-    call, stop, release, report, status,
+    call, stop, release, report, status, restore,
     scope: () => scope,
     setScope(v) { scope = v === "group" ? "group" : "all"; report().catch(() => {}); return scope; },
     async share(tabId, on = true) {

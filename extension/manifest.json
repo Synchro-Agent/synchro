@@ -12,7 +12,8 @@
     "storage",
     "alarms",
     "downloads",
-    "offscreen"
+    "offscreen",
+    "contentSettings"
   ],
   "host_permissions": [
     "<all_urls>"

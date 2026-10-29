@@ -1,7 +1,11 @@
 // Mọi thao tác trên trình duyệt, như người thật: gõ (kể cả ô kiểu React, ô soạn thư, phím từng ký tự), chọn (ô chọn, danh sách tự làm, đánh dấu,
 // nút gạt, thanh trượt), chuột (bấm, bấm đúp, chuột phải, giữ Shift, rê để mở menu, bấm theo tọa độ trên ảnh chụp), cuộn (khung riêng, cuộn vô tận),
 // kéo thả (HTML5 và kéo bằng chuột), tải tệp lên / về, hộp thoại, chờ nội dung, phím tắt, khung con, shadow DOM, nút cố định nằm dưới dải
-// "Synchro đang điều khiển", tab mới, biểu mẫu, lùi / tiến, JavaScript, console, mạng, gộp nhiều thao tác. Trang thử: tests/fixtures/browser-lab.html.
+// "Synchro đang điều khiển", tab mới, biểu mẫu, lùi / tiến, JavaScript, console, mạng, gộp nhiều thao tác; khung con khác nguồn, nút tải lên mở ô
+// chọn tệp ẩn, vùng kéo thả tệp, tệp đính kèm trong chat, tải về rồi đọc / tải tiếp lên, ô ngày / giờ / ô chọn của trình duyệt, lịch chọn ngày,
+// trình soạn thảo (Lexical, canvas kiểu Google Docs, ô chat Enter là gửi, dán có định dạng), sao chép / dán, chuột phải không có menu riêng,
+// cửa sổ đăng nhập bật lên tự đóng, quyền vị trí / thông báo, tab ở nền, mất kết nối giữa chừng (service worker bị tắt).
+// Trang thử: tests/fixtures/browser-lab.html (+ browser-lab-frame.html, browser-lab-popup.html).
 // Chạy cùng một chuỗi thao tác ở:
 //   ext-mock  tiện ích giả lập (scripts/mock-extension.mjs: mã của tiện ích trên Chrome thật qua lớp giả chrome.*);
 //   ext-real  tiện ích thật (Manifest V3) nạp vào Chrome thật bằng Extensions.loadUnpacked, màn hình độ phân giải cao (tỉ lệ 2) như Retina;
@@ -49,6 +53,7 @@ if (!U) { console.error("Không đăng nhập được tài khoản thử."); pr
 const removeAll = async () => { for (const d of (await api("GET", "/api/browser/ext")).j?.devices ?? []) await api("POST", "/api/browser/ext", { op: "remove", id: d.id }); };
 const chromeBin = findChrome();
 const UPLOAD = path.join(os.tmpdir(), `synchro-lab-${process.pid}.txt`);
+const USER_TAB = "data:text/html;charset=utf-8,<title>Tab của người dùng</title><p>Người dùng đang đọc tab này</p>";
 fs.writeFileSync(UPLOAD, "Tệp thử của Synchro\n".repeat(10));
 
 // Một thao tác browser_* gửi thẳng tới nơi chạy (cùng đường máy chủ Synchro dùng).
@@ -255,7 +260,7 @@ async function lab(name, act, o = {}) {
   console.log("11. JavaScript, console, mạng, gộp nhiều thao tác");
   await act({ action: "navigate", url: LAB });
   r = await act({ action: "eval", expression: "document.querySelectorAll('section').length" });
-  ok(JSON.parse(r.value) === 10, "chạy JavaScript trong trang", r);
+  ok(JSON.parse(r.value) === 16, "chạy JavaScript trong trang", r);
   await act({ action: "click", ref: await ref("Gọi máy chủ", "button") });
   await sleep(500);
   r = await act({ action: "console" });
@@ -272,6 +277,148 @@ async function lab(name, act, o = {}) {
   ] });
   s = await st();
   ok(r.done === 6 && r.total === 6 && s.react === "Trần Văn Bình" && s.city === "hn" && s.chk && s.ship === "fast" && s.fixed === 1, "gộp 6 thao tác trong một lần gọi (điền cả biểu mẫu)", { done: r.done, s: { react: s.react, city: s.city, chk: s.chk, ship: s.ship, fixed: s.fixed }, err: (r.results ?? []).find((x) => x.error) });
+
+  console.log("12. Khung con khác nguồn (biểu mẫu nhúng)");
+  r = await act({ action: "read" });
+  const xt = String(r.tree ?? "");
+  ok(/\[iframe Đăng ký nhận tin\]/.test(xt) && /textbox "Email nhận tin"/.test(xt) && /combobox "Tần suất"/.test(xt), "đọc được khung con khác nguồn (127.0.0.1 ↔ localhost) như phần còn lại của trang", xt.slice(Math.max(0, xt.indexOf("Đăng ký nhận tin") - 40), xt.indexOf("Đăng ký nhận tin") + 300));
+  const em = await ref("Email nhận tin", "textbox");
+  ok(em >= 100000, "phần tử trong khung con khác nguồn có ref riêng", em);
+  await act({ action: "type", ref: em, text: "huong@vidu.vn" });
+  await act({ action: "select", ref: await ref("Tần suất", "combobox"), value: "Hằng tuần" });
+  r = await act({ action: "click", ref: await ref("Đăng ký", "button") });
+  await sleep(200);
+  s = await st();
+  ok(s.sub === "huong@vidu.vn" && s.freq === "w", "gõ, chọn, bấm trong khung con khác nguồn", { sub: s.sub, freq: s.freq, err: r.error });
+  r = await act({ action: "text" });
+  ok(/Đã đăng ký huong@vidu\.vn/.test(String(r.text)), "đọc chữ trong khung con khác nguồn (browser_text)");
+  r = await act({ action: "wait", text: "Đã đăng ký huong", timeout: 3000 });
+  ok(r.found === true, "chờ chữ hiện trong khung con khác nguồn", r);
+
+  console.log("13. Tải lên kiểu ứng dụng web, tải về rồi đọc");
+  const att = { name: "cv-nguyen-thi-huong.txt", mime: "text/plain", data: Buffer.from("Hồ sơ của Hương\n").toString("base64") };
+  const attSize = Buffer.byteLength("Hồ sơ của Hương\n");
+  r = await act({ action: "upload", ref: await ref("Chọn tệp CV", "button"), files: [att] });
+  s = await st();
+  ok(s.cv.length === 1 && s.cv[0] === `${att.name}:${attSize}`, "tệp đính kèm trong chat → nút “Chọn tệp CV” (ô chọn tệp ẩn): Synchro bấm nút rồi điền vào hộp chọn tệp", { cv: s.cv, r: r.error ?? r.note });
+  r = await act({ action: "click", ref: await ref("Chọn tệp CV", "button") });
+  ok(/hộp chọn tệp/.test(r.note ?? ""), "bấm nút tải lên: hộp chọn tệp của máy bị chặn (không hiện lên màn hình), model được báo", r.note ?? r.error);
+  r = await act({ action: "upload", path: UPLOAD });
+  s = await st();
+  ok(s.cv[0] === `${path.basename(UPLOAD)}:${fs.statSync(UPLOAD).size}`, "điền tệp trên máy vào hộp chọn tệp trang vừa mở (không cần ref)", { cv: s.cv, err: r.error });
+  r = await act({ action: "upload", ref: await ref("Kéo tệp vào đây"), files: [att] });
+  s = await st();
+  ok(s.dropped[0] === `${att.name}:${attSize}`, "kéo thả tệp đính kèm vào vùng thả tệp (không có ô chọn tệp)", { dropped: s.dropped, r: r.error ?? r.note });
+  r = await act({ action: "upload", ref: await ref("Đã nhận"), path: UPLOAD });
+  s = await st();
+  ok(s.dropped[0] === `${path.basename(UPLOAD)}:${fs.statSync(UPLOAD).size}`, "kéo thả tệp trên máy vào vùng thả tệp (sự kiện kéo thả thật)", { dropped: s.dropped, r: r.error ?? r.note });
+  if (o.downloads) {
+    await act({ action: "click", ref: await ref("Tải bảng giá", "link") });
+    await sleep(800);
+    r = await act({ action: "downloads", op: "read", name: "bang-gia.csv" });
+    const csv = r.data ? Buffer.from(r.data, "base64").toString("utf8") : "";
+    ok(/Áo khoác,450000/.test(csv), "tải tệp về rồi đọc lại nội dung (bảng giá CSV)", r.error ?? csv.slice(0, 80));
+    const dl = (await act({ action: "downloads" })).downloads ?? [];
+    const got = dl.find((d) => /bang-gia/.test(d.name));
+    if (got?.path) {
+      r = await act({ action: "upload", ref: await ref("Ảnh đại diện"), path: got.path });
+      ok((await st()).files.some((f) => /^bang-gia.*\.csv:/.test(f)), "tải tiếp tệp vừa tải về lên trang (đường dẫn lấy từ danh sách tải về)", { err: r.error, files: (await st()).files });
+    } else ok(false, "danh sách tải về có đường dẫn tệp trên máy", dl);
+  }
+
+  console.log("14. Ngày giờ, lịch chọn ngày, ô chọn của trình duyệt");
+  r = await act({ action: "click", ref: await ref("Ngày sinh", "textbox") });
+  ok(/browser_select/.test(r.note ?? ""), "bấm ô ngày của trình duyệt: không mở bảng chọn của hệ điều hành, model được hướng dẫn đặt giá trị", r.note ?? r.error);
+  await act({ action: "select", ref: await ref("Ngày sinh", "textbox"), value: "29/10/1995" });
+  await act({ action: "type", ref: await ref("Giờ hẹn", "textbox"), text: "2:30 PM" });
+  await act({ action: "select", ref: await ref("Lịch hẹn", "textbox"), value: "2026-11-05 09:15" });
+  s = await st();
+  ok(s.dob === "1995-10-29" && s.appt === "14:30" && s.meet === "2026-11-05T09:15", "ô ngày / giờ của trình duyệt nhận cả cách viết 29/10/1995, 2:30 PM", { dob: s.dob, appt: s.appt, meet: s.meet });
+  r = await act({ action: "select", ref: await ref("Ngày sinh", "textbox"), value: "hôm qua" });
+  ok(/YYYY-MM-DD/.test(r.error ?? ""), "ngày sai dạng: báo rõ dạng cần dùng", r.error);
+  await act({ action: "click", ref: await ref("Chọn ngày giao", "button") });
+  await act({ action: "click", ref: await ref("Tháng sau", "button") });
+  await act({ action: "click", ref: await ref("15/11/2026", "button") });
+  ok((await st()).ship === "2026-11-15", "lịch chọn ngày tự làm: sang tháng sau, chọn ngày 15", (await st()).ship);
+  r = await act({ action: "click", ref: await ref("Tỉnh / thành", "combobox") });
+  ok(/browser_select/.test(r.note ?? "") && /Đà Nẵng/.test(r.note ?? ""), "bấm ô chọn của trình duyệt: không mở danh sách của hệ điều hành, model nhận các lựa chọn", r.note ?? r.error);
+
+  console.log("15. Trình soạn thảo");
+  await act({ action: "type", ref: await ref("Trình soạn thảo khối", "textbox"), text: "Kế hoạch tuần" });
+  s = await st();
+  ok(s.lex === "Kế hoạch tuần" && s.lexTrusted === true, "trình soạn thảo kiểu Notion / Lexical (tự giữ nội dung qua beforeinput)", { lex: s.lex, trusted: s.lexTrusted });
+  const dr = JSON.parse((await act({ action: "eval", expression: "(() => { const c = document.getElementById('doc'); c.scrollIntoView({ block: 'center' }); const r = c.getBoundingClientRect(); return { x: r.left + 40, y: r.top + 30 }; })()" })).value);
+  await act({ action: "click", x: Math.round(dr.x), y: Math.round(dr.y) });
+  await act({ action: "type", text: "Báo cáo quý 4" });
+  ok((await st()).doc === "Báo cáo quý 4", "tài liệu vẽ chữ trên canvas kiểu Google Docs: bấm vào trang rồi gõ", (await st()).doc);
+  await act({ action: "type", ref: await ref("Nhắn tin", "textbox"), text: "Chào cả nhóm\nHọp lúc 3 giờ", newline: "shift+enter" });
+  await act({ action: "key", key: "Enter" });
+  ok(JSON.stringify((await st()).sent) === JSON.stringify(["Chào cả nhóm\nHọp lúc 3 giờ"]), "ô chat Enter là gửi (Slack, Messenger): xuống dòng bằng shift+Enter, gửi đúng một tin", (await st()).sent);
+  await act({ action: "type", ref: await ref("Ghi chú có định dạng", "textbox"), text: "Doanh thu tăng 20%", html: "<p>Doanh thu <b>tăng 20%</b></p>" });
+  s = await st();
+  ok(/<b>tăng 20%<\/b>/.test(s.paste?.html ?? "") && s.paste?.text === "Doanh thu tăng 20%", "dán nội dung có định dạng vào trình soạn thảo như ctrl+v (Gmail, Docs, Notion)", s.paste);
+
+  console.log("16. Sao chép, dán, menu chuột phải");
+  await act({ action: "click", ref: await ref("Mã ưu đãi", "textbox") });
+  r = await act({ action: "key", key: "ctrl+a ctrl+c" });
+  ok(r.copied === "MA-GIAM-2026", "ctrl+a, ctrl+c: chọn hết rồi sao chép (đúng cả trên macOS), model nhận chữ đã chép", r.copied ?? r.error);
+  await act({ action: "click", ref: await ref("Dán mã vào đây", "textbox") });
+  await act({ action: "key", key: "ctrl+v" });
+  ok((await st()).pasted === "MA-GIAM-2026", "ctrl+v dán từ bộ nhớ tạm thật", (await st()).pasted);
+  r = await act({ action: "click", ref: await ref("Đoạn chữ thường không có menu riêng"), button: "right" });
+  s = await st();
+  ok(s.nativeCtx === 1 && /menu chuột phải của trình duyệt/.test(r.note ?? ""), "chuột phải chỗ không có menu riêng: trang nhận sự kiện, menu của trình duyệt không bật lên che màn hình, model được hướng dẫn", { n: s.nativeCtx, note: r.note });
+  r = await act({ action: "eval", expression: "1 + 1" });
+  ok(r.value === "2", "trang vẫn phản hồi bình thường sau chuột phải", r);
+
+  console.log("17. Cửa sổ bật lên, quyền của trang");
+  r = await act({ action: "click", ref: await ref("Đăng nhập bằng Synchro ID", "button") });
+  ok(r.title === "Đăng nhập" && /tab mới/.test(r.note ?? ""), "cửa sổ đăng nhập bật lên (window.open kiểu popup): Synchro chuyển sang", r);
+  r = await act({ action: "click", ref: await ref("Cho phép", "button") });
+  ok(r.title === "Phòng thử trình duyệt" && /tự đóng/.test(r.note ?? ""), "cửa sổ tự đóng sau khi bấm Cho phép: Synchro quay về trang trước", r);
+  ok((await st()).login === "ok", "trang nhận kết quả đăng nhập từ cửa sổ bật lên");
+  r = await act({ action: "click", ref: await ref("Tìm cửa hàng gần tôi", "button") });
+  ok((r.permissions ?? []).some((x) => /^geolocation/.test(x)), "trang xin quyền vị trí: model được báo (hộp hỏi quyền nằm ngoài trang)", r.permissions ?? r);
+  r = await act({ action: "permission", name: "geolocation", allow: true, latitude: 10.7769, longitude: 106.7009 });
+  ok(r.state === "granted", "cho trang quyền vị trí (như bấm Cho phép)", r);
+  await act({ action: "click", ref: await ref("Tìm cửa hàng gần tôi", "button") });
+  for (let i = 0; i < 20 && !(await st()).geo; i++) await sleep(150);
+  s = await st();
+  ok(s.geo?.lat === 10.7769 && s.geo?.lng === 106.7009, "trang nhận đúng vị trí người dùng nói", { geo: s.geo, err: s.geoErr });
+  r = await act({ action: "permission", name: "notifications", allow: false });
+  await act({ action: "click", ref: await ref("Bật thông báo", "button") });
+  for (let i = 0; i < 10 && !(await st()).notif; i++) await sleep(100);
+  ok((await st()).notif === "denied" && r.state === "denied", "chặn thông báo đẩy (như bấm Chặn)", { notif: (await st()).notif, r });
+
+  if (o.background) {
+    console.log("18. Làm việc khi tab ở nền, cửa sổ Chrome sau ứng dụng khác");
+    const user = await o.background();
+    s = await st();
+    const feed0 = s.feed;
+    await act({ action: "click", ref: await ref("Chạy hoạt ảnh", "button") });
+    await sleep(900);
+    s = await st();
+    ok(s.anim > 10, `tab của Synchro ở nền: trang vẫn vẽ, hoạt ảnh chạy (${s.anim} khung hình trong 0,6 giây)`, s.anim);
+    for (let i = 0; i < 6; i++) await act({ action: "scroll", dy: 4000 });
+    await sleep(300);
+    ok((await st()).feed > feed0, "cuộn vô tận ở tab nền vẫn tải thêm bài", { before: feed0, after: (await st()).feed });
+    const shot2 = await act({ action: "screenshot" });
+    ok(!!jpegSize(shot2.image ?? ""), "chụp màn hình tab ở nền", shot2.error);
+    ok(await user.front(), "không giành tab người dùng đang xem (Synchro không chuyển tab, không kéo cửa sổ lên)");
+    await user.close();
+  }
+  if (o.interrupt) {
+    console.log("19. Tiện ích mất kết nối giữa chừng");
+    const pending = act({ action: "wait", ms: 6000 });
+    await sleep(700);
+    const how = await o.interrupt();
+    r = await pending;
+    ok(r.status === 503 && /mất kết nối giữa chừng/.test(r.error ?? ""), `${how}: thao tác đang chạy báo rõ bị gián đoạn, không treo tới hết giờ`, r);
+    const t0 = Date.now();
+    r = await act({ action: "read", filter: "interactive" });
+    ok(!r.error && r.title === "Phòng thử trình duyệt", `thao tác tiếp theo đợi tiện ích nối lại (${((Date.now() - t0) / 1000).toFixed(1)} giây) rồi làm tiếp đúng tab đang dở`, r.error ?? r.title);
+    ok(!/Synchro (đang điều khiển|is controlling)/.test(String(r.tree)), "không còn dải điều khiển cũ lẫn vào trang");
+  }
 }
 
 // ---------------------------------------------------------------- nơi chạy
@@ -283,10 +430,18 @@ for (const target of TARGETS) {
     const prof = path.resolve("data-mock/ext-lab-mock");
     fs.rmSync(prof, { recursive: true, force: true });
     const proc = spawn(process.execPath, ["scripts/mock-extension.mjs", "--server", B, "--code", code, "--headless", "--quiet", "--profile", prof], { stdio: ["ignore", "pipe", "inherit"] });
-    await new Promise((res) => { let buf = ""; proc.stdout.on("data", (d) => { buf += d; if (buf.includes("{\"ready\"")) res(); }); proc.on("exit", res); setTimeout(res, 30_000); });
+    let ready = null;
+    await new Promise((res) => { let buf = ""; proc.stdout.on("data", (d) => { buf += d; const m = /\{"ready".*\}/.exec(buf); if (m && !ready) { ready = JSON.parse(m[0]); res(); } }); proc.on("exit", res); setTimeout(res, 30_000); });
+    const ctl = (p, b) => fetch(`http://127.0.0.1:${ready.control}${p}`, { method: b ? "POST" : "GET", headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());
     for (let i = 0; i < 40 && !(await api("GET", "/api/browser/ext")).j?.connected; i++) await sleep(250);
-    try { await lab("Tiện ích giả lập (ext-mock)", runner("ext"), { downloads: false }); }
-    finally { proc.kill("SIGTERM"); await removeAll(); }
+    try {
+      await lab("Tiện ích giả lập (ext-mock)", runner("ext"), {
+        downloads: true,
+        // Người dùng mở tab khác lên trước: tab của Synchro nằm ở nền.
+        background: async () => { const { tab } = await ctl("/open", { url: USER_TAB }); return { front: async () => (await ctl("/state")).tabs.find((t) => t.active)?.id === tab, close: async () => {} }; },
+        interrupt: async () => { await ctl("/drop", { ms: 1500 }); return "Mất kết nối một lúc"; },
+      });
+    } finally { proc.kill("SIGTERM"); await removeAll(); }
   }
   if (target === "ext-real") {
     await removeAll();
@@ -294,6 +449,11 @@ for (const target of TARGETS) {
     const ext = writeExtension(process.cwd(), B, path.join(dir, "extension"));
     const prof = path.join(dir, "chrome");
     fs.rmSync(prof, { recursive: true, force: true });
+    // Tệp tải về vào thư mục riêng của lần thử (không lẫn vào thư mục Tải xuống của máy).
+    const dlDir = path.join(dir, "Downloads");
+    fs.rmSync(dlDir, { recursive: true, force: true });
+    fs.mkdirSync(path.join(prof, "Default"), { recursive: true });
+    fs.writeFileSync(path.join(prof, "Default", "Preferences"), JSON.stringify({ download: { default_directory: dlDir, prompt_for_download: false, directory_upgrade: true }, savefile: { default_directory: dlDir } }));
     // Chrome thật, chạy ẩn, màn hình tỉ lệ 2 như Retina; nạp tiện ích qua đường ống DevTools (Chrome có thương hiệu không còn --load-extension).
     const proc = spawn(chromeBin, ["--headless=new", "--enable-unsafe-extension-debugging", "--remote-debugging-pipe", "--remote-debugging-port=0", "--force-device-scale-factor=2",
       "--no-first-run", "--no-default-browser-check", `--user-data-dir=${prof}`, "--window-size=1280,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
@@ -315,7 +475,21 @@ for (const target of TARGETS) {
       for (let i = 0; i < 40 && !(await api("GET", "/api/browser/ext")).j?.connected; i++) await sleep(250);
       ok((await api("GET", "/api/browser/ext")).j?.connected, "tiện ích thật: ghép nối qua cửa sổ tiện ích");
       await cdp("Target.closeTarget", { targetId });
-      await lab("Tiện ích thật trong Chrome, màn hình tỉ lệ 2 (ext-real)", runner("ext"), { downloads: true });
+      await lab("Tiện ích thật trong Chrome, màn hình tỉ lệ 2 (ext-real)", runner("ext"), {
+        downloads: true,
+        background: async () => {
+          const { targetId } = await cdp("Target.createTarget", { url: USER_TAB });
+          await sleep(400);
+          const { sessionId } = await cdp("Target.attachToTarget", { targetId, flatten: true });
+          return { front: async () => (await cdp("Runtime.evaluate", { expression: "document.visibilityState", returnByValue: true }, sessionId)).result.value === "visible", close: () => cdp("Target.closeTarget", { targetId }) };
+        },
+        // Chrome tắt service worker của tiện ích giữa lúc đang làm (như khi rảnh lâu, cập nhật, thiếu bộ nhớ).
+        interrupt: async () => {
+          const sw = (await cdp("Target.getTargets")).targetInfos.find((t) => t.type === "service_worker" && t.url.startsWith(`chrome-extension://${extId}/`));
+          if (sw) await cdp("Target.closeTarget", { targetId: sw.targetId }).catch((e) => console.log("   (không tắt được service worker:", e.message, ")"));
+          return "Service worker của tiện ích bị Chrome tắt";
+        },
+      });
     } finally { proc.kill("SIGTERM"); await removeAll(); }
   }
   if (target === "synchro") await lab("Trình duyệt của Synchro (synchro)", runner("synchro"), { downloads: true });

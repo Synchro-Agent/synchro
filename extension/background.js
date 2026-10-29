@@ -57,16 +57,18 @@ const control = createControl(chrome, {
   notify: (m) => link?.send(m),
   onStatus: (s) => { acting = s.acting; badge(); },
   onShared: (ids) => chrome.storage.session.set({ shared: ids }).catch(() => {}),
+  save: (v) => chrome.storage.session.set({ ctl: v }).catch(() => {}),
 });
 const link = createLink({ store, control, device, revoked: t("revoked"), onState: (s) => { linkState = s; badge(); chrome.runtime.sendMessage({ op: "changed" }).catch(() => {}); } });
 
 // Phạm vi đã chọn và các tab đã chia sẻ (giữ qua lần service worker khởi động lại).
 chrome.storage.local.get(["scope"]).then((c) => { if (c.scope) control.setScope(c.scope); });
-chrome.storage.session.get(["shared"]).then((c) => { for (const id of c.shared ?? []) control.share(id, true); }).catch(() => {});
+chrome.storage.session.get(["shared", "ctl"]).then((c) => { for (const id of c.shared ?? []) control.share(id, true); control.restore(c.ctl); }).catch(() => {});
 
 chrome.runtime.onStartup.addListener(() => { link.connect(); watchTheme(); });
-chrome.runtime.onInstalled.addListener(() => { link.connect(); chrome.alarms.create("synchro-link", { periodInMinutes: 1 }); });
-// Dự phòng: mỗi phút kiểm tra một lần, mất kết nối thì nối lại (báo thức cũng đánh thức service worker nếu Chrome đã tắt nó).
+chrome.runtime.onInstalled.addListener(() => { link.connect(); chrome.alarms.create("synchro-link", { periodInMinutes: 0.5 }); });
+chrome.alarms.get("synchro-link").then((a) => { if (!a || a.periodInMinutes !== 0.5) chrome.alarms.create("synchro-link", { periodInMinutes: 0.5 }); }).catch(() => {});
+// Dự phòng: 30 giây kiểm tra một lần, mất kết nối thì nối lại (báo thức cũng đánh thức service worker nếu Chrome đã tắt nó).
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === "synchro-link" && !link.online()) link.connect(); });
 link.connect();
 
