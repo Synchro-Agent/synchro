@@ -1,14 +1,25 @@
 "use client";
-// Hộp thư (kết quả tác vụ nền) và tác vụ đã hẹn: tạo, sửa lịch, bật / tắt, chạy ngay. Số kết quả chưa đọc hiện trên thanh bên.
-import { useCallback, useEffect, useRef, useState } from "react";
+// Hộp thư tự động hóa: giao việc bằng câu thường → Synchro lên kế hoạch (tên, lịch, trình duyệt, hướng dẫn chi tiết), người dùng xem / sửa rồi tạo.
+// Việc chạy nền trên máy chủ theo lịch, kể cả khi máy người dùng tắt hay đã đóng trang. Ba mục: Kết quả (theo ngày, xem tiến độ đang chạy, nhật ký),
+// Cần duyệt (đề xuất của việc tự động: tạo skill, hành động, trang web, công cụ — duyệt là Synchro làm), Việc tự động (lịch, bật / tắt, chạy ngay).
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
 import { Markdown } from "./md";
 import { artifactsAsCode, hasArtifacts, splitArtifacts } from "./artifacts";
+import { AUTO, modelName, useModels } from "./models";
+import { allowsModel } from "./catalog";
+import { useApp } from "./store";
 
-type Schedule = { kind: "once" | "hourly" | "daily" | "weekly"; time?: string; weekday?: number; tz: string };
-type Task = { id: string; title: string; prompt: string; schedule: Schedule; model: string | null; enabled: boolean; next_run_at: number | null; last_run_at: number | null; created_at: number; runs: number };
-type Item = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice"; link?: string };
+type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
+type BrowserPref = "auto" | "synchro" | "user";
+type Engine = "chat" | "code";
+type Last = { run: string; status: string; at: number } | null;
+type Task = { id: string; title: string; prompt: string; schedule: Schedule; model: string | null; enabled: boolean; next_run_at: number | null; last_run_at: number | null; created_at: number; runs: number; browser: BrowserPref; memory: boolean; wait_since: number | null; retries: number; last: Last; pending: number; engine: Engine; sid: string | null };
+type Item = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number };
+type Proposal = { id: string; task: string | null; taskTitle: string | null; run: string | null; kind: "skill" | "action" | "site" | "tool"; title: string; summary: string; payload: Record<string, unknown>; status: "pending" | "running" | "done" | "failed" | "rejected"; result: string | null; at: number; decidedAt: number | null };
+type Plan = { title: string; prompt: string; schedule: Schedule; browser: BrowserPref; engine: Engine; approvals: string[]; needs: string[] };
+type RunEv = { seq: number; at: number; kind: string; text: string };
 export const INBOX_CHANGED = "synchro:inbox";
 
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
@@ -18,31 +29,52 @@ const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> 
   return j as T;
 };
 const DAYS = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
-export const scheduleText = (s: Schedule) => s.kind === "once" ? tr("Một lần") : s.kind === "hourly" ? tr("Mỗi giờ") : s.kind === "daily" ? `${tr("Mỗi ngày lúc")} ${s.time}` : `${tr(DAYS[s.weekday ?? 1])} ${tr("hằng tuần lúc")} ${s.time}`;
+export const scheduleText = (s: Schedule) => s.kind === "once" ? tr("Một lần") : s.kind === "hourly" ? (s.every && s.every > 1 ? `${tr("Mỗi")} ${s.every} ${tr("giờ")}` : tr("Mỗi giờ"))
+  : s.kind === "daily" ? `${tr("Mỗi ngày lúc")} ${s.time}` : s.kind === "weekdays" ? `${tr("Thứ Hai – thứ Sáu lúc")} ${s.time}` : `${tr(DAYS[s.weekday ?? 1])} ${tr("hằng tuần lúc")} ${s.time}`;
 // Kết quả có artifact: tài liệu Markdown hiện thẳng như văn bản, loại khác hiện thành khối mã.
 const readable = (text: string) => (hasArtifacts(text) ? splitArtifacts(text).map((sg) => (sg.kind === "text" ? sg.text : sg.art.type === "markdown" ? `\n${sg.art.content}\n` : artifactsAsCode(`<artifact identifier="${sg.art.ident}" type="${sg.art.type}" title="${sg.art.title}">\n${sg.art.content}\n</artifact>`))).join("") : text);
+const z = (n: number) => String(n).padStart(2, "0");
 // "14:05" trong hôm nay, "14:05 · 26/10" các ngày khác.
-const when = (t: number) => {
-  const d = new Date(t), p = (n: number) => String(n).padStart(2, "0"), hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
-  return d.toDateString() === new Date().toDateString() ? hm : `${hm} · ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
-};
-// Mẫu tác vụ hay dùng (người dùng sửa lại cho đúng việc của mình).
-const TEMPLATES = [
-  { title: "Bản tin buổi sáng", prompt: "Tóm tắt những việc tôi cần chú ý hôm nay: lịch họp, email quan trọng chưa trả lời, việc đến hạn. Ngắn gọn theo mức độ ưu tiên.", schedule: { kind: "daily", time: "08:00" } },
-  { title: "Tổng kết tuần", prompt: "Tổng kết công việc tuần này của tôi: việc đã xong, việc còn tồn, rủi ro, và 3 ưu tiên cho tuần sau.", schedule: { kind: "weekly", weekday: 5, time: "17:00" } },
-  { title: "Theo dõi đối thủ", prompt: "Tìm tin mới trong tuần về các đối thủ cạnh tranh của chúng tôi (giá, sản phẩm mới, khuyến mãi) và tóm tắt điểm đáng chú ý.", schedule: { kind: "weekly", weekday: 1, time: "09:00" } },
-] as const;
+const when = (t: number) => { const d = new Date(t), hm = `${z(d.getHours())}:${z(d.getMinutes())}`; return d.toDateString() === new Date().toDateString() ? hm : `${hm} · ${z(d.getDate())}/${z(d.getMonth() + 1)}`; };
+const dayOf = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const dayLabel = (t: number) => { const today = dayOf(Date.now()); return t === today ? tr("Hôm nay") : t === today - 86_400_000 ? tr("Hôm qua") : `${tr(DAYS[new Date(t).getDay()])}, ${z(new Date(t).getDate())}/${z(new Date(t).getMonth() + 1)}`; };
+const excerpt = (t: string) => t.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-/** Số kết quả chưa đọc (thanh bên), kiểm tra mỗi phút và khi quay lại tab; có kết quả mới thì báo bằng thông báo trình duyệt nếu được phép. */
+// Việc mẫu: người dùng bấm để điền ô giao việc rồi sửa cho đúng ý mình.
+const EXAMPLES = [
+  { label: "Giá cổ phiếu mỗi sáng", text: "Thứ Hai đến thứ Sáu lúc 8h30 sáng, tra giá cổ phiếu FPT và VNM (giá đóng cửa hôm trước, khối lượng, tin mới), phân tích xu hướng và đưa ra gợi ý giao dịch kèm lý do và rủi ro" },
+  { label: "Repo GitHub hay → skill", text: "Mỗi ngày lúc 7h sáng, lên GitHub tìm những repo mới có ý tưởng hay, tốt, đột phá ở mọi lĩnh vực, phân tích từng repo và chuyển repo đáng giá nhất thành skill (hỏi tôi trước khi tạo skill)" },
+  { label: "Bản tin AI buổi sáng", text: "Mỗi ngày 7h sáng tóm tắt 5 tin công nghệ và AI quan trọng nhất trong 24 giờ qua, mỗi tin một đoạn ngắn kèm nguồn" },
+  { label: "Theo dõi giá sản phẩm", text: "Mỗi 6 giờ kiểm tra giá iPhone 17 Pro 256GB ở các nhà bán lẻ lớn tại Việt Nam, so với lần trước và báo rõ nơi nào đang rẻ nhất" },
+] as const;
+const BROWSERS: { id: BrowserPref; label: string; hint: string }[] = [
+  { id: "auto", label: "Tự chọn", hint: "Trình duyệt của Synchro trên máy chủ (chạy được cả khi máy bạn tắt); Chrome của bạn khi cần tài khoản bạn đã đăng nhập và Chrome đang mở." },
+  { id: "synchro", label: "Trình duyệt của Synchro", hint: "Luôn chạy trên máy chủ, không đụng tới Chrome của bạn." },
+  { id: "user", label: "Chrome của bạn", hint: "Dùng tài khoản bạn đã đăng nhập. Đến giờ mà Chrome đang tắt thì chờ bạn mở lại (tối đa 12 giờ) rồi mới chạy." },
+];
+// Cách làm: lượt chat đủ công cụ, hay Synchro Code trong workspace riêng của việc (repo, lệnh, pull request).
+const ENGINES: { id: Engine; label: string; hint: string }[] = [
+  { id: "chat", label: "Tra cứu & xử lý", hint: "Tìm web, trình duyệt, Chrome của bạn, connector, skill, chạy code. Hợp với báo cáo, phân tích, theo dõi, soạn nội dung." },
+  { id: "code", label: "Synchro Code", hint: "Làm trong workspace riêng, giữ lại giữa các lần chạy: sửa tệp, chạy lệnh, git, mở pull request trên repo của bạn." },
+];
+// Khả năng việc tự động hay cần (tên như ở Cài đặt → Khả năng).
+const CAPS: [string, string][] = [["browse", "Browser control"], ["code", "Code execution and file creation"], ["net", "Allow network egress"]];
+const KIND_ICON = { skill: <I.Sparkle size={16} />, action: <I.Rocket size={16} />, site: <I.Globe size={16} />, tool: <I.Plug size={16} /> };
+const KIND_LABEL = { skill: "Tạo skill", action: "Việc cần làm", site: "Cho phép trang web", tool: "Dùng công cụ" };
+const APPROVE = { skill: "Tạo skill", action: "Cho phép làm", site: "Cho phép trang này", tool: "Cho phép chạy" };
+
+/** Số mục cần xem (kết quả chưa đọc + đề xuất chờ duyệt) trên thanh bên, kiểm tra mỗi phút và khi quay lại tab;
+ *  có kết quả hay đề xuất mới khi tab đang ẩn thì báo bằng thông báo trình duyệt nếu được phép. */
 export function useInboxCount(on: boolean) {
   const [n, setN] = useState(0);
   const seen = useRef<Set<string> | null>(null);
   const load = useCallback(() => {
     if (!on) return;
-    api<{ items: Item[]; unread: number }>("GET", "/api/inbox").then((j) => {
-      setN(j.unread);
-      const done = j.items.filter((x) => x.status !== "running" && !x.read);
-      if (seen.current) for (const x of done) if (!seen.current.has(x.run) && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) new Notification(`Synchro · ${x.title}`, { body: tr("Tác vụ nền đã chạy xong. Mở Hộp thư để xem kết quả.") });
+    api<{ items: Item[]; unread: number; pending?: number }>("GET", "/api/inbox").then((j) => {
+      setN(j.unread + (j.pending ?? 0));
+      const done = j.items.filter((x) => x.status !== "running" && x.status !== "waiting" && !x.read);
+      if (seen.current) for (const x of done) if (!seen.current.has(x.run) && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) new Notification(`Synchro · ${x.title}`, { body: x.proposals ? tr("Việc tự động đã chạy xong và có đề xuất chờ bạn duyệt.") : tr("Việc tự động đã chạy xong. Mở Hộp thư để xem kết quả.") });
       seen.current = new Set(done.map((x) => x.run));
     }).catch(() => {});
   }, [on]);
@@ -55,118 +87,321 @@ export function useInboxCount(on: boolean) {
   }, [load]);
   return n;
 }
+const changed = () => window.dispatchEvent(new Event(INBOX_CHANGED));
 
-function TaskForm({ init, onClose, onSaved, say, model }: { init?: Task | null; onClose: () => void; onSaved: () => void; say: (m: string) => void; model?: string }) {
-  const [title, setTitle] = useState(init?.title ?? "");
-  const [prompt, setPrompt] = useState(init?.prompt ?? "");
-  const [kind, setKind] = useState<Schedule["kind"]>(init?.schedule.kind ?? "daily");
-  const [time, setTime] = useState(init?.schedule.time ?? "08:00");
-  const [weekday, setWeekday] = useState(init?.schedule.weekday ?? 1);
-  const [busy, setBusy] = useState(false);
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const save = async () => {
-    setBusy(true);
-    const body = { title, prompt, schedule: { kind, time, weekday, tz }, ...(init ? {} : model ? { model } : {}) };
+// ---------------------------------------------------------------- tạo / sửa việc tự động
+function ModelPick({ value, onChange }: { value: string; onChange: (k: string) => void }) {
+  const m = useModels();
+  const groups = m.providers.map((p) => ({ name: p.name, models: p.models.filter((x) => allowsModel(m.allowed, x.key)) })).filter((g) => g.models.length);
+  return (
+    <select className="field" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value={AUTO}>{tr("Tự động: chọn model hợp với việc, lỗi thì chuyển model khác")}</option>
+      {groups.map((g) => <optgroup key={g.name} label={g.name}>{g.models.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}</optgroup>)}
+      {value !== AUTO && !groups.some((g) => g.models.some((x) => x.key === value)) && <option value={value}>{modelName(value)}</option>}
+    </select>
+  );
+}
+
+function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null; plan?: Plan | null; onClose: () => void; onSaved: (t: Task, ran: boolean) => void; say: (m: string) => void }) {
+  const src = init ?? plan;
+  const [title, setTitle] = useState(src?.title ?? "");
+  const [prompt, setPrompt] = useState(src?.prompt ?? "");
+  const [kind, setKind] = useState<Schedule["kind"]>(src?.schedule.kind ?? "daily");
+  const [time, setTime] = useState(src?.schedule.time ?? "08:00");
+  const [weekday, setWeekday] = useState(src?.schedule.weekday ?? 1);
+  const [every, setEvery] = useState(src?.schedule.every ?? 1);
+  const [browser, setBrowser] = useState<BrowserPref>(src?.browser ?? "auto");
+  const codeOk = !!useApp().me?.perms.features.code;
+  const [engine, setEngine] = useState<Engine>(codeOk ? src?.engine ?? "chat" : "chat");
+  const [model, setModel] = useState(init?.model ?? AUTO);
+  const [memory, setMemory] = useState(init?.memory ?? true);
+  const [busy, setBusy] = useState<"" | "save" | "run">("");
+  const save = async (andRun: boolean) => {
+    setBusy(andRun ? "run" : "save");
+    const body = { title, prompt, schedule: { kind, time, weekday, every, tz: tz() }, browser, model, memory, engine };
     try {
-      if (init) await api("PATCH", `/api/tasks/${init.id}`, body); else await api("POST", "/api/tasks", body);
-      say(init ? tr("Đã lưu tác vụ") : kind === "once" ? tr("Đã tạo tác vụ, sẽ chạy trong vòng một phút") : tr("Đã hẹn tác vụ")); onSaved();
-    } catch (e) { say((e as Error).message); setBusy(false); }
+      const { task } = init ? await api<{ task: Task }>("PATCH", `/api/tasks/${init.id}`, body) : await api<{ task: Task }>("POST", "/api/tasks", body);
+      let ran = false;
+      if (andRun && kind !== "once") { await api("POST", `/api/tasks/${task.id}/run`).then(() => { ran = true; }, (e) => say((e as Error).message)); }
+      say(init ? tr("Đã lưu việc tự động") : kind === "once" ? tr("Đã tạo, Synchro chạy trong vòng một phút") : ran ? tr("Đã tạo và đang chạy thử, kết quả vào Hộp thư") : tr("Đã tạo việc tự động"));
+      onSaved(task, ran || kind === "once");
+    } catch (e) { say((e as Error).message); setBusy(""); }
   };
   return (
     <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <form className="modal tk-modal" onSubmit={(e) => { e.preventDefault(); save(); }}>
+      <form className="modal tk-modal" onSubmit={(e) => { e.preventDefault(); save(false); }}>
         <button type="button" className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
-        <h2>{init ? tr("Sửa tác vụ") : tr("Tác vụ nền mới")}</h2>
-        <p className="d">{tr("Synchro tự chạy yêu cầu này theo lịch, kể cả khi bạn không mở trang. Kết quả vào Hộp thư.")}</p>
-        {!init && <div className="tk-tpl">{TEMPLATES.map((t) => <button type="button" key={t.title} className="chip" onClick={() => { setTitle(t.title); setPrompt(t.prompt); setKind(t.schedule.kind); setTime(t.schedule.time); if ("weekday" in t.schedule) setWeekday(t.schedule.weekday); }}>{tr(t.title)}</button>)}</div>}
-        <label className="tk-l">{tr("Tên")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder={tr("Ví dụ: Bản tin buổi sáng")} /></label>
-        <label className="tk-l">{tr("Yêu cầu")}<textarea className="field" value={prompt} maxLength={8000} rows={5} onChange={(e) => setPrompt(e.target.value)} placeholder={tr("Viết như khi nhắn cho Synchro. Connector đã kết nối (email, lịch…) được dùng như trong chat.")} /></label>
+        <h2>{init ? tr("Sửa việc tự động") : plan ? tr("Kế hoạch của Synchro") : tr("Việc tự động mới")}</h2>
+        <div className="tk-mbody">
+        <p className="d">{init ? tr("Đổi lịch, trình duyệt hay hướng dẫn; lần chạy tới dùng ngay bản mới.") : tr("Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ theo lịch, kể cả khi bạn tắt máy.")}</p>
+        <label className="tk-l">{tr("Tên")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder={tr("Ví dụ: Giá cổ phiếu mỗi sáng")} data-notr /></label>
         <div className="tk-sch">
           <label className="tk-l">{tr("Lịch chạy")}<select className="field" value={kind} onChange={(e) => setKind(e.target.value as Schedule["kind"])}>
-            <option value="once">{tr("Một lần, chạy ngay")}</option><option value="hourly">{tr("Mỗi giờ")}</option><option value="daily">{tr("Mỗi ngày")}</option><option value="weekly">{tr("Mỗi tuần")}</option>
+            <option value="once">{tr("Một lần, chạy ngay")}</option><option value="hourly">{tr("Mỗi vài giờ")}</option><option value="daily">{tr("Mỗi ngày")}</option><option value="weekdays">{tr("Thứ Hai – thứ Sáu")}</option><option value="weekly">{tr("Mỗi tuần")}</option>
           </select></label>
+          {kind === "hourly" && <label className="tk-l">{tr("Cách nhau")}<select className="field" value={every} onChange={(e) => setEvery(Number(e.target.value))}>{[1, 2, 3, 4, 6, 8, 12].map((n) => <option key={n} value={n}>{n} {tr("giờ")}</option>)}</select></label>}
           {kind === "weekly" && <label className="tk-l">{tr("Vào")}<select className="field" value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>{DAYS.map((d, i) => <option key={i} value={i}>{tr(d)}</option>)}</select></label>}
-          {(kind === "daily" || kind === "weekly") && <label className="tk-l">{tr("Lúc")}<input className="field" type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>}
+          {(kind === "daily" || kind === "weekdays" || kind === "weekly") && <label className="tk-l">{tr("Lúc")}<input className="field" type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>}
         </div>
-        <p className="tk-tz">{tr("Giờ theo múi giờ")} <span data-notr>{tz}</span></p>
-        <div className="modal-foot"><button type="button" className="btn" onClick={onClose} disabled={busy}>{tr("Hủy")}</button><button className="btn dark" disabled={busy || !title.trim() || !prompt.trim()}>{busy ? <span className="art-spin sm" /> : null}{init ? tr("Lưu") : kind === "once" ? tr("Chạy") : tr("Hẹn lịch")}</button></div>
+        <p className="tk-tz">{tr("Giờ theo múi giờ")} <span data-notr>{tz()}</span></p>
+        {codeOk && <div className="tk-l">{tr("Cách làm")}
+          <div className="tk-br two" role="radiogroup">{ENGINES.map((b) => (
+            <button type="button" key={b.id} role="radio" aria-checked={engine === b.id} className={engine === b.id ? "on" : ""} onClick={() => setEngine(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
+          ))}</div>
+        </div>}
+        {engine === "chat" ? <div className="tk-l">{tr("Trình duyệt")}
+          <div className="tk-br" role="radiogroup">{BROWSERS.map((b) => (
+            <button type="button" key={b.id} role="radio" aria-checked={browser === b.id} className={browser === b.id ? "on" : ""} onClick={() => setBrowser(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
+          ))}</div>
+        </div> : <p className="tk-tz">{tr("Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong Hộp thư.")}</p>}
+        <label className="tk-l">{tr("Model")}<ModelPick value={model} onChange={setModel} /></label>
+        <label className="tk-l">{tr("Hướng dẫn chi tiết cho Synchro")}<textarea className="field" value={prompt} maxLength={8000} rows={7} onChange={(e) => setPrompt(e.target.value)} placeholder={tr("Viết như khi nhắn cho Synchro. Connector đã kết nối (email, lịch…) được dùng như trong chat.")} data-notr /></label>
+        {plan && (plan.approvals.length > 0 || plan.needs.length > 0) && <div className="tk-notes">
+          {plan.approvals.length > 0 && <div><b>{tr("Synchro sẽ hỏi bạn trước khi")}</b><ul>{plan.approvals.map((a) => <li key={a} data-notr>{a}</li>)}</ul></div>}
+          {plan.needs.length > 0 && <div><b>{tr("Cần có để chạy tốt")}</b><ul>{plan.needs.map((a) => <li key={a} data-notr>{a}</li>)}</ul></div>}
+        </div>}
+        <label className="tk-mem"><button type="button" className={`toggle ${memory ? "on" : ""}`} role="switch" aria-checked={memory} aria-label="Nhớ kết quả các lần trước" onClick={() => setMemory(!memory)} /><span><b>{tr("Nhớ kết quả các lần trước")}</b>{tr("So sánh với lần trước, không báo hay đề xuất lại điều đã có.")}</span></label>
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose} disabled={!!busy}>{tr("Hủy")}</button>
+          {!init && kind !== "once" && <button type="button" className="btn" disabled={!!busy || !title.trim() || !prompt.trim()} onClick={() => save(true)}>{busy === "run" ? <span className="art-spin sm" /> : <I.Play size={13} />}{tr("Tạo và chạy thử ngay")}</button>}
+          <button className="btn dark" disabled={!!busy || !title.trim() || !prompt.trim()}>{busy === "save" ? <span className="art-spin sm" /> : null}{init ? tr("Lưu") : kind === "once" ? tr("Chạy") : tr("Tạo việc tự động")}</button>
+        </div>
       </form>
     </div>
   );
 }
 
-export function InboxPage({ say, model, onOpenChat }: { say: (m: string) => void; model?: string; onOpenChat: (title: string, text: string) => void }) {
-  const [tab, setTab] = useState<"inbox" | "tasks">("inbox");
+// Ô giao việc: câu thường → kế hoạch (máy chủ hỏi model nhanh), mở thẻ kế hoạch để xem / sửa rồi tạo.
+function Composer({ onPlan, onManual, say }: { onPlan: (p: Plan) => void; onManual: () => void; say: (m: string) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    try { const { plan } = await api<{ plan: Plan }>("POST", "/api/tasks/plan", { text, tz: tz() }); onPlan(plan); setText(""); }
+    catch (e) { say((e as Error).message); }
+    setBusy(false);
+  };
+  return (
+    <div className="tk-comp">
+      <textarea value={text} rows={2} maxLength={4000} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); go(); } }}
+        placeholder={tr("Giao việc cho Synchro, ví dụ: mỗi sáng 8h tra giá cổ phiếu FPT, phân tích và gợi ý giao dịch")} aria-label="Giao việc cho Synchro" data-notr />
+      <div className="tk-comp-bar">
+        <div className="tk-ex">{EXAMPLES.map((x) => <button key={x.label} type="button" className="chip" onClick={() => setText(tr(x.text))}>{tr(x.label)}</button>)}</div>
+        <button type="button" className="btn ghost" onClick={onManual}>{tr("Tự đặt")}</button>
+        <button type="button" className="btn dark" disabled={!text.trim() || busy} onClick={go}>{busy ? <span className="art-spin sm" /> : <I.Sparkle size={14} />}{busy ? tr("Đang lên kế hoạch…") : tr("Lên kế hoạch")}</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- đề xuất chờ duyệt
+function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => void; onDone: () => void }) {
+  const [busy, setBusy] = useState<"" | "approve" | "reject">("");
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const pl = p.payload as { name?: string; description?: string; skill_md?: string; files?: { path: string }[]; instructions?: string; source?: string; host?: string; url?: string; connector?: string; tool?: string; input?: unknown };
+  const decide = async (decision: "approve" | "reject") => {
+    setBusy(decision);
+    const edits = draft === null ? undefined : p.kind === "skill" ? { skill_md: draft } : { instructions: draft };
+    try {
+      await api("POST", "/api/inbox/proposals", { id: p.id, decision, edits });
+      say(decision === "reject" ? tr("Đã bỏ qua đề xuất") : p.kind === "skill" ? tr("Đã tạo skill") : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, kết quả vào Hộp thư") : tr("Đã cho phép"));
+      changed(); onDone();
+    } catch (e) { say((e as Error).message); onDone(); }
+    setBusy("");
+  };
+  const err = p.status === "pending" && p.result?.startsWith("Lỗi:") ? p.result : null;
+  const body = p.kind === "skill" ? pl.skill_md ?? "" : p.kind === "action" ? pl.instructions ?? "" : "";
+  return (
+    <div className={`tk-prop ${p.status}`}>
+      <div className="tk-prop-h">
+        <span className={`tk-prop-ic ${p.kind}`}>{KIND_ICON[p.kind]}</span>
+        <span className="tk-t"><b data-notr>{p.title}</b><em>{tr(KIND_LABEL[p.kind])}{p.taskTitle ? <> · <span data-notr>{p.taskTitle}</span></> : null} · {when(p.at)}</em></span>
+        {p.status !== "pending" && <span className={`tk-st ${p.status}`}>{p.status === "done" ? tr("Đã duyệt") : p.status === "rejected" ? tr("Đã bỏ qua") : p.status === "running" ? tr("Đang làm") : tr("Lỗi")}</span>}
+      </div>
+      {p.kind === "skill" && pl.description && <p className="tk-prop-d" data-notr>{pl.description}</p>}
+      {p.kind === "site" ? <p className="tk-prop-d">{tr("Việc tự động cần mở trang này nhưng trang chưa có trong danh sách trang được phép.")} <span data-notr>{pl.url || pl.host}</span></p>
+        : p.kind === "tool" ? <p className="tk-prop-d">{tr("Công cụ này đang để chế độ hỏi trước mỗi lần dùng. Tham số:")} <code data-notr>{p.summary}</code></p>
+        : <div className="mdx tk-prop-s"><Markdown text={p.summary} say={say} /></div>}
+      {pl.source && <a className="tk-src" href={pl.source} target="_blank" rel="noopener noreferrer" data-notr><I.External size={12} />{pl.source.replace(/^https?:\/\//, "").slice(0, 80)}</a>}
+      {(p.kind === "skill" || p.kind === "action") && p.status === "pending" && <>
+        <button type="button" className={`tk-more ${open ? "on" : ""}`} onClick={() => setOpen(!open)}><I.Chevron size={12} />{p.kind === "skill" ? tr("Xem và sửa SKILL.md") : tr("Xem và sửa việc Synchro sẽ làm")}{pl.files?.length ? ` · ${pl.files.length} ${tr("tệp kèm theo")}` : ""}</button>
+        {open && <textarea className="field mono tk-prop-md" value={draft ?? body} onChange={(e) => setDraft(e.target.value)} rows={12} spellCheck={false} data-notr />}
+      </>}
+      {err && <div className="sk-err"><span data-notr>{err}</span></div>}
+      {p.status !== "pending" && p.result && <p className="tk-prop-r" data-notr>{p.result.slice(0, 600)}</p>}
+      {p.status === "pending" && <div className="tk-acts">
+        <button className="btn dark" disabled={!!busy} onClick={() => decide("approve")}>{busy === "approve" ? <span className="art-spin sm" /> : <I.Check size={14} />}{tr(APPROVE[p.kind])}</button>
+        <button className="btn" disabled={!!busy} onClick={() => decide("reject")}>{tr("Bỏ qua")}</button>
+      </div>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- một kết quả (mở ra xem chi tiết, tiến độ, nhật ký, đề xuất của lần chạy)
+const LOG_KINDS = new Set(["tool", "note", "step", "say", "ui"]);
+function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; task?: Task; say: (m: string) => void; onOpenChat: (title: string, text: string) => void; onRetry: (t: Task) => void; reload: () => void }) {
+  const [events, setEvents] = useState<RunEv[] | null>(null);
+  const [props, setProps] = useState<Proposal[]>([]);
+  const [log, setLog] = useState(false);
+  const real = x.kind !== "notice" && x.status !== "waiting";
+  useEffect(() => {
+    if (!real) return;
+    let stop = false;
+    const load = () => {
+      api<{ run: { events: RunEv[]; status: string } }>("GET", `/api/runs/${x.run}?json=1`).then((j) => { if (!stop) { setEvents(j.run.events); if (j.run.status !== "running" && x.status === "running") reload(); } }).catch(() => {});
+      if (x.proposals) api<{ proposals: Proposal[] }>("GET", `/api/inbox/proposals?run=${x.run}`).then((j) => { if (!stop) setProps(j.proposals); }).catch(() => {});
+    };
+    load();
+    const t = x.status === "running" ? setInterval(load, 3000) : null;
+    return () => { stop = true; if (t) clearInterval(t); };
+  }, [x.run, x.status, x.proposals, real, reload]);
+  const steps = (events ?? []).filter((e) => LOG_KINDS.has(e.kind) && !(e.kind === "ui"));
+  const lastStep = [...steps].reverse().find((e) => e.kind !== "say");
+  return (
+    <div className="tk-body">
+      {x.note && <p className="tk-note"><I.InfoCircle size={13} /><span data-notr>{tr(x.note)}</span></p>}
+      {x.status === "waiting" ? <div className="tk-run"><I.Clock size={14} />{tr("Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.")}</div>
+        : x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{lastStep ? <span data-notr>{tr(lastStep.text)}</span> : <span>{tr("Synchro đang chạy việc này trên máy chủ")}</span>}</div>
+        : x.error ? <div className="sk-err"><span data-notr>{x.error}</span></div>
+        : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
+      {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={() => { reload(); api<{ proposals: Proposal[] }>("GET", `/api/inbox/proposals?run=${x.run}`).then((j) => setProps(j.proposals)).catch(() => {}); }} />)}</div>}
+      {log && steps.length > 0 && <ol className="tk-log">{steps.map((e) => <li key={e.seq} className={e.kind}><span>{when(e.at).split(" ·")[0]}</span><span data-notr>{e.text}</span></li>)}</ol>}
+      {x.kind !== "notice" && x.status !== "waiting" && <div className="tk-acts">
+        {x.status === "done" && <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
+        {task && x.status !== "running" && <button className="btn" onClick={() => onRetry(task)}><I.Retry size={14} />{tr("Chạy lại")}</button>}
+        {steps.length > 0 && <button className="btn ghost" onClick={() => setLog(!log)}><I.List size={14} />{log ? tr("Ẩn nhật ký") : `${tr("Nhật ký")} (${steps.length})`}</button>}
+        {x.model && <span className="tk-model" data-notr>{modelName(x.model)}</span>}
+      </div>}
+      {x.kind === "notice" && x.link?.startsWith("app:") && <div className="tk-acts"><a className="btn" href={`/apps/${encodeURIComponent(x.link.slice(4))}#comments`} target="_blank" rel="noopener"><I.Chat2 size={14} />{tr("Mở bình luận")}</a></div>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- trang Hộp thư
+export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model?: string; onOpenChat: (title: string, text: string) => void }) {
+  const { openSettings } = useApp();
+  const [tab, setTab] = useState<"results" | "approve" | "jobs">("results");
   const [items, setItems] = useState<Item[] | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [props, setProps] = useState<Proposal[] | null>(null);
+  const [chrome, setChrome] = useState<{ allowed: boolean; connected: boolean; devices: unknown[] } | null>(null);
+  const [caps, setCaps] = useState<{ caps: Record<string, boolean>; locks: Record<string, string> } | null>(null);
+  const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [form, setForm] = useState<Task | null | "new">(null);
+  const [edit, setEdit] = useState<{ task?: Task; plan?: Plan } | "new" | null>(null);
   const load = useCallback(() => {
     api<{ items: Item[] }>("GET", "/api/inbox").then((j) => setItems(j.items)).catch((e) => say(e.message));
     api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch(() => {});
+    api<{ proposals: Proposal[] }>("GET", "/api/inbox/proposals?all=1").then((j) => setProps(j.proposals)).catch(() => {});
   }, [say]);
-  useEffect(() => { load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load]);
-  const read = async (ids: string[] | "all") => { await api("POST", "/api/inbox", { read: ids }).catch(() => {}); window.dispatchEvent(new Event(INBOX_CHANGED)); load(); };
-  const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running") read([x.run]); };
-  const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("inbox"); load(); } catch (e) { say((e as Error).message); } };
+  useEffect(() => {
+    load();
+    api<{ allowed: boolean; connected: boolean; devices: unknown[] }>("GET", "/api/browser/ext").then(setChrome).catch(() => {});
+    api<{ caps: Record<string, boolean>; locks: Record<string, string> }>("GET", "/api/caps").then(setCaps).catch(() => {});
+    const t = setInterval(load, 15_000);
+    return () => clearInterval(t);
+  }, [load]);
+  const read = async (ids: string[] | "all") => { await api("POST", "/api/inbox", { read: ids }).catch(() => {}); changed(); load(); };
+  const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running" && x.status !== "waiting") read([x.run]); };
+  const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } catch (e) { say((e as Error).message); } };
   const setOn = async (t: Task) => { try { await api("PATCH", `/api/tasks/${t.id}`, { enabled: !t.enabled }); load(); } catch (e) { say((e as Error).message); } };
-  const del = async (t: Task) => { try { await api("DELETE", `/api/tasks/${t.id}`); say(tr("Đã xóa tác vụ")); load(); } catch (e) { say((e as Error).message); } };
-  const unread = (items ?? []).filter((x) => !x.read && x.status !== "running").length;
+  const del = async (t: Task) => { if (!window.confirm(tr("Xóa việc tự động này? Kết quả cũ trong Hộp thư cũng bị xóa."))) return; try { await api("DELETE", `/api/tasks/${t.id}`); say(tr("Đã xóa việc tự động")); load(); } catch (e) { say((e as Error).message); } };
+  const byId = useMemo(() => new Map((tasks ?? []).map((t) => [t.id, t])), [tasks]);
+  const unread = (items ?? []).filter((x) => !x.read && x.status !== "running" && x.status !== "waiting").length;
+  const pending = (props ?? []).filter((p) => p.status === "pending");
+  const decided = (props ?? []).filter((p) => p.status !== "pending").slice(0, 20);
+  const shown = (items ?? []).filter((x) => !filter || x.task === filter);
+  const groups = useMemo(() => { const m = new Map<number, Item[]>(); for (const x of shown) { const d = dayOf(x.at); m.set(d, [...(m.get(d) ?? []), x]); } return [...m.entries()]; }, [shown]);
+  const active = (tasks ?? []).filter((t) => t.enabled).length;
+  const needsChrome = (tasks ?? []).some((t) => t.enabled && t.browser === "user");
+  // Khả năng đang tắt trong Cài đặt → Khả năng (người dùng tự tắt, không phải quản trị viên khóa): việc tự động cũng không dùng được.
+  const off = caps ? CAPS.filter(([k]) => !caps.caps[k] && !caps.locks[k] && (k !== "net" || caps.caps.code)).map(([, label]) => tr(label)) : [];
   return (
     <div className="page"><div className="page-in tk">
       <div className="tk-top">
-        <h1>{tr("Hộp thư")}</h1>
-        <div className="pl-seg"><button className={tab === "inbox" ? "on" : ""} onClick={() => setTab("inbox")}>{tr("Kết quả")}{unread > 0 && <i className="tk-badge">{unread}</i>}</button><button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>{tr("Tác vụ đã hẹn")}</button></div>
-        <span style={{ flex: 1 }} />
-        {tab === "inbox" && unread > 0 && <button className="btn" onClick={() => read("all")}>{tr("Đánh dấu đã đọc hết")}</button>}
-        <button className="btn dark" onClick={() => setForm("new")}><I.Plus size={14} />{tr("Tác vụ nền mới")}</button>
+        <div className="tk-hd"><h1>{tr("Hộp thư")}</h1><p>{tr("Giao việc một lần, Synchro tự làm theo lịch trên máy chủ, kể cả khi bạn tắt máy. Kết quả và những việc cần bạn duyệt nằm ở đây.")}</p></div>
       </div>
-      {tab === "inbox" ? (
-        items === null ? <div className="empty"><span className="art-spin" /></div> : !items.length ? (
-          <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Hẹn một tác vụ nền (ví dụ bản tin mỗi sáng, tổng kết cuối tuần), Synchro sẽ tự chạy và gửi kết quả vào đây.")}</span><button className="btn dark" onClick={() => setForm("new")}>{tr("Tác vụ nền mới")}</button></div>
-        ) : (
-          <div className="tk-list">
-            {items.map((x) => (
-              <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""}`}>
-                <button className="tk-row" onClick={() => toggle(x)}>
-                  <span className={`tk-dot ${x.status}`} />
-                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy…") : x.status === "error" ? tr("Lỗi") : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(x.text.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>]/g, "").trim().slice(0, 140))}</em></span>
-                  <span className="tk-when">{when(x.at)}</span>
-                </button>
-                {open === x.run && (
-                  <div className="tk-body">
-                    {x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{tr("Synchro đang chạy tác vụ này ở nền")}</div>
-                      : x.error ? <div className="sk-err"><span>{x.error}</span></div>
-                      : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
-                    {x.status === "done" && <div className="tk-acts">
-                      {x.link?.startsWith("app:") ? <a className="btn" href={`/apps/${encodeURIComponent(x.link.slice(4))}#comments`} target="_blank" rel="noopener"><I.Chat2 size={14} />{tr("Mở bình luận")}</a>
-                        : <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
-                    </div>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )
+      <Composer say={say} onPlan={(plan) => setEdit({ plan })} onManual={() => setEdit("new")} />
+      <div className="tk-status">
+        <span className="tk-pill ok"><i />{active ? `${active} ${tr("việc đang chạy theo lịch trên máy chủ")}` : tr("Máy chủ Synchro sẵn sàng chạy việc của bạn")}</span>
+        {off.length > 0 && <button type="button" className="tk-pill warn" onClick={() => openSettings?.("Capabilities")} data-tip="Việc tự động không dùng được những khả năng đang tắt. Bấm để mở Cài đặt → Khả năng."><i />{tr("Đang tắt")}: {off.join(", ")}</button>}
+        {chrome?.allowed && <button type="button" className={`tk-pill ${chrome.connected ? "ok" : needsChrome ? "warn" : ""}`} onClick={() => openSettings?.("Capabilities")} data-tip={chrome.connected ? "Việc cần tài khoản của bạn chạy được trên Chrome của bạn" : "Mở Chrome có cài tiện ích Synchro để việc cần tài khoản của bạn chạy được"}>
+          <i />{chrome.connected ? tr("Chrome của bạn đang kết nối") : chrome.devices.length ? tr("Chrome của bạn chưa kết nối") : tr("Chưa cài tiện ích Synchro cho Chrome")}
+        </button>}
+      </div>
+      <div className="tk-tabs">
+        <div className="pl-seg">
+          <button className={tab === "results" ? "on" : ""} onClick={() => setTab("results")}>{tr("Kết quả")}{unread > 0 && <i className="tk-badge">{unread}</i>}</button>
+          <button className={tab === "approve" ? "on" : ""} onClick={() => setTab("approve")}>{tr("Cần duyệt")}{pending.length > 0 && <i className="tk-badge warn">{pending.length}</i>}</button>
+          <button className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}>{tr("Việc tự động")}{(tasks?.length ?? 0) > 0 && <i className="tk-count">{tasks!.length}</i>}</button>
+        </div>
+        <span style={{ flex: 1 }} />
+        {tab === "results" && (tasks?.length ?? 0) > 1 && <select className="field tk-filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Lọc theo việc"><option value="">{tr("Mọi việc")}</option>{tasks!.map((t) => <option key={t.id} value={t.id} data-notr>{t.title}</option>)}</select>}
+        {tab === "results" && unread > 0 && <button className="btn" onClick={() => read("all")}>{tr("Đánh dấu đã đọc hết")}</button>}
+      </div>
+
+      {tab === "results" && (items === null ? <div className="empty"><span className="art-spin" /></div> : !shown.length ? (
+        <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy và gửi kết quả vào đây.")}</span></div>
       ) : (
-        tasks === null ? <div className="empty"><span className="art-spin" /></div> : !tasks.length ? (
-          <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa hẹn tác vụ nào")}</b><span>{tr("Ví dụ: 8 giờ sáng mỗi ngày tóm tắt lịch và email; chiều thứ Sáu tổng kết tuần.")}</span><button className="btn dark" onClick={() => setForm("new")}>{tr("Tác vụ nền mới")}</button></div>
-        ) : (
-          <div className="tk-list">
-            {tasks.map((t) => (
-              <div key={t.id} className={`tk-task ${t.enabled ? "" : "off"}`}>
-                <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Clock size={17} /></span>
-                <span className="tk-t"><b data-notr>{t.title}</b><em>{scheduleText(t.schedule)}{t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${when(t.next_run_at)}` : !t.enabled ? ` · ${tr("đã tắt")}` : ""} · {t.runs} {tr("lần chạy")}</em></span>
-                <button className="btn" onClick={() => runNow(t)}><I.Play size={13} />{tr("Chạy ngay")}</button>
-                <button className="icon-btn" aria-label="Sửa" data-tip="Sửa" onClick={() => setForm(t)}><I.Pencil size={15} /></button>
-                <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled} aria-label="Bật lịch" onClick={() => setOn(t)} />
-                <button className="icon-btn" aria-label="Xóa tác vụ" data-tip="Xóa tác vụ" onClick={() => del(t)}><I.Trash size={15} /></button>
+        <div className="tk-feed">{groups.map(([d, list]) => (
+          <section key={d}><h3 className="tk-day">{dayLabel(d)}</h3>
+            <div className="tk-list">{list.map((x) => (
+              <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""}`}>
+                <button className="tk-row" onClick={() => toggle(x)} aria-expanded={open === x.run}>
+                  <span className={`tk-dot ${x.status}`} />
+                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy trên máy chủ…") : x.status === "waiting" ? tr("Đang chờ Chrome của bạn kết nối") : x.status === "error" ? tr("Lỗi") : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(excerpt(x.text))}</em></span>
+                  {(x.proposals ?? 0) > 0 && <span className="tk-chip warn">{x.proposals} {tr("đề xuất")}</span>}
+                  {x.kind === "action" && <span className="tk-chip">{tr("Đã duyệt")}</span>}
+                  <span className="tk-when">{when(x.at).split(" ·")[0]}</span>
+                </button>
+                {open === x.run && <ResultBody x={x} task={byId.get(x.task)} say={say} onOpenChat={onOpenChat} onRetry={runNow} reload={load} />}
               </div>
-            ))}
+            ))}</div>
+          </section>
+        ))}</div>
+      ))}
+
+      {tab === "approve" && (props === null ? <div className="empty"><span className="art-spin" /></div> : !pending.length && !decided.length ? (
+        <div className="apps-empty"><I.ShieldCheck size={22} /><b>{tr("Không có gì cần duyệt")}</b><span>{tr("Việc cần bạn đồng ý (tạo skill, gửi tin, mở trang web mới…) Synchro không tự làm mà gửi vào đây. Bạn chỉ việc duyệt.")}</span></div>
+      ) : (
+        <div className="tk-props">
+          {pending.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={load} />)}
+          {!pending.length && <p className="tk-empty-line"><I.Check size={14} />{tr("Đã duyệt hết. Đề xuất mới sẽ hiện ở đây.")}</p>}
+          {decided.length > 0 && <><h3 className="tk-day">{tr("Đã xử lý gần đây")}</h3>{decided.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={load} />)}</>}
+        </div>
+      ))}
+
+      {tab === "jobs" && (tasks === null ? <div className="empty"><span className="art-spin" /></div> : !tasks.length ? (
+        <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa có việc tự động nào")}</b><span>{tr("Giao việc ở ô phía trên, Synchro lên kế hoạch để bạn xem lại trước khi tạo.")}</span></div>
+      ) : (
+        <div className="tk-jobs">{tasks.map((t) => (
+          <div key={t.id} className={`tk-job ${t.enabled ? "" : "off"}`}>
+            <div className="tk-job-h">
+              <span className="tk-t"><b data-notr>{t.title}</b><em>{scheduleText(t.schedule)}{t.wait_since ? ` · ${tr("đang chờ Chrome")}` : t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${when(t.next_run_at)}` : !t.enabled ? ` · ${tr("đã tắt")}` : ""}</em></span>
+              <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled} aria-label="Bật lịch" onClick={() => setOn(t)} />
+            </div>
+            <div className="tk-job-m">
+              {t.engine === "code" ? <span className="tk-chip"><I.Code size={12} />Synchro Code</span> : <span className="tk-chip"><I.Globe size={12} />{tr(BROWSERS.find((b) => b.id === t.browser)?.label ?? "Tự chọn")}</span>}
+              <span className="tk-chip" data-notr>{modelName(t.model ?? AUTO)}</span>
+              <span className="tk-chip">{t.runs} {tr("lần chạy")}</span>
+              {t.last && <span className={`tk-chip ${t.last.status === "error" ? "bad" : ""}`}>{t.last.status === "running" ? tr("Đang chạy") : t.last.status === "error" ? tr("Lần gần nhất lỗi") : `${tr("Lần gần nhất")} ${when(t.last.at)}`}</span>}
+              {t.pending > 0 && <button type="button" className="tk-chip warn" onClick={() => setTab("approve")}>{t.pending} {tr("chờ duyệt")}</button>}
+            </div>
+            <p className="tk-job-p" data-notr>{t.prompt.slice(0, 220)}{t.prompt.length > 220 ? "…" : ""}</p>
+            <div className="tk-acts">
+              <button className="btn" onClick={() => runNow(t)}><I.Play size={13} />{tr("Chạy ngay")}</button>
+              <button className="btn" onClick={() => { setFilter(t.id); setTab("results"); }}><I.Inbox size={14} />{tr("Xem kết quả")}</button>
+              <button className="btn ghost" onClick={() => setEdit({ task: t })}><I.Pencil size={14} />{tr("Sửa")}</button>
+              <button className="icon-btn" aria-label="Xóa việc tự động" data-tip="Xóa việc tự động" onClick={() => del(t)}><I.Trash size={15} /></button>
+            </div>
           </div>
-        )
-      )}
-      {form && <TaskForm init={form === "new" ? null : form} model={model} say={say} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); setTab(form === "new" ? "tasks" : tab); }} />}
+        ))}</div>
+      ))}
+      {edit && <TaskEditor init={edit === "new" ? null : edit.task ?? null} plan={edit === "new" ? null : edit.plan ?? null} say={say} onClose={() => setEdit(null)}
+        onSaved={(_t, ran) => { setEdit(null); load(); setTab(ran ? "results" : edit !== "new" && edit.task ? tab : "jobs"); }} />}
     </div></div>
   );
 }

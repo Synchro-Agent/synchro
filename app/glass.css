@@ -47,15 +47,15 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
 [data-theme="dark"] .overlay{background:rgba(0,0,0,.38)}
 
 /* ---- the glass material ---- */
-html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn){
+html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn){
   background:transparent;border:0;
   box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow-small);
   transition:scale .5s var(--gl-spring),box-shadow .35s var(--gl-ease,ease),color .2s;
 }
-html body :is(.sidebar,.dock .composer,.hero .composer,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
-html body :is(.chip,.btn,.seg,.topbar .icon-btn,.modal,.dock .composer,.hero .composer,.send):not(.menu){position:relative}
+html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.modal,.dock .composer,.hero .composer,.tk .tk-comp,.send):not(.menu){position:relative}
 
-html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn)::before{
+html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn)::before{
   content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
   background:var(--gl-fill);
   -webkit-backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
@@ -67,26 +67,26 @@ html[data-lens] body :is(.dock .composer,.send,.scroll-down)::before{
   backdrop-filter:var(--lens,) blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
 }
 /* specular rim: bright at top-left and bottom-right like a lit edge */
-html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn):not([data-tip])::after{
+html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn):not([data-tip])::after{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;padding:.75px;opacity:.55;transition:opacity .3s;
   background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
 }
-[data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn):not([data-tip])::after{
+[data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn):not([data-tip])::after{
   background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(255,255,255,.12) 22%,rgba(255,255,255,.02) 45%,rgba(255,255,255,.02) 58%,rgba(255,255,255,.2) 80%,rgba(255,255,255,.55))}
 
 /* sizes: small controls are brighter, large panes are thicker so text stays readable */
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.scroll-down){--gl-fill:var(--gl-fill-small);--gl-blur:2px}
 html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){--gl-fill:var(--gl-fill-thick);--gl-blur:22px;--gl-sat:1.9}
 html body .sidebar{--gl-blur:16px;--gl-fill:color-mix(in srgb,var(--gl-fill) 80%,transparent)}
-html body .hero .composer{--gl-blur:14px}
-[data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn){--text-2:#d2d2ce;--text-3:#a7a7a3}
+html body :is(.hero .composer,.tk .tk-comp){--gl-blur:14px}
+[data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn){--text-2:#d2d2ce;--text-3:#a7a7a3}
 
 /* ---- interaction: light up on hover, grow slightly while pressed, spring back ---- */
 html body :is(.send,.scroll-down,.chip,.btn:not(.dark):not(.danger),.topbar .icon-btn)[data-press]{scale:1.07;transform:none}
 html body :is(.dock .composer,.hero .composer)[data-press]{scale:1.004}
 html body :is(.chip,.btn,.topbar .icon-btn,.send,.scroll-down,.mic-wrap):is(:active,:hover){transform:none}
-html body :is(.dock .composer,.hero .composer):focus-within::after{opacity:1}
+html body :is(.dock .composer,.hero .composer,.tk .tk-comp):focus-within::after{opacity:1}
 /* shadow deepens when content scrolls beneath the dock */
 html body .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0 16px 44px rgba(20,20,50,.22),0 2px 6px rgba(20,20,50,.14)}
 [data-theme="dark"] .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0 18px 48px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.5)}
@@ -106,7 +106,7 @@ html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
 
 /* ---- accessibility (Apple: honour reduce transparency / reduce motion) ---- */
 @media (prefers-reduced-transparency:reduce){
-  html body :is(.sidebar,.dock .composer,.hero .composer,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn)::before{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
+  html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn)::before{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 @media (prefers-reduced-motion:reduce){
   html body :is(.send,.scroll-down,.chip,.btn,.topbar .icon-btn,.dock .composer)[data-press]{scale:1}
@@ -114,6 +114,7 @@ html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
 
 html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.sidebar,.dock .composer,.hero .composer){isolation:isolate;z-index:20}
 html body .sidebar{z-index:5}html body :is(.dock .composer,.hero .composer){z-index:6}
+html body .tk .tk-comp{isolation:isolate}
 html body :is(.menu,.modal,.toast){animation-fill-mode:backwards}
 
 /* ---- enter/exit: never animate opacity on an ancestor of a backdrop-filter ---- */

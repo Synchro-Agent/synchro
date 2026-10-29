@@ -274,9 +274,25 @@ function browserStep(msgs, names) {
 // - "#seq=[{"tool":"write_file","args":{…}},{"tool":"bash","args":{…}}]": gọi lần lượt từng công cụ, mỗi bước một lượt, rồi tóm tắt kết quả.
 // - Lượt tự sửa PR ("[Tự sửa PR #n] …"): CI lỗi vì tệp BROKEN thì xóa tệp đó rồi commit; góp ý "thêm tệp X" thì tạo X rồi commit.
 // "#think": kèm khối suy nghĩ (thinking) như model thật bật suy nghĩ.
+// Mảng JSON ngay sau "#seq=": đọc tới ngoặc đóng cân bằng (sau câu lệnh có thể còn ghi chú bộ não nhắc lại, cũng có dấu ]).
+function seqJson(q) {
+  const i = q.indexOf("#seq=[");
+  if (i < 0) return undefined;
+  let depth = 0, str = false, esc = false;
+  for (let k = i + 5; k < q.length; k++) {
+    const c = q[k];
+    if (str) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') str = false; continue; }
+    if (c === '"') str = true;
+    else if (c === "[" || c === "{") depth++;
+    else if ((c === "]" || c === "}") && --depth === 0) return q.slice(i + 5, k + 1);
+  }
+  return null;
+}
 function seqPlan(q) {
-  const m = /#seq=(\[.*\])/s.exec(q);
-  if (m) { try { return JSON.parse(m[1]); } catch { return null; } }
+  // Lời gọi chạy nền chép lại lời nhờ (đánh giá phiên Code, lên kế hoạch việc tự động, bộ não): trả lời ở reply, không chạy kịch bản.
+  if (/^(Phiên code cần đánh giá:|Việc cần tự động hóa:)/.test(q) || SIDE.test(q)) return null;
+  const m = seqJson(q);
+  if (m !== undefined) { try { return m ? JSON.parse(m) : null; } catch { return null; } }
   if (!q.startsWith("[Tự sửa PR")) return null;
   const steps = [];
   if (/BROKEN/.test(q)) steps.push({ tool: "bash", args: { command: "rm -f BROKEN && git add -A && git commit -qm 'Sửa lỗi CI: bỏ tệp BROKEN làm hỏng bản build'", description: "Sửa lỗi CI và commit" } });
@@ -366,6 +382,26 @@ function mockMeta(q) {
   const suggest = state === "review" ? (files ? "Commit các thay đổi này giúp mình" : "Push lên GitHub và mở pull request") : state === "blocked" ? "Làm tiếp đi" : "Viết kiểm thử cho phần vừa làm";
   return JSON.stringify({ state, reason, suggest });
 }
+// Lên kế hoạch việc tự động (app/automate.ts planAutomation): đọc lịch, giờ, trình duyệt từ lời giao việc như model thật, trả JSON.
+function mockPlan(q) {
+  const text = (/Việc cần tự động hóa:\n([\s\S]*?)\n\nBây giờ:/.exec(q)?.[1] ?? "").trim();
+  const t = norm(text);
+  const days = ["chu nhat", "thu hai", "thu ba", "thu tu", "thu nam", "thu sau", "thu bay"];
+  const wd = days.findIndex((d) => t.includes(d));
+  const every = Number(/moi (\d{1,2}) (?:gio|tieng)/.exec(t)?.[1] ?? 0);
+  const kind = /mot lan|ngay bay gio|ngay lap tuc/.test(t) ? "once" : every || /moi gio|hang gio|every hour/.test(t) ? "hourly"
+    : /ngay lam viec|ngay thuong|thu hai (den|toi|-) thu sau|co phieu|chung khoan|ty gia/.test(t) ? "weekdays" : /moi tuan|hang tuan|weekly/.test(t) || wd >= 0 ? "weekly" : "daily";
+  const m = /(\d{1,2})\s*(?:h|gio|:)\s*(\d{2})?\s*(sang|chieu|toi)?/.exec(t);
+  let h = m ? Number(m[1]) : /chieu/.test(t) ? 17 : /toi/.test(t) ? 20 : 8;
+  if (m && (m[3] === "chieu" || m[3] === "toi" || /\b(moi|buoi|hang|vao) (chieu|toi|dem)\b/.test(t)) && h < 12) h += 12;
+  const time = `${String(Math.min(h, 23)).padStart(2, "0")}:${m?.[2] ?? "00"}`;
+  const browser = /gmail|email cua toi|hop thu cua toi|facebook|tai khoan cua toi|da dang nhap|chrome cua toi/.test(t) ? "user" : "auto";
+  const skill = /skill/.test(t);
+  const engine = /repo cua toi|sua code|sua loi|pull request|\bpr\b|commit|dependenc|thu vien|refactor|chay kiem thu|\bci\b/.test(t) ? "code" : "chat";
+  const title = text.replace(/^(hãy|mỗi ngày|hằng ngày|mỗi sáng)\s+/i, "").split(/[,.;]/)[0].split(" ").slice(0, 8).join(" ");
+  const prompt = `Mục tiêu: ${text}\n\nCách làm:\n1. Tra cứu dữ liệu mới nhất từ nguồn đáng tin cậy (ghi rõ nguồn và thời điểm).\n2. So sánh với kết quả lần chạy trước, nêu thay đổi đáng chú ý.\n3. Phân tích ngắn gọn, nêu lập luận và rủi ro.${skill ? "\n4. Với mục đáng giá nhất, soạn skill và gửi đề xuất bằng inbox_propose (kind=skill) để người dùng duyệt trước khi tạo." : ""}\n\nKết quả: dòng đầu tóm tắt, rồi bảng chi tiết, cuối cùng là Nguồn.`;
+  return JSON.stringify({ title: title[0]?.toUpperCase() + title.slice(1), engine, schedule: { kind, time, ...(kind === "weekly" ? { weekday: wd >= 0 ? wd : 1 } : {}), ...(kind === "hourly" && every > 1 ? { every } : {}) }, browser, prompt, approvals: skill ? ["Tạo skill từ mục được chọn"] : [], needs: browser === "user" ? ["Mở Chrome có cài tiện ích Synchro"] : [] });
+}
 // Các tệp trong tin nhắn người dùng gần nhất, theo đúng định dạng từng API (Anthropic, OpenAI Responses, chat/completions).
 function mediaOf(msgs = []) {
   const m = [...msgs].reverse().find((x) => x.role === "user" && Array.isArray(x.content));
@@ -380,6 +416,7 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
   if (q.startsWith("Phiên code cần đánh giá:")) return { text: mockMeta(q), q };
+  if (q.startsWith("Việc cần tự động hóa:")) return { text: mockPlan(q), q };
   const brain = CLI.mockBrain(q);
   if (brain) return { text: brain, q };
   if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
@@ -433,7 +470,7 @@ function memoryReply(sys, q) {
   return { text: JSON.stringify(out) };
 }
 // Lời gọi của bộ não / đặt tên (chưng cất, biên soạn, gộp, bản đồ, hồ sơ, hướng dẫn): trả lời bằng mockBrain, không qua skill / công cụ.
-const SIDE = /^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/;
+const SIDE = /^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/;
 const capsFor = (sys, q, msgs, tools, none) => {
   if (q.includes("#media") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
   // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
@@ -453,7 +490,7 @@ const sysText = (x) => (typeof x === "string" ? x : Array.isArray(x) ? x.map((b)
 // Lỗi thử nghiệm theo từ khóa trong tin nhắn; trả về true nếu đã trả lỗi.
 async function trap(res, q, fmt) {
   // Lời gọi chưng cất / tổng hợp của bộ não và đặt tên đoạn chat chép lại cả đoạn chat (có thể chứa chữ "#429" của câu trả lời giả lập).
-  if (/^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/.test(q)) return false;
+  if (/^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/.test(q)) return false;
   if (q.includes("#slow")) await sleep(8000);
   const code = q.includes("#401") ? 401 : q.includes("#404") ? 404 : q.includes("#429") ? 429 : q.includes("#500") ? 500 : 0;
   if (!code) return false;

@@ -2,7 +2,7 @@
 // chọn model, dựng lời nhắc hệ thống, chạy vòng lặp công cụ qua chốt chặn (chế độ quyền, trang web được phép), rồi đánh giá phiên.
 import { AUTO, autoEffort, routeModel } from "./router";
 import { can, canModel, permsOf, type UserRow } from "./authstore";
-import { agentSystem, agentTools, anthropicAgent, mockAgent, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent } from "./agentcore";
+import { agentSystem, agentTools, anthropicAgent, mockAgent, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent, type ExtraTool } from "./agentcore";
 import { clampEffort, effortCap, isEffort, legacyModel } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "./providers";
 import { subCli } from "./ai/subs";
@@ -14,6 +14,7 @@ import { exec, sdir } from "./workspace";
 import { overLimit } from "./usage";
 import { repoOfRemote } from "./github";
 import { makeGate } from "./agentgate";
+import type { Ask } from "./approvals";
 import { buildContext } from "./fileproc";
 import { toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { placeUploads, type Upload } from "./uploads";
@@ -63,12 +64,18 @@ export async function runAgentTurn(o: {
   emit: (e: AgentEvent) => void; signal: AbortSignal; inbox?: () => string[]; perm: { mode: PermMode; allow: string[] };
   /** Tệp gửi kèm tin nhắn mới nhất (đã tải lên /api/files?raw=1). */
   files?: Upload[];
+  /** Việc tự động chạy nền (taskagent.ts): công cụ thêm (inbox_propose), số bước tối đa, câu hỏi duyệt không chờ người dùng (onAsk tự trả lời),
+   *  không ghi trạng thái vào danh sách phiên Code (quiet). */
+  extra?: { def: { name: string; description: string; input_schema: unknown }; run: ExtraTool["run"] }[];
+  maxSteps?: number;
+  onAsk?: (a: Ask) => void;
+  quiet?: boolean;
 }) {
   const { user, pick } = o;
   const d = sdir(o.sid), sidNum = Number(o.sid);
   const prefs = getPrefs(user.id);
   // Trạng thái phiên chỉ lưu ở máy chủ khi bật đồng bộ (tắt đồng bộ thì mọi thứ của phiên ở lại thiết bị).
-  const mark = (p: Parameters<typeof patchSession>[2]) => { if (prefs.sync) patchSession(user.id, sidNum, p); };
+  const mark = (p: Parameters<typeof patchSession>[2]) => { if (prefs.sync && !o.quiet) patchSession(user.id, sidNum, p); };
   mark({ running: true });
   try {
     const info = await exec(user.id, d, { cmd: "git rev-parse --abbrev-ref HEAD 2>/dev/null; git remote get-url origin 2>/dev/null | sed -E 's#https://[^@/]*@#https://#'", timeout: 20 });
@@ -78,11 +85,12 @@ export async function runAgentTurn(o: {
     const scripts = !!process.env.E2B_API_KEY && can(user, "sandbox");
     const prefix = prefs.branchPrefix ? `\nKhi cần tạo nhánh git mới, đặt tên bắt đầu bằng "${prefs.branchPrefix}/".` : "";
     const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: `${String(o.system).slice(0, 60_000)}${prefix}`, skills: list.length ? skillsPrompt(list, scripts) : "" });
-    const tools = agentTools(list.length, scripts);
+    const tools = [...agentTools(list.length, scripts), ...(o.extra ?? []).map((x) => x.def)];
+    const extra: ExtraTool[] = (o.extra ?? []).map((x) => ({ name: x.def.name, run: x.run }));
     const bctx = { target: "synchro" as const, def: "synchro" as const, scope: `code:${o.sid}`, cookies: prefs.cookies };
     const gate = makeGate({
       uid: user.id, perm: o.perm, signal: o.signal, probe: async () => (await runBrowserTool(user.id, "browser_tabs", { op: "list" }, bctx)).url,
-      ask: (a) => { mark({ state: "blocked", reason: `Chờ bạn duyệt: ${a.title}`.slice(0, 120) }); o.emit({ t: "ask", ...a }); },
+      ask: (a) => { if (o.onAsk) return o.onAsk(a); mark({ state: "blocked", reason: `Chờ bạn duyệt: ${a.title}`.slice(0, 120) }); o.emit({ t: "ask", ...a }); },
       asked: (id, a) => o.emit({ t: "asked", id, ok: a.ok, always: a.always }),
       allowed: () => o.emit({ t: "perm", allow: [...o.perm.allow] }),
     });
@@ -101,7 +109,7 @@ export async function runAgentTurn(o: {
     let out: { text: string; skills: string[] };
     if (pick.plan) {
       out = await runPlanAgent({ user, model: pick.model, effort: pick.effort, conv: `code-${String(o.sid)}`.slice(0, 64), system: sys, messages: msgs,
-        u: user.id, d, skills: list, scripts, tools, emit: o.emit, signal: o.signal, inbox: o.inbox, gate, bctx });
+        u: user.id, d, skills: list, scripts, tools, emit: o.emit, signal: o.signal, inbox: o.inbox, gate, bctx, extra });
     } else {
       const t = pick.target!;
       // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
@@ -111,7 +119,7 @@ export async function runAgentTurn(o: {
       // Khối ảnh / PDF theo đúng định dạng của từng hãng (như khung chat).
       const conv = t.kind === "mock" ? msgs : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) }))
         : t.kind === "openai" ? msgs.map((m) => ({ ...m, content: toResponses(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
-      out = await runAgent({ adapter, messages: conv, u: user.id, d, skills: list, scripts, emit: o.emit, signal: o.signal, inbox: o.inbox, gate, bctx });
+      out = await runAgent({ adapter, messages: conv, u: user.id, d, skills: list, scripts, emit: o.emit, signal: o.signal, inbox: o.inbox, gate, bctx, extra, maxSteps: o.maxSteps });
     }
     if (out.skills.length) recordUse(user.id, out.skills);
     return { ...out, d };

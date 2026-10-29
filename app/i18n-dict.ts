@@ -1999,3 +1999,76 @@ RULES_EN.push(
   [/^\[Tệp đã gửi ở lượt trước: (.+) \(không còn trên máy chủ\)\]$/, (m) => `[File sent in an earlier turn: ${m[1]} (no longer on the server)]`],
   [/^\[Ảnh đã gửi ở lượt trước: (.+)\]$/, (m) => `[Image sent in an earlier turn: ${m[1]}]`],
 );
+
+// Hộp thư tự động hóa (tasksui.tsx): giao việc, kế hoạch, kết quả, đề xuất chờ duyệt, việc tự động
+addNew(VI2EN, {
+  "Nhật ký": "Log", "Ẩn nhật ký": "Hide log", "Lỗi:": "Error:",
+  "Đã tạo, Synchro chạy trong vòng một phút": "Created, Synchro will run it within a minute", "Đã tạo và đang chạy thử, kết quả vào Hộp thư": "Created and running a test now, the result will arrive in your Inbox",
+  "Đã tạo việc tự động": "Automation created", "Sửa việc tự động": "Edit automation", "Kế hoạch của Synchro": "Synchro's plan", "Việc tự động mới": "New automation",
+  "Đổi lịch, trình duyệt hay hướng dẫn; lần chạy tới dùng ngay bản mới.": "Change the schedule, browser or instructions; the next run uses the new version.",
+  "Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ theo lịch, kể cả khi bạn tắt máy.": "Review and edit if needed. Synchro runs this on its server on schedule, even when your computer is off.",
+  "Ví dụ: Giá cổ phiếu mỗi sáng": "e.g. Stock prices every morning", "Mỗi vài giờ": "Every few hours", "Thứ Hai – thứ Sáu": "Monday – Friday", "Cách nhau": "Every",
+  "Hướng dẫn chi tiết cho Synchro": "Detailed instructions for Synchro", "Synchro sẽ hỏi bạn trước khi": "Synchro will ask you before", "Cần có để chạy tốt": "Needed to run well",
+  "Nhớ kết quả các lần trước": "Remember previous results", "So sánh với lần trước, không báo hay đề xuất lại điều đã có.": "Compares with the last run and doesn't repeat what was already reported or proposed.",
+  "Tạo và chạy thử ngay": "Create and test now", "Tạo việc tự động": "Create automation",
+  "Giao việc cho Synchro, ví dụ: mỗi sáng 8h tra giá cổ phiếu FPT, phân tích và gợi ý giao dịch": "Give Synchro a job, e.g. every morning at 8 check the FPT stock price, analyse it and suggest a trade",
+  "Giao việc cho Synchro": "Give Synchro a job", "Tự đặt": "Set up manually", "Đang lên kế hoạch…": "Planning…", "Lên kế hoạch": "Plan it",
+  "Đã bỏ qua đề xuất": "Proposal dismissed", "Đã tạo skill": "Skill created", "Synchro đang làm việc đã duyệt, kết quả vào Hộp thư": "Synchro is doing the approved task, the result will arrive in your Inbox",
+  "Đã duyệt": "Approved", "Đã bỏ qua": "Dismissed", "Đang làm": "In progress", "Đã cho phép": "Allowed",
+  "Việc tự động cần mở trang này nhưng trang chưa có trong danh sách trang được phép.": "The automation needs this site, but it isn't on your list of allowed sites yet.",
+  "Công cụ này đang để chế độ hỏi trước mỗi lần dùng. Tham số:": "This tool is set to ask before each use. Arguments:",
+  "Xem và sửa SKILL.md": "View and edit SKILL.md", "Xem và sửa việc Synchro sẽ làm": "View and edit what Synchro will do", "tệp kèm theo": "attached files",
+  "Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.": "It's time to run, but your Chrome is off. Synchro runs as soon as Chrome reconnects, or after 12 hours with Synchro's browser.",
+  "Synchro đang chạy việc này trên máy chủ": "Synchro is running this on its server", "Đề xuất của lần chạy này": "Proposals from this run",
+  "Xóa việc tự động này? Kết quả cũ trong Hộp thư cũng bị xóa.": "Delete this automation? Its past results in the Inbox are deleted too.",
+  "Giao việc một lần, Synchro tự làm theo lịch trên máy chủ, kể cả khi bạn tắt máy. Kết quả và những việc cần bạn duyệt nằm ở đây.": "Hand off a job once and Synchro does it on schedule on its server, even when your computer is off. Results and anything that needs your approval land here.",
+  "việc đang chạy theo lịch trên máy chủ": "automations running on schedule on the server", "Máy chủ Synchro sẵn sàng chạy việc của bạn": "Synchro's server is ready to run your jobs",
+  "Mỗi": "Every", "Chrome của bạn đang kết nối": "Your Chrome is connected", "Chrome của bạn chưa kết nối": "Your Chrome isn't connected", "Chưa cài tiện ích Synchro cho Chrome": "Synchro extension for Chrome not installed",
+  "Việc cần tài khoản của bạn chạy được trên Chrome của bạn": "Jobs that need your accounts can run in your Chrome", "Mở Chrome có cài tiện ích Synchro để việc cần tài khoản của bạn chạy được": "Open Chrome with the Synchro extension so jobs that need your accounts can run",
+  "Cần duyệt": "To approve", "Việc tự động": "Automations", "Thứ Hai – thứ Sáu lúc": "Monday – Friday at", "Lọc theo việc": "Filter by automation", "Mọi việc": "All automations",
+  "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy và gửi kết quả vào đây.": "Hand off a job in the box above (e.g. stock prices every morning, great GitHub repos every day). Synchro runs it and sends the results here.",
+  "Đang chạy trên máy chủ…": "Running on the server…", "Đang chờ Chrome của bạn kết nối": "Waiting for your Chrome to connect", "đề xuất": "proposals",
+  "Không có gì cần duyệt": "Nothing to approve", "Việc cần bạn đồng ý (tạo skill, gửi tin, mở trang web mới…) Synchro không tự làm mà gửi vào đây. Bạn chỉ việc duyệt.": "Synchro never does things that need your consent (creating skills, sending messages, opening new sites…) on its own; it sends them here. You just approve.",
+  "Đã duyệt hết. Đề xuất mới sẽ hiện ở đây.": "All caught up. New proposals will show up here.", "Đã xử lý gần đây": "Recently handled",
+  "Chưa có việc tự động nào": "No automations yet", "Giao việc ở ô phía trên, Synchro lên kế hoạch để bạn xem lại trước khi tạo.": "Hand off a job in the box above; Synchro drafts a plan for you to review before it's created.",
+  "đang chờ Chrome": "waiting for Chrome", "Lần gần nhất lỗi": "Last run failed", "Lần gần nhất": "Last run", "chờ duyệt": "to approve", "Xem kết quả": "View results", "Xóa việc tự động": "Delete automation",
+  "Giá cổ phiếu mỗi sáng": "Stock prices every morning", "Bản tin AI buổi sáng": "Morning AI briefing", "Theo dõi giá sản phẩm": "Track a product's price", "Repo GitHub hay → skill": "Great GitHub repos → skills",
+  "Thứ Hai đến thứ Sáu lúc 8h30 sáng, tra giá cổ phiếu FPT và VNM (giá đóng cửa hôm trước, khối lượng, tin mới), phân tích xu hướng và đưa ra gợi ý giao dịch kèm lý do và rủi ro": "Monday to Friday at 8:30 am, check the FPT and VNM stock prices (previous close, volume, latest news), analyse the trend and suggest a trade with reasons and risks",
+  "Mỗi ngày lúc 7h sáng, lên GitHub tìm những repo mới có ý tưởng hay, tốt, đột phá ở mọi lĩnh vực, phân tích từng repo và chuyển repo đáng giá nhất thành skill (hỏi tôi trước khi tạo skill)": "Every day at 7 am, search GitHub for new repos with great, breakthrough ideas in any field, analyse each one and turn the most valuable into a skill (ask me before creating the skill)",
+  "Mỗi ngày 7h sáng tóm tắt 5 tin công nghệ và AI quan trọng nhất trong 24 giờ qua, mỗi tin một đoạn ngắn kèm nguồn": "Every day at 7 am, summarise the 5 most important tech and AI stories of the past 24 hours, one short paragraph each with sources",
+  "Mỗi 6 giờ kiểm tra giá iPhone 17 Pro 256GB ở các nhà bán lẻ lớn tại Việt Nam, so với lần trước và báo rõ nơi nào đang rẻ nhất": "Every 6 hours check the price of the iPhone 17 Pro 256GB at major Vietnamese retailers, compare with last time and say which store is cheapest",
+  "Tự chọn": "Automatic", "Trình duyệt của Synchro": "Synchro's browser", "Chrome của bạn": "Your Chrome",
+  "Trình duyệt của Synchro trên máy chủ (chạy được cả khi máy bạn tắt); Chrome của bạn khi cần tài khoản bạn đã đăng nhập và Chrome đang mở.": "Synchro's browser on the server (works even when your computer is off); your Chrome when the job needs accounts you're signed in to and Chrome is open.",
+  "Luôn chạy trên máy chủ, không đụng tới Chrome của bạn.": "Always runs on the server and never touches your Chrome.",
+  "Dùng tài khoản bạn đã đăng nhập. Đến giờ mà Chrome đang tắt thì chờ bạn mở lại (tối đa 12 giờ) rồi mới chạy.": "Uses the accounts you're signed in to. If Chrome is off when it's time, it waits for you to open it (up to 12 hours) before running.",
+  "Tạo skill": "Create skill", "Việc cần làm": "Action", "Cho phép trang web": "Allow a website", "Dùng công cụ": "Use a tool", "Cho phép làm": "Allow it", "Cho phép trang này": "Allow this site", "Cho phép chạy": "Allow the run",
+  "Việc tự động đã chạy xong và có đề xuất chờ bạn duyệt.": "An automation finished and has proposals waiting for your approval.", "Việc tự động đã chạy xong. Mở Hộp thư để xem kết quả.": "An automation finished. Open your Inbox to see the result.",
+  "Tự động: chọn model hợp với việc, lỗi thì chuyển model khác": "Auto: picks the right model for the job and switches models on errors",
+  "Đã lưu việc tự động": "Automation saved", "Đã xóa việc tự động": "Automation deleted", "Hôm nay": "Today", "Hôm qua": "Yesterday", "Model": "Model", "Trình duyệt": "Browser",
+});
+addNew(VI2EN, {
+  "Thiếu mã đề xuất hoặc quyết định (approve | reject).": "Missing proposal ID or decision (approve | reject).", "Hãy viết việc bạn muốn Synchro tự làm.": "Describe the job you want Synchro to do.",
+  "Không tìm thấy đề xuất.": "Proposal not found.", "Đề xuất này đang được thực hiện.": "This proposal is being carried out.", "Đề xuất này đã được xử lý.": "This proposal has already been handled.",
+  "Công cụ này không còn (connector đã gỡ hoặc tắt).": "This tool is no longer available (the connector was removed or turned off).", "đã duyệt": "approved",
+  "Việc tự động cần có tên.": "The automation needs a name.", "Yêu cầu của việc tự động trống hoặc quá dài (tối đa 8.000 ký tự).": "The automation's instructions are empty or too long (8,000 characters max).",
+  "Không tìm thấy việc tự động.": "Automation not found.", "Hộp thư đã có quá nhiều đề xuất chờ duyệt.": "Your Inbox already has too many proposals waiting for approval.",
+  "Việc này đặt chạy bằng Chrome của bạn nhưng Chrome chưa kết nối với Synchro. Mở Chrome có cài tiện ích Synchro rồi thử lại, hoặc đổi trình duyệt của việc thành Tự chọn.": "This automation is set to run in your Chrome, but Chrome isn't connected to Synchro. Open Chrome with the Synchro extension and try again, or switch the automation's browser to Automatic.",
+});
+// Thời lượng "5 phút" / "12 giờ" trong ghi chú của việc tự động.
+const durEn = (s: string) => s.replace(/(\d+) phút/, (_, n) => `${n} minute${n === "1" ? "" : "s"}`).replace(/(\d+) giờ/, (_, n) => `${n} hour${n === "1" ? "" : "s"}`);
+RULES_EN.push(
+  [/^Đã chờ Chrome của người dùng kết nối lại (.+) rồi mới chạy\.$/, (m) => `Waited ${durEn(m[1])} for your Chrome to reconnect before running.`],
+  [/^Chrome của người dùng không kết nối suốt (.+): làm bằng trình duyệt của Synchro, phần cần tài khoản của người dùng thì ghi rõ chưa làm được\.$/, (m) => `Your Chrome stayed disconnected for ${durEn(m[1])}, so Synchro's browser was used; anything that needs your accounts is marked as not done.`],
+  [/^Thử lại lần (\d+)\/(\d+) vì lần trước lỗi: ([\s\S]*)$/, (m) => `Retry ${m[1]}/${m[2]} because the previous run failed: ${m[3]}`],
+  [/^Mỗi tài khoản có tối đa (\d+) việc tự động\.$/, (m) => `Each account can have up to ${m[1]} automations.`],
+  [/^Mỗi lần chạy gửi tối đa (\d+) đề xuất\.$/, (m) => `Each run can send up to ${m[1]} proposals.`],
+);
+addNew(VI2EN, {
+  "Cách làm": "How it runs", "Tra cứu & xử lý": "Research & process",
+  "Tìm web, trình duyệt, Chrome của bạn, connector, skill, chạy code. Hợp với báo cáo, phân tích, theo dõi, soạn nội dung.": "Web search, browser, your Chrome, connectors, skills, code runs. Good for reports, analysis, monitoring and writing.",
+  "Làm trong workspace riêng, giữ lại giữa các lần chạy: sửa tệp, chạy lệnh, git, mở pull request trên repo của bạn.": "Works in its own workspace that persists between runs: edits files, runs commands, uses git and opens pull requests on your repos.",
+  "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong Hộp thư.": "Synchro Code uses Synchro's browser on the server when it needs the web. Commands that need approval (when Auto mode is off in Settings → Synchro Code) become proposals in your Inbox.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code, nên việc này chưa chạy bằng Synchro Code được.": "Your administrator hasn't enabled Synchro Code for your account, so this automation can't run with Synchro Code yet.",
+  "Thiếu thông tin việc tự động.": "Missing automation details.",
+});
+addNew(VI2EN, { "Đang tắt": "Turned off", "Việc tự động không dùng được những khả năng đang tắt. Bấm để mở Cài đặt → Khả năng.": "Automations can't use capabilities that are turned off. Click to open Settings → Capabilities." });

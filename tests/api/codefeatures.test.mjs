@@ -236,7 +236,9 @@ ok(autoNode?.done && autoNode.steps?.some((x) => x.k === "tool" && x.name === "b
 await gh("/_mock/comment", { repo: REPO, number: 1, body: "Hãy thêm tệp CHANGELOG.md mô tả thay đổi", login: "reviewer" });
 const replied = await until(async () => (await gh(`/_mock/file?repo=${REPO}&ref=${encodeURIComponent(branch)}&path=CHANGELOG.md`))?.content, 90_000, 1000);
 ok(!!replied, "góp ý review: Synchro tự làm theo và đẩy commit", replied);
-st = await gh("/_mock/state");
+// Lời trả lời trên PR được đăng ngay sau khi đẩy commit: chờ thêm một chút rồi mới đếm.
+const mine = (s) => (s.comments[`${REPO}#1`]?.issue ?? []).filter((x) => /Synchro Code/.test(x.body)).length;
+st = (await until(async () => { const s = await gh("/_mock/state"); return mine(s) >= 2 ? s : null; }, 20_000, 500)) ?? await gh("/_mock/state");
 ok((st.comments[`${REPO}#1`]?.issue ?? []).filter((x) => /Synchro Code/.test(x.body)).length === 2, "trả lời góp ý trên PR; lời của chính Synchro không bị coi là góp ý mới", st.comments[`${REPO}#1`]?.issue?.map((x) => x.body.slice(0, 60)));
 
 console.log("10. PR được gộp: tự lưu trữ phiên, xóa nhánh");

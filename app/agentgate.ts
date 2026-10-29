@@ -6,6 +6,8 @@ import { getPrefs } from "./codestore";
 
 /** Lời đáp "không có giao diện để hỏi" (lượt chat không chạy nền, việc chạy nền không người xem). */
 export const NO_UI = "__no_ui__";
+/** Lời đáp "đã gửi yêu cầu duyệt vào Hộp thư" (việc tự động chạy nền: người dùng duyệt sau, lần chạy sau dùng được). */
+export const QUEUED = "__queued__";
 export type Gate = {
   /** null: được làm; chuỗi: lý do không được làm (gửi cho model thay cho kết quả công cụ). */
   check: (name: string, input: Record<string, unknown>) => Promise<string | null>;
@@ -31,7 +33,7 @@ export function makeGate(o: {
     o.asked(id, r);
     return r;
   };
-  const note = (r: Answer) => (r.note && r.note !== "Người dùng đã dừng." && r.note !== NO_UI ? ` Lời nhắn của người dùng: ${r.note}` : "");
+  const note = (r: Answer) => (r.note && r.note !== "Người dùng đã dừng." && r.note !== NO_UI && r.note !== QUEUED ? ` Lời nhắn của người dùng: ${r.note}` : "");
   return {
     seen: (url) => { if (url) site.current = siteOf("browser_navigate", { url }, site.current); },
     check: async (name, input) => {
@@ -47,6 +49,7 @@ export function makeGate(o: {
         if (rule === "blocked") return `Trang ${h} nằm trong danh sách chặn của người dùng (Cài đặt → Synchro Code → Trình duyệt). Không mở hay thao tác trên trang này; báo người dùng nếu việc cần tới nó.`;
         if (rule === "ask") {
           const r = await askUser({ kind: "site", tool: name, key: `site:${h}`, host: h!, title: `Dùng trình duyệt trên ${h}`, detail: name === "browser_navigate" ? String(input.url ?? "") : "" });
+          if (!r.ok && r.note === QUEUED) return `Trang ${h} chưa có trong danh sách trang được phép của người dùng. Synchro đã gửi yêu cầu cho phép trang này vào Hộp thư (người dùng duyệt thì các lần chạy sau dùng được). Không thử lại trang này ở lượt này; dùng nguồn khác và ghi rõ trong kết quả.`;
           if (!r.ok && r.note === NO_UI) return `Trang ${h} chưa có trong danh sách trang được phép (Cài đặt → Synchro Code → Trình duyệt) và lượt này không hỏi được người dùng. Báo người dùng thêm trang này vào danh sách, hoặc nhờ lại trong khung chat để Synchro hỏi.`;
           if (!r.ok) return `Người dùng không cho phép dùng trình duyệt trên ${h}.${note(r)} Không thử lại trang này; hỏi người dùng muốn làm thế nào.`;
           if (r.always) rememberSite(o.uid, h!); else site.once.add(h!);
@@ -57,6 +60,7 @@ export function makeGate(o: {
       const q = needAsk(o.perm, name, input);
       if (!q) return null;
       const r = await askUser(q);
+      if (!r.ok && r.note === QUEUED) return `Việc này cần người dùng duyệt trước (${q.title}). Synchro đã gửi yêu cầu duyệt vào Hộp thư; người dùng duyệt thì Synchro làm đúng việc đó. Không tìm cách khác để lách; làm tiếp phần không cần duyệt và ghi rõ trong kết quả.`;
       if (!r.ok) return `Người dùng không cho phép: ${q.title}.${note(r)} Đừng thử lại cách này; làm theo lời nhắn nếu có, hoặc dừng và hỏi người dùng muốn làm thế nào.`;
       if (r.always && !o.perm.allow.includes(q.key)) { o.perm.allow.push(q.key); o.allowed?.(q.key); }
       return null;

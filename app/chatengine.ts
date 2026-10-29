@@ -29,7 +29,9 @@ import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool } from "./brain";
-import { makeGate, NO_UI, type Gate } from "./agentgate";
+import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
+import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
+import type { TaskCtx } from "./tasks";
 import { answer as answerAsk } from "./approvals";
 import { getPrefs as codePrefs } from "./codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, browserTargetOf, chatFiles, describeBrowser, isBrowserTool, releaseBrowser, runBrowserTool, type BrowserCtx } from "./browsertools";
@@ -161,7 +163,8 @@ type Lib = { key: string; label: string };
 // browse: công cụ trình duyệt đang bật (Cài đặt → Khả năng); bctx: trình duyệt của lượt (của Synchro / Chrome của người dùng, browsertools.ts);
 // shown: trình duyệt đã mở khung cho người dùng ở lượt này;
 // heavy: id các lượt đọc trang / chụp màn hình (lược bớt bản cũ để ngữ cảnh không phình khi thao tác dài).
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate };
+// task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -217,7 +220,7 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   deltaStep();
   const c: Call = { id: `mcp_${randomToken(8)}`, name, input };
   // Công cụ connector để chế độ "Hỏi trước mỗi lần": CLI không hỏi duyệt giữa chừng được, nên báo rõ thay vì tự chạy.
-  if (needsAsk(x, c)) return { content: "Công cụ này đang để chế độ hỏi duyệt trước mỗi lần dùng; gói chạy qua CLI chưa hỏi duyệt được. Hãy cho người dùng biết: đổi quyền công cụ thành \"Luôn cho phép\" trong Connectors, hoặc dùng model khóa API cho việc này.", is_error: true };
+  if (needsAsk(x, c) && !x.task) return { content: "Công cụ này đang để chế độ hỏi duyệt trước mỗi lần dùng; gói chạy qua CLI chưa hỏi duyệt được. Hãy cho người dùng biết: đổi quyền công cụ thành \"Luôn cho phép\" trong Connectors, hoặc dùng model khóa API cho việc này.", is_error: true };
   let res: ToolRun | null = null;
   const m: unknown[] = [];
   const cap: Adapter = { step: async () => { throw new Error("không dùng"); }, results: (_calls, r) => { res = r[0]; return []; } };
@@ -261,6 +264,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     progress("plan", JSON.stringify(items));
     return { content: "Đã cập nhật danh sách việc cho người dùng.", is_error: false, used: { kind: "search", name: "update_plan" } };
   }
+  if (c.name === TASK_TOOL.name && x.task && !x.sess?.get(c.name)) return { ...(await runPropose(x.uid, x.task, c.input ?? {})), used: { kind: "search", name: c.name } };
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return geminiSearch(x.search, String(c.input?.query ?? ""));
@@ -268,12 +272,14 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (x.browse && isBrowserTool(c.name) && !x.sess?.get(c.name)) {
     // Lần đầu dùng trình duyệt trong lượt (hoặc đổi sang trình duyệt kia): mở khung trình duyệt cạnh khung chat để người dùng xem
     // trực tiếp ("browser"), hoặc khung trạng thái Chrome của họ kèm nút Dừng ("browser:user").
+    if (x.task?.browser === "synchro" && c.input?.browser === "user") return { content: "Việc tự động này đặt chỉ dùng trình duyệt của Synchro (browser=\"synchro\"), không dùng Chrome của người dùng.", is_error: true, used: { kind: "search", name: c.name } };
     const where = browserTargetOf(c.input, x.bctx);
     if (x.shown !== where) { x.shown = where; progress("ui", where === "user" ? "browser:user" : "browser"); }
     // Trang web được phép (Cài đặt → Synchro Code → Trình duyệt): trang bị chặn thì không làm, trang lạ thì hỏi người dùng ngay trong đoạn chat.
     // Lượt không chạy nền (không có khung chat theo dõi) thì không hỏi được: từ chối luôn, model được dặn nhờ người dùng thêm trang.
     x.gate ??= makeGate({ uid: x.uid, signal: runSignal(), probe: async () => (await runBrowserTool(x.uid, "browser_tabs", { op: "list" }, x.bctx)).url,
-      ask: (a) => { if (currentRun()) progress("ask", JSON.stringify(a)); else answerAsk(x.uid, a.id, { ok: false, note: NO_UI }); },
+      // Việc tự động chạy nền: không ai trả lời giữa chừng, nên gửi đề xuất cho phép trang vào Hộp thư và làm tiếp bằng nguồn khác.
+      ask: (a) => { if (x.task && a.kind === "site") { queueSite(x.uid, x.task, a.host ?? "", a.detail ?? ""); answerAsk(x.uid, a.id, { ok: false, note: QUEUED }); } else if (currentRun()) progress("ask", JSON.stringify(a)); else answerAsk(x.uid, a.id, { ok: false, note: NO_UI }); },
       asked: (id, a) => { if (currentRun()) progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always })); } });
     const no = await x.gate.check(c.name, c.input ?? {});
     if (no) return { content: no, is_error: true, used: { kind: "search", name: c.name } };
@@ -285,6 +291,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
+  if (x.task && x.sess!.perm(c.name) === "ask") return { content: queueTool(x.uid, x.task, c, { connector: ct.cname, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name }), is_error: true, used };
   if (d === "deny") return { content: "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.", is_error: true, used };
   return { ...(await x.sess!.call(c.name, c.input)), used };
 }
@@ -378,7 +385,8 @@ function pruneBrowser(m: unknown[], x: Exec) {
   }
 }
 async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
-  const steps = x.browse ? BROWSE_STEPS : MAX_STEPS;
+  // Việc tự động chạy nền: không ai ngồi chờ nên cho nhiều bước hơn (tra nhiều nguồn, nhiều connector, nhiều trang).
+  const steps = x.task ? (x.browse ? 300 : 150) : x.browse ? BROWSE_STEPS : MAX_STEPS;
   for (let i = start; i < steps; i++) {
     if (i > 0) { progress("step", "Đang viết câu trả lời"); deltaStep(); }
     if (x.browse) pruneBrowser(m, x);
@@ -387,7 +395,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     if (!r.calls.length) { if (r.pause) continue; return { text: r.text, used }; }
     // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
     if (r.text.trim()) progress("say", r.text.trim());
-    const ask = r.calls.filter((c) => needsAsk(x, c));
+    const ask = x.task ? [] : r.calls.filter((c) => needsAsk(x, c));
     if (ask.length) {
       sweep();
       const id = randomToken(18);
@@ -785,11 +793,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         // Công cụ và hướng dẫn trình duyệt luôn có khi tính năng bật (phần đầu prompt ổn định, đọc lại từ bộ đệm).
         const browse = !!pc.browse && feature !== "artifact";
         const bst = capsState(c.user);
-        const tools = [...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
-        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, bctx: browse ? { def: browserDefault(bst), synchro: !bst.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
+        const task = taskOf(body);
+        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
+        const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => bridgeCall(xx, name, input, usedAll) });
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", ss.route].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
       }
       const r = await subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
@@ -855,15 +864,16 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // Trình duyệt của Synchro (Cài đặt → Khả năng → Điều khiển trình duyệt): model nào cũng thao tác được trên web khi người dùng nhờ.
     // Luôn kèm khi bật, không đoán theo từng câu hỏi: công cụ nằm ở phần đầu prompt, đổi qua lại sẽ làm hỏng bộ đệm prompt.
     const browse = !!skills && t.kind !== "mock" && !!cs?.caps.browse;
-    if (visible.length || sess || code || refs || web || brain || browse) {
+    const task = skills && t.kind !== "mock" ? taskOf(body) : null;
+    if (visible.length || sess || code || refs || web || brain || browse || task) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
+      const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined, browse, bctx: browse && cs ? { def: browserDefault(cs), synchro: !cs.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)
@@ -898,6 +908,8 @@ registerExec("chat", async (body, user) => {
   const scope = { uid: user.id, feature: "chat" };
   const res = await usageScope.run(scope, () => chatPost(body, { user }, scope));
   const json = await res.json();
+  // Việc tự động chạy theo lịch không phải đoạn chat: không rút bộ nhớ hay chưng cất vào bộ não (kết quả các lần trước đã đi cùng lần chạy sau).
+  if (taskOf(body)) return { http: res.status, json };
   // Rút bộ nhớ từ lượt vừa xong ở nền (không làm chậm câu trả lời).
   if (res.status === 200 && useMemory(body, user) && typeof json?.text === "string") void learnFromTurn(user, lastUserText(body.messages), json.text).catch(() => {});
   // Bộ não tổng hợp: ghi nhận đoạn chat để chưng cất thành một nhánh (chạy nền, không làm chậm câu trả lời).

@@ -60,7 +60,9 @@ export const AGENT_TOOLS = [
 
 // ------------------------------------------------------------------ chạy công cụ
 type Out = { content: string; is_error: boolean; summary: string; output?: string; image?: string; diff?: { path: string; add: number; del: number }; url?: string };
-type Ctx = { u: string; d: string; emit: Emit; skills: Skill[]; scripts: boolean; usedSkills: string[]; opened: Set<Pane>; bctx?: BrowserCtx };
+// extra: công cụ thêm của nơi gọi (vd. inbox_propose của việc tự động chạy nền), chạy sau chốt chặn như công cụ thường.
+export type ExtraTool = { name: string; run: (input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean }> };
+type Ctx = { u: string; d: string; emit: Emit; skills: Skill[]; scripts: boolean; usedSkills: string[]; opened: Set<Pane>; bctx?: BrowserCtx; extra?: ExtraTool[] };
 
 const clip = (s: string, max = 30_000) => (s.length <= max ? s : `${s.slice(0, 5000)}\n…[đã cắt ${s.length - max} ký tự]…\n${s.slice(-(max - 5000))}`);
 const one = (s: string, n = 80) => { const l = s.trim().split("\n")[0]; return l.length > n ? l.slice(0, n - 1) + "…" : l; };
@@ -177,6 +179,8 @@ async function safeRun(c: Ctx, name: string, input: Record<string, unknown>): Pr
 async function gatedRun(c: Ctx, gate: Gate | undefined, name: string, input: Record<string, unknown>): Promise<Out> {
   const no = gate ? await gate.check(name, input ?? {}) : null;
   if (no) return { content: no, is_error: true, summary: "Không được phép" };
+  const ex = c.extra?.find((t) => t.name === name);
+  if (ex) { const r = await ex.run(input ?? {}).catch((e) => ({ content: `Lỗi: ${(e as Error).message}`, is_error: true })); return { ...r, summary: one(r.content) }; }
   const out = await safeRun(c, name, input);
   if (out.url) gate?.seen(out.url);
   return out;
@@ -373,13 +377,14 @@ function followup(msgs: unknown[], text: string) {
   if (last?.role === "user" && Array.isArray(last.content)) (last.content as unknown[]).push({ type: "text", text: note });
   else msgs.push({ role: "user", content: note });
 }
-export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: string; d: string; skills: Skill[]; scripts: boolean; emit: Emit; signal: AbortSignal; inbox?: () => string[]; gate?: Gate; bctx?: BrowserCtx }) {
-  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx };
+export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: string; d: string; skills: Skill[]; scripts: boolean; emit: Emit; signal: AbortSignal; inbox?: () => string[]; gate?: Gate; bctx?: BrowserCtx; extra?: ExtraTool[]; maxSteps?: number }) {
+  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx, extra: o.extra };
   const msgs = [...o.messages];
+  const max = o.maxSteps ?? AGENT_MAX_STEPS;
   let text = "";
-  for (let i = 0; i < AGENT_MAX_STEPS; i++) {
+  for (let i = 0; i < max; i++) {
     if (o.signal.aborted) break;
-    const r = await o.adapter.step(msgs, i === AGENT_MAX_STEPS - 1);
+    const r = await o.adapter.step(msgs, i === max - 1);
     if (r.usage) o.emit({ t: "usage", ...r.usage });
     if (r.think?.trim()) o.emit({ t: "think", text: r.think.trim() });
     if (r.text.trim()) { o.emit({ t: "text", text: r.text }); text = r.text; }
@@ -415,9 +420,9 @@ Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, khô
 export async function runPlanAgent(o: {
   user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: unknown }[];
   u: string; d: string; skills: Skill[]; scripts: boolean; tools: { name: string; description: string; input_schema: unknown }[];
-  emit: Emit; signal: AbortSignal; inbox?: () => string[]; gate?: Gate; bctx?: BrowserCtx;
+  emit: Emit; signal: AbortSignal; inbox?: () => string[]; gate?: Gate; bctx?: BrowserCtx; extra?: ExtraTool[];
 }) {
-  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx };
+  const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx, extra: o.extra };
   const cli = subCli(o.model)!;
   let pending = "", n = 0;
   // Lời dẫn trước mỗi nhóm công cụ: hiện thành một đoạn chữ riêng như vòng lặp khóa API.

@@ -81,7 +81,7 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
       <div className="sk-modal">
         <div className="sk-mh"><b>{pv.exists ? `Update ${pv.name} to v${pv.version}` : `Add ${pv.name}`}</b></div>
         {pv.source && <div className="muted" style={{ fontSize: 12, margin: "-2px 0 8px" }} data-notr>{pv.source}{src.pick ? ` · ${src.pick.split("/").slice(1).join("/")}` : ""}</div>}
-        <p className="d" style={{ margin: "0 0 10px" }}>{pv.description}</p>
+        <p className="d" style={{ margin: "0 0 10px" }} data-notr>{pv.description}</p>
         <div className="sk-note">Skills are instructions the model will follow. Only enable skills from sources you trust, and read the content below first.</div>
         {pv.warnings.length > 0 && <ul className="sk-wl">{pv.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
         {err && <div className="sk-err" role="alert"><span>{err}</span></div>}
@@ -199,7 +199,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
             <div className="pl-row2-t">
               <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}</div>
-              <span>{s.description}</span>
+              <span data-notr>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
             <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} set={(v) => toggle(s.name, v)} /></span>
@@ -218,7 +218,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
                 <div key={c.dir} className="sk-choice">
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div><b data-notr>{c.name || c.dir.split("/").pop()}</b>{c.exists && <span className="sk-tag">Installed · will update</span>}</div>
-                    <div className="muted sk-desc">{c.error ? <span className="sk-bad">{c.error}</span> : c.description}</div>
+                    <div className="muted sk-desc">{c.error ? <span className="sk-bad">{c.error}</span> : <span data-notr>{c.description}</span>}</div>
                   </div>
                   <button className="btn" style={{ height: 26 }} disabled={!!c.error || checking || !!bulk} onClick={() => check({ ...choose.src, pick: c.dir })}>Preview</button>
                 </div>
@@ -236,7 +236,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
         <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && setDetail(null)}>
           <div className="sk-modal">
             <div className="sk-mh"><b>{detail.name}</b><span className="muted" style={{ fontSize: 12 }}>v{detail.version}</span><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setDetail(null)}>×</button></div>
-            <p className="d" style={{ margin: "0 0 10px" }}>{detail.description}</p>
+            <p className="d" style={{ margin: "0 0 10px" }} data-notr>{detail.description}</p>
             <div className="sk-meta">
               <span>{detail.useCount ? `Used ${detail.useCount} times` : "Not used yet"}</span>
               {(sc[detail.name]?.up || sc[detail.name]?.down) ? <span>{`Rated helpful ${sc[detail.name].up} · unhelpful ${sc[detail.name].down}`}</span> : null}

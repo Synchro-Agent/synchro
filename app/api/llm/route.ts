@@ -11,6 +11,8 @@ export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   const body = await req.json();
+  // Thông tin việc tự động chỉ do bộ hẹn giờ của máy chủ đặt (tasks.ts), không nhận từ trình duyệt.
+  if (body && typeof body === "object") delete body.task;
   // Mọi lời gọi model trong yêu cầu này được tính vào mức dùng của tài khoản; hết hạn mức thì dừng trước khi gọi.
   // Model của gói subscription (chạy bằng gói của chính người dùng) không tính vào hạn mức chi phí API.
   const over = subCli(body?.model) ? null : overLimit(c.user);
