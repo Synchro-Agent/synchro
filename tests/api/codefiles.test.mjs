@@ -69,7 +69,7 @@ const note = blocks.find((b) => b.type === "text")?.text ?? "";
 ok(/<attachments>/.test(note) && /\.synchro\/uploads\/anh\.png \(ảnh/.test(note) && /\.synchro\/uploads\/goi\.crx/.test(note) && /\.synchro\/uploads\/tien-ich\.zip \(tệp nén \.zip/.test(note), "tin nhắn liệt kê đường dẫn từng tệp trong workspace", note);
 ok(/\.synchro\/uploads\/du-an\/ \(thư mục, 3 tệp\)/.test(note) && /src\/lib\/util\.js/.test(note), "thư mục hiện nguyên khối kèm danh sách tệp bên trong", note);
 ok(blocks.some((b) => b.type === "image" && b.source?.type === "base64" && b.source.data.length > 20), "Claude nhận ảnh dạng khối image", JSON.stringify(blocks.map((b) => b.type)));
-ok(blocks.some((b) => b.type === "text" && /<file name="ghi-chu\.txt">[\s\S]*dong 2/.test(b.text)), "Claude nhận nội dung tệp chữ", JSON.stringify(blocks.map((b) => b.text?.slice(0, 60))));
+ok(blocks.some((b) => b.type === "text" && /<file name="ghi-chu\.txt"[^>]*>[\s\S]*dong 2/.test(b.text)), "Claude nhận nội dung tệp chữ", JSON.stringify(blocks.map((b) => b.text?.slice(0, 60))));
 const ls = async (p) => (await api("POST", "/api/ws", { op: "list", sid, path: p })).j?.entries ?? [];
 const names = (await ls(".synchro/uploads")).map((e) => e.name + (e.dir ? "/" : ""));
 ok(["anh.png", "ghi-chu.txt", "goi.crx", "tien-ich.zip", "du-an/"].every((n) => names.includes(n)) && !names.some((n) => n.startsWith(".tai-len")), "workspace có đủ tệp, .zip giữ nguyên, thư mục đã giải nén (không còn tệp tạm)", JSON.stringify(names));
