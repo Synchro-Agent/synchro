@@ -28,7 +28,12 @@ const turn = async (model, text, sid, files) => {
   const events = t.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
   return { status: r.status, events, done: events.find((e) => e.t === "done"), error: events.find((e) => e.t === "error")?.error };
 };
-const last = async () => (await fetch(`${M}/_debug/last`)).json();
+// Yêu cầu gần nhất của lượt chat theo từng hãng, bỏ qua các lần gọi chạy nền (đánh giá phiên, bộ não) cũng dùng model nhanh.
+const last = async () => {
+  const H = await (await fetch(`${M}/_debug/hist`)).json();
+  const pick = (v) => [...(H[v] ?? [])].reverse().find((b) => !/<code_session_meta>|<brain_(distill|core|compile|merge|maps|profile|instructions)>|trích xuất bộ nhớ/.test(JSON.stringify(b.system ?? b.instructions ?? b.messages?.[0] ?? "")));
+  return { anthropic: pick("anthropic"), openai: pick("openai") };
+};
 
 // Ảnh PNG 4×3 thật (đọc được kích thước), tệp chữ, PDF một trang, tệp nhị phân lạ, .zip và cả một thư mục (nén ở trình duyệt).
 const crc = (b) => { let c = ~0; for (const x of b) { c ^= x; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return ~c >>> 0; };
