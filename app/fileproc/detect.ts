@@ -16,8 +16,9 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
       if (z.file("word/document.xml")) return "docx";
       if (z.file("xl/workbook.xml")) return "xlsx";
       if (z.file("ppt/presentation.xml")) return "pptx";
+      return "zip";
     } catch { /* zip hỏng */ }
-    throw new FileError(`"${name}" là tệp nén/định dạng Office không được hỗ trợ (chỉ nhận .docx, .xlsx, .pptx).`);
+    throw new FileError(`"${name}" là tệp nén bị hỏng, không mở được.`);
   }
   if (startsWith(0xd0, 0xcf, 0x11, 0xe0)) throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
   const head = buf.subarray(0, 8192);

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
 
-import { docText, getBlob, hasBlob } from "./filestate";
+import { docText, getBlob, getStatus, hasBlob } from "./filestate";
 import { locale } from "./i18n";
 export { saveBlob, saveDoc, fileContext } from "./filestate";
 
@@ -22,6 +22,7 @@ export function useFileMenu(say: (m: string) => void) {
   const [t, setT] = useState<Target>(null);
   const [view, setView] = useState<{ name: string; text: string } | null>(null);
   const [raw, setRaw] = useState(false);
+  const [img, setImg] = useState<string | null>(null);
   useEffect(() => {
     if (!t) return;
     const close = () => setT(null);
@@ -30,16 +31,24 @@ export function useFileMenu(say: (m: string) => void) {
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); window.removeEventListener("blur", close); };
   }, [t]);
   useEffect(() => {
-    if (!view) return;
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setView(null);
+    if (!view && !img) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { setView(null); setImg(null); } };
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
-  }, [view]);
+  }, [view, img]);
   const open = (e: React.MouseEvent, name: string, text?: string) => {
     const tx = text ?? docText(name) ?? "";
     if (!tx && !hasBlob(name)) return;
     e.preventDefault(); e.stopPropagation();
     setT({ name, text: tx, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 140) });
+  };
+  /** Bấm vào thẻ tệp như Claude: ảnh mở khung xem lớn, tệp khác mở bản xem trước nội dung. */
+  const show = (name: string, fid?: string) => {
+    const st = getStatus(name), b = getBlob(name);
+    if (st?.thumb && !st.pdf && !st.folder) { setImg(st.thumb); return; }
+    if (b && b.type.startsWith("image/")) { setImg(URL.createObjectURL(b)); return; }
+    if (fid && /\.(png|jpe?g|gif|webp)$/i.test(name)) { setImg(`/api/files/thumb?id=${fid}`); return; }
+    setView({ name, text: docText(name) ?? "" }); setRaw(false);
   };
   const download = (n: string, tx: string) => { const u = URL.createObjectURL(getBlob(n) ?? new Blob([tx], { type: "text/plain" })); const a = document.createElement("a"); a.href = u; a.download = n; a.click(); URL.revokeObjectURL(u); };
   const node = typeof document === "undefined" ? null : createPortal(
@@ -49,6 +58,12 @@ export function useFileMenu(say: (m: string) => void) {
           <button className="menu-item" onClick={() => { setView({ name: t.name, text: t.text }); setRaw(false); setT(null); }}><I.Eye />Xem trước</button>
           <button className="menu-item" onClick={() => { download(t.name, t.text); setT(null); }}><I.Download />Tải về</button>
           <button className="menu-item" onClick={() => { if (!t.text) { say("Tệp này không có nội dung văn bản để sao chép"); setT(null); return; } navigator.clipboard?.writeText(t.text); say("Đã sao chép nội dung"); setT(null); }}><I.Copy />Sao chép nội dung</button>
+        </div>
+      )}
+      {img && (
+        <div className="ft-lightbox" onMouseDown={(e) => e.target === e.currentTarget && setImg(null)}>
+          <img src={img} alt="" />
+          <button className="icon-btn" onClick={() => setImg(null)} aria-label="Đóng"><I.X size={16} /></button>
         </div>
       )}
       {view && (
@@ -66,5 +81,5 @@ export function useFileMenu(say: (m: string) => void) {
         </div>
       )}
     </>, document.body);
-  return { open, node };
+  return { open, show, node };
 }

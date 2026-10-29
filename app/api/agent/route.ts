@@ -10,6 +10,10 @@ import { enabledSkills, recordUse } from "../../skillstore";
 import { skillsPrompt } from "../../skillruntime";
 import { exec, sdir, wsAllowed } from "../../workspace";
 import { overLimit, withUsage } from "../../usage";
+import { buildContext } from "../../fileproc";
+import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
+import { toAnthropic, toOpenAI, toResponses, withPages } from "../../llmcall";
+import { placeUploads, type Upload } from "../../uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +28,10 @@ export async function POST(req: Request) {
   if (!wsAllowed(c.user)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." }, { status: 403 });
   try { limit("agent:" + c.user.id, 30, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
 
-  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted } = await req.json();
+  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted, files } = await req.json();
+  // Tệp / thư mục / .zip gửi kèm tin nhắn mới nhất (đã tải lên /api/files?raw=1): chép nguyên vào workspace, ảnh / PDF / chữ gửi thẳng cho model.
+  const ups: Upload[] = (Array.isArray(files) ? files : []).filter((f) => f && typeof f.id === "string" && typeof f.name === "string").slice(0, MAX_FILES_PER_MESSAGE)
+    .map((f) => ({ id: f.id, name: String(f.name).slice(0, 200), folder: f.folder === true }));
   let d: string;
   try { d = sdir(sid); } catch { return Response.json({ error: "Phiên không hợp lệ." }, { status: 400 }); }
   // Model do người dùng chọn (khóa "nhà cung cấp/mã model"); không chọn thì dùng model mặc định quản trị viên đặt.
@@ -33,7 +40,7 @@ export async function POST(req: Request) {
   const asks = (Array.isArray(messages) ? messages : []).filter((m: { role?: string }) => m?.role !== "assistant").map((m: { content?: unknown }) => String(m?.content ?? "").slice(0, 8000));
   const lastText = asks[asks.length - 1] ?? "";
   // Lời nhờ mới nhất (kèm lời nhờ trước để câu nối tiếp như "làm lại", "tiếp đi" giữ loại việc) cho bộ chọn model và mức nỗ lực.
-  const ask = { text: lastText, attachments: 0, turns: Array.isArray(messages) ? messages.length : 0, studio: false, prevAsk: asks[asks.length - 2] };
+  const ask = { text: lastText, attachments: ups.length, turns: Array.isArray(messages) ? messages.length : 0, studio: false, prevAsk: asks[asks.length - 2] };
   if (chosen === AUTO) {
     // Chọn theo đúng việc đang nhờ (qua cả ba hãng, trong đúng các model bộ chọn đang hiện: gói hoặc khóa API):
     // sửa nhỏ dùng model vừa đủ cho nhanh, dựng cả ứng dụng dùng model mạnh nhất.
@@ -73,7 +80,16 @@ export async function POST(req: Request) {
         const scripts = !!process.env.E2B_API_KEY && can(c.user, "sandbox");
         const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: String(system).slice(0, 60_000), skills: list.length ? skillsPrompt(list, scripts) : "" });
         const tools = agentTools(list.length, scripts);
-        const msgs = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
+        const msgs: { role: string; content: unknown }[] = (Array.isArray(messages) ? messages : []).slice(-30).map((m: { role: string; content: unknown }) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "").slice(0, 100_000) }));
+        const last = msgs[msgs.length - 1];
+        if (ups.length && last?.role === "user") {
+          const placed = await placeUploads(c.user.id, d, ups);
+          for (const e of placed.errors) emit({ t: "text", text: `⚠️ ${e}` });
+          const one = ups.filter((f) => !f.folder);
+          const blocks = await buildContext(one.map((f) => f.id), Object.fromEntries(one.map((f) => [f.id, f.name])), lastText);
+          const note = placed.lines.length ? `\n\n<attachments>\nNgười dùng gửi kèm, đã chép nguyên vẹn vào workspace (dùng được bằng mọi công cụ: đọc, giải nén, chạy):\n${placed.lines.join("\n")}${blocks.length ? "\nẢnh, PDF và nội dung tệp chữ gửi kèm ngay bên dưới." : ""}\n</attachments>` : "";
+          last.content = [{ type: "text", text: String(last.content) + note }, ...blocks];
+        }
         if (plan) {
           const out = await runPlanAgent({ user: c.user, model, effort, conv: `code-${String(sid)}`.slice(0, 64), system: sys, messages: msgs, u: c.user.id, d, skills: list, scripts, tools,
             emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
@@ -87,7 +103,10 @@ export async function POST(req: Request) {
         const adapter = t.kind === "mock" ? mockAgent()
           : t.kind === "anthropic" ? anthropicAgent({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, effort })
           : (t.kind === "openai" ? responsesAgent : openaiAgent)({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: ac.signal, kind: t.kind, effort });
-        const out = await runAgent({ adapter, messages: msgs, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
+        // Khối ảnh / PDF theo đúng định dạng của từng hãng (như khung chat).
+        const conv = t.kind === "mock" ? msgs : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) }))
+          : t.kind === "openai" ? msgs.map((m) => ({ ...m, content: toResponses(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
+        const out = await runAgent({ adapter, messages: conv, u: c.user.id, d, skills: list, scripts, emit, signal: ac.signal, inbox: () => agentInbox.get(ibox)?.splice(0) ?? [] });
         if (out.skills.length) recordUse(c.user.id, out.skills);
         const left = agentInbox.get(ibox)?.splice(0) ?? [];
         emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });

@@ -16,8 +16,8 @@ import { createPortal } from "react-dom";
 import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc } from "./filemenu";
-import { ingestFile } from "./filestate";
-import { AgentSteps, GitHubButton, StatusLine, TaskCard, type AStep } from "./agentui";
+import { capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
+import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, type AStep } from "./agentui";
 import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
@@ -26,7 +26,9 @@ const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loadi
 
 type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?: Pill[] };
 // steps/plan: lượt trả lời do agent (có workspace) làm: đoạn văn xen kẽ công cụ, và danh sách việc.
-type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number } };
+/** files: tệp / thư mục gửi kèm (tên trong filestate; Synchro Code chép nguyên vào workspace .synchro/uploads). */
+type Sent = { name: string; folder?: boolean; count?: number; id?: string };
+type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; files?: Sent[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number } };
 type Ctx = { id: number; name: string; text: string; size: number; kind: "file" | "doc"; pinned?: boolean; off?: boolean };
 type Say = (m: string) => void;
 
@@ -85,7 +87,6 @@ export const PRESETS = [
   { k: "express", label: "Node.js + Express", rule: "Dùng Node.js 20, Express, ES modules, xử lý lỗi bằng middleware tập trung." },
   { k: "go", label: "Go (net/http)", rule: "Dùng Go 1.22, net/http chuẩn, trả lỗi tường minh, không dùng global state." },
 ] as const;
-const BIN_EXT = /\.(png|jpe?g|gif|webp|ico|pdf|mp4|mov|mp3|wav|woff2?|ttf|otf|eot|exe|dll|so|dylib|bin|class|jar|lock|map|svg)$/i;
 const SUGGEST = [
   { t: "Sửa lỗi đăng nhập", d: "Viết hàm login có xử lý lỗi", q: "Viết hàm login bằng TypeScript gọi /api/login" },
   { t: "Dựng trang demo HTML", d: "Có nút bấm, chạy thử được ngay", q: "Tạo demo html có nút bấm để chạy thử" },
@@ -125,24 +126,30 @@ function ErrView({ text }: { text: string }) {
   );
 }
 
-function isTextEntry(path: string): boolean {
-  const seg = path.split("/");
-  return seg.length > 0;
-}
-
-async function readEntry(en: FileSystemEntry, base: string, out: { path: string; file: File }[], skip: { n: number }) {
+// Đọc cả thư mục được kéo thả (giữ nguyên mọi tệp và cấu trúc, chỉ bỏ tệp rác của hệ điều hành).
+async function readEntry(en: FileSystemEntry, base: string, out: { path: string; file: File }[]) {
   if (en.isFile) {
-    const f = await new Promise<File>((res, rej) => (en as FileSystemFileEntry).file(res, rej));
-    const p = base + en.name;
-    if (isTextEntry(p)) out.push({ path: p, file: f }); else skip.n++;
+    if (en.name === ".DS_Store" || en.name === "Thumbs.db") return;
+    out.push({ path: base + en.name, file: await new Promise<File>((res, rej) => (en as FileSystemFileEntry).file(res, rej)) });
   } else if (en.isDirectory) {
     const rd = (en as FileSystemDirectoryEntry).createReader();
     for (;;) {
       const batch = await new Promise<FileSystemEntry[]>((res, rej) => rd.readEntries(res, rej));
       if (!batch.length) break;
-      for (const c of batch) await readEntry(c, base + en.name + "/", out, skip);
+      for (const c of batch) await readEntry(c, base + en.name + "/", out);
     }
   }
+}
+
+// Việc agent đã làm ở một lượt cũ (đọc / sửa tệp, lệnh, trình duyệt): gửi kèm câu trả lời trong lịch sử, để model khác tiếp quản
+// (chế độ Tự động đổi model giữa các câu) vẫn biết đã làm gì, không hỏi lại hay làm lại từ đầu.
+function workLog(steps?: AStep[]) {
+  const ts = (steps ?? []).filter((x): x is Extract<AStep, { k: "tool" }> => x.k === "tool" && x.name !== "update_plan").slice(-40);
+  if (!ts.length) return "";
+  const one = (v: unknown) => String(v).replace(/\s+/g, " ").slice(0, 140);
+  const arg = (t: (typeof ts)[number]) => (typeof t.input.path === "string" ? ` ${one(t.input.path)}` : typeof t.input.command === "string" ? ` \`${one(t.input.command)}\`` : typeof t.input.url === "string" ? ` ${one(t.input.url)}` : typeof t.input.pattern === "string" ? ` "${one(t.input.pattern)}"` : "");
+  const rows = ts.map((t) => `- ${t.name}${arg(t)} → ${t.ok === false ? "lỗi" : "xong"}${t.diff ? ` (+${t.diff.add} −${t.diff.del})` : ""}${t.summary && !t.diff ? `: ${one(t.summary)}` : ""}`);
+  return `\n\n<tool_activity>\nỞ lượt này đã dùng công cụ trong workspace (tóm tắt, không cần làm lại):\n${rows.join("\n")}\n</tool_activity>`;
 }
 
 export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide, onCreate, onNew, onEmpty }: { say: Say; onEmpty: (e: boolean) => void; sid: number | null; title: string; model: string; modelPicker: React.ReactNode; sideOpen: boolean; onSide: () => void; onCreate: (id: number, title: string) => void; onNew: () => void }) {
@@ -161,6 +168,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [busy, setBusy] = useState(false);
   const [v, setV] = useState("");
   const [atts, setAtts] = useState<Att[]>([]);
+  // Tệp / thư mục / .zip đính kèm tin nhắn đang soạn (thẻ giống Claude), gửi đi cùng tin nhắn rồi dọn khỏi khung soạn.
+  const [files, setFiles] = useState<string[]>([]);
   const panel = useDev((s) => s.panel);
   const setPanel = useDev((s) => s.setPanel);
   useDev((s) => s.encVer);
@@ -231,7 +240,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     if (loadedSid.current === sid) return;
     loadedSid.current = sid;
     stopGen();
-    setAtts([]); setV(""); setPanel(null); setMountedP([]);
+    setAtts([]); setFiles([]); setV(""); setPanel(null); setMountedP([]);
     if (sid === null) setPane(null);
     try {
       const s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null");
@@ -344,9 +353,11 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     agentSid.current = s;
     setWsUsed(true);
     const live = ctxRef.current.filter((c) => !c.off);
+    // Tệp gửi kèm ở các lượt trước đã nằm trong workspace: chỉ nhắc đường dẫn (lượt hiện tại do máy chủ ghép mô tả và nội dung).
+    const sentNote = (n: Node) => (n.id !== id && n.files?.length ? `\n\n[Đã gửi kèm, nằm trong workspace: ${n.files.map((f) => `.synchro/uploads/${f.name}${f.folder ? "/" : ""}`).join(", ")}]` : "");
     const messages = hist.flatMap((n) => [
-      { role: "user", content: n.user + (n.hid ? "\n\n" + n.hid : "") + n.atts.map((a) => `\n\n[${a.name}]\n${a.text}`).join("") },
-      ...(n.ai && n.id !== id ? [{ role: "assistant", content: n.ai }] : []),
+      { role: "user", content: n.user + (n.hid ? "\n\n" + n.hid : "") + n.atts.map((a) => `\n\n[${a.name}]\n${a.text}`).join("") + sentNote(n) },
+      ...(n.ai && n.id !== id ? [{ role: "assistant", content: n.ai + workLog(n.steps) }] : []),
     ]);
     const system = [
       MODE_SYS[md],
@@ -363,7 +374,14 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     patchNode(id, (n) => ({ ...n, steps: [] }));
     (async () => {
       try {
-        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort() }, (e) => {
+        const cur = hist[hist.length - 1];
+        const names = cur?.id === id ? (cur.files ?? []).map((f) => f.name) : [];
+        const up = names.length ? await readyFiles(names) : { ok: [], errors: [] };
+        // Nhớ mã tệp trên máy chủ: thẻ ảnh của tin này vẫn hiện ảnh sau khi tải lại trang.
+        if (up.ok.length) patchNode(id, (n) => ({ ...n, files: n.files?.map((f) => ({ ...f, id: up.ok.find((o) => o.name === f.name)?.id ?? f.id })) }));
+        for (const err of up.errors) patchNode(id, (n) => addText(n, `⚠️ ${err}`));
+        if (gen !== genRef.current) return;
+        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort(), files: up.ok }, (e) => {
           if (gen !== genRef.current) return;
           if (e.t === "text") patchNode(id, (n) => addText(n, e.text));
           else if (e.t === "tool") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "tool", id: e.id, name: e.name, input: e.input }] }));
@@ -409,7 +427,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const messages: LLMMsg[] = [];
     hist.forEach((n) => {
       messages.push({ role: "user", content: n.user + (n.hid ? "\n\n" + n.hid : "") + n.atts.map((a) => `\n\n[${a.name}]\n${a.text}`).join("") });
-      if (n.ai && n.id !== id) messages.push({ role: "assistant", content: n.ai });
+      if (n.ai && n.id !== id) messages.push({ role: "assistant", content: n.ai + workLog(n.steps) });
     });
     const buildSystem = (snips: { file: string; name: string; code: string }[]) => [
       "Bạn là Synchro Code, trợ lý lập trình.",
@@ -424,6 +442,15 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     ].filter(Boolean).join("\n\n");
     (async () => {
       let reply: string;
+      // Không có workspace: ảnh, PDF, nội dung tệp gửi thẳng cho model như khung chat.
+      const cur = hist[hist.length - 1];
+      if (cur?.id === id && cur.files?.length) {
+        const fc = await fileContext(cur.files.map((f) => f.name), userText);
+        patchNode(id, (n) => ({ ...n, files: n.files?.map((f) => ({ ...f, id: getStatus(f.name)?.id ?? f.id })) }));
+        if (fc.errors.length) say(fc.errors[0]);
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && fc.blocks.length) lastMsg.content = [{ type: "text", text: String(lastMsg.content) }, ...fc.blocks];
+      }
       const snips = /@codebase\b/i.test(userText) ? await pickRelevantTS(live, userText, 5) : [];
       const system = buildSystem(snips);
       let usedSk: string[] = [];
@@ -448,26 +475,29 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
 
   const send = (text = v, extra: Att[] = atts, hid?: string, strict = false) => {
     if (busy) return;
+    // Tệp đính kèm chỉ đi cùng tin nhắn người dùng gõ (không đi cùng lệnh tự động như Auto-Fix, Inline Edit).
+    const typed = extra === atts;
     strictRef.current = strict;
     let cnt = 0;
     const rt = redact(text.trim()); cnt += rt.count;
     const t = rt.text;
     extra = extra.map((a) => { const r = redact(a.text); cnt += r.count; return { ...a, text: r.text, pills: undefined }; });
     if (cnt) say(`🛡️ Đã bảo vệ ${cnt} thông tin nhạy cảm tại trình duyệt`);
-    if (!t && !extra.length) return;
+    const sent: Sent[] = typed ? files.map((name) => ({ name, folder: getStatus(name)?.folder || undefined, count: getStatus(name)?.count })) : [];
+    if (!t && !extra.length && !sent.length) return;
     stick.current = true;
     const parent = path.length ? path[path.length - 1].id : 0;
-    const n: Node = { id: Date.now(), parent, user: t || "Xem nội dung đính kèm", hid, atts: extra, ai: "", done: false, mode, time: Date.now() };
+    const n: Node = { id: Date.now(), parent, user: t || "Xem nội dung đính kèm", hid, atts: extra, files: sent.length ? sent : undefined, ai: "", done: false, mode, time: Date.now() };
     snapRef.current.set(n.id, ctxRef.current);
     setNodes((ns) => [...ns, n]);
     setSel((s) => ({ ...s, [parent]: n.id }));
-    setV(""); setAtts([]); setMention(null);
+    setV(""); setAtts([]); if (sent.length) setFiles([]); setMention(null);
     run(n.id, [...path, n], n.user, n.atts, mode);
   };
 
   const branch = (old: Node, text: string) => {
     if (busy || !text.trim()) return;
-    const n: Node = { id: Date.now(), parent: old.parent, user: text.trim(), atts: old.atts, ai: "", done: false, mode: old.mode, time: Date.now() };
+    const n: Node = { id: Date.now(), parent: old.parent, user: text.trim(), atts: old.atts, files: old.files, ai: "", done: false, mode: old.mode, time: Date.now() };
     const upto: Node[] = [];
     for (const p of path) { if (p.id === old.id) break; upto.push(p); }
     snapRef.current.set(n.id, ctxRef.current);
@@ -501,45 +531,41 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     });
   };
 
-  const ingest = async (list: { path: string; file: File }[], skipped: number) => {
-    const out: { name: string; text: string; size: number }[] = [];
-    let junk = skipped;
-    for (const { path: p, file } of list) {
-      if (file.size > 400_000 || BIN_EXT.test(p)) { ingestFile(file); out.push({ name: p, text: "", size: file.size }); continue; }
-      try { { const r = redact((await file.text()).slice(0, 200_000)); if (r.count) say(`🛡️ Đã bảo vệ ${r.count} thông tin nhạy cảm trong ${p}`); out.push({ name: p, text: r.text, size: file.size }); } } catch { junk++; }
-    }
-    addCtx(out);
-    say(`Đã thêm ${out.length} tệp vào ngữ cảnh${junk ? ` · bỏ qua ${junk} mục rác` : ""}`);
-  };
-
-  const ingestZip = async (f: File) => {
-    try {
-      const JSZip = (await import("jszip")).default;
-      const z = await JSZip.loadAsync(f);
-      const list: { path: string; file: File }[] = [];
-      let skipped = 0;
-      const root = f.name.replace(/\.zip$/i, "");
-      for (const [name, e] of Object.entries(z.files)) {
-        if (e.dir) continue;
-        if (!isTextEntry(name)) { skipped++; continue; }
-        const blob = await e.async("blob");
-        list.push({ path: root + "/" + name, file: new File([blob], name.split("/").pop() ?? name) });
-      }
-      await ingest(list, skipped);
-    } catch { say("Không đọc được tệp .zip"); }
-  };
-
   const [upl, setUpl] = useState(false);
   const fm = useFileMenu(say);
-  const onFiles = async (files: FileList | File[] | null) => {
-    if (!files?.length) return;
-    const arr = Array.from(files);
-    const zips = arr.filter((f) => /\.zip$/i.test(f.name));
-    const rest = arr.filter((f) => !/\.zip$/i.test(f.name));
-    let skipped = 0;
-    const list = rest.map((f) => ({ path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name, file: f })).filter((x) => { const ok = isTextEntry(x.path); if (!ok) skipped++; return ok; });
-    if (list.length || skipped) await ingest(list, skipped);
-    for (const z of zips) await ingestZip(z);
+  // Như Claude: mọi loại tệp đều đính kèm được (tệp không đọc được chữ vẫn được chép nguyên vào workspace cho agent dùng).
+  const addFiles = (list: File[]) => {
+    const ok = list.filter((f) => f.name !== ".DS_Store");
+    if (!ok.length) return;
+    ok.forEach((f) => ingestFile(f, say, { raw: true }));
+    setFiles((cur) => capFiles(cur.filter((n) => !ok.some((f) => f.name === n)), ok.map((f) => f.name), say));
+  };
+  // Cả thư mục tải lên nguyên khối: nén ngay trong trình duyệt (giữ cấu trúc), hiện là một thẻ thư mục, chép nguyên vào workspace khi gửi.
+  const addFolder = async (name: string, list: { path: string; file: File }[]) => {
+    if (!list.length) { say(`Thư mục "${name}" trống`); return; }
+    try {
+      const JSZip = (await import("jszip")).default;
+      const z = new JSZip();
+      for (const { path: p, file } of list) z.file(p.split("/").slice(1).join("/") || file.name, file);
+      const blob = await z.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+      ingestFile(new File([blob], `${name}.zip`, { type: "application/zip" }), say, { raw: true, key: name, folder: true, count: list.length });
+      setFiles((cur) => capFiles(cur.filter((n) => n !== name), [name], say));
+    } catch { say(`Không nén được thư mục "${name}"`); }
+  };
+  const onFiles = async (picked: FileList | File[] | null, dir = false) => {
+    if (!picked?.length) return;
+    const arr = Array.from(picked);
+    if (!dir) { addFiles(arr); return; }
+    // Chọn thư mục: gom theo thư mục gốc (webkitRelativePath = "thu-muc/…").
+    const groups = new Map<string, { path: string; file: File }[]>();
+    for (const f of arr) {
+      const p = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+      if (f.name === ".DS_Store") continue;
+      const root = p.includes("/") ? p.split("/")[0] : "";
+      if (!root) { addFiles([f]); continue; }
+      groups.set(root, [...(groups.get(root) ?? []), { path: p, file: f }]);
+    }
+    for (const [root, list] of groups) await addFolder(root, list);
   };
 
   const onDrop = async (e: React.DragEvent) => {
@@ -547,13 +573,14 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const items = Array.from(e.dataTransfer.items ?? []);
     const entries = items.map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
     if (!entries.length) return onFiles(e.dataTransfer.files);
-    const out: { path: string; file: File }[] = [];
-    const skip = { n: 0 };
+    const loose: File[] = [];
     for (const en of entries) {
-      if (en.isFile && /\.zip$/i.test(en.name)) { const f = await new Promise<File>((res, rej) => (en as FileSystemFileEntry).file(res, rej)); await ingestZip(f); continue; }
-      await readEntry(en, "", out, skip);
+      if (en.isFile) { loose.push(await new Promise<File>((res, rej) => (en as FileSystemFileEntry).file(res, rej))); continue; }
+      const out: { path: string; file: File }[] = [];
+      await readEntry(en, "", out);
+      await addFolder(en.name, out);
     }
-    if (out.length || skip.n) await ingest(out, skip.n);
+    if (loose.length) addFiles(loose);
   };
 
   const mentionItems = useMemo(() => {
@@ -646,6 +673,13 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   };
 
   const onPaste = (e: React.ClipboardEvent) => {
+    // Dán ảnh chụp màn hình / tệp đã sao chép: thành tệp đính kèm như Claude.
+    const pasted = Array.from(e.clipboardData.files ?? []);
+    if (pasted.length) {
+      e.preventDefault();
+      addFiles(pasted.map((f) => (f.name && f.name !== "image.png" ? f : new File([f], `anh-dan-${new Date().toTimeString().slice(0, 8).replace(/:/g, "")}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type }))));
+      return;
+    }
     const t = e.clipboardData.getData("text");
     if (!t) return;
     const lines = t.split("\n").length;
@@ -914,6 +948,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                 return (
                   <div key={n.id} id={"cv-n" + n.id} className="cv-turn">
                     <div className="user-wrap">
+                      {n.files?.length ? <div className="attach sent">{n.files.map((f) => <FileCard key={f.name} name={f.name} folder={f.folder} count={f.count} fid={f.id} onOpen={() => fm.show(f.name, f.id)} onContextMenu={(e) => fm.open(e, f.name)} />)}</div> : null}
                       {n.atts.length > 0 && <div className="cv-atts end">{n.atts.map((a, k) => <button key={k} className={`cv-att ${a.k}`} onClick={() => setViewer(a)}>{a.k === "error" ? <I.Alert size={14} /> : <I.Code size={14} />}{a.name}</button>)}</div>}
                       {editing?.id === n.id ? (
                         <div className="cv-edit">
@@ -936,7 +971,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
-                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={n.ai} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className="ai-msg">{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">
@@ -989,16 +1024,11 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   <div className="cv-custom-r"><button className="btn" onClick={() => { setErrText(""); setErrOpen(false); }}>Hủy</button><button className="btn dark" onClick={addErr} disabled={!errText.trim()}>Đính kèm</button></div>
                 </div>
               )}
-              {(ctx.length > 0 || atts.length > 0) && (
+              {(files.length > 0 || atts.length > 0) && (
                 <div className="cv-pills">
-                  {ctx.length > 0 && (
-                    <div className="attach cv-attach">{fm.node}
-                      {ctx.map((c) => (
-                        <div key={c.id} className={`cv-fc ${c.off ? "off" : ""} ${c.pinned ? "pin" : ""}`}>
-                          <FileCard name={c.name.split("/").pop() ?? c.name} onContextMenu={(e) => fm.open(e, c.name.split("/").pop() ?? c.name)} onRemove={() => setCtx((x) => x.filter((y) => y.id !== c.id))} />
-                          {c.pinned && <span className="cv-fc-pin"><I.Pin size={11} /></span>}
-                        </div>
-                      ))}
+                  {files.length > 0 && (
+                    <div className="attach cv-attach">
+                      {files.map((f) => <FileCard key={f} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles((x) => x.filter((y) => y !== f))} />)}
                     </div>
                   )}
                   {atts.map((a, k) => (
@@ -1021,7 +1051,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   {upl && <UploadModal say={say} onClose={() => setUpl(false)} onFiles={(f) => { setUpl(false); onFiles(f); }} />}
                   <Menu open={menu === "plus"} style={{ bottom: 42, left: 0, width: 258 }}>
                     <input ref={fileIn} type="file" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
-                    <input ref={dirIn} type="file" hidden {...({ webkitdirectory: "", directory: "" } as object)} multiple onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
+                    <input ref={dirIn} type="file" hidden {...({ webkitdirectory: "", directory: "" } as object)} multiple onChange={(e) => { onFiles(e.target.files, true); e.target.value = ""; }} />
                     <input ref={zipIn} type="file" accept=".zip" hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
                     <button className="menu-item" onClick={() => { setMenu(""); setUpl(true); }}><I.Clip />Tải tệp lên</button>
                     <button className="menu-item" onClick={() => { setMenu(""); dirIn.current?.click(); }}><I.Folder />Tải cả thư mục</button>
@@ -1032,9 +1062,10 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   </Menu>
                 </div>
                 <div className="cv-sp" />
-                <button className="send" disabled={!busy && !v.trim() && !atts.length} onClick={busy ? stopGen : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.Stop /> : <I.Enter />}</button>
+                <button className="send" disabled={!busy && !v.trim() && !atts.length && !files.length} onClick={busy ? stopGen : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.Stop /> : <I.Enter />}</button>
               </div>
-              {dragOn && <div className="cv-drop">Thả tệp, thư mục hoặc .zip để thêm vào ngữ cảnh</div>}
+              {dragOn && <div className="cv-drop">Thả tệp, thư mục hoặc .zip để gửi kèm tin nhắn</div>}
+              {fm.node}
             </div>
             <div className="cv-under">
               <GitHubButton git={git} available={!!status?.available} reason={status?.reason} ensureSid={() => ensureSid()} say={say}

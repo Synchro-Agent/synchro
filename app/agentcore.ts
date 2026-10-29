@@ -300,8 +300,10 @@ export function mockAgent(): Adapter {
   return {
     step: async (msgs) => {
       await new Promise((r) => setTimeout(r, 450));
-      const firstUser = msgs.findLastIndex((m) => (m as { role: string; content: unknown }).role === "user" && typeof (m as { content: unknown }).content === "string");
-      const q = String((msgs[firstUser] as { content: string })?.content ?? "");
+      // Tin của người dùng (chữ, hoặc chữ kèm khối ảnh / tệp đính kèm), không tính kết quả công cụ.
+      const said = (c: unknown) => (typeof c === "string" ? c : Array.isArray(c) && !c.some((b) => b?.type === "tool_result") ? c.filter((b) => b?.type === "text").map((b) => b.text).join("\n") : null);
+      const firstUser = msgs.findLastIndex((m) => (m as { role: string }).role === "user" && said((m as { content: unknown }).content) !== null);
+      const q = said((msgs[firstUser] as { content: unknown })?.content) ?? "";
       const k = msgs.slice(firstUser + 1).filter((m) => (m as { role: string }).role === "assistant").length;
       const steps: [string, Call[]][] = [
         ["Mình sẽ xem workspace trước, rồi dựng một trang demo để chạy thử các công cụ.", [call("update_plan", { items: plan(0) }), call("list_files", {})]],
@@ -390,7 +392,7 @@ Các công cụ nói ở trên (bash, read_file, write_file, edit_file, list_fil
 Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.
 </synchro_tools>`;
 export async function runPlanAgent(o: {
-  user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: string }[];
+  user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: unknown }[];
   u: string; d: string; skills: Skill[]; scripts: boolean; tools: { name: string; description: string; input_schema: unknown }[];
   emit: Emit; signal: AbortSignal; inbox?: () => string[];
 }) {

@@ -46,6 +46,16 @@ export async function fsop<T = Record<string, unknown>>(u: string, d: string, op
   return j as T;
 }
 
+// Ghi tệp nhị phân vào thư mục phiên: từng khúc 12 MB (base64 qua stdin), dưới giới hạn 30 MB mỗi yêu cầu của dịch vụ workspace.
+const PUT_JS = 'const fs=require("fs"),p=require("path");const[f,m]=process.argv.slice(1);let b="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>b+=c).on("end",()=>{fs.mkdirSync(p.dirname(f),{recursive:true});(m==="a"?fs.appendFileSync:fs.writeFileSync)(f,Buffer.from(b,"base64"))})';
+export async function putFile(u: string, d: string, rel: string, buf: Buffer) {
+  const p = cleanPath(rel), CH = 12 * 1048576;
+  for (let i = 0; i === 0 || i < buf.length; i += CH) {
+    const r = await exec(u, d, { argv: ["node", "-e", PUT_JS, p, i ? "a" : "w"], stdin: buf.subarray(i, i + CH).toString("base64"), timeout: 120 });
+    if (r.code) throw new AuthError(`Không chép được ${p} vào workspace: ${(r.err || r.out).trim().slice(0, 200)}`, 500);
+  }
+}
+
 // Đường dẫn tương đối, không thoát ra ngoài thư mục phiên. Chấp nhận cả đường dẫn tuyệt đối trong thư mục phiên.
 export function cleanPath(p: unknown, d?: string) {
   let s = String(p ?? ".").trim().replace(/\\/g, "/");

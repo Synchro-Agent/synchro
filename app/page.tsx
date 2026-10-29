@@ -6,7 +6,7 @@ import { Avatar } from "./avatar";
 import { getLang, tr } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
-import { capFiles } from "./filestate";
+import { capFiles, getStatus } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
 import { HalftoneBg } from "./halftone";
 import { CodeView } from "./codeview";
@@ -478,7 +478,7 @@ function Composer(p: {
   const micBtn = <MicPicker say={say} rec={rec} onMic={mic} />;
   const modelPicker = <ModelPicker model={model} setModel={setModel} />;
   const chips = files.length > 0 && (
-    <div className="attach">{fm.node}{files.map((f, i) => <FileCard key={f + i} name={f} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
+    <div className="attach">{fm.node}{files.map((f, i) => <FileCard key={f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
   );
 
   if (dock)
@@ -1117,6 +1117,9 @@ export default function Home() {
     const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
     fileContext(f, t).then(({ blocks, errors, failed }) => {
       errors.forEach((m) => say(m));
+      // Nhớ mã tệp trên máy chủ: các lượt sau (kể cả khi chế độ Tự động đổi model) gửi lại tệp này cùng lịch sử.
+      const fids = Object.fromEntries(f.flatMap((n) => { const x = getStatus(n)?.id; return x ? [[n, x]] : []; }));
+      if (Object.keys(fids).length) patch(id!, (ms) => ms.map((m, k) => (k === ms.length - 2 && m.role === "user" ? { ...m, fids } : m)));
       // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
       if (failed) { patch(id!, (m) => [...m.slice(0, -1), { role: "ai", text: `⚠️ ${tr(errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.")}`, time: Date.now(), done: true }]); return; }
       if (blocks.length) hist[hist.length - 1] = { role: "user", content: [{ type: "text", text: t || "Hãy xem các tệp đính kèm." }, ...blocks] };
@@ -1556,7 +1559,7 @@ export default function Home() {
                 {chat.msgs.map((m, i) => <Fragment key={i}>{chat.compact?.upto === i && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}{
                   m.role === "user" ? (
                     <div key={i} className="user-wrap">
-                      {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
+                      {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => fm.show(f, m.fids?.[f])} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
                       {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
                       <div className="user-msg"><UserText text={m.text} /></div>
                     </div>
