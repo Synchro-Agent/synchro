@@ -4553,6 +4553,9 @@ button.bn-box:disabled{cursor:default}
 .brw-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
 .main.art-full .brw-panel{width:100%;border-left:0}
 @media (max-width:760px){.brw-panel{position:fixed;inset:0;width:100%;z-index:60;border-left:0}}
+/* Nút quả địa cầu ở đầu đoạn chat; chấm xanh: Synchro đã dùng trình duyệt trong đoạn chat này. */
+.brw-btn{position:relative}
+.brw-dot{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px var(--bg)}
 /* Khung trình duyệt: chọn trình duyệt của Synchro / Chrome của bạn; Chrome của bạn: cài tiện ích, ghép nối, trạng thái, Dừng */
 .bh{flex:1;min-height:0;display:flex;flex-direction:column}
 .bh-h{display:flex;align-items:center;gap:8px;height:42px;padding:0 6px 0 8px;border-bottom:.5px solid var(--border);flex:none}
