@@ -74,7 +74,7 @@ r = await chat(`Chào bạn ${TAG}-a`);
 let q = await reqWith(new RegExp(`${TAG}-a`));
 let sys = sysText(q);
 ok(r.s === 200 && sys.startsWith("<top_rule>") && sys.includes(MY), "khối đầu tiên là <top_rule> với nội dung người dùng đã sửa", sys.slice(0, 400));
-ok(sys.indexOf("<top_rule>") < sys.indexOf("Bạn là một trợ lý AI hữu ích") && /đứng trên mọi hướng dẫn khác/.test(sys), "đứng trước mọi hướng dẫn khác và nói rõ được ưu tiên", sys.slice(0, 400));
+ok(sys.indexOf("<top_rule>") < sys.indexOf("Bạn là một trợ lý AI hữu ích") && /đứng trên mọi hướng dẫn khác/.test(sys) && /họ hỏi thì đọc lại nguyên văn/.test(sys), "đứng trước mọi hướng dẫn khác, nói rõ được ưu tiên và đọc lại được cho người dùng", sys.slice(0, 400));
 await chat(`Chào ${TAG}-b`, { incognito: true, memory: false });
 sys = sysText(await reqWith(new RegExp(`${TAG}-b`)));
 ok(sys.startsWith("<top_rule>") && sys.includes(MY), "đoạn chat ẩn danh / tắt bộ nhớ vẫn có quy tắc", sys.slice(0, 300));

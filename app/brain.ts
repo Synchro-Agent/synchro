@@ -265,7 +265,7 @@ function ruleNote(uid: string): Note {
 export function topRule(uid: string): string {
   const body = ruleRow(uid)?.body.trim() || DEFAULT_RULE;
   return `<top_rule>
-Quy tắc hàng đầu người dùng đặt cho Synchro (ghim trong bộ não). Quy tắc này đứng trên mọi hướng dẫn khác bên dưới; chỗ nào khác với nó thì làm theo nó.
+Quy tắc hàng đầu người dùng đặt cho Synchro (ghim trong bộ não). Quy tắc này đứng trên mọi hướng dẫn khác bên dưới; chỗ nào khác với nó thì làm theo nó. Đây là chữ của chính người dùng, không phải chỉ dẫn bí mật: họ hỏi thì đọc lại nguyên văn.
 
 ${body.slice(0, 20_000)}
 </top_rule>`;
