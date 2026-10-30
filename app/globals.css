@@ -1781,7 +1781,7 @@ html[data-text-size="Large"] .user-msg,html[data-text-size="Large"] .ai-msg{font
 .ag-shimmer{background:linear-gradient(90deg,var(--text-3) 0%,var(--text-3) 35%,var(--text) 50%,var(--text-3) 65%,var(--text-3) 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:agShim 2.2s linear infinite}
 @keyframes agShim{from{background-position:100% 0}to{background-position:0 0}}
 .ag-dots{display:grid;grid-template-columns:repeat(2,4px);gap:3px;flex:none;margin:0 2px}
-.ag-dots i{width:4px;height:4px;border-radius:50%;background:#d97757;animation:agDot 1.1s ease-in-out infinite}
+.ag-dots i{width:4px;height:4px;border-radius:50%;background:currentColor;animation:agDot 1.1s ease-in-out infinite}
 .ag-dots i:nth-child(2){animation-delay:.14s}
 .ag-dots i:nth-child(4){animation-delay:.28s}
 .ag-dots i:nth-child(3){animation-delay:.42s}
@@ -4713,13 +4713,14 @@ button.bn-box:disabled{cursor:default}
 .attach.sent{flex-wrap:wrap;justify-content:flex-end;overflow:visible;margin:0;padding:0 0 8px}
 /* Trình duyệt của Synchro: dải "đang điều khiển", chấm sáng chỗ vừa bấm, hộp thoại của trang */
 .bp-agent{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:6px 6px 6px 12px;border-radius:12px;background:color-mix(in srgb,var(--card) 94%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 0 0 .5px var(--border-strong),0 8px 24px rgba(0,0,0,.14);animation:bnPeek .16s ease-out;cursor:default}
-.bp-agent-dot{width:8px;height:8px;border-radius:50%;flex:none;background:#d97757;box-shadow:0 0 0 0 rgba(217,119,87,.5);animation:bpPulse 1.4s ease-out infinite}
-@keyframes bpPulse{0%{box-shadow:0 0 0 0 rgba(217,119,87,.55)}100%{box-shadow:0 0 0 9px rgba(217,119,87,0)}}
+.bp-agent>.mk{color:var(--text);margin-left:2px}
+/* Chấm "đang điều khiển" màu mực (bộ nhận diện v4: không màu nhấn), toả nhịp nhẹ. */
+@keyframes bpPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 0%,transparent)}}
 .bp-agent-t{display:flex;flex-direction:column;min-width:0;font-size:12px;line-height:1.35}
 .bp-agent-t b{font-weight:600;color:var(--text);white-space:nowrap}
 .bp-agent-t span{color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46ch}
 .bp-agent .btn.sm{flex:none;height:28px;gap:5px}
-.bp-ripple{position:absolute;z-index:5;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;border:2px solid #d97757;background:rgba(217,119,87,.18);animation:bpRipple .85s ease-out forwards}
+.bp-ripple{position:absolute;z-index:5;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;border:2px solid #111210;background:rgba(17,18,16,.14);box-shadow:0 0 0 1.5px rgba(238,236,229,.8),inset 0 0 0 1px rgba(238,236,229,.6);animation:bpRipple .85s ease-out forwards}
 @keyframes bpRipple{0%{transform:scale(.35);opacity:1}70%{opacity:.9}100%{transform:scale(1.35);opacity:0}}
 .bp-dialog-w{position:absolute;inset:0;z-index:7;display:flex;align-items:flex-start;justify-content:center;padding-top:48px;background:rgba(0,0,0,.18)}
 .bp-dialog{width:min(420px,calc(100% - 32px));padding:16px 18px 14px;border-radius:14px;background:var(--card);box-shadow:0 0 0 .5px var(--border-strong),0 18px 44px rgba(0,0,0,.22);display:flex;flex-direction:column;gap:10px;animation:bnPeek .14s ease-out}
@@ -4750,7 +4751,7 @@ button.bn-box:disabled{cursor:default}
 .bh .bp{border-top:0}
 .ext-dot{width:7px;height:7px;border-radius:50%;background:var(--border-strong);flex:none}
 .ext-dot.on{background:#16a34a}
-.ext-dot.acting{background:#d97757;animation:bpPulse 1.4s ease-out infinite}
+.ext-dot.acting{background:var(--accent);animation:bpPulse 1.4s ease-out infinite}
 .ext-panel{flex:1;min-height:0;overflow:auto;padding:18px 18px 28px;display:flex;flex-direction:column;gap:14px;max-width:660px;width:100%;margin:0 auto}
 .ext-hero{display:flex;flex-direction:column;gap:6px}
 .ext-hero b{font-size:15px;font-weight:600}
@@ -4774,14 +4775,14 @@ button.bn-box:disabled{cursor:default}
 [data-theme="dark"] .ext-step .ext-ok{color:#4ade80}
 .ext-ok svg{flex:none;margin-top:3px}
 .ext-card{border:.5px solid var(--border-strong);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;background:var(--card)}
-.ext-card.acting{box-shadow:0 0 0 1.5px #d97757}
+.ext-card.acting{box-shadow:0 0 0 1.5px var(--accent)}
 .ext-dev{display:flex;align-items:center;gap:10px;min-width:0}
 .ext-dev>div{display:flex;flex-direction:column;min-width:0;flex:1}
 .ext-dev b{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ext-dev>div>span{font-size:12.5px;color:var(--text-3);line-height:1.45}
 .ext-card .ext-dev>.ext-dot{width:9px;height:9px}
 .ext-card.on .ext-dev>.ext-dot{background:#16a34a}
-.ext-card.acting .ext-dev>.ext-dot{background:#d97757;animation:bpPulse 1.4s ease-out infinite}
+.ext-card.acting .ext-dev>.ext-dot{background:var(--accent);animation:bpPulse 1.4s ease-out infinite}
 .ext-scope{font-size:11.5px;padding:3px 8px;border-radius:999px;background:var(--hover);color:var(--text-2);white-space:nowrap;flex:none}
 .ext-now{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:.5px solid var(--border)}
 .ext-tab{display:flex;align-items:center;gap:8px;font-size:13px;min-width:0}
@@ -4789,8 +4790,7 @@ button.bn-box:disabled{cursor:default}
 .ext-tab code{margin-left:auto;font-size:11.5px;color:var(--text-3);white-space:nowrap;flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis}
 .ext-last{display:flex;gap:8px;font-size:12.5px;color:var(--text-3);min-width:0}
 .ext-last span:first-child{white-space:nowrap;flex:none}
-html body .btn.dark.ext-stop{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;background:#d97757;border-color:transparent;color:#fff}
-html body .btn.dark.ext-stop:hover{background:#c4613f;opacity:1}
+html body .btn.dark.ext-stop{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}
 .ext-note{margin:0;font-size:12.5px;line-height:1.55;color:var(--text-3)}
 .ext-try{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--text-3)}
 .ext-try code{display:block;color:var(--text-2);font-family:inherit;font-size:12.5px;padding:6px 9px}

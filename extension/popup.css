@@ -1,12 +1,14 @@
 /* Cửa sổ tiện ích Synchro: cùng bộ nhận diện v4 với app — chữ Anthropic Sans (tiêu đề Unbounded), bảng màu Carbon / Ivory (không màu nhấn),
-   nút kính màu mực; tự theo giao diện sáng / tối của trình duyệt. Phông chép khi đóng gói (extension/build.mjs). */
+   nút kính màu mực, logo và loader vẽ bằng SVG (extension/brand.js) với chuyển động như app; tự theo giao diện sáng / tối của trình duyệt.
+   Phông chép khi đóng gói (extension/build.mjs). Chỉ màu trạng thái (đã kết nối / lỗi) là có sắc. */
 @font-face { font-family: "Anthropic Sans"; src: url(fonts/AnthropicSans.woff2) format("woff2"); font-weight: 300 800; font-display: block; }
 @font-face { font-family: "Unbounded"; src: url(fonts/unbounded-vietnamese.woff2) format("woff2"); font-weight: 200 900; font-display: block; unicode-range: U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB; }
 @font-face { font-family: "Unbounded"; src: url(fonts/unbounded-latin.woff2) format("woff2"); font-weight: 200 900; font-display: block; unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 
 :root {
   --bg: #EEECE5; --card: #F7F6F1; --soft: #E6E4DC; --seg-on: #F7F6F1; --fg: #111210; --fg2: #484941; --mut: #6A6B63; --line: #DFDCD3; --line2: #D3D0C6;
-  --acc: #111210; --act: #d97757; --ok: #1f9d55; --err: #c2410c; --on: #111210; --ink: #111210;
+  --acc: #111210; --ok: #1f9d55; --err: #c2410c; --on: #111210; --knob-on: #F7F6F1; --ink: #111210;
+  --lock: cubic-bezier(.76, 0, .24, 1); --glide: cubic-bezier(.65, 0, .35, 1);
   --sh: 0 1px 2px rgba(20, 20, 19, .04), 0 0 0 .5px rgba(20, 20, 19, .1);
   /* Kính màu mực (như nút gửi trong app): đen bóng ở giao diện sáng, sáng bóng ở giao diện tối. */
   --g-top: rgba(70, 71, 66, .94); --g-mid: rgba(17, 18, 16, .97); --g-bot: #000; --g-fg: #EEECE5; --g-hi: rgba(255, 255, 255, .5); --g-rim: rgba(255, 255, 255, .14);
@@ -16,7 +18,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111210; --card: #1C1D1A; --soft: #1E1F1B; --seg-on: #272823; --fg: #EEECE5; --fg2: #B9B8AF; --mut: #8F9088; --line: #2A2B26; --line2: #34352F;
-    --acc: #EEECE5; --ok: #4ade80; --err: #fb923c; --on: #EEECE5; --ink: #EEECE5;
+    --acc: #EEECE5; --ok: #4ade80; --err: #fb923c; --on: #EEECE5; --knob-on: #111210; --ink: #EEECE5;
     --sh: 0 1px 2px rgba(0, 0, 0, .4), 0 0 0 .5px rgba(255, 255, 255, .08);
     --g-top: #fff; --g-mid: rgba(238, 236, 229, .97); --g-bot: rgba(217, 214, 204, .97); --g-fg: #111210; --g-hi: #fff; --g-rim: rgba(0, 0, 0, .16);
     --g-sheen: rgba(255, 255, 255, .7); --g-sh: 0 6px 18px -4px rgba(0, 0, 0, .6), 0 1px 2px rgba(0, 0, 0, .4); --g-hover: brightness(.94);
@@ -32,9 +34,33 @@ button:focus-visible, input:focus-visible { outline: 2px solid color-mix(in srgb
 .ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
-/* Đầu cửa sổ: logo (mặt nạ tô màu mực của theme), tên, trạng thái. */
+/* Logo (extension/brand.js): mk-a / mk-b là hai nửa lệch nhau R = 350; dịch mỗi nửa 175 về tâm thì khớp thành vòng tròn (đồng bộ).
+   intro: mở cửa sổ thì vòng tròn tách thành chữ S; rê chuột: khớp lại; synced: ghép nối xong, khớp pha một nhịp rồi tách.
+   mk-load (đang chạy, lặp 1,6 giây): xoay 180° rồi nghỉ, giữa vòng hai nửa thu về vòng tròn. Tắt khi giảm chuyển động. */
+.mk, .lk { display: block; flex: none; fill: currentColor; overflow: visible; }
+.mk-r { transform-box: fill-box; transform-origin: center; }
+.mk-a, .mk-b { transition: transform .7s var(--lock); }
+.logo:hover .mk-a { transform: translateY(175px); }
+.logo:hover .mk-b { transform: translateY(-175px); }
+.lk.intro .mk-a { animation: mkPa .7s var(--lock) .15s backwards; }
+.lk.intro .mk-b { animation: mkPb .7s var(--lock) .15s backwards; }
+.lk.synced .mk-a { animation: mkSa 1.5s var(--lock); }
+.lk.synced .mk-b { animation: mkSb 1.5s var(--lock); }
+.mk-load .mk-r { animation: mkSpin 1.6s var(--glide) infinite; }
+.mk-load .mk-a { animation: mkLa 1.6s infinite; }
+.mk-load .mk-b { animation: mkLb 1.6s infinite; }
+@keyframes mkPa { from { transform: translateY(175px); } to { transform: none; } }
+@keyframes mkPb { from { transform: translateY(-175px); } to { transform: none; } }
+@keyframes mkSa { 0%, 100% { transform: none; } 40%, 62% { transform: translateY(175px); } }
+@keyframes mkSb { 0%, 100% { transform: none; } 40%, 62% { transform: translateY(-175px); } }
+@keyframes mkSpin { 0% { transform: rotate(0); } 75%, 100% { transform: rotate(180deg); } }
+@keyframes mkLa { 0% { transform: none; animation-timing-function: cubic-bezier(.37, 0, .63, 1); } 37.5% { transform: translateY(175px); animation-timing-function: cubic-bezier(.37, 0, .63, 1); } 75%, 100% { transform: none; } }
+@keyframes mkLb { 0% { transform: none; animation-timing-function: cubic-bezier(.37, 0, .63, 1); } 37.5% { transform: translateY(-175px); animation-timing-function: cubic-bezier(.37, 0, .63, 1); } 75%, 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mk *, .lk * { animation: none !important; transition: none !important; } }
+
+/* Đầu cửa sổ: logo (màu mực của theme), tên, trạng thái. */
 header { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 14px 0 16px; border-bottom: .5px solid var(--line2); }
-.mark { width: 92px; height: 17px; flex: none; background: var(--ink); -webkit-mask: url(logo.png) center / contain no-repeat; mask: url(logo.png) center / contain no-repeat; }
+.logo { display: flex; flex: none; color: var(--ink); cursor: default; }
 .wm { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
 .wm small { font: 550 10.5px/1 "Anthropic Sans", system-ui, sans-serif; letter-spacing: .01em; color: var(--mut); padding: 4px 6px; border-radius: 6px;
   background: var(--soft); box-shadow: inset 0 0 0 .5px var(--line2); }
@@ -43,11 +69,11 @@ header { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0
 .st:empty { display: none; }
 .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mut); }
 .st.online::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
-.st.connecting::before { background: var(--acc); animation: blink 1.2s ease-in-out infinite; }
+.st.connecting::before, .st.acting::before { display: none; }
+.st .mk { color: var(--fg); }
 .st.offline { color: var(--err); }
 .st.offline::before { background: var(--err); }
-.st.acting { color: var(--act); background: color-mix(in srgb, var(--act) 9%, var(--card)); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--act) 40%, transparent); }
-.st.acting::before { background: var(--act); animation: ring 1.4s ease-out infinite; }
+.st.acting { color: var(--fg); box-shadow: 0 0 0 1px var(--ink); }
 
 main { padding: 16px; display: grid; gap: 14px; }
 p { margin: 0; }
@@ -84,23 +110,21 @@ input.code::placeholder { color: color-mix(in srgb, var(--mut) 50%, transparent)
 .pri:active:not(:disabled) { transform: translateY(.5px); }
 .pri .ic { width: 16px; height: 16px; transition: transform .15s; }
 .pri:hover:not(:disabled) .ic { transform: translateX(2px); }
-.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
 .link { border: 0; background: none; padding: 0; color: var(--fg2); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px;
   text-decoration-color: var(--line2); }
 .link:hover { color: var(--fg); text-decoration-color: currentColor; }
 
-/* Đã ghép nối: Synchro đang điều khiển. */
-.live { display: grid; gap: 11px; padding: 13px; border-radius: 14px; background: color-mix(in srgb, var(--act) 8%, var(--card));
-  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--act) 42%, transparent), 0 8px 22px -12px color-mix(in srgb, var(--act) 60%, transparent); }
+/* Đã ghép nối: Synchro đang điều khiển (viền màu mực, loader của logo, nút Dừng kính màu mực). */
+.live { display: grid; gap: 11px; padding: 13px; border-radius: 14px; background: var(--card); box-shadow: 0 0 0 1px var(--ink), 0 10px 24px -14px rgba(0, 0, 0, .45); }
 .live-h { display: flex; gap: 11px; align-items: center; min-width: 0; }
+.live-h > .mk { margin: 0 3px 0 2px; color: var(--fg); }
 .live-h > div { display: grid; min-width: 0; }
 .live-h b { font-weight: 600; font-size: 13.5px; }
 .live-h small { color: var(--fg2); font-size: 12px; }
-.pulse { width: 10px; height: 10px; margin: 0 2px 0 3px; border-radius: 50%; flex: none; background: var(--act); animation: ring 1.4s ease-out infinite; }
-.stop { height: 38px; width: 100%; border: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; color: #fff;
-  background: linear-gradient(180deg, #e68e6f, #d26c4a); box-shadow: 0 6px 14px -6px rgba(210, 108, 74, .7), inset 0 1px .5px rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(0, 0, 0, .1);
-  transition: filter .15s; }
-.stop:hover { filter: brightness(1.06); }
+.stop { height: 38px; width: 100%; border: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;
+  color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-mid) 52%, var(--g-bot));
+  box-shadow: var(--g-sh), inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim), inset 0 12px 12px -10px var(--g-sheen); transition: filter .15s; }
+.stop:hover { filter: var(--g-hover); }
 .stop i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
 
 /* Tài khoản đã ghép nối. */
@@ -114,6 +138,7 @@ input.code::placeholder { color: color-mix(in srgb, var(--mut) 50%, transparent)
 .who-t small .ic { width: 12px; height: 12px; }
 .note { display: flex; gap: 9px; align-items: flex-start; padding: 10px 14px 12px; border-top: .5px solid var(--line); color: var(--fg2); font-size: 12.5px; }
 .note .ic { margin-top: 2px; color: var(--mut); }
+.note .mk { margin: 1px 2px 0; color: var(--fg); }
 .note b { color: var(--fg); font-weight: 600; }
 .note.bad, .note.bad .ic { color: var(--err); }
 
@@ -137,15 +162,11 @@ input.code::placeholder { color: color-mix(in srgb, var(--mut) 50%, transparent)
 .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3);
   transition: transform .18s; }
 .sw[aria-checked="true"] { background: var(--on); }
-.sw[aria-checked="true"]::after { transform: translateX(14px); }
+.sw[aria-checked="true"]::after { transform: translateX(14px); background: var(--knob-on); }
 
 footer { display: flex; justify-content: space-between; align-items: center; margin: 0 -16px -16px; padding: 8px 8px 10px; border-top: .5px solid var(--line2); }
 .ghost { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--fg2);
   font-size: 12.5px; font-weight: 550; transition: background .15s, color .15s; }
 .ghost:hover { background: var(--soft); color: var(--fg); }
 .ghost.danger:hover { color: var(--err); background: color-mix(in srgb, var(--err) 8%, transparent); }
-
-@keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(217, 119, 87, .55); } 100% { box-shadow: 0 0 0 7px rgba(217, 119, 87, 0); } }
-@keyframes blink { 50% { opacity: .35; } }
-@keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

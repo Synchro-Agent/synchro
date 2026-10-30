@@ -23,7 +23,7 @@ Mỗi tài khoản Synchro ghép nối trình duyệt của mình bằng mã ri�
 
 - Mặc định Synchro có **toàn quyền**: dùng được mọi tab của trình duyệt. Muốn giới hạn, mở cửa sổ tiện ích và chọn **Chỉ nhóm tab Synchro**: Synchro chỉ làm trên các tab nó tự mở (nhóm tab "Synchro") và tab bạn bấm **Cho Synchro dùng tab này**.
 - Mở trang mới thì Synchro dùng tab riêng trong nhóm "Synchro", không đè lên tab bạn đang xem. Synchro không bao giờ điều khiển chính trang Synchro hay trang hệ thống của trình duyệt.
-- Tab Synchro đang làm có viền cam và dải **"Synchro đang điều khiển tab này"** với nút **Dừng**. Bấm Dừng (trên dải, trong cửa sổ tiện ích, ở khung trình duyệt của Synchro, hoặc nút Hủy trên thanh "đang gỡ lỗi trình duyệt này") là Synchro dừng ngay cả lượt đó.
+- Tab Synchro đang làm có viền đậm quanh trang, logo Synchro xoay và dải **"Synchro đang điều khiển tab này"** với nút **Dừng**. Bấm Dừng (trên dải, trong cửa sổ tiện ích, ở khung trình duyệt của Synchro, hoặc nút Hủy trên thanh "đang gỡ lỗi trình duyệt này") là Synchro dừng ngay cả lượt đó.
 - Trình duyệt hiện thanh "Synchro đã bắt đầu gỡ lỗi trình duyệt này" khi Synchro đang điều khiển. Đó là thông báo bình thường của Chrome cho mọi tiện ích dùng quyền gỡ lỗi; hết lượt Synchro tự thôi điều khiển và thanh này biến mất.
 - Cần mật khẩu, mã OTP hay captcha: Synchro nhờ bạn tự nhập ngay trên trình duyệt rồi làm tiếp.
 

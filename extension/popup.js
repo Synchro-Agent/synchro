@@ -2,6 +2,7 @@
 // chia sẻ tab đang xem, nút Dừng khi Synchro đang điều khiển, ngắt ghép nối.
 import { SERVER } from "./config.js";
 import { t } from "./i18n.js";
+import { lockup, mark } from "./brand.js";
 
 const $ = (s) => document.querySelector(s);
 const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === "on") for (const [ev, f] of Object.entries(v)) e.addEventListener(ev, f); else if (k.startsWith("aria") || k === "role") e.setAttribute(k.replace(/^aria([A-Z])/, (_, c) => `aria-${c.toLowerCase()}`), v); else if (v !== undefined && v !== false) e[k] = v; } e.append(...kids.flat().filter((x) => x != null && x !== false)); return e; };
@@ -14,16 +15,21 @@ const PATHS = {
   tabs: "M8 8V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2M3 11a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
   group: "M4 6h7M4 6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-7l-2-2",
   alert: "M12 8v5M12 16.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
-  spark: "M12 3c.5 4.5 2.5 6.5 9 9-6.5 2.5-8.5 4.5-9 9-.5-4.5-2.5-6.5-9-9 6.5-2.5 8.5-4.5 9-9z",
   globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3z",
 };
 const icon = (n) => { const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("class", "ic"); s.setAttribute("aria-hidden", "true"); p.setAttribute("d", PATHS[n]); s.append(p); return s; };
 const ask = (m) => chrome.runtime.sendMessage(m);
+// Đang chạy: mark của logo xoay theo nhịp đồng bộ (như loader trong app), thay cho chấm / vòng quay.
+const loader = (px) => mark(px, "mk-load");
 const host = (u) => String(u || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
 const initials = (n) => { const w = String(n || "").trim().split(/[\s@._-]+/).filter(Boolean); return ((w[0]?.[0] ?? "") + (w.length > 1 ? w.at(-1)[0] : "")).toLocaleUpperCase() || "S"; };
 // Mã ghép nối luôn hiện dạng ABCD-EFGH khi gõ / dán.
 const fmtCode = (v) => { const c = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8); return c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c; };
 for (const el of document.querySelectorAll("[data-t]")) el.textContent = t(el.dataset.t);
+// Logo đầu cửa sổ: mở ra thì hai nửa đang khớp thành vòng tròn tách ra thành chữ S; rê chuột thì khớp lại; ghép nối xong thì khớp pha một nhịp.
+const logo = lockup(17, "intro");
+$("#logo").append(logo);
+const synced = () => { logo.classList.remove("intro", "synced"); void logo.getBoundingClientRect(); logo.classList.add("synced"); };
 // Báo theme cho background (dự phòng khi trình duyệt không có chrome.offscreen): logo trên thanh công cụ đổi theo.
 chrome.runtime.sendMessage({ op: "theme", dark: matchMedia("(prefers-color-scheme: dark)").matches }).catch(() => {});
 
@@ -33,7 +39,8 @@ async function render(s) {
   const st = $("#st");
   const state = s.acting ? "acting" : s.link?.state ?? "unpaired";
   st.className = `st ${state}`;
-  st.textContent = t(s.acting ? "stActing" : state === "online" ? "stOnline" : state === "unpaired" ? "stUnpaired" : state === "connecting" ? "stConnecting" : "stOffline");
+  st.replaceChildren(...(state === "acting" || state === "connecting" ? [loader(11)] : []),
+    t(s.acting ? "stActing" : state === "online" ? "stOnline" : state === "unpaired" ? "stUnpaired" : state === "connecting" ? "stConnecting" : "stOffline"));
   const app = $("#app");
   app.replaceChildren();
   const put = (...kids) => app.append(...kids.filter((x) => x != null && x !== false));
@@ -50,7 +57,7 @@ async function render(s) {
       busy = true; err = ""; render(s);
       const r = await ask({ op: "pair", server: server.value, code: c });
       busy = false; err = r.error ?? "";
-      if (!r.error) { codeVal = ""; srvVal = null; srvEdit = false; }
+      if (!r.error) { codeVal = ""; srvVal = null; srvEdit = false; synced(); }
       render(r.error ? s : r);
     };
     code.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
@@ -65,7 +72,7 @@ async function render(s) {
       editing ? null : h("div", { className: "srv" }, icon("globe"), h("span", { className: "ell" }, t("serverAt"), " ", h("b", {}, host(srvVal ?? known))),
         h("button", { className: "link", on: { click: () => { srvEdit = true; render(s).then(() => $("#server")?.focus()); } } }, t("change"))),
       msg ? h("p", { className: "err", role: "alert" }, icon("alert"), h("span", {}, msg)) : null,
-      h("button", { className: "pri", disabled: busy, on: { click: go } }, busy ? [h("span", { className: "spin" }), t("pairing")] : [t("pair"), icon("arrow")]),
+      h("button", { className: "pri", disabled: busy, on: { click: go } }, busy ? [loader(16), t("pairing")] : [t("pair"), icon("arrow")]),
       known ? h("footer", {}, openSynchro(known)) : null,
     );
     if (!busy) setTimeout(() => (editing && !server.value ? server : code).focus(), 30);
@@ -79,7 +86,7 @@ async function render(s) {
   const seg = (v, label, ic) => h("label", {}, h("input", { type: "radio", name: "scope", value: v, checked: s.scope === v, on: { change: async () => render(await ask({ op: "scope", scope: v })) } }), icon(ic), label);
   put(
     s.acting ? h("section", { className: "live" },
-      h("div", { className: "live-h" }, h("span", { className: "pulse" }),
+      h("div", { className: "live-h" }, loader(22),
         h("div", {}, h("b", {}, t("acting")), h("small", { className: "ell" }, s.actTab?.title ? `${t("actingOn")} ${s.actTab.title}` : t("actingHelp")))),
       h("button", { className: "stop", on: { click: async () => render(await ask({ op: "stop" })) } }, h("i"), t("stop"))) : null,
     h("section", { className: "card" },
@@ -87,8 +94,8 @@ async function render(s) {
         h("div", { className: "who-t" }, h("b", { className: "ell" }, name), h("small", {}, icon("globe"), h("span", { className: "ell" }, host(s.server))))),
       s.acting ? null : h("div", { className: `note${bad ? " bad" : ""}` },
         bad ? [icon("alert"), h("span", {}, s.link.error)]
-          : online ? [icon("spark"), h("span", {}, h("b", {}, t("idle")), " ", t("idleHelp"))]
-          : [h("span", { className: "spin" }), h("span", {}, t(s.link?.state === "connecting" ? "connecting" : "offline"))])),
+          : online ? [mark(15), h("span", {}, h("b", {}, t("idle")), " ", t("idleHelp"))]
+          : [loader(15), h("span", {}, t(s.link?.state === "connecting" ? "connecting" : "offline"))])),
     h("section", { className: "sec" },
       h("div", { className: "sec-h" }, t("scope")),
       h("div", { className: "seg", role: "radiogroup", ariaLabel: t("scope") }, seg("all", t("scopeAll"), "tabs"), seg("group", t("scopeGroup"), "group")),

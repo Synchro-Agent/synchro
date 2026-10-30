@@ -27,13 +27,15 @@ let acting = false, linkState = { state: "unpaired", error: "" }, theme = "light
 function badge() {
   const on = linkState.state === "online";
   chrome.action.setBadgeText({ text: acting ? "●" : on ? "" : linkState.state === "unpaired" ? "" : "!" });
-  chrome.action.setBadgeBackgroundColor({ color: acting ? "#d97757" : theme === "dark" ? "#5c5b57" : "#87867f" });
-  chrome.action.setBadgeTextColor?.({ color: "#ffffff" });
+  // Bộ nhận diện v4: không màu nhấn. Đang điều khiển: huy hiệu màu mực (Carbon trên thanh sáng, Ivory trên thanh tối); mất kết nối: Graphite.
+  const dark = theme === "dark";
+  chrome.action.setBadgeBackgroundColor({ color: acting ? (dark ? "#EEECE5" : "#111210") : dark ? "#5C5D56" : "#85867E" });
+  chrome.action.setBadgeTextColor?.({ color: acting && dark ? "#111210" : "#EEECE5" });
   chrome.action.setTitle({ title: `Synchro · ${acting ? t("acting") : on ? t("online") : linkState.state === "unpaired" ? t("pair") : t("offline")}` });
 }
 
-// Logo Synchro trên thanh công cụ theo theme sáng / tối của trình duyệt: bản sáng (tia sáng xanh đậm) trên thanh sáng, bản tối (màu sáng hơn,
-// viền sáng mờ) trên thanh tối. Service worker không đọc được theme, nên tài liệu ẩn theme.html đọc rồi báo về; nhớ lại lựa chọn gần nhất.
+// Logo Synchro trên thanh công cụ theo theme sáng / tối của trình duyệt: mark Carbon trên thanh sáng, mark Ivory trên thanh tối.
+// Service worker không đọc được theme, nên tài liệu ẩn theme.html đọc rồi báo về; nhớ lại lựa chọn gần nhất.
 const icon = (t) => ({ 16: `icons/toolbar-${t}-16.png`, 24: `icons/toolbar-${t}-24.png`, 32: `icons/toolbar-${t}-32.png` });
 function setTheme(dark) {
   const t = dark ? "dark" : "light";

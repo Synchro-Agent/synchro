@@ -536,7 +536,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         {/* Chỉ hiện khi Synchro thật sự đang thao tác trên trình duyệt (không phải khi đoạn chat đang chạy việc khác hay bạn tự mở trang). */}
         {agentOn && (
           <div className="bp-agent" onMouseDown={(e) => e.stopPropagation()}>
-            <span className="bp-agent-dot" />
+            <Mark size={15} state="load" />
             <span className="bp-agent-t"><b>Synchro đang điều khiển trình duyệt</b>{act?.label ? <span data-notr>{act.kind === "type" ? `Gõ “${act.label}”` : act.kind === "navigate" ? `Mở ${hostOf(act.label)}` : act.kind === "key" ? `Nhấn ${act.label}` : act.kind === "select" ? `Chọn “${act.label}”` : `${act.kind === "hover" ? "Rê chuột" : act.kind === "drag" ? "Kéo thả" : act.kind === "upload" ? "Tải tệp" : "Bấm"} ${act.label}`}</span> : null}</span>
             {onStop && <button className="btn sm" onClick={onStop}><I.Stop size={12} />Dừng</button>}
           </div>

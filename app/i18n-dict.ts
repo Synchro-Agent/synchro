@@ -1908,8 +1908,8 @@ Object.assign(VI2EN, {
   "Synchro đang điều khiển": "Synchro is in control", "Chưa kết nối: mở trình duyệt có cài tiện ích Synchro, tiện ích tự kết nối.": "Not connected: open the browser that has the Synchro extension, and it connects by itself.",
   "Đổi trong cửa sổ tiện ích Synchro trên Chrome": "Change it in the Synchro extension window in Chrome", "Nhóm tab Synchro": "Synchro tab group", "Toàn quyền · mọi tab": "Full control · all tabs",
   "Thao tác gần nhất": "Last action",
-  "Bạn xem trực tiếp ngay trên trình duyệt của mình. Tab Synchro đang làm có viền cam và dải “Synchro đang điều khiển tab này” với nút Dừng; Synchro tự mở trang ở tab riêng (nhóm tab “Synchro”), không đè lên tab bạn đang xem.":
-    "You watch it live in your own browser. The tab Synchro is working in has an orange border and a “Synchro is controlling this tab” bar with a Stop button; Synchro opens pages in its own tabs (the “Synchro” tab group), never over the tab you're looking at.",
+  "Bạn xem trực tiếp ngay trên trình duyệt của mình. Tab Synchro đang làm có viền đậm quanh trang và dải “Synchro đang điều khiển tab này” với nút Dừng; Synchro tự mở trang ở tab riêng (nhóm tab “Synchro”), không đè lên tab bạn đang xem.":
+    "You watch it live in your own browser. The tab Synchro is working in has a bold border around the page and a “Synchro is controlling this tab” bar with a Stop button; Synchro opens pages in its own tabs (the “Synchro” tab group), never over the tab you're looking at.",
   "Thử nhờ trong khung chat": "Try asking in the chat", "Mở Gmail trên Chrome của tôi và tóm tắt các thư chưa đọc": "Open Gmail in my Chrome and summarize my unread emails",
   "Đọc trang tôi đang mở trên Chrome rồi tóm tắt": "Read the page I have open in Chrome and summarize it", "Điền biểu mẫu đang mở trong tab của tôi bằng thông tin của tôi": "Fill in the form open in my tab with my details",
   "Trình duyệt đã ghép nối": "Paired browsers", "Thêm trình duyệt": "Add a browser", "Ngoại tuyến": "Offline", "Gỡ trình duyệt này": "Remove this browser",

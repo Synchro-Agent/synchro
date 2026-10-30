@@ -138,7 +138,7 @@ function ChromePanel({ ext, say, busy, onStop }: { ext: ReturnType<typeof useExt
         )}
         {acting && <button className="btn dark ext-stop" onClick={stop}><I.Stop size={12} />Dừng</button>}
       </div>
-      <p className="ext-note">Bạn xem trực tiếp ngay trên trình duyệt của mình. Tab Synchro đang làm có viền cam và dải “Synchro đang điều khiển tab này” với nút Dừng; Synchro tự mở trang ở tab riêng (nhóm tab “Synchro”), không đè lên tab bạn đang xem.</p>
+      <p className="ext-note">Bạn xem trực tiếp ngay trên trình duyệt của mình. Tab Synchro đang làm có viền đậm quanh trang và dải “Synchro đang điều khiển tab này” với nút Dừng; Synchro tự mở trang ở tab riêng (nhóm tab “Synchro”), không đè lên tab bạn đang xem.</p>
       <div className="ext-try">
         <span>Thử nhờ trong khung chat</span>
         {["Mở Gmail trên Chrome của tôi và tóm tắt các thư chưa đọc", "Đọc trang tôi đang mở trên Chrome rồi tóm tắt", "Điền biểu mẫu đang mở trong tab của tôi bằng thông tin của tôi"].map((t) => <code key={t}>{t}</code>)}
