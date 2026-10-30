@@ -163,6 +163,17 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   const vts = useRef(0);
   const vframe = useRef<VideoFrame | null>(null);
   const vraf = useRef(0);
+  // Dự đoán cuộn (video): khung gần nhất giữ trong canvas ẩn (base); bạn cuộn trang thì khung xem dịch phần nội dung ngay ở nhịp làm tươi
+  // kế tiếp (trừ thanh cố định trên / dưới), hình thật từ máy chủ tới sau đè lên đúng chỗ — cuộn có cảm giác tức thì như trình duyệt thường.
+  // sinfo: vùng cuộn dưới con trỏ (máy chủ dò: có cuộn cả trang không, thanh cố định, màu nền); ys: vị trí cuộn lúc Chrome chụp từng khung
+  // (theo timestamp của khung); pr: vị trí bạn muốn tới (target) và vị trí của khung đang hiện (server).
+  const vframeY = useRef(0);
+  const base = useRef<HTMLCanvasElement | null>(null);
+  const sinfo = useRef<{ root: boolean; top: number; bottom: number; max: number; bg: string } | null>(null);
+  const posY = useRef(0);
+  const ys = useRef(new Map<number, number>());
+  const pr = useRef({ target: 0, server: 0, wheelAt: 0, same: 0 });
+  const praf = useRef(0);
   // Ô nhập ẩn nhận bàn phím: bộ gõ tiếng Việt (Telex, VNI…), dán chữ.
   const kb = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
@@ -182,10 +193,11 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     const v = VIEWPORTS.find((x) => x.k === vpRef.current);
     // fa: báo máy chủ đã nhận từng khung (máy chủ chỉ để tối đa 2 khung trên đường đi và tự cân chất lượng theo tốc độ mạng thật).
     // vid: nhận được video (WebCodecs).
+    // sp: dự đoán cuộn (máy chủ gửi vị trí cuộn của từng khung và vùng cuộn dưới con trỏ).
     const vid = typeof VideoDecoder === "function";
-    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true, fa: true, vid });
+    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true, fa: true, vid, sp: vid });
     const r = view.current?.getBoundingClientRect();
-    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true, fa: true, vid });
+    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true, fa: true, vid, sp: vid });
   };
   const draw = () => {
     if (decoding.current || !nextFrame.current) return;
@@ -206,18 +218,44 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     })).catch(() => { decoding.current = false; draw(); });
   };
   const frame = (b: Blob) => { nextFrame.current = b; draw(); };
+  // Vẽ khung đang giữ lên màn hình, dịch phần nội dung theo vị trí cuộn bạn muốn so với vị trí của khung (đơn vị điểm ảnh của khung).
+  const paint = () => {
+    praf.current = 0;
+    const c = cv.current, b = base.current;
+    if (!c || !b || !b.width) return;
+    if (c.width !== b.width) c.width = b.width;
+    if (c.height !== b.height) c.height = b.height;
+    const ctx = c.getContext("2d", { alpha: false });
+    if (!ctx) return;
+    const si = sinfo.current, k = size.current.h ? c.height / size.current.h : 1;
+    const top = Math.round((si?.top ?? 0) * k), band = c.height - top - Math.round((si?.bottom ?? 0) * k);
+    let off = si?.root ? Math.round((pr.current.target - pr.current.server) * k) : 0;
+    ctx.drawImage(b, 0, 0);
+    if (!off || band <= 2) return;
+    off = Math.max(1 - band, Math.min(band - 1, off));
+    ctx.fillStyle = si!.bg;
+    ctx.fillRect(0, top, c.width, band);
+    if (off > 0) ctx.drawImage(b, 0, top + off, c.width, band - off, 0, top, c.width, band - off);
+    else ctx.drawImage(b, 0, top, c.width, band + off, 0, top - off, c.width, band + off);
+  };
   const vdraw = () => {
     vraf.current = 0;
-    const f = vframe.current, c = cv.current;
+    const f = vframe.current;
     vframe.current = null;
     if (!f) return;
-    if (c) {
-      if (c.width !== f.displayWidth) c.width = f.displayWidth;
-      if (c.height !== f.displayHeight) c.height = f.displayHeight;
-      c.getContext("2d", { alpha: false })?.drawImage(f, 0, 0);
-      if (!shown.current) { shown.current = true; setBlank(false); }
-    }
+    const b = (base.current ??= document.createElement("canvas"));
+    if (b.width !== f.displayWidth) b.width = f.displayWidth;
+    if (b.height !== f.displayHeight) b.height = f.displayHeight;
+    b.getContext("2d", { alpha: false })?.drawImage(f, 0, 0);
     f.close();
+    // Khung mới: vị trí của khung. Hết cuộn (0,45 giây) thì theo đúng máy chủ; trang không chạy theo dự đoán (vùng cuộn riêng, cuộn bị
+    // chặn, chạm đáy) trong 3 khung liền thì cũng thôi đoán.
+    const p = pr.current, y = vframeY.current;
+    p.same = y === p.server && p.target !== y ? p.same + 1 : 0;
+    p.server = y;
+    if (performance.now() - p.wheelAt > 450 || p.same >= 3) p.target = y;
+    paint();
+    if (!shown.current) { shown.current = true; setBlank(false); }
   };
   const vclose = () => {
     const d = vdec.current;
@@ -225,12 +263,19 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     try { if (d && d.state !== "closed") d.close(); } catch {}
     vframe.current?.close(); vframe.current = null;
     cancelAnimationFrame(vraf.current); vraf.current = 0;
+    cancelAnimationFrame(praf.current); praf.current = 0;
+    ys.current.clear();
   };
   const vopen = (s: WebSocket, codec: string, desc?: string) => {
     vclose();
     vmode.current = true; vok.current = false;
     const d: VideoDecoder = new VideoDecoder({
-      output: (f) => { vok.current = true; vframe.current?.close(); vframe.current = f; if (!vraf.current) vraf.current = requestAnimationFrame(vdraw); },
+      output: (f) => {
+        vok.current = true; vframe.current?.close(); vframe.current = f;
+        const m = ys.current; vframeY.current = m.get(f.timestamp) ?? posY.current;
+        for (const t of m.keys()) { if (t > f.timestamp) break; m.delete(t); }
+        if (!vraf.current) vraf.current = requestAnimationFrame(vdraw);
+      },
       // Lỗi giải mã: đã chạy được thì xin khung khóa mới (máy chủ gửi lại cấu hình), chưa lần nào được thì quay về JPEG.
       error: () => {
         if (vdec.current !== d || ws.current !== s) return;
@@ -250,7 +295,9 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     const key = (u8[0] & 1) === 1;
     if (vneedKey.current && !key) return;
     vneedKey.current = false;
-    d.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: (vts.current += 33_333), data: u8.subarray(1) }));
+    const ts = (vts.current += 33_333);
+    ys.current.set(ts, posY.current);
+    d.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: ts, data: u8.subarray(1) }));
   };
   // Mỗi lần kết nối có một số thứ tự: lần kết nối cũ (vé về muộn, hiệu ứng chạy hai lần) tự hủy, không để lại kết nối
   // "mồ côi" vẫn đẩy hình khổ mặc định vào khung.
@@ -277,16 +324,18 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
           if (vmode.current) vchunk(e.data as ArrayBuffer); else frame(new Blob([e.data as ArrayBuffer], { type: "image/jpeg" }));
           return;
         }
-        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string; w?: number; h?: number; codec?: string; desc?: string; off?: boolean };
+        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string; w?: number; h?: number; codec?: string; desc?: string; off?: boolean; y?: number; root?: boolean; top?: number; bottom?: number; max?: number; bg?: string };
         try { j = JSON.parse(String(e.data)); } catch { return; }
         if (j.t === "meta") size.current = { w: j.w ?? 0, h: j.h ?? 0 };
+        else if (j.t === "pos") posY.current = Number(j.y) || 0;
+        else if (j.t === "sinfo") sinfo.current = { root: !!j.root, top: Number(j.top) || 0, bottom: Number(j.bottom) || 0, max: Number(j.max) || 0, bg: /^(rgb|#)[\w(), .%]*$/.test(String(j.bg)) ? String(j.bg) : "#fff" };
         else if (j.t === "video") {
           if (j.off || !j.codec || typeof VideoDecoder !== "function") vclose();
           else { size.current = { w: j.w ?? 0, h: j.h ?? 0 }; vopen(s, j.codec, j.desc); }
         }
         // Máy chủ bản cũ: khung hình dạng base64 trong JSON.
         else if (j.t === "frame" && j.data) { size.current = { w: j.w ?? 0, h: j.h ?? 0 }; frame(new Blob([Uint8Array.from(atob(j.data), (ch) => ch.charCodeAt(0))], { type: "image/jpeg" })); }
-        else if (j.t === "nav") { if (j.url !== undefined) { setUrl(j.url); setNavd(true); if (!editing.current) setAddr(blankUrl(j.url) ? "" : j.url); } }
+        else if (j.t === "nav") { sinfo.current = null; if (j.url !== undefined) { setUrl(j.url); setNavd(true); if (!editing.current) setAddr(blankUrl(j.url) ? "" : j.url); } }
         else if (j.t === "tabs") {
           // Giữ thứ tự tab đã thấy; tab mới thêm vào bên phải (Chromium trả tab mới nhất lên đầu).
           const list = j.list as BTab[];
@@ -339,6 +388,13 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
       const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
       const p = pt(e.clientX, e.clientY), a = wheelAcc.current;
       wheelAcc.current = { ...p, dx: (a?.dx ?? 0) + e.deltaX * k, dy: (a?.dy ?? 0) + e.deltaY * k };
+      // Dự đoán cuộn: bánh xe trên vùng cuộn cả trang thì dịch nội dung ngay (vẽ lại ở nhịp làm tươi kế tiếp), không chờ hình từ máy chủ.
+      const si = sinfo.current;
+      if (vmode.current && si?.root && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        const q = pr.current;
+        q.target = Math.max(0, Math.min(si.max, q.target + e.deltaY * k)); q.wheelAt = performance.now(); q.same = 0;
+        if (!praf.current) praf.current = requestAnimationFrame(paint);
+      }
       if (!wr) wr = requestAnimationFrame(() => { wr = 0; const w = wheelAcc.current; wheelAcc.current = null; if (w) send({ t: "wheel", ...w }); });
     };
     el.addEventListener("wheel", wheel, { passive: false });

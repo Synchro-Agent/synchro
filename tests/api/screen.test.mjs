@@ -188,5 +188,39 @@ console.log("5. Video: khung chỉ mang phần thay đổi (gõ phím vài KB th
   v.ws.close();
 }
 
+console.log("6. Dự đoán cuộn: vị trí cuộn của từng khung, vùng cuộn dưới con trỏ (cả trang / vùng riêng, thanh cố định)");
+{
+  const v = await open();
+  const msgs = [];
+  v.ws.onmessage = (e) => { if (typeof e.data === "string") msgs.push(JSON.parse(e.data)); else v.ws.send('{"t":"fa"}'); };
+  v.send({ t: "size", w: 900, h: 700, dpr: 2, bin: true, fa: true, vid: true, sp: true });
+  // Thanh cố định cao 60px ở trên, nội dung dài; bên phải dưới thanh là một vùng cuộn riêng (như khung chat).
+  v.send({ t: "html", html: `<!doctype html><meta charset=utf-8><body style="margin:0;font:16px sans-serif;background:rgb(250, 250, 240)"><header style="position:fixed;top:0;left:0;right:0;height:60px;background:#333;color:#fff">Thanh cố định</header><div id=chat style="position:fixed;top:100px;right:10px;width:200px;height:300px;overflow-y:auto;background:#eee">${Array.from({ length: 80 }, (_, i) => `<p>tin ${i}</p>`).join("")}</div><main style="padding-top:70px;margin-right:230px">${Array.from({ length: 300 }, (_, i) => `<p>Dòng ${i}</p>`).join("")}</main></body>` });
+  await until(() => msgs.find((m) => m.t === "video"), 20_000);
+  await sleep(1200);
+  v.send({ t: "mouse", type: "mouseMoved", x: 200, y: 400, button: "none", buttons: 0 });
+  const main = await until(() => msgs.filter((m) => m.t === "sinfo").at(-1), 8000);
+  ok(main?.root === true && main.top === 60 && main.bottom === 0 && main.max > 3000 && main.bg === "rgb(250, 250, 240)", "trang dài: bánh xe cuộn cả trang, thanh cố định 60px ở trên, vị trí cuộn lớn nhất, màu nền", main);
+  v.send({ t: "mouse", type: "mouseMoved", x: 780, y: 250, button: "none", buttons: 0 });
+  const chat = await until(() => { const l = msgs.filter((m) => m.t === "sinfo").at(-1); return l && l.root === false ? l : null; }, 8000);
+  ok(chat?.root === false, "trên vùng cuộn riêng (khung chat): không cuộn cả trang, khung xem không đoán", chat ?? msgs.filter((m) => m.t === "sinfo"));
+  const n0 = msgs.filter((m) => m.t === "pos").length;
+  for (let i = 0; i < 10; i++) { v.send({ t: "wheel", x: 200, y: 400, dx: 0, dy: 100 }); await sleep(60); }
+  await sleep(1500);
+  const ps = msgs.filter((m) => m.t === "pos").slice(n0).map((m) => m.y);
+  ok(ps.length >= 2 && ps.at(-1) >= 900 && ps.every((y, i) => !i || y >= ps[i - 1]), "mỗi khung kèm vị trí cuộn của trang lúc chụp (tăng dần khi cuộn, tới ~1000px)", ps);
+  // Người xem xin khung khóa (giải mã lỗi): khung gửi lại vẫn kèm đúng vị trí cuộn, không phải rỗng.
+  const n1 = msgs.length;
+  v.send({ t: "vkey" });
+  const pk = await until(() => msgs.slice(n1).find((m) => m.t === "pos"), 8000);
+  ok(typeof pk?.y === "number" && pk.y === ps.at(-1), "xin khung khóa: vị trí cuộn gửi lại đúng", msgs.slice(n1).filter((m) => m.t !== "tabs"));
+  // Trang mới: vùng cuộn được dò và gửi lại (khung xem bỏ vùng cuộn cũ khi chuyển trang), cả khi giống trang trước.
+  const n2 = msgs.length;
+  v.send({ t: "html", html: `<!doctype html><meta charset=utf-8><body style="margin:0;font:16px sans-serif;background:rgb(250, 250, 240)"><header style="position:fixed;top:0;left:0;right:0;height:60px;background:#333;color:#fff">Thanh cố định</header><div id=chat style="position:fixed;top:100px;right:10px;width:200px;height:300px;overflow-y:auto;background:#eee">${Array.from({ length: 80 }, (_, i) => `<p>tin ${i}</p>`).join("")}</div><main style="padding-top:70px;margin-right:230px">${Array.from({ length: 300 }, (_, i) => `<p>Dòng ${i}</p>`).join("")}</main></body>` });
+  const again = await until(() => { const i = msgs.findIndex((m, k) => k >= n2 && m.t === "nav"); return i >= 0 && msgs.slice(i).find((m) => m.t === "sinfo"); }, 8000);
+  ok(again?.root === true || again?.root === false, "chuyển trang: vùng cuộn gửi lại sau nav, không cần rê chuột", msgs.slice(n2).map((m) => m.t));
+  v.ws.close();
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

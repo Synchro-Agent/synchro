@@ -114,6 +114,25 @@ export function createBrowser(host) {
     if (e.closest("a[href],button,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],label,select,summary,[onclick]")) return "pointer";
     if (e.closest("input:not([type=button]):not([type=submit]):not([type=reset]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,[contenteditable=''],[contenteditable=true]")) return "text";
     return [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) ? "text" : "default"; })()`;
+  // Vùng cuộn dưới con trỏ, để khung xem dịch trang ngay khi người dùng cuộn (dự đoán cuộn) thay vì chờ hình từ máy chủ:
+  // root — bánh xe ở đây cuộn cả trang (không có vùng cuộn riêng như khung chat, danh sách); top / bottom — chiều cao thanh cố định / dính
+  // ở mép trên / dưới (đứng yên khi cuộn, khung xem không dịch phần đó); max — vị trí cuộn lớn nhất; bg — màu nền (phần lộ ra khi dịch).
+  const SCROLL_AT = (x, y) => `(() => { const se = document.scrollingElement || document.documentElement, H = innerHeight, W = innerWidth;
+    const skip = (e) => !e || e === se || e === document.body || e === document.documentElement;
+    let root = se.scrollHeight > H + 1;
+    for (let e = document.elementFromPoint(${x}, ${y}); !skip(e); e = e.parentElement) {
+      const o = getComputedStyle(e).overflowY;
+      if ((o === "auto" || o === "scroll" || o === "overlay") && e.scrollHeight > e.clientHeight + 1) { root = false; break; }
+    }
+    const edge = (py, top) => { let v = 0; for (const px of [W * 0.1, W * 0.5, W * 0.9]) {
+      for (let e = document.elementFromPoint(px, py); !skip(e); e = e.parentElement) {
+        const p = getComputedStyle(e).position;
+        if (p === "fixed" || p === "sticky") { const r = e.getBoundingClientRect(); if (r.height < H * 0.4 && r.width > W * 0.5) v = Math.max(v, top ? r.bottom : H - r.top); break; }
+      } } return Math.max(0, Math.min(v, H * 0.4)); };
+    let top = 0; for (const py of [2, 24, 48, 72]) top = Math.max(top, edge(py, true));
+    let bottom = 0; for (const py of [H - 2, H - 24]) bottom = Math.max(bottom, edge(py, false));
+    const bg = (e) => { const c = e && getComputedStyle(e).backgroundColor; return c && c !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(c) ? c : ""; };
+    return { root, top: Math.round(top), bottom: Math.round(bottom), max: Math.max(0, Math.round(se.scrollHeight - H)), bg: bg(document.body) || bg(document.documentElement) || "rgb(255, 255, 255)" }; })()`;
   const pageWs = (u, id) => `ws://${new URL(st(u).base).host}/devtools/page/${id}`;
 
   // Kết nối cấp trình duyệt: tải tệp về thư mục của người dùng, theo dõi tệp đang tải.
@@ -239,7 +258,7 @@ export function createBrowser(host) {
     // người xem nhận khung video (1 byte cờ khung khóa + dữ liệu). Tối đa một khung trong bộ nén và 2 khung trên đường đi; bận thì
     // giữ khung mới nhất (Chrome chờ báo nhận) — mạng chậm thì ít khung hơn nhưng khung nào cũng nét. Không cần hạ chất lượng hay refine.
     // mk: hàm tạo bộ nén; vid: { enc, w, h (điểm ảnh của ảnh), css: { w, h }, cfg, sent }; vbusy: lúc đưa khung vào bộ nén (0 = rảnh).
-    let mk = null, vid = null, vbusy = 0, lastPushed = null, motion = false, motionT = null;
+    let mk = null, vid = null, vbusy = 0, lastPushed = null, motion = false, motionT = null, posY = NaN;
     // Số đo từng khâu (người xem xin "stats: true", vd. công cụ đo độ trễ): mỗi 2 giây gửi { t: "stats" } — số khung Chrome gửi, khung bỏ
     // vì đang bận, khung vào / ra bộ nén, thời gian nén, cỡ ảnh JPEG, thời gian từ thao tác của người dùng tới khung Chrome kế tiếp.
     const stat = { cast: 0, drop: 0, push: 0, out: 0, encMs: 0, encMax: 0, jpg: 0, bytes: 0, inLat: [], inAt: 0 };
@@ -319,8 +338,8 @@ export function createBrowser(host) {
         enc.onFrame = (o) => { if (vid?.enc === enc) out(o); };
         enc.onError = (e) => { if (vid?.enc === enc) videoFail(e); };
       }
-      vid.css = { w: f.w, h: f.h };
-      lastPushed = { data: f.data, w: f.w, h: f.h };
+      vid.css = { w: f.w, h: f.h }; vid.y = f.y;
+      lastPushed = { data: f.data, w: f.w, h: f.h, y: f.y };
       vid.at = Date.now(); stat.push++;
       vid.enc.push(buf);
       f.ack();
@@ -334,8 +353,10 @@ export function createBrowser(host) {
         if (!vid.sent) {
           if (!key || !vid.cfg) return next();
           send({ t: "video", codec: vid.cfg.codec, ...(vid.cfg.desc ? { desc: vid.cfg.desc.toString("base64") } : {}), w: vid.css.w, h: vid.css.h });
-          vid.sent = true; meta = `${vid.css.w}x${vid.css.h}`;
+          vid.sent = true; meta = `${vid.css.w}x${vid.css.h}`; posY = NaN;
         }
+        // Vị trí cuộn của trang lúc Chrome chụp khung này (dự đoán cuộn ở khung xem): chỉ gửi khi đổi, ngay trước khung.
+        if (size.sp && Number.isFinite(vid.y) && vid.y !== posY) { posY = vid.y; send({ t: "pos", y: Math.round(vid.y * 10) / 10 }); }
         const m = `${vid.css.w}x${vid.css.h}`;
         if (m !== meta) { meta = m; send({ t: "meta", w: vid.css.w, h: vid.css.h }); }
         ws.send(Buffer.concat([Buffer.from([key ? 1 : 0]), data]));
@@ -368,7 +389,7 @@ export function createBrowser(host) {
         inLat: stat.inLat.length ? Math.round(stat.inLat.reduce((a, b) => a + b, 0) / stat.inLat.length) : null, inflight, video: !!mk });
       Object.assign(stat, { cast: 0, drop: 0, push: 0, out: 0, encMs: 0, encMax: 0, jpg: 0, bytes: 0, inLat: [] });
     }, 2000);
-    const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
+    const sendInfo = async () => { if (c) sendNav(await info(c)); };
     const pushTabs = async () => {
       try {
         const list = (await pages(u)).map(tabOf);
@@ -406,10 +427,10 @@ export function createBrowser(host) {
         stat.cast++; stat.jpg += p.data.length * 0.75; if (latest) stat.drop++;
         if (stat.inAt) { stat.inLat.push(lastFrame - stat.inAt); stat.inAt = 0; }
         latest?.ack();
-        latest = { data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight, ack };
+        latest = { data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight, y: p.metadata.scrollOffsetY ?? 0, ack };
         next();
       });
-      n.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) { send({ t: "nav", url: p.frame.url }); pushTabs(); } });
+      n.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) { sendNav({ url: p.frame.url }); pushTabs(); } });
       n.on("Page.loadEventFired", () => { sendInfo(); pushTabs(); });
       n.on("Page.frameStartedLoading", () => send({ t: "loading", on: true }));
       n.on("Page.frameStoppedLoading", () => send({ t: "loading", on: false }));
@@ -424,16 +445,33 @@ export function createBrowser(host) {
       if (s.dialog) send({ t: "dialog", type: s.dialog.type, message: s.dialog.message, def: s.dialog.def });
     };
     // Con trỏ: dò kiểu con trỏ ở vị trí chuột mới nhất (tối đa ~12 lần / giây), chỉ gửi khi đổi.
-    let cursor = "default", cursorAt = null, cursorBusy = false;
+    // Người xem xin "sp: true" (dự đoán cuộn): dò thêm vùng cuộn dưới con trỏ (SCROLL_AT), gửi { t: "sinfo" } khi đổi.
+    let cursor = "default", cursorAt = null, cursorBusy = false, sinfo = "", lastPt = null;
     const probeCursor = async () => {
       if (cursorBusy || !cursorAt || !c || s.dialog) return;
       cursorBusy = true;
       const { x, y } = cursorAt; cursorAt = null;
       try {
-        const r = await c.send("Runtime.evaluate", { expression: CURSOR_AT(Math.round(x), Math.round(y)), returnByValue: true }, 2000);
-        const v = String(r?.result?.value ?? "default").slice(0, 40);
+        const X = Math.round(x), Y = Math.round(y);
+        const r = await c.send("Runtime.evaluate", { expression: size.sp ? `({ c: ${CURSOR_AT(X, Y)}, s: ${SCROLL_AT(X, Y)} })` : CURSOR_AT(X, Y), returnByValue: true }, 2000);
+        const val = r?.result?.value;
+        const v = String((size.sp ? val?.c : val) ?? "default").slice(0, 40);
         if (v !== cursor) { cursor = v; send({ t: "cursor", c: v }); }
+        if (size.sp && val?.s) { const j = JSON.stringify(val.s); if (j !== sinfo) { sinfo = j; send({ t: "sinfo", ...val.s }); } }
       } catch {} finally { cursorBusy = false; if (cursorAt) setTimeout(probeCursor, 80); }
+    };
+    // Đang cuộn: dò lại vùng cuộn (thanh dính có thể vừa bám mép, trang dài thêm), tối đa ~4 lần / giây.
+    let scrollProbeAt = 0;
+    const probeScroll = (x, y) => {
+      if (!size.sp || Date.now() - scrollProbeAt < 250) return;
+      scrollProbeAt = Date.now();
+      const first = !cursorAt; cursorAt = lastPt = { x, y }; if (first) setTimeout(probeCursor, 0);
+    };
+    // Trang mới / tải xong: khung xem bỏ vùng cuộn đã biết (nav) — dò lại ở vị trí chuột gần nhất, gửi lại cả khi giống trang trước.
+    const sendNav = (o) => {
+      send({ t: "nav", ...o });
+      sinfo = "";
+      if (size.sp && lastPt) { const first = !cursorAt; cursorAt = lastPt; if (first) setTimeout(probeCursor, 150); }
     };
     const viewer = { send, follow: (id) => { attach(id).catch(() => {}); } };
     s.viewers.add(viewer);
@@ -469,7 +507,7 @@ export function createBrowser(host) {
           let dpr = Math.max(1, Math.min(Number(j.dpr) || 1, 2));
           while (dpr > 1 && w * h * dpr * dpr > 4_200_000) dpr = Math.max(1, dpr - 0.25);
           // vq: chất lượng JPEG Chrome chụp để đưa vào bộ nén video (thử nghiệm / công cụ đo; mặc định VIDEO_Q).
-          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true, stats: j.stats === true, vq: Number.isFinite(j.vq) ? Math.max(30, Math.min(95, j.vq | 0)) : VIDEO_Q };
+          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true, stats: j.stats === true, sp: j.sp === true, vq: Number.isFinite(j.vq) ? Math.max(30, Math.min(95, j.vq | 0)) : VIDEO_Q };
           inflight = 0; sentAt.length = 0;
           meta = "";
           const had = !!mk;
@@ -483,9 +521,9 @@ export function createBrowser(host) {
           if (j.type !== "mouseMoved") { lastInput = now; stat.inAt ||= now; }
           else if (j.buttons) moving(); // kéo thanh cuộn / kéo chọn: trang chạy theo chuột
           await c.send("Input.dispatchMouseEvent", { type: j.type, x: +j.x, y: +j.y, button: j.button ?? "left", buttons: j.buttons ?? 0, clickCount: j.clickCount ?? 0, modifiers: j.mod ?? 0 });
-          if (j.type === "mouseMoved") { const first = !cursorAt; cursorAt = { x: +j.x, y: +j.y }; if (first) setTimeout(probeCursor, 80); }
+          if (j.type === "mouseMoved") { const first = !cursorAt; cursorAt = lastPt = { x: +j.x, y: +j.y }; if (first) setTimeout(probeCursor, 80); }
         } else if (j.t === "wheel") {
-          lastInput = now; stat.inAt ||= now; moving();
+          lastInput = now; stat.inAt ||= now; moving(); probeScroll(+j.x, +j.y);
           await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +j.x, y: +j.y, deltaX: +j.dx || 0, deltaY: +j.dy || 0 });
         } else if (j.t === "key") {
           lastInput = now; stat.inAt ||= now;
