@@ -3,6 +3,9 @@
 // mở đầu lời nhắc hệ thống của mọi lượt người dùng trò chuyện với mọi model: chat (khóa API lẫn gói subscription, kể cả ẩn danh / tắt
 // bộ nhớ), Synchro Code, giọng nói; lời gọi nội bộ không kèm. Agent của Synchro Code tự đẩy code và mở pull request (git_push,
 // create_pull_request) bằng GitHub đã kết nối, qua chốt duyệt như lệnh thường.
+import fs from "node:fs";
+import path from "node:path";
+
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = process.env.MOCK_URL ?? "http://127.0.0.1:4010", GH = process.env.GH_URL ?? "http://127.0.0.1:4013";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); };
@@ -94,7 +97,15 @@ await other("POST", "/api/memory", { items: [`Thích đi Đà Lạt ${TAG}`] });
 await other("PUT", "/api/brain/note", { title: "Kế hoạch riêng", body: "Đi Đà Lạt tháng sau. #ke-hoach" });
 const before = { mem: (await other("GET", "/api/memory")).j?.items?.length, hist: (await other("GET", "/api/brain/instructions")).j?.history?.length, notes: (await other("GET", "/api/brain")).j?.nodes?.length };
 ok(before.mem > 0 && before.hist > 0 && before.notes > 0, "trước khi xóa: có ký ức, lịch sử hướng dẫn, ghi chú riêng", before);
+// Ký ức riêng CLI tự ghi (Claude Code: projects/<thư mục>/memory; Antigravity: .gemini/GEMINI.md) cũng bị xóa.
+const uidB = (await other("GET", "/api/auth/me")).j?.user?.id;
+const ENG = path.resolve(process.env.SYNCHRO_ENGINE_HOME ?? path.join(process.env.DATA_DIR ?? "data-mock", "engine"), "logins");
+const cliMem = [path.join(ENG, "claude", uidB, "projects", "-work", "memory", "user.md"), path.join(ENG, "agy", uidB, ".gemini", "GEMINI.md")];
+for (const f of cliMem) { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, `Người dùng thích cà phê ${TAG}`); }
 r = await other("DELETE", "/api/brain");
+let gone = false;
+for (let i = 0; i < 40 && !gone; i++) { gone = cliMem.every((f) => !fs.existsSync(f)); if (!gone) await sleep(250); }
+ok(uidB && gone && fs.existsSync(path.join(ENG, "claude", uidB, "projects", "-work")), "xóa luôn ký ức riêng của Claude Code và Antigravity (giữ phiên của CLI)", cliMem.map((f) => fs.existsSync(f)));
 const kinds = (r.j?.nodes ?? []).map((x) => x.kind);
 ok(r.s === 200 && kinds.every((k) => ["hub", "about", "model", "index", "log", "rule"].includes(k)) && kinds.includes("rule") && !(r.j.nodes ?? []).some((x) => x.title === "Kế hoạch riêng"), "bộ não chỉ còn khung trung tâm và quy tắc", (r.j?.nodes ?? []).map((x) => x.title));
 n = await note(other);

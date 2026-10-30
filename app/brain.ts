@@ -1084,7 +1084,7 @@ export function wipeBrain(uid: string) {
   for (const tb of ["brain_queue", "brain_state", "brain_log", "instructions_history"]) d.prepare(`DELETE FROM ${tb} WHERE user_id = ?`).run(uid);
   clearMemory(uid);
   forgetProfile(uid);
-  forgetCliMemory(uid);
+  void forgetCliMemory(uid);
   const u = getUser(uid);
   if (!u) return;
   logEvent(uid, `Bộ não vừa được tạo và nhận ${L(RULE)} của người dùng`);
