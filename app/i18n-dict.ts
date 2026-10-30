@@ -661,6 +661,22 @@ export const EN2VI: Record<string, string> = {
 };
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Đã thêm (.+) vào thư viện cho mọi người$/, (m) => `Added ${m[1]} to the Library for everyone`],
+  [/^Đã tạo skill (.+) và thêm vào thư viện cho mọi người\.$/, (m) => `Created skill ${m[1]} and added it to the Library for everyone.`],
+  [/^Thư viện cho mọi người đã đủ (\d+) mục\.$/, (m) => `The Library for everyone already has ${m[1]} items.`],
+  // Antigravity vẫn tự chặn công cụ sau khi đã nhắc (app/chatengine.ts, app/agentcore.ts)
+  [/^Antigravity tự chặn công cụ \((.+)\) nên lượt này chưa làm được gì\. Hãy gửi lại yêu cầu hoặc chọn model khác( \(để Tự động thì Synchro tự chuyển model\))?\.$/, (m) => `Antigravity blocked its tools (${m[1]}), so this turn couldn't do anything. Send the request again or pick another model${m[2] ? " (on Auto, Synchro switches models for you)" : ""}.`],
+  // Skill tự viết từ repo không có SKILL.md (app/skillgen.ts) và tải repo git (app/repofetch.ts)
+  [/^Repo không có SKILL\.md: Synchro đã đọc toàn bộ (\d+) tệp của repo( và nhờ model viết SKILL\.md)?\. Hãy đọc lại nội dung bên dưới trước khi thêm$/, (m) => `This repository has no SKILL.md: Synchro read all ${m[1]} files in it${m[2] ? " and had a model write SKILL.md" : ""}. Review the content below before adding it`],
+  [/^(\d+) tệp nhị phân \(ảnh, tệp nén…\) chỉ có tên trong references\/repo-tree\.md, không đóng gói$/, (m) => `${m[1]} binary files (images, archives…) are only listed in references/repo-tree.md, not bundled`],
+  [/^(\d+) tệp văn bản quá lớn hoặc vượt giới hạn (\d+) tệp \/ (\d+)MB nên chỉ có tên trong references\/repo-tree\.md$/, (m) => `${m[1]} text files are too large or over the ${m[2]}-file / ${m[3]}MB limit, so they are only listed in references/repo-tree.md`],
+  [/^(\d+) tệp lớn hơn 30MB được bỏ qua$/, (m) => `${m[1]} files larger than 30MB were skipped`],
+  [/^Model chưa viết được SKILL\.md \((.*)\), nên Synchro dựng skill từ README của repo$/, (m) => `The model couldn't write SKILL.md (${m[1]}), so Synchro built the skill from the repository's README`],
+  [/^Chưa có model nào để viết SKILL\.md \(chưa đăng nhập gói hoặc chưa có khóa API\), nên Synchro dựng skill từ README của repo$/, () => "No model is connected to write SKILL.md (no plan signed in and no API key), so Synchro built the skill from the repository's README"],
+  [/^Không tải được repo: (.+)$/, (m) => `Couldn't download the repository: ${m[1]}`],
+  [/^Không kết nối được tới (.+)$/, (m) => `Couldn't connect to ${m[1]}`],
+  [/^Không tìm thấy máy chủ (.+)$/, (m) => `Server ${m[1]} not found`],
+  [/^Repo quá lớn để đọc \(>(\d+)MB\)$/, (m) => `The repository is too large to read (>${m[1]}MB)`],
   [/^Gói có (\d+) skill\. Hãy chọn skill muốn thêm\.$/, (m) => `This package has ${m[1]} skills. Choose which to add.`],
   [/^Bỏ qua (\d+) file có định dạng không hỗ trợ: (.+)$/, (m) => `Skipped ${m[1]} unsupported files: ${m[2]}`],
   [/^Đã thêm (\d+) skill$/, (m) => `Added ${m[1]} skills`],
@@ -1088,10 +1104,36 @@ Object.assign(EN2VI, {
   "Off": "Tắt", "Install": "Cài đặt",
 });
 Object.assign(VI2EN, { "từ": "from" });
+// Nhập skill từ link repo git bất kỳ, skill tự viết từ repo không có SKILL.md (app/repofetch.ts, app/skillgen.ts)
+Object.assign(VI2EN, {
+  "Đọc repo quá lâu. Thử lại sau.": "Reading the repository took too long. Try again later.",
+  "Link không hợp lệ. Hãy dán link repo git dạng https://…": "Invalid link. Paste a git repository link like https://…",
+  "Chỉ nhận link https tới repo git công khai": "Only https links to public git repositories are accepted",
+  "Link không được chứa tên đăng nhập / mật khẩu": "The link must not contain a username or password",
+  "Link thiếu tên repo": "The link is missing the repository name", "Tên repo trong link có ký tự không hợp lệ": "The repository name in the link has invalid characters",
+  "Không đọc repo ở địa chỉ nội bộ": "Repositories on internal addresses can't be read",
+  "Không đọc được repo: link không phải repo git công khai (repo riêng tư cần quyền truy cập)": "Couldn't read the repository: the link isn't a public git repository (private repositories need access)",
+  "Repo có quá nhiều tệp để đọc": "The repository has too many files to read", "Repo trống (không có tệp nào)": "The repository is empty (no files)",
+  "Repo không có tệp nào để đọc": "The repository has no files to read",
+  "đọc tài liệu repo rồi viết hướng dẫn chi tiết": "read the repository docs and write detailed instructions", "SKILL.md quá ngắn": "SKILL.md is too short",
+  "Đã tạo skill và thêm vào thư viện cho mọi người": "Skill created and added to the Library for everyone",
+  "Chỉ quản trị viên thêm được skill vào thư viện cho mọi người.": "Only administrators can add skills to the Library for everyone.",
+  "Thư viện cho mọi người đã đủ": "The Library for everyone is full", "Không còn tệp của skill này trên máy chủ.": "This skill's files are no longer on the server.",
+  "Đường dẫn không an toàn trong skill.": "Unsafe path in the skill.", "Thêm từ Kho kỹ năng": "Added from the Skill Hub",
+});
 Object.assign(EN2VI, { "is installed and ready to use": "đã cài và sẵn sàng dùng" });
 Object.assign(VI2EN, { "is installed and ready to use": "is installed and ready to use" });
 // Ô "Thêm từ GitHub" dùng chung (Kỹ năng + Plugins)
 Object.assign(EN2VI, {
+  "Who can use this skill?": "Ai được dùng skill này?", "Only me": "Chỉ mình tôi", "Everyone": "Mọi người",
+  "Goes to Your skills. Only your account uses it.": "Vào Skill của bạn, chỉ tài khoản của bạn dùng.",
+  "Goes to the Library for everyone. Every account can use it.": "Vào Thư viện cho mọi người, mọi tài khoản đều dùng được.",
+  "Only administrators can add to the Library for everyone.": "Chỉ quản trị viên thêm được vào Thư viện cho mọi người.",
+  "Add for everyone": "Thêm cho mọi người",
+  "Paste a git repository link (GitHub, GitLab, Bitbucket…): one skill or any repository": "Dán link repo git (GitHub, GitLab, Bitbucket…): một skill hoặc bất kỳ repo nào",
+  "Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates. A repository without SKILL.md: Synchro reads every file in it and writes the skill from it.": "Synchro tự xem link. Một skill thì vào mục Skill của bạn. Repo có nhiều skill thì cài thành một thư viện, có kiểm tra giấy phép, script và cập nhật một chạm. Repo không có SKILL.md: Synchro đọc mọi tệp trong repo rồi tự viết skill từ đó.",
+  "This repository has no SKILL.md. Synchro is reading every file in it and writing the skill. This can take a minute.": "Repo này không có SKILL.md. Synchro đang đọc mọi tệp trong repo và viết skill, có thể mất khoảng một phút.",
+  "Reading the repository…": "Đang đọc repo…", "Add from a repository link": "Thêm từ link repo", "GitHub, GitLab… One skill or any repository, detected for you": "GitHub, GitLab… Một skill hay bất kỳ repo nào, Synchro tự nhận ra",
   "Paste a GitHub link: one skill or a whole repository": "Dán link GitHub: một skill hoặc cả repo",
   "Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates.": "Synchro tự xem link. Một skill thì vào mục Skill của bạn. Repo có nhiều skill thì cài thành một thư viện, có kiểm tra giấy phép, script và cập nhật một chạm.",
   "Checking…": "Đang kiểm tra…", "Add from GitHub": "Thêm từ GitHub", "One skill or a whole repository, detected for you": "Một skill hay cả repo, Synchro tự nhận ra",

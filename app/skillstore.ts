@@ -58,6 +58,8 @@ export const skillErr = (e: unknown) =>
   e instanceof MultiSkillError ? Response.json({ choices: e.choices, message: e.message })
   : e instanceof SkillError ? Response.json({ error: e.message }, { status: e.status })
   : (console.error("[skills]", e), Response.json({ error: "Lỗi máy chủ khi xử lý skill" }, { status: 500 }));
+/** Gói / repo không có SKILL.md nào: link GitHub / git thì Synchro đọc toàn repo và tự viết skill (app/skillgen.ts). */
+export class NoSkillError extends SkillError {}
 export class MultiSkillError extends SkillError { constructor(public choices: SkillChoice[]) { super(`Gói có ${choices.length} skill. Hãy chọn skill muốn thêm.`); this.status = 300; } }
 const fail = (m: string, status = 400): never => { const e = new SkillError(m); e.status = status; throw e; };
 
@@ -95,7 +97,8 @@ export const enabledSkills = async (uid: string, projectId?: string | null) =>
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const extOf = (p: string) => path.posix.extname(p).toLowerCase();
 const kindOf = (p: string): SkillFile["kind"] =>
-  /^scripts\//.test(p) || [".py", ".sh", ".js", ".ts"].includes(extOf(p)) ? "script"
+  /^references\//.test(p) ? "reference"
+  : /^scripts\//.test(p) || [".py", ".sh", ".js", ".ts"].includes(extOf(p)) ? "script"
   : /^assets\//.test(p) || BIN_EXT.has(extOf(p)) ? "asset" : "reference";
 export const estTokens = (s: string) => Math.ceil(s.length / 4);
 
@@ -190,7 +193,7 @@ export async function parseUpload(filename: string, buf: Buffer, opts: { pick?: 
   // SKILL.md ở bất kỳ độ sâu nào; skill lồng trong skill khác không tính là skill riêng.
   let roots = all.filter(({ p }) => path.posix.basename(p) === "SKILL.md").map(({ f, p }) => ({ f, dir: dirOf(p) }));
   roots = roots.filter((r) => !roots.some((o) => o !== r && o.dir !== r.dir && (o.dir === "" || r.dir.startsWith(o.dir + "/"))));
-  if (roots.length === 0) fail("Không tìm thấy SKILL.md trong file nén");
+  if (roots.length === 0) throw new NoSkillError("Không tìm thấy SKILL.md trong file nén");
   let root = roots[0];
   if (opts.pick !== undefined) {
     const want = opts.pick.replace(/^\/+|\/+$/g, "");
@@ -264,43 +267,51 @@ const locked = <T>(uid: string, fn: () => Promise<T>): Promise<T> => {
 };
 
 export function saveSkill(uid: string, filename: string, buf: Buffer, opts: UpOpts & { enabled?: boolean } = {}): Promise<{ skill: Skill; created: boolean }> {
-  const enabled = opts.enabled ?? true;
   rate(uid);
-  return locked(uid, async () => {
-    const p = await parseUpload(filename, buf, { ...opts, uid });
-    const cur = await getSkill(uid, p.name);
-    const count = (db().prepare("SELECT COUNT(*) n FROM skills WHERE user_id = ?").get(uid) as { n: number }).n;
-    if (!cur && count >= LIMITS.skills) fail(`Đã đạt giới hạn ${LIMITS.skills} skill cho mỗi tài khoản`);
-    const size = p.entries.reduce((a, e) => a + e.data.length, 0);
-    if ((await usedBytes(uid)) + size > LIMITS.userBytes) fail(`Đã hết dung lượng skill của tài khoản (${LIMITS.userBytes / 1048576}MB). Hãy xóa bớt skill cũ`);
-    const id = cur?.id ?? crypto.randomUUID();
-    const version = (cur ? Math.max(...cur.versions) : 0) + 1;
-    const rel = path.posix.join(uid, id, `v${version}`);
-    const base = path.join(ROOT, rel);
-    await fs.mkdir(base, { recursive: true });
-    for (const e of p.entries) {
-      const dest = path.join(base, e.path);
-      if (!dest.startsWith(base + path.sep)) fail("Đường dẫn không an toàn");
-      await fs.mkdir(path.dirname(dest), { recursive: true });
-      await fs.writeFile(dest, e.data);
+  return locked(uid, async () => storeParsed(uid, await parseUpload(filename, buf, { ...opts, uid }), opts.enabled ?? true));
+}
+/** Xem trước / lưu skill đã tách thành danh sách tệp (có SKILL.md ở gốc) — skill Synchro tự viết từ repo không có SKILL.md. */
+export async function previewParsed(uid: string, p: Parsed): Promise<Preview> {
+  const cur = await getSkill(uid, p.name);
+  return { name: p.name, description: p.description, body: p.body, files: p.files, warnings: p.warnings, tokens: p.tokens, exists: !!cur, version: (cur?.version ?? 0) + 1 };
+}
+export function saveParsed(uid: string, p: Parsed, enabled = true): Promise<{ skill: Skill; created: boolean }> {
+  rate(uid);
+  return locked(uid, () => storeParsed(uid, p, enabled));
+}
+async function storeParsed(uid: string, p: Parsed, enabled: boolean): Promise<{ skill: Skill; created: boolean }> {
+  const cur = await getSkill(uid, p.name);
+  const count = (db().prepare("SELECT COUNT(*) n FROM skills WHERE user_id = ?").get(uid) as { n: number }).n;
+  if (!cur && count >= LIMITS.skills) fail(`Đã đạt giới hạn ${LIMITS.skills} skill cho mỗi tài khoản`);
+  const size = p.entries.reduce((a, e) => a + e.data.length, 0);
+  if ((await usedBytes(uid)) + size > LIMITS.userBytes) fail(`Đã hết dung lượng skill của tài khoản (${LIMITS.userBytes / 1048576}MB). Hãy xóa bớt skill cũ`);
+  const id = cur?.id ?? crypto.randomUUID();
+  const version = (cur ? Math.max(...cur.versions) : 0) + 1;
+  const rel = path.posix.join(uid, id, `v${version}`);
+  const base = path.join(ROOT, rel);
+  await fs.mkdir(base, { recursive: true });
+  for (const e of p.entries) {
+    const dest = path.join(base, e.path);
+    if (!dest.startsWith(base + path.sep)) fail("Đường dẫn không an toàn");
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, e.data);
+  }
+  const now = Date.now();
+  const versions = JSON.stringify([...(cur?.versions ?? []), version]);
+  db().transaction(() => {
+    if (cur) {
+      // Phiên bản mới thay bản hiện hành; file của bản cũ vẫn nằm trên đĩa.
+      db().prepare("UPDATE skills SET description = ?, body = ?, storage_path = ?, version = ?, versions = ?, warnings = ?, updated_at = ? WHERE id = ?")
+        .run(p.description, p.body, rel, version, versions, JSON.stringify(p.warnings), now, id);
+      db().prepare("DELETE FROM skill_files WHERE skill_id = ?").run(id);
+    } else {
+      db().prepare("INSERT INTO skills (id, user_id, name, description, body, storage_path, enabled, version, versions, warnings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(id, uid, p.name, p.description, p.body, rel, enabled ? 1 : 0, version, versions, JSON.stringify(p.warnings), now, now);
     }
-    const now = Date.now();
-    const versions = JSON.stringify([...(cur?.versions ?? []), version]);
-    db().transaction(() => {
-      if (cur) {
-        // Phiên bản mới thay bản hiện hành; file của bản cũ vẫn nằm trên đĩa.
-        db().prepare("UPDATE skills SET description = ?, body = ?, storage_path = ?, version = ?, versions = ?, warnings = ?, updated_at = ? WHERE id = ?")
-          .run(p.description, p.body, rel, version, versions, JSON.stringify(p.warnings), now, id);
-        db().prepare("DELETE FROM skill_files WHERE skill_id = ?").run(id);
-      } else {
-        db().prepare("INSERT INTO skills (id, user_id, name, description, body, storage_path, enabled, version, versions, warnings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(id, uid, p.name, p.description, p.body, rel, enabled ? 1 : 0, version, versions, JSON.stringify(p.warnings), now, now);
-      }
-      const ins = db().prepare("INSERT INTO skill_files (skill_id, path, size, mime_type, kind) VALUES (?, ?, ?, ?, ?)");
-      for (const f of p.files) ins.run(id, f.path, f.size, f.mime_type, f.kind);
-    })();
-    return { skill: (await getSkill(uid, p.name))!, created: !cur };
-  });
+    const ins = db().prepare("INSERT INTO skill_files (skill_id, path, size, mime_type, kind) VALUES (?, ?, ?, ?, ?)");
+    for (const f of p.files) ins.run(id, f.path, f.size, f.mime_type, f.kind);
+  })();
+  return { skill: (await getSkill(uid, p.name))!, created: !cur };
 }
 
 // Quay lại một phiên bản cũ đã lưu trên đĩa (đọc lại và kiểm tra như lúc tải lên).
@@ -435,7 +446,7 @@ export async function fetchGithubSkill(raw: string, pick?: string): Promise<{ fi
   const tries = g.segs.length ? Array.from({ length: Math.min(g.segs.length, 4) }, (_, i) => ({ ref: g.segs.slice(0, i + 1).join("/"), rest: g.segs.slice(i + 1) })) : [{ ref: "HEAD", rest: [] as string[] }];
   for (const t of tries) {
     if (!t.ref.split("/").every((x) => SEG.test(x))) continue;
-    const buf = await download(`https://codeload.github.com/${g.owner}/${g.repo}/zip/${t.ref.split("/").map(encodeURIComponent).join("/")}`, LIMITS.githubZip);
+    const buf = await download(`${process.env.GITHUB_CODELOAD_URL ?? "https://codeload.github.com"}/${g.owner}/${g.repo}/zip/${t.ref.split("/").map(encodeURIComponent).join("/")}`, LIMITS.githubZip);
     if (!buf) continue;
     let rest = t.rest;
     if (g.file && rest.length) rest = rest[rest.length - 1].toLowerCase().endsWith(".md") ? rest.slice(0, -1) : rest;

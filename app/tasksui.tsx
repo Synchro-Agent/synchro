@@ -10,6 +10,7 @@ import { artifactsAsCode, hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, modelName, useModels } from "./models";
 import { allowsModel } from "./catalog";
 import { useApp } from "./store";
+import { ScopeChoice, useIsAdmin, type Scope } from "./skillsui";
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 type BrowserPref = "auto" | "synchro" | "user";
@@ -201,13 +202,16 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
   const [busy, setBusy] = useState<"" | "approve" | "reject">("");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
+  // Skill đề xuất: tạo cho riêng mình hay đưa vào Thư viện cho mọi người (chỉ quản trị viên).
+  const admin = useIsAdmin();
+  const [scope, setScope] = useState<Scope>("me");
   const pl = p.payload as { name?: string; description?: string; skill_md?: string; files?: { path: string }[]; instructions?: string; source?: string; host?: string; url?: string; connector?: string; tool?: string; input?: unknown };
   const decide = async (decision: "approve" | "reject") => {
     setBusy(decision);
-    const edits = draft === null ? undefined : p.kind === "skill" ? { skill_md: draft } : { instructions: draft };
+    const edits = p.kind === "skill" ? { ...(draft === null ? {} : { skill_md: draft }), ...(scope === "org" ? { scope } : {}) } : draft === null ? undefined : { instructions: draft };
     try {
       await api("POST", "/api/inbox/proposals", { id: p.id, decision, edits });
-      say(decision === "reject" ? tr("Đã bỏ qua đề xuất") : p.kind === "skill" ? tr("Đã tạo skill") : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, kết quả vào Hộp thư") : tr("Đã cho phép"));
+      say(decision === "reject" ? tr("Đã bỏ qua đề xuất") : p.kind === "skill" ? tr(scope === "org" ? "Đã tạo skill và thêm vào thư viện cho mọi người" : "Đã tạo skill") : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, kết quả vào Hộp thư") : tr("Đã cho phép"));
       changed(); onDone();
     } catch (e) { say((e as Error).message); onDone(); }
     setBusy("");
@@ -231,6 +235,7 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
         {open && <textarea className="field mono tk-prop-md" value={draft ?? body} onChange={(e) => setDraft(e.target.value)} rows={12} spellCheck={false} data-notr />}
       </>}
       {err && <div className="sk-err"><span data-notr>{err}</span></div>}
+      {p.kind === "skill" && p.status === "pending" && <ScopeChoice value={scope} onChange={setScope} admin={admin} disabled={!!busy} />}
       {p.status !== "pending" && p.result && <p className="tk-prop-r" data-notr>{p.result.slice(0, 600)}</p>}
       {p.status === "pending" && <div className="tk-acts">
         <button className="btn dark" disabled={!!busy} onClick={() => decide("approve")}>{busy === "approve" ? <span className="art-spin sm" /> : <I.Check size={14} />}{tr(APPROVE[p.kind])}</button>

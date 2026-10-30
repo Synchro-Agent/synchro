@@ -18,28 +18,31 @@ export function GithubAdd({ focus, onDone }: { focus?: number; onDone?: (r: { ki
   useEffect(() => { if (focus) { input.current?.focus(); input.current?.scrollIntoView({ block: "center", behavior: "smooth" }); } }, [focus]);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  // reading: máy chủ đang đọc toàn bộ repo không có SKILL.md và viết skill (có thể mất cả phút).
+  const [reading, setReading] = useState(false);
   const [err, setErr] = useState("");
   const [skill, setSkill] = useState<(Found & { kind: "skill" }) & { admin: boolean } | null>(null);
   const [bundle, setBundle] = useState<{ url: string; count: number; admin: boolean } | null>(null);
   const go = async () => {
     const u = url.trim();
     if (!u || busy) return;
-    setErr(""); setBusy(true);
+    setErr(""); setBusy(true); setReading(false);
     try {
-      const [f, admin] = await Promise.all([inspectGithub(u), isAdmin()]);
+      const [f, admin] = await Promise.all([inspectGithub(u, () => setReading(true)), isAdmin()]);
       if (f.kind === "skill") setSkill({ ...f, admin });
       else setBundle({ url: u, count: f.count, admin });
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); setReading(false); }
   };
   const portal = (n: React.ReactNode) => createPortal(n, document.body);
   return (
     <div className="gh-add">
       <form className="sk-gh" onSubmit={(e) => { e.preventDefault(); go(); }}>
         <I.GitHub size={16} />
-        <input ref={input} placeholder="Paste a GitHub link: one skill or a whole repository" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} />
-        <button className="btn dark" disabled={busy || !url.trim()}>{busy ? <><span className="art-spin sm" />Checking…</> : "Add"}</button>
+        <input ref={input} placeholder="Paste a git repository link (GitHub, GitLab, Bitbucket…): one skill or any repository" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} />
+        <button className="btn dark" disabled={busy || !url.trim()}>{busy ? <><span className="art-spin sm" />{reading ? "Reading the repository…" : "Checking…"}</> : "Add"}</button>
       </form>
-      <p className="d gh-hint">Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates.</p>
+      <p className="d gh-hint">Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates. A repository without SKILL.md: Synchro reads every file in it and writes the skill from it.</p>
+      {reading && <p className="d gh-hint" role="status">This repository has no SKILL.md. Synchro is reading every file in it and writing the skill. This can take a minute.</p>}
       {err && <div className="sk-err" role="alert"><span>{err}</span><button type="button" className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {skill && portal(
         <SkillAddModal src={skill.src} pv={skill.pv} onClose={() => setSkill(null)}

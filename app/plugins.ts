@@ -280,6 +280,56 @@ export async function addZipToPlugin(id: string, buf: Buffer) {
   return { added, plugin: getPlugin(id)! };
 }
 
+/**
+ * Thêm một skill (đã kiểm tra, tệp nằm ở data/skills/…) vào "Thư viện cho mọi người": một thư viện một skill của tổ chức, mọi tài khoản dùng
+ * được như các thư viện khác. Tạo skill mới (dán link, tải lên, Synchro viết, lưu cách làm) chọn "cho mọi người" thì đi đường này.
+ * Cùng tên thì cập nhật thư viện đó. by: người thêm (hiện ở dòng "từ …"); source: link gốc nếu có.
+ */
+export async function publishSkill(s: Skill, by: { name: string; source?: string }) {
+  const d = init();
+  const base = path.join(ROOT, s.storage_path);
+  const entries: Entry[] = [];
+  const walk = async (dir: string) => {
+    for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) await walk(full);
+      else entries.push({ path: path.relative(base, full).split(path.sep).join("/"), data: await fs.readFile(full) });
+    }
+  };
+  await walk(base).catch(() => fail("Không còn tệp của skill này trên máy chủ.", 410));
+  const p = parseEntries(entries, [], PLUGIN_LIMITS.filesPerSkill);
+  const slug = `skill-${p.name}`.slice(0, 41).replace(/-+$/, "");
+  const existing = d.prepare("SELECT * FROM plugins WHERE owner = 'org' AND slug = ?").get(slug) as Row | undefined;
+  if (!existing && (d.prepare("SELECT COUNT(*) AS n FROM plugins WHERE owner = 'org'").get() as { n: number }).n >= PLUGIN_LIMITS.perOwner) fail(`Thư viện cho mọi người đã đủ ${PLUGIN_LIMITS.perOwner} mục.`);
+  const id = existing?.id ?? "pl_" + crypto.randomBytes(8).toString("hex");
+  const stamp = "sk" + Date.now().toString(36);
+  const rel = path.posix.join("_plugins", id, stamp, p.name);
+  for (const e of p.entries) {
+    const dest = path.join(ROOT, rel, e.path);
+    if (!dest.startsWith(path.join(ROOT, rel) + path.sep)) fail("Đường dẫn không an toàn trong skill.");
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, e.data);
+  }
+  const sc = scan(p.entries);
+  const size = p.entries.reduce((a, e) => a + e.data.length, 0);
+  const report: SkillReport = { name: p.name, description: p.description, dir: ".", repo: by.source ?? "synchro", files: p.entries.length, size, scripts: sc.scripts, license: "Thêm từ Kho kỹ năng", licenseKind: "unknown", risk: sc.risk, flags: sc.flags };
+  const title = /^#\s+(.+)$/m.exec(p.body)?.[1]?.replace(/[*_`]/g, "").trim().slice(0, 80) || p.name;
+  const now = Date.now();
+  d.transaction(() => {
+    if (existing) {
+      d.prepare("UPDATE plugins SET name = ?, description = ?, author = ?, homepage = ?, size = ?, updated_at = ? WHERE id = ?").run(title, p.description, by.name, by.source ?? null, size, now, id);
+      d.prepare("DELETE FROM plugin_skills WHERE plugin_id = ?").run(id);
+    } else {
+      d.prepare(`INSERT INTO plugins (id, owner, slug, catalog_id, name, description, author, homepage, color, studio, everywhere, enabled, sources, commits, size, created_at, updated_at, checked_at)
+        VALUES (?, 'org', ?, NULL, ?, ?, ?, ?, NULL, NULL, 0, 1, '[]', '{}', ?, ?, ?, ?)`).run(id, slug, title, p.description, by.name, by.source ?? null, size, now, now, now);
+    }
+    d.prepare("INSERT INTO plugin_skills (id, plugin_id, name, description, body, storage_path, files, report, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)")
+      .run(crypto.randomUUID(), id, p.name, p.description, p.body, rel, JSON.stringify(p.files), JSON.stringify(report));
+  })();
+  for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
+  return getPlugin(id)!;
+}
+
 export async function removePlugin(id: string) {
   init().prepare("DELETE FROM plugins WHERE id = ?").run(id);
   await fs.rm(path.join(PROOT(), id), { recursive: true, force: true });

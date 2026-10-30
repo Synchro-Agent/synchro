@@ -3293,6 +3293,7 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .pl-add{display:inline-flex;align-items:center;gap:5px}
 .menu.pl-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:200px;z-index:40}
 .menu.pl-menu.right{min-width:310px}
+.menu.pl-menu.from-left{right:auto;left:0;transform-origin:top left}
 .pl-mi{display:flex;flex-direction:column;gap:1px;text-align:left}
 .pl-mi b{font-weight:460;font-size:13.5px}.pl-mi em{font-style:normal;font-size:12px;color:var(--text-3)}
 .menu.pl-menu .menu-item{height:auto;min-height:32px;padding-top:7px;padding-bottom:7px;align-items:center}
@@ -3459,6 +3460,11 @@ html body .menu.pub-menu::before{background:var(--card)!important}
 .pub-vis span{display:flex;flex-direction:column;gap:1px}
 .pub-vis b{font-weight:480;font-size:13.5px}
 .pub-vis em{font-style:normal;font-size:12px;color:var(--text-3)}
+.pub-vis button:disabled{opacity:.55;cursor:not-allowed}
+/* Tạo skill: cho riêng mình hay cho mọi người (hai lựa chọn cạnh nhau, hẹp thì xếp dọc). */
+.sk-scope{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.sk-scope-l{grid-column:1/-1;font-size:12px;color:var(--text-3)}
+@media (max-width:560px){.sk-scope{grid-template-columns:1fr}}
 .pub-link{display:flex;align-items:center;gap:6px;padding:6px 6px 6px 10px;border-radius:10px;background:var(--hover);font-size:12.5px}
 .pub-link a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent)}
 .pub-acts{display:flex;justify-content:flex-end;gap:8px}

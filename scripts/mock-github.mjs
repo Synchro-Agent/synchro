@@ -1,5 +1,7 @@
 // GitHub giả lập cho dev:mock và bộ kiểm thử: kết nối tài khoản (OAuth), API repo / pull request / CI (check runs) / bình luận,
 // và máy chủ git thật (git http-backend) để clone / push từ workspace giống github.com. Mọi repo là repo git trần trong thư mục dir.
+// Repo công khai (Kho kỹ năng dán link repo): /codeload/<chủ>/<repo>/zip/<nhánh> như codeload.github.com, /public-git/<chủ>/<repo>.git
+// clone không cần đăng nhập (chỉ đọc) như một máy chủ git công khai bất kỳ (GitLab, Gitea…).
 // CI giả lập: commit có tệp BROKEN thì lượt kiểm tra "test" lỗi (chạy xong sau ~1,5 giây kể từ lần đầu được hỏi), không có thì đạt.
 // Điều khiển cho kiểm thử: POST /_mock/repo, /_mock/comment, /_mock/merge, /_mock/close; GET /_mock/state, /_mock/file.
 import { spawn, spawnSync } from "node:child_process";
@@ -59,7 +61,7 @@ export async function startMockGithub(port, dir) {
     const write = /git-receive-pack/.test(rel) || /service=git-receive-pack/.test(req.url);
     const tok = /^basic\s+(.+)$/i.exec(auth ?? "")?.[1];
     const pass = tok ? Buffer.from(tok, "base64").toString().split(":")[1] : null;
-    if (!okToken(pass)) { res.writeHead(401, { "WWW-Authenticate": 'Basic realm="GitHub"' }); return res.end("Cần đăng nhập GitHub"); }
+    if (auth === "public" ? write : !okToken(pass)) { res.writeHead(401, { "WWW-Authenticate": 'Basic realm="GitHub"' }); return res.end("Cần đăng nhập GitHub"); }
     const repo = /^\/([^/]+\/[^/]+?)\.git/.exec(rel)?.[1];
     if (!repo || !exists(repo)) { res.writeHead(404); return res.end("Repository not found"); }
     const q = new URL(req.url, base).search.slice(1);
@@ -93,6 +95,16 @@ export async function startMockGithub(port, dir) {
     const auth = req.headers.authorization;
     try {
       if (p.startsWith("/git/")) return gitHttp(req, res, p.slice(4), auth);
+      if (p.startsWith("/public-git/")) return gitHttp(req, res, p.slice("/public-git".length), "public");
+      // zip của cả repo như codeload.github.com: thư mục gốc "<repo>-<nhánh>/".
+      const cl = /^\/codeload\/([^/]+)\/([^/]+)\/zip\/(.+)$/.exec(p);
+      if (cl) {
+        const repo = `${cl[1]}/${cl[2]}`, ref = decodeURIComponent(cl[3]);
+        if (!exists(repo) || !sha(repo, ref)) { res.writeHead(404); return res.end("Not Found"); }
+        const z = spawnSync("git", ["--git-dir", gitDir(repo), "archive", "--format=zip", `--prefix=${cl[2]}-${ref.replace(/\//g, "-")}/`, ref], { maxBuffer: 200 << 20 });
+        res.writeHead(200, { "content-type": "application/zip" });
+        return res.end(z.stdout);
+      }
       // ---- OAuth (cửa sổ "Kết nối GitHub") ----
       if (p === "/login/oauth/authorize") {
         const to = new URL(u.searchParams.get("redirect_uri"));

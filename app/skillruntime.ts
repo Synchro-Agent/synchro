@@ -152,7 +152,9 @@ export async function runSkillTool(list: Skill[], tool: string, input: Record<st
       return { content: `Skill "${name}" không tồn tại hoặc đang tắt. Skill đang bật: ${names || "(không có)"}`, is_error: true, used };
     }
     if (tool === "load_skill") {
-      const files = s.files.length ? s.files.map((f) => `- ${f.path} (${f.kind}, ${f.size} bytes)`).join("\n") : "(không có file đi kèm)";
+      // Skill tạo từ cả repo có thể có vài trăm tệp: liệt kê tối đa 120, phần còn lại xem cây thư mục (references/repo-tree.md).
+      const shown = s.files.slice(0, 120).map((f) => `- ${f.path} (${f.kind}, ${f.size} bytes)`);
+      const files = s.files.length ? [...shown, ...(s.files.length > shown.length ? [`- … và ${s.files.length - shown.length} tệp nữa${s.files.some((f) => f.path === "references/repo-tree.md") ? " (danh sách đầy đủ: references/repo-tree.md)" : ""}`] : [])].join("\n") : "(không có file đi kèm)";
       return { content: `<skill name="${esc(s.name)}" version="${s.version}">\n${s.body}\n</skill>\n\nFile đi kèm (đọc bằng read_skill_file):\n${files}`, is_error: false, used };
     }
     const p = String(input?.path ?? "");

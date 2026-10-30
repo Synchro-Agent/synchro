@@ -8,7 +8,7 @@ import { diffLines } from "./md";
 
 type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number };
 type FileInfo = { path: string; size: number; kind: string };
-type Preview = { name: string; description: string; body: string; files: FileInfo[]; warnings: string[]; tokens: number; exists: boolean; version: number; source?: string };
+type Preview = { name: string; description: string; body: string; files: FileInfo[]; warnings: string[]; tokens: number; exists: boolean; version: number; source?: string; generated?: boolean };
 type Choice = { dir: string; name: string; description: string; error?: string; exists: boolean };
 // Nguồn của skill đang thêm: file tải lên hoặc link GitHub; pick = thư mục skill khi gói có nhiều skill.
 type Src = { kind: "file"; file: File; pick?: string } | { kind: "github"; url: string; pick?: string };
@@ -36,8 +36,17 @@ const ago = (iso: string) => new Date(iso).toLocaleDateString(vi() ? "vi-VN" : "
 const meta = (s: Item) => [`v${s.version}`, ago(s.updated_at), s.fileCount ? (vi() ? `${s.fileCount} tệp` : `${s.fileCount} files`) : "", s.useCount ? (vi() ? `đã dùng ${s.useCount} lần` : `used ${s.useCount}×`) : ""].filter(Boolean).join(" · ");
 
 // Gửi nguồn skill lên máy chủ: dry = chỉ kiểm tra và trả bản xem trước (hoặc danh sách skill để chọn).
-async function send(src: Src, dry: boolean): Promise<{ preview?: Preview; choices?: Choice[]; skill?: Item; created?: boolean }> {
-  if (src.kind === "github") return api("/api/skills/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: src.url, pick: src.pick, dry }) });
+// Link repo không có SKILL.md: máy chủ đọc toàn repo và viết skill ở nền ({ pending }) — gửi lại đúng yêu cầu tới khi xong (tối đa ~8 phút).
+async function send(src: Src, dry: boolean, onWait?: () => void): Promise<{ preview?: Preview; choices?: Choice[]; skill?: Item; created?: boolean }> {
+  if (src.kind === "github") {
+    for (let i = 0; ; i++) {
+      const j = await api("/api/skills/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: src.url, pick: src.pick, dry }) });
+      if (!j.pending) return j;
+      if (i > 190) throw new Error("Đọc repo quá lâu. Thử lại sau.");
+      onWait?.();
+      await new Promise((ok) => setTimeout(ok, 2500));
+    }
+  }
   const fd = new FormData(); fd.append("file", src.file);
   if (dry) fd.append("dry", "1");
   if (src.pick !== undefined) fd.append("pick", src.pick);
@@ -50,29 +59,63 @@ export async function dryRunSkill(f: File): Promise<Preview> {
   return j.preview;
 }
 
-// Xem link GitHub có mấy skill (không lưu gì): một skill → bản xem trước để thêm vào Kỹ năng; nhiều skill → nên cài thành plugin.
+// Xem link repo có mấy skill (không lưu gì): một skill → bản xem trước để thêm vào Kỹ năng; nhiều skill → nên cài thành plugin.
+// Không có SKILL.md: bản xem trước là skill Synchro tự viết từ toàn bộ repo (generated). onWait: máy chủ đang đọc repo.
 export type Found = { kind: "skill"; src: Src; pv: Preview } | { kind: "bundle"; count: number };
-export async function inspectGithub(url: string): Promise<Found> {
+const onGithub = (u: string) => /^https?:\/\/(www\.)?(github\.com|raw\.githubusercontent\.com)\//i.test(u.trim());
+export async function inspectGithub(url: string, onWait?: () => void): Promise<Found> {
   const src: Src = { kind: "github", url };
-  const j = await send(src, true);
+  const j = await send(src, true, onWait);
   if (j.preview) return { kind: "skill", src: { ...src, pick: (j.preview as Preview & { pick?: string }).pick }, pv: j.preview };
   const ok = (j.choices ?? []).filter((c) => !c.error);
   if (!ok.length) throw new Error(j.choices?.length ? j.choices.map((c) => `${c.name || c.dir}: ${c.error}`).join("\n") : "No SKILL.md found at this link.");
+  // Cài thành thư viện (plugin) hiện chỉ cho repo GitHub; nơi khác thì dán link tới thư mục của một skill.
+  if (ok.length > 1 && !onGithub(url)) throw new Error(getLang() === "vi" ? `Repo có ${ok.length} skill (${ok.map((c) => c.name || c.dir).slice(0, 6).join(", ")}). Hãy dán link tới thư mục của skill cần thêm.` : `This repository has ${ok.length} skills (${ok.map((c) => c.name || c.dir).slice(0, 6).join(", ")}). Paste a link to the folder of the skill you want.`);
   if (ok.length > 1) return { kind: "bundle", count: ok.length };
   const one = await send({ ...src, pick: ok[0].dir }, true);
   return { kind: "skill", src: { ...src, pick: ok[0].dir }, pv: one.preview! };
 }
 
-// Duyệt một skill trước khi thêm. onOrg (chỉ quản trị viên, nguồn GitHub): cài skill này cho cả tổ chức dưới dạng plugin.
+// Tạo skill: dùng cho riêng mình (Skill của bạn) hay cho mọi người (Thư viện cho mọi người — chỉ quản trị viên; skill thành một thư viện
+// của tổ chức, mọi tài khoản dùng được). Dùng chung cho mọi cách tạo skill: dán link repo, tải lên, lưu cách làm, Synchro đề xuất.
+export type Scope = "me" | "org";
+export function useIsAdmin() {
+  const [a, setA] = useState(false);
+  useEffect(() => { let on = true; fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
+  return a;
+}
+export function ScopeChoice({ value, onChange, admin, disabled }: { value: Scope; onChange: (v: Scope) => void; admin: boolean; disabled?: boolean }) {
+  return (
+    <div className="pub-vis sk-scope" role="radiogroup" aria-label="Who can use this skill?">
+      <div className="sk-scope-l">Who can use this skill?</div>
+      <button type="button" role="radio" aria-checked={value === "me"} className={value === "me" ? "on" : ""} disabled={disabled} onClick={() => onChange("me")}><I.Lock size={15} /><span><b>Only me</b><em>Goes to Your skills. Only your account uses it.</em></span></button>
+      <button type="button" role="radio" aria-checked={value === "org"} className={value === "org" ? "on" : ""} disabled={disabled || !admin} onClick={() => onChange("org")}><I.Users size={15} /><span><b>Everyone</b><em>{admin ? "Goes to the Library for everyone. Every account can use it." : "Only administrators can add to the Library for everyone."}</em></span></button>
+    </div>
+  );
+}
+// Đưa skill vừa lưu vào Thư viện cho mọi người (máy chủ bỏ bản riêng để không trùng); danh sách thư viện tải lại (PLUGINS_CHANGED của pluginsui).
+export async function shareSkill(name: string, source?: string) {
+  await api(`/api/skills/${encodeURIComponent(name)}/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ source }) });
+  window.dispatchEvent(new Event("synchro:plugins"));
+}
+
+// Duyệt một skill trước khi thêm. onOrg (chỉ quản trị viên, repo GitHub có SKILL.md): "Mọi người" cài thành thư viện theo dõi repo
+// (kiểm tra giấy phép, cập nhật theo commit); còn lại (tải lên, skill Synchro viết từ repo, link git khác) thì lưu rồi đưa vào thư viện.
 export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; pv: Preview; onClose: () => void; onDone: () => void; onOrg?: () => void }) {
   const app = useApp();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const admin = useIsAdmin();
+  const [scope, setScope] = useState<Scope>("me");
   const confirm = async () => {
+    if (scope === "org" && onOrg && !pv.generated) return onOrg();
     setSaving(true); setErr("");
     try {
       const j = await send(src, false);
-      app.say(j.created ? `Đã thêm skill ${j.skill!.name}` : `Đã cập nhật ${j.skill!.name} lên v${j.skill!.version}`);
+      if (scope === "org") {
+        await shareSkill(j.skill!.name, src.kind === "github" ? src.url : undefined);
+        app.say(`Đã thêm ${j.skill!.name} vào thư viện cho mọi người`);
+      } else app.say(j.created ? `Đã thêm skill ${j.skill!.name}` : `Đã cập nhật ${j.skill!.name} lên v${j.skill!.version}`);
       window.dispatchEvent(new Event(SKILLS_CHANGED)); onDone();
     } catch (e) { setErr((e as Error).message); setSaving(false); }
   };
@@ -91,11 +134,11 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
           <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>{pv.files.length} files</div>
           <div className="sk-files">{pv.files.map((f) => <div key={f.path}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
         </>}
+        <ScopeChoice value={scope} onChange={setScope} admin={admin} disabled={saving} />
         <div className="sk-actions">
-          {onOrg && <button className="btn" disabled={saving} onClick={onOrg}>Install for everyone</button>}
           <span style={{ flex: 1 }} />
           <button className="btn" disabled={saving} onClick={onClose}>Cancel</button>
-          <button className="btn dark" disabled={saving} onClick={confirm}>{saving ? "Saving…" : pv.exists ? "Update and keep state" : "Add and enable"}</button>
+          <button className="btn dark" disabled={saving} onClick={confirm}>{saving ? "Saving…" : scope === "org" ? "Add for everyone" : pv.exists ? "Update and keep state" : "Add and enable"}</button>
         </div>
       </div>
     </div>

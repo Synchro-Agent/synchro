@@ -2,12 +2,13 @@
 // người dùng xem / sửa rồi tạo; (2) người dùng duyệt đề xuất của việc tự động → Synchro làm: tạo skill, làm hành động đã duyệt (lượt chạy riêng,
 // kết quả vào Hộp thư), cho phép trang web, gọi công cụ connector để "hỏi trước" với đúng tham số đã đề xuất.
 import JSZip from "jszip";
-import { permsOf, type UserRow } from "./authstore";
+import { isAdmin, permsOf, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
 import { connPolicy } from "./catalog";
 import { allowSite } from "./codestore";
 import { ConnectorSession } from "./connectors";
-import { saveSkill } from "./skillstore";
+import { removeSkill, saveSkill } from "./skillstore";
+import { publishSkill } from "./plugins";
 import { can } from "./authstore";
 import { claimProposal, cleanBrowser, cleanEngine, cleanSchedule, getProposal, localTime, runApproved, settleProposal, TaskError, type BrowserPref, type Engine, type Proposal, type Schedule } from "./tasks";
 
@@ -52,7 +53,8 @@ export async function planAutomation(user: UserRow, text: string, tz: string): P
 }
 
 // ---------------------------------------------------------------- duyệt đề xuất
-type Edits = { skill_md?: unknown; instructions?: unknown };
+/** scope "org" (quản trị viên): skill đã duyệt vào "Thư viện cho mọi người" thay vì Skill của bạn. */
+type Edits = { skill_md?: unknown; instructions?: unknown; scope?: unknown };
 /** Người dùng duyệt / bỏ qua một đề xuất. Duyệt thì làm ngay; lỗi (vd. SKILL.md đã sửa sai) thì đề xuất trở lại "chờ duyệt" để sửa và thử lại. */
 export async function decideProposal(user: UserRow, id: string, decision: "approve" | "reject", edits: Edits = {}): Promise<{ proposal: Proposal; run?: string }> {
   const p = getProposal(user.id, id);
@@ -76,7 +78,12 @@ export async function decideProposal(user: UserRow, id: string, decision: "appro
         name = "skill.zip"; buf = await z.generateAsync({ type: "nodebuffer" });
       }
       const r = await saveSkill(user.id, name, buf, { enabled: true });
-      settleProposal(user.id, id, "done", `${r.created ? "Đã tạo skill" : "Đã cập nhật skill"} ${r.skill.name} và bật để dùng.`, md !== pl.skill_md ? { ...pl, skill_md: md, name: r.skill.name } : undefined);
+      if (edits.scope === "org") {
+        if (!isAdmin(user)) throw new TaskError("Chỉ quản trị viên thêm được skill vào thư viện cho mọi người.", 403);
+        await publishSkill(r.skill, { name: user.full_name || user.name || user.email });
+        await removeSkill(user.id, r.skill.name);
+      }
+      settleProposal(user.id, id, "done", edits.scope === "org" ? `Đã tạo skill ${r.skill.name} và thêm vào thư viện cho mọi người.` : `${r.created ? "Đã tạo skill" : "Đã cập nhật skill"} ${r.skill.name} và bật để dùng.`, md !== pl.skill_md ? { ...pl, skill_md: md, name: r.skill.name } : undefined);
       return { proposal: getProposal(user.id, id)! };
     }
     if (p.kind === "action") {

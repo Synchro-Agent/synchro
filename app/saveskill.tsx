@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { tr } from "./i18n";
-import { SKILLS_CHANGED } from "./skillsui";
+import { ScopeChoice, shareSkill, SKILLS_CHANGED, useIsAdmin, type Scope } from "./skillsui";
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 // Lời dặn lâu dài: có từ chỉ thời gian về sau hoặc "luôn / không bao giờ".
@@ -88,6 +88,8 @@ export function SaveSkillModal({ rules, onClose, onDone }: { rules: string[]; on
   const [exists, setExists] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const admin = useIsAdmin();
+  const [scope, setScope] = useState<Scope>("me");
   const text = body ?? `# ${oneLine(rules[0]).slice(0, 80)}\n\nNgười dùng đã dặn Synchro làm theo các điều sau. Áp dụng mỗi khi yêu cầu có liên quan, kể cả ở đoạn chat mới:\n\n${chosen.map((r) => `- ${oneLine(r)}`).join("\n")}\n`;
   const ok = NAME_RE.test(name) && desc.trim().length >= 10 && text.trim().length >= 10;
 
@@ -106,6 +108,8 @@ export function SaveSkillModal({ rules, onClose, onDone }: { rules: string[]; on
       // Trùng tên skill đã có: hỏi lại trước khi lưu thành phiên bản mới.
       if (exists === null) { const j = await send(true); if (j.preview?.exists) { setExists(j.preview.version); return; } }
       await send(false);
+      // Cho mọi người: đưa skill vừa lưu vào Thư viện cho mọi người (máy chủ bỏ bản riêng để không trùng).
+      if (scope === "org") await shareSkill(name);
       window.dispatchEvent(new Event(SKILLS_CHANGED));
       onDone(name);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -130,6 +134,7 @@ export function SaveSkillModal({ rules, onClose, onDone }: { rules: string[]; on
         <label className="tk-l">SKILL.md<textarea className="field mono" rows={8} value={text} onChange={(e) => setBody(e.target.value)} /></label>
         {exists !== null && <div className="sk-note" style={{ marginTop: 10 }}>{tr(`Đã có skill tên ${name}. Lưu sẽ tạo phiên bản mới v${exists}; bản cũ vẫn khôi phục được.`)}</div>}
         {err && <div className="sk-err" role="alert" style={{ marginTop: 10 }}><span>{err}</span></div>}
+        <ScopeChoice value={scope} onChange={setScope} admin={admin} disabled={busy} />
         <div className="sk-actions">
           <button className="btn" disabled={busy} onClick={onClose}>{tr("Hủy")}</button>
           <button className="btn dark" disabled={busy || !ok || !chosen.length && body === null} onClick={save}>{busy ? tr("Đang lưu…") : exists !== null ? tr("Lưu phiên bản mới") : tr("Lưu skill")}</button>

@@ -215,6 +215,18 @@ export function SkillHub() {
   const [tab, setTab] = useState<"yours" | "discover" | null>(null);
   const [pv, setPv] = useState<{ catalogId?: string; url?: string; name: string } | null>(null);
   const [addMenu, setAddMenu] = useState(false);
+  // Menu Thêm neo theo mép phải của nút; khung hẹp (Cài đặt → Kho kỹ năng) đẩy nút xuống sát mép trái thì menu mở sang phải,
+  // không tràn ra ngoài khung đang cắt nội dung (overflow).
+  const [menuLeft, setMenuLeft] = useState(false);
+  const toggleAdd = () => {
+    if (!addMenu) {
+      const el = addRef.current, r = el?.getBoundingClientRect();
+      let edge = 0;
+      for (let p = el?.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p); if (/(hidden|auto|scroll|clip)/.test(`${o.overflowX} ${o.overflow}`)) { edge = p.getBoundingClientRect().left; break; } }
+      setMenuLeft(!!r && r.right - 320 < edge + 8);
+    }
+    setAddMenu(!addMenu);
+  };
   const sc = useSkillScores(d);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -222,6 +234,8 @@ export function SkillHub() {
   const addRef = useRef<HTMLDivElement>(null);
   const load = useCallback(() => api<Data>("GET", "/api/plugins").then((x) => { setD(x); setErr(""); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
+  // Skill vừa được đưa vào Thư viện cho mọi người (hộp thêm skill, lưu cách làm, đề xuất của Synchro): tải lại danh sách thư viện.
+  useEffect(() => { window.addEventListener(PLUGINS_CHANGED, load); return () => window.removeEventListener(PLUGINS_CHANGED, load); }, [load]);
   useEffect(() => {
     if (!addMenu) return;
     const h = (e: MouseEvent) => { if (!addRef.current?.contains(e.target as Node)) setAddMenu(false); };
@@ -294,10 +308,10 @@ export function SkillHub() {
         <span className="s-search pl-search"><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span>
         {d.canInstall && (
           <div className="pl-addw" ref={addRef}>
-            <button className="btn dark pl-add" onClick={() => setAddMenu(!addMenu)}><I.Plus size={14} />Add<I.Chevron size={13} /></button>
+            <button className="btn dark pl-add" onClick={toggleAdd}><I.Plus size={14} />Add<I.Chevron size={13} /></button>
             {addMenu && (
-              <div className="menu pl-menu right">
-                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setGhFocus(Date.now()); }}><span className="pl-mic"><I.GitHub size={15} /></span><span className="pl-mi"><b>Add from GitHub</b><em>One skill or a whole repository, detected for you</em></span></button>
+              <div className={`menu pl-menu right${menuLeft ? " from-left" : ""}`}>
+                <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setGhFocus(Date.now()); }}><span className="pl-mic"><I.GitHub size={15} /></span><span className="pl-mi"><b>Add from a repository link</b><em>GitHub, GitLab… One skill or any repository, detected for you</em></span></button>
                 <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }}><span className="pl-mic"><I.FileUp size={17} /></span><span className="pl-mi"><b>Upload a skill</b><em>A .zip skill folder or a SKILL.md file</em></span></button>
                 <button className="menu-item" onClick={() => { setAddMenu(false); app.close(); app.ask("Hãy giúp tôi tạo một skill mới."); }}><span className="pl-mic"><I.Sparkles size={17} /></span><span className="pl-mi"><b>Create with Synchro</b><em>Describe what you need, Synchro writes the skill</em></span></button>
                 <hr />

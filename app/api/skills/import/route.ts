@@ -1,20 +1,75 @@
-import { fetchGithubSkill, LIMITS, previewSkill, publicSkill, saveSkill, skillErr } from "../../../skillstore";
+import { fetchGithubSkill, LIMITS, NoSkillError, parseEntries, type Parsed, previewParsed, previewSkill, publicSkill, saveParsed, saveSkill, skillErr } from "../../../skillstore";
+import { fetchGitRepo, RepoError } from "../../../repofetch";
+import { GEN, readRepo, skillFromRepo } from "../../../skillgen";
 import { current, featureGate, limit } from "../../../authstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// { url, pick?, dry? }: nhập skill từ link GitHub công khai (repo, thư mục hoặc file SKILL.md).
+const isGithub = (u: string) => /^https?:\/\/(www\.)?(github\.com|raw\.githubusercontent\.com)\//i.test(u.trim());
+
+// Repo không có SKILL.md: Synchro đọc toàn repo rồi tự viết skill — việc chạy nền (gói subscription có thể mất cả phút, lâu hơn thời gian
+// chờ của proxy). Giao diện gửi lại đúng yêu cầu vài giây một lần: đang chạy thì nhận { pending }, xong thì nhận bản xem trước; bấm Thêm
+// dùng lại đúng bản đã tạo (không đọc / viết lại lần hai). Giữ 30 phút, tối đa vài bản mỗi lúc.
+type Job = { at: number; p?: Parsed; error?: string; status?: number; running: boolean };
+const g = globalThis as unknown as { __synchroSkillGen?: Map<string, Job> };
+const jobs = (g.__synchroSkillGen ??= new Map());
+const KEEP = 30 * 60_000;
+function sweep() {
+  for (const [k, j] of jobs) if (!j.running && Date.now() - j.at > KEEP) jobs.delete(k);
+  while (jobs.size > 8) { const k = [...jobs.keys()].find((x) => !jobs.get(x)!.running); if (!k) break; jobs.delete(k); }
+}
+
+// { url, pick?, dry? }: nhập skill từ link repo git công khai (GitHub, GitLab, Bitbucket, Codeberg / Gitea, máy chủ git riêng…):
+// repo, thư mục hoặc file SKILL.md. Repo / thư mục không có SKILL.md: tạo skill từ toàn bộ nội dung repo.
 export async function POST(req: Request) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
-  const uid = current(req)!.user.id;
+  const user = current(req)!.user, uid = user.id;
   try {
-    limit("gh-import:" + uid, 40, 3600_000);
     const { url, pick, dry } = await req.json();
-    const g = await fetchGithubSkill(String(url ?? ""), typeof pick === "string" ? pick : undefined);
-    const opts = { pick: g.pick, maxZip: LIMITS.githubZip };
-    if (dry) return Response.json({ preview: { ...(await previewSkill(uid, g.filename, g.buf, opts)), source: g.source, pick: g.pick } });
-    const { skill, created } = await saveSkill(uid, g.filename, g.buf, opts);
-    return Response.json({ skill: publicSkill(skill), created, warnings: skill.warnings });
-  } catch (e) { return skillErr(e); }
+    const raw = String(url ?? "");
+    sweep();
+    const want = typeof pick === "string" ? pick : undefined;
+    const key0 = `${uid}|${raw.trim()}|${want ?? ""}`;
+    const done = jobs.get(key0);
+    if (done) {
+      if (done.running) return Response.json({ pending: true });
+      if (done.error) { jobs.delete(key0); return Response.json({ error: done.error }, { status: done.status ?? 400 }); }
+      if (dry) return Response.json({ preview: { ...(await previewParsed(uid, done.p!)), generated: true } });
+      jobs.delete(key0);
+      const { skill, created } = await saveParsed(uid, done.p!);
+      return Response.json({ skill: publicSkill(skill), created, warnings: skill.warnings });
+    }
+    limit("gh-import:" + uid, 40, 3600_000);
+    const gh = isGithub(raw);
+    const src = gh
+      ? await fetchGithubSkill(raw, want).then((x) => ({ ...x, sub: "" }))
+      : await fetchGitRepo(raw).then((x) => ({ filename: x.filename, buf: x.buf, pick: want ?? (x.sub || undefined), source: x.source, sub: x.sub }));
+    const opts = { pick: src.pick, maxZip: gh ? LIMITS.githubZip : 130 * 1024 * 1024 };
+    try {
+      if (dry) return Response.json({ preview: { ...(await previewSkill(uid, src.filename, src.buf, opts)), source: src.source, pick: src.pick } });
+      const { skill, created } = await saveSkill(uid, src.filename, src.buf, opts);
+      return Response.json({ skill: publicSkill(skill), created, warnings: skill.warnings });
+    } catch (e) { if (!(e instanceof NoSkillError)) throw e; }
+    // Không có SKILL.md: đọc toàn bộ repo (hoặc thư mục trong link) ở nền rồi tự viết skill.
+    // zip của GitHub có thư mục gốc "<repo>-<nhánh>/": pick đã gồm thư mục đó, readRepo tự bỏ.
+    const sub = gh ? (src.pick ?? "").split("/").slice(1).join("/") : src.sub;
+    const job: Job = { at: Date.now(), running: true };
+    jobs.set(key0, job);
+    (async () => {
+      try {
+        const { files, skipped } = await readRepo(src.buf, sub, { stripTop: gh });
+        const repoName = sub ? sub.split("/").filter(Boolean).pop()! : src.filename.replace(/\.zip$/i, "");
+        const r = await skillFromRepo(user, files, { repoName, source: `${src.source}${sub ? `/${sub}` : ""}`, skipped });
+        job.p = parseEntries(r.entries, r.warnings, GEN.files + 5);
+      } catch (e) {
+        job.error = e instanceof Error ? e.message : String(e);
+        job.status = (e as { status?: number }).status ?? 400;
+      } finally { job.running = false; job.at = Date.now(); }
+    })();
+    return Response.json({ pending: true });
+  } catch (e) {
+    if (e instanceof RepoError) return Response.json({ error: e.message }, { status: e.status });
+    return skillErr(e);
+  }
 }

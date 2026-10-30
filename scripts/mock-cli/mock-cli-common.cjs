@@ -57,7 +57,22 @@ const isTitleAsk = (prompt) => prompt.includes("Đoạn chat cần đặt tên:"
 // Bộ não (dev:mock): trả JSON đúng định dạng cho từng bước học / chăm sóc, suy ra từ chính dữ liệu được gửi (không bịa thêm).
 const fold = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
 const AREAS = [["Học tập", /ielts|thpt|toan|du hoc|tieng anh|on thi/], ["Lập trình", /lap trinh|python|javascript|cyber|code|bao mat/], ["Sức khỏe", /gym|tap luyen|suc khoe|chay bo/]];
+// Viết SKILL.md từ bản đọc toàn repo (app/skillgen.ts): như model thật — tên theo gợi ý, mô tả và hướng dẫn chỉ tới tệp có thật trong repo.
+// Ghi số tệp đã thấy nội dung để kiểm thử biết bản đọc phủ hết repo.
+function mockSkillGen(prompt) {
+  const i = prompt.indexOf("Viết SKILL.md cho repo dưới đây.");
+  if (i < 0) return null;
+  const q = prompt.slice(i);
+  const name = /Tên gợi ý: ([a-z0-9-]+)/.exec(q)?.[1] ?? "repo-skill";
+  const source = /^Repo: (.+)$/m.exec(q)?.[1] ?? "repo";
+  const files = [...q.matchAll(/<tep path="([^"]+)">/g)].map((m) => m[1]);
+  const total = /^Tổng (\d+) tệp/m.exec(q)?.[1] ?? "?";
+  return `---\nname: ${name}\ndescription: "Kiến thức từ repo ${source} (mock). Dùng khi người dùng hỏi về ${name} hoặc cần làm việc với repo này."\n---\n# ${name}\n\nSkill viết từ bản đọc toàn repo ${source}: đã thấy nội dung ${files.length} tệp văn bản trên tổng ${total} tệp. Khi người dùng hỏi về repo, mở đúng tệp liên quan trong references/ trước khi trả lời và trích tên tệp.\n\n## Quy trình\n1. Đọc references/repo-tree.md để biết cấu trúc.\n2. Mở tệp liên quan nhất.\n3. Trả lời dựa đúng nội dung tệp.\n\n## Tệp tham khảo\n${files.slice(0, 5).map((f) => "- references/" + f).join("\n")}\n`;
+}
+
 function mockBrain(prompt) {
+  const sg = mockSkillGen(prompt);
+  if (sg) return sg;
   if (prompt.includes("Đoạn chat cần chưng cất:")) {
     const body = prompt.split("Đoạn chat cần chưng cất:")[1] ?? "";
     const users = [...body.matchAll(/\[Người dùng\]\n([^\n]+)/g)].map((m) => m[1].trim()).filter(Boolean);
