@@ -38,7 +38,10 @@ const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "re
 const MAX_RUNNING = Number(env("WS_MAX_RUNNING", 4));
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
-const CPUS = env("WS_CPUS", "1");
+// 2 CPU (cả máy): trình duyệt của Synchro vẽ / chụp khung 2x khi cuộn nhanh gần gấp đôi (đo: 10 → 18–21 khung / giây). Ưu tiên thấp
+// (cpu-shares 256): khi tranh CPU, máy chủ web, ffmpeg nén hình và các dịch vụ khác chạy trước, container chỉ dùng phần còn rảnh.
+const CPUS = env("WS_CPUS", "2");
+const CPU_SHARES = env("WS_CPU_SHARES", "256");
 const DISK_MB = Number(env("WS_DISK_MB", 5000));
 const SOCK = "/var/run/docker.sock";
 const HOME = "/home/user", WORK = HOME + "/work", UID = "1500";
@@ -176,7 +179,7 @@ async function ensure(u) {
       }
       if (!c) {
         const r = await run("docker", ["run", "-d", "--name", name, "--hostname", "workspace", "--init",
-          "--network", NET, "--memory", MEMORY, "--memory-swap", MEMORY, "--cpus", CPUS, "--pids-limit", "512",
+          "--network", NET, "--memory", MEMORY, "--memory-swap", MEMORY, "--cpus", CPUS, "--cpu-shares", CPU_SHARES, "--pids-limit", "512",
           "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--shm-size", "256m",
           "--label", `synchro.ws=${u}`, "-v", `${dir}:${WORK}`, IMAGE]);
         if (r.code) throw new E(500, "Không tạo được workspace: " + r.err.trim().slice(0, 300));
@@ -187,6 +190,12 @@ async function ensure(u) {
       }
       c = await inspect(name);
       B.reset(u);
+    }
+    // Container tạo từ bản trước (giới hạn CPU cũ): cập nhật tại chỗ, không cần tạo lại.
+    const nano = Math.round(Number(CPUS) * 1e9);
+    if (c.HostConfig && (c.HostConfig.NanoCpus !== nano || c.HostConfig.CpuShares !== Number(CPU_SHARES))) {
+      const r = await run("docker", ["update", "--cpus", CPUS, "--cpu-shares", CPU_SHARES, name], { timeout: 30_000 });
+      if (r.code) log("không cập nhật được giới hạn CPU", u, r.err.trim().slice(0, 200)); else { log("cập nhật giới hạn CPU", u); c = await inspect(name); }
     }
     const s = st(u);
     s.ip = c.NetworkSettings.Networks[NET]?.IPAddress ?? "";
