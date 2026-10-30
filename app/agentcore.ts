@@ -455,7 +455,7 @@ export async function runPlanAgent(o: {
   try {
     const once = (messages: { role: string; content: unknown }[], fresh = false) => subTurn({
       user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages, conv: o.conv, effort: o.effort,
-      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url }, fresh,
+      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url, alive: bridge.alive }, fresh,
     });
     // Lỗi tạm thời của CLI khi chưa kịp dùng công cụ nào: thử lại một lần ở phiên mới kèm toàn bộ lịch sử (như chat).
     const tryOnce = async (messages: { role: string; content: unknown }[]) => {

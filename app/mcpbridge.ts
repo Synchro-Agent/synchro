@@ -3,11 +3,12 @@
 // Mỗi lượt chat mở một cầu nối riêng với mã bí mật ngẫu nhiên, chỉ nhận kết nối trực tiếp từ máy chủ (không qua nginx),
 // và đóng ngay khi lượt xong. Lời gọi công cụ chạy trong ngữ cảnh của lượt nên nhật ký làm việc, kết quả, tin nhắn thêm vẫn đúng chỗ.
 import crypto from "node:crypto";
+import { MAX_TURN_MS } from "./ai/cli_runtime";
 import { currentRun, inRun } from "./runs";
 
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh JPEG (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code.
-type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; image?: string }>; exp: number };
+type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; image?: string }>; exp: number; busy: number; last: number };
 const g = globalThis as unknown as { __synchroBridges?: Map<string, Bridge> };
 const bridges = (g.__synchroBridges ??= new Map());
 
@@ -19,8 +20,11 @@ export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["
   const now = Date.now();
   for (const [k, b] of bridges) if (b.exp < now) bridges.delete(k);
   const token = crypto.randomBytes(24).toString("base64url");
-  bridges.set(token, { ...o, run: currentRun(), exp: now + 35 * 60_000 });
-  return { url: `${internalUrl()}/api/mcp/bridge/${token}`, close: () => { bridges.delete(token); } };
+  // Sống tới hết mức trần của lượt (lượt xong thì close() xóa ngay).
+  const b: Bridge = { ...o, run: currentRun(), exp: now + MAX_TURN_MS + 5 * 60_000, busy: 0, last: now };
+  bridges.set(token, b);
+  // alive: đang chạy công cụ thì là "bây giờ", không thì lúc công cụ gần nhất xong (để biết CLI còn làm việc).
+  return { url: `${internalUrl()}/api/mcp/bridge/${token}`, close: () => { bridges.delete(token); }, alive: () => (b.busy ? Date.now() : b.last) };
 }
 
 type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
@@ -47,7 +51,8 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
       if (!b.tools.some((t) => t.name === name)) return fail(m.id, -32602, `Không có công cụ ${name}`);
       const args = (m.params?.arguments && typeof m.params.arguments === "object" ? m.params.arguments : {}) as Record<string, unknown>;
       try {
-        const r = await inRun(b.run, () => b.call(name, args));
+        b.busy++; b.last = Date.now();
+        const r = await inRun(b.run, () => b.call(name, args)).finally(() => { b.busy--; b.last = Date.now(); });
         return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: "image/jpeg" }] : [])], isError: r.is_error });
       } catch (e) {
         return ok(m.id, { content: [{ type: "text", text: `Lỗi: ${(e as Error).message}` }], isError: true });

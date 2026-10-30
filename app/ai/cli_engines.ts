@@ -1,9 +1,9 @@
 // Ba engine chạy CLI chính chủ bằng gói subscription của người dùng (ADR 0001, bước 5).
 // Engine không biết tài khoản là ai: biến môi trường đăng nhập (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME…) do cli_auth.engineEnv()
-// dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng hoặc quá 30 phút.
+// dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage } from "./engine";
-import { type Cli, engineHome, find, makeDir, type Proc, spawnCli, stripAnsi, type Exit } from "./cli_runtime";
+import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -14,7 +14,7 @@ function start(cli: Cli, args: string[], req: TurnRequest, stdin: string): Proc 
   // Không có workdir riêng thì chạy trong <home>/work (CLI chỉ ghi trong thư mục làm việc).
   const cwd = req.workdir ?? path.join(engineHome(), "work");
   makeDir(cwd);
-  return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal });
+  return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive });
 }
 
 // ---------------------------------------------------------------- tệp đính kèm
@@ -47,10 +47,14 @@ async function* objects(p: Proc): AsyncIterable<Json> {
 const err = (message: string, code: ErrorCode): Event => ({ kind: "error", message: redact(message), code });
 const notInstalled = (cli: Cli): Event => err(`CLI ${cli} chưa được cài trên máy chủ.`, "other");
 
+export const timeoutText = (e: Pick<Exit, "idle">) => e.idle
+  ? `CLI không có hoạt động nào trong ${Math.round(IDLE_MS / 60_000)} phút (có thể đã treo) nên Synchro dừng lượt này. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở.`
+  : `Lượt này đã chạy ${Math.round(MAX_TURN_MS / 3600_000 * 10) / 10} giờ (mức tối đa mỗi lượt) nên đã dừng. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở.`;
+
 /** Lỗi khi CLI thoát mà chưa có kết quả: Dừng, quá giờ, hoặc đoạn cuối stderr đã phân loại. */
 function exitError(cli: Cli, p: Proc, e: Exit, extra = ""): Event {
   if (e.aborted) return err("Đã dừng.", "aborted");
-  if (e.timedOut) return err("Lượt này chạy quá 30 phút nên đã dừng.", "timeout");
+  if (e.timedOut) return err(timeoutText(e), "timeout");
   const msg = [extra, stripAnsi(p.stderr()).trim().split("\n").slice(-6).join("\n")].filter(Boolean).join("\n") || `CLI ${cli} thoát với mã ${e.code}.`;
   return err(msg, classify(msg));
 }

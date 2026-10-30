@@ -661,6 +661,8 @@ export const EN2VI: Record<string, string> = {
 };
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^CLI không có hoạt động nào trong (\d+) phút \(có thể đã treo\) nên Synchro dừng lượt này\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `The CLI showed no activity for ${m[1]} minutes (it may have hung), so Synchro stopped this turn. Send "continue" to pick up where it left off.`],
+  [/^Lượt này đã chạy ([\d.]+) giờ \(mức tối đa mỗi lượt\) nên đã dừng\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `This turn ran for ${m[1]} hours (the per-turn maximum) and was stopped. Send "continue" to pick up where it left off.`],
   [/^Đã thêm (.+) vào thư viện cho mọi người$/, (m) => `Added ${m[1]} to the Library for everyone`],
   [/^Đã tạo skill (.+) và thêm vào thư viện cho mọi người\.$/, (m) => `Created skill ${m[1]} and added it to the Library for everyone.`],
   [/^Thư viện cho mọi người đã đủ (\d+) mục\.$/, (m) => `The Library for everyone already has ${m[1]} items.`],

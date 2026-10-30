@@ -1,7 +1,7 @@
 // Tầng chạy CLI chính chủ (ADR 0001): thư mục nhà riêng của engine, cài đặt, tìm, và chạy tiến trình con an toàn.
 // - Thư mục nhà: SYNCHRO_ENGINE_HOME, mặc định <DATA_DIR>/engine. CLI nằm trong <home>/.local/bin và chỉ nhận CLI ở đó.
 // - Biến môi trường lọc theo danh sách cho phép (không lọt khóa API, DATA_KEY… của Synchro sang CLI).
-// - Mỗi tiến trình là một process group riêng: bấm Dừng hoặc quá 30 phút thì kill cả nhóm.
+// - Mỗi tiến trình là một process group riêng: bấm Dừng, CLI im lặng quá lâu (treo) hoặc chạm mức trần của lượt thì kill cả nhóm.
 // - SYNCHRO_ENGINE_USER: chạy CLI bằng user hệ thống riêng qua `sudo -n -u` (xem scripts/setup-engine-user.sh).
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -10,7 +10,11 @@ import readline from "node:readline";
 
 export type Cli = "claude" | "codex" | "agy";
 export const CLIS: Cli[] = ["claude", "codex", "agy"];
-export const MAX_TURN_MS = 30 * 60_000;
+// Lượt làm việc dài (dựng cả bộ nhận diện, sửa nhiều tệp) chạy tới khi xong: chỉ dừng khi CLI im lặng IDLE_MS (không in gì, không gọi công cụ
+// của Synchro — có thể đã treo; một công cụ được chờ tới 30 phút) hoặc chạm mức trần MAX_TURN_MS. Đổi bằng SYNCHRO_TURN_MAX_MIN / SYNCHRO_TURN_IDLE_MIN.
+const envMin = (k: string, d: number) => { const n = Number(process.env[k]); return (Number.isFinite(n) && n > 0 ? n : d) * 60_000; };
+export const MAX_TURN_MS = envMin("SYNCHRO_TURN_MAX_MIN", 180);
+export const IDLE_MS = envMin("SYNCHRO_TURN_IDLE_MIN", 40);
 
 export const engineHome = () => path.resolve(process.env.SYNCHRO_ENGINE_HOME ?? path.join(process.env.DATA_DIR ?? path.join(process.cwd(), "data"), "engine"));
 export const binDir = () => path.join(engineHome(), ".local", "bin");
@@ -110,11 +114,15 @@ export type RunOpts = {
   /** Nội dung đưa vào stdin rồi đóng stdin (prompt). Bỏ trống thì stdin để mở cho write() (đăng nhập). */
   stdin?: string;
   timeoutMs?: number;
+  /** Dừng khi im lặng quá lâu: không có đầu ra (stdout / stderr) và alive() không mới hơn trong idleMs. */
+  idleMs?: number;
+  /** Lúc gần nhất lượt còn hoạt động ngoài đầu ra của CLI (đang / vừa chạy công cụ của Synchro). */
+  alive?: () => number;
   signal?: AbortSignal;
   /** Chạy trong pseudo-terminal (qua lệnh `script`) cho CLI cần terminal khi đăng nhập. */
   pty?: boolean;
 };
-export type Exit = { code: number | null; signal: string | null; timedOut: boolean; aborted: boolean };
+export type Exit = { code: number | null; signal: string | null; timedOut: boolean; aborted: boolean; idle?: boolean };
 export type Proc = {
   child: ChildProcess;
   /** Từng dòng stdout (đã bỏ mã màu nếu chạy trong pty). */
@@ -177,8 +185,9 @@ export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
   const env = { ...cleanEnv(o.env), ...(o.pty ? { TERM: "xterm-256color" } : {}) };
   const c = command(bin, args, env, !!o.pty, o.cwd ?? engineHome());
   const child = spawn(c.file, c.argv, { cwd: c.cwd, env: c.env as NodeJS.ProcessEnv, detached: true, stdio: ["pipe", "pipe", "pipe"] });
-  let err = "", timedOut = false, aborted = false, killer: NodeJS.Timeout | null = null;
-  child.stderr!.on("data", (d) => { err = (err + d.toString()).slice(-20_000); });
+  let err = "", timedOut = false, aborted = false, idle = false, killer: NodeJS.Timeout | null = null, lastOut = Date.now();
+  child.stderr!.on("data", (d) => { lastOut = Date.now(); err = (err + d.toString()).slice(-20_000); });
+  child.stdout!.on("data", () => { lastOut = Date.now(); });
   // Chạy bằng user riêng: Synchro không gửi tín hiệu được cho tiến trình của user khác, nên ghi nhớ mọi tiến trình con cháu của sudo
   // (kể cả khi sudo đã thoát, chúng không còn trong cây) và kill chúng bằng chính user của engine.
   const owned = new Set<number>();
@@ -195,13 +204,15 @@ export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
     killer ??= setTimeout(() => killGroup("SIGKILL"), 3000);
   };
   const timer = setTimeout(() => { timedOut = true; kill(); }, o.timeoutMs ?? MAX_TURN_MS);
+  const idleMs = o.idleMs;
+  const idler = idleMs ? setInterval(() => { if (Date.now() - Math.max(lastOut, o.alive?.() ?? 0) > idleMs) { timedOut = idle = true; kill(); } }, Math.min(15_000, idleMs / 4)) : null;
   const onAbort = () => { aborted = true; kill(); };
   if (o.signal) { if (o.signal.aborted) onAbort(); else o.signal.addEventListener("abort", onAbort, { once: true }); }
   const done = new Promise<Exit>((ok) => child.on("close", (code, signal) => {
-    clearTimeout(timer); if (killer) clearTimeout(killer); o.signal?.removeEventListener("abort", onAbort);
+    clearTimeout(timer); if (idler) clearInterval(idler); if (killer) clearTimeout(killer); o.signal?.removeEventListener("abort", onAbort);
     // Tiến trình chính đã thoát nhưng con cháu có thể còn: dọn cả nhóm.
     killGroup("SIGKILL");
-    ok({ code, signal, timedOut, aborted });
+    ok({ code, signal, timedOut, aborted, ...(idle ? { idle } : {}) });
   }));
   child.on("error", (e) => { err += String(e.message); });
   if (o.stdin !== undefined) { child.stdin!.end(o.stdin); }

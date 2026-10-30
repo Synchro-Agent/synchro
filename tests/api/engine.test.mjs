@@ -103,7 +103,7 @@ try {
     const ac = new AbortController(); setTimeout(() => ac.abort(), 200);
     const a2 = await R.runCli("/bin/sleep", ["30"], { signal: ac.signal });
     ok(a2.aborted && !a2.timedOut, "AbortSignal → dừng, đánh dấu aborted", JSON.stringify(a2));
-    ok(R.MAX_TURN_MS === 30 * 60_000, "trần mỗi lượt 30 phút");
+    ok(R.MAX_TURN_MS === 180 * 60_000 && R.IDLE_MS === 40 * 60_000, "trần mỗi lượt 3 giờ, dừng khi im lặng 40 phút");
     // User hệ thống riêng (VPS): sudo chạy từ "/", env -i -C chuyển vào thư mục làm việc dưới quyền user của engine.
     process.env.SYNCHRO_ENGINE_USER = "synchro-cli";
     const cmd = R.command("/x/claude", ["-p"], { HOME: "/e", PATH: "/usr/bin:/bin", CLAUDE_CODE_OAUTH_TOKEN: "tok" }, false, "/e/work/u1");
@@ -333,6 +333,22 @@ try {
     await A.logout("agy", U);
     ok(!(await A.status("agy", U)).loggedIn, "agy: đăng xuất");
     ok((await A.status("codex", U)).loggedIn, "đăng xuất claude không ảnh hưởng codex");
+  }
+
+  // ------------------------------------------------------------------
+  console.log("9. Lượt dài: chỉ dừng khi CLI im lặng (treo), không dừng khi còn làm việc");
+  {
+    const run = async (script, o) => { const t0 = Date.now(); const p = R.spawnCli("/bin/sh", ["-c", script], o); for await (const _ of p.lines) { /* đọc hết */ } return { ...(await p.done), ms: Date.now() - t0 }; };
+    let e = await run("sleep 5", { idleMs: 600 });
+    ok(e.timedOut && e.idle && e.ms < 2500, "im lặng quá idleMs: dừng, báo idle", e);
+    ok(/không có hoạt động nào trong \d+ phút/.test(CE.timeoutText(e)) && /đã chạy [\d.]+ giờ/.test(CE.timeoutText({})), "lời báo khác nhau: treo / chạm mức trần", CE.timeoutText(e));
+    e = await run("for i in 1 2 3 4 5 6 7; do echo $i; sleep 0.25; done", { idleMs: 600 });
+    ok(e.code === 0 && !e.timedOut && e.ms > 1500, "còn in ra đều đặn: chạy tới khi xong dù lâu hơn idleMs", e);
+    e = await run("sleep 1.6", { idleMs: 600, alive: () => Date.now() });
+    ok(e.code === 0 && !e.timedOut, "không in gì nhưng đang chạy công cụ (alive): không dừng", e);
+    e = await run("sleep 5", { idleMs: 60_000, timeoutMs: 700 });
+    ok(e.timedOut && !e.idle, "mức trần của lượt vẫn còn", e);
+    ok(R.MAX_TURN_MS >= 3 * 3600_000 && R.IDLE_MS > 30 * 60_000, "mặc định: trần 3 giờ, im lặng 40 phút (> 30 phút chờ một công cụ)", { max: R.MAX_TURN_MS, idle: R.IDLE_MS });
   }
 } catch (e) {
   ok(false, "lỗi bất ngờ", e.stack);

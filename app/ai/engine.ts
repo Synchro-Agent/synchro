@@ -24,6 +24,9 @@ export type TurnRequest = {
   history?: { role: "user" | "assistant"; content: unknown }[];
   /** Cầu nối MCP của Synchro cho lượt này (công cụ skill, plugin, connector…); CLI gọi tới địa chỉ nội bộ này. */
   mcp?: { url: string };
+  /** Lúc gần nhất lượt còn hoạt động ngoài đầu ra của CLI (đang / vừa chạy công cụ qua cầu nối MCP): CLI in kết quả một lần lúc xong
+   *  (Antigravity) không bị coi là treo khi đang làm việc bằng công cụ. */
+  alive?: () => number;
   /** Người dùng bật "Tìm kiếm trên web": bật công cụ tìm web dựng sẵn của CLI. */
   web?: boolean;
   /** Biến môi trường thêm cho tiến trình (đã qua bộ lọc của cli_runtime). */
@@ -35,7 +38,7 @@ export type TurnRequest = {
 export type RateWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string };
 export type Usage = { input: number; output: number; cacheRead?: number; cacheWrite?: number; costUsd?: number; limits?: RateWindow[] };
 
-/** Mã lỗi: quota (hết hạn mức), auth (cần đăng nhập lại), other, aborted (người dùng bấm Dừng), timeout (quá 30 phút). */
+/** Mã lỗi: quota (hết hạn mức), auth (cần đăng nhập lại), other, aborted (người dùng bấm Dừng), timeout (CLI im lặng quá lâu hoặc chạm mức trần của lượt). */
 export type ErrorCode = "quota" | "auth" | "other" | "aborted" | "timeout";
 
 export type Event =

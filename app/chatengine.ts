@@ -815,7 +815,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
     const cli = subCli(model)!;
     const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
-    let bridge: { url: string; close: () => void } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "";
+    let bridge: { url: string; close: () => void; alive: () => number } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "";
     const usedAll: ToolRun["used"][] = [];
     let bridged = 0;
     try {
@@ -840,7 +840,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const once = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
-        mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true, fresh,
+        mcp: bridge ? { url: bridge.url, alive: bridge.alive } : undefined, web: body.web === true, fresh,
       });
       // Lỗi tạm thời của CLI (không phải đăng nhập, hạn mức, quá giờ hay người dùng bấm Dừng) khi chưa kịp dùng công cụ nào: thử lại một
       // lần ở phiên mới kèm toàn bộ lịch sử (nối tiếp phiên ngay sau lượt trước có lúc hỏng) — tin nhắn nào cũng phải chạy được.

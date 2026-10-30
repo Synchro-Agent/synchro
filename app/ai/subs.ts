@@ -523,7 +523,7 @@ function saveAttachments(work: string, atts: Attachment[]) {
 }
 
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string }; web?: boolean; fresh?: boolean };
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean };
 export type SubResult = { status: number; json: Json };
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
@@ -554,7 +554,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
   }
   const req: TurnRequest = {
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal, mcp: o.mcp, web: o.web,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
@@ -589,7 +589,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
       if (cli === "codex") { const h = g.limits.get(`${cli}:${o.user.id}`); if (h) h.at = 0; }
       return { status: 429, json: { error: `Gói ${SUB[cli].name} của bạn đã hết hạn mức.`, planLimit: cli, resetsAt: planBlock(cli, o.user.id), apiModel, apiModelName: apiName, detail: redact(err.message).slice(0, 200) } };
     }
-    if (err.code === "timeout") return { status: 504, json: { error: "Lượt này chạy quá 30 phút nên đã dừng." } };
+    if (err.code === "timeout") return { status: 504, json: { error: err.message } };
     return { status: 502, json: { error: redact(err.message).slice(0, 500) || "Gói subscription báo lỗi." } };
   }
   g.quota.delete(`${cli}:${o.user.id}`);
