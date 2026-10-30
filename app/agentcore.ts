@@ -424,7 +424,7 @@ export const agentTools = (skillCount: number, scripts: boolean) => [...AGENT_TO
 // nhật ký, danh sách việc, terminal, trình duyệt, khung Changes và tin nhắn thêm giống hệt nhau.
 const PLAN_NOTE = (cli: string) => `<synchro_tools>
 Các công cụ nói ở trên (bash, read_file, write_file, edit_file, list_files, grep, browser_*, open_pane, update_plan và công cụ skill) nằm trong máy chủ MCP "synchro"${cli === "claude" ? " (tên đầy đủ có tiền tố mcp__synchro__, ví dụ mcp__synchro__bash)" : cli === "agy" ? " (tên đầy đủ có tiền tố mcp_synchro_, ví dụ mcp_synchro_bash)" : ""}. Đó là workspace thật của người dùng: mọi việc đọc, sửa tệp, chạy lệnh, mở trình duyệt đều làm qua các công cụ này.
-Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.
+Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.${cli === "agy" ? "\nCông cụ dựng sẵn của Antigravity (run_command, write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent, search_web) bị chặn ở đây: gọi chúng thì lượt dừng ngay. Chỉ dùng công cụ mcp_synchro_… (lệnh: mcp_synchro_bash; trang web: mcp_synchro_browser_navigate rồi mcp_synchro_browser_read)." : ""}
 </synchro_tools>`;
 export async function runPlanAgent(o: {
   user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: unknown }[];

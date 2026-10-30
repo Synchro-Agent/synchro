@@ -211,8 +211,12 @@ Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ
 </working_out_loud>`;
 // Gói chạy qua CLI (Claude Code, Codex, Antigravity) gọi công cụ của Synchro qua cầu nối MCP "synchro".
 const BRIDGE_CLIS = new Set(["claude", "codex", "agy"]);
-const CLI_TOOLS_NOTE = (cli: string) => `<synchro_tools>
-Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.
+// Antigravity (-p): công cụ dựng sẵn của nó cần duyệt nên bị tự chặn (lượt dừng sau câu dẫn) — nói trước để model dùng ngay công cụ của
+// Synchro thay vì thử công cụ của agy rồi mới được nhắc (tin đầu "tóm tắt video YouTube" từng dừng ở "Mình sẽ lấy phụ đề qua lệnh script").
+const AGY_NOTE = (web: boolean) => `
+Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}`;
+const CLI_TOOLS_NOTE = (cli: string, web = false) => `<synchro_tools>
+Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.${cli === "agy" ? AGY_NOTE(web) : ""}
 </synchro_tools>`;
 /** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
 async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>, usedAll: ToolRun["used"][]) {
@@ -830,7 +834,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => { bridged++; return bridgeCall(xx, name, input, usedAll); } });
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
       }
       const turnMsgs = am ?? withRecall(messages, recallOf(body, c.user, convId));
       const once = (msgs: unknown, fresh = false) => subTurn({
