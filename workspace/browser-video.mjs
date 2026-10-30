@@ -5,7 +5,8 @@
 // - ngay trong Chromium (WebCodecs, VP9 chế độ nội dung màn hình): khi máy không có ffmpeg (dev:mock trên máy của bạn).
 // Người xem giải mã bằng WebCodecs (VideoDecoder); trình duyệt không giải mã được thì máy chủ quay về JPEG như cũ.
 //
-// Bộ nén (enc): enc.push(jpeg Buffer) — mỗi khung vào ra đúng một khung; enc.close().
+// Bộ nén (enc): enc.push(jpeg Buffer) — mỗi khung vào ra đúng một khung; enc.close(). w, h: cỡ khung video cố định (điểm ảnh, ở mật độ
+// đầy đủ); ảnh nhỏ hơn (Chrome chụp 1,5x khi đang cuộn cho nhanh) được phóng lên đúng cỡ đó, không phải mở lại bộ nén.
 // Gọi lại: onConfig({ codec, desc? }) trước khung đầu, onFrame({ key, data }), onError(lỗi) — sau lỗi bộ nén không dùng tiếp.
 import { execFile, spawn } from "node:child_process";
 
@@ -41,9 +42,10 @@ const hex2 = (n) => n.toString(16).padStart(2, "0");
 // Ra: FLV — mỗi khung một thẻ có độ dài, đọc được ngay khi đủ byte; thẻ đầu là cấu hình AVC (avcC) dùng làm description cho VideoDecoder.
 // x264 superfast + zerolatency: không khung B, không nhìn trước; CRF giữ chất lượng đều. Màu: ma trận BT.601 của JPEG, dải TV.
 // Không thêm -probesize nhỏ / -fflags nobuffer: với mpjpeg hai cờ này làm ffmpeg giữ lại một khung (đo trên VPS: trễ đúng một nhịp).
-export function ffmpegEncoder(bin, { crf = 24 } = {}) {
+export function ffmpegEncoder(bin, { crf = 24, w, h } = {}) {
+  const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
   const args = ["-hide_banner", "-loglevel", "error", "-f", "mpjpeg", "-i", "pipe:0", "-an",
-    "-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,format=yuv420p",
+    "-vf", w && h ? `scale=${even(w)}:${even(h)}:flags=bicubic,format=yuv420p` : "crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,format=yuv420p",
     "-c:v", "libx264", "-preset", "superfast", "-tune", "zerolatency", "-crf", String(crf), "-g", "100000", "-bf", "0",
     "-color_primaries", "bt709", "-color_trc", "iec61966-2-1", "-colorspace", "smpte170m", "-color_range", "tv",
     "-fps_mode", "passthrough", "-flush_packets", "1", "-f", "flv", "-flvflags", "no_duration_filesize", "pipe:1"];
@@ -91,13 +93,19 @@ const PAGE_JS = `window.__venc = (() => {
   const cfg = (w, h) => ({ codec: "${VP9}", width: w, height: h, bitrateMode: "quantizer", latencyMode: "realtime", contentHint: "text", framerate: 30 });
   return {
     async caps() { try { return !!(await VideoEncoder.isConfigSupported(cfg(2000, 1400))).supported && typeof ImageDecoder === "function"; } catch { return false; } },
-    open(id, q) { encs.set(id, { e: null, w: 0, h: 0, n: 0, q }); },
+    open(id, q, tw, th) { encs.set(id, { e: null, w: 0, h: 0, n: 0, q, tw, th }); },
     async frame(id, data) {
       const x = encs.get(id); if (!x) return;
       try {
         const d = new ImageDecoder({ data: Uint8Array.fromBase64(data), type: "image/jpeg" });
-        const { image } = await d.decode(); d.close();
+        let { image } = await d.decode(); d.close();
         if (!encs.has(id)) { image.close(); return; }
+        // Cỡ khung cố định: mọi ảnh đi cùng một đường (bitmap đúng cỡ khung) — ảnh nhỏ hơn lúc đang cuộn được phóng lên; ảnh đủ cỡ cũng
+        // đi đường này để hệ màu của mọi khung giống nhau (đổi hệ màu thì bộ nén tự chèn khung khóa kèm cấu hình mới).
+        if (x.tw && x.th) {
+          const bmp = await createImageBitmap(image, { resizeWidth: x.tw, resizeHeight: x.th, resizeQuality: "medium" });
+          const ts = image.timestamp; image.close(); image = new VideoFrame(bmp, { timestamp: ts }); bmp.close();
+        }
         const w = image.displayWidth, h = image.displayHeight, first = !x.e;
         if (first) {
           x.e = new VideoEncoder({
@@ -156,12 +164,12 @@ export async function openEncoderPage(bc, connect) {
     id: targetId, cdp: c,
     get closed() { return c.closed; },
     close() { c.close(); bc.send("Target.closeTarget", { targetId }).catch(() => {}); },
-    encoder({ q = 30 } = {}) {
+    encoder({ q = 30, w = 0, h = 0 } = {}) {
       const id = `e${++n}`;
       const enc = { kind: "page", onConfig: null, onFrame: null, onError: null };
       subs.set(id, enc);
       const fail = (e) => { if (subs.delete(id)) enc.onError?.(String(e?.message ?? e)); };
-      ev(`__venc.open(${JSON.stringify(id)}, ${q | 0})`).catch(fail);
+      ev(`__venc.open(${JSON.stringify(id)}, ${q | 0}, ${Math.round(w) | 0}, ${Math.round(h) | 0})`).catch(fail);
       enc.push = (jpg) => { if (subs.has(id)) ev(`__venc.frame(${JSON.stringify(id)}, ${JSON.stringify(jpg.toString("base64"))})`).catch(fail); };
       enc.close = () => { if (subs.delete(id)) ev(`__venc.close(${JSON.stringify(id)})`).catch(() => {}); };
       return enc;

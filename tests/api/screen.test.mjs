@@ -157,10 +157,13 @@ console.log("5. Video: khung chỉ mang phần thay đổi (gõ phím vài KB th
   const med = (a) => { const x = [...a].sort((p, q) => p - q); return x[x.length >> 1] ?? 0; };
   ok(typed.length >= 5 && typed.every((b) => !b.jpeg) && med(typed.map((b) => b.n)) < 8000, "gõ phím: khung video nhỏ (vài KB)", { n: typed.length, median: med(typed.map((b) => b.n)), sizes: typed.map((b) => b.n).slice(0, 12) });
   mark = bins.length;
+  const cfgBefore = msgs.filter((m) => m.t === "video").length;
   for (let i = 0; i < 20; i++) { v.send({ t: "wheel", x: 400, y: 400, dx: 0, dy: 80 }); await sleep(50); }
   await sleep(1200);
   const scrolled = bins.slice(mark);
   ok(scrolled.length >= 4 && med(scrolled.map((b) => b.n)) < 150_000, "cuộn: khung video nhỏ hơn hẳn ảnh 2x", { n: scrolled.length, median: med(scrolled.map((b) => b.n)) });
+  // Đang cuộn Chrome chụp 1,5x cho nhanh, bộ nén phóng lên cỡ khung 2x: không mở lại bộ nén (không có cấu hình video mới), không khung khóa mới.
+  ok(msgs.filter((m) => m.t === "video").length === cfgBefore && !scrolled.some((b) => b.k === 1), "cuộn: chụp nhỏ hơn khi đang cuộn mà không mở lại bộ nén", { cfgs: msgs.filter((m) => m.t === "video").length - cfgBefore, keys: scrolled.filter((b) => b.k === 1).length });
   // Tab nén video là tab ẩn: không lọt vào danh sách tab của người dùng.
   const tabs = msgs.filter((m) => m.t === "tabs").at(-1);
   ok(tabs && !(tabs.list ?? []).some((t) => /encoder\.synchro|synchro-encoder/.test(t.url)), "tab nén video không hiện trong danh sách tab", tabs?.list);

@@ -21,6 +21,12 @@ export { BrowserError };
 const DEBUG = !!process.env.SYNCHRO_BROWSER_DEBUG;
 // Tệp đã tải về đọc lại được cho model (browser_downloads op "read").
 const MAX_READ = 15 * 1024 * 1024;
+// Chất lượng JPEG Chrome chụp khi truyền bằng video (ảnh chỉ đi tới bộ nén trên máy chủ, không qua mạng của người xem). 70: Chrome
+// chụp / ffmpeg đọc nhẹ hơn, sau khi nén x264 nhìn không khác 85.
+const VIDEO_Q = 70;
+// Đang cuộn / kéo (bánh xe, kéo thanh cuộn, phím cuộn): Chrome chụp ở mật độ này cho nhanh (đo trên VPS 2 CPU: 2x 20 → 1,5x 25 khung / giây),
+// bộ nén phóng lên cỡ khung 2x; dừng MOTION_MS thì chụp lại 2x (chữ đứng yên luôn sắc nét). Gõ chữ luôn ở 2x.
+const MOTION_DPR = 1.5, MOTION_MS = 350;
 
 export class CDP {
   constructor(ws) {
@@ -195,10 +201,10 @@ export function createBrowser(host) {
   async function videoMaker(u) {
     if (videoOff()) return null;
     const bin = await ffmpegBin();
-    if (bin) return async () => ffmpegEncoder(bin);
+    if (bin) return async (o) => ffmpegEncoder(bin, o);
     if (!host.pageVideo || process.env.SYNCHRO_VIDEO === "ffmpeg") return null;
     if (!(await pageVideo(u).catch(() => null))) return null;
-    return async () => (await pageVideo(u).catch(() => null))?.encoder() ?? null;
+    return async (o) => (await pageVideo(u).catch(() => null))?.encoder(o) ?? null;
   }
 
   // ---------------------------------------------------------------- màn hình trực tiếp cho người dùng
@@ -213,7 +219,7 @@ export function createBrowser(host) {
     host.sock?.(u, 1);
     // dpr: mật độ điểm ảnh của màn hình người xem (Retina = 2) để chữ nét; bin: khung hình gửi dạng nhị phân (không base64).
     // Chromium chạy với --force-device-scale-factor=2 (workspace/browser.sh): khung phát hình vẽ ở 2x, maxWidth thu về đúng màn hình người xem.
-    let size = { w: 1280, h: 800, mobile: false, dpr: 1, bin: false };
+    let size = { w: 1280, h: 800, mobile: false, dpr: 1, bin: false, vq: VIDEO_Q };
     let c = null, lastTabs = "";
     const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
     // Khung hình theo nhịp mạng: chỉ báo Chrome đã nhận (ack, Chrome mới vẽ và nén khung kế tiếp) khi khung đã gửi đi; mạng chậm thì
@@ -233,7 +239,7 @@ export function createBrowser(host) {
     // người xem nhận khung video (1 byte cờ khung khóa + dữ liệu). Tối đa một khung trong bộ nén và 2 khung trên đường đi; bận thì
     // giữ khung mới nhất (Chrome chờ báo nhận) — mạng chậm thì ít khung hơn nhưng khung nào cũng nét. Không cần hạ chất lượng hay refine.
     // mk: hàm tạo bộ nén; vid: { enc, w, h (điểm ảnh của ảnh), css: { w, h }, cfg, sent }; vbusy: lúc đưa khung vào bộ nén (0 = rảnh).
-    let mk = null, vid = null, vbusy = 0, lastPushed = null;
+    let mk = null, vid = null, vbusy = 0, lastPushed = null, motion = false, motionT = null;
     // Số đo từng khâu (người xem xin "stats: true", vd. công cụ đo độ trễ): mỗi 2 giây gửi { t: "stats" } — số khung Chrome gửi, khung bỏ
     // vì đang bận, khung vào / ra bộ nén, thời gian nén, cỡ ảnh JPEG, thời gian từ thao tác của người dùng tới khung Chrome kế tiếp.
     const stat = { cast: 0, drop: 0, push: 0, out: 0, encMs: 0, encMax: 0, jpg: 0, bytes: 0, inLat: [], inAt: 0 };
@@ -300,13 +306,15 @@ export function createBrowser(host) {
       const buf = Buffer.from(f.data, "base64"), d = jpegSize(buf);
       if (!d) { f.ack(); return; }
       vbusy = Date.now();
-      if (!vid || vid.w !== d.w || vid.h !== d.h) {
+      // Cỡ khung video cố định theo mật độ đầy đủ của người xem; ảnh chụp nhỏ hơn lúc đang cuộn được bộ nén phóng lên.
+      const tw = Math.round(size.w * size.dpr), th = Math.round(size.h * size.dpr);
+      if (!vid || vid.w !== tw || vid.h !== th) {
         vid?.enc.close();
         vid = null;
-        const enc = await mk().catch(() => null);
+        const enc = await mk({ w: tw, h: th }).catch(() => null);
         if (gone || !mk) { enc?.close(); vbusy = 0; f.ack(); return; }
         if (!enc) { f.ack(); return videoFail("không mở được bộ nén"); }
-        vid = { enc, w: d.w, h: d.h, css: null, cfg: null, sent: false };
+        vid = { enc, w: tw, h: th, css: null, cfg: null, sent: false };
         enc.onConfig = (cfg) => { if (vid?.enc === enc) { vid.cfg = cfg; vid.sent = false; } };
         enc.onFrame = (o) => { if (vid?.enc === enc) out(o); };
         enc.onError = (e) => { if (vid?.enc === enc) videoFail(e); };
@@ -345,6 +353,15 @@ export function createBrowser(host) {
     };
     const vwatch = setInterval(() => { if (vbusy && Date.now() - vbusy > 4000) videoFail("bộ nén không trả khung"); }, 1000);
     const next = () => (mk ? pump().catch((e) => videoFail(e?.message)) : !flushT && flush());
+    // Bắt đầu / hết cuộn (chỉ khi truyền bằng video): đổi mật độ chụp rồi phát lại (vài ms, không mở lại bộ nén).
+    const moving = () => {
+      if (!mk || size.dpr <= MOTION_DPR) return;
+      clearTimeout(motionT);
+      motionT = setTimeout(() => { motion = false; if (c && !gone) c.send("Page.stopScreencast").catch(() => {}).finally(() => startCast()); }, MOTION_MS);
+      if (motion) return;
+      motion = true;
+      if (c && !gone) c.send("Page.stopScreencast").catch(() => {}).finally(() => startCast());
+    };
     const statT = setInterval(() => {
       if (size.stats) send({ t: "stats", cast: stat.cast, drop: stat.drop, push: stat.push, out: stat.out, encMs: stat.out ? Math.round(stat.encMs / stat.out) : 0, encMax: stat.encMax,
         jpgKB: stat.cast ? Math.round(stat.jpg / stat.cast / 1024) : 0, outKB: stat.out ? Math.round((stat.bytes / stat.out / 1024) * 10) / 10 : 0,
@@ -365,8 +382,8 @@ export function createBrowser(host) {
     const startCast = async () => {
       const cc = c, at = Date.now();
       // Video: khung vào bộ nén luôn ở đúng mật độ điểm ảnh của người xem, chất lượng cao (bộ nén lo phần dung lượng).
-      const d = mk ? size.dpr : castDpr();
-      await cc.send("Page.startScreencast", { format: "jpeg", quality: mk ? 85 : STEPS[qi].q + (d > 1 ? 0 : 8), maxWidth: Math.round(size.w * d), maxHeight: Math.round(size.h * d), everyNthFrame: 1 }).catch(() => {});
+      const d = mk ? (motion ? Math.min(size.dpr, MOTION_DPR) : size.dpr) : castDpr();
+      await cc.send("Page.startScreencast", { format: "jpeg", quality: mk ? size.vq : STEPS[qi].q + (d > 1 ? 0 : 8), maxWidth: Math.round(size.w * d), maxHeight: Math.round(size.h * d), everyNthFrame: 1 }).catch(() => {});
       clearTimeout(watch);
       watch = setTimeout(() => { if (!gone && c === cc && lastFrame < at) cc.send("Page.stopScreencast").catch(() => {}).finally(() => startCast()); }, 1500);
     };
@@ -451,7 +468,8 @@ export function createBrowser(host) {
           // Màn hình mật độ cao: tối đa 2x, khung rất lớn thì hạ xuống để hình vẫn đi kịp qua mạng.
           let dpr = Math.max(1, Math.min(Number(j.dpr) || 1, 2));
           while (dpr > 1 && w * h * dpr * dpr > 4_200_000) dpr = Math.max(1, dpr - 0.25);
-          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true, stats: j.stats === true };
+          // vq: chất lượng JPEG Chrome chụp để đưa vào bộ nén video (thử nghiệm / công cụ đo; mặc định VIDEO_Q).
+          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true, stats: j.stats === true, vq: Number.isFinite(j.vq) ? Math.max(30, Math.min(95, j.vq | 0)) : VIDEO_Q };
           inflight = 0; sentAt.length = 0;
           meta = "";
           const had = !!mk;
@@ -463,13 +481,15 @@ export function createBrowser(host) {
           await startCast();
         } else if (j.t === "mouse") {
           if (j.type !== "mouseMoved") { lastInput = now; stat.inAt ||= now; }
+          else if (j.buttons) moving(); // kéo thanh cuộn / kéo chọn: trang chạy theo chuột
           await c.send("Input.dispatchMouseEvent", { type: j.type, x: +j.x, y: +j.y, button: j.button ?? "left", buttons: j.buttons ?? 0, clickCount: j.clickCount ?? 0, modifiers: j.mod ?? 0 });
           if (j.type === "mouseMoved") { const first = !cursorAt; cursorAt = { x: +j.x, y: +j.y }; if (first) setTimeout(probeCursor, 80); }
         } else if (j.t === "wheel") {
-          lastInput = now; stat.inAt ||= now;
+          lastInput = now; stat.inAt ||= now; moving();
           await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +j.x, y: +j.y, deltaX: +j.dx || 0, deltaY: +j.dy || 0 });
         } else if (j.t === "key") {
           lastInput = now; stat.inAt ||= now;
+          if (/^(PageUp|PageDown|ArrowUp|ArrowDown|Home|End)$/.test(String(j.key)) || (j.key === " " && j.type === "keyDown")) moving();
           await c.send("Input.dispatchKeyEvent", { type: j.type, key: j.key, code: j.code, text: j.text, unmodifiedText: j.text, windowsVirtualKeyCode: j.kc ?? 0, modifiers: j.mod ?? 0 });
         } else if (j.t === "text") {
           lastInput = now; stat.inAt ||= now;
@@ -509,7 +529,7 @@ export function createBrowser(host) {
     for (const m of queue.splice(0)) handle(m);
     // Người xem rời đi: chỉ đóng kết nối (phát hình của kết nối đó tự dừng). Không gửi stopScreencast: lệnh này tới muộn sẽ tắt luôn
     // phát hình của người xem mới trên cùng tab (đóng rồi mở lại khung trình duyệt thì màn hình đứng).
-    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); clearInterval(vwatch); clearInterval(statT); vid?.enc.close(); vid = null; mk = null; latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
+    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); clearTimeout(motionT); clearInterval(vwatch); clearInterval(statT); vid?.enc.close(); vid = null; mk = null; latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
     if (gone) bye(); else ws.on("close", bye);
   }
 
