@@ -8,6 +8,7 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 // Importing animation components from framer-motion
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
+import { Loader, Mark } from "./brand";
 
 // --- NHỊP ANIMATION CHUNG ---
 // Mọi lớp trong một bước dùng cùng easing và thời lượng, chỉ lệch nhau STEP giây, và đều bắt đầu
@@ -126,15 +127,12 @@ function Orb({ stage }: { stage: Stage }) {
         {stage === "success" && <motion.span key="ring2" className="auth-orb-ring" initial={{ scale: 1, opacity: 0.35 }} animate={{ scale: 1.9, opacity: 0 }} transition={{ duration: 1.3, delay: 0.18, ease: [0.16, 1, 0.3, 1] }} />}
       </AnimatePresence>
       <AnimatePresence mode="wait">
+        {/* Đang xử lý: logo xoay theo nhịp đồng bộ. Thành công: hai nửa khớp pha thành một vòng tròn trọn vẹn (đã đồng bộ). */}
         {stage === "loading" && (
-          <motion.svg key="spark" className="auth-spark" viewBox="0 0 40 40" aria-hidden exit={{ scale: 0.15, opacity: 0, rotate: 120, transition: { duration: 0.32, ease: "easeIn" } }}>
-            {Array.from({ length: 12 }, (_, i) => <rect key={i} x="18.5" y="3.5" width="3" height="10.5" rx="1.5" transform={`rotate(${i * 30} 20 20)`} style={{ animationDelay: `${(i - 12) * 0.1}s` }} />)}
-          </motion.svg>
+          <motion.span key="load" className="auth-mark" exit={{ scale: 0.6, opacity: 0, transition: { duration: 0.28, ease: "easeIn" } }}><Mark size={46} state="load" /></motion.span>
         )}
         {stage === "success" && (
-          <motion.svg key="check" className="auth-check" viewBox="0 0 40 40" aria-hidden initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.35, ease: EASE }}>
-            <motion.path d="M11.5 20.8l5.7 5.7L28.8 14.6" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.55, delay: 0.1, ease: EASE }} />
-          </motion.svg>
+          <motion.span key="done" className="auth-mark" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.35, ease: EASE }}><Mark size={46} state="close" /></motion.span>
         )}
         {stage === "error" && (
           <motion.svg key="err" className="auth-alert" viewBox="0 0 40 40" aria-hidden initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1, x: [0, -6, 6, -3, 3, 0] }} transition={{ duration: 0.5, ease: "easeOut" }}>
@@ -392,7 +390,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
         <div className={cn( "fixed top-4 left-4 z-20 flex items-center gap-2", "md:left-1/2 md:-translate-x-1/2" )}>
             {logo}
-            <h1 className="logo text-foreground" style={{ fontWeight: 360 }}>{brandName}</h1>
+            <h1 className="sr-only">{brandName}</h1>
         </div>
 
         <div className={cn("flex w-full flex-1 h-full items-center justify-center bg-card", "relative overflow-hidden")}>
@@ -402,7 +400,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
             <motion.fieldset key="form" exit={{ opacity: 0, scale: 0.96, filter: "blur(10px)", transition: { duration: 0.35, ease: EASE } }} className="relative z-10 flex flex-col items-center gap-8 w-[280px] mx-auto p-4">
                 <AnimatePresence mode="wait" initial={true}>
                     {authStep === "email" && <motion.div key="email-content" exit={stepExit} className="w-full flex flex-col items-center gap-4">
-                        <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground whitespace-nowrap">{titles.email[0]}</p></div></BlurFade>
+                        <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="auth-title text-foreground">{titles.email[0]}</p></div></BlurFade>
                         <BlurFade delay={BASE + STEP}><p className="text-sm font-medium text-muted-foreground">{titles.email[1]}</p></BlurFade>
                         <BlurFade delay={BASE + STEP * 2}><div className="flex items-center justify-center gap-3 w-full">
                             <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>
@@ -412,7 +410,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                         <BlurFade delay={BASE + STEP * 3} className="w-[300px]"><div className="flex items-center w-full gap-2 py-2"><hr className="w-full border-border"/><span className="text-xs font-semibold text-muted-foreground">OR</span><hr className="w-full border-border"/></div></BlurFade>
                     </motion.div>}
                     {authStep !== "email" && <motion.div key={`${authStep}-title`} exit={stepExit} className="w-full flex flex-col items-center text-center gap-4">
-                        <BlurFade className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl tracking-tight text-foreground whitespace-nowrap">{titles[authStep][0]}</p></div></BlurFade>
+                        <BlurFade className="w-full"><div className="text-center"><p className="auth-title text-foreground">{titles[authStep][0]}</p></div></BlurFade>
                         <BlurFade delay={STEP}><p className="text-sm font-medium text-muted-foreground">{titles[authStep][1]}</p></BlurFade>
                         {mode === "profile" && user && <BlurFade delay={STEP * 2}><p className="auth-signed-as"><span>Signed in as</span> <b data-notr>{user.email}</b></p></BlurFade>}
                     </motion.div>}
@@ -430,7 +428,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
                                         <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
-                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" contentClassName="text-foreground/80 hover:text-foreground">{checking ? <span className="auth-mini-spin" aria-hidden /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
+                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" contentClassName="text-foreground/80 hover:text-foreground">{checking ? <Loader size={16} /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
                                     </div></div>
                                 </div>
                             </BlurFade>

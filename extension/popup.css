@@ -1,23 +1,24 @@
-/* Cửa sổ tiện ích Synchro: cùng phông chữ (Anthropic Sans / Serif), bảng màu và nút kính màu mực với app Synchro,
-   tự theo giao diện sáng / tối của trình duyệt. Phông chép từ public/fonts khi đóng gói (extension/build.mjs). */
+/* Cửa sổ tiện ích Synchro: cùng bộ nhận diện v4 với app — chữ Anthropic Sans (tiêu đề Unbounded), bảng màu Carbon / Ivory (không màu nhấn),
+   nút kính màu mực; tự theo giao diện sáng / tối của trình duyệt. Phông chép khi đóng gói (extension/build.mjs). */
 @font-face { font-family: "Anthropic Sans"; src: url(fonts/AnthropicSans.woff2) format("woff2"); font-weight: 300 800; font-display: block; }
-@font-face { font-family: "Anthropic Serif"; src: url(fonts/AnthropicSerif.woff2) format("woff2"); font-weight: 300 800; font-display: block; }
+@font-face { font-family: "Unbounded"; src: url(fonts/unbounded-vietnamese.woff2) format("woff2"); font-weight: 200 900; font-display: block; unicode-range: U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB; }
+@font-face { font-family: "Unbounded"; src: url(fonts/unbounded-latin.woff2) format("woff2"); font-weight: 200 900; font-display: block; unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 
 :root {
-  --bg: #fcfcfa; --card: #fff; --soft: #f4f3ef; --seg-on: #fff; --fg: #141413; --fg2: #545452; --mut: #87867f; --line: #ebeae6; --line2: #dcdad4;
-  --acc: #2f7bf6; --act: #d97757; --ok: #1f9d55; --err: #c2410c; --on: #2c6ecb; --ink: #000;
+  --bg: #EEECE5; --card: #F7F6F1; --soft: #E6E4DC; --seg-on: #F7F6F1; --fg: #111210; --fg2: #484941; --mut: #6A6B63; --line: #DFDCD3; --line2: #D3D0C6;
+  --acc: #111210; --act: #d97757; --ok: #1f9d55; --err: #c2410c; --on: #111210; --ink: #111210;
   --sh: 0 1px 2px rgba(20, 20, 19, .04), 0 0 0 .5px rgba(20, 20, 19, .1);
   /* Kính màu mực (như nút gửi trong app): đen bóng ở giao diện sáng, sáng bóng ở giao diện tối. */
-  --g-top: rgba(78, 78, 86, .94); --g-mid: rgba(24, 24, 28, .97); --g-bot: #000; --g-fg: #fff; --g-hi: rgba(255, 255, 255, .5); --g-rim: rgba(255, 255, 255, .14);
+  --g-top: rgba(70, 71, 66, .94); --g-mid: rgba(17, 18, 16, .97); --g-bot: #000; --g-fg: #EEECE5; --g-hi: rgba(255, 255, 255, .5); --g-rim: rgba(255, 255, 255, .14);
   --g-sheen: rgba(255, 255, 255, .2); --g-sh: 0 6px 16px -4px rgba(0, 0, 0, .3), 0 1px 2px rgba(0, 0, 0, .25); --g-hover: brightness(1.18);
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131313; --card: #1c1c1c; --soft: #222221; --seg-on: #31312f; --fg: #faf9f5; --fg2: #b0aea5; --mut: #8a8983; --line: #2a2a29; --line2: #393937;
-    --acc: #6fa0f0; --ok: #4ade80; --err: #fb923c; --on: #4b8bf0; --ink: #f5f4ef;
+    --bg: #111210; --card: #1C1D1A; --soft: #1E1F1B; --seg-on: #272823; --fg: #EEECE5; --fg2: #B9B8AF; --mut: #8F9088; --line: #2A2B26; --line2: #34352F;
+    --acc: #EEECE5; --ok: #4ade80; --err: #fb923c; --on: #EEECE5; --ink: #EEECE5;
     --sh: 0 1px 2px rgba(0, 0, 0, .4), 0 0 0 .5px rgba(255, 255, 255, .08);
-    --g-top: #fff; --g-mid: rgba(238, 237, 232, .97); --g-bot: rgba(206, 205, 199, .97); --g-fg: #141413; --g-hi: #fff; --g-rim: rgba(0, 0, 0, .16);
+    --g-top: #fff; --g-mid: rgba(238, 236, 229, .97); --g-bot: rgba(217, 214, 204, .97); --g-fg: #111210; --g-hi: #fff; --g-rim: rgba(0, 0, 0, .16);
     --g-sheen: rgba(255, 255, 255, .7); --g-sh: 0 6px 18px -4px rgba(0, 0, 0, .6), 0 1px 2px rgba(0, 0, 0, .4); --g-hover: brightness(.94);
   }
 }
@@ -33,8 +34,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid color-mix(in srgb
 
 /* Đầu cửa sổ: logo (mặt nạ tô màu mực của theme), tên, trạng thái. */
 header { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 14px 0 16px; border-bottom: .5px solid var(--line2); }
-.mark { width: 40px; height: 22px; flex: none; background: var(--ink); -webkit-mask: url(logo.png) center / contain no-repeat; mask: url(logo.png) center / contain no-repeat; }
-.wm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 500 19px/1 "Anthropic Serif", Georgia, serif; letter-spacing: -.015em; white-space: nowrap; }
+.mark { width: 92px; height: 17px; flex: none; background: var(--ink); -webkit-mask: url(logo.png) center / contain no-repeat; mask: url(logo.png) center / contain no-repeat; }
+.wm { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
 .wm small { font: 550 10.5px/1 "Anthropic Sans", system-ui, sans-serif; letter-spacing: .01em; color: var(--mut); padding: 4px 6px; border-radius: 6px;
   background: var(--soft); box-shadow: inset 0 0 0 .5px var(--line2); }
 .st { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 8px; border-radius: 999px; flex: none;
@@ -52,7 +53,7 @@ main { padding: 16px; display: grid; gap: 14px; }
 p { margin: 0; }
 
 /* Chưa ghép nối. */
-h1 { margin: 0; font: 450 22px/1.2 "Anthropic Serif", Georgia, serif; letter-spacing: -.015em; }
+h1 { margin: 0; font: 400 18px/1.25 "Unbounded", "Anthropic Sans", sans-serif; letter-spacing: -.035em; }
 .hero p { margin-top: 6px; color: var(--fg2); }
 .steps { list-style: none; margin: 0; padding: 2px 14px; border-radius: 14px; background: var(--card); box-shadow: var(--sh); }
 .steps li { display: flex; gap: 11px; align-items: flex-start; padding: 9px 0; color: var(--fg2); font-size: 12.5px; }

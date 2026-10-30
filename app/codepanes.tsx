@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import "@xterm/xterm/css/xterm.css";
 import * as I from "./icons";
+import { Mark } from "./brand";
 import { gitOp, isLocalUrl, useCodeUi, wsOp, type GitState, type PrInfo, type WsStatus } from "./wsclient";
 
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
@@ -25,7 +26,7 @@ export function TerminalPane({ sid, visible }: { sid: number; visible: boolean }
       <div className="tp-tabs">
         {tabs.map((t) => (
           <div key={t.id} className={`tp-tab ${act === t.id ? "on" : ""}`}>
-            <button onClick={() => setAct(t.id)}>{t.kind === "log" ? <I.Spark size={13} /> : <I.Terminal size={13} />}{t.title}</button>
+            <button onClick={() => setAct(t.id)}>{t.kind === "log" ? <Mark size={13} /> : <I.Terminal size={13} />}{t.title}</button>
             {t.kind === "term" && tabs.filter((x) => x.kind === "term").length > 1 && <button className="tp-x" onClick={() => close(t.id)} aria-label="Đóng terminal"><I.X size={11} /></button>}
           </div>
         ))}

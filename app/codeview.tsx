@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { Menu, Thinking } from "./ui";
+import { Mark } from "./brand";
 import { Markdown, fileNameFor, type DevBlock } from "./md";
 import { callLLM, getActiveEffort, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
 import { ls } from "./userscope";
@@ -1036,7 +1037,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
         <div className="thread cv-thread" ref={threadRef} onScroll={onScroll} onMouseUp={onThreadUp}>
           {path.length === 0 ? (
             <div className="cv-empty">
-              <div className="cv-hello">Hôm nay bạn muốn xây dựng gì?</div>
+              <div className="cv-hello"><Mark size={28} state="intro" />Hôm nay bạn muốn xây dựng gì?</div>
               <div className="cv-sugg">
                 {SUGGEST.map((s) => (
                   <button key={s.t} className="cv-card" onClick={() => { setV(s.q); ta.current?.focus(); }}><b>{s.t}</b><span>{s.d}</span></button>

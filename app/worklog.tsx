@@ -3,7 +3,7 @@
 // danh sách việc có đánh dấu, và dòng trạng thái (đang làm gì · bao lâu · bao nhiêu token) — thay cho màn hình trống chỉ có vòng xoay.
 import { useEffect, useState } from "react";
 import * as I from "./icons";
-import { FluidDots } from "./fluid-dots";
+import { Loader } from "./brand";
 import { tr } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 
@@ -105,7 +105,7 @@ export function WorkStatus({ label, since, chars }: { label?: string; since: num
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   return (
     <div className="wl-status" role="status" aria-live="polite">
-      <FluidDots size={13} />
+      <Loader size={14} />
       <span className="wl-st-t" key={label}>{label || tr("Đang suy nghĩ…")}</span>
       <span className="wl-st-m">{dur(now - since)}{chars > 40 ? ` · ≈ ${tok(Math.round(chars / 4))} token` : ""}</span>
     </div>

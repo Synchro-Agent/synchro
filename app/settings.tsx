@@ -5,6 +5,7 @@ import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
 import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
+import { Mark } from "./brand";
 import { MODES, PRESETS } from "./codeview";
 import { ProvidersPanel } from "./providersui";
 import { ConnectorsPanel } from "./connectorsui";
@@ -336,7 +337,7 @@ function Billing() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", gap: 12 }}><I.Spark size={28} /><div><div style={{ fontWeight: 560 }}>Free plan</div><div className="d">Try Synchro</div></div></div>
+        <div style={{ display: "flex", gap: 12 }}><Mark size={28} /><div><div style={{ fontWeight: 560 }}>Free plan</div><div className="d">Try Synchro</div></div></div>
         <button className="btn dark" onClick={app.upgrade}>Upgrade plan</button>
       </div>
       <ul className="perks">{perks.map((p) => <li key={p}><I.Check size={14} />{p}</li>)}</ul>

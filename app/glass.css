@@ -5,29 +5,29 @@
 
 :root{
   --gl-blur:4px;--gl-sat:1.7;--gl-bright:1.04;
-  --gl-fill:rgba(255,255,255,.34);
-  --gl-fill-small:rgba(255,255,255,.5);
-  --gl-fill-thick:rgba(255,255,255,.7);
-  --gl-hair:rgba(40,40,70,.10);
-  --gl-shadow:0 10px 30px rgba(40,40,80,.14),0 2px 6px rgba(40,40,80,.08);
-  --gl-shadow-small:0 3px 10px rgba(40,40,80,.10),0 1px 2px rgba(40,40,80,.08);
+  --gl-fill:rgba(250,249,245,.42);
+  --gl-fill-small:rgba(250,249,245,.56);
+  --gl-fill-thick:rgba(247,246,241,.78);
+  --gl-hair:rgba(17,18,16,.10);
+  --gl-shadow:0 10px 30px rgba(17,18,16,.11),0 2px 6px rgba(17,18,16,.07);
+  --gl-shadow-small:0 3px 10px rgba(17,18,16,.08),0 1px 2px rgba(17,18,16,.07);
   --gl-shine:.95;
   --gl-spring:cubic-bezier(.2,.9,.25,1.12);
 }
 [data-theme="dark"]{
-  --gl-fill:rgba(44,44,52,.40);
-  --gl-fill-small:rgba(255,255,255,.09);
-  --gl-fill-thick:rgba(32,32,38,.68);
-  --gl-hair:rgba(255,255,255,.06);
+  --gl-fill:rgba(28,29,26,.52);
+  --gl-fill-small:rgba(238,236,229,.075);
+  --gl-fill-thick:rgba(22,23,20,.78);
+  --gl-hair:rgba(238,236,229,.07);
   --gl-shadow:0 14px 38px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
   --gl-shadow-small:0 4px 14px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
   --gl-shine:.4;
 }
 
-/* ambient colour so the glass has something to bend */
+/* Ánh sáng nền cho kính có cái để khúc xạ: trung tính như bộ nhận diện (không màu nhấn) — vùng sáng Ivory ấm và bóng Graphite rất nhẹ. */
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:radial-gradient(38vw 38vw at 78% 12%,rgba(47,123,246,.24),transparent 70%),radial-gradient(42vw 42vw at 12% 88%,rgba(98,140,255,.20),transparent 70%),radial-gradient(30vw 30vw at 60% 80%,rgba(190,120,255,.12),transparent 70%)}
-[data-theme="dark"] body::before{background:radial-gradient(38vw 38vw at 78% 12%,rgba(47,123,246,.18),transparent 70%),radial-gradient(42vw 42vw at 12% 88%,rgba(70,110,255,.18),transparent 70%),radial-gradient(30vw 30vw at 60% 80%,rgba(160,90,255,.10),transparent 70%)}
+  background:radial-gradient(40vw 40vw at 80% 10%,rgba(255,255,252,.75),transparent 70%),radial-gradient(44vw 44vw at 10% 90%,rgba(133,134,126,.16),transparent 70%),radial-gradient(30vw 30vw at 62% 82%,rgba(217,214,204,.55),transparent 70%)}
+[data-theme="dark"] body::before{background:radial-gradient(40vw 40vw at 80% 10%,rgba(238,236,229,.055),transparent 70%),radial-gradient(44vw 44vw at 10% 90%,rgba(133,134,126,.08),transparent 70%),radial-gradient(30vw 30vw at 62% 82%,rgba(238,236,229,.03),transparent 70%)}
 .app{background:transparent}
 
 /* ---- structure ---- */
@@ -92,7 +92,7 @@ html body .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0
 [data-theme="dark"] .dock .composer[data-under="1"]{box-shadow:0 0 0 .5px var(--gl-hair),0 18px 48px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.5)}
 
 /* ---- non-glass pieces that sit on glass ---- */
-.nav-item.active,.chat-item.active{background:rgba(255,255,255,.55);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.7),0 1px 3px rgba(40,40,80,.08)}
+.nav-item.active,.chat-item.active{background:rgba(255,255,255,.55);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.7),0 1px 3px rgba(17,18,16,.08)}
 [data-theme="dark"] .nav-item.active,[data-theme="dark"] .chat-item.active{background:rgba(255,255,255,.10);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14)}
 .nav-item,.chat-item{border-radius:14px}
 .seg,.seg button{border-radius:999px}
@@ -139,7 +139,7 @@ html body .modal{animation-duration:.3s}
 .seg{position:relative;isolation:auto}
 .seg button{position:relative;z-index:1;background:transparent!important;box-shadow:none!important;transition:color .25s}
 .seg .thumb{position:absolute;top:2px;bottom:2px;left:0;width:var(--w,0);transform:translateX(var(--x,0));border-radius:999px;z-index:0;
-  background:rgba(255,255,255,.75);box-shadow:0 1px 4px rgba(40,40,80,.16),inset 0 0 0 .5px rgba(255,255,255,.9);pointer-events:none;opacity:0}
+  background:rgba(255,255,255,.75);box-shadow:0 1px 4px rgba(17,18,16,.16),inset 0 0 0 .5px rgba(255,255,255,.9);pointer-events:none;opacity:0}
 [data-theme="dark"] .seg .thumb{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}
 .seg .thumb[data-ready]{opacity:1;transition:transform .38s var(--gl-spring),width .38s var(--gl-spring)}
 .seg:active .thumb{scale:.97 1.04}
@@ -167,7 +167,7 @@ html body .modal{animation-duration:.3s}
 .model>.icon-btn:hover{background:var(--hover)}
 
 /* ---- press feedback (visible on light glass too) ---- */
-:root{--row-hover:rgba(40,40,70,.065);--row-press:rgba(40,40,70,.13);--row-active:rgba(40,40,70,.10)}
+:root{--row-hover:rgba(17,18,16,.065);--row-press:rgba(17,18,16,.13);--row-active:rgba(17,18,16,.10)}
 [data-theme="dark"]{--row-hover:rgba(255,255,255,.07);--row-press:rgba(255,255,255,.14);--row-active:rgba(255,255,255,.10)}
 html body :is(.nav-item,.chat-item,.menu-item,.icon-btn,.chev,.seg button,.chip,.btn:not(.dark):not(.danger)){transition:background-color .16s,color .16s,scale .22s var(--gl-spring),box-shadow .2s}
 html body :is(.nav-item,.chat-item,.menu-item):hover{background:var(--row-hover)}
@@ -192,7 +192,7 @@ html body .topbar .icon-btn.side-toggle:active{scale:.92}
 html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
 @keyframes gBubbleIn{from{transform:scale(.4) translateX(-14px)}}
 
-.mprov .sc .dot{width:6px;height:6px;border-radius:50%;background:var(--toggle-on,#3b82f6)}
+.mprov .sc .dot{width:6px;height:6px;border-radius:50%;background:var(--toggle-on)}
 .model-sub .mrow{min-height:50px}
 
 /* Pinned / collapsible sidebar sections */

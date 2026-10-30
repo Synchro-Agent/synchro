@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   const error = new URL(req.url).searchParams.get("error") ?? "";
   const data = JSON.stringify({ at: Date.now(), error }).replace(/</g, "\\u003c");
   const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GitHub</title>
-<style>body{font:15px system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#faf9f5;color:#1f1e1d}@media(prefers-color-scheme:dark){body{background:#262624;color:#f5f4ee}}p{max-width:420px;text-align:center;line-height:1.5}a{color:inherit}</style></head>
+<style>body{font:15px system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#EEECE5;color:#111210}@media(prefers-color-scheme:dark){body{background:#111210;color:#EEECE5}}p{max-width:420px;text-align:center;line-height:1.5}a{color:inherit}</style></head>
 <body><p id="m"></p><script>
 const d=${data};
 try{localStorage.setItem("synchro:gh",JSON.stringify(d))}catch(e){}

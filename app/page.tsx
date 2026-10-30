@@ -8,6 +8,7 @@ import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
+import { Lockup, Mark, Wordmark } from "./brand";
 import { HalftoneBg } from "./halftone";
 import { CodeView, type CodeMeta } from "./codeview";
 import { answerAsk, deleteServerSession, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
@@ -834,6 +835,11 @@ export default function Home() {
     localStorage.setItem("theme", t);
     document.documentElement.dataset.theme = t === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
   };
+  // Màu thanh trình duyệt / thanh trạng thái điện thoại theo giao diện đang dùng trong app (Carbon / Ivory của bộ nhận diện).
+  useEffect(() => {
+    const dark = document.documentElement.dataset.theme === "dark";
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute("content", dark ? "#111210" : "#EEECE5"));
+  }, [theme]);
 
   const chat = chats.find((c) => c.id === cur);
   // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
@@ -1422,7 +1428,7 @@ export default function Home() {
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving ? (
-    <AuthComponent key="auth" brandName="Synchro" logo={<I.Spark size={24} />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
+    <AuthComponent key="auth" brandName="Synchro" logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
       onDone={(u) => { enterAccount(u); syncProfile(u); setMe(u); if (!u.needsProfile) setAuthLeaving(true); }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
   ) : null;
   if (!me || needProfile) return <>{null}{authEl}</>;
@@ -1439,7 +1445,7 @@ export default function Home() {
       }}>
         <div className="side-top">
           <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Đóng thanh bên"><I.Panel /></button>
-          <span className="logo">Synchro</span>
+          <a className="side-brand" href="/" onClick={(e) => { e.preventDefault(); goNew(); }} aria-label="Synchro"><Wordmark height={17} /></a>
         </div>
         <div className="nav">
           <button className={`nav-item ${view === "new" ? "active" : ""}`} onClick={goNew}>
@@ -1625,7 +1631,7 @@ export default function Home() {
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
-            <div className="greeting">{incog && <I.Ghost size={26} />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
+            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark size={30} state="intro" className="greet-mark" />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
               <div className="modewrap" key={tplMode}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { FluidDots } from "./fluid-dots";
+import { Loader } from "./brand";
 import { useEffect, useRef, useState } from "react";
 
 export function Menu({ open, className = "", style, children }: { open: boolean; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
@@ -19,19 +19,10 @@ export function Menu({ open, className = "", style, children }: { open: boolean;
   return <div className={`menu ${className} ${out && !open ? "out" : ""}`} style={style}>{open ? children : last.current}</div>;
 }
 
-export function Spark({ size = 18 }: { size?: number }) {
-  const rays = Array.from({ length: 12 }, (_, i) => i * 30);
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="currentColor" aria-hidden>
-      {rays.map((a) => <rect key={a} x="18.2" y="2" width="3.6" height="13" rx="1.8" transform={`rotate(${a} 20 20)`} />)}
-    </svg>
-  );
-}
-
 // text: bước đang làm của lượt chạy nền ("Đang đọc skill …"), hiện cạnh chấm động.
 export function Thinking({ label, text }: { label: string; text?: string }) {
   return (
-    <div className="thinking" role="status" aria-label={text || label}><FluidDots size={14} />{text && <span className="thinking-t" key={text}>{text}</span>}</div>
+    <div className="thinking" role="status" aria-label={text || label}><Loader size={15} />{text && <span className="thinking-t" key={text}>{text}</span>}</div>
   );
 }
 

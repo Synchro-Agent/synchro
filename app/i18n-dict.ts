@@ -2,6 +2,8 @@ import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
+  "Synchro: chat với mọi model AI, viết code, giọng nói và tự động hoá công việc, tất cả đồng bộ một nhịp.": "Synchro: chat with any AI model, write code, use your voice and automate your work, all in sync.",
+  "Chat với mọi model AI, viết code, giọng nói và tự động hoá công việc, tất cả đồng bộ một nhịp.": "Chat with any AI model, write code, use your voice and automate your work, all in sync.",
   "Đặt tên tự động": "Name automatically", "Chưa đặt được tên tự động. Thử lại sau.": "Couldn't name the chat automatically. Try again later.",
   // Synchro Code: workspace, agent, GitHub
   "Phiên code mới": "New code session",

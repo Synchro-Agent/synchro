@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
-import { FluidDots } from "./fluid-dots";
+import { Loader } from "./brand";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
@@ -191,7 +191,7 @@ export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { st
 const fmtTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const fmtTime = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
 
-// Dòng trạng thái khi agent đang làm: animation tải của Synchro (FluidDots), việc đang làm (chữ lướt sáng), thời gian, số token.
+// Dòng trạng thái khi agent đang làm: logo Synchro xoay theo nhịp đồng bộ (Loader), việc đang làm (chữ lướt sáng), thời gian, số token.
 export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: number; tokens: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -215,7 +215,7 @@ export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: nu
   }
   return (
     <div className="ag-status">
-      <span className="ag-load" aria-hidden><FluidDots size={14} /></span>
+      <span className="ag-load" aria-hidden><Loader size={15} /></span>
       <span className="ag-shimmer">{label}</span>
       <span className="ag-meta" data-notr>{sec >= 1 ? `${fmtTime(sec)} · ` : ""}{fmtTok(tokens)} tokens</span>
     </div>
@@ -229,7 +229,7 @@ export function TaskCard({ plan }: { plan: PlanItem[] }) {
       {plan.map((x, i) => (
         <li key={i} className={x.status}>
           <span className="tk-ic">{x.status === "completed" ? <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            : x.status === "in_progress" ? <svg viewBox="0 0 16 16" className="spin"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="30 10" /></svg>
+            : x.status === "in_progress" ? <Loader size={14} />
             : <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2.4" /></svg>}</span>
           <span>{x.content}</span>
         </li>

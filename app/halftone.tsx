@@ -1,6 +1,7 @@
 "use client";
 // Nền toàn màn hình của tab Code: shader "Halftone Vibe" (21st.dev Shader Builder), WebGL1 thuần.
-// Theme tối dùng đúng bảng màu và thông số của mẫu; theme sáng dùng nền sáng với chấm xanh tím nhạt cùng họ màu.
+// Màu theo bộ nhận diện v4 (trung tính, không màu nhấn): nền Carbon với chấm Ash → Graphite → Ivory ở theme tối, nền Ivory với chấm
+// Stone → Graphite ở theme sáng.
 import { useEffect, useRef } from "react";
 
 const FRAG = `#ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -57,10 +58,10 @@ void main() {
 }`;
 
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
-// Mẫu gốc (theme tối) và bản tùy biến cho theme sáng.
+// Hai bảng màu: theme tối và theme sáng.
 const THEMES = {
-  dark: { colors: ["#0B1026", "#3D46E8", "#B18CFF", "#FFD6E7"], contrast: 0.91, grain: 0.06, brightness: 0 },
-  light: { colors: ["#F5F5FB", "#C7CCFF", "#9C8CFF", "#F2B8D6"], contrast: 0.96, grain: 0.035, brightness: 0.01 },
+  dark: { colors: ["#111210", "#2A2B26", "#5C5D56", "#B9B8AF"], contrast: 0.9, grain: 0.05, brightness: 0 },
+  light: { colors: ["#EEECE5", "#DCD9CF", "#B5B3AA", "#85867E"], contrast: 0.95, grain: 0.03, brightness: 0.01 },
 };
 
 export function HalftoneBg() {

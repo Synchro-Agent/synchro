@@ -75,9 +75,6 @@ export const Sort = (p: P) => <S {...p}><path d="M6 4v12M3.5 13.5L6 16l2.5-2.5M1
 export const List = (p: P) => <S {...p}><path d="M7 5h10M7 10h10M7 15h10M3.5 5h.01M3.5 10h.01M3.5 15h.01" /></S>;
 export const Brain = (p: P) => <S {...p}><path d="M10 4v12M7 4.5a2.5 2.5 0 00-2.5 2.5v.5A2.5 2.5 0 003 10a2.5 2.5 0 001.5 2.3V13A2.5 2.5 0 007 15.5M13 4.5A2.5 2.5 0 0115.5 7v.5A2.5 2.5 0 0117 10a2.5 2.5 0 01-1.5 2.3V13a2.5 2.5 0 01-2.5 2.5" /></S>;
 export const Clock = (p: P) => <S {...p}><circle cx="10" cy="10" r="7" /><path d="M10 6v4l2.5 2" /></S>;
-// Logo Synchro: chữ S trong quỹ đạo kèm ngôi sao, vân mực sần (public/brand/synchro-logo.png làm mặt nạ). Màu mực theo giao diện:
-// đen ở giao diện sáng, sáng ở giao diện tối (--logo-ink). size là chiều cao; logo ngang nên rộng gấp ~1,8 lần.
-export const Spark = ({ size = 40 }: P) => <span className="spark" style={{ width: Math.round(size * 1.8), height: size }} aria-hidden />;
 export const Pin = (p: P) => <S {...p}><g transform="translate(10 10) rotate(45) scale(.72) translate(-12 -12)" strokeWidth="2"><path d="M12 17v5M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z" /></g></S>;
 export const PinOff = (p: P) => <S {...p}><g transform="translate(10 10) rotate(45) scale(.72) translate(-12 -12)" strokeWidth="2"><path d="M12 17v5M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z" /></g><path d="M3.5 3.5l13 13" /></S>;
 export const Folder = (p: P) => <S {...p}><path d="M3 6.2A2.2 2.2 0 015.2 4h2.5c.5 0 1 .2 1.3.6l.9 1.2h4.9A2.2 2.2 0 0117 8v6.2a2.2 2.2 0 01-2.2 2.2H5.2A2.2 2.2 0 013 14.2z" /></S>;

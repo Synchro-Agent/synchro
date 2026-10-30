@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import * as I from "../icons";
+import { Lockup, Mark } from "../brand";
 
 type Os = "mac" | "win" | "ios" | "android";
 const NAME: Record<Os, string> = { mac: "macOS", win: "Windows", ios: "iPhone", android: "Android" };
@@ -33,7 +34,7 @@ function DesktopArt() {
         <div className="dl-win-bar"><i /><i /><i /></div>
         <div className="dl-win-body">
           <div className="dl-win-side">
-            <div className="dl-win-brand"><I.Spark size={14} /><span>Synchro</span></div>
+            <div className="dl-win-brand"><Lockup height={11} /></div>
             <span className="on"><I.Plus size={11} />Mới</span>
             <span><I.Folder size={11} />Dự án</span>
             <span><I.Code size={11} />Code</span>
@@ -52,7 +53,7 @@ function DesktopArt() {
           </div>
         </div>
       </div>
-      <div className="dl-dock"><i /><i /><span><I.Spark size={16} /></span><i /><i /></div>
+      <div className="dl-dock"><i /><i /><span><Mark size={16} /></span><i /><i /></div>
     </div>
   );
 }
@@ -95,7 +96,7 @@ export function DownloadView() {
     <div className="dl">
       <div className="dl-bg" aria-hidden><i /><i /><i /></div>
       <header className="dl-top">
-        <Link href="/" className="dl-brand"><I.Spark size={26} /><span className="logo">Synchro</span></Link>
+        <Link href="/" className="dl-brand" aria-label="Synchro"><Lockup height={24} className="lk-hover" /></Link>
         <nav className="dl-nav"><a href="#desktop">Máy tính</a><a href="#mobile">Điện thoại</a></nav>
         <Link href="/" className="btn dark dl-open">Mở Synchro</Link>
       </header>
