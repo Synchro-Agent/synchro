@@ -10,7 +10,8 @@
 //   ở chế độ -p, công cụ MCP cần duyệt bị tự từ chối trừ khi hook PreToolUse trong ~/.gemini/config/hooks.json trả "allow" (tài liệu của agy).
 //   Công cụ MCP mặc định nạp khi cần: model tìm rồi gọi qua tên chung "CallMcpTool"; công cụ có _meta "antigravity/alwaysLoad" được nạp sẵn
 //   và gọi bằng tên mcp_synchro_…. Bị từ chối thì lượt dừng sau câu dẫn đầu tiên, nhật ký (--log-file) ghi
-//   `Print mode: soft-denying tool confirmation "<tên>"`. Trong prompt: [mock:ondemand] → gọi qua CallMcpTool; [mock:deny] → model gọi
+//   `Print mode: soft-denying tool confirmation "<tên>"`. Trong prompt: [mock:ondemand] → gọi qua CallMcpTool; [mock:websearch] → search_web
+//   (chặn nếu hook không cho); [mock:denyall] → luôn bị chặn; [mock:deny] → model gọi
 //   công cụ dựng sẵn run_command (luôn bị từ chối).
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
@@ -82,6 +83,15 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
         process.exit(1);
       }
     }
+    // [mock:flaky]: lần đầu gặp prompt này agy lỗi giữa chừng (như lỗi mạng / máy chủ của Google), lần sau chạy bình thường.
+    if (prompt.includes("[mock:flaky]")) {
+      const ff = path.join(gem, "mock-flaky.json"), seen = readJson(ff), k = C.crypto.createHash("sha1").update(prompt).digest("hex");
+      if (!seen[k]) {
+        seen[k] = 1; fs.writeFileSync(ff, JSON.stringify(seen));
+        console.log(JSON.stringify({ conversation_id: "", status: "ERROR", response: "", error: "INTERNAL: upstream connection reset", duration_seconds: 0.1, num_turns: 0, usage: usage0 }));
+        process.exit(1);
+      }
+    }
     const turn = C.bumpSession(gem, conv);
     const st = C.stallTurn(gem, conv, prompt);
     if (st.stall) return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: C.STALL_TEXT, error: "", duration_seconds: 0.2, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: 10 } }));
@@ -93,12 +103,23 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
     const log = (l) => { if (logFile) fs.appendFileSync(logFile, `I1030 00:00:00.000000       1 ${l}\n`); };
     log("cli_setting_manager.go:96] CLI settings initialized: permissions=<nil>, toolPermission=request-review");
     let note = "";
+    const nudged = prompt.includes("<synchro_continue>");
+    // [mock:websearch]: model dùng công cụ tìm web dựng sẵn của agy (search_web) — chỉ chạy khi hook cho phép (Synchro bật tìm web),
+    // không thì agy tự chặn như bản thật; được nhắc (lượt <synchro_continue>) thì model chuyển sang công cụ của Synchro.
+    if (prompt.includes("[mock:websearch]") && !nudged) {
+      if (!hookAllows("search_web")) {
+        log('tool_confirmation_manager.go:221] Print mode: soft-denying tool confirmation "search_web" at step 2');
+        return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: "Mình sẽ tìm trên web.", error: "", duration_seconds: 0.3, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: 6 } }));
+      }
+      note += " [đã tìm web bằng search_web]";
+    }
     if (srv && !srv.disabled) {
       const ask = C.toolAsk(prompt);
       const listed = ask ? (await C.mcp(srv.serverUrl).catch(() => ({ tools: [] }))).tools : [];
       const direct = !prompt.includes("[mock:ondemand]") && listed.some((t) => t.name === ask?.name && t._meta?.["antigravity/alwaysLoad"] === true);
-      const hookName = prompt.includes("[mock:deny]") ? "run_command" : direct ? `mcp_synchro_${ask?.name}` : "CallMcpTool";
-      if (!ask) note = ` [công cụ Synchro: ${(await C.mcp(srv.serverUrl).catch(() => ({ tools: [] }))).tools.length}]`;
+      // [mock:deny]: lượt đầu model gọi công cụ dựng sẵn bị chặn (run_command), được nhắc thì dùng công cụ của Synchro; [mock:denyall]: luôn bị chặn.
+      const hookName = prompt.includes("[mock:denyall]") || (prompt.includes("[mock:deny]") && !nudged) ? "run_command" : direct ? `mcp_synchro_${ask?.name}` : "CallMcpTool";
+      if (!ask) note += ` [công cụ Synchro: ${(await C.mcp(srv.serverUrl).catch(() => ({ tools: [] }))).tools.length}]`;
       else if (hookName === "run_command" || !hookAllows(hookName)) {
         log(`tool_confirmation_manager.go:221] Print mode: soft-denying tool confirmation "${hookName}" at step 2`);
         await C.sleep(100);
@@ -106,7 +127,7 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
       } else {
         const r = await C.mcp(srv.serverUrl, ask).catch((e) => ({ error: { message: String(e) } }));
         const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n");
-        note = ` [đã dùng ${ask.name}${direct ? "" : " qua CallMcpTool"}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
+        note += ` [đã dùng ${ask.name}${direct ? "" : " qua CallMcpTool"}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
       }
     }
     // Như agy thật ở print mode: không có cờ gửi tệp; model mở tệp trong thư mục làm việc bằng công cụ xem tệp (view_file).

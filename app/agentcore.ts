@@ -12,7 +12,7 @@ import { subCli, subTurn } from "./ai/subs";
 import { BROWSER_TOOLS, isBrowserTool, runBrowserTool, type BrowserCtx } from "./browsertools";
 import type { Gate } from "./agentgate";
 import type { Ask } from "./approvals";
-import { MAX_NUDGE, NUDGE, stalled } from "./stall";
+import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -453,26 +453,43 @@ export async function runPlanAgent(o: {
     },
   });
   try {
-    const once = (messages: { role: string; content: unknown }[]) => subTurn({
+    const once = (messages: { role: string; content: unknown }[], fresh = false) => subTurn({
       user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages, conv: o.conv, effort: o.effort,
-      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url },
+      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url }, fresh,
     });
+    // Lỗi tạm thời của CLI khi chưa kịp dùng công cụ nào: thử lại một lần ở phiên mới kèm toàn bộ lịch sử (như chat).
+    const tryOnce = async (messages: { role: string; content: unknown }[]) => {
+      const before = n;
+      let res = await once(messages);
+      if (res.status >= 500 && res.status !== 504 && n === before && !o.signal.aborted) { await new Promise((ok) => setTimeout(ok, 1500)); res = await once(messages, true); }
+      return res;
+    };
+    type J = { text?: string; error?: string; cancelled?: boolean; denied?: string[] };
     let hist = o.messages;
-    let r = await once(hist);
-    // CLI xong lượt mà người dùng vừa nhắn thêm: làm tiếp ngay trong cùng phiên. Mới báo "Mình sẽ…" mà chưa gọi công cụ nào: nhắc làm tiếp (stall.ts).
-    for (let k = 0, nudged = 0; k < 6 && r.status === 200 && !o.signal.aborted; k++) {
-      const said = String((r.json as { text?: unknown }).text ?? "");
+    let r = await tryOnce(hist);
+    let good: typeof r | null = null;
+    // CLI xong lượt mà người dùng vừa nhắn thêm: làm tiếp ngay trong cùng phiên. Mới báo "Mình sẽ…" mà chưa gọi công cụ nào: nhắc làm tiếp
+    // (stall.ts). agy tự chặn công cụ của nó: nhắc dùng công cụ của Synchro.
+    for (let k = 0, nudged = 0, nd = 0; k < 6 && r.status === 200 && !o.signal.aborted; k++) {
+      good = r;
+      const jj = r.json as J;
+      const said = String(jj.text ?? "");
       const more = o.inbox?.() ?? [];
       let next: string;
       if (more.length) { for (const t of more) o.emit({ t: "steer", text: t }); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
+      else if (jj.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(jj.denied); }
       else if (!n && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
       else break;
       if (!pending.trim()) pending = said;
       flush();
       hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
-      r = await once(hist);
+      r = await tryOnce(hist);
     }
-    const j = r.json as { text?: string; error?: string; cancelled?: boolean };
+    // Lượt làm tiếp lỗi: giữ phần đã trả lời, kèm lý do ngắn.
+    if (r.status !== 200 && good) r = { status: 200, json: { ...(good.json as Record<string, unknown>), denied: undefined, text: `${String((good.json as J).text ?? "").trim()}\n\n_(${String((r.json as J).error ?? "Lượt làm tiếp bị lỗi").slice(0, 300)})_` } };
+    const j = r.json as J;
+    if (r.status === 200 && j.denied?.length && !n && (!String(j.text ?? "").trim() || stalled(String(j.text))))
+      throw new Error(`Antigravity tự chặn công cụ (${j.denied.join(", ")}) nên lượt này chưa làm được gì. Hãy gửi lại yêu cầu hoặc chọn model khác.`);
     if (r.status !== 200) throw new Error(j.error ?? "Gói subscription báo lỗi.");
     if (!pending.trim() && j.text) pending = j.text;
     flush();

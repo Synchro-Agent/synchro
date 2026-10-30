@@ -173,10 +173,22 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   // agy 1.4.11: công cụ MCP nạp khi cần được gọi qua tên chung CallMcpTool — vẫn được phép, không dừng sau câu dẫn.
   const od = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc [mock:ondemand] #tool=update_plan #args={"items":[{"content":"Buoc hai","status":"in_progress"}]}' }], skills: true });
   ok(od.s === 200 && /\[đã dùng update_plan qua CallMcpTool: Đã cập nhật/.test(od.j?.text ?? ""), "agy gọi công cụ qua CallMcpTool (nạp khi cần) vẫn chạy", JSON.stringify(od.j));
-  // agy tự chặn công cụ (ví dụ công cụ dựng sẵn): báo rõ thay vì trả mỗi câu dẫn rồi im lặng; nhật ký của lượt được xóa.
-  const dn = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Mở trang [mock:deny] #tool=browser_tabs #args={"op":"list"}' }], skills: true });
+  // agy tự chặn công cụ dựng sẵn của nó (lượt dừng sau câu dẫn): Synchro nhắc dùng công cụ của Synchro và làm tiếp — không báo lỗi.
   const { readdirSync } = await import("node:fs");
-  ok(dn.s >= 400 && /Antigravity tự chặn công cụ của Synchro \(run_command\)/.test(dn.j?.error ?? "") && !readdirSync(`${process.cwd()}/data-mock/engine/work`, { recursive: true }).some((f) => /\.synchro-agy-.*\.log$/.test(String(f))), "agy tự chặn công cụ → báo lỗi rõ ràng (không im lặng), xóa nhật ký của lượt", JSON.stringify(dn));
+  const noLogs = () => !readdirSync(`${process.cwd()}/data-mock/engine/work`, { recursive: true }).some((f) => /\.synchro-agy-.*\.log$/.test(String(f)));
+  const dn = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Mở trang [mock:deny] #tool=browser_tabs #args={"op":"list"}' }], skills: true });
+  ok(dn.s === 200 && /\[đã dùng browser_tabs/.test(dn.j?.text ?? "") && noLogs(), "agy tự chặn công cụ của nó → Synchro nhắc dùng công cụ của Synchro, lượt làm xong (không báo lỗi), xóa nhật ký của lượt", JSON.stringify(dn).slice(0, 400));
+  // Nhắc rồi mà vẫn bị chặn: báo rõ ràng (không trả mỗi câu dẫn rồi im lặng).
+  const da = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Mở trang [mock:denyall] #tool=browser_tabs #args={"op":"list"}' }], skills: true });
+  ok(da.s >= 400 && /Antigravity tự chặn công cụ \(run_command\)/.test(da.j?.error ?? "") && noLogs(), "nhắc hết lượt vẫn bị chặn → báo lỗi rõ ràng", JSON.stringify(da).slice(0, 300));
+  // Lỗi tạm thời của gói ở lượt đầu (chưa dùng công cụ nào): Synchro tự thử lại một lần ở phiên mới — người dùng không thấy lỗi.
+  const fl = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: "chào [mock:flaky]" }], skills: true });
+  ok(fl.s === 200 && /Gemini/.test(fl.j?.text ?? ""), "lỗi tạm thời ở lượt đầu → tự thử lại, lượt vẫn trả lời", JSON.stringify(fl).slice(0, 300));
+  // Tìm web: bật tìm web thì agy được dùng search_web của nó; tắt thì bị chặn → nhắc → vẫn trả lời (tin nhắn nào cũng chạy).
+  const ws1 = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", web: true, messages: [{ role: "user", content: "tóm tắt video này [mock:websearch] https://www.youtube.com/watch?v=abc" }], skills: true });
+  ok(ws1.s === 200 && /\[đã tìm web bằng search_web\]/.test(ws1.j?.text ?? ""), "bật tìm web: agy được dùng search_web của nó", JSON.stringify(ws1).slice(0, 300));
+  const ws2 = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: "tóm tắt video này [mock:websearch] https://www.youtube.com/watch?v=abc" }], skills: true });
+  ok(ws2.s === 200 && (ws2.j?.text ?? "").length > 0 && !/search_web\]/.test(ws2.j.text), "tắt tìm web: search_web bị chặn → Synchro nhắc → lượt vẫn trả lời, không lỗi", JSON.stringify(ws2).slice(0, 300));
   const pre = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
   ok(pre.sub?.setup && !existsSync(`${agyDir}/onboarding-input.log`), "chưa làm quen: vòng tròn báo cần hoàn tất, Synchro không bấm thay", JSON.stringify(pre.sub));

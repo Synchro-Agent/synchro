@@ -205,7 +205,10 @@ export class CodexEngine implements Engine {
 // Synchro: mcp_synchro_… khi công cụ được nạp sẵn (cầu nối đánh dấu antigravity/alwaysLoad), CallMcpTool khi agy 1.4.x để model tự tìm
 // công cụ rồi gọi qua tên chung. Công cụ dựng sẵn của agy (lệnh shell, ghi tệp trên máy chủ) vẫn bị từ chối như trước.
 const agyLocks = new Map<string, Promise<void>>();
-const AGY_HOOK = JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: "mcp_synchro_.*|CallMcpTool", hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
+// Bật tìm web (Cài đặt / nút tìm web): cho phép thêm công cụ tìm web của chính agy (search_web — chỉ gọi dịch vụ tìm kiếm của Google,
+// không đụng tới máy chủ). Công cụ đọc tệp / chạy lệnh / đọc URL bất kỳ của agy vẫn bị chặn: chúng chạy trên máy chủ bằng user của
+// engine, đọc được thư mục đăng nhập của tài khoản khác và địa chỉ nội bộ.
+const AGY_HOOK = (web?: boolean) => JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: `mcp_synchro_.*|CallMcpTool${web ? "|search_web|web_search" : ""}`, hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
 /** Công cụ agy tự từ chối trong lượt (đọc nhật ký của lượt bằng chính user của engine, rồi xóa nhật ký). */
 async function agyDenied(req: TurnRequest, log: string): Promise<string[]> {
   const sh = spawnCli("/bin/sh", ["-c", 'grep -o "soft-denying tool confirmation \\"[A-Za-z_]*\\"" "$1" 2>/dev/null; rm -f "$1"', "sh", log], { env: req.env, cwd: path.dirname(log) });
@@ -223,7 +226,7 @@ async function agyRun(args: string[], req: TurnRequest) {
 async function agyBridge(req: TurnRequest, url: string) {
   if (!(await agyRun(["mcp", "add", "synchro", url], req))) return false;
   // Ghi hook bằng đúng user của engine (thư mục đăng nhập 0700 của user đó).
-  const sh = spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: AGY_HOOK });
+  const sh = spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: AGY_HOOK(req.web) });
   return (await sh.done).code === 0;
 }
 
@@ -283,12 +286,10 @@ export class AntigravityEngine implements Engine {
       return;
     }
     const text = typeof o.response === "string" ? o.response : "";
+    // agy tự chặn công cụ (của nó hoặc của Synchro): lượt dừng sớm. Trả kèm danh sách để bên gọi nhắc model làm tiếp bằng công cụ được
+    // phép (chat, Synchro Code); bên gọi hết lượt nhắc mới báo lỗi rõ ràng.
     const denied = log ? await agyDenied(req, log).catch(() => []) : [];
-    if (denied.length) {
-      yield err(`Antigravity tự chặn công cụ của Synchro (${denied.join(", ")}) nên lượt này dừng sau câu đầu, chưa làm được gì. Hãy gửi lại yêu cầu hoặc chọn model khác (để Tự động thì Synchro tự chuyển model).`, "other");
-      return;
-    }
     if (text) yield { kind: "text", text };
-    yield { kind: "final", text, via: "agy" };
+    yield { kind: "final", text, via: "agy", ...(denied.length ? { denied } : {}) };
   }
 }

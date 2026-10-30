@@ -75,8 +75,12 @@ for (const model of ["sub-claude/sonnet", "sub-codex/gpt-6.1-sol", "sub-agy/gemi
 {
   const r = await run({ model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc [mock:ondemand] #tool=update_plan #args={"items":[{"content":"Nap khi can","status":"in_progress"}]}' }] });
   ok(/\[đã dùng update_plan qua CallMcpTool/.test(r.text), "Antigravity 1.4.11: công cụ nạp khi cần (CallMcpTool) vẫn chạy", r.text.slice(0, 200));
+  // Antigravity tự chặn công cụ dựng sẵn của nó: Synchro nhắc dùng công cụ của Synchro → lượt làm xong (như tin đầu "tóm tắt video").
   const d = await run({ model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Mở trang [mock:deny] #tool=browser_tabs #args={"op":"list"}' }] });
-  ok(/Antigravity tự chặn công cụ của Synchro/.test(JSON.stringify(d.j)), "Antigravity tự chặn công cụ → báo rõ, không im lặng", JSON.stringify(d.j).slice(0, 300));
+  ok(/\[đã dùng browser_tabs/.test(d.text), "Antigravity tự chặn công cụ của nó → nhắc dùng công cụ của Synchro, làm xong", JSON.stringify(d.j).slice(0, 300));
+  // Nhắc hết lượt vẫn bị chặn: báo rõ, không im lặng.
+  const dd = await run({ model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Mở trang [mock:denyall] #tool=browser_tabs #args={"op":"list"}' }] });
+  ok(/Antigravity tự chặn công cụ/.test(JSON.stringify(dd.j)), "vẫn bị chặn sau khi nhắc → báo rõ, không im lặng", JSON.stringify(dd.j).slice(0, 300));
 }
 
 console.log("3. Trình duyệt của Synchro: lượt dừng sau câu dẫn được nhắc, rồi mở trang thật");

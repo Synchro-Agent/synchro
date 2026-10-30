@@ -29,7 +29,7 @@ import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule } from "./brain";
-import { MAX_NUDGE, NUDGE, stalled } from "./stall";
+import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
 import type { TaskCtx } from "./tasks";
@@ -833,26 +833,52 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
       }
       const turnMsgs = am ?? withRecall(messages, recallOf(body, c.user, convId));
-      const once = (msgs: unknown) => subTurn({
+      const once = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
-        mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true,
+        mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true, fresh,
       });
+      // Lỗi tạm thời của CLI (không phải đăng nhập, hạn mức, quá giờ hay người dùng bấm Dừng) khi chưa kịp dùng công cụ nào: thử lại một
+      // lần ở phiên mới kèm toàn bộ lịch sử (nối tiếp phiên ngay sau lượt trước có lúc hỏng) — tin nhắn nào cũng phải chạy được.
+      const tryOnce = async (msgs: unknown) => {
+        const before = bridged;
+        let res = await once(msgs);
+        if (res.status >= 500 && res.status !== 504 && bridged === before && !runSignal()?.aborted) {
+          await new Promise((ok) => setTimeout(ok, 1500));
+          res = await once(msgs, true);
+        }
+        return res;
+      };
+      type J = { text?: unknown; denied?: string[]; error?: unknown };
       let hist = turnMsgs as unknown[];
-      let r = await once(hist);
+      let r = await tryOnce(hist);
+      // good: câu trả lời tốt gần nhất — lượt nhắc / tin nhắn thêm sau đó có lỗi thì vẫn giữ phần đã trả lời.
+      let good: typeof r | null = null;
       // Lượt của CLI xong mà còn tin nhắn thêm chưa đọc: làm tiếp ngay trong cùng phiên của CLI (không chờ lượt sau). Gói mới báo
-      // "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp (stall.ts).
-      for (let k = 0, nudged = 0; k < 6 && !am && r.status === 200; k++) {
-        const said = String((r.json as { text?: unknown }).text ?? "");
+      // "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp (stall.ts). agy tự chặn công cụ: nhắc dùng công cụ được phép.
+      for (let k = 0, nudged = 0, nd = 0; k < 6 && !am && r.status === 200; k++) {
+        good = r;
+        const j = r.json as J;
+        const said = String(j.text ?? "");
         const more = takeInbox();
         let next: string;
         if (more.length) { for (const t of more) progress("steer", t); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
+        else if (j.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(j.denied); }
         else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
         else break;
         if (said.trim()) progress("say", said.trim());
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
-        r = await once(hist);
+        r = await tryOnce(hist);
       }
+      if (r.status !== 200 && good && r.status !== 499) {
+        const g = good.json as J;
+        r = { status: 200, json: { ...(good.json as Record<string, unknown>), denied: undefined, text: `${String(g.text ?? "").trim()}\n\n_(${String((r.json as J).error ?? "Lượt làm tiếp bị lỗi").slice(0, 300)})_` } };
+      }
+      // Nhắc hết lượt mà agy vẫn tự chặn công cụ và chưa làm được gì: báo rõ (không trả mỗi câu dẫn rồi im lặng).
+      const left = (r.json as J).denied;
+      if (r.status === 200 && left?.length && (!String((r.json as J).text ?? "").trim() || stalled(String((r.json as J).text))))
+        r = { status: 502, json: { error: `Antigravity tự chặn công cụ (${left.join(", ")}) nên lượt này chưa làm được gì. Hãy gửi lại yêu cầu hoặc chọn model khác (để Tự động thì Synchro tự chuyển model).` } };
+      else if (r.status === 200 && left) r = { ...r, json: { ...(r.json as Record<string, unknown>), denied: undefined } };
       if (!x || r.status !== 200) return Response.json(r.json, { status: r.status });
       // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).
       const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);

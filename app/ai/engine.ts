@@ -44,7 +44,8 @@ export type Event =
   | { kind: "session"; id: string; model?: string }
   | { kind: "usage"; usage: Usage }
   /** via: engine thực sự trả lời (vd. "api:anthropic" khi đã chuyển sang khóa API dự phòng). */
-  | { kind: "final"; text: string; via?: string }
+  /** denied: công cụ CLI tự chặn trong lượt (agy -p) — lượt dừng sớm; bên gọi nhắc model làm tiếp bằng công cụ được phép. */
+  | { kind: "final"; text: string; via?: string; denied?: string[] }
   | { kind: "error"; message: string; code?: ErrorCode };
 
 export interface Engine {

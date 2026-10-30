@@ -522,7 +522,8 @@ function saveAttachments(work: string, atts: Attachment[]) {
   for (const d of listEngineDir(root)) if (/^\d{8}$/.test(d) && d < old) { try { removeDir(path.join(root, d)); } catch {} }
 }
 
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string }; web?: boolean };
+/** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string }; web?: boolean; fresh?: boolean };
 export type SubResult = { status: number; json: Json };
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
@@ -538,7 +539,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const conv = o.conv && o.conv.length <= 64 ? o.conv : null;
   const prev = conv ? (d.prepare("SELECT session_id, turns FROM engine_sessions WHERE user_id = ? AND conv = ? AND cli = ?").get(o.user.id, conv, cli) as { session_id: string; turns: number } | undefined) : undefined;
   // Nối tiếp phiên của CLI khi lịch sử khớp đúng lượt trước (không sửa, không tạo lại câu trả lời); ngược lại mở phiên mới kèm lịch sử.
-  const resume = prev && prev.turns === msgs.length - 1 ? prev.session_id : undefined;
+  const resume = prev && !o.fresh && prev.turns === msgs.length - 1 ? prev.session_id : undefined;
   // Ảnh, PDF gửi kèm nguyên dạng như khi dùng ứng dụng của hãng (không đổi thành chữ): Claude Code nhận khối ảnh / PDF qua stream-json,
   // Codex nhận ảnh bằng --image, Antigravity mở tệp trong thư mục làm việc bằng công cụ xem tệp của nó.
   const col: Collect = { atts: [], nativePdf: cli === "claude" };
@@ -558,7 +559,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
   const eng = engineFor(cli);
-  let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null;
+  let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
   for await (const e of eng.runTurn(req)) {
     if (e.kind === "text") { text += e.text; o.onDelta?.(e.text); }
     else if (e.kind === "session") {
@@ -569,7 +570,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
         if (cur[run.model] !== e.model) { g.resolved.set(k, { ...cur, [run.model]: e.model }); g.models.delete(k); }
       }
     }
-    else if (e.kind === "final") { final = e.text; via = e.via ?? cli; }
+    else if (e.kind === "final") { final = e.text; via = e.via ?? cli; denied = e.denied ?? []; }
     else if (e.kind === "usage" && e.usage.limits?.length) saveLimits(cli, o.user.id, e.usage.limits);
     else if (e.kind === "error") err = { message: e.message, code: e.code };
   }
@@ -598,5 +599,5 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
       ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at`)
       .run(o.user.id, conv, cli, session, msgs.length + 1, Date.now());
   }
-  return { status: 200, json: { model: o.model, text: final ?? text, via } };
+  return { status: 200, json: { model: o.model, text: final ?? text, via, ...(denied.length ? { denied } : {}) } };
 }
