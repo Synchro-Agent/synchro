@@ -131,5 +131,59 @@ console.log("4. Mạng chậm: tự hạ chất lượng / độ phân giải đ
   w.close();
 }
 
+console.log("5. Video: khung chỉ mang phần thay đổi (gõ phím vài KB thay vì ~250 KB một ảnh 2x), vẫn nét 2x");
+{
+  const v = await open();
+  const bins = [], msgs = [];
+  let mark = 0;
+  v.ws.onmessage = (e) => {
+    if (typeof e.data === "string") { const j = JSON.parse(e.data); msgs.push({ ...j, at: bins.length }); return; }
+    v.ws.send('{"t":"fa"}');
+    const u8 = new Uint8Array(e.data);
+    bins.push({ at: Date.now(), n: u8.length, k: u8[0], jpeg: u8[0] === 0xff && u8[1] === 0xd8 });
+  };
+  v.send({ t: "size", w: 900, h: 700, dpr: 2, bin: true, fa: true, vid: true });
+  v.send({ t: "html", html: `<!doctype html><meta charset=utf-8><body style="margin:20px;font:16px sans-serif"><input id=x autofocus style="font-size:22px;width:600px;caret-color:transparent">${Array.from({ length: 200 }, (_, i) => `<p>Dòng ${i}: trình duyệt của Synchro truyền hình bằng video, chữ nét ở mật độ 2x.</p>`).join("")}</body>` });
+  const cfg = await until(() => msgs.find((m) => m.t === "video" && m.codec), 30_000);
+  ok(cfg && /^(vp09|avc1|av01)\./.test(cfg.codec) && cfg.w === 900 && cfg.h === 700, "máy chủ chọn video, gửi cấu hình giải mã (codec, kích thước trang)", cfg ?? msgs.filter((m) => m.t !== "tabs").slice(-3));
+  await until(() => bins.length >= 1, 15_000);
+  const first = bins[cfg?.at ?? 0];
+  ok(first && first.k === 1 && !first.jpeg && first.n > 5000, "khung đầu là khung khóa (cả màn hình)", first);
+  await sleep(1500);
+  mark = bins.length;
+  for (let i = 0; i < 10; i++) { v.send({ t: "text", text: "a" }); await sleep(200); }
+  await sleep(600);
+  const typed = bins.slice(mark);
+  const med = (a) => { const x = [...a].sort((p, q) => p - q); return x[x.length >> 1] ?? 0; };
+  ok(typed.length >= 5 && typed.every((b) => !b.jpeg) && med(typed.map((b) => b.n)) < 8000, "gõ phím: khung video nhỏ (vài KB)", { n: typed.length, median: med(typed.map((b) => b.n)), sizes: typed.map((b) => b.n).slice(0, 12) });
+  mark = bins.length;
+  for (let i = 0; i < 20; i++) { v.send({ t: "wheel", x: 400, y: 400, dx: 0, dy: 80 }); await sleep(50); }
+  await sleep(1200);
+  const scrolled = bins.slice(mark);
+  ok(scrolled.length >= 4 && med(scrolled.map((b) => b.n)) < 150_000, "cuộn: khung video nhỏ hơn hẳn ảnh 2x", { n: scrolled.length, median: med(scrolled.map((b) => b.n)) });
+  // Tab nén video là tab ẩn: không lọt vào danh sách tab của người dùng.
+  const tabs = msgs.filter((m) => m.t === "tabs").at(-1);
+  ok(tabs && !(tabs.list ?? []).some((t) => /encoder\.synchro|synchro-encoder/.test(t.url)), "tab nén video không hiện trong danh sách tab", tabs?.list);
+  // Bộ giải mã của người xem lỗi → xin khung khóa: màn hình đứng yên vẫn nhận lại cấu hình + khung khóa của khung gần nhất.
+  await sleep(800);
+  const nCfg = msgs.filter((m) => m.t === "video").length;
+  mark = bins.length;
+  v.send({ t: "vkey" });
+  await until(() => msgs.filter((m) => m.t === "video").length > nCfg && bins.length > mark, 15_000);
+  ok(msgs.filter((m) => m.t === "video").length > nCfg && bins[mark]?.k === 1, "xin khung khóa: cấu hình mới + khung khóa, kể cả khi trang đứng yên", { cfgs: msgs.filter((m) => m.t === "video").length - nCfg, next: bins[mark] });
+  // Đổi kích thước khung xem: cấu hình mới theo kích thước mới.
+  v.send({ t: "size", w: 800, h: 600, dpr: 2, bin: true, fa: true, vid: true });
+  const cfg2 = await until(() => msgs.find((m) => m.t === "video" && m.codec && m.w === 800), 20_000);
+  ok(cfg2?.h === 600, "đổi kích thước: cấu hình video mới 800x600", msgs.filter((m) => m.t === "video").slice(-2));
+  // Trình duyệt của người xem không giải mã được loại video này → máy chủ quay về JPEG.
+  v.send({ t: "novideo" });
+  await until(() => msgs.some((m) => m.t === "video" && m.off), 10_000);
+  mark = bins.length;
+  v.send({ t: "text", text: "b" });
+  await until(() => bins.slice(mark).some((b) => b.jpeg), 15_000);
+  ok(msgs.some((m) => m.t === "video" && m.off) && bins.slice(mark).some((b) => b.jpeg), "novideo: máy chủ báo tắt video và gửi lại ảnh JPEG", bins.slice(mark, mark + 3));
+  v.ws.close();
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

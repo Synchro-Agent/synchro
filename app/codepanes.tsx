@@ -154,6 +154,15 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   const nextFrame = useRef<Blob | null>(null);
   const decoding = useRef(false);
   const shown = useRef(false);
+  // Video (máy chủ có bộ nén, trình duyệt có WebCodecs): khung chỉ mang phần thay đổi, giải mã bằng VideoDecoder (phần cứng nếu có),
+  // khung giải mã xong mới nhất vẽ ở nhịp làm tươi kế tiếp. Không giải mã được loại video máy chủ gửi thì xin quay về JPEG.
+  const vdec = useRef<VideoDecoder | null>(null);
+  const vmode = useRef(false);
+  const vok = useRef(false);
+  const vneedKey = useRef(true);
+  const vts = useRef(0);
+  const vframe = useRef<VideoFrame | null>(null);
+  const vraf = useRef(0);
   // Ô nhập ẩn nhận bàn phím: bộ gõ tiếng Việt (Telex, VNI…), dán chữ.
   const kb = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
@@ -172,9 +181,11 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
     const v = VIEWPORTS.find((x) => x.k === vpRef.current);
     // fa: báo máy chủ đã nhận từng khung (máy chủ chỉ để tối đa 2 khung trên đường đi và tự cân chất lượng theo tốc độ mạng thật).
-    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true, fa: true });
+    // vid: nhận được video (WebCodecs).
+    const vid = typeof VideoDecoder === "function";
+    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true, fa: true, vid });
     const r = view.current?.getBoundingClientRect();
-    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true, fa: true });
+    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true, fa: true, vid });
   };
   const draw = () => {
     if (decoding.current || !nextFrame.current) return;
@@ -195,6 +206,52 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     })).catch(() => { decoding.current = false; draw(); });
   };
   const frame = (b: Blob) => { nextFrame.current = b; draw(); };
+  const vdraw = () => {
+    vraf.current = 0;
+    const f = vframe.current, c = cv.current;
+    vframe.current = null;
+    if (!f) return;
+    if (c) {
+      if (c.width !== f.displayWidth) c.width = f.displayWidth;
+      if (c.height !== f.displayHeight) c.height = f.displayHeight;
+      c.getContext("2d", { alpha: false })?.drawImage(f, 0, 0);
+      if (!shown.current) { shown.current = true; setBlank(false); }
+    }
+    f.close();
+  };
+  const vclose = () => {
+    const d = vdec.current;
+    vdec.current = null; vmode.current = false; vneedKey.current = true;
+    try { if (d && d.state !== "closed") d.close(); } catch {}
+    vframe.current?.close(); vframe.current = null;
+    cancelAnimationFrame(vraf.current); vraf.current = 0;
+  };
+  const vopen = (s: WebSocket, codec: string, desc?: string) => {
+    vclose();
+    vmode.current = true; vok.current = false;
+    const d: VideoDecoder = new VideoDecoder({
+      output: (f) => { vok.current = true; vframe.current?.close(); vframe.current = f; if (!vraf.current) vraf.current = requestAnimationFrame(vdraw); },
+      // Lỗi giải mã: đã chạy được thì xin khung khóa mới (máy chủ gửi lại cấu hình), chưa lần nào được thì quay về JPEG.
+      error: () => {
+        if (vdec.current !== d || ws.current !== s) return;
+        const ok = vok.current;
+        vclose();
+        if (s.readyState === 1) s.send(JSON.stringify(ok ? { t: "vkey" } : { t: "novideo" }));
+        vmode.current = ok;
+      },
+    });
+    vdec.current = d;
+    try { d.configure({ codec, optimizeForLatency: true, ...(desc ? { description: Uint8Array.from(atob(desc), (ch) => ch.charCodeAt(0)) } : {}) }); }
+    catch { vclose(); if (s.readyState === 1) s.send('{"t":"novideo"}'); }
+  };
+  const vchunk = (b: ArrayBuffer) => {
+    const d = vdec.current, u8 = new Uint8Array(b);
+    if (!d || d.state !== "configured" || u8.length < 2) return;
+    const key = (u8[0] & 1) === 1;
+    if (vneedKey.current && !key) return;
+    vneedKey.current = false;
+    d.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: (vts.current += 33_333), data: u8.subarray(1) }));
+  };
   // Mỗi lần kết nối có một số thứ tự: lần kết nối cũ (vé về muộn, hiệu ứng chạy hai lần) tự hủy, không để lại kết nối
   // "mồ côi" vẫn đẩy hình khổ mặc định vào khung.
   const gen = useRef(0);
@@ -203,21 +260,30 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     const my = ++gen.current;
     ws.current?.close();
     ws.current = null;
+    vclose();
     setSt("connecting");
     setNavd(false);
     try {
       const u = ticket ? await ticket() : (await wsOp<{ url: string }>("ticket", sid!, { kind: "screen" })).url;
       if (my !== gen.current) return;
       const s = new WebSocket(u);
-      s.binaryType = "blob";
+      s.binaryType = "arraybuffer";
       ws.current = s;
       s.onopen = () => { if (ws.current !== s) return s.close(); setSt("open"); sendSize(s); };
       s.onmessage = (e) => {
         if (ws.current !== s) return;
-        if (typeof e.data !== "string") { s.send('{"t":"fa"}'); frame(e.data as Blob); return; }
-        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string; w?: number; h?: number };
+        if (typeof e.data !== "string") {
+          s.send('{"t":"fa"}');
+          if (vmode.current) vchunk(e.data as ArrayBuffer); else frame(new Blob([e.data as ArrayBuffer], { type: "image/jpeg" }));
+          return;
+        }
+        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string; w?: number; h?: number; codec?: string; desc?: string; off?: boolean };
         try { j = JSON.parse(String(e.data)); } catch { return; }
         if (j.t === "meta") size.current = { w: j.w ?? 0, h: j.h ?? 0 };
+        else if (j.t === "video") {
+          if (j.off || !j.codec || typeof VideoDecoder !== "function") vclose();
+          else { size.current = { w: j.w ?? 0, h: j.h ?? 0 }; vopen(s, j.codec, j.desc); }
+        }
         // Máy chủ bản cũ: khung hình dạng base64 trong JSON.
         else if (j.t === "frame" && j.data) { size.current = { w: j.w ?? 0, h: j.h ?? 0 }; frame(new Blob([Uint8Array.from(atob(j.data), (ch) => ch.charCodeAt(0))], { type: "image/jpeg" })); }
         else if (j.t === "nav") { if (j.url !== undefined) { setUrl(j.url); setNavd(true); if (!editing.current) setAddr(blankUrl(j.url) ? "" : j.url); } }
@@ -248,16 +314,16 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
           say(d.state === "inProgress" ? `Đang tải về: ${d.name}` : d.state === "completed" ? `Đã tải về ${d.name} (thư mục Downloads của workspace)` : `Không tải được ${d.name}`);
         }
       };
-      s.onclose = () => { if (ws.current === s) setSt("closed"); };
+      s.onclose = () => { if (ws.current === s) { setSt("closed"); vclose(); } };
     } catch (e) { if (my === gen.current) { say((e as Error).message); setSt("closed"); } }
   }, [sid, ticket, say]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chỉ nhận hình khi khung đang hiện (tiết kiệm băng thông); ẩn thì ngắt.
   useEffect(() => {
-    if (!visible) { gen.current++; const s = ws.current; ws.current = null; s?.close(); return; }
+    if (!visible) { gen.current++; const s = ws.current; ws.current = null; s?.close(); vclose(); return; }
     connect();
-    return () => { gen.current++; const s = ws.current; ws.current = null; s?.close(); };
-  }, [visible, connect]);
+    return () => { gen.current++; const s = ws.current; ws.current = null; s?.close(); vclose(); };
+  }, [visible, connect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = view.current;

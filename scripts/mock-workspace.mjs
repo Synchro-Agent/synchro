@@ -66,7 +66,8 @@ export function startMockWs(port, root, secret) {
     proc.kill("SIGKILL");
     throw new BrowserError(500, "Không bật được Chrome trên máy này.");
   };
-  const core = createBrowser({ up, downloads: (u) => path.join(dirOf(u), "Downloads"), readDownload: (u, name) => fs.promises.readFile(path.join(dirOf(u), "Downloads", path.basename(String(name)))), allowFile: true });
+  // pageVideo: máy không có ffmpeg (thường gặp khi chạy dev:mock) thì nén video ngay trong Chrome (WebCodecs, VP9) như trên VPS dùng x264.
+  const core = createBrowser({ up, downloads: (u) => path.join(dirOf(u), "Downloads"), readDownload: (u, name) => fs.promises.readFile(path.join(dirOf(u), "Downloads", path.basename(String(name)))), allowFile: true, pageVideo: true });
   const relay = createRelay();
   const killAll = () => { for (const { proc } of procs.values()) proc.kill("SIGKILL"); };
   process.on("exit", killAll);

@@ -8,11 +8,13 @@
 // - screen(ws, u): truyền hình trực tiếp tới khung trình duyệt của người dùng, nhận chuột / bàn phím của họ, và báo cho
 //   người xem biết Synchro đang làm gì (điểm bấm, chữ đang gõ) để họ theo dõi hoặc giành lại quyền điều khiển bất cứ lúc nào.
 // host: { up(u) → "http://host:cổng" của DevTools (bật trình duyệt nếu chưa chạy); touch(u); sock(u, ±1); downloads(u) → thư mục tải về
-//         trong máy chạy trình duyệt; readDownload?(u, tên) → nội dung tệp đã tải (Buffer); ports?(u) → cổng server đang chạy (trang tab mới) }.
+//         trong máy chạy trình duyệt; readDownload?(u, tên) → nội dung tệp đã tải (Buffer); ports?(u) → cổng server đang chạy (trang tab mới);
+//         pageVideo?: true → máy không có ffmpeg thì nén video ngay trong Chromium (workspace/browser-video.mjs) }.
 import crypto from "node:crypto";
 import http from "node:http";
 import { WebSocket } from "ws";
 import { BrowserError, createActor } from "./browser-act.mjs";
+import { ffmpegBin, ffmpegEncoder, isEncoderTab, jpegSize, openEncoderPage, videoOff } from "./browser-video.mjs";
 
 export { BrowserError };
 
@@ -96,7 +98,8 @@ export function createBrowser(host) {
 
   const devtools = (u, path, method = "GET") => devJson(`${st(u).base}${path}`, method);
   const wsUrl = (u, raw) => { const s = st(u); const b = new URL(s.base); const x = new URL(raw); x.host = b.host; return x.toString(); };
-  const pages = async (u) => (await devtools(u, "/json/list")).filter((t) => t.type === "page");
+  // Tab nén video (workspace/browser-video.mjs) là tab ẩn của Synchro: không phải tab của người dùng hay của model.
+  const pages = async (u) => (await devtools(u, "/json/list")).filter((t) => t.type === "page" && !isEncoderTab(t) && t.id !== st(u).venc?.id);
   // icon: biểu tượng trang (Chrome đã tải sẵn) để hàng tab giống trình duyệt thường; chỉ địa chỉ http(s) công khai.
   const tabOf = (x) => ({ id: x.id, title: x.title, url: x.url, ...(/^https?:\/\//.test(x.faviconUrl ?? "") && !/^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(x.faviconUrl) ? { icon: x.faviconUrl } : {}) });
   // Kiểu con trỏ tại một điểm của trang (bàn tay trên liên kết, dấu gõ chữ trên ô nhập / chữ…) để khung xem đổi con trỏ như trình duyệt thật.
@@ -178,6 +181,26 @@ export function createBrowser(host) {
   }
   const info = A.info, act = A.act, handleDialog = A.handleDialog;
 
+  // Bộ nén video trong Chromium (một tab ẩn cho mỗi trình duyệt), chỉ dùng khi host cho phép và máy không có ffmpeg.
+  async function pageVideo(u) {
+    const s = st(u);
+    if (s.venc && !s.venc.closed) return s.venc;
+    return (s.vencP ??= (async () => {
+      const bc = await browserLevel(u);
+      s.venc = await openEncoderPage(bc, (id) => CDP.open(pageWs(u, id)));
+      return s.venc;
+    })().finally(() => { s.vencP = null; }));
+  }
+  /** Nguồn bộ nén video cho người xem: hàm tạo bộ nén (async), hoặc null nếu chỉ có JPEG. */
+  async function videoMaker(u) {
+    if (videoOff()) return null;
+    const bin = await ffmpegBin();
+    if (bin) return async () => ffmpegEncoder(bin);
+    if (!host.pageVideo || process.env.SYNCHRO_VIDEO === "ffmpeg") return null;
+    if (!(await pageVideo(u).catch(() => null))) return null;
+    return async () => (await pageVideo(u).catch(() => null))?.encoder() ?? null;
+  }
+
   // ---------------------------------------------------------------- màn hình trực tiếp cho người dùng
   async function screen(ws, u) {
     const queue = [];
@@ -204,8 +227,13 @@ export function createBrowser(host) {
     // Thời gian khung tới nơi trừ đi mức nền (khứ hồi + xử lý cố định, lấy nhỏ nhất gần đây) là phần do cỡ khung / băng thông:
     // >90 ms thì hạ bậc, hai nhịp liền <35 ms thì nâng lại. Người xem bản cũ: chờ bufferedAmount như trước.
     let latest = null, flushT = null, meta = "", qi = 0, waited = 0, sent = 0, calm = 0, tuned = Date.now(), lastBytes = 0;
-    let inflight = 0, ackSum = 0, ackN = 0, ackMin = Infinity, base = 0, refineT = null, refined = true, lastRefine = 0, dropUntil = 0;
+    let inflight = 0, ackSum = 0, ackN = 0, ackMin = Infinity, base = 0, refineT = null, refined = true, lastRefine = 0, dropUntil = 0, lastInput = 0;
     const sentAt = [];
+    // Video (người xem xin "vid: true" và máy chủ có bộ nén, workspace/browser-video.mjs): khung JPEG 2x chất lượng cao vào bộ nén,
+    // người xem nhận khung video (1 byte cờ khung khóa + dữ liệu). Tối đa một khung trong bộ nén và 2 khung trên đường đi; bận thì
+    // giữ khung mới nhất (Chrome chờ báo nhận) — mạng chậm thì ít khung hơn nhưng khung nào cũng nét. Không cần hạ chất lượng hay refine.
+    // mk: hàm tạo bộ nén; vid: { enc, w, h (điểm ảnh của ảnh), css: { w, h }, cfg, sent }; vbusy: lúc đưa khung vào bộ nén (0 = rảnh).
+    let mk = null, vid = null, vbusy = 0, lastPushed = null;
     const e2e = () => size.bin && size.fa;
     const castDpr = () => Math.min(size.dpr, STEPS[qi].d);
     const tune = () => {
@@ -236,7 +264,8 @@ export function createBrowser(host) {
         const buf = Buffer.from(f.data, "base64");
         lastBytes = buf.length;
         ws.send(buf);
-        if (e2e()) { inflight++; sentAt.push(Date.now()); }
+        // Khung refine lớn hơn hẳn khung thường: không tính vào thời gian khung tới nơi (không làm bộ tự cân tưởng mạng chậm).
+        if (e2e()) { inflight++; sentAt.push(f.refine ? 0 : Date.now()); }
       }
       sent++;
       f.ack();
@@ -245,11 +274,12 @@ export function createBrowser(host) {
     };
     // Màn hình đứng yên 350 ms khi đang ở bậc thấp (mạng chậm): một khung chất lượng cao ở đúng mật độ điểm ảnh của người xem để
     // chữ sắc nét khi đọc. Tối đa một khung mỗi 2 giây; khung Chrome tự vẽ lại ngay sau lần chụp được bỏ qua (không thành vòng lặp).
+    // Chỉ khi người dùng ngừng thao tác 1,2 giây: khung lớn này không chen trước khung của phím vừa gõ (trễ vọt 500–600 ms).
     const refine = async () => {
       refineT = null;
-      if (refined || gone || !c || ws.readyState !== WebSocket.OPEN || s.dialog) return;
+      if (refined || gone || !c || mk || ws.readyState !== WebSocket.OPEN || s.dialog) return;
       if (qi === 0 && castDpr() >= size.dpr) { refined = true; return; }
-      const wait = Math.max(latest || (e2e() && inflight >= 2) ? 200 : 0, lastRefine + 2000 - Date.now());
+      const wait = Math.max(latest || (e2e() && inflight >= 2) ? 200 : 0, lastRefine + 2000 - Date.now(), lastInput + 1200 - Date.now());
       if (wait > 0) { refineT = setTimeout(refine, wait); return; }
       refined = true;
       try {
@@ -260,6 +290,55 @@ export function createBrowser(host) {
         flush();
       } catch {}
     };
+    // Video: đưa khung mới nhất vào bộ nén khi bộ nén rảnh và đường đi còn chỗ.
+    const pump = async () => {
+      if (!mk || !latest || vbusy || ws.readyState !== WebSocket.OPEN || inflight >= 2) return;
+      const f = latest; latest = null;
+      const buf = Buffer.from(f.data, "base64"), d = jpegSize(buf);
+      if (!d) { f.ack(); return; }
+      vbusy = Date.now();
+      if (!vid || vid.w !== d.w || vid.h !== d.h) {
+        vid?.enc.close();
+        vid = null;
+        const enc = await mk().catch(() => null);
+        if (gone || !mk) { enc?.close(); vbusy = 0; f.ack(); return; }
+        if (!enc) { f.ack(); return videoFail("không mở được bộ nén"); }
+        vid = { enc, w: d.w, h: d.h, css: null, cfg: null, sent: false };
+        enc.onConfig = (cfg) => { if (vid?.enc === enc) { vid.cfg = cfg; vid.sent = false; } };
+        enc.onFrame = (o) => { if (vid?.enc === enc) out(o); };
+        enc.onError = (e) => { if (vid?.enc === enc) videoFail(e); };
+      }
+      vid.css = { w: f.w, h: f.h };
+      lastPushed = { data: f.data, w: f.w, h: f.h };
+      vid.enc.push(buf);
+      f.ack();
+    };
+    const out = ({ key, data }) => {
+      vbusy = 0;
+      if (ws.readyState === WebSocket.OPEN) {
+        // Cấu hình giải mã đi trước khung khóa đầu tiên của mỗi bộ nén (mở lại khi đổi kích thước / người xem xin khung khóa).
+        if (!vid.sent) {
+          if (!key || !vid.cfg) return next();
+          send({ t: "video", codec: vid.cfg.codec, ...(vid.cfg.desc ? { desc: vid.cfg.desc.toString("base64") } : {}), w: vid.css.w, h: vid.css.h });
+          vid.sent = true; meta = `${vid.css.w}x${vid.css.h}`;
+        }
+        const m = `${vid.css.w}x${vid.css.h}`;
+        if (m !== meta) { meta = m; send({ t: "meta", w: vid.css.w, h: vid.css.h }); }
+        ws.send(Buffer.concat([Buffer.from([key ? 1 : 0]), data]));
+        inflight++; sentAt.push(Date.now());
+      }
+      next();
+    };
+    // Bộ nén lỗi: quay về JPEG cho kết nối này (người xem chuyển theo khi nhận video off).
+    const videoFail = (why) => {
+      if (DEBUG) console.log(`[browser] video → jpeg: ${why}`);
+      const was = !!mk;
+      mk = null; vid?.enc.close(); vid = null; vbusy = 0; meta = ""; inflight = 0; sentAt.length = 0;
+      if (was) send({ t: "video", off: true });
+      if (c && !gone) c.send("Page.stopScreencast").catch(() => {}).finally(() => startCast());
+    };
+    const vwatch = setInterval(() => { if (vbusy && Date.now() - vbusy > 4000) videoFail("bộ nén không trả khung"); }, 1000);
+    const next = () => (mk ? pump().catch((e) => videoFail(e?.message)) : !flushT && flush());
     const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
     const pushTabs = async () => {
       try {
@@ -273,8 +352,9 @@ export function createBrowser(host) {
     let lastFrame = 0, watch = null;
     const startCast = async () => {
       const cc = c, at = Date.now();
-      const d = castDpr();
-      await cc.send("Page.startScreencast", { format: "jpeg", quality: STEPS[qi].q + (d > 1 ? 0 : 8), maxWidth: Math.round(size.w * d), maxHeight: Math.round(size.h * d), everyNthFrame: 1 }).catch(() => {});
+      // Video: khung vào bộ nén luôn ở đúng mật độ điểm ảnh của người xem, chất lượng cao (bộ nén lo phần dung lượng).
+      const d = mk ? size.dpr : castDpr();
+      await cc.send("Page.startScreencast", { format: "jpeg", quality: mk ? 85 : STEPS[qi].q + (d > 1 ? 0 : 8), maxWidth: Math.round(size.w * d), maxHeight: Math.round(size.h * d), everyNthFrame: 1 }).catch(() => {});
       clearTimeout(watch);
       watch = setTimeout(() => { if (!gone && c === cc && lastFrame < at) cc.send("Page.stopScreencast").catch(() => {}).finally(() => startCast()); }, 1500);
     };
@@ -296,7 +376,7 @@ export function createBrowser(host) {
         if (lastFrame < dropUntil) { dropUntil = 0; return ack(); }
         latest?.ack();
         latest = { data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight, ack };
-        if (!flushT) flush();
+        next();
       });
       n.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) { send({ t: "nav", url: p.frame.url }); pushTabs(); } });
       n.on("Page.loadEventFired", () => { sendInfo(); pushTabs(); });
@@ -340,8 +420,17 @@ export function createBrowser(host) {
           inflight = Math.max(0, inflight - 1);
           const t0 = sentAt.shift();
           if (t0) { const d = Date.now() - t0; ackSum += d; ackN++; ackMin = Math.min(ackMin, d); }
-          if (latest && !flushT) flush();
+          if (latest) next();
           return;
+        }
+        if (j.t === "vkey" || j.t === "novideo") {
+          // Người xem cần khung khóa (bộ giải mã vừa lỗi / mở lại): bộ nén mới, nén lại khung gần nhất nếu màn hình đang đứng yên.
+          // novideo: trình duyệt của người xem không giải mã được loại video này → JPEG.
+          if (j.t === "novideo") return videoFail("người xem không giải mã được");
+          if (!mk) return;
+          vid?.enc.close(); vid = null; vbusy = 0;
+          if (!latest && lastPushed) latest = { ...lastPushed, ack: () => {} };
+          return next();
         }
         if (j.t === "size") {
           const w = Math.max(320, Math.min(j.w | 0, 2560)), h = Math.max(240, Math.min(j.h | 0, 1600));
@@ -351,17 +440,25 @@ export function createBrowser(host) {
           size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true };
           inflight = 0; sentAt.length = 0;
           meta = "";
+          const had = !!mk;
+          mk = j.vid === true && size.bin && size.fa ? await videoMaker(u).catch(() => null) : null;
+          vid?.enc.close(); vid = null; vbusy = 0; lastPushed = null;
+          if (had && !mk) send({ t: "video", off: true });
           await metrics();
           await c.send("Page.stopScreencast").catch(() => {});
           await startCast();
         } else if (j.t === "mouse") {
+          if (j.type !== "mouseMoved") lastInput = now;
           await c.send("Input.dispatchMouseEvent", { type: j.type, x: +j.x, y: +j.y, button: j.button ?? "left", buttons: j.buttons ?? 0, clickCount: j.clickCount ?? 0, modifiers: j.mod ?? 0 });
           if (j.type === "mouseMoved") { const first = !cursorAt; cursorAt = { x: +j.x, y: +j.y }; if (first) setTimeout(probeCursor, 80); }
         } else if (j.t === "wheel") {
+          lastInput = now;
           await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +j.x, y: +j.y, deltaX: +j.dx || 0, deltaY: +j.dy || 0 });
         } else if (j.t === "key") {
+          lastInput = now;
           await c.send("Input.dispatchKeyEvent", { type: j.type, key: j.key, code: j.code, text: j.text, unmodifiedText: j.text, windowsVirtualKeyCode: j.kc ?? 0, modifiers: j.mod ?? 0 });
         } else if (j.t === "text") {
+          lastInput = now;
           await c.send("Input.insertText", { text: String(j.text ?? "") });
         } else if (j.t === "go") {
           await act(u, { action: "navigate", url: j.url, user: true }).catch((e) => send({ t: "error", error: e.message }));
@@ -398,7 +495,7 @@ export function createBrowser(host) {
     for (const m of queue.splice(0)) handle(m);
     // Người xem rời đi: chỉ đóng kết nối (phát hình của kết nối đó tự dừng). Không gửi stopScreencast: lệnh này tới muộn sẽ tắt luôn
     // phát hình của người xem mới trên cùng tab (đóng rồi mở lại khung trình duyệt thì màn hình đứng).
-    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
+    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); clearInterval(vwatch); vid?.enc.close(); vid = null; mk = null; latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
     if (gone) bye(); else ws.on("close", bye);
   }
 
