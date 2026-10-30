@@ -7,6 +7,7 @@ import net from "node:net";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { lookup } from "node:dns/promises";
 import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
@@ -38,9 +39,10 @@ const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "re
 const MAX_RUNNING = Number(env("WS_MAX_RUNNING", 4));
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
-// 2 CPU (cả máy): trình duyệt của Synchro vẽ / chụp khung 2x khi cuộn nhanh gần gấp đôi (đo: 10 → 18–21 khung / giây). Ưu tiên thấp
-// (cpu-shares 256): khi tranh CPU, máy chủ web, ffmpeg nén hình và các dịch vụ khác chạy trước, container chỉ dùng phần còn rảnh.
-const CPUS = env("WS_CPUS", "2");
+// Mọi CPU của máy (đọc lúc dịch vụ khởi động, nâng VPS xong là tự dùng thêm): trình duyệt của Synchro vẽ / chụp khung 2x tốn ~90 ms CPU
+// mỗi khung nên càng nhiều CPU càng cuộn mượt (đo trên VPS 2 CPU: 1 CPU 10, 2 CPU 18–21 khung / giây). Ưu tiên thấp (cpu-shares 256):
+// khi tranh CPU, máy chủ web, ffmpeg nén hình và các dịch vụ khác chạy trước, container chỉ dùng phần còn rảnh.
+const CPUS = env("WS_CPUS", String(Math.max(1, os.availableParallelism?.() ?? os.cpus().length)));
 const CPU_SHARES = env("WS_CPU_SHARES", "256");
 const DISK_MB = Number(env("WS_DISK_MB", 5000));
 const SOCK = "/var/run/docker.sock";
