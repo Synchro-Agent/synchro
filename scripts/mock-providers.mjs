@@ -164,15 +164,18 @@ const valid = (k) => typeof k === "string" && k.includes("mock");
 const elevenNo = (req, perm) => String(req.headers["xi-api-key"] ?? "").includes(`no${perm}`);
 
 // Chữ của tin nhắn người dùng gần nhất (bỏ qua kết quả công cụ, ảnh, tệp).
+// Lời nhắc làm tiếp của Synchro (<synchro_continue>) không phải câu người dùng gõ: đọc yêu cầu thật trước nó.
 function lastUserFull(msgs = []) {
   for (const m of [...msgs].reverse()) {
     if (m.role !== "user") continue;
-    if (typeof m.content === "string") return m.content;
+    if (typeof m.content === "string") { if (m.content.startsWith("<synchro_continue>")) continue; return m.content; }
     const t = (m.content ?? []).filter((b) => b.type === "text" || b.type === "input_text").map((b) => b.text).join("\n");
-    if (t) return t;
+    if (t && !t.startsWith("<synchro_continue>")) return t;
   }
   return "";
 }
+// [mock:stall]: như model thật đôi khi chỉ báo "Mình sẽ…" rồi dừng, không gọi công cụ; Synchro nhắc làm tiếp thì làm thật.
+const stallNow = (q, msgs) => q.includes("[mock:stall]") && !JSON.stringify(msgs ?? []).includes("<synchro_continue>");
 // Tầng động Synchro ghép vào cuối tin nhắn mới nhất (artifact hiện tại, tài liệu tri thức…): không phải câu người dùng gõ.
 const DYN = /<(current_artifacts|tool_activity|context_mixer|skill_routing|brain_recall)>[\s\S]*?<\/\1>/g;
 const lastUserText = (msgs) => lastUserFull(msgs).replace(DYN, "").trim();
@@ -472,6 +475,7 @@ function memoryReply(sys, q) {
 // Lời gọi của bộ não / đặt tên (chưng cất, biên soạn, gộp, bản đồ, hồ sơ, hướng dẫn): trả lời bằng mockBrain, không qua skill / công cụ.
 const SIDE = /^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/;
 const capsFor = (sys, q, msgs, tools, none) => {
+  if (stallNow(q, msgs)) return { text: "Mình sẽ mở trình duyệt và làm ngay." };
   if (q.includes("#media") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
   // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
   if (!none && q.includes("#tool=") && !/#rev\s*\d+/.test(q)) { const w = wantTool(q, tools); if (w) return { tool: w }; }

@@ -55,7 +55,7 @@ const authFile = path.join(dir, "auth.json");
   }
   if (a[0] === "exec") {
     const resume = a[1] === "resume" ? a[2] : undefined;
-    const prompt = await C.readStdin();
+    let prompt = await C.readStdin();
     const tid = resume || C.uuid();
     C.out({ type: "thread.started", thread_id: tid });
     C.out({ type: "turn.started" });
@@ -67,6 +67,9 @@ const authFile = path.join(dir, "auth.json");
     }
     if (prompt.includes("[mock:quota]")) { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
     const turn = C.bumpSession(dir, tid);
+    const st = C.stallTurn(dir, tid, prompt);
+    if (st.stall) { C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: C.STALL_TEXT } }); C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: 10 } }); return; }
+    prompt = st.prompt;
     await C.sleep(150);
     C.out({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "**Chào hỏi**" } });
     const eff = (a.find((x) => x.startsWith("model_reasoning_effort=")) ?? "").split("=")[1];

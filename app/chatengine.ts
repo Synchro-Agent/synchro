@@ -29,6 +29,7 @@ import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule } from "./brain";
+import { MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
 import type { TaskCtx } from "./tasks";
@@ -387,12 +388,19 @@ function pruneBrowser(m: unknown[], x: Exec) {
 async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][], uid: string, model: string, start = 0): Promise<Out> {
   // Việc tự động chạy nền: không ai ngồi chờ nên cho nhiều bước hơn (tra nhiều nguồn, nhiều connector, nhiều trang).
   const steps = x.task ? (x.browse ? 300 : 150) : x.browse ? BROWSE_STEPS : MAX_STEPS;
+  // Lượt mới chỉ báo "Mình sẽ…" rồi dừng, chưa dùng công cụ nào: nhắc model làm tiếp (stall.ts).
+  let nudged = 0, acted = start > 0;
   for (let i = start; i < steps; i++) {
     if (i > 0) { progress("step", "Đang viết câu trả lời"); deltaStep(); }
     if (x.browse) pruneBrowser(m, x);
     const r = await ad.step(m, i === steps - 1);
     m.push(r.assistant);
-    if (!r.calls.length) { if (r.pause) continue; return { text: r.text, used }; }
+    if (!r.calls.length) {
+      if (r.pause) continue;
+      if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; progress("say", r.text.trim()); m.push({ role: "user", content: NUDGE }); continue; }
+      return { text: r.text, used };
+    }
+    acted = true;
     // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
     if (r.text.trim()) progress("say", r.text.trim());
     const ask = x.task ? [] : r.calls.filter((c) => needsAsk(x, c));
@@ -785,6 +793,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
     let bridge: { url: string; close: () => void } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "";
     const usedAll: ToolRun["used"][] = [];
+    let bridged = 0;
     try {
       if (pc && !am && BRIDGE_CLIS.has(cli)) {
         const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
@@ -800,14 +809,21 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net)] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
         const xx: Exec = { list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
-        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => bridgeCall(xx, name, input, usedAll) });
+        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => { bridged++; return bridgeCall(xx, name, input, usedAll); } });
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
       }
-      const r = await subTurn({
+      const turnMsgs = am ?? withRecall(messages, recallOf(body, c.user, convId));
+      const once = (msgs: unknown) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-        messages: am ?? withRecall(messages, recallOf(body, c.user, convId)), conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
+        messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
         mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true,
       });
+      let r = await once(turnMsgs);
+      // Gói dừng ngay sau câu "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp trong cùng phiên của CLI (stall.ts).
+      for (let k = 0, said: string; k < MAX_NUDGE && bridge && r.status === 200 && !bridged && stalled(said = String((r.json as { text?: unknown }).text ?? "")); k++) {
+        progress("say", said.trim());
+        r = await once([...(turnMsgs as unknown[]), { role: "assistant", content: said }, { role: "user", content: NUDGE }]);
+      }
       if (!x || r.status !== 200) return Response.json(r.json, { status: r.status });
       // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).
       const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);

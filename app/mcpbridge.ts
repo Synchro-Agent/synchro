@@ -40,7 +40,8 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
       });
     case "ping": return ok(m.id, {});
     case "tools/list":
-      return ok(m.id, { tools: b.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.input_schema ?? { type: "object", properties: {} } })) });
+      // antigravity/alwaysLoad: Antigravity nạp sẵn công cụ (gọi thẳng mcp_synchro_…) thay vì để model tự tìm rồi gọi qua CallMcpTool.
+      return ok(m.id, { tools: b.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.input_schema ?? { type: "object", properties: {} }, _meta: { "antigravity/alwaysLoad": true } })) });
     case "tools/call": {
       const name = String(m.params?.name ?? "");
       if (!b.tools.some((t) => t.name === name)) return fail(m.id, -32602, `Không có công cụ ${name}`);

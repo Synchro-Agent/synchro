@@ -158,10 +158,17 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   const agyDir = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/antigravity-cli`;
   // Công cụ của Synchro cho Gemini qua gói: cầu nối thêm bằng `agy mcp add` cho riêng lượt, hook chỉ cho phép công cụ mcp_synchro_….
   const at = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc #tool=update_plan #args={"items":[{"content":"Buoc mot","status":"in_progress"}]}' }], skills: true });
-  ok(at.s === 200 && /\[đã dùng update_plan: Đã cập nhật/.test(at.j?.text ?? "") && !/bị từ chối/.test(at.j.text), "Gemini qua gói gọi được công cụ của Synchro (không bị agy từ chối)", JSON.stringify(at.j));
+  ok(at.s === 200 && /\[đã dùng update_plan: Đã cập nhật/.test(at.j?.text ?? "") && !/bị từ chối/.test(at.j.text), "Gemini qua gói gọi thẳng công cụ của Synchro (cầu nối đánh dấu nạp sẵn, không bị agy từ chối)", JSON.stringify(at.j));
   const { readFileSync } = await import("node:fs");
   const cfg = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/config`;
-  ok(!JSON.parse(readFileSync(`${cfg}/mcp_config.json`, "utf8")).mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*"/.test(readFileSync(`${cfg}/hooks.json`, "utf8")), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ của Synchro");
+  ok(!JSON.parse(readFileSync(`${cfg}/mcp_config.json`, "utf8")).mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*\|CallMcpTool"/.test(readFileSync(`${cfg}/hooks.json`, "utf8")), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ MCP (của Synchro)");
+  // agy 1.4.11: công cụ MCP nạp khi cần được gọi qua tên chung CallMcpTool — vẫn được phép, không dừng sau câu dẫn.
+  const od = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc [mock:ondemand] #tool=update_plan #args={"items":[{"content":"Buoc hai","status":"in_progress"}]}' }], skills: true });
+  ok(od.s === 200 && /\[đã dùng update_plan qua CallMcpTool: Đã cập nhật/.test(od.j?.text ?? ""), "agy gọi công cụ qua CallMcpTool (nạp khi cần) vẫn chạy", JSON.stringify(od.j));
+  // agy tự chặn công cụ (ví dụ công cụ dựng sẵn): báo rõ thay vì trả mỗi câu dẫn rồi im lặng; nhật ký của lượt được xóa.
+  const dn = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Mở trang [mock:deny] #tool=browser_tabs #args={"op":"list"}' }], skills: true });
+  const { readdirSync } = await import("node:fs");
+  ok(dn.s >= 400 && /Antigravity tự chặn công cụ của Synchro \(run_command\)/.test(dn.j?.error ?? "") && !readdirSync(`${process.cwd()}/data-mock/engine/work`, { recursive: true }).some((f) => /\.synchro-agy-.*\.log$/.test(String(f))), "agy tự chặn công cụ → báo lỗi rõ ràng (không im lặng), xóa nhật ký của lượt", JSON.stringify(dn));
   const pre = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
   ok(pre.sub?.setup && !existsSync(`${agyDir}/onboarding-input.log`), "chưa làm quen: vòng tròn báo cần hoàn tất, Synchro không bấm thay", JSON.stringify(pre.sub));

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Antigravity CLI giả lập (dev:mock), theo đúng hành vi agy 1.4.7 quan sát trên máy chủ thật:
+// Antigravity CLI giả lập (dev:mock), theo đúng hành vi agy 1.4.11 quan sát trên máy chủ thật:
 // - chạy không tham số = đăng nhập trong terminal (menu → link → dán mã); phiên đăng nhập ghi xuống đĩa sau khoảng 1 giây;
 // - lần mở tương tác đầu tiên sau đăng nhập hiện màn hình làm quen (bảng màu, điều khoản, chia sẻ dữ liệu) — mọi phím gõ vào
 //   màn hình đó được ghi lại để kiểm thử chắc chắn Synchro không bấm thay người dùng;
@@ -7,6 +7,10 @@
 // - --output-format json [--model] [--effort] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức.
 // - `mcp add|remove|list` ghi ~/.gemini/config/mcp_config.json đúng định dạng của agy ({ mcpServers: { tên: { serverUrl, headers, disabled } } });
 //   ở chế độ -p, công cụ MCP cần duyệt bị tự từ chối trừ khi hook PreToolUse trong ~/.gemini/config/hooks.json trả "allow" (tài liệu của agy).
+//   Công cụ MCP mặc định nạp khi cần: model tìm rồi gọi qua tên chung "CallMcpTool"; công cụ có _meta "antigravity/alwaysLoad" được nạp sẵn
+//   và gọi bằng tên mcp_synchro_…. Bị từ chối thì lượt dừng sau câu dẫn đầu tiên, nhật ký (--log-file) ghi
+//   `Print mode: soft-denying tool confirmation "<tên>"`. Trong prompt: [mock:ondemand] → gọi qua CallMcpTool; [mock:deny] → model gọi
+//   công cụ dựng sẵn run_command (luôn bị từ chối).
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
@@ -28,7 +32,7 @@ const hookAllows = (tool) => Object.values(readJson(hooksFile)).some((h) => h?.e
 const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "utf8")).onboardingComplete === true; } catch { return false; } };
 
 (async () => {
-  if (a[0] === "--version") return console.log("1.4.7 [mock]");
+  if (a[0] === "--version") return console.log("1.4.11 [mock]");
   const li = fs.existsSync(loginFile);
   if (a[0] === "models") {
     console.log("Fetching available models...");
@@ -56,7 +60,8 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
     return console.log(["NAME     TYPE  STATUS   COMMAND/URL", ...Object.entries(c.mcpServers).map(([n, v]) => `${n}  http  ${v.disabled ? "disabled" : "enabled"}  ${v.serverUrl}`)].join("\n"));
   }
   if (a.includes("-p")) {
-    const prompt = C.flag(a, "-p") ?? "", conv = C.flag(a, "--conversation") || C.uuid();
+    let prompt = C.flag(a, "-p") ?? "";
+    const conv = C.flag(a, "--conversation") || C.uuid();
     if (!li) {
       console.log(JSON.stringify({ conversation_id: "", status: "ERROR", response: "", error: "authentication failed or timed out", duration_seconds: 0, num_turns: 0, usage: usage0 }));
       console.error("Error: authentication required. Run 'agy' to log in, then retry.");
@@ -64,20 +69,30 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
     }
     if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
     const turn = C.bumpSession(gem, conv);
+    const st = C.stallTurn(gem, conv, prompt);
+    if (st.stall) return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: C.STALL_TEXT, error: "", duration_seconds: 0.2, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: 10 } }));
+    prompt = st.prompt;
     const model = C.flag(a, "--model"), effort = C.flag(a, "--effort");
     // Công cụ của Synchro qua máy chủ MCP "synchro" trong cấu hình chung của tài khoản.
     const srv = readJson(mcpFile).mcpServers?.synchro;
+    const logFile = C.flag(a, "--log-file");
+    const log = (l) => { if (logFile) fs.appendFileSync(logFile, `I1030 00:00:00.000000       1 ${l}\n`); };
+    log("cli_setting_manager.go:96] CLI settings initialized: permissions=<nil>, toolPermission=request-review");
     let note = "";
     if (srv && !srv.disabled) {
       const ask = C.toolAsk(prompt);
+      const listed = ask ? (await C.mcp(srv.serverUrl).catch(() => ({ tools: [] }))).tools : [];
+      const direct = !prompt.includes("[mock:ondemand]") && listed.some((t) => t.name === ask?.name && t._meta?.["antigravity/alwaysLoad"] === true);
+      const hookName = prompt.includes("[mock:deny]") ? "run_command" : direct ? `mcp_synchro_${ask?.name}` : "CallMcpTool";
       if (!ask) note = ` [công cụ Synchro: ${(await C.mcp(srv.serverUrl).catch(() => ({ tools: [] }))).tools.length}]`;
-      else if (!hookAllows(`mcp_synchro_${ask.name}`)) {
-        console.error(`the mcp_synchro_${ask.name} tool(s) required approval that headless mode cannot prompt for, so they were auto-denied. Settings allow-rules do not apply; re-run with --dangerously-skip-permissions to auto-approve all tools.`);
-        note = " [công cụ bị từ chối]";
+      else if (hookName === "run_command" || !hookAllows(hookName)) {
+        log(`tool_confirmation_manager.go:221] Print mode: soft-denying tool confirmation "${hookName}" at step 2`);
+        await C.sleep(100);
+        return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: "Mình sẽ xem cách dùng các công cụ trình duyệt trước.", error: "", duration_seconds: 0.3, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: 12 } }));
       } else {
         const r = await C.mcp(srv.serverUrl, ask).catch((e) => ({ error: { message: String(e) } }));
         const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n");
-        note = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
+        note = ` [đã dùng ${ask.name}${direct ? "" : " qua CallMcpTool"}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
       }
     }
     // Như agy thật ở print mode: không có cờ gửi tệp; model mở tệp trong thư mục làm việc bằng công cụ xem tệp (view_file).

@@ -201,10 +201,19 @@ export class CodexEngine implements Engine {
 // Công cụ của Synchro cho Antigravity: agy chỉ đọc máy chủ MCP từ cấu hình chung của tài khoản (~/.gemini/config/mcp_config.json),
 // không có cờ cho từng lượt như Claude Code / Codex. Mỗi lượt có công cụ: thêm cầu nối của lượt bằng chính `agy mcp add`, rồi gỡ
 // khi xong; các lượt có công cụ của cùng một tài khoản chạy lần lượt để cầu nối không lẫn. Ở chế độ -p, agy tự từ chối công cụ cần duyệt;
-// hook PreToolUse (~/.gemini/config/hooks.json, theo tài liệu của agy) chỉ cho phép công cụ của Synchro (mcp_synchro_…),
-// công cụ dựng sẵn của agy (lệnh shell, ghi tệp trên máy chủ) vẫn bị từ chối như trước.
+// hook PreToolUse (~/.gemini/config/hooks.json, theo tài liệu của agy) chỉ cho phép công cụ MCP — trong cấu hình chỉ có cầu nối của
+// Synchro: mcp_synchro_… khi công cụ được nạp sẵn (cầu nối đánh dấu antigravity/alwaysLoad), CallMcpTool khi agy 1.4.x để model tự tìm
+// công cụ rồi gọi qua tên chung. Công cụ dựng sẵn của agy (lệnh shell, ghi tệp trên máy chủ) vẫn bị từ chối như trước.
 const agyLocks = new Map<string, Promise<void>>();
-const AGY_HOOK = JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: "mcp_synchro_.*", hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
+const AGY_HOOK = JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: "mcp_synchro_.*|CallMcpTool", hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
+/** Công cụ agy tự từ chối trong lượt (đọc nhật ký của lượt bằng chính user của engine, rồi xóa nhật ký). */
+async function agyDenied(req: TurnRequest, log: string): Promise<string[]> {
+  const sh = spawnCli("/bin/sh", ["-c", 'grep -o "soft-denying tool confirmation \\"[A-Za-z_]*\\"" "$1" 2>/dev/null; rm -f "$1"', "sh", log], { env: req.env, cwd: path.dirname(log) });
+  let out = "";
+  for await (const l of sh.lines) out += l + "\n";
+  await sh.done;
+  return [...new Set([...out.matchAll(/"([A-Za-z_]+)"/g)].map((m) => m[1]))];
+}
 async function agyRun(args: string[], req: TurnRequest) {
   const p = start("agy", args, { ...req, signal: undefined }, "");
   if (!p) return false;
@@ -247,6 +256,9 @@ export class AntigravityEngine implements Engine {
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--conversation", req.sessionId);
+    // Lượt có công cụ: nhật ký riêng của lượt để biết agy có tự từ chối công cụ nào không (khi đó lượt dừng sau câu dẫn đầu tiên).
+    const log = req.mcp ? path.join(req.workdir ?? path.join(engineHome(), "work"), `.synchro-agy-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.log`) : "";
+    if (log) args.push("--log-file", log);
     args.push("-p", prompt);
     const p = start("agy", args, req, "");
     if (!p) { yield notInstalled("agy"); return; }
@@ -268,6 +280,11 @@ export class AntigravityEngine implements Engine {
       return;
     }
     const text = typeof o.response === "string" ? o.response : "";
+    const denied = log ? await agyDenied(req, log).catch(() => []) : [];
+    if (denied.length) {
+      yield err(`Antigravity tự chặn công cụ của Synchro (${denied.join(", ")}) nên lượt này dừng sau câu đầu, chưa làm được gì. Hãy gửi lại yêu cầu hoặc chọn model khác (để Tự động thì Synchro tự chuyển model).`, "other");
+      return;
+    }
     if (text) yield { kind: "text", text };
     yield { kind: "final", text, via: "agy" };
   }

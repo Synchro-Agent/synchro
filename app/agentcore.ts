@@ -12,6 +12,7 @@ import { subCli, subTurn } from "./ai/subs";
 import { BROWSER_TOOLS, isBrowserTool, runBrowserTool, type BrowserCtx } from "./browsertools";
 import type { Gate } from "./agentgate";
 import type { Ask } from "./approvals";
+import { MAX_NUDGE, NUDGE, stalled } from "./stall";
 
 export const AGENT_MAX_STEPS = 40;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
@@ -381,7 +382,7 @@ export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: st
   const c: Ctx = { u: o.u, d: o.d, emit: o.emit, skills: o.skills, scripts: o.scripts, usedSkills: [], opened: new Set(), bctx: o.bctx, extra: o.extra };
   const msgs = [...o.messages];
   const max = o.maxSteps ?? AGENT_MAX_STEPS;
-  let text = "";
+  let text = "", nudged = 0, acted = false;
   for (let i = 0; i < max; i++) {
     if (o.signal.aborted) break;
     const r = await o.adapter.step(msgs, i === max - 1);
@@ -389,7 +390,12 @@ export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: st
     if (r.think?.trim()) o.emit({ t: "think", text: r.think.trim() });
     if (r.text.trim()) { o.emit({ t: "text", text: r.text }); text = r.text; }
     msgs.push(r.assistant);
-    if (!r.calls.length) break;
+    if (!r.calls.length) {
+      // Mới báo "Mình sẽ…" rồi dừng mà chưa dùng công cụ nào: nhắc làm tiếp (stall.ts).
+      if (!acted && nudged < MAX_NUDGE && i < max - 1 && stalled(r.text)) { nudged++; msgs.push({ role: "user", content: NUDGE }); continue; }
+      break;
+    }
+    acted = true;
     const res: Out[] = [];
     for (const call of r.calls) {
       if (o.signal.aborted) break;
@@ -444,10 +450,17 @@ export async function runPlanAgent(o: {
     },
   });
   try {
-    const r = await subTurn({
-      user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages: o.messages, conv: o.conv, effort: o.effort,
+    const once = (messages: { role: string; content: unknown }[]) => subTurn({
+      user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages, conv: o.conv, effort: o.effort,
       signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url },
     });
+    let r = await once(o.messages);
+    // Gói dừng ngay sau câu "Mình sẽ…" mà chưa gọi công cụ nào: nhắc làm tiếp trong cùng phiên của CLI (stall.ts).
+    for (let k = 0, said: string; k < MAX_NUDGE && r.status === 200 && !n && !o.signal.aborted && stalled(said = String((r.json as { text?: unknown }).text ?? "")); k++) {
+      if (!pending.trim()) pending = said;
+      flush();
+      r = await once([...o.messages, { role: "assistant", content: said }, { role: "user", content: NUDGE }]);
+    }
     const j = r.json as { text?: string; error?: string; cancelled?: boolean };
     if (r.status !== 200) throw new Error(j.error ?? "Gói subscription báo lỗi.");
     if (!pending.trim() && j.text) pending = j.text;

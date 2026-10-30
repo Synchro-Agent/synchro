@@ -23,6 +23,15 @@ function bumpSession(dir, id) {
   writeJson(f, s);
   return s[id];
 }
+/** [mock:stall]: lượt đầu chỉ báo "Mình sẽ…" rồi dừng, không gọi công cụ. Synchro nhắc làm tiếp (<synchro_continue>) thì làm thật:
+ *  CLI thật nhớ yêu cầu trước trong phiên, giả lập đọc lại yêu cầu đã lưu của phiên (lượt nối tiếp chỉ nhận lời nhắc). */
+function stallTurn(dir, id, prompt) {
+  const f = path.join(dir, "mock-prompts.json"), s = readJson(f, {});
+  const nudge = prompt.includes("<synchro_continue>");
+  if (!nudge) { s[id] = prompt; writeJson(f, s); }
+  return { stall: prompt.includes("[mock:stall]") && !nudge, prompt: nudge && !/#tool=/.test(prompt) ? `${s[id] ?? ""}\n${prompt}` : prompt };
+}
+const STALL_TEXT = "Mình sẽ mở trình duyệt và làm ngay.";
 /** Hạn mức giả lập: mỗi lượt dùng 7% phiên 5 giờ và 2% tuần. */
 function bumpUsage(dir) {
   const f = path.join(dir, "mock-usage.json"), now = Date.now();
@@ -162,4 +171,4 @@ function mediaDesc(buf, hint = "") {
 }
 const mediaReply = (items) => `MEDIA: ${items.length ? items.join("; ") : "không có tệp nào"}`;
 
-module.exports = { mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

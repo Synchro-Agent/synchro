@@ -72,6 +72,9 @@ const loginFile = path.join(dir, ".mock-login");
       result({ subtype: "success", is_error: true, result: `Claude AI usage limit reached|${sec(lim.fiveReset)}` });
       process.exit(1);
     }
+    const stl = C.stallTurn(dir, sid, prompt);
+    if (stl.stall) { C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: C.STALL_TEXT }] }, session_id: sid }); result({ subtype: "success", is_error: false, result: C.STALL_TEXT }); return; }
+    prompt = stl.prompt;
     const delta = async (t) => { for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
     // Như Claude Code thật với --mcp-config: nối máy chủ MCP "synchro", gọi công cụ (mcp__synchro__…) khi cần.
     const cfgJson = (() => { try { return JSON.parse(C.flag(a, "--mcp-config") ?? "null"); } catch { return null; } })();
