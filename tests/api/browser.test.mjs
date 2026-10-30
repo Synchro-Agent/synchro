@@ -61,7 +61,10 @@ if (!chrome) {
     r = await ask(member, model, TASK);
     ok(r.s === 200 && /Đã làm xong trên trình duyệt/.test(r.j?.text ?? "") && /6\/6 thao tác/.test(r.j.text) && /Trang cuối: Đã nộp bài/.test(r.j.text), `${model}: làm 6/6 thao tác, trang cuối "Đã nộp bài" (${Date.now() - t0} ms)`, JSON.stringify(r.j).slice(0, 400));
   }
-  const L = await last();
+  // Đúng yêu cầu của lượt làm bài (lời gọi chạy nền sau đó như rút bộ nhớ, đặt tên đoạn chat có thể là yêu cầu gần nhất).
+  const H = await (await fetch(`${MOCK}/_debug/hist`)).json();
+  const turnOf = (v) => [...(H[v] ?? [])].reverse().find((b) => JSON.stringify(b.messages ?? b.input ?? "").includes("Đã làm 6/6 thao tác"));
+  const L = { anthropic: turnOf("anthropic") ?? { messages: [] }, openai: turnOf("openai"), google: turnOf("google") };
   const tr = L.anthropic.messages.flatMap((m) => (Array.isArray(m.content) ? m.content : [])).filter((b) => b.type === "tool_result");
   ok(tr.some((b) => Array.isArray(b.content) && b.content.some((x) => x.type === "image" && x.source?.data?.length > 1000)), "Claude nhận ảnh chụp trình duyệt (khối image trong tool_result)");
   const batch = tr.map((b) => (typeof b.content === "string" ? b.content : "")).find((t) => t.startsWith("Đã làm 6/6 thao tác"));

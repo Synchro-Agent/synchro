@@ -103,7 +103,9 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
 const MOD = (e: React.KeyboardEvent | React.MouseEvent) => (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 const BTN = ["left", "middle", "right"] as const;
 
-type BTab = { id: string; title: string; url: string };
+type BTab = { id: string; title: string; url: string; icon?: string };
+// Tên tab từ DevTools có thể còn mã HTML (&#39;, &amp;…): đổi về chữ thường.
+const unesc = (t: string) => t.replace(/&(#\d+|#x[0-9a-f]+|amp|lt|gt|quot|apos);/gi, (_m, k: string) => k[0] === "#" ? String.fromCodePoint(k[1] === "x" || k[1] === "X" ? parseInt(k.slice(2), 16) : +k.slice(1)) : ({ amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'" } as Record<string, string>)[k.toLowerCase()] ?? _m);
 type Viewport = "responsive" | "desktop" | "tablet" | "mobile";
 const VIEWPORTS: { k: Viewport; label: string; w?: number; h?: number; mobile?: boolean }[] = [
   { k: "responsive", label: "Tự co giãn" }, { k: "desktop", label: "Máy tính · 1280×800", w: 1280, h: 800 },
@@ -112,13 +114,20 @@ const VIEWPORTS: { k: Viewport; label: string; w?: number; h?: number; mobile?: 
 const blankUrl = (u: string) => !u || u === "about:blank" || u.startsWith("chrome://newtab");
 const hostOf = (u: string) => { try { const x = new URL(u); return x.host || u; } catch { return u; } };
 
+// Biểu tượng trang trên tab (Chrome của Synchro đã tải); không tải được thì dùng quả địa cầu.
+function TabIcon({ src }: { src: string }) {
+  const [ok, setOk] = useState(true);
+  // eslint-disable-next-line @next/next/no-img-element
+  return ok ? <img className="bp-fav" src={src} width={14} height={14} alt="" referrerPolicy="no-referrer" onError={() => setOk(false)} /> : <I.Globe size={13} />;
+}
+
 // Trình duyệt của workspace (giống trình duyệt tích hợp của Claude): hàng tab, thanh địa chỉ, trang tab mới (gợi ý server đang chạy
 // ở Synchro Code), menu ⋮ (mở bằng trình duyệt của bạn, sao chép URL, lưu ảnh chụp, mở file HTML, khung nhìn, xóa dữ liệu) và nút phóng to.
 // Dùng ở Synchro Code (sid: phiên code) và ở khung chat / trang Trình duyệt (ticket: vé của /api/browser). Khi Synchro đang tự thao tác:
 // dải "Synchro đang điều khiển" (nút Dừng), chấm sáng ở chỗ vừa bấm; hộp thoại của trang hiện cho người dùng tự chọn khi Synchro không thao tác.
 type AgentAct = { kind: string; label?: string; x?: number; y?: number; at: number };
 type PageDialog = { type: string; message: string; def: string };
-export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expanded, autoOpen, setAutoOpen, onStop, busy }: { sid?: number; ticket?: () => Promise<string>; visible: boolean; say: Say; onClose?: () => void; onExpand?: () => void; expanded?: boolean; autoOpen?: boolean; setAutoOpen?: (v: boolean) => void; onStop?: () => void; busy?: boolean }) {
+export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expanded, autoOpen, setAutoOpen, onStop }: { sid?: number; ticket?: () => Promise<string>; visible: boolean; say: Say; onClose?: () => void; onExpand?: () => void; expanded?: boolean; autoOpen?: boolean; setAutoOpen?: (v: boolean) => void; onStop?: () => void; busy?: boolean }) {
   const [url, setUrl] = useState("");
   const [addr, setAddr] = useState("");
   const [focus, setFocus] = useState(false);
@@ -138,21 +147,53 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   const idleT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ws = useRef<WebSocket | null>(null);
   const view = useRef<HTMLDivElement>(null);
-  const img = useRef<HTMLImageElement>(null);
+  // Màn hình trang: khung JPEG nhị phân giải mã ngoài luồng chính (createImageBitmap), mỗi lần màn hình làm tươi chỉ vẽ khung mới
+  // nhất lên canvas. size: kích thước trang theo điểm ảnh CSS (tọa độ chuột gửi lại theo đơn vị này; ảnh có thể lớn hơn theo dpr).
+  const cv = useRef<HTMLCanvasElement>(null);
+  const size = useRef({ w: 0, h: 0 });
+  const nextFrame = useRef<Blob | null>(null);
+  const decoding = useRef(false);
+  const shown = useRef(false);
+  // Ô nhập ẩn nhận bàn phím: bộ gõ tiếng Việt (Telex, VNI…), dán chữ.
+  const kb = useRef<HTMLTextAreaElement>(null);
+  const composing = useRef(false);
+  const moveEv = useRef<Record<string, unknown> | null>(null);
+  const moveRaf = useRef(0);
+  const wheelAcc = useRef<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const addrIn = useRef<HTMLInputElement>(null);
   const htmlIn = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const editing = useRef(false);
-  const lastMove = useRef(0);
   const vpRef = useRef(vp); vpRef.current = vp;
   const send = (o: Record<string, unknown>) => { if (ws.current?.readyState === 1) ws.current.send(JSON.stringify(o)); };
+  // dpr: mật độ điểm ảnh của màn hình (Retina = 2) để trang vẽ đúng độ nét; bin: nhận khung hình dạng nhị phân.
   const sendSize = (to?: WebSocket) => {
     const out = (o: Record<string, unknown>) => (to ? to.readyState === 1 && to.send(JSON.stringify(o)) : send(o));
+    const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
     const v = VIEWPORTS.find((x) => x.k === vpRef.current);
-    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile });
+    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true });
     const r = view.current?.getBoundingClientRect();
-    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height) });
+    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true });
   };
+  const draw = () => {
+    if (decoding.current || !nextFrame.current) return;
+    const blob = nextFrame.current;
+    nextFrame.current = null;
+    decoding.current = true;
+    createImageBitmap(blob).then((bmp) => requestAnimationFrame(() => {
+      const c = cv.current;
+      if (c) {
+        if (c.width !== bmp.width) c.width = bmp.width;
+        if (c.height !== bmp.height) c.height = bmp.height;
+        c.getContext("2d", { alpha: false })?.drawImage(bmp, 0, 0);
+        if (!shown.current) { shown.current = true; setBlank(false); }
+      }
+      bmp.close();
+      decoding.current = false;
+      draw();
+    })).catch(() => { decoding.current = false; draw(); });
+  };
+  const frame = (b: Blob) => { nextFrame.current = b; draw(); };
   // Mỗi lần kết nối có một số thứ tự: lần kết nối cũ (vé về muộn, hiệu ứng chạy hai lần) tự hủy, không để lại kết nối
   // "mồ côi" vẫn đẩy hình khổ mặc định vào khung.
   const gen = useRef(0);
@@ -167,13 +208,17 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
       const u = ticket ? await ticket() : (await wsOp<{ url: string }>("ticket", sid!, { kind: "screen" })).url;
       if (my !== gen.current) return;
       const s = new WebSocket(u);
+      s.binaryType = "blob";
       ws.current = s;
       s.onopen = () => { if (ws.current !== s) return s.close(); setSt("open"); sendSize(s); };
       s.onmessage = (e) => {
         if (ws.current !== s) return;
-        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string };
+        if (typeof e.data !== "string") { frame(e.data as Blob); return; }
+        let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string; w?: number; h?: number };
         try { j = JSON.parse(String(e.data)); } catch { return; }
-        if (j.t === "frame" && img.current) { img.current.src = `data:image/jpeg;base64,${j.data}`; setBlank(false); }
+        if (j.t === "meta") size.current = { w: j.w ?? 0, h: j.h ?? 0 };
+        // Máy chủ bản cũ: khung hình dạng base64 trong JSON.
+        else if (j.t === "frame" && j.data) { size.current = { w: j.w ?? 0, h: j.h ?? 0 }; frame(new Blob([Uint8Array.from(atob(j.data), (ch) => ch.charCodeAt(0))], { type: "image/jpeg" })); }
         else if (j.t === "nav") { if (j.url !== undefined) { setUrl(j.url); setNavd(true); if (!editing.current) setAddr(blankUrl(j.url) ? "" : j.url); } }
         else if (j.t === "tabs") {
           // Giữ thứ tự tab đã thấy; tab mới thêm vào bên phải (Chromium trả tab mới nhất lên đầu).
@@ -182,6 +227,8 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
           setActive(j.active ?? "");
         }
         else if (j.t === "ports") setPorts(j.list as number[]);
+        // Con trỏ của trang (bàn tay trên liên kết, dấu gõ chữ…): đổi thẳng trên khung xem, không vẽ lại React.
+        else if (j.t === "cursor" && view.current) view.current.style.cursor = /^[\w-]+$/.test(String((j as { c?: string }).c)) ? String((j as { c?: string }).c) : "default";
         else if (j.t === "loading") setLoading(!!j.on);
         else if (j.t === "cleared") say("Đã xóa dữ liệu duyệt web");
         else if (j.t === "error" && j.error) say(j.error);
@@ -217,9 +264,22 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     let t: ReturnType<typeof setTimeout> | undefined;
     const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { if (vpRef.current === "responsive") sendSize(); }, 150); });
     ro.observe(el);
-    const wheel = (e: WheelEvent) => { if (vpRef.current !== "responsive" && e.shiftKey) return; e.preventDefault(); const p = pt(e.clientX, e.clientY); send({ t: "wheel", ...p, dx: e.deltaX, dy: e.deltaY }); };
+    // Cuộn: gộp các lần cuộn trong một nhịp làm tươi màn hình thành một lần gửi (cuộn mượt, không dồn hàng).
+    let wr = 0;
+    const wheel = (e: WheelEvent) => {
+      if (vpRef.current !== "responsive" && e.shiftKey) return;
+      e.preventDefault();
+      const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
+      const p = pt(e.clientX, e.clientY), a = wheelAcc.current;
+      wheelAcc.current = { ...p, dx: (a?.dx ?? 0) + e.deltaX * k, dy: (a?.dy ?? 0) + e.deltaY * k };
+      if (!wr) wr = requestAnimationFrame(() => { wr = 0; const w = wheelAcc.current; wheelAcc.current = null; if (w) send({ t: "wheel", ...w }); });
+    };
     el.addEventListener("wheel", wheel, { passive: false });
-    return () => { ro.disconnect(); el.removeEventListener("wheel", wheel); clearTimeout(t); };
+    // Kéo cửa sổ sang màn hình có mật độ điểm ảnh khác: vẽ lại trang theo độ nét mới.
+    const mq = window.matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dppx)");
+    const dprChange = () => sendSize();
+    mq.addEventListener?.("change", dprChange);
+    return () => { ro.disconnect(); el.removeEventListener("wheel", wheel); mq.removeEventListener?.("change", dprChange); clearTimeout(t); cancelAnimationFrame(wr); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { sendSize(); }, [vp]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -240,30 +300,44 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   }, [menu]);
 
   const pt = (cx: number, cy: number) => {
-    const im = img.current;
-    if (!im || !im.naturalWidth) return { x: 0, y: 0 };
-    const r = im.getBoundingClientRect();
-    return { x: Math.round(((cx - r.left) / r.width) * im.naturalWidth), y: Math.round(((cy - r.top) / r.height) * im.naturalHeight) };
+    const c = cv.current, z = size.current;
+    if (!c || !z.w) return { x: 0, y: 0 };
+    const r = c.getBoundingClientRect();
+    return { x: Math.round(((cx - r.left) / r.width) * z.w), y: Math.round(((cy - r.top) / r.height) * z.h) };
   };
+  const focusKb = () => kb.current?.focus({ preventScroll: true });
+  // Di chuột: gửi tối đa một lần mỗi nhịp làm tươi màn hình (rê chuột, kéo thả mượt); bấm / nhả gửi ngay, sau vị trí chuột mới nhất.
+  const flushMove = () => { cancelAnimationFrame(moveRaf.current); moveRaf.current = 0; if (moveEv.current) send(moveEv.current); moveEv.current = null; };
   const mouse = (type: string) => (e: React.MouseEvent) => {
-    if (type === "mouseMoved") { const n = Date.now(); if (n - lastMove.current < 40) return; lastMove.current = n; }
-    if (type === "mousePressed") view.current?.focus();
-    send({ t: "mouse", type, ...pt(e.clientX, e.clientY), button: type === "mouseMoved" ? (e.buttons & 1 ? "left" : "none") : BTN[e.button] ?? "left", buttons: e.buttons, clickCount: type === "mouseMoved" ? 0 : e.detail || 1, mod: MOD(e) });
+    const ev = { t: "mouse", type, ...pt(e.clientX, e.clientY), button: type === "mouseMoved" ? (e.buttons & 1 ? "left" : e.buttons & 2 ? "right" : "none") : BTN[e.button] ?? "left", buttons: e.buttons, clickCount: type === "mouseMoved" ? 0 : e.detail || 1, mod: MOD(e) };
+    if (type === "mouseMoved") {
+      moveEv.current = ev;
+      if (!moveRaf.current) moveRaf.current = requestAnimationFrame(() => { moveRaf.current = 0; if (moveEv.current) send(moveEv.current); moveEv.current = null; });
+      return;
+    }
+    flushMove();
+    if (type === "mousePressed") { e.preventDefault(); focusKb(); }
+    send(ev);
   };
   const key = (type: "down" | "up") => (e: React.KeyboardEvent) => {
+    // Bộ gõ (Telex, VNI, tiếng Nhật…) đang ghép chữ: để ô nhập ẩn nhận, ghép xong mới gửi cả chữ.
+    if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
     if ((e.metaKey || e.ctrlKey) && ["v", "c", "x"].includes(e.key.toLowerCase())) return; // để trình duyệt xử lý dán / sao chép
     e.preventDefault();
     const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey;
     const text = printable ? e.key : e.key === "Enter" ? "\r" : undefined;
     send({ t: "key", type: type === "up" ? "keyUp" : text ? "keyDown" : "rawKeyDown", key: e.key, code: e.code, text: type === "down" ? text : undefined, kc: e.keyCode, mod: MOD(e) });
   };
-  const go = (to: string) => { editing.current = false; if (to.trim()) { send({ t: "go", url: to.trim() }); setAddr(to.trim()); } addrIn.current?.blur(); view.current?.focus(); };
+  const go = (to: string) => { editing.current = false; if (to.trim()) { send({ t: "go", url: to.trim() }); setAddr(to.trim()); } addrIn.current?.blur(); focusKb(); };
   const local = blankUrl(url) || isLocalUrl(url) || url.startsWith("data:");
   const shot = () => {
-    const src = img.current?.src;
-    if (!src || blank) return say("Chưa có hình để lưu");
-    const a = document.createElement("a");
-    a.href = src; a.download = `synchro-${hostOf(url).replace(/[^\w.-]+/g, "_") || "trang"}-${Date.now()}.jpg`; a.click();
+    if (!cv.current || blank) return say("Chưa có hình để lưu");
+    cv.current.toBlob((b) => {
+      if (!b) return say("Chưa có hình để lưu");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(b); a.download = `synchro-${hostOf(url).replace(/[^\w.-]+/g, "_") || "trang"}-${Date.now()}.png`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, "image/png");
   };
   const openHtml = async (f?: File | null) => { if (!f) return; send({ t: "html", html: await f.text() }); say(`Đã mở ${f.name}`); };
   const item = (label: string, fn: () => void, o: { disabled?: boolean; check?: boolean; danger?: boolean; icon?: React.ReactNode } = {}) => (
@@ -277,7 +351,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         <div className="bp-tablist">
           {tabs.map((t) => (
             <div key={t.id} className={`bp-tab ${t.id === active ? "on" : ""}`} title={t.url}>
-              <button onClick={() => send({ t: "tab", id: t.id })}><I.Globe size={13} /><span className="cv-ell" data-notr>{blankUrl(t.url) ? "Tab mới" : t.title || hostOf(t.url)}</span></button>
+              <button onClick={() => send({ t: "tab", id: t.id })}>{t.icon ? <TabIcon src={t.icon} /> : <I.Globe size={13} />}<span className="cv-ell" data-notr>{blankUrl(t.url) ? "Tab mới" : unesc(t.title || "") || hostOf(t.url)}</span></button>
               <button className="tp-x" onClick={() => send({ t: "closetab", id: t.id })} aria-label="Đóng tab"><I.X size={11} /></button>
             </div>
           ))}
@@ -308,21 +382,35 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         <button type="button" className="icon-btn" onClick={() => send({ t: "back" })} aria-label="Quay lại"><I.Back size={15} /></button>
         <button type="button" className="icon-btn" onClick={() => send({ t: "forward" })} aria-label="Tiến tới"><span style={{ display: "inline-flex", transform: "scaleX(-1)" }}><I.Back size={15} /></span></button>
         <button type="button" className="icon-btn" onClick={() => send({ t: "reload" })} aria-label="Tải lại">{loading ? <span className="ag-spin" /> : <I.Retry size={15} />}</button>
-        <input ref={addrIn} className={focus || !addr ? "" : "rest"} value={focus ? addr : addr ? hostOf(addr) + (() => { try { const x = new URL(addr); return x.pathname === "/" ? "" : x.pathname; } catch { return ""; } })() : ""}
-          placeholder="Nhập địa chỉ" spellCheck={false} data-notr
-          onFocus={(e) => { editing.current = true; setFocus(true); setTimeout(() => e.target.select(), 0); }}
-          onBlur={() => { editing.current = false; setFocus(false); }} onChange={(e) => setAddr(e.target.value)} />
+        {/* Không gõ: tên miền nổi, đường dẫn mờ (như thanh địa chỉ của trình duyệt thường); bấm vào thì sửa cả địa chỉ. */}
+        <span className="bp-addr-w">
+          <input ref={addrIn} className={focus || !addr ? "" : "rest"} value={addr}
+            placeholder="Nhập địa chỉ" spellCheck={false} data-notr
+            onFocus={(e) => { editing.current = true; setFocus(true); setTimeout(() => e.target.select(), 0); }}
+            onBlur={() => { editing.current = false; setFocus(false); }} onChange={(e) => setAddr(e.target.value)} />
+          {!focus && addr && (
+            <span className="bp-addr" data-notr onMouseDown={(e) => { e.preventDefault(); addrIn.current?.focus(); }}>
+              {(() => { try { const x = new URL(addr), dec = (v: string) => { try { return decodeURI(v); } catch { return v; } }; return <><b>{x.host}</b><span>{dec(x.pathname === "/" ? "" : x.pathname)}{dec(x.search)}</span></>; } catch { return <b>{addr}</b>; } })()}
+            </span>
+          )}
+        </span>
         <button type="button" className="icon-btn" disabled={local} onClick={() => window.open(url, "_blank", "noopener")} title={local ? "Địa chỉ localhost chỉ có trong workspace" : "Mở trong trình duyệt của bạn"} aria-label="Mở trong trình duyệt của bạn"><I.External size={15} /></button>
       </form>
-      <div ref={view} className={`bp-view ${fixed ? "fixed" : ""}`} tabIndex={0} onMouseDown={mouse("mousePressed")} onMouseUp={mouse("mouseReleased")} onMouseMove={mouse("mouseMoved")} onContextMenu={(e) => e.preventDefault()}
-        onKeyDown={key("down")} onKeyUp={key("up")} onPaste={(e) => { e.preventDefault(); send({ t: "text", text: e.clipboardData.getData("text") }); }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={img} alt="" draggable={false} style={{ visibility: blank || isNew ? "hidden" : "visible", width: fixed ? `min(100%, ${fixed}px)` : undefined }} />
-        {act && Date.now() - act.at < 900 && act.x != null && img.current?.naturalWidth ? (() => {
-          const im = img.current!.getBoundingClientRect(), vr = view.current!.getBoundingClientRect();
-          return <span key={act.at} className="bp-ripple" style={{ left: im.left - vr.left + (act.x! / img.current!.naturalWidth) * im.width, top: im.top - vr.top + (act.y! / img.current!.naturalHeight) * im.height }} />;
+      <div ref={view} className={`bp-view ${fixed ? "fixed" : ""}`} onMouseDown={mouse("mousePressed")} onMouseUp={mouse("mouseReleased")} onMouseMove={mouse("mouseMoved")} onContextMenu={(e) => e.preventDefault()}>
+        {loading && <div className="bp-load" aria-hidden />}
+        <canvas ref={cv} aria-label="Trang đang mở" style={{ visibility: blank || isNew ? "hidden" : "visible", width: fixed ? `min(100%, ${fixed}px)` : undefined }} />
+        <textarea ref={kb} className="bp-kb" aria-label="Gõ vào trang" autoCapitalize="off" autoComplete="off" autoCorrect="off" spellCheck={false} data-notr
+          onKeyDown={key("down")} onKeyUp={key("up")}
+          onCompositionStart={() => { composing.current = true; }}
+          onCompositionEnd={(e) => { composing.current = false; const t = e.data || e.currentTarget.value; if (t) send({ t: "text", text: t }); e.currentTarget.value = ""; }}
+          onInput={(e) => { if (composing.current) return; const t = e.currentTarget.value; if (t) send({ t: "text", text: t }); e.currentTarget.value = ""; }}
+          onPaste={(e) => { e.preventDefault(); send({ t: "text", text: e.clipboardData.getData("text") }); }} />
+        {act && Date.now() - act.at < 900 && act.x != null && cv.current && size.current.w ? (() => {
+          const im = cv.current!.getBoundingClientRect(), vr = view.current!.getBoundingClientRect();
+          return <span key={act.at} className="bp-ripple" style={{ left: im.left - vr.left + (act.x! / size.current.w) * im.width, top: im.top - vr.top + (act.y! / size.current.h) * im.height }} />;
         })() : null}
-        {(agentOn || busy) && (
+        {/* Chỉ hiện khi Synchro thật sự đang thao tác trên trình duyệt (không phải khi đoạn chat đang chạy việc khác hay bạn tự mở trang). */}
+        {agentOn && (
           <div className="bp-agent" onMouseDown={(e) => e.stopPropagation()}>
             <span className="bp-agent-dot" />
             <span className="bp-agent-t"><b>Synchro đang điều khiển trình duyệt</b>{act?.label ? <span data-notr>{act.kind === "type" ? `Gõ “${act.label}”` : act.kind === "navigate" ? `Mở ${hostOf(act.label)}` : act.kind === "key" ? `Nhấn ${act.label}` : act.kind === "select" ? `Chọn “${act.label}”` : `${act.kind === "hover" ? "Rê chuột" : act.kind === "drag" ? "Kéo thả" : act.kind === "upload" ? "Tải tệp" : "Bấm"} ${act.label}`}</span> : null}</span>

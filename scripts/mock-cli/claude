@@ -75,6 +75,8 @@ const loginFile = path.join(dir, ".mock-login");
     const stl = C.stallTurn(dir, sid, prompt);
     if (stl.stall) { C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: C.STALL_TEXT }] }, session_id: sid }); result({ subtype: "success", is_error: false, result: C.STALL_TEXT }); return; }
     prompt = stl.prompt;
+    // #slow: lượt trả lời mất 3 giây (thử nhắn thêm khi CLI đang trả lời); lượt nối tiếp với tin nhắn thêm thì trả lời ngay.
+    if (prompt.includes("#slow") && !prompt.includes("<user_followup>")) await C.sleep(3000);
     const delta = async (t) => { for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
     // Như Claude Code thật với --mcp-config: nối máy chủ MCP "synchro", gọi công cụ (mcp__synchro__…) khi cần.
     const cfgJson = (() => { try { return JSON.parse(C.flag(a, "--mcp-config") ?? "null"); } catch { return null; } })();

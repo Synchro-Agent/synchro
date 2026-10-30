@@ -58,7 +58,7 @@ export function startMockWs(port, root, secret) {
     const port = await freePort();
     const proc = spawn(CHROME, ["--headless=new", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-blink-features=AutomationControlled",
       "--lang=vi-VN", "--accept-lang=vi-VN,vi,en-US,en", "--use-mock-keychain", "--password-store=basic", "--disable-features=Translate,MediaRouter", "--mute-audio",
-      `--remote-debugging-port=${port}`, "--remote-allow-origins=*", `--user-data-dir=${prof}`, "--window-size=1280,800", "about:blank"], { stdio: "ignore", env: { ...process.env, TZ: "Asia/Ho_Chi_Minh" } });
+      `--remote-debugging-port=${port}`, "--remote-allow-origins=*", `--user-data-dir=${prof}`, "--window-size=1280,800", "--force-device-scale-factor=2", "about:blank"], { stdio: "ignore", env: { ...process.env, TZ: "Asia/Ho_Chi_Minh" } });
     const base = `http://127.0.0.1:${port}`;
     procs.set(u, { proc, base });
     proc.on("exit", () => { if (procs.get(u)?.proc === proc) { procs.delete(u); core.reset(u); } });

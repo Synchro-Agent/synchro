@@ -97,7 +97,14 @@ export function createBrowser(host) {
   const devtools = (u, path, method = "GET") => devJson(`${st(u).base}${path}`, method);
   const wsUrl = (u, raw) => { const s = st(u); const b = new URL(s.base); const x = new URL(raw); x.host = b.host; return x.toString(); };
   const pages = async (u) => (await devtools(u, "/json/list")).filter((t) => t.type === "page");
-  const tabOf = (x) => ({ id: x.id, title: x.title, url: x.url });
+  // icon: biểu tượng trang (Chrome đã tải sẵn) để hàng tab giống trình duyệt thường; chỉ địa chỉ http(s) công khai.
+  const tabOf = (x) => ({ id: x.id, title: x.title, url: x.url, ...(/^https?:\/\//.test(x.faviconUrl ?? "") && !/^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(x.faviconUrl) ? { icon: x.faviconUrl } : {}) });
+  // Kiểu con trỏ tại một điểm của trang (bàn tay trên liên kết, dấu gõ chữ trên ô nhập / chữ…) để khung xem đổi con trỏ như trình duyệt thật.
+  const CURSOR_AT = (x, y) => `(() => { const e = document.elementFromPoint(${x}, ${y}); if (!e) return "default";
+    const c = getComputedStyle(e).cursor; if (c && c !== "auto") return c;
+    if (e.closest("a[href],button,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],label,select,summary,[onclick]")) return "pointer";
+    if (e.closest("input:not([type=button]):not([type=submit]):not([type=reset]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,[contenteditable=''],[contenteditable=true]")) return "text";
+    return [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) ? "text" : "default"; })()`;
   const pageWs = (u, id) => `ws://${new URL(st(u).base).host}/devtools/page/${id}`;
 
   // Kết nối cấp trình duyệt: tải tệp về thư mục của người dùng, theo dõi tệp đang tải.
@@ -181,9 +188,40 @@ export function createBrowser(host) {
     await activeTab(u);
     if (gone) return;
     host.sock?.(u, 1);
-    let size = { w: 1280, h: 800, mobile: false };
+    // dpr: mật độ điểm ảnh của màn hình người xem (Retina = 2) để chữ nét; bin: khung hình gửi dạng nhị phân (không base64).
+    // Chromium chạy với --force-device-scale-factor=2 (workspace/browser.sh): khung phát hình vẽ ở 2x, maxWidth thu về đúng màn hình người xem.
+    let size = { w: 1280, h: 800, mobile: false, dpr: 1, bin: false };
     let c = null, lastTabs = "";
     const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
+    // Khung hình theo nhịp mạng: chỉ báo Chrome đã nhận (ack, Chrome mới vẽ và nén khung kế tiếp) khi khung trước đã gửi đi và đường
+    // truyền còn trống. Mạng chậm thì Chrome tự giãn nhịp thay vì nén những khung sẽ bỏ, màn hình không trễ dần; luôn gửi khung mới nhất.
+    // Chất lượng nén tự cân theo mạng: khung phải chờ đường truyền nhiều thì hạ dần (chữ vẫn nét nhờ 2x), mạng thông thì nâng lại.
+    const QUAL = [82, 72, 62, 52];
+    let latest = null, flushT = null, meta = "", qi = 0, waits = 0, sent = 0, tuned = Date.now();
+    const tune = () => {
+      const now = Date.now();
+      if (now - tuned < 2000 || sent < 6) return;
+      const ratio = waits / sent, prev = qi;
+      if (ratio > 0.3 && qi < QUAL.length - 1) qi++;
+      else if (ratio < 0.05 && now - tuned > 4000 && qi > 0) qi--;
+      waits = 0; sent = 0; tuned = now;
+      if (qi !== prev) c?.send("Page.stopScreencast").catch(() => {}).finally(() => startCast());
+    };
+    const flush = () => {
+      flushT = null;
+      if (!latest || ws.readyState !== WebSocket.OPEN) return;
+      if (ws.bufferedAmount > 384_000) { if (!latest.waited) { latest.waited = true; waits++; } flushT = setTimeout(flush, 12); return; }
+      const f = latest; latest = null;
+      if (!size.bin) send({ t: "frame", data: f.data, w: f.w, h: f.h });
+      else {
+        const m = `${f.w}x${f.h}`;
+        if (m !== meta) { meta = m; send({ t: "meta", w: f.w, h: f.h }); }
+        ws.send(Buffer.from(f.data, "base64"));
+      }
+      sent++;
+      f.ack();
+      tune();
+    };
     const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
     const pushTabs = async () => {
       try {
@@ -192,8 +230,15 @@ export function createBrowser(host) {
         if (j !== lastTabs) { lastTabs = j; send({ t: "tabs", list, active: s.tab }); }
       } catch {}
     };
-    const metrics = () => c.send("Emulation.setDeviceMetricsOverride", { width: size.w, height: size.h, deviceScaleFactor: 1, mobile: size.mobile }).catch(() => {});
-    const startCast = () => c.send("Page.startScreencast", { format: "jpeg", quality: 65, maxWidth: size.w, maxHeight: size.h, everyNthFrame: 1 }).catch(() => {});
+    const metrics = () => c.send("Emulation.setDeviceMetricsOverride", { width: size.w, height: size.h, deviceScaleFactor: size.dpr, mobile: size.mobile }).catch(() => {});
+    // Chưa có khung nào sau 1,5 giây (trang tĩnh chưa vẽ lại, phát hình bị kết nối khác tắt): bật lại để màn hình không đứng.
+    let lastFrame = 0, watch = null;
+    const startCast = async () => {
+      const cc = c, at = Date.now();
+      await cc.send("Page.startScreencast", { format: "jpeg", quality: QUAL[qi] + (size.dpr > 1 ? 0 : 6), maxWidth: Math.round(size.w * size.dpr), maxHeight: Math.round(size.h * size.dpr), everyNthFrame: 1 }).catch(() => {});
+      clearTimeout(watch);
+      watch = setTimeout(() => { if (!gone && c === cc && lastFrame < at) cc.send("Page.stopScreencast").catch(() => {}).finally(() => startCast()); }, 1500);
+    };
     // Gắn màn hình vào một tab (đổi tab = đóng kết nối cũ, mở kết nối tới tab mới). Agent làm việc trên cùng tab này.
     const attach = async (id) => {
       const list = await pages(u);
@@ -204,9 +249,14 @@ export function createBrowser(host) {
       const n = await CDP.open(pageWs(u, target.id));
       c = n;
       if (s.tab !== target.id) { s.tab = target.id; s.cdp?.close(); s.cdp = null; }
+      // w, h: kích thước trang theo điểm ảnh CSS (tọa độ chuột / phím gửi lại theo đơn vị này), ảnh có thể lớn hơn theo dpr.
       n.on("Page.screencastFrame", (p) => {
-        send({ t: "frame", data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight });
-        n.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
+        const ack = () => n.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
+        if (n !== c) return ack();
+        lastFrame = Date.now();
+        latest?.ack();
+        latest = { data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight, ack };
+        if (!flushT) flush();
       });
       n.on("Page.frameNavigated", (p) => { if (!p.frame.parentId) { send({ t: "nav", url: p.frame.url }); pushTabs(); } });
       n.on("Page.loadEventFired", () => { sendInfo(); pushTabs(); });
@@ -222,6 +272,18 @@ export function createBrowser(host) {
       await pushTabs();
       if (s.dialog) send({ t: "dialog", type: s.dialog.type, message: s.dialog.message, def: s.dialog.def });
     };
+    // Con trỏ: dò kiểu con trỏ ở vị trí chuột mới nhất (tối đa ~12 lần / giây), chỉ gửi khi đổi.
+    let cursor = "default", cursorAt = null, cursorBusy = false;
+    const probeCursor = async () => {
+      if (cursorBusy || !cursorAt || !c || s.dialog) return;
+      cursorBusy = true;
+      const { x, y } = cursorAt; cursorAt = null;
+      try {
+        const r = await c.send("Runtime.evaluate", { expression: CURSOR_AT(Math.round(x), Math.round(y)), returnByValue: true }, 2000);
+        const v = String(r?.result?.value ?? "default").slice(0, 40);
+        if (v !== cursor) { cursor = v; send({ t: "cursor", c: v }); }
+      } catch {} finally { cursorBusy = false; if (cursorAt) setTimeout(probeCursor, 80); }
+    };
     const viewer = { send, follow: (id) => { attach(id).catch(() => {}); } };
     s.viewers.add(viewer);
     await attach(s.tab);
@@ -234,12 +296,18 @@ export function createBrowser(host) {
       let j; try { j = JSON.parse(m.toString()); } catch { return; }
       try {
         if (j.t === "size") {
-          size = { w: Math.max(320, Math.min(j.w | 0, 2560)), h: Math.max(240, Math.min(j.h | 0, 1600)), mobile: !!j.mobile };
+          const w = Math.max(320, Math.min(j.w | 0, 2560)), h = Math.max(240, Math.min(j.h | 0, 1600));
+          // Màn hình mật độ cao: tối đa 2x, khung rất lớn thì hạ xuống để hình vẫn đi kịp qua mạng.
+          let dpr = Math.max(1, Math.min(Number(j.dpr) || 1, 2));
+          while (dpr > 1 && w * h * dpr * dpr > 4_200_000) dpr = Math.max(1, dpr - 0.25);
+          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true };
+          meta = "";
           await metrics();
           await c.send("Page.stopScreencast").catch(() => {});
           await startCast();
         } else if (j.t === "mouse") {
           await c.send("Input.dispatchMouseEvent", { type: j.type, x: +j.x, y: +j.y, button: j.button ?? "left", buttons: j.buttons ?? 0, clickCount: j.clickCount ?? 0, modifiers: j.mod ?? 0 });
+          if (j.type === "mouseMoved") { const first = !cursorAt; cursorAt = { x: +j.x, y: +j.y }; if (first) setTimeout(probeCursor, 80); }
         } else if (j.t === "wheel") {
           await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +j.x, y: +j.y, deltaX: +j.dx || 0, deltaY: +j.dy || 0 });
         } else if (j.t === "key") {
@@ -247,12 +315,12 @@ export function createBrowser(host) {
         } else if (j.t === "text") {
           await c.send("Input.insertText", { text: String(j.text ?? "") });
         } else if (j.t === "go") {
-          await act(u, { action: "navigate", url: j.url }).catch((e) => send({ t: "error", error: e.message }));
+          await act(u, { action: "navigate", url: j.url, user: true }).catch((e) => send({ t: "error", error: e.message }));
         } else if (j.t === "html") {
           const html = String(j.html ?? "").slice(0, 5_000_000);
           await c.send("Page.navigate", { url: "data:text/html;charset=utf-8;base64," + Buffer.from(html).toString("base64") });
         } else if (j.t === "back" || j.t === "forward" || j.t === "reload") {
-          await act(u, { action: "navigate", url: j.t });
+          await act(u, { action: "navigate", url: j.t, user: true });
         } else if (j.t === "tab") {
           if (j.id !== s.tab) await attach(String(j.id));
         } else if (j.t === "newtab") {
@@ -279,7 +347,9 @@ export function createBrowser(host) {
       } catch (e) { send({ t: "error", error: e.message }); }
     };
     for (const m of queue.splice(0)) handle(m);
-    const bye = () => { s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.send("Page.stopScreencast").catch(() => {}).finally(() => c.close()); } };
+    // Người xem rời đi: chỉ đóng kết nối (phát hình của kết nối đó tự dừng). Không gửi stopScreencast: lệnh này tới muộn sẽ tắt luôn
+    // phát hình của người xem mới trên cùng tab (đóng rồi mở lại khung trình duyệt thì màn hình đứng).
+    const bye = () => { clearTimeout(flushT); clearTimeout(watch); latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
     if (gone) bye(); else ws.on("close", bye);
   }
 

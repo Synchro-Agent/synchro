@@ -8,7 +8,7 @@ import { ConnectorSession, connectorsPrompt } from "./connectors";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { currentRun, delta, deltaStep, liveNow, progress, registerExec, runSignal, takeInbox } from "./runs";
+import { currentRun, delta, deltaStep, inboxWaiting, liveNow, progress, registerExec, runSignal, steered, stepSignal, takeInbox } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
@@ -84,7 +84,7 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
       max_tokens: outCap(t, max_tokens), ...effortParams(t, effort),
       system: [{ type: "text", text: system || "Bạn là một trợ lý AI hữu ích." }, { type: "text", text: skillSys, cache_control: { type: "ephemeral" } }],
       tools, ...(noTools ? { tool_choice: { type: "none" } } : {}), messages: withCacheMark(msgs, hist),
-    }, runSignal(), live(), (b) => searched(b));
+    }, stepSignal(), live(), (b) => searched(b));
     const blocks: (ABlock & { input?: Record<string, unknown> })[] = j.content ?? [];
     for (const b of blocks) searched(b);
     return {
@@ -104,7 +104,7 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
       max_tokens: outCap(t, max_tokens), ...effortParams(t, effort), messages: [{ role: "system", content: system }, ...msgs],
       tools: tools.map((x) => ({ type: "function", function: { name: x.name, description: x.description, parameters: x.input_schema } })),
       ...(noTools ? { tool_choice: "none" } : {}),
-    }, runSignal(), live());
+    }, stepSignal(), live());
     const m = j.choices?.[0]?.message ?? {};
     const calls: Call[] = (m.tool_calls ?? []).map((c: { id: string; function: { name: string; arguments: string } }) => {
       let input: Record<string, unknown> = {};
@@ -127,7 +127,7 @@ const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: 
       const a = it.action as { query?: string; url?: string } | undefined;
       progress("tool", a?.url && !a.query ? `Đang đọc trang web: ${a.url.slice(0, 120)}` : `Đang tìm trên web: ${String(a?.query ?? "").slice(0, 120)}`);
     };
-    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: [...respTools(tools), ...(web ? [{ type: "web_search" }] : [])], ...(noTools ? { tool_choice: "none" } : {}) }, runSignal(), live(), searched));
+    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: [...respTools(tools), ...(web ? [{ type: "web_search" }] : [])], ...(noTools ? { tool_choice: "none" } : {}) }, stepSignal(), live(), searched));
     for (const it of r.items) searched(it);
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
@@ -230,12 +230,21 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   const r = (res as Run | null) ?? { content: "Không có kết quả.", is_error: true };
   return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image } : {}) };
 }
-// Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ).
+// Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ, hoặc ngay khi model đang viết).
 function addFollowup(m: unknown[], text: string) {
   const note = `<user_followup>\n${text}\n</user_followup>`;
   const last = m[m.length - 1] as { role?: string; content?: unknown };
   if (last?.role === "user" && Array.isArray(last.content)) (last.content as unknown[]).push({ type: "text", text: note });
+  else if (last?.role === "user" && typeof last.content === "string") last.content = `${last.content}\n\n${note}`;
   else m.push({ role: "user", content: note });
+}
+/** Ghép các tin nhắn thêm đang chờ vào lượt (hiện trong nhật ký là "nhắn thêm"); trả false khi không có tin nào. */
+function takeFollowups(m: unknown[]): boolean {
+  const more = takeInbox();
+  if (!more.length) return false;
+  for (const t of more) progress("steer", t);
+  addFollowup(m, more.join("\n\n"));
+  return true;
 }
 // Tìm web cho Gemini qua khóa API: lớp tương thích OpenAI của Gemini chưa có Google Search, nên Synchro gọi API gốc của Gemini
 // (cùng khóa, cùng model) với công cụ google_search và trả về câu trả lời có dẫn nguồn như một công cụ thường.
@@ -393,10 +402,21 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
   for (let i = start; i < steps; i++) {
     if (i > 0) { progress("step", "Đang viết câu trả lời"); deltaStep(); }
     if (x.browse) pruneBrowser(m, x);
-    const r = await ad.step(m, i === steps - 1);
+    let r: Awaited<ReturnType<Adapter["step"]>>;
+    try { r = await ad.step(m, i === steps - 1); }
+    catch (e) {
+      // Người dùng nhắn thêm khi model đang viết: giữ phần đã viết trong nhật ký, ghép tin mới rồi gọi lại model ngay.
+      if (!steered()) throw e;
+      const part = liveNow().trim();
+      if (part) progress("say", part);
+      takeFollowups(m);
+      continue;
+    }
     m.push(r.assistant);
     if (!r.calls.length) {
       if (r.pause) continue;
+      // Tin nhắn thêm tới khi model đã viết xong câu trả lời: làm tiếp trong cùng lượt với tin mới, không chờ lượt sau.
+      if (i < steps - 1 && inboxWaiting()) { if (r.text.trim()) progress("say", r.text.trim()); takeFollowups(m); continue; }
       if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; progress("say", r.text.trim()); m.push({ role: "user", content: NUDGE }); continue; }
       return { text: r.text, used };
     }
@@ -818,11 +838,20 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
         mcp: bridge ? { url: bridge.url } : undefined, web: body.web === true,
       });
-      let r = await once(turnMsgs);
-      // Gói dừng ngay sau câu "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp trong cùng phiên của CLI (stall.ts).
-      for (let k = 0, said: string; k < MAX_NUDGE && bridge && r.status === 200 && !bridged && stalled(said = String((r.json as { text?: unknown }).text ?? "")); k++) {
-        progress("say", said.trim());
-        r = await once([...(turnMsgs as unknown[]), { role: "assistant", content: said }, { role: "user", content: NUDGE }]);
+      let hist = turnMsgs as unknown[];
+      let r = await once(hist);
+      // Lượt của CLI xong mà còn tin nhắn thêm chưa đọc: làm tiếp ngay trong cùng phiên của CLI (không chờ lượt sau). Gói mới báo
+      // "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp (stall.ts).
+      for (let k = 0, nudged = 0; k < 6 && !am && r.status === 200; k++) {
+        const said = String((r.json as { text?: unknown }).text ?? "");
+        const more = takeInbox();
+        let next: string;
+        if (more.length) { for (const t of more) progress("steer", t); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
+        else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
+        else break;
+        if (said.trim()) progress("say", said.trim());
+        hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
+        r = await once(hist);
       }
       if (!x || r.status !== 200) return Response.json(r.json, { status: r.status });
       // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).

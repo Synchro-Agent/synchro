@@ -13,9 +13,11 @@ const VERB = String.raw`(?:sẽ|đang|bắt đầu|tiến hành|vào|mở|tìm|x
 const SOON = String.raw`(?:sẽ|đang|xin|giờ|bây giờ|ngay|đi|cùng|thử)`;
 const START = new RegExp(String.raw`^(?:(?:ok|okay|được|vâng|dạ|rồi|sure|alright)[,!.\s]+)?(?:${WHO}\s+(?:${SOON}\s+){0,2}${VERB}|let me|i'll|i will|i'm going to|i am going to)(?=[\s,.:…]|$)`, "iu");
 
-/** Câu trả lời chỉ là lời báo sắp làm (ngắn, không hỏi lại người dùng). */
+/** Câu trả lời chỉ là lời báo sắp làm: một đoạn ngắn (tối đa hai câu), không hỏi lại người dùng. Lời dẫn kèm luôn kết quả
+ *  ("Mình sẽ tìm trên web.\n\nTheo kết quả…") là câu trả lời thật, không nhắc. */
 export function stalled(text: string | null | undefined): boolean {
   const t = String(text ?? "").trim();
-  if (!t || t.length > 500 || /[?？]\s*$/.test(t) || /```|<artifact/.test(t)) return false;
+  if (!t || t.length > 260 || /\n\s*\n/.test(t) || /[?？]\s*$/.test(t) || /```|<artifact|\|/.test(t)) return false;
+  if (t.split(/(?<=[.!…])\s+/).filter(Boolean).length > 2) return false;
   return START.test(t);
 }

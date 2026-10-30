@@ -391,6 +391,9 @@ export async function runAgent(o: { adapter: Adapter; messages: unknown[]; u: st
     if (r.text.trim()) { o.emit({ t: "text", text: r.text }); text = r.text; }
     msgs.push(r.assistant);
     if (!r.calls.length) {
+      // Người dùng nhắn thêm khi agent vừa trả lời xong: làm tiếp ngay trong cùng lượt với tin mới.
+      const more = i < max - 1 ? o.inbox?.() ?? [] : [];
+      if (more.length) { for (const t of more) o.emit({ t: "steer", text: t }); followup(msgs, more.join("\n\n")); continue; }
       // Mới báo "Mình sẽ…" rồi dừng mà chưa dùng công cụ nào: nhắc làm tiếp (stall.ts).
       if (!acted && nudged < MAX_NUDGE && i < max - 1 && stalled(r.text)) { nudged++; msgs.push({ role: "user", content: NUDGE }); continue; }
       break;
@@ -454,12 +457,20 @@ export async function runPlanAgent(o: {
       user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages, conv: o.conv, effort: o.effort,
       signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url },
     });
-    let r = await once(o.messages);
-    // Gói dừng ngay sau câu "Mình sẽ…" mà chưa gọi công cụ nào: nhắc làm tiếp trong cùng phiên của CLI (stall.ts).
-    for (let k = 0, said: string; k < MAX_NUDGE && r.status === 200 && !n && !o.signal.aborted && stalled(said = String((r.json as { text?: unknown }).text ?? "")); k++) {
+    let hist = o.messages;
+    let r = await once(hist);
+    // CLI xong lượt mà người dùng vừa nhắn thêm: làm tiếp ngay trong cùng phiên. Mới báo "Mình sẽ…" mà chưa gọi công cụ nào: nhắc làm tiếp (stall.ts).
+    for (let k = 0, nudged = 0; k < 6 && r.status === 200 && !o.signal.aborted; k++) {
+      const said = String((r.json as { text?: unknown }).text ?? "");
+      const more = o.inbox?.() ?? [];
+      let next: string;
+      if (more.length) { for (const t of more) o.emit({ t: "steer", text: t }); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
+      else if (!n && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
+      else break;
       if (!pending.trim()) pending = said;
       flush();
-      r = await once([...o.messages, { role: "assistant", content: said }, { role: "user", content: NUDGE }]);
+      hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
+      r = await once(hist);
     }
     const j = r.json as { text?: string; error?: string; cancelled?: boolean };
     if (r.status !== 200) throw new Error(j.error ?? "Gói subscription báo lỗi.");

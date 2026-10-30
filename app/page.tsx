@@ -1679,6 +1679,13 @@ export default function Home() {
                   )
                 }</Fragment>)}
                 {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
+                {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
+                {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
+                  <div key={q.id} className="user-wrap steer-pending">
+                    <span className="steer-tag">{tr("Đã gửi · Synchro đang đọc")}</span>
+                    <div className="user-msg"><UserText text={q.text} /></div>
+                  </div>
+                ))}
                 <div ref={endRef} />
               </div>
             </div>
@@ -1705,7 +1712,7 @@ export default function Home() {
               {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
                   onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
-              <QueueChips items={queued.filter((q) => q.chat === chat.id)} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
+              <QueueChips items={queued.filter((q) => q.chat === chat.id && q.mode === "later")} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
               <Composer {...composerProps} dock extra={<ContextMixer chat={chat} studio={chat.studio} busy={busy} say={say} recentSkills={[...new Set(chat.msgs.filter((m) => m.role === "ai").slice(-2).flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))]}
                 onChange={(p) => setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, ...p } : c)))} />} />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>

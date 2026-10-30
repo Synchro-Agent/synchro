@@ -7,6 +7,13 @@ const S = ({ size = 18, children, fill }: P & { children: React.ReactNode; fill?
   </svg>
 );
 
+// Biểu tượng vẽ trên lưới 24 (theo Lucide, giấy phép ISC): cùng độ dày nét nhìn thấy với bộ lưới 20 ở trên.
+const S24 = ({ size = 18, children }: P & { children: React.ReactNode }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.68" strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+
 export const Plus = (p: P) => <S {...p}><path d="M10 4v12M4 10h12" /></S>;
 export const Minus = (p: P) => <S {...p}><path d="M4.5 10h11" /></S>;
 export const Merge = (p: P) => <S {...p}><path d="M5 4v3.5c0 2 1.5 3 5 3.5M15 4v3.5c0 2-1.5 3-5 3.5v5M7.5 13.5L10 16l2.5-2.5" /></S>;
@@ -20,7 +27,7 @@ export const Connectors = (p: P) => <S {...p}><path d="M3.3 8.6h5v5h5v5h-10z" />
 export const Plugins = (p: P) => <S {...p}><g className="ai-plug"><path d="M12.6 4.2l-2.3 2.3M15.8 7.4l-2.3 2.3" /><path d="M8.6 6.2l5.2 5.2-1.6 1.6a3.3 3.3 0 01-4.6 0l-.6-.6a3.3 3.3 0 010-4.6z" /></g><path d="M7 13.4l-3.5 3.5" /></S>;
 export const Code = (p: P) => <S {...p}><g className="ai-lt"><path d="M6.8 6L2.8 10l4 4" /></g><g className="ai-rt"><path d="M13.2 6l4 4-4 4" /></g><g className="ai-sl"><path d="M11.8 4l-3.6 12" /></g></S>;
 export const Brief = (p: P) => <S {...p}><g className="ai-br"><rect x="3" y="6" width="14" height="10" rx="2" /><path d="M7.5 6V4.5h5V6M3 10.5h14" /></g></S>;
-export const Pencil = (p: P) => <S {...p}><path d="M12.9 4a1.9 1.9 0 012.7 0l.4.4a1.9 1.9 0 010 2.7L7.6 15.5l-4 1 1-4zM11.2 5.8l3 3" /></S>;
+export const Pencil = (p: P) => <S24 {...p}><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></S24>;
 export const Grad = (p: P) => <S {...p}><path d="M2 8l8-4 8 4-8 4zM5 10v4c0 1 2.2 2 5 2s5-1 5-2v-4" /></S>;
 export const Coffee = (p: P) => <S {...p}><path d="M4 8h9v5a3 3 0 01-3 3H7a3 3 0 01-3-3zM13 9h1.5a2 2 0 010 4H13M7 3.5c0 1-1 1-1 2M10 3.5c0 1-1 1-1 2" /></S>;
 export const Bulb = (p: P) => <S {...p}><path d="M7 14h6M8 16.5h4M10 3a5 5 0 00-3 9c.6.5 1 1.2 1 2h4c0-.8.4-1.5 1-2a5 5 0 00-3-9z" /></S>;
@@ -49,7 +56,7 @@ export const Palette = (p: P) => <S {...p}><path d="M10 3a7 7 0 100 14c1.1 0 1.7
 export const Plug = (p: P) => <S {...p}><path d="M7.4 12.6L4 16M6.5 9.3l4.2 4.2c.5.5 1.4.5 2 0l.6-.6c.5-.5.5-1.4 0-2L9 6.7c-.5-.5-1.4-.5-2 0l-.5.6c-.5.5-.5 1.4 0 2zM9.5 8.4l-1.4-1.4M11.6 10.5L10.2 9.1M11.2 3.6l-1 1.7M16.4 8.8l-1.7 1M14.8 5.2l-1.2 1.2" /></S>;
 export const Gear = (p: P) => <S {...p}><circle cx="10" cy="10" r="2.5" /><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" /></S>;
 export const User = (p: P) => <S {...p}><circle cx="10" cy="10" r="7" /><circle cx="10" cy="8.5" r="2.2" /><path d="M5.5 15c1-2 2.7-2.8 4.5-2.8s3.5.8 4.5 2.8" /></S>;
-export const Shield = (p: P) => <S {...p}><path d="M10 2.5l6 2.3v4.7c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V4.8z" /></S>;
+export const Shield = (p: P) => <S24 {...p}><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></S24>;
 export const Lock = (p: P) => <S {...p}><rect x="4.5" y="8.5" width="11" height="8.5" rx="2" /><path d="M7 8.5V6.5a3 3 0 016 0v2" /></S>;
 export const Admin = (p: P) => <S {...p}><path d="M8.62 3.4Q10 2.4 11.38 3.4L16.22 6.9Q17.6 7.9 17.07 9.52L15.23 15.18Q14.7 16.8 13 16.8H7Q5.3 16.8 4.77 15.18L2.93 9.52Q2.4 7.9 3.78 6.9Z" /><circle cx="10" cy="8.9" r="2.1" /><path d="M6.7 16.7c.2-1.9 1.6-3.1 3.3-3.1s3.1 1.2 3.3 3.1" /></S>;
 export const Card = (p: P) => <S {...p}><rect x="2.5" y="5" width="15" height="10" rx="2" /><path d="M2.5 8.5h15" /></S>;
@@ -106,7 +113,7 @@ export const Inbox = (p: P) => <S {...p}><path d="M3.5 11.5l2-6.2c.2-.5.6-.8 1.1
 export const Pointer = (p: P) => <S {...p}><path d="M5 3.5l9.5 5.6-4.2 1.1-2.2 4.1z" /><path d="M10.6 10.4l3.6 3.6" /><path d="M14.5 3.2v1.6M16.8 5.5h-1.6M16.2 3.8l-1 1" /></S>;
 export const Compare = (p: P) => <S {...p}><rect x="2.8" y="4" width="6.2" height="12" rx="1.6" /><rect x="11" y="4" width="6.2" height="12" rx="1.6" /><path d="M5.2 8h1.6M13.4 8h1.6M5.2 11h1.6M13.4 11h1.6" /></S>;
 // Ứng dụng nội bộ (artifact xuất bản) và phạm vi chia sẻ cho cả tổ chức.
-export const Rocket = (p: P) => <S {...p}><path d="M11.8 3.2c2.3-.6 4.2-.5 5 .2.7.8.8 2.7.2 5-.7 2.6-2.6 5-5.2 6.4l-1.6.8-4-4 .8-1.6C8.4 7.4 9.2 4 11.8 3.2z" /><circle cx="12.6" cy="7.4" r="1.4" /><path d="M6.2 10.4l-2.6.4-.8 2.2 3.1.2M9.6 13.8l-.4 2.6-2.2.8-.2-3.1M4.8 15.2c-.8.8-1.1 2-1.1 2s1.2-.3 2-1.1" /></S>;
+export const Rocket = (p: P) => <S24 {...p}><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" /></S24>;
 export const Users = (p: P) => <S {...p}><circle cx="7.5" cy="7" r="2.6" /><path d="M2.8 16c.5-2.6 2.4-4.1 4.7-4.1s4.2 1.5 4.7 4.1" /><path d="M13 4.6a2.4 2.4 0 010 4.7M14.6 11.9c1.4.5 2.4 1.8 2.7 4.1" /></S>;
 // Menu Thêm của Kho kỹ năng: tải tệp skill lên, tạo cùng Synchro, duyệt danh mục thư viện.
 export const FileUp = (p: P) => <S {...p}><path d="M11.5 2.75H6.25a1.5 1.5 0 00-1.5 1.5v11.5a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5V6.5z" /><path d="M11.5 2.75V6.5h3.75M10 14.25V9.5M7.9 11.6L10 9.5l2.1 2.1" /></S>;
@@ -132,7 +139,7 @@ export const Subtitle = (p: P) => <S {...p}><rect x="3" y="4.5" width="14" heigh
 export const Book = (p: P) => <S {...p}><path d="M4 4.5h5a2 2 0 012 2V16a1.5 1.5 0 00-1.5-1.5H4zM16 4.5h-5a2 2 0 00-2 2V16a1.5 1.5 0 011.5-1.5H16z" /></S>;
 export const VoicePlus = (p: P) => <S {...p}><circle cx="10" cy="7" r="3" /><path d="M4.5 16.5c.7-2.8 2.8-4.3 5.5-4.3s4.8 1.5 5.5 4.3M15.5 2.5v4M13.5 4.5h4" /></S>;
 export const Film = (p: P) => <S {...p}><rect x="3" y="4" width="14" height="12" rx="2.4" /><circle cx="10" cy="9" r="2.3" /><path d="M6.5 16c.6-2 1.9-3 3.5-3s2.9 1 3.5 3" /></S>;
-export const ShieldCheck = (p: P) => <S {...p}><path d="M10 2.5l6 2.3v4.7c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V4.8z" /><path d="M7.3 10l2 2 3.5-4" /></S>;
+export const ShieldCheck = (p: P) => <S24 {...p}><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></S24>;
 
 // Bộ icon của menu Cài đặt, vẽ trên lưới 24 theo kiểu Lucide (ISC), nét quy đổi bằng nét 1.4/20 của các icon khác để đứng cạnh nhau đều nhau.
 const L = ({ size = 18, children }: P & { children: React.ReactNode }) => (

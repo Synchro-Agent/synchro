@@ -39,7 +39,7 @@ function init() {
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
-type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[] };
+type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; step?: AbortController };
 const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
 // Lượt đang chạy trong tiến trình này: chữ đang viết (để người mở lại trang thấy ngay phần đã có) và bộ hủy.
@@ -74,6 +74,21 @@ export const liveRunOf = (uid: string, conv: string) => { for (const [id, l] of 
 export const liveNow = () => { const s = scope.getStore(); return s ? live.get(s.id)?.text ?? "" : ""; };
 /** Tín hiệu hủy của lượt đang chạy: truyền vào mọi lời gọi model, connector, chạy code. */
 export const runSignal = (): AbortSignal | undefined => { const s = scope.getStore(); return s ? live.get(s.id)?.ctl.signal : undefined; };
+/** Tín hiệu của một lần gọi model trong lượt: hủy khi lượt bị dừng, hoặc khi người dùng nhắn thêm (model đang viết dở thì dừng bước
+ *  đó để đọc tin mới ngay, không phải chờ hết câu trả lời). */
+export function stepSignal(): AbortSignal | undefined {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l) return undefined;
+  const c = new AbortController();
+  if (l.ctl.signal.aborted) c.abort(); else l.ctl.signal.addEventListener("abort", () => c.abort(), { once: true });
+  l.step = c;
+  return c.signal;
+}
+/** Bước gọi model vừa bị ngắt vì người dùng nhắn thêm (không phải nút Dừng). */
+export function steered(): boolean {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  return !!l && !l.ctl.signal.aborted && !!l.step?.signal.aborted && l.inbox.length > 0;
+}
 /** Chữ model vừa viết (không ghi vào cơ sở dữ liệu, chỉ gửi cho người đang theo dõi). */
 export function delta(t: string) {
   const s = scope.getStore(), l = s && live.get(s.id);
@@ -117,7 +132,14 @@ export function pushInbox(id: string, uid: string, text: string): boolean {
   const l = live.get(id);
   if (!l || l.uid !== uid || l.ctl.signal.aborted) return false;
   l.inbox.push(text.slice(0, 20_000));
+  // Model đang viết: dừng bước đó để đọc tin mới ngay (vòng lặp ghép tin rồi gọi lại model); đang chạy công cụ thì ghép sau công cụ.
+  l.step?.abort();
   return true;
+}
+/** Lượt hiện tại còn tin nhắn thêm chưa đọc. */
+export function inboxWaiting(): boolean {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  return !!l && l.inbox.length > 0;
 }
 /** Lấy (và xóa) các tin nhắn thêm đang chờ của lượt hiện tại. */
 export function takeInbox(): string[] {

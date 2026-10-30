@@ -58,6 +58,9 @@ export const VI2EN: Record<string, string> = {
   "Ngữ cảnh phiên chat": "Session context",
   "Chạy lệnh": "Run command",
   "Đẩy code lên GitHub": "Push code to GitHub",
+  "Đã gửi · Synchro đang đọc": "Sent · Synchro is reading it",
+  "Trang đang mở": "Open page",
+  "Gõ vào trang": "Type into the page",
   "Mở pull request trên GitHub": "Open a pull request on GitHub",
   "Quy tắc hàng đầu": "Top rule",
   "Đọc": "Read",
@@ -1576,6 +1579,7 @@ export const SAME_WORDS = new Set([
   "Lan", "Minh", "Hà", "Nội", "Sài", "Gòn", "Đà", "Nẵng", "Huế", "Cas",
 ]);
 export const SAME = new Set<string>([
+  "(resolution:", "dppx)",
   "Synchro clone UI",
 ]);
 

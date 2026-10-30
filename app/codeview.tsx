@@ -1179,7 +1179,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                 <button className="cv-modebtn" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}{m.short}<I.Chevron size={12} /></button>
                 <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   {MODES.map((x) => (
-                    <button key={x.k} className={`cv-mode-item ${mode === x.k ? "sel" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
+                    <button key={x.k} className={`cv-mode-item ${mode === x.k ? "picked" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
                       <span className={`cv-mode-ic m-${x.k}`}>{modeIcon(x.k, 18)}</span>
                       <span className="cv-opt-t">{x.label}<small>{x.desc}</small></span>
                       {mode === x.k && <span className="ck"><I.Check /></span>}
@@ -1195,7 +1195,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   {PERMS.map((x) => {
                     const off = x.k === "auto" && !!cp && !cp.allowBypass;
                     return (
-                      <button key={x.k} disabled={off} className={`cv-mode-item ${permNow.mode === x.k ? "sel" : ""}`} onClick={() => { setPerm({ mode: x.k, allow: permNow.allow }); setMenu(""); say(`Chế độ quyền: ${x.label}`); }}>
+                      <button key={x.k} disabled={off} className={`cv-mode-item ${permNow.mode === x.k ? "picked" : ""}`} onClick={() => { setPerm({ mode: x.k, allow: permNow.allow }); setMenu(""); say(`Chế độ quyền: ${x.label}`); }}>
                         <span className={`cv-mode-ic p-${x.k}`}>{permIcon(x.k, 18)}</span>
                         <span className="cv-opt-t">{x.label}<small>{off ? "Đang tắt ở Cài đặt → Synchro Code (Cho phép chế độ Tự động)." : x.desc}</small></span>
                         {permNow.mode === x.k && <span className="ck"><I.Check /></span>}

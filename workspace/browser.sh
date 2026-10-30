@@ -13,7 +13,7 @@ if ! pgrep -u "$(id -u)" -x chromium >/dev/null; then
     ${V:+--user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$V Safari/537.36"} \
     --disk-cache-size=104857600 --password-store=basic \
     --remote-debugging-port=9222 --remote-allow-origins='*' \
-    --user-data-dir="$HOME/work/.browser/profile" --window-size=1280,800 \
+    --user-data-dir="$HOME/work/.browser/profile" --window-size=1280,800 --force-device-scale-factor=2 \
     about:blank >"$HOME/.synchro/chromium.log" 2>&1 &
 fi
 if ! pgrep -u "$(id -u)" -x socat >/dev/null; then

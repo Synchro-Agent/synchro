@@ -777,7 +777,8 @@ export function createActor(env) {
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(url) ? "http://" + url : /\s/.test(url) || !/\./.test(url) ? `https://www.google.com/search?q=${encodeURIComponent(url)}` : "https://" + url;
         if (!/^(https?|about|data|file):/i.test(url)) throw new BrowserError(400, "Chỉ mở được địa chỉ http(s).");
         if (/^file:/i.test(url) && !env.allowFile) throw new BrowserError(400, "Không mở được tệp trên máy chủ.");
-        emit(u, { t: "agent", kind: "navigate", label: url.slice(0, 200) });
+        // Người dùng tự mở trang (thanh địa chỉ): không báo "Synchro đang điều khiển".
+        if (!a.user) emit(u, { t: "agent", kind: "navigate", label: url.slice(0, 200) });
         const load = c.once("Page.loadEventFired", 20_000);
         const r = await c.send("Page.navigate", { url }, 30_000);
         if (r.errorText) return { error: `Không mở được ${url}: ${r.errorText}`, ...(await here(c)) };
@@ -1003,7 +1004,7 @@ export function createActor(env) {
       }
       case "console": { const logs = c.logs.slice(-Number(a.limit ?? 50)); if (a.clear) c.logs = []; return { logs, requests: c.net.slice(-30) }; }
       case "network": return { requests: c.net.slice(-Number(a.limit ?? 40)) };
-      case "back": case "forward": case "reload": return act(u, { action: "navigate", url: a.action });
+      case "back": case "forward": case "reload": return act(u, { action: "navigate", url: a.action, user: a.user });
       default: throw new BrowserError(400, `Thao tác trình duyệt không hợp lệ: ${a.action}`);
     }
   }
