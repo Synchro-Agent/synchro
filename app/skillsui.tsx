@@ -5,6 +5,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang } from "./i18n";
 import { diffLines } from "./md";
+import { slimSkillZip, tooLarge } from "./skillzip";
 
 type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number };
 type FileInfo = { path: string; size: number; kind: string };
@@ -26,9 +27,12 @@ export const SKILLS_DROP = "skills:drop";
 const api = async (url: string, init?: RequestInit) => {
   const r = await fetch(url, init);
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
+  // 413 không kèm lời giải thích: nginx chặn trước khi tới máy chủ (tệp vượt giới hạn mỗi lần tải lên).
+  if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : `Lỗi ${r.status}`));
   return j;
 };
+// Dung lượng tối đa một gói skill tải lên (LIMITS.zip trong skillstore.ts): gói lớn hơn được lọc trong trình duyệt, chỉ giữ thư mục các skill.
+const SKILL_ZIP_MAX = 20 * 1024 * 1024;
 const fmt = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const vi = () => getLang() === "vi";
 const ago = (iso: string) => new Date(iso).toLocaleDateString(vi() ? "vi-VN" : "en-US", { day: "numeric", month: "short" });
@@ -47,7 +51,7 @@ async function send(src: Src, dry: boolean, onWait?: () => void): Promise<{ prev
       await new Promise((ok) => setTimeout(ok, 2500));
     }
   }
-  const fd = new FormData(); fd.append("file", src.file);
+  const fd = new FormData(); fd.append("file", await slimSkillZip(src.file, SKILL_ZIP_MAX));
   if (dry) fd.append("dry", "1");
   if (src.pick !== undefined) fd.append("pick", src.pick);
   return api("/api/skills", { method: "POST", body: fd });

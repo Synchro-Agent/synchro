@@ -7,13 +7,14 @@ import { getLang, tr } from "./i18n";
 import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
+import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
 import { ScoreBadge, SkillsPanel, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : `Error ${r.status}`));
   return j as T;
 }
 // Báo cho thanh nhập và trang Artifacts biết plugin vừa đổi (studio có thêm skill).
@@ -125,9 +126,10 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
     setBusy("");
   };
   const upload = async (f: File) => {
-    const fd = new FormData(); fd.append("file", f);
+    const fd = new FormData();
     setBusy("upload");
-    try { const r = await api<{ added: string[]; plugins: PublicPlugin[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, fd); app.say(`${tr("Added")} ${r.added.join(", ")}`); onChange(r); fire(); }
+    // Gói lớn (cả repo): chỉ tải lên thư mục các skill, lọc như máy chủ (addZipToPlugin).
+    try { fd.append("file", await slimSkillZip(f, UPLOAD_MAX, "library")); const r = await api<{ added: string[]; plugins: PublicPlugin[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, fd); app.say(`${tr("Added")} ${r.added.join(", ")}`); onChange(r); fire(); }
     catch (e) { app.say((e as Error).message); }
     setBusy("");
   };
