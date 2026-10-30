@@ -196,12 +196,15 @@ export function createBrowser(host) {
     // Khung hình theo nhịp mạng: chỉ báo Chrome đã nhận (ack, Chrome mới vẽ và nén khung kế tiếp) khi khung đã gửi đi; mạng chậm thì
     // Chrome tự giãn nhịp thay vì nén những khung sẽ bỏ, màn hình không trễ dồn; luôn gửi khung mới nhất.
     // Bậc chất lượng tự cân theo mạng (mức nén, mật độ điểm ảnh tối đa của khung phát).
-    const STEPS = [{ q: 76, d: 2 }, { q: 66, d: 2 }, { q: 62, d: 1.5 }, { q: 56, d: 1.25 }, { q: 50, d: 1 }];
+    // Giữ 2x lâu nhất có thể (chữ nét), chỉ hạ mức nén; mạng rất chậm mới hạ độ phân giải. Màn hình đứng yên thì gửi thêm một khung
+    // 2x chất lượng cao (refine) nên lúc đọc vẫn sắc nét dù lúc cuộn đang ở bậc thấp.
+    const STEPS = [{ q: 76, d: 2 }, { q: 62, d: 2 }, { q: 50, d: 2 }, { q: 55, d: 1.5 }, { q: 50, d: 1.25 }, { q: 50, d: 1 }];
     // Người xem báo đã nhận từng khung (fa, khi trình duyệt xin "fa: true"): tối đa 2 khung đang trên đường đi, đo được thời gian
     // một khung tới nơi — bộ đệm mạng của hệ điều hành / nginx chứa được hàng chục khung nên không dựa vào bufferedAmount được.
-    // Khung tới nơi chậm (>220 ms) thì hạ bậc, hai nhịp liền nhanh (<130 ms) thì nâng lại. Người xem bản cũ: chờ bufferedAmount như trước.
+    // Thời gian khung tới nơi trừ đi mức nền (khứ hồi + xử lý cố định, lấy nhỏ nhất gần đây) là phần do cỡ khung / băng thông:
+    // >90 ms thì hạ bậc, hai nhịp liền <35 ms thì nâng lại. Người xem bản cũ: chờ bufferedAmount như trước.
     let latest = null, flushT = null, meta = "", qi = 0, waited = 0, sent = 0, calm = 0, tuned = Date.now(), lastBytes = 0;
-    let inflight = 0, ackSum = 0, ackN = 0;
+    let inflight = 0, ackSum = 0, ackN = 0, ackMin = Infinity, base = 0, refineT = null, refined = true, lastRefine = 0, dropUntil = 0;
     const sentAt = [];
     const e2e = () => size.bin && size.fa;
     const castDpr = () => Math.min(size.dpr, STEPS[qi].d);
@@ -209,11 +212,13 @@ export function createBrowser(host) {
       const now = Date.now(), span = now - tuned;
       if (span < 1500 || (e2e() ? ackN < 3 : sent < 3)) return;
       const prev = qi, ratio = waited / span, avg = ackN ? ackSum / ackN : 0;
-      const slow = e2e() ? avg > 220 : ratio > 0.35, fast = e2e() ? avg < 130 : ratio < 0.08;
-      if (slow) { calm = 0; qi = Math.min(STEPS.length - 1, qi + ((e2e() ? avg > 500 : ratio > 0.7) ? 2 : 1)); }
+      if (ackN) base = base ? Math.min(ackMin, base + 15) : ackMin;
+      const excess = avg - base;
+      const slow = e2e() ? excess > 90 : ratio > 0.35, fast = e2e() ? excess < 35 : ratio < 0.08;
+      if (slow) { calm = 0; qi = Math.min(STEPS.length - 1, qi + ((e2e() ? excess > 300 : ratio > 0.7) ? 2 : 1)); }
       else if (fast) { if (++calm >= 2 && qi > 0) { qi--; calm = 0; } }
       else calm = 0;
-      waited = 0; sent = 0; ackSum = 0; ackN = 0; tuned = now;
+      waited = 0; sent = 0; ackSum = 0; ackN = 0; ackMin = Infinity; tuned = now;
       if (qi === prev) return;
       send({ t: "quality", step: qi, q: STEPS[qi].q, d: castDpr() });
       c?.send("Page.stopScreencast").catch(() => {}).finally(() => startCast());
@@ -236,6 +241,24 @@ export function createBrowser(host) {
       sent++;
       f.ack();
       tune();
+      if (size.bin && !f.refine) { refined = false; clearTimeout(refineT); refineT = setTimeout(refine, 350); }
+    };
+    // Màn hình đứng yên 350 ms khi đang ở bậc thấp (mạng chậm): một khung chất lượng cao ở đúng mật độ điểm ảnh của người xem để
+    // chữ sắc nét khi đọc. Tối đa một khung mỗi 2 giây; khung Chrome tự vẽ lại ngay sau lần chụp được bỏ qua (không thành vòng lặp).
+    const refine = async () => {
+      refineT = null;
+      if (refined || gone || !c || ws.readyState !== WebSocket.OPEN || s.dialog) return;
+      if (qi === 0 && castDpr() >= size.dpr) { refined = true; return; }
+      const wait = Math.max(latest || (e2e() && inflight >= 2) ? 200 : 0, lastRefine + 2000 - Date.now());
+      if (wait > 0) { refineT = setTimeout(refine, wait); return; }
+      refined = true;
+      try {
+        const r = await c.send("Page.captureScreenshot", { format: "jpeg", quality: 88 }, 5000);
+        if (!r?.data || latest || gone) return;
+        lastRefine = Date.now(); dropUntil = lastRefine + 300;
+        latest = { data: r.data, w: size.w, h: size.h, ack: () => {}, refine: true };
+        flush();
+      } catch {}
     };
     const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
     const pushTabs = async () => {
@@ -270,6 +293,7 @@ export function createBrowser(host) {
         const ack = () => n.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
         if (n !== c) return ack();
         lastFrame = Date.now();
+        if (lastFrame < dropUntil) { dropUntil = 0; return ack(); }
         latest?.ack();
         latest = { data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight, ack };
         if (!flushT) flush();
@@ -315,7 +339,7 @@ export function createBrowser(host) {
           // Người xem đã nhận một khung: mở chỗ cho khung kế tiếp, ghi thời gian khung đó đi tới nơi.
           inflight = Math.max(0, inflight - 1);
           const t0 = sentAt.shift();
-          if (t0) { ackSum += Date.now() - t0; ackN++; }
+          if (t0) { const d = Date.now() - t0; ackSum += d; ackN++; ackMin = Math.min(ackMin, d); }
           if (latest && !flushT) flush();
           return;
         }
@@ -374,7 +398,7 @@ export function createBrowser(host) {
     for (const m of queue.splice(0)) handle(m);
     // Người xem rời đi: chỉ đóng kết nối (phát hình của kết nối đó tự dừng). Không gửi stopScreencast: lệnh này tới muộn sẽ tắt luôn
     // phát hình của người xem mới trên cùng tab (đóng rồi mở lại khung trình duyệt thì màn hình đứng).
-    const bye = () => { clearTimeout(flushT); clearTimeout(watch); latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
+    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
     if (gone) bye(); else ws.on("close", bye);
   }
 
