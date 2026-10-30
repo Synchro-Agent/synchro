@@ -965,7 +965,7 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null;
-    let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false;
+    let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false;
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     let streamed = false, pend: string | null = null, raf = 0;
     const flush = () => { raf = 0; if (pend === null || gen !== genRef.current) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
@@ -1016,7 +1016,9 @@ export default function Home() {
       });
     } catch (e) {
       setQueued((q) => q.map((x) => (x.chat === id && x.mode === "steer" ? { ...x, mode: "later" as const } : x)));
-      reply = e instanceof LLMError && [400, 401, 403, 404, 409, 410, 429, 503].includes(e.status) && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
+      // Máy chủ trả lời kèm lý do (kể cả lỗi của gói / model, mã 5xx): hiện đúng lý do; chỉ khi không có lý do mới báo chung chung.
+      failed = true;
+      reply = e instanceof LLMError && e.message && !/^(LLM|Run|Lỗi) \d+$/.test(e.message) ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
         const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio); };
@@ -1037,7 +1039,8 @@ export default function Home() {
     }
     const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
-    const words = (reply + note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : "")).split(/(\s+)/);
+    // Câu báo lỗi không kèm ghi chú "đã áp dụng hướng dẫn / ngữ cảnh dự án" (lượt đó chưa chạy được).
+    const words = (reply + (failed ? "" : note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : ""))).split(/(\s+)/);
     let i = 0;
     let wait = 42;
     timer.current = setInterval(() => {

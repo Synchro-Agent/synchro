@@ -276,6 +276,9 @@ export class AntigravityEngine implements Engine {
     if (o.status === "ERROR" || o.error || e.code !== 0) {
       if (e.aborted || e.timedOut) { yield exitError("agy", p, e); return; }
       const m = [o.error, stripAnsi(p.stderr()).trim()].filter(Boolean).join("\n") || "Antigravity báo lỗi.";
+      if (log) await agyDenied(req, log).catch(() => []);
+      // Model không nhận mức effort (agy kiểm tra trước khi chạy, chưa tốn lượt nào): chạy lại ngay, để model dùng mức mặc định.
+      if (req.effort && /--effort is not supported/i.test(m)) { yield* this.turn({ ...req, effort: undefined }); return; }
       yield err(m, classify(m));
       return;
     }

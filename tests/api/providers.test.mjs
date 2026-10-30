@@ -152,6 +152,14 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   ok(gm && gm.models.map((m) => m.name).join() === "Gemini 4 Argon,Gemini 3.8 Flash,Gemini 3.1 Flash Lite,Claude Sonnet 4.6 (Antigravity),Claude Opus 4.6 (Antigravity),GPT-OSS 120B (Antigravity)", "nhóm Gemini: đủ model agy trả về (Gemini trước, Claude / GPT qua Antigravity sau), không tách High / Low", JSON.stringify(gm?.models));
   const ag = await member("POST", "/api/llm", { model: "sub-agy/claude-opus-4-6-thinking", messages: [{ role: "user", content: "chào" }], skills: true });
   ok(ag.s === 200 && /\[model claude-opus-4-6-thinking\]/.test(ag.j.text ?? ""), "chat bằng Claude Opus 4.6 qua gói Google (agy --model đúng mã)", JSON.stringify(ag.j).slice(0, 300));
+  // Model Claude / GPT qua Antigravity không nhận --effort (agy thật dừng lượt ngay: tài khoản mới chọn "Trung bình" là hỏng mọi lượt chat).
+  for (const ef of ["medium", "high"]) {
+    const ce = await member("POST", "/api/llm", { model: "sub-agy/claude-opus-4-6-thinking", effort: ef, messages: [{ role: "user", content: "tóm tắt giúp tôi" }], skills: true });
+    ok(ce.s === 200 && /\[model claude-opus-4-6-thinking\]/.test(ce.j?.text ?? "") && !/\[effort/.test(ce.j?.text ?? ""), `Claude Opus 4.6 qua Antigravity, mức ${ef}: không gửi --effort, lượt chạy bình thường`, JSON.stringify(ce.j).slice(0, 300));
+  }
+  // Model nào khác agy cũng báo không nhận effort: Synchro tự chạy lại lượt không kèm effort.
+  const ne = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.1-flash-lite", effort: "high", messages: [{ role: "user", content: "chào [mock:noeffort]" }], skills: true });
+  ok(ne.s === 200 && /\[model gemini-3\.1-flash-lite\]/.test(ne.j?.text ?? "") && !/\[effort/.test(ne.j?.text ?? ""), "agy báo model không nhận --effort → tự chạy lại không kèm effort", JSON.stringify(ne).slice(0, 300));
   const r = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", effort: "high", messages: [{ role: "user", content: "chào" }], skills: true });
   ok(r.s === 200 && /Gemini/.test(r.j.text) && /\[model gemini-3\.8-flash-high\]/.test(r.j.text), "chat bằng gói Gemini, effort ở mục Effort → biến thể High", JSON.stringify(r.j));
   const users = (await admin("GET", "/api/admin")).j.users, uid = users.find((x) => x.email === "pv-member@synchro.test").id;

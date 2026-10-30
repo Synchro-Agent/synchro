@@ -5,6 +5,7 @@
 //   màn hình đó được ghi lại để kiểm thử chắc chắn Synchro không bấm thay người dùng;
 // - `models` in "mã<TAB>Tên" sau dòng "Fetching available models...", gồm biến thể effort và cả model Claude / GPT;
 // - --output-format json [--model] [--effort] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức.
+//   --effort với model Claude / GPT (không phải gemini-…) → lỗi "--effort is not supported for model" như agy thật.
 // - `mcp add|remove|list` ghi ~/.gemini/config/mcp_config.json đúng định dạng của agy ({ mcpServers: { tên: { serverUrl, headers, disabled } } });
 //   ở chế độ -p, công cụ MCP cần duyệt bị tự từ chối trừ khi hook PreToolUse trong ~/.gemini/config/hooks.json trả "allow" (tài liệu của agy).
 //   Công cụ MCP mặc định nạp khi cần: model tìm rồi gọi qua tên chung "CallMcpTool"; công cụ có _meta "antigravity/alwaysLoad" được nạp sẵn
@@ -68,6 +69,19 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
       process.exit(1);
     }
     if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
+    // Như agy 1.4.11 thật (nhật ký trên VPS 2026-10-30): model Claude / GPT qua Antigravity không nhận --effort, lượt dừng ngay.
+    {
+      const m = C.flag(a, "--model"), e = C.flag(a, "--effort");
+      // [mock:noeffort]: cả model Gemini này cũng không nhận --effort (Synchro phải tự chạy lại không kèm effort).
+      if (m && e && (!/^gemini-/i.test(m) || prompt.includes("[mock:noeffort]"))) {
+        const msg = `invalid model selection (--model "${m}" --effort "${e}"): --effort is not supported for model "${m}"`;
+        const lf = C.flag(a, "--log-file");
+        if (lf) fs.appendFileSync(lf, `E1030 00:00:00.000000       1 printmode.go:308] Print mode: ${msg}\n`);
+        console.log(JSON.stringify({ conversation_id: "", status: "ERROR", response: "", error: msg, duration_seconds: 0, num_turns: 0, usage: usage0 }));
+        console.error(`Error: ${msg}`);
+        process.exit(1);
+      }
+    }
     const turn = C.bumpSession(gem, conv);
     const st = C.stallTurn(gem, conv, prompt);
     if (st.stall) return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: C.STALL_TEXT, error: "", duration_seconds: 0.2, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: 10 } }));

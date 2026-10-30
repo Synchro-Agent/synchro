@@ -148,6 +148,8 @@ export function resolvePlanModel(cli: Cli, uid: string, id: string, effort?: str
       const i = order.indexOf(want);
       e = i < 0 ? undefined : [...order.slice(0, i + 1)].reverse().find((x) => pm.efforts!.includes(x)) ?? pm.efforts[0];
     }
+    // agy: model Claude / GPT qua Antigravity không nhận --effort (agy 1.4.11 dừng lượt: "--effort is not supported for model").
+    if (cli === "agy" && !isGeminiId(id)) e = undefined;
     return { model: pm?.variants?.default ?? (id && id !== "default" ? id : undefined), effort: e };
   }
   const want = effort === "extra" ? ["xhigh", "high", "max"] : effort === "max" ? ["max", "xhigh", "high"] : effort === "low" ? ["low", "minimal", "extra-low", "medium"]
