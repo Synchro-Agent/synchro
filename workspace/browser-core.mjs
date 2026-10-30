@@ -193,30 +193,45 @@ export function createBrowser(host) {
     let size = { w: 1280, h: 800, mobile: false, dpr: 1, bin: false };
     let c = null, lastTabs = "";
     const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
-    // Khung hình theo nhịp mạng: chỉ báo Chrome đã nhận (ack, Chrome mới vẽ và nén khung kế tiếp) khi khung trước đã gửi đi và đường
-    // truyền còn trống. Mạng chậm thì Chrome tự giãn nhịp thay vì nén những khung sẽ bỏ, màn hình không trễ dần; luôn gửi khung mới nhất.
-    // Chất lượng nén tự cân theo mạng: khung phải chờ đường truyền nhiều thì hạ dần (chữ vẫn nét nhờ 2x), mạng thông thì nâng lại.
-    const QUAL = [82, 72, 62, 52];
-    let latest = null, flushT = null, meta = "", qi = 0, waits = 0, sent = 0, tuned = Date.now();
+    // Khung hình theo nhịp mạng: chỉ báo Chrome đã nhận (ack, Chrome mới vẽ và nén khung kế tiếp) khi khung đã gửi đi; mạng chậm thì
+    // Chrome tự giãn nhịp thay vì nén những khung sẽ bỏ, màn hình không trễ dồn; luôn gửi khung mới nhất.
+    // Bậc chất lượng tự cân theo mạng (mức nén, mật độ điểm ảnh tối đa của khung phát).
+    const STEPS = [{ q: 76, d: 2 }, { q: 66, d: 2 }, { q: 62, d: 1.5 }, { q: 56, d: 1.25 }, { q: 50, d: 1 }];
+    // Người xem báo đã nhận từng khung (fa, khi trình duyệt xin "fa: true"): tối đa 2 khung đang trên đường đi, đo được thời gian
+    // một khung tới nơi — bộ đệm mạng của hệ điều hành / nginx chứa được hàng chục khung nên không dựa vào bufferedAmount được.
+    // Khung tới nơi chậm (>220 ms) thì hạ bậc, hai nhịp liền nhanh (<130 ms) thì nâng lại. Người xem bản cũ: chờ bufferedAmount như trước.
+    let latest = null, flushT = null, meta = "", qi = 0, waited = 0, sent = 0, calm = 0, tuned = Date.now(), lastBytes = 0;
+    let inflight = 0, ackSum = 0, ackN = 0;
+    const sentAt = [];
+    const e2e = () => size.bin && size.fa;
+    const castDpr = () => Math.min(size.dpr, STEPS[qi].d);
     const tune = () => {
-      const now = Date.now();
-      if (now - tuned < 2000 || sent < 6) return;
-      const ratio = waits / sent, prev = qi;
-      if (ratio > 0.3 && qi < QUAL.length - 1) qi++;
-      else if (ratio < 0.05 && now - tuned > 4000 && qi > 0) qi--;
-      waits = 0; sent = 0; tuned = now;
-      if (qi !== prev) c?.send("Page.stopScreencast").catch(() => {}).finally(() => startCast());
+      const now = Date.now(), span = now - tuned;
+      if (span < 1500 || (e2e() ? ackN < 3 : sent < 3)) return;
+      const prev = qi, ratio = waited / span, avg = ackN ? ackSum / ackN : 0;
+      const slow = e2e() ? avg > 220 : ratio > 0.35, fast = e2e() ? avg < 130 : ratio < 0.08;
+      if (slow) { calm = 0; qi = Math.min(STEPS.length - 1, qi + ((e2e() ? avg > 500 : ratio > 0.7) ? 2 : 1)); }
+      else if (fast) { if (++calm >= 2 && qi > 0) { qi--; calm = 0; } }
+      else calm = 0;
+      waited = 0; sent = 0; ackSum = 0; ackN = 0; tuned = now;
+      if (qi === prev) return;
+      send({ t: "quality", step: qi, q: STEPS[qi].q, d: castDpr() });
+      c?.send("Page.stopScreencast").catch(() => {}).finally(() => startCast());
     };
     const flush = () => {
       flushT = null;
       if (!latest || ws.readyState !== WebSocket.OPEN) return;
-      if (ws.bufferedAmount > 384_000) { if (!latest.waited) { latest.waited = true; waits++; } flushT = setTimeout(flush, 12); return; }
+      if (e2e() ? inflight >= 2 : ws.bufferedAmount > Math.max(48_000, lastBytes * 0.5)) { latest.waitFrom ??= Date.now(); if (!e2e()) flushT = setTimeout(flush, 8); return; }
       const f = latest; latest = null;
-      if (!size.bin) send({ t: "frame", data: f.data, w: f.w, h: f.h });
+      if (f.waitFrom) waited += Date.now() - f.waitFrom;
+      if (!size.bin) { send({ t: "frame", data: f.data, w: f.w, h: f.h }); lastBytes = f.data.length; }
       else {
         const m = `${f.w}x${f.h}`;
         if (m !== meta) { meta = m; send({ t: "meta", w: f.w, h: f.h }); }
-        ws.send(Buffer.from(f.data, "base64"));
+        const buf = Buffer.from(f.data, "base64");
+        lastBytes = buf.length;
+        ws.send(buf);
+        if (e2e()) { inflight++; sentAt.push(Date.now()); }
       }
       sent++;
       f.ack();
@@ -235,7 +250,8 @@ export function createBrowser(host) {
     let lastFrame = 0, watch = null;
     const startCast = async () => {
       const cc = c, at = Date.now();
-      await cc.send("Page.startScreencast", { format: "jpeg", quality: QUAL[qi] + (size.dpr > 1 ? 0 : 6), maxWidth: Math.round(size.w * size.dpr), maxHeight: Math.round(size.h * size.dpr), everyNthFrame: 1 }).catch(() => {});
+      const d = castDpr();
+      await cc.send("Page.startScreencast", { format: "jpeg", quality: STEPS[qi].q + (d > 1 ? 0 : 8), maxWidth: Math.round(size.w * d), maxHeight: Math.round(size.h * d), everyNthFrame: 1 }).catch(() => {});
       clearTimeout(watch);
       watch = setTimeout(() => { if (!gone && c === cc && lastFrame < at) cc.send("Page.stopScreencast").catch(() => {}).finally(() => startCast()); }, 1500);
     };
@@ -295,12 +311,21 @@ export function createBrowser(host) {
       const now = Date.now(); if (now - lastTouch > 10_000) { lastTouch = now; host.touch?.(u); }
       let j; try { j = JSON.parse(m.toString()); } catch { return; }
       try {
+        if (j.t === "fa") {
+          // Người xem đã nhận một khung: mở chỗ cho khung kế tiếp, ghi thời gian khung đó đi tới nơi.
+          inflight = Math.max(0, inflight - 1);
+          const t0 = sentAt.shift();
+          if (t0) { ackSum += Date.now() - t0; ackN++; }
+          if (latest && !flushT) flush();
+          return;
+        }
         if (j.t === "size") {
           const w = Math.max(320, Math.min(j.w | 0, 2560)), h = Math.max(240, Math.min(j.h | 0, 1600));
           // Màn hình mật độ cao: tối đa 2x, khung rất lớn thì hạ xuống để hình vẫn đi kịp qua mạng.
           let dpr = Math.max(1, Math.min(Number(j.dpr) || 1, 2));
           while (dpr > 1 && w * h * dpr * dpr > 4_200_000) dpr = Math.max(1, dpr - 0.25);
-          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true };
+          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true };
+          inflight = 0; sentAt.length = 0;
           meta = "";
           await metrics();
           await c.send("Page.stopScreencast").catch(() => {});

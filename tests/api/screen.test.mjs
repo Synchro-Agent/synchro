@@ -78,5 +78,35 @@ const legacy = await until(() => c.got.json.find((m) => m.t === "frame" && m.dat
 ok(legacy && legacy.w === 640 && jpegSize(Uint8Array.from(Buffer.from(legacy.data, "base64")))?.w === 640 && !c.got.bin.length, "khung JSON base64 ở mật độ 1x như trước", legacy ? { w: legacy.w, h: legacy.h } : null);
 c.ws.close();
 
+console.log("4. Mạng chậm: tự hạ chất lượng / độ phân giải để không trễ dồn, mạng thông thì nâng lại");
+{
+  const t = await me("POST", "/api/browser", { op: "ticket" });
+  const w = new WebSocket(new URL(t.j.url, B.replace(/^http/, "ws")).toString());
+  w.binaryType = "arraybuffer";
+  const dims = [], steps = [];
+  // Như khung xem của Synchro: báo đã nhận từng khung (fa). Mạng chậm giả lập: khung tới nơi sau 450 ms.
+  let delay = 0;
+  w.onmessage = (e) => {
+    if (typeof e.data === "string") { const j = JSON.parse(e.data); if (j.t === "quality") steps.push(j); return; }
+    const s = jpegSize(e.data); if (s) dims.push({ at: Date.now(), w: s.w });
+    if (delay) setTimeout(() => w.send('{"t":"fa"}'), delay); else w.send('{"t":"fa"}');
+  };
+  await new Promise((r) => (w.onopen = r));
+  w.send(JSON.stringify({ t: "size", w: 900, h: 700, dpr: 2, bin: true, fa: true }));
+  w.send(JSON.stringify({ t: "html", html: `<!doctype html><meta charset=utf-8><body style="margin:0"><canvas id=c width=900 height=700></canvas><script>const c=document.getElementById("c").getContext("2d");(function f(){for(let i=0;i<400;i++){c.fillStyle="hsl("+Math.random()*360+",80%,50%)";c.fillRect(Math.random()*900,Math.random()*700,40,40)}requestAnimationFrame(f)})()</script>` }));
+  await until(() => dims.length > 5, 15_000);
+  const full = Math.max(...dims.map((d) => d.w));
+  delay = 450;
+  await until(() => steps.length && steps.at(-1).d < 2, 15_000);
+  const t1 = Date.now();
+  await sleep(2500);
+  const recent = dims.filter((d) => d.at > t1);
+  ok(full === 1800 && steps.length > 0 && steps.at(-1).d < 2 && recent.length > 0 && recent.every((d) => d.w < 1800), "mạng chậm → hạ chất lượng rồi độ phân giải, khung nhỏ lại", { full, steps, recent: recent.slice(-2) });
+  delay = 0;
+  await until(() => steps.at(-1)?.step === 0, 20_000);
+  ok(steps.at(-1)?.step === 0, "mạng thông → nâng lại bậc cao nhất (2x)", steps.slice(-2));
+  w.close();
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

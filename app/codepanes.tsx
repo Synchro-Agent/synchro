@@ -171,9 +171,10 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     const out = (o: Record<string, unknown>) => (to ? to.readyState === 1 && to.send(JSON.stringify(o)) : send(o));
     const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
     const v = VIEWPORTS.find((x) => x.k === vpRef.current);
-    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true });
+    // fa: báo máy chủ đã nhận từng khung (máy chủ chỉ để tối đa 2 khung trên đường đi và tự cân chất lượng theo tốc độ mạng thật).
+    if (v?.w) return out({ t: "size", w: v.w, h: v.h, mobile: v.mobile, dpr, bin: true, fa: true });
     const r = view.current?.getBoundingClientRect();
-    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true });
+    if (r && r.width > 50) out({ t: "size", w: Math.round(r.width), h: Math.round(r.height), dpr, bin: true, fa: true });
   };
   const draw = () => {
     if (decoding.current || !nextFrame.current) return;
@@ -213,7 +214,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
       s.onopen = () => { if (ws.current !== s) return s.close(); setSt("open"); sendSize(s); };
       s.onmessage = (e) => {
         if (ws.current !== s) return;
-        if (typeof e.data !== "string") { frame(e.data as Blob); return; }
+        if (typeof e.data !== "string") { s.send('{"t":"fa"}'); frame(e.data as Blob); return; }
         let j: { t: string; data?: string; url?: string; title?: string; on?: boolean; error?: string; list?: unknown; active?: string; w?: number; h?: number };
         try { j = JSON.parse(String(e.data)); } catch { return; }
         if (j.t === "meta") size.current = { w: j.w ?? 0, h: j.h ?? 0 };
