@@ -234,6 +234,9 @@ export function createBrowser(host) {
     // giữ khung mới nhất (Chrome chờ báo nhận) — mạng chậm thì ít khung hơn nhưng khung nào cũng nét. Không cần hạ chất lượng hay refine.
     // mk: hàm tạo bộ nén; vid: { enc, w, h (điểm ảnh của ảnh), css: { w, h }, cfg, sent }; vbusy: lúc đưa khung vào bộ nén (0 = rảnh).
     let mk = null, vid = null, vbusy = 0, lastPushed = null;
+    // Số đo từng khâu (người xem xin "stats: true", vd. công cụ đo độ trễ): mỗi 2 giây gửi { t: "stats" } — số khung Chrome gửi, khung bỏ
+    // vì đang bận, khung vào / ra bộ nén, thời gian nén, cỡ ảnh JPEG, thời gian từ thao tác của người dùng tới khung Chrome kế tiếp.
+    const stat = { cast: 0, drop: 0, push: 0, out: 0, encMs: 0, encMax: 0, jpg: 0, bytes: 0, inLat: [], inAt: 0 };
     const e2e = () => size.bin && size.fa;
     const castDpr = () => Math.min(size.dpr, STEPS[qi].d);
     const tune = () => {
@@ -310,11 +313,14 @@ export function createBrowser(host) {
       }
       vid.css = { w: f.w, h: f.h };
       lastPushed = { data: f.data, w: f.w, h: f.h };
+      vid.at = Date.now(); stat.push++;
       vid.enc.push(buf);
       f.ack();
     };
     const out = ({ key, data }) => {
       vbusy = 0;
+      if (vid?.at) { const d = Date.now() - vid.at; stat.encMs += d; stat.encMax = Math.max(stat.encMax, d); }
+      stat.out++; stat.bytes += data.length;
       if (ws.readyState === WebSocket.OPEN) {
         // Cấu hình giải mã đi trước khung khóa đầu tiên của mỗi bộ nén (mở lại khi đổi kích thước / người xem xin khung khóa).
         if (!vid.sent) {
@@ -339,6 +345,12 @@ export function createBrowser(host) {
     };
     const vwatch = setInterval(() => { if (vbusy && Date.now() - vbusy > 4000) videoFail("bộ nén không trả khung"); }, 1000);
     const next = () => (mk ? pump().catch((e) => videoFail(e?.message)) : !flushT && flush());
+    const statT = setInterval(() => {
+      if (size.stats) send({ t: "stats", cast: stat.cast, drop: stat.drop, push: stat.push, out: stat.out, encMs: stat.out ? Math.round(stat.encMs / stat.out) : 0, encMax: stat.encMax,
+        jpgKB: stat.cast ? Math.round(stat.jpg / stat.cast / 1024) : 0, outKB: stat.out ? Math.round((stat.bytes / stat.out / 1024) * 10) / 10 : 0,
+        inLat: stat.inLat.length ? Math.round(stat.inLat.reduce((a, b) => a + b, 0) / stat.inLat.length) : null, inflight, video: !!mk });
+      Object.assign(stat, { cast: 0, drop: 0, push: 0, out: 0, encMs: 0, encMax: 0, jpg: 0, bytes: 0, inLat: [] });
+    }, 2000);
     const sendInfo = async () => { if (c) send({ t: "nav", ...(await info(c)) }); };
     const pushTabs = async () => {
       try {
@@ -374,6 +386,8 @@ export function createBrowser(host) {
         if (n !== c) return ack();
         lastFrame = Date.now();
         if (lastFrame < dropUntil) { dropUntil = 0; return ack(); }
+        stat.cast++; stat.jpg += p.data.length * 0.75; if (latest) stat.drop++;
+        if (stat.inAt) { stat.inLat.push(lastFrame - stat.inAt); stat.inAt = 0; }
         latest?.ack();
         latest = { data: p.data, w: p.metadata.deviceWidth, h: p.metadata.deviceHeight, ack };
         next();
@@ -437,7 +451,7 @@ export function createBrowser(host) {
           // Màn hình mật độ cao: tối đa 2x, khung rất lớn thì hạ xuống để hình vẫn đi kịp qua mạng.
           let dpr = Math.max(1, Math.min(Number(j.dpr) || 1, 2));
           while (dpr > 1 && w * h * dpr * dpr > 4_200_000) dpr = Math.max(1, dpr - 0.25);
-          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true };
+          size = { w, h, mobile: !!j.mobile, dpr, bin: j.bin === true, fa: j.fa === true, stats: j.stats === true };
           inflight = 0; sentAt.length = 0;
           meta = "";
           const had = !!mk;
@@ -448,17 +462,17 @@ export function createBrowser(host) {
           await c.send("Page.stopScreencast").catch(() => {});
           await startCast();
         } else if (j.t === "mouse") {
-          if (j.type !== "mouseMoved") lastInput = now;
+          if (j.type !== "mouseMoved") { lastInput = now; stat.inAt ||= now; }
           await c.send("Input.dispatchMouseEvent", { type: j.type, x: +j.x, y: +j.y, button: j.button ?? "left", buttons: j.buttons ?? 0, clickCount: j.clickCount ?? 0, modifiers: j.mod ?? 0 });
           if (j.type === "mouseMoved") { const first = !cursorAt; cursorAt = { x: +j.x, y: +j.y }; if (first) setTimeout(probeCursor, 80); }
         } else if (j.t === "wheel") {
-          lastInput = now;
+          lastInput = now; stat.inAt ||= now;
           await c.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +j.x, y: +j.y, deltaX: +j.dx || 0, deltaY: +j.dy || 0 });
         } else if (j.t === "key") {
-          lastInput = now;
+          lastInput = now; stat.inAt ||= now;
           await c.send("Input.dispatchKeyEvent", { type: j.type, key: j.key, code: j.code, text: j.text, unmodifiedText: j.text, windowsVirtualKeyCode: j.kc ?? 0, modifiers: j.mod ?? 0 });
         } else if (j.t === "text") {
-          lastInput = now;
+          lastInput = now; stat.inAt ||= now;
           await c.send("Input.insertText", { text: String(j.text ?? "") });
         } else if (j.t === "go") {
           await act(u, { action: "navigate", url: j.url, user: true }).catch((e) => send({ t: "error", error: e.message }));
@@ -495,7 +509,7 @@ export function createBrowser(host) {
     for (const m of queue.splice(0)) handle(m);
     // Người xem rời đi: chỉ đóng kết nối (phát hình của kết nối đó tự dừng). Không gửi stopScreencast: lệnh này tới muộn sẽ tắt luôn
     // phát hình của người xem mới trên cùng tab (đóng rồi mở lại khung trình duyệt thì màn hình đứng).
-    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); clearInterval(vwatch); vid?.enc.close(); vid = null; mk = null; latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
+    const bye = () => { clearTimeout(flushT); clearTimeout(watch); clearTimeout(refineT); clearInterval(vwatch); clearInterval(statT); vid?.enc.close(); vid = null; mk = null; latest?.ack(); latest = null; s.viewers.delete(viewer); host.sock?.(u, -1); clearInterval(poll); if (c) { c.switching = true; c.close(); } };
     if (gone) bye(); else ws.on("close", bye);
   }
 
