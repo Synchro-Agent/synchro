@@ -9,7 +9,7 @@ import type { UserRow } from "./authstore";
 import { oneShot, pickModel } from "./ai/anymodel";
 import { parseSkillMd, type Entry } from "./skillstore";
 
-export const GEN = { files: 400, bytes: 40 * 1024 * 1024, file: 1024 * 1024, digest: 90_000 };
+export const GEN = { files: 3000, bytes: 40 * 1024 * 1024, file: 1024 * 1024, digest: 90_000 };
 
 const JUNK = (seg: string) => seg === "__MACOSX" || seg === ".DS_Store" || seg === "Thumbs.db" || seg === ".git" || seg === "node_modules";
 const DOC = /\.(md|markdown|mdx|rst|txt|adoc|org)$/i;
@@ -143,7 +143,7 @@ export async function skillFromRepo(user: UserRow, files: RepoFile[], o: { repoN
       const cleaned = raw.trim().replace(/^```(?:markdown|md|yaml)?\s*\n([\s\S]*?)\n```\s*$/i, "$1").replace(/^[\s\S]*?(?=^---\s*$)/m, "").trim();
       const p = parseSkillMd(cleaned);
       if (p.body.length < 200) throw new Error("SKILL.md quá ngắn");
-      md = cleaned; model = pick.model;
+      md = p.repaired ?? cleaned; model = pick.model;
     } catch (e) {
       warnings.push(`Model chưa viết được SKILL.md (${String((e as Error).message ?? e).slice(0, 160)}), nên Synchro dựng skill từ README của repo`);
     }

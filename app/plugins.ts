@@ -19,7 +19,7 @@ export type Risk = "none" | "low" | "medium" | "high";
 export type SkillReport = { name: string; description: string; dir: string; repo: string; files: number; size: number; scripts: number; license: string; licenseKind: LicenseKind; risk: Risk; flags: string[]; blocked?: string; duplicateOf?: string };
 export type LicenseKind = "open" | "proprietary" | "unknown";
 
-export const PLUGIN_LIMITS = { skills: 80, filesPerSkill: 400, skillBytes: 25 * 1024 * 1024, pluginBytes: 150 * 1024 * 1024, zip: 80 * 1024 * 1024, perOwner: 40 };
+export const PLUGIN_LIMITS = { skills: 80, filesPerSkill: 5000, skillBytes: 25 * 1024 * 1024, pluginBytes: 150 * 1024 * 1024, zip: 80 * 1024 * 1024, perOwner: 40 };
 const PROOT = () => path.join(ROOT, "_plugins");
 export class PluginError extends Error { constructor(m: string, public status = 400) { super(m); } }
 const fail = (m: string, status = 400): never => { throw new PluginError(m, status); };

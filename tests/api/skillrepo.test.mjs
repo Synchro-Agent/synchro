@@ -25,7 +25,7 @@ await me("POST", "/api/auth/login", { email: "skillrepo@synchro.test", password:
 const row = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === "skillrepo@synchro.test");
 // Thành viên không được dùng model nào (chưa đăng nhập gói, không có khóa API): skill dựng từ README.
 await admin("PATCH", `/api/admin/users/${row.id}`, { action: "set_perms", perms: { models: [], features: Object.fromEntries(Object.keys(row.perms.features).map((k) => [k, true])) } });
-for (const who of [admin, me]) for (const n of ["plain-repo", "docs", "real-skill"]) await who("DELETE", `/api/skills/${n}`);
+for (const who of [admin, me]) for (const n of ["plain-repo", "docs", "real-skill", "big-skill", "loose-yaml"]) await who("DELETE", `/api/skills/${n}`);
 // Thư viện chung từ lần chạy trước của bài này.
 for (const x of (await admin("GET", "/api/plugins")).j?.plugins ?? []) if (x.scope === "org" && x.slug === "skill-plain-repo") await admin("DELETE", `/api/plugins/${x.id}`);
 
@@ -42,6 +42,18 @@ const FILES = {
 };
 await repo("mock-dev/plain-repo", FILES);
 await repo("mock-dev/real-skill", { "SKILL.md": "---\nname: real-skill\ndescription: Skill có sẵn SKILL.md.\n---\n# Real\n\nLàm theo hướng dẫn.\n", "references/notes.md": "ghi chú\n" });
+// SKILL.md viết frontmatter chưa đúng YAML (dấu ngoặc kép giữa câu, dấu ":" chưa bọc ngoặc) — Claude Code vẫn đọc được.
+const LOOSE_DESC = `"Dùng khi" người dùng hỏi: cách audit bảo mật ${"rất kỹ, ".repeat(100)}kể cả 'trích dẫn'`;
+await repo("mock-dev/loose-yaml", { "SKILL.md": `---\nname: loose-yaml\ndescription: ${LOOSE_DESC}\nallowed-tools:\n  - Bash\n---\n# Loose\n\nLàm theo hướng dẫn.\n` });
+// Skill thật kèm cả nghìn tệp (như kaankiziltug/logo-design-skill: 1432 biểu tượng SVG mẫu) nằm trong thư mục con của repo.
+const BIG = 1500;
+await repo("mock-dev/big-skill", {
+  "README.md": "# Big skill repo\n",
+  "docs/shot.png": "\u0089PNG\r\n\u001a\n",
+  "skills/big-skill/SKILL.md": "---\nname: big-skill\ndescription: Skill kèm thư viện biểu tượng SVG rất lớn.\n---\n# Big\n\nTìm mẫu bằng scripts/count.py.\n",
+  "skills/big-skill/scripts/count.py": "import pathlib\nprint('SVG:', len(list(pathlib.Path('assets/library/svg').glob('*.svg'))))\n",
+  ...Object.fromEntries(Array.from({ length: BIG }, (_, i) => [`skills/big-skill/assets/library/svg/m${i}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="${(i % 5) + 1}"/></svg>`])),
+});
 
 // Gửi link, chờ máy chủ đọc repo (pending) tới khi có bản xem trước / lỗi.
 async function inspect(who, url, pick) {
@@ -95,6 +107,30 @@ console.log("4. Repo có SKILL.md: cài như trước");
 {
   const r = await inspect(admin, "https://github.com/mock-dev/real-skill");
   ok(r.j?.preview?.name === "real-skill" && !r.j.preview.generated && r.first?.j?.pending === undefined, "SKILL.md có sẵn: xem trước ngay, không tự viết", r.j);
+}
+
+console.log("4b. Skill kèm hơn nghìn tệp: nhập được, script của skill thấy đủ tệp");
+{
+  const r = await inspect(admin, "https://github.com/mock-dev/big-skill");
+  ok(r.j?.preview?.name === "big-skill" && r.j.preview.files?.length === BIG + 1, `xem trước đủ ${BIG + 1} tệp đi kèm`, { s: r.s, error: r.j?.error, n: r.j?.preview?.files?.length });
+  const sv = await admin("POST", "/api/skills/import", { url: "https://github.com/mock-dev/big-skill", dry: false });
+  ok(sv.s === 200 && sv.j?.skill?.fileCount === BIG + 1, "cài được vào Skill của bạn", { s: sv.s, error: sv.j?.error, n: sv.j?.skill?.fileCount });
+  if (sv.j?.skill && !sv.j.skill.enabled) await admin("PATCH", "/api/skills/big-skill", { enabled: true });
+  let t = await admin("POST", "/api/llm", { system: "", max_tokens: 1500, skills: true, model: "anthropic/claude-sonnet-5-5", messages: [{ role: "user", content: "#skillrun big-skill scripts/count.py" }] });
+  for (let i = 0; i < 120 && t.j?.run && !t.j.done; i++) { await sleep(500); t = await admin("GET", `/api/runs/${t.j.run ?? t.j.id}?json=1`); }
+  ok(String(t.j?.text ?? "").includes(`SVG: ${BIG}`), `script của skill chạy với đủ ${BIG} tệp SVG`, String(t.j?.text ?? JSON.stringify(t.j)).slice(0, 400));
+  await admin("DELETE", "/api/skills/big-skill");
+}
+
+console.log("4c. SKILL.md có frontmatter chưa đúng YAML: Synchro tự sửa, không báo lỗi");
+{
+  const r = await inspect(me, "https://github.com/mock-dev/loose-yaml");
+  ok(r.j?.preview?.name === "loose-yaml" && r.j.preview.description === LOOSE_DESC.replace(/\s+/g, " ").trim(), "đọc được name / description nguyên văn (cả dấu ngoặc kép, dấu \":\")", { s: r.s, error: r.j?.error, d: r.j?.preview?.description?.slice(0, 80) });
+  ok((r.j?.preview?.warnings ?? []).some((w) => w.includes("Synchro đã tự sửa")), "báo đã tự sửa frontmatter", r.j?.preview?.warnings);
+  const sv = await me("POST", "/api/skills/import", { url: "https://github.com/mock-dev/loose-yaml", dry: false });
+  const d = await me("GET", "/api/skills/loose-yaml");
+  ok(sv.s === 200 && d.j?.skill?.description === r.j?.preview?.description, "cài được; skill đã lưu đọc lại đúng", { s: sv.s, error: sv.j?.error });
+  await me("DELETE", "/api/skills/loose-yaml");
 }
 
 console.log("5b. Tạo skill cho mọi người: vào Thư viện cho mọi người (chỉ quản trị viên), mọi tài khoản dùng được");

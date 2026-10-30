@@ -266,7 +266,7 @@ const safeRel = (p) => typeof p === "string" && p.length > 0 && p.length < 300 &
 
 async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, timeout = 120 }) {
   if (!Array.isArray(argv) || !argv.length || argv.length > 60 || argv.some((a) => typeof a !== "string" || a.length > 4000)) throw new E(400, "Lệnh không hợp lệ");
-  if (!Array.isArray(files) || files.length > 120 || files.some((f) => !safeRel(f?.path) || typeof f.b64 !== "string")) throw new E(400, "Tệp không hợp lệ");
+  if (!Array.isArray(files) || files.length > 6000 || files.some((f) => !safeRel(f?.path) || typeof f.b64 !== "string")) throw new E(400, "Tệp không hợp lệ");
   if (wantNet && !proxyUp) throw new E(503, "Máy chủ chưa bật được mạng cho code (proxy kho thư viện).");
   if (running >= RUN_MAX) throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.");
   const sec = Math.max(5, Math.min(Number(timeout) || 120, 300));
@@ -441,9 +441,9 @@ const authed = (req) => {
   const want = `Bearer ${SECRET}`;
   return h.length === want.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(want));
 };
-const body = (req) => new Promise((res, rej) => {
+const body = (req, max = 30_000_000) => new Promise((res, rej) => {
   const ch = []; let n = 0;
-  req.on("data", (c) => { n += c.length; if (n > 30_000_000) { rej(new E(413, "Dữ liệu quá lớn")); req.destroy(); } else ch.push(c); });
+  req.on("data", (c) => { n += c.length; if (n > max) { rej(new E(413, "Dữ liệu quá lớn")); req.destroy(); } else ch.push(c); });
   req.on("end", () => { try { res(JSON.parse(Buffer.concat(ch).toString() || "{}")); } catch { rej(new E(400, "JSON không hợp lệ")); } });
 });
 const reply = (res, status, o) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(o)); };
@@ -453,7 +453,8 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/health") return reply(res, 200, { ok: true });
   if (!authed(req)) return reply(res, 401, { error: "unauthorized" });
   try {
-    const b = req.method === "POST" ? await body(req) : Object.fromEntries(url.searchParams);
+    // /run: chạy script của skill gửi kèm mọi tệp của skill (tới 100 MB, base64) — nhận lớn hơn các lệnh khác.
+    const b = req.method === "POST" ? await body(req, url.pathname === "/run" ? 160_000_000 : 30_000_000) : Object.fromEntries(url.searchParams);
     if (!okUser(b.u)) throw new E(400, "Thiếu tài khoản");
     switch (url.pathname) {
       case "/ensure": { const s = await ensure(b.u); return reply(res, 200, { ok: true, running: true, socks: s.socks }); }

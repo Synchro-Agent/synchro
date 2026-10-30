@@ -14,7 +14,7 @@ export const ROOT = process.env.SKILLS_DIR ?? path.join(DATA_DIR, "skills");
 export const LIMITS = {
   zip: 20 * 1024 * 1024,
   unzipped: 100 * 1024 * 1024,
-  files: 100,
+  files: 5000,        // số tệp tối đa mỗi skill (skill thật có thể kèm cả nghìn ảnh / biểu tượng mẫu); dung lượng giới hạn ở unzipped
   fileRead: 100_000, // ký tự tối đa trả cho model mỗi lần đọc
   bodyTokens: 5000,
   desc: 1024,        // nên ngắn hơn mức này (cảnh báo)
@@ -108,12 +108,40 @@ function cleanPath(p: string): string {
   return path.posix.normalize(n);
 }
 
-export function parseSkillMd(raw: string) {
+// SKILL.md ngoài đời hay viết frontmatter chưa đúng YAML (dấu ngoặc kép giữa câu: description: "Dùng khi" người dùng hỏi…; dấu ":" trong
+// description không bọc ngoặc) — Claude Code vẫn đọc được. Synchro sửa từng dòng "khóa: giá trị" hỏng thành chuỗi JSON (là YAML hợp lệ),
+// giá trị viết tiếp ở các dòng thụt vào gộp lại; dòng hợp lệ và khối lồng nhau giữ nguyên.
+function repairFrontmatter(src: string): string {
+  const lines = src.split("\n"), out: string[] = [];
+  const unquote = (v: string) => {
+    const t = v.trim();
+    if (t.length >= 2 && t[0] === '"' && t.endsWith('"')) return t.slice(1, -1).replace(/\\"/g, '"');
+    if (t.length >= 2 && t[0] === "'" && t.endsWith("'")) return t.slice(1, -1).replace(/''/g, "'");
+    return t;
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^([A-Za-z_][\w-]*):[ \t]+(\S.*)$/);
+    if (!m || /^[|>][-+0-9]*\s*$/.test(m[2])) { out.push(lines[i]); continue; }
+    let j = i;
+    while (j + 1 < lines.length && /^[ \t]+\S/.test(lines[j + 1])) j++;
+    const chunk = lines.slice(i, j + 1).join("\n");
+    try { parseYaml(chunk); out.push(chunk); }
+    catch { out.push(`${m[1]}: ${JSON.stringify(unquote([m[2], ...lines.slice(i + 1, j + 1).map((l) => l.trim())].join(" ")))}`); }
+    i = j;
+  }
+  return out.join("\n");
+}
+
+// repaired: cả tệp SKILL.md với frontmatter đã sửa (chỉ có khi bản gốc chưa đúng YAML) — lưu bản này để mọi nơi đọc skill đều đọc được.
+export function parseSkillMd(raw: string): { name: string; description: string; body: string; repaired?: string } {
   const text = raw.replace(/^﻿/, "").replace(/\r\n/g, "\n");
   const m = text.match(/^---\n([\s\S]*?)\n---[ \t]*(?:\n|$)/);
   if (!m) return fail("SKILL.md phải bắt đầu bằng phần frontmatter YAML (--- ... ---) chứa name và description");
-  let fm: unknown;
-  try { fm = parseYaml(m[1]); } catch (e) { return fail("Frontmatter YAML không hợp lệ: " + String((e as Error).message).split("\n")[0]); }
+  let fm: unknown, fixed: string | null = null;
+  try { fm = parseYaml(m[1]); } catch (e) {
+    fixed = repairFrontmatter(m[1]);
+    try { fm = parseYaml(fixed); } catch { return fail("Frontmatter YAML không hợp lệ: " + String((e as Error).message).split("\n")[0]); }
+  }
   if (!fm || typeof fm !== "object") return fail("Frontmatter của SKILL.md đang trống");
   const o = fm as Record<string, unknown>;
   if (o.name === undefined || o.name === null || String(o.name).trim() === "") fail("Thiếu trường name trong SKILL.md");
@@ -123,7 +151,8 @@ export function parseSkillMd(raw: string) {
   if (name.length > LIMITS.name) fail(`name quá dài (${name.length} ký tự, tối đa ${LIMITS.name})`);
   if (!NAME_RE.test(name)) fail(`name "${name}" không hợp lệ: chỉ dùng chữ thường, số và dấu gạch ngang (ví dụ: brand-style)`);
   if (description.length > LIMITS.descMax) fail(`description quá dài (${description.length} ký tự, tối đa ${LIMITS.descMax})`);
-  return { name, description, body: text.slice(m[0].length).trim() };
+  const body = text.slice(m[0].length).trim();
+  return { name, description, body, ...(fixed !== null ? { repaired: `---\n${fixed}\n---\n${text.slice(m[0].length)}` } : {}) };
 }
 
 // Cảnh báo khi SKILL.md nhắc tới file không có trong gói. Bỏ qua đường dẫn mẫu ({lang}/…, <tên>, *.md)
@@ -152,7 +181,11 @@ export function parseEntries(entries: Entry[], warnings: string[], maxFiles = LI
   if (entries.length > maxFiles + 1) fail(`Quá nhiều file (${entries.length}, tối đa ${maxFiles})`);
   const md = entries.find((e) => e.path === "SKILL.md");
   if (!md) return fail("Không tìm thấy SKILL.md");
-  const { name, description, body } = parseSkillMd(md.data.toString("utf8"));
+  const { name, description, body, repaired } = parseSkillMd(md.data.toString("utf8"));
+  if (repaired) {
+    entries = entries.map((e) => (e === md ? { path: e.path, data: Buffer.from(repaired) } : e));
+    warnings.push("Frontmatter của SKILL.md chưa đúng cú pháp YAML (vd. dấu ngoặc kép giữa câu, dấu \":\" chưa bọc ngoặc): Synchro đã tự sửa, nội dung giữ nguyên");
+  }
   const files: SkillFile[] = entries.filter((e) => e.path !== "SKILL.md").map((e) => ({ path: e.path, size: e.data.length, mime_type: MIME[extOf(e.path)] ?? (isText(e.path) ? "text/plain" : "application/octet-stream"), kind: kindOf(e.path) }));
   const tokens = estTokens(body);
   if (!body) warnings.push("Phần nội dung SKILL.md đang trống: model sẽ không có hướng dẫn nào để làm theo");
@@ -391,7 +424,7 @@ export function findFile(s: Skill, p: string) {
 
 export async function readSkillFile(s: Skill, p: string): Promise<{ text: string; truncated: boolean; binary: boolean; size: number }> {
   const f = findFile(s, p);
-  if (!f) return fail(`File "${p}" không thuộc skill "${s.name}". Các file có sẵn: ${s.files.map((x) => x.path).join(", ") || "(không có)"}`, 404);
+  if (!f) return fail(`File "${p}" không thuộc skill "${s.name}". Các file có sẵn: ${s.files.slice(0, 40).map((x) => x.path).join(", ") || "(không có)"}${s.files.length > 40 ? ` … và ${s.files.length - 40} tệp nữa` : ""}`, 404);
   const buf = await fs.readFile(path.join(ROOT, s.storage_path, f!.path));
   if (BIN_EXT.has(extOf(f!.path))) return { text: "", truncated: false, binary: true, size: buf.length };
   const t = buf.toString("utf8");
