@@ -76,7 +76,7 @@ export async function inspectGithub(url: string, onWait?: () => void): Promise<F
   return { kind: "skill", src: { ...src, pick: ok[0].dir }, pv: one.preview! };
 }
 
-// Tạo skill: dùng cho riêng mình (Skill của bạn) hay cho mọi người (Thư viện cho mọi người — chỉ quản trị viên; skill thành một thư viện
+// Tạo skill (quản trị viên): dùng cho riêng mình (Skill của bạn) hay cho mọi người (Thư viện cho mọi người; skill thành một thư viện
 // của tổ chức, mọi tài khoản dùng được). Dùng chung cho mọi cách tạo skill: dán link repo, tải lên, lưu cách làm, Synchro đề xuất.
 export type Scope = "me" | "org";
 export function useIsAdmin() {
@@ -84,12 +84,14 @@ export function useIsAdmin() {
   useEffect(() => { let on = true; fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
   return a;
 }
+// Chỉ quản trị viên mới thấy lựa chọn này; tài khoản khác thêm skill vào Skill của bạn như thường.
 export function ScopeChoice({ value, onChange, admin, disabled }: { value: Scope; onChange: (v: Scope) => void; admin: boolean; disabled?: boolean }) {
+  if (!admin) return null;
   return (
     <div className="pub-vis sk-scope" role="radiogroup" aria-label="Who can use this skill?">
       <div className="sk-scope-l">Who can use this skill?</div>
       <button type="button" role="radio" aria-checked={value === "me"} className={value === "me" ? "on" : ""} disabled={disabled} onClick={() => onChange("me")}><I.Lock size={15} /><span><b>Only me</b><em>Goes to Your skills. Only your account uses it.</em></span></button>
-      <button type="button" role="radio" aria-checked={value === "org"} className={value === "org" ? "on" : ""} disabled={disabled || !admin} onClick={() => onChange("org")}><I.Users size={15} /><span><b>Everyone</b><em>{admin ? "Goes to the Library for everyone. Every account can use it." : "Only administrators can add to the Library for everyone."}</em></span></button>
+      <button type="button" role="radio" aria-checked={value === "org"} className={value === "org" ? "on" : ""} disabled={disabled} onClick={() => onChange("org")}><I.Users size={15} /><span><b>Everyone</b><em>Goes to the Library for everyone. Every account can use it.</em></span></button>
     </div>
   );
 }
