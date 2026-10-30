@@ -20,6 +20,8 @@ import { toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { placeUploads, type Upload } from "./uploads";
 import { runBrowserTool } from "./browsertools";
 import { getPrefs, patchSession, type PermMode } from "./codestore";
+import { topRule } from "./brain";
+import { gitOp } from "./codegit";
 
 type Msg = { role: string; content: unknown };
 export type Picked = { model: string; plan: boolean; target: Awaited<ReturnType<typeof resolveModel>>; effort?: string };
@@ -59,6 +61,22 @@ export function effectivePerm(uid: string, p: unknown): { mode: PermMode; allow:
   return { mode, allow };
 }
 
+// Đẩy code và mở pull request bằng GitHub người dùng đã kết nối, cùng đường với nút Push / Tạo PR ở khung Changes
+// (lệnh git push trong bash không có quyền). Qua chốt chặn như lệnh thường: chế độ Tự động thì làm luôn, không thì hỏi duyệt.
+const gitTools = (user: UserRow, d: string, sid: string | number) => [
+  { def: { name: "git_push", description: "Đẩy các commit của phiên lên GitHub bằng tài khoản GitHub người dùng đã kết nối (như nút Push). Bật \"Tự tạo pull request\" ở Cài đặt thì đang ở nhánh chính sẽ tự sang nhánh mới rồi mở PR. Commit trước khi push.", input_schema: { type: "object", properties: {}, required: [] } },
+    run: async () => {
+      const r = await gitOp(user, d, { action: "push", sid }) as { branch?: string; repo?: string | null; output?: string; pr?: { url: string; number: number } };
+      return { content: `Đã push nhánh ${r.branch ?? "?"}${r.repo ? ` lên ${r.repo}` : ""}.${r.pr ? ` Pull request #${r.pr.number}: ${r.pr.url}` : ""}\n${(r.output ?? "").slice(-1500)}`.trim(), is_error: false, summary: r.pr ? `${r.branch} · #${r.pr.number}` : r.branch ?? "" };
+    } },
+  { def: { name: "create_pull_request", description: "Mở pull request cho nhánh hiện tại (đã có PR thì trả về PR đó). Đang ở nhánh chính thì tự tạo nhánh mới theo tiền tố của người dùng và đẩy lên trước. title / body: tiêu đề và mô tả PR (bỏ trống thì lấy từ commit); base: nhánh đích (mặc định nhánh chính của repo).",
+    input_schema: { type: "object", properties: { title: { type: "string" }, body: { type: "string" }, base: { type: "string" } }, required: [] } },
+    run: async (a: Record<string, unknown>) => {
+      const r = await gitOp(user, d, { action: "pr", sid, title: a.title, body: a.body, base: a.base }) as { branch?: string; pr?: { url: string; number: number; created: boolean } };
+      return { content: `${r.pr?.created ? "Đã mở" : "Đã có"} pull request #${r.pr?.number}: ${r.pr?.url} (nhánh ${r.branch ?? "?"}).`, is_error: false, summary: `#${r.pr?.number ?? "?"}` };
+    } },
+];
+
 export async function runAgentTurn(o: {
   user: UserRow; sid: string | number; pick: Picked; system: string; messages: Msg[]; project?: unknown; skills?: boolean;
   emit: (e: AgentEvent) => void; signal: AbortSignal; inbox?: () => string[]; perm: { mode: PermMode; allow: string[] };
@@ -84,9 +102,11 @@ export async function runAgentTurn(o: {
     const list = o.skills && can(user, "skills") ? await enabledSkills(user.id, o.project ? String(o.project) : null) : [];
     const scripts = !!process.env.E2B_API_KEY && can(user, "sandbox");
     const prefix = prefs.branchPrefix ? `\nKhi cần tạo nhánh git mới, đặt tên bắt đầu bằng "${prefs.branchPrefix}/".` : "";
-    const sys = agentSystem({ d, repo, branch: repo ? branch || null : null, extra: `${String(o.system).slice(0, 60_000)}${prefix}`, skills: list.length ? skillsPrompt(list, scripts) : "" });
-    const tools = [...agentTools(list.length, scripts), ...(o.extra ?? []).map((x) => x.def)];
-    const extra: ExtraTool[] = (o.extra ?? []).map((x) => ({ name: x.def.name, run: x.run }));
+    // Quy tắc hàng đầu (ghim trong bộ não) đứng trước mọi hướng dẫn của agent.
+    const sys = `${topRule(user.id)}\n\n${agentSystem({ d, repo, branch: repo ? branch || null : null, extra: `${String(o.system).slice(0, 60_000)}${prefix}`, skills: list.length ? skillsPrompt(list, scripts) : "" })}`;
+    const more = [...(o.extra ?? []), ...gitTools(user, d, o.sid)];
+    const tools = [...agentTools(list.length, scripts), ...more.map((x) => x.def)];
+    const extra: ExtraTool[] = more.map((x) => ({ name: x.def.name, run: x.run }));
     const bctx = { target: "synchro" as const, def: "synchro" as const, scope: `code:${o.sid}`, cookies: prefs.cookies };
     const gate = makeGate({
       uid: user.id, perm: o.perm, signal: o.signal, probe: async () => (await runBrowserTool(user.id, "browser_tabs", { op: "list" }, bctx)).url,

@@ -174,7 +174,7 @@ function lastUserFull(msgs = []) {
   return "";
 }
 // Tầng động Synchro ghép vào cuối tin nhắn mới nhất (artifact hiện tại, tài liệu tri thức…): không phải câu người dùng gõ.
-const DYN = /<(current_artifacts|tool_activity|context_mixer|skill_routing)>[\s\S]*?<\/\1>/g;
+const DYN = /<(current_artifacts|tool_activity|context_mixer|skill_routing|brain_recall)>[\s\S]*?<\/\1>/g;
 const lastUserText = (msgs) => lastUserFull(msgs).replace(DYN, "").trim();
 // Tầng động của tin nhắn người dùng gần nhất có tầng động (bước tự vá chèn thêm một tin nhắn hệ thống phía sau).
 function dynOf(msgs = []) {

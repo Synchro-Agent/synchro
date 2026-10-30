@@ -11,7 +11,7 @@ import * as I from "./icons";
 import { type Chat, useApp } from "./store";
 import { getLang } from "./i18n";
 
-type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "ghost" | "tag";
+type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
 type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
 type Stats = { notes: number; links: number; chats: number; topics: number; entities: number; maps: number; pending: number; memories: number; learnedAt: number | null; gardenAt: number | null };
 type Graph = { nodes: GNode[]; edges: { s: string; t: string }[]; stats: Stats; cfg: { gen: boolean; sens: boolean; autoIns: boolean } };
@@ -27,11 +27,11 @@ const L = (vi: string, e: string) => (en() ? e : vi);
 const KIND: Record<Kind, [string, string]> = {
   hub: ["Trung tâm", "Hub"], about: ["Về bạn", "About you"], model: ["Bán cầu", "Hemisphere"], chat: ["Đoạn chat", "Chat"], code: ["Synchro Code", "Synchro Code"],
   topic: ["Chủ đề", "Topic"], entity: ["Tên riêng", "Entity"], map: ["Bản đồ", "Map"], index: ["Mục lục", "Index"], log: ["Hoạt động", "Activity"],
-  skill: ["Skill", "Skill"], connector: ["Connector", "Connector"], note: ["Ghi chú của bạn", "Your note"], daily: ["Nhật ký", "Daily note"], ghost: ["Chưa có ghi chú", "Not created yet"], tag: ["Thẻ", "Tag"],
+  skill: ["Skill", "Skill"], connector: ["Connector", "Connector"], note: ["Ghi chú của bạn", "Your note"], daily: ["Nhật ký", "Daily note"], rule: ["Quy tắc hàng đầu", "Top rule"], ghost: ["Chưa có ghi chú", "Not created yet"], tag: ["Thẻ", "Tag"],
 };
 const KIND_ICON: Partial<Record<Kind, (p: { size?: number }) => React.ReactNode>> = {
   hub: I.Brain, about: I.User, model: I.Sparkle, chat: I.Chat2, code: I.Code, topic: I.Bulb, entity: I.Book, map: I.Layers, index: I.List, log: I.History,
-  skill: I.Scroll, connector: I.Connectors, note: I.Pencil, daily: I.Calendar, ghost: I.Ghost,
+  skill: I.Scroll, connector: I.Connectors, note: I.Pencil, daily: I.Calendar, rule: I.ShieldCheck, ghost: I.Ghost,
 };
 const KindIcon = ({ k, size = 14 }: { k: Kind; size?: number }) => { const Ic = KIND_ICON[k]; return Ic ? <span className="bw-ki" aria-hidden><Ic size={size} /></span> : <span className="bw-ki" aria-hidden>#</span>; };
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
@@ -612,7 +612,7 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
         {(n || missing) && !edit && (
           <div className="bn-tools">
             <button className="btn sm" onClick={() => setEdit(missing ? { title, body: "" } : { title: n!.title, body: n!.generated ? n!.props.userNote ?? "" : n!.body })}><I.Pencil size={13} />{missing ? L("Tạo ghi chú", "Create note") : n!.generated ? L("Ghi chú của bạn", "Your note") : L("Sửa", "Edit")}</button>
-            {n && <button className={`icon-btn ${n.props.pinned ? "on" : ""}`} aria-label={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} data-tip={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} onClick={() => void call("PUT", "/api/brain/note", { title: n.title, pinned: !n.props.pinned })}>{n.props.pinned ? <I.PinOff size={15} /> : <I.Pin size={15} />}</button>}
+            {n && n.kind !== "rule" && <button className={`icon-btn ${n.props.pinned ? "on" : ""}`} aria-label={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} data-tip={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} onClick={() => void call("PUT", "/api/brain/note", { title: n.title, pinned: !n.props.pinned })}>{n.props.pinned ? <I.PinOff size={15} /> : <I.Pin size={15} />}</button>}
             {n && (
               <div className="bn-more-w" ref={moreRef}>
                 <button className={`icon-btn ${more ? "on" : ""}`} aria-label={L("Thêm thao tác", "More actions")} aria-expanded={more} onClick={() => setMore(!more)}><I.Dots size={15} /></button>
@@ -645,13 +645,15 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
         </div>
       )}
       {!d && !missing && <div className="us-empty"><span className="art-spin sm" /></div>}
+      {n?.kind === "rule" && !edit && <p className="bn-empty">{L("Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, việc tự động trong Hộp thư và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.", "Synchro puts this rule at the very top of every model's prompt, everywhere you talk to it: chat, Synchro Code, Inbox automations and voice. It stays pinned and is never deleted, even when you clear the brain.")}</p>}
       {missing && !edit && <p className="bn-empty">{L("Ghi chú này chưa có: các ghi chú khác đang trỏ tới nó. Synchro sẽ viết trang này khi biết thêm về nó, hoặc bạn tự tạo.", "This note doesn't exist yet, but other notes link to it. Synchro writes it once it learns more, or you can create it.")}</p>}
       {edit ? (
         <div className="bn-edit">
-          {(missing || (n && !n.generated)) && <input className="field" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} aria-label={L("Tên ghi chú", "Note title")} />}
+          {(missing || (n && !n.generated && n.kind !== "rule")) && <input className="field" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} aria-label={L("Tên ghi chú", "Note title")} />}
           <textarea className="textarea" autoFocus value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} rows={10}
             placeholder={L("Viết bằng Markdown. Gõ [[Tên ghi chú]] để nối tới ghi chú khác, #thẻ để gắn thẻ.", "Write in Markdown. Type [[Note name]] to link another note, #tag to tag it.")} />
           {n?.generated && <p className="d">{L("Synchro tự viết phần còn lại của trang này từ các đoạn chat; phần bạn viết nằm ở mục “Ghi chú của bạn”.", "Synchro writes the rest of this page from your chats; what you write goes under “Your note”.")}</p>}
+          {n?.kind === "rule" && <p className="d">{L("Để trống thì Synchro dùng lại bản mặc định.", "Leave it empty to go back to the default rule.")}</p>}
           <div className="bn-edit-a"><button className="btn" onClick={() => setEdit(null)} disabled={busy}>{L("Hủy", "Cancel")}</button><button className="btn dark" onClick={save} disabled={busy}>{busy ? <span className="art-spin sm" /> : null}{L("Lưu", "Save")}</button></div>
         </div>
       ) : n && <div className="bn-body"><NoteMd text={n.body} exists={exists} onOpen={onOpen} onTask={n.kind === "chat" || n.kind === "code" || n.kind === "daily" || n.kind === "note" ? task : undefined} /></div>}
@@ -801,7 +803,7 @@ function Activity({ onOpen, version }: { onOpen: Open; version: number }) {
 
 // ---------------------------------------------------------------- không gian Bộ não (toàn trang)
 // Lối vào: tên thật của ghi chú → nhãn hiện theo ngôn ngữ giao diện.
-const ENTRY: Record<string, [string, string]> = { "Bộ não": ["Bộ não", "Brain"], "Về bạn": ["Về bạn", "About you"], "Mục lục": ["Mục lục", "Index"], "Hoạt động bộ não": ["Hoạt động bộ não", "Brain activity"] };
+const ENTRY: Record<string, [string, string]> = { "Quy tắc hàng đầu": ["Quy tắc hàng đầu", "Top rule"], "Bộ não": ["Bộ não", "Brain"], "Về bạn": ["Về bạn", "About you"], "Mục lục": ["Mục lục", "Index"], "Hoạt động bộ não": ["Hoạt động bộ não", "Brain activity"] };
 export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: { initial?: string | null; onInitial?: () => void; sideOpen?: boolean; onSide?: () => void }) {
   const app = useApp();
   const [g, setG] = useState<Graph | null>(null);
@@ -952,10 +954,10 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
         {!g ? <div className="us-empty"><span className="art-spin sm" /></div> : (
           <>
             <nav className="bw-entry">
-              {Object.entries(ENTRY).map(([t, lb]) => { const n = g.nodes.find((x) => x.title === t); return n ? <button key={t} className={`bw-item ${at?.title === t && tab === "note" ? "on" : ""}`} onClick={() => open(t)}><KindIcon k={n.kind} size={14} /><span>{L(...lb)}</span></button> : null; })}
+              {Object.entries(ENTRY).map(([t, lb]) => { const n = g.nodes.find((x) => x.title === t); return n ? <button key={t} className={`bw-item ${at?.title === t && tab === "note" ? "on" : ""}`} onClick={() => open(t)}><KindIcon k={n.kind} size={14} /><span>{L(...lb)}</span>{n.pinned && <I.Pin size={11} />}</button> : null; })}
               {g.nodes.some((n) => n.title === today()) && <button className={`bw-item ${at?.title === today() && tab === "note" ? "on" : ""}`} onClick={() => open(today())}><KindIcon k="daily" size={14} /><span>{L("Hôm nay", "Today")}</span></button>}
             </nav>
-            {grp("pin", L("Đã ghim", "Pinned"), (g.nodes ?? []).filter((n) => n.pinned))}
+            {grp("pin", L("Đã ghim", "Pinned"), (g.nodes ?? []).filter((n) => n.pinned && n.kind !== "rule"))}
             {grp("map", L("Bản đồ", "Maps"), byKind(["map"]))}
             {grp("topic", L("Chủ đề", "Topics"), byKind(["topic"]).sort(byLinks))}
             {grp("entity", L("Tên riêng", "Entities"), byKind(["entity"]).sort(byLinks))}
@@ -1000,8 +1002,8 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   useEffect(() => { void load(); }, [load]);
   const openBrain = (title?: string) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title: title ?? null } }));
   const setAuto = (on: boolean) => void api("PUT", "/api/brain/instructions", { auto: on }).then(() => { void load(); app.say(on ? L("Synchro sẽ tự cập nhật hướng dẫn từ các đoạn chat", "Synchro will update your instructions from your chats") : L("Đã tắt tự cập nhật hướng dẫn", "Automatic instruction updates are off")); }).catch((e) => app.say(e.message));
-  const wipe = () => app.confirm(L("Xóa toàn bộ bộ não?", "Delete the whole brain?"), L("Mọi ghi chú, liên kết, trang chủ đề và hoạt động sẽ bị xóa. Ký ức dài hạn giữ nguyên. Đoạn chat trong trình duyệt không bị ảnh hưởng.", "All notes, links, topic pages and activity will be deleted. Long-term memories stay. Chats in your browser are not affected."), L("Xóa", "Delete"),
-    () => { void api<Graph>("DELETE", "/api/brain").then((j) => { setG({ ...j, cfg: g?.cfg ?? j.cfg }); app.say(L("Đã xóa bộ não", "Brain deleted")); }).catch((e) => app.say(e.message)); });
+  const wipe = () => app.confirm(L("Xóa toàn bộ bộ não?", "Delete the whole brain?"), L("Synchro quên sạch mọi điều về bạn: ghi chú, liên kết, chủ đề, hoạt động, ký ức dài hạn, bộ nhớ dự án, phần tự giới thiệu và hướng dẫn (cả lịch sử), tên gọi. Chỉ giữ Quy tắc hàng đầu và những gì có lúc tạo tài khoản (họ tên, lĩnh vực). Các đoạn chat vẫn còn.", "Synchro forgets everything about you: notes, links, topics, activity, long-term memories, project memory, your introduction and instructions (with their history), nickname. Only the Top rule and what you gave when signing up (name, field) stay. Your chats are kept."), L("Xóa", "Delete"),
+    () => { void api<Graph>("DELETE", "/api/brain").then((j) => { setG({ ...j, cfg: g?.cfg ?? j.cfg }); window.dispatchEvent(new Event("synchro:forget")); app.say(L("Đã xóa bộ não", "Brain deleted")); }).catch((e) => app.say(e.message)); });
   const s = g?.stats;
   return (
     <div className="bn">

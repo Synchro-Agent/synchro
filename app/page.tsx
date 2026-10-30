@@ -815,6 +815,12 @@ export default function Home() {
     if (me && view === "customize" && !me.perms.features.skills) setView("new");
     if (me && (view === "projects" || view === "project") && !me.perms.features.projects) setView("new");
   }, [me, model, view]);
+  // Xóa bộ não (Cài đặt → Bộ não): quên luôn bộ nhớ của các dự án (lưu trong trình duyệt).
+  useEffect(() => {
+    const forget = () => setProjects((ps) => ps.map((p) => (p.mem?.length ? { ...p, mem: [] } : p)));
+    window.addEventListener("synchro:forget", forget);
+    return () => window.removeEventListener("synchro:forget", forget);
+  }, []);
   useEffect(() => {
     if (!loaded) return;
     ls.set("chats", JSON.stringify(chats.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true, prog: undefined })) }))));

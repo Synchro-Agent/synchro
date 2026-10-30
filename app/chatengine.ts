@@ -28,7 +28,7 @@ import { mergedProviders, subCli, subTurn } from "./ai/subs";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
-import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool } from "./brain";
+import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule } from "./brain";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
 import type { TaskCtx } from "./tasks";
@@ -763,7 +763,10 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       return Response.json({ error: String((e as Error).message ?? e) }, { status: 502 });
     }
   }
-  const { system, messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted, conv } = body;
+  const { messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted, conv } = body;
+  // Quy tắc hàng đầu (ghim trong bộ não) mở đầu lời nhắc hệ thống của mọi lượt người dùng trò chuyện: chat, Synchro Code, việc tự động,
+  // giọng nói nối tiếp; gói subscription lẫn khóa API. Lời gọi nội bộ (đặt tên, rút bộ nhớ…) và artifact không kèm.
+  const system: string = useProfile(body) ? `${topRule(c.user.id)}\n\n${body.system || "Bạn là một trợ lý AI hữu ích."}` : body.system;
   scope.feature = feature === "artifact" ? "artifact" : feature === "code" ? "code" : skills ? "chat" : "internal";
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());

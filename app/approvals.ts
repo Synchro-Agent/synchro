@@ -51,6 +51,11 @@ export function needAsk(perm: Perm, name: string, input: Record<string, unknown>
     return { kind: "edit", tool: name, key: "edit", title: name === "write_file" ? `Ghi tệp ${p}` : `Sửa tệp ${p}`,
       detail: name === "write_file" ? String(input.content ?? "").slice(0, 4000) : `- ${String(input.old_str ?? "").slice(0, 1800)}\n+ ${String(input.new_str ?? "").slice(0, 1800)}` };
   }
+  if (name === "git_push" || name === "create_pull_request") {
+    if (perm.allow.includes("push")) return null;
+    return { kind: "bash", tool: name, key: "push", title: name === "git_push" ? "Đẩy code lên GitHub" : "Mở pull request trên GitHub",
+      detail: name === "git_push" ? "git push -u origin HEAD" : String(input.title ?? "").slice(0, 300) };
+  }
   if (name === "bash" || name === "run_skill_script") {
     const cmd = name === "bash" ? String(input.command ?? "") : `${String(input.skill ?? input.name ?? "")} ${String(input.script ?? input.path ?? "")}`.trim();
     if (name === "bash" && readOnlyCmd(cmd)) return null;

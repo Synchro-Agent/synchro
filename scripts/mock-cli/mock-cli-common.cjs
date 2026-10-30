@@ -116,6 +116,11 @@ function prefsEcho(all) {
   const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(all);
   return m ? `PREFS: ${m[1].trim().replace(/\s+/g, " ")}` : "PREFS: none";
 }
+// Cho kiểm thử biết quy tắc hàng đầu có mở đầu lời nhắc Synchro gửi kèm không, và nội dung quy tắc (một dòng).
+function ruleEcho(sys) {
+  const m = /<top_rule>([\s\S]*?)<\/top_rule>/.exec(sys);
+  return m ? `TOPRULE: ${sys.trimStart().startsWith("<top_rule>") ? "first" : "inside"} ${m[1].trim().replace(/\s+/g, " ").slice(0, 600)}` : "TOPRULE: none";
+}
 function reply(name, prompt, turn) {
   if (isTitleAsk(prompt)) return mockTitle(prompt);
   const last = prompt.trim().split("\n").filter(Boolean).pop() ?? "";
@@ -157,4 +162,4 @@ function mediaDesc(buf, hint = "") {
 }
 const mediaReply = (items) => `MEDIA: ${items.length ? items.join("; ") : "không có tệp nào"}`;
 
-module.exports = { mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

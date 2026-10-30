@@ -48,6 +48,8 @@ const loginFile = path.join(dir, ".mock-login");
         }
       }
     }
+    // Ghi chú nhớ lại từ bộ não Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ (không đọc lệnh thử trong đó).
+    prompt = prompt.replace(/<brain_recall>[\s\S]*?<\/brain_recall>/g, "").trim();
     const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
     const sid = C.flag(a, "--resume") || C.uuid();
     // Tên gọi tắt → model thật (như Claude Code báo trong system/init).
@@ -90,7 +92,7 @@ const loginFile = path.join(dir, ".mock-login");
     }
     const web = (C.flag(a, "--tools") ?? "").includes("WebSearch") ? " [tìm web]" : "";
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
-    const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${C.flag(a, "--append-system-prompt") ?? ""}\n${prompt}`) : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));
+    const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${C.flag(a, "--append-system-prompt") ?? ""}\n${prompt}`) : /#toprule/.test(prompt) ? C.ruleEcho(C.flag(a, "--append-system-prompt") ?? "") : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(C.flag(a, "--append-system-prompt") ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));
     await delta(text);
     C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] }, session_id: sid });
     result({ subtype: "success", is_error: false, result: text, usage: { input_tokens: prompt.length, output_tokens: text.length, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });

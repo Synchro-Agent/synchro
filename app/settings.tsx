@@ -432,11 +432,11 @@ function Memory() {
       return j as { added?: number };
     } catch (e) { app.say((e as Error).message); return null; }
   };
-  // Bản cũ chỉ lưu bộ nhớ trong cài đặt cá nhân (model không dùng tới): chuyển một lần lên máy chủ.
+  // Bản cũ lưu bộ nhớ trong cài đặt cá nhân của trình duyệt: bỏ đi, không đưa lên lại (xóa bộ não thì Synchro phải quên hẳn).
   const [old, setOld] = usePref<string[]>("memories", []);
   useEffect(() => {
-    if (!old.length) { void call("GET"); return; }
-    void call("POST", { items: old }).then((j) => { if (j) setOld([]); });
+    if (old.length) setOld([]);
+    void call("GET");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const cfg = st?.cfg ?? { gen: true, sens: false };
   const mems = st?.items ?? [];

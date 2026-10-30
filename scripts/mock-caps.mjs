@@ -745,7 +745,8 @@ export function capsReply(sys, q, msgs, toolNames) {
   if (s.includes("<compact_history>")) return { text: compactReply(q) };
   if (s.includes("<skill_heal>")) return { text: healReply(q) };
   // Thử chạy script của skill: "#skillrun <skill> <đường dẫn> [tham số…]".
-  const sr = /#skillrun\s+(\S+)\s+(\S+)(.*)$/.exec(String(q));
+  // Chỉ đọc trên cùng dòng lệnh: phần ghép thêm phía sau tin nhắn (ghi chú nhớ lại từ bộ não…) không phải tham số.
+  const sr = /#skillrun[ \t]+(\S+)[ \t]+(\S+)([^\n]*)/.exec(String(q));
   if (sr && toolNames.includes("run_skill_script")) return { tool: { name: "run_skill_script", args: { name: sr[1], path: sr[2], args: sr[3].trim() ? sr[3].trim().split(/\s+/) : [] } } };
   if (s.includes("<critic_review>")) return { text: criticReply(q) };
   if (s.includes("<voice_brief>")) return { text: voiceBrief(q) };

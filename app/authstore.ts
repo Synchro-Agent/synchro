@@ -241,6 +241,11 @@ export function setInstructions(uid: string, text: string) {
   writeProfile(uid, c);
 }
 
+/** Xóa bộ não (brain.ts): quên tên gọi và phần tự giới thiệu / hướng dẫn; giữ đúng những gì có lúc tạo tài khoản (họ tên, lĩnh vực). */
+export function forgetProfile(uid: string) {
+  writeProfile(uid, { nickname: null, instructions: null });
+}
+
 export function updateProfile(req: Request, u: UserRow, p: ProfileIn) {
   limit("profile:" + u.id, 30, 15 * MIN);
   const c = cleanProfile(p);

@@ -196,7 +196,7 @@ const zr = await me("GET", "/api/brain/export", undefined, true);
 const zb = new Uint8Array(await zr.arrayBuffer());
 ok(zr.status === 200 && zr.headers.get("content-type") === "application/zip" && zb[0] === 0x50 && zb[1] === 0x4b && new TextDecoder().decode(zb).includes("Chủ đề/IELTS.md") && new TextDecoder().decode(zb).includes("Tên riêng/Python.md"), "tải bộ não về thành thư mục Markdown (.zip các tệp .md)", `${zr.status} ${zr.headers.get("content-type")}`);
 r = await me("DELETE", "/api/brain");
-ok(r.s === 200 && r.j.nodes.every((n) => ["hub", "about", "model", "index", "log"].includes(n.kind)), "xóa bộ não: chỉ còn khung trung tâm", JSON.stringify(r.j.nodes.map((n) => n.title)));
+ok(r.s === 200 && r.j.nodes.every((n) => ["hub", "about", "model", "index", "log", "rule"].includes(n.kind)) && r.j.nodes.some((n) => n.kind === "rule"), "xóa bộ não: chỉ còn khung trung tâm và Quy tắc hàng đầu", JSON.stringify(r.j.nodes.map((n) => n.title)));
 
 await me("DELETE", "/api/brain");
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);

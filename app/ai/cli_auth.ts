@@ -76,6 +76,15 @@ export function engineEnv(cli: Cli, scope: string): Record<string, string> {
   return { HOME: dir };
 }
 
+/** Ký ức riêng CLI tự ghi cho tài khoản (Claude Code: projects/<thư mục làm việc>/memory; Antigravity: .gemini/GEMINI.md).
+ *  Xóa cùng bộ não để không model nào còn nhớ gì về người dùng; phiên đăng nhập và lịch sử từng đoạn chat giữ nguyên. */
+export function forgetCliMemory(scope: string) {
+  const root = path.join(engineHome(), "logins"), s = safeScope(scope);
+  const projects = path.join(root, "claude", s, "projects");
+  try { for (const p of fs.readdirSync(projects)) fs.rmSync(path.join(projects, p, "memory"), { recursive: true, force: true }); } catch {}
+  try { fs.rmSync(path.join(root, "agy", s, ".gemini", "GEMINI.md"), { force: true }); } catch {}
+}
+
 // ---------------------------------------------------------------- trạng thái
 type G = { cache: Map<string, Status>; pending: Map<string, Pending>; relogin: Set<string> };
 const g: G = ((globalThis as { __synchroCliAuth?: G }).__synchroCliAuth ??= { cache: new Map(), pending: new Map(), relogin: new Set() });

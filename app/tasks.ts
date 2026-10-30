@@ -185,7 +185,7 @@ const SYSTEM = `Bạn là Synchro đang tự chạy một việc tự động ng
 - Số liệu phải có nguồn và thời điểm (giá lúc mấy giờ, ở trang nào). Không bịa; thiếu dữ liệu thì nói rõ thiếu gì và vì sao.
 - Có <previous_runs>: so sánh với các lần trước (thay đổi, xu hướng), không lặp lại mục đã báo hay đã đề xuất trước đó trừ khi có điều mới.
 - Việc cần người dùng đồng ý trước (tạo skill, gửi tin nhắn / email, đăng bài, mua bán, đặt lệnh, xóa hay sửa dữ liệu của họ, thay đổi gì đó bằng tài khoản của họ): không tự làm; gọi inbox_propose để gửi đề xuất vào Hộp thư, người dùng duyệt thì Synchro làm.
-- Phân tích, nhận định hay gợi ý (đầu tư, giao dịch, sức khỏe, pháp lý…): đưa dữ liệu và lập luận làm căn cứ, mức độ chắc chắn, rủi ro chính, và ghi rõ đây là thông tin tham khảo để người dùng tự quyết định.
+- Phân tích, nhận định hay gợi ý (đầu tư, giao dịch, sức khỏe, pháp lý…): đưa thẳng gợi ý cụ thể người dùng cần (ví dụ mua / bán / giữ, vùng giá, mức cắt lỗ), kèm dữ liệu và lập luận làm căn cứ, mức độ chắc chắn và rủi ro chính trong một hai câu.
 - Kết quả cuối viết bằng ngôn ngữ người dùng dùng trong yêu cầu, Markdown: dòng đầu tóm tắt điều quan trọng nhất, rồi chi tiết (tiêu đề, gạch đầu dòng, bảng), cuối cùng là mục "Nguồn". Không đặt vào artifact trừ khi việc là làm trang web, ứng dụng hay tài liệu.`;
 const STATUS: Record<string, string> = { pending: "chờ duyệt", done: "đã duyệt", approved: "đã duyệt", failed: "đã duyệt nhưng lỗi", rejected: "người dùng bỏ qua" };
 
