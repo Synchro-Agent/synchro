@@ -287,3 +287,36 @@ html body button.send.send:disabled::after{opacity:.3}
 html body .nav-item .plus{box-shadow:0 0 0 .5px var(--ink-g-rim),0 3px 8px var(--ink-glow)}
 html body .nav-item .plus::before{background:linear-gradient(180deg,var(--ink-g-top),var(--ink-g-mid) 50%,var(--ink-g-bot));
   box-shadow:inset 0 1px .5px var(--ink-g-hi),inset 0 -1px 1px -.5px var(--ink-g-rim),inset 0 7px 7px -5px var(--ink-g-sheen),inset 0 -4px 5px -4px var(--ink-g-glow)}
+
+/* ===== Kính chỉ ở chỗ quan trọng (app sau khi đăng nhập; trang đăng nhập giữ nguyên) =====
+   Giữ kính: khung gõ chat (thấy chữ chạy bên dưới), nút cuộn xuống nổi trên chat, thanh bên, menu / hộp thoại / thông báo nổi.
+   Nút thường, nút đậm, chip, nút chọn đoạn, nút trên thanh trên, nút gửi, "+" của Mới: phẳng theo bộ nhận diện — mực đặc (nút chính) hoặc
+   viền mảnh trên nền trong (nút phụ), không khúc xạ, không vệt bóng, không phóng to khi rê chuột. */
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)::before,
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)::after{display:none!important;content:none!important}
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *),
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *):is(:hover,:active,[data-press]){scale:none;filter:none;isolation:auto}
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *){transition:background-color .15s,color .15s,box-shadow .15s,opacity .15s!important}
+/* Nút phụ / chip: nền trong, viền mảnh; rê chuột: nền nhạt. */
+html body :is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *){background:transparent;border:0;box-shadow:inset 0 0 0 .5px var(--border-strong)!important;color:var(--text)}
+html body :is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *):hover{background:var(--hover)}
+html body .chip:not(.auth-root *){color:var(--text-2)}
+html body .chip:not(.auth-root *):hover{color:var(--text)}
+/* Nút chính: mực đặc (Carbon ở giao diện sáng, Ivory ở giao diện tối). */
+html body .btn.dark:not(.auth-root *){background:var(--btn-dark);color:var(--btn-dark-text);border:0;box-shadow:none!important}
+html body .btn.dark:not(.auth-root *):hover{background:color-mix(in srgb,var(--btn-dark) 84%,var(--bg));opacity:1}
+html body .btn.danger:not(.auth-root *){background:#c6422f;color:#fff;border:0;box-shadow:none!important}
+html body .btn.danger:not(.auth-root *):hover{background:#b03a29}
+html body :is(.btn.dark,.btn.danger):not(.auth-root *):active{opacity:.9}
+/* Nút gửi, "+" của Mới: tròn / vuông mực đặc. */
+html body button.send.send:not(.auth-root *){background:var(--accent);color:var(--on-accent);box-shadow:none!important}
+html body button.send.send:not(.auth-root *):disabled{opacity:.3}
+html body .nav-item .plus:not(.auth-root *){background:var(--accent);color:var(--on-accent);box-shadow:none}
+/* Nút chọn đoạn: rãnh nhạt, mục đang chọn là thẻ đặc. */
+html body .seg:not(.auth-root *){background:var(--hover);box-shadow:inset 0 0 0 .5px var(--border)!important}
+html body .seg:not(.auth-root *) .thumb{background:var(--card);box-shadow:0 1px 2px rgba(17,18,16,.1),0 0 0 .5px var(--border-strong)}
+html[data-theme="dark"] body .seg:not(.auth-root *) .thumb{background:#2A2B26;box-shadow:0 1px 2px rgba(0,0,0,.4),0 0 0 .5px rgba(238,236,229,.1)}
+/* Nút trên thanh trên (gồm nút mở thanh bên khi đã thu gọn): trong, rê chuột nền nhạt. */
+html body .topbar .icon-btn:not(.auth-root *){background:transparent;box-shadow:none!important}
+html body .topbar .icon-btn:not(.auth-root *):hover{background:var(--hover)}
+html body .topbar .icon-btn.side-toggle:not(.auth-root *){width:36px;height:36px;border-radius:10px;margin-left:0;margin-top:0;animation:none}

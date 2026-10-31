@@ -175,7 +175,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
               <button className="menu-item" onClick={() => { setGroup(!group); setSMenu(false); }}>Nhóm theo loại{group && <span className="ck"><I.Check size={16} /></span>}</button>
             </Menu>
           </div>
-          <button className="btn pj-new" onClick={onNew}>Dự án mới</button>
+          <button className="btn dark pj-new" onClick={onNew}>Dự án mới</button>
         </div>
       </div>
       {empty ? (
@@ -183,7 +183,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
           <EmptyArt />
           <h2>{q ? "Không tìm thấy dự án" : arch ? "Chưa có dự án nào được lưu trữ" : "Bạn muốn bắt đầu một dự án?"}</h2>
           {!q && !arch && <p>Tải tài liệu lên, thiết lập hướng dẫn tùy chỉnh và sắp xếp các cuộc trò chuyện ở cùng một nơi.</p>}
-          {!q && !arch && <button className="btn pj-new big" onClick={onNew}>Dự án mới</button>}
+          {!q && !arch && <button className="btn dark pj-new big" onClick={onNew}>Dự án mới</button>}
         </div>
       ) : group ? (
         [["Đã ghim", list.filter((x) => x.pinned)], ["Dự án của bạn", list.filter((x) => !x.pinned)]].map(([t, l]) => (l as Project[]).length > 0 && (
