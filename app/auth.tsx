@@ -9,6 +9,7 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
 import { Loader, Mark } from "./brand";
+import { preloadIntro, wantsIntro } from "./introfilm";
 
 // --- NHỊP ANIMATION CHUNG ---
 // Mọi lớp trong một bước dùng cùng easing và thời lượng, chỉ lệch nhau STEP giây, và đều bắt đầu
@@ -222,7 +223,8 @@ interface AuthComponentProps {
   user?: AuthUser | null;
   // true: app đã sẵn sàng phía dưới, màn hình này tan dần rồi gọi onLeft
   leaving?: boolean;
-  onDone?: (user: AuthUser) => void;
+  // kind: "signup" / "profile" (vừa điền hồ sơ lần đầu) / "login" — tài khoản mới thì app phát phim giới thiệu sau lời chào.
+  onDone?: (user: AuthUser, kind: Kind) => void;
   onLeft?: () => void;
   onSignOut?: () => void;
 }
@@ -271,10 +273,12 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
       const { user: u } = await post<{ user: AuthUser }>(url, body);
       await wait(minMs - (Date.now() - t0));
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
-      if (u.needsProfile) { busy.current = false; onDone?.(u); return; }
+      if (u.needsProfile) { busy.current = false; onDone?.(u, k); return; }
       setDoneUser(u);
       setStage("success");
-      setTimeout(() => onDone?.(u), SUCCESS_HOLD);
+      // Tài khoản mới: tải trước phim giới thiệu trong lúc hiện lời chào.
+      if (wantsIntro(u, k)) preloadIntro();
+      setTimeout(() => onDone?.(u, k), SUCCESS_HOLD);
     } catch (e) { busy.current = false; fail((e as Error).message); }
   };
 

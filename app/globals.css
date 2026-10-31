@@ -4944,3 +4944,63 @@ html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
 .ft-lightbox img{max-width:min(1200px,100%);max-height:100%;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.4);cursor:default}
 .ft-lightbox .icon-btn{position:absolute;top:16px;right:16px;color:#fff;background:rgba(0,0,0,.4)}
 
+
+/* ===== Phim giới thiệu cho tài khoản mới (app/introfilm.tsx) =====
+   Vào: vòng tròn của logo nở ra (clip-path) bằng màu nền phim, phim hiện dần. Ra: khung hình tách đôi như logo — nửa trái lên, nửa phải
+   xuống, lệch pha một nhịp rồi trượt khỏi màn hình (cùng đường cong lock của bộ nhận diện) — app bên dưới lắng xuống (app-reveal). */
+.intro{position:fixed;inset:0;z-index:400;color:#EEECE5;font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+.intro-iris{position:absolute;inset:0;background:var(--intro-bg)}
+.intro-stage{position:absolute;inset:0;background:var(--intro-bg)}
+.intro[data-phase="iris"] .intro-stage{visibility:hidden}
+.intro-stage.gone{visibility:hidden}
+.intro-host{position:absolute;inset:0;opacity:0;transition:opacity .7s cubic-bezier(.33,1,.68,1)}
+.intro-host.on{opacity:1}
+.intro-host .intro-v{width:100%;height:100%;object-fit:contain;display:block;background:var(--intro-bg)}
+.intro-load{position:absolute;inset:0;display:grid;place-items:center;color:#EEECE5;animation:fadeIn .4s .25s both}
+.intro-paused{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.intro-paused svg{width:58px;height:58px;padding:16px 14px 16px 18px;border-radius:50%;fill:#EEECE5;background:rgba(14,14,11,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 0 0 .5px rgba(238,236,229,.2)}
+.intro-ui{position:absolute;inset:0;pointer-events:none;transition:opacity .35s}
+.intro-ui.fade,.intro-cap.fade{opacity:0}
+.intro-ui>*{pointer-events:auto}
+.intro-btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:999px;font-size:13.5px;font-weight:500;color:rgba(238,236,229,.86);
+  background:rgba(238,236,229,.08);box-shadow:inset 0 0 0 .5px rgba(238,236,229,.2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:background .2s,color .2s,opacity .5s}
+.intro-btn:hover{background:rgba(238,236,229,.16);color:#EEECE5}
+.intro-btn:focus-visible{outline:2px solid rgba(238,236,229,.6);outline-offset:2px}
+.intro-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.intro-btn.skip{position:absolute;top:max(18px,env(safe-area-inset-top));right:max(18px,env(safe-area-inset-right));padding:0 10px 0 15px;opacity:0;pointer-events:none}
+.intro-btn.skip.on{opacity:1;pointer-events:auto}
+.intro-btn.snd{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));width:34px;padding:0;justify-content:center}
+.intro-btn.sound-need{position:absolute;left:50%;bottom:max(28px,env(safe-area-inset-bottom));transform:translateX(-50%);height:38px;padding:0 18px;color:#111210;background:#EEECE5;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.intro-btn.sound-need:hover{background:#fff;color:#111210}
+.intro-bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(238,236,229,.08)}
+.intro-bar>div{height:100%;background:rgba(238,236,229,.55);transform-origin:left;transform:scaleX(0)}
+.intro-cap{position:absolute;left:50%;transform:translateX(-50%);margin:0;max-width:min(860px,calc(100% - 48px));text-align:center;font-size:clamp(14px,1.25vw,17px);line-height:1.45;
+  color:rgba(238,236,229,.92);pointer-events:none;animation:introCap .35s cubic-bezier(.33,1,.68,1) both;transition:opacity .3s}
+.intro-cap.band{translate:0 50%}
+.intro-cap.over,.intro-cap.top{padding:6px 14px;border-radius:10px;background:rgba(14,14,11,.62);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.intro-cap.over{bottom:max(30px,env(safe-area-inset-bottom))}
+.intro-cap.top{top:max(20px,env(safe-area-inset-top))}
+@keyframes introCap{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:none}}
+.intro-split{position:absolute;inset:0;pointer-events:none}
+.intro-h{position:absolute;top:0;bottom:0;width:50%;overflow:hidden}
+.intro-h.l{left:0;animation:introUp 1.15s cubic-bezier(.76,0,.24,1) forwards;box-shadow:0 26px 60px rgba(0,0,0,.32)}
+.intro-h.r{right:0;animation:introDown 1.15s cubic-bezier(.76,0,.24,1) forwards;box-shadow:0 -26px 60px rgba(0,0,0,.32)}
+.intro-hi{position:absolute;top:0;bottom:0;width:200%;background:var(--intro-bg) center/contain no-repeat}
+.intro-h.l .intro-hi{left:0}
+.intro-h.r .intro-hi{right:0}
+@keyframes introUp{0%{transform:none}28%,36%{transform:translateY(-5%)}100%{transform:translateY(-104%)}}
+@keyframes introDown{0%{transform:none}28%,36%{transform:translateY(5%)}100%{transform:translateY(104%)}}
+/* Giảm chuyển động: không nở / tách — màn phim chỉ mờ dần vào và ra. */
+.intro.reduced{animation:fadeIn .45s both}
+.intro.reduced[data-phase="out"]{animation:introOut .5s forwards}
+@keyframes introOut{to{opacity:0}}
+.intro-ask{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px}
+.intro-ask img{width:min(720px,100%);aspect-ratio:16/9;object-fit:cover;border-radius:14px;box-shadow:0 0 0 .5px rgba(238,236,229,.14)}
+.intro-ask-a{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.intro-btn.pri{color:#111210;background:#EEECE5}
+.intro-btn.pri:hover{background:#fff;color:#111210}
+/* App bên dưới lắng xuống khi khung hình tách đôi (gỡ lớp ngay khi xong để .app không thành lớp xếp chồng riêng). */
+.app.app-reveal{animation:appReveal 1.15s cubic-bezier(.33,1,.68,1) backwards}
+@keyframes appReveal{from{transform:scale(1.035);filter:blur(10px);opacity:.55}to{transform:none;filter:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.app.app-reveal{animation:none}}
+html[data-motion="reduced"] .app.app-reveal{animation:none}

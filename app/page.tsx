@@ -66,6 +66,7 @@ import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
 import { CustomizePage, useStudios, type CzTab } from "./pluginsui";
 import { ConnectorsPanel } from "./connectorsui";
+import { IntroFilm, wantsIntro } from "./introfilm";
 type Say = (m: string) => void;
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -728,6 +729,12 @@ export default function Home() {
   }, [me?.id, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [providers, setProviders] = useState<Providers>();
   const [authLeaving, setAuthLeaving] = useState(false);
+  // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): giữ màn đăng nhập tới khi phim phủ kín màn hình, app lắng xuống khi phim tách đôi,
+  // lời chào ở trang chủ chạy lại chuyển động của logo (greetKey).
+  const [intro, setIntro] = useState(false);
+  const [authHold, setAuthHold] = useState(false);
+  const [reveal, setReveal] = useState(false);
+  const [greetKey, setGreetKey] = useState(0);
   // Hồ sơ trên máy chủ là nguồn chính; các ô trong Cài đặt → Tài khoản đọc từ đây.
   const syncProfile = (u: AuthUser) => {
     setAcct(u.email);
@@ -1427,15 +1434,19 @@ export default function Home() {
   if (me === undefined) return <div style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
-  const authEl = !me || needProfile || authLeaving ? (
+  const authEl = !me || needProfile || authLeaving || authHold ? (
     <AuthComponent key="auth" brandName="Synchro" logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
-      onDone={(u) => { enterAccount(u); syncProfile(u); setMe(u); if (!u.needsProfile) setAuthLeaving(true); }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
+      onDone={(u, kind) => {
+        enterAccount(u); syncProfile(u); setMe(u);
+        if (u.needsProfile) return;
+        if (wantsIntro(u, kind)) { setAuthHold(true); setIntro(true); } else setAuthLeaving(true);
+      }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
   ) : null;
   if (!me || needProfile) return <>{null}{authEl}</>;
 
   return (<>
     <AppCtx.Provider value={api}>
-    <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}`}>
+    <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? " app-reveal" : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
       <aside className={`sidebar ${open ? "" : "closed"}`} onClickCapture={(e) => {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
@@ -1631,7 +1642,7 @@ export default function Home() {
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
-            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark size={30} state="intro" className="greet-mark" />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
+            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark key={greetKey} size={30} state="intro" className="greet-mark" />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
               <div className="modewrap" key={tplMode}>
@@ -1788,5 +1799,7 @@ export default function Home() {
     </div>
     </AppCtx.Provider>
     {authEl}
+    {intro && me && <IntroFilm uid={me.id} onCovered={() => setAuthHold(false)} onDone={() => setIntro(false)}
+      onReveal={() => { setReveal(true); setGreetKey((k) => k + 1); setTimeout(() => setReveal(false), 1300); }} />}
   </>);
 }
