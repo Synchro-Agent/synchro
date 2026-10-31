@@ -478,6 +478,8 @@ export const EN2VI: Record<string, string> = {
   "Drop a .zip skill folder or a SKILL.md here. Synchro checks it, shows a preview, then the model loads it automatically when a request matches.": "Thả thư mục kỹ năng (.zip) hoặc file SKILL.md vào đây. Synchro sẽ kiểm tra, cho xem trước, rồi model tự nạp khi yêu cầu phù hợp.",
   "Checking…": "Đang kiểm tra…",
   "Your skills": "Kỹ năng của bạn",
+  "In Artifacts": "Có ở Artifacts", "In this section of Artifacts": "Có trong mục này ở trang Artifacts", "Chosen by you": "Bạn tự chọn", "Detect automatically": "Để Synchro tự nhận diện",
+  "Added automatically by Synchro": "Synchro tự nhận diện và thêm vào", "Not a docs, slides or design skill": "Không thuộc Tài liệu, Trình bày hay Thiết kế",
   "No matching skills.": "Không có kỹ năng phù hợp.",
   "No skills yet.": "Chưa có kỹ năng nào.",
   "Loading…": "Đang tải…",
@@ -1119,7 +1121,7 @@ Object.assign(VI2EN, {
   "Không đọc được repo: link không phải repo git công khai (repo riêng tư cần quyền truy cập)": "Couldn't read the repository: the link isn't a public git repository (private repositories need access)",
   "Repo có quá nhiều tệp để đọc": "The repository has too many files to read", "Repo trống (không có tệp nào)": "The repository is empty (no files)",
   "Repo không có tệp nào để đọc": "The repository has no files to read",
-  "đọc tài liệu repo rồi viết hướng dẫn chi tiết": "read the repository docs and write detailed instructions", "SKILL.md quá ngắn": "SKILL.md is too short",
+  "đọc tài liệu repo rồi viết hướng dẫn chi tiết": "read the repository docs and write detailed instructions", "phân loại ngắn": "a short classification", "Mục không hợp lệ": "Invalid section", "SKILL.md quá ngắn": "SKILL.md is too short",
   "Đã tạo skill và thêm vào thư viện cho mọi người": "Skill created and added to the Library for everyone",
   "Chỉ quản trị viên thêm được skill vào thư viện cho mọi người.": "Only administrators can add skills to the Library for everyone.",
   "Thư viện cho mọi người đã đủ": "The Library for everyone is full", "Không còn tệp của skill này trên máy chủ.": "This skill's files are no longer on the server.",
@@ -1792,12 +1794,12 @@ RULES_VI.push(
   [/^Signed in with your (.+?)(?: · (\d+) models)?$/, (m) => `Đã đăng nhập bằng ${viOf(m[1]) === m[1] && m[1] === "account" ? "tài khoản" : viOf(m[1])}${m[2] ? ` · ${m[2]} model` : ""}`],
 );
 Object.assign(VI2EN, {
-  "Thư viện thiết kế cho nút Thiết kế: frontend-design, canvas-design và theme-factory của Anthropic; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); triết lý design engineering và animation của Emil Kowalski; Web Interface Guidelines của Vercel; UX Designer; 118 mẫu HTML của Awesome Design HTML; ảnh chụp App Store. Model tự chọn skill phù hợp cho từng việc.":
-    "Design library for the Design button: Anthropic's frontend-design, canvas-design and theme-factory; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); Emil Kowalski's design engineering and animation philosophy; Vercel's Web Interface Guidelines; UX Designer; Awesome Design HTML's 118 HTML samples; App Store screenshots. The model picks the right skill for each job.",
+  "Thư viện thiết kế cho nút Thiết kế: frontend-design, canvas-design, theme-factory và slack-gif-creator của Anthropic; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); triết lý design engineering và animation của Emil Kowalski; Web Interface Guidelines của Vercel; UX Designer; 118 mẫu HTML của Awesome Design HTML; ảnh chụp App Store. Model tự chọn skill phù hợp cho từng việc.":
+    "Design library for the Design button: Anthropic's frontend-design, canvas-design, theme-factory and slack-gif-creator; Taste; UI/UX Pro Max (design system, UI styling, brand, banner, slides); Emil Kowalski's design engineering and animation philosophy; Vercel's Web Interface Guidelines; UX Designer; Awesome Design HTML's 118 HTML samples; App Store screenshots. The model picks the right skill for each job.",
   "Cho nút Trình bày: slides (HTML có Chart.js, công thức viết slide) và design-system của UI/UX Pro Max, theme-factory và frontend-design của Anthropic, writing-guidelines của Vercel. Tệp .pptx được tạo bằng chạy code (python-pptx).":
     "For the Presentation button: UI/UX Pro Max's slides (HTML with Chart.js, slide-writing formulas) and design-system, Anthropic's theme-factory and frontend-design, Vercel's writing-guidelines. .pptx files are made by running code (python-pptx).",
-  "Cho nút Tài liệu: internal-comms và theme-factory của Anthropic, writing-guidelines của Vercel, brand (giọng văn thương hiệu) của UI/UX Pro Max. Tệp .docx / .pdf được tạo bằng chạy code (python-docx, reportlab).":
-    "For the Document button: Anthropic's internal-comms and theme-factory, Vercel's writing-guidelines, UI/UX Pro Max's brand (brand voice). .docx / .pdf files are made by running code (python-docx, reportlab).",
+  "Cho nút Tài liệu: internal-comms, doc-coauthoring (cùng viết tài liệu, đề xuất, đặc tả theo quy trình) và theme-factory của Anthropic, writing-guidelines của Vercel, brand (giọng văn thương hiệu) của UI/UX Pro Max. Tệp .docx / .pdf được tạo bằng chạy code (python-docx, reportlab).":
+    "For the Document button: Anthropic's internal-comms, doc-coauthoring (co-writing docs, proposals and specs step by step) and theme-factory, Vercel's writing-guidelines, UI/UX Pro Max's brand (brand voice). .docx / .pdf files are made by running code (python-docx, reportlab).",
   "playwright-cli của Microsoft, webapp-testing, mcp-builder và skill-creator của Anthropic, react-best-practices và composition-patterns của Vercel. Hợp với Synchro Code.":
     "Microsoft's playwright-cli, Anthropic's webapp-testing, mcp-builder and skill-creator, Vercel's react-best-practices and composition-patterns. A good fit for Synchro Code.",
   "Các skill độc quyền (docx, pdf, pptx, xlsx) bị bỏ qua vì giấy phép không cho sao chép.": "Proprietary skills (docx, pdf, pptx, xlsx) are skipped because their license doesn't allow copying.",

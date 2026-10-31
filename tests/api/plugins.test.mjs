@@ -74,7 +74,10 @@ ok(r.s === 200 && r.j.plugin.mine.enabled === false && r.j.plugin.enabled === tr
 console.log("4. Studio trong chat");
 const studioChat = (c, studio, text) => c("POST", "/api/llm", { system: "", messages: [{ role: "user", content: text }], model: "anthropic/claude-opus-5-5", skills: true, studio });
 r = await studioChat(member, "design", "Làm trang web cho quán cà phê");
-ok(/Chưa có thư viện skill/.test(r.j?.text ?? ""), "đã tắt plugin: studio không có thư viện", (r.j?.text ?? "").slice(0, 200));
+// Skill thiết kế của plugin Emil (cá nhân, không gắn studio) được Synchro tự xếp vào Thiết kế (skillstudio.ts): tắt Design Studio thì thư viện
+// Thiết kế chỉ còn những skill đó.
+const offSk = (r.j?.skills ?? []).filter((u) => u.kind === "skill").map((u) => u.name);
+ok(offSk.length > 0 && offSk.every((n) => mine.skills.some((s) => s.name === n)), `đã tắt Design Studio: thư viện Thiết kế chỉ còn skill tự thêm từ plugin của bạn (${offSk.join(", ")})`, (r.j?.text ?? "").slice(0, 200));
 await member("PATCH", `/api/plugins/${ds.id}`, { mine: { enabled: true } });
 r = await studioChat(member, "design", "Làm trang web cho quán cà phê");
 const usedSk = (r.j?.skills ?? []).filter((u) => u.kind === "skill").map((u) => u.name);

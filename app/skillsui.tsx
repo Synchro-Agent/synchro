@@ -7,7 +7,12 @@ import { getLang } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
 
-type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number };
+// studio: mục ở trang Artifacts (Tài liệu / Trình bày / Thiết kế) mà Synchro tự xếp skill vào (src: bộ luật / model / người dùng tự chọn).
+type Kind = "docs" | "slides" | "design";
+type StudioTag = { studios: Kind[]; src: "rules" | "model" | "manual"; why: string } | null;
+type Item = { name: string; description: string; enabled: boolean; version: number; versions: number[]; updated_at: string; fileCount: number; warnings: string[]; useCount: number; lastUsed: string | null; scripts: number; studio?: StudioTag };
+const KINDS: Kind[] = ["docs", "slides", "design"];
+const KIND_NAME: Record<Kind, string> = { docs: "Docs", slides: "Slides", design: "Design" };
 type FileInfo = { path: string; size: number; kind: string };
 type Preview = { name: string; description: string; body: string; files: FileInfo[]; warnings: string[]; tokens: number; exists: boolean; version: number; source?: string; generated?: boolean };
 type Choice = { dir: string; name: string; description: string; error?: string; exists: boolean };
@@ -21,6 +26,8 @@ type Detail = Item & { body: string; files: FileInfo[]; patches?: Patch[] };
 const portal = (n: ReactNode) => (typeof document === "undefined" ? n : createPortal(n, document.body));
 
 export const SKILLS_CHANGED = "skills:changed";
+// Mục ở trang Artifacts của skill vừa đổi (model xếp lại xong, người dùng tự chọn): trang Artifacts đếm lại số skill mỗi mục.
+export const SKILL_STUDIOS = "skills:studios";
 export const SKILLS_UPLOAD = "skills:upload";
 // Kho kỹ năng nhận tệp thả vào trang rồi chuyển cho danh sách skill (detail = File).
 export const SKILLS_DROP = "skills:drop";
@@ -187,8 +194,15 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
   const sc = useSkillScores(list);
   const verRef = useRef<HTMLInputElement>(null);
 
+  // Model đang xếp lại mục ở trang Artifacts cho skill vừa thêm (ở nền): tải lại vài lần để thấy kết quả.
+  const polls = useRef(0);
   const load = useCallback(async () => {
-    try { setList((await api("/api/skills")).skills); setLoadErr(""); } catch (e) { setLoadErr((e as Error).message); setList([]); }
+    try {
+      const j = await api("/api/skills");
+      setList(j.skills); setLoadErr("");
+      if (j.refining && polls.current < 12) { polls.current++; setTimeout(() => { void load(); window.dispatchEvent(new Event(SKILL_STUDIOS)); }, 2500); }
+      else polls.current = 0;
+    } catch (e) { setLoadErr((e as Error).message); setList([]); }
   }, []);
   useEffect(() => { load(); const h = () => load(); window.addEventListener(SKILLS_CHANGED, h); return () => window.removeEventListener(SKILLS_CHANGED, h); }, [load]);
 
@@ -247,7 +261,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
           <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)}>
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
             <div className="pl-row2-t">
-              <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}</div>
+              <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}{s.studio?.studios.map((k) => <span key={k} className="pl-b st" data-tip="In this section of Artifacts">{KIND_NAME[k]}</span>)}</div>
               <span data-notr>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
@@ -295,6 +309,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
                   : <button key={v} className="lnk" onClick={() => restore(detail.name, v)}>v{v}</button>)}</span>
               )}
             </div>
+            <StudioPick name={detail.name} tag={detail.studio ?? null} onSet={(studio) => { setDetail({ ...detail, studio }); setList((l) => l && l.map((x) => (x.name === detail.name ? { ...x, studio } : x))); }} onErr={setErr} />
             {sc[detail.name]?.low && <div className="sk-note bad">{LOW_NOTE}</div>}
             {detail.warnings.length > 0 && <ul className="sk-wl">{detail.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
             <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>SKILL.md</div>
@@ -315,6 +330,30 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
         </div>
       )}
     </>
+  );
+}
+
+// Mục ở trang Artifacts: Synchro tự nhận diện skill thuộc Tài liệu / Trình bày / Thiết kế (0–3 mục) và thêm vào thư viện của mục đó.
+// Bấm một mục để tự chọn (từ đó Synchro không tự xếp lại); "Detect automatically" để Synchro nhận diện lại.
+function StudioPick({ name, tag, onSet, onErr }: { name: string; tag: StudioTag; onSet: (t: StudioTag) => void; onErr: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const cur = tag?.studios ?? [];
+  const set = async (studios: Kind[] | null) => {
+    setBusy(true);
+    try {
+      const j = await api(`/api/skills/${name}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ studios }) });
+      onSet(j.skill.studio ?? null); window.dispatchEvent(new Event(SKILL_STUDIOS));
+    } catch (e) { onErr((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="sk-studio">
+      <span className="sk-studio-l">In Artifacts</span>
+      {KINDS.map((k) => {
+        const on = cur.includes(k);
+        return <button key={k} className={`sk-st ${on ? "on" : ""}`} aria-pressed={on} disabled={busy} onClick={() => set(on ? cur.filter((x) => x !== k) : KINDS.filter((x) => x === k || cur.includes(x)))}><I.M icon={on ? "Check" : "Plus"} size={12} />{KIND_NAME[k]}</button>;
+      })}
+      <span className="sk-studio-n">{tag?.src === "manual" ? <>Chosen by you<span aria-hidden> · </span><button className="lnk" disabled={busy} onClick={() => set(null)}>Detect automatically</button></> : cur.length ? "Added automatically by Synchro" : "Not a docs, slides or design skill"}</span>
+    </div>
   );
 }
 

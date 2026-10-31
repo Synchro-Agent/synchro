@@ -8,6 +8,7 @@ import JSZip from "jszip";
 import { parse as parseYaml } from "yaml";
 import { db, DATA_DIR } from "./authstore";
 import { runner } from "./coderun";
+import { classify, dropTag, getTag, refine, userKey } from "./skillstudio";
 
 export const ROOT = process.env.SKILLS_DIR ?? path.join(DATA_DIR, "skills");
 
@@ -83,6 +84,12 @@ function hydrate(r: Row): Skill {
   };
 }
 
+/** Skill của người này theo id, đang bật cho cả tài khoản (để vào thư viện Tài liệu / Trình bày / Thiết kế). */
+export const enabledSkillsByIds = (uid: string, ids: string[]): Skill[] => {
+  if (!ids.length) return [];
+  const st = db().prepare("SELECT * FROM skills WHERE user_id = ? AND id = ? AND enabled = 1");
+  return ids.map((id) => st.get(uid, id) as Row | undefined).filter((r): r is Row => !!r).map(hydrate);
+};
 export const listSkills = async (uid: string) => (db().prepare("SELECT * FROM skills WHERE user_id = ? ORDER BY name").all(uid) as Row[]).map(hydrate);
 export const getSkill = async (uid: string, name: string) => {
   const r = db().prepare("SELECT * FROM skills WHERE user_id = ? AND name = ?").get(uid, name) as Row | undefined;
@@ -344,7 +351,20 @@ async function storeParsed(uid: string, p: Parsed, enabled: boolean): Promise<{ 
     const ins = db().prepare("INSERT INTO skill_files (skill_id, path, size, mime_type, kind) VALUES (?, ?, ?, ?, ?)");
     for (const f of p.files) ins.run(id, f.path, f.size, f.mime_type, f.kind);
   })();
+  tagStudios(uid, { id, name: p.name, description: p.description, body: p.body });
   return { skill: (await getSkill(uid, p.name))!, created: !cur };
+}
+// Xếp skill vào Tài liệu / Trình bày / Thiết kế ở trang Artifacts (skillstudio.ts): bộ luật ngay, model của người dùng xếp lại ở nền.
+function tagStudios(uid: string, s: { id: string; name: string; description: string; body: string }) {
+  if (classify(userKey(s.id), s)) refine(uid, userKey(s.id), s);
+}
+/** Skill chưa được xếp mục (tạo trước khi có tính năng này, hoặc model chưa xếp lại): xếp ngay. */
+export function ensureStudioTags(uid: string) {
+  for (const r of db().prepare("SELECT id, name, description, body FROM skills WHERE user_id = ?").all(uid) as { id: string; name: string; description: string; body: string }[]) tagStudios(uid, r);
+}
+/** Lúc máy chủ khởi động: xếp mục cho mọi skill chưa xếp bằng bộ luật (không gọi model của ai). */
+export function ensureAllStudioTags() {
+  for (const r of db().prepare("SELECT id, name, description, body FROM skills").all() as { id: string; name: string; description: string; body: string }[]) classify(userKey(r.id), r);
 }
 
 // Quay lại một phiên bản cũ đã lưu trên đĩa (đọc lại và kiểm tra như lúc tải lên).
@@ -373,6 +393,7 @@ export const restoreVersion = (uid: string, name: string, v: number) => locked(u
     const ins = db().prepare("INSERT INTO skill_files (skill_id, path, size, mime_type, kind) VALUES (?, ?, ?, ?, ?)");
     for (const f of p.files) ins.run(s.id, f.path, f.size, f.mime_type, f.kind);
   })();
+  tagStudios(uid, { id: s.id, name: p.name, description: p.description, body: p.body });
   return (await getSkill(uid, name))!;
 });
 
@@ -403,6 +424,7 @@ export const removeSkill = (uid: string, name: string) => locked(uid, async () =
   const s = await getSkill(uid, name);
   if (!s) return fail(`Không có skill "${name}"`, 404);
   db().prepare("DELETE FROM skills WHERE id = ?").run(s.id);
+  dropTag(userKey(s.id));
   await fs.rm(path.join(ROOT, uid, s.id), { recursive: true, force: true });
 });
 
@@ -437,7 +459,7 @@ export async function readSkillRaw(s: Skill, p: string): Promise<Buffer> {
   return fs.readFile(path.join(ROOT, s.storage_path, p));
 }
 
-export const publicSkill = (s: Skill) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled, version: s.version, versions: s.versions, created_at: s.created_at, updated_at: s.updated_at, fileCount: s.files.length, warnings: s.warnings, projects: s.projects, useCount: s.use_count, lastUsed: s.last_used_at, scripts: s.files.filter((f) => f.kind === "script").length });
+export const publicSkill = (s: Skill) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled, studio: getTag(userKey(s.id)), version: s.version, versions: s.versions, created_at: s.created_at, updated_at: s.updated_at, fileCount: s.files.length, warnings: s.warnings, projects: s.projects, useCount: s.use_count, lastUsed: s.last_used_at, scripts: s.files.filter((f) => f.kind === "script").length });
 
 // ---------------------------------------------------------------- nhập từ GitHub
 // Nhận link github.com/<owner>/<repo>[/tree|blob/<ref>/<path>] của repo công khai. Chỉ tải từ codeload.github.com

@@ -10,13 +10,13 @@ export const PLUGIN_DIR: DirPlugin[] = [
   {
     catalogId: "design-studio", slug: "design-studio", name: "Design Studio", studio: "design", category: "studio", color: "#7c3aed", license: "MIT · Apache-2.0", skillCount: 32,
     tagline: "Mọi kiến thức thiết kế trong một nút: giao diện, thẩm mỹ, chuyển động, thương hiệu, minh họa.",
-    description: "Thư viện thiết kế cho nút Thiết kế: frontend-design, canvas-design và theme-factory của Anthropic; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); triết lý design engineering và animation của Emil Kowalski; Web Interface Guidelines của Vercel; UX Designer; 118 mẫu HTML của Awesome Design HTML; ảnh chụp App Store. Model tự chọn skill phù hợp cho từng việc.",
+    description: "Thư viện thiết kế cho nút Thiết kế: frontend-design, canvas-design, theme-factory và slack-gif-creator của Anthropic; Taste; UI/UX Pro Max (design system, UI styling, brand, banner); triết lý design engineering và animation của Emil Kowalski; Web Interface Guidelines của Vercel; UX Designer; 118 mẫu HTML của Awesome Design HTML; ảnh chụp App Store. Model tự chọn skill phù hợp cho từng việc.",
     author: "Nhiều tác giả", homepage: "https://github.com/anthropics/skills",
     sources: [
-      { repo: AS, path: "skills", include: ["frontend-design", "canvas-design", "theme-factory", "algorithmic-art", "web-artifacts-builder"] },
+      { repo: AS, path: "skills", include: ["frontend-design", "canvas-design", "theme-factory", "algorithmic-art", "web-artifacts-builder", "slack-gif-creator"] },
       { repo: "Leonxlnx/taste-skill" },
       { repo: UUX, path: ".claude/skills", include: ["ui-ux-pro-max", "design", "design-system", "ui-styling", "brand", "banner-design"] },
-      { repo: EMIL, path: "skills", include: ["emil-design-eng", "apple-design", "animate", "animation-performance", "animation-vocabulary", "improve-animations", "review-animations", "find-animation-opportunities", "prototype", "mobile-native", "break-ui", "pick-ui-library", "animate-expo"] },
+      { repo: EMIL, path: "skills", include: ["emil-design-eng", "apple-design", "animate", "animation-performance", "animation-vocabulary", "improve-animations", "review-animations", "find-animation-opportunities", "remove-animations", "prototype", "mobile-native", "break-ui", "pick-ui-library", "animate-expo"] },
       { repo: VC, path: "skills", include: ["web-design-guidelines", "vercel-react-view-transitions"] },
       { repo: "szilu/ux-designer-skill" },
       { repo: "yzfly/awesome-design-html" },
@@ -36,12 +36,12 @@ export const PLUGIN_DIR: DirPlugin[] = [
     ],
   },
   {
-    catalogId: "docs-studio", slug: "docs-studio", name: "Docs Studio", studio: "docs", category: "studio", color: "#2563eb", license: "MIT · Apache-2.0", skillCount: 4,
+    catalogId: "docs-studio", slug: "docs-studio", name: "Docs Studio", studio: "docs", category: "studio", color: "#2563eb", license: "MIT · Apache-2.0", skillCount: 5,
     tagline: "Tài liệu rõ ràng, đúng giọng văn, trình bày đẹp; xuất Word, PDF hoặc Markdown.",
-    description: "Cho nút Tài liệu: internal-comms và theme-factory của Anthropic, writing-guidelines của Vercel, brand (giọng văn thương hiệu) của UI/UX Pro Max. Tệp .docx / .pdf được tạo bằng chạy code (python-docx, reportlab).",
+    description: "Cho nút Tài liệu: internal-comms, doc-coauthoring (cùng viết tài liệu, đề xuất, đặc tả theo quy trình) và theme-factory của Anthropic, writing-guidelines của Vercel, brand (giọng văn thương hiệu) của UI/UX Pro Max. Tệp .docx / .pdf được tạo bằng chạy code (python-docx, reportlab).",
     author: "Nhiều tác giả", homepage: "https://github.com/anthropics/skills",
     sources: [
-      { repo: AS, path: "skills", include: ["internal-comms", "theme-factory"] },
+      { repo: AS, path: "skills", include: ["internal-comms", "theme-factory", "doc-coauthoring"] },
       { repo: VC, path: "skills", include: ["writing-guidelines"] },
       { repo: UUX, path: ".claude/skills", include: ["brand"] },
     ],

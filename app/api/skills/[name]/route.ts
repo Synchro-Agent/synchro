@@ -1,4 +1,6 @@
 import { getSkill, publicSkill, readSkillRaw, removeSkill, restoreVersion, setEnabled, setProjectEnabled, SkillError, type Skill } from "../../../skillstore";
+import { setManual, userKey } from "../../../skillstudio";
+import { STUDIO_KINDS } from "../../../studiorules";
 import { dropPatches, hashText, listPatches, setPatch } from "../../../skillheal";
 import { current, featureGate } from "../../../authstore";
 
@@ -24,13 +26,21 @@ async function patchesOf(uid: string, s: Skill) {
 }
 
 // { enabled } bật/tắt cho cả tài khoản; { project, enabled } bật/tắt riêng trong một dự án; { restore: n } quay lại phiên bản n;
-// { patch, action } duyệt / bỏ bản tự sửa đang chờ hoặc hoàn tác bản đang dùng.
+// { patch, action } duyệt / bỏ bản tự sửa đang chờ hoặc hoàn tác bản đang dùng;
+// { studios: ["docs" | "slides" | "design", …] } tự chọn mục ở trang Artifacts; { studios: null } để Synchro tự nhận diện lại.
 export async function PATCH(req: Request, { params }: Ctx) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
   const uid = current(req)!.user.id;
   try {
-    const { enabled, project, restore, patch, action } = await req.json();
+    const { enabled, project, restore, patch, action, studios } = await req.json();
     const name = (await params).name;
+    if (studios !== undefined) {
+      const sk = await getSkill(uid, name);
+      if (!sk) return Response.json({ error: "Không có skill này" }, { status: 404 });
+      if (studios !== null && (!Array.isArray(studios) || studios.some((x: unknown) => !STUDIO_KINDS.includes(x as never)))) return Response.json({ error: "Mục không hợp lệ" }, { status: 400 });
+      setManual(userKey(sk.id), studios, sk);
+      return Response.json({ skill: publicSkill(sk) });
+    }
     if (typeof patch === "string") {
       const sk = await getSkill(uid, name);
       if (!sk || !["approve", "reject", "revert"].includes(action)) return Response.json({ error: "Yêu cầu không hợp lệ" }, { status: 400 });

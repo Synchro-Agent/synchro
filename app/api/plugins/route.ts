@@ -1,5 +1,5 @@
 import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../authstore";
-import { installPlugin, listPlugins, parseRepo, PluginError, previewPlugin, type PluginDef } from "../../plugins";
+import { installPlugin, listPlugins, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
 import { PLUGIN_DIR } from "../../plugindir";
 
 export const runtime = "nodejs";
@@ -11,7 +11,8 @@ const err = (e: unknown) => (e instanceof PluginError ? Response.json({ error: e
 // Plugin của tổ chức + của riêng mình, và danh mục plugin dựng sẵn.
 export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
-  return Response.json({ plugins: listPlugins(user.id), directory: PLUGIN_DIR, admin: isAdmin(user), canInstall: can(user, "skills") });
+  // studios: thư viện của Tài liệu / Trình bày / Thiết kế ở trang Artifacts, gồm cả skill Synchro tự nhận diện thuộc mục đó.
+  return Response.json({ plugins: listPlugins(user.id), directory: PLUGIN_DIR, admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
 });
 
 // { action: "preview" | "install", catalogId? | url?, scope: "org" | "personal", skip?: string[] }
@@ -35,7 +36,7 @@ export const POST = handle(async (req: Request) => {
     if (b.action === "install") {
       limit("plugin:" + user.id, 20, 3600_000);
       const skip = Array.isArray(b.skip) ? b.skip.filter((x: unknown): x is string => typeof x === "string").slice(0, 200) : [];
-      const plugin = await installPlugin(scope === "org" ? "org" : user.id, def, { skip });
+      const plugin = await installPlugin(scope === "org" ? "org" : user.id, def, { skip, by: user.id });
       return Response.json({ plugin, plugins: listPlugins(user.id) });
     }
     limit("plugin-preview:" + user.id, 60, 3600_000);

@@ -17,6 +17,7 @@ import { splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, routeModel, taskLabel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
+import { ruleStudios } from "./studiorules";
 import { STUDIO_LABEL } from "./plugindir";
 import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
@@ -678,6 +679,10 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k })));
     const votes = new Map<string, number>();
     for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
+    // Skill ở nhiều thư viện (Synchro tự xếp một skill vào 2–3 mục) mà phiếu ngang nhau: nghiêng về mục chính câu yêu cầu nói tới
+    // ("làm slide thuyết trình" → Trình bày). Điểm nhỏ, chỉ để phân định khi gần bằng nhau.
+    const intent = ruleStudios("", lastUserText(messages)).scores;
+    for (const k of STUDIOS) if (intent[k] > 0) votes.set(`studio-${k}`, (votes.get(`studio-${k}`) ?? 0) + intent[k] * 0.01);
     const pick = (n: string) => (libs[n] ?? []).slice().sort((a, b) => (votes.get(b.key) ?? 0) - (votes.get(a.key) ?? 0))[0];
     const hits = raw.map((h) => ({ ...h, lib: pick(h.skill.name) }));
     for (const h of hits) if (h.lib) prefer[h.skill.name] = h.lib.key;

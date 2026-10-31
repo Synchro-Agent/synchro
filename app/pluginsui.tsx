@@ -8,9 +8,9 @@ import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
 import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
-import { ScoreBadge, SkillsPanel, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
+import { ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 
-type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean };
+type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -381,13 +381,17 @@ export function useStudios() {
   useEffect(() => {
     const load = () => fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j: Data | null) => {
       if (!j) return;
+      // Máy chủ đếm sẵn (gồm skill Synchro tự nhận diện thuộc mục — từ Kho kỹ năng và plugin khác); máy chủ cũ thì tự đếm plugin studio.
+      if (j.studios) { setM(j.studios); return; }
       const o: Partial<Record<Studio, { name: string; skills: number }>> = {};
       for (const p of j.plugins) if (p.studio && p.enabled && p.mine.enabled) { const c = o[p.studio]; o[p.studio] = { name: c ? `${c.name}, ${p.name}` : p.name, skills: (c?.skills ?? 0) + p.skills.filter((s) => s.enabled).length }; }
       setM(o);
     }).catch(() => {});
     load();
-    window.addEventListener(PLUGINS_CHANGED, load);
-    return () => window.removeEventListener(PLUGINS_CHANGED, load);
+    // Skill thêm / sửa / xóa trong Kho kỹ năng có thể vào hoặc ra khỏi một mục (Synchro tự nhận diện): đếm lại.
+    const evs = [PLUGINS_CHANGED, SKILLS_CHANGED, SKILL_STUDIOS];
+    for (const e of evs) window.addEventListener(e, load);
+    return () => { for (const e of evs) window.removeEventListener(e, load); };
   }, []);
   return m;
 }

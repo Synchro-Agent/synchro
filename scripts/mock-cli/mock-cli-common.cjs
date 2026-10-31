@@ -70,9 +70,25 @@ function mockSkillGen(prompt) {
   return `---\nname: ${name}\ndescription: "Kiến thức từ repo ${source} (mock). Dùng khi người dùng hỏi về ${name} hoặc cần làm việc với repo này."\n---\n# ${name}\n\nSkill viết từ bản đọc toàn repo ${source}: đã thấy nội dung ${files.length} tệp văn bản trên tổng ${total} tệp. Khi người dùng hỏi về repo, mở đúng tệp liên quan trong references/ trước khi trả lời và trích tên tệp.\n\n## Quy trình\n1. Đọc references/repo-tree.md để biết cấu trúc.\n2. Mở tệp liên quan nhất.\n3. Trả lời dựa đúng nội dung tệp.\n\n## Tệp tham khảo\n${files.slice(0, 5).map((f) => "- references/" + f).join("\n")}\n`;
 }
 
+// Xếp skill vào Tài liệu / Trình bày / Thiết kế (app/skillstudio.ts): như model thật — đọc tên, mô tả, nội dung rồi trả một dòng JSON.
+// Hiểu theo nghĩa chứ không chỉ khớp chữ: "pitch" / "thuyết trình" là Trình bày, "giao diện" / "logo" / "màu" là Thiết kế…
+function mockStudio(prompt) {
+  const i = prompt.indexOf("Skill cần phân loại:");
+  if (i < 0) return null;
+  const t = fold(prompt.slice(i));
+  const any = (...ws) => ws.some((w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(t));
+  const docs = any("bao cao", "de xuat", "hop dong", "tai lieu", "van ban", "bien ban", "report", "proposal", "document", "docx", "memo", "contract", "documentation", "newsletter");
+  const slides = any("slide", "slides", "thuyet trinh", "trinh chieu", "presentation", "deck", "pitch", "pptx", "powerpoint", "keynote");
+  const design = any("thiet ke", "giao dien", "logo", "mau sac", "phong chu", "do hoa", "poster", "banner", "ui", "ux", "typography", "animation", "brand", "thuong hieu", "figma", "mockup");
+  const code = !docs && !slides && !design;
+  return JSON.stringify({ docs, slides, design, why: code ? "(mock) Skill về việc khác, không thuộc mục nào." : `(mock) Thuộc ${[docs && "Tài liệu", slides && "Trình bày", design && "Thiết kế"].filter(Boolean).join(", ")}.` });
+}
+
 function mockBrain(prompt) {
   const sg = mockSkillGen(prompt);
   if (sg) return sg;
+  const st = mockStudio(prompt);
+  if (st) return st;
   if (prompt.includes("Đoạn chat cần chưng cất:")) {
     const body = prompt.split("Đoạn chat cần chưng cất:")[1] ?? "";
     const users = [...body.matchAll(/\[Người dùng\]\n([^\n]+)/g)].map((m) => m[1].trim()).filter(Boolean);

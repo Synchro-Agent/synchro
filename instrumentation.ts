@@ -20,7 +20,14 @@ export async function register() {
       (await import("./app/prwatch")).startPrWatch(Number(process.env.SYNCHRO_PR_TICK_MS) || 90_000);
     } catch (e) { console.error("[runs]", e); }
   }, 1500);
-  if (process.env.SYNCHRO_DEFAULT_PLUGINS === "0") return;
-  const { ensureDefaultPlugins } = await import("./app/plugins");
-  setTimeout(() => { ensureDefaultPlugins().catch((e) => console.error("[plugins]", e)); }, 5000);
+  // Skill và plugin có từ trước khi có tính năng tự xếp mục: xếp vào Tài liệu / Trình bày / Thiết kế bằng bộ luật (model xếp lại khi
+  // người dùng mở Kho kỹ năng hoặc lưu skill).
+  setTimeout(async () => {
+    try { (await import("./app/plugins")).ensurePluginTags(); (await import("./app/skillstore")).ensureAllStudioTags(); }
+    catch (e) { console.error("[skill-studio]", e); }
+  }, 4000);
+  // Cài sẵn 3 studio (tắt bằng SYNCHRO_DEFAULT_PLUGINS=0), rồi cập nhật studio đã cài theo danh mục mới (luôn chạy: chỉ đụng tới studio đã cài).
+  const { ensureDefaultPlugins, syncStudioCatalog } = await import("./app/plugins");
+  const run = process.env.SYNCHRO_DEFAULT_PLUGINS === "0" ? syncStudioCatalog : ensureDefaultPlugins;
+  setTimeout(() => { run().catch((e) => console.error("[plugins]", e)); }, 5000);
 }

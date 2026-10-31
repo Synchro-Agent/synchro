@@ -9,7 +9,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
 import { db } from "./authstore";
-import { download, isAllowed, isText, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
+import { download, enabledSkillsByIds, isAllowed, isText, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
+import { classify, dropPluginTags, keepPluginTags, pluginKey, refine, tagsOf, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
@@ -196,7 +197,7 @@ type Row = { id: string; owner: string; slug: string; catalog_id: string | null;
 type SRow = { id: string; plugin_id: string; name: string; description: string; body: string; storage_path: string; files: string; report: string; enabled: number; use_count: number; last_used_at: number | null };
 
 const slugOk = (s: string) => /^[a-z0-9][a-z0-9-]{0,40}$/.test(s);
-export async function installPlugin(owner: string, def: PluginDef, opts: { skip?: string[] } = {}) {
+export async function installPlugin(owner: string, def: PluginDef, opts: { skip?: string[]; by?: string } = {}) {
   const d = init();
   if (!slugOk(def.slug)) fail("Tên plugin không hợp lệ.");
   const existing = d.prepare("SELECT * FROM plugins WHERE owner = ? AND slug = ?").get(owner, def.slug) as Row | undefined;
@@ -239,7 +240,23 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
   })();
   // Xóa bản cũ trên đĩa sau khi bản mới đã ghi xong.
   for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
+  tagPlugin(id, opts.by ?? (owner === "org" ? undefined : owner));
   return getPlugin(id)!;
+}
+
+// Skill của plugin không gắn studio: Synchro tự xếp vào Tài liệu / Trình bày / Thiết kế (skillstudio.ts) để chúng vào thư viện của mục đó
+// ở trang Artifacts. Plugin studio giữ đúng danh sách đã chọn, không tự thêm sang mục khác. by: tài khoản có model để xếp lại ở nền.
+function tagPlugin(id: string, by?: string) {
+  const pl = init().prepare("SELECT studio FROM plugins WHERE id = ?").get(id) as { studio: string | null } | undefined;
+  if (!pl) return;
+  const rows = init().prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
+  keepPluginTags(id, rows.map((r) => r.name));
+  if (pl.studio) return;
+  for (const r of rows) { const key = pluginKey(id, r.name); if (classify(key, r) && by) refine(by, key, r); }
+}
+/** Xếp mục cho mọi skill của plugin chưa xếp (khi máy chủ khởi động: plugin cài trước khi có tính năng này). */
+export function ensurePluginTags() {
+  for (const r of init().prepare("SELECT id FROM plugins WHERE studio IS NULL").all() as { id: string }[]) tagPlugin(r.id);
 }
 
 // Thêm skill từ file zip tải lên (vd. bộ skill không có trên GitHub) vào một plugin có sẵn.
@@ -277,6 +294,7 @@ export async function addZipToPlugin(id: string, buf: Buffer) {
   // Ghi nhớ để lần cập nhật từ GitHub không làm mất skill tải lên.
   const srcs = JSON.parse(pl!.sources) as Source[];
   d.prepare("UPDATE plugins SET sources = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(srcs), Date.now(), id);
+  tagPlugin(id, pl!.owner === "org" ? undefined : pl!.owner);
   return { added, plugin: getPlugin(id)! };
 }
 
@@ -327,11 +345,13 @@ export async function publishSkill(s: Skill, by: { name: string; source?: string
       .run(crypto.randomUUID(), id, p.name, p.description, p.body, rel, JSON.stringify(p.files), JSON.stringify(report));
   })();
   for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
+  tagPlugin(id, s.user_id);
   return getPlugin(id)!;
 }
 
 export async function removePlugin(id: string) {
   init().prepare("DELETE FROM plugins WHERE id = ?").run(id);
+  dropPluginTags(id);
   await fs.rm(path.join(PROOT(), id), { recursive: true, force: true });
 }
 
@@ -351,12 +371,18 @@ export async function checkUpdate(id: string) {
 export async function updatePlugin(id: string) {
   const pl = init().prepare("SELECT * FROM plugins WHERE id = ?").get(id) as Row | undefined;
   if (!pl) return fail("Không tìm thấy plugin.", 404);
-  // Giữ skill tải lên thủ công (không có trên GitHub).
-  const uploads = init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND report LIKE '%\"repo\":\"upload\"%'").all(id) as SRow[];
+  const uploads = uploadsOf(id);
   const out = await installPlugin(pl.owner, { catalogId: pl.catalog_id ?? undefined, slug: pl.slug, name: pl.name, description: pl.description, author: pl.author ?? undefined, homepage: pl.homepage ?? undefined, color: pl.color ?? undefined, studio: (pl.studio as Studio) ?? null, everywhere: !!pl.everywhere, sources: JSON.parse(pl.sources) });
+  restoreUploads(id, uploads, pl.owner);
+  return out;
+}
+// Giữ skill tải lên thủ công (không có trên GitHub) qua lần cài lại từ GitHub.
+const uploadsOf = (id: string) => init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND report LIKE '%\"repo\":\"upload\"%'").all(id) as SRow[];
+function restoreUploads(id: string, uploads: SRow[], owner: string) {
+  if (!uploads.length) return;
   const ins = init().prepare("INSERT OR IGNORE INTO plugin_skills (id, plugin_id, name, description, body, storage_path, files, report, enabled, use_count, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
   for (const u of uploads) ins.run(u.id, u.plugin_id, u.name, u.description, u.body, u.storage_path, u.files, u.report, u.enabled, u.use_count, u.last_used_at);
-  return out;
+  tagPlugin(id, owner === "org" ? undefined : owner);
 }
 
 // ---------------------------------------------------------------- đọc
@@ -389,7 +415,7 @@ export function setPlugin(id: string, patch: { enabled?: boolean; everywhere?: b
   const d = init();
   if (typeof patch.enabled === "boolean") d.prepare("UPDATE plugins SET enabled = ? WHERE id = ?").run(patch.enabled ? 1 : 0, id);
   if (typeof patch.everywhere === "boolean") d.prepare("UPDATE plugins SET everywhere = ? WHERE id = ?").run(patch.everywhere ? 1 : 0, id);
-  if (patch.studio === null || (typeof patch.studio === "string" && STUDIOS.includes(patch.studio))) d.prepare("UPDATE plugins SET studio = ? WHERE id = ?").run(patch.studio, id);
+  if (patch.studio === null || (typeof patch.studio === "string" && STUDIOS.includes(patch.studio))) { d.prepare("UPDATE plugins SET studio = ? WHERE id = ?").run(patch.studio, id); tagPlugin(id); }
   if (patch.skills && typeof patch.skills === "object") for (const [n, on] of Object.entries(patch.skills)) d.prepare("UPDATE plugin_skills SET enabled = ? WHERE plugin_id = ? AND name = ?").run(on ? 1 : 0, id, n);
 }
 // Lựa chọn riêng của một người với plugin của tổ chức (tắt cho mình, dùng mọi nơi hay không).
@@ -408,10 +434,30 @@ const toSkill = (s: SRow, plugin: string): Skill => ({
 function active(uid: string) {
   return listPlugins(uid).filter((p) => p.enabled && p.mine.enabled);
 }
-// Skill của các plugin gắn với studio (khi người dùng bấm nút Thiết kế / Trình bày / Tài liệu).
-export function studioSkills(uid: string, studio: Studio): { skills: Skill[]; plugins: string[] } {
-  const ps = active(uid).filter((p) => p.studio === studio);
-  return { skills: ps.flatMap((p) => (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(p.id) as SRow[]).map((s) => toSkill(s, p.id))), plugins: ps.map((p) => p.name) };
+export const MINE_LABEL = "Kho kỹ năng của bạn";
+// Thư viện của một studio (khi người dùng bấm Thiết kế / Trình bày / Tài liệu, và mục lục studio trong chat thường): skill của các plugin
+// gắn với studio, cộng skill Synchro tự nhận diện thuộc mục này — skill của người dùng (Kho kỹ năng) và skill của plugin không gắn studio.
+// Trùng tên: skill của người dùng trước, rồi plugin studio, rồi plugin khác. auto: những skill được tự thêm (from: nguồn).
+export function studioSkills(uid: string, studio: Studio): { skills: Skill[]; plugins: string[]; auto: { name: string; from: string }[] } {
+  const act = active(uid);
+  const rows = (id: string) => init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? AND enabled = 1 ORDER BY name").all(id) as SRow[];
+  const ps = act.filter((p) => p.studio === studio);
+  const mine = enabledSkillsByIds(uid, userStudioIds(uid, studio));
+  const others = act.filter((p) => !p.studio).map((p) => {
+    const rs = rows(p.id), tags = tagsOf(rs.map((r) => pluginKey(p.id, r.name)));
+    return { p, skills: rs.filter((r) => tags.get(pluginKey(p.id, r.name))?.studios.includes(studio)).map((r) => toSkill(r, p.id)) };
+  }).filter((x) => x.skills.length);
+  const skills: Skill[] = [], auto: { name: string; from: string }[] = [];
+  const add = (k: Skill, from?: string) => { if (skills.some((x) => x.name === k.name)) return; skills.push(k); if (from) auto.push({ name: k.name, from }); };
+  for (const k of mine) add(k, MINE_LABEL);
+  for (const p of ps) for (const r of rows(p.id)) add(toSkill(r, p.id));
+  for (const o of others) for (const k of o.skills) add(k, o.p.name);
+  return { skills, plugins: [...ps.map((p) => p.name), ...(mine.length ? [MINE_LABEL] : []), ...others.map((o) => o.p.name)], auto };
+}
+/** Cho trang Artifacts: mỗi studio có bao nhiêu skill, từ đâu, skill nào được tự thêm. */
+export function studioSummary(uid: string) {
+  return Object.fromEntries(STUDIOS.map((s) => { const r = studioSkills(uid, s); return [s, { name: r.plugins.join(", "), skills: r.skills.length, auto: r.auto }]; })
+    .filter(([, v]) => (v as { skills: number }).skills > 0)) as Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>>;
 }
 // Skill của plugin bật "dùng trong mọi cuộc trò chuyện".
 export function everywhereSkills(uid: string): Skill[] {
@@ -441,13 +487,33 @@ export { isText };
 export async function ensureDefaultPlugins() {
   const d = init();
   d.exec("CREATE TABLE IF NOT EXISTS plugin_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-  if (d.prepare("SELECT 1 FROM plugin_meta WHERE key = 'defaults'").get()) return;
   const { PLUGIN_DIR } = await import("./plugindir");
-  let ok = true;
-  for (const def of PLUGIN_DIR.filter((p) => p.category === "studio")) {
-    if (d.prepare("SELECT 1 FROM plugins WHERE owner = 'org' AND catalog_id = ?").get(def.catalogId)) continue;
-    try { await installPlugin("org", def); console.log(`[plugins] đã cài sẵn ${def.name}`); }
-    catch (e) { ok = false; console.error(`[plugins] chưa cài được ${def.name}:`, (e as Error).message); }
+  const studios = PLUGIN_DIR.filter((p) => p.category === "studio");
+  if (!d.prepare("SELECT 1 FROM plugin_meta WHERE key = 'defaults'").get()) {
+    let ok = true;
+    for (const def of studios) {
+      if (d.prepare("SELECT 1 FROM plugins WHERE owner = 'org' AND catalog_id = ?").get(def.catalogId)) continue;
+      try { await installPlugin("org", def); console.log(`[plugins] đã cài sẵn ${def.name}`); }
+      catch (e) { ok = false; console.error(`[plugins] chưa cài được ${def.name}:`, (e as Error).message); }
+    }
+    if (ok) d.prepare("INSERT OR REPLACE INTO plugin_meta (key, value) VALUES ('defaults', ?)").run(String(Date.now()));
   }
-  if (ok) d.prepare("INSERT OR REPLACE INTO plugin_meta (key, value) VALUES ('defaults', ?)").run(String(Date.now()));
+  await syncStudioCatalog();
+}
+export async function syncStudioCatalog() {
+  const d = init();
+  const { PLUGIN_DIR } = await import("./plugindir");
+  const studios = PLUGIN_DIR.filter((p) => p.category === "studio");
+  // Danh mục studio có thêm skill (vd. sau một lượt rà các repo): cập nhật plugin studio đã cài của tổ chức theo nguồn mới, giữ studio,
+  // lựa chọn bật / tắt từng skill và skill tải lên. Chỉ khi nguồn đã cài khác danh mục; quản trị viên đã gỡ thì thôi; lỗi mạng thì thử lại lần sau.
+  for (const def of studios) {
+    const row = d.prepare("SELECT * FROM plugins WHERE owner = 'org' AND catalog_id = ?").get(def.catalogId) as Row | undefined;
+    if (!row || row.sources === JSON.stringify(def.sources)) continue;
+    try {
+      const uploads = uploadsOf(row.id);
+      await installPlugin("org", { ...def, studio: (row.studio as Studio) ?? null, everywhere: !!row.everywhere });
+      restoreUploads(row.id, uploads, "org");
+      console.log(`[plugins] đã cập nhật ${def.name} theo danh mục mới`);
+    } catch (e) { console.error(`[plugins] chưa cập nhật được ${def.name}:`, (e as Error).message); }
+  }
 }

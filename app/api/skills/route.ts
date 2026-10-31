@@ -1,12 +1,16 @@
-import { listSkills, previewSkill, publicSkill, saveSkill, skillErr, SkillError } from "../../skillstore";
+import { ensureStudioTags, listSkills, previewSkill, publicSkill, saveSkill, skillErr, SkillError } from "../../skillstore";
 import { current, featureGate } from "../../authstore";
+import { refining } from "../../skillstudio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const denied = featureGate(req, "skills"); if (denied) return denied;
-  return Response.json({ skills: (await listSkills(current(req)!.user.id)).map(publicSkill) });
+  const uid = current(req)!.user.id;
+  // Skill chưa được xếp vào Tài liệu / Trình bày / Thiết kế (hoặc model chưa xếp lại): xếp ngay, model của người dùng xếp lại ở nền.
+  ensureStudioTags(uid);
+  return Response.json({ skills: (await listSkills(uid)).map(publicSkill), refining: refining() });
 }
 
 // multipart: file (.zip hoặc SKILL.md); dry=1 chỉ kiểm tra + xem trước, không lưu; pick = thư mục skill khi gói có nhiều skill.
