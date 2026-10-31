@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 
 export function Confirm({ title, text, ok, onCancel, onOk }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void }) {
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+    <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal sm" style={{ width: 420 }}>
         <h2 style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
         <p style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>

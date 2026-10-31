@@ -44,6 +44,8 @@ export function db() {
   const sk = new Set((d.prepare("PRAGMA table_info(skills)").all() as { name: string }[]).map((c) => c.name));
   if (!sk.has("use_count")) d.exec("ALTER TABLE skills ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
   if (!sk.has("last_used_at")) d.exec("ALTER TABLE skills ADD COLUMN last_used_at INTEGER");
+  // Link repo đã dùng để thêm skill (khóa so trùng của plugins.linkKey): không cho thêm lại cùng một link.
+  if (!sk.has("source")) d.exec("ALTER TABLE skills ADD COLUMN source TEXT");
   return (g.__synchroDb = d);
 }
 

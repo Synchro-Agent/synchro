@@ -1,4 +1,5 @@
-import { fetchGithubSkill, LIMITS, NoSkillError, parseEntries, type Parsed, previewParsed, previewSkill, publicSkill, saveParsed, saveSkill, skillErr } from "../../../skillstore";
+import { fetchGithubSkill, getSkill, LIMITS, NoSkillError, parseEntries, type Parsed, previewParsed, previewSkill, publicSkill, saveParsed, saveSkill, setSkillSource, skillErr } from "../../../skillstore";
+import { findLinkDup, linkDupMessage, linkKey, type LinkDup } from "../../../plugins";
 import { fetchGitRepo, RepoError } from "../../../repofetch";
 import { GEN, readRepo, skillFromRepo } from "../../../skillgen";
 import { current, featureGate, limit } from "../../../authstore";
@@ -20,6 +21,8 @@ function sweep() {
   while (jobs.size > 8) { const k = [...jobs.keys()].find((x) => !jobs.get(x)!.running); if (!k) break; jobs.delete(k); }
 }
 
+const dupRes = (d: LinkDup) => Response.json({ error: linkDupMessage(d), duplicate: d }, { status: 409 });
+
 // { url, pick?, dry? }: nhập skill từ link repo git công khai (GitHub, GitLab, Bitbucket, Codeberg / Gitea, máy chủ git riêng…):
 // repo, thư mục hoặc file SKILL.md. Repo / thư mục không có SKILL.md: tạo skill từ toàn bộ nội dung repo.
 export async function POST(req: Request) {
@@ -28,6 +31,10 @@ export async function POST(req: Request) {
   try {
     const { url, pick, dry } = await req.json();
     const raw = String(url ?? "");
+    // Link đã dùng để thêm skill (của chính mình, hoặc thư viện cho mọi người): báo trùng, không thêm lại.
+    const dup = findLinkDup(uid, raw);
+    if (dup) return dupRes(dup);
+    const source = linkKey(raw);
     sweep();
     const want = typeof pick === "string" ? pick : undefined;
     const key0 = `${uid}|${raw.trim()}|${want ?? ""}`;
@@ -37,7 +44,7 @@ export async function POST(req: Request) {
       if (done.error) { jobs.delete(key0); return Response.json({ error: done.error }, { status: done.status ?? 400 }); }
       if (dry) return Response.json({ preview: { ...(await previewParsed(uid, done.p!)), generated: true } });
       jobs.delete(key0);
-      const { skill, created } = await saveParsed(uid, done.p!);
+      const { skill, created } = await saveParsed(uid, done.p!, true, source);
       return Response.json({ skill: publicSkill(skill), created, warnings: skill.warnings });
     }
     limit("gh-import:" + uid, 40, 3600_000);
@@ -47,8 +54,14 @@ export async function POST(req: Request) {
       : await fetchGitRepo(raw).then((x) => ({ filename: x.filename, buf: x.buf, pick: want ?? (x.sub || undefined), source: x.source, sub: x.sub }));
     const opts = { pick: src.pick, maxZip: gh ? LIMITS.githubZip : 130 * 1024 * 1024 };
     try {
-      if (dry) return Response.json({ preview: { ...(await previewSkill(uid, src.filename, src.buf, opts)), source: src.source, pick: src.pick } });
-      const { skill, created } = await saveSkill(uid, src.filename, src.buf, opts);
+      if (dry) {
+        const pv = await previewSkill(uid, src.filename, src.buf, opts);
+        // Skill thêm trước khi Synchro lưu link: nội dung SKILL.md giống hệt bản đang có nghĩa là cùng một link → ghi lại link, báo trùng.
+        const cur = pv.exists && source ? await getSkill(uid, pv.name) : null;
+        if (cur && !cur.source && cur.body === pv.body) { setSkillSource(cur.id, source!); return dupRes({ name: cur.name, where: "skill" }); }
+        return Response.json({ preview: { ...pv, source: src.source, pick: src.pick } });
+      }
+      const { skill, created } = await saveSkill(uid, src.filename, src.buf, { ...opts, source });
       return Response.json({ skill: publicSkill(skill), created, warnings: skill.warnings });
     } catch (e) { if (!(e instanceof NoSkillError)) throw e; }
     // Không có SKILL.md: đọc toàn bộ repo (hoặc thư mục trong link) ở nền rồi tự viết skill.

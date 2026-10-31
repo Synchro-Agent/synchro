@@ -49,6 +49,8 @@ export type Skill = {
   id: string; user_id: string; name: string; description: string; body: string; storage_path: string;
   enabled: boolean; version: number; versions: number[]; created_at: string; updated_at: string;
   files: SkillFile[]; warnings: string[]; projects: string[]; use_count: number; last_used_at: string | null;
+  /** Link repo đã dùng để thêm skill (khóa so trùng, plugins.linkKey), hoặc null (tải lên, Synchro viết…). */
+  source: string | null;
 };
 // Gói chứa nhiều skill: trả về danh sách để người dùng chọn (dir dùng làm `pick` khi gửi lại).
 export type SkillChoice = { dir: string; name: string; description: string; error?: string; exists: boolean };
@@ -65,7 +67,7 @@ export class MultiSkillError extends SkillError { constructor(public choices: Sk
 const fail = (m: string, status = 400): never => { const e = new SkillError(m); e.status = status; throw e; };
 
 // ---------------------------------------------------------------- đọc từ DB
-type Row = { id: string; user_id: string; name: string; description: string; body: string; storage_path: string; enabled: number; version: number; versions: string; warnings: string; created_at: number; updated_at: number; use_count: number | null; last_used_at: number | null };
+type Row = { id: string; user_id: string; name: string; description: string; body: string; storage_path: string; enabled: number; version: number; versions: string; warnings: string; created_at: number; updated_at: number; use_count: number | null; last_used_at: number | null; source: string | null };
 // Ghi chú về script tính theo máy chủ lúc đọc (không lưu cố định lúc tải lên): có nơi chạy code thì không cần ghi chú gì.
 // Bỏ ghi chú cũ đã lưu ở các bản trước (nhắc tới quyền Sandbox theo tài khoản, không còn đúng).
 function scriptNote(files: SkillFile[], stored: string[]): string[] {
@@ -80,7 +82,7 @@ function hydrate(r: Row): Skill {
     id: r.id, user_id: r.user_id, name: r.name, description: r.description, body: r.body, storage_path: r.storage_path,
     enabled: !!r.enabled, version: r.version, versions: JSON.parse(r.versions), warnings: scriptNote(files, JSON.parse(r.warnings)),
     created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString(), files, projects,
-    use_count: r.use_count ?? 0, last_used_at: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
+    use_count: r.use_count ?? 0, last_used_at: r.last_used_at ? new Date(r.last_used_at).toISOString() : null, source: r.source ?? null,
   };
 }
 
@@ -91,6 +93,8 @@ export const enabledSkillsByIds = (uid: string, ids: string[]): Skill[] => {
   return ids.map((id) => st.get(uid, id) as Row | undefined).filter((r): r is Row => !!r).map(hydrate);
 };
 export const listSkills = async (uid: string) => (db().prepare("SELECT * FROM skills WHERE user_id = ? ORDER BY name").all(uid) as Row[]).map(hydrate);
+/** Ghi link nguồn cho skill tạo trước khi Synchro lưu link (nhận ra qua nội dung SKILL.md giống hệt). */
+export const setSkillSource = (id: string, source: string) => db().prepare("UPDATE skills SET source = ? WHERE id = ? AND source IS NULL").run(source, id);
 export const getSkill = async (uid: string, name: string) => {
   const r = db().prepare("SELECT * FROM skills WHERE user_id = ? AND name = ?").get(uid, name) as Row | undefined;
   return r ? hydrate(r) : null;
@@ -306,20 +310,21 @@ const locked = <T>(uid: string, fn: () => Promise<T>): Promise<T> => {
   return r;
 };
 
-export function saveSkill(uid: string, filename: string, buf: Buffer, opts: UpOpts & { enabled?: boolean } = {}): Promise<{ skill: Skill; created: boolean }> {
+/** source: khóa link repo của skill (thêm từ link) để lần sau không thêm trùng. */
+export function saveSkill(uid: string, filename: string, buf: Buffer, opts: UpOpts & { enabled?: boolean; source?: string | null } = {}): Promise<{ skill: Skill; created: boolean }> {
   rate(uid);
-  return locked(uid, async () => storeParsed(uid, await parseUpload(filename, buf, { ...opts, uid }), opts.enabled ?? true));
+  return locked(uid, async () => storeParsed(uid, await parseUpload(filename, buf, { ...opts, uid }), opts.enabled ?? true, opts.source));
 }
 /** Xem trước / lưu skill đã tách thành danh sách tệp (có SKILL.md ở gốc) — skill Synchro tự viết từ repo không có SKILL.md. */
 export async function previewParsed(uid: string, p: Parsed): Promise<Preview> {
   const cur = await getSkill(uid, p.name);
   return { name: p.name, description: p.description, body: p.body, files: p.files, warnings: p.warnings, tokens: p.tokens, exists: !!cur, version: (cur?.version ?? 0) + 1 };
 }
-export function saveParsed(uid: string, p: Parsed, enabled = true): Promise<{ skill: Skill; created: boolean }> {
+export function saveParsed(uid: string, p: Parsed, enabled = true, source?: string | null): Promise<{ skill: Skill; created: boolean }> {
   rate(uid);
-  return locked(uid, () => storeParsed(uid, p, enabled));
+  return locked(uid, () => storeParsed(uid, p, enabled, source));
 }
-async function storeParsed(uid: string, p: Parsed, enabled: boolean): Promise<{ skill: Skill; created: boolean }> {
+async function storeParsed(uid: string, p: Parsed, enabled: boolean, source?: string | null): Promise<{ skill: Skill; created: boolean }> {
   const cur = await getSkill(uid, p.name);
   const count = (db().prepare("SELECT COUNT(*) n FROM skills WHERE user_id = ?").get(uid) as { n: number }).n;
   if (!cur && count >= LIMITS.skills) fail(`Đã đạt giới hạn ${LIMITS.skills} skill cho mỗi tài khoản`);
@@ -341,12 +346,12 @@ async function storeParsed(uid: string, p: Parsed, enabled: boolean): Promise<{ 
   db().transaction(() => {
     if (cur) {
       // Phiên bản mới thay bản hiện hành; file của bản cũ vẫn nằm trên đĩa.
-      db().prepare("UPDATE skills SET description = ?, body = ?, storage_path = ?, version = ?, versions = ?, warnings = ?, updated_at = ? WHERE id = ?")
-        .run(p.description, p.body, rel, version, versions, JSON.stringify(p.warnings), now, id);
+      db().prepare("UPDATE skills SET description = ?, body = ?, storage_path = ?, version = ?, versions = ?, warnings = ?, source = COALESCE(?, source), updated_at = ? WHERE id = ?")
+        .run(p.description, p.body, rel, version, versions, JSON.stringify(p.warnings), source ?? null, now, id);
       db().prepare("DELETE FROM skill_files WHERE skill_id = ?").run(id);
     } else {
-      db().prepare("INSERT INTO skills (id, user_id, name, description, body, storage_path, enabled, version, versions, warnings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(id, uid, p.name, p.description, p.body, rel, enabled ? 1 : 0, version, versions, JSON.stringify(p.warnings), now, now);
+      db().prepare("INSERT INTO skills (id, user_id, name, description, body, storage_path, enabled, version, versions, warnings, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(id, uid, p.name, p.description, p.body, rel, enabled ? 1 : 0, version, versions, JSON.stringify(p.warnings), source ?? null, now, now);
     }
     const ins = db().prepare("INSERT INTO skill_files (skill_id, path, size, mime_type, kind) VALUES (?, ?, ?, ?, ?)");
     for (const f of p.files) ins.run(id, f.path, f.size, f.mime_type, f.kind);
@@ -459,7 +464,7 @@ export async function readSkillRaw(s: Skill, p: string): Promise<Buffer> {
   return fs.readFile(path.join(ROOT, s.storage_path, p));
 }
 
-export const publicSkill = (s: Skill) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled, studio: getTag(userKey(s.id)), version: s.version, versions: s.versions, created_at: s.created_at, updated_at: s.updated_at, fileCount: s.files.length, warnings: s.warnings, projects: s.projects, useCount: s.use_count, lastUsed: s.last_used_at, scripts: s.files.filter((f) => f.kind === "script").length });
+export const publicSkill = (s: Skill) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled, source: s.source, studio: getTag(userKey(s.id)), version: s.version, versions: s.versions, created_at: s.created_at, updated_at: s.updated_at, fileCount: s.files.length, warnings: s.warnings, projects: s.projects, useCount: s.use_count, lastUsed: s.last_used_at, scripts: s.files.filter((f) => f.kind === "script").length });
 
 // ---------------------------------------------------------------- nhập từ GitHub
 // Nhận link github.com/<owner>/<repo>[/tree|blob/<ref>/<path>] của repo công khai. Chỉ tải từ codeload.github.com

@@ -41,6 +41,60 @@ function init() {
   return d;
 }
 
+// ---------------------------------------------------------------- chặn thêm skill trùng link
+/**
+ * Khóa so trùng của một link repo: cùng một link (cả repo, hoặc cùng thư mục skill trong repo) thì cùng khóa, bất kể cách viết:
+ * bỏ https / www / .git / dấu "/" cuối / ?… #…, không phân biệt hoa thường ở tên miền, chủ sở hữu và repo, bỏ tên nhánh
+ * (…/tree/main/x và …/tree/master/x là cùng một thư mục), link tới tệp SKILL.md tính như link thư mục chứa nó,
+ * raw.githubusercontent.com tính như github.com. Link không đọc được thì null.
+ */
+export function linkKey(raw: string): string | null {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol)) return null;
+  let host = u.host.toLowerCase().replace(/^www\./, "");
+  let segs = u.pathname.split("/").filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+  let base: string[], rest: string[];
+  if (host === "raw.githubusercontent.com") { host = "github.com"; base = segs.slice(0, 2); rest = segs.slice(3); }
+  else if (host === "github.com") { base = segs.slice(0, 2); rest = segs[2] === "tree" || segs[2] === "blob" ? segs.slice(4) : []; }
+  else {
+    // GitLab: <nhóm>/<repo>/-/tree|blob/<nhánh>/<thư mục>; Gitea / Codeberg: <chủ>/<repo>/src/branch|tag|commit/<nhánh>/…; Bitbucket: …/src/<nhánh>/….
+    const dash = segs.indexOf("-"), src = segs.indexOf("src");
+    if (dash > 0) { base = segs.slice(0, dash); rest = /^(tree|blob)$/.test(segs[dash + 1] ?? "") ? segs.slice(dash + 3) : []; }
+    else if (src >= 2) { base = segs.slice(0, src); rest = segs.slice(src + (/^(branch|tag|commit)$/.test(segs[src + 1] ?? "") ? 3 : 2)); }
+    else { base = segs; rest = []; }
+  }
+  if (!base.length || !host) return null;
+  base = base.map((x, i) => (i === base.length - 1 ? x.replace(/\.git$/i, "") : x).toLowerCase());
+  if (/^SKILL\.md$/i.test(rest[rest.length - 1] ?? "")) rest = rest.slice(0, -1);
+  return [host, ...base, ...rest].join("/");
+}
+/** Khóa so trùng của một nguồn thư viện (cả repo hoặc một thư mục); nguồn chỉ lấy vài skill chọn lọc (include) không tính là cả link. */
+const sourceKey = (s: Source) => (s.include?.length ? null : linkKey(`https://github.com/${s.repo}${s.path ? `/tree/${s.ref ?? "HEAD"}/${s.path}` : ""}`));
+export type LinkDup = { name: string; where: "skill" | "personal" | "org" };
+/**
+ * Link đã được dùng để thêm skill trước đây chưa: trong Skill của bạn, Thư viện của bạn, hoặc Thư viện cho mọi người (quản trị viên thêm).
+ * Áp cho mọi tài khoản: quản trị viên so với skill riêng của mình và thư viện cho mọi người; tài khoản thường so với skill / thư viện
+ * của chính mình và thư viện cho mọi người. Chỉ trùng nguyên link mới tính (thư mục khác trong cùng repo là skill khác).
+ */
+export function findLinkDup(uid: string, raw: string): LinkDup | null {
+  const key = linkKey(raw);
+  if (!key) return null;
+  const d = init();
+  const sk = d.prepare("SELECT name FROM skills WHERE user_id = ? AND source = ?").get(uid, key) as { name: string } | undefined;
+  if (sk) return { name: sk.name, where: "skill" };
+  for (const p of d.prepare("SELECT name, owner, sources, homepage FROM plugins WHERE owner = ? OR owner = 'org' ORDER BY owner = 'org' DESC").all(uid) as { name: string; owner: string; sources: string; homepage: string | null }[]) {
+    const srcs = JSON.parse(p.sources) as Source[];
+    // Skill lẻ đưa vào thư viện cho mọi người (không theo dõi repo): link gốc lưu ở homepage.
+    const keys = srcs.length ? srcs.map(sourceKey) : [p.homepage ? linkKey(p.homepage) : null];
+    if (keys.includes(key)) return { name: p.name, where: p.owner === "org" ? "org" : "personal" };
+  }
+  return null;
+}
+const WHERE: Record<LinkDup["where"], string> = { skill: "Skill của bạn", personal: "Thư viện của bạn", org: "Thư viện cho mọi người" };
+/** Thông báo khi link đã được thêm (giao diện hiện nguyên câu này). */
+export const linkDupMessage = (d: LinkDup) => `Skill từ link này đã có: "${d.name}" trong ${WHERE[d.where]}. Synchro không thêm skill trùng.`;
+
 // ---------------------------------------------------------------- tải repo GitHub
 const SEG = /^[A-Za-z0-9._-]{1,100}$/;
 export function parseRepo(raw: string): Source {
@@ -429,7 +483,7 @@ export function setPref(uid: string, id: string, p: { enabled?: boolean; everywh
 // ---------------------------------------------------------------- dùng trong chat
 const toSkill = (s: SRow, plugin: string): Skill => ({
   id: s.id, user_id: plugin, name: s.name, description: s.description, body: s.body, storage_path: s.storage_path, enabled: true, version: 1, versions: [1],
-  created_at: "", updated_at: "", files: JSON.parse(s.files), warnings: [], projects: [], use_count: s.use_count, last_used_at: null,
+  created_at: "", updated_at: "", files: JSON.parse(s.files), warnings: [], projects: [], use_count: s.use_count, last_used_at: null, source: null,
 });
 function active(uid: string) {
   return listPlugins(uid).filter((p) => p.enabled && p.mine.enabled);

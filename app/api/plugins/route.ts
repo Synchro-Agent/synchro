@@ -1,5 +1,5 @@
 import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../authstore";
-import { installPlugin, listPlugins, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
+import { findLinkDup, installPlugin, linkDupMessage, listPlugins, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
 import { PLUGIN_DIR } from "../../plugindir";
 
 export const runtime = "nodejs";
@@ -27,6 +27,9 @@ export const POST = handle(async (req: Request) => {
   try {
     if (typeof b.catalogId === "string") def = PLUGIN_DIR.find((p) => p.catalogId === b.catalogId);
     else if (typeof b.url === "string") {
+      // Link đã dùng để thêm skill / thư viện (của chính mình, hoặc thư viện cho mọi người): báo trùng, không cài lại.
+      const dup = findLinkDup(user.id, b.url);
+      if (dup) return Response.json({ error: linkDupMessage(dup), duplicate: dup }, { status: 409 });
       const src = parseRepo(b.url);
       const repo = src.repo.split("/")[1];
       const slug = (src.path ? `${repo}-${src.path.split("/").pop()}` : repo).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "plugin";

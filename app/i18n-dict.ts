@@ -857,6 +857,7 @@ RULES_EN.push(
   [/^Khóa API bị từ chối \((\d+)\): ([\s\S]+)$/, (m) => `API key rejected (${m[1]}): ${m[2]}`],
   [/^Không tìm thấy model hoặc địa chỉ API \(404\): ([\s\S]+)$/, (m) => `Model or API address not found (404): ${m[1]}`],
   [/^Nhà cung cấp đang giới hạn lượt gọi hoặc hết hạn mức \(429\): ([\s\S]+)$/, (m) => `The provider is rate-limiting requests or the quota has run out (429): ${m[1]}`],
+  [/^Skill từ link này đã có: "(.+)" trong (Skill của bạn|Thư viện của bạn|Thư viện cho mọi người)\. Synchro không thêm skill trùng\.$/, (m) => `A skill from this link already exists: "${m[1]}" in ${({ "Skill của bạn": "Your skills", "Thư viện của bạn": "Your libraries", "Thư viện cho mọi người": "Libraries for everyone" } as Record<string, string>)[m[2]]}. Synchro doesn't add duplicate skills.`],
   [/^Khóa API đã hết số dư, cần nạp thêm ở trang của nhà cung cấp \(402\): ([\s\S]+)$/, (m) => `The API key is out of balance. Top it up on the provider's site (402): ${m[1]}`],
   [/^Không kết nối được tới (\S+): ([\s\S]+)$/, (m) => `Couldn't connect to ${m[1]}: ${m[2]}`],
   [/^Lỗi (\d+): ([\s\S]+)$/, (m) => `Error ${m[1]}: ${m[2]}`],

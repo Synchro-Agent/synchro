@@ -52,7 +52,8 @@ const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a
 const pdfBuf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"), P = `application/pdf ${pdfBuf.length}B`;
 const media = (text) => [{ role: "user", content: [{ type: "text", text }, { type: "image", media_type: "image/png", data: png }, { type: "document", media_type: "application/pdf", data: pdfBuf.toString("base64"), name: "đề bài.pdf", fallbackText: "Câu 1: chọn đáp án đúng" }] }];
 
-// Bắt đầu sạch: hiện mọi model ở màn hình chính, đăng xuất gói Grok.
+// Bắt đầu sạch: hiện mọi model ở màn hình chính (trả lại như cũ khi xong), đăng xuất gói Grok.
+const mainBefore = (await api("GET", "/api/admin/apikeys")).j?.main ?? ["*"];
 await api("POST", "/api/admin/apikeys", { action: "main", main: ["*"] });
 await api("POST", "/api/engines/grok/logout");
 
@@ -226,5 +227,6 @@ console.log("8. Chế độ Tự động, bộ não, đăng xuất");
   ok(no.s === 409 && /Providers/.test(no.j?.error ?? ""), "chưa đăng nhập gói Grok → 409, nhắc vào Providers", no.j);
 }
 
+await api("POST", "/api/admin/apikeys", { action: "main", main: mainBefore });
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
