@@ -188,7 +188,7 @@ export function BrowserHub({ ticket, synchro, prefer, visible, say, onClose, onE
           </button>
         </div>
         <div className="bh-acts">
-          {onExpand && <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} data-tip={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>}
+          {onExpand && <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} data-tip={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.M icon="Collapse" size={15} /> : <I.M icon="Expand" size={15} />}</button>}
           {onClose && <button className="icon-btn" onClick={onClose} aria-label="Đóng trình duyệt" data-tip="Đóng"><I.X size={15} /></button>}
         </div>
       </div>

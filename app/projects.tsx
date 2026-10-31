@@ -67,24 +67,13 @@ function useAway(close: () => void) {
   return ref;
 }
 
-const Archive = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2.8" y="3.8" width="14.4" height="3.6" rx="1" /><path d="M4 7.4V15a1.4 1.4 0 001.4 1.4h9.2A1.4 1.4 0 0016 15V7.4M8 10.6h4" /></svg>
-);
-const Github = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.8a8.2 8.2 0 00-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-1-.9-1.2-.9-1.2-.8-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.300 1.900.9 2.300.7.1-.5.3-.9.5-1.100-1.800-.2-3.700-.9-3.700-4 0-.9.3-1.600.9-2.200-.1-.2-.4-1 .1-2.100 0 0 .7-.2 2.200.8a7.600 7.600 0 014 0c1.500-1 2.200-.8 2.200-.8.4 1.100.2 1.900.1 2.100.5.6.9 1.300.9 2.200 0 3.100-1.900 3.800-3.700 4 .3.3.6.8.6 1.500v2.200c0 .2.2.5.6.4A8.200 8.200 0 0010 1.800z" /></svg>
-);
-const TextIn = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5.5" width="15" height="9" rx="1.8" /><path d="M6 8.5h3.5M6 11.5h6" /></svg>
-);
-const Clipx = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M16 9.4l-5.6 5.6a3.6 3.6 0 01-5.100-5.100l6-6a2.400 2.400 0 013.400 3.400l-6 6a1.200 1.200 0 01-1.700-1.700l5.400-5.400" /></svg>
-);
-const Bubble = ({ size = 22 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.500c-4.700 0-8.500 3.200-8.500 7.200 0 1.800.8 3.400 2.100 4.700L4.800 20l4.200-1.800c1 .3 2 .4 3 .4 4.700 0 8.500-3.200 8.500-7.200S16.700 3.500 12 3.500z" /><path d="M8.500 10.800h.01M12 10.800h.01M15.500 10.800h.01" strokeWidth="2" /></svg>
-);
-const Lock = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4.500" y="9" width="11" height="7.500" rx="1.800" /><path d="M7 9V6.800a3 3 0 016 0V9" /></svg>
-);
+// Icon riêng của Dự án: Phosphor như phần còn lại của app (app/icons.tsx).
+const Archive = ({ size = 18 }: { size?: number }) => <I.Archive size={size} />;
+const Github = ({ size = 18 }: { size?: number }) => <I.GitHub size={size} />;
+const TextIn = ({ size = 18 }: { size?: number }) => <I.TextIn size={size} />;
+const Clipx = ({ size = 18 }: { size?: number }) => <I.Clip size={size} />;
+const Bubble = ({ size = 22 }: { size?: number }) => <I.Chat2 size={size} />;
+const Lock = ({ size = 14 }: { size?: number }) => <I.Lock size={size} />;
 
 export function EmptyArt() {
   return (
@@ -104,7 +93,7 @@ export function ProjMenu({ p, open, style, pin, onPin, onEdit, onArchive, onDele
 }) {
   return (
     <Menu open={open} className="down" style={{ width: 250, ...style }}>
-      {pin && <button className="menu-item" onClick={onPin}>{p.pinned ? <I.PinOff /> : <I.Pin />}{p.pinned ? "Bỏ ghim" : "Ghim"}</button>}
+      {pin && <button className="menu-item" onClick={onPin}>{p.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{p.pinned ? "Bỏ ghim" : "Ghim"}</button>}
       <button className="menu-item" onClick={onEdit}><I.Pencil />Chỉnh sửa thông tin chi tiết</button>
       <hr />
       <button className="menu-item" onClick={onArchive}><Archive />{p.archived ? "Bỏ lưu trữ" : "Lưu trữ"}</button>
@@ -299,7 +288,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
       <div className="pj-title">
         <h1>{proj.name}</h1>
         <div className="pj-tools">
-          <button className={`icon-btn pj-pinbtn ${proj.pinned ? "on" : ""}`} data-tip={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} aria-label={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} onClick={() => { patch(proj.id, { pinned: !proj.pinned }); say(proj.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}>{proj.pinned ? <I.PinOff /> : <I.Pin />}</button>
+          <button className={`icon-btn pj-pinbtn ${proj.pinned ? "on" : ""}`} data-tip={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} aria-label={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} onClick={() => { patch(proj.id, { pinned: !proj.pinned }); say(proj.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}>{proj.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}</button>
           <div ref={mRef} style={{ position: "relative" }}>
             <button className="icon-btn" aria-label="Tùy chọn" onClick={() => setMenu(!menu)}>⋮</button>
             <ProjMenu p={proj} open={menu} style={{ top: 38, right: 0 }} onPin={() => {}}
@@ -321,7 +310,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
         </div>
         <aside className="pj-side">
           <section>
-            <div className="pj-sh"><h3>Hướng dẫn</h3><button className="icon-btn" aria-label={proj.ins ? "Chỉnh sửa hướng dẫn" : "Đặt hướng dẫn"} onClick={() => setIns(true)}>{proj.ins ? <I.Pencil size={16} /> : <I.Plus size={16} />}</button></div>
+            <div className="pj-sh"><h3>Hướng dẫn</h3><button className="icon-btn" aria-label={proj.ins ? "Chỉnh sửa hướng dẫn" : "Đặt hướng dẫn"} onClick={() => setIns(true)}>{proj.ins ? <I.M icon="Pencil" size={16} /> : <I.M icon="Plus" size={16} />}</button></div>
             <p className={`pj-ins ${proj.ins ? "" : "muted"}`}>{proj.ins || "Thêm hướng dẫn để điều chỉnh câu trả lời của Synchro"}</p>
           </section>
           <section>
@@ -354,7 +343,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
             {ctx.length > 0 && (
               <div className="pj-usage">
                 <div className="pj-bar"><i style={{ width: `${Math.max(pct, 1.5)}%` }} /></div>
-                <div className="pj-usage-t"><span>Đã dùng {pct}% dung lượng dự án</span><span className="pj-info" data-tip="Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat" tabIndex={0}><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><circle cx="10" cy="10" r="7.500" /><path d="M10 9v4.500M10 6.600v.01" /></svg></span></div>
+                <div className="pj-usage-t"><span>Đã dùng {pct}% dung lượng dự án</span><span className="pj-info" data-tip="Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat" tabIndex={0}><I.InfoCircle size={16} /></span></div>
               </div>
             )}
             {sel.size > 0 && (

@@ -126,7 +126,7 @@ export function CommentsPanel({ app, me, owner, comments, setComments, onClose, 
         <div className="cl-c-h"><b data-notr>{c.user.name}</b><span>{ago(c.at)}</span>
           {(c.user.id === me || owner) && (
             <span className="cl-c-a">
-              <button className="icon-btn" onClick={() => act(c, c.resolved ? "reopen" : "resolve")} aria-label={c.resolved ? "Mở lại" : "Đánh dấu đã xử lý"} title={c.resolved ? "Mở lại" : "Đánh dấu đã xử lý"}>{c.resolved ? <I.Retry size={14} /> : <I.Check size={14} />}</button>
+              <button className="icon-btn" onClick={() => act(c, c.resolved ? "reopen" : "resolve")} aria-label={c.resolved ? "Mở lại" : "Đánh dấu đã xử lý"} title={c.resolved ? "Mở lại" : "Đánh dấu đã xử lý"}>{c.resolved ? <I.M icon="Retry" size={14} /> : <I.M icon="Check" size={14} />}</button>
               <button className="icon-btn" onClick={() => act(c, "delete")} aria-label="Xóa bình luận" title="Xóa bình luận"><I.Trash size={14} /></button>
             </span>
           )}

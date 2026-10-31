@@ -37,7 +37,7 @@ const DOING: Record<string, string> = {
 };
 const desc = (t: ToolStep) => (typeof t.input.description === "string" && t.input.description.trim() ? t.input.description.trim() : "");
 const RUNNING: Record<string, string> = { bash: "Đang chạy lệnh…", write_file: "Đang ghi file…", edit_file: "Đang sửa file…", browser_navigate: "Đang mở trang…", browser_screenshot: "Đang chụp màn hình…" };
-const iconOf = (n: string) => (n === "bash" ? <I.Terminal size={14} /> : n.startsWith("browser_") ? <I.Globe size={14} /> : n.endsWith("_file") || n === "list_files" ? <I.File size={14} /> : n === "grep" ? <I.Search size={14} /> : n.includes("skill") ? <I.Scroll size={14} /> : <I.ChevronR size={14} />);
+const iconOf = (n: string) => (n === "bash" ? <I.Terminal size={14} /> : n.startsWith("browser_") ? <I.Globe size={14} /> : n.endsWith("_file") || n === "list_files" ? <I.File size={14} /> : n === "grep" ? <I.Search size={14} /> : n.includes("skill") ? <I.M icon="Scroll" size={14} /> : <I.M icon="ChevronR" size={14} />);
 
 function Diff({ d }: { d?: { add: number; del: number } }) {
   if (!d) return null;
@@ -136,7 +136,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
   const always = a.kind === "site" ? `Luôn cho phép ${a.host ?? "trang này"}` : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này";
   return (
     <div className="ag-ask" role="alertdialog" aria-label={a.title}>
-      <div className="ag-ask-h"><span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.Pencil size={15} /> : <I.Terminal size={15} />}</span>
+      <div className="ag-ask-h"><span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.M icon="Pencil" size={15} /> : <I.M icon="Terminal" size={15} />}</span>
         <div><b>{a.kind === "site" ? "Cho Synchro dùng trình duyệt trên trang này?" : a.kind === "edit" ? "Cho Synchro sửa tệp này?" : "Cho Synchro chạy lệnh này?"}</b><span data-notr>{a.title}</span></div></div>
       {a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
       {note !== null ? (
@@ -228,9 +228,9 @@ export function TaskCard({ plan }: { plan: PlanItem[] }) {
     <ul className="cv-tasks">
       {plan.map((x, i) => (
         <li key={i} className={x.status}>
-          <span className="tk-ic">{x.status === "completed" ? <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <span className="tk-ic">{x.status === "completed" ? <I.CheckCircle size={16} />
             : x.status === "in_progress" ? <Loader size={14} />
-            : <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2.4" /></svg>}</span>
+            : <I.CircleDashed size={16} />}</span>
           <span>{x.content}</span>
         </li>
       ))}

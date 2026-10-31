@@ -148,7 +148,7 @@ function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnT
               <li>
                 <b>Enter this code</b>
                 <span>It expires in 15 minutes. Never share it with anyone.</span>
-                <div className="pv-code"><code data-notr>{login.userCode}</code><button className="icon-btn" aria-label="Copy code" data-tip={copied ? "Copied" : "Copy code"} onClick={() => copy(login.userCode!)}>{copied ? <I.Check size={15} /> : <I.Copy size={15} />}</button></div>
+                <div className="pv-code"><code data-notr>{login.userCode}</code><button className="icon-btn" aria-label="Copy code" data-tip={copied ? "Copied" : "Copy code"} onClick={() => copy(login.userCode!)}>{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button></div>
                 <span className="pv-wait"><span className="api-spin" />Waiting for you to approve…</span>
               </li>
             )}

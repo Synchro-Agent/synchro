@@ -3,21 +3,17 @@
 import { SERVER } from "./config.js";
 import { t } from "./i18n.js";
 import { lockup, mark } from "./brand.js";
+import { PH } from "./phosphor.js";
 
 const $ = (s) => document.querySelector(s);
 const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === "on") for (const [ev, f] of Object.entries(v)) e.addEventListener(ev, f); else if (k.startsWith("aria") || k === "role") e.setAttribute(k.replace(/^aria([A-Z])/, (_, c) => `aria-${c.toLowerCase()}`), v); else if (v !== undefined && v !== false) e[k] = v; } e.append(...kids.flat().filter((x) => x != null && x !== false)); return e; };
-// Biểu tượng nét 24×24 (tô bằng màu chữ), dựng bằng DOM.
-const PATHS = {
-  arrow: "M5 12h14M13 6l6 6-6 6",
-  open: "M7 17 17 7M9 7h8v8",
-  leave: "M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9",
-  tab: "M3 7a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM3 9h18",
-  tabs: "M8 8V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2M3 11a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
-  group: "M4 6h7M4 6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-7l-2-2",
-  alert: "M12 8v5M12 16.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
-  globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3z",
+// Biểu tượng: Phosphor Regular như app (extension/phosphor.js, lưới 256), tô bằng màu chữ, dựng bằng DOM.
+const icon = (n) => {
+  const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
+  s.setAttribute("viewBox", "0 0 256 256"); s.setAttribute("class", "ic"); s.setAttribute("aria-hidden", "true");
+  for (const [tag, attrs] of PH[n] ?? []) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); s.append(e); }
+  return s;
 };
-const icon = (n) => { const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("class", "ic"); s.setAttribute("aria-hidden", "true"); p.setAttribute("d", PATHS[n]); s.append(p); return s; };
 const ask = (m) => chrome.runtime.sendMessage(m);
 // Đang chạy: mark của logo xoay theo nhịp đồng bộ (như loader trong app), thay cho chấm / vòng quay.
 const loader = (px) => mark(px, "mk-load");

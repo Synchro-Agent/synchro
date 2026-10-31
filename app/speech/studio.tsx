@@ -105,7 +105,7 @@ function Dub({ say }: { say: (m: string) => void }) {
         <Select id="db-n" label="Số người nói" value={nsp} options={[["", "Tự động"], ...["1", "2", "3", "4", "5", "6", "8", "10"].map((x) => [x, x] as [string, string])]} onChange={setNsp} inline />
         <Toggle checked={bg} onChange={setBg} label="Giữ nhạc nền và tiếng động" />
         {clean ? <Toggle checked={wm} onChange={setWm} label="Gắn watermark" /> : <p className="sp-note">Gói {plan?.tierName} lồng tiếng có watermark (ElevenLabs bắt buộc). Gói Starter trở lên tắt được.</p>}
-        <button className="sp-fsec-h sp-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}>Tùy chọn nâng cao<span className={`sec-chev ${adv ? "open" : ""}`}>{adv ? <I.Chevron size={14} /> : <I.ChevronR size={14} />}</span></button>
+        <button className="sp-fsec-h sp-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}>Tùy chọn nâng cao<span className={`sec-chev ${adv ? "open" : ""}`}>{adv ? <I.M icon="Chevron" size={14} /> : <I.M icon="ChevronR" size={14} />}</span></button>
         {adv && (
           <>
             <div className="sp-two flat">

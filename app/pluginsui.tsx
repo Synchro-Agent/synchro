@@ -194,7 +194,7 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolea
         <div className="menu pl-menu">
           <button className="menu-item" onClick={() => { setOpen(false); onOpen(); }}><I.Sliders size={15} />Manage</button>
           {manage && <button className="menu-item" onClick={() => { setOpen(false); onAct("check"); }}><I.Retry size={15} />Check for updates</button>}
-          <button className="menu-item" onClick={() => { setOpen(false); onAct("toggle"); }}>{on ? <I.Pause size={15} /> : <I.Play size={15} />}{on ? (p.scope === "org" && !manage ? "Turn off for me" : "Turn off") : "Turn on"}</button>
+          <button className="menu-item" onClick={() => { setOpen(false); onAct("toggle"); }}>{on ? <I.M icon="Pause" size={15} /> : <I.M icon="Play" size={15} />}{on ? (p.scope === "org" && !manage ? "Turn off for me" : "Turn off") : "Turn on"}</button>
           {manage && <><hr /><button className="menu-item del" onClick={() => { setOpen(false); onAct("remove"); }}><I.Trash size={15} />Uninstall</button></>}
         </div>
       )}

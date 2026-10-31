@@ -612,7 +612,7 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
         {(n || missing) && !edit && (
           <div className="bn-tools">
             <button className="btn sm" onClick={() => setEdit(missing ? { title, body: "" } : { title: n!.title, body: n!.generated ? n!.props.userNote ?? "" : n!.body })}><I.Pencil size={13} />{missing ? L("Tạo ghi chú", "Create note") : n!.generated ? L("Ghi chú của bạn", "Your note") : L("Sửa", "Edit")}</button>
-            {n && n.kind !== "rule" && <button className={`icon-btn ${n.props.pinned ? "on" : ""}`} aria-label={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} data-tip={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} onClick={() => void call("PUT", "/api/brain/note", { title: n.title, pinned: !n.props.pinned })}>{n.props.pinned ? <I.PinOff size={15} /> : <I.Pin size={15} />}</button>}
+            {n && n.kind !== "rule" && <button className={`icon-btn ${n.props.pinned ? "on" : ""}`} aria-label={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} data-tip={n.props.pinned ? L("Bỏ ghim", "Unpin") : L("Ghim lên đầu", "Pin to top")} onClick={() => void call("PUT", "/api/brain/note", { title: n.title, pinned: !n.props.pinned })}>{n.props.pinned ? <I.M icon="PinOff" size={15} /> : <I.M icon="Pin" size={15} />}</button>}
             {n && (
               <div className="bn-more-w" ref={moreRef}>
                 <button className={`icon-btn ${more ? "on" : ""}`} aria-label={L("Thêm thao tác", "More actions")} aria-expanded={more} onClick={() => setMore(!more)}><I.Dots size={15} /></button>

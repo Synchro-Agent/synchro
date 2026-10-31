@@ -85,8 +85,7 @@ export function FilePanel({ file, onClose, expanded, setExpanded, say, switcher 
         <div className="art-acts">
           <a className="btn fp-dl" href={url(file)} download={file.name} onClick={() => say(`${tr("Đã tải")} ${file.name}`)}><I.Download size={15} />{tr("Tải về")}</a>
           <button className="icon-btn" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "Thu nhỏ" : "Toàn màn hình"} data-tip={expanded ? "Thu nhỏ" : "Toàn màn hình"}>
-            {expanded ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" /></svg>
-              : <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" /></svg>}
+            <I.M icon={expanded ? "Collapse" : "Expand"} size={15} />
           </button>
           <button className="icon-btn" onClick={onClose} aria-label="Đóng" data-tip="Đóng"><I.X size={16} /></button>
         </div>
@@ -118,7 +117,7 @@ export function ProductSwitcher({ items, active }: { items: Product[]; active: s
   return (
     <div className="prod-sw" ref={ref}>
       <button className="icon-btn prod-sw-b" onClick={() => setOpen(!open)} aria-label="Sản phẩm của đoạn chat" data-tip="Sản phẩm của đoạn chat" aria-expanded={open}>
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="5" height="5" rx="1.2" /><rect x="9" y="2" width="5" height="5" rx="1.2" /><rect x="2" y="9" width="5" height="5" rx="1.2" /><rect x="9" y="9" width="5" height="5" rx="1.2" /></svg>
+        <I.SquaresFour size={15} />
         <span>{items.length}</span>
       </button>
       <Menu open={open} className="prod-menu">

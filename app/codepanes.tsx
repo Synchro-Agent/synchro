@@ -483,7 +483,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         </div>
         <div className="bp-acts" ref={menuRef}>
           <button className={`icon-btn ${menu ? "on" : ""}`} onClick={() => setMenu(!menu)} aria-label="Tùy chọn trình duyệt" title="Tùy chọn"><I.Dots size={16} /></button>
-          {onExpand && <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} title={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>}
+          {onExpand && <button className="icon-btn" onClick={onExpand} aria-label={expanded ? "Thu nhỏ" : "Phóng to"} title={expanded ? "Thu nhỏ" : "Phóng to"}>{expanded ? <I.M icon="Collapse" size={15} /> : <I.M icon="Expand" size={15} />}</button>}
           {onClose && <button className="icon-btn" onClick={onClose} aria-label="Đóng trình duyệt" title="Đóng"><I.X size={15} /></button>}
           {menu && (
             <div className="menu bp-menu">
@@ -638,7 +638,7 @@ export function FilesPane({ sid, visible, say }: { sid: number; visible: boolean
       rows.push(
         <button key={e.path} className={`fp-row ${act === e.path ? "on" : ""}`} style={{ paddingLeft: 8 + depth * 14 }} onClick={() => (e.dir ? toggle(e.path) : open(e.path))} title={e.path}>
           {e.dir ? <span className={`ag-chev ${exp.has(e.path) ? "on" : ""}`}><I.ChevronR size={11} /></span> : <span className="fp-sp" />}
-          {e.dir ? <I.Folder size={14} /> : <I.File size={14} />}<span className="cv-ell" data-notr>{e.name}</span>
+          {e.dir ? <I.M icon="Folder" size={14} /> : <I.M icon="File" size={14} />}<span className="cv-ell" data-notr>{e.name}</span>
         </button>,
       );
       if (e.dir && exp.has(e.path)) walk(e.path, depth + 1);

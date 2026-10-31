@@ -467,17 +467,6 @@ html[data-ui-font="Serif"] body{font-family:Georgia,serif}
 .model-sub{padding:6px}
 .model-sub .mline{height:32px}
 .msub-note{font-size:13px;padding:4px 10px 6px}
-.nav-item svg *{transform-box:fill-box}
-.nav-item svg g{transform-box:view-box;transform-origin:10px 10px;transition:transform .35s var(--ease)}
-.nav-item:hover .ai-sl{transform:rotate(-18deg)}
-.nav-item:hover .ai-lt{transform:translateX(-.6px)}
-.nav-item:hover .ai-rt{transform:translateX(.6px)}
-.nav-item:hover .ai-l1{transform:translate(.3px,-1.6px) rotate(-7deg)}
-.nav-item:hover .ai-l2{transform:translate(.2px,-.9px) rotate(-5deg)}
-.nav-item:hover .ai-q{transform:translate(.4px,-.8px) rotate(14deg)}
-.nav-item:hover .ai-sq{transform:rotate(16deg)}
-.nav-item:hover .ai-br{animation:wig .5s var(--ease) both}
-@keyframes wig{0%{transform:rotate(0)}35%{transform:rotate(9deg)}100%{transform:rotate(7deg)}}
 .nav-item .tag{padding:1px 8px;border-radius:8px;border:.5px solid transparent;margin-right:-4px}
 [data-theme="dark"] .nav-item .tag{border-color:#2f2f2f}
 .nav-plus{margin-left:auto;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;opacity:0;color:var(--text-2);transition:opacity .15s,background .15s}
@@ -2472,48 +2461,8 @@ b,strong{font-weight:560}
 .nav-chev svg{transition:transform .3s var(--ease)}
 .nav-chev.open svg{transform:rotate(90deg)}
 
-/* ===== Icon Speech chuyển động khi rê chuột ===== */
-.nav-item:hover .ai-sw1{animation:aiWave 1.1s ease-in-out infinite}
-.nav-item:hover .ai-sw2{animation:aiWave 1.1s .18s ease-in-out infinite}
-.nav-item:hover .ai-hd{transform:translateY(-.6px)}
-.nav-item svg :is(g.ai-sw1,g.ai-sw2){transform-origin:12px 7px}
-@keyframes aiWave{0%,100%{opacity:1;transform:translateX(0) scale(1)}45%{opacity:.25;transform:translateX(1.4px) scale(1.12)}}
 
-/* ===== Bộ icon công cụ Speech ===== */
-.ti{overflow:visible}
-.ti g{transform-box:view-box;transition:transform .35s var(--ease),opacity .35s}
-/* chuyển động riêng từng icon, chạy khi rê chuột vào thẻ, mục thanh bên hoặc tab */
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-w1{animation:tiWave 1.1s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-w2{animation:tiWave 1.1s .18s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-bar1{animation:tiBar .8s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-bar2{animation:tiBar .8s .15s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-bar3{animation:tiBar .8s .3s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-b1{transform:translateY(-1px)}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-b2{transform:translate(.6px,.8px)}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-spark{animation:tiSpark .9s var(--ease) both}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-dot{animation:tiTwinkle 1s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-ghost{transform:translateX(1.4px);opacity:.6}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-burst{animation:tiBurst .9s ease-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-noise{opacity:.35}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-clean{transform:translateX(-.8px)}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-spin{transform:rotate(180deg)}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-merid{animation:tiMerid 1.6s ease-in-out infinite}
-:is(.sp-tcard,.nav-item,.sp-tabs button):hover .ti-lines{animation:tiType 1.2s steps(1) infinite}
-svg.ti :is(g.ti-bar1,g.ti-bar2,g.ti-bar3){transform-origin:12px 12px}
-svg.ti g.ti-spin{transform-origin:12px 12px;transition-duration:.6s}
-svg.ti g.ti-spark{transform-origin:19px 5px}
-svg.ti g.ti-merid{transform-origin:10px 12px}
-svg.ti g.ti-burst{transform-origin:12px 12px}
-svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
-@keyframes tiWave{0%,100%{opacity:1;transform:translateX(0)}50%{opacity:.25;transform:translateX(1.2px)}}
-@keyframes tiBar{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.45)}}
-@keyframes tiSpark{0%{transform:rotate(0) scale(1)}50%{transform:rotate(90deg) scale(1.25)}100%{transform:rotate(180deg) scale(1)}}
-@keyframes tiTwinkle{0%,100%{opacity:1}50%{opacity:.2}}
-@keyframes tiBurst{0%{opacity:1;transform:translateX(0)}70%{opacity:.2;transform:translateX(1.6px)}100%{opacity:1;transform:translateX(0)}}
-@keyframes tiMerid{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.35)}}
-@keyframes tiType{0%{clip-path:inset(0 60% 0 0)}33%{clip-path:inset(0 30% 0 0)}66%{clip-path:inset(0 0 0 0)}}
-.nav-sub .ti{width:16px;height:16px}
-@media (prefers-reduced-motion:reduce){.ti g,.nav-item svg g{animation:none!important;transition:none!important}}
+.nav-sub .ph-hover svg{width:16px;height:16px}
 .vm-top{gap:10px;align-items:center}
 .vm-lang{display:inline-flex;padding:3px;border-radius:99px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14)}
 .vm-lang button{height:24px;min-width:34px;padding:0 9px;border-radius:99px;font-size:12px;color:rgba(255,255,255,.6)}
@@ -2547,23 +2496,6 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
   box-shadow:0 0 0 .5px color-mix(in srgb,var(--border-strong) 80%,transparent),0 2px 8px rgba(0,0,0,.06)}
 [data-theme="dark"] .app.code-view :is(.cv-under>:not(.cv-sp),.cv-bar>*)::before{background:color-mix(in srgb,var(--bg) 66%,transparent);box-shadow:0 0 0 .5px rgba(255,255,255,.1),0 2px 10px rgba(0,0,0,.35)}
 .app.code-view .cv-bar>.cv-bar-l{flex:0 1 auto;margin-right:auto;min-width:0}
-/* Icon Skills: cuộn giấy mở ra và dòng chữ được viết lại khi rê chuột */
-.nav-item:hover .ai-roll{transform:translateY(1.3px)}
-.nav-item:hover .ai-ink path{stroke-dasharray:1;animation:aiInk .7s .1s var(--ease) both}
-@keyframes aiInk{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
-/* Icon Hộp thư: hai dòng thư rơi vào khay (ẩn khi không rê chuột nên icon đứng yên vẫn như cũ), mép khay nhún nhẹ lúc đón thư. */
-svg g.ai-mail{opacity:0}
-.nav-item svg g.ai-mail{transform:translateY(-3.6px);transition:transform .5s cubic-bezier(.34,1.45,.64,1),opacity .2s}
-.nav-item:hover svg g.ai-mail{opacity:1;transform:none;transition-delay:.04s}
-.nav-item:hover .ai-lip{animation:aiLip .55s .2s var(--ease) both}
-@keyframes aiLip{0%,100%{transform:none}40%{transform:translateY(.8px)}}
-/* Icon Bộ não: hai bán cầu lệch pha (trái lên, phải xuống) rồi khớp lại như logo Synchro; đường giữa vẽ lại từ trên xuống như tín hiệu chạy qua. */
-.nav-item:hover .ai-bn-l{animation:aiBnL .9s cubic-bezier(.76,0,.24,1) both}
-.nav-item:hover .ai-bn-r{animation:aiBnR .9s cubic-bezier(.76,0,.24,1) both}
-.nav-item:hover .ai-bn-c path{stroke-dasharray:1;animation:aiInk .55s var(--ease) both}
-@keyframes aiBnL{0%,100%{transform:none}45%,55%{transform:translate(-.4px,-1.3px)}}
-@keyframes aiBnR{0%,100%{transform:none}45%,55%{transform:translate(.4px,1.3px)}}
-@media (prefers-reduced-motion:reduce){.nav-item:hover .ai-bn-c path{animation:none}.nav-item svg g.ai-mail{transition:none}}
 
 /* ===== Cài đặt → Providers ===== */
 .api-sum{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 6px}
@@ -2848,18 +2780,6 @@ svg g.ai-mail{opacity:0}
   .dl-main,.dl-alt,.dl-store{width:100%;min-width:0;justify-content:center}
 }
 
-/* Nút trò chuyện bằng giọng nói: rê chuột vào thì các vạch sóng âm nhún lệch nhịp, giống nút voice của Claude */
-.wv rect{transform-box:fill-box;transform-origin:center;transition:transform .25s var(--ease)}
-.vm-open:hover .wv rect{animation:wvBounce .95s cubic-bezier(.45,0,.55,1) infinite}
-.vm-open:hover .wv rect:nth-child(1),.vm-open:hover .wv rect:nth-child(5){--lo:1;--hi:2.4}
-.vm-open:hover .wv rect:nth-child(2),.vm-open:hover .wv rect:nth-child(4){--lo:.55;--hi:1.45}
-.vm-open:hover .wv rect:nth-child(3){--lo:.5;--hi:1}
-.vm-open:hover .wv rect:nth-child(2){animation-delay:-.16s}
-.vm-open:hover .wv rect:nth-child(3){animation-delay:-.32s}
-.vm-open:hover .wv rect:nth-child(4){animation-delay:-.48s}
-.vm-open:hover .wv rect:nth-child(5){animation-delay:-.64s}
-@keyframes wvBounce{0%,100%{transform:scaleY(var(--lo,1))}50%{transform:scaleY(var(--hi,1))}}
-@media (prefers-reduced-motion:reduce){.vm-open:hover .wv rect{animation:none}}
 /* Bộ chọn model: ghi chú khi quản trị viên giới hạn mức nỗ lực */
 .msub-cap{display:flex;align-items:center;gap:6px;margin:4px 0 0;padding-top:8px;border-top:.5px solid var(--border)}
 .msub-cap svg{flex:none}
@@ -3281,11 +3201,6 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 @media (max-width:640px){.us-p{grid-template-columns:minmax(0,1fr) 64px;}.us-p-l{grid-column:span 1}.us-pr{grid-template-columns:minmax(0,1fr) 72px 72px 72px 24px}}
 [data-theme="dark"] :is(.us-wrap,.us-card){--us-fill:var(--accent)}
 .us-ring.on[data-tip]::after,.us-ring.on[data-tip]::before{display:none}
-.nav-item:hover .ai-snap,.s-item:hover .ai-snap,.cz-nav button:hover .ai-snap{transform:translate(-1.4px,1.4px)}
-.ai-snap,.ai-plug{transition:transform .35s var(--ease)}
-.nav-item:hover .ai-plug,.s-item:hover .ai-plug,.cz-nav button:hover .ai-plug{transform:translate(-1.2px,1.2px)}
-.s-item:hover .ai-roll,.cz-nav button:hover .ai-roll{transform:translateY(1.3px)}
-.s-item:hover .ai-ink path,.cz-nav button:hover .ai-ink path{stroke-dasharray:1;animation:aiInk .7s .1s var(--ease) both}
 
 /* ---------------------------------------------------------------- Tùy chỉnh: Skills / Connectors / Plugins */
 .page-in.cz{max-width:1040px;display:grid;grid-template-columns:190px minmax(0,1fr);gap:28px;align-items:start}
@@ -3516,12 +3431,16 @@ html body .menu.pl-menu::before{background:var(--card)!important}
 .pl-mi em,.art-dl-t em{color:var(--text-3)}
 
 /* Icon: nét bằng thân chữ đứng cạnh (--icon-stroke); vẽ trên lưới 16, 20 hay 24 đều như nhau */
-.nav-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
-.s-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
-.menu-item svg :is(path,circle,rect,line,polyline,polygon,ellipse),
-.icon-btn svg :is(path,circle,rect,line,polyline,polygon,ellipse),
-.pl-mic svg :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:var(--icon-stroke)}
-.nav-item.active svg :is(path,circle,rect,line,polyline,polygon,ellipse),.s-item.on svg :is(path,circle,rect,line,polyline,polygon,ellipse){stroke-width:var(--icon-stroke-strong)}
+/* (Icon Phosphor svg.ph / svg.mph tự có độ dày: hình tô + viền 2 đơn vị, không theo quy tắc nét cố định này.) */
+.nav-item svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse),
+.s-item svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse),
+.menu-item svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse),
+.icon-btn svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse),
+.pl-mic svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse){vector-effect:non-scaling-stroke;stroke-width:var(--icon-stroke)}
+.nav-item.active svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse),.s-item.on svg:not(.ph):not(.mph) :is(path,circle,rect,line,polyline,polygon,ellipse){stroke-width:var(--icon-stroke-strong)}
+/* Mục đang chọn: icon Phosphor đậm hơn một chút (như chữ đậm hơn). */
+:is(.nav-item.active,.s-item.on) svg.ph{stroke-width:5}
+:is(.nav-item.active,.s-item.on) svg.mph path{stroke-width:.47}
 /* Lượt chạy nền: bước đang làm hiện cạnh chấm động */
 .thinking{gap:10px}
 .thinking-t{font-size:13px;color:var(--text-3);animation:fadeIn .3s both;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
@@ -5008,3 +4927,16 @@ html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
 @keyframes appReveal{from{transform:scale(1.025);filter:blur(8px)}to{transform:none;filter:none}}
 @media (prefers-reduced-motion:reduce){.app.app-reveal{animation:none}}
 html[data-motion="reduced"] .app.app-reveal{animation:none}
+
+/* ===== Icon Phosphor Light (app/icons.tsx) và chuyển động biến hình (app/morph.tsx, morphicons) ===== */
+svg.ph{flex:none;display:block}
+/* Icon biến hình (lưới 24 của morphicons): viền thêm như icon tĩnh — 2 / 256 × 24 ≈ 0,19 đơn vị. */
+svg.mph path{stroke:currentColor;stroke-width:.19;stroke-linejoin:round}
+.ph-hover{display:inline-grid;place-items:center;flex:none}
+.ph-flip{display:inline-grid;flex:none}
+.ph-flip svg{transform:scaleX(-1)}
+.nav-item .ph-hover svg{width:var(--icon);height:var(--icon)}
+/* Nút trò chuyện bằng giọng nói: rê chuột vào thì sóng âm nhún nhẹ theo nhịp. */
+.vm-open:hover svg.ph{animation:wvPulse .95s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes wvPulse{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.72)}}
+@media (prefers-reduced-motion:reduce){.vm-open:hover svg.ph{animation:none}}

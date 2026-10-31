@@ -174,7 +174,7 @@ export function Player({ src, title, label, dl, name, seekTo, onTime }: { src: s
   const save = () => { if (dl) saveUrl(dl, name); };
   return (
     <div className="sp-player">
-      <button className="sp-pbtn" aria-label={play ? "Tạm dừng" : "Phát"} onClick={toggle} disabled={!src}>{play ? <I.Pause size={14} /> : <I.Play size={14} />}</button>
+      <button className="sp-pbtn" aria-label={play ? "Tạm dừng" : "Phát"} onClick={toggle} disabled={!src}>{play ? <I.M icon="Pause" size={14} /> : <I.M icon="Play" size={14} />}</button>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
         {title && <span className="sp-ptitle">{title}</span>}
         <Wave src={src} progress={dur ? t / dur : 0} onSeek={seek} />
@@ -204,7 +204,7 @@ export function Dock() {
   const a = now.el, dur = Number.isFinite(a.duration) ? a.duration : 0, p = dur ? a.currentTime / dur : 0;
   return (
     <div className="sp-dock" role="region" aria-label="Trình phát">
-      <button className="sp-pbtn" aria-label={a.paused ? "Phát" : "Tạm dừng"} onClick={() => (a.paused ? void a.play().catch(() => {}) : a.pause())}>{a.paused ? <I.Play size={14} /> : <I.Pause size={14} />}</button>
+      <button className="sp-pbtn" aria-label={a.paused ? "Phát" : "Tạm dừng"} onClick={() => (a.paused ? void a.play().catch(() => {}) : a.pause())}>{a.paused ? <I.M icon="Play" size={14} /> : <I.M icon="Pause" size={14} />}</button>
       <span className="sp-dock-t" data-notr>{now.title}</span>
       <input className="sp-range sp-dock-r" type="range" min={0} max={1000} value={Math.round(p * 1000)} aria-label="Tua" style={{ "--p": `${p * 100}%` } as React.CSSProperties}
         onChange={(e) => { if (dur) a.currentTime = (Number(e.target.value) / 1000) * dur; }} />
@@ -278,7 +278,7 @@ export function OrbStage({ hue, active, progress, min, best, size = 168, onPlay,
         </svg>
       )}
       <div className="sp-orbc" style={{ width: size, height: size }}><LiquidOrb hue={hue} activity={active || playing ? talking : 0} /></div>
-      {onPlay && <button className="sp-orbplay" onClick={onPlay} aria-label={playing ? "Dừng nghe" : "Nghe thử"}>{playing ? <I.Pause size={16} /> : <I.Play size={16} />}</button>}
+      {onPlay && <button className="sp-orbplay" onClick={onPlay} aria-label={playing ? "Dừng nghe" : "Nghe thử"}>{playing ? <I.M icon="Pause" size={16} /> : <I.M icon="Play" size={16} />}</button>}
       {min && <span className="sp-dial-l"><b>Tối thiểu</b>{min}</span>}
       {best && <span className="sp-dial-r"><b>Tốt nhất</b>{best}</span>}
     </div>
@@ -292,7 +292,7 @@ export function ErrBox({ msg }: { msg: string }) { return msg ? <div className="
 function Sec({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
     <div className="sp-fsec">
-      <button className="sp-fsec-h" aria-expanded={open} onClick={onToggle}>{title}<span className={`sec-chev ${open ? "open" : ""}`}>{open ? <I.Chevron size={14} /> : <I.ChevronR size={14} />}</span></button>
+      <button className="sp-fsec-h" aria-expanded={open} onClick={onToggle}>{title}<span className={`sec-chev ${open ? "open" : ""}`}>{open ? <I.M icon="Chevron" size={14} /> : <I.M icon="ChevronR" size={14} />}</span></button>
       {open && <div className="sp-fsec-b">{children}</div>}
     </div>
   );
@@ -402,7 +402,7 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
             {list?.map((v) => (
               <div key={v.id} role="option" aria-selected={value === v.id} className={`sp-vrow ${value === v.id ? "is-sel" : ""} ${playing === v.id ? "playing" : ""}`}>
                 <button className="sp-avbtn" aria-label={playing === v.id ? `Dừng nghe ${v.name}` : `Nghe thử ${v.name}`} onClick={() => toggle(v)} disabled={!v.preview}>
-                  <VoiceAvatar v={v} size={34} playing={playing === v.id} /><span className="sp-avplay">{playing === v.id ? <I.Pause size={12} /> : <I.Play size={12} />}</span>
+                  <VoiceAvatar v={v} size={34} playing={playing === v.id} /><span className="sp-avplay">{playing === v.id ? <I.M icon="Pause" size={12} /> : <I.M icon="Play" size={12} />}</span>
                 </button>
                 <div className="sp-vmeta"><b><span data-notr>{v.name}</span>{v.desc ? ` · ${tr(v.desc)}` : ""}</b><span>{v.mine ? CAT_LABEL[v.category] ?? v.category : [v.use, v.gender, v.age].filter(Boolean).join(" · ")}</span></div>
                 <span className="sp-vlang"><span className="sp-flag">{flag(v.langCode)}</span>{v.lang || "Đa ngôn ngữ"}{v.accent && <em>{v.accent}</em>}</span>

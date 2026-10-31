@@ -63,7 +63,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
   const card = (v: Voice, extra?: React.ReactNode) => (
     <div key={v.id} className="sp-vcard">
       <div className="sp-vcard-t">
-        <button className="sp-avbtn" aria-label={playing === v.id ? `Dừng nghe ${v.name}` : `Nghe thử ${v.name}`} onClick={() => preview(v)} disabled={!v.preview}><VoiceAvatar v={v} size={40} playing={playing === v.id} /><span className="sp-avplay">{playing === v.id ? <I.Pause size={12} /> : <I.Play size={12} />}</span></button>
+        <button className="sp-avbtn" aria-label={playing === v.id ? `Dừng nghe ${v.name}` : `Nghe thử ${v.name}`} onClick={() => preview(v)} disabled={!v.preview}><VoiceAvatar v={v} size={40} playing={playing === v.id} /><span className="sp-avplay">{playing === v.id ? <I.M icon="Pause" size={12} /> : <I.M icon="Play" size={12} />}</span></button>
         <div><b data-notr>{v.name}</b><span>{v.desc}</span></div>
       </div>
       <div className="sp-vcard-m"><span className={`sp-badge k-${v.category}`}>{v.mine ? CAT_LABEL[v.category] ?? v.category : v.use || "Thư viện"}</span><span className="sp-muted">{[v.lang, v.accent, v.mine ? "" : v.gender].filter(Boolean).join(" · ")}</span></div>

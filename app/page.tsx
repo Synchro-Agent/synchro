@@ -460,7 +460,7 @@ function Composer(p: {
           {perms?.features.files !== false && <button className="menu-item" onClick={shot}><I.Camera />Chụp ảnh màn hình</button>}
           {p.onProject && perms?.features.projects !== false && (p.projects?.length ? (
             <>
-              <button className="menu-item" aria-expanded={projOpen} onClick={() => setProjOpen(!projOpen)}><I.Layers />Thêm vào dự án<span className="sc">{projOpen ? <I.Chevron size={16} /> : <I.ChevronR size={16} />}</span></button>
+              <button className="menu-item" aria-expanded={projOpen} onClick={() => setProjOpen(!projOpen)}><I.Layers />Thêm vào dự án<span className="sc">{projOpen ? <I.M icon="Chevron" size={16} /> : <I.M icon="ChevronR" size={16} />}</span></button>
               {projOpen && p.projects.map((pr) => <button key={pr.id} className="menu-item sub" onClick={() => { setMenu(false); setProjOpen(false); p.onProject!(p.project === pr.id ? undefined : pr.id); }}><span data-notr>{pr.name}</span>{p.project === pr.id && <span className="ck"><I.Check /></span>}</button>)}
             </>
           ) : <button className="menu-item" onClick={() => { setMenu(false); p.onProject!(undefined); }}><I.Layers />Tạo dự án để thêm vào</button>)}
@@ -475,7 +475,7 @@ function Composer(p: {
 
   const sendBtn = (
     <button className="send" disabled={!busy && !canSend} onClick={busy ? (v.trim() && p.onSteer ? () => submit() : onStop) : () => submit()} aria-label={busy ? (v.trim() && p.onSteer ? "Gửi thêm" : "Dừng") : "Gửi"}>
-      {busy ? (v.trim() && p.onSteer ? <I.Arrow /> : <I.Stop />) : dock ? <I.Enter /> : <I.Arrow />}
+      {busy ? (v.trim() && p.onSteer ? <I.M icon="Arrow" /> : <I.M icon="Stop" />) : dock ? <I.M icon="Enter" /> : <I.M icon="Arrow" />}
     </button>
   );
   const micBtn = <MicPicker say={say} rec={rec} onMic={mic} />;
@@ -1344,7 +1344,7 @@ export default function Home() {
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
     { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hay: "projects", run: () => { setCurProj(null); setView("projects"); } },
     { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hay: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
-    { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.Sun size={16} /> : <I.Moon size={16} />, hay: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
+    { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.M icon="Sun" size={16} /> : <I.M icon="Moon" size={16} />, hay: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
     { id: "sidebar", label: "Ẩn / hiện thanh bên", icon: <I.Panel size={16} />, keys: "⌘.", hay: "sidebar", run: () => setOpen((o) => !o) },
     { id: "keys", label: "Phím tắt", icon: <I.Keyboard size={16} />, keys: "⌘/", hay: "shortcuts", run: () => setModal("keys") },
   ];
@@ -1461,15 +1461,15 @@ export default function Home() {
           <button className={`nav-item ${view === "new" ? "active" : ""}`} onClick={goNew}>
             {view === "new" ? <I.Plus /> : <span className="plus"><I.Plus size={14} /></span>}Mới<span className="sc-hint">⇧⌘O</span>
           </button>
-          {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Layers />} label="Dự án" plus={() => setModal("proj")} />}
-          {caps.art !== false && <Nav v="artifacts" icon={<I.Shapes />} label="Artifacts" />}
-          <Nav v="inbox" icon={<I.Inbox />} label="Hộp thư" badge={inboxN} />
-          <Nav v="brain" icon={<I.Brain />} label="Bộ não" />
-          {me?.perms.features.code !== false && <Nav v="code" icon={<I.Code />} label="Code" />}
+          {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Hover icon={["Layers", "FolderOpen"]} />} label="Dự án" plus={() => setModal("proj")} />}
+          {caps.art !== false && <Nav v="artifacts" icon={<I.Hover icon={["Shapes", "Cube"]} />} label="Artifacts" />}
+          <Nav v="inbox" icon={<I.Hover icon={["Inbox", "TrayIn"]} />} label="Hộp thư" badge={inboxN} />
+          <Nav v="brain" icon={<I.Hover icon={["Brain", "HeadCircuit"]} />} label="Bộ não" />
+          {me?.perms.features.code !== false && <Nav v="code" icon={<I.Hover icon={["Code", "CodeBlock"]} />} label="Code" />}
           {me?.perms.features.speech !== false && (
             <>
               <div className="nav-row">
-                <button data-nav="speech" className={`nav-item ${view === "speech" && (spTool === "home" || !spOpen) ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Speech />Speech</button>
+                <button data-nav="speech" className={`nav-item ${view === "speech" && (spTool === "home" || !spOpen) ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Hover icon={["Speech", "Wave"]} />Speech</button>
                 <button className={`nav-chev ${spOpen ? "open" : ""}`} aria-expanded={spOpen} aria-label={spOpen ? "Thu gọn công cụ Speech" : "Mở công cụ Speech"} onClick={() => setSpOpen(!spOpen)}><I.ChevronR size={14} /></button>
               </div>
               <div className={`fold ${spOpen ? "open" : ""}`}>
@@ -1479,7 +1479,7 @@ export default function Home() {
               </div>
             </>
           )}
-          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Plugins />} label="Skill Hub" />}
+          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Hover icon={["Plugins", "Connectors"]} />} label="Skill Hub" />}
         </div>
         {(() => {
           const row = (c: Chat) => (
@@ -1495,7 +1495,7 @@ export default function Home() {
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
                   {!pickProj ? (
                     <>
-                      <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.PinOff /> : <I.Pin />}{c.pinned ? "Bỏ ghim" : "Ghim"}<span className="sc">P</span></button>
+                      <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}<span className="sc">P</span></button>
                       <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên<span className="sc">R</span></button>
                       <button className="menu-item" onClick={() => (projects.length ? setPickProj(true) : (say("Hãy tạo dự án trước ở mục Dự án"), setChatMenu(null)))}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
                       {c.project !== undefined && <button className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: undefined } : x))); setChatMenu(null); say("Đã gỡ khỏi dự án"); }}><I.Layers />Gỡ khỏi dự án</button>}
@@ -1523,9 +1523,9 @@ export default function Home() {
               )}
               <button className="dots" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>
               <Menu open={codeMenu === c.id} className="down" style={{ top: 34, right: 0, width: 220 }}>
-                <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.PinOff /> : <I.Pin />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
+                <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
-                <button className="menu-item" onClick={() => { codePatch(c.id, { archived: !c.archived }); setCodeMenu(null); say(c.archived ? "Đã khôi phục phiên code" : "Đã lưu trữ phiên code"); }}>{c.archived ? <I.Retry /> : <I.Inbox />}{c.archived ? "Khôi phục" : "Lưu trữ"}</button>
+                <button className="menu-item" onClick={() => { codePatch(c.id, { archived: !c.archived }); setCodeMenu(null); say(c.archived ? "Đã khôi phục phiên code" : "Đã lưu trữ phiên code"); }}>{c.archived ? <I.M icon="Retry" /> : <I.M icon="Inbox" />}{c.archived ? "Khôi phục" : "Lưu trữ"}</button>
                 <hr />
                 <button className="menu-item del" onClick={() => { setCodeMenu(null); setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (cpPage?.sync) deleteServerSession(c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); }}><I.Trash />Xóa</button>
               </Menu>
@@ -1621,7 +1621,7 @@ export default function Home() {
               <div className="title-wrap" style={{ position: "relative" }}>
                 <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
                   <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
-                    <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.PinOff /> : <I.Pin />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
+                    <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
                     <button className="menu-item" onClick={() => { setTitleMenu(false); autoTitle(chat.id, true); }}><I.Sparkle />Đặt tên tự động</button>
                     <hr />
@@ -1684,7 +1684,7 @@ export default function Home() {
                       })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{m.plan?.length ? <PlanCard plan={m.plan} live={!m.done} /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} chars={m.text.length + (m.parts ?? []).reduce((n, p) => n + (p.k === "say" ? p.text.length : 0), 0)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && (
                         <div className="actions in">
-                          <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.Check size={16} /> : <I.Copy size={16} />}</button>
+                          <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>
                           <button className={`icon-btn ${speaking === `${chat.id}-${i}` ? "like-on" : ""}`} onClick={() => speak(`${chat.id}-${i}`, m.text)} aria-label="Đọc to"><I.Speaker size={16} /></button>
                           <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => like(i, 1)} aria-label="Hữu ích"><I.ThumbUp size={16} /></button>
                           <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => like(i, -1)} aria-label="Không hữu ích"><I.ThumbDown size={16} /></button>

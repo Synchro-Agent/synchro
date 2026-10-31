@@ -261,7 +261,7 @@ function Live({ say, lang, keyterms, onSaved }: { say: (m: string) => void; lang
         <div className={`sp-live-orb ${on_ ? "on" : ""}`}><PearlOrb level={level} active={on_} /></div>
         <b>{on_ ? "Đang nghe…" : "Bấm micro để bắt đầu"}</b>
         <span className="sp-muted">{on_ ? `${fmtDur(sec)} · Scribe v2 Realtime` : "Scribe v2 Realtime · khóa API không rời máy chủ (token dùng một lần)"}</span>
-        <button className={`sp-mic ${on_ ? "on" : ""}`} aria-pressed={on_} aria-label={on_ ? "Dừng ghi" : "Bắt đầu ghi"} onClick={() => (on_ ? stop() : void start())}>{on_ ? <I.Stop size={22} /> : <I.Mic size={22} />}</button>
+        <button className={`sp-mic ${on_ ? "on" : ""}`} aria-pressed={on_} aria-label={on_ ? "Dừng ghi" : "Bắt đầu ghi"} onClick={() => (on_ ? stop() : void start())}>{on_ ? <I.M icon="Stop" size={22} /> : <I.M icon="Mic" size={22} />}</button>
       </div>
       <div className="sp-live-text" aria-live="polite">
         {!lines.length && !partial && <span className="sp-muted">Lời nói sẽ hiện ở đây theo thời gian thực.</span>}

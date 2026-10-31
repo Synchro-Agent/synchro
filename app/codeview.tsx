@@ -39,7 +39,7 @@ const PERMS: { k: PermMode; label: string; short: string; desc: string }[] = [
   { k: "edits", label: "Tự sửa tệp", short: "Tự sửa tệp", desc: "Tự sửa tệp, chỉ hỏi trước khi chạy lệnh có thể thay đổi máy (cài gói, xóa, push…)." },
   { k: "auto", label: "Tự động", short: "Tự động", desc: "Không hỏi gì: Synchro tự sửa tệp và chạy lệnh để làm xong việc." },
 ];
-const permIcon = (k: PermMode, s = 14) => (k === "ask" ? <I.Shield size={s} /> : k === "edits" ? <I.Pencil size={s} /> : <I.Rocket size={s} />);
+const permIcon = (k: PermMode, s = 14) => (k === "ask" ? <I.Shield size={s} /> : k === "edits" ? <I.M icon="Pencil" size={s} /> : <I.M icon="Rocket" size={s} />);
 export type CodeMeta = { state?: SessionState; reason?: string | null; running?: boolean };
 type Ctx = { id: number; name: string; text: string; size: number; kind: "file" | "doc"; pinned?: boolean; off?: boolean };
 type Say = (m: string) => void;
@@ -928,7 +928,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
 
   const lastId = path.length ? path[path.length - 1].id : -1;
   const m = MODES.find((x) => x.k === mode) ?? MODES[0];
-  const modeIcon = (k: string, s = 16) => (k === "auto" ? <I.Sparkle size={s} /> : k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.Alert size={s} /> : <I.Code size={s} />);
+  const modeIcon = (k: string, s = 16) => (k === "auto" ? <I.Sparkle size={s} /> : k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.M icon="Alert" size={s} /> : <I.M icon="Code" size={s} />);
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
   // Kéo đường chia để đổi độ rộng khung bên phải.
   const startDrag = (e: React.MouseEvent) => {
@@ -968,7 +968,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                 <div key={c.id} className="cv-row">
                   <button className={`cv-sw ${c.off ? "" : "on"}`} onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, off: !x.off } : x)))} aria-label="Bật/tắt"><i /></button>
                   <span className="cv-ell">{c.name}</span><em>{fmtK(tok(c.text))}</em>
-                  <button className="icon-btn" onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x)))} aria-label="Ghim">{c.pinned ? <I.PinOff size={14} /> : <I.Pin size={14} />}</button>
+                  <button className="icon-btn" onClick={() => setCtx((a) => a.map((x) => (x.id === c.id ? { ...x, pinned: !x.pinned } : x)))} aria-label="Ghim">{c.pinned ? <I.M icon="PinOff" size={14} /> : <I.M icon="Pin" size={14} />}</button>
                   <button className="icon-btn" onClick={() => setCtx((a) => a.filter((x) => x.id !== c.id))} aria-label="Xóa"><I.Trash size={14} /></button>
                 </div>
               ))}
@@ -1055,7 +1055,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   <div key={n.id} id={"cv-n" + n.id} className="cv-turn">
                     <div className="user-wrap">
                       {n.files?.length ? <div className="attach sent">{n.files.map((f) => <FileCard key={f.name} name={f.name} folder={f.folder} count={f.count} fid={f.id} onOpen={() => fm.show(f.name, f.id)} onContextMenu={(e) => fm.open(e, f.name)} />)}</div> : null}
-                      {n.atts.length > 0 && <div className="cv-atts end">{n.atts.map((a, k) => <button key={k} className={`cv-att ${a.k}`} onClick={() => setViewer(a)}>{a.k === "error" ? <I.Alert size={14} /> : <I.Code size={14} />}{a.name}</button>)}</div>}
+                      {n.atts.length > 0 && <div className="cv-atts end">{n.atts.map((a, k) => <button key={k} className={`cv-att ${a.k}`} onClick={() => setViewer(a)}>{a.k === "error" ? <I.M icon="Alert" size={14} /> : <I.M icon="Code" size={14} />}{a.name}</button>)}</div>}
                       {editing?.id === n.id ? (
                         <div className="cv-edit">
                           <textarea autoFocus value={editing.text} rows={Math.min(6, editing.text.split("\n").length + 1)} onChange={(e) => setEditing({ id: n.id, text: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) branch(n, editing.text); if (e.key === "Escape") setEditing(null); }} />
@@ -1114,7 +1114,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                     <div key={g}><div className="cv-mh">@{g === "Hàm" ? "Function" : g}</div>
                       {grp(g).map((it) => { const idx = mentionItems.indexOf(it); return (
                         <button key={it.g + it.label} className={`menu-item ${idx === mi ? "act" : ""}`} onMouseEnter={() => setMi(idx)} onMouseDown={(e) => { e.preventDefault(); pickMention(it); }}>
-                          {g === "Codebase" ? <I.Layers size={16} /> : g === "Folder" ? <I.Folder size={16} /> : g === "Docs" ? <I.Globe size={16} /> : g === "Hàm" ? <I.Code size={16} /> : <I.Clip size={16} />}<span className="cv-ell">{it.label}</span>
+                          {g === "Codebase" ? <I.Layers size={16} /> : g === "Folder" ? <I.Folder size={16} /> : g === "Docs" ? <I.Globe size={16} /> : g === "Hàm" ? <I.M icon="Code" size={16} /> : <I.M icon="Clip" size={16} />}<span className="cv-ell">{it.label}</span>
                         </button>); })}
                     </div>
                   ))
@@ -1139,7 +1139,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   )}
                   {atts.map((a, k) => (
                     <div key={k} className={`cv-pill att ${a.k}`}>
-                      <button className="n" onClick={() => setViewer(a)} title="Xem lại">{a.k === "error" ? <I.Alert size={13} /> : <I.Code size={13} />}{a.name}</button>
+                      <button className="n" onClick={() => setViewer(a)} title="Xem lại">{a.k === "error" ? <I.M icon="Alert" size={13} /> : <I.M icon="Code" size={13} />}{a.name}</button>
                       <button onClick={() => setAtts((x) => x.filter((_, j) => j !== k))} aria-label="Xóa"><I.X size={12} /></button>
                     </div>
                   ))}
@@ -1168,7 +1168,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   </Menu>
                 </div>
                 <div className="cv-sp" />
-                <button className="send" disabled={!busy && !v.trim() && !atts.length && !files.length} onClick={busy ? stopGen : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.Stop /> : <I.Enter />}</button>
+                <button className="send" disabled={!busy && !v.trim() && !atts.length && !files.length} onClick={busy ? stopGen : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.M icon="Stop" /> : <I.M icon="Enter" />}</button>
               </div>
               {dragOn && <div className="cv-drop">Thả tệp, thư mục hoặc .zip để gửi kèm tin nhắn</div>}
               {fm.node}
@@ -1230,7 +1230,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
             </button>
           ))}
           <div className="cv-sp" />
-          <button className="icon-btn" onClick={() => setPaneMax(!paneMax)} aria-label={paneMax ? "Thu nhỏ" : "Phóng to"} title={paneMax ? "Thu nhỏ" : "Phóng to"}>{paneMax ? <I.Collapse size={15} /> : <I.Expand size={15} />}</button>
+          <button className="icon-btn" onClick={() => setPaneMax(!paneMax)} aria-label={paneMax ? "Thu nhỏ" : "Phóng to"} title={paneMax ? "Thu nhỏ" : "Phóng to"}>{paneMax ? <I.M icon="Collapse" size={15} /> : <I.M icon="Expand" size={15} />}</button>
           <button className="icon-btn" onClick={() => { setPane(null); setPaneMax(false); }} aria-label="Đóng khung" title="Đóng khung"><I.X size={15} /></button>
         </div>
         <div className="cv-side-b">
@@ -1359,7 +1359,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       {viewer && (
         <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setViewer(null); }}>
           <div className="modal cv-modal">
-            <div className="cv-mh big">{viewer.k === "error" ? <I.Alert size={16} /> : <I.Code size={16} />}{viewer.name}<button className="icon-btn" onClick={() => setViewer(null)} aria-label="Đóng"><I.X size={16} /></button></div>
+            <div className="cv-mh big">{viewer.k === "error" ? <I.M icon="Alert" size={16} /> : <I.M icon="Code" size={16} />}{viewer.name}<button className="icon-btn" onClick={() => setViewer(null)} aria-label="Đóng"><I.X size={16} /></button></div>
             {viewer.k === "error" ? <ErrView text={viewer.text} /> : <pre className="cv-trace plain">{viewer.text}</pre>}
           </div>
         </div>
@@ -1430,7 +1430,7 @@ function SidePanel({ panel, setPanel, say, onFix }: { panel: Panel; setPanel: (p
         <div className="cv-ph-r">
           {panel.runnable && <button className="icon-btn" onClick={goPreview} aria-label="Chạy lại" title="Chạy lại"><I.Retry size={16} /></button>}
           <button className="icon-btn" onClick={() => { navigator.clipboard?.writeText(code); say("Đã sao chép mã"); }} aria-label="Sao chép"><I.Copy size={16} /></button>
-          <button className="icon-btn" onClick={download} aria-label="Tải về"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" /></svg></button>
+          <button className="icon-btn" onClick={download} aria-label="Tải về"><I.Download size={16} /></button>
           <button className="icon-btn" onClick={() => setPanel(null)} aria-label="Đóng"><I.X size={16} /></button>
         </div>
       </div>

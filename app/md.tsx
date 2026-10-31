@@ -76,12 +76,12 @@ function Code({ lang, code, say, dev, idx }: { lang: string; code: string; say: 
         <div className="cb-tools">
           {dev && <>
             <button className={diff ? "on" : ""} disabled={!prev} title={prev ? "So sánh với phiên bản trước" : "Chưa có phiên bản trước để so sánh"} onClick={() => setDiff(!diff)}><b className="cb-pm">±</b>Diff{rows && <i className="cb-cnt"><em className="a">+{add}</em><em className="d">−{del}</em></i>}</button>
-            {RUNNABLE.test(lang) && <button title="Chạy thử" onClick={() => dev.onPanel({ lang, code, name, run: true })}><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z" /></svg>Chạy</button>}
-            <button title="Mở trong khung soạn thảo" onClick={() => dev.onPanel({ lang, code, name })}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="3" width="12" height="10" rx="2" /><path d="M9.5 3v10" /></svg>Mở</button>
-            <button title="Tải về" onClick={download}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" /></svg></button>
-            <button title="Sao chép đường dẫn" onClick={() => { navigator.clipboard?.writeText(name); say("Đã sao chép đường dẫn: " + name); }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.1 2.1 0 013 3l-1 1M9 11.5l-1 1a2.1 2.1 0 01-3-3l1-1" /></svg></button>
+            {RUNNABLE.test(lang) && <button title="Chạy thử" onClick={() => dev.onPanel({ lang, code, name, run: true })}><I.Play size={13} />Chạy</button>}
+            <button title="Mở trong khung soạn thảo" onClick={() => dev.onPanel({ lang, code, name })}><I.AppWindow size={14} />Mở</button>
+            <button title="Tải về" onClick={download}><I.Download size={14} /></button>
+            <button title="Sao chép đường dẫn" onClick={() => { navigator.clipboard?.writeText(name); say("Đã sao chép đường dẫn: " + name); }}><I.Connect size={14} /></button>
           </>}
-          <button onClick={() => { navigator.clipboard?.writeText(code); setOk(true); say("Đã sao chép mã"); setTimeout(() => setOk(false), 1500); }}>{ok ? <I.Check size={14} /> : <I.Copy size={14} />}{ok ? "Đã chép" : "Sao chép"}</button>
+          <button onClick={() => { navigator.clipboard?.writeText(code); setOk(true); say("Đã sao chép mã"); setTimeout(() => setOk(false), 1500); }}>{ok ? <I.M icon="Check" size={14} /> : <I.M icon="Copy" size={14} />}{ok ? "Đã chép" : "Sao chép"}</button>
         </div>
       </div>
       {merged !== null && <div className="cb-note">⚡ Đã tự ghép với tệp gốc · 0 token</div>}
