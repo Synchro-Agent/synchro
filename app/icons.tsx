@@ -1,8 +1,8 @@
 // Icon của Synchro: Phosphor Regular (MIT) — outline, lưới 256, vẽ bằng currentColor, viền thêm 2 đơn vị (STROKE) để nét dày bằng bộ icon
 // cũ (~1,27px ở cỡ 18). Dữ liệu sinh từ @phosphor-icons/core bằng
 // scripts/phosphor-icons.mjs (app/phosphor-data.ts); tên trong app giữ như cũ (I.Search, I.Plus…) nên mọi chỗ dùng không đổi.
-// Chuyển động: icon đổi theo trạng thái dùng <I.M icon="…"> (biến hình bằng morphicons, app/morph.tsx); icon ở thanh bên biến hình khi rê
-// chuột bằng <I.Hover icon={["…", "…"]}>.
+// Chuyển động (app/morph.tsx): icon đổi theo trạng thái dùng <I.M icon="…"> — cặp cùng dáng biến hình bằng morphicons, cặp khác dáng đổi
+// êm (icon cũ thu nhỏ, mờ đi; icon mới nở ra); icon ở thanh bên đổi khi rê chuột bằng <I.Hover icon={["…", "…"]}>.
 import React from "react";
 import { NAMES, type IconName } from "./phosphor-data";
 import { HoverMorph, Morph } from "./morph";
@@ -22,8 +22,8 @@ const mk = (name: IconName) => {
 // Mọi icon theo tên trong NAMES (tạo một lần; xuất ra bên dưới bằng tên như cũ).
 const A = Object.fromEntries((Object.keys(NAMES) as IconName[]).map((k) => [k, mk(k)])) as unknown as Record<IconName, (p: P) => React.JSX.Element>;
 
-/** Icon biến hình khi đổi tên (vd. <I.M icon={copied ? "Check" : "Copy"} />): hai nhánh của phép chọn cùng là I.M nên React cập nhật
- *  thay vì dựng lại, morphicons biến icon cũ thành icon mới. */
+/** Icon chuyển êm khi đổi tên (vd. <I.M icon={copied ? "Check" : "Copy"} />): hai nhánh của phép chọn cùng là I.M nên React cập nhật
+ *  thay vì dựng lại, icon cũ chuyển sang icon mới (xem app/morph.tsx). */
 export const M = ({ icon, size = 18 }: P & { icon: IconName }) => <Morph name={NAMES[icon]} size={size} />;
 /** Icon biến hình khi rê chuột vào mục chứa nó (.nav-item, nút…): icon={[lúc thường, khi rê chuột]}. */
 export const Hover = ({ icon, size = 18 }: P & { icon: [IconName, IconName] }) => <HoverMorph a={NAMES[icon[0]]} b={NAMES[icon[1]]} size={size} />;

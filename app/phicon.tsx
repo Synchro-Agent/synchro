@@ -6,10 +6,10 @@ import { PH } from "./phosphor-data";
 /** Viền thêm quanh nét của Phosphor Regular (16 → 18 đơn vị trên lưới 256, ~1,27px ở cỡ 18). */
 export const STROKE = 2;
 
-export function PhIcon({ ph, size = 18 }: { ph: string; size?: number }) {
+export function PhIcon({ ph, size = 18, svgRef }: { ph: string; size?: number; svgRef?: React.Ref<SVGSVGElement> }) {
   const els = PH[ph] ?? [];
   return (
-    <svg width={size} height={size} viewBox="0 0 256 256" fill="currentColor" stroke="currentColor" strokeWidth={STROKE} strokeLinejoin="round" aria-hidden className="ph">
+    <svg ref={svgRef} width={size} height={size} viewBox="0 0 256 256" fill="currentColor" stroke="currentColor" strokeWidth={STROKE} strokeLinejoin="round" aria-hidden className="ph">
       {els.map(([tag, attrs], i) => React.createElement(tag, { key: i, ...attrs }))}
     </svg>
   );
