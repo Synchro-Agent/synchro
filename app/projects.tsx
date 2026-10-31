@@ -147,10 +147,10 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
   const sorts: [Sort, string][] = [["upd", "Cập nhật lần cuối"], ["created", "Ngày tạo"], ["alpha", "Theo bảng chữ cái"]];
   const empty = list.length === 0;
   return (
-    <div className="page"><div className="pj-in">
-      <div className="pj-head">
+    <div className="page sy-proj"><div className="pj-in">
+      <header className="sy-head">
         <h1>{arch ? "Dự án đã lưu trữ" : "Dự án"}</h1>
-        <div className="pj-tools">
+        <div className="sy-tools pj-tools">
           {q !== null ? (
             <div className="pj-search"><I.Search size={16} /><input autoFocus placeholder="Tìm kiếm dự án..." value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setQ(null)} /><button className="icon-btn" aria-label="Xóa" onClick={() => setQ(null)}><I.X size={16} /></button></div>
           ) : (
@@ -166,7 +166,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
           </div>
           <button className="btn dark pj-new" onClick={onNew}>Dự án mới</button>
         </div>
-      </div>
+      </header>
       {empty ? (
         <div className="pj-empty">
           <EmptyArt />
@@ -176,7 +176,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
         </div>
       ) : group ? (
         [["Đã ghim", list.filter((x) => x.pinned)], ["Dự án của bạn", list.filter((x) => !x.pinned)]].map(([t, l]) => (l as Project[]).length > 0 && (
-          <section key={t as string}><div className="pj-sec">{t as string}</div><div className="pj-grid pj-gridf">{(l as Project[]).map(card)}</div></section>
+          <section key={t as string} className="sy-psec"><div className="sy-sh"><h2>{t as string}</h2><span className="sy-rule" /></div><div className="pj-grid pj-gridf">{(l as Project[]).map(card)}</div></section>
         ))
       ) : (
         <div className="pj-grid pj-gridf">{list.map(card)}</div>
@@ -283,7 +283,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
     if (ok) { patch(proj.id, { ctx: acc }); say(`Đã thêm ${ok} tệp`); }
   };
   return (
-    <div className="page"><div className="pj-in">
+    <div className="page sy-projpage"><div className="pj-in">
       <div className="pj-crumb"><button onClick={onBack}>Dự án</button><span>/</span><b>{proj.name}</b></div>
       <div className="pj-title">
         <h1>{proj.name}</h1>
@@ -298,6 +298,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
           </div>
         </div>
       </div>
+      <div className="sy-pmeta"><span><b>{mine.length}</b><em>Đoạn chat</em></span><span><b>{ctx.length}</b><em>Tệp ngữ cảnh</em></span><span><b>{mem.length}</b><em>Mục ghi nhớ</em></span><span><b>{ago(projUpd(proj, chats))}</b><em>Cập nhật gần nhất</em></span></div>
       {proj.desc && <p className="muted pj-desc">{proj.desc}</p>}
       <div className="pj-cols">
         <div className="pj-main">

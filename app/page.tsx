@@ -27,6 +27,7 @@ import { ASK_EVENT } from "./askcard";
 import { steerRun, takeSteer } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
+import { TplArt } from "./syart";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { BrainWorkspace, useBrainSync } from "./brainui";
 import { BrowserHub } from "./browserhub";
@@ -183,16 +184,6 @@ function LibChips({ libs, onOpen }: { libs: LibUse[]; onOpen: () => void }) {
       <I.Plugins size={13} /><span>{tr(l.forced ? "Chế độ" : "Thư viện")} <b data-notr={l.key.startsWith("lib-") || undefined}>{l.key.startsWith("lib-") ? l.label : tr(l.label)}</b></span>
       {l.skills.length > 0 && <span className="lib-sk" data-notr>{l.skills.slice(0, 3).join(", ")}{l.skills.length > 3 ? ` +${l.skills.length - 3}` : ""}</span>}
     </button>))}</div>;
-}
-
-function TplArt({ k }: { k: string }) {
-  if (k === "doc") return (
-    <div className="ta doc"><i className="b1" /><b className="A">A</b><i className="l1" /><i className="l2" /><i className="l3" /><span className="ck" /><i className="l4" /><i className="l5" /></div>
-  );
-  if (k === "design") return (
-    <div className="ta des"><i className="notch" /><span className="d1" /><i className="r1" /><span className="d2" /><i className="r2" /><div className="bar"><u /><u /><u /></div></div>
-  );
-  return <div className="ta sl"><i className="h" /><i className="p1" /><i className="p2" /><i className="p3" /><span className="img" /></div>;
 }
 
 function ModelPicker({ model, setModel }: { model: string; setModel: (m: string) => void }) {
@@ -1749,25 +1740,36 @@ export default function Home() {
         )}
 
         {view === "artifacts" && (
-          <div className="page"><div className="page-in">
-            <h1 style={{ marginBottom: 24 }}>Artifacts</h1>
-            <div className="tabs" style={{ alignItems: "center" }}>
-              {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} className={`tab ${tab === i ? "on" : ""}`} onClick={() => setTab(i)}>{t}</button>)}
-              <span className="art-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></span>
+          <div className="page sy-art"><div className="page-in">
+            <header className="sy-head"><h1>Artifacts</h1></header>
+            <div className="sy-bar">
+              <div className="sy-seg" role="tablist">
+                {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}
+              </div>
+              <label className="sy-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></label>
             </div>
-            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tạo thứ gì đó mới</div>
-            <div className="tpls">
-              {TPLS.map((t, i) => (
-                <button key={t.k} className={`tpl tpl-${t.k} ${i === 2 ? "last" : ""}`} onClick={() => { setTplMode(t.k); setView("new"); }}>
-                  <div className="th"><TplArt k={t.k} /><span className="cur"><svg width="16" height="18" viewBox="0 0 16 18"><path d="M1.5 1l12 7.2-5.4 1.3-2.6 5.2z" fill="#fff" stroke="#111" strokeWidth="1.2" strokeLinejoin="round" /></svg><em>Synchro</em></span></div>
-                  <span className="tl">{t.name}{studios[STUDIO_OF[t.k]] ? <span className="tpl-lib" title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={12} />{studios[STUDIO_OF[t.k]]!.skills} skill</span> : <span className="new-tag">Mới</span>}</span>
-                  <span className="tpl-pop"><b>{t.name}</b><i>Của Synchro</i><span>{t.desc}</span></span>
-                </button>
-              ))}
-            </div>
-            <div className="muted" style={{ fontSize: 12, margin: "28px 0 10px" }}>{tab === 3 ? "Ứng dụng nội bộ" : tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</div>
-            {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
-              onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
+            <section className="sy-sec">
+              <div className="sy-sh"><h2>Tạo thứ gì đó mới</h2><span className="sy-rule" /></div>
+              <div className="sy-tpls">
+                {TPLS.map((t) => {
+                  const lib = studios[STUDIO_OF[t.k]];
+                  return (
+                    <button key={t.k} className="sy-tpl" onClick={() => { setTplMode(t.k); setView("new"); }}>
+                      <div className="sy-tpl-art"><TplArt k={t.k} /></div>
+                      <div className="sy-tpl-b">
+                        <div className="sy-tpl-t"><b>{t.name}</b>{lib ? <span className="sy-tag" title={lib.name}><I.Plugins size={11} />{lib.skills} skill</span> : <span className="sy-tag on">Mới</span>}</div>
+                        <p>{t.desc}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+            <section className="sy-sec">
+              <div className="sy-sh"><h2>{tab === 3 ? "Ứng dụng nội bộ" : tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</h2><span className="sy-rule" /></div>
+              {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
+                onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
+            </section>
           </div></div>
         )}
 

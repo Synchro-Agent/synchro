@@ -117,10 +117,10 @@ try {
 
   await click(`document.querySelector(".pl-add")`, "Thêm"); await sleep(600);
   const menu = await text(".pl-menu .pl-mi b");
-  ok(/Thêm từ GitHub/.test(menu) && /Tải lên skill/.test(menu) && /Duyệt danh mục/.test(menu), "menu Thêm: " + menu, menu);
+  ok(/Thêm từ link repo/.test(menu) && /Tải lên skill/.test(menu) && /Duyệt danh mục/.test(menu), "menu Thêm: " + menu, menu);
   await shot("2-menu");
-  await click(byText(".pl-menu .menu-item", "Thêm từ GitHub"), "menu GitHub"); await sleep(700);
-  ok(await ev(`document.activeElement === document.querySelector(".hub-yours .gh-add input")`), "chọn Thêm từ GitHub → con trỏ vào ô link");
+  await click(byText(".pl-menu .menu-item", "Thêm từ link repo"), "menu link repo"); await sleep(700);
+  ok(await ev(`document.activeElement === document.querySelector(".hub-yours .gh-add input")`), "chọn Thêm từ link repo → con trỏ vào ô link");
 
   // Kéo thả tệp SKILL.md vào giữa trang
   const at = await ev(`(() => { const b = document.querySelector(".pl-tip").getBoundingClientRect(); return [b.x + 60, b.y + 5]; })()`);

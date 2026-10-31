@@ -1,0 +1,279 @@
+/* =====================================================================================================================
+   Giao diện riêng của Synchro (bộ nhận diện v4) cho: Artifacts, Dự án, hộp tạo dự án, trang dự án, hộp ngôn ngữ, Cài đặt.
+   - Màu trung tính: Carbon / Ivory, Graphite cho chữ phụ, Ash / Stone cho bề mặt và viền. Không màu nhấn.
+   - Chữ: tiêu đề trang bằng Unbounded (cỡ vừa phải), mọi chữ còn lại bằng Anthropic Sans. Không đánh số mục, không chữ đơn cách.
+   - Đường kẻ mảnh 1px, thẻ phẳng viền mảnh, nút và bộ chọn dạng viên thuốc.
+   - Giữ nguyên animation sẵn có (thẻ thư mục kính của Dự án, ô thả tệp ngữ cảnh).
+   Tệp này nạp sau glass.css nên ghi đè được các quy tắc cũ của những màn hình trên.
+   ===================================================================================================================== */
+:root{
+  --sy-bg:#EEECE5;--sy-surface:#E8E6DE;--sy-raised:#F5F4EF;--sy-line:#D6D3C9;--sy-soft:#E0DDD3;--sy-fg:#111210;--sy-muted:#64655E;
+  --sy-card:color-mix(in srgb,var(--sy-raised) 72%,transparent);
+}
+[data-theme="dark"]{--sy-bg:#111210;--sy-surface:#161714;--sy-raised:#1C1D1A;--sy-line:#2A2B26;--sy-soft:#1E1F1B;--sy-fg:#EEECE5;--sy-muted:#8F9088;
+  --sy-card:color-mix(in srgb,var(--sy-raised) 78%,transparent)}
+
+/* ---------------------------------------------------------------- bộ phận dùng chung */
+.sy-tag{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border:1px solid var(--sy-line);border-radius:999px;
+  font-size:11px;font-weight:500;color:var(--sy-muted);white-space:nowrap}
+.sy-tag svg{width:11px;height:11px}
+.sy-tag.on{background:var(--sy-fg);border-color:var(--sy-fg);color:var(--sy-bg)}
+/* Tiêu đề nhóm: chữ thường đậm vừa, đường kẻ mảnh chạy tới mép phải. */
+.sy-sh{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+.sy-sh h2{margin:0;font-size:14px;font-weight:560;color:var(--sy-fg);white-space:nowrap;letter-spacing:0}
+.sy-sh .sy-rule{flex:1;height:1px;background:var(--sy-line);min-width:24px}
+/* Đầu trang: tiêu đề, công cụ bên phải, kẻ mảnh bên dưới. */
+.sy-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 0 16px;margin:0 0 22px;border-bottom:1px solid var(--sy-line)}
+.sy-head h1{margin:0;font:400 26px/1.15 var(--font-display)!important;letter-spacing:-.04em!important;color:var(--sy-fg)}
+.sy-head .sy-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+/* Bộ chọn dạng viên thuốc: rãnh viền mảnh, mục đang chọn tô đặc. */
+.sy-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--sy-line);border-radius:999px;background:transparent}
+.sy-seg>button{height:28px;padding:0 13px;border-radius:999px;font-size:13px;font-weight:460;color:var(--sy-muted);white-space:nowrap;
+  transition:background-color .35s var(--ease-glide),color .35s var(--ease-glide)}
+.sy-seg>button:hover{color:var(--sy-fg)}
+.sy-seg>button.on{background:var(--sy-fg);color:var(--sy-bg)}
+.sy-search{display:flex;align-items:center;gap:8px;height:34px;padding:0 13px;border:1px solid var(--sy-line);border-radius:999px;color:var(--sy-muted);
+  background:transparent;transition:border-color .2s}
+.sy-search:focus-within{border-color:var(--sy-fg)}
+.modal label.sy-search{display:flex;margin:0 0 14px;font-size:13.5px;font-weight:400}
+.sy-search input{flex:1;min-width:0;border:0;background:transparent;font-size:13.5px;color:var(--sy-fg)}
+.sy-input{width:100%;border:1px solid var(--sy-line);border-radius:12px;background:var(--sy-card);padding:10px 13px;font-size:14px;color:var(--sy-fg);
+  transition:border-color .2s,background-color .2s;resize:vertical}
+.sy-input::placeholder{color:var(--sy-muted);opacity:.8}
+.sy-input:focus{outline:0;border-color:var(--sy-fg);background:var(--sy-raised)}
+
+/* ---------------------------------------------------------------- Artifacts */
+.page.sy-art .page-in{max-width:1000px}
+.sy-art .sy-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 28px;flex-wrap:wrap}
+.sy-art .sy-bar .sy-search{width:min(260px,100%)}
+.sy-art .sy-sec{margin:0 0 32px}
+/* Thẻ tạo mới: gọn (ba thẻ trong khoảng 780px), hình thu nhỏ có mảng màu của sản phẩm. */
+.sy-tpls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:780px}
+.sy-tpl{position:relative;display:flex;flex-direction:column;text-align:left;border:1px solid var(--sy-line);border-radius:16px;overflow:hidden;
+  background:var(--sy-card);color:var(--sy-fg);transition:border-color .3s,transform .45s var(--ease-glide)}
+.sy-tpl:hover{border-color:var(--sy-muted);transform:translateY(-2px)}
+.sy-tpl:focus-visible{outline:2px solid var(--sy-fg);outline-offset:2px}
+.sy-tpl-art{position:relative;height:124px;border-bottom:1px solid var(--sy-line);background:var(--sy-surface);overflow:hidden}
+.sy-tplsvg{position:absolute;inset:0;width:100%;height:100%}
+.sy-tplsvg .s-paper{fill:var(--sy-raised);stroke:var(--sy-line);stroke-width:1}
+.sy-tplsvg .s-ink{fill:var(--sy-fg)}
+.sy-tplsvg .s-line{fill:var(--sy-line)}
+.sy-tplsvg .s-block{fill:var(--sy-soft)}
+.sy-tplsvg .s-paperfill{fill:var(--sy-raised)}
+.sy-tplsvg .o5{opacity:.45}.sy-tplsvg .o7{opacity:.7}
+.sy-tplsvg .s-sel{fill:none;stroke:var(--sy-fg);stroke-width:1.2}
+.sy-tplsvg .s-handle{fill:var(--sy-raised);stroke:var(--sy-fg);stroke-width:1.2}
+.sy-tplsvg .s-cursor{fill:var(--sy-fg);stroke:var(--sy-raised);stroke-width:1.2;stroke-linejoin:round}
+.sy-tplsvg .s-dot{fill:var(--sy-line)}
+.sy-tplsvg .s-link{fill:none;stroke:var(--sy-muted);stroke-width:1.2;stroke-dasharray:3 3}
+/* Chuyển động khi rê chuột: chữ được viết ra, cột dâng lên, bình luận / bảng vẽ trượt nhẹ. Tắt dần, không vọt quá. */
+.sy-tplsvg :is(.s-type rect,.s-bars rect,.s-cols rect){transform-box:fill-box}
+.sy-tplsvg .s-type rect{transform-origin:left center}
+.sy-tplsvg :is(.s-bars,.s-cols) rect{transform-origin:center bottom}
+.sy-tplsvg :is(.s-note,.s-board,.s-sel){transition:transform .7s var(--ease-glide)}
+.sy-tpl:hover .s-type rect{animation:sy-type .8s var(--ease-out) both}
+.sy-tpl:hover .s-type rect:nth-child(2){animation-delay:.12s}
+.sy-tpl:hover .s-type rect:nth-child(3){animation-delay:.24s}
+.sy-tpl:hover :is(.s-bars,.s-cols) rect{animation:sy-rise .7s var(--ease-out) both}
+.sy-tpl:hover :is(.s-bars,.s-cols) rect:nth-child(2){animation-delay:.07s}
+.sy-tpl:hover :is(.s-bars,.s-cols) rect:nth-child(3){animation-delay:.14s}
+.sy-tpl:hover :is(.s-bars,.s-cols) rect:nth-child(4){animation-delay:.21s}
+.sy-tpl:hover .s-note{transform:translate(-8px,2px)}
+.sy-tpl:hover .slides .s-sel{transform:translateX(64px)}
+.sy-tpl:hover .s-board{transform:translate(-6px,3px)}
+@keyframes sy-type{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes sy-rise{from{transform:scaleY(.3)}to{transform:scaleY(1)}}
+.sy-tpl-b{display:flex;flex-direction:column;gap:4px;padding:12px 14px 14px}
+.sy-tpl-t{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sy-tpl-t b{font-size:14.5px;font-weight:560}
+.sy-tpl-b p{margin:0;font-size:12.5px;line-height:1.5;color:var(--sy-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* Thẻ artifact */
+.sy-art .art-grid{gap:12px}
+.sy-art .art-tile{border:1px solid var(--sy-line)!important;border-radius:16px!important;background:var(--sy-card)!important;box-shadow:none!important;overflow:hidden;
+  transition:border-color .3s}
+.sy-art .art-tile:hover{border-color:var(--sy-muted)!important;transform:none!important}
+.sy-art .art-tile>:first-child{border-bottom:1px solid var(--sy-line)}
+.sy-art .art-tile-meta b{font-size:13.5px;font-weight:500;color:var(--sy-fg)}
+.sy-art .art-tile-ic{border:1px solid var(--sy-line);background:transparent!important;color:var(--sy-fg)}
+.sy-art .apps-row{border:1px solid var(--sy-line);border-radius:14px;background:var(--sy-card)}
+
+/* ---------------------------------------------------------------- Dự án: danh sách (thẻ thư mục kính và animation giữ nguyên) */
+.sy-psec{margin:0 0 26px}
+.sy-proj .pj-empty{border:1px dashed var(--sy-line);border-radius:20px;background:transparent}
+.sy-proj .pj-arch{color:var(--sy-muted)}
+.sy-proj .pj-arch:hover{color:var(--sy-fg)}
+/* Điện thoại: lưới cũ để 4 cột nên các thư mục (rộng 132px) đè lên nhau; giữ 2 cột. */
+@media (max-width:760px){.sy-proj .pj-gridf{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:18px 8px!important}}
+
+/* ---------------------------------------------------------------- Dự án: trang chi tiết */
+.sy-projpage .pj-crumb{font-size:13px;color:var(--sy-muted)}
+.sy-projpage .pj-crumb button{color:var(--sy-muted)}
+.sy-projpage .pj-crumb button:hover{color:var(--sy-fg)}
+.sy-projpage .pj-crumb b{color:var(--sy-fg);font-weight:500}
+.sy-projpage .pj-title{padding-bottom:16px;border-bottom:1px solid var(--sy-line);margin-bottom:14px}
+.sy-projpage .pj-title h1{font:400 26px/1.15 var(--font-display)!important;letter-spacing:-.04em!important}
+/* Dải số liệu: bốn ô kẻ mảnh, số ở trên, tên ở dưới. */
+.sy-pmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 20px;border:1px solid var(--sy-line);border-radius:14px;overflow:hidden}
+.sy-pmeta>span{display:flex;flex-direction:column;gap:2px;padding:10px 14px;min-width:0}
+.sy-pmeta>span+span{border-left:1px solid var(--sy-line)}
+.sy-pmeta b{font-size:18px;font-weight:560;line-height:1.3;color:var(--sy-fg);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sy-pmeta>span:last-child b{font-size:14px;line-height:1.75}
+.sy-pmeta em{font-size:12px;font-style:normal;color:var(--sy-muted)}
+@media (max-width:760px){.sy-pmeta{grid-template-columns:repeat(2,minmax(0,1fr))}.sy-pmeta>span:nth-child(3){border-left:0}.sy-pmeta>span:nth-child(n+3){border-top:1px solid var(--sy-line)}}
+.sy-projpage .pj-desc{max-width:72ch;color:var(--sy-muted);font-size:14px;line-height:1.6;margin:0 0 14px}
+.sy-projpage .pj-chat{border-radius:12px}
+.sy-projpage .pj-chats-empty{border:1px dashed var(--sy-line);border-radius:16px}
+/* Bảng bên phải: các mục ngăn bằng kẻ mảnh, tiêu đề chữ thường. */
+.sy-projpage .pj-side{border:1px solid var(--sy-line)!important;border-radius:18px!important;background:var(--sy-card)!important;box-shadow:none!important;padding:0!important;overflow:hidden}
+.sy-projpage .pj-side>section{padding:16px 18px!important;border-top:1px solid var(--sy-line)!important;margin:0!important}
+.sy-projpage .pj-side>section:first-child{border-top:0!important}
+.sy-projpage .pj-sh{display:flex;align-items:center;gap:8px;margin:0 0 8px!important;min-height:28px}
+.sy-projpage .pj-sh h3{flex:1;margin:0!important;font-size:14px!important;font-weight:560!important;color:var(--sy-fg)}
+.sy-projpage .pj-sh .icon-btn{width:28px;height:28px;border:1px solid var(--sy-line);border-radius:999px;color:var(--sy-fg)}
+.sy-projpage .pj-memlink{font-size:12px;font-weight:500;color:var(--sy-muted);border:1px solid var(--sy-line);border-radius:999px;padding:4px 10px}
+.sy-projpage .pj-memlink:hover{color:var(--sy-fg);border-color:var(--sy-muted)}
+.sy-projpage .pj-skills li{border-top:1px solid var(--sy-soft)!important;background:transparent!important}
+.sy-projpage .pj-skills li:first-child{border-top:0!important}
+.sy-projpage .pj-sk-all{border:1px solid var(--sy-line);border-radius:999px;background:transparent!important;color:var(--sy-muted)!important}
+.sy-projpage .pj-ctx-empty{border-color:var(--sy-line)!important}
+
+/* ---------------------------------------------------------------- hộp thoại (tạo / sửa dự án, ngôn ngữ, hộp của trang dự án) */
+html body .modal.sy-modal{width:min(520px,94vw);padding:0;border-radius:20px}
+.sy-modal .sy-mh{position:relative;padding:20px 24px 16px;border-bottom:1px solid var(--sy-line)}
+.sy-modal .sy-mh h2{margin:0!important;padding-right:40px;font:400 20px/1.25 var(--font-display)!important;letter-spacing:-.035em!important;color:var(--sy-fg)}
+.sy-modal .sy-x{position:absolute;top:16px;right:16px;width:32px;height:32px;border:1px solid var(--sy-line);border-radius:999px;color:var(--sy-fg)}
+.sy-modal .sy-x:hover{border-color:var(--sy-muted)}
+.sy-modal .sy-mb{padding:4px 24px 0}
+.sy-fieldrow{padding:16px 0;border-bottom:1px solid var(--sy-soft)}
+.sy-fieldrow:last-child{border-bottom:0}
+.sy-fieldrow label{display:block;margin:0 0 2px!important;font-size:14px!important;font-weight:500!important;color:var(--sy-fg)}
+.sy-fieldrow small{display:block;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--sy-muted)}
+.sy-modal .sy-mf{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 24px 18px;border-top:1px solid var(--sy-line);margin-top:4px}
+.sy-modal .sy-mf .sy-kbd{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid var(--sy-line);border-radius:7px;font-size:12px;color:var(--sy-muted)}
+@media (hover:none){.sy-modal .sy-mf .sy-kbd{visibility:hidden}}
+.sy-modal .sy-mf>div{display:flex;gap:8px;margin-left:auto}
+/* Ngôn ngữ */
+.sy-lang .sy-mb{padding:18px 24px 22px}
+.sy-langs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sy-langs>button{position:relative;display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--sy-line);border-radius:14px;
+  text-align:left;background:transparent;color:var(--sy-fg);transition:border-color .25s,background-color .35s var(--ease-glide)}
+.sy-langs>button:hover{border-color:var(--sy-muted)}
+.sy-langs>button.on{border-color:var(--sy-fg);background:var(--sy-card)}
+.sy-langs .g{display:grid;place-items:center;flex:none;width:42px;height:42px;border:1px solid var(--sy-line);border-radius:11px;background:var(--sy-surface);
+  font:400 16px/1 var(--font-display);letter-spacing:-.03em}
+.sy-langs b{display:block;font-size:14px;font-weight:500}
+.sy-langs em{display:block;margin-top:2px;font-size:12px;font-style:normal;color:var(--sy-muted)}
+.sy-langs .ck{position:absolute;top:50%;right:12px;margin-top:-11px;display:grid;place-items:center;width:22px;height:22px;border-radius:999px;background:var(--sy-fg);color:var(--sy-bg)}
+/* Hộp của trang dự án (hướng dẫn, văn bản, bộ nhớ): cùng kiểu viền mảnh. */
+html body .modal.pj-modal{border-radius:20px}
+.modal.pj-modal h2{font:400 20px/1.25 var(--font-display)!important;letter-spacing:-.035em!important}
+.modal.pj-modal .field,.sy-modal .field{border:1px solid var(--sy-line);border-radius:12px;background:var(--sy-card)}
+.modal.pj-modal .field:focus,.sy-modal .field:focus{border-color:var(--sy-fg);box-shadow:none}
+
+/* ---------------------------------------------------------------- Cài đặt */
+html body .modal.settings.sy-settings{border-radius:22px}
+.sy-settings .s-nav{width:224px;background:transparent!important;border-right:1px solid var(--sy-line)!important;padding:20px 12px!important;display:flex;flex-direction:column}
+.sy-settings .sy-snav-h{padding:2px 10px 14px}
+.sy-settings .sy-snav-h b{font:400 18px/1.2 var(--font-display);letter-spacing:-.035em;color:var(--sy-fg)}
+.sy-settings .s-search{height:34px;border:1px solid var(--sy-line);border-radius:999px!important;background:transparent!important;margin:0 0 16px!important;padding:0 12px!important;color:var(--sy-muted)}
+.sy-settings .s-search:focus-within{border-color:var(--sy-fg)}
+.sy-settings .s-group{font-size:12px!important;font-weight:500!important;color:var(--sy-muted)!important;padding:0 10px!important;margin:0 0 6px!important}
+.sy-settings .s-item+.s-group{margin-top:18px!important}
+.sy-settings .s-item{border:1px solid transparent;border-radius:10px!important;color:var(--sy-muted)!important;background:transparent!important;
+  transition:color .2s,border-color .25s,background-color .25s}
+.sy-settings .s-item:hover{color:var(--sy-fg)!important;background:var(--sy-soft)!important}
+.sy-settings .s-item.on{color:var(--sy-fg)!important;border-color:var(--sy-line);background:var(--sy-card)!important}
+.sy-settings .close{width:32px;height:32px;border:1px solid var(--sy-line);border-radius:999px;top:18px!important;right:18px!important}
+.sy-settings .s-body{padding:24px 36px 36px!important}
+.sy-sbody-h{padding:0 44px 14px 0;margin:0 0 4px;border-bottom:1px solid var(--sy-line)}
+.sy-sbody-h h2{margin:2px 0 0;font:400 22px/1.2 var(--font-display);letter-spacing:-.04em;color:var(--sy-fg)}
+/* Tiêu đề ghi sẵn trong từng mục trùng với đầu trang: ẩn (giữ phần mô tả và nút). */
+.sy-settings .adm-head .adm-badge,.sy-settings .adm-head .s-title,.sy-settings .us-page>h3:first-child,.sy-settings .bn>h3:first-child,.sy-settings .pl-top .pl-title{display:none!important}
+.sy-settings .adm-head{margin:14px 0 8px!important;padding:0!important}
+.sy-settings .adm-head .d,.sy-settings .us-page>.d,.sy-settings .bn>p.d,.sy-settings .s-body>p.d{font-size:13.5px;line-height:1.6;color:var(--sy-muted);max-width:68ch}
+/* Mục con: tên chữ thường đậm vừa, đường kẻ mảnh chạy tới mép phải. */
+.sy-settings .s-body h3{display:flex;align-items:center;gap:12px;margin:30px 0 8px!important;font-size:14px!important;font-weight:560!important;color:var(--sy-fg)!important}
+.sy-settings .s-body h3::after{content:"";flex:1;height:1px;background:var(--sy-line)}
+.sy-settings .s-body h3 .muted{color:var(--sy-muted)!important;font-weight:400}
+.sy-settings .sy-sbody-h+h3,.sy-settings .sy-sbody-h+*>h3:first-child{margin-top:22px!important}
+.sy-settings .row{padding:15px 0!important;border-top:1px solid var(--sy-soft)!important;gap:28px}
+.sy-settings h3+.row,.sy-settings .row:first-of-type{border-top:0!important}
+.sy-settings .row .t{font-size:14px;font-weight:460;color:var(--sy-fg)}
+.sy-settings .row .d{font-size:12.5px;line-height:1.5;color:var(--sy-muted)!important}
+/* Bộ chọn trong Cài đặt (Chủ đề, Cỡ chữ, Độ rộng…): rãnh viền mảnh, mục chọn tô đặc. */
+.sy-settings .group{background:transparent!important;border:1px solid var(--sy-line);border-radius:999px!important;padding:3px!important;gap:2px}
+.sy-settings .group button{height:28px!important;border-radius:999px!important;color:var(--sy-muted)!important;padding:0 13px;
+  transition:background-color .35s var(--ease-glide),color .35s var(--ease-glide)!important}
+.sy-settings .group button:hover{color:var(--sy-fg)!important}
+.sy-settings .group button.on{background:var(--sy-fg)!important;color:var(--sy-bg)!important;box-shadow:none!important}
+.sy-settings .sel{white-space:nowrap;height:32px;padding:0 12px!important;border:1px solid var(--sy-line);border-radius:999px!important;background:transparent}
+.sy-settings .sel:hover{border-color:var(--sy-muted);background:transparent!important}
+/* Công tắc: rãnh viền mảnh khi tắt, tô đặc khi bật. */
+.sy-settings .toggle,.sy-projpage .toggle{background:transparent!important;box-shadow:inset 0 0 0 1px var(--sy-line)}
+.sy-settings .toggle::after,.sy-projpage .toggle::after{background:var(--sy-muted)!important;box-shadow:none!important}
+.sy-settings .toggle.on,.sy-projpage .toggle.on{background:var(--sy-fg)!important;box-shadow:none}
+.sy-settings .toggle.on::after,.sy-projpage .toggle.on::after{background:var(--sy-bg)!important}
+/* Thẻ trong các mục (Providers, Mức dùng, Quản trị, Kho kỹ năng, Connectors…): phẳng, viền mảnh, không bóng. */
+.sy-settings :is(.api-card,.us-card,.inset,.promo,.dcard,.adm-stat,.adm-card,.cn-row,.cn-card,.us-vc,.pl-hero,.apps-row){
+  border:1px solid var(--sy-line)!important;border-radius:14px!important;background:var(--sy-card)!important;box-shadow:none!important}
+.sy-settings .pl-rows2{border-top:1px solid var(--sy-line)}
+.sy-settings .pl-row2{border-radius:0!important;border-bottom:1px solid var(--sy-soft);background:transparent!important}
+.sy-settings .pl-sec{font-size:12px!important;font-weight:500!important;color:var(--sy-muted)!important;margin:24px 0 8px!important}
+/* Trạng thái: chữ giữ màu mực, chỉ chấm tròn mang màu trạng thái. */
+.sy-settings .pv-tag.ok{color:var(--sy-fg)!important}
+/* Công tắc của Bộ não: cùng kiểu với các công tắc khác, không dùng màu nhấn. */
+.sy-settings .bg-sw{background:transparent;box-shadow:inset 0 0 0 1px var(--sy-line)}
+.sy-settings .bg-sw i{background:var(--sy-muted);box-shadow:none}
+.sy-settings .bg-sw.on{background:var(--sy-fg)}
+.sy-settings .bg-sw.on i{background:var(--sy-bg)}
+/* Số liệu Bộ não: dải ô kẻ mảnh như trang dự án. */
+.sy-settings .bn-stats{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:0!important;border:1px solid var(--sy-line);border-radius:14px;overflow:hidden;margin:14px 0!important}
+.sy-settings .bn-stats>span{display:flex!important;flex-direction:column;gap:2px;padding:10px 14px!important;border:0!important;border-radius:0!important;background:transparent!important;
+  font-size:12px!important;color:var(--sy-muted)!important}
+.sy-settings .bn-stats>span+span{border-left:1px solid var(--sy-line)!important}
+.sy-settings .bn-stats b{font-size:18px!important;font-weight:560!important;line-height:1.3;color:var(--sy-fg);font-variant-numeric:tabular-nums}
+/* Kho kỹ năng: bộ chọn Của bạn / Khám phá dạng viên thuốc. */
+.sy-settings .pl-seg{gap:2px;border:1px solid var(--sy-line);border-radius:999px;background:transparent}
+.sy-settings .pl-seg button{border-radius:999px;color:var(--sy-muted)}
+.sy-settings .pl-seg button.on{background:var(--sy-fg);color:var(--sy-bg);box-shadow:none}
+.sy-settings .field,.sy-settings .textarea,.sy-settings input.field{border:1px solid var(--sy-line)!important;border-radius:12px!important;background:var(--sy-card)!important}
+.sy-settings .field:focus,.sy-settings .textarea:focus{border-color:var(--sy-fg)!important;box-shadow:none!important}
+.sy-settings .s-body .btn{border-radius:999px}
+
+/* ---------------------------------------------------------------- màn hình hẹp */
+@media (max-width:900px){
+  .sy-projpage .pj-cols{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .sy-tpls{grid-template-columns:1fr;max-width:none}
+  .sy-tpl{flex-direction:row}
+  .sy-tpl-art{height:auto;width:132px;flex:none;border-bottom:0;border-right:1px solid var(--sy-line)}
+  .sy-langs{grid-template-columns:1fr}
+  .sy-head{flex-wrap:wrap}
+  /* Artifacts: tab cuộn ngang, ô tìm kiếm rộng hết hàng */
+  .sy-art .sy-bar{flex-direction:column;align-items:stretch;gap:12px}
+  .sy-art .sy-bar .sy-seg{max-width:100%;overflow-x:auto;scrollbar-width:none;align-self:flex-start}
+  .sy-art .sy-bar .sy-seg::-webkit-scrollbar{display:none}
+  .sy-art .sy-bar .sy-search{width:100%}
+}
+/* Cài đặt trên điện thoại: thanh icon hẹp như bản cũ (cùng mốc 720px của globals.css), nhóm tách bằng một vạch mảnh. */
+@media (max-width:720px){
+  .sy-settings .s-nav{width:60px!important;padding:14px 8px!important;border-right:1px solid var(--sy-line)!important}
+  .sy-settings .sy-snav-h,.sy-settings .s-search,.sy-settings .s-item .s-lbl,.sy-settings .s-search+.s-group{display:none!important}
+  .sy-settings .s-group{display:block!important;height:1px;padding:0!important;margin:12px 8px!important;background:var(--sy-line);font-size:0!important;overflow:hidden}
+  .sy-settings .s-item{justify-content:center;padding:0!important;height:40px!important}
+  .sy-settings .s-body{padding:18px 16px 32px!important}
+  /* Hàng cài đặt: nhãn chiếm cả dòng khi không đủ chỗ, nút điều khiển xuống dòng dưới (canh phải) */
+  .sy-settings .row{flex-wrap:wrap;row-gap:10px!important;column-gap:16px!important}
+  .sy-settings .row>div:first-child{flex:1 1 200px;min-width:0}
+  .sy-settings .row>:not(:first-child){margin-left:auto}
+  .sy-settings .bn-stats>span{border-top:1px solid var(--sy-line)!important;margin-top:-1px}
+  .sy-settings .promo{flex-direction:column;align-items:stretch}
+  .sy-settings .promo>*{max-width:100%;min-width:0}
+  .sy-sbody-h{padding-right:44px}
+  .sy-sbody-h h2{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){
+  .sy-tpl,.sy-tplsvg :is(.s-note,.s-board,.s-sel){transition:none}
+  .sy-tpl:hover :is(.s-type,.s-bars,.s-cols) rect{animation:none}
+}

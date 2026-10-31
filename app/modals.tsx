@@ -5,7 +5,7 @@ import * as I from "./icons";
 import { UsageIcon } from "./usageui";
 import { SettingsBody } from "./settings";
 import { usePref, useApp } from "./store";
-import type { Lang } from "./i18n";
+import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 
 export function Confirm({ title, text, ok, onCancel, onOk }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void }) {
@@ -24,17 +24,26 @@ export function LangModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState("");
   const [lang, setLang] = usePref<Lang>("uilang", "vi");
   const [, setVlang] = usePref("vlang", "Vietnamese");
-  const LANGS: [Lang, string, string][] = [["vi", "Tiếng Việt", "Vietnamese"], ["en", "English", "English (US)"]];
+  // [mã, tên, tên tiếng Anh, chữ đại diện, mã vùng]
+  const LANGS: [Lang, string, string, string, string][] = [["vi", "Tiếng Việt", "Vietnamese", "Vi", "VI-VN"], ["en", "English", "English (US)", "En", "EN-US"]];
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal sm" style={{ width: 460 }}>
-        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 12, right: 12 }}><I.X size={16} /></button>
-        <h2 style={{ fontSize: 15 }}>Chọn ngôn ngữ của bạn</h2>
-        <input className="field" autoFocus placeholder="Tìm ngôn ngữ" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="langs" data-notr style={{ gridTemplateColumns: "1fr 1fr" }}>
-          {LANGS.filter(([, n, e]) => (n + e).toLowerCase().includes(q.toLowerCase())).map(([k, n, e]) => (
-            <button key={k} className={`lang ${lang === k ? "on" : ""}`} onClick={() => { setLang(k); setVlang(k === "en" ? "English" : "Vietnamese"); onClose(); }}><span><b>{n}</b><br /><span className="muted" style={{ fontSize: 12 }}>{e}</span></span>{lang === k && <I.Check size={16} />}</button>
-          ))}
+      <div className="modal sy-modal sy-lang">
+        <div className="sy-mh">
+          <h2>Chọn ngôn ngữ của bạn</h2>
+          <button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button>
+        </div>
+        <div className="sy-mb">
+          <label className="sy-search"><I.Search size={15} /><input autoFocus placeholder="Tìm ngôn ngữ" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+          <div className="sy-langs" data-notr>
+            {LANGS.filter(([, n, e]) => (n + e).toLowerCase().includes(q.toLowerCase())).map(([k, n, e, g, code]) => (
+              <button key={k} className={lang === k ? "on" : ""} aria-pressed={lang === k} onClick={() => { setLang(k); setVlang(k === "en" ? "English" : "Vietnamese"); onClose(); }}>
+                <span className="g"><span>{g}</span></span>
+                <span><b>{n}</b><em>{code} · {e}</em></span>
+                {lang === k && <span className="ck"><I.Check size={13} /></span>}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -44,18 +53,36 @@ export function LangModal({ onClose }: { onClose: () => void }) {
 export function ProjectModal({ onClose, onCreate, init, title = "Tạo dự án", ok = "Tạo dự án" }: { onClose: () => void; onCreate: (n: string, d: string) => void; init?: { name: string; desc: string }; title?: string; ok?: string }) {
   const [n, setN] = useState(init?.name ?? "");
   const [d, setD] = useState(init?.desc ?? "");
+  const go = () => n.trim() && onCreate(n.trim(), d.trim());
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal sm">
-        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}><I.X /></button>
-        <h2>{title}</h2>
-        <label>Bạn đang làm việc gì?</label>
-        <input className="field" autoFocus placeholder="Đặt tên cho dự án" value={n} onChange={(e) => setN(e.target.value)} />
-        <label>Bạn đang muốn đạt được điều gì?</label>
-        <textarea className="field" rows={4} placeholder="Mô tả dự án, mục tiêu, chủ đề, v.v." value={d} onChange={(e) => setD(e.target.value)} />
-        <div className="modal-foot">
-          <button className="btn" onClick={onClose}>Hủy</button>
-          <button className="btn dark" onClick={() => n.trim() && onCreate(n.trim(), d.trim())}>{ok}</button>
+      <div className="modal sy-modal" onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); go(); } }}>
+        <div className="sy-mh">
+          <h2>{title}</h2>
+          <button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button>
+        </div>
+        <div className="sy-mb">
+          <div className="sy-fieldrow">
+            <div>
+              <label htmlFor="sy-pj-name">Tên dự án</label>
+              <small>Tên ngắn để tìm lại dự án ở thanh bên và trang Dự án.</small>
+              <input id="sy-pj-name" className="sy-input" autoFocus placeholder="Ví dụ: Ra mắt Synchro bản di động" value={n} onChange={(e) => setN(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); go(); } }} />
+            </div>
+          </div>
+          <div className="sy-fieldrow">
+            <div>
+              <label htmlFor="sy-pj-desc">Mục tiêu và bối cảnh</label>
+              <small>Synchro đọc phần này trước mỗi đoạn chat trong dự án.</small>
+              <textarea id="sy-pj-desc" className="sy-input" rows={4} placeholder="Dự án nhằm đạt điều gì, cho ai, đang ở giai đoạn nào…" value={d} onChange={(e) => setD(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <div className="sy-mf">
+          <span className="sy-kbd" data-notr>⌘ ⏎</span>
+          <div>
+            <button className="btn" onClick={onClose}>Hủy</button>
+            <button className="btn dark" disabled={!n.trim()} style={!n.trim() ? { opacity: 0.45 } : undefined} onClick={go}>{ok}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -190,19 +217,25 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ...(feat?.skills !== false ? [["Skill Hub", <I.Plugins key="pl" />] as [string, React.ReactNode]] : []),
     ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
   ];
-  const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => n.toLowerCase().includes(q.toLowerCase()));
+  // Tìm theo cả tên gốc (tiếng Anh) lẫn tên đang hiện ở giao diện tiếng Việt.
+  const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => [n, tr(n, "vi")].some((x) => x.toLowerCase().includes(q.trim().toLowerCase())));
+  const item = (n: string, ic: React.ReactNode) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>;
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal settings">
-        <button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X /></button>
+      <div className="modal settings sy-settings">
+        <button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
         <div className="s-nav">
-          <div className="s-search"><I.Search size={16} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="sy-snav-h"><b>Settings</b></div>
+          <div className="s-search"><I.Search size={15} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <div className="s-group">Settings</div>
-          {f(items).map(([n, ic]) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>)}
-          <div className="s-group" style={{ marginTop: 20 }}>Customize</div>
-          {f(custom).map(([n, ic]) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>)}
+          {f(items).map(([n, ic]) => item(n, ic))}
+          <div className="s-group">Customize</div>
+          {f(custom).map(([n, ic]) => item(n, ic))}
         </div>
-        <div className="s-body" key={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></div>
+        <div className="s-body" key={tab}>
+          <header className="sy-sbody-h"><h2>{tab}</h2></header>
+          <SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} />
+        </div>
       </div>
     </div>
   );

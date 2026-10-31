@@ -9,6 +9,12 @@ export const VI2EN: Record<string, string> = {
   "Phiên code mới": "New code session",
   "Phiên mới": "New session",
   "Luật dự án": "Project rules",
+  // Giao diện riêng của Synchro: trang dự án, hộp tạo dự án
+  "Mục ghi nhớ": "Memories", "Cập nhật gần nhất": "Last updated",
+  "Tên dự án": "Project name", "Tên ngắn để tìm lại dự án ở thanh bên và trang Dự án.": "A short name to find the project in the sidebar and on the Projects page.",
+  "Ví dụ: Ra mắt Synchro bản di động": "e.g. Launch Synchro on mobile", "Mục tiêu và bối cảnh": "Goal and context",
+  "Synchro đọc phần này trước mỗi đoạn chat trong dự án.": "Synchro reads this before every chat in the project.",
+  "Dự án nhằm đạt điều gì, cho ai, đang ở giai đoạn nào…": "What the project is for, who it serves, what stage it is at…",
   "Xuất cuộc trò chuyện (.md)": "Export conversation (.md)",
   "Trình duyệt": "Browser",
   "File": "Files",
@@ -1825,7 +1831,7 @@ Object.assign(VI2EN, {
 EN2VI["Default access"] = "Quyền mặc định";
 SAME.add("Audio Native");
 EN2VI["Web design guidelines, React best practices, view transitions, deploy."] = "Hướng dẫn thiết kế web, React best practices, view transitions, triển khai.";
-for (const w of ["Emil", "Kowalski", "Level", "Builder", "Leonxlnx", "Parth", "Jadhav", "Szilárd", "Hajba", "Ngân"]) SAME_WORDS.add(w);
+for (const w of ["Vi", "En", "Emil", "Kowalski", "Level", "Builder", "Leonxlnx", "Parth", "Jadhav", "Szilárd", "Hajba", "Ngân"]) SAME_WORDS.add(w);
 RULES_EN.push([/^Cài từ github\.com\/(.*)$/, (m) => `Installed from github.com/${m[1]}`]);
 Object.assign(VI2EN, {
   "Không tìm thấy giọng này (có thể đã bị xóa hoặc chưa được thêm vào tài khoản).": "This voice wasn't found (it may have been deleted or never added to the account).",

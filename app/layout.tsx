@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/unbounded/wght.css";
 import "./globals.css";
 import "./glass.css";
+import "./synchro-ui.css";
 
 const DESC = "Synchro: chat với mọi model AI, viết code, giọng nói và tự động hoá công việc, tất cả đồng bộ một nhịp.";
 
