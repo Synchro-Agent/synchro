@@ -33,10 +33,12 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
 /* ---- structure ---- */
 .dock{position:absolute;left:0;right:0;bottom:0;padding:0 24px 16px;pointer-events:none;z-index:6}
 .dock>*{pointer-events:auto}
+/* Mép cuộn dưới ô nhập: chữ của chat chạy vào đây thì mờ hẳn và nhạt đi (đậm dần từ ngang thân ô nhập), dòng "Synchro là AI…" luôn đọc rõ.
+   Trước đây lớp này chỉ đủ mờ từ 66px nên chữ phía sau vẫn sắc nét và chồng lên dòng đó. */
 .dock::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
-  -webkit-mask-image:linear-gradient(to bottom,transparent 34px,#000 66px);mask-image:linear-gradient(to bottom,transparent 34px,#000 66px);
-  background:linear-gradient(to bottom,transparent 34px,color-mix(in srgb,var(--bg) 60%,transparent) 72px)}
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 14px,#000 42px);mask-image:linear-gradient(to bottom,transparent 14px,#000 42px);
+  background:linear-gradient(to bottom,transparent 14px,color-mix(in srgb,var(--bg) 84%,transparent) 48px)}
 .thread{padding-bottom:140px;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 14px);mask-image:linear-gradient(to bottom,transparent 0,#000 14px)}
 .scroll-down{left:calc(50% - 17px);transform:none}
 .sidebar{margin:10px 0 10px 10px;height:calc(100% - 20px);border-radius:26px;padding-left:0;border:0}
@@ -62,9 +64,11 @@ html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scrol
   backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
   box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.55)),inset -1px -1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.35)),inset 0 0 10px -2px rgba(255,255,255,calc(var(--gl-shine)*.08));
 }
+/* Làm mờ trước rồi mới khúc xạ ở viền: viền bẻ cong phần nền đã mờ nên chữ chạy qua mép không bị tách màu R/G/B, nhấp nháy ("lóa").
+   Đặt khúc xạ trước như trước đây thì Chrome bỏ luôn lớp làm mờ đứng sau bộ lọc SVG: chữ dưới kính vẫn sắc nét. */
 html[data-lens] body :is(.dock .composer,.send,.scroll-down)::before{
-  -webkit-backdrop-filter:var(--lens,) blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
-  backdrop-filter:var(--lens,) blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));
+  -webkit-backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright)) var(--lens,);
+  backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright)) var(--lens,);
 }
 /* specular rim: bright at top-left and bottom-right like a lit edge */
 html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn):not([data-tip])::after{
@@ -80,6 +84,10 @@ html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.scroll-down){--gl-fill:va
 html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){--gl-fill:var(--gl-fill-thick);--gl-blur:22px;--gl-sat:1.9}
 html body .sidebar{--gl-blur:16px;--gl-fill:color-mix(in srgb,var(--gl-fill) 80%,transparent)}
 html body :is(.hero .composer,.tk .tk-comp){--gl-blur:14px}
+/* Ô nhập nổi trên chat đang cuộn: kính dày như ô nhập ở trang chủ (mờ 14px, phủ đậm hơn, bớt tăng bão hoà) để chữ chạy bên dưới chỉ còn
+   là một sắc độ dịu; mờ 4px / phủ 42% để lộ từng dòng chữ thành vệt đậm nhạt chạy liên tục dưới kính. */
+html body .dock .composer{--gl-blur:14px;--gl-sat:1.25;--gl-fill:rgba(250,249,245,.62)}
+[data-theme="dark"] .dock .composer{--gl-fill:rgba(28,29,26,.68)}
 [data-theme="dark"] :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn){--text-2:#d2d2ce;--text-3:#a7a7a3}
 
 /* ---- interaction: light up on hover, grow slightly while pressed, spring back ---- */
