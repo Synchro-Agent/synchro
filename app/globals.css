@@ -4723,6 +4723,7 @@ button.bn-box:disabled{cursor:default}
 .ext-step ol{margin:6px 0 0;padding-left:18px;list-style:decimal;color:var(--text-2);font-size:13px;line-height:1.75}
 .ext-step ol b{font-weight:560;font-size:13px}
 .ext-step code,.ext-try code{font-size:12px;background:var(--hover);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.ext-step li>code{white-space:nowrap}
 .ext-step a.btn{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--text);line-height:32px}
 .ext-url{display:inline-flex;align-items:center;gap:4px;color:var(--text-2);vertical-align:baseline;margin-right:6px}
 .ext-code{display:flex;align-items:center;gap:6px;margin:8px 0 4px}

@@ -91,10 +91,10 @@ export function ExtSetup({ st, reload, say, pairOnly }: { st: ExtState | null; r
         <div>
           <b>Cài vào trình duyệt</b>
           <ol>
-            <li>Giải nén tệp vừa tải, được thư mục <code data-notr>synchro-chrome</code></li>
+            <li>Giải nén tệp vừa tải, được thư mục <code data-notr>synchro-chrome</code> (tải nhiều lần thì tên có thêm số, như <code data-notr>synchro-chrome (1)</code>).</li>
             <li>Mở trang quản lý tiện ích: {["chrome", "edge", "brave"].map((b) => <button key={b} className="ext-url" onClick={() => copy(`${b}://extensions`, `Đã sao chép ${b}://extensions`)} data-tip="Sao chép, rồi dán vào thanh địa chỉ"><code data-notr>{b}://extensions</code><I.Copy size={12} /></button>)}</li>
             <li>Bật Developer mode (Chế độ dành cho nhà phát triển) ở góc trên bên phải.</li>
-            <li>Bấm Load unpacked (Tải tiện ích đã giải nén) rồi chọn thư mục <code data-notr>synchro-chrome</code></li>
+            <li>Bấm Load unpacked (Tải tiện ích đã giải nén) rồi chọn thư mục vừa giải nén: thư mục có tệp <code data-notr>manifest.json</code> ngay bên trong.</li>
             <li>Bấm biểu tượng mảnh ghép trên thanh công cụ và ghim Synchro để dễ mở.</li>
           </ol>
         </div>

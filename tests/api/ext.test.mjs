@@ -260,15 +260,16 @@ if (!chrome) {
 console.log("8. Tải tiện ích (.zip) gắn sẵn địa chỉ Synchro này");
 const zr = await fetch(`${B}/api/browser/ext/download`);
 const zip = await JSZip.loadAsync(Buffer.from(await zr.arrayBuffer())).catch(() => null);
-const file = (p) => zip?.file(`synchro-chrome/${p}`)?.async("string");
+const file = (p) => zip?.file(p)?.async("string");
 const manifest = JSON.parse((await file("manifest.json")) ?? "{}");
 ok(zr.status === 200 && zr.headers.get("content-type") === "application/zip" && /synchro-chrome\.zip/.test(zr.headers.get("content-disposition") ?? ""), "tải tệp synchro-chrome.zip", `${zr.status} ${zr.headers.get("content-type")}`);
+ok(!!zip?.file("manifest.json") && !Object.keys(zip?.files ?? {}).some((n) => /^[^/]+\/manifest\.json$/.test(n)), "manifest.json nằm ngay ở gốc tệp zip: giải nén bằng Windows (Extract All) hay macOS đều được thư mục có manifest.json ngay bên trong", Object.keys(zip?.files ?? {}).slice(0, 5).join(", "));
 ok(manifest.manifest_version === 3 && manifest.permissions?.includes("debugger") && manifest.background?.type === "module", "manifest V3, quyền debugger, service worker dạng module", JSON.stringify(manifest));
 ok((await file("act.js")) === fs.readFileSync("workspace/browser-act.mjs", "utf8"), "act.js đúng là lõi thao tác của trình duyệt Synchro (workspace/browser-act.mjs)");
 ok((await file("config.js"))?.includes(JSON.stringify(B)), "config.js ghi sẵn địa chỉ Synchro", await file("config.js"));
-ok(!!(await file("background.js")) && !!(await file("popup.html")) && !!(await file("_locales/vi/messages.json")) && !zip?.file("synchro-chrome/build.mjs"), "đủ tệp của tiện ích, không kèm công cụ đóng gói");
+ok(!!(await file("background.js")) && !!(await file("popup.html")) && !!(await file("_locales/vi/messages.json")) && !zip?.file("build.mjs"), "đủ tệp của tiện ích, không kèm công cụ đóng gói");
 const icons = [...Object.values(manifest.icons ?? {}), ...Object.values(manifest.action?.default_icon ?? {}), ...[16, 24, 32].map((n) => `icons/toolbar-dark-${n}.png`), "brand.js"];
-ok(icons.length >= 11 && icons.every((p) => !!zip?.file(`synchro-chrome/${p}`)), "logo Synchro: biểu tượng tiện ích, biểu tượng thanh công cụ bản sáng và bản tối, logo cho cửa sổ tiện ích", icons.filter((p) => !zip?.file(`synchro-chrome/${p}`)).join(", "));
+ok(icons.length >= 11 && icons.every((p) => !!zip?.file(p)), "logo Synchro: biểu tượng tiện ích, biểu tượng thanh công cụ bản sáng và bản tối, logo cho cửa sổ tiện ích", icons.filter((p) => !zip?.file(p)).join(", "));
 ok(manifest.permissions?.includes("offscreen") && /MATCH_MEDIA/.test((await file("background.js")) ?? "") && !!(await file("theme.html")), "đổi logo trên thanh công cụ theo theme sáng / tối của trình duyệt");
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

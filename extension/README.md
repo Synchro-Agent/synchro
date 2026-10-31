@@ -5,10 +5,10 @@ Tiện ích này cho Synchro tự làm việc ngay trên trình duyệt của b�
 ## Cài đặt (khoảng 1 phút)
 
 1. **Tải tiện ích.** Trong Synchro mở **Cài đặt → Khả năng → Trình duyệt của bạn** (hoặc khung **Trình duyệt → Chrome của bạn**), bấm **Tải tiện ích (.zip)**. Tệp tải về đã ghi sẵn địa chỉ máy chủ Synchro của bạn.
-2. **Giải nén** tệp `synchro-chrome.zip`. Bạn được thư mục `synchro-chrome`; để thư mục này ở chỗ cố định, không xóa (trình duyệt chạy tiện ích từ chính thư mục đó).
+2. **Giải nén** tệp `synchro-chrome.zip` (Windows: chuột phải → Extract All; macOS: bấm đúp). Bạn được thư mục `synchro-chrome` (tải nhiều lần thì tên có thêm số, như `synchro-chrome (1)`); để thư mục này ở chỗ cố định, không xóa (trình duyệt chạy tiện ích từ chính thư mục đó).
 3. **Mở trang quản lý tiện ích:** gõ `chrome://extensions` vào thanh địa chỉ (Edge: `edge://extensions`, Brave: `brave://extensions`).
 4. **Bật Developer mode** (Chế độ dành cho nhà phát triển) ở góc trên bên phải trang.
-5. Bấm **Load unpacked** (Tải tiện ích đã giải nén) rồi chọn thư mục `synchro-chrome`.
+5. Bấm **Load unpacked** (Tải tiện ích đã giải nén) rồi chọn thư mục vừa giải nén: thư mục có tệp `manifest.json` ngay bên trong. Nếu Chrome báo *Manifest file is missing or unreadable* thì bạn đã chọn nhầm thư mục bên ngoài (thường do tệp tải từ bản cũ của Synchro, bên trong còn một thư mục `synchro-chrome` nữa): mở thư mục đó ra và chọn thư mục `synchro-chrome` bên trong.
 6. Bấm biểu tượng mảnh ghép trên thanh công cụ, **ghim Synchro** để dễ mở. Logo Synchro trên thanh công cụ tự đổi theo giao diện sáng / tối của trình duyệt.
 
 ## Ghép nối với tài khoản Synchro
