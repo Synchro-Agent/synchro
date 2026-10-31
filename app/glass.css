@@ -320,3 +320,8 @@ html[data-theme="dark"] body .seg:not(.auth-root *) .thumb{background:#2A2B26;bo
 html body .topbar .icon-btn:not(.auth-root *){background:transparent;box-shadow:none!important}
 html body .topbar .icon-btn:not(.auth-root *):hover{background:var(--hover)}
 html body .topbar .icon-btn.side-toggle:not(.auth-root *){width:36px;height:36px;border-radius:10px;margin-left:0;margin-top:0;animation:none}
+/* Mục Xóa trong menu: rê chuột là nền đỏ nhạt, chữ / icon đỏ đậm (trước đây nền đỏ đậm trùng màu chữ đỏ nên không đọc được). */
+html body .menu .menu-item.del,html body .menu-item.del{color:#c6422f}
+html body :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#c6422f 12%,transparent);color:#b03a29}
+html[data-theme="dark"] body :is(.menu .menu-item.del,.menu-item.del){color:#ff8a78}
+html[data-theme="dark"] body :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#ff6b57 16%,transparent);color:#ffa497}
