@@ -2551,6 +2551,19 @@ svg.ti :is(g.ti-w1,g.ti-w2){transform-origin:12px 12px}
 .nav-item:hover .ai-roll{transform:translateY(1.3px)}
 .nav-item:hover .ai-ink path{stroke-dasharray:1;animation:aiInk .7s .1s var(--ease) both}
 @keyframes aiInk{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+/* Icon Hộp thư: hai dòng thư rơi vào khay (ẩn khi không rê chuột nên icon đứng yên vẫn như cũ), mép khay nhún nhẹ lúc đón thư. */
+svg g.ai-mail{opacity:0}
+.nav-item svg g.ai-mail{transform:translateY(-3.6px);transition:transform .5s cubic-bezier(.34,1.45,.64,1),opacity .2s}
+.nav-item:hover svg g.ai-mail{opacity:1;transform:none;transition-delay:.04s}
+.nav-item:hover .ai-lip{animation:aiLip .55s .2s var(--ease) both}
+@keyframes aiLip{0%,100%{transform:none}40%{transform:translateY(.8px)}}
+/* Icon Bộ não: hai bán cầu lệch pha (trái lên, phải xuống) rồi khớp lại như logo Synchro; đường giữa vẽ lại từ trên xuống như tín hiệu chạy qua. */
+.nav-item:hover .ai-bn-l{animation:aiBnL .9s cubic-bezier(.76,0,.24,1) both}
+.nav-item:hover .ai-bn-r{animation:aiBnR .9s cubic-bezier(.76,0,.24,1) both}
+.nav-item:hover .ai-bn-c path{stroke-dasharray:1;animation:aiInk .55s var(--ease) both}
+@keyframes aiBnL{0%,100%{transform:none}45%,55%{transform:translate(-.4px,-1.3px)}}
+@keyframes aiBnR{0%,100%{transform:none}45%,55%{transform:translate(.4px,1.3px)}}
+@media (prefers-reduced-motion:reduce){.nav-item:hover .ai-bn-c path{animation:none}.nav-item svg g.ai-mail{transition:none}}
 
 /* ===== Cài đặt → Providers ===== */
 .api-sum{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 6px}
