@@ -11,6 +11,7 @@ import { AUTO, modelName, useModels } from "./models";
 import { allowsModel } from "./catalog";
 import { useApp } from "./store";
 import { ScopeChoice, useIsAdmin, type Scope } from "./skillsui";
+import { TimePick } from "./timepick";
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 type BrowserPref = "auto" | "synchro" | "user";
@@ -142,7 +143,7 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
           </select></label>
           {kind === "hourly" && <label className="tk-l">{tr("Cách nhau")}<select className="field" value={every} onChange={(e) => setEvery(Number(e.target.value))}>{[1, 2, 3, 4, 6, 8, 12].map((n) => <option key={n} value={n}>{n} {tr("giờ")}</option>)}</select></label>}
           {kind === "weekly" && <label className="tk-l">{tr("Vào")}<select className="field" value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>{DAYS.map((d, i) => <option key={i} value={i}>{tr(d)}</option>)}</select></label>}
-          {(kind === "daily" || kind === "weekdays" || kind === "weekly") && <label className="tk-l">{tr("Lúc")}<input className="field" type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>}
+          {(kind === "daily" || kind === "weekdays" || kind === "weekly") && <div className="tk-l">{tr("Lúc")}<TimePick value={time} onChange={setTime} /></div>}
         </div>
         <p className="tk-tz">{tr("Giờ theo múi giờ")} <span data-notr>{tz()}</span></p>
         {codeOk && <div className="tk-l">{tr("Cách làm")}
