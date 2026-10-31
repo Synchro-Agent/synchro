@@ -729,12 +729,11 @@ export default function Home() {
   }, [me?.id, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [providers, setProviders] = useState<Providers>();
   const [authLeaving, setAuthLeaving] = useState(false);
-  // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): giữ màn đăng nhập tới khi phim phủ kín màn hình, app lắng xuống khi phim tách đôi,
-  // lời chào ở trang chủ chạy lại chuyển động của logo (greetKey).
+  // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): giữ màn đăng nhập tới khi phim phủ kín màn hình; app lắng xuống khi logo của
+  // phim bay về chỗ (reveal: giấu logo thật của app tới khi logo bay tới).
   const [intro, setIntro] = useState(false);
   const [authHold, setAuthHold] = useState(false);
   const [reveal, setReveal] = useState(false);
-  const [greetKey, setGreetKey] = useState(0);
   // Hồ sơ trên máy chủ là nguồn chính; các ô trong Cài đặt → Tài khoản đọc từ đây.
   const syncProfile = (u: AuthUser) => {
     setAcct(u.email);
@@ -1642,7 +1641,7 @@ export default function Home() {
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
-            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark key={greetKey} size={30} state="intro" className="greet-mark" />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
+            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark size={30} state="intro" className="greet-mark" />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
               <div className="modewrap" key={tplMode}>
@@ -1799,7 +1798,7 @@ export default function Home() {
     </div>
     </AppCtx.Provider>
     {authEl}
-    {intro && me && <IntroFilm uid={me.id} onCovered={() => setAuthHold(false)} onDone={() => setIntro(false)}
-      onReveal={() => { setReveal(true); setGreetKey((k) => k + 1); setTimeout(() => setReveal(false), 1300); }} />}
+    {intro && me && <IntroFilm uid={me.id} onCovered={() => setAuthHold(false)} onReveal={() => setReveal(true)}
+      onDone={() => { setReveal(false); setIntro(false); }} />}
   </>);
 }

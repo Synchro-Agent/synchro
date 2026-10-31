@@ -1,6 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/introfilm.mjs
 // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): đăng ký bằng email → lời chào → vòng tròn của logo nở ra phủ màn hình → phim phát
-// có tiếng, phụ đề tiếng Việt → Bỏ qua (tài khoản 1) / hết phim (tài khoản 2) → khung hình tách đôi, app lắng xuống → vào app; tải lại không
+// có tiếng, phụ đề tiếng Việt → Bỏ qua (tài khoản 1) / hết phim (tài khoản 2) → logo bay về chỗ trong app, nền phim tan ra → vào app; tải lại không
 // phát lại. Hai tài khoản thử (mật khẩu ngẫu nhiên) tự xoá khi xong.
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
@@ -59,8 +59,9 @@ async function signup(tag) {
   await click(field("input[autocomplete=new-password]"), "password"); await type(password); await enter();
   await until(`!!document.querySelector("input[autocomplete=new-password]:not([readonly])") && [...document.querySelectorAll("input[autocomplete=new-password]")].length >= 1 && /confirm/i.test(document.querySelector("form")?.innerHTML ?? "") || document.querySelectorAll("input[autocomplete=new-password]").length === 2`, 15000, "confirm step"); await sleep(900);
   await click(field("input[autocomplete=new-password]", -1), "confirm"); await type(password); await enter();
-  await until(`!!${field("input[autocomplete=name]")}`, 15000, "profile step"); await sleep(500);
-  await click(field("input[autocomplete=name]"), "name"); await type("Lâm Thử Phim");
+  await until(`!!${field("input[autocomplete=name]")}`, 15000, "profile step"); await sleep(900);
+  // Ô vừa hiện còn đang chạy hiệu ứng: gõ lại tới khi ô nhận chữ.
+  for (let i = 0; i < 4 && !(await ev(`${field("input[autocomplete=name]")}?.value`)); i++) { await click(field("input[autocomplete=name]"), "name"); await type("Lâm Thử Phim"); await sleep(300); }
   await click(field("input[autocomplete=bday]"), "dob"); await type("01022000"); await enter();
   await until(`!!document.querySelector(".auth-welcome")`, 20000, "welcome");
 }
@@ -72,9 +73,9 @@ try {
   await shot("1-welcome");
   await until(`!!document.querySelector(".intro")`, 6000, "intro mounted");
   ok(await ev(`document.querySelector(".intro").dataset.phase === "iris" && !!document.querySelector(".intro-iris")`), "lời chào xong: bắt đầu bằng vòng tròn nở ra (không hiện phim đột ngột)");
-  await sleep(450);
-  const midIris = await ev(`(() => { const c = getComputedStyle(document.querySelector(".intro-iris")).clipPath; const r = /circle\\(([\\d.]+)px/.exec(c); return r ? +r[1] : -1; })()`);
-  ok(midIris > 30 && midIris < Math.hypot(1440, 900), "giữa lúc chuyển: vòng tròn đang nở, chưa phủ kín", midIris);
+  const irisR = () => ev(`(() => { const e = document.querySelector(".intro-iris"); if (!e) return -1; const r = /circle\\(([\\d.]+)px/.exec(getComputedStyle(e).clipPath); return r ? +r[1] : -1; })()`);
+  const r1 = await irisR(); await sleep(300); const r2 = await irisR();
+  ok(r2 > r1 && r2 > 0 && r2 < Math.hypot(1440, 900), "giữa lúc chuyển: vòng tròn đang nở dần, chưa phủ kín", `${r1} → ${r2}`);
   ok(await ev(`!!document.querySelector(".auth-root")`), "màn lời chào vẫn ở dưới cho tới khi phủ kín");
   await shot("2-iris");
   await until(`["wait","play"].includes(document.querySelector(".intro")?.dataset.phase)`, 4000, "covered");
@@ -90,17 +91,19 @@ try {
   ok(await ev(`getComputedStyle(document.querySelector(".intro-btn.skip")).opacity === "1"`), "nút Bỏ qua đã hiện");
   await shot("3-playing");
   await click(`document.querySelector(".intro-btn.skip")`, "skip");
-  await sleep(120);
-  const out = await ev(`(() => { const hs = [...document.querySelectorAll(".intro-hi")]; return { phase: document.querySelector(".intro").dataset.phase, halves: hs.length, img: hs.every((h) => /^url\\("data:image\\/jpeg/.test(h.style.backgroundImage)), reveal: document.querySelector(".app")?.classList.contains("app-reveal") }; })()`);
-  ok(out.phase === "out" && out.halves === 2 && out.img, "Bỏ qua: khung hình đang hiện tách làm hai nửa", JSON.stringify(out));
-  ok(out.reveal, "app bên dưới lắng xuống cùng lúc", JSON.stringify(out));
-  await sleep(380);
-  const mv = await ev(`(() => { const [l, r] = [...document.querySelectorAll(".intro-h")].map((e) => new DOMMatrix(getComputedStyle(e).transform).m42); return { l, r }; })()`);
-  ok(mv.l < 0 && mv.r > 0, "nửa trái trượt lên, nửa phải trượt xuống", JSON.stringify(mv));
-  await shot("4-split");
+  await sleep(150);
+  const out = await ev(`(() => ({ phase: document.querySelector(".intro").dataset.phase, mk: !!document.querySelector(".intro-fly .fly-mk svg"), wd: !!document.querySelector(".intro-fly .fly-wd svg"), host: getComputedStyle(document.querySelector(".intro-host")).opacity }))()`);
+  ok(out.phase === "out" && out.mk && out.wd, "Bỏ qua: phim mờ đi, logo của khung cuối hiện lên (biểu tượng + chữ)", JSON.stringify(out));
+  // Logo bắt đầu bay sau ~0,65 giây; chờ tới khi đang bay (Chrome ẩn trên máy dev có thể chậm vài trăm ms).
+  await until(`(() => { const m = document.querySelector(".fly-mk"); return !!m && new DOMMatrix(getComputedStyle(m).transform).a < 0.9; })()`, 3000, "flight").catch(() => {});
+  const mid = await ev(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"); return { m: m && new DOMMatrix(getComputedStyle(m).transform).a, w: w && new DOMMatrix(getComputedStyle(w).transform).a, reveal: document.querySelector(".app")?.classList.contains("app-reveal"), hidden: getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "0", stage: +getComputedStyle(document.querySelector(".intro-stage")).opacity }; })()`);
+  ok(mid.m < 0.9 && mid.w < 0.9, "logo đang bay về chỗ (thu nhỏ dần)", JSON.stringify(mid));
+  ok(mid.reveal && mid.hidden && mid.stage < 1, "nền phim tan ra, app lắng xuống, logo thật của app chờ logo bay tới", JSON.stringify(mid));
+  ok(await ev(`[...document.querySelectorAll(".intro-cap, .intro-ui")].every((e) => +getComputedStyle(e).opacity < 0.05)`), "phụ đề và nút đã mờ hết khi logo bay");
+  await shot("4-flight");
   await until(`!document.querySelector(".intro")`, 4000, "intro gone");
   await sleep(300);
-  ok(await ev(`!document.querySelector(".app.app-reveal") && !!document.querySelector(".greeting")`), "xong: vào trang chủ, lớp chuyển cảnh đã gỡ");
+  ok(await ev(`!document.querySelector(".app.app-reveal") && !!document.querySelector(".greeting") && getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "1"`), "xong: vào trang chủ, logo thật của app hiện lại, lớp chuyển cảnh đã gỡ");
   await shot("5-home");
   await P("Page.reload"); await sleep(3500);
   ok(await ev(`!document.querySelector(".intro") && !!document.querySelector(".greeting")`), "tải lại trang: không phát lại phim");
@@ -110,8 +113,9 @@ try {
   await until(`document.querySelector(".intro")?.dataset.phase === "play"`, 25000, "playing 2");
   await ev(`(() => { const v = document.querySelector(".intro-v"); v.currentTime = v.duration - 0.6; return 1; })()`);
   await until(`document.querySelector(".intro")?.dataset.phase === "out"`, 6000, "ended → out");
-  ok(await ev(`[...document.querySelectorAll(".intro-hi")].length === 2`), "hết phim: khung logo cuối tách đôi, mở ra app");
-  await sleep(250); await shot("6-end-split");
+  ok(await ev(`!!document.querySelector(".intro-fly .fly-mk") && !document.querySelector(".intro-fly.skip")`), "hết phim: logo của khung cuối ở lại (đè khít, không hiện lại), phim mờ đi");
+  await shot("6-end-hold");
+  await sleep(900); await shot("6b-end-flight");
   await until(`!document.querySelector(".intro")`, 4000, "intro gone 2");
   ok(await ev(`!!document.querySelector(".greeting")`), "hết phim: vào trang chủ");
 

@@ -1,13 +1,14 @@
 "use client";
 // Phim giới thiệu Synchro (42 giây, dự án synchro-launch-film) cho tài khoản mới: phát một lần ngay sau lời chào "Welcome to Synchro, …".
 // - Vào: vòng tròn của logo ở lời chào nở ra phủ kín màn hình bằng đúng màu nền của phim (#0e0e0b), phim hiện dần trên nền đó, tiếng to dần.
-// - Ra (hết phim, Bỏ qua, Esc): tiếng nhỏ dần; khung hình đang hiện tách đôi như logo — hai nửa lệch pha (trái lên, phải xuống) rồi trượt
-//   khỏi màn hình — mở ra giao diện chính đang lắng xuống bên dưới.
+// - Ra (hết phim, Bỏ qua, Esc): tiếng nhỏ dần; logo ở khung cuối của phim (vẽ lại đè khít lên phim) ở lại khi phim mờ đi, rồi tách thành
+//   hai phần bay về đúng chỗ của chúng trong app — biểu tượng về cạnh lời chào ở trang chủ, chữ "synchro" về đầu thanh bên — đổi dần từ Ivory
+//   sang màu chữ của app; nền phim tan ra, app bên dưới lắng xuống. Bỏ qua giữa phim: phim mờ đi, logo hiện lên đúng chỗ đó rồi bay như vậy.
 // - Phụ đề tiếng Việt cho các dòng chữ tiếng Anh trong phim (giao diện tiếng Việt), nằm trong dải đen dưới phim nếu có chỗ.
 // - Trình duyệt chặn tự phát có tiếng: phát không tiếng, hiện nút Bật tiếng. Giảm chuyển động: không tự phát, không nở / tách, chỉ mờ dần.
 // - Bản 720p (4 MB) cho màn hẹp / tiết kiệm dữ liệu, 1080p (18 MB) cho màn lớn; tải trước từ lúc hiện lời chào (preloadIntro).
 import { useEffect, useRef, useState } from "react";
-import { Loader } from "./brand";
+import { Loader, Mark, Wordmark } from "./brand";
 import { getLang } from "./i18n";
 
 const BG = "#0e0e0b"; // nền phim sau khi nén (Carbon #111210 + grain)
@@ -74,9 +75,13 @@ function fade(v: HTMLVideoElement, to: number, ms: number) {
 
 type Phase = "iris" | "ask" | "wait" | "play" | "out";
 
+// Logo ở khung cuối của phim (src/scenes/Finale.tsx): lockup cao 210 trong khung 1920×1080, góc trên trái (388,07; 435).
+const LOCK = { x: 388.07, y: 435, k: 210 / 1050 };
+type Fly = { mark: { x: number; y: number; h: number }; word: { x: number; y: number; h: number }; end: boolean };
+
 /**
  * Màn phim phủ toàn màn hình (trên cả màn đăng nhập). onCovered: màn hình đã phủ kín màu nền phim (gỡ màn đăng nhập phía dưới);
- * onReveal: khung hình bắt đầu tách đôi (app bên dưới lắng xuống); onDone: xong hẳn.
+ * onReveal: logo bắt đầu bay về chỗ (app bên dưới lắng xuống, giấu logo thật của app tới khi logo bay tới); onDone: xong hẳn.
  */
 export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; onCovered: () => void; onReveal: () => void; onDone: () => void }) {
   const reduced = useRef(reducedMotion()).current;
@@ -88,11 +93,12 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   const [skip, setSkip] = useState(false); // nút Bỏ qua hiện sau 1,2 giây
   const [cap, setCap] = useState<(typeof CAPS)[number] | null>(null);
   const [capBottom, setCapBottom] = useState<number | null>(null); // dải đen dưới phim đủ chỗ cho phụ đề: khoảng cách tới đáy
-  const [shot, setShot] = useState(""); // khung hình lúc tách đôi
-  const root = useRef<HTMLDivElement>(null), host = useRef<HTMLDivElement>(null), iris = useRef<HTMLDivElement>(null);
+  const [fly, setFly] = useState<Fly | null>(null); // logo của khung cuối, bay về chỗ trong app
+  const [clear, setClear] = useState(false); // nền phim tan ra
+  const root = useRef<HTMLDivElement>(null), host = useRef<HTMLDivElement>(null), iris = useRef<HTMLDivElement>(null), flyBox = useRef<HTMLDivElement>(null);
   const bar = useRef<HTMLDivElement>(null), skipBtn = useRef<HTMLButtonElement>(null);
   const video = useRef<HTMLVideoElement | null>(null);
-  const leaving = useRef(false);
+  const leaving = useRef(false), shownRef = useRef(false); // shownRef: leave() chạy cả từ sự kiện "ended" đăng ký lúc gắn video
   const cb = useRef({ onCovered, onReveal, onDone });
   cb.current = { onCovered, onReveal, onDone };
   const vi = getLang() === "vi";
@@ -111,7 +117,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    const ended = () => leave();
+    const ended = () => leave(true);
     const failed = () => leave();
     v.addEventListener("ended", ended); v.addEventListener("error", failed);
     const vis = () => { if (leaving.current) return; if (document.hidden) v.pause(); else if (!pausedRef.current && phaseRef.current === "play") v.play().catch(() => {}); };
@@ -153,7 +159,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
       try { await v.play(); }
       catch { v.muted = true; setMuted(true); setNeedSound(true); try { await v.play(); } catch { return leave(); } }
       if (off) return;
-      setPhase("play"); setShown(true);
+      setPhase("play"); setShown(true); shownRef.current = true;
       if (!v.muted) fade(v, VOLUME, 700);
     };
     if (v.readyState >= 3) start(); else v.addEventListener("canplay", start, { once: true });
@@ -168,25 +174,49 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   }, [phase]);
   useEffect(() => { if (skip) skipBtn.current?.focus({ preventScroll: true }); }, [skip]);
 
-  // Ra: tiếng nhỏ dần, chụp khung hình đang hiện rồi tách đôi; app bên dưới lắng xuống cùng lúc.
-  async function leave() {
+  // Ra: tiếng nhỏ dần; logo của khung cuối ở lại khi phim mờ đi (hết phim: đè khít lên khung cuối; Bỏ qua: hiện lên đúng chỗ đó),
+  // rồi bay về chỗ trong app. Giảm chuyển động / phim chưa hiện: chỉ mờ dần.
+  function leave(end = false) {
     if (leaving.current) return;
     leaving.current = true;
     const v = video.current!;
-    let img = "";
-    try {
-      if (v.videoWidth && v.readyState >= 2) {
-        const c = document.createElement("canvas");
-        c.width = v.videoWidth; c.height = v.videoHeight;
-        c.getContext("2d")!.drawImage(v, 0, 0);
-        img = c.toDataURL("image/jpeg", 0.9);
-      }
-    } catch {}
-    setShot(img);
-    setPhase("out");
-    cb.current.onReveal();
     if (!v.paused && !v.muted) fade(v, 0, 450).then(() => v.pause()); else v.pause();
-    setTimeout(() => cb.current.onDone(), reduced ? 600 : 1250);
+    const r = host.current?.getBoundingClientRect();
+    if (reduced || !shownRef.current || !r?.width) {
+      setPhase("out"); cb.current.onReveal();
+      setTimeout(() => cb.current.onDone(), 600);
+      return;
+    }
+    const s = Math.min(r.width / 1920, r.height / 1080), k = LOCK.k * s;
+    const x = r.left + (r.width - 1920 * s) / 2 + LOCK.x * s, y = r.top + (r.height - 1080 * s) / 2 + LOCK.y * s;
+    setFly({ mark: { x, y, h: 1050 * k }, word: { x: x + 1108.33 * k, y: y + 38 * k, h: 949 * k }, end });
+    setPhase("out");
+    setTimeout(land, end ? 450 : 650);
+  }
+  // Logo bay về chỗ (FLIP): đo chỗ đến trước khi app bắt đầu lắng xuống; chỗ đến không thấy (thanh bên đóng, không ở trang chủ) thì mờ đi.
+  function land() {
+    const box = flyBox.current;
+    if (!box) return cb.current.onDone();
+    const pairs: [Element | null, Element | null, number][] = [
+      [box.querySelector(".fly-mk"), document.querySelector(".app .greeting .greet-mark"), 0],
+      [box.querySelector(".fly-wd"), document.querySelector(".app .side-brand .lk"), 70],
+    ];
+    const plan = pairs.map(([el, to, delay]) => {
+      const b = to?.getBoundingClientRect();
+      const ok = !!b && b.width > 0 && b.right > 0 && b.left < innerWidth && b.bottom > 0 && b.top < innerHeight;
+      return { el, to, b: ok ? b : null, delay, color: to ? getComputedStyle(to).color : "" };
+    });
+    cb.current.onReveal();
+    setClear(true);
+    const anims = plan.map(({ el, b, delay, color }) => {
+      if (!el) return null;
+      const a = el.getBoundingClientRect();
+      if (!b) return el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.94)" }], { duration: 550, delay, easing: "cubic-bezier(.33,1,.68,1)", fill: "forwards" });
+      const kk = b.height / a.height, dx = b.left + b.width / 2 - (a.left + (a.width * kk) / 2), dy = b.top + b.height / 2 - (a.top + (a.height * kk) / 2);
+      return el.animate([{ transform: "none", color: "#EEECE5" }, { transform: `translate(${dx}px, ${dy}px) scale(${kk})`, color }],
+        { duration: 950, delay, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" });
+    });
+    Promise.all(anims.map((x) => x?.finished)).then(() => cb.current.onDone(), () => cb.current.onDone());
   }
 
   // Bàn phím: Esc / Enter bỏ qua, Space tạm dừng.
@@ -211,15 +241,10 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   };
   const watch = () => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} setPhase("wait"); };
 
-  const half = (side: "l" | "r") => (
-    <div className={`intro-h ${side}`}>
-      <div className="intro-hi" style={{ backgroundImage: shot ? `url(${shot})` : undefined }} />
-    </div>
-  );
   return (
     <div ref={root} className={`intro ${reduced ? "reduced" : ""}`} data-phase={phase} role="dialog" aria-modal="true" aria-label={L("Phim giới thiệu Synchro", "Synchro intro film")} style={{ ["--intro-bg" as string]: BG }}>
       {!reduced && phase === "iris" && <div ref={iris} className="intro-iris" style={{ clipPath: "circle(0px at 50% 50%)" }} />}
-      <div className={`intro-stage ${phase === "out" ? "gone" : ""}`} onClick={() => { if (phase === "play") toggle(); }}>
+      <div className={`intro-stage ${clear ? "clear" : ""}`} onClick={() => { if (phase === "play") toggle(); }}>
         <div ref={host} className={`intro-host ${shown ? "on" : ""}`} />
         {phase === "wait" && <div className="intro-load"><Loader size={34} label={L("Đang tải phim", "Loading the film")} /></div>}
         {phase === "ask" && (
@@ -249,7 +274,12 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
           <div className="intro-bar"><div ref={bar} /></div>
         </div>
       )}
-      {phase === "out" && !reduced && <div className="intro-split">{half("l")}{half("r")}</div>}
+      {fly && (
+        <div ref={flyBox} className={`intro-fly ${fly.end ? "" : "skip"}`} aria-hidden>
+          <span className="fly-mk" style={{ left: fly.mark.x, top: fly.mark.y }}><Mark size={fly.mark.h} /></span>
+          <span className="fly-wd" style={{ left: fly.word.x, top: fly.word.y }}><Wordmark height={fly.word.h} /></span>
+        </div>
+      )}
     </div>
   );
 }
