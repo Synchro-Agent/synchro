@@ -244,7 +244,10 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 .dock-note{width:min(var(--thread-w,768px),calc(100% - 48px))}
 .cursor{display:inline-block;width:8px;height:16px;background:var(--text);vertical-align:-2px;animation:blink 1s steps(1) infinite}
 
-.page{flex:1;overflow:auto;padding:24px 0 60px;animation:fadeIn .3s both}
+/* Hiện dần bằng transition + @starting-style (chạy xong là gỡ hẳn): animation độ mờ — kể cả đã chạy xong — làm Chrome coi .page là một
+   lớp xếp chồng riêng, mọi khung phủ toàn màn hình trong trang (xem artifact, sửa việc tự động…) bị thanh bên (z-index 20) đè lên. */
+.page{flex:1;overflow:auto;padding:24px 0 60px;transition:opacity .3s}
+@starting-style{.page{opacity:0}}
 .page-in{max-width:700px;margin:0 auto;width:calc(100% - 48px)}
 .page h1{font-family:var(--font-display);font-weight:400;font-size:22.4px;margin:0;letter-spacing:-.035em}
 .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
