@@ -5,7 +5,7 @@
 //   Mã ghép nối: Synchro → Cài đặt → Khả năng → Trình duyệt của bạn → Ghép nối (hoặc khung trình duyệt → Chrome của bạn).
 //   Đã ghép nối thì chạy lại không cần --code (khóa lưu trong hồ sơ, mặc định data-mock/ext-chrome).
 // Sẵn sàng thì in một dòng JSON { ready, control, devtools }: cổng HTTP điều khiển (127.0.0.1, cho kiểm thử) và cổng DevTools của Chrome.
-// Cổng điều khiển: GET /state · POST /stop (như bấm Dừng) · POST /cancel (như bấm Hủy trên thanh gỡ lỗi của Chrome) · POST /scope { scope }
+// Cổng điều khiển: GET /state · POST /stop (như bấm Dừng) · POST /pause, /resume (như bấm Tạm dừng / Tiếp tục) · POST /cancel (như bấm Hủy trên thanh gỡ lỗi của Chrome) · POST /scope { scope }
 //   · POST /share { tab, on } · POST /open { url } (người dùng tự mở một tab) · POST /drop { ms } (mất kết nối giữa chừng, nối lại sau ms)
 //   · POST /quit.
 import http from "node:http";
@@ -93,6 +93,8 @@ const ctl = http.createServer(async (req, res) => {
     switch (new URL(req.url, "http://x").pathname) {
       case "/state": return json(res, 200, { link: link.state(), control: control.status(), scope: control.scope(), devtools: port, tabs: await shim.chrome.tabs.query({}), store: { paired: !!read().token, device: read().device ?? null } });
       case "/stop": await control.stop("user"); return json(res, 200, { ok: true });
+      case "/pause": return json(res, 200, { paused: control.pause(true) });
+      case "/resume": return json(res, 200, { paused: control.pause(false) });
       case "/cancel": { const t = Number(control.status().tab); if (t) shim.chrome.debugger.cancelByUser(t); return json(res, 200, { ok: !!t }); }
       case "/scope": control.setScope(b.scope); await store.set({ scope: control.scope() }); link.send({ t: "status", scope: control.scope() }); return json(res, 200, { scope: control.scope() });
       case "/share": await control.share(Number(b.tab), b.on !== false); return json(res, 200, control.status());

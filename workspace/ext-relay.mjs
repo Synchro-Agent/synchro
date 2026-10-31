@@ -60,6 +60,7 @@ export function createRelay({ log = () => {} } = {}) {
     if (j.tab !== undefined) o.tab = j.tab && typeof j.tab === "object" ? { title: String(j.tab.title ?? "").slice(0, 200), url: String(j.tab.url ?? "").slice(0, 500) } : null;
     if (j.tabs !== undefined) o.tabs = Math.max(0, Number(j.tabs) || 0);
     if (j.acting !== undefined) o.acting = !!j.acting;
+    if (j.paused !== undefined) o.paused = !!j.paused;
     return o;
   };
 

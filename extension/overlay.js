@@ -1,56 +1,59 @@
-// Dải "Synchro đang điều khiển tab này" + nút Dừng, chèn vào trang khi Synchro điều khiển tab (qua chrome.debugger, chạy cả trên trang có CSP chặt).
-// Nằm trong shadow root đóng, gắn aria-hidden nên không lẫn vào nội dung model đọc (browser_read / browser_find bỏ qua).
-// Viền sáng quanh trang không nhận chuột; nút Dừng gọi window.__synchroStop (Runtime.addBinding của tiện ích).
-// window.__synOverlay: set(nhãn đang làm) · pause(true/false) ẩn tạm khi chụp màn hình · guard() bỏ qua chuột ngay trước khi Synchro bấm
-// (để cú bấm của Synchro không trúng nút Dừng) · remove().
-// Dải theo bộ nhận diện v4 và giao diện sáng / tối của trình duyệt: mark Synchro xoay theo nhịp đồng bộ (loader như trong app) suốt lúc
-// Synchro điều khiển, viền trang hai lớp Carbon + Ivory (thấy rõ trên trang sáng lẫn tối), nút Dừng kính màu mực. Mọi phần tử dựng bằng DOM
-// (không innerHTML), mark là SVG dựng bằng createElementNS từ hình học trong brand.js (không tải ảnh) để chạy được cả trên trang bật
-// Trusted Types hay CSP chặt (Gmail, ngân hàng…).
+// Dải "Synchro đang điều khiển tab này" với nút Tạm dừng / Tiếp tục và Dừng, chèn vào trang khi Synchro điều khiển tab (qua chrome.debugger,
+// chạy cả trên trang có CSP chặt). Nằm trong shadow root đóng, gắn aria-hidden nên không lẫn vào nội dung model đọc (browser_read / browser_find
+// bỏ qua). Viền quanh trang không nhận chuột; nút gọi window.__synchroStop("pause" | "resume" | "stop") (Runtime.addBinding của tiện ích).
+// window.__synOverlay: set(nhãn đang làm) · paused(true/false) trạng thái tạm dừng · pause(true/false) ẩn tạm khi chụp màn hình ·
+// guard() bỏ qua chuột ngay trước khi Synchro bấm (để cú bấm của Synchro không trúng nút) · remove().
+// Thiết kế như dải "Synchro is using your phone" trong phim giới thiệu: viên bo tròn màu Carbon ở mép trên, chữ Ivory, mark Synchro xoay theo
+// nhịp đồng bộ (loader của bộ nhận diện) — cùng một màu trên trang sáng lẫn tối; viền trang hai lớp Carbon 3px + Ivory 1,5px như trong phim.
+// Mọi phần tử dựng bằng DOM (không innerHTML), mark là SVG dựng bằng createElementNS từ hình học trong brand.js (không tải ảnh) để chạy được
+// cả trên trang bật Trusted Types hay CSP chặt (Gmail, ngân hàng…).
 import { MARK_SMALL } from "./brand.js";
 
 export function overlayScript(s) {
-  const T = JSON.stringify({ title: s.barTitle, stop: s.barStop, mark: MARK_SMALL });
+  const T = JSON.stringify({ title: s.barTitle, paused: s.barPaused, stop: s.barStop, pause: s.barPause, resume: s.barResume, mark: MARK_SMALL });
   return `(() => {
   if (window.top !== window) return;
   if (window.__synOverlay) { window.__synOverlay.show(); return; }
   const T = ${T};
   const CSS = \`
-    :host { all: initial; }
-    :host { --pill: rgba(238,236,229,.9); --ink: #111210; --ink2: #64655E; --line: rgba(17,18,16,.12); --sep: rgba(17,18,16,.1);
-      --edge: inset 0 0 0 1px rgba(238,236,229,.75), inset 0 0 0 3px rgba(17,18,16,.85), inset 0 0 40px rgba(17,18,16,.16);
-      --lock: cubic-bezier(.76,0,.24,1); --glide: cubic-bezier(.65,0,.35,1);
-      --g-top: rgba(70,71,66,.94); --g-mid: rgba(17,18,16,.97); --g-bot: #000; --g-fg: #EEECE5; --g-hi: rgba(255,255,255,.5); --g-rim: rgba(255,255,255,.14); --g-sheen: rgba(255,255,255,.2); --g-hover: brightness(1.2); }
-    @media (prefers-color-scheme: dark) {
-      :host { --pill: rgba(17,18,16,.86); --ink: #EEECE5; --ink2: #8F9088; --line: rgba(238,236,229,.12); --sep: rgba(238,236,229,.1);
-        --edge: inset 0 0 0 1px rgba(17,18,16,.75), inset 0 0 0 3px rgba(238,236,229,.88), inset 0 0 40px rgba(238,236,229,.12);
-        --g-top: #fff; --g-mid: rgba(238,236,229,.97); --g-bot: rgba(217,214,204,.97); --g-fg: #111210; --g-hi: #fff; --g-rim: rgba(0,0,0,.16); --g-sheen: rgba(255,255,255,.7); --g-hover: brightness(.93); }
-    }
-    .edge { position: fixed; inset: 0; pointer-events: none; box-shadow: var(--edge); transition: opacity .2s; }
-    .pill { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: min(600px, calc(100vw - 32px));
-      padding: 7px 7px 7px 14px; border-radius: 999px; background: var(--pill); color: var(--ink); font: 600 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      -webkit-font-smoothing: antialiased; box-shadow: 0 14px 36px -10px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.08), 0 0 0 .5px var(--line), inset 0 1px 0 rgba(255,255,255,.08);
-      pointer-events: auto; transition: opacity .2s; -webkit-backdrop-filter: blur(20px) saturate(1.7); backdrop-filter: blur(20px) saturate(1.7); }
-    .mk { flex: none; display: block; width: 14.25px; height: 19px; fill: var(--ink); overflow: visible; }
+    :host { all: initial; --carbon: #111210; --ivory: #EEECE5; --glide: cubic-bezier(.65,0,.35,1); --out: cubic-bezier(.33,1,.68,1); }
+    .edge { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 3px var(--carbon), inset 0 0 0 4.5px var(--ivory), inset 0 0 40px rgba(17,18,16,.14); transition: opacity .3s; }
+    .pill { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; height: 38px; box-sizing: border-box;
+      max-width: min(680px, calc(100vw - 24px)); padding: 0 5px 0 14px; border-radius: 19px; background: var(--carbon); color: var(--ivory);
+      font: 500 13.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -.005em; -webkit-font-smoothing: antialiased;
+      box-shadow: 0 10px 30px -8px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.18), 0 0 0 .5px rgba(238,236,229,.14); pointer-events: auto;
+      transition: opacity .2s; animation: drop .45s var(--out) both; }
+    @keyframes drop { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .mk { flex: none; display: block; width: 12px; height: 16px; fill: var(--ivory); overflow: visible; }
     .mk-r { transform-box: fill-box; transform-origin: center; animation: mkSpin 1.6s var(--glide) infinite; }
     .mk-a { animation: mkLa 1.6s infinite; }
     .mk-b { animation: mkLb 1.6s infinite; }
     @keyframes mkSpin { 0% { transform: rotate(0); } 75%, 100% { transform: rotate(180deg); } }
     @keyframes mkLa { 0% { transform: none; animation-timing-function: cubic-bezier(.37,0,.63,1); } 37.5% { transform: translateY(175px); animation-timing-function: cubic-bezier(.37,0,.63,1); } 75%, 100% { transform: none; } }
     @keyframes mkLb { 0% { transform: none; animation-timing-function: cubic-bezier(.37,0,.63,1); } 37.5% { transform: translateY(-175px); animation-timing-function: cubic-bezier(.37,0,.63,1); } 75%, 100% { transform: none; } }
-    @media (prefers-reduced-motion: reduce) { .mk-r, .mk-a, .mk-b { animation: none; } }
-    .sep { flex: none; width: 1px; height: 22px; background: var(--sep); }
-    .txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-    .head { white-space: nowrap; }
-    .lab { color: var(--ink2); font-weight: 450; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .txt { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+    .head { flex: none; }
+    .lab { color: rgba(238,236,229,.55); font-weight: 450; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .lab::before { content: "·"; margin-right: 6px; }
     .lab:empty { display: none; }
-    button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: 999px; flex: none;
-      color: var(--g-fg); font: 600 12.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: linear-gradient(180deg, var(--g-top), var(--g-mid) 52%, var(--g-bot));
-      box-shadow: 0 4px 12px -4px rgba(0,0,0,.35), inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim), inset 0 10px 10px -8px var(--g-sheen); transition: filter .15s; }
-    button:hover { filter: var(--g-hover); }
-    button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-    button i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; display: block; }
+    .acts { display: flex; gap: 4px; margin-left: 6px; flex: none; }
+    button { all: unset; cursor: pointer; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 14px; flex: none;
+      color: var(--ivory); font: 500 12.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: rgba(238,236,229,.12);
+      box-shadow: inset 0 0 0 .5px rgba(238,236,229,.28); transition: background .15s, color .15s; }
+    button:hover { background: rgba(238,236,229,.2); }
+    button:focus-visible { outline: 2px solid rgba(238,236,229,.7); outline-offset: 2px; }
+    button.go { background: var(--ivory); color: var(--carbon); box-shadow: none; }
+    button.go:hover { background: #fff; }
+    i { display: block; flex: none; }
+    i.sq { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+    i.bars { width: 8px; height: 9px; box-sizing: border-box; border-left: 2.6px solid currentColor; border-right: 2.6px solid currentColor; }
+    i.play { width: 0; height: 0; border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; margin-left: 1px; }
+    /* Tạm dừng: mark đứng yên (chữ S), viền trang nhạt đi — Synchro không thao tác cho tới khi bấm Tiếp tục. */
+    .paused .mk-r, .paused .mk-a, .paused .mk-b { animation: none; }
+    .paused .edge { opacity: .35; }
+    .paused .lab { display: none; }
+    @media (prefers-reduced-motion: reduce) { .mk-r, .mk-a, .mk-b, .pill { animation: none; } }
+    @media (max-width: 520px) { .lab { display: none; } .pill { padding-left: 12px; } button { padding: 0 9px; } }
     .off .pill, .off .edge { opacity: 0; pointer-events: none; }
     .guard .pill { pointer-events: none; }
   \`;
@@ -59,25 +62,24 @@ export function overlayScript(s) {
   host.style.cssText = "all: initial; position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; display: block;";
   const root = host.attachShadow({ mode: "closed" });
   try { const sh = new CSSStyleSheet(); sh.replaceSync(CSS); root.adoptedStyleSheets = [sh]; } catch { const st = document.createElement("style"); st.textContent = CSS; root.append(st); }
-  const wrap = document.createElement("div");
-  const edge = document.createElement("div"); edge.className = "edge";
-  const pill = document.createElement("div"); pill.className = "pill";
-  // Mark Synchro (mực Carbon ở giao diện sáng, Ivory ở giao diện tối như trong app), xoay theo nhịp đồng bộ: Synchro đang điều khiển.
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+  const wrap = el("div"), edge = el("div", "edge"), pill = el("div", "pill");
+  // Mark Synchro (Ivory trên nền Carbon), xoay theo nhịp đồng bộ: Synchro đang điều khiển.
   const NS = "http://www.w3.org/2000/svg", svg = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
   const mark = svg("svg", { class: "mk", viewBox: "-393.75 -525 787.5 1050" }), spin = svg("g", { class: "mk-r" });
   spin.append(svg("path", { class: "mk-a", d: T.mark[0] }), svg("path", { class: "mk-b", d: T.mark[1] }));
   mark.append(spin);
-  const sep = document.createElement("span"); sep.className = "sep";
-  const txt = document.createElement("span"); txt.className = "txt";
-  const head = document.createElement("span"); head.className = "head";
-  head.textContent = T.title;
-  const lab = document.createElement("span"); lab.className = "lab";
+  const txt = el("span", "txt"), head = el("span", "head", T.title), lab = el("span", "lab");
   txt.append(head, lab);
-  const btn = document.createElement("button"); btn.type = "button";
-  const sq = document.createElement("i"); btn.append(sq, document.createTextNode(T.stop));
-  btn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); try { window.__synchroStop && window.__synchroStop("stop"); } catch {} });
+  const send = (what) => { try { window.__synchroStop && window.__synchroStop(what); } catch {} };
+  const pz = el("button"), pzI = el("i", "bars"), pzT = document.createTextNode(T.pause);
+  pz.type = "button"; pz.append(pzI, pzT);
+  pz.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); const on = !wrap.classList.contains("paused"); api.paused(on); send(on ? "pause" : "resume"); });
+  const stop = el("button"); stop.type = "button"; stop.append(el("i", "sq"), document.createTextNode(T.stop));
+  stop.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); send("stop"); });
+  const acts = el("span", "acts"); acts.append(pz, stop);
   for (const ev of ["mousedown", "mouseup", "pointerdown", "pointerup", "keydown"]) pill.addEventListener(ev, (e) => e.stopPropagation());
-  pill.append(mark, sep, txt, btn);
+  pill.append(mark, txt, acts);
   wrap.append(edge, pill);
   root.append(wrap);
   let guardT = 0, gone = false, iv = 0;
@@ -85,6 +87,11 @@ export function overlayScript(s) {
   const api = {
     show() { wrap.classList.remove("off"); mount(); },
     set(label) { lab.textContent = String(label || ""); mount(); },
+    paused(on) {
+      wrap.classList.toggle("paused", !!on);
+      head.textContent = on ? T.paused : T.title;
+      pzI.className = on ? "play" : "bars"; pzT.textContent = on ? T.resume : T.pause; pz.classList.toggle("go", !!on);
+    },
     pause(on) { wrap.classList.toggle("off", !!on); },
     guard() { wrap.classList.add("guard"); clearTimeout(guardT); guardT = setTimeout(() => wrap.classList.remove("guard"), 800); },
     remove() { gone = true; clearInterval(iv); host.remove(); delete window.__synOverlay; },

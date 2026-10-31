@@ -23,6 +23,17 @@ const ask = (m) => chrome.runtime.sendMessage(m);
 const loader = (px) => mark(px, "mk-load");
 const host = (u) => String(u || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
 const initials = (n) => { const w = String(n || "").trim().split(/[\s@._-]+/).filter(Boolean); return ((w[0]?.[0] ?? "") + (w.length > 1 ? w.at(-1)[0] : "")).toLocaleUpperCase() || "S"; };
+// Ảnh đại diện của tài khoản (ảnh tự tải lên hoặc từ Google / GitHub, máy chủ gửi khi ghép nối / kết nối); không có hoặc lỗi tải thì chữ cái đầu.
+const avatar = (u, name) => {
+  const box = h("span", { className: "av", ariaHidden: "true" }, initials(name));
+  const src = String(u?.avatar ?? "");
+  if (/^https:\/\//.test(src) || /^data:image\/(png|jpeg|webp);base64,/.test(src)) {
+    const img = h("img", { src, alt: "", referrerPolicy: "no-referrer", decoding: "async" });
+    img.addEventListener("load", () => box.replaceChildren(img), { once: true });
+    img.addEventListener("error", () => img.remove(), { once: true });
+  }
+  return box;
+};
 // Mã ghép nối luôn hiện dạng ABCD-EFGH khi gõ / dán.
 const fmtCode = (v) => { const c = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8); return c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c; };
 for (const el of document.querySelectorAll("[data-t]")) el.textContent = t(el.dataset.t);
@@ -37,10 +48,10 @@ let busy = false, err = "", codeVal = "", srvVal = null, srvEdit = false;
 async function render(s) {
   s ??= await ask({ op: "state" });
   const st = $("#st");
-  const state = s.acting ? "acting" : s.link?.state ?? "unpaired";
+  const state = s.paused ? "paused" : s.acting ? "acting" : s.link?.state ?? "unpaired";
   st.className = `st ${state}`;
-  st.replaceChildren(...(state === "acting" || state === "connecting" ? [loader(11)] : []),
-    t(s.acting ? "stActing" : state === "online" ? "stOnline" : state === "unpaired" ? "stUnpaired" : state === "connecting" ? "stConnecting" : "stOffline"));
+  st.replaceChildren(...(state === "acting" || state === "connecting" ? [loader(11)] : state === "paused" ? [mark(11)] : []),
+    t(s.paused ? "stPaused" : s.acting ? "stActing" : state === "online" ? "stOnline" : state === "unpaired" ? "stUnpaired" : state === "connecting" ? "stConnecting" : "stOffline"));
   const app = $("#app");
   app.replaceChildren();
   const put = (...kids) => app.append(...kids.filter((x) => x != null && x !== false));
@@ -85,14 +96,17 @@ async function render(s) {
   const bad = !online && s.link?.error;
   const seg = (v, label, ic) => h("label", {}, h("input", { type: "radio", name: "scope", value: v, checked: s.scope === v, on: { change: async () => render(await ask({ op: "scope", scope: v })) } }), icon(ic), label);
   put(
-    s.acting ? h("section", { className: "live" },
-      h("div", { className: "live-h" }, loader(22),
-        h("div", {}, h("b", {}, t("acting")), h("small", { className: "ell" }, s.actTab?.title ? `${t("actingOn")} ${s.actTab.title}` : t("actingHelp")))),
-      h("button", { className: "stop", on: { click: async () => render(await ask({ op: "stop" })) } }, h("i"), t("stop"))) : null,
+    s.acting || s.paused ? h("section", { className: `live${s.paused ? " paused" : ""}` },
+      h("div", { className: "live-h" }, s.paused ? mark(22) : loader(22),
+        h("div", {}, h("b", {}, t(s.paused ? "paused" : "acting")), h("small", { className: "ell" }, s.paused ? t("pausedHelp") : s.actTab?.title ? `${t("actingOn")} ${s.actTab.title}` : t("actingHelp")))),
+      // Tạm dừng / Tiếp tục: thao tác đang chạy làm nốt, thao tác kế tiếp chờ tới khi bấm Tiếp tục. Dừng: dừng hẳn lượt này.
+      h("div", { className: "live-a" },
+        h("button", { className: `pz${s.paused ? " go" : ""}`, on: { click: async () => render(await ask({ op: s.paused ? "resume" : "pause" })) } }, h("i", { className: s.paused ? "play" : "bars" }), t(s.paused ? "resume" : "pause")),
+        h("button", { className: `stop${s.paused ? " soft" : ""}`, on: { click: async () => render(await ask({ op: "stop" })) } }, h("i"), t("stop")))) : null,
     h("section", { className: "card" },
-      h("div", { className: "who" }, h("span", { className: "av", ariaHidden: "true" }, initials(name)),
+      h("div", { className: "who" }, avatar(s.user, name),
         h("div", { className: "who-t" }, h("b", { className: "ell" }, name), h("small", {}, icon("globe"), h("span", { className: "ell" }, host(s.server))))),
-      s.acting ? null : h("div", { className: `note${bad ? " bad" : ""}` },
+      s.acting || s.paused ? null : h("div", { className: `note${bad ? " bad" : ""}` },
         bad ? [icon("alert"), h("span", {}, s.link.error)]
           : online ? [mark(15), h("span", {}, h("b", {}, t("idle")), " ", t("idleHelp"))]
           : [loader(15), h("span", {}, t(s.link?.state === "connecting" ? "connecting" : "offline"))])),

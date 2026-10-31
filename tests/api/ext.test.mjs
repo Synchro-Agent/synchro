@@ -221,6 +221,25 @@ if (!chrome) {
     done = await waitRun(run);
     ok(done?.result?.cancelled === true && Date.now() - t0 < 15_000, "bấm Hủy trên thanh “đang gỡ lỗi” của Chrome cũng là Dừng", JSON.stringify(done).slice(0, 300));
 
+    console.log("6b. Tạm dừng / Tiếp tục trong Chrome: thao tác kế tiếp chờ tới khi bấm Tiếp tục; Dừng lúc đang tạm dừng thì dừng hẳn");
+    const st6b = await ctl("/pause", {});
+    ok(st6b.paused === true && (await ctl("/state")).control.paused === true, "bấm Tạm dừng: tiện ích ở trạng thái tạm dừng", JSON.stringify(st6b));
+    t0 = Date.now();
+    run = await runOf(`#tool=browser_wait #args={"ms":200,"browser":"user"}`);
+    await sleep(2500);
+    let held = (await me("GET", `/api/runs/${run}?json=1`)).j?.run;
+    ok(held?.status === "running", "đang tạm dừng: thao tác kế tiếp chờ, lượt chưa xong sau 2,5 giây", JSON.stringify(held).slice(0, 200));
+    ok((await ctl("/resume", {})).paused === false, "bấm Tiếp tục");
+    done = await waitRun(run);
+    ok(done?.status === "done" && !done?.result?.cancelled && Date.now() - t0 >= 2500, `Tiếp tục: thao tác chạy, lượt xong (${Date.now() - t0} ms)`, JSON.stringify(done).slice(0, 300));
+    await ctl("/pause", {});
+    t0 = Date.now();
+    run = await runOf(`#tool=browser_wait #args={"ms":200,"browser":"user"}`);
+    await sleep(1500);
+    await ctl("/stop", {});
+    done = await waitRun(run);
+    ok(done?.result?.cancelled === true && Date.now() - t0 < 15_000 && (await ctl("/state")).control.paused === false, "bấm Dừng lúc đang tạm dừng: lượt dừng ngay, hết tạm dừng", JSON.stringify(done).slice(0, 300));
+
     console.log("7. Gỡ trình duyệt khỏi Synchro");
     const id = (await me("GET", "/api/browser/ext")).j.devices[0].id;
     r = await me("POST", "/api/browser/ext", { op: "remove", id });

@@ -1,5 +1,5 @@
 import { AuthError, audit, clientIp, handle, limit } from "../../../../authstore";
-import { extAllowed, redeemPairCode } from "../../../../browserext";
+import { avatarOf, extAllowed, redeemPairCode } from "../../../../browserext";
 import { setUserCaps } from "../../../../caps";
 
 export const runtime = "nodejs";
@@ -15,5 +15,5 @@ export const POST = handle(async (req) => {
   const r = redeemPairCode(b.code, { name: b.name, browser: b.browser });
   if (r.first) setUserCaps(r.user.id, { mine: true });
   audit("browser_ext_pair", { actor: r.user, ip: clientIp(req), detail: `${r.device.name}${b.browser ? ` · ${String(b.browser).slice(0, 40)}` : ""}` });
-  return Response.json({ token: r.token, device: r.device, user: { name: r.user.full_name || r.user.name, email: r.user.email } });
+  return Response.json({ token: r.token, device: r.device, user: { name: r.user.full_name || r.user.name, email: r.user.email, avatar: avatarOf(r.user.avatar) } });
 });

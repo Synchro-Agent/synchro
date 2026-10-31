@@ -93,15 +93,17 @@ chrome.runtime.onMessage.addListener((m, _sender, reply) => {
       case "scope": control.setScope(m.scope); await store.set({ scope: control.scope() }); link.send({ t: "status", scope: control.scope() }); break;
       case "share": if (tab?.id != null) await control.share(tab.id, !!m.on); break;
       case "stop": await control.stop("user"); break;
+      case "pause": control.pause(true); break;
+      case "resume": control.pause(false); break;
       case "reconnect": link.connect(); break;
     }
     const st = control.status();
     const c2 = await store.get();
     // Tab Synchro đang làm, để cửa sổ tiện ích ghi "Đang làm trên: …".
-    const at = st.acting && Number(st.tab) ? await chrome.tabs.get(Number(st.tab)).catch(() => null) : null;
+    const at = (st.acting || st.paused) && Number(st.tab) ? await chrome.tabs.get(Number(st.tab)).catch(() => null) : null;
     return {
       link: link.state(), server: c2.server || server || "", user: c2.user ?? null, device: c2.device ?? null,
-      scope: control.scope(), acting: st.acting, actTab: at ? { title: at.title, url: at.url } : null, tab: tab ? { id: tab.id, title: tab.title, url: tab.url, shared: control.isShared(tab.id) } : null,
+      scope: control.scope(), acting: st.acting, paused: st.paused, actTab: at ? { title: at.title, url: at.url } : null, tab: tab ? { id: tab.id, title: tab.title, url: tab.url, shared: control.isShared(tab.id) } : null,
       paired: !!(cfg.token || c2.token),
     };
   })().then(reply, (e) => reply({ error: String(e?.message ?? e) }));

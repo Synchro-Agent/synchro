@@ -8,7 +8,7 @@ import { BrowserPane } from "./codepanes";
 import { loadCaps, setCaps, useCaps } from "./capsclient";
 
 type Say = (m: string) => void;
-export type ExtDevice = { id: string; name: string; browser: string | null; createdAt: number; lastSeen: number | null; connected: boolean; active: boolean; scope: "all" | "group" | null; tab: { title: string; url: string } | null; acting: boolean; last: { kind: string; label: string; at: number } | null; version: string | null };
+export type ExtDevice = { id: string; name: string; browser: string | null; createdAt: number; lastSeen: number | null; connected: boolean; active: boolean; scope: "all" | "group" | null; tab: { title: string; url: string } | null; acting: boolean; paused?: boolean; last: { kind: string; label: string; at: number } | null; version: string | null };
 export type ExtState = { allowed: boolean; connected: boolean; devices: ExtDevice[]; target: "synchro" | "user"; mine: boolean };
 type Where = "synchro" | "user";
 
@@ -127,7 +127,7 @@ function ChromePanel({ ext, say, busy, onStop }: { ext: ReturnType<typeof useExt
       <div className={`ext-card ${d.connected ? "on" : ""} ${acting ? "acting" : ""}`}>
         <div className="ext-dev">
           <span className="ext-dot" />
-          <div><b data-notr>{d.name}</b><span>{acting ? "Synchro đang điều khiển" : d.connected ? "Đã kết nối" : "Chưa kết nối: mở trình duyệt có cài tiện ích Synchro, tiện ích tự kết nối."}</span></div>
+          <div><b data-notr>{d.name}</b><span>{d.paused ? "Đã tạm dừng trên Chrome" : acting ? "Synchro đang điều khiển" : d.connected ? "Đã kết nối" : "Chưa kết nối: mở trình duyệt có cài tiện ích Synchro, tiện ích tự kết nối."}</span></div>
           {d.connected && <span className="ext-scope" data-tip="Đổi trong cửa sổ tiện ích Synchro trên Chrome">{d.scope === "group" ? "Nhóm tab Synchro" : "Toàn quyền · mọi tab"}</span>}
         </div>
         {d.connected && (d.tab || d.last) && (
@@ -217,7 +217,7 @@ export function ExtSettings({ say }: { say: Say }) {
           {st.devices.map((x) => (
             <div key={x.id} className="ext-row">
               <span className={`ext-dot ${x.connected ? "on" : ""} ${x.acting ? "acting" : ""}`} /><span className="cv-ell" data-notr>{x.name}</span>
-              <span className="ext-row-s">{x.acting ? "Synchro đang điều khiển" : x.connected ? (x.scope === "group" ? "Đã kết nối · nhóm tab Synchro" : "Đã kết nối · toàn quyền") : "Ngoại tuyến"}</span>
+              <span className="ext-row-s">{x.paused ? "Đã tạm dừng trên Chrome" : x.acting ? "Synchro đang điều khiển" : x.connected ? (x.scope === "group" ? "Đã kết nối · nhóm tab Synchro" : "Đã kết nối · toàn quyền") : "Ngoại tuyến"}</span>
               <button className="icon-btn" onClick={() => remove(x.id, x.name)} aria-label="Gỡ trình duyệt này" data-tip="Gỡ trình duyệt này"><I.Trash size={14} /></button>
             </div>
           ))}

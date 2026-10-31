@@ -62,6 +62,9 @@ export function redeemPairCode(code: unknown, meta: { name?: unknown; browser?: 
 }
 
 /** Thiết bị theo khóa riêng (tiện ích gửi kèm Authorization: Bearer …). */
+/** Ảnh đại diện gửi cho tiện ích: ảnh tự tải lên (data URL) hoặc ảnh từ Google / GitHub (https); khác thì không gửi (vẽ chữ cái đầu). */
+export const avatarOf = (a: string | null | undefined) => (a && (/^https:\/\//.test(a) || /^data:image\/(png|jpeg|webp);base64,/.test(a)) ? a : null);
+
 export function deviceOf(req: Request) {
   const h = req.headers.get("authorization") ?? "";
   const token = /^Bearer (sxt_[\w-]{20,})$/.exec(h)?.[1];

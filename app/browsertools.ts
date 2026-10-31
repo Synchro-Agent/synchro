@@ -282,6 +282,7 @@ export const browserTargetOf = (input: R | undefined, ctx?: BrowserCtx): Browser
 const NOT_LINKED = "Chrome của người dùng chưa kết nối với Synchro (tiện ích Synchro chưa cài, chưa ghép nối, hoặc trình duyệt đang tắt). Báo người dùng: mở Chrome / Edge / Brave có cài tiện ích Synchro (tiện ích tự kết nối), hoặc cài ở Cài đặt → Khả năng → Trình duyệt của bạn. Người dùng không cần Chrome của họ thì có thể dùng browser=\"synchro\".";
 
 /** Chạy một công cụ trình duyệt cho người dùng u: trình duyệt trong workspace của họ, hoặc Chrome của họ qua tiện ích Synchro. */
+const PAUSE_MAX = 15 * 60_000;
 export async function runBrowserTool(u: string, name: string, input: R, ctx?: BrowserCtx): Promise<BrowserOut> {
   const action = name.slice("browser_".length);
   const target = browserTargetOf(input, ctx);
@@ -297,9 +298,14 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
   // Mỗi lượt một mã: người dùng bấm Dừng trong Chrome thì tiện ích từ chối mọi thao tác còn lại của đúng lượt đó.
   const turn = ctx ? (ctx.turn ??= currentRun() ?? crypto.randomUUID()) : currentRun() ?? crypto.randomUUID();
   try {
-    const r = target === "user"
+    // Người dùng bấm Tạm dừng trên Chrome: tiện ích giữ thao tác tối đa 60 giây rồi trả { paused } (thao tác chưa chạy) — hỏi lại,
+    // tối đa 15 phút; quá thì báo model.
+    const t0 = Date.now();
+    let r = target === "user"
       ? await wsAgent<R>("/ext", { u, op: "call", a: { ...args, action }, turn, timeout: ms - 5_000 }, ms)
       : await wsAgent<R>("/browser", { ...args, u, action, ...(ctx?.scope ? { scope: ctx.scope } : {}), ...(ctx?.cookies ? { cookies: ctx.cookies } : {}) }, ms);
+    while (target === "user" && r?.paused === true && Date.now() - t0 < PAUSE_MAX) r = await wsAgent<R>("/ext", { u, op: "call", a: { ...args, action }, turn, timeout: ms - 5_000 }, ms);
+    if (r?.paused === true) return { content: "Người dùng đã tạm dừng Synchro trên Chrome hơn 15 phút nên thao tác này chưa chạy. Hỏi người dùng có muốn làm tiếp không.", is_error: true, summary: "Đang tạm dừng trên Chrome" };
     if (name === "browser_downloads" && typeof r.data === "string") return await downloaded(r);
     return { ...format(name, r), url: typeof r.url === "string" ? r.url : undefined };
   } catch (e) {

@@ -69,11 +69,12 @@ header { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0
 .st:empty { display: none; }
 .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mut); }
 .st.online::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
-.st.connecting::before, .st.acting::before { display: none; }
+.st.connecting::before, .st.acting::before, .st.paused::before { display: none; }
 .st .mk { color: var(--fg); }
 .st.offline { color: var(--err); }
 .st.offline::before { background: var(--err); }
 .st.acting { color: var(--fg); box-shadow: 0 0 0 1px var(--ink); }
+.st.paused { color: var(--fg2); }
 
 main { padding: 16px; display: grid; gap: 14px; }
 p { margin: 0; }
@@ -125,6 +126,17 @@ input.code::placeholder { color: color-mix(in srgb, var(--mut) 50%, transparent)
   color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-mid) 52%, var(--g-bot));
   box-shadow: var(--g-sh), inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim), inset 0 12px 12px -10px var(--g-sheen); transition: filter .15s; }
 .stop:hover { filter: var(--g-hover); }
+.live-a { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.live.paused { box-shadow: 0 0 0 .5px var(--line2), var(--sh); }
+.pz, .stop.soft { height: 38px; border: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;
+  color: var(--fg); background: var(--soft); box-shadow: inset 0 0 0 .5px var(--line2); filter: none; transition: background .15s, box-shadow .15s; }
+.pz:hover, .stop.soft:hover { background: var(--seg-on); box-shadow: inset 0 0 0 .5px var(--line2), 0 1px 3px rgba(0, 0, 0, .1); filter: none; }
+.pz.go { color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-mid) 52%, var(--g-bot));
+  box-shadow: var(--g-sh), inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim), inset 0 12px 12px -10px var(--g-sheen); }
+.pz.go:hover { filter: var(--g-hover); }
+/* Biểu tượng nút: hai vạch (tạm dừng), tam giác (tiếp tục). */
+.pz i.bars { width: 9px; height: 10px; border-left: 3px solid currentColor; border-right: 3px solid currentColor; box-sizing: border-box; }
+.pz i.play { width: 0; height: 0; border-left: 9px solid currentColor; border-top: 5.5px solid transparent; border-bottom: 5.5px solid transparent; margin-left: 2px; }
 .stop i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
 
 /* Tài khoản đã ghép nối. */
@@ -132,6 +144,8 @@ input.code::placeholder { color: color-mix(in srgb, var(--mut) 50%, transparent)
 .who { display: flex; align-items: center; gap: 11px; padding: 12px 14px; }
 .av { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12.5px; font-weight: 650; letter-spacing: .02em;
   color: var(--g-fg); background: linear-gradient(180deg, var(--g-top), var(--g-bot)); box-shadow: inset 0 1px .5px var(--g-hi), inset 0 0 0 .75px var(--g-rim); }
+.av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.av:has(img) { background: var(--soft); box-shadow: inset 0 0 0 .5px var(--line2); overflow: hidden; }
 .who-t { display: grid; min-width: 0; }
 .who-t b { font-size: 13.5px; font-weight: 600; }
 .who-t small { display: flex; align-items: center; gap: 5px; color: var(--mut); font-size: 12px; }

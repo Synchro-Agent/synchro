@@ -16,6 +16,9 @@ import { strings } from "./i18n.js";
 
 const STOPPED = 499;
 const IDLE_MS = 120_000;
+// Người dùng bấm Tạm dừng: thao tác kế tiếp chờ tối đa chừng này rồi báo máy chủ "đang tạm dừng" (máy chủ hỏi lại, tối đa 15 phút),
+// để không chạm giới hạn chờ 85 giây của mỗi thao tác.
+const HOLD_MS = 60_000;
 const GROUP = "Synchro";
 // Trang không gắn chrome.debugger được (trang hệ thống, cửa hàng tiện ích).
 const RESTRICTED = /^(chrome|edge|brave|opera|vivaldi|about|chrome-extension|moz-extension|devtools|view-source|chrome-search|chrome-untrusted):|^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com|microsoftedge\.microsoft\.com\/addons)/i;
@@ -38,6 +41,7 @@ export function createControl(chrome, o = {}) {
   const S = { tab: "", viewers: new Set() };
   let hint = "", idleT = 0, halt = null; // halt: { turn, at } sau khi người dùng bấm Dừng
   let running = null; // { reject } của thao tác đang chạy
+  let paused = false, waiters = []; // Tạm dừng: các thao tác đang chờ người dùng bấm Tiếp tục
 
   // ---------------------------------------------------------------- phiên chrome.debugger theo tab (giống lớp CDP của browser-core)
   // Sự kiện của phiên con (khung con khác nguồn) kèm src.sessionId.
@@ -92,9 +96,14 @@ export function createControl(chrome, o = {}) {
     // Dải điều khiển trong trang (cả các trang mở sau trong tab này) và nút Dừng.
     const src = overlayScript(strings());
     await s.send("Runtime.addBinding", { name: "__synchroStop" }).catch(() => {});
-    s.on("Runtime.bindingCalled", (p) => { if (p.name === "__synchroStop") stop("user"); });
+    // Nút trên dải: "pause" / "resume" (Tạm dừng / Tiếp tục), còn lại là Dừng.
+    s.on("Runtime.bindingCalled", (p) => {
+      if (p.name !== "__synchroStop") return;
+      if (p.payload === "pause") pause(true); else if (p.payload === "resume") pause(false); else stop("user");
+    });
     await s.send("Page.addScriptToEvaluateOnNewDocument", { source: src }).catch(() => {});
     await s.send("Runtime.evaluate", { expression: src }).catch(() => {});
+    if (paused) await s.send("Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.paused(true)" }).catch(() => {});
     return s;
   }
   async function detachAll() {
@@ -231,7 +240,7 @@ export function createControl(chrome, o = {}) {
     const tab = Number(S.tab) ? await chrome.tabs.get(Number(S.tab)).catch(() => null) : null;
     const list = await tabs().catch(() => []);
     const cur = tab ? { title: (page?.url && page.title) || tab.title || "", url: page?.url || tab.url || "" } : null;
-    notify({ t: "status", scope, tab: cur, tabs: list.length, acting: S.acting > 0 });
+    notify({ t: "status", scope, tab: cur, tabs: list.length, acting: S.acting > 0, paused });
     o.onStatus?.(status());
     save();
   }
@@ -253,7 +262,7 @@ export function createControl(chrome, o = {}) {
     }
     save();
   }
-  const status = () => ({ scope, acting: S.acting > 0, tab: S.tab, attached: [...sessions.keys()], shared: [...shared], halted: !!halt });
+  const status = () => ({ scope, acting: S.acting > 0, paused, tab: S.tab, attached: [...sessions.keys()], shared: [...shared], halted: !!halt });
 
   // Một thao tác từ máy chủ. Người dùng đã bấm Dừng trong lượt này thì từ chối mọi thao tác còn lại của lượt.
   async function call(a, turn = "") {
@@ -265,7 +274,12 @@ export function createControl(chrome, o = {}) {
     try {
       r = await new Promise((ok, no) => {
         running = { no, turn };
-        A.tool("me", a).then(ok, no);
+        const go = () => A.tool("me", a).then(ok, no);
+        if (!paused) return go();
+        // Đang tạm dừng: giữ thao tác tới khi người dùng bấm Tiếp tục; quá HOLD_MS thì báo máy chủ để hỏi lại (thao tác chưa chạy).
+        const t = setTimeout(() => { waiters = waiters.filter((f) => f !== resume); ok({ paused: true }); }, HOLD_MS);
+        const resume = () => { clearTimeout(t); go(); };
+        waiters.push(resume);
       });
       return r;
     } finally {
@@ -275,7 +289,16 @@ export function createControl(chrome, o = {}) {
     }
   }
   // Dừng: từ người dùng (dải trong trang, cửa sổ tiện ích, nút Hủy của Chrome) hoặc từ Synchro (nút Dừng ở khung chat).
+  // Tạm dừng / Tiếp tục (dải trong trang, cửa sổ tiện ích): thao tác đang chạy làm nốt, thao tác kế tiếp chờ.
+  function pause(on) {
+    paused = !!on;
+    for (const s of sessions.values()) s.send("Runtime.evaluate", { expression: `window.__synOverlay && window.__synOverlay.paused(${paused})` }).catch(() => {});
+    if (!paused) { const w = waiters; waiters = []; w.forEach((f) => f()); }
+    report().catch(() => {});
+    return paused;
+  }
   async function stop(by = "user") {
+    paused = false; waiters = [];
     const turn = running?.turn ?? "";
     halt = { turn, at: Date.now() };
     S.halt = "Người dùng đã bấm Dừng trong Chrome.";
@@ -286,7 +309,7 @@ export function createControl(chrome, o = {}) {
     report().catch(() => {});
   }
   // Hết lượt: thôi điều khiển (gỡ dải, ngắt chrome.debugger); giữ tab đang dùng để lượt sau làm tiếp.
-  async function release() { clearTimeout(idleT); if (S.acting > 0) return; await detachAll(); report().catch(() => {}); }
+  async function release() { clearTimeout(idleT); if (S.acting > 0 || waiters.length) return; paused = false; await detachAll(); report().catch(() => {}); }
 
   // Tab Synchro mở ra (trang mở tab mới, window.open) thuộc về Synchro; tab đóng thì quên.
   chrome.tabs.onCreated?.addListener((t) => { if (t.openerTabId != null && (mine.has(t.openerTabId) || sessions.has(t.openerTabId))) { mine.add(t.id); group(t.id); } });
@@ -306,7 +329,7 @@ export function createControl(chrome, o = {}) {
   chrome.downloads?.onChanged?.addListener((d) => { const x = S.downloads?.find((y) => y.id === d.id); if (!x) return; if (d.filename?.current) { x.name = d.filename.current.split(/[\\/]/).pop(); x.path = d.filename.current; } if (d.state?.current === "complete") x.state = "completed"; else if (d.state?.current === "interrupted") x.state = "canceled"; });
 
   return {
-    call, stop, release, report, status, restore,
+    call, stop, pause, release, report, status, restore,
     scope: () => scope,
     setScope(v) { scope = v === "group" ? "group" : "all"; report().catch(() => {}); return scope; },
     async share(tabId, on = true) {
