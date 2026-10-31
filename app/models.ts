@@ -33,7 +33,7 @@ export function modelName(key: string) {
   if (key === AUTO) return "Tự động";
   for (const p of state.providers) for (const m of p.models) if (m.key === key) return m.name;
   const id = splitKey(key).id || key;
-  return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/-/g, " ");
+  return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/^grok-/, "Grok ").replace(/^deepseek-/, "DeepSeek ").replace(/-/g, " ");
 }
 
 // Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định hoặc model đầu tiên được phép.

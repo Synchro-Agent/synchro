@@ -262,13 +262,13 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {none && (
           <div className="mempty">
             <b>Chưa kết nối model nào</b>
-            <span>{me?.isAdmin ? "Đăng nhập gói Claude, ChatGPT hoặc Gemini của bạn, hoặc nhập khóa API dùng chung." : "Đăng nhập gói Claude, ChatGPT hoặc Gemini của bạn để bắt đầu."}</span>
+            <span>{me?.isAdmin ? "Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok của bạn, hoặc nhập khóa API dùng chung." : "Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok của bạn để bắt đầu."}</span>
             <button className="btn dark" onClick={() => { close(); openSettings?.("Providers"); }}>Mở Cài đặt → Providers</button>
           </div>
         )}
         {!none && (
           <button className="menu-item mline mauto" onClick={() => pick(AUTO)} onMouseEnter={() => setSub(null)}>
-            <span className="mauto-t"><b>Tự động</b><em>Chọn qua cả Claude, ChatGPT, Gemini: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
+            <span className="mauto-t"><b>Tự động</b><em>Chọn qua mọi hãng đã kết nối (Claude, ChatGPT, Gemini, Grok, DeepSeek): việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
           </button>
         )}
         {!none && <hr />}
@@ -1066,7 +1066,7 @@ export default function Home() {
   // (tới khi gói hồi lại), chọn model tương đương và gửi lại lượt vừa lỗi. Không đồng ý: giữ nguyên gói.
   const askPlanSwitch = (d: Record<string, unknown>, retry: () => void) => {
     const cli = String(d.planLimit ?? d.relogin), api = String(d.apiModel), apiName = typeof d.apiModelName === "string" ? d.apiModelName : modelName(api);
-    const name = cli === "claude" ? "Claude" : cli === "codex" ? "ChatGPT" : "Gemini";
+    const name = ({ claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" } as Record<string, string>)[cli] ?? cli;
     const at = typeof d.resetsAt === "number" ? new Date(d.resetsAt).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
     const en = getLang() === "en";
     setGc({

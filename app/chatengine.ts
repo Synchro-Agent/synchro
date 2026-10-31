@@ -161,7 +161,8 @@ const mockAdapter = (skills: Skl): Adapter => ({
 type Lib = { key: string; label: string };
 // trace: dấu vết công cụ của lượt theo chuẩn Synchro (trả về trình duyệt, lượt sau gửi lại để model nào cũng biết đã làm gì).
 // heal: model của lượt này, dùng để tự sửa script của skill khi script hỏng (skillheal.ts).
-// search: model Gemini (khóa API) để tìm web bằng Google Search qua API gốc của Gemini (công cụ web_search của Synchro).
+// search: model Gemini / Grok / DeepSeek (khóa API) để tìm web qua công cụ web_search của Synchro (Google Search qua API gốc của Gemini,
+// web_search của API Responses ở xAI / DeepSeek).
 // browse: công cụ trình duyệt đang bật (Cài đặt → Khả năng); bctx: trình duyệt của lượt (của Synchro / Chrome của người dùng, browsertools.ts);
 // shown: trình duyệt đã mở khung cho người dùng ở lượt này;
 // heavy: id các lượt đọc trang / chụp màn hình (lược bớt bản cũ để ngữ cảnh không phình khi thao tác dài).
@@ -210,14 +211,16 @@ Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ
 - Nếu có khối <user_followup>: đó là tin người dùng nhắn thêm khi bạn đang làm. Ghép yêu cầu đó vào việc đang làm (ưu tiên nếu nó đổi yêu cầu), nói ngắn rằng bạn đã nhận và sẽ làm thế nào, rồi làm tiếp — không bỏ dở việc trước.
 - Câu trả lời cuối vẫn đầy đủ như bình thường.
 </working_out_loud>`;
-// Gói chạy qua CLI (Claude Code, Codex, Antigravity) gọi công cụ của Synchro qua cầu nối MCP "synchro".
-const BRIDGE_CLIS = new Set(["claude", "codex", "agy"]);
+// Gói chạy qua CLI (Claude Code, Codex, Antigravity, Grok) gọi công cụ của Synchro qua cầu nối MCP "synchro".
+const BRIDGE_CLIS = new Set(["claude", "codex", "agy", "grok"]);
 // Antigravity (-p): công cụ dựng sẵn của nó cần duyệt nên bị tự chặn (lượt dừng sau câu dẫn) — nói trước để model dùng ngay công cụ của
 // Synchro thay vì thử công cụ của agy rồi mới được nhắc (tin đầu "tóm tắt video YouTube" từng dừng ở "Mình sẽ lấy phụ đề qua lệnh script").
 const AGY_NOTE = (web: boolean) => `
 Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}`;
+// Grok CLI: công cụ MCP nằm sau search_tool / use_tool, tên đầy đủ là synchro__<tên>; công cụ dựng sẵn (shell, đọc / sửa tệp) bị tắt.
+const GROK_NOTE = ", tên đầy đủ là synchro__<tên> (ví dụ synchro__load_skill): tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó. Công cụ dựng sẵn của Grok (shell, đọc / sửa tệp) đã tắt ở đây";
 const CLI_TOOLS_NOTE = (cli: string, web = false) => `<synchro_tools>
-Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.${cli === "agy" ? AGY_NOTE(web) : ""}
+Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : cli === "grok" ? GROK_NOTE : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng.${cli === "agy" ? AGY_NOTE(web) : ""}
 </synchro_tools>`;
 /** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
 async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>, usedAll: ToolRun["used"][]) {
@@ -258,6 +261,7 @@ const GEMINI_WEB_TOOL = {
   description: "Tìm thông tin mới trên web bằng Google Search. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn.",
   input_schema: { type: "object", properties: { query: { type: "string", description: "Câu tìm kiếm ngắn, cùng ngôn ngữ người dùng" } }, required: ["query"] },
 };
+const WEB_DESC = "Tìm thông tin mới trên web. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn.";
 async function geminiSearch(t: Target, query: string): Promise<ToolRun> {
   const used = { kind: "search" as const, name: "web_search" };
   if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
@@ -273,6 +277,24 @@ async function geminiSearch(t: Target, query: string): Promise<ToolRun> {
   const src = (c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri?: string; title?: string } => !!w?.uri).slice(0, 8).map((w, i) => `[${i + 1}] ${w.title ?? ""} — ${w.uri}`).join("\n");
   return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src || "(không có)"}`, is_error: false, used };
 }
+// Tìm web cho Grok / DeepSeek qua khóa API: /chat/completions của hai hãng không có công cụ tìm web phía máy chủ, nên Synchro gọi
+// API Responses của chính hãng đó (cùng khóa, cùng model) với công cụ web_search và trả câu trả lời kèm nguồn như một công cụ thường.
+async function responsesSearch(t: Target, query: string): Promise<ToolRun> {
+  const used = { kind: "search" as const, name: "web_search" };
+  if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
+  try {
+    const j = await responsesCall(t, { input: [{ role: "user", content: `Tìm trên web rồi tóm tắt ngắn gọn, ghi rõ nguồn: ${query.slice(0, 500)}` }], tools: [{ type: "web_search" }], max_output_tokens: 4000 }, runSignal() ?? AbortSignal.timeout(90_000)) as { output?: { type: string; content?: { type: string; text?: string; annotations?: { type?: string; url?: string; title?: string }[] }[] }[]; citations?: unknown[] };
+    const parts = (j.output ?? []).filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text");
+    const text = parts.map((c) => c.text ?? "").join("").trim();
+    const urls = [...parts.flatMap((c) => (c.annotations ?? []).filter((a) => a.url).map((a) => ({ url: a.url!, title: a.title ?? "" }))), ...(Array.isArray(j.citations) ? j.citations : []).filter((u): u is string => typeof u === "string").map((url) => ({ url, title: "" }))];
+    const src = [...new Map(urls.map((u) => [u.url, u])).values()].slice(0, 8).map((u, i) => `[${i + 1}] ${u.title} — ${u.url}`).join("\n");
+    return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src || "(không có)"}`, is_error: false, used };
+  } catch (e) {
+    if (isAbort(e)) throw e;
+    return { content: `Chưa tìm được trên web (${e instanceof HttpErr ? e.status : "mất kết nối"}): ${String((e as Error).message).slice(0, 200)}`, is_error: true, used };
+  }
+}
+const searchWeb = (t: Target, query: string) => (t.kind === "google" ? geminiSearch(t, query) : responsesSearch(t, query));
 async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "update_plan") {
     const items = (Array.isArray(c.input?.items) ? c.input.items : []).map((i: { content?: unknown; status?: unknown }) => ({ content: String(i.content ?? "").slice(0, 120), status: ["pending", "in_progress", "completed"].includes(String(i.status)) ? String(i.status) : "pending" })).slice(0, 12);
@@ -282,7 +304,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === TASK_TOOL.name && x.task && !x.sess?.get(c.name)) return { ...(await runPropose(x.uid, x.task, c.input ?? {})), used: { kind: "search", name: c.name } };
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
-  if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return geminiSearch(x.search, String(c.input?.query ?? ""));
+  if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
   if (x.browse && isBrowserTool(c.name) && !x.sess?.get(c.name)) {
     // Lần đầu dùng trình duyệt trong lượt (hoặc đổi sang trình duyệt kia): mở khung trình duyệt cạnh khung chat để người dùng xem
@@ -942,7 +964,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));
     // "Tìm kiếm trên web" ở khung soạn: công cụ tìm web phía máy chủ của Anthropic / OpenAI; Gemini dùng web_search của Synchro
     // (Google Search qua API gốc của Gemini).
-    const web = !!skills && body.web === true && (t.kind === "anthropic" || t.kind === "openai" || t.kind === "google");
+    // Grok / DeepSeek dùng web_search của Synchro (API Responses của chính hãng có công cụ tìm web).
+    const synWeb = t.kind === "google" || t.kind === "xai" || t.kind === "deepseek";
+    const web = !!skills && body.web === true && (t.kind === "anthropic" || t.kind === "openai" || synWeb);
     const brain = t.kind !== "mock" && brainOn(body, c.user);
     // Trình duyệt của Synchro (Cài đặt → Khả năng → Điều khiển trình duyệt): model nào cũng thao tác được trên web khi người dùng nhờ.
     // Luôn kèm khi bật, không đoán theo từng câu hỏi: công cụ nằm ở phần đầu prompt, đổi qua lại sẽ làm hỏng bộ đệm prompt.
@@ -952,11 +976,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && t.kind === "google" ? [GEMINI_WEB_TOOL] : [])];
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net)] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && t.kind === "google" ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)

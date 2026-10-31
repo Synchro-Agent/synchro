@@ -24,7 +24,7 @@ const GH = `http://127.0.0.1:${GH_PORT}`;
 const ghEnv = { GITHUB_CLIENT_ID: "mock-github-client", GITHUB_CLIENT_SECRET: "mock-github-secret", GITHUB_WEB_URL: GH, GITHUB_API_URL: `${GH}/api`, GITHUB_GIT_URL: `${GH}/git`, SYNCHRO_PR_TICK_MS: "3000", GITHUB_CODELOAD_URL: `${GH}/codeload`, GIT_ALLOW_PRIVATE: "1" };
 const env = { ...process.env, ...ghEnv, WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, WS_PUBLIC_URL: `ws://localhost:${WS_PORT}/ws-agent`, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_TASK_RETRY_MS: "4000", SYNCHRO_CHROME_WAIT_MS: "30000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "" };
 
-// CLI giả lập (claude, codex, agy) cho Cài đặt → Providers: chép vào <engine home>/.local/bin như CLI thật đã cài,
+// CLI giả lập (claude, codex, agy, grok) cho Cài đặt → Providers: chép vào <engine home>/.local/bin như CLI thật đã cài,
 // kèm địa chỉ máy chủ giả lập (trang đăng nhập /mock-login/…).
 const ENGINE_BIN = path.join(DATA, "engine", ".local", "bin");
 fs.mkdirSync(ENGINE_BIN, { recursive: true });
@@ -71,6 +71,8 @@ const add = [
   ["anthropic", { id: "anthropic", key: MOCK_KEYS.anthropic, baseUrl: `${M}/anthropic` }],
   ["openai", { id: "openai", key: MOCK_KEYS.openai, baseUrl: `${M}/openai/v1` }],
   ["google", { id: "google", key: MOCK_KEYS.google, baseUrl: `${M}/google/v1beta/openai` }],
+  ["xai", { id: "xai", key: MOCK_KEYS.xai, baseUrl: `${M}/xai/v1` }],
+  ["deepseek", { id: "deepseek", key: MOCK_KEYS.deepseek, baseUrl: `${M}/deepseek` }],
   // Speech, đọc to và trò chuyện bằng giọng nói dùng ElevenLabs giả lập (gói Free như tài khoản thật; đổi gói ở /_debug/el).
   ["elevenlabs", { id: "elevenlabs", kind: "elevenlabs", key: MOCK_KEYS.elevenlabs, baseUrl: `${M}/elevenlabs` }],
 ];
@@ -165,6 +167,8 @@ console.log(`
   │ Đăng nhập:  ${ADMIN.email} / ${ADMIN.password}
   │ Model:      ${models.map((p) => `${p.name} (${p.models.length})`).join(", ") || "chưa có"}
   │ Thử lỗi:    gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn
+  │ Grok:       khóa API giả lập nối sẵn; gói Grok: Cài đặt → Providers → Grok → Sign in with your plan (trang cho phép giả lập)
+  │ DeepSeek:   khóa API giả lập nối sẵn (chỉ có khóa API, không có gói đăng nhập)
   │ Khóa thử:   khóa nào có chữ "mock" đều hợp lệ, API giả lập ở ${M}
   │ Connector:  ${connected.map((x) => x.name).join(", ") || "chưa có"} (đã kết nối sẵn)
   │ Thử:        "Tìm ghi chú về Synchro", "Tạo ghi chú tên Họp thứ Hai", "Xóa ghi chú n2", "Mấy giờ rồi?"

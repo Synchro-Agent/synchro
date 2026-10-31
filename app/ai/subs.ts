@@ -1,7 +1,7 @@
 // Gói subscription trong Synchro (ADR 0001): model của gói hiện trong bộ chọn model của chính người đã đăng nhập,
 // lượt chat chạy qua engine CLI (nối tiếp phiên bằng resume), hạn mức của gói (phiên 5 giờ, tuần) cho vòng tròn mức dùng.
-// Khóa model: "sub-claude/sonnet", "sub-codex/gpt-6.1-sol", "sub-agy/gemini-3-pro" ("default" = model mặc định của gói).
-// Bộ chọn model gộp theo hãng (Claude, ChatGPT, Gemini): đã đăng nhập gói thì nhóm hiện model của gói; gói hết hạn mức thì
+// Khóa model: "sub-claude/sonnet", "sub-codex/gpt-6.1-sol", "sub-agy/gemini-3-pro", "sub-grok/grok-4.7" ("default" = model mặc định của gói).
+// Bộ chọn model gộp theo hãng (Claude, ChatGPT, Gemini, Grok; DeepSeek chỉ có khóa API): đã đăng nhập gói thì nhóm hiện model của gói; gói hết hạn mức thì
 // Synchro KHÔNG tự chuyển sang khóa API mà hỏi người dùng. Đồng ý thì nhóm đó hiện model của khóa API cho tới khi gói hồi lại.
 import crypto from "node:crypto";
 import path from "node:path";
@@ -11,6 +11,7 @@ import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
 import { engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
+import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
 import type { Attachment, RateWindow, TurnRequest } from "./engine";
 import { redact } from "./errors";
@@ -24,11 +25,12 @@ export const subCli = (key: unknown): Cli | null => {
 };
 
 /** Tên gói, hãng (để hiện logo), và model mặc định khi chưa đọc được danh sách thật. */
-export const SUB: Record<Cli, { name: string; vendor: "anthropic" | "openai" | "google"; label: string; fallback: { id: string; name: string }[] }> = {
+export const SUB: Record<Cli, { name: string; vendor: "anthropic" | "openai" | "google" | "xai"; label: string; fallback: { id: string; name: string }[] }> = {
   // Claude Code nhận tên gọi tắt fable / opus / sonnet / haiku và tự dùng bản mới nhất gói được phép (Fable có thể cần usage credits).
   claude: { name: "Claude", vendor: "anthropic", label: "Claude · Your plan", fallback: [{ id: "fable", name: "Claude Fable" }, { id: "opus", name: "Claude Opus" }, { id: "sonnet", name: "Claude Sonnet" }, { id: "haiku", name: "Claude Haiku" }] },
   codex: { name: "ChatGPT", vendor: "openai", label: "ChatGPT · Your plan", fallback: [{ id: "default", name: "ChatGPT (plan default)" }] },
   agy: { name: "Gemini", vendor: "google", label: "Gemini · Your plan", fallback: [{ id: "default", name: "Gemini (plan default)" }] },
+  grok: { name: "Grok", vendor: "xai", label: "Grok · Your plan", fallback: [{ id: "default", name: "Grok (plan default)" }] },
 };
 
 // ---------------------------------------------------------------- codex app-server (JSON-RPC qua stdio)
@@ -115,6 +117,11 @@ async function detectModels(cli: Cli, scope: string, agyLines?: string[]): Promi
     const list = agyModels(agyLines ?? []);
     return list.length ? list : SUB.agy.fallback;
   }
+  if (cli === "grok") {
+    // `grok models` (đọc cùng lúc kiểm tra đăng nhập): model mặc định của gói trước.
+    const list = (agyLines ?? []).map((id) => ({ id, name: prettyGrok(id) }));
+    return list.length ? list : SUB.grok.fallback;
+  }
   if (cli === "codex") {
     const [r] = await codexRpc(scope, [{ method: "model/list" }]).catch(() => [null]);
     const list = ((r?.data ?? []) as Json[]).filter((m) => !m.hidden && typeof (m.id ?? m.model) === "string").map((m) => ({
@@ -158,7 +165,9 @@ export function resolvePlanModel(cli: Cli, uid: string, id: string, effort?: str
   return { model: pick };
 }
 
-const VENDOR_CLI: Record<string, Cli> = { anthropic: "claude", openai: "codex", google: "agy" };
+const VENDOR_CLI: Record<string, Cli> = { anthropic: "claude", openai: "codex", google: "agy", xai: "grok" };
+/** Thứ tự các hãng trong bộ chọn model. DeepSeek không có gói đăng nhập (chỉ khóa API). */
+export const VENDORS = ["anthropic", "openai", "google", "xai", "deepseek"] as const;
 
 /** Model của gói (đã đăng nhập, không cần đăng nhập lại), đọc lại tối đa 10 phút một lần. */
 async function planModels(cli: Cli, u: UserRow) {
@@ -167,9 +176,9 @@ async function planModels(cli: Cli, u: UserRow) {
   if (!s?.loggedIn || s.relogin) return null;
   // Đọc lại khi hết hạn nhớ, hoặc khi người dùng vừa đăng nhập lại sau lần đọc trước.
   const k = `${cli}:${u.id}`, hit = g.models.get(k);
-  // agy: trạng thái (`agy models`, đọc lại mỗi phút) cho biết danh sách hiện tại — Google đổi danh sách (vd. gói chuyển từ dùng thử
+  // agy, grok: trạng thái (`… models`, đọc lại mỗi phút) cho biết danh sách hiện tại — hãng đổi danh sách (vd. gói chuyển từ dùng thử
   // sang trả phí) thì cập nhật ngay.
-  const src = cli === "agy" ? (s.models ?? []).join("\n") : undefined;
+  const src = cli === "agy" || cli === "grok" ? (s.models ?? []).join("\n") : undefined;
   const fresh = hit && Date.now() - hit.at < MODELS_TTL && hit.at > loginTime(cli, u.id) && (src === undefined || hit.src === src);
   const models = fresh ? hit.v : await detectModels(cli, u.id, s.models);
   if (!fresh) g.models.set(k, { at: Date.now(), v: models, src });
@@ -183,11 +192,11 @@ async function planModels(cli: Cli, u: UserRow) {
 export async function mergedProviders(u: UserRow, api: ProviderInfo[]): Promise<ProviderInfo[]> {
   const out: ProviderInfo[] = [];
   const used = new Set<string>();
-  for (const vendor of ["anthropic", "openai", "google"]) {
+  for (const vendor of VENDORS) {
     const cli = VENDOR_CLI[vendor];
     const ap = api.find((p) => p.id === vendor) ?? api.find((p) => p.kind === vendor && !used.has(p.id));
     if (ap) used.add(ap.id);
-    const models = await planModels(cli, u);
+    const models = cli ? await planModels(cli, u) : null;
     if (!models?.length) { if (ap) out.push({ ...ap, source: "api" }); continue; }
     const plan = { cli, models, blockedUntil: planBlock(cli, u.id), usingApiUntil: apiOptIn(u.id, cli), relogin: needsRelogin(cli, u.id) };
     const name = ap?.name ?? SUB[cli].name;
@@ -227,6 +236,7 @@ export const forgetSubModels = (cli: Cli, uid: string) => g.models.delete(`${cli
 //   primary / secondary { usedPercent, windowDurationMins, resetsAt }.
 // - Gemini (Antigravity): Pro và Ultra hồi quota mỗi 5 giờ cho tới khi chạm hạn mức tuần; gói khác chỉ có hạn mức tuần.
 //   Quota tách hai nhóm: model Gemini, và model Claude / GPT; agy hiện trong bảng /usage (/quota).
+// - Grok (SuperGrok, X Premium+): hạn mức cuốn chiếu nhưng Grok CLI không báo còn bao nhiêu; chỉ biết khi hãng báo đã chạm giới hạn.
 // Mốc đặt lại luôn lấy từ hãng. Khi mốc đã qua mà chưa có số mới: phiên 5 giờ về 0% và bắt đầu lại ở tin nhắn sau;
 // hạn mức tuần về 0% và mốc kế tiếp là đúng một tuần sau mốc cũ.
 export type WindowKind = "session" | "weekly" | "other";
@@ -393,6 +403,7 @@ const NOTE: Record<Cli, string> = {
   claude: "The session starts with your first message and lasts 5 hours. Weekly limits reset at a fixed time each week.",
   codex: "Plus has a rolling 5-hour window and a weekly limit. Pro plans only have a weekly limit.",
   agy: "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models have separate quotas.",
+  grok: "SuperGrok and X Premium+ have rolling usage limits. The Grok CLI doesn't report how much is left, so Synchro counts your messages and tells you when Grok says the limit is reached.",
 };
 
 /** Antigravity đang chờ người dùng hoàn tất bước làm quen (đã thấy ở lần đọc hạn mức gần nhất). */
@@ -414,8 +425,8 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean } = {}
     const r = await agyUsage(u.id).catch(() => ({ windows: [] as PlanWindow[], setup: false }));
     saveLimits(cli, u.id, r.windows, { setup: r.setup });
     hit = g.limits.get(k);
-  } else if (cli === "claude" && !hit?.plan) {
-    const s = await status("claude", u.id).catch(() => null);
+  } else if ((cli === "claude" || cli === "grok") && !hit?.plan) {
+    const s = await status(cli, u.id).catch(() => null);
     if (s?.plan) saveLimits(cli, u.id, [], { plan: s.plan });
     hit = g.limits.get(k);
   }
@@ -427,7 +438,7 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean } = {}
   const plan = hit?.plan ? hit.plan.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : null;
   return { cli, name: SUB[cli].name, plan, windows, turnsToday: turnsToday(u.id, cli), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup,
     note: hit?.setup ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits."
-      : windows.length ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
+      : windows.length || cli === "grok" ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
 }
 
 // ---------------------------------------------------------------- phiên CLI theo đoạn chat

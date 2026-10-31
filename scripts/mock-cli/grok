@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+// Grok CLI giả lập (dev:mock), theo tài liệu của xAI Grok Build (docs/user-guide: authentication, headless mode, MCP servers):
+// - login --device-auth: in link + mã thiết bị ra stderr ("To sign in, open this URL in your browser:" …), chờ người dùng cho phép trên trang
+//   giả lập rồi ghi $GROK_HOME/auth.json, in "✓ Signed in"; logout xóa auth.json.
+// - models: "You are logged in with …." / "You are not authenticated.", "Default model: …", "Available models:", "  * mã (default)", "  - mã".
+// - mcp add --transport http <tên> <url> | remove <tên> | list: ghi [mcp_servers.<tên>] url = "…" trong $GROK_HOME/config.toml.
+// - --prompt-file <tệp> --output-format streaming-json [-m] [--effort] [--resume <id>] [--rules] [--tools] [--deny]…: mỗi dòng một sự kiện
+//   (text, thought, tool_call, tool_call_update, end, error). Công cụ MCP gọi qua use_tool với tên synchro__<tên>.
+// Trong prompt: [mock:quota] → hết hạn mức gói; [mock:noeffort] → model không nhận --effort; #grokargs → trả lại các cờ đã nhận
+// (kiểm thử công cụ dựng sẵn đã tắt); #web → tìm web khi --tools có web_search; #media → mô tả tệp đính kèm @… nhận được.
+const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
+const { fs, path } = C;
+const a = process.argv.slice(2);
+const home = process.env.GROK_HOME || path.join(process.env.HOME || "/tmp", ".grok");
+const authFile = path.join(home, "auth.json"), cfgFile = path.join(home, "config.toml");
+const MODELS = ["grok-4.7", "grok-4.6", "grok-build-0.1"];
+const li = () => fs.existsSync(authFile);
+// config.toml tối giản: chỉ các bảng [mcp_servers.<tên>] có url.
+const readMcp = () => { try { return Object.fromEntries([...fs.readFileSync(cfgFile, "utf8").matchAll(/\[mcp_servers\.([\w-]+)\]\s*\n\s*url\s*=\s*"([^"]+)"/g)].map((m) => [m[1], m[2]])); } catch { return {}; } };
+const writeMcp = (o) => { fs.mkdirSync(home, { recursive: true }); fs.writeFileSync(cfgFile, Object.entries(o).map(([n, u]) => `[mcp_servers.${n}]\nurl = "${u}"\nenabled = true\n`).join("\n")); };
+const all = (n) => a.flatMap((x, i) => (x === n ? [a[i + 1]] : []));
+
+(async () => {
+  if (a[0] === "--version" || a[0] === "version") return console.log("grok 0.1.42 [mock]");
+  if (a[0] === "models") {
+    console.log(li() ? "You are logged in with SuperGrok (owner@example.com)." : "You are not authenticated.");
+    console.log("");
+    console.log(`Default model: ${MODELS[0]}\n`);
+    console.log("Available models:");
+    for (const [i, m] of MODELS.entries()) console.log(i === 0 ? `  * ${m} (default)` : `  - ${m}`);
+    return;
+  }
+  if (a[0] === "logout") { fs.rmSync(authFile, { force: true }); return console.log("Signed out."); }
+  if (a[0] === "login") {
+    if (!a.includes("--device-auth") && !a.includes("--device-code")) { console.error("mock grok: chỉ hỗ trợ đăng nhập bằng --device-auth"); process.exit(2); }
+    const L = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", pick = (n) => Array.from({ length: n }, () => L[C.crypto.randomInt(L.length)]).join("");
+    const code = `${pick(4)}-${pick(4)}`;
+    console.error(`To sign in, open this URL in your browser:\n  ${C.cfg.base}/mock-login/grok?user_code=${code}\n\nConfirm this code in your browser:\n  ${code}\n\nOnly continue with a code you requested. Don't share it with anyone.\nWaiting for authorization...`);
+    for (let i = 0; i < 600; i++) {
+      await C.sleep(1000);
+      const r = await fetch(`${C.cfg.base}/mock-login/grok/status?code=${code}`).then((x) => x.json()).catch(() => null);
+      if (r?.approved) { fs.mkdirSync(home, { recursive: true }); fs.writeFileSync(authFile, JSON.stringify({ "grok::session": { key: "mock", auth_mode: "oauth" } }), { mode: 0o600 }); console.error("✓ Signed in"); process.exit(0); }
+    }
+    console.error("Device code expired. Run `grok login --device-auth` again."); process.exit(1);
+  }
+  if (a[0] === "mcp") {
+    const m = readMcp();
+    if (a[1] === "add") {
+      const rest = a.slice(2).filter((x, i, arr) => x !== "--transport" && arr[i - 1] !== "--transport" && x !== "--scope" && arr[i - 1] !== "--scope");
+      const [name, url] = rest;
+      if (!name || !url) { console.error("Usage: grok mcp add --transport http <name> <url>"); process.exit(2); }
+      m[name] = url; writeMcp(m);
+      return console.log(`Added MCP server '${name}' (http) to ${cfgFile}`);
+    }
+    if (a[1] === "remove") {
+      if (!m[a[2]]) { console.error(`MCP server '${a[2]}' not found`); process.exit(1); }
+      delete m[a[2]]; writeMcp(m);
+      return console.log(`Removed MCP server '${a[2]}'`);
+    }
+    return console.log(Object.entries(m).map(([n, u]) => `${n}  http  ${u}`).join("\n") || "No MCP servers configured.");
+  }
+  const pf = C.flag(a, "--prompt-file");
+  if (pf || a.includes("-p")) {
+    let prompt = pf ? fs.readFileSync(pf, "utf8") : C.flag(a, "-p") ?? "";
+    const fmt = C.flag(a, "--output-format") ?? "plain";
+    if (fmt !== "streaming-json") { console.error("mock grok: chỉ hỗ trợ --output-format streaming-json"); process.exit(2); }
+    const fail = (message) => { C.out({ type: "error", message }); process.exit(1); };
+    if (!li()) return fail("Not authenticated. Run `grok login` to sign in, or set XAI_API_KEY.");
+    if (prompt.includes("[mock:quota]")) return fail("Rate limit exceeded: you've reached your SuperGrok usage limit. Try again in 2 hours.");
+    const model = C.flag(a, "-m") ?? C.flag(a, "--model") ?? MODELS[0], effort = C.flag(a, "--effort");
+    if (!MODELS.includes(model)) return fail(`Unknown model '${model}'. Run \`grok models\` to see available models.`);
+    if (effort && prompt.includes("[mock:noeffort]")) return fail(`Model '${model}' does not support --effort ${effort}.`);
+    const resume = C.flag(a, "--resume") ?? C.flag(a, "-r");
+    const sessions = (() => { try { return JSON.parse(fs.readFileSync(path.join(home, "mock-sessions.json"), "utf8")); } catch { return {}; } })();
+    if (resume && !sessions[resume]) return fail(`Session not found: ${resume}`);
+    const sid = resume || C.uuid();
+    const turn = C.bumpSession(home, sid);
+    const rules = all("--rules").join("\n");
+    const tools = (C.flag(a, "--tools") ?? "").split(",").filter(Boolean), deny = all("--deny");
+    const disallowed = (C.flag(a, "--disallowed-tools") ?? "").split(",").filter(Boolean);
+    const web = tools.includes("web_search") && !a.includes("--disable-web-search");
+    const end = (text) => {
+      for (const p of C.chunks(text)) C.out({ type: "text", data: p });
+      C.out({ type: "end", stopReason: "end_turn", sessionId: sid, requestId: `req_${Date.now()}`, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length } });
+    };
+    const st = C.stallTurn(home, sid, prompt);
+    if (st.stall) return end(C.STALL_TEXT);
+    prompt = st.prompt;
+    await C.sleep(120);
+    C.out({ type: "thought", data: "Đang nghĩ…" });
+    if (prompt.includes("#grokargs")) return end(`ARGS: tools=${tools.join("|") || "-"} deny=${deny.join("|") || "-"} web=${web ? "on" : "off"} model=${model} effort=${effort ?? "-"} rules=${rules ? "yes" : "no"} memory=${a.includes("--no-memory") ? "off" : "on"} approve=${a.includes("--always-approve") ? "yes" : "no"} resume=${resume ? "yes" : "no"} disallowed=${disallowed.join("|") || "-"} autoupdate=${a.includes("--no-auto-update") ? "off" : "on"}`);
+    // Tệp đính kèm @đường_dẫn (tương đối với thư mục làm việc): đọc đúng các byte như Grok CLI đính kèm tệp.
+    const refs = [...prompt.matchAll(/(?:^|\s)@([^\s]+\.(?:png|jpe?g|webp|gif|pdf))/gi)].map((m) => m[1]);
+    const missing = refs.find((f) => !fs.existsSync(path.resolve(process.cwd(), f)));
+    if (missing) return fail(`Could not attach @${missing}: No such file or directory`);
+    // --disallowed-tools search_tool,use_tool: không gọi được công cụ MCP nào (như Grok CLI thật: danh sách cấm thắng danh sách cho phép).
+    const mcpUrl = disallowed.includes("use_tool") ? undefined : readMcp().synchro;
+    const ask = C.toolAsk(prompt);
+    let note = "";
+    if (mcpUrl && ask) {
+      for (const p of C.chunks(`Mình sẽ dùng công cụ ${ask.name} của Synchro.`)) C.out({ type: "text", data: p });
+      const id = `call_${Date.now()}`;
+      C.out({ type: "tool_call", toolCallId: id, title: "use_tool", toolName: "use_tool", kind: "other", status: "in_progress", rawInput: { tool_name: `synchro__${ask.name}`, arguments: ask.args } });
+      const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
+      C.out({ type: "tool_call_update", toolCallId: id, status: r.error ? "failed" : "completed", rawOutput: r.error ?? r.result });
+      note = ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
+    } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
+    if (web && prompt.includes("#web")) {
+      C.out({ type: "tool_call", toolCallId: "call_web", title: "Web search", toolName: "web_search", kind: "search", status: "in_progress", rawInput: { query: prompt.slice(0, 60) } });
+      C.out({ type: "tool_call_update", toolCallId: "call_web", status: "completed" });
+      note += " [tìm web]";
+    }
+    const both = `${rules}\n\n${prompt}`;
+    const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(refs.map((f) => `${C.mediaDesc(fs.readFileSync(path.resolve(process.cwd(), f)))} (@file)`))
+      : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(both) : /#toprule/.test(prompt) ? C.ruleEcho(rules) : C.reply("Grok", prompt, turn) + note + (effort ? ` [effort ${effort}]` : ""));
+    return end(text);
+  }
+  console.error(`mock grok: không hỗ trợ "${a.join(" ")}"`);
+  process.exit(2);
+})();

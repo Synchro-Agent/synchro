@@ -16,12 +16,13 @@ export type Rate = { provider: string; limit: number; remaining: number; resetAt
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
 // Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem app/ai/subs.ts).
 export type PlanWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string; label: string; kind: "session" | "weekly" | "other"; group?: string; idle?: boolean };
-export type SubUsage = { cli: "claude" | "codex" | "agy"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
+export type SubUsage = { cli: "claude" | "codex" | "agy" | "grok"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
 /** Một hãng trong chế độ Tự động / Cài đặt → Usage: Synchro tự nhận đang chạy bằng gói đã đăng nhập (plan) hay khóa API. */
-export type VendorUsage = { vendor: "anthropic" | "openai" | "google"; cli: SubUsage["cli"]; name: string; models: number; mode: "plan" | "api" | "none"; provider: string | null;
+/** cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API). */
+export type VendorUsage = { vendor: "anthropic" | "openai" | "google" | "xai" | "deepseek"; cli: SubUsage["cli"] | null; name: string; models: number; mode: "plan" | "api" | "none"; provider: string | null;
   sub?: SubUsage; rate?: Rate | null; credit?: Credit | null; usingApiUntil?: number | null };
 export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage; vendors?: VendorUsage[] };
-const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
+const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI", deepseek: "DeepSeek" };
 
 // ---------------------------------------------------------------- dữ liệu dùng chung
 let cache: { key: string; v: UsageState } | null = null;
@@ -128,7 +129,11 @@ const PLAN_NOTE: Record<SubUsage["cli"], [string, string]> = {
   claude: ["Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.", "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week."],
   codex: ["Gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần; gói Pro chỉ có hạn mức tuần.", "Plus has a rolling 5-hour window and a weekly limit. Pro plans only have a weekly limit."],
   agy: ["Google AI Pro và Ultra hồi quota mỗi 5 giờ cho tới khi chạm hạn mức tuần. Model Gemini và model Claude/GPT tính riêng.", "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models are counted separately."],
+  grok: ["SuperGrok và X Premium+ có hạn mức cuốn chiếu; hết hạn mức thì Synchro hỏi bạn trước khi dùng khóa API.", "SuperGrok and X Premium+ have rolling limits. When you hit one, Synchro asks before using an API key."],
 };
+/** Ghi chú khi gói chưa có thanh hạn mức nào: Antigravity chưa đọc được bảng hạn mức, Grok CLI không báo hạn mức, gói khác chờ lượt chat đầu. */
+const noWindows = (cli: SubUsage["cli"] | null | undefined, tail: [string, string]) =>
+  cli === "grok" ? L("Grok CLI không báo hạn mức còn lại của gói. Synchro đếm số tin nhắn và báo ngay khi Grok nói đã chạm giới hạn.", "The Grok CLI doesn't report how much of the plan is left. Synchro counts your messages and tells you as soon as Grok says the limit is reached.") : cli === "agy" ? L(...tail) : L("Gửi một tin nhắn bằng gói này để xem hạn mức.", "Send a message with this plan to see its limits.");
 const winLevel = (w: PlanWindow) => (w.status === "rejected" ? "hot" : w.status === "allowed_warning" ? "warn" : level(w.usedPct ?? 0));
 
 function PlanRow({ w }: { w: PlanWindow }) {
@@ -187,7 +192,7 @@ function useLimitAlerts(st: UsageState | null) {
 // ---------------------------------------------------------------- vòng tròn cạnh bộ chọn model
 const L = (vi: string, e: string) => (en() ? e : vi);
 // Màu cố định theo hãng (bảng màu phân loại đã kiểm tra mù màu; màu đi theo hãng, không theo thứ hạng).
-export const VENDOR_COLOR: Record<VendorUsage["vendor"] | "other", string> = { anthropic: "var(--vc-claude)", openai: "var(--vc-gpt)", google: "var(--vc-gemini)", other: "var(--vc-other)" };
+export const VENDOR_COLOR: Record<VendorUsage["vendor"] | "other", string> = { anthropic: "var(--vc-claude)", openai: "var(--vc-gpt)", google: "var(--vc-gemini)", xai: "var(--vc-grok)", deepseek: "var(--vc-deepseek)", other: "var(--vc-other)" };
 const planName = (sub?: SubUsage) => (sub?.plan ? (en() ? `${sub.plan} plan` : `Gói ${sub.plan}`) : L("Gói subscription", "Subscription plan"));
 // Mức đã dùng của một hãng (cửa sổ gần chạm nhất của gói; với khóa API: hạn mức gọi / số dư).
 const vendorPct = (v: VendorUsage) => v.mode === "plan" ? Math.max(0, ...(v.sub?.windows ?? []).map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
@@ -208,7 +213,7 @@ function VendorBlock({ v }: { v: VendorUsage }) {
     <div className="us-v">
       <div className="us-v-h"><i style={{ background: VENDOR_COLOR[v.vendor] }} /><b data-notr>{v.name}</b><ModeTag v={v} /></div>
       {v.mode === "plan" ? (wins.length ? wins.filter((w) => w.kind !== "other").map((w) => <PlanRow key={w.window} w={w} />)
-        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.", "Antigravity is waiting for its first-run setup.") : v.cli === "agy" ? L("Synchro chưa đọc được hạn mức của gói này.", "Synchro could not read this plan's quota yet.") : L("Gửi một tin nhắn bằng gói này để xem hạn mức.", "Send a message with this plan to see its limits.")}</p>)
+        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.", "Antigravity is waiting for its first-run setup.") : noWindows(v.cli, ["Synchro chưa đọc được hạn mức của gói này.", "Synchro could not read this plan's quota yet."])}</p>)
         : <>
           {v.rate && <RateRow r={v.rate} />}
           {v.credit && <CreditBar c={v.credit} />}
@@ -261,7 +266,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
           <>
             {sub.windows.map((w) => <PlanRow key={w.window} w={w} />)}
             {sub.setup && <p className="us-note">{L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.", "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.")}</p>}
-            {!sub.windows.length && !sub.setup && <p className="us-note">{sub.cli === "agy" ? L("Synchro chưa đọc được hạn mức của gói.", "Synchro could not read the plan's quota yet.") : L("Gửi một tin nhắn bằng gói này để xem hạn mức.", "Send a message with this plan to see its limits.")}{sub.turnsToday ? ` ${L(`Hôm nay: ${sub.turnsToday} tin nhắn.`, `${sub.turnsToday} messages today.`)}` : ""}</p>}
+            {!sub.windows.length && !sub.setup && <p className="us-note">{noWindows(sub.cli, ["Synchro chưa đọc được hạn mức của gói.", "Synchro could not read the plan's quota yet."])}{sub.turnsToday ? ` ${L(`Hôm nay: ${sub.turnsToday} tin nhắn.`, `${sub.turnsToday} messages today.`)}` : ""}</p>}
             {sub.credits && <p className="us-note" data-notr>{sub.credits}</p>}
             <p className="us-note">{PLAN_NOTE[sub.cli][en() ? 1 : 0]}</p>
           </>
@@ -287,16 +292,17 @@ type Details = {
   days: { day: number; cost: number; input: number; output: number; calls: Partial<Record<VendorUsage["vendor"] | "other", number>> }[];
 };
 const FEATURE: Record<string, [string, string]> = { chat: ["Chat", "Chat"], code: ["Synchro Code", "Synchro Code"], artifact: ["Artifact có AI", "AI-powered artifacts"], internal: ["Bộ nhớ và đặt tên đoạn chat", "Memory and chat titles"], test: ["Thử khóa API", "API key tests"] };
-// "anthropic/claude-sonnet-5-5" → "Claude Sonnet 5.5", "openai/gpt-6-astra" → "GPT-6 Astra", "google/gemini-3.8-flash" → "Gemini 3.8 Flash".
+// "anthropic/claude-sonnet-5-5" → "Claude Sonnet 5.5", "openai/gpt-6-astra" → "GPT-6 Astra", "google/gemini-3.8-flash" → "Gemini 3.8 Flash",
+// "xai/grok-4.7" → "Grok 4.7", "deepseek/deepseek-v4-pro" → "DeepSeek V4 Pro".
 const modelName = (k: string) => {
   const id = k.split("/").slice(1).join("/");
   if (id.startsWith("gpt-")) return "GPT-" + id.slice(4).split("-").map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
-  return id.replace(/-(\d+)-(\d+)$/, " $1.$2").split("-").map((w) => (/^\d/.test(w) ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
+  return id.replace(/-(\d+)-(\d+)$/, " $1.$2").split("-").map((w) => (w === "deepseek" ? "DeepSeek" : /^\d/.test(w) ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
 };
-const SUB_NAME: Record<SubUsage["cli"], string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini" };
+const SUB_NAME: Record<SubUsage["cli"], string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
 const vendorKey = (model: string) => { const v = vendorOf(model); return v === "other" ? "other" : v; };
-const SERIES: [VendorUsage["vendor"] | "other", string][] = [["anthropic", "Claude"], ["openai", "ChatGPT"], ["google", "Gemini"], ["other", "Khác"]];
-const CLI_VENDOR: Record<SubUsage["cli"], VendorUsage["vendor"]> = { claude: "anthropic", codex: "openai", agy: "google" };
+const SERIES: [VendorUsage["vendor"] | "other", string][] = [["anthropic", "Claude"], ["openai", "ChatGPT"], ["google", "Gemini"], ["xai", "Grok"], ["deepseek", "DeepSeek"], ["other", "Khác"]];
+const CLI_VENDOR: Record<SubUsage["cli"], VendorUsage["vendor"]> = { claude: "anthropic", codex: "openai", agy: "google", grok: "xai" };
 const num = (n: number) => n.toLocaleString(en() ? "en-US" : "vi-VN");
 
 /** Thẻ của một hãng trong Cài đặt → Usage: cách đang chạy, hạn mức của gói hoặc của khóa API, số lượt 30 ngày. */
@@ -314,7 +320,7 @@ function VendorCard({ v, turns, cost, go }: { v: VendorUsage; turns: number; cos
           onClick={() => { setBusy(true); refreshUsage(true); setTimeout(() => setBusy(false), 2500); }}>{busy ? <span className="art-spin sm" /> : <I.Retry size={14} />}</button>}
       </div>
       {v.mode === "plan" && (wins.length ? wins.map((w) => <PlanRow key={w.window} w={w} />)
-        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (Cài đặt → Providers → Gemini).", "Antigravity is waiting for its first-run setup (Settings → Providers → Gemini).") : v.cli === "agy" ? L("Synchro chưa đọc được hạn mức của gói này. Bấm nút đọc lại ở góc thẻ để thử lại.", "Synchro could not read this plan's quota yet. Use the reload button on this card to try again.") : L("Gửi một tin nhắn bằng gói này để Synchro đọc hạn mức.", "Send a message with this plan so Synchro can read its limits.")}</p>)}
+        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (Cài đặt → Providers → Gemini).", "Antigravity is waiting for its first-run setup (Settings → Providers → Gemini).") : v.cli === "agy" || v.cli === "grok" ? noWindows(v.cli, ["Synchro chưa đọc được hạn mức của gói này. Bấm nút đọc lại ở góc thẻ để thử lại.", "Synchro could not read this plan's quota yet. Use the reload button on this card to try again."]) : L("Gửi một tin nhắn bằng gói này để Synchro đọc hạn mức.", "Send a message with this plan so Synchro can read its limits.")}</p>)}
       {v.mode === "api" && <>
         {v.rate && <RateRow r={v.rate} />}
         {v.credit && <CreditBar c={v.credit} />}
@@ -376,7 +382,8 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
     window.addEventListener("synchro:usage", load);
     return () => window.removeEventListener("synchro:usage", load);
   }, []);
-  const vendors = st?.vendors ?? [];
+  // Hãng chỉ có khóa API (DeepSeek) mà chưa nối: chỉ quản trị viên mới nối được nên chỉ hiện cho quản trị viên.
+  const vendors = (st?.vendors ?? []).filter((v) => v.mode !== "none" || !!v.cli || st?.admin);
   const callsOf = (v: VendorUsage["vendor"]) => d?.days.reduce((a, x) => a + (x.calls[v] ?? 0), 0) ?? 0;
   const costOf = (v: VendorUsage) => d?.byModel.filter((m) => m.model.split("/")[0] === v.provider).reduce((a, m) => a + m.cost, 0) ?? 0;
   const total = d?.days.reduce((a, x) => a + x.cost, 0) ?? 0;

@@ -8,7 +8,7 @@
 //   và tự viết lại "Hướng dẫn cho Synchro" từ hồ sơ (có lịch sử để quay lại bản cũ). Người dùng không phải bấm gì.
 // - Dùng (mọi model): phần tổng quan đi vào lời nhắc hệ thống, vài trang liên quan đi kèm mỗi câu hỏi, và công cụ brain_search /
 //   brain_read / brain_write để model tự tra, đọc theo liên kết và ghi nhớ.
-// Cấu trúc: [[Bộ não]] là trung tâm; ba bán cầu [[Claude]] · [[ChatGPT]] · [[Gemini]] (ba hãng dùng chung một bộ não).
+// Cấu trúc: [[Bộ não]] là trung tâm; các bán cầu [[Claude]] · [[ChatGPT]] · [[Gemini]] · [[Grok]] · [[DeepSeek]] (các hãng dùng chung một bộ não).
 import crypto from "node:crypto";
 import { db, forgetProfile, getUser, setInstructions, type UserRow } from "./authstore";
 import { forgetCliMemory } from "./ai/cli_auth";
@@ -37,7 +37,7 @@ type Props = {
 
 export const HUB = "Bộ não", ABOUT = "Về bạn", INDEX = "Mục lục", LOG = "Hoạt động bộ não", RULE = "Quy tắc hàng đầu";
 const MAP_PREFIX = "Bản đồ · ";
-const HEMI: Record<string, string> = { anthropic: "Claude", openai: "ChatGPT", google: "Gemini" };
+const HEMI: Record<string, string> = { anthropic: "Claude", openai: "ChatGPT", google: "Gemini", xai: "Grok", deepseek: "DeepSeek" };
 /** Ghi chú Synchro tự viết (nội dung dựng lại từ thuộc tính): người dùng chỉ thêm phần "Ghi chú của bạn". */
 const GENERATED: NoteKind[] = ["hub", "about", "model", "chat", "code", "topic", "entity", "map", "index", "log", "skill", "connector", "daily"];
 /** Ghi chú khung của bộ não: không xóa được. */
@@ -196,6 +196,8 @@ const MODEL_INTRO: Record<string, string> = {
   Claude: "Bán cầu **Claude** của [[Bộ não]]: các đoạn chat Claude đã cùng bạn suy nghĩ.",
   ChatGPT: "Bán cầu **ChatGPT** của [[Bộ não]]: các đoạn chat ChatGPT đã cùng bạn suy nghĩ.",
   Gemini: "Bán cầu **Gemini** của [[Bộ não]]: các đoạn chat Gemini đã cùng bạn suy nghĩ.",
+  Grok: "Bán cầu **Grok** của [[Bộ não]]: các đoạn chat Grok đã cùng bạn suy nghĩ.",
+  DeepSeek: "Bán cầu **DeepSeek** của [[Bộ não]]: các đoạn chat DeepSeek đã cùng bạn suy nghĩ.",
 };
 function aboutBody(u: Pick<UserRow, "id" | "full_name" | "nickname" | "occupation">, p: Props): string {
   const who = [u.full_name && `- Tên: ${u.full_name}${u.nickname && u.nickname !== u.full_name ? ` (gọi là ${u.nickname})` : ""}`, u.occupation && `- Lĩnh vực chọn lúc tạo tài khoản: ${u.occupation}`].filter(Boolean).join("\n");
@@ -218,7 +220,7 @@ function rebuild(uid: string, n: Note, props: Props): Note {
   return put(uid, { id: n.id, kind: n.kind, title: n.title, body: n.body, props });
 }
 
-/** Trung tâm, ba bán cầu, [[Về bạn]], [[Mục lục]], [[Hoạt động bộ não]] luôn có. */
+/** Trung tâm, các bán cầu, [[Về bạn]], [[Mục lục]], [[Hoạt động bộ não]] luôn có. */
 export function ensureBase(u: Pick<UserRow, "id" | "full_name" | "nickname" | "occupation">) {
   const uid = u.id;
   if (!byKey(uid, HUB)) put(uid, { kind: "hub", title: HUB, body: hubBody({}, uid), props: { auto: true, tags: ["bo-nao"] } });
@@ -226,7 +228,7 @@ export function ensureBase(u: Pick<UserRow, "id" | "full_name" | "nickname" | "o
     const cur = getNote(uid, name);
     const models = cur?.props.models ?? {};
     const used = Object.entries(models).sort((a, b) => b[1] - a[1]).map(([k, n]) => `- ${k.split("/").slice(1).join("/") || k} · ${n} lượt`).join("\n");
-    const body = `${MODEL_INTRO[name]} Ba bán cầu dùng chung một bộ não, nên điều ${name} học được thì các model khác cũng biết.\n${used ? `\n## Model đã dùng\n${used}\n` : ""}${userPart(cur?.props ?? {})}`;
+    const body = `${MODEL_INTRO[name]} Các bán cầu dùng chung một bộ não, nên điều ${name} học được thì các model khác cũng biết.\n${used ? `\n## Model đã dùng\n${used}\n` : ""}${userPart(cur?.props ?? {})}`;
     if (!cur || cur.body !== body) put(uid, { kind: "model", title: name, body, props: { ...(cur?.props ?? {}), auto: true, tags: ["model"] } });
   }
   const cur = getNote(uid, ABOUT);
@@ -281,7 +283,7 @@ function hubBody(p: Props, uid: string): string {
     "Trung tâm của mọi thứ Synchro biết về bạn: mọi đoạn chat, chủ đề, tên riêng, model, skill và connector đều nối về đây.\n",
     p.overview ? `\n## Tổng quan\n${p.overview}\n` : "",
     p.focus?.length ? `\n## Đang theo đuổi\n${p.focus.map((x) => `- ${x}`).join("\n")}\n` : "",
-    `\n## Ba bán cầu\n${Object.values(HEMI).map(L).join(" · ")}: ba hãng model dùng chung bộ não này.\n`,
+    `\n## Các bán cầu\n${Object.values(HEMI).map(L).join(" · ")}: các hãng model dùng chung bộ não này.\n`,
     `\n## Lối vào\n- ${L(RULE)}: điều Synchro luôn làm theo trước mọi thứ khác\n- ${L(ABOUT)}: chân dung và thói quen của bạn\n- ${L(INDEX)}: danh mục mọi trang\n- ${L(LOG)}: những gì bộ não vừa học\n`,
     maps.length ? `\n## Bản đồ\n${maps.map((n) => `- ${L(n.title)}`).join("\n")}\n` : "",
     loose.length ? `\n## ${maps.length ? "Chủ đề khác" : "Chủ đề lớn"}\n${loose.map((n) => `- ${L(n.title)} · ${deg.get(fold(n.title)) ?? 0} liên kết`).join("\n")}\n` : "",
@@ -954,7 +956,7 @@ export const BRAIN_TOOLS = [
   { name: "brain_write", description: "Ghi vào bộ não khi người dùng bảo nhớ, lưu hay ghi lại điều gì: tạo hoặc nối thêm vào một ghi chú riêng của họ (Markdown; dùng [[Tên ghi chú]] để nối tới ghi chú khác, #thẻ để gắn thẻ). Không tự ý ghi khi người dùng không yêu cầu.", input_schema: { type: "object", properties: { title: { type: "string" }, content: { type: "string" }, mode: { type: "string", enum: ["append", "replace"] } }, required: ["title", "content"] } },
 ];
 export const BRAIN_RULES = `<synchro_brain>
-Bạn dùng chung bộ não của Synchro với mọi model khác (Claude, ChatGPT, Gemini). Khi người dùng nhắc tới chuyện cũ, kế hoạch, mục tiêu hay điều họ từng nói mà phần đã biết chưa đủ, dùng brain_search rồi brain_read (đi theo [[liên kết]]; "Mục lục" liệt kê mọi trang) để nhớ lại trước khi trả lời. Khi họ bảo ghi nhớ hay lưu lại, dùng brain_write. Nói như người tự nhớ ra, không nhắc tên công cụ.
+Bạn dùng chung bộ não của Synchro với mọi model khác (Claude, ChatGPT, Gemini, Grok, DeepSeek). Khi người dùng nhắc tới chuyện cũ, kế hoạch, mục tiêu hay điều họ từng nói mà phần đã biết chưa đủ, dùng brain_search rồi brain_read (đi theo [[liên kết]]; "Mục lục" liệt kê mọi trang) để nhớ lại trước khi trả lời. Khi họ bảo ghi nhớ hay lưu lại, dùng brain_write. Nói như người tự nhớ ra, không nhắc tên công cụ.
 </synchro_brain>`;
 export function runBrainTool(uid: string, name: string, input: Record<string, unknown>): { content: string; is_error: boolean } {
   const user = getUser(uid);

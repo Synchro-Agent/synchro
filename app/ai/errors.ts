@@ -3,8 +3,8 @@
 
 export type ErrKind = "quota" | "auth" | "other";
 
-const QUOTA = /usage[ _-]?limit|rate[ _-]?limit|quota|resource[ _-]?exhausted|limit (reached|exceeded)|hit your (usage )?limit|too many requests|subscription_sharing_usage_limit|credit balance (is )?too low|insufficient[ _-]?quota|out of credits?|try again (at|after|in)/i;
-const AUTH = /\b40[13]\b|unauthori[sz]ed|forbidden|not logged in|log ?in (again|required|expired)|please (run )?\/?login|login (expired|required)|authentication[ _-]?(failed|required|error)|invalid (api[ _-]?key|token|credentials?)|oauth (token )?(expired|revoked|invalid)|token (has )?(expired|been revoked)|credentials? (expired|missing)|account (disabled|on hold|suspended)|not_eligible/i;
+const QUOTA = /usage[ _-]?limit|rate[ _-]?limit|quota|resource[ _-]?exhausted|limit (reached|exceeded)|hit your (usage )?limit|too many requests|subscription_sharing_usage_limit|credit balance (is )?too low|insufficient[ _-]?(quota|balance)|out of credits?|try again (at|after|in)/i;
+const AUTH = /\b40[13]\b|unauthori[sz]ed|forbidden|not logged in|not authenticated|run `?grok login|log ?in (again|required|expired)|please (run )?\/?login|login (expired|required)|authentication[ _-]?(failed|required|error)|invalid (api[ _-]?key|token|credentials?)|oauth (token )?(expired|revoked|invalid)|token (has )?(expired|been revoked)|credentials? (expired|missing)|account (disabled|on hold|suspended)|not_eligible/i;
 
 export function classify(message: string, status?: number | null): ErrKind {
   if (status === 401 || status === 403) return "auth";
@@ -19,10 +19,11 @@ const SECRET = [
   /sk-ant-[A-Za-z0-9_-]{8,}/g,          // khóa API và token OAuth của Anthropic (sk-ant-api…, sk-ant-oat…)
   /\bsk-(proj-)?[A-Za-z0-9_-]{20,}/g,    // khóa OpenAI
   /\bAIza[0-9A-Za-z_-]{20,}/g,          // khóa Google
+  /\bxai-[A-Za-z0-9_-]{20,}/g,          // khóa xAI (Grok)
   /\bya29\.[0-9A-Za-z_-]{20,}/g,        // token OAuth của Google
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, // JWT
   /(Bearer\s+)[A-Za-z0-9._~+/=-]{16,}/gi,
-  /((?:CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY)\s*[=:]\s*)\S+/g,
+  /((?:CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|XAI_API_KEY|DEEPSEEK_API_KEY)\s*[=:]\s*)\S+/g,
 ];
 export function redact(s: string): string {
   let out = s;

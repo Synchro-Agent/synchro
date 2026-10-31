@@ -3,9 +3,9 @@
 import { cleanPath, exec, fsop, WORK } from "./workspace";
 import { runSkillTool, skillTools } from "./skillruntime";
 import type { Skill } from "./skillstore";
-import { effortParams, respInput, respParse, respTools } from "./llmcall";
+import { compatBody, compatImages, compatRetry, effortParams, respInput, respParse, respTools } from "./llmcall";
 import { noteResponse } from "./usage";
-import type { Effort } from "./catalog";
+import type { Effort, ProviderKind } from "./catalog";
 import type { UserRow } from "./authstore";
 import { openBridge } from "./mcpbridge";
 import { subCli, subTurn } from "./ai/subs";
@@ -265,15 +265,26 @@ export function responsesAgent(o: { provider?: string; key: string; base: string
   };
 }
 
-// Gemini và nhà cung cấp tương thích OpenAI qua /chat/completions.
+// Gemini, Grok, DeepSeek và nhà cung cấp tương thích OpenAI qua /chat/completions.
 export function openaiAgent(o: { provider?: string; key: string; base: string; model: string; system: string; maxTokens: number; tools: { name: string; description: string; input_schema: unknown }[]; signal: AbortSignal; kind?: string; effort?: Effort }): Adapter {
+  const t = { kind: (o.kind ?? "compatible") as ProviderKind, model: o.model };
+  // Grok và DeepSeek suy nghĩ trước khi trả lời: token suy nghĩ tính vào giới hạn đầu ra.
+  const max = t.kind === "xai" || t.kind === "deepseek" ? Math.max(o.maxTokens, 16000) : o.maxTokens;
   return {
     step: async (msgs, last) => {
-      const r = await fetch(`${o.base}/chat/completions`, {
+      const send = (body: Record<string, unknown>) => fetch(`${o.base}/chat/completions`, {
         method: "POST", signal: o.signal,
         headers: { Authorization: `Bearer ${o.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: o.model, max_tokens: o.maxTokens, ...effortParams({ kind: (o.kind ?? "compatible") as "google" }, o.effort), messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }),
+        body: JSON.stringify({ model: o.model, ...body }),
       });
+      const body = await compatImages(t, compatBody(t, { max_tokens: max, ...effortParams(t, o.effort), messages: [{ role: "system", content: o.system }, ...msgs], tools: o.tools.map((x) => ({ type: "function", function: { name: x.name, description: x.description, parameters: x.input_schema } })), ...(last ? { tool_choice: "none" } : {}) }));
+      let r = await send(body);
+      if (r.status === 400) {
+        // Hãng không nhận một tham số (Grok cũ không có reasoning_effort, DeepSeek đòi suy luận của lượt cũ…): thử lại một lần không kèm tham số đó.
+        const text = await r.text(), again = compatRetry(t, body, text);
+        if (!again) throw new ModelError(400, text);
+        r = await send(again);
+      }
       if (!r.ok) throw new ModelError(r.status, await r.text());
       const j = await r.json();
       noteResponse(o.provider ?? "compatible", o.model, j, r.headers);
@@ -423,7 +434,7 @@ export const agentTools = (skillCount: number, scripts: boolean) => [...AGENT_TO
 // qua cầu nối MCP "synchro" (công cụ dựng sẵn của CLI tắt hoặc chỉ đọc), mỗi lời gọi chạy safeRun như vòng lặp khóa API nên
 // nhật ký, danh sách việc, terminal, trình duyệt, khung Changes và tin nhắn thêm giống hệt nhau.
 const PLAN_NOTE = (cli: string) => `<synchro_tools>
-Các công cụ nói ở trên (bash, read_file, write_file, edit_file, list_files, grep, browser_*, open_pane, update_plan và công cụ skill) nằm trong máy chủ MCP "synchro"${cli === "claude" ? " (tên đầy đủ có tiền tố mcp__synchro__, ví dụ mcp__synchro__bash)" : cli === "agy" ? " (tên đầy đủ có tiền tố mcp_synchro_, ví dụ mcp_synchro_bash)" : ""}. Đó là workspace thật của người dùng: mọi việc đọc, sửa tệp, chạy lệnh, mở trình duyệt đều làm qua các công cụ này.
+Các công cụ nói ở trên (bash, read_file, write_file, edit_file, list_files, grep, browser_*, open_pane, update_plan và công cụ skill) nằm trong máy chủ MCP "synchro"${cli === "claude" ? " (tên đầy đủ có tiền tố mcp__synchro__, ví dụ mcp__synchro__bash)" : cli === "agy" ? " (tên đầy đủ có tiền tố mcp_synchro_, ví dụ mcp_synchro_bash)" : cli === "grok" ? " (tên đầy đủ là synchro__<tên>, ví dụ synchro__bash: tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó)" : ""}. Đó là workspace thật của người dùng: mọi việc đọc, sửa tệp, chạy lệnh, mở trình duyệt đều làm qua các công cụ này.
 Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.${cli === "agy" ? "\nCông cụ dựng sẵn của Antigravity (run_command, write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent, search_web) bị chặn ở đây: gọi chúng thì lượt dừng ngay. Chỉ dùng công cụ mcp_synchro_… (lệnh: mcp_synchro_bash; trang web: mcp_synchro_browser_navigate rồi mcp_synchro_browser_read)." : ""}
 </synchro_tools>`;
 export async function runPlanAgent(o: {

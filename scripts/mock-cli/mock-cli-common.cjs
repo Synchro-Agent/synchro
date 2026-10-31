@@ -1,4 +1,4 @@
-// Phần dùng chung của CLI giả lập (claude, codex, agy) cho npm run dev:mock: không gọi mạng thật, không cần tài khoản.
+// Phần dùng chung của CLI giả lập (claude, codex, agy, grok) cho npm run dev:mock: không gọi mạng thật, không cần tài khoản.
 // dev:mock chép các tệp này vào <engine home>/.local/bin kèm mock-cli.json ({ base: địa chỉ máy chủ giả lập }).
 const fs = require("fs"), path = require("path"), crypto = require("crypto"), readline = require("readline");
 

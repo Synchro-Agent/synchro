@@ -1,4 +1,4 @@
-// Công cụ trình duyệt của Synchro cho mọi model: khóa API (Claude, ChatGPT, Gemini) gọi trực tiếp, gói subscription
+// Công cụ trình duyệt của Synchro cho mọi model: khóa API (Claude, ChatGPT, Gemini, Grok, DeepSeek) gọi trực tiếp, gói subscription
 // (Claude Code, Codex, Antigravity) gọi qua cầu nối MCP. Hai nơi làm việc, cùng một bộ thao tác (workspace/browser-act.mjs):
 // - "synchro": Chromium thật trong workspace của người dùng (workspace/browser-core.mjs): giữ đăng nhập, cookie giữa các lần;
 //   người dùng xem trực tiếp cạnh khung chat và tự thao tác được bất cứ lúc nào;

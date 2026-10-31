@@ -7,11 +7,12 @@ import { catalog, mainModels } from "../../providers";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VENDORS = [["anthropic", "claude"], ["openai", "codex"], ["google", "agy"]] as const;
+// DeepSeek chỉ có khóa API (không có gói đăng nhập).
+const VENDORS = [["anthropic", "claude"], ["openai", "codex"], ["google", "agy"], ["xai", "grok"], ["deepseek", null]] as const;
 
 // Mức dùng của tài khoản: giới hạn phiên 5 giờ, giới hạn tuần, hạn mức gọi API và số dư API đã nạp của nhà cung cấp đang chọn (?provider=anthropic).
 // Model của gói subscription (?provider=sub-claude): kèm hạn mức của gói (phiên 5 giờ, tuần) do CLI báo về.
-// ?all=1: từng hãng (Claude, ChatGPT, Gemini) tự nhận đang chạy bằng gói đã đăng nhập hay khóa API, kèm hạn mức tương ứng
+// ?all=1: từng hãng (Claude, ChatGPT, Gemini, Grok, DeepSeek) tự nhận đang chạy bằng gói đã đăng nhập hay khóa API, kèm hạn mức tương ứng
 // (chế độ Tự động và Cài đặt → Usage).
 export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
@@ -21,13 +22,13 @@ export const GET = handle(async (req: Request) => {
     const api = (await catalog()).map((x) => ({ ...x, models: main.includes(ALL) ? x.models : x.models.filter((m) => main.includes(m.key)) })).filter((x) => x.models.length);
     const merged = await mergedProviders(user, api).catch(() => api);
     const vendors = await Promise.all(VENDORS.map(async ([vendor, cli]) => {
-      const g = merged.find((x) => x.kind === vendor && (x.source === "plan" || x.plan?.cli === cli)) ?? merged.find((x) => x.kind === vendor);
-      const base = { vendor, cli, name: SUB[cli].name, models: g?.models.length ?? 0 };
-      if (g?.source === "plan") return { ...base, mode: "plan" as const, provider: null, sub: await subUsage(user, cli, { fresh }) };
+      const g = merged.find((x) => x.kind === vendor && cli && (x.source === "plan" || x.plan?.cli === cli)) ?? merged.find((x) => x.kind === vendor);
+      const base = { vendor, cli, name: cli ? SUB[cli].name : "DeepSeek", models: g?.models.length ?? 0 };
+      if (g?.source === "plan" && cli) return { ...base, mode: "plan" as const, provider: null, sub: await subUsage(user, cli, { fresh }) };
       if (g) {
         const st = usageState(user, g.id);
         // Gói đã đăng nhập nhưng người dùng đồng ý tạm dùng khóa API (gói hết hạn mức): báo kèm hạn mức của gói.
-        return { ...base, mode: "api" as const, provider: g.id, rate: st.rate, credit: st.credit, usingApiUntil: g.plan?.usingApiUntil ?? null, sub: g.plan ? await subUsage(user, cli) : undefined };
+        return { ...base, mode: "api" as const, provider: g.id, rate: st.rate, credit: st.credit, usingApiUntil: g.plan?.usingApiUntil ?? null, sub: g.plan && cli ? await subUsage(user, cli) : undefined };
       }
       return { ...base, mode: "none" as const, provider: null };
     }));

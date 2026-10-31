@@ -119,3 +119,14 @@ Chính sách của các hãng (kiểm tra ngày 26/10/2026):
 - Máy chủ MCP nội bộ để lượt chat bằng gói dùng được skill, connector, chạy code và artifact.
 - Kiểm định dạng bảng `/usage` của `agy` và cách đặt tên model của `agy models` bằng tài khoản thật.
 - Chạy `scripts/setup-engine-user.sh` trên VPS, rồi đặt `SYNCHRO_ENGINE_HOME` và `SYNCHRO_ENGINE_USER`.
+
+## Bổ sung 2026-10-31: Grok (xAI) và DeepSeek
+
+- **Grok** có CLI chính chủ (xAI Grok Build, lệnh `grok`) đăng nhập bằng gói SuperGrok / X Premium+, nên được nối như ba gói trên:
+  - Cài bằng script chính thức `https://x.ai/cli/install.sh` với `GROK_BIN_DIR=<home>/.local/bin` (bản build nằm trong `<home>/.grok`).
+  - Đăng nhập: `grok login --device-auth` in link và mã thiết bị ra stderr; CLI tự thoát khi người dùng cho phép. Mỗi tài khoản `HOME` + `GROK_HOME` riêng (`logins/grok/<id>/.grok/auth.json`). Kiểm tra bằng `grok models` ("You are logged in with …", danh sách "* mã (default)" / "- mã").
+  - Lượt chat: `grok --prompt-file <tệp> --output-format streaming-json --always-approve --no-memory --no-subagents --no-auto-update --tools search_tool,use_tool[,web_search] --deny Bash|Read|Edit|Write|Grep|Glob|WebFetch[|WebSearch] [--rules <system>] [-m] [--effort] [--resume <id>]`. Sự kiện `text`, `tool_call`, `end` (`sessionId`, `usage`), `error`.
+  - Công cụ của Synchro: `grok mcp add --transport http synchro <url>` trước lượt, `grok mcp remove synchro` sau lượt (lần lượt theo từng tài khoản); model gọi qua `use_tool` với tên `synchro__<tên>`. Tệp đính kèm tham chiếu bằng `@<đường dẫn>`.
+  - Grok CLI không báo hạn mức còn lại: Synchro chỉ biết khi hãng báo đã chạm giới hạn (khi đó hỏi người dùng có dùng khóa API xAI không).
+- **DeepSeek** không cho ứng dụng khác đăng nhập bằng tài khoản (chat trên web miễn phí, API tính theo token), nên chỉ có khóa API.
+- Khóa API của cả hai hãng qua `/chat/completions`: Grok nhận `reasoning_effort` từ 4.5 trở lên; DeepSeek ở chế độ suy nghĩ có công cụ đòi gửi lại `reasoning_content` của mọi lượt trả lời trước (lượt cũ trong lịch sử gửi chuỗi rỗng, vẫn bị từ chối thì gửi lại một lần với chế độ suy nghĩ tắt). Tìm web qua công cụ `web_search` của API Responses của chính hãng đó.

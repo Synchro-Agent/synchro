@@ -1,4 +1,4 @@
-// Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, ElevenLabs) để thử Synchro ở máy cục bộ mà không cần khóa thật.
+// Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, xAI, DeepSeek, ElevenLabs) để thử Synchro ở máy cục bộ mà không cần khóa thật.
 // Kiểm tra khóa và tham số giống API thật, trả lời bằng nội dung mẫu kèm tên model để thấy rõ đang dùng model nào.
 // Dùng: npm run dev:mock (tự chạy cùng web), hoặc riêng: node scripts/mock-providers.mjs [cổng, mặc định 4010]
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi; #waittool làm chậm bước gọi công cụ.
@@ -11,7 +11,7 @@ import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
 const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
-export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", elevenlabs: "sk_mock_eleven_0001" };
+export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001" };
 
 // Danh sách model như API thật của từng hãng trả về (theo tài liệu tháng 10/2026), gồm cả model không dùng để nhắn tin mà Synchro phải tự lọc bỏ.
 const ANTHROPIC = [["claude-fable-5-1", "Claude Fable 5.1"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"],
@@ -30,7 +30,11 @@ const GOOGLE = [["gemini-4-argon", "Gemini 4 Argon", "generateContent"], ["gemin
   ["gemini-3-pro-image", "Nano Banana Pro", "generateContent"], ["gemini-3.5-transcribe", "Gemini 3.5 Transcribe", "generateContent"], ["gemini-omni-1.1-flash", "Gemini Omni Flash", "generateContent"],
   ["gemini-robotics-er-2-preview", "Gemini Robotics ER 2", "generateContent"], ["gemini-embedding-2-preview", "Gemini Embedding 2", "embedContent"], ["lyria-3.5", "Lyria 3.5", "generateContent"],
   ["deep-research-preview-04-2026", "Gemini Deep Research", "generateContent"]];
-const VENDOR = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
+// xAI: /v1/models trả cả model đời cũ, model tạo ảnh / video (Synchro tự lọc bỏ). DeepSeek: /models chỉ có mã model.
+const XAI = ["grok-4.7", "grok-4.6", "grok-4.5", "grok-4.3", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning", "grok-build-0.1", "grok-4-fast-reasoning", "grok-3", "grok-3-mini", "grok-code-fast-1", "grok-imagine-image", "grok-imagine-video"];
+const XAI_EFFORT = /^grok-4\.[5-9]/;
+const DEEPSEEK = ["deepseek-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"];
+const VENDOR = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI", deepseek: "DeepSeek" };
 const EFF = ["low", "medium", "high", "xhigh", "max"];
 
 // Như API thật: phản hồi thành công kèm số token đã dùng (usage) và header hạn mức token mỗi phút của tổ chức,
@@ -43,7 +47,10 @@ function meter(res, obj) {
   const input = inTok(b), output = Math.ceil(JSON.stringify(obj.content ?? obj.output ?? obj.choices ?? "").length / 3.5);
   if (prov === "anthropic" && obj.type === "message") obj.usage = { input_tokens: Math.round(input * 0.3), cache_read_input_tokens: Math.round(input * 0.7), cache_creation_input_tokens: 0, output_tokens: output };
   if (prov === "openai" && obj.object === "response") obj.usage = { input_tokens: input, input_tokens_details: { cached_tokens: Math.round(input * 0.5) }, output_tokens: output };
-  if (obj.object === "chat.completion") obj.usage = { prompt_tokens: input, completion_tokens: output };
+  // DeepSeek báo phần đọc từ cache riêng (prompt_cache_hit_tokens); Grok tính token suy nghĩ ngoài completion_tokens (chỉ có trong total_tokens).
+  if (obj.object === "chat.completion") obj.usage = prov === "deepseek" ? { prompt_tokens: input, completion_tokens: output, total_tokens: input + output, prompt_cache_hit_tokens: Math.round(input * 0.6), prompt_cache_miss_tokens: input - Math.round(input * 0.6) }
+    : prov === "xai" ? { prompt_tokens: input, completion_tokens: output, total_tokens: input + output + 40, prompt_tokens_details: { cached_tokens: Math.round(input * 0.5) }, completion_tokens_details: { reasoning_tokens: 40 } }
+    : { prompt_tokens: input, completion_tokens: output };
   const r = RATE[prov];
   if (r) {
     const now = Date.now();
@@ -94,6 +101,8 @@ async function streamOut(res, obj) {
     const base = { id: obj.id, object: "chat.completion.chunk", model: obj.model };
     const m = obj.choices?.[0]?.message ?? {};
     ev(null, { ...base, choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }] });
+    // Suy luận (DeepSeek, Grok) đến từng đoạn trong delta.reasoning_content, trước phần trả lời.
+    for (const p of pieces(m.reasoning_content ?? "", 10)) { if (await tick()) return quit(); ev(null, { ...base, choices: [{ index: 0, delta: { reasoning_content: p }, finish_reason: null }] }); }
     for (const p of pieces(m.content ?? "", 12)) { if (await tick()) return quit(); ev(null, { ...base, choices: [{ index: 0, delta: { content: p }, finish_reason: null }] }); }
     for (const [k, tc] of (m.tool_calls ?? []).entries()) {
       const { function: fn, ...rest } = tc;
@@ -362,7 +371,9 @@ const toolDone = (name, out) => {
 const displayName = (provider, id) =>
   provider === "anthropic" ? ANTHROPIC.find(([x]) => x === id)?.[1] ?? id
   : provider === "google" ? GOOGLE.find(([x]) => x === id)?.[1] ?? id
-  : provider === "openai" ? id.replace(/^gpt/i, "GPT") : id;
+  : provider === "openai" ? id.replace(/^gpt/i, "GPT")
+  : provider === "xai" ? id.replace(/^grok-/, "Grok ")
+  : provider === "deepseek" ? id.replace(/^deepseek-/, "DeepSeek ").replace(/-/g, " ") : id;
 const pro = (id) => /-pro$/.test(id);
 
 // Model lớn trả lời chậm hơn model nhỏ, để thấy trạng thái đang trả lời.
@@ -517,12 +528,85 @@ const MEETING_TEXT = MEETING_LINES.map(([, t]) => t).join(" ");
 const DEVICE_OK = new Set();
 function mockLogin(rest, u, res) {
   const html = (body) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(`<!doctype html><meta charset="utf-8"><title>Đăng nhập giả lập</title><body style="font:16px system-ui;max-width:520px;margin:60px auto;line-height:1.5">${body}</body>`); };
-  const code = String(u.searchParams.get("code") ?? "").replace(/[^A-Z0-9-]/gi, "");
+  const code = String(u.searchParams.get("code") ?? u.searchParams.get("user_code") ?? "").replace(/[^A-Z0-9-]/gi, "");
   if (rest === "claude" || rest === "agy") return html(`<h2>${rest === "claude" ? "Claude" : "Antigravity"} (giả lập)</h2><p>Đã đăng nhập. Chép mã này rồi dán vào Synchro:</p><p><code id="code" style="font-size:22px">MOCK-${rest.toUpperCase()}-OK</code></p>`);
   if (rest === "codex") return html(`<h2>ChatGPT (giả lập)</h2><p>Mã thiết bị: <b id="code">${code}</b></p><p><a id="allow" href="/mock-login/codex/approve?code=${code}">Cho phép Codex</a></p>`);
   if (rest === "codex/approve") { DEVICE_OK.add(code); return html(`<p id="done">Đã cho phép. Quay lại Synchro.</p>`); }
   if (rest === "codex/status") return send(res, 200, { approved: DEVICE_OK.has(code) });
+  // Grok (xAI): trang xác nhận mã thiết bị như auth.x.ai.
+  if (rest === "grok") return html(`<h2>Grok (giả lập)</h2><p>Mã thiết bị: <b id="code">${code}</b></p><p><a id="allow" href="/mock-login/grok/approve?code=${code}">Cho phép Grok CLI</a></p>`);
+  if (rest === "grok/approve") { DEVICE_OK.add(`grok:${code}`); return html(`<p id="done">Đã cho phép. Quay lại Synchro.</p>`); }
+  if (rest === "grok/status") return send(res, 200, { approved: DEVICE_OK.has(`grok:${code}`) });
   return send(res, 404, { error: "not found" });
+}
+
+// xAI (Grok) và DeepSeek theo đúng ràng buộc của API thật (docs.x.ai, api-docs.deepseek.com, tháng 10/2026):
+// - Grok: reasoning_effort chỉ nhận ở Grok 4.5 trở lên (low / medium / high / xhigh); model khác báo lỗi 400. Tin trả lời cũ không gửi kèm reasoning_content.
+// - DeepSeek: chế độ suy nghĩ bật sẵn (thinking.type = "disabled" để tắt); reasoning_effort low / medium / high / max; có công cụ thì mọi tin
+//   trả lời trước phải gửi lại reasoning_content (thiếu là lỗi 400; [mock:strictreason] coi chuỗi rỗng cũng là thiếu); V4 Pro không nhận ảnh.
+// - /responses chỉ dùng cho công cụ web_search phía máy chủ (Synchro gọi khi model cần tìm web).
+async function compatVendor(prov, rest, req, res, b, auth) {
+  const err = (message, type = "invalid_request_error") => ({ error: { message, type } });
+  if (!valid(auth)) return send(res, 401, err(prov === "xai" ? "Incorrect API key provided: xai-****. You can obtain an API key from https://console.x.ai." : "Authentication Fails, Your api key is invalid", "authentication_error"));
+  const list = prov === "xai" ? XAI : DEEPSEEK;
+  if (rest === "/models" && req.method === "GET") return send(res, 200, { object: "list", data: list.map((id, i) => ({ id, object: "model", created: 1_790_000_000 - i * 86400, owned_by: prov === "xai" ? "xai" : "deepseek" })) });
+  if (prov === "deepseek" && rest === "/user/balance" && req.method === "GET") return send(res, 200, { is_available: true, balance_infos: [{ currency: "USD", total_balance: "42.10", granted_balance: "0.00", topped_up_balance: "42.10" }] });
+  if (rest === "/responses" && req.method === "POST") {
+    if (!(b.tools ?? []).some((t) => t.type === "web_search")) return send(res, 400, err("mock: /responses chỉ hỗ trợ công cụ web_search."));
+    const q = (typeof b.input === "string" ? b.input : (b.input ?? []).map((x) => (typeof x.content === "string" ? x.content : (x.content ?? []).map((c) => c.text ?? "").join(" "))).join(" ")).replace(/^Tìm trên web[^:]*:\s*/, "").slice(0, 80);
+    await sleep(300);
+    return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [
+      { type: "web_search_call", id: `ws_mock${Date.now()}`, status: "completed", action: { type: "search", query: q } },
+      { type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: `Kết quả tìm web của ${VENDOR[prov]} (giả lập) cho “${q}”: tin mới nhất hôm nay.`, annotations: [{ type: "url_citation", url: "https://example.com/tin-moi", title: "Tin mới (giả lập)" }] }] },
+    ], usage: { input_tokens: 30, output_tokens: 40 } });
+  }
+  if (rest !== "/chat/completions" || req.method !== "POST") return send(res, 404, err(`Không có đường dẫn ${rest} trên máy chủ giả lập ${VENDOR[prov]}`));
+  if (!list.includes(b.model)) return send(res, 404, err(`The model ${b.model} does not exist or your team does not have access to it.`));
+  const ms = b.messages ?? [];
+  const shape = chatShape(b, false);
+  if (shape) return send(res, 400, err(shape));
+  const thinking = prov === "deepseek" ? b.thinking?.type !== "disabled" : XAI_EFFORT.test(b.model);
+  if (prov === "xai") {
+    if (b.reasoning_effort !== undefined && !XAI_EFFORT.test(b.model)) return send(res, 400, err(`Model ${b.model} does not support parameter reasoningEffort.`));
+    if (b.reasoning_effort !== undefined && !["low", "medium", "high", "xhigh"].includes(b.reasoning_effort)) return send(res, 400, err(`Invalid reasoning_effort: ${b.reasoning_effort}`));
+    const bad = ms.findIndex((m) => m.role === "assistant" && m.reasoning_content !== undefined);
+    if (bad >= 0) return send(res, 400, err(`messages[${bad}]: unknown field \`reasoning_content\`.`));
+    // Như API thật: ảnh chỉ nhận JPG / PNG.
+    if (/"url":"data:image\/(?!png|jpe?g)/.test(JSON.stringify(ms))) return send(res, 400, err("Unsupported image format. Only JPG/JPEG and PNG images are supported."));
+  } else {
+    if (b.reasoning_effort !== undefined && !["low", "medium", "high", "max"].includes(b.reasoning_effort)) return send(res, 400, err(`Invalid reasoning_effort: ${b.reasoning_effort}. Supported: low, high, max.`));
+    if (b.model === "deepseek-v4-pro" && JSON.stringify(ms).includes('"image_url"')) return send(res, 400, err("Model deepseek-v4-pro does not support image input."));
+    const strict = JSON.stringify(ms).includes("[mock:strictreason]");
+    if (thinking && b.tools?.length) {
+      const bad = ms.findIndex((m) => m.role === "assistant" && (typeof m.reasoning_content !== "string" || (strict && !m.reasoning_content)));
+      if (bad >= 0) return send(res, 400, err(`Missing \`reasoning_content\` field in the assistant message at message index ${bad}. In thinking mode with tools, reasoning_content must be passed back. See https://api-docs.deepseek.com/guides/thinking_mode#tool-calls`));
+    }
+  }
+  const { text, q } = reply(prov, b.model, ms, b.max_tokens, b.reasoning_effort ?? (prov === "deepseek" && thinking ? "high" : undefined));
+  const think = thinking ? { reasoning_content: `Suy nghĩ của ${VENDOR[prov]} (giả lập) về: ${q.slice(0, 40)}` } : {};
+  const msg = (m) => ({ id: `chatcmpl-mock${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", ...think, ...m }, finish_reason: m.tool_calls ? "tool_calls" : "stop" }] });
+  const call = (name, args) => msg({ content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] });
+  const sys = ms.find((m) => m.role === "system")?.content;
+  const bst = browserStep(ms, normTools(b.tools).map((t) => t.name));
+  if (bst?.tool) return send(res, 200, call(bst.tool.name, bst.tool.args));
+  if (bst?.text) return send(res, 200, msg({ content: bst.text }));
+  const sst = studioStep(`${sys ?? ""}\n${dynOf(ms)}`, JSON.stringify(ms), q, normTools(b.tools).map((t) => t.name));
+  if (sst?.tool) return send(res, 200, call(sst.tool.name, sst.tool.args));
+  if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, msg({ content: sst.text })); }
+  const lastMsg = ms[ms.length - 1];
+  if (lastMsg?.role === "tool") {
+    const prev = [...ms].reverse().find((x) => x.role === "assistant" && x.tool_calls);
+    return send(res, 200, msg({ content: toolDone(prev?.tool_calls?.[0]?.function?.name ?? "?", lastMsg.content) + afterTool(sys, q, ms) }));
+  }
+  const cr = capsFor(sys, q, ms, b.tools, b.tool_choice === "none");
+  if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, msg({ content: cr.text })); }
+  // "#web" và có công cụ web_search của Synchro: model gọi tìm web.
+  const webAsk = q.includes("#web") && normTools(b.tools).some((t) => t.name === "web_search") && b.tool_choice !== "none" ? { name: "web_search", args: { query: q.replace("#web", "").trim().slice(0, 80) } } : null;
+  const want = cr?.tool ?? webAsk ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
+  if (want) return send(res, 200, call(want.name, want.args));
+  if (await trap(res, q, (m) => err(m, "server_error"))) return;
+  await sleep(latency(b.model));
+  return send(res, 200, msg({ content: text }));
 }
 
 async function handler(req, res) {
@@ -531,7 +615,7 @@ async function handler(req, res) {
   const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
   const b = req.method === "POST" || req.method === "PATCH" ? await readBody(req) : {};
   res.__body = b;
-  res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : null;
+  res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : p.startsWith("/xai/") ? "xai" : p.startsWith("/deepseek/") ? "deepseek" : null;
 
   // ElevenLabs (Speech): mọi đường dẫn trừ Realtime nằm ở mock-eleven.mjs.
   if (await elevenHandler(req, res, p, b, req.__raw ?? Buffer.alloc(0), valid, elevenNo)) return;
@@ -726,6 +810,10 @@ async function handler(req, res) {
     await sleep(latency(b.model));
     return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }] });
   }
+
+  // ---- xAI (Grok) và DeepSeek: /models, /chat/completions, /responses (chỉ cho công cụ web_search), số dư của DeepSeek ----
+  const xd = /^\/(xai)\/v1(\/.*)$/.exec(p) ?? /^\/(deepseek)(?:\/v1)?(\/.*)$/.exec(p);
+  if (xd) return compatVendor(xd[1], xd[2], req, res, b, auth);
 
   // ---- ElevenLabs Realtime: cấp khóa tạm cho phiên (giữ cấu hình để WebSocket giả lập dùng) ----
   if (p === "/elevenlabs/v1/convai/realtime/client_secrets" && req.method === "POST") {

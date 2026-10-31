@@ -5,7 +5,7 @@ import { planModelName, planTurns, SUB } from "../../../ai/subs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VENDOR = { claude: "anthropic", codex: "openai", agy: "google" } as const;
+const VENDOR = { claude: "anthropic", codex: "openai", agy: "google", grok: "xai" } as const;
 
 // Chi tiết 30 ngày cho Cài đặt → Usage (?tz= độ lệch múi giờ của trình duyệt, phút): khóa API theo chi phí và token,
 // gói subscription theo số lượt (hãng không báo token của gói), gộp chung theo ngày và theo hãng.

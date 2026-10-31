@@ -1,6 +1,6 @@
-// Chọn engine theo nhà cung cấp: "claude", "codex", "agy" (CLI chính chủ chạy bằng gói subscription),
+// Chọn engine theo nhà cung cấp: "claude", "codex", "agy", "grok" (CLI chính chủ chạy bằng gói subscription),
 // "api:<hãng>" (khóa API dự phòng, đăng ký ở api_engine.ts), "echo" (kiểm thử).
-import { AntigravityEngine, ClaudeCodeEngine, CodexEngine } from "./cli_engines";
+import { AntigravityEngine, ClaudeCodeEngine, CodexEngine, GrokEngine } from "./cli_engines";
 import { EchoEngine, type Engine } from "./engine";
 
 const factories = new Map<string, () => Engine>([
@@ -8,6 +8,7 @@ const factories = new Map<string, () => Engine>([
   ["claude", () => new ClaudeCodeEngine()],
   ["codex", () => new CodexEngine()],
   ["agy", () => new AntigravityEngine()],
+  ["grok", () => new GrokEngine()],
 ]);
 
 /** Đăng ký engine cho một nhà cung cấp (mỗi lần gọi engineFor tạo engine mới). */

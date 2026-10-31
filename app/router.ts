@@ -1,4 +1,4 @@
-// Chế độ "Tự động": Synchro tự chọn model (qua cả Claude, ChatGPT, Gemini — gói subscription lẫn khóa API) và mức nỗ lực
+// Chế độ "Tự động": Synchro tự chọn model (qua cả Claude, ChatGPT, Gemini, Grok, DeepSeek — gói subscription lẫn khóa API) và mức nỗ lực
 // theo từng việc. Nguyên tắc: đủ chất lượng cho việc đó với chi phí và thời gian thấp nhất —
 //  1) tách chỉ thị (điều người dùng nhờ) khỏi nội dung đi kèm (đoạn dán vào, câu trong ngoặc kép, code, tệp đính kèm):
 //     chỉ thị quyết định loại việc, nội dung chỉ tính độ dài cho những việc phải đọc hết;
@@ -16,13 +16,14 @@
 
 export const AUTO = "auto";
 export type Tier = "fast" | "balanced" | "strong";
-export type Vendor = "anthropic" | "openai" | "google" | "other";
+export type Vendor = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "other";
 export type Task = "chat" | "qa" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "vision" | "longdoc" | "data";
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 
 // Hạng theo tên model của các hãng (không khớp thì coi là "balanced"); "mạnh nhất" là dòng đầu bảng của từng hãng.
 const FAST = /(haiku|flash|lite|mini|nano|luna|small)/i;
-const STRONG = /(opus|fable|astra|argon|ultra|-pro\b|\bpro\b)/i;
+// Grok 4.5 trở lên là dòng mạnh nhất của xAI; DeepSeek V4 Pro khớp "-pro".
+const STRONG = /(opus|fable|astra|argon|ultra|-pro\b|\bpro\b|grok-4\.[5-9]|grok-[5-9])/i;
 const FRONTIER = /(fable|astra|argon|ultra)/i;
 export const tierOf = (key: string): Tier => (STRONG.test(key) ? "strong" : FAST.test(key) ? "fast" : "balanced");
 export function vendorOf(key: string): Vendor {
@@ -30,6 +31,8 @@ export function vendorOf(key: string): Vendor {
   if (/^(anthropic|sub-claude)\//.test(k) || /claude|opus|sonnet|haiku|fable/.test(k)) return "anthropic";
   if (/^(openai|sub-codex)\//.test(k) || /\bgpt|\bo\d|chatgpt|codex/.test(k)) return "openai";
   if (/^(google|sub-agy)\//.test(k) || /gemini/.test(k)) return "google";
+  if (/^(xai|sub-grok)\//.test(k) || /\bgrok/.test(k)) return "xai";
+  if (/^deepseek\//.test(k) || /deepseek/.test(k)) return "deepseek";
   return "other";
 }
 const BASE: Record<Tier | "frontier", number> = { fast: 6, balanced: 7.5, strong: 9, frontier: 9.5 };
@@ -39,6 +42,8 @@ const EDGE: Record<Vendor, Partial<Record<Task, number>>> = {
   anthropic: { code: 0.7, debug: 0.6, build: 0.8, write: 0.5, analyze: 0.3, reason: 0.2, longdoc: 0.2, summarize: 0.3, language: 0.2 },
   openai: { reason: 0.8, data: 0.6, code: 0.4, debug: 0.4, analyze: 0.4, qa: 0.3, write: 0.2, translate: 0.2, build: 0.2, language: 0.3, summarize: 0.2 },
   google: { longdoc: 0.9, vision: 0.9, translate: 0.5, qa: 0.3, data: 0.3, reason: 0.3, code: 0.1, language: 0.3, summarize: 0.5 },
+  xai: { reason: 0.5, qa: 0.5, analyze: 0.3, code: 0.4, debug: 0.3, data: 0.3, longdoc: 0.3 },
+  deepseek: { code: 0.5, debug: 0.4, reason: 0.5, data: 0.4, analyze: 0.2, longdoc: 0.3 },
   other: {},
 };
 export type Profile = { key: string; vendor: Vendor; tier: Tier; frontier: boolean; sub: boolean; cost: number };

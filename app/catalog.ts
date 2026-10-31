@@ -5,10 +5,10 @@
 export type ModelInfo = { key: string; id: string; name: string };
 // Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem app/ai/subs.ts):
 // blockedUntil: gói đang hết hạn mức tới lúc nào; usingApiUntil: người dùng đã đồng ý dùng khóa API thay gói tới lúc nào.
-export type PlanInfo = { cli: "claude" | "codex" | "agy"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean };
+export type PlanInfo = { cli: "claude" | "codex" | "agy" | "grok"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean };
 /** source: nhóm đang hiện model của gói ("plan") hay của khóa API dùng chung ("api"). */
 export type ProviderInfo = { id: string; name: string; kind: ProviderKind; models: ModelInfo[]; source?: "plan" | "api"; plan?: PlanInfo };
-export type ProviderKind = "anthropic" | "openai" | "google" | "compatible" | "elevenlabs" | "mock";
+export type ProviderKind = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "compatible" | "elevenlabs" | "mock";
 
 // Quyền "*" = mọi model, kể cả model hãng mới ra sau này.
 export const ALL = "*";
@@ -17,9 +17,9 @@ export const splitKey = (key: string) => { const i = key.indexOf("/"); return i 
 export const allowsModel = (models: string[], key: string) => models.includes(ALL) || models.includes(key);
 
 // Model tương đương giữa gói subscription và khóa API của cùng hãng ("sub-claude/sonnet" ↔ "anthropic/claude-sonnet-5-5",
-// "sub-codex/gpt-6.1-sol" ↔ "openai/gpt-6.1-sol", "sub-agy/gemini-3-pro" ↔ "google/gemini-3-pro-preview"): trùng mã, rồi mã chứa nhau,
-// rồi cùng dòng model (opus, sonnet, pro, flash…). Danh sách ứng viên xếp mới nhất trước nên hòa điểm thì lấy bản mới nhất.
-const FAMILY = /\b(fable|opus|sonnet|haiku|astra|sol|luna|mini|nano|pro|ultra|flash|lite)\b/g;
+// "sub-codex/gpt-6.1-sol" ↔ "openai/gpt-6.1-sol", "sub-agy/gemini-3-pro" ↔ "google/gemini-3-pro-preview", "sub-grok/grok-4.7" ↔ "xai/grok-4.7"):
+// trùng mã, rồi mã chứa nhau, rồi cùng dòng model (opus, sonnet, pro, flash, build…). Danh sách ứng viên xếp mới nhất trước nên hòa điểm thì lấy bản mới nhất.
+const FAMILY = /\b(fable|opus|sonnet|haiku|astra|sol|luna|mini|nano|pro|ultra|flash|lite|build|reasoning)\b/g;
 export function equivalentModel(from: string, candidates: { key: string; id: string }[]): string | null {
   if (!candidates.length) return null;
   const id = (splitKey(from).id || from).toLowerCase();
@@ -33,10 +33,10 @@ export function equivalentModel(from: string, candidates: { key: string; id: str
   }
   return best;
 }
-/** Hãng (nhà cung cấp API tích hợp sẵn) của một khóa model: "sub-claude/…" → "anthropic", "openai/…" → "openai". */
+/** Hãng (nhà cung cấp API tích hợp sẵn) của một khóa model: "sub-claude/…" → "anthropic", "sub-grok/…" → "xai", "openai/…" → "openai". */
 export const vendorOf = (key: string) => {
   const p = splitKey(key).provider;
-  return p === "sub-claude" ? "anthropic" : p === "sub-codex" ? "openai" : p === "sub-agy" ? "google" : p;
+  return p === "sub-claude" ? "anthropic" : p === "sub-codex" ? "openai" : p === "sub-agy" ? "google" : p === "sub-grok" ? "xai" : p;
 };
 
 // Tên model ở bản cũ (trước khi có danh sách thật) → khóa mới, để quyền đã lưu không mất hiệu lực.
@@ -63,8 +63,9 @@ export const EFFORTS = ["low", "medium", "high", "extra", "max"] as const;
 export type Effort = (typeof EFFORTS)[number];
 export const isEffort = (e: unknown): e is Effort => typeof e === "string" && (EFFORTS as readonly string[]).includes(e);
 const rank = (e: Effort) => EFFORTS.indexOf(e);
-// Gemini chỉ có thấp / trung bình / cao; Claude và OpenAI có đủ năm mức.
-export const effortsFor = (kind?: string): Effort[] => (kind === "google" ? ["low", "medium", "high"] : [...EFFORTS]);
+// Gemini chỉ có thấp / trung bình / cao; Grok tới rất cao (xhigh = "extra"); DeepSeek có thấp / cao / tối đa; Claude và OpenAI có đủ năm mức.
+export const effortsFor = (kind?: string): Effort[] =>
+  kind === "google" ? ["low", "medium", "high"] : kind === "xai" ? ["low", "medium", "high", "extra"] : kind === "deepseek" ? ["low", "high", "max"] : [...EFFORTS];
 // Mức cao nhất được phép: giới hạn riêng của model, không có thì giới hạn chung ("*"), không có nữa thì không giới hạn.
 export const effortCap = (caps: Record<string, Effort> | undefined, model: string): Effort => caps?.[model] ?? caps?.[ALL] ?? "max";
 // Hạ mức đã chọn xuống mức cao nhất mà giới hạn và model cho phép.

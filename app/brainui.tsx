@@ -1008,8 +1008,8 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   return (
     <div className="bn">
       <h3 style={{ marginTop: 0 }}>{L("Bộ não", "Brain")}</h3>
-      <p className="d" style={{ margin: "-4px 0 12px" }}>{L("Sau mỗi đoạn chat, Synchro tự rút ra phần tinh túy và nối nó vào bộ não chung: trang chủ đề, tên riêng, chân dung của bạn, các đoạn chat liên quan. Định kỳ nó tự gộp điều trùng, tự nối liên kết, xếp chủ đề vào bản đồ và tự cập nhật Hướng dẫn cho Synchro. Claude, ChatGPT và Gemini là ba bán cầu dùng chung bộ não này. Bộ não lưu trên máy chủ của bạn.",
-        "After every chat, Synchro distills what matters and links it into one shared brain: topic pages, named things, your portrait, related chats. It regularly merges duplicates, links mentions, sorts topics into maps and updates your Instructions for Synchro on its own. Claude, ChatGPT and Gemini are three hemispheres of the same brain. It's stored on your server.")}</p>
+      <p className="d" style={{ margin: "-4px 0 12px" }}>{L("Sau mỗi đoạn chat, Synchro tự rút ra phần tinh túy và nối nó vào bộ não chung: trang chủ đề, tên riêng, chân dung của bạn, các đoạn chat liên quan. Định kỳ nó tự gộp điều trùng, tự nối liên kết, xếp chủ đề vào bản đồ và tự cập nhật Hướng dẫn cho Synchro. Claude, ChatGPT, Gemini, Grok và DeepSeek là các bán cầu dùng chung bộ não này. Bộ não lưu trên máy chủ của bạn.",
+        "After every chat, Synchro distills what matters and links it into one shared brain: topic pages, named things, your portrait, related chats. It regularly merges duplicates, links mentions, sorts topics into maps and updates your Instructions for Synchro on its own. Claude, ChatGPT, Gemini, Grok and DeepSeek are hemispheres of the same brain. It's stored on your server.")}</p>
       {s && <div className="bn-stats">
         <span><b>{s.notes}</b>{L("ghi chú", "notes")}</span><span><b>{s.links}</b>{L("liên kết", "links")}</span><span><b>{s.chats}</b>{L("đoạn chat đã học", "chats learned")}</span>
         <span><b>{s.topics}</b>{L("chủ đề", "topics")}</span><span><b>{s.entities}</b>{L("tên riêng", "entities")}</span>

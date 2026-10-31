@@ -21,15 +21,15 @@ export const toResponses = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).
   : b.type === "document" ? { type: "input_file", filename: b.name ?? "file.pdf", file_data: `data:${b.media_type ?? "application/pdf"};base64,${b.data}` } : b);
 export const withPages = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).flatMap((b) => b.type === "document" && b.fallbackImages ? [b, ...b.fallbackImages.map((d) => ({ type: "image", media_type: "image/jpeg", data: d }))] : [b]);
 
-// Model có suy luận (Claude, GPT, Gemini) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
-export const outCap = (t: Target, n: number) => (t.kind === "openai" || t.kind === "google" || t.kind === "anthropic" ? Math.max(n, 16000) : n);
+// Model có suy luận (Claude, GPT, Gemini, Grok, DeepSeek) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
+export const outCap = (t: Target, n: number) => (t.kind === "openai" || t.kind === "google" || t.kind === "anthropic" || t.kind === "xai" || t.kind === "deepseek" ? Math.max(n, 16000) : n);
 
 // Đọc lỗi của nhà cung cấp thành một câu ngắn dễ hiểu.
 async function fail(r: Response): Promise<never> {
   const text = await r.text();
   let msg = text.slice(0, 400);
   try { const j = JSON.parse(text); const e = Array.isArray(j) ? j[0]?.error : j.error; msg = (typeof e === "string" ? e : e?.message) ?? j.message ?? msg; } catch {}
-  throw new HttpErr(r.status, r.status === 401 || r.status === 403 ? `Khóa API bị từ chối (${r.status}): ${msg}` : r.status === 404 ? `Không tìm thấy model hoặc địa chỉ API (404): ${msg}` : r.status === 429 ? `Nhà cung cấp đang giới hạn lượt gọi hoặc hết hạn mức (429): ${msg}` : msg);
+  throw new HttpErr(r.status, r.status === 401 || r.status === 403 ? `Khóa API bị từ chối (${r.status}): ${msg}` : r.status === 402 ? `Khóa API đã hết số dư, cần nạp thêm ở trang của nhà cung cấp (402): ${msg}` : r.status === 404 ? `Không tìm thấy model hoặc địa chỉ API (404): ${msg}` : r.status === 429 ? `Nhà cung cấp đang giới hạn lượt gọi hoặc hết hạn mức (429): ${msg}` : msg);
 }
 
 // ---- Truyền chữ theo thời gian thực (SSE) ----
@@ -119,13 +119,78 @@ export async function anthropicCall(t: Target, body: Record<string, unknown>, si
   return j;
 }
 // Mức nỗ lực → tham số của từng hãng ("extra" là xhigh). Gemini chỉ tới high (đã hạ sẵn ở clampEffort). Không chọn thì để model dùng mặc định.
-export function effortParams(t: Pick<Target, "kind">, e?: Effort): Record<string, unknown> {
+// Grok: reasoning_effort low / medium / high / xhigh, chỉ từ Grok 4.5 trở lên (và bản nhiều agent); DeepSeek: low / high / max.
+export function effortParams(t: Pick<Target, "kind"> & { model?: string }, e?: Effort): Record<string, unknown> {
   if (!e) return {};
   const v = e === "extra" ? "xhigh" : e;
   if (t.kind === "anthropic") return { output_config: { effort: v } };
   if (t.kind === "openai") return { reasoning: { effort: v } };
   if (t.kind === "google") return { reasoning_effort: v === "xhigh" || v === "max" ? "high" : v };
+  if (t.kind === "xai") return t.model && !grokEffort(t.model) ? {} : { reasoning_effort: v === "max" ? "xhigh" : v };
+  if (t.kind === "deepseek") return { reasoning_effort: v === "max" ? "max" : v === "low" ? "low" : "high" };
   return {};
+}
+
+// ---- Grok (xAI) và DeepSeek qua /chat/completions ----
+/** Grok nhận reasoning_effort từ 4.5 trở lên (và bản nhiều agent); model cũ hơn không có tham số này. */
+const grokEffort = (model: string) => /^grok-(4\.[5-9]|[5-9])|multi-agent/i.test(model);
+/** DeepSeek Flash đọc được ảnh; V4 Pro chỉ nhận chữ. */
+export const deepseekVision = (model: string) => /flash|vision/i.test(model);
+const NO_IMAGE = "[Ảnh đính kèm: model này chỉ đọc chữ nên không xem được ảnh. Nói với người dùng chọn DeepSeek Flash hoặc model khác nếu cần đọc ảnh.]";
+/** Thay ảnh bằng một dòng ghi chú (model không nhận ảnh trả lỗi 400 cho cả lượt). */
+export function textOnly(msgs: unknown[]): unknown[] {
+  return msgs.map((m) => {
+    const x = m as { content?: unknown };
+    if (!Array.isArray(x.content) || !(x.content as { type?: string }[]).some((p) => p.type === "image_url")) return m;
+    return { ...x, content: (x.content as { type?: string }[]).map((p) => (p.type === "image_url" ? { type: "text", text: NO_IMAGE } : p)) };
+  });
+}
+/**
+ * Chỉnh yêu cầu /chat/completions cho từng hãng trước khi gửi:
+ * - DeepSeek ở chế độ suy nghĩ có công cụ đòi gửi lại reasoning_content của mọi lượt trả lời trước (thiếu là lỗi 400). Bước gọi công cụ
+ *   trong lượt này đã giữ nguyên reasoning_content; lượt cũ trong lịch sử của Synchro chỉ còn chữ nên điền chuỗi rỗng.
+ * - DeepSeek V4 Pro không đọc ảnh: thay ảnh bằng ghi chú. Grok: bỏ reasoning_content khi gửi lại (suy luận của Grok đã mã hóa ở máy chủ).
+ */
+export function compatBody(t: Pick<Target, "kind" | "model">, body: Record<string, unknown>): Record<string, unknown> {
+  if (t.kind !== "deepseek" && t.kind !== "xai") return body;
+  let msgs = Array.isArray(body.messages) ? (body.messages as unknown[]) : [];
+  if (t.kind === "deepseek") {
+    if (!deepseekVision(t.model)) msgs = textOnly(msgs);
+    if (Array.isArray(body.tools) && body.tools.length) msgs = msgs.map((m) => { const x = m as { role?: string; reasoning_content?: unknown }; return x.role === "assistant" && typeof x.reasoning_content !== "string" ? { ...x, reasoning_content: "" } : m; });
+  } else msgs = msgs.map((m) => { const x = m as { role?: string; reasoning_content?: unknown }; if (x.role !== "assistant" || x.reasoning_content === undefined) return m; const { reasoning_content: _r, ...rest } = x; return rest; });
+  return { ...body, messages: msgs };
+}
+/** Grok chỉ nhận ảnh JPG / PNG: ảnh định dạng khác (WebP, GIF…) đổi sang PNG trước khi gửi. */
+export async function compatImages(t: Pick<Target, "kind">, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  if (t.kind !== "xai" || !Array.isArray(body.messages) || !/"data:image\/(?!png|jpe?g)/.test(JSON.stringify(body.messages))) return body;
+  const sharp = (await import("sharp")).default;
+  const fix = async (url: string) => {
+    const m = /^data:image\/([\w.+-]+);base64,([\s\S]*)$/.exec(url);
+    if (!m || /^(png|jpe?g)$/i.test(m[1])) return url;
+    try { return `data:image/png;base64,${(await sharp(Buffer.from(m[2], "base64"), { animated: false }).png().toBuffer()).toString("base64")}`; } catch { return url; }
+  };
+  const messages = await Promise.all((body.messages as { content?: unknown }[]).map(async (msg) => {
+    if (!Array.isArray(msg.content)) return msg;
+    return { ...msg, content: await Promise.all((msg.content as { type?: string; image_url?: { url: string } }[]).map(async (p) => (p.type === "image_url" && p.image_url?.url ? { ...p, image_url: { ...p.image_url, url: await fix(p.image_url.url) } } : p))) };
+  }));
+  return { ...body, messages };
+}
+/** Hãng từ chối một tham số Synchro gửi (400): bản yêu cầu bỏ tham số đó để thử lại một lần, hoặc null. */
+export function compatRetry(t: Pick<Target, "kind">, body: Record<string, unknown>, msg: string): Record<string, unknown> | null {
+  if (t.kind !== "deepseek" && t.kind !== "xai") return null;
+  const msgs = Array.isArray(body.messages) ? (body.messages as unknown[]) : [];
+  // Model không nhận ảnh (bản mới của hãng đổi khả năng): gửi lại chỉ có chữ.
+  if (/image|vision|multimodal|modalit/i.test(msg) && JSON.stringify(msgs).includes('"image_url"')) return { ...body, messages: textOnly(msgs) };
+  // DeepSeek vẫn báo thiếu suy luận của lượt cũ: tắt chế độ suy nghĩ cho lần gọi này (lịch sử không còn suy luận gốc để gửi lại).
+  if (t.kind === "deepseek" && /reasoning/i.test(msg) && (body.thinking as { type?: string } | undefined)?.type !== "disabled") {
+    const { reasoning_effort: _e, ...rest } = body;
+    return { ...rest, thinking: { type: "disabled" }, messages: msgs.map((m) => { const x = m as { reasoning_content?: unknown }; if (x.reasoning_content === undefined) return m; const { reasoning_content: _r, ...r2 } = x; return r2; }) };
+  }
+  // Grok: model không nhận reasoning_effort.
+  if (t.kind === "xai" && body.reasoning_effort !== undefined && /reasoning|effort/i.test(msg)) { const { reasoning_effort: _e, ...rest } = body; return rest; }
+  // Bước cuối (không gọi công cụ nữa) mà hãng không nhận tool_choice: gửi lại không kèm tham số đó.
+  if (body.tool_choice !== undefined && /tool_choice/i.test(msg)) { const { tool_choice: _c, ...rest } = body; return rest; }
+  return null;
 }
 
 // ---- OpenAI Responses API ----
@@ -215,22 +280,32 @@ async function chatStream(r: Response, onDelta: OnDelta, signal?: AbortSignal) {
       if (fn?.arguments) cur.function!.arguments = (cur.function!.arguments ?? "") + fn.arguments;
       deepMerge(cur, rest);
     }
-    for (const [k, v] of Object.entries(x)) if (!["role", "content", "tool_calls"].includes(k) && v != null) extra[k] = v;
+    // Trường khác của tin nhắn: chuỗi đến từng đoạn (reasoning_content của DeepSeek, Grok) thì nối lại; đối tượng (chữ ký suy nghĩ của Gemini) thì giữ bản cuối.
+    for (const [k, v] of Object.entries(x)) if (!["role", "content", "tool_calls"].includes(k) && v != null) extra[k] = typeof v === "string" && typeof extra[k] === "string" ? extra[k] + v : v;
   }
   const tool_calls = calls.filter(Boolean);
   return { id, object: "chat.completion", choices: [{ index: 0, message: { role: "assistant", content: content || (tool_calls.length ? null : ""), ...(tool_calls.length ? { tool_calls } : {}), ...extra }, finish_reason: finish }], ...(usage ? { usage } : {}) };
 }
 export async function openaiCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta) {
-  const r = await fetch(`${t.base}/chat/completions`, {
-    method: "POST", signal,
-    headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
-    // Gemini không nhận stream_options; các hãng khác trả số token ở đoạn cuối khi bật include_usage.
-    body: JSON.stringify({ model: t.model, ...body, ...(onDelta ? { stream: true, ...(t.kind === "google" ? {} : { stream_options: { include_usage: true } }) } : {}) }),
-  });
-  if (!r.ok) await fail(r);
-  const j = onDelta ? await chatStream(r, onDelta, signal) : await r.json();
-  noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
-  return j;
+  const send = async (b: Record<string, unknown>) => {
+    const r = await fetch(`${t.base}/chat/completions`, {
+      method: "POST", signal,
+      headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
+      // Gemini không nhận stream_options; các hãng khác trả số token ở đoạn cuối khi bật include_usage.
+      body: JSON.stringify({ model: t.model, ...b, ...(onDelta ? { stream: true, ...(t.kind === "google" ? {} : { stream_options: { include_usage: true } }) } : {}) }),
+    });
+    if (!r.ok) await fail(r);
+    const j = onDelta ? await chatStream(r, onDelta, signal) : await r.json();
+    noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
+    return j;
+  };
+  const b = await compatImages(t, compatBody(t, body));
+  try { return await send(b); } catch (e) {
+    // Lỗi 400 trả về trước khi có chữ nào: thử lại một lần không kèm tham số hãng không nhận.
+    const again = e instanceof HttpErr && e.status === 400 ? compatRetry(t, b, e.message) : null;
+    if (!again) throw e;
+    return await send(again);
+  }
 }
 
 // Một lượt hỏi đáp không có công cụ: dùng cho chat thường và nút "Gửi thử" ở Cài đặt → Providers.

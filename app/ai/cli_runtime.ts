@@ -8,8 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
-export type Cli = "claude" | "codex" | "agy";
-export const CLIS: Cli[] = ["claude", "codex", "agy"];
+export type Cli = "claude" | "codex" | "agy" | "grok";
+export const CLIS: Cli[] = ["claude", "codex", "agy", "grok"];
 // Lượt làm việc dài (dựng cả bộ nhận diện, sửa nhiều tệp) chạy tới khi xong: chỉ dừng khi CLI im lặng IDLE_MS (không in gì, không gọi công cụ
 // của Synchro — có thể đã treo; một công cụ được chờ tới 30 phút) hoặc chạm mức trần MAX_TURN_MS. Đổi bằng SYNCHRO_TURN_MAX_MIN / SYNCHRO_TURN_IDLE_MIN.
 const envMin = (k: string, d: number) => { const n = Number(process.env[k]); return (Number.isFinite(n) && n > 0 ? n : d) * 60_000; };
@@ -93,7 +93,9 @@ export function find(cli: Cli): string | null {
 
 // ---------------------------------------------------------------- biến môi trường
 // MCP_TOOL_TIMEOUT: thời gian chờ một lời gọi công cụ qua cầu nối MCP của Claude Code (lệnh trong workspace chạy tới 10 phút).
-export const ENV_ALLOW = ["LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_HOME", "MCP_TOOL_TIMEOUT"] as const;
+// GROK_HOME: thư mục cấu hình / đăng nhập của Grok CLI; GROK_DISABLE_AUTOUPDATER: Grok CLI không tự tải bản mới vào thư mục của từng tài khoản;
+// GROK_BIN_DIR: nơi script cài của xAI đặt lệnh grok (chỉ dùng khi cài).
+export const ENV_ALLOW = ["LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR"] as const;
 const basePath = () => [noBrowserDir(), binDir(), path.dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 
 /** Môi trường cho tiến trình CLI: chỉ các biến trong ENV_ALLOW; biến khác (kể cả truyền vào) bị bỏ. */
@@ -233,6 +235,7 @@ export async function runCli(bin: string, args: string[], o: RunOpts = {}) {
 // ---------------------------------------------------------------- cài đặt
 const NPM_PKG: Partial<Record<Cli, string>> = { claude: "@anthropic-ai/claude-code", codex: "@openai/codex" };
 export const AGY_INSTALLER = "https://antigravity.google/cli/install.sh";
+export const GROK_INSTALLER = "https://x.ai/cli/install.sh";
 
 export async function version(cli: Cli): Promise<string | null> {
   const bin = find(cli);
@@ -244,24 +247,32 @@ export async function version(cli: Cli): Promise<string | null> {
 
 /**
  * Cài CLI chính chủ vào <home>/.local/bin: claude và codex qua npm (gói của Anthropic, OpenAI),
- * agy qua script cài của Google (tải bản build, kiểm SHA-512, chép vào --dir).
+ * agy qua script cài của Google (tải bản build, kiểm SHA-512, chép vào --dir), grok qua script cài của xAI
+ * (tải bản build vào <home>/.grok, liên kết lệnh grok vào GROK_BIN_DIR).
  */
 export async function install(cli: Cli, log: (s: string) => void = () => {}): Promise<{ ok: boolean; version: string | null; output: string }> {
   const home = engineHome();
   if (!engineUser()) fs.mkdirSync(binDir(), { recursive: true });
   const env = { HOME: home, PATH: basePath(), LANG: process.env.LANG || "C.UTF-8" };
   let r: Awaited<ReturnType<typeof runCli>>;
-  if (cli === "agy") {
-    const res = await fetch(AGY_INSTALLER);
+  if (cli === "agy" || cli === "grok") {
+    const res = await fetch(cli === "agy" ? AGY_INSTALLER : GROK_INSTALLER);
     if (!res.ok) return { ok: false, version: null, output: `Không tải được script cài (${res.status}).` };
     // Đưa script qua stdin (bash -s) để user riêng của engine chạy được mà không cần đọc tệp tạm của Synchro.
-    r = await runCli("/bin/bash", ["-s", "--", "--dir", binDir()], { env, stdin: await res.text(), timeoutMs: 10 * 60_000 });
+    // Grok: GROK_BIN_DIR là nơi đặt lệnh grok; PATH không có /usr/local/bin để script không đặt thêm liên kết ra ngoài nhà engine.
+    const ver = process.env.SYNCHRO_GROK_VERSION;
+    r = cli === "agy"
+      ? await runCli("/bin/bash", ["-s", "--", "--dir", binDir()], { env, stdin: await res.text(), timeoutMs: 10 * 60_000 })
+      : await runCli("/bin/bash", ["-s", "--", ...(ver ? [ver] : [])], { env: { ...env, PATH: [binDir(), path.dirname(process.execPath), "/usr/bin", "/bin"].join(":"), GROK_BIN_DIR: binDir(), GROK_DISABLE_AUTOUPDATER: "1" }, stdin: await res.text(), timeoutMs: 10 * 60_000 });
   } else {
     const pkg = `${NPM_PKG[cli]}@${process.env[`SYNCHRO_${cli.toUpperCase()}_VERSION`] || "latest"}`;
     const npm = path.join(path.dirname(process.execPath), "npm");
     r = await runCli(fs.existsSync(npm) ? npm : "npm", ["install", "-g", "--prefix", path.join(home, ".local"), "--no-audit", "--no-fund", pkg],
       { env, timeoutMs: 10 * 60_000 });
   }
+  // Grok: bản build nằm trong <home>/.grok; mở quyền đi qua các thư mục đó cho user của Synchro (kiểm tra đã cài, phiên bản),
+  // như thư mục .local/bin. Chỉ thư mục, không đụng tệp nào (đăng nhập của từng tài khoản nằm ở logins/, không ở đây).
+  if (cli === "grok") await runCli("/bin/sh", ["-c", 'for d in "$HOME/.grok" "$HOME/.grok/bin" "$HOME/.grok/downloads"; do [ -d "$d" ] && chmod go+rx "$d"; done; true'], { env, timeoutMs: 20_000 }).catch(() => null);
   const output = `${r.stdout}${r.stderr}`.slice(-4000);
   log(output);
   const v = await version(cli);

@@ -1,9 +1,9 @@
 "use client";
-// Cài đặt → Providers: mỗi hãng (Claude, ChatGPT, Gemini) là một mục. Bấm vào để chọn cách dùng:
-// - Đăng nhập gói subscription của chính mình: máy chủ chạy CLI chính chủ (Claude Code, Codex, Antigravity), Synchro chỉ hiện link
+// Cài đặt → Providers: mỗi hãng (Claude, ChatGPT, Gemini, Grok, DeepSeek) là một mục. Bấm vào để chọn cách dùng:
+// - Đăng nhập gói subscription của chính mình: máy chủ chạy CLI chính chủ (Claude Code, Codex, Antigravity, Grok CLI), Synchro chỉ hiện link
 //   đăng nhập và nhận mã người dùng dán vào; thông tin đăng nhập nằm trong thư mục riêng của tài khoản trên máy chủ.
 // - Liên kết khóa API (chỉ quản trị viên): khóa dùng chung cho cả hệ thống, kèm số dư đã nạp.
-// Chọn cách nào thì mới hiện các bước của cách đó. ElevenLabs chỉ dùng khóa API.
+// Chọn cách nào thì mới hiện các bước của cách đó. DeepSeek (không có gói đăng nhập) và ElevenLabs chỉ dùng khóa API.
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
@@ -13,30 +13,34 @@ import { BrandLogo } from "./brands";
 import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui";
 import { locale } from "./i18n";
 
-type Cli = "claude" | "codex" | "agy";
+type Cli = "claude" | "codex" | "agy" | "grok";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
 export type EngineStatus = { cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
 
-const VENDORS: { id: string; cli: Cli; name: string; vendor: string; plan: string; via: string }[] = [
+// cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API).
+const VENDORS: { id: string; cli: Cli | null; name: string; vendor: string; plan: string; via: string }[] = [
   { id: "anthropic", cli: "claude", name: "Claude", vendor: "Anthropic", plan: "Claude Pro or Max plan", via: "Claude Code" },
   { id: "openai", cli: "codex", name: "ChatGPT", vendor: "OpenAI", plan: "ChatGPT Plus, Pro or Business plan", via: "Codex CLI" },
   { id: "google", cli: "agy", name: "Gemini", vendor: "Google", plan: "Google AI Pro or Ultra plan", via: "Antigravity CLI" },
+  { id: "xai", cli: "grok", name: "Grok", vendor: "xAI", plan: "SuperGrok or X Premium+ plan", via: "Grok CLI" },
+  { id: "deepseek", cli: null, name: "DeepSeek", vendor: "DeepSeek", plan: "", via: "" },
 ];
 type Vendor = (typeof VENDORS)[number];
-const METHOD: Record<string, string> = { token: "long-lived token", oauth: "claude.ai account", chatgpt: "ChatGPT account", apikey: "API key", google: "Google account" };
+type PlanVendor = Vendor & { cli: Cli };
+const METHOD: Record<string, string> = { token: "long-lived token", oauth: "claude.ai account", chatgpt: "ChatGPT account", apikey: "API key", google: "Google account", grok: "Grok account" };
 const when = (t: number) => new Date(t).toLocaleString(locale(), { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
-/** Trạng thái CLI của chính tài khoản cho một hãng. */
-function usePlan(cli: Cli) {
+/** Trạng thái CLI của chính tài khoản cho một hãng (hãng không có gói: không hỏi gì). */
+function usePlan(cli: Cli | null) {
   const [st, setSt] = useState<EngineStatus | null>(null);
   const [err, setErr] = useState("");
-  const load = useCallback((fresh = false) => call<EngineStatus>("GET", `/api/engines/${cli}/status${fresh ? "?fresh=1" : ""}`).then((s) => { setSt(s); return s; }), [cli]);
-  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+  const load = useCallback((fresh = false) => (cli ? call<EngineStatus>("GET", `/api/engines/${cli}/status${fresh ? "?fresh=1" : ""}`) : Promise.reject(new Error("No plan sign-in for this provider."))).then((s) => { setSt(s); return s; }), [cli]);
+  useEffect(() => { if (cli) load().catch((e) => setErr(e.message)); }, [load, cli]);
   return { st, setSt, load, err, setErr };
 }
 
 // ---------------------------------------------------------------- đăng nhập gói subscription
-function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnType<typeof usePlan> }) {
+function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: ReturnType<typeof usePlan> }) {
   const app = useApp();
   const models = useModels();
   const { st, setSt, load, err, setErr } = plan;
@@ -51,7 +55,7 @@ function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnT
     await refreshModels();
     app.say(`Signed in to ${v.name}. Its models are now in the model picker.`);
   }, [load, app, v.name]);
-  // Codex: người dùng nhập mã trên trang của OpenAI, CLI tự hoàn tất; hỏi lại trạng thái mỗi 2 giây.
+  // Codex, Grok: người dùng nhập / xác nhận mã trên trang của hãng, CLI tự hoàn tất; hỏi lại trạng thái mỗi 2 giây.
   // Hàm gọi lại đọc qua ref để vòng hỏi không bị tạo lại (và ngừng) mỗi khi context của ứng dụng đổi.
   const polling = login?.state === "open_url" && !login.needsCode;
   const cb = useRef({ load, done, setErr });
@@ -141,13 +145,13 @@ function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnT
           <ol className="pv-steps">
             <li>
               <b>{`Open the ${v.name} sign-in page`}</b>
-              <span>{v.cli === "codex" ? "Sign in to ChatGPT, then enter the one-time code below." : `Sign in with the account that has your ${v.plan.replace(/ plan$/, "")}, then copy the code the page shows you.`}</span>
+              <span>{v.cli === "codex" ? "Sign in to ChatGPT, then enter the one-time code below." : v.cli === "grok" ? "Sign in with the account that has your SuperGrok or X Premium+ plan, then confirm the code below." : `Sign in with the account that has your ${v.plan.replace(/ plan$/, "")}, then copy the code the page shows you.`}</span>
               {login.url && <a className="btn dark pv-open" href={login.url} target="_blank" rel="noreferrer noopener">Open sign-in page<I.External size={12} /></a>}
             </li>
             {login.userCode && (
               <li>
-                <b>Enter this code</b>
-                <span>It expires in 15 minutes. Never share it with anyone.</span>
+                <b>{v.cli === "grok" ? "Check this code" : "Enter this code"}</b>
+                <span>{v.cli === "grok" ? "The sign-in page should show the same code. It expires in 10 minutes. Never share it with anyone." : "It expires in 15 minutes. Never share it with anyone."}</span>
                 <div className="pv-code"><code data-notr>{login.userCode}</code><button className="icon-btn" aria-label="Copy code" data-tip={copied ? "Copied" : "Copy code"} onClick={() => copy(login.userCode!)}>{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button></div>
                 <span className="pv-wait"><span className="api-spin" />Waiting for you to approve…</span>
               </li>
@@ -180,19 +184,20 @@ function PlanPane({ v, admin, plan }: { v: Vendor; admin: boolean; plan: ReturnT
 function VendorItem({ v, admin, api, apiState, setApi }: { v: Vendor; admin: boolean; api?: ApiProvider; apiState: ApiState | null; setApi: (s: ApiState) => void }) {
   const plan = usePlan(v.cli);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"plan" | "api" | null>(null);
+  // Hãng chỉ có khóa API: mở ra là thấy luôn phần khóa API.
+  const [mode, setMode] = useState<"plan" | "api" | null>(v.cli ? null : "api");
   const st = plan.st;
   const planText = !st ? "Checking…" : !st.installed ? "Not installed" : st.relogin ? "Sign in again" : st.loggedIn ? "Signed in" : "Not signed in";
   const apiText = !api ? "" : !api.configured ? "Not connected" : api.status === "error" ? "Needs attention" : `Connected · ${api.models.length} models`;
   const credit = apiState?.credits?.find((c) => c.provider === v.id) ?? null;
   return (
     <div className={`api-card pv-vendor ${open ? "open" : ""}`} data-vendor={v.id}>
-      <button className="pv-vendor-h" aria-expanded={open} onClick={() => { setOpen(!open); if (open) setMode(null); }}>
+      <button className="pv-vendor-h" aria-expanded={open} onClick={() => { setOpen(!open); if (open) setMode(v.cli ? null : "api"); }}>
         <span className="api-mark" aria-hidden data-notr><BrandLogo id={v.id} size={20} /></span>
         <span className="api-meta">
-          <span className="api-name"><b>{v.name}</b><span className="api-vendor">{v.vendor}</span></span>
+          <span className="api-name"><b>{v.name}</b>{v.vendor !== v.name && <span className="api-vendor">{v.vendor}</span>}</span>
           <span className="pv-sum">
-            <span className={`pv-tag ${st?.loggedIn && !st.relogin ? "ok" : ""}`}><i />{`Plan: ${planText}`}</span>
+            {v.cli ? <span className={`pv-tag ${st?.loggedIn && !st.relogin ? "ok" : ""}`}><i />{`Plan: ${planText}`}</span> : <span className="pv-tag"><i />API key only</span>}
             {admin && api && <span className={`pv-tag ${api.configured && api.status !== "error" ? "ok" : ""}`}><i />{`API: ${apiText}`}</span>}
           </span>
         </span>
@@ -200,11 +205,14 @@ function VendorItem({ v, admin, api, apiState, setApi }: { v: Vendor; admin: boo
       </button>
       {open && (
         <div className="pv-body">
+          {!v.cli && <p className="pv-note">{`${v.name} has no plan sign-in for other apps, so it connects with an API key only.`}</p>}
           <div className="pv-choose" role="radiogroup" aria-label={`How to use ${v.name}`}>
-            <button role="radio" aria-checked={mode === "plan"} className={`pv-opt ${mode === "plan" ? "on" : ""}`} onClick={() => setMode("plan")}>
-              <I.SetAccount size={18} />
-              <span><b>Sign in with your plan</b><em>{`Use your own ${v.plan}. Only your account uses it.`}</em></span>
-            </button>
+            {v.cli && (
+              <button role="radio" aria-checked={mode === "plan"} className={`pv-opt ${mode === "plan" ? "on" : ""}`} onClick={() => setMode("plan")}>
+                <I.SetAccount size={18} />
+                <span><b>Sign in with your plan</b><em>{`Use your own ${v.plan}. Only your account uses it.`}</em></span>
+              </button>
+            )}
             {admin && (
               <button role="radio" aria-checked={mode === "api"} className={`pv-opt ${mode === "api" ? "on" : ""}`} onClick={() => setMode("api")}>
                 <I.SetKey size={18} />
@@ -212,7 +220,7 @@ function VendorItem({ v, admin, api, apiState, setApi }: { v: Vendor; admin: boo
               </button>
             )}
           </div>
-          {mode === "plan" && <PlanPane v={v} admin={admin} plan={plan} />}
+          {mode === "plan" && v.cli && <PlanPane v={v as PlanVendor} admin={admin} plan={plan} />}
           {mode === "api" && admin && (api ? <ProviderCard p={api} onChange={setApi} credit={credit} bare /> : <p className="pv-note">Loading…</p>)}
         </div>
       )}
@@ -234,11 +242,12 @@ export function ProvidersPanel() {
         <div className="adm-badge"><I.SetChip size={22} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="s-title">Providers</div>
-          <div className="d">{admin ? "Connect Claude, ChatGPT and Gemini with your own plan or with an API key shared by everyone." : "Use the AI plans you already pay for. Sign in once and every model your plan allows shows up in the model picker, only for your account."}</div>
+          <div className="d">{admin ? "Connect Claude, ChatGPT, Gemini, Grok and DeepSeek with your own plan or with an API key shared by everyone." : "Use the AI plans you already pay for. Sign in once and every model your plan allows shows up in the model picker, only for your account."}</div>
         </div>
       </div>
       {apiErr && <div className="api-err" role="alert"><I.Alert size={14} /><span>{apiErr}</span></div>}
-      <div className="api-list">{VENDORS.map((v) => <VendorItem key={v.id} v={v} admin={admin} api={api?.providers.find((p) => p.id === v.id)} apiState={api} setApi={update} />)}</div>
+      {/* Hãng chỉ có khóa API (DeepSeek): chỉ quản trị viên nối được nên chỉ hiện cho quản trị viên. */}
+      <div className="api-list">{VENDORS.filter((v) => admin || v.cli).map((v) => <VendorItem key={v.id} v={v} admin={admin} api={api?.providers.find((p) => p.id === v.id)} apiState={api} setApi={update} />)}</div>
       {admin && api && others.length > 0 && (
         <>
           <h3 className="sec">Other providers</h3>

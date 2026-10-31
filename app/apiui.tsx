@@ -132,7 +132,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
         {!bare && <Mark p={p} />}
         <div className="api-meta">
           {!bare && <div className="api-name"><b>{p.name}</b>{p.vendor !== p.name && <span className="api-vendor">{p.vendor}</span>}</div>}
-          <div className="api-sub">{ROLE[p.id] ?? "Chat, Code and Projects"}{p.keyHint && <> · <span className="mono-s" data-notr>{p.keyHint}</span></>}{p.source === "env" && <> · from server environment</>}</div>
+          <div className="api-sub">{ROLE[p.id] ?? "Chat, Code and Projects"}{p.keyHint && <> · <span className="mono-s" data-notr>{p.keyHint}</span></>}{p.source === "env" && <> · from server environment</>}{p.kind === "deepseek" && p.info && <> · {`Balance ${p.info}`}</>}</div>
         </div>
         <span className={`api-badge ${status.cls}`}><i />{status.text}</span>
         <div className="api-btns">

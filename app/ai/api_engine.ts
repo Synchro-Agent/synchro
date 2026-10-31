@@ -1,4 +1,4 @@
-// Engine khóa API (Anthropic, OpenAI, Gemini) làm dự phòng cho engine CLI (ADR 0001, bước 6).
+// Engine khóa API (Anthropic, OpenAI, Gemini, xAI, DeepSeek) làm dự phòng cho engine CLI (ADR 0001, bước 6).
 // Khóa do quản trị viên nhập ở Cài đặt → Providers, lưu mã hóa trong api_providers và dùng chung cho cả hệ thống.
 // FallbackEngine: CLI báo hết hạn mức (quota) trước khi kịp trả chữ nào thì chuyển sang khóa API của cùng hãng.
 import type { Engine, Event, TurnRequest } from "./engine";
@@ -8,9 +8,9 @@ import { chatOnce, HttpErr } from "../llmcall";
 import { classify, redact } from "./errors";
 import { engineFor, registerEngine } from "./selector";
 
-export type ApiKind = "anthropic" | "openai" | "google";
-/** Hãng của từng CLI: gói Claude → khóa Anthropic, ChatGPT (codex) → OpenAI, Gemini (agy) → Google. */
-export const API_OF: Record<string, ApiKind> = { claude: "anthropic", codex: "openai", agy: "google" };
+export type ApiKind = "anthropic" | "openai" | "google" | "xai" | "deepseek";
+/** Hãng của từng CLI: gói Claude → khóa Anthropic, ChatGPT (codex) → OpenAI, Gemini (agy) → Google, Grok → xAI. */
+export const API_OF: Record<string, ApiKind> = { claude: "anthropic", codex: "openai", agy: "google", grok: "xai" };
 
 type Opts = {
   maxTokens?: number;
@@ -100,3 +100,5 @@ export function engineWithFallback(cli: string, o: Opts = {}): Engine {
 registerEngine("api:anthropic", () => new ApiEngine("anthropic"));
 registerEngine("api:openai", () => new ApiEngine("openai"));
 registerEngine("api:google", () => new ApiEngine("google"));
+registerEngine("api:xai", () => new ApiEngine("xai"));
+registerEngine("api:deepseek", () => new ApiEngine("deepseek"));

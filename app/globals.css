@@ -4163,8 +4163,8 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .sp-script-f .sp-hint{flex:1;min-width:200px}
 @media(max-width:768px){.sp-script-t{font-size:15px}}
 /* mức dùng theo hãng: gói subscription / khóa API (vòng tròn chế độ Tự động, Cài đặt → Usage) */
-:root{--vc-claude:#eb6834;--vc-gpt:#1baf7a;--vc-gemini:#2a78d6;--vc-other:#8a8983}
-[data-theme="dark"]{--vc-claude:#d95926;--vc-gpt:#199e70;--vc-gemini:#3987e5;--vc-other:#8f8e88}
+:root{--vc-claude:#eb6834;--vc-gpt:#1baf7a;--vc-gemini:#2a78d6;--vc-grok:#c2185b;--vc-deepseek:#5c3c92;--vc-other:#8a8983}
+[data-theme="dark"]{--vc-claude:#d95926;--vc-gpt:#199e70;--vc-gemini:#3987e5;--vc-grok:#b8245f;--vc-deepseek:#7448b8;--vc-other:#8f8e88}
 .menu.us-pop{max-height:min(600px,calc(100dvh - 120px));overflow:auto}
 .us-v+.us-v{border-top:.5px solid var(--border);margin-top:10px;padding-top:10px}
 .us-v-h{display:flex;align-items:center;gap:8px;min-width:0}

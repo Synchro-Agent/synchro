@@ -29,6 +29,16 @@ const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"]][] = [
   [/^google\/gemini-[\d.]+-pro/, { in: 2, out: 12, cache: 0.2 }, "estimate"],
   [/^google\/gemini-[\d.]+-flash-lite/, { in: 0.25, out: 1.5, cache: 0.025 }, "estimate"],
   [/^google\/gemini-[\d.]+-flash/, { in: 1.5, out: 9, cache: 0.15 }, "estimate"],
+  // xAI (docs.x.ai, giá cho prompt dưới 200 nghìn token; từ 200 nghìn token cả yêu cầu tính gấp đôi).
+  [/^xai\/grok-4\.[67]\b/, { in: 2, out: 6, cache: 0.5 }, "official"],
+  [/^xai\/grok-4\.5\b/, { in: 2, out: 6, cache: 0.3 }, "official"],
+  [/^xai\/grok-4\.(3|20)\b/, { in: 1.25, out: 2.5, cache: 0.2 }, "official"],
+  [/^xai\/grok-build/, { in: 1, out: 2, cache: 0.2 }, "official"],
+  [/^xai\//, { in: 2, out: 6, cache: 0.5 }, "estimate"],
+  // DeepSeek (api-docs.deepseek.com): giá giờ cao điểm; ngoài giờ cao điểm và cuối tuần hãng tính một nửa, nên đây là mức trần.
+  [/^deepseek\/deepseek-(v[\d.]+-)?flash/, { in: 0.3, out: 1.2, cache: 0.006 }, "official"],
+  [/^deepseek\/deepseek-v[\d.]+-pro/, { in: 1.32, out: 3.96, cache: 0.044 }, "official"],
+  [/^deepseek\//, { in: 1.32, out: 3.96, cache: 0.044 }, "estimate"],
   [/./, { in: 3, out: 15, cache: 0.3 }, "estimate"],
 ];
 
@@ -104,8 +114,11 @@ export function readTokens(u: Record<string, unknown> | undefined | null): Tok |
     return { input: Math.max(0, n(u.input_tokens) - cached), output: n(u.output_tokens), cacheRead: cached, cacheWrite: 0 };
   }
   if ("prompt_tokens" in u) {
-    const cached = n((u.prompt_tokens_details as Record<string, unknown> | undefined)?.cached_tokens);
-    return { input: Math.max(0, n(u.prompt_tokens) - cached), output: n(u.completion_tokens), cacheRead: cached, cacheWrite: 0 };
+    // DeepSeek báo phần đọc từ cache ở prompt_cache_hit_tokens; các hãng khác ở prompt_tokens_details.cached_tokens.
+    const cached = "prompt_cache_hit_tokens" in u ? n(u.prompt_cache_hit_tokens) : n((u.prompt_tokens_details as Record<string, unknown> | undefined)?.cached_tokens);
+    // Grok tính token suy nghĩ riêng, ngoài completion_tokens (chỉ có trong total_tokens): cộng phần chênh vào đầu ra.
+    const think = Math.max(0, n(u.total_tokens) - n(u.prompt_tokens) - n(u.completion_tokens));
+    return { input: Math.max(0, n(u.prompt_tokens) - cached), output: n(u.completion_tokens) + think, cacheRead: cached, cacheWrite: 0 };
   }
   return null;
 }

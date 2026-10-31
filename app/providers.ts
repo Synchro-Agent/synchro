@@ -12,6 +12,8 @@ export const BUILTIN: Record<string, Builtin> = {
   anthropic: { kind: "anthropic", name: "Claude", vendor: "Anthropic", base: "https://api.anthropic.com", keyUrl: "https://console.anthropic.com/settings/keys", prefix: "sk-ant-" },
   openai: { kind: "openai", name: "ChatGPT", vendor: "OpenAI", base: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys", prefix: "sk-" },
   google: { kind: "google", name: "Gemini", vendor: "Google", base: "https://generativelanguage.googleapis.com/v1beta/openai", keyUrl: "https://aistudio.google.com/apikey", prefix: "AIza" },
+  xai: { kind: "xai", name: "Grok", vendor: "xAI", base: "https://api.x.ai/v1", keyUrl: "https://console.x.ai", prefix: "xai-" },
+  deepseek: { kind: "deepseek", name: "DeepSeek", vendor: "DeepSeek", base: "https://api.deepseek.com", keyUrl: "https://platform.deepseek.com/api_keys", prefix: "sk-" },
   elevenlabs: { kind: "elevenlabs", name: "ElevenLabs", vendor: "ElevenLabs", base: "https://api.elevenlabs.io", keyUrl: "https://elevenlabs.io/app/settings/api-keys", prefix: "sk_" },
 };
 
@@ -62,6 +64,12 @@ const hint = (k: string) => (k.length > 12 ? `${k.slice(0, 6)}…${k.slice(-4)}`
 const OPENAI_SKIP = /(embedding|tts|whisper|transcribe|audio|realtime|live|translate|image|dall-e|sora|moderation|search|computer-use|codex|deep-research|cyber|rosalind|daybreak|oss|instruct|davinci|babbage|-\d{4}-\d{2}-\d{2}$|-\d{4}$)/i;
 const GOOGLE_SKIP = /(embedding|aqa|imagen|veo|tts|image|live|native-audio|transcribe|translate|omni|robotics|computer-use|learnlm)/i;
 const COMPAT_SKIP = /(embed|tts|whisper|moderation|dall-e|image|rerank|guard)/i;
+// xAI: bỏ model tạo ảnh / video (grok-imagine…), giọng nói và bản chụp có ngày (đã có tên chung trỏ tới bản mới nhất).
+const XAI_SKIP = /(imagine|image|video|vision-beta|tts|voice|audio|realtime|embed|-\d{4}$|-\d{8}$)/i;
+// "grok-4.7" → "Grok 4.7", "grok-4.20-0309-reasoning" → "Grok 4.20 Reasoning", "grok-build-0.1" → "Grok Build 0.1".
+export const prettyGrok = (id: string) => id.replace(/-0\d{3}(?=-|$)/, "").split("-").map((w) => (/^\d/.test(w) ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
+// "deepseek-flash" → "DeepSeek Flash", "deepseek-v4-pro" → "DeepSeek V4 Pro".
+const prettyDeepSeek = (id: string) => id.split("-").map((w) => (w === "deepseek" ? "DeepSeek" : /^v\d/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))).join(" ");
 // "gpt-6-astra" → "GPT-6 Astra", "gpt-5.5-pro" → "GPT-5.5 Pro", "chat-latest" → "ChatGPT Latest"; dòng o giữ nguyên ("o3").
 const prettyOpenAI = (id: string) => {
   if (id === "chat-latest") return "ChatGPT Latest";
@@ -90,6 +98,10 @@ const LEGACY: Partial<Record<ProviderKind, RegExp>> = {
   anthropic: /^claude-(instant|\d|(opus|sonnet|haiku)-[1-4]\b|(fable|opus|sonnet|haiku)-5($|-\d{8}$))/,
   openai: /^(gpt-[1-5]|o\d|chatgpt|chat-latest|gpt-6-sol$)/,
   google: /^gemini-([12][.-]|3-|3\.6-|3\.1-flash|3\.5-flash$)/,
+  // Grok 4.5 trở lên và Grok Build là dòng hiện tại; 2 / 3 / 4.0–4.3 / 4.1x / 4.20, "fast", "code-fast" là đời cũ.
+  xai: /^grok-([1-3]\b|[1-3]-|4($|-)|4\.[0-4](\D|$)|4\.[12]\d|code|beta|vision)|fast/,
+  // deepseek-chat / deepseek-reasoner (V3) và tên cũ của V4 Flash (đã gộp vào deepseek-flash).
+  deepseek: /^deepseek-(chat|reasoner|coder|v[23]|v4-flash)/,
 };
 const isCurrent = (kind: ProviderKind, id: string) => !LEGACY[kind]?.test(id);
 
@@ -120,6 +132,17 @@ async function listAll(kind: ProviderKind, base: string, key: string): Promise<{
   const list = ((j.data ?? j.models ?? []) as { id: string; created?: number; name?: string }[]).filter((m) => typeof m.id === "string");
   if (kind === "openai") {
     return { models: list.filter((m) => /^(gpt|o\d|chatgpt|chat-latest)/i.test(m.id) && !OPENAI_SKIP.test(m.id)).sort((x, y) => (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyOpenAI(m.id) })) };
+  }
+  if (kind === "xai") {
+    // Mới nhất trước (grok-4.7 rồi 4.6…); xAI không trả tên hiển thị nên tự đặt.
+    const ver = (id: string) => Number(/^grok-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? 0);
+    return { models: list.filter((m) => /^grok/i.test(m.id) && !XAI_SKIP.test(m.id)).sort((x, y) => ver(y.id) - ver(x.id) || (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyGrok(m.id) })) };
+  }
+  if (kind === "deepseek") {
+    // Số dư thật của khóa (GET /user/balance) hiện cạnh tên gói, như gói của ElevenLabs.
+    const bal = await getJson(`${b}/user/balance`, { Authorization: `Bearer ${key}` }).catch(() => null) as { is_available?: boolean; balance_infos?: { currency: string; total_balance: string }[] } | null;
+    const info = bal?.balance_infos?.length ? `${bal.balance_infos.map((x) => `${x.total_balance} ${x.currency}`).join(" + ")}${bal.is_available === false ? " (top up needed)" : ""}` : undefined;
+    return { models: list.filter((m) => /^deepseek/i.test(m.id) && !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: prettyDeepSeek(m.id) })), info };
   }
   return { models: list.filter((m) => !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: m.name || m.id })) };
 }
@@ -224,7 +247,7 @@ export async function saveProvider(o: { id?: string; kind?: string; name?: strin
   const name = (builtin?.name ?? (o.name?.trim() || old?.name || "")).slice(0, 40);
   if (!name) throw new Error("Hãy đặt tên cho nhà cung cấp.");
   const baseUrl = (o.baseUrl ?? old?.base_url ?? "").trim().replace(/\/+$/, "");
-  if (kind === "compatible" && !baseUrl) throw new Error("Hãy nhập địa chỉ API (Base URL), ví dụ https://api.deepseek.com/v1.");
+  if (kind === "compatible" && !baseUrl) throw new Error("Hãy nhập địa chỉ API (Base URL), ví dụ https://openrouter.ai/api/v1.");
   if (baseUrl && !okUrl(baseUrl)) throw new Error("Địa chỉ API phải bắt đầu bằng https:// hoặc http://");
   const key = (o.key ?? "").trim() || (old ? open(old.enc_key) : "");
   if (!key) throw new Error("Hãy dán khóa API.");

@@ -1,9 +1,9 @@
-// Ba engine chạy CLI chính chủ bằng gói subscription của người dùng (ADR 0001, bước 5).
+// Các engine chạy CLI chính chủ bằng gói subscription của người dùng (ADR 0001, bước 5): Claude Code, Codex, Antigravity, Grok.
 // Engine không biết tài khoản là ai: biến môi trường đăng nhập (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME…) do cli_auth.engineEnv()
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage } from "./engine";
-import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, type Exit } from "./cli_runtime";
+import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -295,5 +295,101 @@ export class AntigravityEngine implements Engine {
     const denied = log ? await agyDenied(req, log).catch(() => []) : [];
     if (text) yield { kind: "text", text };
     yield { kind: "final", text, via: "agy", ...(denied.length ? { denied } : {}) };
+  }
+}
+
+// ---------------------------------------------------------------- Grok
+// Grok CLI (xAI Grok Build) ở chế độ không giao diện: `grok --prompt-file <tệp> --output-format streaming-json`, mỗi dòng một sự kiện
+// (text, thought, tool_call, tool_call_update, usage, end, error). Prompt đi qua tệp (không qua tham số dòng lệnh, vì lịch sử có thể dài).
+// - Công cụ dựng sẵn (shell, đọc / sửa tệp, đọc URL) tắt: --tools chỉ giữ search_tool / use_tool (gọi công cụ MCP) và web_search khi
+//   người dùng bật tìm web; thêm luật --deny cho chắc. Công cụ của Synchro đi qua cầu nối MCP "synchro" (tên synchro__<tên>).
+// - Grok chỉ đọc máy chủ MCP từ cấu hình (không có cờ cho từng lượt): mỗi lượt có công cụ thêm cầu nối bằng `grok mcp add` rồi gỡ khi xong,
+//   các lượt có công cụ của cùng một tài khoản chạy lần lượt (như Antigravity).
+// - Ảnh / PDF gửi kèm: đã lưu trong thư mục làm việc, prompt tham chiếu bằng @<đường dẫn> (cách đính kèm tệp của Grok CLI).
+const grokLocks = new Map<string, Promise<void>>();
+const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
+async function grokRun(args: string[], req: TurnRequest) {
+  const p = start("grok", args, { ...req, signal: undefined }, "");
+  if (!p) return false;
+  for await (const _ of p.lines) { /* bỏ qua */ }
+  return (await p.done).code === 0;
+}
+/** Xóa tệp tạm của lượt bằng chính user của engine (thư mục làm việc 0700 của user đó). */
+async function rmEngineFile(req: TurnRequest, file: string) {
+  const sh = spawnCli("/bin/sh", ["-c", 'rm -f "$1"', "sh", file], { env: req.env, cwd: path.dirname(file) });
+  await sh.done;
+}
+
+export class GrokEngine implements Engine {
+  readonly id = "grok";
+  async *runTurn(req: TurnRequest): AsyncIterable<Event> {
+    if (!req.mcp) { yield* this.turn(req); return; }
+    const home = String(req.env?.HOME ?? "");
+    const prev = grokLocks.get(home) ?? Promise.resolve();
+    let release = () => {};
+    const mine = new Promise<void>((r) => { release = r; });
+    const chain = prev.then(() => mine);
+    grokLocks.set(home, chain);
+    await prev;
+    try {
+      // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng) bị thay bằng cầu nối mới.
+      await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
+      const ok = await grokRun(["mcp", "add", "--transport", "http", "synchro", req.mcp.url], req).catch(() => false);
+      yield* this.turn(ok ? req : { ...req, mcp: undefined });
+    } finally {
+      await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
+      release();
+      if (grokLocks.get(home) === chain) grokLocks.delete(home);
+    }
+  }
+  private async *turn(req: TurnRequest, retried = false): AsyncIterable<Event> {
+    const cwd = req.workdir ?? path.join(engineHome(), "work");
+    makeDir(cwd);
+    const atts = (req.attachments ?? []).filter((a) => a.path);
+    const refs = atts.flatMap((a) => [a.path!, ...(a.pages ?? []).map((x) => x.path).filter((x): x is string => !!x)]).map((f) => `@${path.relative(cwd, f)}`);
+    // Hướng dẫn hệ thống rất dài (nhiều skill, connector) không vừa một tham số dòng lệnh (giới hạn 128 KB): đưa vào đầu tệp prompt.
+    const longSys = (req.system?.length ?? 0) > 100_000;
+    const prompt = (longSys ? `<system_instructions>\n${req.system}\n</system_instructions>\n\n` : "") + req.prompt
+      + (refs.length ? `\n\n<attachments>\nNgười dùng gửi kèm các tệp dưới đây (đúng thứ tự [Ảnh / Tệp đính kèm n] ở trên): ${refs.join(" ")}\n</attachments>` : "");
+    const file = path.join(cwd, `.synchro-grok-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.txt`);
+    try { writeEngineFile(file, Buffer.from(prompt, "utf8")); }
+    catch (e) { yield err(`Không chuyển được tin nhắn cho Grok: ${(e as Error).message}`, "other"); return; }
+    // Lượt không có cầu nối (việc phụ: đặt tên, rút bộ nhớ…): tắt cả search_tool / use_tool để không gọi nhầm cầu nối của lượt khác
+    // đang chạy cùng lúc. Có tệp đính kèm: không chặn Read để Grok CLI đọc được tệp @… (model vẫn không có công cụ đọc tệp vì --tools).
+    const deny = GROK_DENY.filter((t) => t !== "Read" || !refs.length);
+    const args = ["--prompt-file", file, "--output-format", "streaming-json", "--always-approve", "--no-memory", "--no-subagents", "--no-auto-update",
+      "--tools", req.web ? "search_tool,use_tool,web_search" : "search_tool,use_tool", ...deny.flatMap((t) => ["--deny", t]), ...(req.web ? [] : ["--deny", "WebSearch", "--disable-web-search"]),
+      ...(req.mcp ? [] : ["--disallowed-tools", "search_tool,use_tool"])];
+    if (req.system && !longSys) args.push("--rules", req.system);
+    if (req.model) args.push("-m", req.model);
+    const ce = cliEffort(req.effort);
+    if (ce) args.push("--effort", ce);
+    if (req.sessionId) args.push("--resume", req.sessionId);
+    const p = start("grok", args, req, "");
+    if (!p) { await rmEngineFile(req, file).catch(() => {}); yield notInstalled("grok"); return; }
+    // Có dùng công cụ: phần chữ trước công cụ là lời dẫn (đã hiện trong nhật ký làm việc), câu trả lời là đoạn sau công cụ cuối cùng.
+    let all = "", seg = "", tools = false, done = false, lastErr = "";
+    for await (const o of objects(p)) {
+      if (o.type === "text" && typeof o.data === "string") { all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
+      else if (o.type === "tool_call") { tools = true; seg = ""; }
+      else if (o.type === "error") {
+        lastErr = String(o.message ?? "Grok báo lỗi.");
+        if (classify(lastErr) === "auth") { p.kill(); done = true; yield err(lastErr, "auth"); break; }
+      } else if (o.type === "end") {
+        done = true;
+        if (typeof o.sessionId === "string" && o.sessionId) yield { kind: "session", id: o.sessionId };
+        const u = (o.usage ?? {}) as Json;
+        yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
+        if (lastErr && !all) { yield err(lastErr, classify(lastErr)); break; }
+        yield { kind: "final", text: tools && seg.trim() ? seg : all, via: "grok" };
+      }
+    }
+    const e = await p.done;
+    await rmEngineFile(req, file).catch(() => {});
+    if (done) return;
+    const msg = [lastErr, stripAnsi(p.stderr()).trim().split("\n").slice(-6).join("\n")].filter(Boolean).join("\n");
+    // Model không nhận mức effort này (CLI kiểm tra trước khi chạy, chưa tốn lượt nào): chạy lại để model dùng mức mặc định.
+    if (!retried && !all && req.effort && /effort/i.test(msg) && !e.aborted && !e.timedOut) { yield* this.turn({ ...req, effort: undefined }, true); return; }
+    yield exitError("grok", p, e, lastErr);
   }
 }

@@ -74,7 +74,7 @@ console.log("3. Model của gói trong bộ chọn model và chat bằng gói");
   await admin("POST", "/api/auth/profile", { instructions: "" });
   const all = (await admin("GET", "/api/usage?all=1")).j;
   const cl = all.vendors?.find((v) => v.vendor === "anthropic");
-  ok(cl?.mode === "plan" && cl.sub?.windows.some((w) => w.kind === "session") && all.vendors.length === 3, "chế độ Tự động: mức dùng tự nhận Claude đang chạy bằng gói (không phải API)", JSON.stringify(all.vendors?.map((v) => [v.vendor, v.mode])));
+  ok(cl?.mode === "plan" && cl.sub?.windows.some((w) => w.kind === "session") && all.vendors.length === 5, "chế độ Tự động: mức dùng tự nhận Claude đang chạy bằng gói (không phải API)", JSON.stringify(all.vendors?.map((v) => [v.vendor, v.mode])));
   const det = (await admin("GET", "/api/usage/details?tz=0")).j;
   ok(det.byPlan?.some((m) => m.model === "sub-claude/sonnet" && m.turns >= 2) && (det.days.at(-1).calls.anthropic ?? 0) >= 2, "Cài đặt → Usage: lượt chạy bằng gói theo model và theo ngày", JSON.stringify({ byPlan: det.byPlan, today: det.days.at(-1) }));
   const tt = await admin("POST", "/api/title", { messages: [{ role: "user", text: "Giúp mình lên kế hoạch du lịch Đà Lạt 3 ngày" }, { role: "assistant", text: "Được, đây là lịch trình." }] });

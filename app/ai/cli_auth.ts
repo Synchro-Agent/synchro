@@ -5,6 +5,8 @@
 //   hoặc `claude auth login --claudeai`. Cả hai in link, người dùng dán mã trả về.
 // - Codex: `codex login --device-auth` in link và mã một lần; người dùng nhập mã trên trang của OpenAI, CLI tự thoát khi xong.
 // - Antigravity: `agy` không có lệnh login, lần chạy đầu đòi đăng nhập trong terminal: chạy qua pty, chọn Google OAuth, dán mã.
+// - Grok: `grok login --device-auth` in link và mã thiết bị (ra stderr); người dùng xác nhận trên trang của xAI, CLI tự thoát khi xong.
+//   Đăng nhập lưu ở GROK_HOME/auth.json (GROK_HOME = <thư mục của tài khoản>/.grok).
 // - status() nhớ kết quả 60 giây. Đầu ra CLI gửi về trình duyệt luôn qua redact().
 import fs from "node:fs";
 import path from "node:path";
@@ -13,7 +15,7 @@ import { DATA_DIR } from "../authstore";
 import { type Cli, engineHome, find, makeDir, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
 import { redact } from "./errors";
 
-export type Method = "token" | "oauth" | "chatgpt" | "apikey" | "google" | null;
+export type Method = "token" | "oauth" | "chatgpt" | "apikey" | "google" | "grok" | null;
 export type LoginState = {
   state: "starting" | "open_url" | "verifying" | "done" | "error";
   method: Method;
@@ -73,6 +75,7 @@ export function engineEnv(cli: Cli, scope: string): Record<string, string> {
     return { CLAUDE_CONFIG_DIR: dir, ...(t ? { CLAUDE_CODE_OAUTH_TOKEN: t } : {}) };
   }
   if (cli === "codex") return { CODEX_HOME: dir };
+  if (cli === "grok") return { HOME: dir, GROK_HOME: path.join(dir, ".grok"), GROK_DISABLE_AUTOUPDATER: "1" };
   return { HOME: dir };
 }
 
@@ -110,6 +113,12 @@ async function probe(cli: Cli, scope: string, bin: string): Promise<Pick<Status,
     if (r.code === 0 && /logged in/i.test(out) && !/not logged in/i.test(out)) return { loggedIn: true, method: /api key/i.test(out) ? "apikey" : "chatgpt" };
     return { loggedIn: false, method: null };
   }
+  if (cli === "grok") {
+    // `grok models` in "You are logged in with …." (hoặc "You are not authenticated.") rồi danh sách "  * mã (default)" / "  - mã".
+    const r = await runCli(bin, ["models"], { env, cwd, timeoutMs: 30_000 });
+    const g = grokModels(stripAnsi(r.stdout + r.stderr));
+    return g.loggedIn ? { loggedIn: true, method: "grok", plan: g.plan, models: g.models } : { loggedIn: false, method: null };
+  }
   // agy không có lệnh status: `agy models` liệt kê model khi đã đăng nhập, ngược lại nhắc đăng nhập.
   const r = await runCli(bin, ["models"], { env, cwd, timeoutMs: 30_000 });
   const out = stripAnsi(r.stdout + r.stderr);
@@ -117,6 +126,15 @@ async function probe(cli: Cli, scope: string, bin: string): Promise<Pick<Status,
   // Mỗi dòng "mã<TAB>Tên"; bỏ dòng "Fetching available models..." và các dòng thông báo.
   const models = out.split("\n").map((l) => l.trim()).filter((l) => /^[a-z][\w.-]*(\t|$)/i.test(l) && !/^(fetching|error|warning|please)\b/i.test(l) && l.length < 160);
   return { loggedIn: true, method: "google", models };
+}
+
+/** Đầu ra `grok models`: đã đăng nhập gói chưa, tên gói (khi CLI ghi rõ, vd. SuperGrok) và mã các model (model mặc định trước). */
+export function grokModels(out: string): { loggedIn: boolean; plan: string | null; models: string[] } {
+  const who = /You are logged in with ([^\n]+?)\.?\s*$/im.exec(out)?.[1]?.trim() ?? "";
+  const plan = /(SuperGrok(?: Heavy)?|X Premium\+?|Premium\+?|Grok (?:Pro|Business|Enterprise))/i.exec(who)?.[1] ?? null;
+  const ids: string[] = [];
+  for (const m of out.matchAll(/^\s*([*-])\s+([A-Za-z0-9][\w.:-]*)(\s+\(default\))?\s*$/gm)) { if (m[1] === "*" || m[3]) ids.unshift(m[2]); else ids.push(m[2]); }
+  return { loggedIn: !!who && !/not authenticated/i.test(out), plan, models: [...new Set(ids)] };
 }
 
 /** Hãng từ chối đăng nhập trong lượt chat (401/403): đánh dấu cần đăng nhập lại cho tới khi đăng nhập xong hoặc đăng xuất. */
@@ -149,6 +167,7 @@ const URL_RE: Record<Cli, RegExp> = {
   claude: new RegExp(String.raw`https:\/\/(?:claude\.(?:ai|com)|platform\.claude\.com|console\.anthropic\.com)\/\S*oauth\S*` + mock("claude"), "g"),
   codex: new RegExp(String.raw`https:\/\/auth\.openai\.com\/\S+` + mock("codex"), "g"),
   agy: new RegExp(String.raw`https:\/\/accounts\.google\.com\/o\/oauth2\/\S+` + mock("agy"), "g"),
+  grok: new RegExp(String.raw`https:\/\/(?:[\w-]+\.)*(?:x\.ai|grok\.com)\/\S+` + mock("grok"), "g"),
 };
 const CODE_RE = /\b[A-Z0-9]{4,5}-[A-Z0-9]{4,6}\b/;
 // Token Claude Code in ra sau "Your OAuth token (valid for …):" và trước "Store this token securely…". Chỉ lấy khi đã in xong
@@ -192,6 +211,7 @@ function argsFor(cli: Cli, method: Method): { args: string[]; pty: boolean; need
     ? { args: ["auth", "login", "--claudeai"], pty: true, needsCode: true, method: "oauth" }
     : { args: ["setup-token"], pty: true, needsCode: true, method: "token" };
   if (cli === "codex") return { args: ["login", "--device-auth"], pty: false, needsCode: false, method: "chatgpt" };
+  if (cli === "grok") return { args: ["login", "--device-auth"], pty: false, needsCode: false, method: "grok" };
   return { args: [], pty: true, needsCode: true, method: "google" };
 }
 
@@ -212,7 +232,7 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
   const p: Pending = { cli, scope, proc, raw: "", st: { state: "starting", method: a.method, needsCode: a.needsCode, startedAt: Date.now() }, timer: setTimeout(() => cancelLogin(cli, scope), LOGIN_TTL_MS), onChange: new Set(), hide: [], pastedAt: -1, tokenSeen: 0 };
   g.pending.set(key(cli, scope), p);
   let pressed = false;
-  proc.child.stdout!.on("data", (d: Buffer) => {
+  const onData = (d: Buffer) => {
     p.raw = (p.raw + d.toString()).slice(-200_000);
     const text = stripAnsi(p.raw);
     // agy: màn hình chọn cách đăng nhập → Enter chọn "Google OAuth" (mục đầu tiên).
@@ -220,9 +240,13 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
     const patch: Partial<LoginState> = {};
     const url = pickUrl(cli, text);
     if (url && p.st.url !== url) patch.url = url;
-    // Mã thiết bị của codex in ngay sau link.
+    // Mã thiết bị của codex / grok in ngay sau link (grok: dòng sau "enter this code:" / "Confirm this code in your browser:").
     const at = url ? text.indexOf(url) : -1;
-    if (cli === "codex" && at >= 0) { const c = CODE_RE.exec(text.slice(at + url!.length))?.[0]; if (c && c !== p.st.userCode) patch.userCode = c; }
+    if ((cli === "codex" || cli === "grok") && at >= 0) {
+      const after = text.slice(at + url!.length);
+      const c = CODE_RE.exec(after)?.[0] ?? (cli === "grok" ? /this code[^:\n]*:\s*\n\s*([A-Za-z0-9-]{4,24})\s*$/m.exec(after)?.[1] : undefined);
+      if (c && c !== p.st.userCode) patch.userCode = c;
+    }
     if (p.st.state === "starting" && (patch.url ?? p.st.url)) patch.state = "open_url";
     if (cli === "claude" && a.method === "token" && p.st.state !== "done") {
       if (!p.tokenSeen && /sk-ant-oat/.test(text)) {
@@ -241,7 +265,10 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
       }
     }
     if (Object.keys(patch).length) update(p, patch);
-  });
+  };
+  proc.child.stdout!.on("data", onData);
+  // Grok in link và mã đăng nhập ra stderr.
+  if (cli === "grok") proc.child.stderr!.on("data", onData);
   void proc.done.then((e) => {
     if (g.pending.get(key(cli, scope)) !== p || p.st.state === "done" || p.st.state === "error") return;
     // setup-token in token xong là thoát ngay: đọc token lần cuối trước khi kết luận.
@@ -251,8 +278,8 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
     }
     // agy: submitCode tự cho tiến trình thoát rồi mới kiểm tra đăng nhập bằng một tiến trình mới.
     if (cli === "agy" && p.st.state === "verifying") return;
-    // codex và `claude auth login` thoát 0 khi đăng nhập xong; setup-token chỉ thành công khi đã đọc được token (xử lý ở trên).
-    const ok = e.code === 0 && (cli === "codex" || a.method === "oauth");
+    // codex, grok và `claude auth login` thoát 0 khi đăng nhập xong; setup-token chỉ thành công khi đã đọc được token (xử lý ở trên).
+    const ok = e.code === 0 && (cli === "codex" || cli === "grok" || a.method === "oauth");
     finish(p, ok, e.timedOut ? "Hết thời gian đăng nhập (15 phút). Bắt đầu lại nhé." : undefined);
   });
   await waitFor(p, () => p.st.state !== "starting", 20_000);

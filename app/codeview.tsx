@@ -546,7 +546,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
           usedSk = [...new Set(takeSkillsUsed().filter((u) => u.kind === "skill").map((u) => u.name))];
         } catch (e) { reply = e instanceof LLMError && e.message && !/^(LLM|Run|Lỗi) \d+$/.test(e.message) ? e.message : "Không thể kết nối tới model. Vui lòng thử lại."; }
       }
-      else reply = "Synchro chưa được kết nối với model nào. Quản trị viên vào Cài đặt → Providers để đăng nhập gói Claude / ChatGPT / Gemini hoặc thêm khóa API.";
+      else reply = "Synchro chưa được kết nối với model nào. Quản trị viên vào Cài đặt → Providers để đăng nhập gói Claude / ChatGPT / Gemini / Grok hoặc thêm khóa API.";
       if (gen !== genRef.current) return;
       if (usedSk.length) patchNode(id, (n) => ({ ...n, skills: usedSk }));
       let i = 0;
