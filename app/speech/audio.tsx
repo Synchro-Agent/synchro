@@ -8,23 +8,35 @@ import { ago, del, download, fmtNum, on, post, postForm, useItems, usePlan, type
 import { Drop, ErrBox, Field, ModelPick, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { Chips, Head, Split, Wide } from "./shell";
 import type { ToolProps } from "./view";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
 
 /** Danh sách sản phẩm đã tạo của một công cụ: phát, tải xuống, xóa. */
+/** Chọn hàng loạt cho các danh sách bản đã tạo của Speech: tải về, xóa nhiều bản cùng lúc. */
+export function itemActs(setItems: (f: (l: Item[] | null) => Item[] | null) => void, say: (m: string) => void): BulkAct<Item>[] {
+  return [
+    { id: "dl", label: "Tải về", icon: <I.Download size={14} />, stay: true, when: (l) => l.some((x) => !!x.url), run: (l) => each(l.filter((x) => !!x.url), async (x) => { download(x.url!); await new Promise((r) => setTimeout(r, 350)); }) },
+    { id: "del", label: "Xóa", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} bản?`, text: "Các bản đã chọn và tệp của chúng sẽ bị xóa, không hoàn tác được.", ok: "Xóa" }),
+      run: async (l) => { const gone = new Set<string>(); await each(l, async (x) => { await del("items", x.id); gone.add(x.id); }); setItems((li) => li?.filter((x) => !gone.has(x.id)) ?? null); say(`Đã xóa ${gone.size} bản`); } },
+  ];
+}
+
 export function Results({ items, kinds, say, setItems, empty, title = "Đã tạo" }: { items: Item[] | null; kinds: string[]; say: (m: string) => void; setItems: (f: (l: Item[] | null) => Item[] | null) => void; empty: string; title?: string }) {
   const list = (items ?? []).filter((x) => kinds.includes(x.kind));
   const remove = (it: Item) => { del("items", it.id).then(() => setItems((l) => l?.filter((x) => x.id !== it.id) ?? null)).catch((e: Error) => say(e.message)); };
+  const bk = useBulk(list.slice(0, 20), (x) => x.id);
   return (
     <div className="sp-card">
-      <div className="sp-card-h">{title}{list.length > 0 && <span className="sp-muted">{list.length} bản</span>}</div>
+      <div className="sp-card-h">{title}{list.length > 0 && <span className="sp-muted">{list.length} bản</span>}{list.length > 1 && <span className="sp-card-r"><BulkButton b={bk} compact /></span>}</div>
       {items === null && <div className="sp-empty"><Spin /></div>}
       {items && !list.length && <div className="sp-empty">{empty}</div>}
       {list.slice(0, 20).map((it) => (
-        <div key={it.id} className="sp-hrow">
-          <div className="sp-hrow-t"><b data-notr>{it.title}</b><span className="sp-muted">{it.meta.cost ? `${fmtNum(Number(it.meta.cost))} credit · ` : ""}{ago(it.createdAt)}</span><button className="icon-btn" style={{ marginLeft: "auto" }} aria-label="Xóa" onClick={() => remove(it)}><I.Trash size={14} /></button></div>
+        <div key={it.id} className="sp-hrow" {...bulkRow(bk, it)}>
+          <div className="sp-hrow-t">{bk.on && <BulkCheck on={bk.has(it)} />}<b data-notr>{it.title}</b><span className="sp-muted">{it.meta.cost ? `${fmtNum(Number(it.meta.cost))} credit · ` : ""}{ago(it.createdAt)}</span><button className="icon-btn" style={{ marginLeft: "auto" }} aria-label="Xóa" onClick={() => remove(it)}><I.Trash size={14} /></button></div>
           {it.url && it.mime?.startsWith("audio") ? <Player src={it.url} dl={it.url} label={it.title} />
             : it.url ? <button className="btn" onClick={() => download(it.url!)}><I.Download size={14} />Tải tệp ZIP</button> : null}
         </div>
       ))}
+      <BulkBar b={bk} acts={itemActs(setItems, say)} noun="bản" />
     </div>
   );
 }

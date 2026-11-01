@@ -12,7 +12,7 @@ function NoText({ name }: { name: string }) {
   const b = getBlob(name);
   const [url, setUrl] = useState("");
   useEffect(() => { if (b && b.type.startsWith("image/")) { const u = URL.createObjectURL(b); setUrl(u); return () => URL.revokeObjectURL(u); } }, [b]);
-  if (url) return <img src={url} alt={name} style={{ maxWidth: "100%", borderRadius: 8 }} />;
+  if (url) return <img src={url} alt={name} style={{ maxWidth: "100%", borderRadius: "var(--r-plate)" }} />;
   return <p className="muted" style={{ margin: 0 }}>Không có bản xem trước cho loại tệp này. Dùng “Tải về” để mở tệp gốc, hoặc “Tải lên và chuyển thành markdown” để đọc nội dung.</p>;
 }
 

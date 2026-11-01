@@ -15,6 +15,7 @@ import { ConnLogo } from "./connectorsui";
 import { BrandLogo } from "./brands";
 import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
@@ -253,6 +254,25 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
     try { await fn(); app.say(ok); await load(); if (open) loadDetail(open); } catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
 
+  // Chọn hàng loạt người dùng: tạm khóa, mở khóa, đăng xuất mọi nơi, xóa tài khoản (bỏ qua tài khoản chủ và chính bạn).
+  const qq = q.trim().toLowerCase();
+  const listed = (d?.users ?? []).filter((u) => (filter === "All" || (filter === "Active") === (u.status === "active")) && (!qq || u.email.toLowerCase().includes(qq) || u.name.toLowerCase().includes(qq)));
+  const bk = useBulk(listed, (u) => u.id);
+  const free = (u: U) => !u.protected && u.id !== app.me?.id;
+  const userActs: BulkAct<U>[] = [
+    { id: "suspend", label: "Tạm khóa", icon: <I.Lock size={14} />, when: (l) => l.some((u) => free(u) && u.status === "active"),
+      confirm: (l) => ({ title: `Tạm khóa ${l.filter((u) => free(u) && u.status === "active").length} tài khoản?`, text: "Họ bị đăng xuất mọi nơi và không đăng nhập được cho tới khi bạn mở khóa.", ok: "Tạm khóa" }),
+      run: (l) => act(() => each(l.filter((u) => free(u) && u.status === "active"), (u) => call("PATCH", `/api/admin/users/${u.id}`, { action: "suspend" })), "Đã tạm khóa các tài khoản đã chọn") },
+    { id: "restore", label: "Mở khóa", icon: <I.Restore size={14} />, when: (l) => l.some((u) => free(u) && u.status === "suspended"),
+      run: (l) => act(() => each(l.filter((u) => free(u) && u.status === "suspended"), (u) => call("PATCH", `/api/admin/users/${u.id}`, { action: "restore" })), "Đã mở khóa các tài khoản đã chọn") },
+    { id: "signout", label: "Đăng xuất mọi nơi", icon: <I.Out size={14} />, when: (l) => l.some((u) => free(u) && u.sessions > 0),
+      confirm: (l) => ({ title: `Đăng xuất ${l.filter((u) => free(u) && u.sessions > 0).length} người dùng mọi nơi?`, text: "Mọi phiên đăng nhập của các tài khoản này kết thúc ngay.", ok: "Đăng xuất" }),
+      run: (l) => act(() => each(l.filter((u) => free(u) && u.sessions > 0), (u) => call("PATCH", `/api/admin/users/${u.id}`, { action: "signout" })), "Đã đăng xuất các người dùng đã chọn") },
+    { id: "del", label: "Xóa tài khoản", icon: <I.Trash size={14} />, danger: true, when: (l) => l.some(free),
+      confirm: (l) => { const m = l.filter(free); return { title: `Xóa vĩnh viễn ${m.length} tài khoản?`, text: `Tài khoản và toàn bộ dữ liệu của họ bị xóa, không hoàn tác được.${m.length < l.length ? ` ${l.length - m.length} tài khoản chủ / của bạn được giữ nguyên.` : ""}`, ok: "Xóa vĩnh viễn" }; },
+      run: (l) => { setOpen(null); return act(() => each(l.filter(free), (u) => call("DELETE", `/api/admin/users/${u.id}`, { confirm: u.email })), "Đã xóa các tài khoản đã chọn"); } },
+  ];
+
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
   if (!d) return <div className="empty" style={{ marginTop: 80 }}><span className="muted">Loading…</span></div>;
 
@@ -335,6 +355,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         <div className="s-search"><I.Search size={14} /><input placeholder="Search by name or email" value={q} onChange={(e) => { setQ(e.target.value); setUPage(1); }} /></div>
         <Seg value={filter} onChange={(v) => { setFilter(v); setUPage(1); }} options={["All", "Active", "Suspended"]} />
         <button className="icon-btn" aria-label="Refresh" title="Refresh" onClick={load}><I.Retry size={16} /></button>
+        <BulkButton b={bk} compact />
       </div>
       <div style={{ overflowX: "auto" }}>
         <table className="tbl adm-tbl">
@@ -343,9 +364,9 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
           <tbody>
             {pageUsers.map((u) => (
               <Fragment key={u.id}>
-                <tr className={`adm-row ${open === u.id ? "on" : ""}`} onClick={() => toggle(u.id)}>
+                <tr className={`adm-row ${open === u.id && !bk.on ? "on" : ""}`} onClick={() => toggle(u.id)} {...bulkRow(bk, u)}>
                   <td>
-                    <div className="adm-user"><Avatar name={u.name || u.email} size={28} font={10} src={u.avatar} /><div style={{ minWidth: 0 }}>
+                    <div className="adm-user">{bk.on && <BulkCheck on={bk.has(u)} />}<Avatar name={u.name || u.email} size={28} font={10} src={u.avatar} /><div style={{ minWidth: 0 }}>
                       <div className="nm"><span data-notr>{u.name || u.email.split("@")[0]}</span>{u.id === app.me?.id ? <span className="new-tag" style={{ marginLeft: 6 }}>You</span> : u.protected ? <span className="new-tag" style={{ marginLeft: 6 }}>Admin</span> : null}</div>
                       <div className="em" data-notr>{u.email}</div>
                       <div style={{ marginTop: 3 }}>{u.methods.map((m) => <span key={m} className="adm-chip">{METHOD[m] ?? m}</span>)}{u.customPerms && <span className="adm-chip adm-chip-acc">Custom access</span>}</div>
@@ -355,7 +376,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
                   <td><span className={`adm-st ${u.status === "active" ? "" : "off"}`}><i />{u.status === "active" ? "Active" : "Suspended"}</span></td>
                   <td style={{ width: 24, color: "var(--text-3)" }}><span style={{ display: "inline-flex", transform: open === u.id ? "rotate(180deg)" : undefined, transition: "transform .2s" }}><I.Chevron size={14} /></span></td>
                 </tr>
-                {open === u.id && (
+                {open === u.id && !bk.on && (
                   <tr className="adm-detail"><td colSpan={4}>
                     <div className="adm-grid">
                       <div>
@@ -406,6 +427,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         {users.length === 0 && <div className="empty" style={{ marginTop: 24 }}>No users match.</div>}
       </div>
       <Pager page={up} pages={uPages} from={users.length ? (up - 1) * U_PER + 1 : 0} to={Math.min(up * U_PER, users.length)} total={users.length} onPage={(n) => { setUPage(n); setOpen(null); }} />
+      <BulkBar b={bk} acts={userActs} noun="người dùng" />
 
       <h3 className="sec">Audit log</h3>
       <div className="adm-bar">

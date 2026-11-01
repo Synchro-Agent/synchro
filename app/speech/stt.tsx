@@ -11,6 +11,8 @@ import { EDIT_IDEAS, STT_MODELS } from "./data";
 import { Drop, ErrBox, Field, ModelPick, Player, Recorder, Select, Spin, Tabs, Toggle } from "./parts";
 import { Chips, Group, Head, Split } from "./shell";
 import type { ToolProps } from "./view";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, useBulk } from "../bulk";
+import { itemActs } from "./audio";
 
 type W = { t: string; s: number; e: number; k: number; sp: string };
 type Ent = { text: string; entity_type?: string; type?: string };
@@ -75,6 +77,7 @@ export function STT({ say, sub, setSub }: ToolProps) {
   const [err, setErr] = useState("");
   const [open, setOpen] = useState<{ item: Item; data: Data } | null>(null);
   const [recent, setRecent] = useItems(["stt", "live"]);
+  const bkS = useBulk((recent ?? []).slice(0, 12), (x) => x.id);
   const run = async () => {
     setBusy(true); setErr("");
     const fd = new FormData();
@@ -153,13 +156,14 @@ export function STT({ say, sub, setSub }: ToolProps) {
               <button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={(!file && !/^https?:\/\//.test(url.trim())) || busy} onClick={run}>{busy ? <Spin /> : <I.Subtitle size={14} />}{busy ? "Đang chép…" : "Chép lời"}</button>
             </div>
             <ErrBox msg={err} />
-            <div className="sp-sec-h"><b>Bản chép gần đây</b></div>
+            <div className="sp-sec-h"><b>Bản chép gần đây</b>{(recent?.length ?? 0) > 1 && <span className="sp-card-r"><BulkButton b={bkS} compact /></span>}</div>
             {recent === null ? <div className="sp-empty"><Spin /></div> : !recent.length ? <div className="sp-empty">Chưa có bản chép lời nào.</div> : (
               <table className="sp-table sp-hist">
                 <thead><tr><th>Tên</th><th>Thời lượng</th><th>Tạo lúc</th></tr></thead>
-                <tbody>{recent.slice(0, 12).map((r) => <tr key={r.id} onClick={() => load(r)}><td><I.Subtitle size={14} /><span data-notr>{r.title}</span>{r.kind === "live" && <span className="sp-pill">{KIND_LABEL.live}</span>}</td><td>{fmtDur(Number(r.meta.dur ?? r.meta.seconds ?? 0))}</td><td>{ago(r.createdAt)}</td></tr>)}</tbody>
+                <tbody>{recent.slice(0, 12).map((r) => <tr key={r.id} onClick={() => load(r)} {...bulkRow(bkS, r)}><td>{bkS.on ? <BulkCheck on={bkS.has(r)} /> : <I.Subtitle size={14} />}<span data-notr>{r.title}</span>{r.kind === "live" && <span className="sp-pill">{KIND_LABEL.live}</span>}</td><td>{fmtDur(Number(r.meta.dur ?? r.meta.seconds ?? 0))}</td><td>{ago(r.createdAt)}</td></tr>)}</tbody>
               </table>
             )}
+            <BulkBar b={bkS} acts={itemActs(setRecent, say)} noun="bản" />
           </>
         )}
     </Split>

@@ -53,3 +53,9 @@ export const Wordmark = ({ height = 16, className = "" }: { height?: number; cla
     {LETTERS.map((d, i) => <path key={i} d={d} />)}
   </svg>
 );
+
+/** Nút mở thanh bên khi thanh bên đang đóng — chính là logo. Trên máy tính logo ở đầu thanh điều hướng là chỗ duy nhất mở / đóng bảng đoạn chat,
+ *  nên nút này chỉ hiện trên điện thoại (thanh điều hướng nằm trong ngăn kéo, đóng thì logo hiện ở góc trái trên của trang). */
+export function SideToggle({ onClick }: { onClick: () => void }) {
+  return <button className="side-toggle" onClick={onClick} aria-label="Mở thanh bên"><Mark size={18} /></button>;
+}

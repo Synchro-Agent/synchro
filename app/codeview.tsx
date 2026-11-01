@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { Menu, Thinking } from "./ui";
-import { Mark } from "./brand";
+import { SideToggle } from "./brand";
 import { Markdown, fileNameFor, type DevBlock } from "./md";
 import { callLLM, getActiveEffort, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
 import { ls } from "./userscope";
@@ -987,7 +987,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       <div className="cv-col" ref={colRef}>
       <div className="cv-bar">
         <div className="cv-bar-l">
-          {!sideOpen && <button className="icon-btn" onClick={onSide} aria-label="Mở thanh bên"><I.Panel /></button>}
+          {!sideOpen && <SideToggle onClick={onSide} />}
           <div className="cv-title" title={title}><I.Code size={16} /><span className="cv-ell" data-notr>{title}</span></div>
         </div>
         <div className="cv-bar-r" ref={TOP_MENUS.includes(menu) ? awayTop : undefined}>
@@ -1037,7 +1037,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
         <div className="thread cv-thread" ref={threadRef} onScroll={onScroll} onMouseUp={onThreadUp}>
           {path.length === 0 ? (
             <div className="cv-empty">
-              <div className="cv-hello"><Mark size={28} state="intro" />Hôm nay bạn muốn xây dựng gì?</div>
+              <div className="cv-hello">Hôm nay bạn muốn xây dựng gì?</div>
               <div className="cv-sugg">
                 {SUGGEST.map((s) => (
                   <button key={s.t} className="cv-card" onClick={() => { setV(s.q); ta.current?.focus(); }}><b>{s.t}</b><span>{s.d}</span></button>

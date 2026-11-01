@@ -161,3 +161,7 @@ export const ArrowUpRight = A.ArrowUpRight;
 export const ChatsCircle = A.ChatsCircle;
 export const ArrowRight = A.ArrowRight;
 export const ChevronL = A.ChevronL;
+export const ListChecks = A.ListChecks;
+export const Power = A.Power;
+export const Restore = A.Restore;
+export const FolderPlus = A.FolderPlus;

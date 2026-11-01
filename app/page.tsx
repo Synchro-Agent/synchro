@@ -8,7 +8,8 @@ import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
-import { Lockup, Mark, Wordmark } from "./brand";
+import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
+import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { HalftoneBg } from "./halftone";
 import { CodeView, type CodeMeta } from "./codeview";
 import { answerAsk, deleteServerSession, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
@@ -65,8 +66,11 @@ import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifac
 import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
-import { CustomizePage, useStudios, type CzTab } from "./pluginsui";
-import { ConnectorsPanel } from "./connectorsui";
+import { CustomizePage, HUB_DISCOVER, useStudios, type CzTab } from "./pluginsui";
+import { CONNECTORS_BROWSE, ConnLogo, ConnectorsPanel, type Conn } from "./connectorsui";
+import type { DirEntry } from "./connectordir";
+// Dữ liệu connector cho menu + ở ô chat (connector đã nối, danh mục để thêm).
+type CxData = { connectors: Conn[]; directory: DirEntry[] };
 import { IntroFilm, wantsIntro } from "./introfilm";
 type Say = (m: string) => void;
 
@@ -328,9 +332,9 @@ function PlanNote({ pv }: { pv: ProviderInfo }) {
 type Rec = { lang: string; interimResults: boolean; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void; onend: () => void; start: () => void; stop: () => void };
 
 function Composer(p: {
-  onSend: (t: string, f: string[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
+  onSend: (t: string, f: string[], pick?: { id: string; label: string }[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
-  model: string; setModel: (m: string) => void; goCustom: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
+  model: string; setModel: (m: string) => void; goCustom: () => void; goConnectors?: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
   onVoice?: () => void; extra?: React.ReactNode;
   projects?: { id: number; name: string }[]; project?: number; onProject?: (id: number | undefined) => void;
   /** Đang chạy mà gửi thêm: later = false ghép vào việc đang làm, true = gửi sau khi xong. */
@@ -349,7 +353,24 @@ function Composer(p: {
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const recRef = useRef<Rec | null>(null);
-  const ref = useClickAway(() => setMenu(false));
+  const ref = useClickAway(() => { setMenu(false); setSub(null); });
+  // Menu + → Kho kỹ năng / Connectors: menu con bên phải (điện thoại: thay chỗ menu chính, có nút quay lại).
+  const [sub, setSub] = useState<null | "skills" | "conn" | "add" | "access">(null);
+  const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
+  const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean }[] | null>(null);
+  const [cx, setCx] = useState<CxData | null>(null);
+  const loadSkl = () => Promise.all([
+    fetch("/api/skills").then((r) => r.json()).then((j) => (j.skills ?? []) as { name: string; enabled: boolean }[]).catch(() => []),
+    fetch("/api/plugins").then((r) => r.json()).then((j) => (j.plugins ?? []) as { slug: string; name: string; enabled: boolean; mine: { enabled: boolean } }[]).catch(() => []),
+  ]).then(([s, l]) => setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]));
+  const loadCx = () => fetch("/api/connectors").then((r) => r.json()).then((j) => setCx(j)).catch(() => setCx({ connectors: [], directory: [] }));
+  const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "add" || k === "access") void loadCx(); };
+  const cxPatch = async (id: string, body: Record<string, unknown>) => {
+    const r = await fetch(`/api/connectors/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { say(j.error || "Không đổi được connector"); return; }
+    void loadCx();
+  };
 
   useEffect(() => {
     if (p.prefill.n) { setV(p.prefill.t); ta.current?.focus(); }
@@ -370,8 +391,8 @@ function Composer(p: {
     // Đang chạy: không ngắt — Enter ghép tin vào việc đang làm, ⌘/Ctrl + Enter xếp hàng gửi sau khi xong.
     if (busy && p.onSteer && v.trim()) { p.onSteer(v.trim(), later); setV(""); return; }
     if (!canSend || busy) return;
-    onSend(v.trim() || "Xem tệp đính kèm", files);
-    setV("");
+    onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined);
+    setV(""); setPicks([]);
   };
   const keys = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(e.metaKey || e.ctrlKey); }
@@ -456,10 +477,67 @@ function Composer(p: {
             </>
           ) : <button className="menu-item" onClick={() => { setMenu(false); p.onProject!(undefined); }}><I.Layers />Tạo dự án để thêm vào</button>)}
           <hr />
-          {perms?.features.skills !== false && <button className="menu-item" onClick={() => { setMenu(false); p.goCustom(); }}><I.Plugins />Skill Hub<span className="sc"><I.ChevronR size={16} /></span></button>}
+          {perms?.features.skills !== false && <button className={`menu-item${sub === "skills" ? " on" : ""}`} aria-haspopup="menu" aria-expanded={sub === "skills"} onClick={() => openSub("skills")}><I.Plugins />Kho kỹ năng<span className="sc"><I.ChevronR size={16} /></span></button>}
+          {perms?.features.connectors !== false && <button className={`menu-item${sub === "conn" || sub === "add" || sub === "access" ? " on" : ""}`} aria-haspopup="menu" aria-expanded={sub === "conn"} onClick={() => openSub("conn")}><I.Connectors />Connectors<span className="sc"><I.ChevronR size={16} /></span></button>}
           <hr />
           {perms?.features.web !== false && <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>}
           <button className="menu-item" onClick={() => { setMem(!mem); say(mem ? "Đã tắt bộ nhớ" : "Đã bật bộ nhớ"); }}><I.History />Bộ nhớ{mem && <span className="ck"><I.Check /></span>}</button>
+          {sub && (
+            <div className="menu cm-fly" role="menu">
+              <button className="menu-item cm-back" onClick={() => setSub(sub === "add" || sub === "access" ? "conn" : null)}><I.ChevronL size={16} />{sub === "skills" ? "Kho kỹ năng" : sub === "add" ? "Thêm connector" : sub === "access" ? "Quyền dùng công cụ" : "Connectors"}</button>
+              {sub === "skills" && (<>
+                <div className="cm-list">
+                  {skl === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !skl.length ? <div className="cm-empty">Chưa có skill nào đang bật</div>
+                    : skl.map((k) => { const on = picks.some((x) => x.id === k.id); return (
+                      <button key={k.id} className="menu-item" role="menuitemcheckbox" aria-checked={on} onClick={() => { setPicks(on ? picks.filter((x) => x.id !== k.id) : [...picks, { id: k.id, label: k.label }]); setMenu(false); setSub(null); ta.current?.focus(); }}>
+                        {k.lib ? <I.Plugins /> : <I.Scroll />}<span className="cv-ell" data-notr>{k.label}</span>{on && <span className="ck"><I.Check /></span>}
+                      </button>); })}
+                </div>
+                <hr />
+                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); p.goCustom(); }}><I.Brief />Quản lý skill</button>
+                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("hub-tab", "discover"); } catch {} p.goCustom(); window.dispatchEvent(new Event(HUB_DISCOVER)); }}><I.Plus />Duyệt skill</button>
+              </>)}
+              {sub === "conn" && (<>
+                <button className="menu-item" onClick={() => openSub("add")}><I.Plus />Thêm connector<span className="sc"><I.ChevronR size={16} /></span></button>
+                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}><I.Brief />Quản lý connectors</button>
+                <hr />
+                <div className="cm-list">
+                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !cx.connectors.length ? <div className="cm-empty">Chưa kết nối connector nào</div>
+                    : cx.connectors.map((c) => { const on = c.enabled && !c.adminBlocked && c.status === "ok"; return (
+                      <div key={c.id} className="menu-item cm-conn">
+                        <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} size={20} /><span className="cv-ell" data-notr>{c.name}</span>
+                        <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} ${c.name}`} disabled={c.adminBlocked || c.status !== "ok"} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
+                      </div>); })}
+                </div>
+                <hr />
+                <button className="menu-item" onClick={() => openSub("access")} disabled={!cx?.connectors.length}><I.Search />Quyền dùng công cụ<span className="sc"><I.ChevronR size={16} /></span></button>
+              </>)}
+              {sub === "add" && (<>
+                <div className="cm-list">
+                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
+                    : cx.directory.filter((d) => !cx.connectors.some((c) => c.dir === d.id)).slice(0, 8).map((d) => (
+                      <button key={d.id} className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("cn-browse", "1"); } catch {} (p.goConnectors ?? p.goCustom)(); window.dispatchEvent(new Event(CONNECTORS_BROWSE)); }}>
+                        <ConnLogo logo={d.logo} color={d.color} name={d.name} size={20} /><span className="cv-ell" data-notr>{d.name}</span>
+                      </button>))}
+                </div>
+                <hr />
+                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("cn-browse", "1"); } catch {} (p.goConnectors ?? p.goCustom)(); window.dispatchEvent(new Event(CONNECTORS_BROWSE)); }}><I.Search />Duyệt mọi connector</button>
+              </>)}
+              {sub === "access" && cx && (() => {
+                const live = cx.connectors.filter((c) => c.status === "ok" && !c.adminBlocked);
+                const cur = (ro: boolean) => { const ps = new Set(live.flatMap((c) => c.tools.filter((t) => t.readOnly === ro).map((t) => t.perm))); return ps.size === 1 ? [...ps][0] : null; };
+                const set = async (kind: "read" | "write", perm: string) => { for (const c of live) await cxPatch(c.id, { group: { kind, perm } }); say("Đã đổi quyền dùng công cụ cho mọi connector"); };
+                const opt = (kind: "read" | "write", perm: string, label: string) => <button key={kind + perm} className="menu-item" role="menuitemradio" aria-checked={cur(kind === "read") === perm} onClick={() => set(kind, perm)}>{label}{cur(kind === "read") === perm && <span className="ck"><I.Check /></span>}</button>;
+                return (<>
+                  <div className="cm-h">Công cụ chỉ đọc</div>
+                  {opt("read", "allow", "Tự dùng")}{opt("read", "ask", "Hỏi trước")}
+                  <hr />
+                  <div className="cm-h">Công cụ thay đổi dữ liệu</div>
+                  {opt("write", "ask", "Hỏi trước")}{opt("write", "allow", "Tự dùng")}{opt("write", "block", "Chặn")}
+                </>);
+              })()}
+            </div>
+          )}
         </Menu>
     </div>
   );
@@ -471,8 +549,10 @@ function Composer(p: {
   );
   const micBtn = <MicPicker say={say} rec={rec} onMic={mic} />;
   const modelPicker = <ModelPicker model={model} setModel={setModel} />;
-  const chips = files.length > 0 && (
-    <div className="attach">{fm.node}{files.map((f, i) => <FileCard key={f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
+  const chips = (files.length > 0 || picks.length > 0) && (
+    <div className="attach">{fm.node}
+      {picks.map((k) => <span key={k.id} className="pick-chip">{k.id.startsWith("lib-") ? <I.Plugins size={14} /> : <I.Scroll size={14} />}<span className="cv-ell" data-notr>{k.label}</span><button className="icon-btn" aria-label={`Bỏ skill ${k.label}`} onClick={() => setPicks(picks.filter((x) => x.id !== k.id))}><I.X size={12} /></button></span>)}
+      {files.map((f, i) => <FileCard key={f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
   );
 
   if (dock)
@@ -960,7 +1040,7 @@ export default function Home() {
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
   const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
-  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"]) => {
+  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[]) => {
     const gen = ++genRef.current;
     setBusy(true);
     const pr = pid !== undefined ? projsRef.current.find((x) => x.id === pid) : undefined;
@@ -996,7 +1076,7 @@ export default function Home() {
         .flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))];
       // Lượt chạy bền: máy chủ trả lời ở nền; mã lượt lưu vào tin nhắn để tải lại trang vẫn nhận được kết quả.
       const lastMsg = (f: (m: Msg) => Msg) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
-      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills,
+      reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills, pickedSkills: picked,
         onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta, onEvent,
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via } });
@@ -1176,7 +1256,7 @@ export default function Home() {
       }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
-  const send = (t: string, f: string[] = []) => {
+  const send = (t: string, f: string[] = [], pick?: { id: string; label: string }[]) => {
     if (busy) return;
     stick.current = true;
     const now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
@@ -1184,7 +1264,7 @@ export default function Home() {
     const quiet = (d: number) => { const w = qtimes[d]; if (!w || !qdays.includes(d)) return false; const a = pm(w[0]), b = pm(w[1]); return a > b ? mins >= a : mins >= a && mins < b; };
     if (quiet(now.getDay()) || (mins < 12 * 60 && quiet((now.getDay() + 6) % 7))) say("Đang trong giờ yên tĩnh bạn đã đặt — hãy cân nhắc nghỉ ngơi");
     const tp = tplMode ? TPLS.find((x) => x.k === tplMode) : undefined;
-    const msgs: Msg[] = [{ role: "user", text: t, files: f.length ? f : undefined, time: Date.now(), sys: tp?.sys ?? (view === "project" ? proj?.ins : undefined) }, { role: "ai", text: "", time: Date.now() }];
+    const msgs: Msg[] = [{ role: "user", text: t, files: f.length ? f : undefined, pick, time: Date.now(), sys: tp?.sys ?? (view === "project" ? proj?.ins : undefined) }, { role: "ai", text: "", time: Date.now() }];
     let id = cur;
     if (view !== "chat" || id === null) {
       id = Date.now();
@@ -1209,7 +1289,7 @@ export default function Home() {
       // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
       if (failed) { patch(id!, (m) => [...m.slice(0, -1), { role: "ai", text: `⚠️ ${tr(errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.")}`, time: Date.now(), done: true }]); return; }
       if (blocks.length) hist[hist.length - 1] = { role: "user", content: [{ type: "text", text: t || "Hãy xem các tệp đính kèm." }, ...blocks] };
-      streamReply(id, t, hist, pid, tp ? STUDIO_OF[tp.k] : undefined);
+      streamReply(id, t, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
     });
   };
   const retry = () => {
@@ -1361,7 +1441,7 @@ export default function Home() {
     const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); send(next.text); }, 250);
     return () => clearTimeout(t);
   }, [busy, queued, cur, view]); // eslint-disable-line react-hooks/exhaustive-deps
-  const composerProps = { onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
+  const composerProps = { onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, goConnectors: () => { setCzTab("connectors"); setView("customize"); }, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
     projects: projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })),
     project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
     onProject: (pid: number | undefined) => {
@@ -1379,6 +1459,40 @@ export default function Home() {
     else { setChats((cs) => [{ id: now, title: (u || a).slice(0, 40), msgs }, ...cs]); setCur(now); setView("chat"); }
   };
   const visible = chats.filter((c) => !c.inc);
+  // Chọn hàng loạt ở thanh bên: đoạn chat và phiên code (ghim, đưa vào dự án, lưu trữ, xóa nhiều mục cùng lúc).
+  type SideItem = { k: "chat"; c: Chat } | { k: "code"; c: CodeItem };
+  const sideItems: SideItem[] = [...codeList.map((c) => ({ k: "code" as const, c })), ...visible.map((c) => ({ k: "chat" as const, c }))];
+  const sb = useBulk(sideItems, (x) => `${x.k}:${x.c.id}`);
+  const chatsOf = (l: SideItem[]) => l.flatMap((x) => (x.k === "chat" ? [x.c] : []));
+  const codesOf = (l: SideItem[]) => l.flatMap((x) => (x.k === "code" ? [x.c] : []));
+  const sideActs: BulkAct<SideItem>[] = [
+    { id: "pin", label: "Ghim", icon: <I.M icon="Pin" size={15} />, when: (l) => l.some((x) => !x.c.pinned), run: (l) => {
+      const ids = new Set(chatsOf(l).map((c) => c.id)); setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, pinned: true } : x)));
+      for (const c of codesOf(l)) if (!c.pinned) codePatch(c.id, { pinned: true });
+      say(`Đã ghim ${l.length} mục`);
+    } },
+    { id: "unpin", label: "Bỏ ghim", icon: <I.M icon="PinOff" size={15} />, when: (l) => l.some((x) => x.c.pinned), run: (l) => {
+      const ids = new Set(chatsOf(l).map((c) => c.id)); setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, pinned: false } : x)));
+      for (const c of codesOf(l)) if (c.pinned) codePatch(c.id, { pinned: false });
+      say(`Đã bỏ ghim ${l.length} mục`);
+    } },
+    { id: "proj", label: "Thêm vào dự án", icon: <I.FolderPlus size={15} />, when: (l) => chatsOf(l).length > 0 && projects.some((p) => !p.archived),
+      choices: () => projects.filter((p) => !p.archived).map((p) => ({ id: String(p.id), label: p.name })),
+      run: (l, pid) => { const ids = new Set(chatsOf(l).map((c) => c.id)); const pr = projects.find((p) => String(p.id) === pid); if (!pr) return; setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, project: pr.id } : x))); say(`Đã thêm ${ids.size} đoạn chat vào "${pr.name}"`); } },
+    { id: "unproj", label: "Gỡ khỏi dự án", icon: <I.Layers size={15} />, when: (l) => chatsOf(l).some((c) => c.project !== undefined), run: (l) => {
+      const ids = new Set(chatsOf(l).map((c) => c.id)); setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, project: undefined } : x))); say("Đã gỡ khỏi dự án");
+    } },
+    { id: "arch", label: "Lưu trữ", icon: <I.Archive size={15} />, when: (l) => codesOf(l).some((c) => !c.archived), run: (l) => { for (const c of codesOf(l)) if (!c.archived) codePatch(c.id, { archived: true }); say("Đã lưu trữ các phiên code đã chọn"); } },
+    { id: "unarch", label: "Khôi phục", icon: <I.Restore size={15} />, when: (l) => codesOf(l).some((c) => c.archived), run: (l) => { for (const c of codesOf(l)) if (c.archived) codePatch(c.id, { archived: false }); say("Đã khôi phục các phiên code đã chọn"); } },
+    { id: "del", label: "Xóa", icon: <I.Trash size={15} />, danger: true,
+      confirm: (l) => { const a = chatsOf(l).length, b = codesOf(l).length; return { title: `Xóa ${l.length} mục?`, text: `${[a ? `${a} đoạn chat` : "", b ? `${b} phiên code` : ""].filter(Boolean).join(" và ")} sẽ bị xóa, không hoàn tác được.`, ok: "Xóa" }; },
+      run: (l) => {
+        const ids = new Set(chatsOf(l).map((c) => c.id)), cids = new Set(codesOf(l).map((c) => c.id));
+        if (ids.size) { setChats((cs) => cs.filter((c) => !ids.has(c.id))); if (cur !== null && ids.has(cur)) goNew(); }
+        if (cids.size) { setCodeList((x) => x.filter((c) => !cids.has(c.id))); for (const id of cids) { ls.remove("codeS:" + id); if (cpPage?.sync) deleteServerSession(id); } if (codeCur !== null && cids.has(codeCur)) setCodeCur(null); }
+        say(`Đã xóa ${l.length} mục`);
+      } },
+  ];
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
   const pill = false && (
@@ -1444,7 +1558,7 @@ export default function Home() {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
         const t = e.target as HTMLElement;
         if (spOpen && t.closest(".nav-item,.chat-item,.user,.icon-btn") && !t.closest(".nav-row,.nav-sub")) setSpOpen(false);
-        if (narrow() && t.closest(".nav-item,.chat-item") && !t.closest(".nav-row > .icon-btn, .chat-item .icon-btn, .chat-item input")) setTimeout(() => setOpen(false), 0);
+        if (narrow() && t.closest(".nav-item,.chat-item") && !t.closest(".nav-row > .icon-btn, .chat-item .icon-btn, .chat-item input, [data-bk]")) setTimeout(() => setOpen(false), 0);
       }}>
       {/* Thanh điều hướng dọc: luôn hiện trên máy tính (cả khi thu bảng đoạn chat), có nhãn dưới icon; mục đang mở có ô icon màu mực. */}
       <nav className="rail" aria-label="Điều hướng">
@@ -1496,15 +1610,15 @@ export default function Home() {
         )}
         {(() => {
           const row = (c: Chat) => (
-            <div key={c.id} className="chat-wrap">
+            <div key={c.id} className="chat-wrap" {...bulkRow(sb, { k: "chat", c })}>
               {renaming === c.id ? (
                 <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
                   onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { if (busy) stop(); setCur(c.id); setView("chat"); }}><span key={c.title} className="ct-t" data-notr>{c.title}</span></button>
+                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { if (busy) stop(); setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span></button>
               )}
-              <button className="dots" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>
+              {!sb.on && <button className="dots" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
                   {!pickProj ? (
                     <>
@@ -1524,17 +1638,17 @@ export default function Home() {
             </div>
           );
           const codeRow = (c: CodeItem) => (
-            <div key={"code" + c.id} className="chat-wrap">
+            <div key={"code" + c.id} className="chat-wrap" {...bulkRow(sb, { k: "code", c })}>
               {codeRen === c.id ? (
                 <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
                   onBlur={(e) => { codePatch(c.id, { title: e.target.value || c.title }); setCodeRen(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
                 <button className={`chat-item code-item ${view === "code" && codeCur === c.id ? "active" : ""}`} onClick={() => { setCodeCur(c.id); setView("code"); if (c.archived) codePatch(c.id, { archived: false }); }}>
-                  <span className="cv-ell">{c.title}</span><CodeBadge c={c} />
+                  {sb.on && <BulkCheck on={sb.has({ k: "code", c })} />}<span className="cv-ell">{c.title}</span><CodeBadge c={c} />
                 </button>
               )}
-              <button className="dots" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>
+              {!sb.on && <button className="dots" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>}
               <Menu open={codeMenu === c.id} className="down" style={{ top: 34, right: 0, width: 220 }}>
                 <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
@@ -1594,13 +1708,14 @@ export default function Home() {
                   <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{codeArch.map(codeRow)}</div></div>
                 </>
               )}
-              <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setModal("search")}><I.Sliders size={16} /></button></div>
+              <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setModal("search")}><I.Sliders size={16} /></button></div>
               <div className={`fold ${recentOpen ? "open" : ""}`}>
                 <div className="chat-list">
                   {visible.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>}
                   {rest.map(row)}
                 </div>
               </div>
+              <BulkBar b={sb} acts={sideActs} noun="mục" compact />
             </div>
           );
         })()}
@@ -1611,7 +1726,7 @@ export default function Home() {
       <main className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">
-            {!open && <button className="icon-btn side-toggle" onClick={() => setOpen(true)} aria-label="Mở thanh bên"><I.Panel /></button>}
+            {!open && <SideToggle onClick={() => setOpen(true)} />}
             {view === "chat" && chat && (
               <div className="title-wrap" style={{ position: "relative" }}>
                 <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
@@ -1674,6 +1789,7 @@ export default function Home() {
                     <div key={i} className="user-wrap">
                       {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => fm.show(f, m.fids?.[f])} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
                       {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
+                      {m.pick?.length ? <div className="u-picks">{m.pick.map((k) => <span key={k.id} className="skill-chip">{k.id.startsWith("lib-") ? <I.Plugins size={13} /> : <I.Scroll size={13} />}<span data-notr>{k.label}</span></span>)}</div> : null}
                       <div className="user-msg"><UserText text={m.text} /></div>
                     </div>
                   ) : (
@@ -1744,11 +1860,13 @@ export default function Home() {
         )}
 
         {view === "projects" && (
-          <ProjectsPage projects={projects} chats={chats} say={say} onNew={() => setModal("proj")} onOpen={(id) => { setCurProj(id); setView("project"); }} patch={patchProj} onEdit={(id) => setEditProj(id)} onDelete={(id) => setDelProj(id)} />
+          <ProjectsPage projects={projects} chats={chats} say={say} onNew={() => setModal("proj")} onOpen={(id) => { setCurProj(id); setView("project"); }} patch={patchProj} onEdit={(id) => setEditProj(id)} onDelete={(id) => setDelProj(id)}
+            onDeleteMany={(ids) => { const del = new Set(ids); setProjects((ps) => ps.filter((x) => !del.has(x.id))); setChats((cs) => cs.map((c) => (c.project !== undefined && del.has(c.project) ? { ...c, project: undefined } : c))); if (curProj !== null && del.has(curProj)) setCurProj(null); }} />
         )}
 
         {view === "project" && proj && (
           <ProjectPage proj={proj} chats={chats} say={say} patch={patchProj} onBack={() => setView("projects")} onOpenChat={(id) => { setCur(id); setView("chat"); }} onEdit={() => setEditProj(proj.id)} onDelete={() => setDelProj(proj.id)}
+            onChats={(ids, op) => { const set = new Set(ids); setChats((cs) => (op === "delete" ? cs.filter((c) => !set.has(c.id)) : cs.map((c) => (set.has(c.id) ? { ...c, project: undefined } : c)))); if (op === "delete" && cur !== null && set.has(cur)) setCur(null); }}
             composer={<Composer {...composerProps} placeholder="Hôm nay tôi có thể giúp gì cho bạn?" focusPlaceholder="Nhập / để dùng Skills" />} />
         )}
 

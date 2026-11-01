@@ -13,6 +13,7 @@ import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "./artifacts
 import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "./srcloc";
 import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "./critic";
 import { CriticNote, CriticPill } from "./criticui";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
@@ -683,6 +684,13 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
     if (r.ok) { setList((l) => l?.filter((x) => x.id !== id) ?? null); if (open?.id === id) setOpen(null); say(tr("Đã xóa artifact")); }
   };
   const shown = (tab === 2 ? [] : list ?? []).filter((a) => !q || a.title.toLowerCase().includes(q.toLowerCase()));
+  // Chọn hàng loạt: xóa nhiều artifact cùng lúc.
+  const bk = useBulk(shown, (a) => a.id);
+  const acts: BulkAct<Summary>[] = [
+    { id: "del", label: tr("Xóa"), icon: <I.Trash size={14} />, danger: true,
+      confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} artifact?`, text: tr("Mọi phiên bản của các artifact này sẽ bị xóa, không hoàn tác được."), ok: tr("Xóa") }),
+      run: async (l) => { const gone = new Set<string>(); await each(l, async (a) => { const r = await fetch(`/api/artifacts/${a.id}`, { method: "DELETE" }); if (r.ok) gone.add(a.id); }); setList((x) => x?.filter((a) => !gone.has(a.id)) ?? null); say(`${tr("Đã xóa")} ${gone.size} artifact`); } },
+  ];
   const when = (t: number) => new Date(t).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", getLang() === "en" ? { day: "numeric", month: "short", year: "numeric" } : { day: "2-digit", month: "2-digit", year: "numeric" });
   return (
     <>
@@ -690,18 +698,23 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
         : shown.length === 0 ? (
           <div className="empty"><I.Shapes size={64} /><b>{tab === 2 ? tr("Chưa có artifact nào được chia sẻ với bạn") : q ? tr("Không tìm thấy artifact nào") : tr("Các artifact của bạn nằm ở đây")}</b><span>{tab === 2 ? tr("Khi ai đó chia sẻ artifact với bạn, nó sẽ hiện ở đây.") : tr("Bắt đầu từ một mẫu ở trên, hoặc yêu cầu Synchro tạo thứ gì đó trong bất kỳ đoạn chat nào.")}</span></div>
         ) : (
+          <>
+          <div className="bk-head"><span className="bk-head-n">{shown.length} artifact</span><BulkButton b={bk} /></div>
           <div className="art-grid">
             {shown.map((a) => (
-              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={(e) => e.key === "Enter" && show(a.id)}>
+              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={(e) => e.key === "Enter" && show(a.id)} {...bulkRow(bk, a)}>
+                {bk.on && <BulkCheck on={bk.has(a)} />}
                 <Thumb a={a} />
                 <div className="art-tile-meta">
                   <span className="art-tile-ic"><ArtIcon type={a.type} size={15} /></span>
                   <div><b data-notr>{a.title}</b><span>{tr(ART_LABEL[a.type])} · {when(a.updated_at)}{a.count > 1 ? ` · ${a.count} ${tr("phiên bản")}` : ""}</span></div>
-                  <button className="icon-btn" aria-label="Xóa artifact" onClick={(e) => { e.stopPropagation(); del(a.id); }}><I.Trash size={14} /></button>
+                  {!bk.on && <button className="icon-btn" aria-label="Xóa artifact" onClick={(e) => { e.stopPropagation(); del(a.id); }}><I.Trash size={14} /></button>}
                 </div>
               </div>
             ))}
           </div>
+          <BulkBar b={bk} acts={acts} noun="artifact" />
+          </>
         )}
       {open && (
         <div className="art-modal" onMouseDown={(e) => e.target === e.currentTarget && setOpen(null)}>

@@ -2,6 +2,7 @@
 // Mục Speech (ElevenLabs): khung chung, thanh trên (gói và credit thật), trang chính, trình phát chung ở đáy. Từng công cụ nằm ở tệp riêng.
 // Công cụ chỉ hiện khi gói ElevenLabs quét được có tính năng đó; gói cao hơn tự hiện thêm khi được nâng.
 import { useEffect, useState } from "react";
+import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
 import { GROUPS, STARTERS, TOOLS, normTool, toolDef, toolOn, type SpeechTool } from "./data";
@@ -41,7 +42,7 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
     <div className="sp">
       <div className="sp-bar">
         <div className="sp-bar-l">
-          {!sideOpen && <button className="icon-btn" onClick={onSide} aria-label="Mở thanh bên"><I.Panel /></button>}
+          {!sideOpen && <SideToggle onClick={onSide} />}
           <button className="sp-crumb" onClick={() => setTool("home")}>Speech</button>
           {tool !== "home" && <><span className="sp-crumb-sep">/</span><span className="sp-crumb-cur">{cur.label}</span></>}
         </div>

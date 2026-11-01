@@ -2,7 +2,8 @@
 // chạy cả trên trang có CSP chặt). Nằm trong shadow root đóng, gắn aria-hidden nên không lẫn vào nội dung model đọc (browser_read / browser_find
 // bỏ qua). Viền quanh trang không nhận chuột; nút gọi window.__synchroStop("pause" | "resume" | "stop") (Runtime.addBinding của tiện ích).
 // window.__synOverlay: set(nhãn đang làm) · paused(true/false) trạng thái tạm dừng · pause(true/false) ẩn tạm khi chụp màn hình ·
-// guard(x, y) bỏ qua chuột ngay trước khi Synchro bấm (để cú bấm của Synchro không trúng nút), có toạ độ thì vẽ vòng gợn đúng chỗ bấm · remove().
+// guard() bỏ qua chuột ngay trước khi Synchro bấm (để cú bấm của Synchro không trúng nút) · remove().
+// Synchro thao tác như một người vô hình: không vẽ con trỏ, vòng gợn hay dấu nào ở chỗ bấm / gõ.
 // Thiết kế: viên nổi ở mép trên bằng kính màu Carbon (mờ nền trang phía sau), chữ Ivory, đĩa chứa mark Synchro xoay theo nhịp đồng bộ (loader của
 // bộ nhận diện), hai dòng: "Synchro đang điều khiển tab này" và việc đang làm (đổi nhẹ khi việc đổi); nút Tạm dừng (viền mảnh) và Dừng (Ivory đặc).
 // Cùng một màu trên trang sáng lẫn tối; viền trang hai lớp Carbon + Ivory mảnh, quầng tối bên trong thở chậm. Chữ Anthropic Sans của app (tiện ích
@@ -64,20 +65,13 @@ export function overlayScript(s, font = "") {
     button.solid { background: var(--ivory); color: var(--carbon); box-shadow: none; }
     button.solid:hover { background: #fff; }
     svg.ic { display: block; flex: none; width: 14px; height: 14px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
-    /* Chỗ Synchro vừa bấm: chấm Carbon viền Ivory và một vòng gợn lan ra rồi tan (nhìn rõ trên trang sáng lẫn tối). */
-    .tap { position: fixed; width: 0; height: 0; pointer-events: none; }
-    .tap::before, .tap::after { content: ""; position: absolute; left: 0; top: 0; border-radius: 50%; transform: translate(-50%, -50%); }
-    .tap::before { width: 12px; height: 12px; background: var(--carbon); box-shadow: 0 0 0 2px var(--ivory), 0 2px 8px rgba(0,0,0,.35); animation: tapDot .9s var(--out) forwards; }
-    .tap::after { width: 52px; height: 52px; background: rgba(17,18,16,.12); box-shadow: inset 0 0 0 2px var(--carbon), 0 0 0 1.5px rgba(238,236,229,.9); animation: tapRing .9s var(--out) forwards; }
-    @keyframes tapDot { 0% { transform: translate(-50%, -50%) scale(.4); opacity: 1; } 22% { transform: translate(-50%, -50%) scale(1); } 65% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(.8); opacity: 0; } }
-    @keyframes tapRing { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 1; } 55% { opacity: .8; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
     /* Tạm dừng: mark đứng yên (chữ S), viền và quầng nhạt đi — Synchro không thao tác cho tới khi bấm Tiếp tục. */
     .paused .mk-r, .paused .mk-a, .paused .mk-b, .paused .glow { animation: none; }
     .paused .edge { opacity: .4; }
     .paused .glow { opacity: .25; }
-    @media (prefers-reduced-motion: reduce) { .mk-r, .mk-a, .mk-b, .pill, .glow, .lab.swap { animation: none; } .tap { display: none; } }
+    @media (prefers-reduced-motion: reduce) { .mk-r, .mk-a, .mk-b, .pill, .glow, .lab.swap { animation: none; } }
     @media (max-width: 560px) { .lab, .sep { display: none; } .pill { gap: 8px; } button { width: 34px; padding: 0; } button .t { display: none; } }
-    .off .pill, .off .edge, .off .glow, .off .tap { opacity: 0 !important; pointer-events: none; }
+    .off .pill, .off .edge, .off .glow { opacity: 0 !important; pointer-events: none; }
     .guard .pill { pointer-events: none; }
   \`;
   const host = document.createElement("synchro-control");
@@ -121,10 +115,7 @@ export function overlayScript(s, font = "") {
       pz.classList.toggle("solid", !!on); stop.classList.toggle("solid", !on);
     },
     pause(on) { wrap.classList.toggle("off", !!on); },
-    guard(x, y) {
-      wrap.classList.add("guard"); clearTimeout(guardT); guardT = setTimeout(() => wrap.classList.remove("guard"), 800);
-      if (Number.isFinite(x) && Number.isFinite(y)) { const t = el("span", "tap"); t.style.left = x + "px"; t.style.top = y + "px"; wrap.append(t); setTimeout(() => t.remove(), 950); }
-    },
+    guard() { wrap.classList.add("guard"); clearTimeout(guardT); guardT = setTimeout(() => wrap.classList.remove("guard"), 800); },
     remove() { gone = true; clearInterval(iv); host.remove(); delete window.__synOverlay; },
   };
   window.__synOverlay = api;

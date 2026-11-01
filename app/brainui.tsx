@@ -7,6 +7,8 @@
 //   đồ thị cục bộ. Synchro tự viết các trang; bạn thêm "Ghi chú của bạn" hoặc ghi chú riêng.
 // - Bảng, Hoạt động: việc dang dở, đoạn chat, chủ đề, tên riêng; những gì bộ não vừa tự học.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SideToggle } from "./brand";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import * as I from "./icons";
 import { type Chat, useApp } from "./store";
 import { getLang } from "./i18n";
@@ -837,6 +839,16 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
     return () => document.removeEventListener("mousedown", h);
   }, [findOpen]);
   const load = useCallback(() => fetch("/api/brain", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j?.nodes) { setG(j); setVer((v) => v + 1); } }).catch(() => {}), []);
+  // Chọn hàng loạt ở cột trái: ghim / bỏ ghim / xóa nhiều ghi chú (quy tắc hàng đầu và trang hệ thống không chọn được).
+  const pickable = (g?.nodes ?? []).filter((n) => ["map", "topic", "entity", "note", "chat", "code", "daily"].includes(n.kind));
+  const bkN = useBulk(pickable, (n) => n.title);
+  const noteActs: BulkAct<GNode>[] = [
+    { id: "pin", label: L("Ghim", "Pin"), icon: <I.M icon="Pin" size={15} />, when: (l) => l.some((n) => !n.pinned), run: async (l) => { await each(l.filter((n) => !n.pinned), (n) => api("PUT", "/api/brain/note", { title: n.title, pinned: true })); await load(); } },
+    { id: "unpin", label: L("Bỏ ghim", "Unpin"), icon: <I.M icon="PinOff" size={15} />, when: (l) => l.some((n) => n.pinned), run: async (l) => { await each(l.filter((n) => n.pinned), (n) => api("PUT", "/api/brain/note", { title: n.title, pinned: false })); await load(); } },
+    { id: "del", label: L("Xóa", "Delete"), icon: <I.Trash size={15} />, danger: true,
+      confirm: (l) => ({ title: L(`Xóa ${l.length} ghi chú?`, `Delete ${l.length} notes?`), text: L("Các liên kết tới chúng sẽ thành ghi chú chưa có. Synchro có thể viết lại các trang này khi học thêm.", "Links to them become missing notes. Synchro may write these pages again as it learns."), ok: L("Xóa", "Delete") }),
+      run: async (l) => { await each(l, (n) => api("DELETE", `/api/brain/note?title=${encodeURIComponent(n.title)}`)); if (at && l.some((n) => n.title === at.title)) setTab("graph"); await load(); app.say(L(`Đã xóa ${l.length} ghi chú`, `Deleted ${l.length} notes`)); } },
+  ];
   useEffect(() => { void load(); fetch("/api/brain?tags=1", { cache: "no-store" }).then((r) => r.json()).then((j) => setTags(j.tags ?? [])).catch(() => {}); }, [load]);
   // Bộ não tự học ở nền: đọc lại định kỳ (dày hơn khi còn đoạn chat chờ học) để thấy nó lớn dần.
   useEffect(() => { const t = setInterval(load, g?.stats.pending ? 15_000 : 60_000); return () => clearInterval(t); }, [g?.stats.pending, load]);
@@ -886,8 +898,8 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
         {add}<em>{list.length}</em>
       </div>
       {!fold0[k] && <div className="bw-grp-b">{list.slice(0, limit).map((n) => (
-        <button key={n.id} className={`bw-item ${at?.title === n.title && tab === "note" ? "on" : ""}`} onClick={() => open(n.title)} title={n.title}>
-          <KindIcon k={n.kind} size={13} /><span data-notr>{n.title}</span>{n.pinned && k !== "pin" && <I.Pin size={11} />}
+        <button key={n.id} className={`bw-item ${at?.title === n.title && tab === "note" ? "on" : ""}`} onClick={() => open(n.title)} title={n.title} {...(n.kind === "rule" ? {} : bulkRow(bkN, n))}>
+          {bkN.on && n.kind !== "rule" ? <BulkCheck on={bkN.has(n)} /> : <KindIcon k={n.kind} size={13} />}<span data-notr>{n.title}</span>{n.pinned && k !== "pin" && <I.Pin size={11} />}
         </button>))}
         {list.length > limit && <span className="bw-more-n">{L(`và ${list.length - limit} mục khác — tìm để mở`, `and ${list.length - limit} more — search to open`)}</span>}
       </div>}
@@ -914,7 +926,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
       <Peek onOpen={open} />
       <header className="bw-top">
         <div className="bw-top-l">
-          {!sideOpen && onSide && <button className="icon-btn side-toggle" onClick={onSide} aria-label={L("Mở thanh bên", "Open sidebar")}><I.Panel /></button>}
+          {!sideOpen && onSide && <SideToggle onClick={onSide} />}
           <button className="icon-btn bw-only-m" aria-label={L("Danh sách ghi chú", "Notes list")} onClick={() => setSide(side === "left" ? "" : "left")}><I.List size={16} /></button>
           <span className="bw-brand"><I.Brain size={17} /><b>{L("Bộ não", "Brain")}</b></span>
           <span className="bw-nav">
@@ -953,6 +965,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
       <aside className="bw-left" aria-label={L("Khám phá bộ não", "Explore the brain")}>
         {!g ? <div className="us-empty"><span className="art-spin sm" /></div> : (
           <>
+            {pickable.length > 0 && <div className="bk-head bw-bk"><BulkButton b={bkN} compact /></div>}
             <nav className="bw-entry">
               {Object.entries(ENTRY).map(([t, lb]) => { const n = g.nodes.find((x) => x.title === t); return n ? <button key={t} className={`bw-item ${at?.title === t && tab === "note" ? "on" : ""}`} onClick={() => open(t)}><KindIcon k={n.kind} size={14} /><span>{L(...lb)}</span>{n.pinned && <I.Pin size={11} />}</button> : null; })}
               {g.nodes.some((n) => n.title === today()) && <button className={`bw-item ${at?.title === today() && tab === "note" ? "on" : ""}`} onClick={() => open(today())}><KindIcon k="daily" size={14} /><span>{L("Hôm nay", "Today")}</span></button>}
@@ -969,6 +982,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
               <div className="bw-grp-h"><button aria-expanded={!fold0.tags} onClick={() => setFold0({ ...fold0, tags: !fold0.tags })}><I.ChevronR size={11} /><span>{L("Thẻ", "Tags")}</span></button><em>{tags.length}</em></div>
               {!fold0.tags && <div className="bw-tags">{tags.slice(0, 40).map((t) => <button key={t.tag} className="bn-tag" onClick={() => { setQ(`tag:${t.tag}`); setFindOpen(true); search.current?.focus(); }} data-notr>#{t.tag}<em>{t.count}</em></button>)}</div>}
             </section>}
+            <BulkBar b={bkN} acts={noteActs} noun={L("ghi chú", "notes")} compact />
             {g.stats.chats === 0 && <p className="bw-hint">{L("Bộ não tự lớn lên sau mỗi đoạn chat: chủ đề, tên riêng và chân dung của bạn sẽ hiện ở đây.", "The brain grows after every chat: your topics, entities and portrait show up here.")}</p>}
           </>
         )}

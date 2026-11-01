@@ -7,7 +7,7 @@ import { ls } from "./userscope";
 
 // trace: dấu vết công cụ (chuẩn Synchro) gửi lại ở lượt sau; stopped: người dùng đã bấm Dừng giữa chừng.
 import type { CriticEntry } from "./critic";
-export type Msg = { role: "user" | "ai"; text: string; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; fids?: Record<string, string>; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string;
+export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; label: string }[]; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; fids?: Record<string, string>; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string;
   // Nhật ký làm việc của lượt (lời dẫn, công cụ, danh sách việc); steer: tin nhắn thêm đã ghép vào lượt đang chạy.
   parts?: import("./worklog").Part[]; plan?: import("./worklog").PlanItem[]; seq?: number; steer?: boolean };
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;

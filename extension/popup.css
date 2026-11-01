@@ -1,4 +1,5 @@
-/* Cửa sổ tiện ích Synchro: cùng ngôn ngữ thiết kế "Instrument" với app — chữ Anthropic Sans (Unbounded chỉ cho tiêu đề chính), bảng màu
+/* Cửa sổ tiện ích Synchro: cùng ngôn ngữ thiết kế "Instrument" với app (cùng thang hình khối: viên thuốc cho mọi thứ một dòng, ô biểu tượng 25%,
+   tấm 12px, khối đầu 24px) — chữ Anthropic Sans (Unbounded chỉ cho tiêu đề chính), bảng màu
    Carbon / Ivory (không màu nhấn), nút / ô nhập / bộ chọn dạng viên thuốc cao 34px, thẻ viền mảnh, mục chọn đảo màu mực, nút chính mực phẳng.
    Đầu cửa sổ là khối "cầu nối": trình duyệt này ⟷ Synchro trên nền lưới chấm, nhịp sáng chạy trên đường nối khi đã kết nối (nhanh hơn khi Synchro
    đang điều khiển), đứt nét khi chưa ghép nối / mất kết nối. Logo và loader vẽ bằng SVG (extension/brand.js) với chuyển động như app;
@@ -10,7 +11,7 @@
 :root {
   --bg: #EEECE5; --card: #F6F5F0; --soft: #E6E4DC; --fg: #111210; --fg2: #3E3F39; --mut: #5F6058; --faint: #8A8B83; --line: #DCD9CF; --line2: #CBC8BD;
   --inv: #111210; --inv-fg: #EEECE5; --ink: #111210; --hover: rgba(17, 18, 16, .055); --dots: rgba(17, 18, 16, .13);
-  --ok: #1f9d55; --err: #c2410c; --h: 34px; --r: 18px;
+  --ok: #1f9d55; --err: #c2410c; --h: 34px; --r: 12px;
   --ease: cubic-bezier(.22, .8, .24, 1); --lock: cubic-bezier(.76, 0, .24, 1); --glide: cubic-bezier(.65, 0, .35, 1);
   --lift: 0 1px 2px rgba(17, 18, 16, .05), 0 6px 18px -10px rgba(17, 18, 16, .18); --pri-sh: 0 8px 18px -10px rgba(17, 18, 16, .7);
   color-scheme: light dark;
@@ -81,7 +82,7 @@ main { padding: 0 14px 14px; display: grid; gap: 12px; }
 #app { display: contents; }
 
 /* ---------------------------------------------------------------- khối cầu nối (#hero) */
-.hero { position: relative; display: grid; gap: 14px; padding: 6px 16px 16px; border-radius: 22px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line), var(--lift);
+.hero { position: relative; display: grid; gap: 14px; padding: 6px 16px 16px; border-radius: 24px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line), var(--lift);
   overflow: hidden; isolation: isolate; transition: box-shadow .35s var(--ease); }
 /* Nền lưới chấm, mờ dần ra mép (chỉ sau phần cầu nối). */
 .hero::before { content: ""; position: absolute; inset: 0 0 auto; height: 118px; z-index: -1; pointer-events: none;
@@ -89,7 +90,7 @@ main { padding: 0 14px 14px; display: grid; gap: 12px; }
   -webkit-mask: radial-gradient(70% 90% at 50% 45%, #000 30%, transparent 78%); mask: radial-gradient(70% 90% at 50% 45%, #000 30%, transparent 78%); }
 .stage { display: grid; gap: 8px; padding-top: 18px; }
 .bridge { display: flex; align-items: center; justify-content: center; }
-.node { position: relative; width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 16px; background: var(--bg);
+.node { position: relative; width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 25%; background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--line2); color: var(--fg); transition: background-color .35s var(--ease), color .35s var(--ease), box-shadow .35s; }
 .node .ic { width: 22px; height: 22px; }
 .ns { background: var(--inv); color: var(--inv-fg); box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--inv) 70%, transparent); }
@@ -172,7 +173,7 @@ input[type=text]:focus { box-shadow: inset 0 0 0 1px var(--fg), 0 0 0 3px color-
 .srv .ic { width: 13px; height: 13px; }
 .srv .ell { flex: 1; }
 .srv b { color: var(--fg2); font-weight: 500; }
-.err { display: flex; gap: 8px; align-items: flex-start; padding: 9px 12px; border-radius: 12px; font-size: 12.5px; line-height: 18px; color: var(--err);
+.err { display: flex; gap: 8px; align-items: flex-start; padding: 13px 14px; border-radius: 12px; font-size: 12.5px; line-height: 18px; color: var(--err);
   background: color-mix(in srgb, var(--err) 7%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--err) 28%, transparent); }
 .err .ic { margin-top: 2px; }
 
@@ -228,7 +229,7 @@ input[type=text]:focus { box-shadow: inset 0 0 0 1px var(--fg), 0 0 0 3px color-
 .seg .ic { width: 14px; height: 14px; }
 .hint { padding: 0 2px; color: var(--mut); font-size: 12px; line-height: 17px; }
 .tabrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
-.tab-ic { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--fg2); }
+.tab-ic { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 25%; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--fg2); }
 .tab-ic .ic { width: 16px; height: 16px; }
 .tabrow .tt { display: grid; flex: 1; min-width: 0; }
 .tabrow .tt b { font-size: 12.5px; font-weight: 600; line-height: 18px; }

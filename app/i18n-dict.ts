@@ -2159,3 +2159,67 @@ Object.assign(VI2EN, {
 });
 Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở bảng đoạn chat": "Open chats panel" });
 Object.assign(EN2VI, { "Search by email or IP": "Tìm theo email hoặc IP", "Previous page": "Trang trước", "Next page": "Trang sau" });
+
+// Chọn hàng loạt (app/bulk.tsx và các danh sách): nhãn, thao tác, câu xác nhận / thông báo có số lượng.
+{
+  const add = (m: Record<string, string>) => { for (const [k, v] of Object.entries(m)) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v; };
+  add({
+    "Chọn hàng loạt": "Select", "Xong": "Done", "Chọn nhiều mục để xử lý cùng lúc": "Select several items to act on at once", "Thoát chọn hàng loạt": "Exit selection",
+    "Thao tác hàng loạt": "Bulk actions", "Chọn tất cả": "Select all", "Bỏ chọn tất cả": "Deselect all",
+    "Bật": "Turn on", "Tắt": "Turn off", "Kiểm tra cập nhật": "Check for updates", "Xuất .zip": "Export .zip", "Gỡ": "Uninstall", "Xóa": "Delete",
+    "Ghim": "Pin", "Bỏ ghim": "Unpin", "Lưu trữ": "Archive", "Khôi phục": "Restore", "Bỏ lưu trữ": "Unarchive", "Thêm vào dự án": "Add to project", "Gỡ khỏi dự án": "Remove from project",
+    "Đánh dấu đã đọc": "Mark as read", "Đánh dấu chưa đọc": "Mark as unread", "Gỡ khỏi Hộp thư": "Remove from Inbox", "Bật lịch": "Turn schedule on", "Tắt lịch": "Turn schedule off",
+    "Làm mới công cụ": "Refresh tools", "Ngắt kết nối": "Disconnect", "Tạm khóa": "Suspend", "Mở khóa": "Restore", "Đăng xuất mọi nơi": "Sign out everywhere",
+    "Xóa tài khoản": "Delete account", "Xóa vĩnh viễn": "Delete permanently", "Tải về": "Download", "Xóa giọng": "Delete voice", "Đăng xuất": "Sign out",
+    "Đã bật các thư viện đã chọn": "Selected libraries turned on", "Đã tắt các thư viện đã chọn": "Selected libraries turned off", "Đã gỡ các thư viện đã chọn": "Selected libraries uninstalled",
+    "thư viện có bản cập nhật": "libraries have updates", "thư viện": "libraries", "skill sẽ bị gỡ": "skills will be uninstalled",
+    " (thư viện cho mọi người: gỡ cho cả nhóm)": " (libraries for everyone are uninstalled for the whole team)", "thư viện không thuộc quyền bạn được giữ nguyên.": "libraries you don't manage are kept.",
+    "Mọi phiên bản và tệp của các skill này sẽ bị xóa, không hoàn tác được.": "Every version and file of these skills will be deleted. This can't be undone.",
+    "Mọi phiên bản của các artifact này sẽ bị xóa, không hoàn tác được.": "Every version of these artifacts will be deleted. This can't be undone.",
+    "Các dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại.": "The projects will be deleted. Chats inside them are kept.",
+    "Các đoạn chat đã chọn sẽ bị xóa, không hoàn tác được.": "The selected chats will be deleted. This can't be undone.",
+    "Synchro sẽ không dùng các mục này trong dự án nữa.": "Synchro won't use these items in the project anymore.",
+    "Chỉ gỡ khỏi Hộp thư; việc tự động và lịch chạy giữ nguyên. Kết quả đang chạy được giữ lại.": "Only removed from the Inbox; automations and schedules stay. Results still running are kept.",
+    "kết quả khỏi Hộp thư?": "results from the Inbox?", "việc tự động?": "automations?", "Kết quả cũ của các việc này trong Hộp thư cũng bị xóa.": "Their past results in the Inbox are deleted too.",
+    "Đã gỡ khỏi Hộp thư": "Removed from the Inbox", "Đã lưu trữ các phiên code đã chọn": "Selected code sessions archived", "Đã khôi phục các phiên code đã chọn": "Selected code sessions restored",
+    "Synchro sẽ thôi dùng các connector này và quên đăng nhập của chúng. Bạn có thể kết nối lại sau.": "Synchro will stop using these connectors and forget their sign-ins. You can connect them again later.",
+    "Họ bị đăng xuất mọi nơi và không đăng nhập được cho tới khi bạn mở khóa.": "They're signed out everywhere and can't sign in until you restore them.",
+    "Mọi phiên đăng nhập của các tài khoản này kết thúc ngay.": "Every session of these accounts ends right away.",
+    "Đã tạm khóa các tài khoản đã chọn": "Selected accounts suspended", "Đã mở khóa các tài khoản đã chọn": "Selected accounts restored",
+    "Đã đăng xuất các người dùng đã chọn": "Selected users signed out", "Đã xóa các tài khoản đã chọn": "Selected accounts deleted",
+    "Các bản đã chọn và tệp của chúng sẽ bị xóa, không hoàn tác được.": "The selected items and their files will be deleted. This can't be undone.",
+    "Không hoàn tác được.": "This can't be undone.", "Không làm được": "Couldn't do that",
+    "Connectors": "Connectors", "Chưa có skill nào đang bật": "No skills are turned on", "Quản lý skill": "Manage skills", "Duyệt skill": "Browse skills",
+    "Thêm connector": "Add connector", "Quản lý connectors": "Manage connectors", "Chưa kết nối connector nào": "No connectors yet", "Quyền dùng công cụ": "Tool access",
+    "Duyệt mọi connector": "Browse all connectors", "Công cụ chỉ đọc": "Read-only tools", "Công cụ thay đổi dữ liệu": "Tools that change data", "Tự dùng": "Use automatically",
+    "Hỏi trước": "Ask first", "Chặn": "Block", "Đã đổi quyền dùng công cụ cho mọi connector": "Tool access changed for every connector", "Không đổi được connector": "Couldn't change the connector",
+    "người dùng": "users", "mục": "items", "dự án": "projects", "Đã xóa": "Deleted", "giọng": "voices", "(thư viện cho mọi người: gỡ cho cả nhóm)": "(libraries for everyone are uninstalled for the whole team)",
+  });
+  if (!Object.prototype.hasOwnProperty.call(EN2VI, "artifact")) EN2VI["artifact"] = "artifact";
+  const N: Record<string, [string, string]> = {
+    "mục": ["item", "items"], "skill": ["skill", "skills"], "thư viện": ["library", "libraries"], "dự án": ["project", "projects"], "artifact": ["artifact", "artifacts"],
+    "kết quả": ["result", "results"], "việc": ["task", "tasks"], "ghi chú": ["note", "notes"], "connector": ["connector", "connectors"], "người dùng": ["user", "users"],
+    "bản": ["item", "items"], "giọng": ["voice", "voices"], "đoạn chat": ["chat", "chats"], "mục bộ nhớ": ["memory item", "memory items"], "tài khoản": ["account", "accounts"],
+    "phiên code": ["code session", "code sessions"], "việc tự động": ["automation", "automations"],
+  };
+  const nn = (n: string, w: string) => (N[w] ? N[w][n === "1" ? 0 : 1] : w);
+  const W = Object.keys(N).sort((a, b) => b.length - a.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  RULES_EN.push(
+    [new RegExp(`^Đã chọn (\\d+) (${W})$`), (m) => `${m[1]} ${nn(m[1], m[2])} selected`],
+    [new RegExp(`^Chọn (${W})$`), (m) => `Select ${N[m[1]][1]}`],
+    [new RegExp(`^(\\d+) (${W})$`), (m) => `${m[1]} ${nn(m[1], m[2])}`],
+    [new RegExp(`^(Xóa|Gỡ|Tạm khóa|Ngắt kết nối) (\\d+) (${W})\\?$`), (m) => `${({ "Xóa": "Delete", "Gỡ": "Uninstall", "Tạm khóa": "Suspend", "Ngắt kết nối": "Disconnect" } as Record<string, string>)[m[1]]} ${m[2]} ${nn(m[2], m[3])}?`],
+    [new RegExp(`^Xóa vĩnh viễn (\\d+) (${W})\\?$`), (m) => `Permanently delete ${m[1]} ${nn(m[1], m[2])}?`],
+    [new RegExp(`^Đăng xuất (\\d+) người dùng mọi nơi\\?$`), (m) => `Sign ${m[1]} ${nn(m[1], "người dùng")} out everywhere?`],
+    [new RegExp(`^Xóa (\\d+) giọng khỏi tài khoản ElevenLabs\\?$`), (m) => `Delete ${m[1]} ${nn(m[1], "giọng")} from the ElevenLabs account?`],
+    [new RegExp(`^Xóa (\\d+) mục\\?$`), (m) => `Delete ${m[1]} ${nn(m[1], "mục")}?`],
+    [new RegExp(`^Đã (xóa|ghim|bỏ ghim|lưu trữ|bỏ lưu trữ|ngắt kết nối) (\\d+) (${W})$`), (m) => `${({ "xóa": "Deleted", "ghim": "Pinned", "bỏ ghim": "Unpinned", "lưu trữ": "Archived", "bỏ lưu trữ": "Unarchived", "ngắt kết nối": "Disconnected" } as Record<string, string>)[m[1]]} ${m[2]} ${nn(m[2], m[3])}`],
+    [/^Bỏ skill (.+)$/, (m) => `Remove skill ${m[1]}`],
+    [/^Đã gỡ (\d+) đoạn chat khỏi dự án$/, (m) => `Removed ${m[1]} ${nn(m[1], "đoạn chat")} from the project`],
+    [/^Đã thêm (\d+) đoạn chat vào "(.+)"$/, (m) => `Added ${m[1]} ${nn(m[1], "đoạn chat")} to "${m[2]}"`],
+    [/^(\d+) đoạn chat và (\d+) phiên code sẽ bị xóa, không hoàn tác được\.$/, (m) => `${m[1]} ${nn(m[1], "đoạn chat")} and ${m[2]} ${nn(m[2], "phiên code")} will be deleted. This can't be undone.`],
+    [/^(\d+) (đoạn chat|phiên code) sẽ bị xóa, không hoàn tác được\.$/, (m) => `${m[1]} ${nn(m[1], m[2])} will be deleted. This can't be undone.`],
+    [/^(.*) sẽ bị xóa, không hoàn tác được\.$/, (m) => `${m[1]} will be deleted. This can't be undone.`],
+    [/^Tài khoản và toàn bộ dữ liệu của họ bị xóa, không hoàn tác được\.(?: (\d+) tài khoản chủ \/ của bạn được giữ nguyên\.)?$/, (m) => `The accounts and all their data are deleted. This can't be undone.${m[1] ? ` ${m[1]} owner / your own ${nn(m[1], "tài khoản")} are kept.` : ""}`],
+  );
+}

@@ -7,6 +7,7 @@ import { getLang, tr, untranslated } from "./i18n";
 import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
 import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 
@@ -20,6 +21,7 @@ async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
 // Báo cho thanh nhập và trang Artifacts biết plugin vừa đổi (studio có thêm skill).
 export const PLUGINS_CHANGED = "synchro:plugins";
 const fire = () => window.dispatchEvent(new Event(PLUGINS_CHANGED));
+export const HUB_DISCOVER = "synchro:hub-discover";
 
 const STUDIO: Record<Studio, string> = { design: "Design", slides: "Slides", docs: "Docs" };
 const RISK: Record<Risk, [string, string]> = { none: ["No scripts", "ok"], low: ["Scripts, sandboxed", "low"], medium: ["Review scripts", "mid"], high: ["High risk", "high"] };
@@ -222,7 +224,9 @@ export function SkillHub() {
   const [drop, setDrop] = useState(false);
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"yours" | "discover" | null>(null);
+  const [tab, setTab] = useState<"yours" | "discover" | null>(() => { try { if (sessionStorage.getItem("hub-tab") === "discover") { sessionStorage.removeItem("hub-tab"); return "discover"; } } catch {} return null; });
+  // Menu + ở ô chat → "Duyệt skill": chuyển sang tab Khám phá.
+  useEffect(() => { const h = () => { try { sessionStorage.removeItem("hub-tab"); } catch {} setTab("discover"); }; window.addEventListener(HUB_DISCOVER, h); return () => window.removeEventListener(HUB_DISCOVER, h); }, []);
   const [pv, setPv] = useState<{ catalogId?: string; url?: string; name: string } | null>(null);
   const [addMenu, setAddMenu] = useState(false);
   // Menu Thêm neo theo mép phải của nút; khung hẹp (Cài đặt → Kho kỹ năng) đẩy nút xuống sát mép trái thì menu mở sang phải,
@@ -243,6 +247,9 @@ export function SkillHub() {
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const addRef = useRef<HTMLDivElement>(null);
+  const qlib = q.trim().toLowerCase();
+  const libs = (d?.plugins ?? []).filter((p) => !qlib || `${p.name} ${p.description}`.toLowerCase().includes(qlib)).sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "org" ? -1 : 1));
+  const bk = useBulk(libs, (p) => p.id);
   const load = useCallback(() => api<Data>("GET", "/api/plugins").then((x) => { setD(x); setErr(""); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
   // Skill vừa được đưa vào Thư viện cho mọi người (hộp thêm skill, lưu cách làm, đề xuất của Synchro): tải lại danh sách thư viện.
@@ -278,6 +285,25 @@ export function SkillHub() {
         () => api<{ plugins: PublicPlugin[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { setD((x) => (x ? { ...x, plugins: r.plugins } : x)); fire(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
     } catch (e) { app.say((e as Error).message); }
   };
+  const canManage = (p: PublicPlugin) => p.scope === "personal" || d.admin;
+  const isOn = (p: PublicPlugin) => p.enabled && p.mine.enabled;
+  const setOnAll = async (list: PublicPlugin[], on: boolean) => {
+    for (const p of list.filter((x) => isOn(x) !== on)) merge(await api("PATCH", `/api/plugins/${p.id}`, p.scope === "org" && !canManage(p) ? { mine: { enabled: on } } : { enabled: on }));
+    fire(); app.say(on ? tr("Đã bật các thư viện đã chọn") : tr("Đã tắt các thư viện đã chọn"));
+  };
+  const libActs: BulkAct<PublicPlugin>[] = [
+    { id: "on", label: "Bật", icon: <I.M icon="Play" size={14} />, when: (l) => l.some((p) => !isOn(p)), run: (l) => setOnAll(l, true) },
+    { id: "off", label: "Tắt", icon: <I.M icon="Pause" size={14} />, when: (l) => l.some(isOn), run: (l) => setOnAll(l, false) },
+    { id: "check", label: "Kiểm tra cập nhật", icon: <I.Retry size={14} />, when: (l) => l.some(canManage), run: async (l) => {
+      let n = 0;
+      await each(l.filter(canManage), async (p) => { const r = await api<{ changed: string[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, { action: "check" }); merge({ plugins: [], plugin: r.plugin }); if (r.changed.length) n++; });
+      app.say(n ? `${n} ${tr("thư viện có bản cập nhật")}` : tr("Already up to date"));
+    } },
+    { id: "export", label: "Xuất .zip", icon: <I.Download size={14} />, stay: true, run: (l) => each(l, (p) => exportLib(p, app.say)) },
+    { id: "remove", label: "Gỡ", icon: <I.Trash size={14} />, danger: true, when: (l) => l.some(canManage),
+      confirm: (l) => { const m = l.filter(canManage); return { title: `${tr("Gỡ")} ${m.length} ${tr("thư viện")}?`, text: `${m.reduce((n, p) => n + p.skills.length, 0)} ${tr("skill sẽ bị gỡ")}${m.some((p) => p.scope === "org") ? tr(" (thư viện cho mọi người: gỡ cho cả nhóm)") : ""}.${m.length < l.length ? ` ${l.length - m.length} ${tr("thư viện không thuộc quyền bạn được giữ nguyên.")}` : ""}`, ok: "Gỡ" }; },
+      run: async (l) => { let last: PublicPlugin[] | null = null; await each(l.filter(canManage), async (p) => { last = (await api<{ plugins: PublicPlugin[] }>("DELETE", `/api/plugins/${p.id}`)).plugins; }); if (last) setD((x) => (x ? { ...x, plugins: last! } : x)); fire(); app.say(tr("Đã gỡ các thư viện đã chọn")); } },
+  ];
   const cur = d.plugins.find((p) => p.id === open);
   const featured = d.directory.find((x) => x.catalogId === "design-studio")!;
   const plusBtn = (x: DirPlugin) => {
@@ -296,14 +322,15 @@ export function SkillHub() {
   const row = (p: PublicPlugin) => {
     const manage = p.scope === "personal" || d.admin;
     return (
-      <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(p.id)}>
+      <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(p.id)} {...bulkRow(bk, p)}>
+        {bk.on && <BulkCheck on={bk.has(p)} />}
         <PlugMark id={p.catalogId} size={36} />
         <div className="pl-row2-t">
           <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
           <span>{p.author ? <>{tr("từ")} <span data-notr={untranslated(p.author) || undefined}>{tr(p.author)}</span> · </> : ""}<span data-notr={untranslated(p.description) || undefined}>{p.description}</span></span>
         </div>
         <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>
-        <RowMenu p={p} manage={manage} onOpen={() => setOpen(p.id)} onAct={(a) => act(p, a)} />
+        {!bk.on && <RowMenu p={p} manage={manage} onOpen={() => setOpen(p.id)} onAct={(a) => act(p, a)} />}
       </div>
     );
   };
@@ -343,8 +370,9 @@ export function SkillHub() {
               <I.Plugins size={64} />
             </div>
           )}
-          {org.length > 0 && <><div className="pl-sec">Libraries for everyone <i>{org.length}</i></div><div className="pl-rows2">{org.map(row)}</div></>}
-          {mine.length > 0 && <><div className="pl-sec">Your libraries <i>{mine.length}</i></div><div className="pl-rows2">{mine.map(row)}</div></>}
+          {org.length > 0 && <><div className="pl-sec">Libraries for everyone <i>{org.length}</i><span className="pl-sec-r"><BulkButton b={bk} compact /></span></div><div className="pl-rows2">{org.map(row)}</div></>}
+          {mine.length > 0 && <><div className="pl-sec">Your libraries <i>{mine.length}</i>{!org.length && <span className="pl-sec-r"><BulkButton b={bk} compact /></span>}</div><div className="pl-rows2">{mine.map(row)}</div></>}
+          <BulkBar b={bk} acts={libActs} noun="thư viện" />
           <SkillsPanel q={q} Toggle={Toggle} />
           <p className="d pl-tip"><I.InfoCircle size={14} />Just chat: Synchro looks through every library and skill here and picks the ones that fit your request. A library is a set of skills installed together; a single skill is one you added on its own.</p>
           {drop && <div className="hub-drop"><I.Upload size={22} /><b>Drop to add the skill</b><span>.zip skill folder or SKILL.md</span></div>}

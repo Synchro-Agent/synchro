@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentType, type Reac
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { getLang, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
@@ -268,26 +269,38 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
   const shown = (list ?? []).filter((s) => (s.name + " " + s.description).toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
   const on = (list ?? []).filter((s) => s.enabled).length;
+  // Chọn hàng loạt: bật / tắt, xuất .zip, xóa nhiều skill cùng lúc.
+  const bs = useBulk(shown, (x) => x.name);
+  const skActs: BulkAct<Item>[] = [
+    { id: "on", label: "Bật", icon: <I.M icon="Play" size={14} />, when: (l) => l.some((x) => !x.enabled), run: (l) => each(l.filter((x) => !x.enabled), (x) => toggle(x.name, true)) },
+    { id: "off", label: "Tắt", icon: <I.M icon="Pause" size={14} />, when: (l) => l.some((x) => x.enabled), run: (l) => each(l.filter((x) => x.enabled), (x) => toggle(x.name, false)) },
+    { id: "export", label: "Xuất .zip", icon: <I.Download size={14} />, stay: true, run: (l) => each(l, (x) => exportZip(x.name)) },
+    { id: "del", label: "Xóa", icon: <I.Trash size={14} />, danger: true,
+      confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} skill?`, text: tr("Mọi phiên bản và tệp của các skill này sẽ bị xóa, không hoàn tác được."), ok: "Xóa" }),
+      run: async (l) => { await each(l, (x) => api(`/api/skills/${x.name}`, { method: "DELETE" })); app.say(`${tr("Đã xóa")} ${l.length} skill`); setDetail(null); await load(); window.dispatchEvent(new Event(SKILLS_CHANGED)); } },
+  ];
 
   return (
     <>
-      {(list === null || list.length > 0 || !q) && <div className="pl-sec">Your skills <i>{list?.length ?? 0}</i>{list && list.length > 0 && <span className="pl-sec-d">{`${on} enabled`}</span>}{checking && <span className="art-spin sm" />}</div>}
+      {(list === null || list.length > 0 || !q) && <div className="pl-sec">Your skills <i>{list?.length ?? 0}</i>{list && list.length > 0 && <span className="pl-sec-d">{`${on} enabled`}</span>}{checking && <span className="art-spin sm" />}<span className="pl-sec-r"><BulkButton b={bs} compact /></span></div>}
       {err && <div className="sk-err" role="alert"><span>{err}</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {loadErr && <div className="sk-err">{loadErr}</div>}
       {list !== null && !list.length && !q && <div className="hub-empty"><I.Scroll size={18} /><span>Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.</span></div>}
       <div className="pl-rows2">
         {shown.map((s) => (
-          <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)}>
+          <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)} {...bulkRow(bs, s)}>
+            {bs.on && <BulkCheck on={bs.has(s)} />}
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
             <div className="pl-row2-t">
               <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}{s.studio?.studios.map((k) => <span key={k} className="pl-b st" data-tip="In this section of Artifacts">{KIND_NAME[k]}</span>)}</div>
               <span data-notr>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
-            <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} set={(v) => toggle(s.name, v)} /></span>
+            {!bs.on && <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} set={(v) => toggle(s.name, v)} /></span>}
           </div>
         ))}
       </div>
+      <BulkBar b={bs} acts={skActs} noun="skill" />
       <input ref={verRef} type="file" hidden accept=".zip,.md" onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ""; }} />
 
       {choose && portal(

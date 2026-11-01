@@ -387,3 +387,18 @@ export function markRead(uid: string, runs: string[] | "all") {
   if (runs === "all") { d.prepare("UPDATE task_runs SET read = 1 WHERE owner = ?").run(uid); d.prepare("UPDATE notices SET read = 1 WHERE owner = ?").run(uid); }
   else for (const r of runs.slice(0, 200)) { d.prepare("UPDATE task_runs SET read = 1 WHERE owner = ? AND run_id = ?").run(uid, r); d.prepare("UPDATE notices SET read = 1 WHERE owner = ? AND id = ?").run(uid, r); }
 }
+/** Chọn hàng loạt trong Hộp thư: đánh dấu chưa đọc. */
+export function markUnread(uid: string, runs: string[]) {
+  const d = init();
+  for (const r of runs.slice(0, 200)) { d.prepare("UPDATE task_runs SET read = 0 WHERE owner = ? AND run_id = ?").run(uid, r); d.prepare("UPDATE notices SET read = 0 WHERE owner = ? AND id = ?").run(uid, r); }
+}
+/** Gỡ mục khỏi Hộp thư (chỉ dòng trong Hộp thư của chủ; việc tự động và lịch chạy giữ nguyên). Giao diện không cho gỡ mục đang chạy. */
+export function removeItems(uid: string, runs: string[]) {
+  const d = init();
+  let n = 0;
+  for (const r of runs.slice(0, 200)) {
+    n += d.prepare("DELETE FROM task_runs WHERE owner = ? AND run_id = ?").run(uid, r).changes;
+    n += d.prepare("DELETE FROM notices WHERE owner = ? AND id = ?").run(uid, r).changes;
+  }
+  return n;
+}

@@ -509,10 +509,11 @@ function lastUserText(messages: unknown): string {
 }
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
-function routingPrompt(hits: Hit[], recent: { name: string; lib?: Lib }[]) {
-  if (!hits.length && !recent.length) return "";
+function routingPrompt(hits: Hit[], recent: { name: string; lib?: Lib }[], picked: string[] = []) {
+  if (!hits.length && !recent.length && !picked.length) return "";
   const where = (l?: Lib) => (l ? ` (thư viện ${l.label} · ${l.key})` : "");
   return `<skill_routing>
+${picked.length ? `Người dùng đã tự chọn skill cho tin nhắn này (menu + ở ô chat): ${picked.join(", ")}. Bắt buộc đọc các skill này bằng load_skill trước khi trả lời và làm theo hướng dẫn trong đó.` : ""}
 ${hits.length ? `Hệ thống đã đối chiếu yêu cầu mới nhất với toàn bộ kho skill. Các skill có vẻ liên quan nhất (gợi ý tự động, có thể chưa đúng):
 ${hits.map((h) => `- ${h.skill.name}${where(h.lib)}: ${h.skill.description.replace(/\s+/g, " ").slice(0, 180)}`).join("\n")}` : ""}
 ${recent.length ? `Các lượt trước trong đoạn chat này đã dùng: ${recent.map((r) => `${r.name}${where(r.lib)}`).join(", ")}. Nếu yêu cầu mới sửa hoặc tiếp tục sản phẩm đó, hãy đọc lại các skill này để giữ cùng phong cách và nguyên tắc.` : ""}
@@ -710,7 +711,10 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     for (const h of hits) if (h.lib) prefer[h.skill.name] = h.lib.key;
     const recentNames = Array.isArray(body.recentSkills) ? [...new Set((body.recentSkills as unknown[]).filter((n): n is string => typeof n === "string"))].slice(0, 6) : [];
     const recent = recentNames.filter((n) => list.some((k) => k.name === n) && !hits.some((h) => h.skill.name === n)).map((n) => ({ name: n, lib: libs[n]?.[0] }));
-    route = routingPrompt(hits, recent);
+    // Skill người dùng tự chọn ở menu + (tên skill, hoặc lib-… để mở cả thư viện): chỉ nhận tên có trong kho đang bật.
+    const known = new Set([...list.map((k) => k.name), ...Object.values(libs).flat().map((l) => l.key)]);
+    const picked = Array.isArray(body.pickedSkills) ? [...new Set((body.pickedSkills as unknown[]).filter((n): n is string => typeof n === "string" && known.has(n)))].slice(0, 8) : [];
+    route = routingPrompt(hits, recent, picked);
   }
   return { list, visible, libs, prefer, route };
 }

@@ -164,14 +164,14 @@ export async function attachRun(id: string, onProgress?: (text: string) => void,
   return absorb(result, { onProgress, onDelta, onEvent });
 }
 
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; onEvent?: (e: RunEv) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; pickedSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; onEvent?: (e: RunEv) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
   // Không bịa câu trả lời khi chưa có model: báo rõ để người dùng kết nối gói hoặc khóa API.
   if (!hasLLM) throw new LLMError("Synchro chưa được kết nối với model nào. Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok ở Cài đặt → Providers, hoặc nhập khóa API.", 503);
   const r = await fetch(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills, ...(opts.extra ?? {}), async: opts.onRun ? true : undefined }),
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills, pickedSkills: opts.pickedSkills, ...(opts.extra ?? {}), async: opts.onRun ? true : undefined }),
   });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new LLMError(j.error || `LLM ${r.status}`, r.status, j); }
   const j = await r.json();

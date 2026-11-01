@@ -76,12 +76,8 @@ export function createControl(chrome, o = {}) {
       once(ev, ms) { return new Promise((res) => { const off = s.on(ev, (p) => { off(); clearTimeout(t); res(p); }); const t = setTimeout(() => { off(); res(null); }, ms); }); },
       async send(method, params = {}, timeout = 20_000, sid) {
         if (s.closed) throw new Error("Tab đã đóng hoặc Synchro đã thôi điều khiển tab này.");
-        // Ngay trước cú bấm của Synchro: dải điều khiển tạm không nhận chuột (cú bấm không trúng nút Dừng); cú bấm trên khung chính thì vẽ vòng gợn
-        // đúng chỗ bấm (toạ độ CSS của khung nhìn).
-        if (method === "Input.dispatchMouseEvent" && (params.type === "mousePressed" || params.type === "mouseWheel")) {
-          const at = params.type === "mousePressed" && !sid ? `${Number(params.x) || 0}, ${Number(params.y) || 0}` : "";
-          await raw("Runtime.evaluate", { expression: `window.__synOverlay && window.__synOverlay.guard(${at})` }, 3000).catch(() => {});
-        }
+        // Ngay trước cú bấm của Synchro: dải điều khiển tạm không nhận chuột (cú bấm không trúng nút Dừng). Không vẽ gì ở chỗ bấm (thao tác vô hình).
+        if (method === "Input.dispatchMouseEvent" && (params.type === "mousePressed" || params.type === "mouseWheel")) await raw("Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.guard()" }, 3000).catch(() => {});
         return raw(method, params, timeout, sid);
       },
       close() {},

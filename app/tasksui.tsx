@@ -12,6 +12,7 @@ import { allowsModel } from "./catalog";
 import { useApp } from "./store";
 import { ScopeChoice, useIsAdmin, type Scope } from "./skillsui";
 import { TimePick } from "./timepick";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 type BrowserPref = "auto" | "synchro" | "user";
@@ -320,6 +321,25 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const pending = (props ?? []).filter((p) => p.status === "pending");
   const decided = (props ?? []).filter((p) => p.status !== "pending").slice(0, 20);
   const shown = (items ?? []).filter((x) => !filter || x.task === filter);
+  // Chọn hàng loạt: kết quả (đã đọc / chưa đọc / gỡ khỏi Hộp thư) và việc tự động (chạy ngay, bật / tắt lịch, xóa).
+  const live = (x: Item) => x.status === "running" || x.status === "waiting";
+  const bkR = useBulk(shown, (x) => x.run);
+  const bkJ = useBulk(tasks ?? [], (t) => t.id);
+  const resActs: BulkAct<Item>[] = [
+    { id: "read", label: tr("Đánh dấu đã đọc"), icon: <I.Check size={14} />, when: (l) => l.some((x) => !x.read && !live(x)), run: (l) => read(l.filter((x) => !live(x)).map((x) => x.run)) },
+    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read), run: async (l) => { await api("POST", "/api/inbox", { unread: l.map((x) => x.run) }); changed(); load(); } },
+    { id: "rm", label: tr("Gỡ khỏi Hộp thư"), icon: <I.Trash size={14} />, danger: true, when: (l) => l.some((x) => !live(x)),
+      confirm: (l) => ({ title: `${tr("Gỡ")} ${l.filter((x) => !live(x)).length} ${tr("kết quả khỏi Hộp thư?")}`, text: tr("Chỉ gỡ khỏi Hộp thư; việc tự động và lịch chạy giữ nguyên. Kết quả đang chạy được giữ lại."), ok: tr("Gỡ") }),
+      run: async (l) => { await api("POST", "/api/inbox", { remove: l.filter((x) => !live(x)).map((x) => x.run) }); changed(); load(); say(tr("Đã gỡ khỏi Hộp thư")); } },
+  ];
+  const jobActs: BulkAct<Task>[] = [
+    { id: "run", label: tr("Chạy ngay"), icon: <I.Play size={13} />, run: async (l) => { await each(l, (t) => api("POST", `/api/tasks/${t.id}/run`)); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } },
+    { id: "on", label: tr("Bật lịch"), icon: <I.Power size={14} />, when: (l) => l.some((t) => !t.enabled), run: async (l) => { await each(l.filter((t) => !t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: true })); load(); } },
+    { id: "off", label: tr("Tắt lịch"), icon: <I.Pause size={13} />, when: (l) => l.some((t) => t.enabled), run: async (l) => { await each(l.filter((t) => t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: false })); load(); } },
+    { id: "del", label: tr("Xóa"), icon: <I.Trash size={14} />, danger: true,
+      confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} ${tr("việc tự động?")}`, text: tr("Kết quả cũ của các việc này trong Hộp thư cũng bị xóa."), ok: tr("Xóa") }),
+      run: async (l) => { await each(l, (t) => api("DELETE", `/api/tasks/${t.id}`)); say(tr("Đã xóa việc tự động")); load(); } },
+  ];
   const groups = useMemo(() => { const m = new Map<number, Item[]>(); for (const x of shown) { const d = dayOf(x.at); m.set(d, [...(m.get(d) ?? []), x]); } return [...m.entries()]; }, [shown]);
   const active = (tasks ?? []).filter((t) => t.enabled).length;
   const needsChrome = (tasks ?? []).some((t) => t.enabled && t.browser === "user");
@@ -346,7 +366,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         </div>
         <span style={{ flex: 1 }} />
         {tab === "results" && (tasks?.length ?? 0) > 1 && <select className="field tk-filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Lọc theo việc"><option value="">{tr("Mọi việc")}</option>{tasks!.map((t) => <option key={t.id} value={t.id} data-notr>{t.title}</option>)}</select>}
-        {tab === "results" && unread > 0 && <button className="btn" onClick={() => read("all")}>{tr("Đánh dấu đã đọc hết")}</button>}
+        {tab === "results" && unread > 0 && !bkR.on && <button className="btn" onClick={() => read("all")}>{tr("Đánh dấu đã đọc hết")}</button>}
+        {tab === "results" && <BulkButton b={bkR} />}
+        {tab === "jobs" && <BulkButton b={bkJ} />}
       </div>
 
       {tab === "results" && (items === null ? <div className="empty"><span className="art-spin" /></div> : !shown.length ? (
@@ -355,19 +377,19 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         <div className="tk-feed">{groups.map(([d, list]) => (
           <section key={d}><h3 className="tk-day">{dayLabel(d)}</h3>
             <div className="tk-list">{list.map((x) => (
-              <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""}`}>
+              <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""}`} {...bulkRow(bkR, x)}>
                 <button className="tk-row" onClick={() => toggle(x)} aria-expanded={open === x.run}>
-                  <span className={`tk-dot ${x.status}`} />
+                  {bkR.on ? <BulkCheck on={bkR.has(x)} /> : <span className={`tk-dot ${x.status}`} />}
                   <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy trên máy chủ…") : x.status === "waiting" ? tr("Đang chờ Chrome của bạn kết nối") : x.status === "error" ? tr("Lỗi") : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(excerpt(x.text))}</em></span>
                   {(x.proposals ?? 0) > 0 && <span className="tk-chip warn">{x.proposals} {tr("đề xuất")}</span>}
                   {x.kind === "action" && <span className="tk-chip">{tr("Đã duyệt")}</span>}
                   <span className="tk-when">{when(x.at).split(" ·")[0]}</span>
                 </button>
-                {open === x.run && <ResultBody x={x} task={byId.get(x.task)} say={say} onOpenChat={onOpenChat} onRetry={runNow} reload={load} />}
+                {open === x.run && !bkR.on && <ResultBody x={x} task={byId.get(x.task)} say={say} onOpenChat={onOpenChat} onRetry={runNow} reload={load} />}
               </div>
             ))}</div>
           </section>
-        ))}</div>
+        ))}<BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
       ))}
 
       {tab === "approve" && (props === null ? <div className="empty"><span className="art-spin" /></div> : !pending.length && !decided.length ? (
@@ -384,8 +406,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa có việc tự động nào")}</b><span>{tr("Giao việc ở ô phía trên, Synchro lên kế hoạch để bạn xem lại trước khi tạo.")}</span></div>
       ) : (
         <div className="tk-jobs">{tasks.map((t) => (
-          <div key={t.id} className={`tk-job ${t.enabled ? "" : "off"}`}>
+          <div key={t.id} className={`tk-job ${t.enabled ? "" : "off"}`} {...bulkRow(bkJ, t)}>
             <div className="tk-job-h">
+              {bkJ.on && <BulkCheck on={bkJ.has(t)} />}
               <span className="tk-t"><b data-notr>{t.title}</b><em>{scheduleText(t.schedule)}{t.wait_since ? ` · ${tr("đang chờ Chrome")}` : t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${when(t.next_run_at)}` : !t.enabled ? ` · ${tr("đã tắt")}` : ""}</em></span>
               <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled} aria-label="Bật lịch" onClick={() => setOn(t)} />
             </div>
@@ -397,14 +420,14 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               {t.pending > 0 && <button type="button" className="tk-chip warn" onClick={() => setTab("approve")}>{t.pending} {tr("chờ duyệt")}</button>}
             </div>
             <p className="tk-job-p" data-notr>{t.prompt.slice(0, 220)}{t.prompt.length > 220 ? "…" : ""}</p>
-            <div className="tk-acts">
+            {!bkJ.on && <div className="tk-acts">
               <button className="btn" onClick={() => runNow(t)}><I.Play size={13} />{tr("Chạy ngay")}</button>
               <button className="btn" onClick={() => { setFilter(t.id); setTab("results"); }}><I.Inbox size={14} />{tr("Xem kết quả")}</button>
               <button className="btn ghost" onClick={() => setEdit({ task: t })}><I.Pencil size={14} />{tr("Sửa")}</button>
               <button className="icon-btn" aria-label="Xóa việc tự động" data-tip="Xóa việc tự động" onClick={() => del(t)}><I.Trash size={15} /></button>
-            </div>
+            </div>}
           </div>
-        ))}</div>
+        ))}<BulkBar b={bkJ} acts={jobActs} noun={tr("việc")} /></div>
       ))}
       {edit && <TaskEditor init={edit === "new" ? null : edit.task ?? null} plan={edit === "new" ? null : edit.plan ?? null} say={say} onClose={() => setEdit(null)}
         onSaved={(_t, ran) => { setEdit(null); load(); setTab(ran ? "results" : edit !== "new" && edit.task ? tab : "jobs"); }} />}

@@ -9,6 +9,7 @@ import { AGES, DESIGN_PRESETS, GENDERS, REMIX_IDEAS } from "./data";
 import { Drop, ErrBox, Field, OrbStage, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker, voiceLine } from "./parts";
 import { Head, Wide } from "./shell";
 import type { ToolProps } from "./view";
+import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
 
 type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 type Prev = { id: string; audio: string; dur: number };
@@ -61,8 +62,9 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
     del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
   };
   const card = (v: Voice, extra?: React.ReactNode) => (
-    <div key={v.id} className="sp-vcard">
+    <div key={v.id} className={`sp-vcard${bkV.on && !delOk(v) ? " bk-dim" : ""}`} {...(delOk(v) ? bulkRow(bkV, v) : {})}>
       <div className="sp-vcard-t">
+        {bkV.on && delOk(v) && <BulkCheck on={bkV.has(v)} />}
         <button className="sp-avbtn" aria-label={playing === v.id ? `Dừng nghe ${v.name}` : `Nghe thử ${v.name}`} onClick={() => preview(v)} disabled={!v.preview}><VoiceAvatar v={v} size={40} playing={playing === v.id} /><span className="sp-avplay">{playing === v.id ? <I.M icon="Pause" size={12} /> : <I.M icon="Play" size={12} />}</span></button>
         <div><b data-notr>{v.name}</b><span data-notr={untranslated(v.desc) || undefined}>{v.desc}</span></div>
       </div>
@@ -76,6 +78,12 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
     return w.every((x) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.gender} ${v.age} ${v.use}`.toLowerCase().includes(x))
       && (!kind || (kind === "premade" ? v.category === "premade" : v.category !== "premade")) && (!gender || v.gender === GENDERS.find((g) => g[1] === gender)?.[0]);
   });
+  const delOk = (v: Voice) => !!admin && v.category !== "premade";
+  const bkV = useBulk(shown.filter(delOk), (v) => v.id);
+  const voiceActs: BulkAct<Voice>[] = [
+    { id: "del", label: "Xóa giọng", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} giọng khỏi tài khoản ElevenLabs?`, text: "Không hoàn tác được.", ok: "Xóa" }),
+      run: async (l) => { await each(l, (v) => del("voices", v.id)); await reloadVoices(true); say(`Đã xóa ${l.length} giọng`); } },
+  ];
   const sub2 = { ivc: "Nhân bản nhanh", pvc: "Nhân bản chuyên sâu", design: "Thiết kế giọng", remix: "Remix giọng" } as Record<string, string>;
 
   if (area === "voices") return (
@@ -89,6 +97,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
             <label className="sp-search"><I.Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm theo tên, phong cách, ngôn ngữ…" aria-label="Tìm giọng" /></label>
             <Seg small label="Loại giọng" value={kind} onChange={setKind} items={[{ k: "", label: "Tất cả" }, { k: "premade", label: "Có sẵn" }, { k: "own", label: "Tự tạo" }]} />
             <Seg small label="Giới tính" value={gender} onChange={setGender} items={[{ k: "", label: "Mọi giới tính" }, ...GENDERS.map(([l, k]) => ({ k, label: l }))]} />
+            {shown.some(delOk) && <BulkButton b={bkV} compact />}
           </div>
           <div className="sp-vgrid">
             {mine === null && <div className="sp-empty"><Spin /> Đang tải giọng…</div>}
@@ -100,10 +109,11 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
                 {admin && v.category !== "premade" && <button className="icon-btn" aria-label={`Xóa ${v.name}`} onClick={() => remove(v)}><I.Trash size={15} /></button>}
               </div>
             )))}
-            {(creatable.length > 0 || can.remix) && <button className="sp-vcard sp-vnew" onClick={() => go("create")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>Nhân bản giọng của bạn hoặc thiết kế từ mô tả</span></button>}
+            {(creatable.length > 0 || can.remix) && !bkV.on && <button className="sp-vcard sp-vnew" onClick={() => go("create")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>Nhân bản giọng của bạn hoặc thiết kế từ mô tả</span></button>}
           </div>
         </>
       )}
+      {tab === "mine" && <BulkBar b={bkV} acts={voiceActs} noun="giọng" />}
       {tab === "library" && <LibraryGrid say={say} card={card} onUse={(v) => { setVoice(v); go("tts", "single"); }} />}
     </Wide>
   );
