@@ -92,22 +92,26 @@ export function ProjectModal({ onClose, onCreate, init, title = "Tạo dự án"
 
 export function ShareModal({ title, onClose, say, onCopy }: { title: string; onClose: () => void; say: (m: string) => void; onCopy?: () => void }) {
   const [mode, setMode] = useState<"priv" | "pub">("priv");
-  const link = `https://claude.ai/share/${Math.abs(title.length * 7919 + 104729).toString(16)}-c0de-4a1b`;
+  const link = `${typeof location !== "undefined" ? location.origin : ""}/share/${Math.abs(title.length * 7919 + 104729).toString(16)}-c0de-4a1b`;
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal sm" style={{ width: 480 }}>
-        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 14, right: 14 }}><I.X size={16} /></button>
-        <h2 style={{ fontSize: 16 }}>Chia sẻ đoạn chat</h2>
-        <p className="muted" style={{ fontSize: 13, margin: "0 0 14px" }}>{title}</p>
-        {(["priv", "pub"] as const).map((m) => (
-          <button key={m} className={`radio-row ${mode === m ? "on" : ""}`} onClick={() => setMode(m)}>
-            <span className="rd" />
-            <span><b>{m === "priv" ? "Riêng tư" : "Công khai"}</b><br /><span className="muted" style={{ fontSize: 13 }}>{m === "priv" ? "Chỉ bạn mới có quyền truy cập" : "Bất kỳ ai có liên kết đều có thể xem"}</span></span>
-          </button>
-        ))}
-        <div className="modal-foot" style={{ marginTop: 16 }}>
-          <button className="btn" onClick={onClose}>Hủy</button>
-          <button className="btn dark" disabled={mode === "priv"} style={mode === "priv" ? { opacity: 0.4 } : undefined} onClick={() => { navigator.clipboard?.writeText(link); onCopy?.(); say("Đã sao chép liên kết"); onClose(); }}>Sao chép liên kết</button>
+      <div className="modal sy-modal">
+        <div className="sy-mh"><h2>Chia sẻ đoạn chat</h2><button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
+        <div className="sy-mb sy-share">
+          <p className="sy-sub" data-notr>{title}</p>
+          {(["priv", "pub"] as const).map((m) => (
+            <button key={m} className={`sy-opt ${mode === m ? "on" : ""}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
+              <span className="sy-opt-ic">{m === "priv" ? <I.Lock size={16} /> : <I.Globe size={16} />}</span>
+              <span><b>{m === "priv" ? "Riêng tư" : "Công khai"}</b><em>{m === "priv" ? "Chỉ bạn mới có quyền truy cập" : "Bất kỳ ai có liên kết đều có thể xem"}</em></span>
+              <span className="sy-radio" aria-hidden />
+            </button>
+          ))}
+        </div>
+        <div className="sy-mf">
+          <div>
+            <button className="btn" onClick={onClose}>Hủy</button>
+            <button className="btn dark" disabled={mode === "priv"} onClick={() => { navigator.clipboard?.writeText(link); onCopy?.(); say("Đã sao chép liên kết"); onClose(); }}>Sao chép liên kết</button>
+          </div>
         </div>
       </div>
     </div>
@@ -168,8 +172,8 @@ export function UploadModal({ onClose, onFiles, onConverted }: { onClose: () => 
   };
   return createPortal(
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal upl">
-        <div className="upl-h"><span>Tải lên hoặc thêm tệp</span><span className="upl-beta">Beta</span><button className="icon-btn" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></div>
+      <div className="modal sy-modal upl">
+        <div className="sy-mh"><h2>Tải lên hoặc thêm tệp</h2><button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
         <div className={`upl-zone ${over ? "over" : ""}`}
           onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
           onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setOver(false); const f = Array.from(e.dataTransfer.files); if (f.length) onFiles(f); }}>
@@ -192,10 +196,9 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [["Đoạn chat mới", "⇧⌘O"], ["Tìm kiếm đoạn chat", "⌘K"], ["Mở/đóng thanh bên", "⌘."], ["Mở cài đặt", "⇧⌘,"], ["Phím tắt", "⌘/"], ["Xuống dòng trong tin nhắn", "⇧⏎"], ["Đóng hộp thoại / menu", "Esc"]];
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal sm" style={{ width: 460 }}>
-        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 14, right: 14 }}><I.X size={16} /></button>
-        <h2 style={{ fontSize: 16 }}>Phím tắt</h2>
-        {rows.map(([a, k]) => <div key={a} className="row" style={{ padding: "10px 0" }}><div className="t">{a}</div><kbd className="kbd">{k}</kbd></div>)}
+      <div className="modal sy-modal sy-keys">
+        <div className="sy-mh"><h2>Phím tắt</h2><button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
+        <div className="sy-mb">{rows.map(([a, k]) => <div key={a} className="sy-krow"><span>{a}</span><kbd className="kbd" data-notr>{k}</kbd></div>)}</div>
       </div>
     </div>
   );
