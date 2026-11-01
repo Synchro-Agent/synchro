@@ -3353,7 +3353,7 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 
 /* ---------------------------------------------------------------- xem trước sản phẩm: tải về nhiều định dạng */
 .art-dl{position:relative}
-.menu.art-dl-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:250px;padding:6px;z-index:40}
+.menu.art-dl-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:250px;padding:4px;z-index:40}
 .art-dl-h{font-size:12px;color:var(--text-3);padding:6px 10px 4px}
 .art-dl-menu .menu-item,.prod-menu .menu-item{gap:10px;align-items:center;padding:8px 10px;height:auto}
 .art-dl-t{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;text-align:left}
@@ -3404,7 +3404,7 @@ html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--ca
 .prod-n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:var(--hover);font-size:11px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
 .prod-sw{position:relative;flex:none}
 .prod-sw-b{width:auto!important;padding:0 7px;gap:5px;display:inline-flex;align-items:center;font-size:12px;color:var(--text-2)}
-.menu.prod-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:280px;max-height:60vh;overflow:auto;padding:6px;z-index:40}
+.menu.prod-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:280px;max-height:60vh;overflow:auto;padding:4px;z-index:40}
 .prod-it.on{background:var(--hover)}
 .out-badge.sm{width:28px;height:28px;font-size:8px;border-radius:var(--r-pill)}
 .prod-ic{width:28px;height:28px;border-radius:25%;display:grid;place-items:center;background:var(--hover);color:var(--text-2);font-size:11px;flex:none}
@@ -3871,7 +3871,8 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
   .topbar .title-wrap{min-width:0}
   .topbar .title-wrap .sel{max-width:100%;min-width:0}
   .dock{padding:0 12px 12px}
-  .dock .composer,.dock-note{width:100%}
+  /* Thẻ chế độ và tin chờ gửi thẳng mép với ô soạn tin (trước đây hẹp hơn 48px nên lệch vào 24px). */
+  .dock .composer,.dock-note,.dock-mode,.wl-queue{width:100%}
   .dock-note>span:first-child{display:none}
   .dock-note{justify-content:flex-end}
   /* Độ ưu tiên cao hơn lớp kính (glass.css: z-index 20, lề âm khi đóng). */

@@ -104,17 +104,18 @@ await sleep(800);
 await click(byText(".nav-item", "Mới"), "new"); await sleep(800);
 await sendMsg("Làm trang web cho quán cà phê");
 let seen = new Set();
-for (let i = 0; i < 40; i++) { const t = await ev(`document.querySelector(".thinking-t")?.textContent ?? ""`); if (t) seen.add(t); if (await ev(`document.querySelectorAll(".art-card:not(.busy)").length > 0`)) break; await sleep(150); }
+for (let i = 0; i < 40; i++) { const t = await ev(`document.querySelector(".wl-st-t")?.textContent ?? ""`); if (t) seen.add(t); if (await ev(`document.querySelectorAll(".art-card:not(.busy)").length > 0`)) break; await sleep(150); }
 ok(seen.size > 0, "đang chạy hiện bước: " + [...seen].join(" → "));
 await sleep(2500);
 await click(byText(".nav-item", "Mới"), "new"); await sleep(800);
 await sendMsg("Kể ngắn về lịch sử cà phê #slow");
 await sleep(2000);
-ok(await ev(`!!document.querySelector(".thinking")`), "câu trả lời chậm đang chạy");
+ok(await ev(`!!document.querySelector(".wl-status")`), "câu trả lời chậm đang chạy");
 await P("Page.reload", {}); await sleep(4000);
 const chatTitle = await ev(`[...document.querySelectorAll(".chat-item, aside button")].find((e) => e.textContent.includes("Kể ngắn về lịch sử"))?.textContent ?? ""`);
-await click(`[...document.querySelectorAll("aside *")].find((e) => e.children.length === 0 && e.textContent.trim().startsWith("Kể ngắn về lịch sử"))`, "open chat"); await sleep(1500);
-ok(await ev(`!!document.querySelector(".thinking")`), "tải lại trang giữa chừng: tin nhắn vẫn đang chờ (nối lại lượt chạy)");
+// Tên đoạn chat có thể đã được tự đặt lại: tìm theo cụm chữ còn giữ.
+await click(`[...document.querySelectorAll(".chat-item")].find((e) => e.textContent.includes("lịch sử"))`, "open chat"); await sleep(1500);
+ok(await ev(`!!document.querySelector(".wl-status")`), "tải lại trang giữa chừng: tin nhắn vẫn đang chờ (nối lại lượt chạy)");
 await shot("reload-pending");
 await until(`[...document.querySelectorAll(".ai-msg")].some((e) => e.textContent.includes("cà phê") && e.textContent.length > 40)`, 30000, "answer after reload");
 ok(true, "sau khi tải lại, câu trả lời vẫn hiện ra khi máy chủ chạy xong");

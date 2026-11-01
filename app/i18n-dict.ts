@@ -1558,7 +1558,7 @@ Object.assign(VI2EN, {
   "Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…": "Write your own rules, e.g. always use pnpm, comment in English…", "Bỏ luật": "Remove rules", "Đã lưu luật tùy chỉnh": "Custom rules saved",
   "Viết hàm login bằng TypeScript gọi /api/login": "Write a TypeScript login function that calls /api/login", "Tạo demo html có nút bấm để chạy thử": "Make an HTML page with a button to try", "Lập kế hoạch kiến trúc cho app quản lý công việc": "Plan the architecture of a task manager app",
   "Gửi lại sẽ tạo nhánh mới, bản cũ vẫn được giữ.": "Resending creates a new branch; the old one is kept.", "Gửi nhánh mới": "Send new branch", "Sửa và rẽ nhánh": "Edit and branch", "Nhánh trước": "Previous branch", "Nhánh sau": "Next branch",
-  "Đã dừng · giữ lại phần đã viết": "Stopped · kept what was written", "Thêm tài liệu từ link": "Add docs from a link", "Nhấn Enter để thêm · Esc để hủy": "Press Enter to add · Esc to cancel", "Chưa có tệp nào. Dùng + để tải tệp, thư mục hoặc .zip.": "No files yet. Use + to upload files, folders or a .zip.",
+  "Đã dừng · giữ lại phần đã viết": "Stopped · kept what was written", "Đang trả lời": "Replying", "Thêm tài liệu từ link": "Add docs from a link", "Nhấn Enter để thêm · Esc để hủy": "Press Enter to add · Esc to cancel", "Chưa có tệp nào. Dùng + để tải tệp, thư mục hoặc .zip.": "No files yet. Use + to upload files, folders or a .zip.",
   // Chữ tiếng Việt không dấu (bộ rà xếp nhầm là tiếng Anh)
   "Ghim": "Pin", "Xem": "View", "Xong": "Done", "Cao": "High", "Nhanh": "Fast", "Song song": "Side by side", "Slide sau": "Next slide", "Thanh token": "Token bar", "Micro": "Microphone", "Repo GitHub": "GitHub repo",
 });

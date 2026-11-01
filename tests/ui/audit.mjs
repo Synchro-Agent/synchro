@@ -47,8 +47,81 @@ const CHECK = `(() => {
     if (r.left < -2 && r.right > 8 && !clipped(el) && !el.closest(".sidebar.closed") && getComputedStyle(el).position !== "sticky") { out.push("tràn khỏi mép trái " + Math.round(-r.left) + "px: " + name(el)); n++; continue; }
     const cs = getComputedStyle(el);
     const own = [...el.childNodes].some((c) => c.nodeType === 3 && c.nodeValue.trim());
-    if (own && /(hidden|clip)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 2 && cs.textOverflow !== "ellipsis" && !el.closest("pre,code,.art-code,textarea")) { out.push("chữ bị cắt (không có …): " + name(el) + " “" + el.textContent.trim().slice(0, 40) + "”"); n++; }
+    if (own && /(hidden|clip)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 2 && cs.textOverflow !== "ellipsis" && !el.closest("pre,code,.art-code,textarea,.sr-only")) { out.push("chữ bị cắt (không có …): " + name(el) + " “" + el.textContent.trim().slice(0, 40) + "”"); n++; }
   }
+  // Chữ đè lên chữ: hai đoạn chữ (không lồng nhau) chồng lên nhau mà giữa chúng không có lớp che (nền đặc, kính mờ). Ví dụ thẻ chế độ
+  // nằm trên danh sách việc của chat mà chữ phía sau vẫn sắc nét.
+  const alpha = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return c === "transparent" ? 0 : 1; const p = m[1].split(/[,\s/]+/).filter(Boolean); return p.length > 3 ? +p[3] : 1; };
+  const covers = (el) => { for (const pe of [null, "::before", "::after"]) { const cs = getComputedStyle(el, pe); if (pe && cs.content === "none") continue; if (alpha(cs.backgroundColor) >= 0.85 || (cs.backdropFilter && cs.backdropFilter !== "none") || (cs.backgroundImage !== "none" && !pe && alpha(cs.backgroundColor) > 0.5)) return true; } return false; };
+  // Phần nhìn thấy được của một hình chữ nhật: cắt theo mọi khung tổ tiên có overflow khác visible (khung cuộn, chữ có dấu …), tới
+  // tổ tiên stop (không tính). Chữ đã cuộn khuất hay bị dấu … che thì không tính là đè hay sát mép.
+  const clip = (el, r, stop) => {
+    let x0 = r.left, y0 = r.top, x1 = r.right, y1 = r.bottom;
+    for (let a = el; a && a !== document.documentElement && a !== stop; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") { const q = a.getBoundingClientRect(); if (cs.overflowX !== "visible") { x0 = Math.max(x0, q.left); x1 = Math.min(x1, q.right); } if (cs.overflowY !== "visible") { y0 = Math.max(y0, q.top); y1 = Math.min(y1, q.bottom); } }
+      if (cs.position === "fixed") break;
+    }
+    return x1 - x0 > 0.5 && y1 - y0 > 0.5 ? { left: x0, top: y0, right: x1, bottom: y1, width: x1 - x0, height: y1 - y0 } : null;
+  };
+  const boxes = [];
+  { const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); const rg = document.createRange();
+    while (tw.nextNode() && boxes.length < 3000) {
+      const t = tw.currentNode, p = t.parentElement;
+      if (!t.nodeValue.trim() || !p || p.closest("svg,script,style,textarea,[aria-hidden=true],.sr-only,.cm-editor,iframe") || !vis(p)) continue;
+      rg.selectNodeContents(t);
+      // Từng dòng của đoạn chữ (chữ xuống dòng có khung bao phủ cả hai dòng, không dùng khung bao đó).
+      for (const f of rg.getClientRects()) {
+        const r = clip(p, f);
+        if (!r || r.width < 4 || r.height < 6 || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+        boxes.push({ p, r, t: t.nodeValue.trim() });
+      }
+    } }
+  let over = 0;
+  for (let i = 0; i < boxes.length && over < 6; i++) for (let j = i + 1; j < boxes.length && over < 6; j++) {
+    const A = boxes[i], Bx = boxes[j];
+    if (A.p === Bx.p || A.p.contains(Bx.p) || Bx.p.contains(A.p)) continue;
+    const ix = Math.min(A.r.right, Bx.r.right) - Math.max(A.r.left, Bx.r.left), iy = Math.min(A.r.bottom, Bx.r.bottom) - Math.max(A.r.top, Bx.r.top);
+    if (ix <= 2 || iy <= 3) continue;
+    const small = Math.min(A.r.width * A.r.height, Bx.r.width * Bx.r.height);
+    if (ix * iy < small * 0.25) continue;
+    const cx = Math.max(A.r.left, Bx.r.left) + ix / 2, cy = Math.max(A.r.top, Bx.r.top) + iy / 2;
+    const stack = document.elementsFromPoint(cx, cy);
+    const ia = stack.findIndex((e) => e === A.p || A.p.contains(e) || e.contains(A.p)), ib = stack.findIndex((e) => e === Bx.p || Bx.p.contains(e) || e.contains(Bx.p));
+    const top = ia >= 0 && (ib < 0 || ia <= ib) ? A : Bx, low = top === A ? Bx : A;
+    // Lớp che: tổ tiên của chữ ở trên (không chứa chữ ở dưới) có nền đặc / kính mờ, hoặc phần tử nằm giữa trong ngăn xếp.
+    let hid = false;
+    for (let e = top.p; e && e !== document.body && !e.contains(low.p); e = e.parentElement) if (covers(e)) { hid = true; break; }
+    if (!hid) { const a = stack.indexOf(top.p), b = stack.findIndex((e) => e === low.p || e.contains(low.p)); if (a >= 0 && b > a) for (const e of stack.slice(a + 1, b)) if (!e.contains(low.p) && covers(e)) { hid = true; break; } }
+    if (hid) continue;
+    over++; out.push("chữ đè lên chữ: “" + top.t.slice(0, 30) + "” trên “" + low.t.slice(0, 30) + "” (" + name(top.p) + " / " + name(low.p) + ")");
+  }
+  // Khung nổi, thẻ, hộp thoại: chữ cách mép trái / phải ít nhất 8px, không phần tử nào tràn ra ngoài khung (trừ khung cuộn).
+  let edge = 0;
+  for (const c of document.querySelectorAll(".menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.us-card,.us-vc,.api-card:not(.bare),.cn-card,.cn-row,.dcard,.promo,.adm-card,.pj-card,.art-card,.wl-plan,.plan-card,.sy-settings .s-body .row")) {
+    if (edge > 8 || !vis(c)) continue;
+    const r = c.getBoundingClientRect(); if (r.width < 60 || r.height < 24 || r.bottom < 0 || r.top > H) continue;
+    const cs = getComputedStyle(c), sc = /(auto|scroll)/.test(cs.overflowX + cs.overflowY);
+    for (const k of c.querySelectorAll("*")) {
+      if (!vis(k) || k.closest("svg")) continue;
+      // Khung nổi lồng bên trong (menu ⋯ của một thẻ…) tự được kiểm riêng.
+      const nest = k.parentElement && k.parentElement.closest(".menu,.model-menu,.usermenu,.modal,.toast");
+      if (nest && nest !== c && c.contains(nest)) continue;
+      const q0 = k.getBoundingClientRect(); if (!q0.width || !q0.height) continue;
+      const q = k.parentElement === c ? q0 : clip(k.parentElement, q0, c); if (!q) continue;
+      if (!sc && (q.right > r.right + 1.5 || q.left < r.left - 1.5) && !/(fixed|absolute)/.test(getComputedStyle(k).position)) { out.push("tràn khỏi khung " + Math.round(Math.max(q.right - r.right, r.left - q.left)) + "px: " + name(k) + " trong " + name(c)); edge++; break; }
+      const own = [...k.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+      if (!own) continue;
+      const rg = document.createRange(); rg.selectNodeContents(k); const t = clip(k, rg.getBoundingClientRect(), c);
+      if (!t) continue;
+      const gap = Math.min(t.left - r.left, r.right - t.right);
+      if (t.width && gap < 7.5 && t.top >= r.top && t.bottom <= r.bottom) { out.push("chữ sát mép khung (" + Math.round(gap) + "px): " + name(k) + " “" + k.textContent.trim().slice(0, 30) + "” trong " + name(c)); edge++; break; }
+    }
+  }
+  // Khối soạn tin của đoạn chat: mọi thứ (thẻ chế độ, tin chờ gửi, ô soạn) nằm dưới vùng chuyển của dải kính mờ.
+  { const d = document.querySelector(".main>.dock"); if (d && vis(d)) { const top = d.getBoundingClientRect().top + parseFloat(getComputedStyle(d).paddingTop); for (const k of d.children) if (vis(k) && k.getBoundingClientRect().height && k.getBoundingClientRect().top < top - 1) out.push("nằm trong vùng mờ dần của khối soạn tin: " + name(k));
+    // Thẻ chế độ, tin chờ gửi thẳng mép trái với ô soạn tin.
+    const cl = d.querySelector(".composer")?.getBoundingClientRect().left; if (cl !== undefined) for (const k of d.querySelectorAll(":scope>.dock-mode,:scope>.wl-queue")) if (vis(k) && Math.abs(k.getBoundingClientRect().left - cl) > 1.5) out.push("lệch mép trái so với ô soạn tin " + Math.round(k.getBoundingClientRect().left - cl) + "px: " + name(k)); } }
   for (const img of document.images) if (img.complete && img.naturalWidth === 0 && img.getAttribute("src") && vis(img)) out.push("ảnh hỏng: " + img.getAttribute("src").slice(0, 80));
   if (document.fonts.status !== "loaded") out.push("phông chữ chưa tải xong");
   const bad = [...document.fonts].filter((f) => f.status === "error" && !/Fallback/.test(f.family)).map((f) => f.family);
@@ -143,6 +216,15 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("chat-bieu-do", async () => { await ask("Vẽ biểu đồ doanh thu 6 tháng"); await shot("chat-bieu-do"); });
   await step0("chat-tep", async () => { await ask("Tạo file Excel báo cáo doanh thu"); await shot("chat-tao-tep"); });
   await step0("chat-markdown", async () => { await ask("Viết kế hoạch ra mắt sản phẩm có bảng lịch trình"); await shot("chat-markdown"); });
+  await step0("muc-dung", async () => { await click(`document.querySelector(".us-ring")`, "usage"); await sleep(700); await shot("muc-dung"); await esc(); await sleep(300); });
+  // Đoạn chat ở chế độ Trang trình bày: thẻ "Synchro Slides" xếp trên ô soạn tin, chữ của chat cuộn xuống phía sau nó.
+  await step0("che-do-slides", async () => {
+    await side(); await click(`document.querySelector(".rail-new")`, "new"); await sleep(700);
+    await click(byText(".hero-chip", "Trang trình bày"), "slides"); await sleep(500);
+    await ask("Làm bộ slide giới thiệu quán cà phê");
+    await ev(`(() => { const t = document.querySelector(".thread"); if (t) t.scrollTop = Math.max(0, t.scrollHeight - t.clientHeight - 120); })()`); await sleep(500);
+    await shot("che-do-slides");
+  });
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await sleep(600); await shot("bang-lenh"); await esc(); await sleep(300); });
   await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await sleep(800); await shot("ung-dung"); });
   await step0("du-an", async () => { await nav("Dự án"); await shot("du-an"); });

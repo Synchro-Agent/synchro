@@ -133,7 +133,7 @@ try {
   ok(await ev(`(() => { const f = document.querySelector(".art-panel iframe, .art-frame iframe, iframe"); return !!f; })()`), "khung xem trước mở phiên bản mới");
   await shot("3-patch");
   await P("Page.reload", {}); await sleep(3500);
-  await click(`[...document.querySelectorAll("aside *")].find((e) => e.children.length === 0 && e.textContent.trim().startsWith("tạo trang web giới thiệu"))`, "open chat"); await sleep(1500);
+  await click(`[...document.querySelectorAll(".chat-item")].find((e) => /giới thiệu quán/i.test(e.textContent))`, "open chat"); await sleep(1500);
   const card2 = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`);
   ok(/Phiên bản 2/.test(card2) && !/chưa khớp/.test(card2), "tải lại trang: bản sửa vẫn áp đúng từ lịch sử");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }

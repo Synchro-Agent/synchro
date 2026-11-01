@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { Loader } from "./brand";
-import { tr } from "./i18n";
+import { getLang, tr } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string };
@@ -98,16 +98,19 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
 }
 
 const dur = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };
-const tok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+/** Số bước (lần dùng công cụ) đã làm trong câu trả lời đang chạy: tiến độ thật của việc nhiều bước. */
+export const stepsOf = (parts?: Part[]) => (parts ?? []).reduce((n, p) => n + (p.k === "tools" ? p.items.length : 0), 0);
 /** Dòng trạng thái khi đang chạy: việc đang làm, thời gian đã chạy, số token ước lượng đã viết. */
-export function WorkStatus({ label, since, chars }: { label?: string; since: number; chars: number }) {
+// Trước đây hiện "≈ N token" ước từ chữ hiện trên màn hình: không tính phần model viết vào công cụ (cả bộ slide, trang web…) nên sau 20 phút
+// vẫn chỉ "≈ 138 token", trông như model đứng yên. Nay hiện số bước đã làm.
+export function WorkStatus({ label, since, steps }: { label?: string; since: number; steps: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   return (
     <div className="wl-status" role="status" aria-live="polite">
       <Loader size={14} />
       <span className="wl-st-t" key={label}>{label || tr("Đang suy nghĩ…")}</span>
-      <span className="wl-st-m">{dur(now - since)}{chars > 40 ? ` · ≈ ${tok(Math.round(chars / 4))} token` : ""}</span>
+      <span className="wl-st-m">{dur(now - since)}{steps > 0 ? ` · ${steps} ${getLang() === "en" ? (steps === 1 ? "step" : "steps") : "bước"}` : ""}</span>
     </div>
   );
 }

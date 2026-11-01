@@ -38,7 +38,8 @@ export type ApprovalCall = {
   tool: { name: string; title: string; description: string; destructive: boolean }; input: unknown;
 };
 export type Decision = "allow" | "chat" | "always" | "deny";
-let approver: ((calls: ApprovalCall[]) => Promise<Record<string, Decision>>) | null = null;
+// conv: đoạn chat của lượt đang hỏi (người dùng có thể đang xem đoạn chat khác: thẻ duyệt hiện đúng đoạn chat đó).
+let approver: ((calls: ApprovalCall[], conv?: number | string) => Promise<Record<string, Decision>>) | null = null;
 /** Giao diện đăng ký hàm hỏi người dùng; chưa đăng ký thì mọi yêu cầu đều bị từ chối. */
 export const setApprover = (f: typeof approver) => { approver = f; };
 let lastSkills: SkillUse[] = [];
@@ -67,7 +68,10 @@ export const takeCancelled = () => { const c = lastCancelled; lastCancelled = fa
 export const cancelRun = (id: string) => fetch(`/api/runs/${encodeURIComponent(id)}`, { method: "DELETE" }).then(() => undefined, () => undefined);
 // onEvent: mọi bước của lượt (lời dẫn, công cụ, kết quả, danh sách việc, tin nhắn thêm đã ghép) để dựng nhật ký làm việc.
 export type RunEv = { seq: number; at: number; kind: string; text: string };
-type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void; onEvent?: (e: RunEv) => void };
+// Kết quả phụ của một lượt (skill, tệp, dấu vết…) ghi thẳng vào meta của lượt đó: nhiều đoạn chat chạy cùng lúc không lẫn kết quả của nhau
+// (các hàm take…() đọc biến dùng chung, chỉ an toàn khi mỗi lúc một lượt).
+export type RunMeta = { skills: SkillUse[]; libs: LibUse[]; files: OutFile[]; trace: TraceItem[]; steer: string[]; cancelled: boolean; route: string | null; sources: KbSource[] };
+type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void; onEvent?: (e: RunEv) => void; conv?: number | string; meta?: Partial<RunMeta> };
 // Tin nhắn thêm tới lúc model đã ở bước trả lời cuối (chưa ghép được): trả về để gửi thành lượt tiếp theo (đọc một lần).
 let lastSteer: string[] = [];
 export const takeSteer = () => { const s = lastSteer; lastSteer = []; return s; };
@@ -129,7 +133,7 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
   // Phần chạy tiếp cũng là lượt chạy nền: vẫn truyền chữ và dừng được.
   for (let n = 0; j.approval && n < 20; n++) {
     const calls = (j.approval.calls ?? []) as ApprovalCall[];
-    const decisions = approver ? await approver(calls).catch(() => ({})) : {};
+    const decisions = approver ? await approver(calls, cb.conv).catch(() => ({})) : {};
     const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions, async: true }) });
     if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new LLMError(e.error || `LLM ${r2.status}`, r2.status, e); }
     j = await r2.json();
@@ -148,6 +152,7 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
   lastFiles = Array.isArray(j.files) ? j.files : [];
   lastRoute = j.auto && typeof j.model === "string" ? j.model : null;
   lastSources = Array.isArray(j.sources) ? j.sources : [];
+  if (cb.meta) Object.assign(cb.meta, { skills: lastSkills, libs: lastLibs, files: lastFiles, trace: lastTrace, steer: lastSteer, cancelled: lastCancelled, route: lastRoute, sources: lastSources });
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model; lời nhắn của máy chủ (notice) hiện thành thông báo.
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("synchro:usage"));
@@ -157,14 +162,14 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
 }
 
 /** Mở lại một lượt đang chạy (sau khi tải lại trang): chờ kết quả rồi trả lời như callLLM. */
-export async function attachRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void): Promise<string> {
+export async function attachRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void, meta?: Partial<RunMeta>, conv?: number | string): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = [];
   const { http, result } = await waitRun(id, onProgress, onDelta, onEvent);
   if (http < 200 || http >= 300) throw new LLMError(String(result.error || `LLM ${http}`), http, result);
-  return absorb(result, { onProgress, onDelta, onEvent });
+  return absorb(result, { onProgress, onDelta, onEvent, meta, conv });
 }
 
-export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; pickedSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; onEvent?: (e: RunEv) => void; extra?: Record<string, unknown> } = {}): Promise<string> {
+export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 1500, route?: { task?: string; tokens?: number }, skills = false, opts: { feature?: "chat" | "code"; project?: number | string; conv?: number | string; studio?: string; recentSkills?: string[]; pickedSkills?: string[]; onRun?: (id: string) => void; onProgress?: (text: string) => void; onDelta?: (text: string) => void; onEvent?: (e: RunEv) => void; extra?: Record<string, unknown>; meta?: Partial<RunMeta> } = {}): Promise<string> {
   lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
   // Không bịa câu trả lời khi chưa có model: báo rõ để người dùng kết nối gói hoặc khóa API.
   if (!hasLLM) throw new LLMError("Synchro chưa được kết nối với model nào. Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok ở Cài đặt → Providers, hoặc nhập khóa API.", 503);

@@ -205,7 +205,8 @@ const PLAN_TOOL = {
 // Cách làm việc khi có công cụ: nói cho người dùng biết đang làm gì như một người thật, thay vì im lặng tới khi xong.
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
-- Trước mỗi lần gọi công cụ, viết 1 câu ngắn nói bạn sắp làm gì và vì sao (ví dụ "Mình sẽ đọc tài liệu của skill trước để làm đúng định dạng.").
+- Trước mỗi bước, viết 1 câu ngắn nói bạn sắp làm gì và vì sao (ví dụ "Mình sẽ đọc tài liệu của skill trước để làm đúng định dạng.").
+- Một bước có thể gồm nhiều công cụ: việc không phụ thuộc nhau (đọc nhiều skill hay nhiều tệp tham khảo, nhiều lượt tìm web, mở nhiều trang) thì gọi cùng lúc trong một bước, không gọi lần lượt từng cái.
 - Có kết quả rồi thì nói ngắn điều vừa tìm thấy trước khi làm bước tiếp theo.
 - Việc có từ 3 bước trở lên: gọi update_plan để hiện danh sách việc và cập nhật khi xong từng bước.
 - Nếu có khối <user_followup>: đó là tin người dùng nhắn thêm khi bạn đang làm. Ghép yêu cầu đó vào việc đang làm (ưu tiên nếu nó đổi yêu cầu), nói ngắn rằng bạn đã nhận và sẽ làm thế nào, rồi làm tiếp — không bỏ dở việc trước.
@@ -868,11 +869,17 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
       }
       const turnMsgs = am ?? withRecall(messages, recallOf(body, c.user, convId));
-      const once = (msgs: unknown, fresh = false) => subTurn({
+      const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(),
         mcp: bridge ? { url: bridge.url, alive: bridge.alive } : undefined, web: body.web === true, fresh,
       });
+      // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
+      // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.
+      const once = async (msgs: unknown, fresh = false) => {
+        const r = await turn(msgs, fresh);
+        return r.status === 200 && (r.json as { cancelled?: boolean }).cancelled ? { ...r, json: { ...(r.json as Record<string, unknown>), text: liveNow() } } : r;
+      };
       // Lỗi tạm thời của CLI (không phải đăng nhập, hạn mức, quá giờ hay người dùng bấm Dừng) khi chưa kịp dùng công cụ nào: thử lại một
       // lần ở phiên mới kèm toàn bộ lịch sử (nối tiếp phiên ngay sau lượt trước có lúc hỏng) — tin nhắn nào cũng phải chạy được.
       const tryOnce = async (msgs: unknown) => {
@@ -884,7 +891,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         }
         return res;
       };
-      type J = { text?: unknown; denied?: string[]; error?: unknown };
+      type J = { text?: unknown; denied?: string[]; error?: unknown; cancelled?: boolean };
       let hist = turnMsgs as unknown[];
       let r = await tryOnce(hist);
       // good: câu trả lời tốt gần nhất — lượt nhắc / tin nhắn thêm sau đó có lỗi thì vẫn giữ phần đã trả lời.
@@ -894,6 +901,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       for (let k = 0, nudged = 0, nd = 0; k < 6 && !am && r.status === 200; k++) {
         good = r;
         const j = r.json as J;
+        // Người dùng đã dừng: không nhắc làm tiếp, không ghép tin nhắn thêm (tin đó được gửi thành lượt mới).
+        if (j.cancelled) break;
         const said = String(j.text ?? "");
         const more = takeInbox();
         let next: string;

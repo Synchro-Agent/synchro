@@ -112,13 +112,18 @@ export class ClaudeCodeEngine implements Engine {
     // Công cụ của Synchro có thể dừng chờ người dùng duyệt (chế độ quyền, trang web chưa được phép): chờ được tới hết 30 phút của lượt.
     const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
     if (!p) { yield notInstalled("claude"); return; }
-    let text = "", done = false;
+    // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
+    // không dính liền "…dựng deck.Đã đọc 4 skill…".
+    let text = "", done = false, gap = false;
     const limits = new Map<string, RateWindow>();
     for await (const o of objects(p)) {
       if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) };
+      else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
       else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
-        text += o.event.delta.text;
-        yield { kind: "text", text: o.event.delta.text };
+        const t = (gap ? "\n\n" : "") + o.event.delta.text;
+        gap = false;
+        text += t;
+        yield { kind: "text", text: t };
       } else if (o.type === "system" && o.subtype === "api_retry") {
         // Claude Code tự thử lại khi API lỗi; 401/403 thì thử lại vô ích (token hết hạn, bị thu hồi): dừng ngay, báo đăng nhập lại.
         const st = num(o.error_status) ?? num(o.status) ?? num(o.error?.status);

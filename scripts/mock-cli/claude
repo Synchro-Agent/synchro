@@ -77,7 +77,16 @@ const loginFile = path.join(dir, ".mock-login");
     prompt = stl.prompt;
     // #slow: lượt trả lời mất 3 giây (thử nhắn thêm khi CLI đang trả lời); lượt nối tiếp với tin nhắn thêm thì trả lời ngay.
     if (prompt.includes("#slow") && !prompt.includes("<user_followup>")) await C.sleep(3000);
-    const delta = async (t) => { for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
+    // Mỗi tin của model mở đầu bằng message_start rồi mới tới chữ, như Claude Code thật với --include-partial-messages.
+    const delta = async (t) => { C.out({ type: "stream_event", event: { type: "message_start", message: { role: "assistant" } }, session_id: sid }); for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
+    // [mock:twomsg]: hai tin trong một lượt (câu dẫn → công cụ dựng sẵn → câu trả lời).
+    if (prompt.includes("[mock:twomsg]")) {
+      await delta("Mình sẽ tìm trên web.");
+      C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_ws", name: "WebSearch", input: { query: "mock" } }] }, session_id: sid });
+      await delta("Theo kết quả tìm web: xong.");
+      result({ subtype: "success", is_error: false, result: "Theo kết quả tìm web: xong.", usage: { input_tokens: prompt.length, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
+      return;
+    }
     // Như Claude Code thật với --mcp-config: nối máy chủ MCP "synchro", gọi công cụ (mcp__synchro__…) khi cần.
     const cfgJson = (() => { try { return JSON.parse(C.flag(a, "--mcp-config") ?? "null"); } catch { return null; } })();
     const mcpUrl = cfgJson?.mcpServers?.synchro?.url;

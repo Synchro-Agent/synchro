@@ -83,8 +83,11 @@ html body :is(.group,.pl-seg):not(.auth-root *)>button.on{background:var(--ds-in
 /* Gợi ý khi rê chuột: tấm mực, chữ giấy. */
 html body [data-tip]:not(.auth-root *):hover::after{background:var(--ds-inv);color:var(--ds-inv-fg);font-size:12px;font-weight:460;padding:5px 9px;border-radius:var(--r-pill);box-shadow:var(--ds-lift);letter-spacing:0}
 /* Menu: kính dày, mục cao 34px, icon thẳng hàng, phím tắt canh phải. */
-/* Menu bo 20 = mục tròn 32px (bán kính 16) + đệm 4: góc mục chọn đồng tâm với góc menu. */
-html body :is(.menu,.model-menu,.usermenu,.model-sub):not(.auth-root *){border-radius:var(--r-menu);padding:4px}
+/* Menu bo 20 = mục tròn 32px (bán kính 16) + đệm 4: góc mục chọn đồng tâm với góc menu.
+   Đệm 4px chỉ nặng hơn .menu một bậc (html .menu): khung nổi có nội dung riêng khai báo .menu.<tên> (Mức dùng 16/18px, Xuất bản 14px,
+   chế độ của Code 8px…) giữ đệm của nó. Trước đây quy tắc này nặng hơn tất cả nên chữ trong các khung đó nằm sát mép, nút tràn ra ngoài. */
+html body :is(.menu,.model-menu,.usermenu,.model-sub):not(.auth-root *){border-radius:var(--r-menu)}
+html :is(.menu,.model-menu,.usermenu,.model-sub):not(:where(.auth-root *)){padding:4px}
 html body .menu-item:not(.auth-root *){height:auto;min-height:32px;gap:10px;padding:0 12px;border-radius:var(--ds-r-row);font-size:13px;font-weight:430;color:var(--ds-ink)}
 html body .menu-item:not(.auth-root *)>svg:first-child{width:16px;height:16px;flex:none;color:var(--ds-ink-2)}
 html body .menu-item:not(.auth-root *) .sc{font-size:12px;color:var(--ds-faint)}
@@ -704,7 +707,14 @@ html body .sy-settings .adm-head .adm-badge,html body .sy-settings .adm-head .s-
   html body .sy-sbody-h h2{font-size:19px!important}
   html body .sy-settings .s-body .row{flex-wrap:wrap;row-gap:10px;padding:12px 14px!important}
   html body .sy-settings .s-body .row>div:first-child{flex:1 1 200px}
-  html body .sy-settings .s-body .row>:not(:first-child){margin-left:auto}
+  html body .sy-settings .s-body .row>:not(:first-child){margin-left:auto;max-width:100%}
+  /* Điện thoại: ô nhập (rộng cố định 280px trên máy tính) và bộ chọn đoạn chiếm trọn chiều ngang của hàng thay vì tràn ra ngoài tấm;
+     thẻ giới thiệu Synchro Code xếp khung terminal xuống dưới chữ. */
+  html body .sy-settings .s-body .row>.field{flex:1 1 100%;width:100%!important;min-width:0;margin-left:0}
+  html body .sy-settings .s-body .row>:is(.group,.pl-seg){flex:1 1 100%;margin-left:0}
+  html body .sy-settings .s-body .row>:is(.group,.pl-seg)>button{flex:1 1 auto;justify-content:center;padding:0 8px!important}
+  html body .sy-settings .promo{flex-direction:column;align-items:stretch;gap:16px}
+  html body .sy-settings .promo .term{min-width:0}
 }
 
 /* ---------------------------------------------------------------- hộp thoại */
@@ -823,8 +833,15 @@ html body .upl .upl-hint{color:var(--ds-faint)}
 .sy-krow{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:40px;border-bottom:1px solid var(--ds-line);font-size:13.5px;color:var(--ds-ink)}
 .sy-krow:last-child{border-bottom:0}
 html body .kbd{display:inline-grid;place-items:center;min-width:28px;height:26px;padding:0 8px;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--ds-line-2),0 1px 0 var(--ds-line-2);font-size:12px;font-weight:500;color:var(--ds-ink-2)}
-/* Hàng cài đặt con (vd. "Allow network egress" dưới "Code execution"): không thêm khung thứ hai, chỉ thụt vào 24px để thấy là mục con. */
-html body .sy-settings .inset{margin:8px 0 0 24px!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+/* Hàng cài đặt con (vd. "Allow network egress" dưới "Code execution"): chung một tấm với hàng cha, ngăn bằng kẻ mảnh; chữ thụt vào 20px
+   để thấy là mục con, công tắc thẳng cột với hàng cha. Trước đây hàng con thành một tấm riêng thụt 24px: hai khung lệch mép trái. */
+html body .sy-settings .inset{margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+html body .sy-settings .s-body .row:has(+.inset){border-bottom:0!important;border-bottom-left-radius:0!important;border-bottom-right-radius:0!important}
+html body .sy-settings .s-body .inset>.row{border-top-left-radius:0!important;border-top-right-radius:0!important;padding-left:36px!important}
+html body .sy-settings .s-body .inset>.row:first-child{border-top:1px solid var(--ds-line)!important}
+html body .sy-settings .s-body .inset>.row:first-child>div:first-child{position:relative}
+html body .sy-settings .s-body .inset>.row:first-child>div:first-child::before{content:"";position:absolute;left:-16px;top:3px;width:8px;height:9px;border-left:1.5px solid var(--ds-line-2);border-bottom:1.5px solid var(--ds-line-2);border-bottom-left-radius:4px}
+html body .sy-settings .s-body .inset:not(:has(+.row))>.row:last-child{border-bottom:1px solid var(--ds-line)!important;border-bottom-left-radius:var(--r-plate)!important;border-bottom-right-radius:var(--r-plate)!important}
 /* Thanh trên: tên đoạn chat co lại (… ở cuối) thay vì chạy đè lên các nút bên phải khi khung artifact đang mở. */
 html body .topbar{justify-content:space-between;gap:12px;padding:0 16px}
 html body .topbar .left,html body .topbar .right{position:static;left:auto;right:auto}
@@ -951,3 +968,26 @@ html body .rail .nav-item:active .rail-ic{transform:scale(.94)}
 html body .adm-pager.compact{min-height:28px;margin:6px 4px 2px;gap:8px}
 html body .adm-pager.compact .adm-pg-n{font-size:11.5px}
 html body .adm-pager.compact .icon-btn{width:28px;height:28px}
+
+/* ---------------------------------------------------------------- khối soạn tin của đoạn chat
+   Dải kính mờ bắt đầu phía TRÊN thứ đầu tiên trong khối (thẻ chế độ "Synchro Slides", tin chờ gửi, hay ô soạn tin): chữ của chat cuộn tới đó
+   thì mờ hẳn. Trước đây vùng chuyển nằm ngay chỗ thẻ chế độ nên chữ phía sau vẫn sắc nét, trông như thẻ đè lên danh sách việc.
+   Đệm cuối đoạn chat và nút cuộn xuống theo chiều cao thật của khối (--dock-h, đo trong page.tsx). */
+html body .main>.dock{padding-top:28px}
+html body .main>.dock::before{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px);mask-image:linear-gradient(to bottom,transparent 0,#000 28px);
+  background:linear-gradient(to bottom,transparent 0,color-mix(in srgb,var(--bg) 84%,transparent) 34px)}
+html body .main>.thread{padding-bottom:calc(var(--dock-h,124px) + 20px)}
+html body .main>.scroll-down{bottom:calc(var(--dock-h,124px) + 8px)}
+
+/* Đoạn chat có câu trả lời đang chạy ở nền: chấm nhịp ở cuối hàng (rê chuột thì nhường chỗ cho nút ⋯). */
+html body .shell-side .chat-item:has(.ct-run){padding-right:30px}
+.chat-item .ct-run{position:absolute;right:13px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--ds-ink);transition:opacity .15s}
+.chat-item .ct-run::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ds-ink);opacity:0;animation:ct-run 1.6s var(--ds-ease) infinite}
+@keyframes ct-run{0%{transform:scale(.5);opacity:.5}100%{transform:scale(1.25);opacity:0}}
+.chat-wrap:hover .ct-run{opacity:0}
+@media (prefers-reduced-motion:reduce){.chat-item .ct-run::after{animation:none}}
+html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
+
+/* Câu trả lời đã dừng giữa chừng (nút Dừng): nói rõ để không tưởng là câu trả lời cụt. */
+.msg-stopped{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--ds-muted)}
+.msg-stopped svg{flex:none}

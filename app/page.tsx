@@ -19,15 +19,15 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { elSpeed, speakAI, type Speaking } from "./speak";
-import { applyEvent, PlanCard, QueueChips, WorkParts, WorkStatus, type Queued, type RunEv } from "./worklog";
+import { applyEvent, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown } from "./md";
 import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
-import { steerRun, takeSteer } from "./llm";
-import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { steerRun } from "./llm";
+import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Studio } from "./studio";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
@@ -692,13 +692,20 @@ export default function Home() {
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
   useEffect(() => {
-    setApprover((calls) => new Promise((resolve) => setApproval({ chat: curRef.current, calls, resolve })));
+    setApprover((calls, conv) => new Promise((resolve) => setApproval({ chat: conv !== undefined && Number.isFinite(Number(conv)) ? Number(conv) : curRef.current, calls, resolve })));
     return () => setApprover(null);
   }, []);
   const [curProj, setCurProj] = useState<number | null>(null);
   // Dự án chọn từ khung soạn trước khi gửi tin đầu tiên của đoạn chat mới.
   const [nextProj, setNextProj] = useState<number | undefined>(undefined);
-  const [busy, setBusy] = useState(false);
+  // Đoạn chat đang có câu trả lời chạy (lượt chạy ở máy chủ, theo dõi qua SSE). Chuyển sang mục khác (Speech, Code…), mở đoạn chat khác
+  // hay đoạn chat mới đều không dừng nó: câu trả lời vẫn chạy và hiện đủ khi quay lại; chỉ nút Dừng mới hủy.
+  const [running, setRunning] = useState<ReadonlySet<number>>(() => new Set());
+  const setBusyOf = (id: number, on: boolean) => setRunning((s) => { if (s.has(id) === on) return s; const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
+  // busy: đoạn chat đang mở có câu trả lời đang chạy (ô soạn tin thành "Nhắn thêm", nút Dừng…).
+  const busy = view === "chat" && cur !== null && running.has(cur);
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const fm = useFileMenu((m) => say(m));
   const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
   const [userMenu, setUserMenu] = useState(false);
@@ -850,7 +857,8 @@ export default function Home() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Hiệu ứng gõ chữ của câu trả lời không truyền theo thời gian thực, theo từng đoạn chat.
+  const timers = useRef(new Map<number, ReturnType<typeof setInterval>>());
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
@@ -936,6 +944,8 @@ export default function Home() {
     if (ev.kind !== "ui" || !ev.text.startsWith("browser")) return;
     setBrwPrefer((p) => ({ v: ev.text === "browser:user" ? "user" : "synchro", n: (p?.n ?? 0) + 1 }));
     setChats((cs) => cs.map((c) => (c.id === chatId && !c.browser ? { ...c, browser: true } : c)));
+    // Câu trả lời đang chạy ở nền (người dùng xem đoạn chat khác): không đóng khung đang mở của họ; quay lại thì mở bằng nút trình duyệt.
+    if (chatId !== curRef.current) return;
     setArtSel(null); setFileSel(null); setBrwFor(chatId);
   };
   const brwOk = !!(brw?.available || brw?.ext?.allowed);
@@ -988,6 +998,16 @@ export default function Home() {
   };
   const patch = (id: number, fn: (m: Msg[]) => Msg[]) => setChats((cs) => cs.map((c) => (c.id === id ? { ...c, msgs: fn(c.msgs) } : c)));
   const threadRef = useRef<HTMLDivElement>(null);
+  // Khoảng đệm cuối đoạn chat và nút "cuộn xuống" theo chiều cao thật của khối soạn tin (thẻ chế độ, tin chờ gửi xếp trên ô soạn):
+  // tin cuối không bao giờ nằm dưới các thẻ đó.
+  const dockRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const d = dockRef.current, host = d?.parentElement;
+    if (!d || !host) return;
+    const ro = new ResizeObserver(() => host.style.setProperty("--dock-h", `${Math.round(d.getBoundingClientRect().height)}px`));
+    ro.observe(d);
+    return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
+  }, [view, chat?.id]);
   const stick = useRef(true);
   const [showDown, setShowDown] = useState(false);
   const onScroll = () => {
@@ -1003,32 +1023,38 @@ export default function Home() {
     if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: busy ? "auto" : "smooth" });
   }, [chat?.msgs, busy]);
 
-  // user = false: câu trả lời vừa hiện xong. Mặc định (nút Dừng, đổi đoạn chat…): hủy luôn lượt ở máy chủ để không tốn thêm token,
-  // phần đã viết được giữ lại và đánh dấu đã dừng (lượt sau model biết câu trả lời này chưa hoàn chỉnh).
-  const runRef = useRef<string | null>(null);
+  // Theo từng đoạn chat: mã lượt chạy ở máy chủ, và số thế hệ của lần theo dõi hiện tại (Dừng hay chạy lại thì số cũ hết hiệu lực,
+  // mọi cập nhật đến muộn của lần trước bị bỏ qua).
+  const runs = useRef(new Map<number, string>());
+  const gens = useRef(new Map<number, number>());
+  const genSeq = useRef(0);
   // Tin nhắn gửi trong lúc đang chạy: "steer" đang chờ ghép vào lượt, "later" gửi thành lượt mới khi xong.
   const [queued, setQueued] = useState<Queued[]>([]);
   const onSteer = async (text: string, later: boolean) => {
     const chatId = cur;
     if (chatId === null) return;
     const qid = Date.now() + Math.random();
-    const run = runRef.current;
+    const run = runs.current.get(chatId);
     if (later || !run) { setQueued((q) => [...q, { id: qid, chat: chatId, text, mode: "later" }]); return; }
     setQueued((q) => [...q, { id: qid, chat: chatId, text, mode: "steer" }]);
     if (!(await steerRun(run, text))) setQueued((q) => q.map((x) => (x.id === qid ? { ...x, mode: "later" } : x)));
   };
-  const stop = (user: unknown = true) => {
-    approvalRef.current?.resolve({});
-    setApproval(null);
-    genRef.current++;
-    if (timer.current) clearInterval(timer.current);
-    timer.current = null;
-    setBusy(false);
-    if (user !== false && runRef.current) cancelRun(runRef.current);
-    runRef.current = null;
-    setChats((cs) => cs.map((c) => ({ ...c, msgs: c.msgs.map((m) => (m.done ? m : { ...m, done: true, prog: undefined, ...(user !== false && m.role === "ai" ? { stopped: true, run: undefined } : {}) })) })));
+  // Dừng câu trả lời của một đoạn chat (mặc định: đoạn đang mở). user = false: câu trả lời vừa hiện xong, chỉ dọn trạng thái.
+  // Mặc định (nút Dừng, xóa đoạn chat): hủy luôn lượt ở máy chủ để không tốn thêm token, phần đã viết được giữ lại và đánh dấu đã dừng
+  // (lượt sau model biết câu trả lời này chưa hoàn chỉnh). Chuyển mục hay đổi đoạn chat không gọi hàm này.
+  const stop = (user: unknown = true, id: number | null = curRef.current) => {
+    if (id === null) return;
+    if (approvalRef.current && approvalRef.current.chat === id) { approvalRef.current.resolve({}); setApproval(null); }
+    gens.current.delete(id);
+    const t = timers.current.get(id);
+    if (t) clearInterval(t);
+    timers.current.delete(id);
+    setBusyOf(id, false);
+    const run = runs.current.get(id);
+    if (user !== false && run) cancelRun(run);
+    runs.current.delete(id);
+    patch(id, (ms) => ms.map((m) => (m.done ? m : { ...m, done: true, prog: undefined, ...(user !== false && m.role === "ai" ? { stopped: true, run: undefined } : {}) })));
   };
-  const genRef = useRef(0);
   const capsRef = useRef(caps);
   capsRef.current = caps;
   const [artRefresh, setArtRefresh] = useState(0);
@@ -1043,8 +1069,12 @@ export default function Home() {
   projsRef.current = projects;
   const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
   const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[]) => {
-    const gen = ++genRef.current;
-    setBusy(true);
+    const gen = ++genSeq.current;
+    gens.current.set(id, gen);
+    setBusyOf(id, true);
+    // Lần theo dõi này còn hiệu lực (chưa bị Dừng, chưa có lượt mới của cùng đoạn chat).
+    const mine = () => gens.current.get(id) === gen;
+    const meta: Partial<RunMeta> = {};
     const pr = pid !== undefined ? projsRef.current.find((x) => x.id === pid) : undefined;
     const history = (hist ?? [{ role: "user" as const, content: text }]).slice(-HISTORY_LIMIT);
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
@@ -1053,12 +1083,12 @@ export default function Home() {
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false;
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     let streamed = false, pend: string | null = null, raf = 0;
-    const flush = () => { raf = 0; if (pend === null || gen !== genRef.current) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
+    const flush = () => { raf = 0; if (pend === null || !mine()) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
     const onDelta = (t: string) => { streamed = true; pend = t; if (!raf) raf = requestAnimationFrame(flush); };
     // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
     // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
     const onEvent = (ev: RunEv) => {
-      if (gen !== genRef.current) return;
+      if (!mine()) return;
       openBrowser(ev, id);
       if (ev.kind === "steer") {
         patch(id, (ms) => {
@@ -1079,21 +1109,21 @@ export default function Home() {
       // Lượt chạy bền: máy chủ trả lời ở nền; mã lượt lưu vào tin nhắn để tải lại trang vẫn nhận được kết quả.
       const lastMsg = (f: (m: Msg) => Msg) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills, pickedSkills: picked,
-        onRun: (run) => { runRef.current = run; lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (gen === genRef.current) lastMsg((m) => ({ ...m, prog })); }, onDelta, onEvent,
+        onRun: (run) => { if (mine()) runs.current.set(id, run); lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (mine()) lastMsg((m) => ({ ...m, prog })); }, onDelta, onEvent, meta,
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via } });
-      const used = takeSkillsUsed();
-      libs = takeLibsUsed();
+      const used = meta.skills ?? [];
+      libs = meta.libs ?? [];
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
       const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
       usedSk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
-      outs = takeOutputs();
-      via = takeRoute();
-      trace = takeTrace();
-      cancelled = takeCancelled();
+      outs = meta.files ?? [];
+      via = meta.route ?? null;
+      trace = meta.trace ?? [];
+      cancelled = !!meta.cancelled;
       // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: gửi thành lượt tiếp theo ngay khi xong (không mất tin).
-      const left = takeSteer();
+      const left = meta.steer ?? [];
       setQueued((q) => {
         const mine = q.map((x) => (x.chat === id && x.mode === "steer" ? { ...x, mode: "later" as const } : x));
         const extra = left.filter((t) => !mine.some((x) => x.chat === id && x.text === t)).map((t, k) => ({ id: Date.now() + k + Math.random(), chat: id, text: t, mode: "later" as const }));
@@ -1112,7 +1142,7 @@ export default function Home() {
     }
     if (raf) cancelAnimationFrame(raf);
     // Người dùng đã bấm Dừng: máy chủ trả phần đã viết và dấu vết (công cụ bị dừng ghi cancelled_by_user) — lưu lại cho lượt sau.
-    if (gen !== genRef.current) {
+    if (!mine()) {
       if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply, trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
       return;
     }
@@ -1128,12 +1158,12 @@ export default function Home() {
     const words = (reply + (failed ? "" : note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : ""))).split(/(\s+)/);
     let i = 0;
     let wait = 42;
-    timer.current = setInterval(() => {
+    timers.current.set(id, setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
       patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
       if (i >= words.length) finishReply(id, reply, pr, history, via);
-    }, 38);
+    }, 38));
   };
   // Hỏi Có / Không trước khi dùng khóa API dùng chung thay cho gói đã hết hạn mức. Đồng ý: nhóm model của hãng đó chuyển sang model API
   // (tới khi gói hồi lại), chọn model tương đương và gửi lại lượt vừa lỗi. Không đồng ý: giữ nguyên gói.
@@ -1214,7 +1244,8 @@ export default function Home() {
       .finally(() => titling.current.delete(id));
   };
   const finishReply = (id: number, reply: string, pr: Project | undefined, history: LLMMsg[], via?: string | null) => {
-    stop(false);
+    stop(false, id);
+    doneAway(id);
     setTimeout(() => autoTitle(id), 300);
     const q = [...history].reverse().find((m) => m.role === "user");
     afterArtifacts(id, reply, via || (model !== AUTO ? model : ""), typeof q?.content === "string" ? q.content : "");
@@ -1233,6 +1264,12 @@ export default function Home() {
     const n = new URLSearchParams(location.search).get("next");
     if (n && /^\/apps\/[\w-]{1,40}$/.test(n)) location.replace(n);
   }, [me]);
+  // Câu trả lời xong khi người dùng đang ở mục khác hoặc đoạn chat khác: báo một dòng để họ biết quay lại xem.
+  const doneAway = (id: number) => {
+    if (viewRef.current === "chat" && curRef.current === id) return;
+    const c = chatsRef.current.find((x) => x.id === id);
+    if (c && !document.hidden) say(getLang() === "en" ? `Synchro finished replying in “${c.title}”` : `Synchro đã trả lời xong “${c.title}”`);
+  };
   // Mở lại trang khi câu trả lời còn đang chạy ở máy chủ: nối vào lượt đó, hiện bước đang làm, nhận kết quả khi xong.
   const resumed = useRef(false);
   useEffect(() => {
@@ -1245,17 +1282,25 @@ export default function Home() {
       const run = last.run;
       const set = (f: (m: Msg) => Msg) => patch(c.id, (ms) => (ms.length && ms[ms.length - 1].run === run ? [...ms.slice(0, -1), f(ms[ms.length - 1])] : ms));
       set((m) => ({ ...m, done: false }));
-      runRef.current = run;
-      attachRun(run, (prog) => set((m) => ({ ...m, prog })), (text) => set((m) => ({ ...m, text, prog: undefined })), (ev) => { openBrowser(ev, c.id); if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }).then((text) => {
-        const used = takeSkillsUsed(), libs = takeLibsUsed(), outs = takeOutputs(), trace = takeTrace(), stopped = takeCancelled();
+      runs.current.set(c.id, run);
+      const gen = ++genSeq.current;
+      gens.current.set(c.id, gen);
+      setBusyOf(c.id, true);
+      const mine = () => gens.current.get(c.id) === gen;
+      const meta: Partial<RunMeta> = {};
+      attachRun(run, (prog) => { if (mine()) set((m) => ({ ...m, prog })); }, (text) => { if (mine()) set((m) => ({ ...m, text, prog: undefined })); }, (ev) => { if (!mine()) return; openBrowser(ev, c.id); if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }, meta, c.id).then((text) => {
+        const used = meta.skills ?? [], libs = meta.libs ?? [], outs = meta.files ?? [], trace = meta.trace ?? [], stopped = !!meta.cancelled;
+        // Người dùng bấm Dừng trong lúc chờ: tin đã đánh dấu dừng, chỉ giữ thêm phần máy chủ trả về.
+        if (!mine()) { if (stopped) patch(c.id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || text, trace: trace.length ? trace : m.trace } : m))); return; }
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
-        const via = takeRoute();
+        const via = meta.route ?? null;
         set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined }));
-        if (runRef.current === run) runRef.current = null;
+        stop(false, c.id);
+        doneAway(c.id);
         setTimeout(() => autoTitle(c.id), 300);
-      }, (e) => set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })));
+      }, (e) => { if (!mine()) return; set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })); stop(false, c.id); });
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
   const send = (t: string, f: string[] = [], pick?: { id: string; label: string }[]) => {
@@ -1336,13 +1381,12 @@ export default function Home() {
   };
 
   const goNew = () => {
-    if (busy) stop();
     stopSpeak(); setSpeaking(null);
     setChats((cs) => cs.filter((c) => !c.inc));
     setView("new"); setCur(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
   };
   const goCustom = () => { setCzTab("hub"); setView("customize"); };
-  const removeChat = (id: number) => { setChats((cs) => cs.filter((c) => c.id !== id)); if (cur === id) goNew(); };
+  const removeChat = (id: number) => { if (running.has(id)) stop(true, id); setChats((cs) => cs.filter((c) => c.id !== id)); if (cur === id) goNew(); };
   const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
 
   useEffect(() => {
@@ -1437,14 +1481,22 @@ export default function Home() {
     setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: `${tr("Tác vụ nền")}: ${title}`, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
     setCur(id); setView("chat");
   };
-  // Lượt xong: gửi lần lượt các tin đã xếp hàng của đoạn chat đang mở.
+  // Gửi tiếp một tin vào đoạn chat có sẵn (tin "gửi sau khi xong"), kể cả khi người dùng đang ở mục khác hay đoạn chat khác.
+  const followUp = (id: number, t: string) => {
+    const c = chatsRef.current.find((x) => x.id === id);
+    if (!c) return;
+    if (id === curRef.current) stick.current = true;
+    const hist: LLMMsg[] = [...chatHistory(c.msgs, c.compact), { role: "user", content: t }];
+    patch(id, (m) => [...m, { role: "user", text: t, time: Date.now() }, { role: "ai", text: "", time: Date.now() }]);
+    streamReply(id, t, hist, c.project, c.studio);
+  };
+  // Lượt của một đoạn chat xong: gửi lần lượt các tin đã xếp hàng của đoạn chat đó.
   useEffect(() => {
-    if (busy || cur === null || view !== "chat") return;
-    const next = queued.find((q) => q.chat === cur && q.mode === "later");
+    const next = queued.find((q) => q.mode === "later" && !running.has(q.chat));
     if (!next) return;
-    const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); send(next.text); }, 250);
+    const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); followUp(next.chat, next.text); }, 250);
     return () => clearTimeout(t);
-  }, [busy, queued, cur, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [running, queued]); // eslint-disable-line react-hooks/exhaustive-deps
   const composerProps = { onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, goConnectors: () => { setCzTab("connectors"); setView("customize"); }, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
     projects: projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })),
     project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
@@ -1498,7 +1550,7 @@ export default function Home() {
       confirm: (l) => { const a = chatsOf(l).length, b = codesOf(l).length; return { title: `Xóa ${l.length} mục?`, text: `${[a ? `${a} đoạn chat` : "", b ? `${b} phiên code` : ""].filter(Boolean).join(" và ")} sẽ bị xóa, không hoàn tác được.`, ok: "Xóa" }; },
       run: (l) => {
         const ids = new Set(chatsOf(l).map((c) => c.id)), cids = new Set(codesOf(l).map((c) => c.id));
-        if (ids.size) { setChats((cs) => cs.filter((c) => !ids.has(c.id))); if (cur !== null && ids.has(cur)) goNew(); }
+        if (ids.size) { for (const x of ids) if (running.has(x)) stop(true, x); setChats((cs) => cs.filter((c) => !ids.has(c.id))); if (cur !== null && ids.has(cur)) goNew(); }
         if (cids.size) { setCodeList((x) => x.filter((c) => !cids.has(c.id))); for (const id of cids) { ls.remove("codeS:" + id); if (cpPage?.sync) deleteServerSession(id); } if (codeCur !== null && cids.has(codeCur)) setCodeCur(null); }
         say(`Đã xóa ${l.length} mục`);
       } },
@@ -1532,6 +1584,10 @@ export default function Home() {
   const logout = () => {
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
+    // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
+    for (const t of timers.current.values()) clearInterval(t);
+    timers.current.clear(); gens.current.clear(); runs.current.clear(); setRunning(new Set());
+    approvalRef.current?.resolve({}); setApproval(null);
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
   const api = {
@@ -1627,7 +1683,7 @@ export default function Home() {
                   onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { if (busy) stop(); setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span></button>
+                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
               )}
               {!sb.on && <button className="dots" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
@@ -1813,7 +1869,8 @@ export default function Home() {
                         const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
                         const full = arts.map.get(sg.art.ident)?.[v];
                         return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{m.plan?.length ? <PlanCard plan={m.plan} live={!m.done} /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} chars={m.text.length + (m.parts ?? []).reduce((n, p) => n + (p.k === "say" ? p.text.length : 0), 0)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
+                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{m.plan?.length ? <PlanCard plan={m.plan} live={!m.done} /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
+                      {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>
@@ -1859,7 +1916,7 @@ export default function Home() {
             {fileOpen && fileSel && (
               <FilePanel file={fileSel.file} onClose={() => setFileSel(null)} expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />} />
             )}
-            <div className="dock">
+            <div className="dock" ref={dockRef}>
               {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
                   onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}

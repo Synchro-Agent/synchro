@@ -201,6 +201,9 @@ try {
     const lim = ev.find((e) => e.kind === "usage")?.usage?.limits ?? [];
     ok(lim.some((w) => w.window === "five_hour" && w.usedPct > 0 && w.resetsAt > Date.now()) && lim.some((w) => w.window === "seven_day"), "claude: đọc hạn mức phiên 5 giờ và tuần từ rate_limit_event", JSON.stringify(lim));
     ok(ev.filter((e) => e.kind === "text").length > 1, "claude: chữ hiện dần (text_delta)");
+    const two = await all(S.engineFor("claude").runTurn({ prompt: "[mock:twomsg] tìm giúp", env: A.engineEnv("claude", U) }));
+    const said = two.filter((e) => e.kind === "text").map((e) => e.text).join("");
+    ok(said === "Mình sẽ tìm trên web.\n\nTheo kết quả tìm web: xong.", "claude: hai tin trong một lượt cách nhau một dòng trống (không dính “web.Theo”)", JSON.stringify(said));
     const t0 = Date.now();
     const a401 = await E.collect(S.engineFor("claude").runTurn({ prompt: "[mock:auth401]", env: A.engineEnv("claude", U) }));
     ok(a401.error?.code === "auth" && Date.now() - t0 < 10_000, "claude: api_retry 401 → dừng ngay, báo đăng nhập lại", JSON.stringify(a401.error));
