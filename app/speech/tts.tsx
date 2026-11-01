@@ -12,6 +12,7 @@ import { Group, Head, Split } from "./shell";
 import type { ToolProps } from "./view";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, useBulk } from "../bulk";
 import { itemActs } from "./audio";
+import { PageBar, usePage } from "../pager";
 
 type Line = { id: number; sp: number; text: string };
 type Fx = { filter?: string; space?: string; noise?: string; distance?: string };
@@ -57,6 +58,7 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
   const [tagOpen, setTagOpen] = useState(false);
   const [hist, setHist] = useItems(["tts", "dialogue"]);
   const bkH = useBulk(hist ?? [], (x) => x.id);
+  const pgH = usePage(hist ?? [], 10);
   const ta = useRef<HTMLTextAreaElement>(null);
   const focusLine = useRef<number | null>(null);
   // Hội thoại: hai người nói mặc định là hai giọng đầu tiên của tài khoản.
@@ -198,7 +200,7 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
           {hist === null && <div className="sp-empty"><Spin /></div>}
           {hist?.length === 0 && <div className="sp-empty">Chưa có bản đọc nào.</div>}
           {(hist?.length ?? 0) > 1 && <div className="bk-head"><BulkButton b={bkH} compact /></div>}
-          {hist?.map((h) => (
+          {pgH.items.map((h) => (
             <div key={h.id} className="sp-hrow" {...bulkRow(bkH, h)}>
               <div className="sp-hrow-t">{bkH.on && <BulkCheck on={bkH.has(h)} />}<VoiceAvatar v={{ id: String(h.meta.voice ?? h.id) }} size={18} /><b data-notr>{h.kind === "dialogue" ? "Hội thoại" : String(h.meta.voiceName || "Giọng")}</b><span className="sp-muted">{String(h.meta.modelName ?? "")} · {ago(h.createdAt)}</span></div>
               <p data-notr>{h.title}</p>
@@ -206,6 +208,7 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
               {!bkH.on && <div className="sp-hrow-a"><button className="sp-link" onClick={() => reuse(h)}>Dùng lại văn bản và giọng</button><button className="icon-btn" aria-label="Xóa" onClick={() => remove(h)}><I.Trash size={14} /></button></div>}
             </div>
           ))}
+          <PageBar pg={pgH} compact />
           <BulkBar b={bkH} acts={itemActs(setHist, say)} noun="bản" compact />
         </>
       )}>

@@ -13,6 +13,7 @@ import { useApp } from "./store";
 import { ScopeChoice, useIsAdmin, type Scope } from "./skillsui";
 import { TimePick } from "./timepick";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
+import { PageBar, usePage } from "./pager";
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 type BrowserPref = "auto" | "synchro" | "user";
@@ -340,7 +341,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
       confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} ${tr("việc tự động?")}`, text: tr("Kết quả cũ của các việc này trong Hộp thư cũng bị xóa."), ok: tr("Xóa") }),
       run: async (l) => { await each(l, (t) => api("DELETE", `/api/tasks/${t.id}`)); say(tr("Đã xóa việc tự động")); load(); } },
   ];
-  const groups = useMemo(() => { const m = new Map<number, Item[]>(); for (const x of shown) { const d = dayOf(x.at); m.set(d, [...(m.get(d) ?? []), x]); } return [...m.entries()]; }, [shown]);
+  const pgR = usePage(shown, 15, filter);
+  const pgJ = usePage(tasks ?? [], 10);
+  const groups = useMemo(() => { const m = new Map<number, Item[]>(); for (const x of pgR.items) { const d = dayOf(x.at); m.set(d, [...(m.get(d) ?? []), x]); } return [...m.entries()]; }, [pgR.items]);
   const active = (tasks ?? []).filter((t) => t.enabled).length;
   const needsChrome = (tasks ?? []).some((t) => t.enabled && t.browser === "user");
   // Khả năng đang tắt trong Cài đặt → Khả năng (người dùng tự tắt, không phải quản trị viên khóa): việc tự động cũng không dùng được.
@@ -389,7 +392,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               </div>
             ))}</div>
           </section>
-        ))}<BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
+        ))}<PageBar pg={pgR} /><BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
       ))}
 
       {tab === "approve" && (props === null ? <div className="empty"><span className="art-spin" /></div> : !pending.length && !decided.length ? (
@@ -405,7 +408,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
       {tab === "jobs" && (tasks === null ? <div className="empty"><span className="art-spin" /></div> : !tasks.length ? (
         <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa có việc tự động nào")}</b><span>{tr("Giao việc ở ô phía trên, Synchro lên kế hoạch để bạn xem lại trước khi tạo.")}</span></div>
       ) : (
-        <div className="tk-jobs">{tasks.map((t) => (
+        <div className="tk-jobs">{pgJ.items.map((t) => (
           <div key={t.id} className={`tk-job ${t.enabled ? "" : "off"}`} {...bulkRow(bkJ, t)}>
             <div className="tk-job-h">
               {bkJ.on && <BulkCheck on={bkJ.has(t)} />}
@@ -427,7 +430,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               <button className="icon-btn" aria-label="Xóa việc tự động" data-tip="Xóa việc tự động" onClick={() => del(t)}><I.Trash size={15} /></button>
             </div>}
           </div>
-        ))}<BulkBar b={bkJ} acts={jobActs} noun={tr("việc")} /></div>
+        ))}<PageBar pg={pgJ} /><BulkBar b={bkJ} acts={jobActs} noun={tr("việc")} /></div>
       ))}
       {edit && <TaskEditor init={edit === "new" ? null : edit.task ?? null} plan={edit === "new" ? null : edit.plan ?? null} say={say} onClose={() => setEdit(null)}
         onSaved={(_t, ran) => { setEdit(null); load(); setTab(ran ? "results" : edit !== "new" && edit.task ? tab : "jobs"); }} />}

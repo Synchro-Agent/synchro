@@ -8,6 +8,7 @@ import { useApp } from "./store";
 import { DIR_CATS, type DirCat, type DirEntry } from "./connectordir";
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
+import { PageBar, usePage } from "./pager";
 
 type Perm = "allow" | "chat" | "ask" | "block";
 type Tool = { name: string; title: string; description: string; readOnly: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
@@ -367,6 +368,7 @@ export function ConnectorsPanel() {
   const conns = data?.connectors ?? [];
   // Chọn hàng loạt: bật / tắt, làm mới công cụ, ngắt kết nối nhiều connector cùng lúc.
   const bk = useBulk(conns, (c) => c.id);
+  const pgC = usePage(conns, 10);
   const ok = (c: Conn) => c.status === "ok" && !c.adminBlocked;
   const acts: BulkAct<Conn>[] = [
     { id: "on", label: "Bật", icon: <I.Power size={14} />, when: (l) => l.some((c) => ok(c) && !c.enabled), run: (l) => each(l.filter((c) => ok(c) && !c.enabled), (c) => patch(c, { enabled: true }, (x) => ({ ...x, enabled: true }))) },
@@ -403,7 +405,7 @@ export function ConnectorsPanel() {
         </div>
       ) : (
         <div className="cn-list">
-          {conns.map((c) => (
+          {pgC.items.map((c) => (
             <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy === c.id} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
               onEnable={(v) => patch(c, { enabled: v }, (x) => ({ ...x, enabled: v }))}
               onConnect={() => reconnect(c)} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
@@ -411,6 +413,7 @@ export function ConnectorsPanel() {
               onGroup={(k, p) => patch(c, { group: { kind: k, perm: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.readOnly === (k === "read") ? { ...y, perm: p } : y)) }))}
               onSettings={(st) => patch(c, { settings: st }, (x) => ({ ...x, settings: { ...x.settings, ...st } }))} bk={bk} />
           ))}
+          <PageBar pg={pgC} />
           <BulkBar b={bk} acts={acts} noun="connector" />
         </div>
       )}

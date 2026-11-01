@@ -16,6 +16,7 @@ import { BrandLogo } from "./brands";
 import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
+import { Pager } from "./pager";
 
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
@@ -205,20 +206,6 @@ function Seg({ value, options, onChange }: { value: string; options: string[]; o
 }
 
 // Chia trang: "1–10 / 50", nút trước / sau; more = còn dữ liệu cũ trên máy chủ (nút sau tải thêm).
-function Pager({ page, pages, from, to, total, more, plus, onPage }: { page: number; pages: number; from: number; to: number; total: number; more?: boolean; plus?: boolean; onPage: (n: number) => void }) {
-  if (pages <= 1 && !more) return null;
-  return (
-    <div className="adm-pager">
-      <span className="adm-pg-n" data-notr><b>{from}–{to}</b> / {total}{plus ? "+" : ""}</span>
-      <span className="adm-pg-b">
-        <button className="icon-btn" disabled={page <= 1} aria-label="Previous page" onClick={() => onPage(page - 1)}><I.ChevronL size={15} /></button>
-        <span className="adm-pg" data-notr>{page} / {pages}{plus ? "+" : ""}</span>
-        <button className="icon-btn" disabled={page >= pages && !more} aria-label="Next page" onClick={() => onPage(page + 1)}><I.ChevronR size={15} /></button>
-      </span>
-    </div>
-  );
-}
-
 export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
   const app = useApp();
   const [d, setD] = useState<Data | null>(null);

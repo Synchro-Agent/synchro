@@ -7,6 +7,7 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { getLang, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
+import { PageBar, usePage } from "./pager";
 
 // studio: mục ở trang Artifacts (Tài liệu / Trình bày / Thiết kế) mà Synchro tự xếp skill vào (src: bộ luật / model / người dùng tự chọn).
 type Kind = "docs" | "slides" | "design";
@@ -271,6 +272,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
   const on = (list ?? []).filter((s) => s.enabled).length;
   // Chọn hàng loạt: bật / tắt, xuất .zip, xóa nhiều skill cùng lúc.
   const bs = useBulk(shown, (x) => x.name);
+  const pgS = usePage(shown, 10, q);
   const skActs: BulkAct<Item>[] = [
     { id: "on", label: "Bật", icon: <I.M icon="Play" size={14} />, when: (l) => l.some((x) => !x.enabled), run: (l) => each(l.filter((x) => !x.enabled), (x) => toggle(x.name, true)) },
     { id: "off", label: "Tắt", icon: <I.M icon="Pause" size={14} />, when: (l) => l.some((x) => x.enabled), run: (l) => each(l.filter((x) => x.enabled), (x) => toggle(x.name, false)) },
@@ -287,7 +289,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       {loadErr && <div className="sk-err">{loadErr}</div>}
       {list !== null && !list.length && !q && <div className="hub-empty"><I.Scroll size={18} /><span>Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.</span></div>}
       <div className="pl-rows2">
-        {shown.map((s) => (
+        {pgS.items.map((s) => (
           <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)} {...bulkRow(bs, s)}>
             {bs.on && <BulkCheck on={bs.has(s)} />}
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
@@ -300,6 +302,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
           </div>
         ))}
       </div>
+      <PageBar pg={pgS} />
       <BulkBar b={bs} acts={skActs} noun="skill" />
       <input ref={verRef} type="file" hidden accept=".zip,.md" onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ""; }} />
 

@@ -10,6 +10,7 @@ import { GithubAdd } from "./ghadd";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
 import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
+import { PageBar, usePage } from "./pager";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -250,8 +251,13 @@ export function SkillHub() {
   const qlib = q.trim().toLowerCase();
   const libs = (d?.plugins ?? []).filter((p) => !qlib || `${p.name} ${p.description}`.toLowerCase().includes(qlib)).sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "org" ? -1 : 1));
   const bk = useBulk(libs, (p) => p.id);
+  const pgOrg = usePage(libs.filter((p) => p.scope === "org"), 10, qlib);
+  const pgMine = usePage(libs.filter((p) => p.scope === "personal"), 10, qlib);
   const load = useCallback(() => api<Data>("GET", "/api/plugins").then((x) => { setD(x); setErr(""); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
+  // Có skill lẻ (dù chưa có thư viện nào) thì vẫn mở tab "Của bạn" để thấy skill của mình; chỉ mở Khám phá khi chưa có gì.
+  const [ownSkills, setOwnSkills] = useState<number | null>(null);
+  useEffect(() => { fetch("/api/skills").then((r) => r.json()).then((j) => setOwnSkills((j.skills ?? []).length)).catch(() => setOwnSkills(0)); }, []);
   // Skill vừa được đưa vào Thư viện cho mọi người (hộp thêm skill, lưu cách làm, đề xuất của Synchro): tải lại danh sách thư viện.
   useEffect(() => { window.addEventListener(PLUGINS_CHANGED, load); return () => window.removeEventListener(PLUGINS_CHANGED, load); }, [load]);
   useEffect(() => {
@@ -261,7 +267,7 @@ export function SkillHub() {
   }, [addMenu]);
   if (err) return <div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
   if (!d) return <div className="empty" style={{ marginTop: 40 }}><span className="art-spin" /></div>;
-  const view = tab ?? (d.plugins.length ? "yours" : "discover");
+  const view = tab ?? (d.plugins.length || ownSkills ? "yours" : "discover");
   const merge = (r: { plugins: PublicPlugin[]; plugin?: PublicPlugin }) => setD((x) => (x ? { ...x, plugins: r.plugins.length ? r.plugins : x.plugins.map((p) => (r.plugin && p.id === r.plugin.id ? r.plugin : p)) } : x));
   const byCat = new Map(d.plugins.filter((p) => p.catalogId).map((p) => [p.catalogId!, p]));
   const ql = q.trim().toLowerCase();
@@ -315,7 +321,7 @@ export function SkillHub() {
   const card = (x: DirPlugin) => (
     <div key={x.catalogId} className="pl-dcard">
       <PlugMark id={x.catalogId} size={44} />
-      <div className="pl-dcard-t"><b data-notr>{x.name}</b><span>{x.tagline}</span><em>{x.author} · {x.skillCount} skill · {x.license}</em></div>
+      <div className="pl-dcard-t"><b data-notr>{x.name}</b><span>{x.tagline}</span><em><span data-notr={untranslated(x.author ?? "") || undefined}>{x.author}</span> · {x.skillCount} skill · {x.license}</em></div>
       {plusBtn(x)}
     </div>
   );
@@ -370,8 +376,8 @@ export function SkillHub() {
               <I.Plugins size={64} />
             </div>
           )}
-          {org.length > 0 && <><div className="pl-sec">Libraries for everyone <i>{org.length}</i><span className="pl-sec-r"><BulkButton b={bk} compact /></span></div><div className="pl-rows2">{org.map(row)}</div></>}
-          {mine.length > 0 && <><div className="pl-sec">Your libraries <i>{mine.length}</i>{!org.length && <span className="pl-sec-r"><BulkButton b={bk} compact /></span>}</div><div className="pl-rows2">{mine.map(row)}</div></>}
+          {org.length > 0 && <><div className="pl-sec">Libraries for everyone <i>{org.length}</i><span className="pl-sec-r"><BulkButton b={bk} compact /></span></div><div className="pl-rows2">{pgOrg.items.map(row)}</div><PageBar pg={pgOrg} /></>}
+          {mine.length > 0 && <><div className="pl-sec">Your libraries <i>{mine.length}</i>{!org.length && <span className="pl-sec-r"><BulkButton b={bk} compact /></span>}</div><div className="pl-rows2">{pgMine.items.map(row)}</div><PageBar pg={pgMine} /></>}
           <BulkBar b={bk} acts={libActs} noun="thư viện" />
           <SkillsPanel q={q} Toggle={Toggle} />
           <p className="d pl-tip"><I.InfoCircle size={14} />Just chat: Synchro looks through every library and skill here and picks the ones that fit your request. A library is a set of skills installed together; a single skill is one you added on its own.</p>

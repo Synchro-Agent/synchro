@@ -10,6 +10,7 @@ import { capFiles, getStatus } from "./filestate";
 import { Fade, Menu, Thinking } from "./ui";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
+import { Pager, usePage } from "./pager";
 import { HalftoneBg } from "./halftone";
 import { CodeView, type CodeMeta } from "./codeview";
 import { answerAsk, deleteServerSession, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
@@ -1393,8 +1394,10 @@ export default function Home() {
     return () => { window.removeEventListener("dragenter", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); window.removeEventListener("dragover", prevent); };
   }, [say]);
 
-  const Nav = ({ v, icon, label, badge, onPick }: { v: View; icon: React.ReactNode; label: string; badge?: number; onPick?: () => void }) => (
-    <button data-nav={v} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
+  // Mục trên thanh điều hướng: gọi như một hàm trả về JSX (không phải component định nghĩa lại mỗi lần vẽ), nên bấm vào không dựng lại
+  // cả mục; biểu tượng cố định, không đổi hình khi rê / bấm. tip: tên đầy đủ khi nhãn ngắn hơn tên trang.
+  const nav = ({ v, icon, label, badge, onPick, tip }: { v: View; icon: React.ReactNode; label: string; badge?: number; onPick?: () => void; tip?: string }) => (
+    <button key={v} data-nav={v} data-tip={tip} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
       <span className="rail-ic">{icon}</span><span className="rail-l">{label}</span>{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}
     </button>
   );
@@ -1463,6 +1466,12 @@ export default function Home() {
   type SideItem = { k: "chat"; c: Chat } | { k: "code"; c: CodeItem };
   const sideItems: SideItem[] = [...codeList.map((c) => ({ k: "code" as const, c })), ...visible.map((c) => ({ k: "chat" as const, c }))];
   const sb = useBulk(sideItems, (x) => `${x.k}:${x.c.id}`);
+  // Thanh bên: danh sách dài chia trang gọn (đoạn chat 20 / trang, phiên code 10 / trang), không phải cuộn mãi.
+  const pinPj = new Set(projects.filter((x) => x.pinned && !x.archived).map((x) => x.id));
+  const pgRest = usePage(visible.filter((c) => !c.pinned && !(c.project !== undefined && pinPj.has(c.project))), 20);
+  const pgCode = usePage(codeList.filter((c) => !c.pinned && !c.archived), 10);
+  const pgArch = usePage(codeList.filter((c) => c.archived), 10);
+  const sidePager = (pg: { page: number; pages: number; from: number; to: number; total: number; setPage: (n: number) => void }) => <Pager compact page={pg.page} pages={pg.pages} from={pg.from} to={pg.to} total={pg.total} onPage={pg.setPage} />;
   const chatsOf = (l: SideItem[]) => l.flatMap((x) => (x.k === "chat" ? [x.c] : []));
   const codesOf = (l: SideItem[]) => l.flatMap((x) => (x.k === "code" ? [x.c] : []));
   const sideActs: BulkAct<SideItem>[] = [
@@ -1568,13 +1577,13 @@ export default function Home() {
         </button>
         <button className={`nav-item rail-new ${view === "new" ? "active" : ""}`} onClick={goNew} data-tip="⇧⌘O"><span className="rail-ic"><I.Plus /></span><span className="rail-l">Mới</span></button>
         <div className="rail-nav">
-          {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Hover icon={["Layers", "FolderOpen"]} />} label="Dự án" />}
-          {caps.art !== false && <Nav v="artifacts" icon={<I.Hover icon={["Shapes", "Cube"]} />} label="Artifacts" />}
-          <Nav v="inbox" icon={<I.Hover icon={["Inbox", "TrayIn"]} />} label="Hộp thư" badge={inboxN} />
-          <Nav v="brain" icon={<I.Hover icon={["Brain", "HeadCircuit"]} />} label="Bộ não" />
-          {me?.perms.features.code !== false && <Nav v="code" icon={<I.Hover icon={["Code", "CodeBlock"]} />} label="Code" onPick={() => setCodeCur(null)} />}
-          {me?.perms.features.speech !== false && <Nav v="speech" icon={<I.Hover icon={["Speech", "Wave"]} />} label="Speech" onPick={() => setSpTool("home")} />}
-          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Hover icon={["Plugins", "Connectors"]} />} label="Kho kỹ năng" />}
+          {me?.perms.features.projects !== false && nav({ v: "projects", icon: <I.Layers />, label: "Dự án" })}
+          {caps.art !== false && nav({ v: "artifacts", icon: <I.Shapes />, label: "Artifacts" })}
+          {nav({ v: "inbox", icon: <I.Inbox />, label: "Hộp thư", badge: inboxN })}
+          {nav({ v: "brain", icon: <I.Brain />, label: "Bộ não" })}
+          {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => setCodeCur(null) })}
+          {me?.perms.features.speech !== false && nav({ v: "speech", icon: <I.Speech />, label: "Speech", onPick: () => setSpTool("home") })}
+          {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: "Kỹ năng", tip: "Kho kỹ năng" })}
         </div>
         <div className="rail-foot">
           <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={17} /></button>
@@ -1603,7 +1612,7 @@ export default function Home() {
           <div className="side-tools">
             <div className="section-label">Công cụ Speech</div>
             <div className="nav-sub" aria-label="Công cụ Speech">
-              <button data-nav="sp-home" className={`nav-item ${spTool === "home" ? "active" : ""}`} onClick={() => setSpTool("home")}><I.Hover icon={["Speech", "Wave"]} />Trang chủ Speech</button>
+              <button data-nav="sp-home" className={`nav-item ${spTool === "home" ? "active" : ""}`} onClick={() => setSpTool("home")}><I.Speech />Trang chủ Speech</button>
               {SP_TOOLS.filter((t) => t.k !== "home" && toolOn(spPlan, t.k)).map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} data-nav={`sp-${t.k}`} className={`nav-item ${spTool === t.k ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
             </div>
           </div>
@@ -1699,21 +1708,22 @@ export default function Home() {
               {codeRest.length > 0 && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setCodeOpen(!codeOpen)}><span>Code</span><span className={`sec-chev ${codeOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${codeOpen ? "open" : ""}`}><div className="chat-list">{codeRest.map(codeRow)}</div></div>
+                  <div className={`fold ${codeOpen ? "open" : ""}`}><div className="chat-list">{pgCode.items.map(codeRow)}</div>{sidePager(pgCode)}</div>
                 </>
               )}
               {codeArch.length > 0 && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setArchOpen(!archOpen)}><span>Code đã lưu trữ · {codeArch.length}</span><span className={`sec-chev ${archOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{codeArch.map(codeRow)}</div></div>
+                  <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div>
                 </>
               )}
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setModal("search")}><I.Sliders size={16} /></button></div>
               <div className={`fold ${recentOpen ? "open" : ""}`}>
                 <div className="chat-list">
                   {visible.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>}
-                  {rest.map(row)}
+                  {pgRest.items.map(row)}
                 </div>
+                {sidePager(pgRest)}
               </div>
               <BulkBar b={sb} acts={sideActs} noun="mục" compact />
             </div>

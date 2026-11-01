@@ -149,7 +149,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("hop-thu", async () => { await nav("Hộp thư"); await shot("hop-thu"); });
   await step0("code", async () => { await nav("Code"); await sleep(1000); await shot("code"); });
   await step0("speech", async () => { await nav("Speech"); await shot("speech"); });
-  await step0("kho-ky-nang", async () => { await nav("Kho kỹ năng"); await shot("kho-ky-nang"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
+  await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
   await step0("cai-dat", async () => {
     await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);

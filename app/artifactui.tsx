@@ -14,6 +14,7 @@ import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "./srcloc";
 import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "./critic";
 import { CriticNote, CriticPill } from "./criticui";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
+import { PageBar, usePage } from "./pager";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
@@ -686,6 +687,7 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
   const shown = (tab === 2 ? [] : list ?? []).filter((a) => !q || a.title.toLowerCase().includes(q.toLowerCase()));
   // Chọn hàng loạt: xóa nhiều artifact cùng lúc.
   const bk = useBulk(shown, (a) => a.id);
+  const pg = usePage(shown, 24, `${tab}|${q}`);
   const acts: BulkAct<Summary>[] = [
     { id: "del", label: tr("Xóa"), icon: <I.Trash size={14} />, danger: true,
       confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} artifact?`, text: tr("Mọi phiên bản của các artifact này sẽ bị xóa, không hoàn tác được."), ok: tr("Xóa") }),
@@ -701,7 +703,7 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
           <>
           <div className="bk-head"><span className="bk-head-n">{shown.length} artifact</span><BulkButton b={bk} /></div>
           <div className="art-grid">
-            {shown.map((a) => (
+            {pg.items.map((a) => (
               <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={(e) => e.key === "Enter" && show(a.id)} {...bulkRow(bk, a)}>
                 {bk.on && <BulkCheck on={bk.has(a)} />}
                 <Thumb a={a} />
@@ -713,6 +715,7 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
               </div>
             ))}
           </div>
+          <PageBar pg={pg} />
           <BulkBar b={bk} acts={acts} noun="artifact" />
           </>
         )}

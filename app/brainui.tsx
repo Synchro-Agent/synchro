@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SideToggle } from "./brand";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
+import { Pager } from "./pager";
 import * as I from "./icons";
 import { type Chat, useApp } from "./store";
 import { getLang } from "./i18n";
@@ -842,6 +843,8 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
   // Chọn hàng loạt ở cột trái: ghim / bỏ ghim / xóa nhiều ghi chú (quy tắc hàng đầu và trang hệ thống không chọn được).
   const pickable = (g?.nodes ?? []).filter((n) => ["map", "topic", "entity", "note", "chat", "code", "daily"].includes(n.kind));
   const bkN = useBulk(pickable, (n) => n.title);
+  // Mỗi nhóm ở cột trái chia trang gọn 15 mục (thay cho cắt ở 60 mục "tìm để mở").
+  const [gpg, setGpg] = useState<Record<string, number>>({});
   const noteActs: BulkAct<GNode>[] = [
     { id: "pin", label: L("Ghim", "Pin"), icon: <I.M icon="Pin" size={15} />, when: (l) => l.some((n) => !n.pinned), run: async (l) => { await each(l.filter((n) => !n.pinned), (n) => api("PUT", "/api/brain/note", { title: n.title, pinned: true })); await load(); } },
     { id: "unpin", label: L("Bỏ ghim", "Unpin"), icon: <I.M icon="PinOff" size={15} />, when: (l) => l.some((n) => n.pinned), run: async (l) => { await each(l.filter((n) => n.pinned), (n) => api("PUT", "/api/brain/note", { title: n.title, pinned: false })); await load(); } },
@@ -891,17 +894,19 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
   const s = g?.stats;
   const byKind = (k: Kind[]) => (g?.nodes ?? []).filter((n) => k.includes(n.kind));
   // Nhóm trong cột trái: gọi như hàm để không dựng lại khi danh sách đổi.
-  const grp = (k: string, t: string, list: GNode[], limit = 60, add?: React.ReactNode) => !list.length && !add ? null : (
+  const GRP = 15;
+  const pageOf = (k: string, list: GNode[]) => Math.min(gpg[k] ?? 1, Math.max(1, Math.ceil(list.length / GRP)));
+  const grp = (k: string, t: string, list: GNode[], _limit = 60, add?: React.ReactNode) => !list.length && !add ? null : (
     <section className="bw-grp" key={k}>
       <div className="bw-grp-h">
         <button aria-expanded={!fold0[k]} onClick={() => setFold0({ ...fold0, [k]: !fold0[k] })}><I.ChevronR size={11} /><span>{t}</span></button>
         {add}<em>{list.length}</em>
       </div>
-      {!fold0[k] && <div className="bw-grp-b">{list.slice(0, limit).map((n) => (
+      {!fold0[k] && <div className="bw-grp-b">{list.slice((pageOf(k, list) - 1) * GRP, pageOf(k, list) * GRP).map((n) => (
         <button key={n.id} className={`bw-item ${at?.title === n.title && tab === "note" ? "on" : ""}`} onClick={() => open(n.title)} title={n.title} {...(n.kind === "rule" ? {} : bulkRow(bkN, n))}>
           {bkN.on && n.kind !== "rule" ? <BulkCheck on={bkN.has(n)} /> : <KindIcon k={n.kind} size={13} />}<span data-notr>{n.title}</span>{n.pinned && k !== "pin" && <I.Pin size={11} />}
         </button>))}
-        {list.length > limit && <span className="bw-more-n">{L(`và ${list.length - limit} mục khác — tìm để mở`, `and ${list.length - limit} more — search to open`)}</span>}
+        {list.length > GRP && <Pager compact page={pageOf(k, list)} pages={Math.ceil(list.length / GRP)} from={(pageOf(k, list) - 1) * GRP + 1} to={Math.min(pageOf(k, list) * GRP, list.length)} total={list.length} onPage={(n) => setGpg({ ...gpg, [k]: n })} />}
       </div>}
     </section>
   );

@@ -10,6 +10,7 @@ import { Drop, ErrBox, Field, OrbStage, Player, Range, Recorder, Seg, Select, Sp
 import { Head, Wide } from "./shell";
 import type { ToolProps } from "./view";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
+import { PageBar, usePage } from "../pager";
 
 type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 type Prev = { id: string; audio: string; dur: number };
@@ -80,6 +81,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
   });
   const delOk = (v: Voice) => !!admin && v.category !== "premade";
   const bkV = useBulk(shown.filter(delOk), (v) => v.id);
+  const pgV = usePage(shown, 12, `${q}|${kind}|${gender}`);
   const voiceActs: BulkAct<Voice>[] = [
     { id: "del", label: "Xóa giọng", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} giọng khỏi tài khoản ElevenLabs?`, text: "Không hoàn tác được.", ok: "Xóa" }),
       run: async (l) => { await each(l, (v) => del("voices", v.id)); await reloadVoices(true); say(`Đã xóa ${l.length} giọng`); } },
@@ -102,7 +104,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
           <div className="sp-vgrid">
             {mine === null && <div className="sp-empty"><Spin /> Đang tải giọng…</div>}
             {mine && !shown.length && <div className="sp-empty">Không có giọng khớp.</div>}
-            {shown.map((v) => card(v, (
+            {pgV.items.map((v) => card(v, (
               <div className="sp-vcard-a">
                 <button className="btn dark" onClick={() => { setVoice(v); go("tts", "single"); }}>Dùng giọng</button>
                 {can.remix && v.category !== "premade" && <button className="btn" onClick={() => { setVoice(v); go("create", "remix"); }}>Remix</button>}
@@ -113,6 +115,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
           </div>
         </>
       )}
+      {tab === "mine" && <PageBar pg={pgV} />}
       {tab === "mine" && <BulkBar b={bkV} acts={voiceActs} noun="giọng" />}
       {tab === "library" && <LibraryGrid say={say} card={card} onUse={(v) => { setVoice(v); go("tts", "single"); }} />}
     </Wide>

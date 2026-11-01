@@ -10,6 +10,7 @@ import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 import { ghConnect } from "./wsclient";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
+import { PageBar, usePage } from "./pager";
 
 type Say = (t: string) => void;
 
@@ -123,6 +124,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
   const archCount = projects.filter((x) => x.archived).length;
   // Chọn hàng loạt: ghim, lưu trữ / bỏ lưu trữ, xóa nhiều dự án cùng lúc.
   const bk = useBulk(list, (x) => x.id);
+  const pg = usePage(list, 24, `${arch}|${q}|${sort}|${group}`);
   const acts: BulkAct<Project>[] = [
     { id: "pin", label: "Ghim", icon: <I.Pin size={14} />, when: (l) => l.some((x) => !x.pinned), run: (l) => { l.forEach((x) => !x.pinned && patch(x.id, { pinned: true })); say(`Đã ghim ${l.length} dự án`); } },
     { id: "unpin", label: "Bỏ ghim", icon: <I.PinOff size={14} />, when: (l) => l.some((x) => x.pinned), run: (l) => { l.forEach((x) => x.pinned && patch(x.id, { pinned: false })); say(`Đã bỏ ghim ${l.length} dự án`); } },
@@ -207,9 +209,10 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
             <section key={t as string} className="pj-group"><div className="ds-sec"><h2>{t as string}</h2><i>{(l as Project[]).length}</i></div><div className="pj-grid pj-gridf">{(l as Project[]).map(card)}{gi === 1 && slot}</div></section>
           ))
         ) : (
-          <div className="pj-grid pj-gridf">{list.map(card)}{slot}</div>
+          <div className="pj-grid pj-gridf">{pg.items.map(card)}{pg.page === pg.pages && slot}</div>
         )}
       </div>
+      {!group && <PageBar pg={pg} />}
       <BulkBar b={bk} acts={acts} noun="dự án" />
     </div></div>
   );
@@ -286,6 +289,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   // Chọn hàng loạt: đoạn chat trong dự án (gỡ khỏi dự án, xóa) và bộ nhớ dự án (xóa nhiều mục).
   const bkC = useBulk(mine, (c) => c.id);
   const bkM = useBulk(mem, (m) => m.id);
+  const pgC = usePage(mine, 10), pgMem = usePage(mem, 10);
   const chatActs: BulkAct<Chat>[] = [
     { id: "unlink", label: "Gỡ khỏi dự án", icon: <I.Layers size={14} />, run: (l) => { onChats(l.map((c) => c.id), "unlink"); say(`Đã gỡ ${l.length} đoạn chat khỏi dự án`); } },
     { id: "del", label: "Xóa", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} đoạn chat?`, text: "Các đoạn chat đã chọn sẽ bị xóa, không hoàn tác được.", ok: "Xóa" }), run: (l) => { onChats(l.map((c) => c.id), "delete"); say(`Đã xóa ${l.length} đoạn chat`); } },
@@ -378,11 +382,12 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
           <div className="pj-chats-empty"><Bubble /><p>Synchro sử dụng cùng một nguồn kiến thức mỗi khi bạn trò chuyện với Synchro trong dự án này.</p></div>
         ) : (
           <><div className="bk-head"><span className="bk-head-n">{mine.length} đoạn chat</span><BulkButton b={bkC} compact /></div>
-          <div className="pj-chats">{mine.map((c) => <button key={c.id} className="pj-chat" onClick={() => onOpenChat(c.id)} {...bulkRow(bkC, c)}>{bkC.on ? <BulkCheck on={bkC.has(c)} /> : <span className="pj-chat-ic"><Bubble size={16} /></span>}<b>{c.title}</b><span>{ago(c.id)}</span>{!bkC.on && <I.ChevronR size={14} />}</button>)}</div>
+          <div className="pj-chats">{pgC.items.map((c) => <button key={c.id} className="pj-chat" onClick={() => onOpenChat(c.id)} {...bulkRow(bkC, c)}>{bkC.on ? <BulkCheck on={bkC.has(c)} /> : <span className="pj-chat-ic"><Bubble size={16} /></span>}<b>{c.title}</b><span>{ago(c.id)}</span>{!bkC.on && <I.ChevronR size={14} />}</button>)}</div>
+          <PageBar pg={pgC} />
           <BulkBar b={bkC} acts={chatActs} noun="đoạn chat" /></>
         ))}
         {tab === "ins" && <div className="pj-note"><p className={`pj-ins ${proj.ins ? "" : "muted"}`}>{proj.ins || "Thêm hướng dẫn để điều chỉnh câu trả lời của Synchro"}</p></div>}
-        {tab === "mem" && (mem.length === 0 ? <div className="pj-note"><p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p></div> : <><div className="bk-head"><span className="bk-head-n">{mem.length} mục</span><BulkButton b={bkM} compact /></div><ul className="pj-mem pj-list">{mem.map((m) => <li key={m.id} {...bulkRow(bkM, m)}>{bkM.on && <BulkCheck on={bkM.has(m)} />}{m.content}</li>)}</ul><BulkBar b={bkM} acts={memActs} noun="mục" /></>)}
+        {tab === "mem" && (mem.length === 0 ? <div className="pj-note"><p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p></div> : <><div className="bk-head"><span className="bk-head-n">{mem.length} mục</span><BulkButton b={bkM} compact /></div><ul className="pj-mem pj-list">{pgMem.items.map((m) => <li key={m.id} {...bulkRow(bkM, m)}>{bkM.on && <BulkCheck on={bkM.has(m)} />}{m.content}</li>)}</ul><PageBar pg={pgMem} /><BulkBar b={bkM} acts={memActs} noun="mục" /></>)}
         {tab === "skills" && canSkills && <ProjectSkills pid={proj.id} say={say} />}
         {tab === "ctx" && (
           <section className="pj-ctx">

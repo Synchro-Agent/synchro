@@ -8,6 +8,7 @@ import { Menu } from "./ui";
 import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
+import { PageBar, usePage } from "./pager";
 import { BrandLogo } from "./brands";
 import { vendorOf } from "./router";
 
@@ -411,6 +412,11 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       </div>
     );
   });
+  // Theo model: dòng của gói rồi dòng của khóa API, chia trang 10 mục.
+  const byModelRows: ({ kind: "plan"; m: NonNullable<typeof d>["byPlan"][number] } | { kind: "api"; row: React.ReactNode })[] = [
+    ...(d?.byPlan ?? []).map((m) => ({ kind: "plan" as const, m })), ...(apiNow ? apiRows.map((row) => ({ kind: "api" as const, row })) : []),
+  ];
+  const pgM = usePage(byModelRows, 10);
   const lead = !st ? "" : planNow && apiNow ? L("Hãng chạy bằng gói hiện hạn mức của gói (phiên 5 giờ, hằng tuần); hãng chạy bằng khóa API hiện chi phí và hạn mức của khóa.", "Providers on a plan show the plan's limits (5-hour session, weekly); providers on an API key show the key's cost and limits.")
     : planNow ? L("Các hãng đang chạy bằng gói subscription bạn đã đăng nhập, nên mức dùng hiện theo hạn mức của gói (phiên 5 giờ, hằng tuần) do hãng báo về.", "Your providers run on the subscription plans you signed in to, so usage follows each plan's limits (5-hour session, weekly) as the provider reports them.")
     : apiNow ? L("Các hãng đang chạy bằng khóa API, nên mức dùng tính theo chi phí token thật và hạn mức chi phí của Synchro.", "Your providers run on API keys, so usage is measured in real token cost against Synchro's cost limits.")
@@ -445,16 +451,16 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       <h3 className="sec">{L("Theo model", "By model")}</h3>
       {!d ? null : !d.byPlan.length && !(apiNow && d.byModel.length) ? <p className="d">{L("Chưa có lượt dùng nào. Bắt đầu một đoạn chat là số liệu hiện ở đây.", "No usage yet. Start a chat and it shows up here.")}</p> : (
         <div className="us-card us-list">
-          {d.byPlan.map((m) => (
+          {pgM.items.map((x) => x.kind === "plan" ? ((m) => (
             <div key={m.model} className="us-li">
               <div className="us-li-t"><b data-notr><i className="us-dot" style={{ background: VENDOR_COLOR[CLI_VENDOR[m.cli]] }} />{m.model.endsWith("/") ? L(`${m.name} (lượt cũ, chưa ghi tên model)`, `${m.name} (earlier calls, model not recorded)`) : m.name}</b><span>{L(`Gói ${SUB_NAME[m.cli]} · ${num(m.turns)} lượt`, `${SUB_NAME[m.cli]} plan · ${num(m.turns)} calls`)}</span></div>
               <em className="us-incl">{L("Trong gói", "Included")}</em>
               <div className="us-li-bar"><i style={{ width: `${(m.turns / topTurns) * 100}%`, background: VENDOR_COLOR[CLI_VENDOR[m.cli]] }} /></div>
             </div>
-          ))}
-          {apiNow && apiRows}
+          ))(x.m) : x.row)}
         </div>
       )}
+      <PageBar pg={pgM} />
       {!apiNow && !!d?.byModel.length && (
         <div className="us-old">
           <button className="us-old-b" aria-expanded={oldApi} onClick={() => setOldApi(!oldApi)}>{L(`Khóa API dùng trước đây: ${num(d.byModel.reduce((a, m) => a + m.calls, 0))} lần gọi · ${money(total)}`, `Earlier API key use: ${num(d.byModel.reduce((a, m) => a + m.calls, 0))} calls · ${money(total)}`)}<I.Chevron size={12} /></button>
@@ -499,6 +505,11 @@ function Money({ value, onSave, placeholder = "No limit" }: { value: number | nu
 export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
   const [d, setD] = useState<AdminData | null>(null);
   const [showPrices, setShowPrices] = useState(false);
+  const [pq, setPq] = useState("");
+  const pql = pq.trim().toLowerCase();
+  const people = (d?.users ?? []).filter((u) => !pql || `${u.name} ${u.email}`.toLowerCase().includes(pql));
+  const pgP = usePage(people, 10, pql);
+  const pgPr = usePage(d?.prices ?? [], 12);
   useEffect(() => { adm("GET").then(setD).catch((e) => say(e.message)); }, [say]);
   const patch = (body: unknown, ok: string) => adm("PATCH", body).then((x) => { setD(x); say(ok); refreshUsage(); }).catch((e) => say(e.message));
   if (!d) return <div className="muted" style={{ fontSize: 12 }}>Loading…</div>;
@@ -511,8 +522,10 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
       <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
+      {d.users.length > 10 && <div className="s-search us-ppl-s"><I.Search size={14} /><input placeholder="Search by name or email" value={pq} onChange={(e) => setPq(e.target.value)} /></div>}
       <div className="us-ppl">
-        {d.users.map((u) => {
+        {!people.length && <div className="d" style={{ padding: "10px 4px" }}>No users match.</div>}
+        {pgP.items.map((u) => {
           const s = u.limits.find((l) => l.key === "session")!, w = u.limits.find((l) => l.key === "weekly")!;
           return (
             <div key={u.id} className="us-p">
@@ -525,12 +538,13 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
           );
         })}
       </div>
+      <PageBar pg={pgP} />
 
       <div className="adm-card-h" style={{ marginTop: 14, cursor: "pointer" }} onClick={() => setShowPrices(!showPrices)}><b>Model prices {showPrices ? "▴" : "▾"}</b><span className="d">USD per 1 million tokens, used to turn tokens into cost. Claude prices are official; others are estimates you should check against each provider&apos;s pricing page.</span></div>
       {showPrices && (
         <div className="us-prices">
           <div className="us-pr h"><span>Model</span><span>Input</span><span>Output</span><span>Cache read</span><span /></div>
-          {d.prices.map((p) => (
+          {pgPr.items.map((p) => (
             <div key={p.model} className="us-pr">
               <span data-notr>{modelName(p.model)} <i className={`us-src ${p.src}`}>{p.src === "official" ? "Official" : p.src === "custom" ? "Custom" : "Estimate"}</i></span>
               {(["in", "out", "cache"] as const).map((k) => <Money key={k} value={p[k]} placeholder="" onSave={(v) => v !== null && patch({ config: { prices: { [p.model]: { in: p.in, out: p.out, cache: p.cache, [k]: v } } } }, "Price saved")} />)}
@@ -539,6 +553,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
           ))}
         </div>
       )}
+      {showPrices && <PageBar pg={pgPr} />}
       <p className="d" style={{ marginTop: 10 }}>{tr("Synchro tính chi phí từ số token thật mà nhà cung cấp trả về sau mỗi lần gọi model.")}</p>
     </div>
   );

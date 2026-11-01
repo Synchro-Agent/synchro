@@ -5,6 +5,7 @@ import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
 import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
+import { PageBar, usePage } from "./pager";
 import { Mark } from "./brand";
 import { MODES, PRESETS } from "./codeview";
 import { ProvidersPanel } from "./providersui";
@@ -186,6 +187,8 @@ function Account() {
     .then((r) => { setIa(r); if (me) app.setMe({ ...me, profile: { ...me.profile, instructions: r.instructions } }); setIns(r.instructions); app.say("Restored this version"); })
     .catch((e) => app.say(e.message));
   const [sessions, setSessions] = useState<Sess[] | null>(null);
+  // Phiên đăng nhập đang mở: chia trang 8 phiên (phiên hiện tại luôn ở trang đầu).
+  const pgSes = usePage([...(sessions ?? [])].sort((a, b) => Number(!!b.current) - Number(!!a.current)), 8);
   const [pw, setPw] = useState<null | { cur: string; next: string; again: string }>(null);
   const [del, setDel] = useState<null | string>(null);
   const [busy, setBusy] = useState(false);
@@ -261,7 +264,7 @@ function Account() {
       <table className="tbl">
         <thead><tr><th>Device</th><th>Location</th><th>Created</th><th>Updated</th><th /></tr></thead>
         <tbody>
-          {(sessions ?? []).map((s) => (
+          {pgSes.items.map((s) => (
             <tr key={s.id}>
               <td><span data-notr>{s.device}</span> {s.current && <span className="new-tag">Current</span>}</td><td data-notr>{s.ip ?? "—"}</td><td data-notr>{fmtDate(s.createdAt)}</td><td data-notr>{fmtDate(s.lastSeen)}</td>
               <td style={{ width: 80, textAlign: "right" }}>{!s.current && <button className="btn" style={{ height: 26 }} onClick={() => endSessions({ id: s.id }, "Session ended")}>Terminate</button>}</td>
@@ -269,6 +272,7 @@ function Account() {
           ))}
         </tbody>
       </table>
+      <PageBar pg={pgSes} />
       <Toasts msg={saved} />
       <Fade show={!!pw}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>

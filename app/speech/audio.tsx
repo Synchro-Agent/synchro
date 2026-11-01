@@ -9,6 +9,7 @@ import { Drop, ErrBox, Field, ModelPick, Player, Range, Recorder, Seg, Select, S
 import { Chips, Head, Split, Wide } from "./shell";
 import type { ToolProps } from "./view";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
+import { PageBar, usePage } from "../pager";
 
 /** Danh sách sản phẩm đã tạo của một công cụ: phát, tải xuống, xóa. */
 /** Chọn hàng loạt cho các danh sách bản đã tạo của Speech: tải về, xóa nhiều bản cùng lúc. */
@@ -23,19 +24,21 @@ export function itemActs(setItems: (f: (l: Item[] | null) => Item[] | null) => v
 export function Results({ items, kinds, say, setItems, empty, title = "Đã tạo" }: { items: Item[] | null; kinds: string[]; say: (m: string) => void; setItems: (f: (l: Item[] | null) => Item[] | null) => void; empty: string; title?: string }) {
   const list = (items ?? []).filter((x) => kinds.includes(x.kind));
   const remove = (it: Item) => { del("items", it.id).then(() => setItems((l) => l?.filter((x) => x.id !== it.id) ?? null)).catch((e: Error) => say(e.message)); };
-  const bk = useBulk(list.slice(0, 20), (x) => x.id);
+  const bk = useBulk(list, (x) => x.id);
+  const pg = usePage(list, 10);
   return (
     <div className="sp-card">
       <div className="sp-card-h">{title}{list.length > 0 && <span className="sp-muted">{list.length} bản</span>}{list.length > 1 && <span className="sp-card-r"><BulkButton b={bk} compact /></span>}</div>
       {items === null && <div className="sp-empty"><Spin /></div>}
       {items && !list.length && <div className="sp-empty">{empty}</div>}
-      {list.slice(0, 20).map((it) => (
+      {pg.items.map((it) => (
         <div key={it.id} className="sp-hrow" {...bulkRow(bk, it)}>
           <div className="sp-hrow-t">{bk.on && <BulkCheck on={bk.has(it)} />}<b data-notr>{it.title}</b><span className="sp-muted">{it.meta.cost ? `${fmtNum(Number(it.meta.cost))} credit · ` : ""}{ago(it.createdAt)}</span><button className="icon-btn" style={{ marginLeft: "auto" }} aria-label="Xóa" onClick={() => remove(it)}><I.Trash size={14} /></button></div>
           {it.url && it.mime?.startsWith("audio") ? <Player src={it.url} dl={it.url} label={it.title} />
             : it.url ? <button className="btn" onClick={() => download(it.url!)}><I.Download size={14} />Tải tệp ZIP</button> : null}
         </div>
       ))}
+      <PageBar pg={pg} />
       <BulkBar b={bk} acts={itemActs(setItems, say)} noun="bản" />
     </div>
   );

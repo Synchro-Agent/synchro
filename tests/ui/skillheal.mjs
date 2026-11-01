@@ -79,7 +79,7 @@ try {
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await sleep(1000);
-  await click(byText(".nav-item", "Kho kỹ năng"), "hub"); await sleep(1500);
+  await click(byText(".nav-item", "Kỹ năng"), "hub"); await sleep(1500);
   await until(`!!${byText(".pl-row2", NAME)}`, 15000, "skill row");
   await click(byText(".pl-row2", NAME), "open skill"); await sleep(1000);
   await until(`!!document.querySelector(".sk-fix")`, 8000, "self-fixes");

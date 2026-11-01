@@ -118,7 +118,7 @@ html body .rail .nav-item:not(.auth-root *):focus-visible .rail-ic{box-shadow:va
 .rail-ic>svg,.rail-ic>.ph-hover,.rail-ic .ph-hover svg{width:18px;height:18px}
 html body .rail .nav-item:not(.active):hover .rail-ic{background:var(--ds-hover)}
 html body .rail .nav-item:not(.active):active .rail-ic{background:var(--ds-press)}
-.rail-l{position:relative;z-index:1;font-size:10.5px;line-height:13px;letter-spacing:.005em;white-space:nowrap;max-width:62px;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease}
+.rail-l{position:relative;z-index:1;font-size:10.5px;line-height:13px;letter-spacing:.005em;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease}
 html body .rail .nav-item.active:not(.auth-root *){color:var(--ds-ink);font-weight:560}
 .rail-nav{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 0;scrollbar-width:none}
 .rail-nav::-webkit-scrollbar{display:none}
@@ -788,8 +788,15 @@ html body .menu.pl-menu .pl-mi em{white-space:normal;line-height:16px}
 @media (max-width:760px){.pj-hero-f{overflow:visible!important}.pj-hero-f>*{transform:scale(.727);transform-origin:left bottom}}
 /* Synchro Code (nền chấm toàn màn hình giữ nguyên): thanh điều hướng có tấm kính mờ phía sau để nhãn đọc rõ trên nền chấm. */
 /* Khung viên thuốc cách đều 6px ở cả bốn phía; logo (36) cách khung 10px mọi phía → bán kính 28 = 18 + 10, đồng tâm. */
+/* Cùng chất kính với ô chat của màn Code: lớp phủ mỏng, làm mờ 26px nên thấy lờ mờ nền chấm bên dưới; viền sáng mảnh như kính thật. */
 html body .app.code-view .rail::before{content:"";position:absolute;inset:6px;z-index:-1;border-radius:var(--r-pill);pointer-events:none;
-  background:color-mix(in srgb,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px var(--ds-line)}
+  background:rgba(255,255,255,.5);-webkit-backdrop-filter:blur(26px) saturate(var(--gl-sat)) brightness(var(--gl-bright));backdrop-filter:blur(26px) saturate(var(--gl-sat)) brightness(var(--gl-bright));
+  box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.55)),inset -1px -1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.35))}
+html[data-theme=dark] body .app.code-view .rail::before{background:rgba(28,29,26,.55)}
+html body .app.code-view .rail::after{content:"";position:absolute;inset:6px;z-index:-1;border-radius:var(--r-pill);pointer-events:none;padding:.75px;opacity:.55;
+  background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+html[data-theme=dark] body .app.code-view .rail::after{background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(255,255,255,.12) 22%,rgba(255,255,255,.02) 45%,rgba(255,255,255,.02) 58%,rgba(255,255,255,.2) 80%,rgba(255,255,255,.55))}
 /* Mục menu nhiều dòng (model "Tự động" có mô tả, model có dòng phụ): giãn theo nội dung, đệm trên dưới 8px. */
 html body .menu-item:is(.mrow,:has(.item-sub)){padding-top:8px;padding-bottom:8px}
 html body .menu-item.mauto{padding-top:8px;padding-bottom:8px;align-items:flex-start}
@@ -936,3 +943,11 @@ html body .pick-chip .icon-btn{width:20px;height:20px;border-radius:var(--r-pill
 /* Nút micro tách đôi: mũi tên là vòng tròn 22px cách viền viên thuốc 5px mọi phía, cùng tâm với đầu tròn bên phải (16 = 11 + 5). */
 html body .mic-wrap{padding:0 5px 0 0}
 html body .mic-wrap .chev{width:22px;height:22px}
+/* Thanh điều hướng: biểu tượng cố định; rê chuột chỉ hiện nền ô, bấm thì ô thu rất nhẹ rồi trả lại (không đổi hình, không nảy). */
+html body .rail .nav-item .rail-ic{transition:background-color .18s ease,color .18s ease,transform .14s var(--ds-ease)}
+html body .rail .nav-item:active .rail-ic{transform:scale(.94)}
+@media (prefers-reduced-motion:reduce){html body .rail .nav-item .rail-ic{transition:none}html body .rail .nav-item:active .rail-ic{transform:none}}
+/* Phân trang gọn (thanh bên, chỗ hẹp): chữ nhỏ, nút 28px. */
+html body .adm-pager.compact{min-height:28px;margin:6px 4px 2px;gap:8px}
+html body .adm-pager.compact .adm-pg-n{font-size:11.5px}
+html body .adm-pager.compact .icon-btn{width:28px;height:28px}
