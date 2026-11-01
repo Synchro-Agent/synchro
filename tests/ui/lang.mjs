@@ -116,7 +116,7 @@ for (const lang of LANGS) {
   await step("speech", async () => { await nav("speech"); await look("speech"); });
   const spTools = await ev(`[...document.querySelectorAll('[data-nav^="sp-"]')].map((e) => e.dataset.nav)`).catch(() => []);
   for (const t of spTools) await step(t, async () => { await nav(t); await look(t); });
-  await step("menu người dùng", async () => { await click(`document.querySelector(".side-bottom .user")`, "user"); await sleep(500); await look("menu người dùng"); });
+  await step("menu người dùng", async () => { await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await look("menu người dùng"); });
   await step("cài đặt", async () => {
     await click(`[...document.querySelectorAll(".menu-item")].find((e) => /^(Cài đặt|Settings)/.test(e.textContent.trim()))`, "settings"); await sleep(1200);
     const n = await ev(`document.querySelectorAll(".modal.settings .s-item").length`);

@@ -153,3 +153,10 @@ export const CheckCircle = A.CheckCircle;
 export const CircleDashed = A.CircleDashed;
 export const AppWindow = A.Browser;
 export const SquaresFour = A.SquaresFour;
+// Giao diện "Instrument": lối tắt ở trang chủ, sân khấu Artifacts, tab của trang dự án.
+export const Slides = A.Slides;
+export const PenNib = A.PenNib;
+export const Article = A.Article;
+export const ArrowUpRight = A.ArrowUpRight;
+export const ChatsCircle = A.ChatsCircle;
+export const ArrowRight = A.ArrowRight;

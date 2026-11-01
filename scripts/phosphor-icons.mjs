@@ -28,6 +28,8 @@ export const NAMES = {
   ArrowRight: "arrow-right", Browser: "browser", Browsers: "browsers", Eraser: "eraser", SignOut: "sign-out", WarningCircle: "warning-circle",
   Archive: "archive", TextIn: "text-align-left", FileText: "file-text", Flow: "flow-arrow", FileDoc: "file-doc", CheckCircle: "check-circle",
   CircleDashed: "circle-dashed", SquaresFour: "squares-four",
+  // Giao diện "Instrument": lối tắt ở trang chủ, sân khấu Artifacts, tab của trang dự án.
+  Slides: "presentation-chart", PenNib: "pen-nib", Article: "article", ArrowUpRight: "arrow-up-right", ChatsCircle: "chats-circle",
 };
 
 // Icon chỉ dùng theo tên Phosphor (bộ công cụ Speech: app/speech/toolicons.tsx, cặp icon biến hình khi rê chuột).

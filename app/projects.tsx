@@ -146,42 +146,58 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
   };
   const sorts: [Sort, string][] = [["upd", "Cập nhật lần cuối"], ["created", "Ngày tạo"], ["alpha", "Theo bảng chữ cái"]];
   const empty = list.length === 0;
+  const live = projects.filter((x) => !x.archived).length;
+  // Ô "Dự án mới" cùng dáng thư mục, nằm cuối mặt bàn.
+  const slot = !arch && !q && (
+    <button key="new" className="pj-slot" onClick={onNew}>
+      <span className="pj-slot-f" aria-hidden><i /><I.Plus size={20} /></span>
+      <span className="pj-gname"><b>Dự án mới</b></span>
+    </button>
+  );
   return (
-    <div className="page sy-proj"><div className="pj-in">
-      <header className="sy-head">
-        <h1>{arch ? "Dự án đã lưu trữ" : "Dự án"}</h1>
-        <div className="sy-tools pj-tools">
-          {q !== null ? (
-            <div className="pj-search"><I.Search size={16} /><input autoFocus placeholder="Tìm kiếm dự án..." value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setQ(null)} /><button className="icon-btn" aria-label="Xóa" onClick={() => setQ(null)}><I.X size={16} /></button></div>
-          ) : (
-            <button className="icon-btn" aria-label="Tìm kiếm" onClick={() => setQ("")}><I.Search /></button>
-          )}
+    <div className="page ds-page sy-proj"><div className="page-in pj-in">
+      <header className="ds-head">
+        <div className="ds-head-t"><h1>Dự án</h1><p>Mỗi dự án giữ hướng dẫn, tệp và bộ nhớ riêng cho mọi đoạn chat bên trong.</p></div>
+        <div className="ds-acts"><button className="btn dark pj-new" onClick={onNew}><I.Plus size={16} />Dự án mới</button></div>
+      </header>
+      <div className="ds-bar">
+        <div className="ds-seg" role="tablist">
+          <button role="tab" aria-selected={!arch} className={!arch ? "on" : ""} onClick={() => setArch(false)}>Đang dùng<i>{live}</i></button>
+          <button role="tab" aria-selected={arch} className={arch ? "on" : ""} onClick={() => setArch(true)}>Lưu trữ<i>{archCount}</i></button>
+        </div>
+        <div className="ds-acts">
+          <label className="ds-search"><I.Search size={16} /><input placeholder="Tìm dự án" value={q ?? ""} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setQ(null)} />{q && <button className="ds-clear" aria-label="Xóa" onClick={() => setQ(null)}><I.X size={14} /></button>}</label>
           <div ref={sRef} style={{ position: "relative" }}>
-            <button className="icon-btn" aria-label="Sắp xếp" onClick={() => setSMenu(!sMenu)}><I.Sort /></button>
-            <Menu open={sMenu} className="down" style={{ top: 38, right: 0, width: 210 }}>
+            <button className="btn ds-sort" aria-label="Sắp xếp" onClick={() => setSMenu(!sMenu)}><I.Sort size={15} /><span>{sorts.find(([k]) => k === sort)![1]}</span><I.Chevron size={14} /></button>
+            <Menu open={sMenu} className="down" style={{ top: 42, right: 0, width: 220 }}>
               {sorts.map(([k, l]) => <button key={k} className="menu-item" onClick={() => { setSort(k); setSMenu(false); }}>{l}{sort === k && <span className="ck"><I.Check size={16} /></span>}</button>)}
               <hr />
               <button className="menu-item" onClick={() => { setGroup(!group); setSMenu(false); }}>Nhóm theo loại{group && <span className="ck"><I.Check size={16} /></span>}</button>
             </Menu>
           </div>
-          <button className="btn dark pj-new" onClick={onNew}>Dự án mới</button>
         </div>
-      </header>
-      {empty ? (
-        <div className="pj-empty">
-          <EmptyArt />
-          <h2>{q ? "Không tìm thấy dự án" : arch ? "Chưa có dự án nào được lưu trữ" : "Bạn muốn bắt đầu một dự án?"}</h2>
-          {!q && !arch && <p>Tải tài liệu lên, thiết lập hướng dẫn tùy chỉnh và sắp xếp các cuộc trò chuyện ở cùng một nơi.</p>}
-          {!q && !arch && <button className="btn dark pj-new big" onClick={onNew}>Dự án mới</button>}
-        </div>
-      ) : group ? (
-        [["Đã ghim", list.filter((x) => x.pinned)], ["Dự án của bạn", list.filter((x) => !x.pinned)]].map(([t, l]) => (l as Project[]).length > 0 && (
-          <section key={t as string} className="sy-psec"><div className="sy-sh"><h2>{t as string}</h2><span className="sy-rule" /></div><div className="pj-grid pj-gridf">{(l as Project[]).map(card)}</div></section>
-        ))
-      ) : (
-        <div className="pj-grid pj-gridf">{list.map(card)}</div>
-      )}
-      {(archCount > 0 || arch) && <button className="lnk pj-arch" onClick={() => setArch(!arch)}>{arch ? "← Quay lại dự án" : `Xem dự án đã lưu trữ (${archCount})`}</button>}
+      </div>
+      <div className="pj-desk">
+        {empty && !slot ? (
+          <div className="pj-empty">
+            <EmptyArt />
+            <h2>{q ? "Không tìm thấy dự án" : "Chưa có dự án nào được lưu trữ"}</h2>
+          </div>
+        ) : empty && !projects.some((x) => !x.archived) ? (
+          <div className="pj-empty">
+            <EmptyArt />
+            <h2>Bạn muốn bắt đầu một dự án?</h2>
+            <p>Tải tài liệu lên, thiết lập hướng dẫn tùy chỉnh và sắp xếp các cuộc trò chuyện ở cùng một nơi.</p>
+            <button className="btn dark pj-new big" onClick={onNew}>Dự án mới</button>
+          </div>
+        ) : group ? (
+          [["Đã ghim", list.filter((x) => x.pinned)], ["Dự án của bạn", list.filter((x) => !x.pinned)]].map(([t, l], gi) => ((l as Project[]).length > 0 || gi === 1) && (
+            <section key={t as string} className="pj-group"><div className="ds-sec"><h2>{t as string}</h2><i>{(l as Project[]).length}</i></div><div className="pj-grid pj-gridf">{(l as Project[]).map(card)}{gi === 1 && slot}</div></section>
+          ))
+        ) : (
+          <div className="pj-grid pj-gridf">{list.map(card)}{slot}</div>
+        )}
+      </div>
     </div></div>
   );
 }
@@ -238,6 +254,7 @@ export function MemModal({ mem, onClose, onDelete }: { mem: { id: number; conten
   );
 }
 
+type PTab = "chats" | "ins" | "mem" | "skills" | "ctx";
 export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, onEdit, onDelete, say }: {
   proj: Project; chats: Chat[]; composer: React.ReactNode; patch: (id: number, f: Partial<Project>) => void;
   onBack: () => void; onOpenChat: (id: number) => void; onEdit: () => void; onDelete: () => void; say: Say;
@@ -261,6 +278,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const shownCtx = ctx.filter((c) => !sq || c.name.toLowerCase().includes(sq.toLowerCase()));
   const pct = Math.max(1, Math.ceil(ctx.reduce((n, c) => n + (c.chars ?? 0), 0) / 10000));
   const [memOpen, setMemOpen] = useState(false);
+  const [tab, setTab] = useState<PTab>("chats");
   const [upl, setUpl] = useState(false);
   const [ghOpen, setGhOpen] = useState(false);
   const fm = useFileMenu(say);
@@ -282,60 +300,67 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
     setBusyCtx(false);
     if (ok) { patch(proj.id, { ctx: acc }); say(`Đã thêm ${ok} tệp`); }
   };
+  const PRESETS = ["aurora", "ember", "dusk", "glacier", "verdant"] as const;
+  const tabs: [PTab, string, number | null][] = [["chats", "Đoạn chat", mine.length], ["ins", "Hướng dẫn", null], ["mem", "Bộ nhớ", mem.length], ...(canSkills ? [["skills", "Kỹ năng", null] as [PTab, string, null]] : []), ["ctx", "Ngữ cảnh", ctx.length]];
   return (
-    <div className="page sy-projpage"><div className="pj-in">
-      <div className="pj-crumb"><button onClick={onBack}>Dự án</button><span>/</span><b>{proj.name}</b></div>
-      <div className="pj-title">
-        <h1>{proj.name}</h1>
-        <div className="pj-tools">
+    <div className="page ds-page sy-projpage"><div className="page-in pj-in">
+      <nav className="pj-crumb"><button onClick={onBack}>Dự án</button><I.ChevronR size={13} /><b>{proj.name}</b></nav>
+      <header className="pj-hero">
+        <div className="pj-hero-f">
+          <GlassFolder key={proj.id + ":" + ctx.map((c) => c.name).join("|")} label={proj.name} meta="" art={PRESETS[proj.id % PRESETS.length]} seed={(proj.id % 97) + 1}
+            files={ctx.map((c) => ({ name: c.name, meta: c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").toUpperCase() }))} action="none" appear={false} width={88} />
+        </div>
+        <div className="pj-hero-t">
+          <h1>{proj.name}</h1>
+          {proj.desc && <p>{proj.desc}</p>}
+          <div className="pj-facts"><span><I.Clock size={13} />Cập nhật {ago(projUpd(proj, chats))}</span><span>{mine.length} đoạn chat</span><span>{ctx.length} tệp ngữ cảnh</span><span>{mem.length} mục ghi nhớ</span></div>
+        </div>
+        <div className="ds-acts pj-tools">
           <button className={`icon-btn pj-pinbtn ${proj.pinned ? "on" : ""}`} data-tip={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} aria-label={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} onClick={() => { patch(proj.id, { pinned: !proj.pinned }); say(proj.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}>{proj.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}</button>
           <div ref={mRef} style={{ position: "relative" }}>
-            <button className="icon-btn" aria-label="Tùy chọn" onClick={() => setMenu(!menu)}>⋮</button>
-            <ProjMenu p={proj} open={menu} style={{ top: 38, right: 0 }} onPin={() => {}}
+            <button className="icon-btn" aria-label="Tùy chọn" onClick={() => setMenu(!menu)}><I.Dots size={18} /></button>
+            <ProjMenu p={proj} open={menu} style={{ top: 42, right: 0 }} onPin={() => {}}
               onEdit={() => { setMenu(false); onEdit(); }}
               onArchive={() => { patch(proj.id, { archived: !proj.archived }); setMenu(false); say(proj.archived ? "Đã bỏ lưu trữ dự án" : "Đã lưu trữ dự án"); if (!proj.archived) onBack(); }}
               onDelete={() => { setMenu(false); onDelete(); }} />
           </div>
         </div>
-      </div>
-      <div className="sy-pmeta"><span><b>{mine.length}</b><em>Đoạn chat</em></span><span><b>{ctx.length}</b><em>Tệp ngữ cảnh</em></span><span><b>{mem.length}</b><em>Mục ghi nhớ</em></span><span><b>{ago(projUpd(proj, chats))}</b><em>Cập nhật gần nhất</em></span></div>
-      {proj.desc && <p className="muted pj-desc">{proj.desc}</p>}
-      <div className="pj-cols">
-        <div className="pj-main">
-          {composer}
-          {mine.length === 0 ? (
-            <div className="pj-chats-empty"><Bubble /><p>Synchro sử dụng cùng một nguồn kiến thức mỗi khi bạn trò chuyện với Synchro trong dự án này.</p></div>
-          ) : (
-            <div className="pj-chats">{mine.map((c) => <button key={c.id} className="pj-chat" onClick={() => onOpenChat(c.id)}><b>{c.title}</b><span>{ago(c.id)}</span></button>)}</div>
-          )}
+      </header>
+      <div className="pj-compose">{composer}</div>
+      <div className="ds-bar pj-tabbar">
+        <div className="ds-seg" role="tablist">
+          {tabs.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}{n !== null && <i>{n}</i>}</button>)}
         </div>
-        <aside className="pj-side">
-          <section>
-            <div className="pj-sh"><h3>Hướng dẫn</h3><button className="icon-btn" aria-label={proj.ins ? "Chỉnh sửa hướng dẫn" : "Đặt hướng dẫn"} onClick={() => setIns(true)}>{proj.ins ? <I.M icon="Pencil" size={16} /> : <I.M icon="Plus" size={16} />}</button></div>
-            <p className={`pj-ins ${proj.ins ? "" : "muted"}`}>{proj.ins || "Thêm hướng dẫn để điều chỉnh câu trả lời của Synchro"}</p>
-          </section>
-          <section>
-            <div className="pj-sh"><h3>Bộ nhớ</h3><button className="pj-memlink" onClick={() => setMemOpen(true)}>Xem bộ nhớ</button></div>
-            {mem.length === 0 ? <p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p> : <ul className="pj-mem">{mem.slice(-3).map((m) => <li key={m.id}>{m.content}</li>)}</ul>}
-          </section>
-          {canSkills && <ProjectSkills pid={proj.id} say={say} />}
-          <section>
-            <div className="pj-sh"><h3>Ngữ cảnh</h3>
-              {busyCtx ? <span className="pj-spin" aria-label="Đang tải" /> : (
-                <>
-                  {ctx.length > 0 && <button className={`icon-btn ${sq !== null ? "on" : ""}`} data-tip="Tìm kiếm tệp" aria-label="Tìm kiếm tệp" onClick={() => setSq(sq === null ? "" : null)}><I.Search size={16} /></button>}
-                  <div ref={aRef} style={{ position: "relative" }}>
-                    <button className="icon-btn" aria-label="Thêm ngữ cảnh" onClick={() => setAdd(!add)}><I.Plus size={16} /></button>
-                    <Menu open={add} className="down" style={{ top: 34, right: 0, width: 230 }}>
-                      <button className="menu-item" onClick={() => { setAdd(false); setUpl(true); }}><Clipx />Tải lên từ thiết bị</button>
-                      <button className="menu-item" onClick={() => { setAdd(false); setTxt(true); }}><TextIn />Thêm nội dung văn bản</button>
-                      <hr />
-                      <button className="menu-item" onClick={() => { setAdd(false); setGhOpen(true); }}><Github />GitHub</button>
-                    </Menu>
-                  </div>
-                </>
-              )}
-            </div>
+        <div className="ds-acts">
+          {tab === "ins" && <button className="btn" onClick={() => setIns(true)}>{proj.ins ? <I.M icon="Pencil" size={15} /> : <I.M icon="Plus" size={15} />}{proj.ins ? "Chỉnh sửa hướng dẫn" : "Đặt hướng dẫn"}</button>}
+          {tab === "mem" && <button className="btn pj-memlink" onClick={() => setMemOpen(true)}>Xem bộ nhớ</button>}
+          {tab === "ctx" && (busyCtx ? <span className="pj-spin" aria-label="Đang tải" /> : (
+            <>
+              {ctx.length > 0 && <button className={`icon-btn ${sq !== null ? "on" : ""}`} data-tip="Tìm kiếm tệp" aria-label="Tìm kiếm tệp" onClick={() => setSq(sq === null ? "" : null)}><I.Search size={16} /></button>}
+              <div ref={aRef} style={{ position: "relative" }}>
+                <button className="btn dark" aria-label="Thêm ngữ cảnh" onClick={() => setAdd(!add)}><I.Plus size={15} />Thêm ngữ cảnh</button>
+                <Menu open={add} className="down" style={{ top: 42, right: 0, width: 230 }}>
+                  <button className="menu-item" onClick={() => { setAdd(false); setUpl(true); }}><Clipx />Tải lên từ thiết bị</button>
+                  <button className="menu-item" onClick={() => { setAdd(false); setTxt(true); }}><TextIn />Thêm nội dung văn bản</button>
+                  <hr />
+                  <button className="menu-item" onClick={() => { setAdd(false); setGhOpen(true); }}><Github />GitHub</button>
+                </Menu>
+              </div>
+            </>
+          ))}
+        </div>
+      </div>
+      <div className="pj-panel" key={tab}>
+        {tab === "chats" && (mine.length === 0 ? (
+          <div className="pj-chats-empty"><Bubble /><p>Synchro sử dụng cùng một nguồn kiến thức mỗi khi bạn trò chuyện với Synchro trong dự án này.</p></div>
+        ) : (
+          <div className="pj-chats">{mine.map((c) => <button key={c.id} className="pj-chat" onClick={() => onOpenChat(c.id)}><span className="pj-chat-ic"><Bubble size={16} /></span><b>{c.title}</b><span>{ago(c.id)}</span><I.ChevronR size={14} /></button>)}</div>
+        ))}
+        {tab === "ins" && <div className="pj-note"><p className={`pj-ins ${proj.ins ? "" : "muted"}`}>{proj.ins || "Thêm hướng dẫn để điều chỉnh câu trả lời của Synchro"}</p></div>}
+        {tab === "mem" && (mem.length === 0 ? <div className="pj-note"><p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p></div> : <ul className="pj-mem pj-list">{mem.map((m) => <li key={m.id}>{m.content}</li>)}</ul>)}
+        {tab === "skills" && canSkills && <ProjectSkills pid={proj.id} say={say} />}
+        {tab === "ctx" && (
+          <section className="pj-ctx">
             <input ref={fRef} type="file" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (fs.length) addFiles(fs); }} />
             {fm.node}
             {upl && <UploadModal say={say} onClose={() => setUpl(false)} onFiles={(f) => { setUpl(false); addFiles(f); }} />}
@@ -380,7 +405,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
               </div>
             )}
           </section>
-        </aside>
+        )}
       </div>
       <Fade show={ins}><InsModal init={proj.ins ?? ""} onClose={() => setIns(false)} onSave={(t) => { patch(proj.id, { ins: t }); setIns(false); say("Đã lưu hướng dẫn"); }} /></Fade>
       <Fade show={memOpen}><MemModal mem={mem} onClose={() => setMemOpen(false)} onDelete={(id) => patch(proj.id, { mem: mem.filter((m) => m.id !== id) })} /></Fade>

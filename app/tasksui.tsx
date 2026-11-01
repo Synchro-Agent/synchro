@@ -326,10 +326,10 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   // Khả năng đang tắt trong Cài đặt → Khả năng (người dùng tự tắt, không phải quản trị viên khóa): việc tự động cũng không dùng được.
   const off = caps ? CAPS.filter(([k]) => !caps.caps[k] && !caps.locks[k] && (k !== "net" || caps.caps.code)).map(([, label]) => tr(label)) : [];
   return (
-    <div className="page"><div className="page-in tk">
-      <div className="tk-top">
-        <div className="tk-hd"><h1>{tr("Hộp thư")}</h1><p>{tr("Giao việc một lần, Synchro tự làm theo lịch trên máy chủ, kể cả khi bạn tắt máy. Kết quả và những việc cần bạn duyệt nằm ở đây.")}</p></div>
-      </div>
+    <div className="page ds-page tk-page"><div className="page-in tk">
+      <header className="ds-head tk-top">
+        <div className="ds-head-t"><h1>{tr("Hộp thư")}</h1><p>{tr("Giao việc một lần, Synchro tự làm theo lịch trên máy chủ, kể cả khi bạn tắt máy. Kết quả và những việc cần bạn duyệt nằm ở đây.")}</p></div>
+      </header>
       <Composer say={say} onPlan={(plan) => setEdit({ plan })} onManual={() => setEdit("new")} />
       <div className="tk-status">
         <span className="tk-pill ok"><i />{active ? `${active} ${tr("việc đang chạy theo lịch trên máy chủ")}` : tr("Máy chủ Synchro sẵn sàng chạy việc của bạn")}</span>
@@ -338,8 +338,8 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
           <i />{chrome.connected ? tr("Chrome của bạn đang kết nối") : chrome.devices.length ? tr("Chrome của bạn chưa kết nối") : tr("Chưa cài tiện ích Synchro cho Chrome")}
         </button>}
       </div>
-      <div className="tk-tabs">
-        <div className="pl-seg">
+      <div className="tk-tabs ds-bar">
+        <div className="ds-seg pl-seg">
           <button className={tab === "results" ? "on" : ""} onClick={() => setTab("results")}>{tr("Kết quả")}{unread > 0 && <i className="tk-badge">{unread}</i>}</button>
           <button className={tab === "approve" ? "on" : ""} onClick={() => setTab("approve")}>{tr("Cần duyệt")}{pending.length > 0 && <i className="tk-badge warn">{pending.length}</i>}</button>
           <button className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}>{tr("Việc tự động")}{(tasks?.length ?? 0) > 0 && <i className="tk-count">{tasks!.length}</i>}</button>

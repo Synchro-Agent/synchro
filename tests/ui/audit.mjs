@@ -124,7 +124,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   const side = async () => {
     // Điện thoại: khung artifact mở toàn màn hình, đóng trước (như người dùng bấm X) rồi mới mở thanh bên.
     if (mobile && (await ev(`!!document.querySelector(".art-panel")`))) { await click(`document.querySelector(".art-panel [aria-label='Đóng']")`, "close art").catch(() => {}); await sleep(400); }
-    if (await ev(`!!document.querySelector(".sidebar.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); } };
+    if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); } };
   const nav = async (label) => { await side(); await click(byText(".nav-item", label), label); await sleep(1500); };
   const step0 = async (name, fn) => { try { await fn(); } catch (e) { note(`${tag}/${name}`, "không chạy được bước: " + e.message.split("\n")[0]); await shot(name + "-fail").catch(() => {}); } };
 
@@ -150,7 +150,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("code", async () => { await nav("Code"); await sleep(1000); await shot("code"); });
   await step0("speech", async () => { await nav("Speech"); await shot("speech"); });
   await step0("kho-ky-nang", async () => { await nav("Kho kỹ năng"); await shot("kho-ky-nang"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
-  await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".side-bottom .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
+  await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
   await step0("cai-dat", async () => {
     await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);
     const n = await ev(`document.querySelectorAll(".modal.settings .s-item").length`);

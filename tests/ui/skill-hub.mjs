@@ -102,13 +102,13 @@ const text = (sel) => ev(`[...document.querySelectorAll(${JSON.stringify(sel)})]
 const api2 = (m, p, b) => fetch(B + p, { method: m, headers: { "content-type": "application/json", origin: B, cookie }, body: b && JSON.stringify(b) }).then((r) => r.json().catch(() => ({})));
 await api2("DELETE", "/api/skills/meeting-notes");
 try {
-  const nav = await text(".sidebar .nav-item, aside .nav-item");
+  const nav = await text(".rail .nav-item, .sidebar .nav-item");
   ok(/Kho kỹ năng/.test(nav) && !/Kỹ năng\b(?! )/.test(nav.replace("Kho kỹ năng", "")), "thanh bên có mục Kho kỹ năng: " + nav, nav);
   ok(await ev(`!!${byText(".nav-item", "Kho kỹ năng")}?.querySelector("svg")`), "mục có icon");
   await click(byText(".nav-item", "Kho kỹ năng"), "nav"); await sleep(1500);
   await until(`!!document.querySelector(".hub-yours")`, 15000, "hub page");
-  const cz = await text(".cz-nav button");
-  ok(/^Kho kỹ năng( \| Connectors)?$/.test(cz), "trang Tùy chỉnh không còn Skills / Plugins riêng: " + cz, cz);
+  const cz = await text(".ds-tabs button");
+  ok(/^(Kho kỹ năng( \| Connectors)?)?$/.test(cz), "trang Tùy chỉnh không còn Skills / Plugins riêng (một mục thì không cần tab): " + cz, cz);
   const title = await text(".pl-title"), secs = await text(".pl-sec");
   ok(title === "Kho kỹ năng", "tiêu đề: " + title);
   ok(/Thư viện cho mọi người/.test(secs) && /Skill của bạn/.test(secs), "các phần: " + secs, secs);
@@ -156,7 +156,7 @@ try {
   await ev(`(() => { const i = document.querySelector(".pl-search input"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, ""); i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
 
   // Cài đặt: một mục Kho kỹ năng thay cho Skills + Plugins
-  await click(`[...document.querySelectorAll("aside button")].find((e) => e.textContent.includes("Download Tester"))`, "user menu"); await sleep(500);
+  await click(`document.querySelector(".rail .user")`, "user menu"); await sleep(500);
   const st = await ev(`!!${byText(".menu-item", "Cài đặt")}`);
   if (st) { await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);
     const tabs = await text(".s-nav button");

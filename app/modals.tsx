@@ -223,7 +223,6 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal settings sy-settings">
-        <button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
         <div className="s-nav">
           <div className="sy-snav-h"><b>Settings</b></div>
           <div className="s-search"><I.Search size={15} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -233,7 +232,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
           {f(custom).map(([n, ic]) => item(n, ic))}
         </div>
         <div className="s-body" key={tab}>
-          <header className="sy-sbody-h"><h2>{tab}</h2></header>
+          <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
           <SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} />
         </div>
       </div>

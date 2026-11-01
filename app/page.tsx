@@ -27,7 +27,7 @@ import { ASK_EVENT } from "./askcard";
 import { steerRun, takeSteer } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, takeCancelled, takeTrace, takeRoute, setActiveEffort, setActiveModel, setApprover, takeLibsUsed, takeOutputs, takeSkillsUsed, type ApprovalCall, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
-import { TplArt } from "./syart";
+import { Studio } from "./studio";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { BrainWorkspace, useBrainSync } from "./brainui";
 import { BrowserHub } from "./browserhub";
@@ -248,7 +248,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }}>
-      <button className="model-btn" onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"} <span className="muted">{eLabel}</span><I.Chevron size={14} /></button>
+      <button className="model-btn" onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
       <Menu open={mm} className="model-menu" style={{ position: "absolute", ...(shift ? { translate: `${shift}px 0` } : {}) }}>
         {none && (
           <div className="mempty">
@@ -1313,8 +1313,10 @@ export default function Home() {
     return () => { window.removeEventListener("dragenter", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); window.removeEventListener("dragover", prevent); };
   }, [say]);
 
-  const Nav = ({ v, icon, label, tag, plus, badge }: { v: View; icon: React.ReactNode; label: string; tag?: string; plus?: () => void; badge?: number }) => (
-    <button data-nav={v} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); }}>{icon}{label}{tag && <span className="tag">{tag}</span>}{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}{plus && <span className="nav-plus" role="button" aria-label="Dự án mới" onClick={(e) => { e.stopPropagation(); plus(); }}><I.Plus size={16} /></span>}</button>
+  const Nav = ({ v, icon, label, badge, onPick }: { v: View; icon: React.ReactNode; label: string; badge?: number; onPick?: () => void }) => (
+    <button data-nav={v} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
+      <span className="rail-ic">{icon}</span><span className="rail-l">{label}</span>{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}
+    </button>
   );
   const [voiceOn, setVoiceOn] = useState(false);
   // Bộ não: mở từ Cài đặt → Bộ não (kèm ghi chú cần mở), và tự nạp dần các đoạn chat cũ của trình duyệt này lên bộ não.
@@ -1438,40 +1440,60 @@ export default function Home() {
     <AppCtx.Provider value={api}>
     <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? " app-reveal" : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
-      <aside className={`sidebar ${open ? "" : "closed"}`} onClickCapture={(e) => {
+      <div className={`shell-side ${open ? "" : "closed"}`} onClickCapture={(e) => {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
         const t = e.target as HTMLElement;
         if (spOpen && t.closest(".nav-item,.chat-item,.user,.icon-btn") && !t.closest(".nav-row,.nav-sub")) setSpOpen(false);
         if (narrow() && t.closest(".nav-item,.chat-item") && !t.closest(".nav-row > .icon-btn, .chat-item .icon-btn, .chat-item input")) setTimeout(() => setOpen(false), 0);
       }}>
-        <div className="side-top">
-          <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Đóng thanh bên"><I.Panel /></button>
-          <a className="side-brand" href="/" onClick={(e) => { e.preventDefault(); goNew(); }} aria-label="Synchro"><Wordmark height={17} /></a>
-        </div>
-        <div className="nav">
-          <button className={`nav-item ${view === "new" ? "active" : ""}`} onClick={goNew}>
-            {view === "new" ? <I.Plus /> : <span className="plus"><I.Plus size={14} /></span>}Mới<span className="sc-hint">⇧⌘O</span>
-          </button>
-          {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Hover icon={["Layers", "FolderOpen"]} />} label="Dự án" plus={() => setModal("proj")} />}
+      {/* Thanh điều hướng dọc: luôn hiện trên máy tính (cả khi thu bảng đoạn chat), có nhãn dưới icon; mục đang mở có ô icon màu mực. */}
+      <nav className="rail" aria-label="Điều hướng">
+        {/* Logo trong vòng tròn; rê chuột vào thì thành nút mở / đóng bảng đoạn chat. */}
+        <button className="rail-mark" onClick={() => setOpen(!open)} aria-label={open ? "Đóng bảng đoạn chat" : "Mở bảng đoạn chat"} aria-expanded={open} data-tip={open ? "Đóng bảng đoạn chat" : "Mở bảng đoạn chat"}>
+          <span className="rm-logo"><Mark size={20} /></span><span className="rm-panel"><I.Panel size={18} /></span>
+        </button>
+        <button className={`nav-item rail-new ${view === "new" ? "active" : ""}`} onClick={goNew} data-tip="⇧⌘O"><span className="rail-ic"><I.Plus /></span><span className="rail-l">Mới</span></button>
+        <div className="rail-nav">
+          {me?.perms.features.projects !== false && <Nav v="projects" icon={<I.Hover icon={["Layers", "FolderOpen"]} />} label="Dự án" />}
           {caps.art !== false && <Nav v="artifacts" icon={<I.Hover icon={["Shapes", "Cube"]} />} label="Artifacts" />}
           <Nav v="inbox" icon={<I.Hover icon={["Inbox", "TrayIn"]} />} label="Hộp thư" badge={inboxN} />
           <Nav v="brain" icon={<I.Hover icon={["Brain", "HeadCircuit"]} />} label="Bộ não" />
           {me?.perms.features.code !== false && <Nav v="code" icon={<I.Hover icon={["Code", "CodeBlock"]} />} label="Code" />}
-          {me?.perms.features.speech !== false && (
-            <>
-              <div className="nav-row">
-                <button data-nav="speech" className={`nav-item ${view === "speech" && (spTool === "home" || !spOpen) ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool("home"); }}><I.Hover icon={["Speech", "Wave"]} />Speech</button>
-                <button className={`nav-chev ${spOpen ? "open" : ""}`} aria-expanded={spOpen} aria-label={spOpen ? "Thu gọn công cụ Speech" : "Mở công cụ Speech"} onClick={() => setSpOpen(!spOpen)}><I.ChevronR size={14} /></button>
-              </div>
-              <div className={`fold ${spOpen ? "open" : ""}`}>
-                <div className="nav-sub" aria-label="Công cụ Speech">
-                  {SP_TOOLS.filter((t) => t.k !== "home" && toolOn(spPlan, t.k)).map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} data-nav={`sp-${t.k}`} className={`nav-item ${view === "speech" && spTool === t.k ? "active" : ""}`} tabIndex={spOpen ? 0 : -1} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
-                </div>
-              </div>
-            </>
-          )}
-          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Hover icon={["Plugins", "Connectors"]} />} label="Skill Hub" />}
+          {me?.perms.features.speech !== false && <Nav v="speech" icon={<I.Hover icon={["Speech", "Wave"]} />} label="Speech" onPick={() => setSpTool("home")} />}
+          {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Hover icon={["Plugins", "Connectors"]} />} label="Kho kỹ năng" />}
         </div>
+        <div className="rail-foot">
+          <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={18} /></button>
+          <div ref={userRef} className="rail-user">
+            <button className="user" onClick={() => setUserMenu(!userMenu)} aria-label={name} title={name} data-notr><Avatar name={name} /></button>
+            <Menu open={!!(userMenu)} style={{ bottom: 0, left: "calc(100% + 10px)", width: 300 }} className="usermenu">
+              <div className="um-head"><Avatar name={name} /><span><b data-notr>{shortName(name)}</b><em data-notr>{me.email}</em></span></div>
+              <hr />
+              <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
+              <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
+              <hr />
+              <button className="menu-item" onClick={() => { window.open("/download", "_blank", "noopener"); setUserMenu(false); }}><I.GetApps />Tải ứng dụng</button>
+              <button className="menu-item" onClick={() => { setModal("keys"); setUserMenu(false); }}><I.Keyboard />Phím tắt<span className="sc">⌘/</span></button>
+              <hr />
+              <button className="menu-item" onClick={() => { setModal("logout"); setUserMenu(false); }}><I.Out />Đăng xuất</button>
+            </Menu>
+          </div>
+        </div>
+      </nav>
+      <aside className="sidebar">
+        <div className="side-top">
+          <a className="side-brand" href="/" onClick={(e) => { e.preventDefault(); goNew(); }} aria-label="Synchro"><Wordmark height={17} /></a>
+        </div>
+        <button className="side-search" onClick={() => setModal("search")}><I.Search size={15} /><span>Tìm đoạn chat, tệp, lệnh…</span><kbd>⌘K</kbd></button>
+        {view === "speech" && me?.perms.features.speech !== false && (
+          <div className="side-tools">
+            <div className="section-label">Công cụ Speech</div>
+            <div className="nav-sub" aria-label="Công cụ Speech">
+              <button data-nav="sp-home" className={`nav-item ${spTool === "home" ? "active" : ""}`} onClick={() => setSpTool("home")}><I.Hover icon={["Speech", "Wave"]} />Trang chủ Speech</button>
+              {SP_TOOLS.filter((t) => t.k !== "home" && toolOn(spPlan, t.k)).map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} data-nav={`sp-${t.k}`} className={`nav-item ${spTool === t.k ? "active" : ""}`} onClick={() => { setView("speech"); setSpTool(t.k); }}><Ic size={16} />{t.label}</button>; })}
+            </div>
+          </div>
+        )}
         {(() => {
           const row = (c: Chat) => (
             <div key={c.id} className="chat-wrap">
@@ -1582,26 +1604,8 @@ export default function Home() {
             </div>
           );
         })()}
-        <div className="side-bottom">
-          <div ref={userRef} style={{ flex: 1, position: "relative" }}>
-            <button className="user" style={{ width: "100%" }} onClick={() => setUserMenu(!userMenu)}>
-              <Avatar name={name} /><span title={name} data-notr>{shortName(name)}</span><span style={{ marginLeft: "auto" }} className="muted"><I.Chevron size={14} /></span>
-            </button>
-              <Menu open={!!(userMenu)} style={{ bottom: 44, left: 0, width: 300 }} className="usermenu">
-                <div className="muted" style={{ fontSize: 13, padding: "6px 10px" }}>{me.email}</div>
-                <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
-                <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
-                <hr />
-                <button className="menu-item" onClick={() => { window.open("/download", "_blank", "noopener"); setUserMenu(false); }}><I.GetApps />Tải ứng dụng</button>
-                <button className="menu-item" onClick={() => { setModal("keys"); setUserMenu(false); }}><I.Keyboard />Phím tắt<span className="sc">⌘/</span></button>
-                <hr />
-                <button className="menu-item" onClick={() => { setModal("logout"); setUserMenu(false); }}><I.Out />Đăng xuất</button>
-              </Menu>
-          </div>
-          {me?.perms.features.skills !== false && <button className="icon-btn" onClick={goCustom} aria-label="Skill Hub" data-tip="Skill Hub"><I.Plugins size={16} /></button>}
-          <button className="icon-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm"><I.Search size={16} /></button>
-        </div>
       </aside>
+      </div>
       {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
       <main className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
@@ -1632,8 +1636,16 @@ export default function Home() {
 
         {view === "new" && (
           <div className="hero" key={String(incog)}>
-            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark size={30} state="intro" className="greet-mark" />}{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</div>
+            <div className="hero-col">
+            <div className="hero-date" data-notr>{new Date().toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "long", day: "numeric", month: "long" })}</div>
+            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark size={30} state="intro" className="greet-mark" />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
+            {!tplMode && !incog && caps.art !== false && (
+              <div className="hero-quick" aria-label="Bắt đầu nhanh">
+                {TPLS.map((t) => { const Ic = t.k === "doc" ? I.Article : t.k === "slides" ? I.Slides : I.PenNib; return (
+                  <button key={t.k} className="hero-chip" onClick={() => setTplMode(t.k)}><Ic size={16} /><span>{t.name}</span></button>); })}
+              </div>
+            )}
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
               <div className="modewrap" key={tplMode}>
                 <div className="modebar">
@@ -1648,7 +1660,8 @@ export default function Home() {
                   ))}
                 </div>
               </div>); })()}
-            {incog ? <p className="muted" style={{ fontSize: 13, marginTop: 20 }}>Đoạn chat ẩn danh sẽ không được lưu vào lịch sử</p> : null}
+            {incog ? <p className="muted hero-note">Đoạn chat ẩn danh sẽ không được lưu vào lịch sử</p> : null}
+            </div>
           </div>
         )}
 
@@ -1740,36 +1753,19 @@ export default function Home() {
         )}
 
         {view === "artifacts" && (
-          <div className="page sy-art"><div className="page-in">
-            <header className="sy-head"><h1>Artifacts</h1></header>
-            <div className="sy-bar">
-              <div className="sy-seg" role="tablist">
+          <div className="page ds-page ds-art"><div className="page-in">
+            <header className="ds-head">
+              <div className="ds-head-t"><h1>Artifacts</h1><p>Tài liệu, trang trình bày, thiết kế và ứng dụng bạn làm cùng Synchro.</p></div>
+              <label className="ds-search"><I.Search size={16} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} />{artQ && <button className="ds-clear" aria-label="Xóa" onClick={() => setArtQ("")}><I.X size={14} /></button>}</label>
+            </header>
+            <Studio items={TPLS.map((t) => ({ k: t.k, name: t.name, desc: t.desc, lib: studios[STUDIO_OF[t.k]] ?? null }))} onCreate={(k) => { setTplMode(k); setView("new"); }} />
+            <div className="ds-bar">
+              <div className="ds-seg" role="tablist">
                 {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}
               </div>
-              <label className="sy-search"><I.Search size={15} /><input placeholder="Tìm artifact" value={artQ} onChange={(e) => setArtQ(e.target.value)} /></label>
             </div>
-            <section className="sy-sec">
-              <div className="sy-sh"><h2>Tạo thứ gì đó mới</h2><span className="sy-rule" /></div>
-              <div className="sy-tpls">
-                {TPLS.map((t) => {
-                  const lib = studios[STUDIO_OF[t.k]];
-                  return (
-                    <button key={t.k} className="sy-tpl" onClick={() => { setTplMode(t.k); setView("new"); }}>
-                      <div className="sy-tpl-art"><TplArt k={t.k} /></div>
-                      <div className="sy-tpl-b">
-                        <div className="sy-tpl-t"><b>{t.name}</b>{lib ? <span className="sy-tag" title={lib.name}><I.Plugins size={11} />{lib.skills} skill</span> : <span className="sy-tag on">Mới</span>}</div>
-                        <p>{t.desc}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-            <section className="sy-sec">
-              <div className="sy-sh"><h2>{tab === 3 ? "Ứng dụng nội bộ" : tab === 2 ? "Được chia sẻ với bạn" : "Artifact của bạn"}</h2><span className="sy-rule" /></div>
-              {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
-                onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
-            </section>
+            {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
+              onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
           </div></div>
         )}
 

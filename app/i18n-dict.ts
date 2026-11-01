@@ -2147,3 +2147,14 @@ addNew(VI2EN, { "Đang tắt": "Turned off", "Việc tự động không dùng �
 
 // Xuất skill / thư viện thành .zip (app/skillexport.ts).
 Object.assign(VI2EN, { "Đã xuất": "Exported", "Không xuất được skill này.": "Could not export this skill.", "Không có skill này.": "This skill does not exist.", "Không tìm thấy thư viện.": "Library not found." });
+
+// Giao diện "Instrument": đầu trang, tab, nút mới.
+Object.assign(EN2VI, { "Libraries and skills Synchro uses when it works for you: add one from a repository link, upload one, or browse the license-checked directory.": "Thư viện và skill Synchro dùng khi làm việc cho bạn: thêm từ link repo, tải lên, hoặc khám phá danh mục đã kiểm tra giấy phép." });
+Object.assign(VI2EN, {
+  "Điều hướng": "Navigation", "Tìm đoạn chat, tệp, lệnh…": "Search chats, files, commands…", "Trang chủ Speech": "Speech home",
+  "Tài liệu, trang trình bày, thiết kế và ứng dụng bạn làm cùng Synchro.": "Documents, slides, designs and apps you make with Synchro.",
+  "Mỗi dự án giữ hướng dẫn, tệp và bộ nhớ riêng cho mọi đoạn chat bên trong.": "Each project keeps its own instructions, files and memory for every chat inside it.",
+  "đoạn chat": "chats", "tệp ngữ cảnh": "context files", "mục ghi nhớ": "memories",
+  "Tạo tài liệu": "Create a document", "Tạo trang trình bày": "Create slides", "Tạo thiết kế": "Create a design",
+});
+Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở bảng đoạn chat": "Open chats panel" });

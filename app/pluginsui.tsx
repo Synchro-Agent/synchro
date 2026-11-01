@@ -375,10 +375,16 @@ export function SkillHub() {
 export type CzTab = "hub" | "connectors";
 export function CustomizePage({ tab, setTab, connectors, feats }: { tab: CzTab; setTab: (t: CzTab) => void; connectors: React.ReactNode; feats: { skills: boolean; connectors: boolean } }) {
   const items: [CzTab, string, React.ReactNode, boolean][] = [["hub", "Skill Hub", <I.Plugins key="h" />, feats.skills], ["connectors", "Connectors", <I.Connectors key="c" />, feats.connectors]];
+  const shown = items.filter((x) => x[3]);
+  const cur: CzTab = tab === "connectors" && feats.connectors ? "connectors" : "hub";
   return (
-    <div className="page"><div className="page-in cz">
-      <nav className="cz-nav">{items.filter((x) => x[3]).map(([k, label, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{label}</span></button>)}</nav>
-      <div className="cz-body">{tab === "connectors" && feats.connectors ? connectors : <SkillHub />}</div>
+    <div className="page ds-page cz-page"><div className="page-in cz">
+      <header className="ds-head">
+        <div className="ds-head-t"><h1>{cur === "connectors" ? "Connectors" : "Skill Hub"}</h1>
+          <p>{cur === "connectors" ? "Let Synchro use your other apps and services for more context, and take actions in them for you." : "Libraries and skills Synchro uses when it works for you: add one from a repository link, upload one, or browse the license-checked directory."}</p></div>
+      </header>
+      {shown.length > 1 && <nav className="ds-tabs" role="tablist">{shown.map(([k, label, ic]) => <button key={k} role="tab" aria-selected={cur === k} className={cur === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{label}</span></button>)}</nav>}
+      <div className="cz-body">{cur === "connectors" ? connectors : <SkillHub />}</div>
     </div></div>
   );
 }
