@@ -77,14 +77,14 @@ console.log("1. Khóa API: danh sách model và số dư");
 console.log("2. Grok qua khóa API");
 {
   const a = await api("POST", "/api/llm", { model: "xai/grok-4.7", effort: "high", messages: [{ role: "user", content: "chào Grok" }], skills: true });
-  const sent = await lastBody("xai", (b) => b.model === "grok-4.7" && JSON.stringify(b.messages).includes("chào Grok"));
+  const sent = await lastBody("xai", (b) => b.model === "grok-4.7" && JSON.stringify(b.messages ?? b.input ?? "").includes("chào Grok"));
   ok(a.s === 200 && /Grok 4\.7/.test(a.j?.text ?? "") && sent?.reasoning_effort === "high", "chat bằng Grok 4.7, mức nỗ lực Cao → reasoning_effort high", { s: a.s, j: a.j, eff: sent?.reasoning_effort });
   await api("POST", "/api/llm", { model: "xai/grok-4.7", effort: "extra", messages: [{ role: "user", content: "rất cao" }], skills: true });
-  ok((await lastBody("xai", (b) => JSON.stringify(b.messages).includes("rất cao")))?.reasoning_effort === "xhigh", "mức Rất cao → xhigh");
+  ok((await lastBody("xai", (b) => JSON.stringify(b.messages ?? b.input ?? "").includes("rất cao")))?.reasoning_effort === "xhigh", "mức Rất cao → xhigh");
   const mx = await api("POST", "/api/llm", { model: "xai/grok-4.7", effort: "max", messages: [{ role: "user", content: "tối đa" }], skills: true });
-  ok(mx.s === 200 && (await lastBody("xai", (b) => JSON.stringify(b.messages).includes("tối đa")))?.reasoning_effort === "xhigh", "Grok không có mức Tối đa → hạ về xhigh (không lỗi)");
+  ok(mx.s === 200 && (await lastBody("xai", (b) => JSON.stringify(b.messages ?? b.input ?? "").includes("tối đa")))?.reasoning_effort === "xhigh", "Grok không có mức Tối đa → hạ về xhigh (không lỗi)");
   const gb = await api("POST", "/api/llm", { model: "xai/grok-build-0.1", effort: "high", messages: [{ role: "user", content: "build thử" }], skills: true });
-  ok(gb.s === 200 && (await lastBody("xai", (b) => JSON.stringify(b.messages).includes("build thử")))?.reasoning_effort === undefined, "Grok Build không nhận reasoning_effort → Synchro không gửi", gb.j);
+  ok(gb.s === 200 && (await lastBody("xai", (b) => JSON.stringify(b.messages ?? b.input ?? "").includes("build thử")))?.reasoning_effort === undefined, "Grok Build không nhận reasoning_effort → Synchro không gửi", gb.j);
   // Vòng công cụ: lượt gọi công cụ của Grok có reasoning_content; gửi lại thì bỏ đi (API giả lập từ chối trường này như API thật không nhận).
   const t = await run({ model: "xai/grok-4.7", messages: [{ role: "user", content: 'Ghi việc #tool=update_plan #args={"items":[{"content":"Buoc grok","status":"in_progress"}]}' }] });
   ok(t.s === 200 && /update_plan/.test(t.text) && t.events.some((e) => e.kind === "plan" && /Buoc grok/.test(e.text)), "Grok gọi công cụ của Synchro (danh sách việc) và trả lời tiếp", { s: t.s, text: t.text.slice(0, 200) });
@@ -106,21 +106,21 @@ console.log("3. DeepSeek qua khóa API");
   // Lịch sử có lượt trả lời cũ + có công cụ: DeepSeek đòi reasoning_content của mọi lượt trả lời trước.
   const msgs = [{ role: "user", content: "câu một" }, { role: "assistant", content: "Đây là câu trả lời trước." }, { role: "user", content: "câu hai deepseek" }];
   const r = await api("POST", "/api/llm", { model: "deepseek/deepseek-v4-pro", effort: "max", messages: msgs, skills: true });
-  const sent = await lastBody("deepseek", (b) => JSON.stringify(b.messages).includes("câu hai deepseek"));
+  const sent = await lastBody("deepseek", (b) => JSON.stringify(b.messages ?? b.input ?? "").includes("câu hai deepseek"));
   ok(r.s === 200 && /DeepSeek v4 pro/i.test(r.j?.text ?? "") && sent?.messages.find((m) => m.role === "assistant")?.reasoning_content === "" && sent.reasoning_effort === "max",
     "lượt cũ trong lịch sử được gửi kèm reasoning_content (rỗng) nên không bị lỗi 400; mức Tối đa → max", { s: r.s, j: r.j, eff: sent?.reasoning_effort });
   const sr = await api("POST", "/api/llm", { model: "deepseek/deepseek-v4-pro", messages: [...msgs.slice(0, 2), { role: "user", content: "câu ba [mock:strictreason]" }], skills: true });
-  const h = (await hist("deepseek")).filter((b) => JSON.stringify(b.messages).includes("câu ba"));
+  const h = (await hist("deepseek")).filter((b) => JSON.stringify(b.messages ?? b.input ?? "").includes("câu ba"));
   ok(sr.s === 200 && h.length >= 2 && h.at(-1).thinking?.type === "disabled" && h.at(-1).reasoning_effort === undefined, "API vẫn đòi suy luận gốc của lượt cũ → Synchro tự gửi lại một lần với chế độ suy nghĩ tắt", { s: sr.s, err: sr.j?.error, n: h.length });
   // Vòng công cụ chạy nền (truyền chữ dần): reasoning_content đến từng đoạn phải được nối lại đủ rồi gửi lại ở bước sau.
   const t = await run({ model: "deepseek/deepseek-v4-pro", messages: [{ role: "user", content: 'Ghi việc [mock:strictreason] #tool=update_plan #args={"items":[{"content":"Buoc ds","status":"in_progress"}]}' }] });
-  const step2 = await lastBody("deepseek", (b) => (b.messages ?? []).some((m) => m.role === "tool") && JSON.stringify(b.messages).includes("Buoc ds"));
+  const step2 = await lastBody("deepseek", (b) => (b.messages ?? []).some((m) => m.role === "tool") && JSON.stringify(b.messages ?? b.input ?? "").includes("Buoc ds"));
   const rc = step2?.messages.find((m) => m.role === "assistant" && m.tool_calls)?.reasoning_content ?? "";
   ok(t.s === 200 && t.events.some((e) => e.kind === "plan" && /Buoc ds/.test(e.text)) && /^Suy nghĩ của DeepSeek \(giả lập\) về: /.test(rc) && rc.length > 30, "DeepSeek gọi công cụ: suy luận truyền từng đoạn được nối đủ và gửi lại", { s: t.s, rc, text: t.text.slice(0, 160) });
   const e1 = await api("POST", "/api/llm", { model: "deepseek/deepseek-flash", effort: "medium", messages: [{ role: "user", content: "mức vừa" }], skills: true });
-  ok(e1.s === 200 && (await lastBody("deepseek", (b) => JSON.stringify(b.messages).includes("mức vừa")))?.reasoning_effort === "low", "DeepSeek không có mức Trung bình → hạ về low (không lỗi)");
+  ok(e1.s === 200 && (await lastBody("deepseek", (b) => JSON.stringify(b.messages ?? b.input ?? "").includes("mức vừa")))?.reasoning_effort === "low", "DeepSeek không có mức Trung bình → hạ về low (không lỗi)");
   const pro = await api("POST", "/api/llm", { model: "deepseek/deepseek-v4-pro", messages: media("#media xem đề bài"), skills: true });
-  const pb = await lastBody("deepseek", (b) => b.model === "deepseek-v4-pro" && JSON.stringify(b.messages).includes("#media"));
+  const pb = await lastBody("deepseek", (b) => b.model === "deepseek-v4-pro" && JSON.stringify(b.messages ?? b.input ?? "").includes("#media"));
   // API giả lập trả lỗi 400 nếu V4 Pro nhận ảnh: lượt chạy được là ảnh đã được thay bằng ghi chú cho model.
   ok(pro.s === 200 && !pro.j?.error && /chỉ đọc chữ/.test(JSON.stringify(pb?.messages ?? "")) && !JSON.stringify(pb?.messages ?? "").includes("image_url"), "DeepSeek V4 Pro (chỉ đọc chữ): ảnh thay bằng ghi chú, không lỗi 400", { s: pro.s, err: pro.j?.error });
   const fl = await api("POST", "/api/llm", { model: "deepseek/deepseek-flash", messages: media("#media xem đề bài"), skills: true });

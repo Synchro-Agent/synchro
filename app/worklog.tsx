@@ -97,6 +97,40 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 
+/**
+ * Câu trả lời đã xong: danh sách việc và nhật ký làm việc chỉ hiện lúc đang chạy; xong thì gom thành một dòng tổng kết (số việc đã xong,
+ * số bước, thời gian), bấm vào để xem lại chi tiết. Câu trả lời cuối của model là phần tổng kết bằng lời.
+ */
+export function WorkSummary({ parts, plan, ms, stopped, render }: { parts?: Part[]; plan?: PlanItem[]; ms?: number; stopped?: boolean; render: (text: string) => React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const steps = stepsOf(parts), en = getLang() === "en";
+  const total = plan?.length ?? 0, ok = plan?.filter((x) => x.status === "completed").length ?? 0;
+  const bad = (parts ?? []).reduce((n, p) => n + (p.k === "tools" ? p.items.filter((x) => x.ok === false).length : 0), 0);
+  if (!steps && !total && !(parts ?? []).length) return null;
+  const bits = [
+    total ? (en ? `${ok}/${total} tasks done` : `Xong ${ok}/${total} việc`) : stopped ? (en ? "Stopped" : "Đã dừng") : en ? "Done" : "Đã xong",
+    steps ? (en ? `${steps} ${steps === 1 ? "step" : "steps"}` : `${steps} bước`) : "",
+    ms && ms >= 1000 ? dur(ms) : "",
+  ].filter(Boolean);
+  return (
+    <div className={`wl-sum ${open ? "open" : ""}`}>
+      <button className="wl-sum-h" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className={`wl-sum-ic ${stopped || (total && ok < total) ? "part" : ""}`}>{stopped ? <I.Stop size={10} /> : <I.Check size={11} />}</span>
+        <span>{bits.join(" · ")}</span>
+        {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
+        <span className="wl-sum-more">{open ? (en ? "Hide steps" : "Ẩn các bước") : en ? "Show steps" : "Xem các bước"}</span>
+        <I.ChevronR size={13} />
+      </button>
+      {open && (
+        <div className="wl-sum-b">
+          {plan?.length ? <PlanCard plan={plan} live={false} /> : null}
+          {parts?.length ? <WorkParts parts={parts} live={false} render={render} /> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const dur = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };
 /** Số bước (lần dùng công cụ) đã làm trong câu trả lời đang chạy: tiến độ thật của việc nhiều bước. */
 export const stepsOf = (parts?: Part[]) => (parts ?? []).reduce((n, p) => n + (p.k === "tools" ? p.items.length : 0), 0);

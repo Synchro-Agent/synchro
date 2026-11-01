@@ -15,6 +15,7 @@ import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "./c
 import { CriticNote, CriticPill } from "./criticui";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
+import { buildPptx, PPTX_FRAME_JS, type DeckSlide } from "./deckpptx";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
@@ -31,7 +32,7 @@ const LIBS: [string, string, string][] = [
   ["lucide-react-0.460.0.min.js", "lucide-react@0.460.0/dist/umd/lucide-react.min.js", "sha384-JEoKym/kMViouWwSkyVNKeAyxFMvD/XeYv4VtG86kNEtGxzuvjSjTqWulOQd6dNY"],
   ["babel-7.29.11.min.js", "@babel/standalone@7.29.11/babel.min.js", "sha384-WLl8kKG54INe3zxB+zrpQr6Z1cgCoBg+ZirrqnCcjzA5sjvtSirQ11bgyU91deI+"],
 ];
-// Thư viện tải khi cần: chụp ảnh PNG của artifact (html-to-image).
+// Thư viện tải khi cần: chụp ảnh PNG của artifact (html-to-image); xuất PowerPoint cũng dùng nó để chụp nền từng slide (deckpptx.ts).
 export const H2I: [string, string, string] = ["html-to-image-1.11.11.js", "html-to-image@1.11.11/dist/html-to-image.js", "sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz"];
 export const libUrls = (origin: string, l: [string, string, string]) => [`${origin}${V}${l[0]}`, `https://cdn.jsdelivr.net/npm/${l[1]}`, l[2]];
 const CDNS = "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com";
@@ -52,8 +53,10 @@ var api={complete:function(p){return ask({t:"complete",prompt:p})},storage:stora
 window.synchro=api;window.claude=api;try{window.storage=storage}catch(e){}
 // Synchro yêu cầu: in (lưu PDF) hoặc chụp ảnh PNG phần đang xem (slide hiện tại nếu là bản trình bày).
 function lib(u,cb){if(window.htmlToImage)return cb(true);var n=0;(function tryLoad(){if(n>1)return cb(false);var s=document.createElement("script");s.src=h2i[n++];s.crossOrigin="anonymous";s.integrity=h2i[2];s.onload=function(){cb(true)};s.onerror=function(){s.remove();tryLoad()};document.head.appendChild(s)})()}
+${PPTX_FRAME_JS}
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
-if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
+if(d.t==="pptx")lib(0,function(ok){if(!ok)return post({t:"pptx",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxPptx(d.id)});
+else if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
 else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
 var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWidth)):2;
 htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
@@ -92,7 +95,7 @@ function find(){var s=[].slice.call(document.querySelectorAll("section.slide,[da
 function show(i){S=find();if(!S.length){post({t:"slides",n:0,cur:0});return}cur=Math.max(0,Math.min(i,S.length-1));
 S.forEach(function(el,k){el.setAttribute("data-sx-slide","");if(k===cur){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","");CL.forEach(function(c){el.classList.add(c)})}else{el.setAttribute("data-sx-hide","");el.removeAttribute("data-sx-on");CL.forEach(function(c){el.classList.remove(c)})}});
 if(fixed===null)post({t:"slides",n:S.length,cur:cur})}
-window.__sxGo=function(i){show(i)};window.__sxCur=function(){return S[cur]||null};
+window.__sxGo=function(i){show(i)};window.__sxCur=function(){return S[cur]||null};window.__sxAll=function(){S=find();return S};window.__sxIdx=function(){return cur};
 function reveal(){S=find();S.forEach(function(el){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","")});
 [].forEach.call(document.body.querySelectorAll("*"),function(el){if(S.indexOf(el)<0&&!S.some(function(s){return s.contains(el)||el.contains(s)})&&getComputedStyle(el).position==="fixed")el.setAttribute("data-sx-noprint","")})}
 window.__sxPrint=function(){reveal();setTimeout(function(){print();show(cur)},60)};
@@ -174,7 +177,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
       const d = e.data as { __synchro?: string; t?: string; id?: number; prompt?: unknown; message?: string; h?: number; op?: string; key?: unknown; value?: unknown; shared?: boolean; prefix?: unknown };
       if (!d || d.__synchro !== ch) return;
       if (d.t === "height" && typeof d.h === "number") cb.current.onHeight?.(d.h);
-      else if (d.t === "slides" || d.t === "png" || d.t === "ready" || d.t === "picked") cb.current.onMsg?.(d as FrameMsg);
+      else if (d.t === "slides" || d.t === "png" || d.t === "pptx" || d.t === "pptx-step" || d.t === "ready" || d.t === "picked") cb.current.onMsg?.(d as FrameMsg);
       else if (d.t === "error") cb.current.onError?.(String(d.message ?? "").slice(0, 500));
       else if (d.t === "complete") {
         const res = (m: Record<string, unknown>) => w.postMessage({ __synchro: ch, t: "res", id: d.id, ...m }, "*");
@@ -301,7 +304,7 @@ export async function svgToPng(svg: string): Promise<Blob> {
 const dataUrlBlob = (u: string) => { const [h, b] = u.split(","); const bin = atob(b); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: /data:([^;]+)/.exec(h)?.[1] ?? "image/png" }); };
 
 type DlItem = { label: string; sub: string; run: () => void | Promise<void> };
-function DownloadMenu({ items, say }: { items: DlItem[]; say: (m: string) => void }) {
+function DownloadMenu({ items, say, note }: { items: DlItem[]; say: (m: string) => void; note?: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -316,6 +319,7 @@ function DownloadMenu({ items, say }: { items: DlItem[]; say: (m: string) => voi
   };
   return (
     <div className="art-dl" ref={ref}>
+      {note && <span className="art-dl-note" role="status">{note}</span>}
       <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Tải về" data-tip="Tải về" aria-expanded={open}>{busy ? <span className="art-spin sm" /> : <I.Download size={16} />}</button>
       <Menu open={open} className="art-dl-menu">
         <div className="art-dl-h">{tr("Tải về")}</div>
@@ -470,9 +474,12 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
   const [reload, setReload] = useState(0);
+  // Tiến độ xuất PowerPoint ("3/18"), hiện cạnh nút Tải về.
+  const [pptxStep, setPptxStep] = useState("");
   const send = useRef<FrameSend | null>(null);
   const body = useRef<HTMLDivElement>(null);
   const pending = useRef<Map<number, (d: FrameMsg) => void>>(new Map());
+  const steps = useRef<Map<number, (d: FrameMsg) => void>>(new Map());
   // Chỉ và sửa: đang chọn phần tử / phần tử đã chọn và yêu cầu sửa. So sánh: bản trước và bản đang xem.
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<{ sel: string; tag: string; text: string; html: string; loc: { start: number; end: number } | null } | null>(null);
@@ -506,11 +513,13 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
     if (!showCode) { Promise.resolve(fn()).then(ok, no); return; }
     setTab("preview"); setTimeout(() => Promise.resolve(fn()).then(ok, no), wait);
   });
-  const frameCall = (m: FrameMsg) => new Promise<FrameMsg>((ok, no) => {
+  // o.onStep: tin tiến độ của lệnh chạy lâu (xuất PowerPoint báo từng slide); o.ms: thời gian chờ tối đa.
+  const frameCall = (m: FrameMsg, o: { ms?: number; onStep?: (d: FrameMsg) => void } = {}) => new Promise<FrameMsg>((ok, no) => {
     if (!send.current) return no(new Error(tr("Khung xem chưa sẵn sàng")));
     const id = Date.now() + Math.random();
-    const t = setTimeout(() => { pending.current.delete(id); no(new Error(tr("Quá thời gian chờ"))); }, 20000);
-    pending.current.set(id, (d) => { clearTimeout(t); d.error ? no(new Error(String(d.error))) : ok(d); });
+    const t = setTimeout(() => { pending.current.delete(id); steps.current.delete(id); no(new Error(tr("Quá thời gian chờ"))); }, o.ms ?? 20000);
+    if (o.onStep) steps.current.set(id, o.onStep);
+    pending.current.set(id, (d) => { clearTimeout(t); steps.current.delete(id); d.error ? no(new Error(String(d.error))) : ok(d); });
     send.current({ ...m, id });
   });
   const onMsg = (d: FrameMsg) => {
@@ -519,6 +528,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
       if (!d.cancel) { setPicked({ sel: String(d.sel ?? ""), tag: String(d.tag ?? ""), text: String(d.text ?? ""), html: String(d.html ?? ""), loc: parseLoc(d.loc, art.content.split("\n").length) }); setReq(""); }
       return;
     }
+    if (d.t === "pptx-step") { steps.current.get(d.id as number)?.(d); return; }
     const f = pending.current.get(d.id as number); if (f) { pending.current.delete(d.id as number); f(d); }
   };
   const canPick = !!onAsk && art.complete && !showCode && !compare && ["html", "react", "svg"].includes(art.type);
@@ -542,11 +552,19 @@ Yêu cầu: ${req.trim()}`);
   };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
   const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture" }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
+  // PowerPoint: Synchro tự dựng ngay trong khung xem (deckpptx.ts), không nhờ model; chữ sửa được, hình giữ nguyên.
+  const pptxFrame = () => withPreview(async () => {
+    say(tr("Đang dựng tệp PowerPoint…"));
+    const d = await frameCall({ t: "pptx" }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
+    setPptxStep("");
+    const n = `${name}.pptx`;
+    saveBlob(await buildPptx(d.slides as DeckSlide[], Number(d.w), Number(d.h), art.title), n); done(n);
+  }, 1500).finally(() => setPptxStep(""));
   const shown = (sel: string) => { const el = body.current?.querySelector(sel); if (!el) throw new Error(tr("Chưa hiện xong nội dung")); return el; };
   const items: DlItem[] = [];
   if (deck) {
     items.push({ label: "PDF", sub: "Mỗi slide một trang (chọn Lưu thành PDF)", run: pdfFrame });
-    if (onAsk) items.push({ label: "PowerPoint (.pptx)", sub: "Synchro tạo tệp chỉnh sửa được", run: () => onAsk(`${tr("Hãy xuất bản trình bày")} “${art.title}” ${tr("thành tệp PowerPoint (.pptx) chỉnh sửa được, giữ nguyên nội dung, thứ tự và bố cục từng slide.")}`) });
+    items.push({ label: "PowerPoint (.pptx)", sub: "Chữ sửa được, hình giữ nguyên", run: pptxFrame });
     items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: () => { const n = artFileName(art); saveBlob(new Blob([deckExport(art.content)], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
   } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: "Ảnh toàn trang", run: pngFrame });
   else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", art.content, location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
@@ -581,13 +599,15 @@ Yêu cầu: ${req.trim()}`);
         )}
         {runnable && <div className="art-tabs"><button className={!showCode ? "on" : ""} disabled={!art.complete} onClick={() => setTab("preview")}>{tr("Xem trước")}</button><button className={showCode ? "on" : ""} onClick={() => setTab("code")}>{tr("Mã")}</button></div>}
         <div className="art-acts">
-          {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
+          {/* Viên phản biện đổi rộng / hẹp khi chạy xong: đặt đầu nhóm (nhóm canh phải) để nó co giãn không đẩy các nút khác nhảy chỗ
+              (trước đây nút Chỉ và sửa nhảy ngang 61px ngay dưới con trỏ). */}
           {criticOf && art.complete && !compare && <CriticPill entry={crit} findings={findings} can={important(art) && !!onCritic}
             onRun={() => onCritic?.(art)} onShow={() => { setTab("code"); setTimeout(() => body.current?.querySelector(".cr-note")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60); }} />}
+          {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>
           {art.complete && extra?.(art)}
-          {art.complete && <DownloadMenu items={items} say={say} />}
+          {art.complete && <DownloadMenu items={items} say={say} note={pptxStep ? `PowerPoint ${pptxStep}` : ""} />}
           <button className="icon-btn" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "Thu nhỏ" : "Toàn màn hình"} data-tip={expanded ? "Thu nhỏ" : "Toàn màn hình"}>
             <I.M icon={expanded ? "Collapse" : "Expand"} size={15} />
           </button>

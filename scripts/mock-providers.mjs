@@ -638,12 +638,13 @@ async function handler(req, res) {
   // Kiểm thử: yêu cầu gần nhất gửi tới từng hãng (xem điểm đệm prompt, model được chọn…), số token ước tính, số luồng.
   if (p === "/_debug/last") return send(res, 200, LAST);
   if (p === "/_debug/streams") return send(res, 200, STREAMS);
-  // 30 yêu cầu gần nhất của từng hãng (khi có lời gọi chạy nền sau lượt chat, như rút bộ nhớ, đè lên "gần nhất").
+  // 200 yêu cầu gần nhất của từng hãng (khi có lời gọi chạy nền sau lượt chat, như rút bộ nhớ, đè lên "gần nhất"). Trước đây 30: bộ kiểm
+  // tác vụ tự động tự tạo nhiều lời gọi tới mức đẩy lời gọi cần kiểm ra khỏi lịch sử, lúc đạt lúc không.
   if (p === "/_debug/hist") return send(res, 200, HIST);
   // Lời gọi rút bộ nhớ chạy nền sau lượt chat không tính là "gần nhất" (chỉ ghi vào lịch sử) để kiểm thử đọc đúng lượt chat.
   if (res.__prov) {
     if (!JSON.stringify(b).includes("Bạn trích xuất bộ nhớ dài hạn")) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); }
-    (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 30);
+    (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 200);
   }
   res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
 

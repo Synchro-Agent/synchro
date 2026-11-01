@@ -5,3 +5,6 @@ react 18.3.1, react-dom 18.3.1 (MIT) · @babel/standalone 7.29.11 (MIT) · recha
 Thư viện cho khung xem trước tệp (Word, Excel, PowerPoint) và xuất ảnh, cũng chạy trong khung cô lập:
 jszip 3.10.1 (MIT, chọn MIT trong giấy phép kép MIT / GPL-3.0) · mammoth 1.8.0 (BSD-2-Clause) · xlsx 0.18.5 (Apache-2.0) · html-to-image 1.11.11 (MIT)
 pdfjs-dist 3.11.174 (Apache-2.0), bản legacy: xem trước PDF
+
+Thư viện của trang Synchro (không chạy trong artifact), tải khi cần:
+pptxgenjs 4.0.1 (MIT, bản pptxgen.bundle.js kèm JSZip): xuất bản trình bày thành PowerPoint (app/deckpptx.ts)

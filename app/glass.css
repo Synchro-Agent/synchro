@@ -293,7 +293,10 @@ html body .nav-item .plus::before{background:linear-gradient(180deg,var(--ink-g-
    Nút thường, nút đậm, chip, nút chọn đoạn, nút trên thanh trên, nút gửi, "+" của Mới: phẳng theo bộ nhận diện — mực đặc (nút chính) hoặc
    viền mảnh trên nền trong (nút phụ), không khúc xạ, không vệt bóng, không phóng to khi rê chuột. */
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)::before,
-html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)::after{display:none!important;content:none!important}
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *):not([data-tip])::after{display:none!important;content:none!important}
+/* Phần tử có gợi ý (data-tip): ::after là gợi ý khi rê chuột, không phải lớp kính. Trước đây quy tắc trên tắt luôn gợi ý của nút trên thanh trên,
+   nút .btn, chip… (rê chuột vào nút Trình duyệt không thấy gợi ý). Lúc không rê chuột vẫn tắt như cũ. */
+html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)[data-tip]:not(:hover,:focus-visible)::after{display:none!important;content:none!important}
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *),
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *):is(:hover,:active,[data-press]){scale:none;filter:none;isolation:auto}
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *){transition:background-color .15s,color .15s,box-shadow .15s,opacity .15s!important}

@@ -76,7 +76,9 @@ try {
   await until(`!!document.querySelector(".intro")`, 6000, "intro mounted");
   ok(await ev(`document.querySelector(".intro").dataset.phase === "iris" && !!document.querySelector(".intro-iris")`), "lời chào xong: bắt đầu bằng vòng tròn nở ra (không hiện phim đột ngột)");
   const irisR = () => ev(`(() => { const e = document.querySelector(".intro-iris"); if (!e) return -1; const r = /circle\\(([\\d.]+)px/.exec(getComputedStyle(e).clipPath); return r ? +r[1] : -1; })()`);
-  const r1 = await irisR(); await sleep(300); const r2 = await irisR();
+  // Vòng tròn bắt đầu nở sau ~0,2 giây (hiện dần trước); máy bận thì trễ hơn chút: dò tới 1,5 giây cho tới khi bán kính tăng.
+  const r1 = await irisR(); let r2 = r1;
+  for (let i = 0; i < 15 && r2 <= r1; i++) { await sleep(100); r2 = await irisR(); }
   ok(r2 > r1 && r2 > 0 && r2 < Math.hypot(1440, 900), "giữa lúc chuyển: vòng tròn đang nở dần, chưa phủ kín", `${r1} → ${r2}`);
   ok(await ev(`!!document.querySelector(".auth-root")`), "màn lời chào vẫn ở dưới cho tới khi phủ kín");
   const seed = await ev(`(() => { const s = document.querySelector(".intro-seed"), a = document.querySelector(".auth-root .auth-mark"); if (!s) return null; const b = s.getBoundingClientRect();

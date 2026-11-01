@@ -17,6 +17,9 @@ const adminId = db.prepare("SELECT id FROM users WHERE email = ?").get("admin@sy
 const saved = adminId ? db.prepare("SELECT override FROM usage_users WHERE user_id = ?").get(adminId) : undefined;
 if (adminId) db.prepare("INSERT INTO usage_users (user_id, session_start, week_anchor, override) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET override = excluded.override")
   .run(adminId, Date.now(), Date.now(), JSON.stringify({ session: 100000, weekly: 100000 }));
+// Mức dùng cũ của các tài khoản thử (chỉ dữ liệu giả lập data-mock): chạy nhiều lượt trong ngày thì cộng dồn tới hạn mức phiên, bộ kiểm
+// sau bị chặn "đã dùng hết giới hạn của phiên này" (routing.test lỗi 8/16). Mỗi lượt chạy bắt đầu từ mức dùng 0.
+db.prepare("DELETE FROM usage_events WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@synchro.test')").run();
 // Khả năng (Cài đặt → Khả năng) của tài khoản thử nghiệm: bộ kiểm thử bật / tắt rồi tự trả lại, nhưng bộ bị ngắt giữa chừng thì không,
 // nên trình chạy chụp lại trước và trả về như cũ khi xong (kể cả khi lỗi).
 db.exec("CREATE TABLE IF NOT EXISTS user_caps (user_id TEXT PRIMARY KEY, caps TEXT NOT NULL, updated_at INTEGER NOT NULL)");
@@ -61,4 +64,5 @@ console.log("\n━━ Tổng kết");
 for (const r of rows) console.log(`${r.fail ? "✗" : "✓"} ${r.f.padEnd(34)} ${r.pass} đạt, ${r.fail} lỗi  (${r.s}s)`);
 const bad = rows.filter((r) => r.fail).length;
 console.log(bad ? `\n${bad}/${rows.length} bộ có lỗi` : `\nTất cả ${rows.length} bộ đều đạt`);
-process.exit(bad ? 1 : 0);
+// exitCode thay cho process.exit(): khi đầu ra là ống (npm run qa đọc qua pipe), Node ghi không đồng bộ và process.exit() cắt mất phần tổng kết.
+process.exitCode = bad ? 1 : 0;

@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "dev:mock": "node scripts/dev-mock.mjs",
     "dev:mock:fast": "node scripts/dev-mock.mjs --fast",
+    "qa": "node scripts/qa.mjs",
     "build": "next build --turbopack",
     "start": "next start"
   },

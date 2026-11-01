@@ -21,7 +21,11 @@ export type Risk = "none" | "low" | "medium" | "high";
 export type SkillReport = { name: string; description: string; dir: string; repo: string; files: number; size: number; scripts: number; license: string; licenseKind: LicenseKind; risk: Risk; flags: string[]; blocked?: string; duplicateOf?: string };
 export type LicenseKind = "open" | "proprietary" | "unknown";
 
-export const PLUGIN_LIMITS = { skills: 80, filesPerSkill: 5000, skillBytes: 25 * 1024 * 1024, pluginBytes: 150 * 1024 * 1024, zip: 80 * 1024 * 1024, perOwner: 40 };
+// skills: số skill tối đa cài từ một plugin (trước đây 80, phần dư bị bỏ qua). zip / pluginBytes / skillBytes: repo tải về tối đa 500MB, giữ lại
+// tối đa 400MB skill, mỗi skill 60MB (trước đây 80 / 150 / 25MB: repo skill nhiều ảnh mẫu không cài được). perOwner / ownerBytes: mỗi tài khoản (và thư viện chung "org")
+// tối đa 200 plugin và 4GB. Trước đây chỉ 40 plugin — con số đặt tùy ý, không vì
+// dung lượng (cả kho dữ liệu chỉ vài trăm MB) — người dùng chạm giới hạn mà không biết đã cài bao nhiêu hay phải làm gì.
+export const PLUGIN_LIMITS = { skills: 200, filesPerSkill: 5000, skillBytes: 60 * 1024 * 1024, pluginBytes: 400 * 1024 * 1024, zip: 500 * 1024 * 1024, perOwner: 200, ownerBytes: 4 * 1024 * 1024 * 1024 };
 const PROOT = () => path.join(ROOT, "_plugins");
 export class PluginError extends Error { constructor(m: string, public status = 400) { super(m); } }
 const fail = (m: string, status = 400): never => { throw new PluginError(m, status); };
@@ -265,12 +269,15 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
   const d = init();
   if (!slugOk(def.slug)) fail("Tên plugin không hợp lệ.");
   const existing = d.prepare("SELECT * FROM plugins WHERE owner = ? AND slug = ?").get(owner, def.slug) as Row | undefined;
-  if (!existing && (d.prepare("SELECT COUNT(*) AS n FROM plugins WHERE owner = ?").get(owner) as { n: number }).n >= PLUGIN_LIMITS.perOwner) fail(`Đã đạt giới hạn ${PLUGIN_LIMITS.perOwner} plugin.`);
+  const used = d.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS b FROM plugins WHERE owner = ?").get(owner) as { n: number; b: number };
+  const who = owner === "org" ? "Thư viện chung của tổ chức" : "Tài khoản của bạn";
+  if (!existing && used.n >= PLUGIN_LIMITS.perOwner) fail(`${who} đã có ${used.n} plugin, mức tối đa là ${PLUGIN_LIMITS.perOwner}. Gỡ bớt plugin không dùng trong Kho kỹ năng (⋯ › Gỡ) rồi cài lại.`);
   const { commits, found } = await collect(def);
   const keep = found.filter((f) => !f.report.blocked && !f.report.duplicateOf && !opts.skip?.includes(f.report.name)).slice(0, PLUGIN_LIMITS.skills);
   if (!keep.length) fail("Không có skill nào cài được trong gói này.");
   const size = keep.reduce((a, f) => a + f.report.size, 0);
   if (size > PLUGIN_LIMITS.pluginBytes) fail(`Plugin quá lớn (${(size / 1048576).toFixed(0)}MB, tối đa ${PLUGIN_LIMITS.pluginBytes / 1048576}MB). Hãy bỏ bớt skill.`);
+  if (used.b - (existing?.size ?? 0) + size > PLUGIN_LIMITS.ownerBytes) fail(`${who} đã dùng ${(used.b / 1073741824).toFixed(1)}GB cho plugin, cài thêm gói này (${(size / 1048576).toFixed(0)}MB) sẽ vượt mức ${PLUGIN_LIMITS.ownerBytes / 1073741824}GB. Gỡ bớt plugin không dùng trong Kho kỹ năng (⋯ › Gỡ) rồi cài lại.`);
   const id = existing?.id ?? "pl_" + crypto.randomBytes(8).toString("hex");
   const stamp = Date.now().toString(36);
   const prevSkills = existing ? (d.prepare("SELECT name, enabled, use_count, last_used_at FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; enabled: number; use_count: number; last_used_at: number | null }[]) : [];

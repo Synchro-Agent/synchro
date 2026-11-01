@@ -422,7 +422,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
                 {shownCtx.map((c) => {
                   const ext = (c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").slice(0, 4).toUpperCase()) || "FILE";
                   return (
-                    <div key={c.id} className={`pj-file ${sel.has(c.id) ? "sel" : ""} ${sel.size ? "selmode" : ""}`} onContextMenu={(e) => fm.open(e, c.name, c.text)} onClick={() => sel.size && toggle(c.id)}>
+                    <div key={c.id} className={`pj-file ${sel.has(c.id) ? "is-sel" : ""} ${sel.size ? "selmode" : ""}`} onContextMenu={(e) => fm.open(e, c.name, c.text)} onClick={() => sel.size && toggle(c.id)}>
                       <button className="pj-file-x" aria-label="Xóa" onClick={(e) => { e.stopPropagation(); patch(proj.id, { ctx: ctx.filter((x) => x.id !== c.id) }); }}><I.X size={12} /></button>
                       <b title={c.name}>{c.name}</b>
                       <span>{fmtSize(c.size ?? c.chars ?? 0)}</span>

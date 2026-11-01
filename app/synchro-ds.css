@@ -82,13 +82,27 @@ html body :is(.group,.pl-seg):not(.auth-root *)>button:hover{color:var(--ds-ink)
 html body :is(.group,.pl-seg):not(.auth-root *)>button.on{background:var(--ds-inv)!important;color:var(--ds-inv-fg)!important}
 /* Gợi ý khi rê chuột: tấm mực, chữ giấy. */
 html body [data-tip]:not(.auth-root *):hover::after{background:var(--ds-inv);color:var(--ds-inv-fg);font-size:12px;font-weight:460;padding:5px 9px;border-radius:var(--r-pill);box-shadow:var(--ds-lift);letter-spacing:0}
+/* Gợi ý nổi (tips.ts): một khung gắn vào body, trên mọi lớp, tự đặt chỗ trong màn hình. Khi đã bật (html[data-tips="js"]) thì tắt gợi ý ::after
+   cũ: nó nằm trong phần tử nên bị khung cha cắt (thanh điều hướng cuộn dọc, thanh công cụ khung artifact sát mép trên) hay bị lớp khác che. */
+html[data-tips="js"] body [data-tip]:hover::after{content:none!important;display:none!important}
+.tip-float{position:fixed;left:0;top:0;z-index:2147483000;max-width:min(320px,calc(100vw - 16px));padding:5px 9px;border-radius:var(--r-pill);pointer-events:none;
+  background:var(--ds-inv);color:var(--ds-inv-fg);font:460 12px/16px var(--font-sans);letter-spacing:0;box-shadow:var(--ds-lift);width:max-content;white-space:normal;overflow-wrap:anywhere;text-wrap:balance;
+  opacity:0;visibility:hidden;transform:translateY(2px);transition:opacity .15s var(--ds-ease),transform .15s var(--ds-ease),visibility 0s .15s}
+.tip-float.multi{border-radius:10px;padding:6px 10px}
+.tip-float[data-side="bottom"]{transform:translateY(-2px)}
+.tip-float[data-side="right"]{transform:translateX(-2px)}
+.tip-float.on{opacity:1;visibility:visible;transform:none;transition:opacity .15s var(--ds-ease),transform .15s var(--ds-ease)}
+@media (prefers-reduced-motion:reduce){.tip-float{transition:none}}
 /* Menu: kính dày, mục cao 34px, icon thẳng hàng, phím tắt canh phải. */
 /* Menu bo 20 = mục tròn 32px (bán kính 16) + đệm 4: góc mục chọn đồng tâm với góc menu.
    Đệm 4px chỉ nặng hơn .menu một bậc (html .menu): khung nổi có nội dung riêng khai báo .menu.<tên> (Mức dùng 16/18px, Xuất bản 14px,
    chế độ của Code 8px…) giữ đệm của nó. Trước đây quy tắc này nặng hơn tất cả nên chữ trong các khung đó nằm sát mép, nút tràn ra ngoài. */
 html body :is(.menu,.model-menu,.usermenu,.model-sub):not(.auth-root *){border-radius:var(--r-menu)}
 html :is(.menu,.model-menu,.usermenu,.model-sub):not(:where(.auth-root *)){padding:4px}
-html body .menu-item:not(.auth-root *){height:auto;min-height:32px;gap:10px;padding:0 12px;border-radius:var(--ds-r-row);font-size:13px;font-weight:430;color:var(--ds-ink)}
+html body .menu-item:not(.auth-root *){height:auto;min-height:32px;gap:10px;border-radius:var(--ds-r-row);font-size:13px;font-weight:430;color:var(--ds-ink)}
+/* Đệm của mục menu: chỉ nặng hơn .menu-item một bậc (html .menu-item) nên mục có đệm riêng (mục hai dòng ở menu Tải về, Code, plugin; mục con
+   thụt vào; mục nhiều dòng) giữ đệm của nó. Trước đây đệm 0 12px đè tất cả: các mục hai dòng dính sát nhau, mục con mất thụt lề. */
+html .menu-item:not(:where(.auth-root *)){padding:0 12px}
 html body .menu-item:not(.auth-root *)>svg:first-child{width:16px;height:16px;flex:none;color:var(--ds-ink-2)}
 html body .menu-item:not(.auth-root *) .sc{font-size:12px;color:var(--ds-faint)}
 html body .menu:not(.auth-root *) hr{border-top:1px solid var(--ds-line);margin:6px 6px;opacity:.8}
@@ -549,7 +563,7 @@ html body .pj-panel .pj-ctx-empty{padding:28px 16px 26px;border-radius:var(--r-c
 html body .pj-panel .pj-ctx-empty.drag{box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
 html body .pj-panel .pj-files{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 html body .pj-panel .pj-file{border-radius:var(--r-card);border:0;box-shadow:inset 0 0 0 1px var(--ds-line);background:var(--ds-plate);min-height:112px;padding:12px 14px}
-html body .pj-panel .pj-file.sel{box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
+html body .pj-panel .pj-file.is-sel{box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
 html body .pj-panel .pj-usage{margin:0}
 html body .pj-panel .pj-fsearch{height:var(--ds-h);border-radius:999px;border:1px solid var(--ds-ink);padding:0 14px;margin:0}
 @media (max-width:760px){
@@ -1009,3 +1023,22 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 /* Chip thư viện trong câu trả lời: nhãn "Thư viện Tài liệu" không xuống dòng trong viên thuốc; danh sách skill co lại với dấu …. */
 .lib-chip{max-width:100%;min-width:0}
 .lib-chip>span:not(.lib-sk){white-space:nowrap;flex:none}
+
+/* Dòng tổng kết của câu trả lời đã xong (danh sách việc và nhật ký làm việc thu vào đây, bấm để xem lại). */
+.wl-sum{margin:0 0 12px}
+.wl-sum-h{display:inline-flex;align-items:center;gap:8px;min-height:30px;padding:4px 12px 4px 6px;border-radius:var(--r-pill);font-size:13px;color:var(--ds-muted);
+  box-shadow:inset 0 0 0 1px var(--ds-line);background:color-mix(in srgb,var(--ds-plate) 60%,transparent);transition:background-color var(--ds-fast),color var(--ds-fast)}
+.wl-sum-h:hover{background:var(--ds-hover);color:var(--ds-ink)}
+.wl-sum-ic{display:grid;place-items:center;width:18px;height:18px;flex:none;border-radius:50%;background:var(--ds-inv);color:var(--ds-inv-fg)}
+.wl-sum-ic.part{background:transparent;color:var(--ds-ink-2);box-shadow:inset 0 0 0 1.5px var(--ds-line-2)}
+.wl-sum-h em{font-style:normal;font-size:12px;color:#c4452e}
+.wl-sum-more{color:var(--ds-faint);font-size:12.5px}
+.wl-sum-h>svg:last-child{flex:none;color:var(--ds-faint);transition:transform .2s var(--ds-ease)}
+.wl-sum.open .wl-sum-h>svg:last-child{transform:rotate(90deg)}
+.wl-sum-b{margin:10px 0 0 2px;padding-left:14px;border-left:1.5px solid var(--ds-line);animation:rise .2s var(--ds-ease) both}
+.wl-sum-b .wl-plan{margin-top:0}
+@media (prefers-reduced-motion:reduce){.wl-sum-b{animation:none}}
+
+/* Tiến độ xuất PowerPoint: nhãn nổi ngay dưới nút Tải về (không chen vào hàng nút, các nút không xô lệch khi nó hiện / ẩn). */
+.art-dl-note{position:absolute;top:calc(100% + 6px);right:0;z-index:41;padding:3px 9px;border-radius:var(--r-pill);background:var(--ds-inv);color:var(--ds-inv-fg);
+  font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:var(--ds-lift);pointer-events:none}

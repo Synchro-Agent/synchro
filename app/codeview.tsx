@@ -1016,7 +1016,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
             <Menu open={menu === "rules"} className="cv-rules" style={{ top: 38, right: 0, width: 340 }}>
               <div className="cv-mh">Luật dự án cho phiên này</div>
               {PRESETS.map((p) => (
-                <button key={p.k} className={`menu-item cv-opt ${rules.preset === p.k ? "sel" : ""}`} onClick={() => { setRules({ ...rules, preset: p.k }); setMenu(""); say("Đã áp dụng: " + p.label); }}>
+                <button key={p.k} className={`menu-item cv-opt ${rules.preset === p.k ? "is-sel" : ""}`} onClick={() => { setRules({ ...rules, preset: p.k }); setMenu(""); say("Đã áp dụng: " + p.label); }}>
                   <span className="cv-opt-t">{p.label}<small>{p.rule}</small></span>{rules.preset === p.k && <span className="ck"><I.Check /></span>}
                 </button>
               ))}

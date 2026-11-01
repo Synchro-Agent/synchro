@@ -25,6 +25,8 @@ const setFeatures = async (features) => {
   await admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: { ...Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])), ...features } } });
 };
 const last = async () => (await fetch(`${MOCK}/_debug/last`)).json();
+// Lời gọi model của đúng câu hỏi (máy chủ còn có lời gọi chạy nền của bộ kiểm trước — đặt tên đoạn chat, phản biện… — chen vào "gần nhất").
+const lastFor = async (q) => { const h = await (await fetch(`${MOCK}/_debug/hist`)).json(); return { anthropic: [...(h.anthropic ?? [])].reverse().find((x) => JSON.stringify(x.messages ?? []).includes(q)) ?? {} }; };
 const ask = (c, model, text, extra = {}) => c("POST", "/api/llm", { system: "", model, skills: true, messages: [{ role: "user", content: text }], ...extra });
 const TASK = `#browser mở ${PAGE} rồi làm bài giúp mình`;
 const chrome = findChrome();
@@ -40,16 +42,16 @@ r = await member("GET", "/api/browser");
 ok(r.s === 200 && r.j.available === false && /Cloud sandbox/.test(r.j.reason ?? ""), "không có Cloud sandbox → khóa, kèm lý do", JSON.stringify(r.j));
 ok((await member("POST", "/api/browser", { op: "ticket" })).s === 403, "không có quyền → không cấp vé");
 r = await ask(member, "anthropic/claude-haiku-5-5", TASK);
-ok(r.s === 200 && !(await last()).anthropic.tools?.some((t) => t.name?.startsWith("browser_")), "không có quyền → model không nhận công cụ trình duyệt", JSON.stringify(r.j).slice(0, 200));
+ok(r.s === 200 && !(await lastFor(TASK)).anthropic.tools?.some((t) => t.name?.startsWith("browser_")), "không có quyền → model không nhận công cụ trình duyệt", JSON.stringify(r.j).slice(0, 200));
 await setFeatures({});
 
 console.log("2. Công cụ trình duyệt luôn có khi bật, phần đầu prompt giữ nguyên giữa các câu hỏi (đọc lại từ bộ đệm)");
 r = await ask(member, "anthropic/claude-haiku-5-5", "Giải thích ngắn gọn lãi kép là gì?");
-const A1 = await last();
+const A1 = await lastFor("Giải thích ngắn gọn lãi kép là gì?");
 ok(A1.anthropic.tools?.some((t) => t.name === "browser_batch") && /<browser>/.test(JSON.stringify(A1.anthropic.system)), "có công cụ và hướng dẫn trình duyệt");
 ok(r.s === 200 && !/trình duyệt/.test(r.j?.text ?? ""), "câu hỏi kiến thức: model không tự mở trình duyệt", JSON.stringify(r.j).slice(0, 200));
 await ask(member, "anthropic/claude-haiku-5-5", "Làm trang web cho quán cà phê");
-const A2 = await last();
+const A2 = await lastFor("Làm trang web cho quán cà phê");
 ok(JSON.stringify(A1.anthropic.tools) === JSON.stringify(A2.anthropic.tools) && JSON.stringify(A1.anthropic.system) === JSON.stringify(A2.anthropic.system), "hai câu hỏi khác nhau: công cụ và phần đầu prompt giống hệt");
 
 if (!chrome) {

@@ -176,5 +176,6 @@ ok((await client().raw(`/api/plugins/${pl.id}/export`)).s === 401, "chưa đăng
 
 // Dọn dẹp.
 for (const who of [memA, memB]) { await who("DELETE", "/api/skills/exp-one"); for (const x of (await who("GET", "/api/plugins")).j?.plugins ?? []) if (x.scope === "personal") await who("DELETE", `/api/plugins/${x.id}`); }
-console.log(`\nskillexport: ${pass}/${pass + fail}`);
+// Dòng kết quả theo đúng mẫu run-all.mjs đọc ("N/M đạt"); trước đây "skillexport: 44/44" nên bị tính là lỗi dù đạt hết.
+console.log(`\nskillexport: ${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

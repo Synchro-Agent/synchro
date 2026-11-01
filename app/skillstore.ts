@@ -24,7 +24,8 @@ export const LIMITS = {
   skills: 200,             // số skill tối đa mỗi tài khoản
   userBytes: 300 * 1024 * 1024, // dung lượng skill tối đa mỗi tài khoản (mọi phiên bản)
   uploadsPerHour: 60,      // mỗi tài khoản
-  githubZip: 60 * 1024 * 1024, // zip tải từ GitHub (cả repo, chỉ giữ thư mục skill được chọn)
+  // zip tải từ GitHub (cả repo, chỉ giữ thư mục skill được chọn). Trước đây 60MB: repo skill nhiều ảnh mẫu bị từ chối "Repo quá lớn để tải".
+  githubZip: 500 * 1024 * 1024,
   scriptOut: 20_000,       // ký tự stdout/stderr tối đa trả về khi chạy script
 };
 
@@ -489,14 +490,15 @@ export function parseGithubUrl(raw: string) {
 }
 
 export async function download(url: string, max: number) {
-  const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "Synchro" } });
+  // Repo lớn (vài trăm MB) cần vài phút để tải: chờ tới 3 phút (trước đây 30 giây, repo lớn bị cắt giữa chừng).
+  const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(180_000), headers: { "User-Agent": "Synchro" } });
   if (r.status === 404) return null;
   if (!r.ok || !r.body) fail(`GitHub trả lỗi ${r.status}`, 502);
   const chunks: Buffer[] = [];
   let n = 0;
   for await (const c of r.body as unknown as AsyncIterable<Uint8Array>) {
     n += c.length;
-    if (n > max) fail(`Repo quá lớn để tải (>${max / 1048576}MB). Hãy tải thư mục skill thành zip rồi upload`);
+    if (n > max) fail(`Repo quá lớn để tải (hơn ${max / 1048576}MB). Hãy dán link tới đúng thư mục skill trong repo, hoặc tải thư mục skill thành zip rồi tải lên.`);
     chunks.push(Buffer.from(c));
   }
   return Buffer.concat(chunks);

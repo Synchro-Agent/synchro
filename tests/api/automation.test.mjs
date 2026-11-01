@@ -62,8 +62,9 @@ console.log("2. Giao việc bằng câu thường → kế hoạch (model nhanh 
 r = await a("POST", "/api/tasks/plan", { text: "Thứ Hai đến thứ Sáu lúc 8h30 sáng, tra giá cổ phiếu FPT và VNM, phân tích xu hướng và đưa ra gợi ý giao dịch", tz: TZ });
 let p = r.j?.plan;
 ok(r.s === 200 && p.schedule.kind === "weekdays" && p.schedule.time === "08:30" && p.schedule.tz === TZ && p.browser === "auto" && /FPT/.test(p.prompt) && p.title, "giá cổ phiếu: thứ Hai – thứ Sáu 08:30, hướng dẫn chi tiết", JSON.stringify(r.j));
-const planReq = await reqWith(/<automation_plan>/, false);
-ok(!!planReq && /Việc cần tự động hóa:/.test(JSON.stringify(planReq.messages)), "lời giao việc tới model kèm hướng dẫn lên kế hoạch", JSON.stringify(planReq ?? {}).slice(0, 200));
+// Model nhanh lên kế hoạch do chế độ Tự động chọn, có thể thuộc hãng bất kỳ (tùy hạn mức còn lại sau các bộ kiểm trước): tìm ở mọi hãng.
+const planReq = Object.values(await hist()).flat().reverse().find((x) => x && /<automation_plan>/.test(JSON.stringify(x)));
+ok(!!planReq && /Việc cần tự động hóa:/.test(JSON.stringify(planReq.messages ?? planReq.input ?? planReq.contents ?? planReq)), "lời giao việc tới model kèm hướng dẫn lên kế hoạch", JSON.stringify(planReq ?? {}).slice(0, 200));
 r = await a("POST", "/api/tasks/plan", { text: "Mỗi ngày lúc 7h sáng lên GitHub tìm những repo có ý tưởng hay, đột phá, phân tích rồi chuyển repo đáng giá nhất thành skill (hỏi tôi trước khi tạo)", tz: TZ });
 p = r.j?.plan;
 ok(r.s === 200 && p.schedule.kind === "daily" && p.schedule.time === "07:00" && p.approvals.length > 0 && /inbox_propose/.test(p.prompt), "repo GitHub → skill: mỗi ngày 07:00, có bước chờ duyệt", JSON.stringify(r.j));
