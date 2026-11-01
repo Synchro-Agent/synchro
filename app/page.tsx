@@ -468,7 +468,7 @@ function Composer(p: {
     <div ref={ref} style={{ position: "relative" }}>
       <input ref={fileIn} type="file" multiple hidden onChange={pick} />
       <button className="icon-btn" onClick={() => setMenu(!menu)} aria-label="Thêm"><I.Plus /></button>
-        <Menu open={!!(menu)} className="" style={{ bottom: 40, left: 0, width: 264 }}>
+        <Menu open={!!(menu)} className="plus-menu" style={{ bottom: 40, left: 0, width: 264 }}>
           {perms?.features.files !== false && <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>}
           {perms?.features.files !== false && <button className="menu-item" onClick={shot}><I.Camera />Chụp ảnh màn hình</button>}
           {p.onProject && perms?.features.projects !== false && (p.projects?.length ? (
@@ -1004,7 +1004,12 @@ export default function Home() {
   useEffect(() => {
     const d = dockRef.current, host = d?.parentElement;
     if (!d || !host) return;
-    const ro = new ResizeObserver(() => host.style.setProperty("--dock-h", `${Math.round(d.getBoundingClientRect().height)}px`));
+    // Cột chat hẹp (khung artifact mở, màn hình nhỏ): data-narrow bỏ dòng ghi chú dưới ô soạn tin để nó không vỡ nhiều dòng.
+    const ro = new ResizeObserver(() => {
+      host.style.setProperty("--dock-h", `${Math.round(d.getBoundingClientRect().height)}px`);
+      const w = (d.querySelector(".composer") as HTMLElement | null)?.offsetWidth ?? d.clientWidth;
+      if (w < 600) d.dataset.narrow = ""; else delete d.dataset.narrow;
+    });
     ro.observe(d);
     return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
   }, [view, chat?.id]);

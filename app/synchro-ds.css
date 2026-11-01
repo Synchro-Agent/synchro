@@ -101,6 +101,11 @@ html body .app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds
 
 /* ---------------------------------------------------------------- khung app: thanh điều hướng dọc + bảng đoạn chat */
 .shell-side{display:flex;flex:none;height:100%;position:relative;z-index:5}
+/* Thanh bên đang mở một menu (menu tài khoản, ⋯ của đoạn chat…) hay gợi ý khi rê chuột: nằm trên khối soạn tin của chat (z 6). Trước đây
+   khi thanh bên thu gọn, ô soạn tin và dải kính mờ che mất góc dưới bên phải của menu tài khoản. Chỉ nâng lúc có menu (menu đóng là gỡ
+   khỏi trang) nên khung phủ toàn màn hình mở từ trong trang vẫn nằm trên thanh bên như cũ. Độ ưu tiên bằng đúng .shell-side
+   (:where): không bao giờ hạ ngăn kéo thanh bên trên điện thoại (z 65, trên lớp nền mờ z 64) xuống dưới lớp nền mờ. */
+.shell-side:where(:has(.menu,[data-tip]:hover)){z-index:30}
 /* Đệm trên = đệm dưới (16px): logo và ảnh đại diện cách đều hai mép; ở màn Code, khung viên thuốc phía sau cách mép 6px nên cả hai cách khung 10px. */
 .rail{position:relative;z-index:7;width:68px;flex:none;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:4px;height:100%;min-height:0}
 .rail-mark{position:relative;display:grid;place-items:center;width:36px;height:36px;border-radius:var(--r-pill);margin:0 0 6px;color:var(--logo-ink);
@@ -854,7 +859,10 @@ html body :is(.pj-panel .pj-chats,.pj-panel .pj-list,.pj-panel .pj-skills,.tk-pa
 html body :is(.pj-panel .pj-chats,.pj-panel .pj-list,.pj-panel .pj-skills,.tk-page .tk-list,.pl-rows2,.pl-rows)>:last-child{border-bottom-left-radius:var(--r-card)!important;border-bottom-right-radius:var(--r-card)!important}
 html body :is(.pl-row2,.tk-item,.pj-chat):has(.menu:not(.out)){position:relative;z-index:3}
 /* Ô soạn tin ở đầu trang (trang dự án): menu model / micro mở xuống dưới, không chui lên thanh trên. */
+/* Ô soạn tin của trang dự án nằm sát đầu trang: mọi menu của nó mở xuống dưới (menu + từng mở lên trên, bị thanh trên che mất đầu). */
 html body .pj-compose :is(.model-menu,.mic-wrap .menu){top:calc(100% + 8px)!important;bottom:auto!important;transform-origin:top right}
+html body .pj-compose .plus-menu{top:calc(100% + 8px)!important;bottom:auto!important;transform-origin:top left}
+html body .pj-compose .plus-menu .menu.cm-fly{top:0;bottom:auto}
 html body .pj-compose .model-sub:not(.msub-models){top:0!important;bottom:auto!important}
 /* Chữ giao diện luôn là Anthropic Sans: tên skill, phím tắt, tiêu đề nhỏ trong Code / Bộ não / Khám phá (Unbounded chỉ cho tiêu đề trang,
    lời chào; chữ đơn cách chỉ cho mã, đường dẫn, khóa). */
@@ -976,6 +984,12 @@ html body .adm-pager.compact .icon-btn{width:28px;height:28px}
 html body .main>.dock{padding-top:28px}
 html body .main>.dock::before{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px);mask-image:linear-gradient(to bottom,transparent 0,#000 28px);
   background:linear-gradient(to bottom,transparent 0,color-mix(in srgb,var(--bg) 84%,transparent) 34px)}
+/* Khối soạn tin đang mở một bảng nổi (chọn model và menu con, Mức dùng, bàn trộn ngữ cảnh, micro, +): nằm trên khung xem artifact (z 25)
+   và thanh trên; trước đây menu con "Mức độ nỗ lực" mở sang phải thì chui xuống dưới khung artifact. Chỉ nâng lúc có bảng nổi. */
+html body .main>.dock:has(.menu,.cx-pop){z-index:30}
+/* Cột chat hẹp (khung artifact mở, màn hình nhỏ): bỏ dòng ghi chú như trên điện thoại thay vì để nó vỡ ba dòng chen vào tên model. */
+html body .main>.dock[data-narrow] .dock-note>span:first-child{display:none}
+html body .main>.dock[data-narrow] .dock-note{justify-content:flex-end}
 html body .main>.thread{padding-bottom:calc(var(--dock-h,124px) + 20px)}
 html body .main>.scroll-down{bottom:calc(var(--dock-h,124px) + 8px)}
 
@@ -991,3 +1005,7 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 /* Câu trả lời đã dừng giữa chừng (nút Dừng): nói rõ để không tưởng là câu trả lời cụt. */
 .msg-stopped{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--ds-muted)}
 .msg-stopped svg{flex:none}
+
+/* Chip thư viện trong câu trả lời: nhãn "Thư viện Tài liệu" không xuống dòng trong viên thuốc; danh sách skill co lại với dấu …. */
+.lib-chip{max-width:100%;min-width:0}
+.lib-chip>span:not(.lib-sk){white-space:nowrap;flex:none}

@@ -118,6 +118,21 @@ const CHECK = `(() => {
       if (t.width && gap < 7.5 && t.top >= r.top && t.bottom <= r.bottom) { out.push("chữ sát mép khung (" + Math.round(gap) + "px): " + name(k) + " “" + k.textContent.trim().slice(0, 30) + "” trong " + name(c)); edge++; break; }
     }
   }
+  // Khung nổi (menu, bảng chọn, hộp thoại) không bị lớp khác che: dò lưới điểm bên trong, điểm nào trúng phần tử ngoài khung là bị che.
+  // Ví dụ menu tài khoản mở từ thanh điều hướng khi thanh bên thu gọn từng bị ô soạn tin của chat che mất góc dưới.
+  for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.usermenu,.model-sub,.modal,[role=dialog]")) {
+    if (!vis(m) || getComputedStyle(m).pointerEvents === "none") continue;
+    const q = m.getBoundingClientRect(); if (q.width < 40 || q.height < 30) continue;
+    let hit = null, n = 0;
+    for (let x = q.left + 8; x < q.right - 6; x += 14) for (let y = q.top + 8; y < q.bottom - 6; y += 14) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const rr = parseFloat(getComputedStyle(m).borderTopLeftRadius) || 0, dx = Math.max(q.left + rr - x, 0, x - (q.right - rr)), dy = Math.max(q.top + rr - y, 0, y - (q.bottom - rr));
+      if (dx > 0 && dy > 0 && dx * dx + dy * dy > rr * rr - 4) continue;
+      const t = document.elementFromPoint(x, y);
+      if (t && !m.contains(t) && !t.closest(".toast,[role=tooltip]") && !t.contains(m)) { n++; hit ??= t; }
+    }
+    if (n) out.push("khung nổi bị che " + n + " điểm: " + name(m) + " dưới " + name(hit));
+  }
   // Khối soạn tin của đoạn chat: mọi thứ (thẻ chế độ, tin chờ gửi, ô soạn) nằm dưới vùng chuyển của dải kính mờ.
   { const d = document.querySelector(".main>.dock"); if (d && vis(d)) { const top = d.getBoundingClientRect().top + parseFloat(getComputedStyle(d).paddingTop); for (const k of d.children) if (vis(k) && k.getBoundingClientRect().height && k.getBoundingClientRect().top < top - 1) out.push("nằm trong vùng mờ dần của khối soạn tin: " + name(k));
     // Thẻ chế độ, tin chờ gửi thẳng mép trái với ô soạn tin.
@@ -224,6 +239,13 @@ for (const theme of THEMES) for (const size of SIZES) {
     await ask("Làm bộ slide giới thiệu quán cà phê");
     await ev(`(() => { const t = document.querySelector(".thread"); if (t) t.scrollTop = Math.max(0, t.scrollHeight - t.clientHeight - 120); })()`); await sleep(500);
     await shot("che-do-slides");
+  });
+  // Thanh bên thu gọn, mở menu tài khoản trong đoạn chat: menu nằm trên ô soạn tin (không bị che góc dưới).
+  if (!mobile) await step0("menu-nguoi-dung-thu-gon", async () => {
+    await click(`document.querySelector(".rail-mark")`, "collapse"); await sleep(700);
+    await click(`document.querySelector(".rail .user")`, "user"); await sleep(600);
+    await shot("menu-nguoi-dung-thu-gon"); await esc(); await sleep(300);
+    await click(`document.querySelector(".rail-mark")`, "expand"); await sleep(700);
   });
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await sleep(600); await shot("bang-lenh"); await esc(); await sleep(300); });
   await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await sleep(800); await shot("ung-dung"); });
