@@ -4878,15 +4878,18 @@ html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
 .ft-lightbox .icon-btn{position:absolute;top:16px;right:16px;color:#fff;background:rgba(0,0,0,.4)}
 
 
-/* ===== Phim giới thiệu cho tài khoản mới (app/introfilm.tsx) =====
-   Vào: vòng tròn của logo nở ra (clip-path) bằng màu nền phim, phim hiện dần. Ra: khung hình tách đôi như logo — nửa trái lên, nửa phải
-   xuống, lệch pha một nhịp rồi trượt khỏi màn hình (cùng đường cong lock của bộ nhận diện) — app bên dưới lắng xuống (app-reveal). */
+/* ===== Phim giới thiệu cho tài khoản mới (app/introfilm.tsx, chuyển cảnh: app/handoff.ts) =====
+   Vào: vòng tròn kính quanh logo của lời chào hoá mực rồi nở ra (clip-path) với vignette của khung đầu phim; bản sao logo (intro-seed) lướt
+   về giữa thành chấm mở đầu của phim. Ra: logo của khung cuối bay về chỗ trong app, nền phim mở ra thành lỗ tròn (mask) quanh chỗ hạ cánh. */
 .intro{position:fixed;inset:0;z-index:400;color:#EEECE5;font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
 .intro-iris{position:absolute;inset:0;background:var(--intro-bg)}
 .intro-stage{position:absolute;inset:0;background:var(--intro-bg)}
 .intro[data-phase="iris"] .intro-stage{visibility:hidden}
 .intro-stage.gone{visibility:hidden}
-.intro-host{position:absolute;inset:0;opacity:0;transition:opacity .7s cubic-bezier(.33,1,.68,1)}
+.intro-host{position:absolute;inset:0;opacity:0;transition:opacity .15s cubic-bezier(.33,1,.68,1)}
+.intro-seed{position:absolute;left:0;top:0;z-index:1;display:block;visibility:hidden;transform-origin:0 0;pointer-events:none}
+.intro-seed svg{display:block}
+.intro[data-phase="out"]{pointer-events:none}
 .intro-host.on{opacity:1}
 .intro-host .intro-v{width:100%;height:100%;object-fit:contain;display:block;background:var(--intro-bg)}
 .intro-load{position:absolute;inset:0;display:grid;place-items:center;color:#EEECE5;animation:fadeIn .4s .25s both}
@@ -4917,9 +4920,8 @@ html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
 .intro-cap.over{bottom:max(30px,env(safe-area-inset-bottom))}
 .intro-cap.top{top:max(20px,env(safe-area-inset-top))}
 @keyframes introCap{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:none}}
-/* Ra: phim mờ đi, logo của khung cuối ở lại rồi bay về chỗ trong app (WAAPI, app/introfilm.tsx); nền phim tan ra. */
+/* Ra: phim mờ đi, logo của khung cuối ở lại rồi bay về chỗ trong app (WAAPI, app/handoff.ts); nền phim mở ra thành lỗ tròn. */
 .intro[data-phase="out"] .intro-host{opacity:0;transition:opacity .45s cubic-bezier(.33,1,.68,1)}
-.intro-stage.clear{opacity:0;transition:opacity .9s cubic-bezier(.33,1,.68,1)}
 .intro-fly{position:absolute;inset:0;pointer-events:none;color:#EEECE5}
 .intro-fly>span{position:absolute;display:block;transform-origin:0 0;color:#EEECE5}
 .intro-fly svg{display:block}
@@ -4934,13 +4936,21 @@ html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
 .intro-ask-a{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .intro-btn.pri{color:#111210;background:#EEECE5}
 .intro-btn.pri:hover{background:#fff;color:#111210}
-/* App bên dưới lắng xuống khi logo bay về chỗ; logo thật của app (cạnh lời chào, đầu thanh bên) ẩn tới khi logo bay tới
-   (gỡ lớp ngay khi xong để .app không thành lớp xếp chồng riêng). */
-.app.app-reveal{animation:appReveal 1s cubic-bezier(.33,1,.68,1) backwards}
-.app.app-reveal :is(.greeting .greet-mark,.side-brand .lk){opacity:0}
-@keyframes appReveal{from{transform:scale(1.025);filter:blur(8px)}to{transform:none;filter:none}}
-@media (prefers-reduced-motion:reduce){.app.app-reveal{animation:none}}
-html[data-motion="reduced"] .app.app-reveal{animation:none}
+/* Logo hạ cánh (app/handoff.ts): logo thật của app ẩn tới khi bản sao bay tới — biểu tượng cạnh lời chào, và chữ "synchro" ở đầu thanh
+   bên khi ra từ phim. Trang chủ lắp lại bằng WAAPI nên gỡ lớp này không làm chạy lại hiệu ứng nào. */
+.app.app-reveal .greeting .greet-mark,.app.reveal-film .side-brand .lk{opacity:0}
+
+/* Rời màn đăng nhập (sang phim hoặc vào app): lời chào mờ lên, quầng sáng và viền chạy của vòng tròn tắt, logo trên đầu mờ đi; logo của lời
+   chào nhường chỗ cho bản sao đang bay (auth-fly ở trên màn đăng nhập nên không bị lỗ tròn cắt). */
+.auth-root.auth-out .auth-stage-text{animation:authTextOut .38s cubic-bezier(.32,0,.67,0) forwards}
+.auth-root.auth-out :is(.auth-orb-glow,.auth-orb-ring,.auth-head),.auth-root.auth-out .auth-orb::after{animation:authFade .3s cubic-bezier(.33,1,.68,1) forwards}
+.auth-root.auth-out .auth-mark{visibility:hidden}
+.auth-root.auth-out .auth-orb{animation:authFade .4s .05s cubic-bezier(.33,1,.68,1) forwards}
+@keyframes authTextOut{to{opacity:0;transform:translateY(-8px);filter:blur(6px)}}
+@keyframes authFade{to{opacity:0}}
+.auth-fly{position:fixed;inset:0;z-index:310;pointer-events:none}
+.auth-fly>span{position:absolute;left:0;top:0;display:block;visibility:hidden;transform-origin:0 0}
+.auth-fly svg{display:block}
 
 /* ===== Icon Phosphor Light (app/icons.tsx) và chuyển động biến hình (app/morph.tsx, morphicons) ===== */
 svg.ph{flex:none;display:block}

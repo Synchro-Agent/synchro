@@ -1,7 +1,9 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/introfilm.mjs
-// Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): đăng ký bằng email → lời chào → vòng tròn của logo nở ra phủ màn hình → phim phát
-// có tiếng, phụ đề tiếng Việt → Bỏ qua (tài khoản 1) / hết phim (tài khoản 2) → logo bay về chỗ trong app, nền phim tan ra → vào app; tải lại không
-// phát lại. Hai tài khoản thử (mật khẩu ngẫu nhiên) tự xoá khi xong.
+// Phim giới thiệu cho tài khoản mới (app/introfilm.tsx, chuyển cảnh app/handoff.ts): đăng ký bằng email → lời chào → vòng tròn kính quanh logo
+// hoá mực rồi nở ra phủ màn hình, logo thu về giữa thành chấm mở đầu của phim → phim phát có tiếng, phụ đề tiếng Việt, chấm của phim thế chỗ
+// bản sao → Bỏ qua (tài khoản 1) / hết phim (tài khoản 2) → logo bay về chỗ trong app, nền phim mở ra thành lỗ tròn, trang chủ lắp lại → vào app;
+// tải lại không phát lại; đăng xuất rồi đăng nhập lại (tài khoản 1): logo của lời chào bay về cạnh lời chào ở trang chủ, màn đăng nhập mở ra
+// thành lỗ tròn. Các tài khoản thử (mật khẩu ngẫu nhiên) tự xoá khi xong.
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -77,10 +79,21 @@ try {
   const r1 = await irisR(); await sleep(300); const r2 = await irisR();
   ok(r2 > r1 && r2 > 0 && r2 < Math.hypot(1440, 900), "giữa lúc chuyển: vòng tròn đang nở dần, chưa phủ kín", `${r1} → ${r2}`);
   ok(await ev(`!!document.querySelector(".auth-root")`), "màn lời chào vẫn ở dưới cho tới khi phủ kín");
+  const seed = await ev(`(() => { const s = document.querySelector(".intro-seed"), a = document.querySelector(".auth-root .auth-mark"); if (!s) return null; const b = s.getBoundingClientRect();
+    return { vis: getComputedStyle(s).visibility, cx: b.left + b.width / 2, cy: b.top + b.height / 2, h: b.height, auth: a ? getComputedStyle(a).visibility : "-" }; })()`);
+  ok(seed && seed.vis === "visible" && seed.auth === "hidden", "logo của lời chào không bị cắt: bản sao nằm trên vòng mực, logo thật nhường chỗ", JSON.stringify(seed));
+  // Đo bản sao đúng lúc phủ kín (đổi pha), vì ngay sau đó chấm của phim thế chỗ.
+  await ev(`(() => { const i = document.querySelector(".intro"); new MutationObserver(() => { if (i.dataset.phase === "iris" || window.__dot) return; const s = document.querySelector(".intro-seed"); if (!s) { window.__dot = { gone: true }; return; }
+    const b = s.getBoundingClientRect(), k = Math.min(innerWidth / 1920, innerHeight / 1080);
+    window.__dot = { dx: Math.round(b.left + b.width / 2 - innerWidth / 2), dy: Math.round(b.top + b.height / 2 - innerHeight / 2), h: +b.height.toFixed(1), want: +(42 * k).toFixed(1) }; }).observe(i, { attributes: true, attributeFilter: ["data-phase"] }); return 1; })()`);
   await shot("2-iris");
   await until(`["wait","play"].includes(document.querySelector(".intro")?.dataset.phase)`, 4000, "covered");
   ok(await ev(`!document.querySelector(".auth-root")`), "phủ kín rồi mới gỡ màn đăng nhập");
+  const dot = await ev(`window.__dot ?? null`);
+  ok(dot && Math.abs(dot.dx) <= 1 && Math.abs(dot.dy) <= 1 && Math.abs(dot.h - dot.want) <= 0.6, "phủ kín: logo nằm đúng giữa khung phim, đúng cỡ chấm mở đầu của phim", JSON.stringify(dot));
   await until(`document.querySelector(".intro")?.dataset.phase === "play"`, 20000, "playing");
+  await until(`!document.querySelector(".intro-seed")`, 4000, "seed handed off").catch(() => {});
+  ok(await ev(`!document.querySelector(".intro-seed") && document.querySelector(".intro-v").currentTime >= 0.3`), "chấm của phim thế chỗ bản sao khi đã đủ cỡ (từ 0,3 s)");
   await sleep(2400);
   const st = await ev(`(() => { const v = document.querySelector(".intro-v"); return { t: v.currentTime, paused: v.paused, muted: v.muted, src: v.currentSrc.split("/").pop(), op: getComputedStyle(document.querySelector(".intro-host")).opacity }; })()`);
   ok(st.t > 1.5 && !st.paused && st.op === "1", "phim đang phát và đã hiện hẳn", JSON.stringify(st));
@@ -97,9 +110,9 @@ try {
   // Logo bắt đầu bay sau ~0,65 giây; chờ tới khi đang bay (Chrome ẩn trên máy dev có thể chậm vài trăm ms).
   // Chữ bay sau biểu tượng 70 ms: chờ cả hai cùng đang bay.
   await until(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"); return !!m && !!w && new DOMMatrix(getComputedStyle(m).transform).a < 0.9 && new DOMMatrix(getComputedStyle(w).transform).a < 0.9; })()`, 3000, "flight").catch(() => {});
-  const mid = await ev(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"); return { m: m && new DOMMatrix(getComputedStyle(m).transform).a, w: w && new DOMMatrix(getComputedStyle(w).transform).a, reveal: document.querySelector(".app")?.classList.contains("app-reveal"), hidden: getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "0", stage: +getComputedStyle(document.querySelector(".intro-stage")).opacity }; })()`);
+  const mid = await ev(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"), st = getComputedStyle(document.querySelector(".intro-stage")); return { m: m && new DOMMatrix(getComputedStyle(m).transform).a, w: w && new DOMMatrix(getComputedStyle(w).transform).a, reveal: document.querySelector(".app")?.classList.contains("app-reveal"), hidden: getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "0", hole: /radial-gradient/.test(st.maskImage || st.webkitMaskImage || ""), anims: document.querySelector(".app").getAnimations({ subtree: true }).filter((a) => !(a instanceof CSSAnimation) && !(a instanceof CSSTransition)).length }; })()`);
   ok(mid.m < 0.9 && mid.w < 0.9, "logo đang bay về chỗ (thu nhỏ dần)", JSON.stringify(mid));
-  ok(mid.reveal && mid.hidden && mid.stage < 1, "nền phim tan ra, app lắng xuống, logo thật của app chờ logo bay tới", JSON.stringify(mid));
+  ok(mid.reveal && mid.hidden && mid.hole && mid.anims > 3, "nền phim mở ra thành lỗ tròn, trang chủ đang lắp lại, logo thật của app chờ logo bay tới", JSON.stringify(mid));
   ok(await ev(`[...document.querySelectorAll(".intro-cap, .intro-ui")].every((e) => +getComputedStyle(e).opacity < 0.05)`), "phụ đề và nút đã mờ hết khi logo bay");
   await shot("4-flight");
   await until(`!document.querySelector(".intro")`, 4000, "intro gone");
@@ -108,6 +121,23 @@ try {
   await shot("5-home");
   await P("Page.reload"); await sleep(3500);
   ok(await ev(`!document.querySelector(".intro") && !!document.querySelector(".greeting")`), "tải lại trang: không phát lại phim");
+
+  // ---- Tài khoản 1: đăng nhập lại — logo của lời chào bay về cạnh lời chào, màn đăng nhập mở ra thành lỗ tròn, không có phim
+  await P("Network.clearBrowserCookies");
+  await P("Page.navigate", { url: B + "/" });
+  await until(`!!${field("input[type=email]")}`, 30000, "sign-in form (login)"); await sleep(600);
+  await click(field("input[type=email]"), "email"); await type(made[0].email); await enter();
+  await until(`!!${field("input[type=password]")}`, 15000, "password (login)"); await sleep(500);
+  await click(field("input[type=password]"), "password"); await type(made[0].password); await enter();
+  await until(`!!document.querySelector(".auth-welcome")`, 20000, "welcome back");
+  await until(`!!document.querySelector(".auth-fly span") && getComputedStyle(document.querySelector(".auth-fly span")).visibility === "visible"`, 6000, "login flight");
+  await sleep(450);
+  const lf = await ev(`(() => { const c = document.querySelector(".auth-fly span"), r = getComputedStyle(document.querySelector(".auth-root")); return { k: new DOMMatrix(getComputedStyle(c).transform).a, hole: /radial-gradient/.test(r.maskImage || r.webkitMaskImage || ""), reveal: document.querySelector(".app")?.classList.contains("reveal-login"), intro: !!document.querySelector(".intro"), mark: getComputedStyle(document.querySelector(".auth-root .auth-mark")).visibility }; })()`);
+  ok(lf.k < 0.95 && lf.hole && lf.reveal && !lf.intro && lf.mark === "hidden", "đăng nhập lại: logo bay về cạnh lời chào, màn đăng nhập mở ra thành lỗ tròn, không phát phim", JSON.stringify(lf));
+  await shot("5b-login-flight");
+  await until(`!document.querySelector(".auth-root")`, 5000, "login done");
+  const land = await ev(`(() => { const g = document.querySelector(".greeting .greet-mark"); return { op: getComputedStyle(g).opacity, reveal: !!document.querySelector(".app.app-reveal"), fly: !!document.querySelector(".auth-fly") }; })()`);
+  ok(land.op === "1" && !land.reveal && !land.fly, "đăng nhập lại xong: logo thật cạnh lời chào hiện lại, lớp chuyển cảnh đã gỡ", JSON.stringify(land));
 
   // ---- Tài khoản 2: xem hết phim (tua tới gần cuối)
   await signup("end");

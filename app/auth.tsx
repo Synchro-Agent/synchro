@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "./cn";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 // Importing class-variance-authority for the built-in button component
 import { cva, type VariantProps } from "class-variance-authority";
 // Importing icons from lucide-react
@@ -9,6 +9,7 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
 import { Loader, Mark } from "./brand";
+import { assemble, boxOf, center, fly, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
 
 // --- NHỊP ANIMATION CHUNG ---
@@ -221,15 +222,19 @@ interface AuthComponentProps {
   // "profile": người đã đăng nhập (thường qua Google/GitHub) nhưng chưa điền hồ sơ
   mode?: "auth" | "profile";
   user?: AuthUser | null;
-  // true: app đã sẵn sàng phía dưới, màn hình này tan dần rồi gọi onLeft
+  // true: app đã sẵn sàng phía dưới — logo của lời chào bay về cạnh lời chào ở trang chủ, màn này mở ra thành lỗ tròn quanh chỗ logo hạ cánh
+  // (app/handoff.ts), xong thì gọi onLeft. onReveal: lúc logo bắt đầu bay (app giấu logo thật tới khi bản sao tới nơi).
   leaving?: boolean;
+  onReveal?: () => void;
+  // true: phim giới thiệu đang mở ra từ logo của lời chào (app/introfilm.tsx giữ bản sao của logo): lời chào mờ lên, logo thật nhường chỗ.
+  toFilm?: boolean;
   // kind: "signup" / "profile" (vừa điền hồ sơ lần đầu) / "login" — tài khoản mới thì app phát phim giới thiệu sau lời chào.
   onDone?: (user: AuthUser, kind: Kind) => void;
   onLeft?: () => void;
   onSignOut?: () => void;
 }
 
-export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onDone, onLeft, onSignOut }: AuthComponentProps) => {
+export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -382,8 +387,42 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };
 
+  // Vào app: bản sao logo của lời chào (đặt khít lên logo thật trước khi vẽ) bay theo đường cong về cạnh lời chào ở trang chủ, giữa đường
+  // tách từ vòng tròn thành chữ S; màn này mở ra thành lỗ tròn từ chỗ logo hạ cánh, trang chủ lắp lại quanh đó. Giảm chuyển động: chỉ mờ dần.
+  const [still] = useState(reducedMotion);
+  const rootRef = useRef<HTMLDivElement>(null), flyRef = useRef<HTMLSpanElement>(null), left = useRef(false);
+  const [flyOpen, setFlyOpen] = useState(false);
+  useLayoutEffect(() => {
+    if (!leaving || still || left.current) return;
+    left.current = true;
+    const root = rootRef.current, el = flyRef.current, svg = root?.querySelector(".auth-mark svg");
+    settleApp();
+    const target = document.querySelector(".app .greeting .greet-mark");
+    const from = svg ? boxOf(svg) : null, to = target ? boxOf(target) : null;
+    const at = onScreen(to) ? center(to) : from ? center(from) : { x: innerWidth / 2, y: innerHeight / 2 };
+    onReveal?.();
+    const jobs: Promise<unknown>[] = [];
+    if (el && svg && from?.w) {
+      const color = getComputedStyle(svg).color;
+      Object.assign(el.style, { left: `${from.x}px`, top: `${from.y}px`, color, visibility: "visible" });
+      jobs.push((target && onScreen(to)
+        ? fly(el, from, to, { ms: 950, delay: 60, arc: 0.14, color: [color, getComputedStyle(target).color] })
+        : el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.9)" }], { duration: 500, delay: 100, easing: "cubic-bezier(.33,1,.68,1)", fill: "forwards" })).finished);
+      // Không huỷ khi effect dọn dẹp (StrictMode chạy effect hai lần, lần hai bị chặn bởi left): logo phải mở thành S giữa đường bay.
+      window.setTimeout(() => setFlyOpen(true), 260);
+    }
+    // Lỗ sáng đi theo logo đang bay (logo mang trang chủ theo nó về chỗ). Hai nền đều sáng nên viền mềm: trang chủ lan ra như quầng sáng.
+    const flying = !!(el && from?.w && onScreen(to));
+    if (root) jobs.push(openHole(root, flying ? () => center(boxOf(el!)) : at, { ms: 1050, delay: 80, feather: 64 }));
+    jobs.push(assemble(onScreen(to) ? at : null));
+    Promise.all(jobs).then(() => onLeft?.(), () => onLeft?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaving]);
+  const out = (leaving || toFilm) && !still;
+
   return (
-    <motion.div className="auth-root bg-background min-h-screen w-screen flex flex-col fixed inset-0 z-[300]" initial={false} animate={leaving ? { opacity: 0, scale: 1.04, filter: "blur(14px)" } : { opacity: 1, scale: 1, filter: "blur(0px)" }} transition={{ duration: 0.75, ease: EASE }} onAnimationComplete={() => { if (leaving) onLeft?.(); }} style={{ pointerEvents: leaving ? "none" : undefined }}>
+    <>
+    <motion.div ref={rootRef} className={cn("auth-root bg-background min-h-screen w-screen flex flex-col fixed inset-0 z-[300]", out && "auth-out")} initial={false} animate={leaving && still ? { opacity: 0 } : { opacity: 1, scale: 1, filter: "blur(0px)" }} transition={{ duration: 0.5, ease: EASE }} onAnimationComplete={() => { if (leaving && still) onLeft?.(); }} style={{ pointerEvents: leaving ? "none" : undefined }}>
         <style>{`
             input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none !important; } input[type="password"]::-webkit-credentials-auto-fill-button, input[type="password"]::-webkit-strong-password-auto-fill-button { display: none !important; } input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active { -webkit-box-shadow: 0 0 0 30px transparent inset !important; -webkit-text-fill-color: var(--foreground) !important; background-color: transparent !important; background-clip: content-box !important; transition: background-color 5000s ease-in-out 0s !important; color: var(--foreground) !important; caret-color: var(--foreground) !important; } input:autofill { background-color: transparent !important; background-clip: content-box !important; -webkit-text-fill-color: var(--foreground) !important; color: var(--foreground) !important; } input:-internal-autofill-selected { background-color: transparent !important; background-image: none !important; color: var(--foreground) !important; -webkit-text-fill-color: var(--foreground) !important; } input:-webkit-autofill::first-line { color: var(--foreground) !important; -webkit-text-fill-color: var(--foreground) !important; }
             @property --angle-1 { syntax: "<angle>"; inherits: false; initial-value: -75deg; } @property --angle-2 { syntax: "<angle>"; inherits: false; initial-value: -45deg; }
@@ -392,7 +431,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
             .glass-input-wrap { position: relative; z-index: 2; transform-style: preserve-3d; border-radius: 9999px; } .glass-input { display: flex; position: relative; width: 100%; align-items: center; gap: 0.5rem; border-radius: 9999px; padding: 0.25rem; -webkit-tap-highlight-color: transparent; backdrop-filter: blur(clamp(1px, 0.125em, 4px)); transition: all 400ms cubic-bezier(0.25, 1, 0.5, 1); background: linear-gradient(-75deg, oklch(from var(--background) l c h / 5%), oklch(from var(--background) l c h / 20%), oklch(from var(--background) l c h / 5%)); box-shadow: inset 0 0.125em 0.125em oklch(from var(--foreground) l c h / 5%), inset 0 -0.125em 0.125em oklch(from var(--background) l c h / 50%), 0 0.25em 0.125em -0.125em oklch(from var(--foreground) l c h / 20%), 0 0 0.1em 0.25em inset oklch(from var(--background) l c h / 20%), 0 0 0 0 oklch(from var(--background) l c h); } .glass-input-wrap:focus-within .glass-input { backdrop-filter: blur(0.01em); box-shadow: inset 0 0.125em 0.125em oklch(from var(--foreground) l c h / 5%), inset 0 -0.125em 0.125em oklch(from var(--background) l c h / 50%), 0 0.15em 0.05em -0.1em oklch(from var(--foreground) l c h / 25%), 0 0 0.05em 0.1em inset oklch(from var(--background) l c h / 50%), 0 0 0 0 oklch(from var(--background) l c h); } .glass-input::after { content: ""; position: absolute; z-index: 1; inset: 0; border-radius: 9999px; width: calc(100% + clamp(1px, 0.0625em, 4px)); height: calc(100% + clamp(1px, 0.0625em, 4px)); top: calc(0% - clamp(1px, 0.0625em, 4px) / 2); left: calc(0% - clamp(1px, 0.0625em, 4px) / 2); padding: clamp(1px, 0.0625em, 4px); box-sizing: border-box; background: conic-gradient(from var(--angle-1) at 50% 50%, oklch(from var(--foreground) l c h / 50%) 0%, transparent 5% 40%, oklch(from var(--foreground) l c h / 50%) 50%, transparent 60% 95%, oklch(from var(--foreground) l c h / 50%) 100%), linear-gradient(180deg, oklch(from var(--background) l c h / 50%), oklch(from var(--background) l c h / 50%)); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; transition: all 400ms cubic-bezier(0.25, 1, 0.5, 1), --angle-1 500ms ease; box-shadow: inset 0 0 0 calc(clamp(1px, 0.0625em, 4px) / 2) oklch(from var(--background) l c h / 50%); pointer-events: none; } .glass-input-wrap:focus-within .glass-input::after { --angle-1: -125deg; } .glass-input-text-area { position: absolute; inset: 0; border-radius: 9999px; pointer-events: none; } .glass-input-text-area::after { content: ""; display: block; position: absolute; width: calc(100% - clamp(1px, 0.0625em, 4px)); height: calc(100% - clamp(1px, 0.0625em, 4px)); top: calc(0% + clamp(1px, 0.0625em, 4px) / 2); left: calc(0% + clamp(1px, 0.0625em, 4px) / 2); box-sizing: border-box; border-radius: 9999px; overflow: clip; background: linear-gradient(var(--angle-2), transparent 0%, oklch(from var(--background) l c h / 50%) 40% 50%, transparent 55%); z-index: 3; mix-blend-mode: screen; pointer-events: none; background-size: 200% 200%; background-position: 0% 50%; transition: background-position calc(400ms * 1.25) cubic-bezier(0.25, 1, 0.5, 1), --angle-2 calc(400ms * 1.25) cubic-bezier(0.25, 1, 0.5, 1); } .glass-input-wrap:focus-within .glass-input-text-area::after { background-position: 25% 50%; }
         `}</style>
 
-        <div className={cn( "fixed top-4 left-4 z-20 flex items-center gap-2", "md:left-1/2 md:-translate-x-1/2" )}>
+        <div className={cn( "auth-head fixed top-4 left-4 z-20 flex items-center gap-2", "md:left-1/2 md:-translate-x-1/2" )}>
             {logo}
             <h1 className="sr-only">{brandName}</h1>
         </div>
@@ -514,5 +553,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
             </AnimatePresence>
         </div>
     </motion.div>
+    {leaving && !still && <div className="auth-fly" aria-hidden><span ref={flyRef}><Mark size={46} state={flyOpen ? "s" : "sync"} /></span></div>}
+    </>
   );
 };

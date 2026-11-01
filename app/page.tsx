@@ -801,11 +801,12 @@ export default function Home() {
   }, [me?.id, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [providers, setProviders] = useState<Providers>();
   const [authLeaving, setAuthLeaving] = useState(false);
-  // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): giữ màn đăng nhập tới khi phim phủ kín màn hình; app lắng xuống khi logo của
-  // phim bay về chỗ (reveal: giấu logo thật của app tới khi logo bay tới).
+  // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): giữ màn đăng nhập tới khi phim phủ kín màn hình. Vào app (từ phim hoặc từ lời
+  // chào khi đăng nhập lại): logo bay về chỗ, trang chủ lắp lại quanh đó (app/handoff.ts); reveal giấu logo thật của app tới khi bản sao
+  // bay tới — "film": cả chữ "synchro" ở đầu thanh bên (chữ của khung cuối phim bay về đó), "login": chỉ biểu tượng cạnh lời chào.
   const [intro, setIntro] = useState(false);
   const [authHold, setAuthHold] = useState(false);
-  const [reveal, setReveal] = useState(false);
+  const [reveal, setReveal] = useState<"" | "film" | "login">("");
   // Hồ sơ trên máy chủ là nguồn chính; các ô trong Cài đặt → Tài khoản đọc từ đây.
   const syncProfile = (u: AuthUser) => {
     setAcct(u.email);
@@ -1551,17 +1552,18 @@ export default function Home() {
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving || authHold ? (
     <AuthComponent key="auth" brandName="Synchro" logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
+      toFilm={intro} onReveal={() => setReveal("login")}
       onDone={(u, kind) => {
         enterAccount(u); syncProfile(u); setMe(u);
         if (u.needsProfile) return;
         if (wantsIntro(u, kind)) { setAuthHold(true); setIntro(true); } else setAuthLeaving(true);
-      }} onLeft={() => setAuthLeaving(false)} onSignOut={logout} />
+      }} onLeft={() => { setAuthLeaving(false); setReveal(""); }} onSignOut={logout} />
   ) : null;
   if (!me || needProfile) return <>{null}{authEl}</>;
 
   return (<>
     <AppCtx.Provider value={api}>
-    <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? " app-reveal" : ""}`}>
+    <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? ` app-reveal reveal-${reveal}` : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
       <div className={`shell-side ${open ? "" : "closed"}`} onClickCapture={(e) => {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
@@ -1924,7 +1926,7 @@ export default function Home() {
     </div>
     </AppCtx.Provider>
     {authEl}
-    {intro && me && <IntroFilm uid={me.id} onCovered={() => setAuthHold(false)} onReveal={() => setReveal(true)}
-      onDone={() => { setReveal(false); setIntro(false); }} />}
+    {intro && me && <IntroFilm uid={me.id} onCovered={() => setAuthHold(false)} onReveal={() => setReveal("film")}
+      onDone={() => { setReveal(""); setIntro(false); }} />}
   </>);
 }
