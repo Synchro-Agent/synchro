@@ -87,7 +87,7 @@ try {
   ok(!st.muted, "phát có tiếng (người dùng vừa thao tác trên trang)", JSON.stringify(st));
   ok(st.src === "synchro-intro.mp4", "màn rộng dùng bản 1080p", st.src);
   const cap = await ev(`document.querySelector(".intro-cap")?.textContent ?? ""`);
-  ok(/ChatGPT, Gemini và Claude/.test(cap), "phụ đề tiếng Việt theo cảnh", cap);
+  ok(/Claude, ChatGPT, Gemini, Grok và DeepSeek/.test(cap), "phụ đề tiếng Việt theo cảnh", cap);
   ok(await ev(`getComputedStyle(document.querySelector(".intro-btn.skip")).opacity === "1"`), "nút Bỏ qua đã hiện");
   await shot("3-playing");
   await click(`document.querySelector(".intro-btn.skip")`, "skip");
@@ -95,7 +95,8 @@ try {
   const out = await ev(`(() => ({ phase: document.querySelector(".intro").dataset.phase, mk: !!document.querySelector(".intro-fly .fly-mk svg"), wd: !!document.querySelector(".intro-fly .fly-wd svg"), host: getComputedStyle(document.querySelector(".intro-host")).opacity }))()`);
   ok(out.phase === "out" && out.mk && out.wd, "Bỏ qua: phim mờ đi, logo của khung cuối hiện lên (biểu tượng + chữ)", JSON.stringify(out));
   // Logo bắt đầu bay sau ~0,65 giây; chờ tới khi đang bay (Chrome ẩn trên máy dev có thể chậm vài trăm ms).
-  await until(`(() => { const m = document.querySelector(".fly-mk"); return !!m && new DOMMatrix(getComputedStyle(m).transform).a < 0.9; })()`, 3000, "flight").catch(() => {});
+  // Chữ bay sau biểu tượng 70 ms: chờ cả hai cùng đang bay.
+  await until(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"); return !!m && !!w && new DOMMatrix(getComputedStyle(m).transform).a < 0.9 && new DOMMatrix(getComputedStyle(w).transform).a < 0.9; })()`, 3000, "flight").catch(() => {});
   const mid = await ev(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"); return { m: m && new DOMMatrix(getComputedStyle(m).transform).a, w: w && new DOMMatrix(getComputedStyle(w).transform).a, reveal: document.querySelector(".app")?.classList.contains("app-reveal"), hidden: getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "0", stage: +getComputedStyle(document.querySelector(".intro-stage")).opacity }; })()`);
   ok(mid.m < 0.9 && mid.w < 0.9, "logo đang bay về chỗ (thu nhỏ dần)", JSON.stringify(mid));
   ok(mid.reveal && mid.hidden && mid.stage < 1, "nền phim tan ra, app lắng xuống, logo thật của app chờ logo bay tới", JSON.stringify(mid));

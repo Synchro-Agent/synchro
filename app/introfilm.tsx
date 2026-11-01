@@ -1,17 +1,17 @@
 "use client";
-// Phim giới thiệu Synchro (42 giây, dự án synchro-launch-film) cho tài khoản mới: phát một lần ngay sau lời chào "Welcome to Synchro, …".
-// - Vào: vòng tròn của logo ở lời chào nở ra phủ kín màn hình bằng đúng màu nền của phim (#0e0e0b), phim hiện dần trên nền đó, tiếng to dần.
+// Phim giới thiệu Synchro (43 giây, dự án synchro-intro-film, giao diện Instrument) cho tài khoản mới: phát một lần ngay sau lời chào "Welcome to Synchro, …".
+// - Vào: vòng tròn của logo ở lời chào nở ra phủ kín màn hình bằng đúng màu nền của phim (#10100d), phim hiện dần trên nền đó, tiếng to dần.
 // - Ra (hết phim, Bỏ qua, Esc): tiếng nhỏ dần; logo ở khung cuối của phim (vẽ lại đè khít lên phim) ở lại khi phim mờ đi, rồi tách thành
 //   hai phần bay về đúng chỗ của chúng trong app — biểu tượng về cạnh lời chào ở trang chủ, chữ "synchro" về đầu thanh bên — đổi dần từ Ivory
 //   sang màu chữ của app; nền phim tan ra, app bên dưới lắng xuống. Bỏ qua giữa phim: phim mờ đi, logo hiện lên đúng chỗ đó rồi bay như vậy.
 // - Phụ đề tiếng Việt cho các dòng chữ tiếng Anh trong phim (giao diện tiếng Việt), nằm trong dải đen dưới phim nếu có chỗ.
 // - Trình duyệt chặn tự phát có tiếng: phát không tiếng, hiện nút Bật tiếng. Giảm chuyển động: không tự phát, không nở / tách, chỉ mờ dần.
-// - Bản 720p (4 MB) cho màn hẹp / tiết kiệm dữ liệu, 1080p (18 MB) cho màn lớn; tải trước từ lúc hiện lời chào (preloadIntro).
+// - Bản 720p (4 MB) cho màn hẹp / tiết kiệm dữ liệu, 1080p (19 MB) cho màn lớn; tải trước từ lúc hiện lời chào (preloadIntro).
 import { useEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { getLang } from "./i18n";
 
-const BG = "#0e0e0b"; // nền phim sau khi nén (Carbon #111210 + grain)
+const BG = "#10100d"; // nền phim sau khi nén (Carbon #111210 + grain + vignette), đo ở mép khung đầu và khung cuối
 const VOLUME = 0.9;
 const SEEN = (uid: string) => `synchro:intro-seen:${uid}`;
 const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
@@ -41,23 +41,23 @@ export function preloadIntro() {
 }
 
 // Phụ đề tiếng Việt [bắt đầu, kết thúc (giây), [phụ đề, dòng tiếng Anh gốc trong phim], đặt trên cùng]: theo nhịp của phim
-// (150 BPM, 1 phách = 0,4 s; src/timeline.ts). Chỉ hiện khi giao diện tiếng Việt (phim vốn bằng tiếng Anh).
+// (150 BPM, 1 phách = 0,4 s; synchro-intro-film/src/timeline.ts). Chỉ hiện khi giao diện tiếng Việt (phim vốn bằng tiếng Anh).
 const CAPS: [number, number, [string, string], boolean?][] = [
-  [2.0, 4.5, ["ChatGPT, Gemini và Claude của bạn: đăng nhập bằng chính tài khoản của bạn, một Synchro cho cả ba.", "Your ChatGPT, Gemini and Claude. Sign in with your own accounts. One Synchro for all three."]],
-  [4.6, 5.9, ["Mọi công cụ, mọi gói: trình duyệt, tiện ích Chrome, Skills và Connectors chạy cả trên gói miễn phí.", "Every tool. Every plan. Browser, Extension, Skills and Connectors work even on free plans."]],
-  [6.2, 8.4, ["“Lên kế hoạch cuối tuần ở Kyoto dưới 900 đô và báo cho Mai.”", "“Plan my Kyoto weekend under $900 and tell Mai.”"]],
-  [9.3, 14.1, ["Chrome của bạn, tự lái: tiện ích Synchro tự bấm, tự gõ, tự đặt chỗ.", "Your Chrome, on autopilot. The Synchro extension clicks, types and books by itself."], true],
-  [14.3, 18.2, ["Rồi thêm vào lịch và nhắn cho Mai.", "Then it adds the trip to your calendar and texts Mai."]],
-  [18.6, 19.6, ["Xong: vé máy bay, khách sạn, lịch và tin nhắn.", "Done: flight, hotel, calendar and message."]],
-  [20.0, 23.9, ["Chạy cả khi bạn ngủ: giao việc một lần, Hộp thư chạy theo lịch trên máy chủ Synchro, kể cả khi bạn gập máy.", "Runs while you sleep. Hand off a job once. Inbox runs it on schedule on Synchro's server, even with your laptop closed."]],
-  [24.0, 25.9, ["Synchro Code: không gian làm việc thật với terminal, trình duyệt, git và pull request.", "Synchro Code. A real workspace: terminal, browser, git and pull requests."]],
-  [26.0, 27.9, ["Skills & Connectors: kết nối ứng dụng của bạn, Synchro tự chọn skill hợp với việc.", "Skills & Connectors. Plug in your apps. Synchro picks the right skill for the job."]],
-  [28.0, 30.4, ["Speech: giọng đọc, đổi giọng và trợ lý giọng nói, chạy bằng ElevenLabs.", "Speech. Voices, voice changer and voice agents, powered by ElevenLabs."]],
-  [30.5, 31.8, ["Bộ não: một trí nhớ dùng chung cho Claude, ChatGPT và Gemini.", "The Brain. One memory, shared by Claude, ChatGPT and Gemini."]],
-  [31.8, 33.0, ["1 · Học từ mọi đoạn chat.", "1 · Learns from every chat."]],
-  [33.0, 34.2, ["2 · Tự chăm sóc chính nó.", "2 · Tends itself."]],
-  [34.2, 35.8, ["3 · Đổi model, Synchro vẫn nhớ bạn.", "3 · Switch models. It still knows you."]],
-  [39.6, 42.5, ["Trợ lý AI của bạn. Mọi nơi, mọi lúc.", "Your AI agent. Anywhere, anytime."]],
+  [2.2, 5.2, ["Tất cả AI của bạn, một Synchro: kết nối Claude, ChatGPT, Gemini, Grok và DeepSeek của chính bạn.", "All your AI. One Synchro. Connect your own Claude, ChatGPT, Gemini, Grok and DeepSeek."]],
+  [5.3, 6.9, ["Mọi công cụ, mọi gói: trình duyệt, tiện ích Chrome, Skills và Connectors chạy cả trên gói miễn phí.", "Every tool. Every plan. Browser, Chrome extension, Skills and Connectors work even on free plans."]],
+  [7.0, 9.1, ["“Lên kế hoạch cuối tuần ở Kyoto dưới 900 đô và báo cho Mai.”", "“Plan my Kyoto weekend under $900 and tell Mai.”"]],
+  [9.7, 14.0, ["Chrome của bạn, tự lái: tiện ích Synchro tự bấm, tự gõ, tự đặt chỗ.", "Your Chrome, on autopilot. The Synchro extension clicks, types and books by itself."]],
+  [14.2, 17.0, ["Rồi nhắn cho Mai giúp bạn: lịch và tin nhắn, xử lý luôn trên điện thoại.", "Then it texts Mai for you. Calendar and messages, handled on your phone too."]],
+  [18.3, 19.6, ["Bạn giao việc. Synchro làm xong.", "You hand it off. Synchro gets it done."]],
+  [20.0, 23.4, ["Chạy cả khi bạn ngủ: giao cho Hộp thư một lần, Synchro chạy theo lịch trên máy chủ của nó, kể cả khi bạn gập máy.", "Runs while you sleep. Give Inbox a job once. Synchro runs it on schedule on its own server, even with your laptop closed."]],
+  [23.6, 25.8, ["Synchro Code: không gian làm việc thật với terminal, trình duyệt, git và pull request.", "Synchro Code. A real workspace: terminal, browser, git and pull requests."]],
+  [26.0, 28.2, ["Skills & Connectors: kết nối ứng dụng của bạn, Synchro tự chọn skill hợp với việc.", "Skills & Connectors. Plug in your apps. Synchro picks the right skill for the job."]],
+  [28.4, 30.9, ["Speech: giọng đọc, đổi giọng và trợ lý giọng nói, chạy bằng ElevenLabs.", "Speech. Voices, voice changer and voice agents, powered by ElevenLabs."]],
+  [31.6, 33.0, ["Bộ não: một trí nhớ dùng chung cho mọi model bạn kết nối.", "The Brain. One memory, shared by every model you connect."]],
+  [33.0, 34.4, ["1 · Học từ mọi đoạn chat.", "01 · Learns from every chat."]],
+  [34.4, 35.8, ["2 · Tự chăm sóc chính nó.", "02 · Tends itself."]],
+  [35.8, 37.8, ["3 · Đổi model, Synchro vẫn nhớ bạn.", "03 · Switch models. It still knows you."]],
+  [40.8, 43.3, ["Trợ lý AI của bạn. Mọi nơi, mọi lúc.", "Your AI agent. Anywhere, anytime."]],
 ];
 
 // Tiếng to / nhỏ dần (iOS không cho đổi âm lượng: bỏ qua, vẫn chạy đúng thời gian).
@@ -75,7 +75,7 @@ function fade(v: HTMLVideoElement, to: number, ms: number) {
 
 type Phase = "iris" | "ask" | "wait" | "play" | "out";
 
-// Logo ở khung cuối của phim (src/scenes/Finale.tsx): lockup cao 210 trong khung 1920×1080, góc trên trái (388,07; 435).
+// Logo ở khung cuối của phim (synchro-intro-film/src/scenes/Finale.tsx): lockup cao 210 trong khung 1920×1080, góc trên trái (388,07; 435).
 const LOCK = { x: 388.07, y: 435, k: 210 / 1050 };
 type Fly = { mark: { x: number; y: number; h: number }; word: { x: number; y: number; h: number }; end: boolean };
 
@@ -111,7 +111,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     v.muted = false; v.volume = 0;
     let raf = 0;
     const tick = () => {
-      const t = v.currentTime, d = v.duration || 42.4;
+      const t = v.currentTime, d = v.duration || 43.2;
       if (bar.current) bar.current.style.transform = `scaleX(${Math.min(1, t / d)})`;
       if (vi) { const c = CAPS.find(([a, b]) => t >= a && t < b) ?? null; setCap((p) => (p === c ? p : c)); }
       raf = requestAnimationFrame(tick);
@@ -251,7 +251,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
           <div className="intro-ask" onClick={(e) => e.stopPropagation()}>
             <img src="/intro/synchro-intro-poster.jpg" alt="" />
             <div className="intro-ask-a">
-              <button type="button" className="intro-btn pri" onClick={watch}>{L("Xem phim giới thiệu (42 giây)", "Watch the intro (42 seconds)")}</button>
+              <button type="button" className="intro-btn pri" onClick={watch}>{L("Xem phim giới thiệu (43 giây)", "Watch the intro (43 seconds)")}</button>
               <button type="button" className="intro-btn" onClick={() => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} leave(); }}>{L("Vào Synchro", "Go to Synchro")}</button>
             </div>
           </div>
