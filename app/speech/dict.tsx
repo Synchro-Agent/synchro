@@ -112,7 +112,7 @@ export function DictTool({ say, voice }: ToolProps) {
               ))}
               <button className="sp-add" onClick={() => setEdit({ ...edit, rows: [...edit.rows, row()] })}><I.Plus size={14} />Thêm quy tắc</button>
             </div>
-            <div className="sp-chips"><span className="sp-chips-l">Ví dụ</span>{EXAMPLES.map(([w, s]) => <button key={w} className="sp-tag" onClick={() => setEdit({ ...edit, rows: [...edit.rows.filter((x) => x.word.trim() || x.say.trim()), row({ word: w, say: s }), row()] })}>{w} → {s}</button>)}</div>
+            <div className="sp-chips"><span className="sp-chips-l">Ví dụ</span>{EXAMPLES.map(([w, s]) => <button key={w} className="sp-tag" data-notr onClick={() => setEdit({ ...edit, rows: [...edit.rows.filter((x) => x.word.trim() || x.say.trim()), row({ word: w, say: s }), row()] })}>{w} → {s}</button>)}</div>
             <p className="sp-hint">“Đọc thay bằng” chạy với mọi model. Phiên âm IPA chính xác hơn nhưng chỉ một số model tiếng Anh (Flash v2, Turbo v2, English v1) hỗ trợ.</p>
             <div className="sp-gen">
               {edit.id && <button className="btn" disabled={!!busy || !rules().length || !voice} onClick={listen}>{busy === "test" ? <Spin /> : <I.Speaker size={14} />}Nghe thử</button>}

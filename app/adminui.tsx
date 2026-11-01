@@ -203,6 +203,21 @@ function Seg({ value, options, onChange }: { value: string; options: string[]; o
   return <div className="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} onClick={() => onChange(s)}>{s}</button>)}</div>;
 }
 
+// Chia trang: "1–10 / 50", nút trước / sau; more = còn dữ liệu cũ trên máy chủ (nút sau tải thêm).
+function Pager({ page, pages, from, to, total, more, plus, onPage }: { page: number; pages: number; from: number; to: number; total: number; more?: boolean; plus?: boolean; onPage: (n: number) => void }) {
+  if (pages <= 1 && !more) return null;
+  return (
+    <div className="adm-pager">
+      <span className="adm-pg-n" data-notr><b>{from}–{to}</b> / {total}{plus ? "+" : ""}</span>
+      <span className="adm-pg-b">
+        <button className="icon-btn" disabled={page <= 1} aria-label="Previous page" onClick={() => onPage(page - 1)}><I.ChevronL size={15} /></button>
+        <span className="adm-pg" data-notr>{page} / {pages}{plus ? "+" : ""}</span>
+        <button className="icon-btn" disabled={page >= pages && !more} aria-label="Next page" onClick={() => onPage(page + 1)}><I.ChevronR size={15} /></button>
+      </span>
+    </div>
+  );
+}
+
 export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
   const app = useApp();
   const [d, setD] = useState<Data | null>(null);
@@ -217,6 +232,10 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   const [delTxt, setDelTxt] = useState("");
   const [busy, setBusy] = useState(false);
   const [pwFor, setPwFor] = useState<U | null>(null);
+  // Danh sách người dùng và nhật ký dài: chia trang thay vì cuộn mãi.
+  const [uPage, setUPage] = useState(1);
+  const [lPage, setLPage] = useState(1);
+  const [lq, setLq] = useState("");
   const [pw, setPw] = useState({ next: "", again: "", signOut: true });
 
   const [api, setApi] = useState<ApiState | null>(null);
@@ -240,7 +259,13 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   const s = d.stats;
   const ql = q.trim().toLowerCase();
   const users = d.users.filter((u) => (filter === "All" || (filter === "Active") === (u.status === "active")) && (!ql || u.email.toLowerCase().includes(ql) || u.name.toLowerCase().includes(ql)));
-  const logs = d.audit.filter((l) => LOG_FILTER[logF](l.action));
+  const lql = lq.trim().toLowerCase();
+  const logs = d.audit.filter((l) => LOG_FILTER[logF](l.action) && (!lql || [l.actor_email, l.target_email, l.ip, l.detail].some((x) => x?.toLowerCase().includes(lql))));
+  const U_PER = 10, L_PER = 15;
+  const uPages = Math.max(1, Math.ceil(users.length / U_PER)), up = Math.min(uPage, uPages);
+  const lPages = Math.max(1, Math.ceil(logs.length / L_PER)), lp = Math.min(lPage, lPages);
+  const pageUsers = users.slice((up - 1) * U_PER, up * U_PER), pageLogs = logs.slice((lp - 1) * L_PER, lp * L_PER);
+  const loadMore = () => call<{ audit: Log[] }>("GET", `/api/admin?before=${d.audit[d.audit.length - 1].id}`).then((x) => { setD({ ...d, audit: [...d.audit, ...x.audit] }); setMore(x.audit.length >= 100); if (x.audit.length) setLPage(lp + 1); }).catch((e) => app.say(e.message));
   const stats: [string, number, boolean?][] = [["Users", s.users], ["Active in last 7 days", s.active7], ["New in last 7 days", s.new7], ["Active sessions", s.sessions], ["Suspended", s.suspended, s.suspended > 0], ["Failed sign-ins (24h)", s.failed24, s.failed24 > 20]];
 
   return (
@@ -307,8 +332,8 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
 
       <h3 className="sec">Users</h3>
       <div className="adm-bar">
-        <div className="s-search"><I.Search size={14} /><input placeholder="Search by name or email" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <Seg value={filter} onChange={setFilter} options={["All", "Active", "Suspended"]} />
+        <div className="s-search"><I.Search size={14} /><input placeholder="Search by name or email" value={q} onChange={(e) => { setQ(e.target.value); setUPage(1); }} /></div>
+        <Seg value={filter} onChange={(v) => { setFilter(v); setUPage(1); }} options={["All", "Active", "Suspended"]} />
         <button className="icon-btn" aria-label="Refresh" title="Refresh" onClick={load}><I.Retry size={16} /></button>
       </div>
       <div style={{ overflowX: "auto" }}>
@@ -316,7 +341,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
           <colgroup><col /><col style={{ width: 112 }} /><col style={{ width: 104 }} /><col style={{ width: 28 }} /></colgroup>
           <thead><tr><th>User</th><th>Last active</th><th>Status</th><th /></tr></thead>
           <tbody>
-            {users.map((u) => (
+            {pageUsers.map((u) => (
               <Fragment key={u.id}>
                 <tr className={`adm-row ${open === u.id ? "on" : ""}`} onClick={() => toggle(u.id)}>
                   <td>
@@ -380,10 +405,14 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         </table>
         {users.length === 0 && <div className="empty" style={{ marginTop: 24 }}>No users match.</div>}
       </div>
+      <Pager page={up} pages={uPages} from={users.length ? (up - 1) * U_PER + 1 : 0} to={Math.min(up * U_PER, users.length)} total={users.length} onPage={(n) => { setUPage(n); setOpen(null); }} />
 
       <h3 className="sec">Audit log</h3>
-      <div className="adm-bar"><Seg value={logF} onChange={setLogF} options={["All", "Sign-ins", "Admin actions"]} /></div>
-      {logs.map((l) => {
+      <div className="adm-bar">
+        <div className="s-search"><I.Search size={14} /><input placeholder="Search by email or IP" value={lq} onChange={(e) => { setLq(e.target.value); setLPage(1); }} /></div>
+        <Seg value={logF} onChange={(v) => { setLogF(v); setLPage(1); }} options={["All", "Sign-ins", "Admin actions"]} />
+      </div>
+      {pageLogs.map((l) => {
         const [label, kind] = ACTIONS[l.action] ?? [l.action, ""];
         const who = l.actor_email && l.target_email && l.actor_email !== l.target_email ? `${l.actor_email} → ${l.target_email}` : l.actor_email ?? l.target_email ?? "—";
         return (
@@ -395,7 +424,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
         );
       })}
       {logs.length === 0 && <div className="empty" style={{ marginTop: 16 }}>No events yet.</div>}
-      {more && d.audit.length > 0 && <button className="btn" style={{ marginTop: 12 }} onClick={() => call<{ audit: Log[] }>("GET", `/api/admin?before=${d.audit[d.audit.length - 1].id}`).then((x) => { setD({ ...d, audit: [...d.audit, ...x.audit] }); setMore(x.audit.length >= 100); }).catch((e) => app.say(e.message))}>Load more</button>}
+      <Pager page={lp} pages={lPages} from={logs.length ? (lp - 1) * L_PER + 1 : 0} to={Math.min(lp * L_PER, logs.length)} total={logs.length} more={more && d.audit.length > 0 && lp >= lPages} plus={more && d.audit.length > 0} onPage={(n) => (n > lPages ? void loadMore() : setLPage(n))} />
 
       <Fade show={!!pwFor}>
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setPwFor(null)}>

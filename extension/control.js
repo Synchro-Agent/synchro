@@ -54,6 +54,18 @@ export function createControl(chrome, o = {}) {
     // Người dùng bấm "Hủy" trên thanh "… đang gỡ lỗi trình duyệt này": coi như bấm Dừng.
     if (reason === "canceled_by_user") stop("user");
   });
+  // Phông Anthropic Sans của tiện ích (fonts/, chép khi đóng gói) gửi kèm dải điều khiển dạng base64: trang nạp bằng FontFace từ dữ liệu.
+  // Không đọc được (vd. tiện ích giả lập không có chrome.runtime.getURL) thì dải dùng phông hệ thống, không bao giờ làm hỏng việc gắn vào tab.
+  let fontP = null;
+  const overlayFont = () => fontP ??= (async () => {
+    try {
+      const r = await fetch(chrome.runtime.getURL("fonts/AnthropicSans.woff2"));
+      if (!r.ok) return "";
+      const u = new Uint8Array(await r.arrayBuffer()); let bin = "";
+      for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000));
+      return btoa(bin);
+    } catch { return ""; }
+  })();
   function session(tabId) {
     const subs = new Map();
     const raw = (method, params = {}, timeout = 20_000, sessionId) => withTimeout(chrome.debugger.sendCommand(sessionId ? { tabId, sessionId } : { tabId }, method, params), timeout, `${method}: quá thời gian`);
@@ -64,8 +76,12 @@ export function createControl(chrome, o = {}) {
       once(ev, ms) { return new Promise((res) => { const off = s.on(ev, (p) => { off(); clearTimeout(t); res(p); }); const t = setTimeout(() => { off(); res(null); }, ms); }); },
       async send(method, params = {}, timeout = 20_000, sid) {
         if (s.closed) throw new Error("Tab đã đóng hoặc Synchro đã thôi điều khiển tab này.");
-        // Ngay trước cú bấm của Synchro: dải điều khiển tạm không nhận chuột (cú bấm không trúng nút Dừng).
-        if (method === "Input.dispatchMouseEvent" && (params.type === "mousePressed" || params.type === "mouseWheel")) await raw("Runtime.evaluate", { expression: "window.__synOverlay && window.__synOverlay.guard()" }, 3000).catch(() => {});
+        // Ngay trước cú bấm của Synchro: dải điều khiển tạm không nhận chuột (cú bấm không trúng nút Dừng); cú bấm trên khung chính thì vẽ vòng gợn
+        // đúng chỗ bấm (toạ độ CSS của khung nhìn).
+        if (method === "Input.dispatchMouseEvent" && (params.type === "mousePressed" || params.type === "mouseWheel")) {
+          const at = params.type === "mousePressed" && !sid ? `${Number(params.x) || 0}, ${Number(params.y) || 0}` : "";
+          await raw("Runtime.evaluate", { expression: `window.__synOverlay && window.__synOverlay.guard(${at})` }, 3000).catch(() => {});
+        }
         return raw(method, params, timeout, sid);
       },
       close() {},
@@ -94,7 +110,7 @@ export function createControl(chrome, o = {}) {
     chrome.tabs.update(tab.id, { autoDiscardable: false }).catch(() => {});
     await A.prepare("me", s);
     // Dải điều khiển trong trang (cả các trang mở sau trong tab này) và nút Dừng.
-    const src = overlayScript(strings());
+    const src = overlayScript(strings(), await overlayFont());
     await s.send("Runtime.addBinding", { name: "__synchroStop" }).catch(() => {});
     // Nút trên dải: "pause" / "resume" (Tạm dừng / Tiếp tục), còn lại là Dừng.
     s.on("Runtime.bindingCalled", (p) => {

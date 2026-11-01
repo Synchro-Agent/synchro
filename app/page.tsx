@@ -1450,7 +1450,7 @@ export default function Home() {
       <nav className="rail" aria-label="Điều hướng">
         {/* Logo trong vòng tròn; rê chuột vào thì thành nút mở / đóng bảng đoạn chat. */}
         <button className="rail-mark" onClick={() => setOpen(!open)} aria-label={open ? "Đóng bảng đoạn chat" : "Mở bảng đoạn chat"} aria-expanded={open} data-tip={open ? "Đóng bảng đoạn chat" : "Mở bảng đoạn chat"}>
-          <span className="rm-logo"><Mark size={20} /></span><span className="rm-panel"><I.Panel size={18} /></span>
+          <span className="rm-logo"><Mark size={18} /></span><span className="rm-panel"><I.Panel size={16} /></span>
         </button>
         <button className={`nav-item rail-new ${view === "new" ? "active" : ""}`} onClick={goNew} data-tip="⇧⌘O"><span className="rail-ic"><I.Plus /></span><span className="rail-l">Mới</span></button>
         <div className="rail-nav">
@@ -1458,12 +1458,12 @@ export default function Home() {
           {caps.art !== false && <Nav v="artifacts" icon={<I.Hover icon={["Shapes", "Cube"]} />} label="Artifacts" />}
           <Nav v="inbox" icon={<I.Hover icon={["Inbox", "TrayIn"]} />} label="Hộp thư" badge={inboxN} />
           <Nav v="brain" icon={<I.Hover icon={["Brain", "HeadCircuit"]} />} label="Bộ não" />
-          {me?.perms.features.code !== false && <Nav v="code" icon={<I.Hover icon={["Code", "CodeBlock"]} />} label="Code" />}
+          {me?.perms.features.code !== false && <Nav v="code" icon={<I.Hover icon={["Code", "CodeBlock"]} />} label="Code" onPick={() => setCodeCur(null)} />}
           {me?.perms.features.speech !== false && <Nav v="speech" icon={<I.Hover icon={["Speech", "Wave"]} />} label="Speech" onPick={() => setSpTool("home")} />}
           {me?.perms.features.skills !== false && <Nav v="customize" icon={<I.Hover icon={["Plugins", "Connectors"]} />} label="Kho kỹ năng" />}
         </div>
         <div className="rail-foot">
-          <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={18} /></button>
+          <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={17} /></button>
           <div ref={userRef} className="rail-user">
             <button className="user" onClick={() => setUserMenu(!userMenu)} aria-label={name} title={name} data-notr><Avatar name={name} /></button>
             <Menu open={!!(userMenu)} style={{ bottom: 0, left: "calc(100% + 10px)", width: 300 }} className="usermenu">
@@ -1761,7 +1761,7 @@ export default function Home() {
             <Studio items={TPLS.map((t) => ({ k: t.k, name: t.name, desc: t.desc, lib: studios[STUDIO_OF[t.k]] ?? null }))} onCreate={(k) => { setTplMode(k); setView("new"); }} />
             <div className="ds-bar">
               <div className="ds-seg" role="tablist">
-                {["Tất cả", "Của bạn", "Được chia sẻ với bạn", "Ứng dụng"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}
+                {["Tất cả", "Của bạn", "Được chia sẻ", "Ứng dụng"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}
               </div>
             </div>
             {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}

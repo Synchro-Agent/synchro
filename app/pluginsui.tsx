@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, untranslated } from "./i18n";
 import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
@@ -227,13 +227,14 @@ export function SkillHub() {
   const [addMenu, setAddMenu] = useState(false);
   // Menu Thêm neo theo mép phải của nút; khung hẹp (Cài đặt → Kho kỹ năng) đẩy nút xuống sát mép trái thì menu mở sang phải,
   // không tràn ra ngoài khung đang cắt nội dung (overflow).
-  const [menuLeft, setMenuLeft] = useState(false);
+  // Menu "Thêm": canh phải theo nút, nhưng luôn nằm gọn trong khung cuộn gần nhất (màn hình hẹp: thu hẹp lại và dời vào trong, không tràn ra ngoài).
+  const [menuPos, setMenuPos] = useState<{ left: number; width: number } | null>(null);
   const toggleAdd = () => {
     if (!addMenu) {
       const el = addRef.current, r = el?.getBoundingClientRect();
-      let edge = 0;
-      for (let p = el?.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p); if (/(hidden|auto|scroll|clip)/.test(`${o.overflowX} ${o.overflow}`)) { edge = p.getBoundingClientRect().left; break; } }
-      setMenuLeft(!!r && r.right - 320 < edge + 8);
+      let lo = 0, hi = window.innerWidth;
+      for (let p = el?.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p); if (/(hidden|auto|scroll|clip)/.test(`${o.overflowX} ${o.overflow}`)) { const b = p.getBoundingClientRect(); lo = b.left; hi = b.right; break; } }
+      if (r) { const w = Math.min(310, hi - lo - 16), x = Math.min(Math.max(r.right - w, lo + 8), hi - 8 - w); setMenuPos({ left: Math.round(x - r.left), width: Math.round(w) }); }
     }
     setAddMenu(!addMenu);
   };
@@ -299,7 +300,7 @@ export function SkillHub() {
         <PlugMark id={p.catalogId} size={36} />
         <div className="pl-row2-t">
           <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
-          <span>{p.author ? <>{tr("từ")} {tr(p.author)} · </> : ""}{p.description}</span>
+          <span>{p.author ? <>{tr("từ")} <span data-notr={untranslated(p.author) || undefined}>{tr(p.author)}</span> · </> : ""}<span data-notr={untranslated(p.description) || undefined}>{p.description}</span></span>
         </div>
         <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>
         <RowMenu p={p} manage={manage} onOpen={() => setOpen(p.id)} onAct={(a) => act(p, a)} />
@@ -320,7 +321,7 @@ export function SkillHub() {
           <div className="pl-addw" ref={addRef}>
             <button className="btn dark pl-add" onClick={toggleAdd}><I.Plus size={14} />Add<I.Chevron size={13} /></button>
             {addMenu && (
-              <div className={`menu pl-menu right${menuLeft ? " from-left" : ""}`}>
+              <div className="menu pl-menu right" style={menuPos ? { left: menuPos.left, right: "auto", width: menuPos.width, minWidth: 0 } : undefined}>
                 <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setGhFocus(Date.now()); }}><span className="pl-mic"><I.GitHub size={15} /></span><span className="pl-mi"><b>Add from a repository link</b><em>GitHub, GitLab… One skill or any repository, detected for you</em></span></button>
                 <button className="menu-item" onClick={() => { setAddMenu(false); setTab("yours"); setTimeout(() => window.dispatchEvent(new Event(SKILLS_UPLOAD)), 50); }}><span className="pl-mic"><I.FileUp size={17} /></span><span className="pl-mi"><b>Upload a skill</b><em>A .zip skill folder or a SKILL.md file</em></span></button>
                 <button className="menu-item" onClick={() => { setAddMenu(false); app.close(); app.ask("Hãy giúp tôi tạo một skill mới."); }}><span className="pl-mic"><I.Sparkles size={17} /></span><span className="pl-mi"><b>Create with Synchro</b><em>Describe what you need, Synchro writes the skill</em></span></button>

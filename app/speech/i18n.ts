@@ -549,7 +549,7 @@ Object.assign(SPEECH_VI2EN, {
   "Tổng đài": "Call center", "Quán cà phê": "Café", "Thành phố": "City", "Bàn phím": "Keyboard", "Gần": "Near", "Vừa": "Medium", "Xa": "Far",
   "Lọc âm": "Filter", "Giọng qua radio cũ, điện thoại, robot…": "Voice through an old radio, phone, robot…", "Tiếng nền": "Background noise", "Tổng đài, quán cà phê, thành phố…": "Call center, café, city…",
   "Không gian": "Space", "Vang như trong phòng, hội trường, đường hầm…": "Reverb like a room, hall, tunnel…", "Khoảng cách": "Distance", "Người nói đứng gần hay xa micro": "How close the speaker is to the mic",
-  "Hiệu ứng âm thanh": "Audio effects", "Làm giọng nghe như qua radio cũ, điện thoại, trong hội trường hay giữa quán cà phê.": "Make the voice sound like an old radio, a phone call, a hall or a busy café.",
+  "Hiệu ứng âm thanh": "Audio effects", "Làm giọng nghe như qua radio cũ, điện thoại, trong hội trường hay giữa quán cà phê.": "Make the voice sound like an old radio, a phone call, a hall or a busy coffee shop.",
   "Hiệu ứng không gian cần định dạng MP3, Opus hoặc WAV.": "Space effects need MP3, Opus or WAV output.", "Không bắt buộc": "Optional", "Thêm": "Add",
 
   // giọng
@@ -628,7 +628,7 @@ Object.assign(SPEECH_VI2EN, {
   "Thể loại, tâm trạng, nhạc cụ, nhịp độ, giọng hát… Ví dụ: Nhạc lo-fi nhẹ nhàng để học bài, piano và tiếng mưa": "Genre, mood, instruments, tempo, vocals… e.g. Mellow lo-fi for studying, piano and rain",
   "Lời bài hát": "Lyrics", "AI tự viết": "AI writes them", "Không lời": "Instrumental", "Lời của tôi": "My lyrics",
   "Thể loại": "Genre", "Tâm trạng": "Mood", "Nhạc cụ": "Instruments", "Nhạc phim": "Cinematic", "vui tươi": "upbeat", "thư giãn": "chill", "hùng tráng": "epic", "lãng mạn": "romantic", "hồi hộp": "suspenseful", "mơ màng": "dreamy",
-  "đàn tranh": "đàn tranh zither", "sáo trúc": "bamboo flute", "trống": "drums",
+  "đàn tranh": "Vietnamese zither (dan tranh)", "sáo trúc": "bamboo flute", "trống": "drums",
   "Học bài": "Study", "Vlog du lịch": "Travel vlog", "Sinh nhật": "Birthday", "Quảng cáo": "Advertisement", "Ballad buồn": "Sad ballad",
   "Nhạc lo-fi nhẹ nhàng để học bài, piano mộc, tiếng mưa lách tách, nhịp chậm": "Mellow lo-fi for studying, soft piano, gentle rain, slow tempo",
   "Nhạc nền vlog du lịch tươi sáng, guitar acoustic và tiếng vỗ tay, cảm giác tự do": "Bright travel vlog background music, acoustic guitar and claps, a sense of freedom",

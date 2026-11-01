@@ -160,3 +160,4 @@ export const Article = A.Article;
 export const ArrowUpRight = A.ArrowUpRight;
 export const ChatsCircle = A.ChatsCircle;
 export const ArrowRight = A.ArrowRight;
+export const ChevronL = A.ChevronL;

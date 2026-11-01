@@ -126,7 +126,7 @@ export const VI2EN: Record<string, string> = {
   "Đóng thanh bên": "Close sidebar", "Mở thanh bên": "Open sidebar", "Dự án mới": "New project", "Tìm kiếm": "Search", "Ẩn danh": "Incognito",
   "Hôm nay tôi có thể giúp gì cho bạn?": "How can I help you today?", "Thêm": "Add", "Nhập bằng giọng nói": "Dictate", "Chọn micro": "Choose microphone", "Chế độ giọng nói": "Voice mode",
   "Chưa có dự án nào": "No projects yet", "Dự án giúp bạn sắp xếp các đoạn chat và tệp liên quan.": "Projects help you organize related chats and files.",
-  "Tất cả": "All", "Của bạn": "Yours", "Được chia sẻ với bạn": "Shared with you", "Tạo thứ gì đó mới": "Create something new",
+  "Tất cả": "All", "Của bạn": "Yours", "Được chia sẻ với bạn": "Shared with you", "Được chia sẻ": "Shared", "Tạo thứ gì đó mới": "Create something new",
   "Tài liệu": "Docs", "Của Synchro": "By Synchro", "Trang trình bày": "Slides", "Thiết kế": "Design",
   "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.": "Documents your team reads, comments on and edits live, while Synchro keeps them up to date.",
   "Bộ trang chiếu mà bạn có thể trình chiếu, đổi kiểu dáng bằng hệ thống thiết kế và tải về dạng PowerPoint hoặc PDF.": "Slide decks you can present, restyle with a design system and download as PowerPoint or PDF.",
@@ -2158,3 +2158,4 @@ Object.assign(VI2EN, {
   "Tạo tài liệu": "Create a document", "Tạo trang trình bày": "Create slides", "Tạo thiết kế": "Create a design",
 });
 Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở bảng đoạn chat": "Open chats panel" });
+Object.assign(EN2VI, { "Search by email or IP": "Tìm theo email hoặc IP", "Previous page": "Trang trước", "Next page": "Trang sau" });

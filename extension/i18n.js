@@ -51,6 +51,12 @@ const VI = {
   actingOn: "Đang làm trên:",
   actingHelp: "Bạn có thể dừng bất cứ lúc nào.",
   idleHelp: "Cứ nhờ trong khung chat, ví dụ “mở Gmail trên Chrome của tôi”.",
+  hReady: "Sẵn sàng",
+  hConnecting: "Đang kết nối",
+  hOffline: "Mất kết nối",
+  offlineHelp: "Synchro tự kết nối lại khi máy chủ phản hồi.",
+  nodeBrowser: "Trình duyệt này",
+  account: "Tài khoản",
 };
 const EN = {
   title: "Synchro for Chrome",
@@ -103,6 +109,12 @@ const EN = {
   actingOn: "Working in:",
   actingHelp: "You can stop it at any time.",
   idleHelp: "Just ask in the chat, like “open Gmail on my Chrome”.",
+  hReady: "Ready",
+  hConnecting: "Connecting",
+  hOffline: "Disconnected",
+  offlineHelp: "Synchro reconnects as soon as the server answers.",
+  nodeBrowser: "This browser",
+  account: "Account",
 };
 const lang = () => String(globalThis.navigator?.language ?? "vi").toLowerCase().startsWith("vi") ? "vi" : "en";
 export const t = (k) => (lang() === "vi" ? VI : EN)[k] ?? VI[k] ?? k;

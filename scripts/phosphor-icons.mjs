@@ -30,6 +30,7 @@ export const NAMES = {
   CircleDashed: "circle-dashed", SquaresFour: "squares-four",
   // Giao diện "Instrument": lối tắt ở trang chủ, sân khấu Artifacts, tab của trang dự án.
   Slides: "presentation-chart", PenNib: "pen-nib", Article: "article", ArrowUpRight: "arrow-up-right", ChatsCircle: "chats-circle",
+  ChevronL: "caret-left",
 };
 
 // Icon chỉ dùng theo tên Phosphor (bộ công cụ Speech: app/speech/toolicons.tsx, cặp icon biến hình khi rê chuột).
@@ -43,8 +44,8 @@ export const EXTRA = [
 const DIR = "node_modules/@phosphor-icons/core/assets/regular";
 const TAGS = new Set(["path", "circle", "rect", "line", "polyline", "polygon", "ellipse"]);
 const data = {};
-for (const ph of [...Object.values(NAMES), ...EXTRA]) {
-  if (data[ph]) continue;
+// Các phần tử SVG của một icon Phosphor Regular (bỏ khung bao trong suốt, bỏ fill để tô bằng currentColor).
+function read(ph) {
   const svg = fs.readFileSync(`${DIR}/${ph}.svg`, "utf8");
   const els = [];
   for (const m of svg.matchAll(/<(path|circle|rect|line|polyline|polygon|ellipse)\b([^>]*?)\/?>/g)) {
@@ -56,8 +57,9 @@ for (const ph of [...Object.values(NAMES), ...EXTRA]) {
     els.push([m[1], attrs]);
   }
   if (!els.length) throw new Error(`Không đọc được ${ph}`);
-  data[ph] = els;
+  return els;
 }
+for (const ph of [...Object.values(NAMES), ...EXTRA]) data[ph] ??= read(ph);
 const out = `// Sinh bởi scripts/phosphor-icons.mjs từ @phosphor-icons/core (Phosphor Regular, MIT) — đừng sửa tay.
 // NAMES: tên icon trong app → tên Phosphor; PH: các phần tử SVG gốc (lưới 256, tô bằng currentColor).
 export const NAMES = ${JSON.stringify(NAMES)} as const;
@@ -66,8 +68,9 @@ export const PH: Record<string, [string, Record<string, string>][]> = ${JSON.str
 `;
 fs.writeFileSync("app/phosphor-data.ts", out);
 
-// Cửa sổ tiện ích Chrome (extension/popup.js): cùng bộ icon, chỉ những icon nó dùng.
-export const EXT = { arrow: "arrow-right", open: "arrow-square-out", leave: "sign-out", tab: "browser", tabs: "browsers", group: "folder-simple", alert: "warning-circle", globe: "globe-simple" };
-const ext = Object.fromEntries(Object.entries(EXT).map(([k, ph]) => [k, data[ph]]));
+// Tiện ích Chrome (cửa sổ extension/popup.js, dải điều khiển trong trang extension/overlay.js): cùng bộ icon, chỉ những icon nó dùng.
+export const EXT = { arrow: "arrow-right", open: "arrow-square-out", leave: "sign-out", tab: "browser", tabs: "browsers", group: "folder-simple", alert: "warning-circle",
+  globe: "globe-simple", link: "link-simple", pause: "pause", play: "play", stop: "stop", check: "check" };
+const ext = Object.fromEntries(Object.entries(EXT).map(([k, ph]) => [k, data[ph] ?? read(ph)]));
 fs.writeFileSync("extension/phosphor.js", `// Sinh bởi scripts/phosphor-icons.mjs từ @phosphor-icons/core (Phosphor Regular, MIT) — đừng sửa tay.\n// Icon của cửa sổ tiện ích: các phần tử SVG gốc trên lưới 256 (tô bằng currentColor, viền 2 đơn vị như app).\nexport const PH = ${JSON.stringify(ext)};\n`);
 console.log(`Đã ghi ${Object.keys(data).length} icon Phosphor Regular vào app/phosphor-data.ts (${(out.length / 1024).toFixed(0)} KB)`);

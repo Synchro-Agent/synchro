@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:mock": "node scripts/dev-mock.mjs",
+    "dev:mock:fast": "node scripts/dev-mock.mjs --fast",
     "build": "next build --turbopack",
     "start": "next start"
   },

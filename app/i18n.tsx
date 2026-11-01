@@ -26,8 +26,16 @@ export function tr(s: string, lang: Lang = cur): string {
       if (m) { out = f(m); break; }
     }
   }
+  // Chuỗi ghép bằng " · " (tên model · mô tả, giọng · ngôn ngữ…): dịch từng phần, phần không có trong từ điển (tên riêng) giữ nguyên.
+  if (out === undefined && t.includes(" · ")) {
+    const parts = t.split(" · "), done = parts.map((x) => tr(x, lang));
+    if (done.some((x, i) => x !== parts[i])) out = done.join(" · ");
+  }
   return out === undefined ? s : s.replace(t, () => out as string);
 }
+
+/** Chuỗi không có bản dịch ở cả hai chiều: nội dung (tên người, mô tả từ nhà cung cấp…), đánh dấu data-notr để không lẫn với chữ giao diện. */
+export const untranslated = (s: string) => !!s.trim() && tr(s, "en") === s && tr(s, "vi") === s;
 
 const SKIP = "script,style,textarea,input,code,pre,[data-notr],.ai-msg,.user-msg,.mdx,.title-edit";
 const ATTRS = ["placeholder", "title", "aria-label", "data-tip"];

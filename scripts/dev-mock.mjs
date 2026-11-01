@@ -1,6 +1,7 @@
 // Chạy Synchro ở máy cục bộ với API giả lập của các hãng: không cần khóa thật, không gọi ra Internet.
 // Dữ liệu riêng trong data-mock/, bản build riêng trong .next-mock/, nên chạy song song được với npm run dev.
 // Dùng: npm run dev:mock   → mở http://localhost:3200 và đăng nhập bằng tài khoản thử nghiệm in ra ở terminal.
+//       npm run dev:mock:fast → như trên nhưng chạy bản production (nhanh, độ trễ thấp; sửa mã thì chạy lại).
 // Xóa toàn bộ dữ liệu thử nghiệm: xóa thư mục data-mock/.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -43,7 +44,19 @@ if (!fs.existsSync(path.join(DATA, "synchro.db"))) {
   if (r.status !== 0) { console.error(r.stderr || r.stdout); process.exit(1); }
 }
 
-const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--turbopack", "-p", String(PORT)], { env, stdio: "inherit" });
+// --fast (npm run dev:mock:fast): dựng bản production một lần rồi chạy `next start` — trang mở gần như tức thì, không biên dịch lại
+// khi chuyển màn hình (chế độ dev biên dịch theo yêu cầu, chạy React ở chế độ dev nên chậm hơn nhiều). Sửa mã thì chạy lại lệnh này.
+const FAST = process.argv.includes("--fast") || process.env.MOCK_FAST === "1";
+if (FAST) {
+  env.NEXT_DIST_DIR = ".next-mockfast";
+  console.log("Đang dựng bản chạy nhanh (production)…");
+  // Dựng bằng webpack: turbopack dò cả thư mục .mkvenv (Python cục bộ, có liên kết ra ngoài dự án) nên dựng trên máy này lỗi.
+  // Dựng lại trên bộ nhớ đệm webpack của lần trước bị lỗi băm (WasmHash … reading 'length'): luôn xóa đệm trước khi dựng.
+  fs.rmSync(path.join(env.NEXT_DIST_DIR, "cache"), { recursive: true, force: true });
+  const b = spawnSync(process.execPath, ["node_modules/next/dist/bin/next", "build"], { env, stdio: "inherit" });
+  if (b.status !== 0) { console.error("Dựng bản chạy nhanh thất bại."); process.exit(1); }
+}
+const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", FAST ? "start" : "dev", ...(FAST ? [] : ["--turbopack"]), "-p", String(PORT)], { env, stdio: "inherit" });
 const stop = () => { next.kill("SIGINT"); process.exit(0); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);

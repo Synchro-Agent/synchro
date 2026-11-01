@@ -231,14 +231,14 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
   const langs = (l?: string[]) => (l?.length ? <span className="sp-mlangs">{l.slice(0, 5).map((x) => <i key={x}>{x}</i>)}{l.length > 5 && <i>+{l.length - 5}</i>}</span> : null);
   return (
     <div className="sp-mpick" ref={box}>
-      <button className="sp-vbig sp-mcard" aria-expanded={open} aria-label={`${label}: ${m.name}`} onClick={() => setOpen(!open)}>
-        <span><b>{m.name}{m.badge && <em className="sp-badge-r">{m.badge}</em>}</b><small>{m.note}</small></span><I.Chevron size={14} />
+      <button className="sp-vbig sp-mcard" aria-expanded={open} aria-haspopup="listbox" onClick={() => setOpen(!open)}>
+        <span><b><span data-notr>{m.name}</span>{m.badge && <em className="sp-badge-r">{m.badge}</em>}</b><small>{m.note}</small></span><I.Chevron size={14} />
       </button>
       {open && (
         <div className="sp-mmenu" role="listbox" aria-label={label}>
           {models.map((x) => (
             <button key={x.id} role="option" aria-selected={x.id === value} className={x.id === value ? "on" : ""} onClick={() => { onChange(x.id); setOpen(false); }}>
-              <span><b>{x.name}{x.badge && <em className="sp-badge-r">{x.badge}</em>}</b><small>{x.note}</small>{langs(x.langs)}</span>{x.id === value && <I.Check size={15} />}
+              <span><b><span data-notr>{x.name}</span>{x.badge && <em className="sp-badge-r">{x.badge}</em>}</b><small>{x.note}</small>{langs(x.langs)}</span>{x.id === value && <I.Check size={15} />}
             </button>
           ))}
         </div>

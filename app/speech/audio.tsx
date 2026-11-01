@@ -117,7 +117,7 @@ export function SfxTool({ say }: ToolProps) {
         <div className="sp-card">
           <Field label="Mô tả âm thanh" hint={`${p.length}/450`} htmlFor="sfx-p"><textarea id="sfx-p" className="sp-input ta" rows={4} maxLength={450} value={p} onChange={(e) => setP(e.target.value)} placeholder="Tả cụ thể: nguồn âm, không gian, khoảng cách, nhịp… Ví dụ: “Heavy rain on a tin roof with distant thunder”" /></Field>
           <div className="sp-catrow" role="tablist" aria-label="Danh mục gợi ý">{SFX_CATS.map((c, i) => <button key={c.label} role="tab" aria-selected={cat === i} className={`sp-fpill ${cat === i ? "on" : ""}`} onClick={() => setCat(i)}>{c.label}</button>)}</div>
-          <div className="sp-exs">{SFX_CATS[cat].items.map(([vi, en]) => <button key={en} className="sp-tag" title={en} onClick={() => setP(en)}>{vi}</button>)}</div>
+          <div className="sp-exs">{SFX_CATS[cat].items.map(([vi, en]) => <button key={en} className="sp-tag" onClick={() => setP(en)}>{vi}</button>)}</div>
           <Field label="Model"><ModelPick value={model} onChange={setModel} models={SFX_MODELS} /></Field>
           <Toggle checked={auto} onChange={setAuto} label="Tự chọn độ dài" hint="AI chọn độ dài hợp với mô tả" />
           {!auto && <Range id="sfx-d" label="Độ dài" value={dur} min={0.5} max={30} step={0.5} onChange={setDur} show={`${String(dur).replace(".", ",")} giây`} left="0,5 giây" right="30 giây" />}
