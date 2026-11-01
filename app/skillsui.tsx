@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentType, type Reac
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { getLang } from "./i18n";
+import { getLang, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
 
@@ -90,6 +90,19 @@ export async function inspectGithub(url: string, onWait?: () => void): Promise<F
 // Tạo skill (quản trị viên): dùng cho riêng mình (Skill của bạn) hay cho mọi người (Thư viện cho mọi người; skill thành một thư viện
 // của tổ chức, mọi tài khoản dùng được). Dùng chung cho mọi cách tạo skill: dán link repo, tải lên, lưu cách làm, Synchro đề xuất.
 export type Scope = "me" | "org";
+// Tải về tệp .zip xuất skill / thư viện (app/skillexport.ts): giữ đúng tên tệp máy chủ đặt, README theo ngôn ngữ giao diện.
+export async function downloadExport(url: string, fallback: string): Promise<string> {
+  const r = await fetch(`${url}?lang=${getLang()}`, { cache: "no-store" });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `Error ${r.status}`); }
+  const blob = await r.blob();
+  const m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get("content-disposition") ?? "");
+  const name = m ? decodeURIComponent(m[1]) : fallback;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+  return name;
+}
+
 export function useIsAdmin() {
   const [a, setA] = useState(false);
   useEffect(() => { let on = true; fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
@@ -242,6 +255,12 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
   const restore = (n: string, v: number) => app.confirm(`Restore v${v}?`, "The model will use this version from now on. Newer versions stay saved and can be restored later.", "Restore version", async () => {
     try { await api(`/api/skills/${n}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ restore: v }) }); app.say(`Đã khôi phục ${n} về v${v}`); await load(); open(n); } catch (e) { setErr((e as Error).message); }
   });
+  const [exporting, setExporting] = useState(false);
+  const exportZip = async (n: string) => {
+    setExporting(true);
+    try { const f = await downloadExport(`/api/skills/${encodeURIComponent(n)}/export`, `${n}.zip`); app.say(`${tr("Đã xuất")} ${f}`); }
+    catch (e) { setErr((e as Error).message); } finally { setExporting(false); }
+  };
   const openFile = async (n: string, path: string) => {
     try { const j = await api(`/api/skills/${n}/file?path=${encodeURIComponent(path)}`); setFileView({ path, text: j.binary ? "(binary file)" : j.text + (j.truncated ? "\n…" : "") }); } catch (e) { setErr((e as Error).message); }
   };
@@ -323,6 +342,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
             <div className="sk-actions">
               <button className="btn danger" onClick={() => del(detail.name)}>Delete</button>
               <span style={{ flex: 1 }} />
+              <button className="btn" disabled={exporting} onClick={() => exportZip(detail.name)}>{exporting ? <span className="art-spin sm" /> : <I.Download size={14} />}Export .zip</button>
               <button className="btn" onClick={() => verRef.current?.click()}>Upload new version</button>
               <button className="btn dark" onClick={() => { toggle(detail.name, !detail.enabled); setDetail({ ...detail, enabled: !detail.enabled }); }}>{detail.enabled ? "Disable" : "Enable"}</button>
             </div>

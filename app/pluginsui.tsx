@@ -8,7 +8,7 @@ import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins
 import type { DirPlugin } from "./plugindir";
 import { GithubAdd } from "./ghadd";
 import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
-import { ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
+import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -160,16 +160,17 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
         <div className="pl-list">
           {p.skills.map((s) => <SkillLine key={s.id} s={s.report} right={<>{s.useCount > 0 && <span className="pl-use">{s.useCount}×</span>}{manage && <button className={`toggle ${s.enabled ? "on" : ""}`} role="switch" aria-checked={s.enabled} aria-label={s.name} onClick={() => patch({ skills: { [s.name]: !s.enabled } })} />}</>} />)}
         </div>
-        {manage && (
-          <div className="modal-foot pl-acts">
-            <button className="btn danger" onClick={remove}>Uninstall</button>
-            <span style={{ flex: 1 }} />
+        <div className="modal-foot pl-acts">
+          {manage && <button className="btn danger" onClick={remove}>Uninstall</button>}
+          <span style={{ flex: 1 }} />
+          <button className="btn" disabled={!!busy} onClick={async () => { setBusy("export"); await exportLib(p, app.say); setBusy(""); }}>{busy === "export" ? <span className="art-spin sm" /> : <I.Download size={14} />}Export .zip</button>
+          {manage && <>
             <input ref={file} type="file" accept=".zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
             <button className="btn" disabled={!!busy} onClick={() => file.current?.click()}>{busy === "upload" ? <span className="art-spin sm" /> : <I.Plus size={14} />}Add skills from zip</button>
             {p.updateAvailable ? <button className="btn dark" disabled={!!busy} onClick={() => act("update")}>{busy === "update" ? <span className="art-spin sm" /> : null}Update</button>
               : <button className="btn" disabled={!!busy} onClick={() => act("check")}>{busy === "check" ? <span className="art-spin sm" /> : null}Check for updates</button>}
-          </div>
-        )}
+          </>}
+        </div>
       </div>
     </div>
   );
@@ -178,7 +179,13 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
 // ---------------------------------------------------------------- trang Kho kỹ năng
 // Kết hợp Claude và Synchro: hai tab Của bạn / Khám phá, nút + cài một chạm cho plugin trong danh mục (đã kiểm tra giấy phép),
 // "Thêm từ repo GitHub" có bước xem trước giấy phép và rủi ro, mỗi plugin có menu nhanh (quản lý, cập nhật, tắt, gỡ).
+// Xuất thư viện thành .zip (mọi skill, nguồn, commit, giấy phép, tùy chọn): ai thấy thư viện thì xuất được.
+async function exportLib(p: PublicPlugin, say: (m: string) => void) {
+  try { const f = await downloadExport(`/api/plugins/${encodeURIComponent(p.id)}/export`, `${p.slug}.zip`); say(`${tr("Đã xuất")} ${f}`); }
+  catch (e) { say((e as Error).message); }
+}
 function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolean; onOpen: () => void; onAct: (a: "check" | "toggle" | "remove") => void }) {
+  const app = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -194,6 +201,7 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolea
         <div className="menu pl-menu">
           <button className="menu-item" onClick={() => { setOpen(false); onOpen(); }}><I.Sliders size={15} />Manage</button>
           {manage && <button className="menu-item" onClick={() => { setOpen(false); onAct("check"); }}><I.Retry size={15} />Check for updates</button>}
+          <button className="menu-item" onClick={() => { setOpen(false); void exportLib(p, app.say); }}><I.Download size={15} />Export .zip</button>
           <button className="menu-item" onClick={() => { setOpen(false); onAct("toggle"); }}>{on ? <I.M icon="Pause" size={15} /> : <I.M icon="Play" size={15} />}{on ? (p.scope === "org" && !manage ? "Turn off for me" : "Turn off") : "Turn on"}</button>
           {manage && <><hr /><button className="menu-item del" onClick={() => { setOpen(false); onAct("remove"); }}><I.Trash size={15} />Uninstall</button></>}
         </div>

@@ -231,8 +231,10 @@ export async function parseUpload(filename: string, buf: Buffer, opts: { pick?: 
   } catch { return fail("Không đọc được file zip (file bị hỏng hoặc không phải zip)"); }
   if (unsafe) fail(`Đường dẫn không an toàn trong file nén: "${unsafe}" (chứa ".." hoặc bắt đầu bằng "/")`);
   // Bỏ rác của hệ điều hành và thư mục ẩn (.git, .github…): không phải một phần của skill.
-  const all = Object.values(zip.files).filter((f) => !f.dir).map((f) => ({ f, p: cleanPath(f.name) }))
+  let all = Object.values(zip.files).filter((f) => !f.dir).map((f) => ({ f, p: cleanPath(f.name) }))
     .filter(({ p }) => !p.split("/").some((seg) => seg === "__MACOSX" || seg === ".DS_Store" || seg === "Thumbs.db" || seg.startsWith(".")));
+  // Tệp .zip do Synchro xuất (app/skillexport.ts): thư mục _synchro/ là thông tin và phiên bản cũ, không phải một phần của skill.
+  if (all.some(({ p }) => p === "_synchro/skill.json" || p === "_synchro/library.json")) all = all.filter(({ p }) => !p.startsWith("_synchro/"));
   const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
   // SKILL.md ở bất kỳ độ sâu nào; skill lồng trong skill khác không tính là skill riêng.
   let roots = all.filter(({ p }) => path.posix.basename(p) === "SKILL.md").map(({ f, p }) => ({ f, dir: dirOf(p) }));

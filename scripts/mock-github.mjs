@@ -142,6 +142,14 @@ export async function startMockGithub(port, dir) {
       // ---- REST API ----
       if (!p.startsWith("/api/")) return html(res, `<h2>GitHub (giả lập)</h2><p>${p}</p>`);
       const ap = p.slice(4);
+      // Commit hiện tại của một nhánh (repo công khai, không cần đăng nhập) như api.github.com: Kho kỹ năng ghi commit khi cài thư viện từ link.
+      const cm = req.method === "GET" && /^\/repos\/([^/]+\/[^/]+)\/commits\/([^/]+)$/.exec(ap);
+      if (cm && exists(cm[1])) {
+        const s = sha(cm[1], decodeURIComponent(cm[2]));
+        if (!s) return json(res, 422, { message: "No commit found for SHA" });
+        if (/vnd\.github\.sha/.test(req.headers.accept ?? "")) { res.writeHead(200, { "content-type": "text/plain" }); return res.end(s); }
+        return json(res, 200, { sha: s });
+      }
       if (!okToken(/^Bearer\s+(.+)$/i.exec(auth ?? "")?.[1])) return json(res, 401, { message: "Bad credentials" });
       if (ap === "/user") return json(res, 200, USER);
       if (ap === "/user/emails") return json(res, 200, [{ email: `${MOCK_GH_LOGIN}@users.noreply.github.com`, primary: true, verified: true }]);

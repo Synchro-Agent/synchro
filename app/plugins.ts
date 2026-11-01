@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import JSZip from "jszip";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
+import { GH_API } from "./github";
 import { classify, dropPluginTags, keepPluginTags, pluginKey, refine, tagsOf, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
@@ -107,14 +108,22 @@ export function parseRepo(raw: string): Source {
   return { repo: `${owner}/${repo}`, ...(ref ? { ref } : {}), ...(p ? { path: p } : {}) };
 }
 
+// GitHub giả lập của dev:mock (GITHUB_API_URL / GITHUB_CODELOAD_URL): repo có trên đó thì lấy ở đó, không có thì đi GitHub thật như máy chủ thật.
+const API_HOSTS = [...new Set([GH_API, "https://api.github.com"])];
+const CODELOAD_HOSTS = [...new Set([(process.env.GITHUB_CODELOAD_URL ?? "https://codeload.github.com").replace(/\/$/, ""), "https://codeload.github.com"])];
+
 // Commit hiện tại của nhánh (để ghi nhận phiên bản và kiểm tra cập nhật). Lỗi API (giới hạn lượt gọi) thì dùng tên nhánh.
 async function resolveCommit(repo: string, ref = "HEAD"): Promise<string> {
-  try {
-    const r = await fetch(`https://api.github.com/repos/${repo}/commits/${encodeURIComponent(ref)}`, { headers: { Accept: "application/vnd.github.sha", "User-Agent": "Synchro", ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) }, signal: AbortSignal.timeout(15_000) });
-    const t = (await r.text()).trim();
-    if (r.ok && /^[0-9a-f]{40}$/.test(t)) return t;
-    if (r.status === 404 || r.status === 422) fail(`Không tìm thấy repo hoặc nhánh ${repo}${ref !== "HEAD" ? `@${ref}` : ""} (chỉ hỗ trợ repo công khai).`, 404);
-  } catch (e) { if (e instanceof PluginError) throw e; }
+  let missing = 0;
+  for (const host of API_HOSTS) {
+    try {
+      const r = await fetch(`${host}/repos/${repo}/commits/${encodeURIComponent(ref)}`, { headers: { Accept: "application/vnd.github.sha", "User-Agent": "Synchro", ...(process.env.GITHUB_TOKEN && host === "https://api.github.com" ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) }, signal: AbortSignal.timeout(15_000) });
+      const t = (await r.text()).trim();
+      if (r.ok && /^[0-9a-f]{40}$/.test(t)) return t;
+      if (r.status === 404 || r.status === 422) missing++;
+    } catch {}
+  }
+  if (missing === API_HOSTS.length) fail(`Không tìm thấy repo hoặc nhánh ${repo}${ref !== "HEAD" ? `@${ref}` : ""} (chỉ hỗ trợ repo công khai).`, 404);
   return ref;
 }
 const zipCache = new Map<string, { at: number; buf: Buffer }>();
@@ -123,7 +132,8 @@ async function repoZip(repo: string, commit: string) {
   const c = zipCache.get(key);
   if (c && Date.now() - c.at < 10 * 60_000) return c.buf;
   const [o, r] = repo.split("/");
-  const buf = await download(`https://codeload.github.com/${o}/${r}/zip/${encodeURIComponent(commit)}`, PLUGIN_LIMITS.zip);
+  let buf: Buffer | null = null;
+  for (const host of CODELOAD_HOSTS) if (!buf) buf = await download(`${host}/${o}/${r}/zip/${encodeURIComponent(commit)}`, PLUGIN_LIMITS.zip);
   if (!buf) return fail(`Không tải được ${repo} từ GitHub.`, 404);
   zipCache.set(key, { at: Date.now(), buf });
   for (const [k, v] of zipCache) if (Date.now() - v.at > 10 * 60_000) zipCache.delete(k);
@@ -264,6 +274,8 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
   const id = existing?.id ?? "pl_" + crypto.randomBytes(8).toString("hex");
   const stamp = Date.now().toString(36);
   const prevSkills = existing ? (d.prepare("SELECT name, enabled, use_count, last_used_at FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; enabled: number; use_count: number; last_used_at: number | null }[]) : [];
+  // Skill tải lên thủ công (Thêm skill từ file zip) được giữ qua lần cài lại (restoreUploads): tệp của chúng cũng phải còn trên đĩa.
+  const uploadDirs = new Set(existing ? uploadsOf(id).map((u) => u.storage_path.split("/")[2]) : []);
   const rows: SRow[] = [];
   for (const f of keep) {
     const p = parseEntries(f.entries, [], PLUGIN_LIMITS.filesPerSkill);
@@ -293,7 +305,7 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
     for (const r of rows) ins.run(r.id, r.plugin_id, r.name, r.description, r.body, r.storage_path, r.files, r.report, r.enabled, r.use_count, r.last_used_at);
   })();
   // Xóa bản cũ trên đĩa sau khi bản mới đã ghi xong.
-  for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
+  for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp && !uploadDirs.has(e)) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
   tagPlugin(id, opts.by ?? (owner === "org" ? undefined : owner));
   return getPlugin(id)!;
 }
