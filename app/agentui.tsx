@@ -174,7 +174,7 @@ export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { st
     return out;
   }, [steps, view]);
   return (
-    <div className="ag">
+    <div className={`ag${live ? " ai-streaming" : ""}`}>
       {blocks.map((b, i) => b.k === "steer"
         ? <div key={i} className="ag-steer"><span>Bạn nhắn thêm</span><p data-notr>{b.text}</p></div>
         : b.k === "text"

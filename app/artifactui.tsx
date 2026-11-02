@@ -630,7 +630,7 @@ Yêu cầu: ${req.trim()}`);
         ) : deck ? (
           <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} loc={!!onAsk} />
         ) : art.type === "markdown" ? (
-          <div className="art-md mdx"><Markdown text={art.content} say={say} /></div>
+          <div className={`art-md mdx${art.complete ? "" : " ai-streaming"}`}><Markdown text={art.content} say={say} /></div>
         ) : art.type === "mermaid" ? (
           <div className="art-md"><MermaidSvg code={art.content} onError={setErr} /></div>
         ) : art.type === "vbhc" ? (
@@ -668,10 +668,12 @@ type Summary = { id: string; conv: string; ident: string; title: string; type: A
 
 // Ảnh thu nhỏ: chạy thật artifact ở kích thước nhỏ (html/svg/react), tài liệu và mã hiện vài dòng đầu.
 // Danh sách chỉ kèm phần đầu của artifact: trang web dài bị cắt mất thân trang và script (ảnh thu nhỏ trống / đen), nên khi thẻ hiện ra
-// thì tải bản đầy đủ rồi mới chạy.
+// thì tải bản đầy đủ rồi mới chạy. Trong lúc tải, ô hiện vệt chờ thay vì nền trắng (trang tối nháy trắng trên giao diện tối), khung chạy xong
+// (sự kiện load của iframe, bắt ở pha capture vì load không nổi bọt) mới hiện dần; quá 5 giây thì hiện luôn.
 function Thumb({ a }: { a: Summary }) {
   const [vis, setVis] = useState(false);
   const [doc, setDoc] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current; if (!el) return;
@@ -687,8 +689,15 @@ function Thumb({ a }: { a: Summary }) {
   }, [vis, live, a.full, a.id, a.preview]);
   const content = a.full === false ? doc : a.preview;
   const vb = a.type === "vbhc" ? parseVbhc(a.preview).spec : null;
+  const framed = vis && (!!vb || (live && content !== null));
+  useEffect(() => {
+    const el = ref.current; if (!el || !framed) return;
+    const done = () => setOk(true), t = setTimeout(done, 5000);
+    el.addEventListener("load", done, true);
+    return () => { clearTimeout(t); el.removeEventListener("load", done, true); };
+  }, [framed]);
   return (
-    <div className={`art-thumb t-${a.type}`} ref={ref}>
+    <div className={`art-thumb t-${a.type}${(vb || live) && !ok ? " wait" : ""}`} ref={ref}>
       {vb ? (vis && <div className="art-thumb-scale"><iframe className="art-thumb-frame" title={a.title} srcDoc={vbhcHtml(vb, a.title)} sandbox="" /></div>)
         : live ? (vis && content !== null && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={content} ai={false} title={a.title} className="art-thumb-frame" /></div>)
         : a.type === "markdown" ? <div className="art-thumb-doc mdx"><Markdown text={a.preview.split("\n").slice(0, 24).join("\n")} say={() => {}} /></div>

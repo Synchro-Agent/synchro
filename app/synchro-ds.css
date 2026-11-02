@@ -910,6 +910,13 @@ html body .bk-btn.sm:not(.auth-root *){height:28px;padding:0 11px;font-size:12.5
 .bk-head-n{margin-right:auto;font-size:12.5px;color:var(--ds-muted)}
 .pl-sec-r,.sp-card-r{margin-left:auto;display:inline-flex}
 .pl-sec:has(.pl-sec-r){display:flex;align-items:center;gap:8px}
+/* Tiêu đề mục không gãy dòng ("Thư viện cho mọi / người", "1 đang / bật" trên điện thoại khi nút Chọn hàng loạt chiếm chỗ): chữ giữ
+   một dòng, thiếu chỗ thì nút xuống hàng. Trên điện thoại nút chỉ còn biểu tượng như nút Quét skill rác. */
+html body .pl-sec{white-space:nowrap;flex-wrap:wrap;row-gap:6px}
+@media (max-width:640px){
+  html body .pl-sec-r .bk-btn.sm:not(.on){width:28px;padding:0;justify-content:center}
+  html body .pl-sec-r .bk-btn:not(.on) .bk-l{display:none}
+}
 .bw-bk{margin:0 0 6px;justify-content:flex-start}
 .bk-check{flex:none;width:18px;height:18px;border-radius:var(--r-pill);display:inline-grid;place-items:center;background:var(--ds-plate);
   box-shadow:inset 0 0 0 1.5px var(--ds-line-2);color:var(--ds-inv-fg);transition:background-color var(--ds-fast),box-shadow var(--ds-fast);animation:bkIn .2s var(--ds-ease) backwards}
@@ -1092,10 +1099,14 @@ html body .scan-modal .btn.scan-danger:hover:not(:disabled){background:color-mix
   html body .pl-top .pl-scan{width:var(--ds-h);padding:0;justify-content:center;margin-left:auto}
   html body .pl-top .pl-scan .pl-scan-l{display:none}
   html body .pl-top .pl-scan+.pl-addw{margin-left:0}
-  /* Bốn tab không vừa một hàng: chia hai hàng, tab nào cũng thấy trọn (không phải vuốt ngang tìm tab bị khuất). */
-  html body .scan-modal .scan-tabs{display:grid;grid-template-columns:1fr 1fr;align-self:stretch;height:auto;border-radius:18px;overflow:visible}
-  html body .scan-modal .scan-tabs>button{justify-content:center}
-  html body .scan-modal .scan-tabs>button:last-child:nth-child(odd){grid-column:1/-1}
+  /* Ba tab nằm gọn một hàng, chia nhau bề ngang (xếp hai hàng thì tab "Ổn" đứng lẻ, kéo dài hết hàng dưới). Bốn tab (có "Chưa đọc")
+     không vừa một hàng: hai hàng hai cột, tab nào cũng thấy trọn (không phải vuốt ngang tìm tab bị khuất). */
+  html body .scan-modal .scan-tabs{align-self:stretch}
+  html body .scan-modal .scan-tabs>button{flex:1 1 auto;justify-content:center;gap:4px;padding:0 6px;font-size:12.5px}
+  html body .scan-modal .scan-tabs:has(>:nth-child(4)){display:grid;grid-template-columns:1fr 1fr;height:auto;border-radius:18px;overflow:visible}
+  /* Cột tên chiếm trọn hàng khi tab không có nút thao tác (tab Ổn): quy tắc máy tính .scan-list.noact giữ tỉ lệ .9fr / 2fr nên tên
+     skill bị ép còn một phần ba bề ngang, gãy "algorithmic- / art". */
+  .scan-list.noact .scan-row{grid-template-columns:minmax(0,1fr)}
   .scan-kinds li{grid-template-columns:1fr;gap:2px}
   .scan-pick{flex-wrap:wrap;gap:6px}
   html body .scan-pick select.pl-sel{flex:1 1 100%}

@@ -99,8 +99,9 @@ export function AppsGallery({ q, say }: { q: string; say: (m: string) => void })
           <span className="pl-mark" style={{ width: 40, height: 40 }}><I.Rocket size={18} /></span>
           <div className="apps-t">
             <b data-notr>{a.title}</b>
-            {/* Dấu "·" dính vào chữ đứng trước (khoảng trắng không ngắt) và "2 lượt mở" không bị tách: màn hẹp từng đẩy "· 2/11/2026" xuống đầu dòng. */}
-            <span>{[a.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi"), a.mine ? "" : `${tr("của")} ${a.ownerName}`, `${a.opens} ${tr("lượt mở")}`.replace(/ /g, "\u00a0"),
+            {/* Dấu "·" dính vào chữ đứng trước (khoảng trắng không ngắt) và "2 lượt mở", "của Lan Anh" không bị tách: màn hẹp từng đẩy
+                "· 2/11/2026" xuống đầu dòng, bẻ tên "apps- / a", "Download / Tester". Gạch nối trong tên là gạch không ngắt. */}
+            <span>{[a.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi"), a.mine ? "" : `${tr("của")} ${a.ownerName}`.replace(/ /g, "\u00a0").replace(/-/g, "\u2011"), `${a.opens} ${tr("lượt mở")}`.replace(/ /g, "\u00a0"),
               new Date(a.updated_at).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")].filter(Boolean).join("\u00a0· ")}</span>
           </div>
           <a className="btn" href={`/apps/${a.id}`} target="_blank" rel="noreferrer">{tr("Mở")}</a>

@@ -194,12 +194,45 @@ const CHECK = `(() => {
       const d = rect(k, i), el = nodes[k].parentElement; if (!d.width || d.bottom < 0 || d.top > H || cut(el, d)) continue;
       const box = el.closest(":not(span,b,i,em,small,strong,a,kbd,u,s,code)"), a = near(k, i, -1), z = near(k, i, 1);
       if (!a || !box || !box.contains(nodes[a[0]])) continue;
-      const L = rect(...a), say = "“" + box.textContent.trim().replace(/\s+/g, " ").slice(0, 40) + "”";
+      const L = rect(...a), say = "“" + box.textContent.trim().replace(/\\s+/g, " ").slice(0, 40) + "”";
       if (L.bottom <= d.top + 2) { n++; out.push("dấu · ở đầu dòng: " + say + " (" + name(el) + ")"); continue; }
       if (!z || !box.contains(nodes[z[0]])) continue;
       const R = rect(...z); if (Math.abs(R.top - d.top) > 4 || Math.abs(L.top - d.top) > 4) continue;
       const gl = d.left - L.right, gr = R.left - d.right;
       if (gl < 16 && gr < 16 && Math.abs(gl - gr) > 2.5) { n++; out.push("khoảng cách hai bên dấu · lệch (" + Math.round(gl) + "/" + Math.round(gr) + "px): " + say + " (" + name(el) + ")"); }
+    } }
+  // Một chữ đứng lẻ ở dòng cuối của đoạn chữ nhiều dòng ("…các thành phần giao diện / khác." ở Cài đặt, "…hợp với việc / đó" ở bộ chọn
+  // model). Chỉ xét khối có chữ trực tiếp; bỏ ô gõ, mã và câu trả lời đang chạy chữ (ở đó text-wrap-style để auto có chủ ý).
+  { let n = 0;
+    for (const el of document.querySelectorAll("body *")) {
+      if (n >= 6) break;
+      if (el.closest("svg,script,style,textarea,input,pre,code,.cm-editor,iframe,[aria-hidden=true],.sr-only,.ai-streaming")) continue;
+      if (![...el.childNodes].some((c) => c.nodeType === 3 && c.nodeValue.trim())) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display.startsWith("inline") || cs.whiteSpace.includes("nowrap") || !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+      const r = el.getBoundingClientRect(); if (!r.width || r.bottom < 0 || r.top > H || r.right <= 0 || r.left >= W) continue;
+      const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3;
+      if (r.height < lh * 1.8) continue;
+      const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), texts = [];
+      for (let t; (t = tw.nextNode());) if (t.nodeValue.trim()) texts.push(t);
+      const rg = document.createRange();
+      // Dòng cuối: đi ngược từ ký tự cuối tới khi gặp ký tự ở dòng trên; ghi lại khung của chữ ở dòng cuối.
+      let last = null, line = "", above = false, box = null;
+      walk: for (let k = texts.length - 1; k >= 0; k--) { const v = texts[k].nodeValue; for (let i = v.length - 1; i >= 0; i--) {
+        if (!v[i].trim()) { line = v[i] + line; continue; }
+        rg.setStart(texts[k], i); rg.setEnd(texts[k], i + 1); const b = rg.getClientRects()[0]; if (!b) continue;
+        if (last == null) last = b.top;
+        if (Math.abs(b.top - last) > lh / 2) { above = true; break walk; }
+        line = v[i] + line; box = box ? { l: Math.min(box.l, b.left), r: Math.max(box.r, b.right), t: b.top, b: b.bottom } : { l: b.left, r: b.right, t: b.top, b: b.bottom };
+      } }
+      const w = line.trim();
+      if (!above || !w || /\\s/.test(w) || w.length > 14 || !box) continue;
+      // Chữ bị khung cắt (dòng thứ ba sau line-clamp, thanh bên đang thu gọn) không ai thấy. Chữ lẻ dài (từ 40% bề ngang trở lên) không
+      // tính: pretty của Chrome cũng chỉ kéo chữ khi dòng cuối quá ngắn.
+      let gone = false;
+      for (let p = el; p && p !== document.body; p = p.parentElement) { const ps = getComputedStyle(p); if (/(hidden|clip|auto|scroll)/.test(ps.overflowX + ps.overflowY)) { const q = p.getBoundingClientRect(); if (box.t >= q.bottom - 1 || box.b <= q.top + 1 || box.l >= q.right - 1 || box.r <= q.left + 1) { gone = true; break; } } }
+      if (gone || box.r - box.l >= 0.4 * (r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight))) continue;
+      { n++; out.push("chữ đứng lẻ ở dòng cuối “" + w + "”: “" + el.textContent.trim().replace(/\\s+/g, " ").slice(0, 50) + "” (" + name(el) + ")"); }
     } }
   return out;
 })()`;

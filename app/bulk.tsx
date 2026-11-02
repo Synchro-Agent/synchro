@@ -77,8 +77,8 @@ export function useBulk<T>(items: T[], key: (x: T) => string | number): Bulk<T> 
 export function BulkButton<T>({ b, compact }: { b: Bulk<T>; compact?: boolean }) {
   if (!b.total && !b.on) return null;
   return (
-    <button className={`btn bk-btn${b.on ? " on" : ""}${compact ? " sm" : ""}`} aria-pressed={b.on} onClick={() => (b.on ? b.exit() : b.start())} data-tip={b.on ? undefined : "Chọn nhiều mục để xử lý cùng lúc"}>
-      {b.on ? <I.X size={14} /> : <I.ListChecks size={15} />}{b.on ? "Xong" : "Chọn hàng loạt"}
+    <button className={`btn bk-btn${b.on ? " on" : ""}${compact ? " sm" : ""}`} aria-pressed={b.on} aria-label={b.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (b.on ? b.exit() : b.start())} data-tip={b.on ? undefined : "Chọn nhiều mục để xử lý cùng lúc"}>
+      {b.on ? <I.X size={14} /> : <I.ListChecks size={15} />}<span className="bk-l">{b.on ? "Xong" : "Chọn hàng loạt"}</span>
     </button>
   );
 }
