@@ -39,8 +39,8 @@ export function removeUserCaps(uid: string) {
 // Khả năng thực sự dùng được: chạy code cần quản trị viên cho phép Cloud sandbox và máy chủ có nơi chạy code;
 // artifact dùng AI cần bật Artifacts; truy cập mạng cần bật chạy code; trình duyệt của Synchro chạy trong workspace của người dùng
 // nên cần máy chủ có dịch vụ workspace và quản trị viên cho phép Synchro Code + Cloud sandbox. Chrome của người dùng (tiện ích Synchro)
-// chỉ cần dịch vụ workspace (nơi tiện ích nối tới) và đã ghép nối ít nhất một trình duyệt; có nó thì điều khiển trình duyệt vẫn dùng được
-// khi trình duyệt của Synchro bị khóa.
+// cần quản trị viên cho phép (Quyền truy cập → Your Chrome), dịch vụ workspace (nơi tiện ích nối tới) và đã ghép nối ít nhất một trình duyệt;
+// có nó thì điều khiển trình duyệt vẫn dùng được khi trình duyệt của Synchro bị khóa.
 export function capsState(u: UserRow): CapsState {
   const mine = userCaps(u.id);
   const locks: CapsState["locks"] = {};
@@ -50,7 +50,8 @@ export function capsState(u: UserRow): CapsState {
   const caps: Caps = { ...mine };
   if (!can(u, "code") || !can(u, "sandbox")) locks.browse = "admin";
   else if (!wsConfigured()) locks.browse = "server";
-  if (!wsConfigured()) locks.mine = "server";
+  if (!can(u, "chrome")) locks.mine = "admin";
+  else if (!wsConfigured()) locks.mine = "server";
   const paired = !locks.mine && hasDevice(u.id);
   if (locks.code) { caps.code = false; caps.net = false; }
   if (!paired) caps.mine = false;

@@ -227,13 +227,17 @@ function launch(r: TaskRow, o: { chrome: boolean; note?: string; action?: { titl
     .run(runId, r.id, r.owner, o.action ? `Đã duyệt: ${o.action.title}`.slice(0, 200) : r.title, Date.now(), o.action ? "action" : "run", o.note ?? null);
   return runId;
 }
-const chromeOn = async (uid: string) => (await extLive(uid).catch(() => ({ connected: false }))).connected;
+// Quản trị viên tắt "Your Chrome" cho tài khoản: không chờ Chrome, việc đặt dùng Chrome chạy bằng trình duyệt của Synchro.
+const chromeLocked = (uid: string) => { const u = getUser(uid); return !!u && !can(u, "chrome"); };
+const LOCKED_NOTE = "Quản trị viên chưa cho phép tài khoản này dùng Chrome của người dùng: làm bằng trình duyệt của Synchro.";
+const chromeOn = async (uid: string) => !chromeLocked(uid) && (await extLive(uid).catch(() => ({ connected: false }))).connected;
 
 /** Chạy ngay (nút "Chạy ngay"), không đổi lịch. Việc đặt dùng Chrome của người dùng thì Chrome phải đang kết nối. */
 export async function runNow(uid: string, id: string) {
   const r = getTask(uid, id);
   if (!r) return fail("Không tìm thấy việc tự động.", 404);
   const chrome = await chromeOn(uid);
+  if (r.browser === "user" && !chrome && chromeLocked(uid)) fail("Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn với Synchro. Đổi trình duyệt của việc này sang Tự chọn hoặc Trình duyệt của Synchro.", 403);
   if (r.browser === "user" && !chrome) fail("Việc này đặt chạy bằng Chrome của bạn nhưng Chrome chưa kết nối với Synchro. Mở Chrome có cài tiện ích Synchro rồi thử lại, hoặc đổi trình duyệt của việc thành Tự chọn.", 409);
   const run = launch(r, { chrome });
   if (!run) return fail("Tài khoản không còn hoạt động.", 403);
@@ -262,17 +266,17 @@ export async function tick(now = Date.now()) {
     if (!claimed) continue;
     const chrome = r.browser === "synchro" ? false : await chromeOn(r.owner);
     // Việc cần Chrome của người dùng mà Chrome đang tắt (máy ngủ): chờ tới khi Chrome kết nối lại.
-    if (r.browser === "user" && !chrome) { d.prepare("UPDATE tasks SET wait_since = ? WHERE id = ?").run(now, r.id); continue; }
-    if (launch(r, { chrome })) n++;
+    if (r.browser === "user" && !chrome && !chromeLocked(r.owner)) { d.prepare("UPDATE tasks SET wait_since = ? WHERE id = ?").run(now, r.id); continue; }
+    if (launch(r, { chrome, note: r.browser === "user" && !chrome ? LOCKED_NOTE : undefined })) n++;
   }
   // Việc đang chờ Chrome: Chrome kết nối thì chạy; chờ quá lâu thì chạy bằng trình duyệt của Synchro (ghi rõ trong kết quả).
   for (const r of d.prepare("SELECT * FROM tasks WHERE wait_since IS NOT NULL").all() as TaskRow[]) {
     const chrome = await chromeOn(r.owner);
-    const late = now - (r.wait_since ?? now) >= CHROME_WAIT_MS();
+    const late = now - (r.wait_since ?? now) >= CHROME_WAIT_MS() || chromeLocked(r.owner);
     if (!chrome && !late) continue;
     if (d.prepare("UPDATE tasks SET wait_since = NULL WHERE id = ? AND wait_since = ?").run(r.id, r.wait_since).changes !== 1) continue;
     const waited = Math.round((now - (r.wait_since ?? now)) / 60_000), span = waited >= 90 ? `${Math.round(waited / 60)} giờ` : `${Math.max(waited, 1)} phút`;
-    if (launch(r, { chrome, note: chrome ? (waited >= 2 ? `Đã chờ Chrome của người dùng kết nối lại ${span} rồi mới chạy.` : undefined) : `Chrome của người dùng không kết nối suốt ${span}: làm bằng trình duyệt của Synchro, phần cần tài khoản của người dùng thì ghi rõ chưa làm được.` })) n++;
+    if (launch(r, { chrome, note: !chrome && chromeLocked(r.owner) ? LOCKED_NOTE : chrome ? (waited >= 2 ? `Đã chờ Chrome của người dùng kết nối lại ${span} rồi mới chạy.` : undefined) : `Chrome của người dùng không kết nối suốt ${span}: làm bằng trình duyệt của Synchro, phần cần tài khoản của người dùng thì ghi rõ chưa làm được.` })) n++;
   }
   // Lần chạy lỗi (model quá tải, mất mạng…): chạy lại sau RETRY_MS, tối đa MAX_RETRY lần cho mỗi lần đến hạn.
   for (const x of d.prepare("SELECT run_id, task_id, owner FROM task_runs WHERE kind = 'run' AND retried = 0 AND at > ?").all(now - 24 * 3600_000) as { run_id: string; task_id: string; owner: string }[]) {

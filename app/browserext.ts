@@ -2,7 +2,7 @@
 // khóa riêng của từng thiết bị (chỉ lưu bản băm), vé WebSocket ngắn hạn, và gửi lệnh browser_* tới tiện ích qua dịch vụ workspace
 // (workspace/ext-relay.mjs: tiện ích nối WebSocket /ws-agent/ext, máy chủ này gửi lệnh qua HTTP /ext).
 import crypto from "node:crypto";
-import { AuthError, db, getUser } from "./authstore";
+import { AuthError, can, db, getUser } from "./authstore";
 import { agent, wsConfigured } from "./workspace";
 
 let ready = false;
@@ -28,6 +28,8 @@ const normCode = (c: unknown) => String(c ?? "").toUpperCase().replace(/[^A-Z0-9
 export const CODE_TTL = 10 * 60_000;
 
 export const extAllowed = () => wsConfigured();
+/** Quản trị viên tắt "Your Chrome" (Quyền truy cập) cho tài khoản này: không ghép nối, không kết nối, model không điều khiển Chrome của họ. */
+export const CHROME_LOCKED = "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn với Synchro.";
 export const devicesOf = (uid: string) => (init().prepare("SELECT * FROM browser_devices WHERE user_id = ? ORDER BY created_at").all(uid) as Row[]).map(pub);
 export const hasDevice = (uid: string) => !!init().prepare("SELECT 1 FROM browser_devices WHERE user_id = ? LIMIT 1").get(uid);
 
@@ -52,6 +54,7 @@ export function redeemPairCode(code: unknown, meta: { name?: unknown; browser?: 
   d.prepare("DELETE FROM browser_pair_codes WHERE code_hash = ?").run(sha(c));
   const user = getUser(row.user_id);
   if (!user || user.status !== "active") throw new AuthError("Tài khoản không còn dùng được.", 403);
+  if (!can(user, "chrome")) throw new AuthError(CHROME_LOCKED, 403);
   const first = !hasDevice(user.id);
   const id = crypto.randomBytes(12).toString("base64url");
   const token = "sxt_" + crypto.randomBytes(32).toString("base64url");
@@ -108,6 +111,8 @@ export async function extOverview(uid: string) {
     const l = live.devices.find((x) => x.id === d.id);
     return { ...d, connected: !!l, active: !!l?.active, scope: l?.scope ?? null, tab: l?.tab ?? null, acting: !!l?.acting, last: l?.last ?? null, version: l?.ext ?? null };
   });
-  return { allowed: extAllowed(), connected: live.connected, devices };
+  const u = getUser(uid);
+  const locked = !!u && !can(u, "chrome");
+  return { allowed: extAllowed() && !locked, locked, connected: live.connected && !locked, devices };
 }
 export const extNotify = (uid: string, op: "stop" | "release") => (wsConfigured() ? agent("/ext", { u: uid, op }, 8_000).then(() => true, () => false) : Promise.resolve(false));

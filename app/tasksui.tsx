@@ -116,6 +116,8 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
   const [every, setEvery] = useState(src?.schedule.every ?? 1);
   const [browser, setBrowser] = useState<BrowserPref>(src?.browser ?? "auto");
   const codeOk = !!useApp().me?.perms.features.code;
+  // Quản trị viên tắt "Your Chrome": không chọn được Chrome của bạn (việc đã đặt sẵn thì chạy bằng trình duyệt của Synchro).
+  const chromeOk = useApp().me?.perms.features.chrome !== false;
   const [engine, setEngine] = useState<Engine>(codeOk ? src?.engine ?? "chat" : "chat");
   const [model, setModel] = useState(init?.model ?? AUTO);
   const [memory, setMemory] = useState(init?.memory ?? true);
@@ -155,8 +157,9 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
         </div>}
         {engine === "chat" ? <div className="tk-l">{tr("Trình duyệt")}
           <div className="tk-br" role="radiogroup">{BROWSERS.map((b) => (
-            <button type="button" key={b.id} role="radio" aria-checked={browser === b.id} className={browser === b.id ? "on" : ""} onClick={() => setBrowser(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
+            <button type="button" key={b.id} role="radio" aria-checked={browser === b.id} className={browser === b.id ? "on" : ""} disabled={b.id === "user" && !chromeOk} onClick={() => setBrowser(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
           ))}</div>
+          {!chromeOk && <p className="tk-tz">{tr(browser === "user" ? "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn: việc này sẽ chạy bằng trình duyệt của Synchro." : "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn.")}</p>}
         </div> : <p className="tk-tz">{tr("Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong Hộp thư.")}</p>}
         <label className="tk-l">{tr("Model")}<ModelPick value={model} onChange={setModel} /></label>
         <label className="tk-l">{tr("Hướng dẫn chi tiết cho Synchro")}<textarea className="field" value={prompt} maxLength={8000} rows={7} onChange={(e) => setPrompt(e.target.value)} placeholder={tr("Viết như khi nhắn cho Synchro. Connector đã kết nối (email, lịch…) được dùng như trong chat.")} data-notr /></label>

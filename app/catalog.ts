@@ -55,6 +55,7 @@ export const FEATURES = [
   { key: "web", label: "Web search", desc: "Read web pages to answer questions." },
   { key: "connectors", label: "Connectors", desc: "Connect apps and services through MCP so the model can use their tools." },
   { key: "sandbox", label: "Cloud sandbox", desc: "Run code on the server sandbox." },
+  { key: "chrome", label: "Your Chrome", desc: "Let Synchro work in the person's own Chrome, Edge or Brave through the Synchro extension, with the sites they are signed in to." },
 ] as const;
 export type Feature = (typeof FEATURES)[number]["key"];
 

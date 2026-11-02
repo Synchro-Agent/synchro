@@ -272,5 +272,47 @@ const icons = [...Object.values(manifest.icons ?? {}), ...Object.values(manifest
 ok(icons.length >= 11 && icons.every((p) => !!zip?.file(p)), "logo Synchro: biểu tượng tiện ích, biểu tượng thanh công cụ bản sáng và bản tối, logo cho cửa sổ tiện ích", icons.filter((p) => !zip?.file(p)).join(", "));
 ok(manifest.permissions?.includes("offscreen") && /MATCH_MEDIA/.test((await file("background.js")) ?? "") && !!(await file("theme.html")), "đổi logo trên thanh công cụ theo theme sáng / tối của trình duyệt");
 
+console.log("9. Quản trị viên tắt “Your Chrome” (Quyền truy cập): không ghép nối, không kết nối, model không điều khiển Chrome; bật lại thì như cũ");
+{
+  let cookie = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
+  const admin = async (method, p, body) => {
+    const r = await fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
+    for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
+    return r.json().catch(() => null);
+  };
+  if (!cookie) await admin("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
+  const u = (await admin("GET", "/api/admin")).users.find((x) => x.email === EMAIL);
+  const setChrome = (on) => admin("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: { ...Object.fromEntries(Object.keys(u.perms.features).map((k) => [k, true])), chrome: on } } });
+  ok("chrome" in u.perms.features && u.perms.features.chrome === true, "Quyền truy cập có mục Your Chrome, mặc định bật", JSON.stringify(u.perms.features));
+  // Ghép nối một trình duyệt và lấy sẵn một mã khi còn được phép.
+  const c1 = (await me("POST", "/api/browser/ext", { op: "code" })).j.code;
+  const paired = await raw("/api/browser/ext/pair", { code: c1, name: "Chrome thử khóa" });
+  const c2 = (await me("POST", "/api/browser/ext", { op: "code" })).j.code;
+  ok(paired.s === 200 && !!paired.j.token && !!c2, "còn được phép: ghép nối được", JSON.stringify(paired.j).slice(0, 200));
+  await me("PATCH", "/api/caps", { browse: true, mine: true });
+  await setChrome(false);
+  r = await me("GET", "/api/caps");
+  ok(r.j.locks.mine === "admin" && r.j.caps.mine === false && r.j.paired === false && r.j.caps.browse === true, "Cài đặt → Khả năng: Chrome của bạn bị khóa bởi quản trị viên, trình duyệt của Synchro vẫn dùng được", JSON.stringify(r.j));
+  r = await me("GET", "/api/browser/ext");
+  ok(r.j.allowed === false && r.j.locked === true && r.j.connected === false && r.j.target === "synchro", "GET /api/browser/ext: không cho dùng, mặc định trình duyệt của Synchro", JSON.stringify(r.j).slice(0, 300));
+  ok((await me("GET", "/api/browser")).j?.ext?.allowed === false, "GET /api/browser: tiện ích không dùng được");
+  r = await me("POST", "/api/browser/ext", { op: "code" });
+  ok(r.s === 403 && /Quản trị viên chưa cho phép/.test(r.j?.error ?? ""), "không lấy được mã ghép nối mới", JSON.stringify(r.j));
+  r = await raw("/api/browser/ext/pair", { code: c2, name: "Chrome lấy mã trước khi khóa" });
+  ok(r.s === 403 && (await me("GET", "/api/browser/ext")).j.devices.every((d) => d.name !== "Chrome lấy mã trước khi khóa"), "mã lấy trước khi khóa: không ghép nối được, không tạo trình duyệt", JSON.stringify(r.j));
+  r = await raw("/api/browser/ext/connect", {}, { authorization: `Bearer ${paired.j.token}` });
+  ok(r.s === 403, "trình duyệt đã ghép nối: không xin được vé kết nối", JSON.stringify(r.j));
+  await ask("anthropic/claude-haiku-5-5", MINE);
+  const H = await (await fetch(`${MOCK}/_debug/hist`)).json();
+  const Lk = (H.anthropic ?? []).map((x) => JSON.stringify(x.messages ?? [])).find((m) => m.includes("Quản trị viên chưa cho phép tài khoản này dùng Chrome của người dùng")) ?? "";
+  ok(!!Lk && Lk.includes("Dùng trình duyệt của Synchro"), "nhờ làm trên Chrome của tôi: model được báo Chrome bị khóa, gợi ý dùng trình duyệt của Synchro", Lk.slice(-400) || "không thấy lời gọi nào nhận thông báo khóa");
+  await setChrome(true);
+  r = await me("GET", "/api/caps");
+  ok(r.j.locks.mine === undefined && r.j.paired === true, "bật lại: Chrome của bạn dùng được như cũ", JSON.stringify(r.j));
+  ok((await raw("/api/browser/ext/connect", {}, { authorization: `Bearer ${paired.j.token}` })).s === 200, "bật lại: trình duyệt đã ghép nối kết nối lại được");
+  for (const d of (await me("GET", "/api/browser/ext")).j?.devices ?? []) await me("POST", "/api/browser/ext", { op: "remove", id: d.id });
+  await me("PATCH", "/api/caps", { browse: true, mine: false });
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

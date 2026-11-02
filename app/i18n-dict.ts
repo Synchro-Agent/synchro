@@ -2266,3 +2266,17 @@ Object.assign(VI2EN, {
     [/^Đã xóa (\S+) skill · đã gỡ (\S+) thư viện trống$/, (m) => `Deleted ${sk(m[1])} · uninstalled ${m[2]} empty ${m[2] === "1" ? "library" : "libraries"}`],
   );
 }
+// Quyền truy cập → Your Chrome (tiện ích Synchro cho Chrome)
+Object.assign(EN2VI, {
+  "Your Chrome": "Chrome của người dùng",
+  "Let Synchro work in the person's own Chrome, Edge or Brave through the Synchro extension, with the sites they are signed in to.": "Cho Synchro làm việc trên Chrome, Edge hoặc Brave của chính người đó qua tiện ích Synchro, với các trang họ đã đăng nhập.",
+  "Your administrator has not allowed your account to use your own Chrome with Synchro.": "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn với Synchro.",
+  "Your administrator has not enabled a browser for your account: Synchro's own browser needs Synchro Code and Cloud sandbox, and your own Chrome needs Your Chrome.": "Quản trị viên chưa bật trình duyệt nào cho tài khoản của bạn: trình duyệt của Synchro cần Synchro Code và Sandbox đám mây, còn Chrome của bạn cần quyền Chrome của người dùng.",
+});
+Object.assign(VI2EN, {
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn với Synchro.": "Your administrator has not allowed your account to use your own Chrome with Synchro.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn với Synchro. Đổi trình duyệt của việc này sang Tự chọn hoặc Trình duyệt của Synchro.": "Your administrator has not allowed your account to use your own Chrome with Synchro. Change this task's browser to Automatic or Synchro's browser.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn: việc này sẽ chạy bằng trình duyệt của Synchro.": "Your administrator has not allowed your account to use your own Chrome: this task will run in Synchro's browser.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn.": "Your administrator has not allowed your account to use your own Chrome.",
+  "Chrome của bạn bị khóa": "Your Chrome is locked",
+});

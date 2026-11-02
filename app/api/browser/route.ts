@@ -1,4 +1,4 @@
-import { AuthError, handle, requireUser, sameOrigin } from "../../authstore";
+import { AuthError, can, handle, requireUser, sameOrigin } from "../../authstore";
 import { extAllowed, hasDevice } from "../../browserext";
 import { browserDefault, capsState } from "../../caps";
 import { agent, ticket } from "../../workspace";
@@ -15,7 +15,7 @@ export const GET = handle(async (req) => {
   const { user } = requireUser(req);
   const st = capsState(user);
   const reason = lockReason(st.locks.browse);
-  return Response.json({ available: !reason, reason, control: st.caps.browse, ext: { allowed: extAllowed(), paired: hasDevice(user.id) }, target: browserDefault(st) });
+  return Response.json({ available: !reason, reason, control: st.caps.browse, ext: { allowed: extAllowed() && can(user, "chrome"), paired: hasDevice(user.id) && can(user, "chrome") }, target: browserDefault(st) });
 });
 
 export const POST = handle(async (req) => {

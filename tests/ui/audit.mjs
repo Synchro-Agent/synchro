@@ -165,8 +165,9 @@ const CHECK = `(() => {
   }
   for (const s of document.querySelectorAll("select")) {
     if (!vis(s)) continue; const b = s.getBoundingClientRect(); if (!b.width || b.bottom < 0 || b.top > H) continue;
-    const cs = getComputedStyle(s), rad = parseFloat(cs.borderTopRightRadius) || 0, pr = parseFloat(cs.paddingRight) || 0;
-    if (rad >= b.height / 2 - 3 && pr < 26) out.push("mũi tên ô chọn sát viền bo tròn (chừa " + Math.round(pr) + "px): " + name(s));
+    // Mũi tên mặc định của trình duyệt (appearance khác none) luôn nằm sát viền phải dù chừa padding bao nhiêu.
+    const cs = getComputedStyle(s), rad = parseFloat(cs.borderTopRightRadius) || 0, pr = parseFloat(cs.paddingRight) || 0, native = (cs.appearance || cs.webkitAppearance) !== "none";
+    if (rad >= b.height / 2 - 3 && (native || pr < 26)) out.push("mũi tên ô chọn sát viền bo tròn (" + (native ? "mũi tên mặc định" : "chừa " + Math.round(pr) + "px") + "): " + name(s));
   }
   return out;
 })()`;

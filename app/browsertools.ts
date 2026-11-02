@@ -203,7 +203,7 @@ export type ChatFile = { name: string; mime: string; data: Buffer };
  *  files = tệp người dùng đính kèm trong đoạn chat (và tệp Synchro tạo ra) để browser_upload tải lên trang. */
 // scope: phiên dùng trình duyệt ("code:<id>", "chat:<id>"); cookies: cách giữ cookie / đăng nhập của trình duyệt Synchro
 // (Cài đặt → Synchro Code → Trình duyệt: luôn giữ, đến khi trình duyệt tắt, riêng từng phiên).
-export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]> };
+export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; user?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]> };
 
 /** Tệp của đoạn chat cho browser_upload: tệp người dùng đính kèm (ảnh, PDF giữ nguyên trong tin nhắn; tệp khác lấy bản gốc theo id trong <file … id>)
  *  và tệp Synchro tạo ra (outs của lượt, liên kết /api/outputs/… trong các câu trả lời trước). Tệp mới hơn đứng trước khi trùng tên. */
@@ -290,6 +290,7 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
   const args = { ...input };
   delete args.browser;
   if (target === "synchro" && ctx?.synchro === false) return { content: "Trình duyệt của Synchro chưa dùng được với tài khoản này (quản trị viên chưa bật Synchro Code và Cloud sandbox). Dùng Chrome của người dùng: browser=\"user\".", is_error: true, summary: "Trình duyệt của Synchro bị khóa" };
+  if (target === "user" && ctx?.user === false) return { content: `Quản trị viên chưa cho phép tài khoản này dùng Chrome của người dùng với Synchro.${ctx.synchro === false ? " Trình duyệt của Synchro cũng chưa dùng được: báo người dùng không thao tác trình duyệt được và nhờ quản trị viên." : " Dùng trình duyệt của Synchro: browser=\"synchro\"."}`, is_error: true, summary: "Chrome của bạn bị khóa" };
   // Tệp đính kèm trong chat cần tải lên trang (browser_upload, kể cả trong browser_batch).
   const bad = action === "upload" ? await attachFiles(args, ctx) : "";
   if (action === "batch" && Array.isArray(args.actions)) for (const x of args.actions as R[]) if (x?.action === "upload" && x.file != null) { const e = await attachFiles(x, ctx); if (e) return { content: e, is_error: true, summary: "Không thấy tệp" }; }

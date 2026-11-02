@@ -1,5 +1,5 @@
-import { AuthError, handle, limit, requireUser, sameOrigin } from "../../../authstore";
-import { extAllowed, extNotify, extOverview, newPairCode, removeDevice } from "../../../browserext";
+import { AuthError, can, handle, limit, requireUser, sameOrigin } from "../../../authstore";
+import { CHROME_LOCKED, extAllowed, extNotify, extOverview, newPairCode, removeDevice } from "../../../browserext";
 import { browserDefault, capsState } from "../../../caps";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export const POST = handle(async (req) => {
   const { user } = requireUser(req);
   if (!extAllowed()) throw new AuthError("Máy chủ chưa bật dịch vụ workspace nên chưa nối được trình duyệt của bạn.", 501);
   const b = (await req.json().catch(() => ({}))) as { op?: string; id?: string };
-  if (b.op === "code") { limit(`ext-code:${user.id}`, 20, 10 * 60_000); return Response.json(newPairCode(user.id)); }
+  if (b.op === "code") { if (!can(user, "chrome")) throw new AuthError(CHROME_LOCKED, 403); limit(`ext-code:${user.id}`, 20, 10 * 60_000); return Response.json(newPairCode(user.id)); }
   if (b.op === "remove") {
     if (!(await removeDevice(user.id, String(b.id ?? "")))) throw new AuthError("Không tìm thấy trình duyệt này.", 404);
     return Response.json(await extOverview(user.id));

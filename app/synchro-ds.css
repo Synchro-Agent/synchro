@@ -1107,9 +1107,10 @@ html body .scan-modal .btn.scan-danger:hover:not(:disabled){background:color-mix
 
 /* Ô nhập nhiều dòng không bo kiểu viên thuốc: bán kính 999px cắt mất chữ ở bốn góc (ô Hướng dẫn của việc tự động). */
 html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field{border-radius:var(--r-card)!important}
-/* Ô chọn bo tròn: tự vẽ mũi tên, cách viền phải 14px, chừa chỗ cho chữ. Mũi tên mặc định của trình duyệt nằm sát viền, rơi vào phần bo
-   (ô chọn model của việc tự động, ô lọc Hộp thư / Bộ não, ô "Gửi … tin gần nhất" của bảng ngữ cảnh). */
-html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.field,html body .cx-hist select,html body .sy-settings select.field{
+/* Ô chọn bo tròn: tự vẽ mũi tên, cách viền phải 13px, chừa chỗ cho chữ. Mũi tên mặc định của trình duyệt luôn nằm sát viền (chừa thêm
+   padding cũng không dời được), rơi vào phần bo: ô chọn model của việc tự động và của Quét skill rác, ô lọc Hộp thư / Bộ não,
+   ô "Gửi … tin gần nhất" của bảng ngữ cảnh, ô Studio của thư viện. */
+html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.field,html body .cx-hist select,html body .sy-settings select.field,html body select.pl-sel{
   -webkit-appearance:none;appearance:none;padding-right:34px!important;cursor:pointer;text-overflow:ellipsis;
   background-image:var(--sel-arrow)!important;background-position:right 13px center!important;background-size:12px 12px!important;background-repeat:no-repeat!important}
 /* Mũi tên dạng nét (như mũi tên mặc định của các ô chọn khác), màu chữ phụ của từng giao diện. */
