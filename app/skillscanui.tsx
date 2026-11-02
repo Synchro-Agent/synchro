@@ -106,22 +106,41 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
       app.say(on ? `Đã bật lại ${list.length} skill` : `Đã tắt ${list.length} skill`);
     } catch (e) { setErr((e as Error).message); await reload().catch(() => {}); } finally { setBusy(null); }
   };
-  // Xóa: chỉ skill của bạn (skill thư viện thì tắt; muốn bỏ hẳn thì gỡ cả thư viện).
+  // Xóa hẳn mọi skill người này quản lý: skill của bạn (mọi phiên bản và tệp) và skill trong thư viện (xóa khỏi thư viện, lần cập nhật từ repo
+  // không thêm lại; thư viện không còn skill nào thì gỡ luôn). Thư viện cho mọi người: chỉ quản trị viên.
   const del = (xs: ScanItem[]) => {
-    const list = xs.filter((x) => x.kind === "skill");
+    const list = xs.filter((x) => x.manage);
     if (!list.length) return;
-    const one = list.length === 1;
-    app.confirm(one ? `Xóa skill "${list[0].name}"?` : `Xóa ${list.length} skill?`,
-      one ? "Mọi phiên bản và tệp của skill này sẽ bị xóa, không hoàn tác được." : "Mọi phiên bản và tệp của các skill này sẽ bị xóa, không hoàn tác được.", "Xóa", async () => {
-        setBusy(one ? list[0].key : "all"); setErr("");
-        const gone = new Set<string>();
-        try { for (const x of list) { await call(`/api/skills/${encodeURIComponent(x.name)}`, "DELETE"); gone.add(x.key); } }
-        catch (e) { setErr((e as Error).message); }
-        patchItems(gone, () => null);
-        window.dispatchEvent(new Event(SKILLS_CHANGED));
-        if (gone.size) app.say(`Đã xóa ${gone.size} skill`);
-        setBusy(null);
-      });
+    const one = list.length === 1, x0 = list[0];
+    const fromLib = list.some((x) => x.plugin), own = list.some((x) => !x.plugin);
+    const title = !one ? `Xóa ${list.length} skill?` : x0.plugin ? `Xóa skill "${x0.name}" khỏi thư viện ${x0.where}?` : `Xóa skill "${x0.name}"?`;
+    const text = !fromLib ? (one ? "Mọi phiên bản và tệp của skill này sẽ bị xóa, không hoàn tác được." : "Mọi phiên bản và tệp của các skill này sẽ bị xóa, không hoàn tác được.")
+      : one ? "Skill bị xóa khỏi thư viện và không quay lại khi cập nhật thư viện. Muốn có lại thì gỡ rồi cài lại thư viện."
+      : own ? "Skill của bạn bị xóa cùng mọi phiên bản và tệp. Skill trong thư viện bị xóa khỏi thư viện và không quay lại khi cập nhật; thư viện không còn skill nào thì được gỡ luôn. Không hoàn tác được."
+      : "Skill bị xóa khỏi thư viện và không quay lại khi cập nhật; thư viện không còn skill nào thì được gỡ luôn. Không hoàn tác được.";
+    app.confirm(title, text, "Xóa", async () => {
+      setBusy(one ? x0.key : "all"); setErr("");
+      const gone = new Set<string>(), fails: string[] = [];
+      let emptied = 0;
+      for (const x of list.filter((x) => !x.plugin)) {
+        try { await call(`/api/skills/${encodeURIComponent(x.name)}`, "DELETE"); gone.add(x.key); } catch (e) { fails.push(`${x.name}: ${(e as Error).message}`); }
+      }
+      // Mỗi thư viện một lần gọi.
+      const libs = new Map<string, ScanItem[]>();
+      for (const x of list.filter((x) => x.plugin)) libs.set(x.plugin!, [...(libs.get(x.plugin!) ?? []), x]);
+      for (const [id, ls] of libs) {
+        try {
+          const r = await call<{ removed: string[]; uninstalled: boolean }>(`/api/plugins/${encodeURIComponent(id)}`, "POST", { action: "remove-skills", names: ls.map((x) => x.name) });
+          for (const x of ls) if (r.removed.includes(x.name)) gone.add(x.key);
+          if (r.uninstalled) emptied++;
+        } catch (e) { fails.push(`${ls[0].where}: ${(e as Error).message}`); }
+      }
+      patchItems(gone, () => null);
+      window.dispatchEvent(new Event(SKILLS_CHANGED)); window.dispatchEvent(new Event("synchro:plugins"));
+      if (gone.size) app.say(emptied ? `Đã xóa ${gone.size} skill · đã gỡ ${emptied} thư viện trống` : `Đã xóa ${gone.size} skill`);
+      if (fails.length) setErr(fails.join("\n"));
+      setBusy(null);
+    });
   };
 
   const n = job ? tally(job) : null;
@@ -130,7 +149,7 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
   const running = job?.status === "running";
   const pct = job?.total ? Math.round((job.done / job.total) * 100) : 0;
   const offable = rows.filter((x) => x.manage && x.enabled);
-  const own = rows.filter((x) => x.kind === "skill");
+  const deletable = rows.filter((x) => x.manage);
   const locked = rows.some((x) => !x.manage);
   const when = job?.ended ? new Date(job.ended).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
@@ -170,12 +189,12 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
                 <button key={t.v} role="tab" aria-selected={cur === t.v} className={cur === t.v ? "on" : ""} onClick={() => setTab(t.v)}><span>{t.label}</span><i data-notr>{n[t.v]}</i></button>
               ))}
             </div>
-            {(offable.length > 0 || (own.length > 0 && cur !== "ok") || locked) && cur !== "ok" && (
+            {(offable.length > 0 || deletable.length > 0 || locked) && cur !== "ok" && (
               <div className="scan-tools">
                 {locked && <span className="scan-lock"><I.Lock size={13} /><span>Only an admin can change libraries for everyone.</span></span>}
                 <span className="scan-sp" />
                 {offable.length > 0 && <button className="btn sm" disabled={!!busy} onClick={() => setOn(offable, false)}>{busy === "all" ? <span className="art-spin sm" /> : <I.M icon="Pause" size={13} />}<span>Turn off all</span><i data-notr>{offable.length}</i></button>}
-                {own.length > 0 && <button className="btn sm scan-danger" disabled={!!busy} onClick={() => del(own)}><I.Trash size={13} /><span>Delete your skills</span><i data-notr>{own.length}</i></button>}
+                {deletable.length > 0 && (cur === "junk" || cur === "useless") && <button className="btn sm scan-danger" disabled={!!busy} onClick={() => del(deletable)}><I.Trash size={13} /><span>Delete all</span><i data-notr>{deletable.length}</i></button>}
               </div>
             )}
             <div className={`scan-list ${cur === "ok" ? "noact" : ""}`} role="tabpanel">
@@ -190,7 +209,7 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
                     <div className="scan-act">
                       {x.manage ? <>
                         <button className="btn sm" disabled={!!busy} onClick={() => setOn([x], !x.enabled)}>{busy === x.key ? <span className="art-spin sm" /> : null}{x.enabled ? "Turn off" : "Turn on"}</button>
-                        {x.kind === "skill" && <button className="icon-btn scan-del" disabled={!!busy} onClick={() => del([x])} aria-label="Delete" data-tip="Delete"><I.Trash size={14} /></button>}
+                        <button className="icon-btn scan-del" disabled={!!busy} onClick={() => del([x])} aria-label="Delete" data-tip="Delete"><I.Trash size={14} /></button>
                       </> : <span className="scan-ro" data-tip="Only an admin can change libraries for everyone"><I.Lock size={14} /></span>}
                     </div>
                   )}

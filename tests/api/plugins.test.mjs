@@ -124,8 +124,22 @@ r = await member("POST", `/api/plugins/${mine.id}`, { action: "check" });
 ok(r.s === 200 && Array.isArray(r.j.changed) && r.j.changed.length === 0, "kiểm tra cập nhật: đang là bản mới nhất", JSON.stringify(r.j).slice(0, 200));
 r = await member("PATCH", `/api/plugins/${mine.id}`, { skills: { animate: false }, everywhere: true });
 ok(r.j.plugin.skills.find((s) => s.name === "animate").enabled === false && r.j.plugin.mine.everywhere, "tắt từng skill, bật dùng trong mọi cuộc trò chuyện");
+// Xóa skill khỏi thư viện (Quét skill rác → Xóa): xóa hẳn, cập nhật lại từ repo không thêm lại; xóa hết thì gỡ cả thư viện.
+r = await member("POST", `/api/plugins/${mine.id}`, { action: "remove-skills", names: ["animate"] });
+ok(r.s === 200 && r.j.removed?.join() === "animate" && !r.j.uninstalled && !r.j.plugin.skills.some((s) => s.name === "animate") && r.j.plugin.skills.length === total - 2, "xóa một skill khỏi thư viện", JSON.stringify(r.j).slice(0, 300));
+r = await member("POST", `/api/plugins/${mine.id}`, { action: "update" });
+ok(r.s === 200 && !r.j.plugin.skills.some((s) => s.name === "animate") && r.j.plugin.skills.length === total - 2, "cập nhật lại từ repo: skill đã xóa không quay lại", JSON.stringify(r.j.plugin?.skills?.map((s) => s.name)));
+r = await admin("POST", `/api/plugins/${mine.id}`, { action: "remove-skills", names: ["animate"] });
+ok(r.s === 404, "tài khoản khác không xóa được skill trong thư viện của người này");
+r = await member("POST", `/api/plugins/${ds.id}`, { action: "remove-skills", names: [ds.skills[0].name] });
+ok(r.s === 403, "người thường không xóa được skill trong thư viện của tổ chức");
+r = await member("POST", `/api/plugins/${mine.id}`, { action: "remove-skills", names: [] });
+ok(r.s === 400, "không chọn skill nào → 400");
+const rest = (await member("GET", "/api/plugins")).j.plugins.find((p) => p.id === mine.id).skills.map((s) => s.name);
+r = await member("POST", `/api/plugins/${mine.id}`, { action: "remove-skills", names: rest });
+ok(r.s === 200 && r.j.uninstalled === true && r.j.plugin === null && !r.j.plugins.some((p) => p.id === mine.id), "xóa hết skill: thư viện trống được gỡ luôn", JSON.stringify({ uninstalled: r.j.uninstalled, n: rest.length }));
 r = await member("DELETE", `/api/plugins/${mine.id}`);
-ok(r.s === 200 && !r.j.plugins.some((p) => p.id === mine.id), "gỡ plugin cá nhân");
+ok(r.s === 404, "thư viện đã gỡ thì không còn");
 r = await member("DELETE", `/api/plugins/${ds.id}`);
 ok(r.s === 403, "người thường không gỡ được plugin của tổ chức");
 

@@ -59,6 +59,18 @@ await until(`!!document.querySelector(".art-panel") && !document.querySelector("
 await sleep(2500);
 const n = await ev(`(() => { const t = document.querySelector(".art-panel")?.textContent ?? ""; const m = /Slide\\s*\\d+\\s*\\/\\s*(\\d+)/.exec(t); return m ? Number(m[1]) : 0; })()`);
 check("bộ slide đã dựng", n > 1, `${n} slide`);
+// Chạy xong: danh sách việc, lời giải thích và các bước gom vào một dòng tổng kết (bấm để xem lại); câu trả lời cuối không lặp lại lời giải thích.
+{
+  const ws = await ev(`(() => { const m = [...document.querySelectorAll(".ai-msg")].pop(); if (!m) return null; const loose = (s) => [...m.querySelectorAll(s)].filter((e) => !e.closest(".wl-sum")).length;
+    return { sum: m.querySelectorAll(".wl-sum").length, head: m.querySelector(".wl-sum-h")?.textContent ?? "", live: loose(".wl-status") + loose(".wl-plan") + loose(".wl-say") + loose(".wl-tools-h") }; })()`);
+  await click(`[...document.querySelectorAll(".ai-msg")].pop().querySelector(".wl-sum-h")`, "summary"); await sleep(400);
+  const says = await ev(`[...[...document.querySelectorAll(".ai-msg")].pop().querySelectorAll(".wl-sum-b .wl-say")].map((e) => e.textContent.trim()).filter((t) => t.length > 20)`);
+  const answer = await ev(`(() => { const m = [...document.querySelectorAll(".ai-msg")].pop().cloneNode(true); m.querySelectorAll(".wl-sum").forEach((e) => e.remove()); return m.textContent; })()`);
+  const dup = says.filter((t) => answer.includes(t.slice(0, 60)));
+  check("chạy xong: còn đúng một dòng tổng kết, không còn danh sách việc / lời giải thích đang chạy", ws?.sum === 1 && ws.live === 0 && /Xong|Đã xong/.test(ws.head), JSON.stringify(ws));
+  check("câu trả lời cuối không lặp lại lời giải thích (lời giải thích nằm trong tổng kết)", says.length > 0 && !dup.length, `${says.length} đoạn giải thích · lặp: ${dup.map((t) => t.slice(0, 40)).join(" | ")}`);
+  await click(`[...document.querySelectorAll(".ai-msg")].pop().querySelector(".wl-sum-h")`, "summary close"); await sleep(300);
+}
 
 const t0 = Date.now();
 await click(`document.querySelector(".art-panel [aria-label='Tải về']")`, "download");

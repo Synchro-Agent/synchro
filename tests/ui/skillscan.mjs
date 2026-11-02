@@ -35,6 +35,15 @@ const SKILLS = {
   "scan-noverdict-x": { d: "Quy trình kiểm thử API trước khi phát hành", b: "# Kiểm thử API\n\nChạy bộ kiểm thử hợp đồng cho mọi endpoint, so sánh mã trạng thái và lược đồ JSON với tài liệu OpenAPI, ghi lại endpoint lệch chuẩn trước khi phát hành." },
 };
 for (const n of Object.keys(SKILLS)) await api("DELETE", `/api/skills/${n}`);
+// Một skill rác nằm trong thư viện (đưa vào Thư viện cho mọi người thành thư viện "Mẫu thư viện" chỉ có skill đó): xóa trong bảng thì
+// skill rời thư viện và thư viện trống được gỡ luôn.
+const LIB = "scan-lib-placeholder";
+for (const p of (await api("GET", "/api/plugins")).j.plugins ?? []) if (p.slug === `skill-${LIB}`) await api("DELETE", `/api/plugins/${p.id}`);
+await api("DELETE", `/api/skills/${LIB}`);
+{
+  const fd = new FormData(); fd.append("file", new Blob([`---\nname: ${LIB}\ndescription: "Skill mẫu"\n---\n\n# Mẫu thư viện\n\nTODO: điền hướng dẫn ở đây. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.\n`], { type: "text/markdown" }), "SKILL.md");
+  if ((await api("POST", "/api/skills", fd)).s !== 200 || (await api("POST", `/api/skills/${LIB}/share`, {})).s !== 200) throw new Error("không đưa được skill vào thư viện");
+}
 for (const [n, s] of Object.entries(SKILLS)) {
   const fd = new FormData(); fd.append("file", new Blob([`---\nname: ${n}\ndescription: ${JSON.stringify(s.d)}\n---\n\n${s.b}\n`], { type: "text/markdown" }), "SKILL.md");
   const r = await api("POST", "/api/skills", fd);
@@ -123,6 +132,8 @@ try {
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await openHub();
+  // Đo giật: ghi mọi tác vụ dài (> 50ms, làm khựng giao diện) trong lúc mở hộp thoại, quét, chuyển tab, cuộn danh sách.
+  await ev(`(() => { window.__lt = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push(Math.round(e.duration)); }).observe({ type: "longtask" }); return true; })()`);
   check("thanh công cụ Kho kỹ năng có nút Quét skill rác", await ev(`document.querySelector(".pl-scan").textContent.includes("Quét skill rác")`));
   let lay = await ev(LAYOUT(".pl-top"));
   check("thanh công cụ không tràn, không đè", !lay.length, lay.join(" | "));
@@ -169,10 +180,11 @@ try {
 
   // Tab Rác
   const nJunk = await tabCount("Skill rác"), nUseless = await tabCount("Không có tác dụng"), nOk = await tabCount("Ổn"), nUnk = await tabCount("Chưa đọc được");
-  check("đủ các tab, đếm khớp tổng số skill", nJunk >= 3 && nUseless >= 1 && nOk >= 1 && nUnk >= 1 && nJunk + nUseless + nOk + nUnk === g.count, `rác ${nJunk} · không tác dụng ${nUseless} · ổn ${nOk} · chưa đọc ${nUnk} / ${g.count}`);
+  check("đủ các tab, đếm khớp tổng số skill", nJunk >= 4 && nUseless >= 1 && nOk >= 1 && nUnk >= 1 && nJunk + nUseless + nOk + nUnk === g.count, `rác ${nJunk} · không tác dụng ${nUseless} · ổn ${nOk} · chưa đọc ${nUnk} / ${g.count}`);
   let rows = await rowsOf();
   const r = (n) => rows.find((x) => x.name === n);
-  check("tab Rác mở đầu tiên, có skill chữ mẫu, skill trống và bản trùng", !!r("scan-draft-todo") && !!r("scan-empty-note") && !!r("scan-tax-copy"), rows.map((x) => x.name).join(", "));
+  check("tab Rác mở đầu tiên, có skill chữ mẫu, skill trống, bản trùng và skill rác trong thư viện", !!r("scan-draft-todo") && !!r("scan-empty-note") && !!r("scan-tax-copy") && rows.find((x) => x.name === LIB) && (await ev(`[...document.querySelectorAll(".scan-row")].find((x) => x.querySelector("b").textContent === ${JSON.stringify(LIB)})?.querySelector(".scan-where").textContent`)) === "Mẫu thư viện", rows.map((x) => x.name).join(", "));
+  check("skill trong thư viện cũng có nút Xóa, tab có nút Xóa tất cả", await ev(`!![...document.querySelectorAll(".scan-row")].find((x) => x.querySelector("b").textContent === ${JSON.stringify(LIB)})?.querySelector(".scan-del") && /Xóa tất cả/.test(document.querySelector(".scan-tools .scan-danger")?.textContent ?? "")`));
   check("mỗi skill rác có lý do cụ thể", rows.every((x) => x.why.length > 15) && /gần như trống/.test(r("scan-empty-note")?.why ?? "") && /Trùng hệt nội dung với “scan-tax-vn”/.test(r("scan-tax-copy")?.why ?? ""), `${r("scan-empty-note")?.why} | ${r("scan-tax-copy")?.why}`);
   lay = await ev(LAYOUT(".scan-modal"));
   check("bảng kết quả không tràn, không đè", !lay.length, lay.join(" | "));
@@ -185,6 +197,12 @@ try {
   rows = await rowsOf();
   check("tab Ổn: skill thật kèm ngành nghề", r("scan-tax-vn")?.field === "Kế toán", JSON.stringify(r("scan-tax-vn")));
   check("tab Ổn không có nút tắt / xóa", !(await ev(`!!document.querySelector(".scan-act")`)));
+  // Cuộn danh sách dài (tab Ổn) bằng con lăn chuột như người dùng.
+  { const c = await ev(`(() => { const b = document.querySelector(".scan-list").getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
+    for (let i = 0; i < 10; i++) { await P("Input.dispatchMouseEvent", { type: "mouseWheel", x: c[0], y: c[1], deltaX: 0, deltaY: i < 6 ? 300 : -300 }); await sleep(60); } }
+  await sleep(300);
+  const lt = await ev(`window.__lt`);
+  check("không giật: không tác vụ nào chặn giao diện quá 200ms (mở hộp thoại, quét, chuyển tab, cuộn)", lt.every((x) => x <= 200), `${lt.length} tác vụ dài, lâu nhất ${Math.max(0, ...lt)}ms`);
   lay = await ev(LAYOUT(".scan-modal"));
   check("tab Ổn (nhiều skill thư viện) không tràn, không đè", !lay.length, lay.join(" | "));
   await shot("tab-ok");
@@ -204,6 +222,27 @@ try {
   await click(`document.querySelector(".overlay.cf-top .btn.danger")`, "confirm");
   await until(`![...document.querySelectorAll(".scan-row")].some((x) => x.querySelector("b").textContent === "scan-empty-note")`, 10000, "đã xóa");
   check("bấm Xóa: skill bị xóa thật, biến khỏi bảng", (await api("GET", "/api/skills")).j.skills.every((x) => x.name !== "scan-empty-note"));
+  // Xóa skill rác trong thư viện: hộp xác nhận nói rõ xóa khỏi thư viện; thư viện chỉ có skill đó thì được gỡ luôn.
+  await click(`[...document.querySelectorAll(".scan-row")].find((x) => x.querySelector("b").textContent === ${JSON.stringify(LIB)}).querySelector(".scan-del")`, "delete lib skill");
+  await until(`!!document.querySelector(".overlay.cf-top")`, 5000, "xác nhận xóa khỏi thư viện");
+  const cf = await ev(`document.querySelector(".overlay.cf-top .modal").textContent`);
+  check("xác nhận xóa skill thư viện: nói rõ xóa khỏi thư viện, không quay lại khi cập nhật", /khỏi thư viện Mẫu thư viện\?/.test(cf) && /không quay lại khi cập nhật/.test(cf), cf.slice(0, 160));
+  await click(`document.querySelector(".overlay.cf-top .btn.danger")`, "confirm lib");
+  await until(`![...document.querySelectorAll(".scan-row")].some((x) => x.querySelector("b").textContent === ${JSON.stringify(LIB)})`, 10000, "đã xóa khỏi thư viện");
+  const libGone = !((await api("GET", "/api/plugins")).j.plugins ?? []).some((p) => p.slug === `skill-${LIB}`);
+  const toast = await ev(`[...document.querySelectorAll(".toast, [role=status]")].map((e) => e.textContent).join(" | ")`);
+  check("xóa skill cuối của thư viện: thư viện trống được gỡ, báo một dòng", libGone && /đã gỡ 1 thư viện trống/.test(toast), toast.slice(0, 160));
+  // Xóa tất cả trong tab Không có tác dụng.
+  await click(byText(".scan-tabs button", "Không có tác dụng"), "useless tab 2"); await sleep(300);
+  const nDel = await ev(`document.querySelectorAll(".scan-row").length`);
+  await click(`document.querySelector(".scan-tools .scan-danger")`, "delete all");
+  await until(`!!document.querySelector(".overlay.cf-top")`, 5000, "xác nhận xóa tất cả");
+  const allTitle = await ev(`document.querySelector(".overlay.cf-top h2").textContent`);
+  check("Xóa tất cả: hộp xác nhận ghi đúng số skill (một skill thì ghi tên)", allTitle === (nDel === 1 ? 'Xóa skill "scan-polite-helper"?' : `Xóa ${nDel} skill?`), `${allTitle} · ${nDel} hàng`);
+  await click(`document.querySelector(".overlay.cf-top .btn.danger")`, "confirm all");
+  await until(`!document.querySelector(".scan-row")`, 10000, "tab trống");
+  check("Xóa tất cả: tab trống, skill bị xóa thật", (await api("GET", "/api/skills")).j.skills.every((x) => x.name !== "scan-polite-helper") && (await tabCount("Không có tác dụng")) === 0);
+  await click(byText(".scan-tabs button", "Skill rác"), "junk tab 2"); await sleep(300);
 
   // Đóng rồi mở lại: kết quả còn nguyên (không quét lại), trạng thái tắt cập nhật đúng.
   await key("Escape", "Escape", 27); await sleep(400);
@@ -268,6 +307,7 @@ try {
 } catch (e) { check("lỗi khi chạy", false, e.stack?.split("\n").slice(0, 3).join(" | ")); await shot("fail").catch(() => {}); }
 
 for (const n of Object.keys(SKILLS)) await api("DELETE", `/api/skills/${n}`);
+for (const p of (await api("GET", "/api/plugins")).j.plugins ?? []) if (p.slug === `skill-${LIB}`) await api("DELETE", `/api/plugins/${p.id}`);
 check("không có lỗi JavaScript", !errs.length, errs.slice(0, 3).join(" | "));
 console.log("  ảnh chụp:", SCR);
 ws.close(); chrome.kill();

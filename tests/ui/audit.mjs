@@ -29,6 +29,8 @@ if (!cookie) throw new Error("login failed");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const problems = [];
 const note = (where, what) => { problems.push(`${where}: ${what}`); };
+// Một tác vụ chặn giao diện lâu hơn mức này là người dùng thấy khựng rõ rệt.
+const LAG = 250;
 
 // Kiểm tra trong trang: tràn ngang, chữ bị cắt cụt, ảnh hỏng, phông chữ, chữ tiếng Anh sót (giao diện tiếng Việt).
 const CHECK = `(() => {
@@ -183,6 +185,9 @@ for (const theme of THEMES) for (const size of SIZES) {
   if (mobile) await P("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
   await P("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: theme }] });
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("theme", ${JSON.stringify(theme)}); } catch {}` });
+  // Giật: ghi mọi tác vụ dài (> 50ms) của trang; mỗi bước báo tác vụ quá LAG ms xảy ra sau khi trang đã tải xong (không tính lần tải trang đầu).
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { window.__lt = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push([Math.round(e.duration), Math.round(e.startTime)]); }).observe({ type: "longtask" }); } catch {}` });
+  let lagMax = 0, lagAt = "";
   const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
   const until = async (expr, ms = 30000, what = expr) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return; await sleep(200); } throw new Error("timeout: " + what); };
   const click = async (expr, what) => {
@@ -198,6 +203,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     await sleep(350);
     const where = `${tag}/${name}`;
     for (const e of errs.splice(0)) note(where, e);
+    for (const [d, t] of await ev(`(window.__lt || []).splice(0)`).catch(() => [])) { if (t > 4000 && d > lagMax) { lagMax = d; lagAt = name; } if (t > 4000 && d > LAG) note(where, `giật: giao diện bị chặn ${d}ms`); }
     for (const p of await ev(CHECK).catch((e) => ["kiểm tra lỗi: " + e.message])) note(where, p);
     const { data } = await P("Page.captureScreenshot", { format: "png" });
     writeFileSync(`${OUT}${tag}-${String(++step).padStart(2, "0")}-${name}.png`, Buffer.from(data, "base64"));
@@ -266,6 +272,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     await esc(); await sleep(400);
   });
   if (mobile) await step0("thanh-ben", async () => { await side(); await shot("thanh-ben"); await esc(); });
+  console.log(`  · tác vụ chặn giao diện lâu nhất (sau khi tải trang): ${lagMax}ms${lagAt ? ` (${lagAt})` : ""}`);
   ws.close(); chrome.kill(); await sleep(500);
 }
 

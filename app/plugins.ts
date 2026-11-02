@@ -11,7 +11,7 @@ import JSZip from "jszip";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
-import { classify, dropPluginTags, keepPluginTags, pluginKey, refine, tagsOf, userStudioIds } from "./skillstudio";
+import { classify, dropPluginTags, dropTag, keepPluginTags, pluginKey, refine, tagsOf, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
@@ -40,7 +40,8 @@ function init() {
       CREATE TABLE IF NOT EXISTS plugin_skills (id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT NOT NULL,
         body TEXT NOT NULL, storage_path TEXT NOT NULL, files TEXT NOT NULL, report TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, use_count INTEGER NOT NULL DEFAULT 0,
         last_used_at INTEGER, UNIQUE(plugin_id, name));
-      CREATE TABLE IF NOT EXISTS plugin_prefs (user_id TEXT NOT NULL, plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, enabled INTEGER, everywhere INTEGER, PRIMARY KEY (user_id, plugin_id))`);
+      CREATE TABLE IF NOT EXISTS plugin_prefs (user_id TEXT NOT NULL, plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, enabled INTEGER, everywhere INTEGER, PRIMARY KEY (user_id, plugin_id));
+      CREATE TABLE IF NOT EXISTS plugin_removed (plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, name TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (plugin_id, name))`);
     ready = true;
   }
   return d;
@@ -273,7 +274,9 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
   const who = owner === "org" ? "Thư viện chung của tổ chức" : "Tài khoản của bạn";
   if (!existing && used.n >= PLUGIN_LIMITS.perOwner) fail(`${who} đã có ${used.n} plugin, mức tối đa là ${PLUGIN_LIMITS.perOwner}. Gỡ bớt plugin không dùng trong Kho kỹ năng (⋯ › Gỡ) rồi cài lại.`);
   const { commits, found } = await collect(def);
-  const keep = found.filter((f) => !f.report.blocked && !f.report.duplicateOf && !opts.skip?.includes(f.report.name)).slice(0, PLUGIN_LIMITS.skills);
+  // Skill người quản lý đã xóa khỏi thư viện (Quét skill rác → Xóa) không quay lại khi cập nhật từ repo.
+  const removed = new Set(existing ? (d.prepare("SELECT name FROM plugin_removed WHERE plugin_id = ?").all(existing.id) as { name: string }[]).map((r) => r.name) : []);
+  const keep = found.filter((f) => !f.report.blocked && !f.report.duplicateOf && !opts.skip?.includes(f.report.name) && !removed.has(f.report.name)).slice(0, PLUGIN_LIMITS.skills);
   if (!keep.length) fail("Không có skill nào cài được trong gói này.");
   const size = keep.reduce((a, f) => a + f.report.size, 0);
   if (size > PLUGIN_LIMITS.pluginBytes) fail(`Plugin quá lớn (${(size / 1048576).toFixed(0)}MB, tối đa ${PLUGIN_LIMITS.pluginBytes / 1048576}MB). Hãy bỏ bớt skill.`);
@@ -310,6 +313,8 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
     }
     const ins = d.prepare("INSERT INTO plugin_skills (id, plugin_id, name, description, body, storage_path, files, report, enabled, use_count, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const r of rows) ins.run(r.id, r.plugin_id, r.name, r.description, r.body, r.storage_path, r.files, r.report, r.enabled, r.use_count, r.last_used_at);
+    // Skill bỏ chọn lúc cài cũng không quay lại khi cập nhật (trước đây "Cập nhật" cài lại cả những skill người dùng đã bỏ chọn).
+    for (const n of opts.skip ?? []) if (found.some((f) => f.report.name === n)) d.prepare("INSERT OR IGNORE INTO plugin_removed (plugin_id, name, at) VALUES (?, ?, ?)").run(id, n, now);
   })();
   // Xóa bản cũ trên đĩa sau khi bản mới đã ghi xong.
   for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp && !uploadDirs.has(e)) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
@@ -420,6 +425,28 @@ export async function publishSkill(s: Skill, by: { name: string; source?: string
   for (const e of await fs.readdir(path.join(PROOT(), id)).catch(() => [] as string[])) if (e !== stamp) await fs.rm(path.join(PROOT(), id, e), { recursive: true, force: true });
   tagPlugin(id, s.user_id);
   return getPlugin(id)!;
+}
+
+/** Xóa hẳn một số skill khỏi thư viện (tệp trên đĩa, mục ở Artifacts) và ghi nhớ để lần cập nhật từ repo không thêm lại.
+ *  Thư viện không còn skill nào thì gỡ luôn thư viện (uninstalled). */
+export async function removePluginSkills(id: string, names: string[]) {
+  const d = init();
+  const rows = (d.prepare("SELECT name, storage_path, report FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; storage_path: string; report: string }[]).filter((r) => names.includes(r.name));
+  if (!rows.length) return { removed: [] as string[], uninstalled: false };
+  const now = Date.now();
+  d.transaction(() => {
+    for (const r of rows) {
+      d.prepare("DELETE FROM plugin_skills WHERE plugin_id = ? AND name = ?").run(id, r.name);
+      d.prepare("INSERT OR REPLACE INTO plugin_removed (plugin_id, name, at) VALUES (?, ?, ?)").run(id, r.name, now);
+      dropTag(pluginKey(id, r.name));
+    }
+  })();
+  const base = path.join(PROOT(), id);
+  for (const r of rows) { const dir = path.join(ROOT, r.storage_path); if (dir.startsWith(base + path.sep)) await fs.rm(dir, { recursive: true, force: true }); }
+  const left = d.prepare("SELECT report FROM plugin_skills WHERE plugin_id = ?").all(id) as { report: string }[];
+  if (!left.length) { await removePlugin(id); return { removed: rows.map((r) => r.name), uninstalled: true }; }
+  d.prepare("UPDATE plugins SET size = ?, updated_at = ? WHERE id = ?").run(left.reduce((a, r) => a + ((JSON.parse(r.report) as SkillReport).size ?? 0), 0), now, id);
+  return { removed: rows.map((r) => r.name), uninstalled: false };
 }
 
 export async function removePlugin(id: string) {

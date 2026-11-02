@@ -2246,6 +2246,10 @@ Object.assign(VI2EN, {
   "Kho kỹ năng chưa có skill nào để quét.": "Your Skill Hub has no skills to scan yet.",
   "thẩm định và phân loại một danh sách skill": "review and classify a list of skills",
   "Mọi phiên bản và tệp của skill này sẽ bị xóa, không hoàn tác được.": "Every version and file of this skill will be deleted. This can't be undone.",
+  "Chưa chọn skill nào để xóa.": "No skills selected to delete.",
+  "Skill bị xóa khỏi thư viện và không quay lại khi cập nhật thư viện. Muốn có lại thì gỡ rồi cài lại thư viện.": "The skill is removed from the library and won't come back when the library updates. To get it back, uninstall and reinstall the library.",
+  "Skill của bạn bị xóa cùng mọi phiên bản và tệp. Skill trong thư viện bị xóa khỏi thư viện và không quay lại khi cập nhật; thư viện không còn skill nào thì được gỡ luôn. Không hoàn tác được.": "Your skills are deleted with every version and file. Library skills are removed from their library and won't come back when it updates; a library left with no skills is uninstalled. This can't be undone.",
+  "Skill bị xóa khỏi thư viện và không quay lại khi cập nhật; thư viện không còn skill nào thì được gỡ luôn. Không hoàn tác được.": "The skills are removed from their library and won't come back when it updates; a library left with no skills is uninstalled. This can't be undone.",
 });
 // Đặt trước các luật chung (ví dụ "Đã xóa …") để có số nhiều đúng tiếng Anh.
 {
@@ -2257,6 +2261,8 @@ Object.assign(VI2EN, {
     [/^Đã dừng ở (\S+)\/(\S+) skill · (.+)$/, (m) => `Stopped at ${m[1]} of ${sk(m[2])} · ${m[3]}`],
     [/^Quét (\S+) skill$/, (m) => `Scan ${sk(m[1])}`],
     [/^Đã (tắt|bật lại|xóa) (\S+) skill$/, (m) => `${({ "tắt": "Turned off", "bật lại": "Turned on", "xóa": "Deleted" } as Record<string, string>)[m[1]]} ${sk(m[2])}`],
+    [/^Xóa skill "(.+)" khỏi thư viện (.+)\?$/, (m) => `Delete skill "${m[1]}" from the ${m[2]} library?`],
     [/^Xóa skill "(.+)"\?$/, (m) => `Delete skill "${m[1]}"?`],
+    [/^Đã xóa (\S+) skill · đã gỡ (\S+) thư viện trống$/, (m) => `Deleted ${sk(m[1])} · uninstalled ${m[2]} empty ${m[2] === "1" ? "library" : "libraries"}`],
   );
 }

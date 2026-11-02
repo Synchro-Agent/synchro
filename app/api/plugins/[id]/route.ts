@@ -1,5 +1,5 @@
 import { AuthError, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
-import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, setPlugin, setPref, updatePlugin, type Studio } from "../../../plugins";
+import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, removePluginSkills, setPlugin, setPref, updatePlugin, type Studio } from "../../../plugins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +38,8 @@ export const DELETE = handle(async (req: Request, ctx: Ctx) => {
   return Response.json({ plugins: listPlugins(a.user.id) });
 });
 
-// { action: "check" | "update" } hoặc tải lên zip (multipart, trường "file") để thêm skill vào plugin.
+// { action: "check" | "update" }, { action: "remove-skills", names } (xóa hẳn skill khỏi thư viện, không quay lại khi cập nhật)
+// hoặc tải lên zip (multipart, trường "file") để thêm skill vào plugin.
 export const POST = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const a = await access(req, ctx);
@@ -53,6 +54,12 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
     const b = await req.json().catch(() => ({}));
     if (b.action === "check") return Response.json({ ...(await checkUpdate(a.id)), plugin: getPlugin(a.id, a.user.id) });
     if (b.action === "update") { await updatePlugin(a.id); return Response.json({ plugin: getPlugin(a.id, a.user.id), plugins: listPlugins(a.user.id) }); }
+    if (b.action === "remove-skills") {
+      const names = Array.isArray(b.names) ? b.names.filter((x: unknown): x is string => typeof x === "string").slice(0, 500) : [];
+      if (!names.length) return Response.json({ error: "Chưa chọn skill nào để xóa." }, { status: 400 });
+      const r = await removePluginSkills(a.id, names);
+      return Response.json({ ...r, plugin: r.uninstalled ? null : getPlugin(a.id, a.user.id), plugins: listPlugins(a.user.id) });
+    }
     return Response.json({ error: "Thao tác không hợp lệ." }, { status: 400 });
   } catch (e) { return err(e); }
 });
