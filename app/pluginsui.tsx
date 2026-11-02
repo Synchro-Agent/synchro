@@ -98,7 +98,7 @@ function SkillLine({ s, checked, disabled, onToggle, right }: { s: SkillReport; 
       {onToggle && <input type="checkbox" checked={!!checked} disabled={disabled} onChange={onToggle} aria-label={s.name} />}
       <div className="pl-sk-t">
         <b data-notr>{s.name}</b>
-        <span>{s.blocked ? <em className="pl-why">{s.blocked}</em> : s.duplicateOf ? <em className="pl-why">{tr("Duplicate of")} {s.duplicateOf}</em> : s.description}</span>
+        <span>{s.blocked ? <em className="pl-why">{s.blocked}</em> : s.duplicateOf ? <em className="pl-why">{tr("Duplicate of")} {s.duplicateOf}</em> : <span data-notr>{s.description}</span>}</span>
         <div className="pl-tags">
           <Badge kind={s.licenseKind === "open" ? "ok" : s.licenseKind === "proprietary" ? "high" : "mid"}>{s.license}</Badge>
           <Badge kind={RISK[s.risk][1]}>{RISK[s.risk][0]}</Badge>

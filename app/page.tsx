@@ -1417,7 +1417,8 @@ export default function Home() {
         // trong DOM dù hộp xác nhận nằm trên nó.
         const ov = [...document.querySelectorAll(".overlay")].filter((o) => !o.closest(".closing"));
         const z = (o: Element) => Number(getComputedStyle(o).zIndex) || 0;
-        if (ov.length > 1) { ov.reduce((a, o) => (z(o) >= z(a) ? o : a)).dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); return; }
+        if (ov.length) ov.reduce((a, o) => (z(o) >= z(a) ? o : a)).dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        if (ov.length > 1) return;
         setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
       else if (mod && k === "k") { e.preventDefault(); setModal("search"); }
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }

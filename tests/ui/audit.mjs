@@ -155,6 +155,19 @@ const CHECK = `(() => {
     if (EN.test(v) && !/[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(v) && !seen.has(v)) { seen.add(v); out.push("chữ tiếng Anh: “" + v.slice(0, 60) + "”"); }
     if (seen.size > 8) break;
   }
+  // Ô nhập nhiều dòng bo tròn kiểu viên thuốc: chữ ở bốn góc bị cắt (ô Hướng dẫn của việc tự động từng như vậy). Ô chọn bo tròn mà không
+  // chừa chỗ bên phải: mũi tên nằm đè lên viền bo.
+  for (const t of document.querySelectorAll("textarea")) {
+    if (!vis(t)) continue; const b = t.getBoundingClientRect(); if (!b.width || b.bottom < 0 || b.top > H) continue;
+    const cs = getComputedStyle(t), rad = parseFloat(cs.borderTopLeftRadius) || 0;
+    const frame = parseFloat(cs.borderTopWidth) > 0 || alpha(cs.backgroundColor) > 0.05 || cs.boxShadow !== "none";
+    if (frame && b.height > 56 && rad > Math.min(18, b.height / 4)) out.push("ô nhiều dòng bo tròn " + Math.round(rad) + "px, chữ ở góc bị cắt: " + name(t));
+  }
+  for (const s of document.querySelectorAll("select")) {
+    if (!vis(s)) continue; const b = s.getBoundingClientRect(); if (!b.width || b.bottom < 0 || b.top > H) continue;
+    const cs = getComputedStyle(s), rad = parseFloat(cs.borderTopRightRadius) || 0, pr = parseFloat(cs.paddingRight) || 0;
+    if (rad >= b.height / 2 - 3 && pr < 26) out.push("mũi tên ô chọn sát viền bo tròn (chừa " + Math.round(pr) + "px): " + name(s));
+  }
   return out;
 })()`;
 
@@ -257,8 +270,22 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await sleep(800); await shot("ung-dung"); });
   await step0("du-an", async () => { await nav("Dự án"); await shot("du-an"); });
   await step0("hop-thu", async () => { await nav("Hộp thư"); await shot("hop-thu"); });
+  // Tạo / sửa việc tự động: ô Hướng dẫn nhiều dòng (gõ nội dung dài như người dùng), ô chọn model.
+  await step0("viec-tu-dong", async () => {
+    await click(byText(".tk-page button", "Tự đặt"), "manual task"); await until(`!!document.querySelector(".modal textarea")`, 8000, "task editor");
+    await click(`document.querySelector(".modal textarea")`, "task prompt");
+    await P("Input.insertText", { text: "Mục tiêu: Tìm kiếm, chọn lọc và đánh giá các repository đỉnh cao trên GitHub về design, motion graphics, animation, UI/UX.\n\nCác bước thực hiện:\n1. Tìm kiếm trên GitHub và các danh sách awesome lists.\n2. Đánh giá và chọn lọc những repo tốt nhất.\n3. Trình bày kết quả gửi vào Hộp thư." });
+    await sleep(400); await shot("viec-tu-dong"); await esc(); await sleep(400);
+  });
+  await step0("bo-nao", async () => { await nav("Bộ não"); await shot("bo-nao"); });
   await step0("code", async () => { await nav("Code"); await sleep(1000); await shot("code"); });
   await step0("speech", async () => { await nav("Speech"); await shot("speech"); });
+  // Kho kỹ năng: hộp chi tiết thư viện, hộp thoại Quét skill rác.
+  await step0("kho-ky-nang-hop-thoai", async () => {
+    await nav("Kỹ năng"); await until(`!!document.querySelector(".pl-row2")`, 15000, "hub rows");
+    await click(`document.querySelector(".hub-yours .pl-row2")`, "library detail"); await sleep(700); await shot("chi-tiet-thu-vien"); await esc(); await sleep(400);
+    await click(`document.querySelector(".pl-scan")`, "scan"); await until(`!!document.querySelector(".scan-modal .modal-foot")`, 15000, "scan modal"); await sleep(500); await shot("quet-skill-rac"); await esc(); await sleep(400);
+  });
   await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
   await step0("cai-dat", async () => {
