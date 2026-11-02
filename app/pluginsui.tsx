@@ -319,13 +319,17 @@ export function SkillHub() {
     if (!d.canInstall) return null;
     return <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy} onClick={() => quick(x)}>{busy === x.catalogId ? <span className="art-spin sm" /> : <I.Plus size={15} />}</button>;
   };
-  const card = (x: DirPlugin) => (
-    <div key={x.catalogId} className="pl-dcard">
+  const card = (x: DirPlugin) => {
+    // Thư viện đã cài: bấm cả thẻ mở chi tiết, như nút ✓ (trước đây chỉ nút ✓ mới mở, bấm vào thẻ không có phản hồi).
+    const inst = byCat.get(x.catalogId);
+    return (
+    <div key={x.catalogId} className={`pl-dcard${inst ? " click" : ""}`} onClick={inst ? (e) => { if (!(e.target as Element).closest("button")) setOpen(inst.id); } : undefined}>
       <PlugMark id={x.catalogId} size={44} />
-      <div className="pl-dcard-t"><b data-notr>{x.name}</b><span>{x.tagline}</span><em><span data-notr={untranslated(x.author ?? "") || undefined}>{x.author}</span> · {x.skillCount} skill · {x.license}</em></div>
+      <div className="pl-dcard-t"><b data-notr>{x.name}</b><span>{x.tagline}</span><em><span><span data-notr={untranslated(x.author ?? "") || undefined}>{x.author}</span> ·</span> <span>{x.skillCount} skill ·</span> <span>{x.license}</span></em></div>
       {plusBtn(x)}
     </div>
-  );
+    );
+  };
   const row = (p: PublicPlugin) => {
     const manage = p.scope === "personal" || d.admin;
     return (

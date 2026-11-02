@@ -1436,7 +1436,7 @@ Object.assign(EN2VI, {
     "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản và chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.",
   "Synchro could not read the plan's quota yet.": "Synchro chưa đọc được hạn mức của gói.",
   "Send a message with this plan to see its limits.": "Gửi một tin nhắn bằng gói này để xem hạn mức.",
-  "(estimated price)": "(giá ước tính)", "Default: none": "Mặc định: không giới hạn", "of": "trên",
+  "(estimated price)": "(giá ước tính)", "Default: none": "Mặc định: ∞", "of": "trên",
   "Weekly · model limit": "Hàng tuần · hạn mức theo model", "Usage credits": "Credit sử dụng",
   "Open": "Mở", "Toggle confirm password visibility": "Hiện / ẩn mật khẩu xác nhận",
   "Auto-Fix": "Tự sửa lỗi", "Inline Edit": "Sửa tại chỗ", "Secret Vault": "Kho bí mật", "Codebase": "Mã nguồn", "Folder": "Thư mục", "Function": "Hàm",
@@ -2262,6 +2262,7 @@ Object.assign(VI2EN, {
     [/^Quét (\S+) skill$/, (m) => `Scan ${sk(m[1])}`],
     [/^Đã (tắt|bật lại|xóa) (\S+) skill$/, (m) => `${({ "tắt": "Turned off", "bật lại": "Turned on", "xóa": "Deleted" } as Record<string, string>)[m[1]]} ${sk(m[2])}`],
     [/^Xóa skill "(.+)" khỏi thư viện (.+)\?$/, (m) => `Delete skill "${m[1]}" from the ${m[2]} library?`],
+    [/^Chọn qua mọi hãng đã kết nối \((.*)\): việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó$/, (m) => `Picks across every connected provider (${m[1]}): quick models for easy tasks, the strongest model suited to the job for hard ones`],
     [/^Xóa skill "(.+)"\?$/, (m) => `Delete skill "${m[1]}"?`],
     [/^Đã xóa (\S+) skill · đã gỡ (\S+) thư viện trống$/, (m) => `Deleted ${sk(m[1])} · uninstalled ${m[2]} empty ${m[2] === "1" ? "library" : "libraries"}`],
   );
@@ -2280,3 +2281,11 @@ Object.assign(VI2EN, {
   "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn.": "Your administrator has not allowed your account to use your own Chrome.",
   "Chrome của bạn bị khóa": "Your Chrome is locked",
 });
+// Rà soát cuối (synchro.net.nz): thanh trên của Synchro Code
+Object.assign(VI2EN, { "Ẩn/hiện bảng phiên": "Show or hide the session panel", "Bảng phiên": "Session panel" });
+// Chữ gợi ý bản ngắn khi ô nhập hẹp (phfit.ts chọn bản dài nhất còn vừa ô).
+Object.assign(VI2EN, {
+  "Tìm lệnh, đoạn chat, skill…": "Search commands, chats, skills…", "Tìm kiếm…": "Search…",
+  "Nhắn thêm vào việc đang làm…": "Add to the current task…", "Viết tin nhắn… gõ @ để chọn tệp": "Write a message… type @ to pick files", "Viết tin nhắn…": "Write a message…",
+});
+Object.assign(EN2VI, { "Paste a git repository link (GitHub, GitLab…)": "Dán link repo git (GitHub, GitLab…)", "Paste a git repository link": "Dán link repo git" });

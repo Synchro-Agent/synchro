@@ -4,8 +4,10 @@ import { useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
 import { SEV_LABEL, type CriticEntry, type Finding } from "./critic";
+import { modelName } from "./models";
 
-const short = (key: string) => key.split("/").pop() ?? key;
+// Tên model như ở bộ chọn model ("Claude Sonnet 5.5"), không phải mã ("sub-claude/sonnet" → "sonnet").
+const short = (key: string) => modelName(key);
 
 export function CriticPill({ entry, findings, can, onRun, onShow }: { entry?: CriticEntry; findings: Finding[]; can: boolean; onRun: () => void; onShow: () => void }) {
   if (!entry) return can ? <button className="icon-btn" onClick={onRun} aria-label={tr("Phản biện")} data-tip={tr("Nhờ hội đồng phản biện đọc lại")}><I.Shield size={15} /></button> : null;
@@ -26,7 +28,7 @@ export function CriticNote({ f, canFix, onFix, onSkip }: { f: Finding; canFix: b
     <div className={`cr-note ${f.severity}`} role="note">
       <div className="cr-h">
         <em>{tr(SEV_LABEL[f.severity])}</em><b>{f.title}</b>
-        {f.by?.length ? <span className="cr-by" data-notr title={f.by.join(", ")}>{f.by.map(short).join(" · ")}</span> : null}
+        {f.by?.length ? <span className="cr-by" data-notr>{f.by.map(short).join(" · ")}</span> : null}
       </div>
       {f.detail && <p>{f.detail}</p>}
       {show && f.suggested_fix && <pre className="cr-fix">{f.suggested_fix}</pre>}

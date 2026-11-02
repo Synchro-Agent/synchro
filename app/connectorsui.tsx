@@ -173,7 +173,7 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
           <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} />
           <span className="cn-meta">
             <span className="cn-name"><b data-notr>{c.name}</b>{c.dir === null && <span className="cn-tag">Custom</span>}</span>
-            <span className={`cn-sub ${c.adminBlocked ? "error" : c.status}`}><i />{status}<span className="cn-host" data-notr>{` · ${c.host}`}</span></span>
+            <span className={`cn-sub ${c.adminBlocked ? "error" : c.status}`}><i />{status}<span className="cn-host" data-notr><b className="cn-dot">·</b>{c.host}</span></span>
           </span>
           {c.status === "ok" && <span className="cn-chev"><I.ChevronR size={14} /></span>}
         </button>

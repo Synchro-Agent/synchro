@@ -6,7 +6,8 @@ import { ART_TYPES, type ArtType } from "./artifacts";
 
 export type ArtVersion = { content: string; at: number };
 export type ArtRow = { id: string; conv: string; ident: string; title: string; type: ArtType; lang: string | null; versions: ArtVersion[]; created_at: number; updated_at: number };
-export type ArtSummary = Omit<ArtRow, "versions"> & { count: number; preview: string };
+// preview: phần đầu của bản mới nhất (cho danh sách nhẹ); full = false: bị cắt, ảnh thu nhỏ của trang web tự tải bản đầy đủ (?latest=1).
+export type ArtSummary = Omit<ArtRow, "versions"> & { count: number; preview: string; full: boolean };
 export const ART_LIMITS = { content: 400_000, versions: 50, perUser: 500 };
 
 let ready = false;
@@ -29,7 +30,7 @@ export function listArtifacts(uid: string): ArtSummary[] {
   return rows.map((r) => {
     const a = parse(r);
     const last = a.versions[a.versions.length - 1]?.content ?? "";
-    return { id: a.id, conv: a.conv, ident: a.ident, title: a.title, type: a.type, lang: a.lang, created_at: a.created_at, updated_at: a.updated_at, count: a.versions.length, preview: last.slice(0, 6000) };
+    return { id: a.id, conv: a.conv, ident: a.ident, title: a.title, type: a.type, lang: a.lang, created_at: a.created_at, updated_at: a.updated_at, count: a.versions.length, preview: last.slice(0, 6000), full: last.length <= 6000 };
   });
 }
 

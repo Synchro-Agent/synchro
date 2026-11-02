@@ -151,7 +151,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
       {!edit && p.configured && p.id !== "elevenlabs" && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} />}
       {!edit && p.models.length > 0 && (
         <div className="api-models">
-          <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} />{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</button>
+          <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} /><span>{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</span></button>
           {showModels && <div className="api-chips">{p.models.map((m) => <span key={m.key} className="api-chip" title={m.key} data-notr>{m.name}</span>)}</div>}
         </div>
       )}

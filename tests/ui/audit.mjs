@@ -112,9 +112,11 @@ const CHECK = `(() => {
       const q0 = k.getBoundingClientRect(); if (!q0.width || !q0.height) continue;
       const q = k.parentElement === c ? q0 : clip(k.parentElement, q0, c); if (!q) continue;
       if (!sc && (q.right > r.right + 1.5 || q.left < r.left - 1.5) && !/(fixed|absolute)/.test(getComputedStyle(k).position)) { out.push("tràn khỏi khung " + Math.round(Math.max(q.right - r.right, r.left - q.left)) + "px: " + name(k) + " trong " + name(c)); edge++; break; }
-      const own = [...k.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
-      if (!own) continue;
-      const rg = document.createRange(); rg.selectNodeContents(k); const t = clip(k, rg.getBoundingClientRect(), c);
+      // Chỉ đo chữ của chính phần tử (chữ trong phần tử con có ô cắt "…" riêng thì được đo khi tới phần tử con, theo đúng khung cắt của nó).
+      const own = [...k.childNodes].filter((n) => n.nodeType === 3 && n.nodeValue.trim());
+      if (!own.length) continue;
+      let t = null;
+      for (const n of own) { const rg = document.createRange(); rg.selectNodeContents(n); const b = clip(k, rg.getBoundingClientRect(), c); if (b) t = t ? { left: Math.min(t.left, b.left), top: Math.min(t.top, b.top), right: Math.max(t.right, b.right), bottom: Math.max(t.bottom, b.bottom), width: 1 } : b; }
       if (!t) continue;
       const gap = Math.min(t.left - r.left, r.right - t.right);
       if (t.width && gap < 7.5 && t.top >= r.top && t.bottom <= r.bottom) { out.push("chữ sát mép khung (" + Math.round(gap) + "px): " + name(k) + " “" + k.textContent.trim().slice(0, 30) + "” trong " + name(c)); edge++; break; }
@@ -125,6 +127,8 @@ const CHECK = `(() => {
   for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.usermenu,.model-sub,.modal,[role=dialog]")) {
     if (!vis(m) || getComputedStyle(m).pointerEvents === "none") continue;
     const q = m.getBoundingClientRect(); if (q.width < 40 || q.height < 30) continue;
+    // Tràn mép trên / dưới màn hình: mất viền, mất góc bo (menu con của menu + từng mở lên quá mép trên).
+    if (q.top < -1 || q.bottom > H + 1) out.push("khung nổi tràn khỏi mép " + (q.top < -1 ? "trên " + Math.round(-q.top) : "dưới " + Math.round(q.bottom - H)) + "px: " + name(m));
     let hit = null, n = 0;
     for (let x = q.left + 8; x < q.right - 6; x += 14) for (let y = q.top + 8; y < q.bottom - 6; y += 14) {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -163,12 +167,40 @@ const CHECK = `(() => {
     const frame = parseFloat(cs.borderTopWidth) > 0 || alpha(cs.backgroundColor) > 0.05 || cs.boxShadow !== "none";
     if (frame && b.height > 56 && rad > Math.min(18, b.height / 4)) out.push("ô nhiều dòng bo tròn " + Math.round(rad) + "px, chữ ở góc bị cắt: " + name(t));
   }
+  // Chữ gợi ý (placeholder) dài hơn ô nhập: bị cắt cụt, không có dấu … (ô hạn mức "Mặc định: không giới hạn" ở trang quản trị).
+  { const cv = document.createElement("canvas").getContext("2d");
+    for (const inp of document.querySelectorAll("input[placeholder], textarea[placeholder]")) {
+      if (!vis(inp) || inp.value) continue; const b = inp.getBoundingClientRect(); if (!b.width || b.bottom < 0 || b.top > H) continue;
+      if (inp.tagName === "TEXTAREA" && inp.clientHeight > 40) continue;
+      const cs = getComputedStyle(inp); cv.font = cs.font;
+      const w = cv.measureText(inp.placeholder).width, avail = inp.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (w > avail + 2) out.push("chữ gợi ý bị cắt (" + Math.round(w) + " > " + Math.round(avail) + "px): “" + inp.placeholder.slice(0, 50) + "”");
+    } }
   for (const s of document.querySelectorAll("select")) {
     if (!vis(s)) continue; const b = s.getBoundingClientRect(); if (!b.width || b.bottom < 0 || b.top > H) continue;
     // Mũi tên mặc định của trình duyệt (appearance khác none) luôn nằm sát viền phải dù chừa padding bao nhiêu.
     const cs = getComputedStyle(s), rad = parseFloat(cs.borderTopRightRadius) || 0, pr = parseFloat(cs.paddingRight) || 0, native = (cs.appearance || cs.webkitAppearance) !== "none";
     if (rad >= b.height / 2 - 3 && (native || pr < 26)) out.push("mũi tên ô chọn sát viền bo tròn (" + (native ? "mũi tên mặc định" : "chừa " + Math.round(pr) + "px") + "): " + name(s));
   }
+  // Dấu "·" ngăn cách bị đẩy xuống đầu dòng sau (thẻ Khám phá: "Nhiều tác giả" / "· 32 skill · MIT"), hoặc khoảng cách hai bên dấu lệch
+  // nhau (hàng connector: khoảng trắng đầu bị flex nuốt, 6px trước dấu / 3px sau dấu). Bỏ qua phần chữ bị khung cắt (line-clamp, cuộn).
+  { const nodes = [], tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let t; (t = tw.nextNode());) { const p = t.parentElement; if (t.nodeValue.trim() && p && !p.closest("svg,script,style,textarea,pre,code,.mdx,.ai-msg,.user-msg,.cm-editor,iframe,[aria-hidden=true],.sr-only") && vis(p)) nodes.push(t); }
+    const rect = (k, i) => { const rg = document.createRange(); rg.setStart(nodes[k], i); rg.setEnd(nodes[k], i + 1); return rg.getBoundingClientRect(); };
+    const near = (k, i, dir) => { for (let j = i + dir; ; j += dir) { if (j < 0 || j >= nodes[k].nodeValue.length) { k += dir; if (k < 0 || k >= nodes.length) return null; j = dir > 0 ? -1 : nodes[k].nodeValue.length; continue; } if (nodes[k].nodeValue[j].trim()) return [k, j]; } };
+    const cut = (el, r) => { for (let p = el; p && p !== document.body; p = p.parentElement) { const cs = getComputedStyle(p); if (/(hidden|clip|auto|scroll)/.test(cs.overflowX + cs.overflowY)) { const b = p.getBoundingClientRect(); if (r.top >= b.bottom - 1 || r.bottom <= b.top + 1 || r.left >= b.right - 1 || r.right <= b.left + 1) return true; } } return false; };
+    let n = 0;
+    for (let k = 0; k < nodes.length && n < 6; k++) for (let i = nodes[k].nodeValue.indexOf("·"); i >= 0 && n < 6; i = nodes[k].nodeValue.indexOf("·", i + 1)) {
+      const d = rect(k, i), el = nodes[k].parentElement; if (!d.width || d.bottom < 0 || d.top > H || cut(el, d)) continue;
+      const box = el.closest(":not(span,b,i,em,small,strong,a,kbd,u,s,code)"), a = near(k, i, -1), z = near(k, i, 1);
+      if (!a || !box || !box.contains(nodes[a[0]])) continue;
+      const L = rect(...a), say = "“" + box.textContent.trim().replace(/\s+/g, " ").slice(0, 40) + "”";
+      if (L.bottom <= d.top + 2) { n++; out.push("dấu · ở đầu dòng: " + say + " (" + name(el) + ")"); continue; }
+      if (!z || !box.contains(nodes[z[0]])) continue;
+      const R = rect(...z); if (Math.abs(R.top - d.top) > 4 || Math.abs(L.top - d.top) > 4) continue;
+      const gl = d.left - L.right, gr = R.left - d.right;
+      if (gl < 16 && gr < 16 && Math.abs(gl - gr) > 2.5) { n++; out.push("khoảng cách hai bên dấu · lệch (" + Math.round(gl) + "/" + Math.round(gr) + "px): " + say + " (" + name(el) + ")"); }
+    } }
   return out;
 })()`;
 
@@ -280,6 +312,11 @@ for (const theme of THEMES) for (const size of SIZES) {
   });
   await step0("bo-nao", async () => { await nav("Bộ não"); await shot("bo-nao"); });
   await step0("code", async () => { await nav("Code"); await sleep(1000); await shot("code"); });
+  // Menu ⋮ của Synchro Code khi bảng phiên đang mở: menu nằm trên bảng phiên (từng bị bảng phiên che gần hết).
+  if (!mobile) await step0("code-menu", async () => {
+    if (!(await ev(`!!document.querySelector(".cv-cols>.sr, aside.sr")`))) { await click(`document.querySelector(".cv-bar [aria-label='Ẩn/hiện bảng phiên']")`, "rail"); await sleep(600); }
+    await click(`document.querySelector(".cv-bar [aria-label='Thêm']")`, "more"); await sleep(600); await shot("code-menu-them"); await esc(); await sleep(300);
+  });
   await step0("speech", async () => { await nav("Speech"); await shot("speech"); });
   // Kho kỹ năng: hộp chi tiết thư viện, hộp thoại Quét skill rác.
   await step0("kho-ky-nang-hop-thoai", async () => {
@@ -287,7 +324,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     await click(`document.querySelector(".hub-yours .pl-row2")`, "library detail"); await sleep(700); await shot("chi-tiet-thu-vien"); await esc(); await sleep(400);
     await click(`document.querySelector(".pl-scan")`, "scan"); await until(`!!document.querySelector(".scan-modal .modal-foot")`, 15000, "scan modal"); await sleep(500); await shot("quet-skill-rac"); await esc(); await sleep(400);
   });
-  await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
+  await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText(".hub-seg button, button", "Khám phá"), "discover").catch(() => {}); await until(`!!document.querySelector(".pl-dcard")`, 10000, "discover cards").catch(() => {}); await sleep(500); await shot("kham-pha"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
   await step0("cai-dat", async () => {
     await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);

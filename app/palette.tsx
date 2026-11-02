@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { useFitPlaceholder } from "./phfit";
 
 export type PaletteCmd = { id: string; label: string; icon: ReactNode; keys?: string; hay?: string; run: () => void };
 export type PaletteGo = {
@@ -34,6 +35,8 @@ type Remote = {
 
 export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: number; title: string; msgs: { text: string }[] }[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
   const [q, setQ] = useState("");
+  const qRef = useRef<HTMLInputElement>(null);
+  const ph = useFitPlaceholder(qRef, ["Tìm lệnh, đoạn chat, artifact, skill, tài liệu…", "Tìm lệnh, đoạn chat, skill…", "Tìm kiếm…"]);
   const [sel, setSel] = useState(0);
   const [rem, setRem] = useState<Remote | null>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -77,7 +80,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     <div className="overlay top" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal search pal" style={{ width: "min(640px, calc(100vw - 24px))" }} role="dialog" aria-label={tr("Bảng lệnh")}>
         <div className="s-box"><I.Search size={18} />
-          <input autoFocus placeholder={tr("Tìm lệnh, đoạn chat, artifact, skill, tài liệu…")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={tr("Tìm kiếm")}
+          <input ref={qRef} autoFocus placeholder={tr(ph)} value={q} onChange={(e) => setQ(e.target.value)} aria-label={tr("Tìm kiếm")}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") { e.preventDefault(); setSel((sel + 1) % Math.max(rows.length, 1)); }
               else if (e.key === "ArrowUp") { e.preventDefault(); setSel((sel - 1 + rows.length) % Math.max(rows.length, 1)); }

@@ -68,6 +68,16 @@ const ASK_WORDS = W("giúp|hãy|làm ơn|nhờ|cho (?:mình|tôi|em)|please|can 
 const ASKING = { test: (x: string) => ASK_WORDS.test(x) || /\?\s*$/.test(x) };
 const FILE_NOTE = /Các khối <file> bên dưới[^\n]*|\[File: [^\]\n]*\]|<file\b[\s\S]*?(?:<\/file>|$)/g;
 
+// Phần sau dấu ":" lại chính là lời nhờ tạo sản phẩm ("Kiểm tra giao diện: tạo một trang web…"): phần trước chỉ là nhãn, không phải
+// "kiểm tra đoạn sau". Trước đây cả yêu cầu bị coi là nội dung dán vào, Tự động xếp thành hỏi đáp, nỗ lực thấp. Chỉ áp dụng khi nhãn chỉ
+// có chữ "kiểm tra / check / test" (bỏ chữ đó đi thì không còn chỉ tới nội dung) và không có "này / sau / this…": "Dịch câu này: Make a
+// website…", "Tóm tắt: Tạo một trang web cần ba bước…" thì phần sau vẫn là nội dung.
+const MADE = /^\s*(?:(?:hãy|giúp (?:tôi|mình|em)|please|can you)\s+)?(?:tạo|thiết kế|xây dựng|dựng|làm|lập trình|build|create|make|design|develop)(?![\p{L}\p{N}])/iu;
+const LABEL_CHECK = new RegExp(W("kiểm tra|kiểm thử|check|test|thử").source, "giu");
+const POINTED = W("này|sau|dưới đây|bên dưới|this|these|following|below");
+const madeAfter = (head: string, tail: string) =>
+  MADE.test(tail) && !POINTED.test(head) && !POINT.test(head.replace(LABEL_CHECK, " ")) && !!SIG.build?.some(([re]) => re.test(tail));
+
 export type Ask = { ins: string; content: number; code: boolean; trace: boolean; quotes: number };
 /** Tách chữ người dùng gõ thành chỉ thị (để đoán loại việc) và nội dung đi kèm (chỉ tính độ dài). */
 export function splitAsk(text: string): Ask {
@@ -83,7 +93,7 @@ export function splitAsk(text: string): Ask {
   s = s.replace(/(^|[\s(:,;])'((?:[^'\n]|'(?=\p{L}))+)'(?=$|[\s.,;:!?)])/gu, (_m, a: string, b: string) => { quotes++; content += b.length + 2; return `${a} ‹…› `; });
   // Phần sau dấu ":" khi phần trước chỉ tới nội dung.
   const c = s.indexOf(":");
-  if (c > 0 && c < 220 && !/^\s*\/\//.test(s.slice(c + 1)) && POINT.test(s.slice(0, c)) && s.slice(c + 1).trim().length > 0) {
+  if (c > 0 && c < 220 && !/^\s*\/\//.test(s.slice(c + 1)) && POINT.test(s.slice(0, c)) && s.slice(c + 1).trim().length > 0 && !madeAfter(s.slice(0, c), s.slice(c + 1))) {
     content += s.length - c - 1;
     s = s.slice(0, c);
   }

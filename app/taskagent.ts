@@ -2,6 +2,7 @@
 // đủ công cụ của Synchro Code (sửa tệp, chạy lệnh, git, GitHub, trình duyệt, skill) cộng inbox_propose. Không ai ngồi duyệt giữa chừng nên câu hỏi
 // duyệt (lệnh ở chế độ hỏi trước, trang web chưa được phép) thành đề xuất trong Hộp thư và lượt chạy làm tiếp phần còn lại.
 import { answer } from "./approvals";
+import { usableModels } from "./ai/anymodel";
 import { QUEUED } from "./agentgate";
 import { pickAgentModel, runAgentTurn } from "./agentturn";
 import { ModelError } from "./agentcore";
@@ -28,7 +29,9 @@ registerExec("agent", async (body, user) => {
   // Chế độ quyền: Tự động khi người dùng cho phép (Cài đặt → Synchro Code); không thì tự sửa tệp, lệnh cần duyệt thành đề xuất.
   const prefs = getPrefs(user.id);
   const perm = { mode: (prefs.allowBypass ? "auto" : "edits") as PermMode, allow: Array.isArray(body.allow) ? (body.allow as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 20) : [] };
-  progress("note", `Synchro Code · ${pick.model.split("/").pop()} · ${perm.mode === "auto" ? "chế độ Tự động" : "tự sửa tệp, lệnh cần duyệt"}`);
+  // Tên model như ở bộ chọn model, không phải mã thô.
+  const shown = (await usableModels(user).catch(() => null))?.groups.flatMap((g) => g.models).find((m) => m.key === pick.model)?.name ?? pick.model.split("/").pop();
+  progress("note", `Synchro Code · ${shown} · ${perm.mode === "auto" ? "chế độ Tự động" : "tự sửa tệp, lệnh cần duyệt"}`);
   let said = "";
   try {
     const r = await runAgentTurn({

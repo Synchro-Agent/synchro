@@ -2,7 +2,7 @@
 // Ứng dụng nội bộ: nút Xuất bản trên khung artifact, danh sách ứng dụng (trang Artifacts → Ứng dụng) và trang chạy ứng dụng /apps/<id>.
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
-import { tr } from "./i18n";
+import { getLang, tr } from "./i18n";
 import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
 import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";
@@ -99,7 +99,9 @@ export function AppsGallery({ q, say }: { q: string; say: (m: string) => void })
           <span className="pl-mark" style={{ width: 40, height: 40 }}><I.Rocket size={18} /></span>
           <div className="apps-t">
             <b data-notr>{a.title}</b>
-            <span>{a.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi")}{a.mine ? "" : ` · ${tr("của")} ${a.ownerName}`} · {a.opens} {tr("lượt mở")} · {new Date(a.updated_at).toLocaleDateString("vi-VN")}</span>
+            {/* Dấu "·" dính vào chữ đứng trước (khoảng trắng không ngắt) và "2 lượt mở" không bị tách: màn hẹp từng đẩy "· 2/11/2026" xuống đầu dòng. */}
+            <span>{[a.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi"), a.mine ? "" : `${tr("của")} ${a.ownerName}`, `${a.opens} ${tr("lượt mở")}`.replace(/ /g, "\u00a0"),
+              new Date(a.updated_at).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")].filter(Boolean).join("\u00a0· ")}</span>
           </div>
           <a className="btn" href={`/apps/${a.id}`} target="_blank" rel="noreferrer">{tr("Mở")}</a>
           <button className="icon-btn" aria-label="Chép đường dẫn" data-tip="Chép đường dẫn" onClick={() => { navigator.clipboard?.writeText(appUrl(a.id)); say(tr("Đã chép đường dẫn")); }}><I.Copy size={15} /></button>

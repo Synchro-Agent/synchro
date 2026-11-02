@@ -750,14 +750,16 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   if (body.model !== AUTO || typeof body.resume === "string") return chatTurn(body, c, scope);
   // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,
   // không tự chuyển sang khóa API (tierOf xếp hạng được cả "sub-claude/opus", "sub-claude/haiku"…). Gói hết hạn mức thì không chọn.
-  const { allowed, usable } = await usableModels(c.user);
+  const { allowed, usable, groups } = await usableModels(c.user);
   const blocked = new Set(allowed.filter((k) => !usable.includes(k)));
+  // Tên model như ở bộ chọn model ("Claude Sonnet 4.5"), không phải mã thô ("claude-sonnet-4-5-20250929").
+  const shown = (k: string) => groups.flatMap((g) => g.models).find((m) => m.key === k)?.name ?? k.split("/").pop();
   const q = routeInput(body);
   const r = routeModel(q, usable.length ? usable : allowed);
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
-  progress("note", `Tự động chọn ${r.model.split("/").pop()} · việc ${taskLabel(r.task)} · nỗ lực ${effortLabel(effort)}`);
+  progress("note", `Tự động chọn ${shown(r.model)} · việc ${taskLabel(r.task)} · nỗ lực ${effortLabel(effort)}`);
   let res = await chatTurn({ ...body, model: r.model, effort }, c, scope);
   let used = r.model;
   // Model đầu lỗi / quá tải / hết hạn mức: chuyển một lần sang model dự phòng (ưu tiên hãng khác) mà người dùng không phải làm gì.
@@ -768,7 +770,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
     if (next) {
       const j0 = await res.clone().json().catch(() => ({}));
       if (!(j0 as { usageLimit?: boolean }).usageLimit) {
-        progress("note", `${r.model.split("/").pop()} đang bận, chuyển sang ${next.split("/").pop()}`);
+        progress("note", `${shown(r.model)} đang bận, chuyển sang ${shown(next)}`);
         deltaStep();
         res = await chatTurn({ ...body, model: next, effort }, c, scope);
         used = next;

@@ -664,11 +664,14 @@ export async function saveArtifacts(conv: string, items: ArtBlock[]) {
   await fetch("/api/artifacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conv, items: list }) }).catch(() => {});
 }
 
-type Summary = { id: string; conv: string; ident: string; title: string; type: ArtType; lang: string | null; updated_at: number; count: number; preview: string };
+type Summary = { id: string; conv: string; ident: string; title: string; type: ArtType; lang: string | null; updated_at: number; count: number; preview: string; full?: boolean };
 
 // Ảnh thu nhỏ: chạy thật artifact ở kích thước nhỏ (html/svg/react), tài liệu và mã hiện vài dòng đầu.
+// Danh sách chỉ kèm phần đầu của artifact: trang web dài bị cắt mất thân trang và script (ảnh thu nhỏ trống / đen), nên khi thẻ hiện ra
+// thì tải bản đầy đủ rồi mới chạy.
 function Thumb({ a }: { a: Summary }) {
   const [vis, setVis] = useState(false);
+  const [doc, setDoc] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current; if (!el) return;
@@ -676,11 +679,18 @@ function Thumb({ a }: { a: Summary }) {
     io.observe(el); return () => io.disconnect();
   }, []);
   const live = a.type === "html" || a.type === "svg" || a.type === "react";
+  useEffect(() => {
+    if (!vis || !live || a.full !== false) return;
+    let on = true;
+    fetch(`/api/artifacts/${encodeURIComponent(a.id)}?latest=1`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setDoc(typeof j?.content === "string" ? j.content : a.preview); }).catch(() => { if (on) setDoc(a.preview); });
+    return () => { on = false; };
+  }, [vis, live, a.full, a.id, a.preview]);
+  const content = a.full === false ? doc : a.preview;
   const vb = a.type === "vbhc" ? parseVbhc(a.preview).spec : null;
   return (
     <div className={`art-thumb t-${a.type}`} ref={ref}>
       {vb ? (vis && <div className="art-thumb-scale"><iframe className="art-thumb-frame" title={a.title} srcDoc={vbhcHtml(vb, a.title)} sandbox="" /></div>)
-        : live ? (vis && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={a.preview} ai={false} title={a.title} className="art-thumb-frame" /></div>)
+        : live ? (vis && content !== null && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={content} ai={false} title={a.title} className="art-thumb-frame" /></div>)
         : a.type === "markdown" ? <div className="art-thumb-doc mdx"><Markdown text={a.preview.split("\n").slice(0, 24).join("\n")} say={() => {}} /></div>
         : <pre>{a.preview.split("\n").slice(0, 14).join("\n")}</pre>}
       <span className="art-thumb-shade" />

@@ -8,6 +8,7 @@ import { Markdown, fileNameFor, type DevBlock } from "./md";
 import { callLLM, getActiveEffort, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
 import { ls } from "./userscope";
 import { tr } from "./i18n";
+import { useFitPlaceholder } from "./phfit";
 import { usePref, useApp } from "./store";
 import { redact, unredact, analyzePaste, SLASH, balanceBraces, type Pill } from "./devtools";
 import { useDev, type Panel } from "./devstore";
@@ -259,6 +260,13 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const TOP_MENUS = ["rules", "more"];
   const away = useClickAway(() => { if (!TOP_MENUS.includes(menuRef.current)) setMenu(""); setMention(null); });
   const awayTop = useClickAway(() => { if (TOP_MENUS.includes(menuRef.current)) setMenu(""); });
+  // Esc đóng menu đang mở (⋮, luật dự án, +, chế độ, quyền…).
+  useEffect(() => {
+    if (!menu) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(""); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [menu]);
 
   useEffect(() => { if (loaded) onEmpty(nodes.length === 0); }, [loaded, nodes.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Nạp nội dung một phiên (từ trình duyệt hay máy chủ). Lượt đã dừng giữa chừng coi như xong; câu hỏi duyệt cũ không còn chờ.
@@ -275,6 +283,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     setSuggest(typeof s?.suggest === "string" ? s.suggest : "");
   };
   const busyRef = useRef(false); busyRef.current = busy;
+  const fitPh = useFitPlaceholder(ta, busy ? ["Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong", "Nhắn thêm vào việc đang làm…"] : ["Viết tin nhắn… gõ @ để chọn tệp, hàm hoặc tài liệu", "Viết tin nhắn… gõ @ để chọn tệp", "Viết tin nhắn…"]);
   const loadedSid = useRef<number | null | undefined>(undefined);
   useEffect(() => {
     if (loadedSid.current === sid) return;
@@ -990,13 +999,14 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
           {!sideOpen && <SideToggle onClick={onSide} />}
           <div className="cv-title" title={title}><I.Code size={16} /><span className="cv-ell" data-notr>{title}</span></div>
         </div>
-        <div className="cv-bar-r" ref={TOP_MENUS.includes(menu) ? awayTop : undefined}>
-          <button className={`icon-btn cv-tb ${rail ? "on" : ""}`} onClick={() => setRail(!rail)} aria-label="Ẩn/hiện session rail" title="Session rail"><I.PanelR /></button>
-          <button className={`icon-btn cv-tb ${pane === "terminal" ? "on" : ""}`} onClick={() => wsPane("terminal")} aria-label="Terminal" title="Terminal"><I.Terminal /></button>
-          <button className={`icon-btn cv-tb ${pane === "browser" ? "on" : ""}`} onClick={() => wsPane("browser")} aria-label="Trình duyệt" title="Trình duyệt / xem trước"><I.Globe /></button>
-          <button className={`icon-btn cv-tb ${pane === "files" ? "on" : ""}`} onClick={() => wsPane("files")} aria-label="File" title="File"><I.Folder /></button>
-          <div style={{ position: "relative" }}>
-            <button className={`icon-btn cv-tb ${menu === "more" || menu === "rules" ? "on" : ""}`} onClick={() => setMenu(menu === "more" ? "" : "more")} aria-label="Thêm" title="Thêm"><I.Dots /></button>
+        <div className="cv-bar-r">
+          <button className={`icon-btn cv-tb ${rail ? "on" : ""}`} onClick={() => setRail(!rail)} aria-label="Ẩn/hiện bảng phiên" data-tip="Bảng phiên"><I.PanelR /></button>
+          <button className={`icon-btn cv-tb ${pane === "terminal" ? "on" : ""}`} onClick={() => wsPane("terminal")} aria-label="Terminal" data-tip="Terminal"><I.Terminal /></button>
+          <button className={`icon-btn cv-tb ${pane === "browser" ? "on" : ""}`} onClick={() => wsPane("browser")} aria-label="Trình duyệt" data-tip="Trình duyệt / xem trước"><I.Globe /></button>
+          <button className={`icon-btn cv-tb ${pane === "files" ? "on" : ""}`} onClick={() => wsPane("files")} aria-label="Tệp" data-tip="Tệp"><I.Folder /></button>
+          {/* Bấm ra ngoài nút ⋮ và menu của nó (kể cả các nút khác trên thanh) thì menu đóng. */}
+          <div style={{ position: "relative" }} ref={TOP_MENUS.includes(menu) ? awayTop : undefined}>
+            <button className={`icon-btn cv-tb ${menu === "more" || menu === "rules" ? "on" : ""}`} onClick={() => setMenu(menu === "more" ? "" : "more")} aria-label="Thêm" data-tip="Thêm"><I.Dots /></button>
             <Menu open={menu === "more"} style={{ top: 38, right: 0, width: 250 }}>
               <button className="menu-item" onClick={() => { setMenu(""); newSession(); }}><I.Plus />Phiên mới</button>
               <button className="menu-item" onClick={() => setMenu("rules")}><I.Sliders />Luật dự án<span className="cv-mi-r cv-ell">{ruleLabel}</span></button>
@@ -1150,7 +1160,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   {atts.flatMap((a) => a.pills ?? []).map((p) => <button key={p.label} onClick={() => send(p.label, atts, p.prompt)}>{p.label}</button>)}
                 </div>
               )}
-              <textarea ref={ta} rows={1} value={v} onChange={onChange} onKeyDown={onKey} onPaste={onPaste} placeholder={busy ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : suggest ? `${suggest}    ⇥ Tab` : "Viết tin nhắn…  gõ @ để chọn tệp, hàm hoặc tài liệu"} className={!busy && suggest && !v ? "cv-sugg-on" : undefined} title={!busy && suggest && !v ? "Gợi ý: bấm Tab để dùng" : undefined} />
+              <textarea ref={ta} rows={1} value={v} onChange={onChange} onKeyDown={onKey} onPaste={onPaste} placeholder={!busy && suggest ? `${suggest}    ⇥ Tab` : fitPh} className={!busy && suggest && !v ? "cv-sugg-on" : undefined} title={!busy && suggest && !v ? "Gợi ý: bấm Tab để dùng" : undefined} />
               <div className="cv-tools">
                 <div style={{ position: "relative" }}>
                   <button className="icon-btn" onClick={() => setMenu(menu === "plus" ? "" : "plus")} aria-label="Thêm ngữ cảnh"><I.Plus /></button>
@@ -1177,7 +1187,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               <GitHubButton git={git} available={!!status?.available} reason={status?.reason} ensureSid={() => ensureSid()} say={say}
                 onCloned={(g) => { const id = ensureSid(); setGit(id, g); setWsUsed(true); openPane("files"); }} />
               <div style={{ position: "relative" }}>
-                <button className="cv-modebtn" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}{m.short}<I.Chevron size={12} /></button>
+                <button className="cv-modebtn" data-tip="Chế độ làm việc" aria-label="Chế độ làm việc" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}{m.short}<I.Chevron size={12} /></button>
                 <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   {MODES.map((x) => (
                     <button key={x.k} className={`cv-mode-item ${mode === x.k ? "picked" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
@@ -1190,7 +1200,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               </div>
               {/* Chế độ quyền của phiên: hỏi trước / tự sửa tệp / tự động (Cài đặt → Synchro Code đặt mặc định và cho phép chế độ tự động). */}
               <div style={{ position: "relative" }}>
-                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} title="Chế độ quyền">{permIcon(permNow.mode)}{PERMS.find((x) => x.k === permNow.mode)?.short}<I.Chevron size={12} /></button>
+                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} data-tip="Chế độ quyền" aria-label="Chế độ quyền">{permIcon(permNow.mode)}{PERMS.find((x) => x.k === permNow.mode)?.short}<I.Chevron size={12} /></button>
                 <Menu open={menu === "perm"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   <div className="cv-mh">Quyền của Synchro trong phiên này</div>
                   {PERMS.map((x) => {

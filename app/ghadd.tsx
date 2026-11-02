@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
+import { useFitPlaceholder } from "./phfit";
 import { inspectGithub, SkillAddModal, type Found } from "./skillsui";
 import { PreviewModal } from "./pluginsui";
 import type { PublicPlugin } from "./plugins";
@@ -15,6 +16,7 @@ const repoName = (u: string) => u.replace(/^https?:\/\/(www\.)?github\.com\//, "
 // focus: đổi số này để đưa con trỏ vào ô (mục "Thêm từ GitHub" trong menu Thêm).
 export function GithubAdd({ focus, onDone }: { focus?: number; onDone?: (r: { kind: "skill" } | { kind: "plugin"; plugin: PublicPlugin }) => void }) {
   const input = useRef<HTMLInputElement>(null);
+  const ph = useFitPlaceholder(input, ["Paste a git repository link (GitHub, GitLab, Bitbucket…): one skill or any repository", "Paste a git repository link (GitHub, GitLab…)", "Paste a git repository link"]);
   useEffect(() => { if (focus) { input.current?.focus(); input.current?.scrollIntoView({ block: "center", behavior: "smooth" }); } }, [focus]);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export function GithubAdd({ focus, onDone }: { focus?: number; onDone?: (r: { ki
     <div className="gh-add">
       <form className="sk-gh" onSubmit={(e) => { e.preventDefault(); go(); }}>
         <I.GitHub size={16} />
-        <input ref={input} placeholder="Paste a git repository link (GitHub, GitLab, Bitbucket…): one skill or any repository" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} />
+        <input ref={input} placeholder={ph} value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} />
         <button className="btn dark" disabled={busy || !url.trim()}>{busy ? <><span className="art-spin sm" />{reading ? "Reading the repository…" : "Checking…"}</> : "Add"}</button>
       </form>
       <p className="d gh-hint">Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates. A repository without SKILL.md: Synchro reads every file in it and writes the skill from it.</p>

@@ -27,6 +27,7 @@ import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
 import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
+import { installFloatFit } from "./floatfit";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
@@ -52,6 +53,7 @@ type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" 
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
+import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
 import { InboxPage, useInboxCount } from "./tasksui";
@@ -254,7 +256,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }}>
-      <button className="model-btn" onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
+      <button className="model-btn" data-tip="Chọn model" onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
       <Menu open={mm} className="model-menu" style={{ position: "absolute", ...(shift ? { translate: `${shift}px 0` } : {}) }}>
         {none && (
           <div className="mempty">
@@ -265,17 +267,17 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         )}
         {!none && (
           <button className="menu-item mline mauto" onClick={() => pick(AUTO)} onMouseEnter={() => setSub(null)}>
-            <span className="mauto-t"><b>Tự động</b><em>Chọn qua mọi hãng đã kết nối (Claude, ChatGPT, Gemini, Grok, DeepSeek): việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
+            <span className="mauto-t"><b>Tự động</b><em>{`Chọn qua mọi hãng đã kết nối (${providers.map((p) => p.name).join(", ")}): việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó`}</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
           </button>
         )}
         {!none && <hr />}
         {providers.map((pv) => (
-          <button key={pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => (sub === pv.id ? setSub(null) : hoverProv(pv.id, e.currentTarget))} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
+          <button key={pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
             {pv.name}<span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
           </button>
         ))}
         {!none && <hr />}
-        <button className={`menu-item mline ${sub === "effort" ? "is-sel" : ""}`} onClick={() => setSub(sub === "effort" ? null : "effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
+        <button className={`menu-item mline ${sub === "effort" ? "is-sel" : ""}`} onClick={() => setSub("effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
           <button className="menu-item mline mauto" onClick={() => { setEffort("auto"); close(); }}>
@@ -353,6 +355,7 @@ function Composer(p: {
   const [mem, setMem] = usePref("chatMemory", true);
   const [rec, setRec] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
+  const steerPh = useFitPlaceholder(ta, ["Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong", "Nhắn thêm vào việc đang làm…"]);
   const fileIn = useRef<HTMLInputElement>(null);
   const recRef = useRef<Rec | null>(null);
   const ref = useClickAway(() => { setMenu(false); setSub(null); });
@@ -562,7 +565,7 @@ function Composer(p: {
       <div className="composer" style={{ flexWrap: "wrap" }}>
         {chips && <div style={{ width: "100%" }}>{chips}</div>}
         {plus}
-        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
+        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
         {p.extra}
         {micBtn}
         {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
@@ -572,7 +575,7 @@ function Composer(p: {
   return (
     <div className="composer">
       {chips}
-      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong" : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
+      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
       <div className="comp-row">
         {plus}
         <div className="model">
@@ -694,6 +697,7 @@ export default function Home() {
   approvalRef.current = approval;
   // Gợi ý khi rê chuột tự lật xuống dưới / canh theo mép khi sát mép màn hình hay mép khung (tips.ts).
   useEffect(() => installTips(), []);
+  useEffect(() => installFloatFit(), []);
   useEffect(() => {
     setApprover((calls, conv) => new Promise((resolve) => setApproval({ chat: conv !== undefined && Number.isFinite(Number(conv)) ? Number(conv) : curRef.current, calls, resolve })));
     return () => setApprover(null);
@@ -1698,7 +1702,7 @@ export default function Home() {
               ) : (
                 <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
               )}
-              {!sb.on && <button className="dots" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
+              {!sb.on && <button className="dots" aria-label="Tùy chọn" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
                   {!pickProj ? (
                     <>
@@ -1728,7 +1732,7 @@ export default function Home() {
                   {sb.on && <BulkCheck on={sb.has({ k: "code", c })} />}<span className="cv-ell">{c.title}</span><CodeBadge c={c} />
                 </button>
               )}
-              {!sb.on && <button className="dots" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>}
+              {!sb.on && <button className="dots" aria-label="Tùy chọn" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>}
               <Menu open={codeMenu === c.id} className="down" style={{ top: 34, right: 0, width: 220 }}>
                 <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
@@ -1752,7 +1756,7 @@ export default function Home() {
                     <span className="pj-tg" role="button" aria-label={open ? "Thu gọn" : "Mở rộng"} onClick={(e) => { e.stopPropagation(); setPjClosed({ ...pjClosed, [x.id]: open }); }}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></span>
                     <span>{x.name}</span>
                   </button>
-                  <button className="dots" onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
+                  <button className="dots" aria-label="Tùy chọn" onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
                   <ProjMenu p={x} open={sideProj === x.id} pin style={{ top: 34, right: 0, width: 240 }}
                     onPin={() => { patchProj(x.id, { pinned: false }); setSideProj(null); }}
                     onEdit={() => { setSideProj(null); setEditProj(x.id); }}
@@ -1788,7 +1792,7 @@ export default function Home() {
                   <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div>
                 </>
               )}
-              <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setModal("search")}><I.Sliders size={16} /></button></div>
+              <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>
               <div className={`fold ${recentOpen ? "open" : ""}`}>
                 <div className="chat-list">
                   {visible.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>}
