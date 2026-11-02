@@ -1413,8 +1413,11 @@ export default function Home() {
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       if (e.key === "Escape") {
+        // Đóng lớp phủ nằm trên cùng (z-index cao nhất; bằng nhau thì lớp sau): hộp gắn vào cuối <body> (createPortal) đứng sau hộp xác nhận
+        // trong DOM dù hộp xác nhận nằm trên nó.
         const ov = [...document.querySelectorAll(".overlay")].filter((o) => !o.closest(".closing"));
-        if (ov.length > 1) { ov[ov.length - 1].dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); return; }
+        const z = (o: Element) => Number(getComputedStyle(o).zIndex) || 0;
+        if (ov.length > 1) { ov.reduce((a, o) => (z(o) >= z(a) ? o : a)).dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); return; }
         setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
       else if (mod && k === "k") { e.preventDefault(); setModal("search"); }
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
@@ -1830,7 +1833,7 @@ export default function Home() {
           <div className="hero" key={String(incog)}>
             <div className="hero-col">
             <div className="hero-date" data-notr>{new Date().toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "long", day: "numeric", month: "long" })}</div>
-            <div className="greeting">{incog ? <I.Ghost size={26} /> : <Mark size={30} state="intro" className="greet-mark" />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></div>
+            <div className="greeting">{incog && <I.Ghost size={26} />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></div>
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {!tplMode && !incog && caps.art !== false && (
               <div className="hero-quick" aria-label="Bắt đầu nhanh">

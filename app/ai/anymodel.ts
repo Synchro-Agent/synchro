@@ -21,7 +21,10 @@ export async function usableModels(user: UserRow) {
     // Gói Google: hạn mức đang hết là của nhóm Gemini; model Claude / GPT qua Antigravity tính riêng nên vẫn dùng được.
     return plan?.blockedUntil ? p.models.filter((m) => plan.cli !== "agy" || isGeminiId(m.id)).map((m) => m.key) : [];
   }));
-  return { allowed, usable: allowed.filter((k) => !blocked.has(k)) };
+  const usable = allowed.filter((k) => !blocked.has(k));
+  // groups: model dùng được theo nhóm hãng, kèm tên hiện ở bộ chọn model (hộp chọn model của các việc phụ, ví dụ Quét skill rác).
+  const groups = merged.map((p) => ({ name: p.name, models: p.models.filter((m) => usable.includes(m.key)).map((m) => ({ key: m.key, name: m.name })) })).filter((g) => g.models.length);
+  return { allowed, usable, groups };
 }
 
 /** Model cho một việc phụ: theo độ khó của việc trong các model dùng được (việc phụ thường chọn được model nhanh, rẻ). */

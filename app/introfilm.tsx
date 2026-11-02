@@ -14,7 +14,7 @@
 // - Bản 720p (4 MB) cho màn hẹp / tiết kiệm dữ liệu, 1080p (19 MB) cho màn lớn; tải trước từ lúc hiện lời chào (preloadIntro).
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
-import { assemble, boxOf, center, fly as flyTo, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
+import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
 import { getLang } from "./i18n";
 
 const BG = "#10100d"; // nền phim sau khi nén (Carbon #111210 + grain + vignette), đo ở mép khung đầu và khung cuối
@@ -267,7 +267,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     if (!box) return cb.current.onDone();
     settleApp();
     const plan: [HTMLElement | null, Element | null, number][] = [
-      [box.querySelector<HTMLElement>(".fly-mk"), document.querySelector(".app .greeting .greet-mark"), 0],
+      [box.querySelector<HTMLElement>(".fly-mk"), markTarget(), 0],
       [box.querySelector<HTMLElement>(".fly-wd"), document.querySelector(".app .side-brand .lk"), 70],
     ];
     const ends = plan.map(([, to]) => (to ? boxOf(to) : null));

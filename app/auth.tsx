@@ -9,7 +9,7 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
 import { Loader, Mark } from "./brand";
-import { assemble, boxOf, center, fly, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
+import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
 
 // --- NHỊP ANIMATION CHUNG ---
@@ -387,7 +387,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };
 
-  // Vào app: bản sao logo của lời chào (đặt khít lên logo thật trước khi vẽ) bay theo đường cong về cạnh lời chào ở trang chủ, giữa đường
+  // Vào app: bản sao logo của màn đăng nhập (đặt khít lên logo thật trước khi vẽ) bay theo đường cong về logo ở đầu thanh điều hướng, giữa đường
   // tách từ vòng tròn thành chữ S; màn này mở ra thành lỗ tròn từ chỗ logo hạ cánh, trang chủ lắp lại quanh đó. Giảm chuyển động: chỉ mờ dần.
   const [still] = useState(reducedMotion);
   const rootRef = useRef<HTMLDivElement>(null), flyRef = useRef<HTMLSpanElement>(null), left = useRef(false);
@@ -397,7 +397,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     left.current = true;
     const root = rootRef.current, el = flyRef.current, svg = root?.querySelector(".auth-mark svg");
     settleApp();
-    const target = document.querySelector(".app .greeting .greet-mark");
+    const target = markTarget();
     const from = svg ? boxOf(svg) : null, to = target ? boxOf(target) : null;
     const at = onScreen(to) ? center(to) : from ? center(from) : { x: innerWidth / 2, y: innerHeight / 2 };
     onReveal?.();

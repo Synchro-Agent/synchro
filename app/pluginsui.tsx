@@ -11,6 +11,7 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
 import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 import { PageBar, usePage } from "./pager";
+import { SkillScan } from "./skillscanui";
 
 type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -350,6 +351,7 @@ export function SkillHub() {
         <div className="pl-seg"><button className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
         <span style={{ flex: 1 }} />
         <span className="s-search pl-search"><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span>
+        {(d.plugins.length > 0 || !!ownSkills) && <SkillScan />}
         {d.canInstall && (
           <div className="pl-addw" ref={addRef}>
             <button className="btn dark pl-add" onClick={toggleAdd}><I.Plus size={14} />Add<I.Chevron size={13} /></button>

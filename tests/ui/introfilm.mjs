@@ -112,19 +112,19 @@ try {
   // Logo bắt đầu bay sau ~0,65 giây; chờ tới khi đang bay (Chrome ẩn trên máy dev có thể chậm vài trăm ms).
   // Chữ bay sau biểu tượng 70 ms: chờ cả hai cùng đang bay.
   await until(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"); return !!m && !!w && new DOMMatrix(getComputedStyle(m).transform).a < 0.9 && new DOMMatrix(getComputedStyle(w).transform).a < 0.9; })()`, 3000, "flight").catch(() => {});
-  const mid = await ev(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"), st = getComputedStyle(document.querySelector(".intro-stage")); return { m: m && new DOMMatrix(getComputedStyle(m).transform).a, w: w && new DOMMatrix(getComputedStyle(w).transform).a, reveal: document.querySelector(".app")?.classList.contains("app-reveal"), hidden: getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "0", hole: /radial-gradient/.test(st.maskImage || st.webkitMaskImage || ""), anims: document.querySelector(".app").getAnimations({ subtree: true }).filter((a) => !(a instanceof CSSAnimation) && !(a instanceof CSSTransition)).length }; })()`);
+  const mid = await ev(`(() => { const m = document.querySelector(".fly-mk"), w = document.querySelector(".fly-wd"), st = getComputedStyle(document.querySelector(".intro-stage")); return { m: m && new DOMMatrix(getComputedStyle(m).transform).a, w: w && new DOMMatrix(getComputedStyle(w).transform).a, reveal: document.querySelector(".app")?.classList.contains("app-reveal"), hidden: getComputedStyle(document.querySelector(".rm-logo svg")).opacity === "0", hole: /radial-gradient/.test(st.maskImage || st.webkitMaskImage || ""), anims: document.querySelector(".app").getAnimations({ subtree: true }).filter((a) => !(a instanceof CSSAnimation) && !(a instanceof CSSTransition)).length }; })()`);
   ok(mid.m < 0.9 && mid.w < 0.9, "logo đang bay về chỗ (thu nhỏ dần)", JSON.stringify(mid));
   ok(mid.reveal && mid.hidden && mid.hole && mid.anims > 3, "nền phim mở ra thành lỗ tròn, trang chủ đang lắp lại, logo thật của app chờ logo bay tới", JSON.stringify(mid));
   ok(await ev(`[...document.querySelectorAll(".intro-cap, .intro-ui")].every((e) => +getComputedStyle(e).opacity < 0.05)`), "phụ đề và nút đã mờ hết khi logo bay");
   await shot("4-flight");
   await until(`!document.querySelector(".intro")`, 4000, "intro gone");
   await sleep(300);
-  ok(await ev(`!document.querySelector(".app.app-reveal") && !!document.querySelector(".greeting") && getComputedStyle(document.querySelector(".greeting .greet-mark")).opacity === "1"`), "xong: vào trang chủ, logo thật của app hiện lại, lớp chuyển cảnh đã gỡ");
+  ok(await ev(`!document.querySelector(".app.app-reveal") && !!document.querySelector(".greeting") && getComputedStyle(document.querySelector(".rm-logo svg")).opacity === "1"`), "xong: vào trang chủ, logo thật của app hiện lại, lớp chuyển cảnh đã gỡ");
   await shot("5-home");
   await P("Page.reload"); await sleep(3500);
   ok(await ev(`!document.querySelector(".intro") && !!document.querySelector(".greeting")`), "tải lại trang: không phát lại phim");
 
-  // ---- Tài khoản 1: đăng nhập lại — logo của lời chào bay về cạnh lời chào, màn đăng nhập mở ra thành lỗ tròn, không có phim
+  // ---- Tài khoản 1: đăng nhập lại — logo bay về đầu thanh điều hướng, màn đăng nhập mở ra thành lỗ tròn, không có phim
   await P("Network.clearBrowserCookies");
   await P("Page.navigate", { url: B + "/" });
   await until(`!!${field("input[type=email]")}`, 30000, "sign-in form (login)"); await sleep(600);
@@ -135,11 +135,11 @@ try {
   await until(`!!document.querySelector(".auth-fly span") && getComputedStyle(document.querySelector(".auth-fly span")).visibility === "visible"`, 6000, "login flight");
   await sleep(450);
   const lf = await ev(`(() => { const c = document.querySelector(".auth-fly span"), r = getComputedStyle(document.querySelector(".auth-root")); return { k: new DOMMatrix(getComputedStyle(c).transform).a, hole: /radial-gradient/.test(r.maskImage || r.webkitMaskImage || ""), reveal: document.querySelector(".app")?.classList.contains("reveal-login"), intro: !!document.querySelector(".intro"), mark: getComputedStyle(document.querySelector(".auth-root .auth-mark")).visibility }; })()`);
-  ok(lf.k < 0.95 && lf.hole && lf.reveal && !lf.intro && lf.mark === "hidden", "đăng nhập lại: logo bay về cạnh lời chào, màn đăng nhập mở ra thành lỗ tròn, không phát phim", JSON.stringify(lf));
+  ok(lf.k < 0.95 && lf.hole && lf.reveal && !lf.intro && lf.mark === "hidden", "đăng nhập lại: logo bay về đầu thanh điều hướng, màn đăng nhập mở ra thành lỗ tròn, không phát phim", JSON.stringify(lf));
   await shot("5b-login-flight");
   await until(`!document.querySelector(".auth-root")`, 5000, "login done");
-  const land = await ev(`(() => { const g = document.querySelector(".greeting .greet-mark"); return { op: getComputedStyle(g).opacity, reveal: !!document.querySelector(".app.app-reveal"), fly: !!document.querySelector(".auth-fly") }; })()`);
-  ok(land.op === "1" && !land.reveal && !land.fly, "đăng nhập lại xong: logo thật cạnh lời chào hiện lại, lớp chuyển cảnh đã gỡ", JSON.stringify(land));
+  const land = await ev(`(() => { const g = document.querySelector(".rm-logo svg"); return { op: getComputedStyle(g).opacity, reveal: !!document.querySelector(".app.app-reveal"), fly: !!document.querySelector(".auth-fly") }; })()`);
+  ok(land.op === "1" && !land.reveal && !land.fly, "đăng nhập lại xong: logo thật ở thanh điều hướng hiện lại, lớp chuyển cảnh đã gỡ", JSON.stringify(land));
 
   // ---- Tài khoản 2: xem hết phim (tua tới gần cuối)
   await signup("end");

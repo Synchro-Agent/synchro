@@ -41,6 +41,9 @@ export const reducedMotion = () => typeof window !== "undefined" && (document.do
 export const boxOf = (el: Element): Box => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
 export const center = (b: Box): Pt => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
 /** Chỗ đến có thấy trên màn hình không (thanh bên đóng, không ở trang chủ… thì không bay tới đó). */
+/** Chỗ biểu tượng Synchro bay về khi vào app (đăng nhập, hết phim giới thiệu): logo ở đầu thanh điều hướng (máy tính), hoặc nút logo
+ *  ở góc trái trên khi thanh bên đóng (điện thoại). Trang chủ không còn logo cạnh lời chào. */
+export const markTarget = () => [".app .rm-logo svg", ".app .side-toggle svg"].map((s) => document.querySelector(s)).find((e) => e && onScreen(boxOf(e))) ?? null;
 export const onScreen = (b: Box | null): b is Box => !!b && b.w > 0 && b.h > 0 && b.x + b.w > 0 && b.x < innerWidth && b.y + b.h > 0 && b.y < innerHeight;
 
 function rgb(s: string): [number, number, number] | null {

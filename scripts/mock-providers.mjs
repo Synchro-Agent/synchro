@@ -484,7 +484,7 @@ function memoryReply(sys, q) {
   return { text: JSON.stringify(out) };
 }
 // Lời gọi của bộ não / đặt tên (chưng cất, biên soạn, gộp, bản đồ, hồ sơ, hướng dẫn): trả lời bằng mockBrain, không qua skill / công cụ.
-const SIDE = /^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Skill cần phân loại:)/;
+const SIDE = /^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Skill cần phân loại:|Các skill cần thẩm định:)/;
 const capsFor = (sys, q, msgs, tools, none) => {
   if (stallNow(q, msgs)) return { text: "Mình sẽ mở trình duyệt và làm ngay." };
   if (q.includes("#media") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply

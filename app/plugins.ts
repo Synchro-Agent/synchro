@@ -484,7 +484,13 @@ export function listPlugins(uid: string): PublicPlugin[] {
   return (init().prepare("SELECT * FROM plugins WHERE owner = 'org' OR owner = ? ORDER BY owner = 'org' DESC, name").all(uid) as Row[]).map((r) => pub(r, uid));
 }
 
-export function setPlugin(id: string, patch: { enabled?: boolean; everywhere?: boolean; studio?: Studio | null; skills?: Record<string, boolean> }) {
+/** Nội dung mọi skill trong các thư viện người này thấy, kể cả skill đang tắt (Kho kỹ năng → Quét skill rác). */
+export function pluginSkillsOf(uid: string): { p: PublicPlugin; rows: { name: string; description: string; body: string; files: number; enabled: boolean }[] }[] {
+  const st = init().prepare("SELECT name, description, body, files, enabled FROM plugin_skills WHERE plugin_id = ? ORDER BY name");
+  return listPlugins(uid).map((p) => ({ p, rows: (st.all(p.id) as Pick<SRow, "name" | "description" | "body" | "files" | "enabled">[]).map((r) => ({ name: r.name, description: r.description, body: r.body, files: (JSON.parse(r.files) as unknown[]).length, enabled: !!r.enabled })) }));
+}
+
+export function setPlugin(id: string, patch:{ enabled?: boolean; everywhere?: boolean; studio?: Studio | null; skills?: Record<string, boolean> }) {
   const d = init();
   if (typeof patch.enabled === "boolean") d.prepare("UPDATE plugins SET enabled = ? WHERE id = ?").run(patch.enabled ? 1 : 0, id);
   if (typeof patch.everywhere === "boolean") d.prepare("UPDATE plugins SET everywhere = ? WHERE id = ?").run(patch.everywhere ? 1 : 0, id);

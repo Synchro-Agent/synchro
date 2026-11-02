@@ -2226,3 +2226,37 @@ Object.assign(EN2VI, { "Search by email or IP": "Tìm theo email hoặc IP", "Pr
     [/^Tài khoản và toàn bộ dữ liệu của họ bị xóa, không hoàn tác được\.(?: (\d+) tài khoản chủ \/ của bạn được giữ nguyên\.)?$/, (m) => `The accounts and all their data are deleted. This can't be undone.${m[1] ? ` ${m[1]} owner / your own ${nn(m[1], "tài khoản")} are kept.` : ""}`],
   );
 }
+// Kho kỹ năng → Quét skill rác (skillscanui.tsx, skillscan.ts)
+Object.assign(EN2VI, {
+  "Scan for junk skills": "Quét skill rác", "Scanning skills…": "Đang quét skill…",
+  "A model reads every skill in your Skill Hub: your skills, your libraries and the libraries for everyone. It points out junk skills and skills with no real use, and explains why for each one.": "Model đọc từng skill trong Kho kỹ năng: Skill của bạn, Thư viện của bạn và Thư viện cho mọi người, rồi chỉ ra skill rác và skill không có tác dụng, kèm lý do cho từng skill.",
+  "Junk": "Skill rác", "No real use": "Không có tác dụng", "Fine": "Ổn", "Not read": "Chưa đọc được",
+  "No junk skills found.": "Không tìm thấy skill rác nào.", "Every skill serves a real profession or task.": "Skill nào cũng phục vụ một ngành nghề hay công việc cụ thể.", "No skill passed yet.": "Chưa có skill nào đạt.",
+  "Empty, placeholder or test content, only a README or links, broken text, or an exact copy of another skill.": "Nội dung trống, chữ mẫu hay skill thử, chỉ là README hoặc danh sách link, chữ lộn xộn, hoặc bản sao y hệt một skill khác.",
+  "Readable, but it doesn't serve any profession, field or concrete task, or only repeats what the model already does.": "Đọc được nhưng không phục vụ ngành nghề, lĩnh vực hay công việc cụ thể nào, hoặc chỉ dặn lại điều model vốn đã làm.",
+  "Concrete instructions for a real profession, field or workflow, shown with the field it serves.": "Hướng dẫn cụ thể cho một ngành nghề, lĩnh vực hay quy trình làm việc thật, kèm ngành nghề skill phục vụ.",
+  "Auto (Synchro chooses)": "Tự động (Synchro tự chọn)",
+  "The model reads each skill's name, description and the start of its instructions. Nothing is turned off or deleted unless you choose to.": "Model đọc tên, mô tả và phần đầu hướng dẫn của từng skill. Synchro không tự tắt hay xóa skill nào, chỉ bạn quyết định.",
+  "Only an admin can change libraries for everyone.": "Chỉ quản trị viên đổi được thư viện cho mọi người.", "Only an admin can change libraries for everyone": "Chỉ quản trị viên đổi được thư viện cho mọi người",
+  "Turn off all": "Tắt hết", "Delete your skills": "Xóa skill của bạn", "Results show up here as the model reads.": "Kết quả hiện dần ở đây khi model đọc xong từng lô skill.",
+  "Scan again": "Quét lại", "Keeps running if you close this window.": "Vẫn chạy tiếp khi bạn đóng cửa sổ này.", "Stop": "Dừng",
+});
+Object.assign(VI2EN, {
+  "Model này không còn dùng được. Hãy chọn model khác.": "This model is no longer available. Please choose another model.",
+  "Kho kỹ năng chưa có skill nào để quét.": "Your Skill Hub has no skills to scan yet.",
+  "thẩm định và phân loại một danh sách skill": "review and classify a list of skills",
+  "Mọi phiên bản và tệp của skill này sẽ bị xóa, không hoàn tác được.": "Every version and file of this skill will be deleted. This can't be undone.",
+});
+// Đặt trước các luật chung (ví dụ "Đã xóa …") để có số nhiều đúng tiếng Anh.
+{
+  const sk = (n: string) => `${n} skill${n === "1" ? "" : "s"}`;
+  RULES_EN.unshift(
+    [/^Đã quét xong (\S+) skill: (\S+) skill rác, (\S+) skill không có tác dụng\.$/, (m) => `Scanned ${sk(m[1])}: ${m[2]} junk, ${m[3]} with no real use.`],
+    [/^Đã quét (\S+) skill bằng (.+?) · ([^·]+)$/, (m) => `Scanned ${sk(m[1])} with ${m[2]} · ${m[3]}`],
+    [/^Đang đọc (\S+)\/(\S+) skill · (.+)$/, (m) => `Reading ${m[1]} of ${sk(m[2])} · ${m[3]}`],
+    [/^Đã dừng ở (\S+)\/(\S+) skill · (.+)$/, (m) => `Stopped at ${m[1]} of ${sk(m[2])} · ${m[3]}`],
+    [/^Quét (\S+) skill$/, (m) => `Scan ${sk(m[1])}`],
+    [/^Đã (tắt|bật lại|xóa) (\S+) skill$/, (m) => `${({ "tắt": "Turned off", "bật lại": "Turned on", "xóa": "Deleted" } as Record<string, string>)[m[1]]} ${sk(m[2])}`],
+    [/^Xóa skill "(.+)"\?$/, (m) => `Delete skill "${m[1]}"?`],
+  );
+}

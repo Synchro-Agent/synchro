@@ -856,7 +856,7 @@ function routeStep(S, M, q, toolNames) {
 export function studioStep(sys, msgsJson, q, toolNames) {
   if (String(q ?? "").includes("<point_edit>")) return null; // sửa đúng một phần tử: làm luôn, không đọc skill
   if (/#(rev\s*\d+|badpatch|skillrun)/.test(String(q ?? ""))) return null; // lệnh thử: sửa artifact (SEARCH/REPLACE) hoặc chạy script skill ngay
-  if (/#tool=|#media/.test(String(q ?? "")) || /^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:)/.test(String(q ?? ""))) return null; // ép gọi đúng một công cụ / chỉ mô tả tệp nhận được: không mở thư viện skill trước
+  if (/#tool=|#media/.test(String(q ?? "")) || /^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Các skill cần thẩm định:)/.test(String(q ?? ""))) return null; // ép gọi đúng một công cụ / chỉ mô tả tệp nhận được: không mở thư viện skill trước
   const S = String(sys ?? ""), M = String(msgsJson ?? "");
   const m = /<studio name=\\?"(design|slides|docs)\\?">/.exec(S) ?? /<studio name=\\?"(design|slides|docs)\\?">/.exec(M);
   if (!m) {

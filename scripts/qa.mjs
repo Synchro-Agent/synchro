@@ -11,6 +11,7 @@ const SUITES = [
   ["Soát giao diện toàn trang (sáng/tối × máy tính/điện thoại)", "tests/ui/audit.mjs"],
   ["Menu, bảng nổi, gợi ý, vòng Mức dùng", "tests/ui/popovers.mjs"],
   ["Xuất PowerPoint", "tests/ui/pptx.mjs"],
+  ["Quét skill rác", "tests/ui/skillscan.mjs"],
   ["Chat chạy nền khi chuyển mục", "tests/ui/bgrun.mjs"],
   ["Chữ hiện dần, nút Dừng", "tests/ui/stream.mjs"],
   ["Tải lại trang khi đang trả lời", "tests/ui/runs-reload.mjs"],

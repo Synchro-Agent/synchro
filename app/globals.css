@@ -152,7 +152,6 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:12vh}
 .greeting{display:flex;align-items:center;gap:14px;font-family:var(--font-display);font-size:28px;letter-spacing:-.035em;margin-bottom:22px;animation:rise .6s var(--ease) both}
 /* Unbounded rộng: lời chào co theo bề ngang màn hình, mark cao theo cỡ chữ, màn hẹp căn giữa và chừa lề. */
-.greeting .greet-mark{height:1.05em;width:auto}
 @media (max-width:640px){.greeting{font-size:clamp(20px,6vw,24px);gap:10px;padding:0 24px;justify-content:center;text-align:left;max-width:100%}}
 /* Logo Synchro: ảnh vân mực sần làm mặt nạ, tô bằng màu mực của giao diện (đen ở giao diện sáng, sáng ở giao diện tối).
    --ink-glass: lớp kính màu mực cho các nút mang màu thương hiệu (nút "+" của Mới, nút gửi); --ink-glass-fg: biểu tượng trên đó. */
@@ -4940,7 +4939,7 @@ html[data-tw="wide"] .cv-wrap{width:min(1160px,100%)}
 .intro-btn.pri:hover{background:#fff;color:#111210}
 /* Logo hạ cánh (app/handoff.ts): logo thật của app ẩn tới khi bản sao bay tới — biểu tượng cạnh lời chào, và chữ "synchro" ở đầu thanh
    bên khi ra từ phim. Trang chủ lắp lại bằng WAAPI nên gỡ lớp này không làm chạy lại hiệu ứng nào. */
-.app.app-reveal .greeting .greet-mark,.app.reveal-film .side-brand .lk{opacity:0}
+.app.app-reveal :is(.rm-logo,.side-toggle) svg,.app.reveal-film .side-brand .lk{opacity:0}
 
 /* Rời màn đăng nhập (sang phim hoặc vào app): lời chào mờ lên, quầng sáng và viền chạy của vòng tròn tắt, logo trên đầu mờ đi; logo của lời
    chào nhường chỗ cho bản sao đang bay (auth-fly ở trên màn đăng nhập nên không bị lỗ tròn cắt). */

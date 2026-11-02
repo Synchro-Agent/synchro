@@ -84,9 +84,37 @@ function mockStudio(prompt) {
   return JSON.stringify({ docs, slides, design, why: code ? "(mock) Skill về việc khác, không thuộc mục nào." : `(mock) Thuộc ${[docs && "Tài liệu", slides && "Trình bày", design && "Thiết kế"].filter(Boolean).join(", ")}.` });
 }
 
+// Quét skill rác (app/skillscan.ts): như model thật — đọc từng skill trong lô rồi trả JSON đủ mọi số thứ tự.
+// Chữ mẫu / tên skill thử → rác; chỉ dặn điều model vốn đã làm → không có tác dụng; còn lại → ổn, kèm ngành nghề.
+// Tên có "noverdict" thì bỏ qua skill đó (kiểm thử mục "Chưa đọc được").
+function mockSkillScan(prompt) {
+  const i = prompt.indexOf("Các skill cần thẩm định:");
+  if (i < 0) return null;
+  const en = /bằng tiếng Anh \(English\)/.test(prompt);
+  const blocks = prompt.slice(i).split(/\n\n---\n\n/);
+  const items = [];
+  for (const b of blocks) {
+    const m = /\[(\d+)\] ([^\n]+)/.exec(b);
+    if (!m || /noverdict/.test(m[2])) continue;
+    const t = fold(b);
+    const hint = /Dấu hiệu: ([^\n]*)/.exec(b)?.[1] ?? "";
+    let verdict = "ok", field = "", why = "";
+    if (/chữ mẫu|skill thử/.test(hint)) { verdict = "junk"; why = en ? "(mock) Placeholder or test content with no real instructions." : "(mock) Chỉ là chữ mẫu hoặc skill thử, không có hướng dẫn thật nào."; }
+    else if (/be (polite|helpful)|think step by step|lich su|suy nghi tung buoc|tro ly chung|general assistant/.test(t)) { verdict = "useless"; why = en ? "(mock) Only repeats what the model already does and serves no profession." : "(mock) Chỉ dặn điều model vốn đã làm, không phục vụ ngành nghề hay công việc cụ thể nào."; }
+    else {
+      field = /ke toan|thue|accounting|tax/.test(t) ? (en ? "Accounting" : "Kế toán") : /thiet ke|design|giao dien|\bui\b/.test(t) ? (en ? "Design" : "Thiết kế") : /slide|thuyet trinh|presentation/.test(t) ? (en ? "Presentations" : "Trình bày") : /code|lap trinh|test|api/.test(t) ? (en ? "Software" : "Lập trình") : (en ? "Specialist work" : "Chuyên môn");
+      why = en ? `(mock) Concrete instructions for ${field.toLowerCase()} work.` : `(mock) Có hướng dẫn cụ thể cho công việc ${field.toLowerCase()}.`;
+    }
+    items.push({ i: Number(m[1]), verdict, field, why });
+  }
+  return "```json\n" + JSON.stringify({ items }) + "\n```";
+}
+
 function mockBrain(prompt) {
   const sg = mockSkillGen(prompt);
   if (sg) return sg;
+  const sc = mockSkillScan(prompt);
+  if (sc) return sc;
   const st = mockStudio(prompt);
   if (st) return st;
   if (prompt.includes("Đoạn chat cần chưng cất:")) {
