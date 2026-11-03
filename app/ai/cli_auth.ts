@@ -88,9 +88,10 @@ export async function forgetCliMemory(scope: string) {
 }
 
 // ---------------------------------------------------------------- trạng thái
-type G = { cache: Map<string, Status>; pending: Map<string, Pending>; relogin: Set<string> };
-const g: G = ((globalThis as { __synchroCliAuth?: G }).__synchroCliAuth ??= { cache: new Map(), pending: new Map(), relogin: new Set() });
+type G = { cache: Map<string, Status>; pending: Map<string, Pending>; relogin: Set<string>; probing: Map<string, Promise<Status>> };
+const g: G = ((globalThis as { __synchroCliAuth?: G }).__synchroCliAuth ??= { cache: new Map(), pending: new Map(), relogin: new Set(), probing: new Map() });
 g.relogin ??= new Set();
+g.probing ??= new Map();
 const key = (cli: Cli, scope: string) => `${cli}:${safeScope(scope)}`;
 export const forget = (cli: Cli, scope?: string) => {
   if (scope !== undefined) g.cache.delete(key(cli, scope));
@@ -146,15 +147,33 @@ export async function status(cli: Cli, scope: string, o: { fresh?: boolean; stal
   const k = key(cli, scope), hit = g.cache.get(k), login = loginState(cli, scope), relogin = g.relogin.has(k);
   if (!o.fresh && hit && Date.now() - hit.checkedAt < STATUS_TTL_MS) return { ...hit, login, relogin };
   if (o.stale && hit && !o.fresh) { void status(cli, scope, { fresh: true }).catch(() => null); return { ...hit, login, relogin }; }
-  const bin = find(cli);
-  let s: Status;
-  if (!bin) s = { cli, installed: false, version: null, loggedIn: false, method: null, login, checkedAt: Date.now() };
-  else {
-    const [v, p] = await Promise.all([version(cli), probe(cli, scope, bin).catch((e) => ({ loggedIn: false, method: null, detail: redact(String((e as Error).message)) }))]);
-    s = { cli, installed: true, version: v, ...p, login, checkedAt: Date.now() };
+  // Nhiều lời gọi cùng lúc (bộ chọn model của mọi thẻ đang mở, lượt chat) dùng chung một lần chạy CLI.
+  let run = g.probing.get(k);
+  if (!run) {
+    run = (async (): Promise<Status> => {
+      const bin = find(cli);
+      if (!bin) return { cli, installed: false, version: null, loggedIn: false, method: null, login, checkedAt: Date.now() };
+      const [v, p] = await Promise.all([version(cli), probe(cli, scope, bin).catch((e) => ({ loggedIn: false, method: null, detail: redact(String((e as Error).message)) }))]);
+      return { cli, installed: true, version: v, ...p, login, checkedAt: Date.now() };
+    })().then((s) => { g.cache.set(k, s); return s; }).finally(() => g.probing.delete(k));
+    g.probing.set(k, run);
   }
-  g.cache.set(k, s);
-  return { ...s, relogin };
+  const s = await run;
+  return { ...s, login, relogin };
+}
+
+/**
+ * Kiểm tra sẵn trạng thái đăng nhập CLI của mọi tài khoản từng đăng nhập, ngay khi máy chủ khởi động. Lần kiểm tra đầu chạy CLI
+ * (`auth status`, `models`…) mất tới 20–30 giây khi máy vừa build xong; không làm sẵn thì bộ chọn model của người mở trang đầu tiên sau
+ * deploy chờ trống chừng ấy. Chạy lần lượt từng cái để không dồn tải.
+ */
+export async function warmStatuses() {
+  let names: string[] = [];
+  try { names = fs.readdirSync(path.join(DATA_DIR, "engine-tokens")); } catch { return; }
+  for (const n of names) {
+    const m = /^(claude|codex|agy|grok)-([A-Za-z0-9_-]+)\.login$/.exec(n);
+    if (m) await status(m[1] as Cli, m[2]).catch(() => null);
+  }
 }
 
 // ---------------------------------------------------------------- đăng nhập

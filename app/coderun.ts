@@ -4,7 +4,10 @@
 //   e2b       sandbox đám mây E2B (cần E2B_API_KEY)
 //   workspace container dùng một lần trên VPS qua dịch vụ workspace (workspace/agent.mjs, cần WS_AGENT_URL)
 //   local     máy cục bộ trong sandbox-exec của macOS: chỉ cho npm run dev:mock (CODE_RUN=local)
-// Mạng: tắt "Cho phép truy cập mạng" thì không ra được internet; bật thì chỉ tới được kho thư viện (PKG_DOMAINS).
+// Mạng: tắt "Cho phép truy cập mạng" thì không ra được internet; bật thì tới được kho thư viện (PKG_DOMAINS), thêm "Mọi trang web
+// công khai" (web) thì tới mọi trang công khai. Địa chỉ nội bộ (máy chủ, mạng riêng) luôn bị chặn.
+// keep: thư mục làm việc giữ nguyên giữa các lần chạy trong cùng một đoạn chat (tệp tải về, khung hình, dự án dựng dở), outputs/ mỗi lần
+// chỉ chứa tệp của lần đó. Không có keep (script của skill) thì mỗi lần một thư mục trống.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,11 +17,12 @@ import { agent, wsConfigured } from "./workspace";
 
 export type RunFile = { path: string; data: Buffer };
 // signal: người dùng bấm Dừng thì dừng tiến trình ngay (chỉ máy cục bộ; nơi chạy khác thì bỏ chờ kết quả).
-export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: string; net: boolean; timeout?: number; signal?: AbortSignal };
+export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: string; net: boolean; web?: boolean; keep?: string; timeout?: number; signal?: AbortSignal };
 export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean };
 export type Runner = "e2b" | "workspace" | "local";
 
-export const RUN_LIMITS = { timeout: 120, out: 60_000, files: 10, fileSize: 20 * 1024 * 1024, total: 40 * 1024 * 1024 };
+// timeout: mặc định mỗi lần chạy; maxTimeout: model xin thêm khi dựng video, chuyển tài liệu lớn (tham số timeout của run_code).
+export const RUN_LIMITS = { timeout: 120, maxTimeout: 600, out: 60_000, files: 20, fileSize: 100 * 1024 * 1024, total: 150 * 1024 * 1024 };
 
 export function runner(): Runner | null {
   const v = process.env.CODE_RUN;
@@ -37,7 +41,8 @@ export async function execRun(i: RunInput): Promise<RunOutput> {
   const r = runner();
   if (!r) throw new RunError("Máy chủ chưa có nơi chạy code.");
   for (const f of i.files) if (!okRel(f.path)) throw new RunError(`Đường dẫn tệp không hợp lệ: ${f.path}`);
-  const timeout = Math.max(5, Math.min(i.timeout ?? RUN_LIMITS.timeout, RUN_LIMITS.timeout));
+  if (i.keep !== undefined && !/^[A-Za-z0-9_-]{1,80}$/.test(i.keep)) throw new RunError("Thư mục giữ lại không hợp lệ.");
+  const timeout = Math.max(5, Math.min(i.timeout ?? RUN_LIMITS.timeout, RUN_LIMITS.maxTimeout));
   const out = r === "local" ? await runLocal(i, timeout) : r === "workspace" ? await runWorkspace(i, timeout) : await runE2b(i, timeout);
   return { ...out, stdout: cut(out.stdout), stderr: cut(out.stderr) };
 }
@@ -45,13 +50,21 @@ export async function execRun(i: RunInput): Promise<RunOutput> {
 // ---------------------------------------------------------------- máy cục bộ (giả lập)
 async function runLocal(i: RunInput, timeout: number): Promise<RunOutput> {
   if (process.platform !== "darwin") throw new RunError("CODE_RUN=local chỉ chạy được trên macOS (sandbox-exec).");
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "synchro-run-")));
+  const keepRoot = path.join(os.tmpdir(), "synchro-keep");
+  // Thư mục giữ lại không dùng quá 24 giờ thì xóa (như dịch vụ workspace).
+  for (const u of fs.existsSync(keepRoot) ? fs.readdirSync(keepRoot) : []) for (const k of fs.readdirSync(path.join(keepRoot, u))) {
+    const p = path.join(keepRoot, u, k);
+    try { if (Date.now() - fs.statSync(p).mtimeMs > 24 * 3_600_000) fs.rmSync(p, { recursive: true, force: true }); } catch {}
+  }
+  const keep = i.keep ? path.join(keepRoot, i.uid.replace(/[^\w-]/g, "_"), i.keep) : "";
+  if (keep) { fs.mkdirSync(keep, { recursive: true }); fs.rmSync(path.join(keep, "outputs"), { recursive: true, force: true }); fs.utimesSync(keep, new Date(), new Date()); }
+  const dir = fs.realpathSync(keep || fs.mkdtempSync(path.join(os.tmpdir(), "synchro-run-")));
   try {
     for (const f of i.files) { fs.mkdirSync(path.dirname(path.join(dir, f.path)), { recursive: true }); fs.writeFileSync(path.join(dir, f.path), f.data); }
     for (const d of ["outputs", ".tmp", ".pkgs"]) fs.mkdirSync(path.join(dir, d), { recursive: true });
     const venv = path.join(process.cwd(), ".mkvenv");
     const nodeDir = path.dirname(process.execPath);
-    const port = i.net ? await (await import("./egress")).egressPort() : 0;
+    const port = i.net ? await (await import("./egress")).egressPort(!!i.web) : 0;
     const q = (s: string) => JSON.stringify(s);
     // Mặc định cho phép, rồi chặn: mọi kết nối mạng (trừ proxy kho thư viện), ghi tệp ngoài thư mục chạy, đọc nội dung tệp trong thư mục cá nhân.
     const profile = [
@@ -76,9 +89,10 @@ async function runLocal(i: RunInput, timeout: number): Promise<RunOutput> {
       ...(proxy ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy } : {}),
     };
     const res = await spawnCapped("sandbox-exec", ["-p", profile, ...i.argv], { cwd: dir, env, stdin: i.stdin, timeout, signal: i.signal });
-    return { ...res, files: collect(dir) };
+    const skipped: string[] = [], files = collect(dir, skipped);
+    return { ...res, stderr: res.stderr + (skipped.length ? `\n[Không gửi được: ${skipped.join("; ")}]` : ""), files };
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(keep ? path.join(dir, "outputs") : dir, { recursive: true, force: true });
   }
 }
 
@@ -104,7 +118,7 @@ function spawnCapped(cmd: string, args: string[], o: { cwd: string; env: Record<
 }
 
 // Tệp trong outputs/ (tối đa 3 cấp thư mục), bỏ liên kết tượng trưng, giới hạn số lượng và dung lượng.
-function collect(dir: string): RunFile[] {
+function collect(dir: string, skipped: string[] = []): RunFile[] {
   const base = path.join(dir, "outputs");
   const out: RunFile[] = [];
   let total = 0;
@@ -115,7 +129,7 @@ function collect(dir: string): RunFile[] {
       if (e.isDirectory()) walk(p, depth + 1);
       else if (e.isFile() && out.length < RUN_LIMITS.files) {
         const size = fs.statSync(p).size;
-        if (size > RUN_LIMITS.fileSize || total + size > RUN_LIMITS.total) continue;
+        if (size > RUN_LIMITS.fileSize || total + size > RUN_LIMITS.total) { skipped.push(`${path.relative(base, p)}: ${Math.round(size / 1048576)} MB, quá giới hạn ${RUN_LIMITS.fileSize / 1048576} MB / tệp, ${RUN_LIMITS.total / 1048576} MB / lần chạy`); continue; }
         total += size;
         out.push({ path: path.relative(base, p), data: fs.readFileSync(p) });
       }
@@ -128,7 +142,7 @@ function collect(dir: string): RunFile[] {
 // ---------------------------------------------------------------- container dùng một lần trên VPS
 async function runWorkspace(i: RunInput, timeout: number): Promise<RunOutput> {
   const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[] }>("/run", {
-    u: i.uid, argv: i.argv, stdin: i.stdin ?? null, net: i.net, timeout,
+    u: i.uid, argv: i.argv, stdin: i.stdin ?? null, net: i.net, web: !!i.web, keep: i.keep ?? null, timeout,
     files: i.files.map((f) => ({ path: f.path, b64: f.data.toString("base64") })),
   }, (timeout + 90) * 1000);
   return {
@@ -142,7 +156,7 @@ async function runE2b(i: RunInput, timeout: number): Promise<RunOutput> {
   const { Sandbox } = await import("@e2b/code-interpreter");
   const sbx = await Sandbox.create({
     timeoutMs: (timeout + 60) * 1000,
-    ...(i.net ? { network: { denyOut: ["0.0.0.0/0"], allowOut: PKG_HOSTS } } : { allowInternetAccess: false }),
+    ...(i.net && i.web ? { allowInternetAccess: true } : i.net ? { network: { denyOut: ["0.0.0.0/0"], allowOut: PKG_HOSTS } } : { allowInternetAccess: false }),
   });
   const base = "/home/user/run";
   try {
@@ -176,21 +190,31 @@ async function runE2b(i: RunInput, timeout: number): Promise<RunOutput> {
 export const LANGS = { python: { file: "main.py", argv: ["python3", "main.py"] }, javascript: { file: "main.js", argv: ["node", "main.js"] }, bash: { file: "main.sh", argv: ["bash", "main.sh"] } } as const;
 export type Lang = keyof typeof LANGS;
 
-export function runCodeTool(net: boolean) {
+// Công cụ có sẵn trong image workspace (workspace/Dockerfile): giữ hai nơi khớp nhau. Nơi chạy khác (E2B, máy giả lập) chỉ có phần chung.
+const WS_TOOLS = "Có sẵn lệnh: ffmpeg / ffprobe, ImageMagick (convert, identify), LibreOffice (soffice --headless), pandoc, Poppler (pdftoppm, pdftotext), qpdf, Ghostscript, Tesseract OCR (tiếng Việt, tiếng Anh), Graphviz (dot), SoX, rsvg-convert, Chromium headless (Node: require(\"puppeteer-core\"), executablePath /usr/bin/chromium, args [\"--no-sandbox\"]). Python: pandas, numpy, scipy, scikit-learn, statsmodels, sympy, networkx, matplotlib, seaborn, plotly (+ kaleido xuất ảnh), Pillow, opencv, imageio, moviepy, pydub, python-docx, python-pptx, openpyxl, xlsxwriter, reportlab, pypdf, pdfplumber, PyMuPDF, cairosvg, pytesseract, beautifulsoup4, lxml, requests, qrcode, pyarrow.";
+const BASE_TOOLS = "Python 3 có sẵn pandas, numpy, matplotlib, openpyxl, python-docx, python-pptx, reportlab; có Node.js và bash.";
+const NET_NOTE = (net: boolean, web: boolean) => net && web ? "Có internet: tải ảnh, phông chữ, dữ liệu, gọi API công khai, pip / npm install gói còn thiếu (địa chỉ nội bộ của máy chủ bị chặn)."
+  : net ? "Chỉ cài thêm gói được bằng pip / npm từ kho thư viện chính thức; mọi trang web khác bị chặn." : "Không có internet: không cài thêm gói được, không gọi được trang web nào; chỉ dùng công cụ có sẵn.";
+
+export function runCodeTool(net: boolean, web = false) {
   return {
     name: "run_code",
-    description: `Chạy code trong sandbox cô lập, mỗi lần một thư mục trống mới (không giữ lại gì giữa các lần chạy). Python 3 có sẵn pandas, numpy, matplotlib, openpyxl, python-docx, python-pptx, reportlab; có Node.js và bash. Tệp ghi vào thư mục outputs/ được gửi cho người dùng tải về: dùng để tạo Word (.docx), Excel (.xlsx), PowerPoint (.pptx), PDF, CSV, ảnh biểu đồ (.png)… Tối đa ${RUN_LIMITS.timeout} giây. ${net ? "Có thể cài thêm gói bằng pip/npm từ kho thư viện chính thức; mọi trang web khác bị chặn." : "Không có internet: không cài thêm gói được, không gọi được trang web nào."}`,
+    description: `Chạy code thật (Python, JavaScript, bash) trong sandbox Linux cô lập. Thư mục làm việc giữ nguyên giữa các lần chạy trong cùng đoạn chat (24 giờ): bước sau dùng lại được tệp bước trước tải về hay tạo ra. Tệp ghi vào outputs/ được gửi cho người dùng xem và tải về (tối đa ${RUN_LIMITS.files} tệp, ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp): Word, Excel, PowerPoint, PDF, CSV, ảnh, âm thanh, video MP4… ${runner() === "workspace" ? WS_TOOLS : BASE_TOOLS} Mặc định chạy tối đa ${RUN_LIMITS.timeout} giây; việc nặng (dựng video, chuyển tài liệu lớn) đặt timeout tới ${RUN_LIMITS.maxTimeout}. ${NET_NOTE(net, web)}`,
     input_schema: {
       type: "object",
       properties: {
         language: { type: "string", enum: Object.keys(LANGS), description: "Ngôn ngữ của code" },
-        code: { type: "string", description: "Toàn bộ code cần chạy. Ghi tệp kết quả vào outputs/ (vd. outputs/bao-cao.xlsx)." },
+        code: { type: "string", description: "Toàn bộ code cần chạy. Ghi tệp kết quả vào outputs/ (vd. outputs/bao-cao.xlsx, outputs/video.mp4)." },
+        timeout: { type: "number", description: `Số giây tối đa cho lần chạy này (mặc định ${RUN_LIMITS.timeout}, tối đa ${RUN_LIMITS.maxTimeout}).` },
       },
       required: ["language", "code"],
     },
   };
 }
 
-export const CODE_RULES = (net: boolean) => `Bạn có công cụ run_code để chạy code thật (Python, JavaScript, bash) trong sandbox.
-Dùng nó khi cần tính toán chính xác, phân tích dữ liệu, kiểm tra code, hoặc khi người dùng muốn một tệp (Word, Excel, PowerPoint, PDF, CSV, ảnh biểu đồ): viết code tạo tệp vào outputs/ rồi chạy. Tệp trong outputs/ sẽ hiện trong tin nhắn để người dùng tải về, nên đừng dán nội dung tệp vào câu trả lời; chỉ nói ngắn gọn tệp chứa gì.
-Nếu code lỗi, đọc stderr, sửa và chạy lại (tối đa vài lần). ${net ? "Có thể pip install / npm install gói còn thiếu (chỉ kho thư viện chính thức)." : "Sandbox không có internet nên không cài thêm gói được; chỉ dùng thư viện có sẵn."}`;
+export const CODE_RULES = (net: boolean, web = false) => `Bạn có công cụ run_code để chạy code thật (Python, JavaScript, bash) trong sandbox Linux.
+Dùng nó khi cần tính toán chính xác, phân tích dữ liệu, kiểm tra code, hoặc khi người dùng muốn một tệp (Word, Excel, PowerPoint, PDF, CSV, ảnh, âm thanh, video): viết code tạo tệp vào outputs/ rồi chạy. Tệp trong outputs/ sẽ hiện trong tin nhắn để người dùng xem và tải về, nên đừng dán nội dung tệp vào câu trả lời; chỉ nói ngắn gọn tệp chứa gì.
+Thư mục làm việc giữ nguyên giữa các lần chạy trong đoạn chat này: chia việc lớn thành nhiều lần chạy (chuẩn bị tài nguyên → dựng → kiểm tra) thay vì một script khổng lồ.
+Video, hoạt hình: dựng khung hình (Pillow, matplotlib, cairosvg, hoặc chụp trang HTML / canvas / SVG động bằng Chromium headless qua puppeteer-core) rồi ghép bằng ffmpeg (-c:v libx264 -pix_fmt yuv420p -movflags +faststart) vào outputs/…mp4; âm thanh bằng ffmpeg, SoX hoặc pydub. Kiểm tra bằng ffprobe (thời lượng, kích thước, số khung) và trích vài khung xem thử trước khi báo xong. Đặt timeout 300–600 cho lần dựng.
+Tài liệu: soffice --headless --convert-to pdf để xuất Word / PowerPoint sang PDF; pdftoppm chụp trang PDF thành ảnh để tự kiểm tra bố cục.
+Nếu code lỗi, đọc stderr, sửa và chạy lại. Một cách bị chặn thì thử cách khác trong sandbox trước khi kết luận là không làm được. Không kết thúc lượt khi chưa có sản phẩm: nếu thật sự không tạo được đúng định dạng người dùng muốn, vẫn giao bản gần nhất (vd. artifact HTML chạy được thay cho video) và nói rõ còn thiếu gì. ${NET_NOTE(net, web)}`;

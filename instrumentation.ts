@@ -20,6 +20,9 @@ export async function register() {
       (await import("./app/prwatch")).startPrWatch(Number(process.env.SYNCHRO_PR_TICK_MS) || 90_000);
     } catch (e) { console.error("[runs]", e); }
   }, 1500);
+  // Kiểm tra sẵn trạng thái đăng nhập gói (Claude, ChatGPT, Gemini, Grok): người mở trang đầu tiên sau deploy không phải chờ CLI mới
+  // thấy danh sách model.
+  setTimeout(() => { import("./app/ai/cli_auth").then((m) => m.warmStatuses()).catch((e) => console.error("[engines]", e)); }, 2000);
   // Skill và plugin có từ trước khi có tính năng tự xếp mục: xếp vào Tài liệu / Trình bày / Thiết kế bằng bộ luật (model xếp lại khi
   // người dùng mở Kho kỹ năng hoặc lưu skill).
   setTimeout(async () => {

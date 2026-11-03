@@ -16,6 +16,27 @@ function start(cli: Cli, args: string[], req: TurnRequest, stdin: string): Proc 
   makeDir(cwd);
   return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive });
 }
+// Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): vượt là "spawn E2BIG", lượt chết trước khi chạy. Đo bằng byte
+// (tiếng Việt có dấu 2–3 byte mỗi chữ), chừa chỗ: nội dung dài hơn ARG_MAX_BYTES thì đi qua tệp hoặc stdin.
+const ARG_MAX_BYTES = 100_000;
+const tooLong = (s?: string) => Buffer.byteLength(s ?? "", "utf8") > ARG_MAX_BYTES;
+/** Tệp tạm của lượt trong thư mục làm việc (ghi bằng user của engine). */
+function turnFile(req: TurnRequest, tag: string, text: string) {
+  const cwd = req.workdir ?? path.join(engineHome(), "work");
+  const file = path.join(cwd, `.synchro-${tag}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.txt`);
+  writeEngineFile(file, Buffer.from(text, "utf8"));
+  return file;
+}
+/** Cắt bớt phần đầu (lịch sử cũ) để vừa ARG_MAX_BYTES, giữ phần cuối (tin nhắn mới nhất). */
+function fitTail(text: string, budget: number) {
+  const buf = Buffer.from(text, "utf8");
+  if (buf.length <= budget) return text;
+  const note = "[Phần đầu cuộc trò chuyện quá dài nên đã được lược bớt; dưới đây là phần gần nhất.]\n\n";
+  // Cắt theo byte rồi bỏ nửa ký tự UTF-8 ở đầu (byte tiếp nối 10xxxxxx).
+  let i = buf.length - (budget - Buffer.byteLength(note));
+  while (i < buf.length && (buf[i] & 0xc0) === 0x80) i++;
+  return note + buf.subarray(i).toString("utf8");
+}
 
 // ---------------------------------------------------------------- tệp đính kèm
 /** Claude Code (--input-format stream-json): một tin nhắn người dùng gồm khối ảnh / PDF gốc rồi tới chữ, đúng như Messages API. */
@@ -100,7 +121,12 @@ export class ClaudeCodeEngine implements Engine {
     const allow = [...(req.mcp ? ["mcp__synchro"] : []), ...(req.web ? ["WebSearch", "WebFetch"] : [])];
     if (req.mcp) args.push("--mcp-config", JSON.stringify({ mcpServers: { synchro: { type: "http", url: req.mcp.url } } }), "--strict-mcp-config");
     if (allow.length) args.push("--allowedTools", allow.join(","));
-    if (req.system) args.push("--append-system-prompt", req.system);
+    // Hướng dẫn hệ thống dài (nhiều skill, studio, connector): qua tệp, không qua tham số (giới hạn 128 KB mỗi tham số).
+    let sysFile = "";
+    if (req.system && tooLong(req.system)) {
+      try { sysFile = turnFile(req, "claude-sys", req.system); args.push("--append-system-prompt-file", sysFile); }
+      catch (e) { yield err(`Không chuyển được hướng dẫn cho Claude Code: ${(e as Error).message}`, "other"); return; }
+    } else if (req.system) args.push("--append-system-prompt", req.system);
     if (req.model) args.push("--model", req.model);
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
@@ -111,7 +137,8 @@ export class ClaudeCodeEngine implements Engine {
     // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
     // Công cụ của Synchro có thể dừng chờ người dùng duyệt (chế độ quyền, trang web chưa được phép): chờ được tới hết 30 phút của lượt.
     const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
-    if (!p) { yield notInstalled("claude"); return; }
+    if (sysFile) void p?.done.finally(() => rmEngineFile(req, sysFile).catch(() => {}));
+    if (!p) { if (sysFile) await rmEngineFile(req, sysFile).catch(() => {}); yield notInstalled("claude"); return; }
     // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
     // không dính liền "…dựng deck.Đã đọc 4 skill…".
     let text = "", done = false, gap = false;
@@ -262,7 +289,11 @@ export class AntigravityEngine implements Engine {
   private async *turn(req: TurnRequest): AsyncIterable<Event> {
     // Print mode của agy chỉ nhận chữ: tệp gửi kèm đã lưu trong thư mục làm việc, model mở bằng công cụ xem tệp (đọc được ảnh, PDF).
     const files = fileList(req.attachments ?? [], "Hãy mở từng tệp bằng công cụ xem tệp để thấy đúng nội dung (ảnh, PDF) trước khi trả lời; không đoán nội dung tệp.");
-    const prompt = (req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt) + files;
+    // Print mode của agy chỉ nhận prompt qua tham số -p: quá 128 KB thì lược phần đầu lịch sử (giữ hướng dẫn hệ thống và tin mới nhất).
+    const sys = req.system && !req.sessionId ? `${req.system}\n\n---\n\n` : "";
+    const body = req.prompt + files;
+    const prompt = !tooLong(sys + body) ? sys + body
+      : tooLong(sys) ? fitTail(sys + body, ARG_MAX_BYTES) : sys + fitTail(body, ARG_MAX_BYTES - Buffer.byteLength(sys, "utf8"));
     const args = ["--output-format", "json"];
     if (req.model) args.push("--model", req.model);
     const ce = cliEffort(req.effort);
@@ -353,7 +384,7 @@ export class GrokEngine implements Engine {
     const atts = (req.attachments ?? []).filter((a) => a.path);
     const refs = atts.flatMap((a) => [a.path!, ...(a.pages ?? []).map((x) => x.path).filter((x): x is string => !!x)]).map((f) => `@${path.relative(cwd, f)}`);
     // Hướng dẫn hệ thống rất dài (nhiều skill, connector) không vừa một tham số dòng lệnh (giới hạn 128 KB): đưa vào đầu tệp prompt.
-    const longSys = (req.system?.length ?? 0) > 100_000;
+    const longSys = tooLong(req.system);
     const prompt = (longSys ? `<system_instructions>\n${req.system}\n</system_instructions>\n\n` : "") + req.prompt
       + (refs.length ? `\n\n<attachments>\nNgười dùng gửi kèm các tệp dưới đây (đúng thứ tự [Ảnh / Tệp đính kèm n] ở trên): ${refs.join(" ")}\n</attachments>` : "");
     const file = path.join(cwd, `.synchro-grok-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.txt`);

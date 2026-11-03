@@ -24,14 +24,21 @@ const NET = env("WS_NETWORK", "synchro-ws");
 const BRIDGE = "br-synchro";
 const SUBNET = env("WS_SUBNET", "172.30.0.0/16");
 // Chạy code cho chat (mỗi lần một container mới, xóa ngay sau khi chạy): mạng riêng không ra được internet,
-// chỉ tới được proxy của dịch vụ này ở cổng RUN_PROXY_PORT; proxy chỉ cho đi tới các kho thư viện (PKG_HOSTS).
+// chỉ tới được proxy của dịch vụ này ở cổng RUN_PROXY_PORT. Proxy cho đi tới các kho thư viện (PKG_HOSTS); lần chạy được phép ra
+// mọi trang web công khai (Cài đặt → Khả năng) mang mã riêng trong Proxy-Authorization. Địa chỉ nội bộ luôn bị chặn.
 const RUN_NET = env("WS_RUN_NETWORK", "synchro-run");
 const RUN_BRIDGE = "br-synchro-run";
 const RUN_SUBNET = env("WS_RUN_SUBNET", "172.29.0.0/24");
 const RUN_GW = env("WS_RUN_GATEWAY", "172.29.0.1");
 const RUN_PROXY_PORT = Number(env("WS_RUN_PROXY_PORT", 3556));
-const RUN_MAX = Number(env("WS_RUN_MAX", 4));
-const RUN_MEMORY = env("WS_RUN_MEMORY", "1g");
+const RUN_MAX = Number(env("WS_RUN_MAX", 3));
+// Dựng video / chuyển tài liệu bằng LibreOffice / Chromium cần nhiều bộ nhớ hơn một script phân tích dữ liệu.
+const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
+// Tệp code ghi vào outputs/ được gửi về: tối đa 20 tệp, mỗi tệp 100 MB, tổng 150 MB (đủ cho video MP4 vài phút).
+const RUN_FILES = 20, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
+// Thư mục làm việc giữ nguyên giữa các lần chạy trong cùng một đoạn chat (tệp tải về, khung hình, dự án dựng dở…): xóa sau 24 giờ
+// không dùng, mỗi tài khoản tối đa 3 GB (vượt thì xóa thư mục cũ nhất).
+const KEEP_MS = 24 * 3_600_000, KEEP_MB = 3000;
 // Giữ giống PKG_DOMAINS trong app/catalog.ts.
 const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "registry.npmjs.org", "npmjs.org", "npmjs.com", "registry.yarnpkg.com", "yarnpkg.com",
   "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org", "sum.golang.org", "conda.anaconda.org", "repo.anaconda.com",
@@ -251,10 +258,14 @@ async function exec(u, { d, cmd, argv, timeout = 120, stdin, env: ev = {} }) {
   const cwd = await dirOf(u, d);
   const sec = Math.max(1, Math.min(Number(timeout) || 120, 900));
   const envArgs = Object.entries(ev).filter(([k]) => /^[A-Z_][A-Z0-9_]*$/.test(k)).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
-  const tail = Array.isArray(argv) ? argv.map(String) : ["bash", "-lc", String(cmd ?? "")];
-  const args = ["exec", ...(stdin != null ? ["-i"] : []), "-u", UID, "-w", cwd, "-e", `HOME=${HOME}`, ...envArgs, cname(u), "timeout", "-k", "5", String(sec), ...tail];
+  // Lệnh rất dài (model ghi cả tệp lớn bằng heredoc): một tham số dòng lệnh không được quá 128 KB (spawn E2BIG), nên đưa lệnh vào
+  // bash qua stdin (bash -ls) khi lệnh đó không cần stdin riêng.
+  const viaStdin = !Array.isArray(argv) && stdin == null && Buffer.byteLength(String(cmd ?? ""), "utf8") > 100_000;
+  const tail = Array.isArray(argv) ? argv.map(String) : viaStdin ? ["bash", "-ls"] : ["bash", "-lc", String(cmd ?? "")];
+  const input = viaStdin ? String(cmd) : stdin;
+  const args = ["exec", ...(input != null ? ["-i"] : []), "-u", UID, "-w", cwd, "-e", `HOME=${HOME}`, ...envArgs, cname(u), "timeout", "-k", "5", String(sec), ...tail];
   touch(u);
-  const r = await run("docker", args, { input: stdin, timeout: (sec + 15) * 1000 });
+  const r = await run("docker", args, { input, timeout: (sec + 15) * 1000 });
   touch(u);
   return r;
 }
@@ -264,16 +275,46 @@ const runDir = (id) => `${ROOT}/_runs/${id}`;
 let running = 0;
 const safeRel = (p) => typeof p === "string" && p.length > 0 && p.length < 300 && !p.startsWith("/") && !p.split(/[\\/]/).some((x) => x === ".." || x === "");
 
-async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, timeout = 120 }) {
+const keepRoot = (u) => `${ROOT}/_keep/${u}`;
+const okKeep = (k) => typeof k === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(k);
+// Lần chạy đang dùng thư mục giữ lại: chạy lần lượt trong cùng một đoạn chat để hai lần chạy không ghi đè tệp của nhau.
+const keepBusy = new Map();
+// Mã proxy của các lần chạy được ra mọi trang web công khai (chỉ sống trong lúc chạy).
+const webTokens = new Set();
+function sweepKeep(u) {
+  const root = keepRoot(u);
+  if (!fs.existsSync(root)) return;
+  const dirs = fs.readdirSync(root).map((n) => { const p = `${root}/${n}`; try { return { p, at: fs.statSync(p).mtimeMs }; } catch { return null; } }).filter(Boolean).sort((a, b) => a.at - b.at);
+  for (const d of dirs) if (Date.now() - d.at > KEEP_MS && !keepBusy.has(d.p)) fs.rmSync(d.p, { recursive: true, force: true });
+  return dirs.filter((d) => fs.existsSync(d.p));
+}
+async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, web = false, timeout = 120, keep = null }) {
+  if (!okUser(u)) throw new E(400, "Tài khoản không hợp lệ");
   if (!Array.isArray(argv) || !argv.length || argv.length > 60 || argv.some((a) => typeof a !== "string" || a.length > 4000)) throw new E(400, "Lệnh không hợp lệ");
   if (!Array.isArray(files) || files.length > 6000 || files.some((f) => !safeRel(f?.path) || typeof f.b64 !== "string")) throw new E(400, "Tệp không hợp lệ");
-  if (wantNet && !proxyUp) throw new E(503, "Máy chủ chưa bật được mạng cho code (proxy kho thư viện).");
+  if (keep != null && !okKeep(keep)) throw new E(400, "Thư mục giữ lại không hợp lệ");
+  if (wantNet && !proxyUp) throw new E(503, "Máy chủ chưa bật được mạng cho code (proxy).");
   if (running >= RUN_MAX) throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.");
-  const sec = Math.max(5, Math.min(Number(timeout) || 120, 300));
+  const sec = Math.max(5, Math.min(Number(timeout) || 120, 900));
   const id = crypto.randomBytes(8).toString("hex");
-  const dir = runDir(id), name = "srun-" + id;
+  const dir = keep ? `${keepRoot(u)}/${keep}` : runDir(id), name = "srun-" + id;
+  // Chờ lần chạy trước trong cùng thư mục giữ lại xong.
+  while (keep && keepBusy.has(dir)) await keepBusy.get(dir).catch(() => {});
+  let release = () => {};
+  if (keep) keepBusy.set(dir, new Promise((ok) => { release = () => { keepBusy.delete(dir); ok(); }; }));
+  const token = wantNet && web ? crypto.randomBytes(18).toString("hex") : "";
+  if (token) webTokens.add(token);
   running++;
   try {
+    if (keep) {
+      // Dọn thư mục lâu không dùng; vượt hạn mức thì xóa thư mục cũ nhất (trừ thư mục của lần chạy này).
+      const dirs = sweepKeep(u) ?? [];
+      const du = await run("du", ["-sm", keepRoot(u)], { timeout: 15_000 }).catch(() => null);
+      let mb = Number(du?.out?.split(/\s/)[0]) || 0;
+      for (const d of dirs) { if (mb <= KEEP_MB) break; if (d.p === dir || keepBusy.has(d.p)) continue; const m = await run("du", ["-sm", d.p], { timeout: 15_000 }).catch(() => null); fs.rmSync(d.p, { recursive: true, force: true }); mb -= Number(m?.out?.split(/\s/)[0]) || 0; }
+      // outputs/ chỉ chứa tệp của lần chạy này: tệp lần trước đã gửi cho người dùng.
+      fs.rmSync(`${dir}/outputs`, { recursive: true, force: true });
+    }
     fs.mkdirSync(`${dir}/outputs`, { recursive: true, mode: 0o700 });
     for (const f of files) {
       const p = `${dir}/${f.path}`;
@@ -281,38 +322,46 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
       fs.writeFileSync(p, Buffer.from(f.b64, "base64"));
     }
     await run("chown", ["-R", `${UID}:${UID}`, dir]);
-    const proxy = `http://${RUN_GW}:${RUN_PROXY_PORT}`;
+    fs.utimesSync(dir, new Date(), new Date());
+    const proxy = `http://${token ? `run:${token}@` : ""}${RUN_GW}:${RUN_PROXY_PORT}`;
     const envs = { HOME: HOME, LANG: "C.UTF-8", LC_ALL: "C.UTF-8", MPLBACKEND: "Agg", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1",
       PIP_BREAK_SYSTEM_PACKAGES: "1", PIP_DISABLE_PIP_VERSION_CHECK: "1", NPM_CONFIG_PREFIX: `${HOME}/.npm-global`, npm_config_update_notifier: "false",
       PATH: `${HOME}/.local/bin:${HOME}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
-      ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy } : {}) };
+      ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1" } : {}) };
+    // Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,
+    // ffmpeg nhiều luồng: pids 1024, /dev/shm 512 MB.
     const args = ["run", "--rm", "-i", "--name", name, "--hostname", "sandbox", "--init", "--network", wantNet ? RUN_NET : "none",
-      "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", "1", "--pids-limit", "256", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-      "--shm-size", "128m", "--label", `synchro.run=${u}`, "-u", UID, "-w", `${HOME}/run`, "-v", `${dir}:${HOME}/run`,
+      "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+      "--shm-size", "512m", "--label", `synchro.run=${u}`, "-u", UID, "-w", `${HOME}/run`, "-v", `${dir}:${HOME}/run`,
       ...Object.entries(envs).flatMap(([k, v]) => ["-e", `${k}=${v}`]), IMAGE, "timeout", "-k", "5", String(sec), ...argv];
     const r = await run("docker", args, { input: stdin ?? "", timeout: (sec + 30) * 1000, max: 400_000 });
-    const out = [];
+    const out = [], skipped = [];
     let total = 0;
     const walk = (d, depth) => {
       if (depth > 3 || !fs.existsSync(d)) return;
       for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-        const p = `${d}/${e.name}`;
+        const p = `${d}/${e.name}`, rel = path.relative(`${dir}/outputs`, p);
         if (e.isDirectory()) walk(p, depth + 1);
-        else if (e.isFile() && out.length < 10) {
+        else if (e.isFile()) {
           const size = fs.statSync(p).size;
-          if (size > 20 * 1024 * 1024 || total + size > 40 * 1024 * 1024) continue;
+          if (out.length >= RUN_FILES) { skipped.push(`${rel}: quá ${RUN_FILES} tệp`); continue; }
+          if (size > RUN_FILE_MB * 1048576) { skipped.push(`${rel}: ${Math.round(size / 1048576)} MB, quá ${RUN_FILE_MB} MB`); continue; }
+          if (total + size > RUN_TOTAL_MB * 1048576) { skipped.push(`${rel}: vượt tổng ${RUN_TOTAL_MB} MB`); continue; }
           total += size;
-          out.push({ path: path.relative(`${dir}/outputs`, p), b64: fs.readFileSync(p).toString("base64") });
+          out.push({ path: rel, b64: fs.readFileSync(p).toString("base64") });
         }
       }
     };
     walk(`${dir}/outputs`, 0);
     const timedOut = r.code === 124;
-    return { code: r.code, out: r.out, err: r.err + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : ""), timedOut, files: out };
+    const note = (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : "") + (skipped.length ? `\n[Không gửi được: ${skipped.join("; ")}]` : "");
+    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: out };
   } finally {
     running--;
+    if (token) webTokens.delete(token);
     await run("docker", ["rm", "-f", name], { timeout: 20_000 });
-    fs.rmSync(dir, { recursive: true, force: true });
+    if (keep) { fs.rmSync(`${dir}/outputs`, { recursive: true, force: true }); release(); }
+    else fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -320,9 +369,16 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
 let proxyUp = false;
 const v4Private = (ip) => { const [a, b] = ip.split(".").map(Number); return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224; };
 const ipPrivate = (ip) => (net.isIP(ip) === 4 ? v4Private(ip) : /^(::|::1|f[cd]|fe[89ab]|::ffff:)/i.test(ip));
-async function pkgTarget(host, port) {
+// Mã của lần chạy được ra mọi trang web công khai: "Proxy-Authorization: Basic base64(run:<mã>)" (pip, npm, curl, requests tự gửi khi
+// HTTPS_PROXY có dạng http://run:<mã>@…).
+const webRun = (req) => {
+  const m = /^Basic\s+(.+)$/i.exec(String(req.headers["proxy-authorization"] ?? ""));
+  const tok = m ? Buffer.from(m[1], "base64").toString("utf8").split(":")[1] ?? "" : "";
+  return !!tok && webTokens.has(tok);
+};
+async function pkgTarget(host, port, web = false) {
   const h = String(host).toLowerCase().replace(/\.$/, "");
-  if (!PKG_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is not a package registry`);
+  if (!web && !PKG_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is not a package registry (bật "Mọi trang web công khai" trong Cài đặt → Khả năng để code ra được trang này)`);
   if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
   const ips = (await lookup(h, { all: true })).map((x) => x.address);
   if (!ips.length || ips.some(ipPrivate)) throw new Error(`blocked: ${h} resolves to a private address`);
@@ -332,8 +388,9 @@ function startProxy() {
   const px = http.createServer(async (req, res) => {
     try {
       const t = new URL(req.url);
-      const ip = await pkgTarget(t.hostname, Number(t.port || 80));
-      const up = http.request({ host: ip, port: Number(t.port || 80), path: t.pathname + t.search, method: req.method, headers: { ...req.headers, host: t.host } }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); });
+      const ip = await pkgTarget(t.hostname, Number(t.port || 80), webRun(req));
+      const { "proxy-authorization": _, ...headers } = req.headers;
+      const up = http.request({ host: ip, port: Number(t.port || 80), path: t.pathname + t.search, method: req.method, headers: { ...headers, host: t.host } }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); });
       up.on("error", () => { res.writeHead(502); res.end(); });
       req.pipe(up);
     } catch (e) { res.writeHead(403, { "content-type": "text/plain" }); res.end(String(e.message ?? e)); }
@@ -342,7 +399,7 @@ function startProxy() {
     sock.on("error", () => {});
     const [h, p] = String(req.url ?? "").split(":");
     try {
-      const ip = await pkgTarget(h, Number(p || 443));
+      const ip = await pkgTarget(h, Number(p || 443), webRun(req));
       const up = net.connect(Number(p || 443), ip, () => { sock.write("HTTP/1.1 200 Connection Established\r\n\r\n"); if (head?.length) up.write(head); up.pipe(sock); sock.pipe(up); });
       up.on("error", () => sock.destroy());
       sock.on("close", () => up.destroy());

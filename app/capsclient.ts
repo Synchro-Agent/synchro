@@ -26,9 +26,14 @@ const put = (s: CapsState) => { state = s; memo = { scope: userScope(), v: s }; 
 export function loadCaps(force = false) {
   if (!force && loadedFor === userScope() && (state || inflight)) return inflight ?? Promise.resolve();
   loadedFor = userScope();
-  inflight = fetch("/api/caps", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.caps) put(j); }).catch(() => {}).finally(() => { inflight = null; });
+  inflight = fetch("/api/caps", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
+    if (j?.caps) { put(j); return; }
+    // Lỗi (máy chủ vừa khởi động lại…): đang dùng bản sao đã lưu; thử lại một lần sau 3 giây để lấy trạng thái thật (khóa, nơi chạy code).
+    if (!state && !retried) { retried = true; setTimeout(() => loadCaps(true), 3000); }
+  }).finally(() => { inflight = null; });
   return inflight;
 }
+let retried = false;
 
 // Đổi một khả năng. Trả về null nếu thành công, hoặc thông báo lỗi.
 export async function setCaps(patch: Partial<Caps>): Promise<string | null> {

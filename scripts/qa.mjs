@@ -17,6 +17,9 @@ const SUITES = [
   ["Tải lại trang khi đang trả lời", "tests/ui/runs-reload.mjs"],
   ["Khung phủ nằm trên thanh bên", "tests/ui/layers.mjs"],
   ["Chuyển cảnh đăng nhập → phim → trang chủ", "tests/ui/introfilm.mjs"],
+  ["Màn Đăng nhập, Giới thiệu về bạn trên màn thấp", "tests/ui/authfit.mjs"],
+  ["Danh sách model lỗi ở lần hỏi đầu", "tests/ui/models-retry.mjs"],
+  ["Ảnh từ URL ngoài trong artifact", "tests/ui/artimg.mjs"],
 ];
 const only = process.argv.slice(2);
 

@@ -13,9 +13,15 @@ export type ServerSession = { id: number; title: string; pinned: boolean; archiv
 let prefs: CodePrefs | null = null, loading: Promise<void> | null = null;
 const subs = new Set<() => void>();
 const emit = () => { for (const f of subs) f(); };
+// Lần tải lỗi (máy chủ vừa khởi động lại, mạng chập chờn): bỏ lần tải đó và thử lại sau 3 giây, không để cài đặt "chưa tải xong" mãi.
+let retry: ReturnType<typeof setTimeout> | null = null;
 export function loadCodePrefs(force = false) {
   if (loading && !force) return loading;
-  loading = fetch("/api/code/prefs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) { prefs = j; emit(); } }).catch(() => {});
+  loading = fetch("/api/code/prefs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
+    if (j) { prefs = j; emit(); return; }
+    loading = null;
+    if (!prefs && !retry) retry = setTimeout(() => { retry = null; if (subs.size) loadCodePrefs(); }, 3000);
+  });
   return loading;
 }
 /** Cài đặt Synchro Code của tài khoản (null khi chưa tải xong). */

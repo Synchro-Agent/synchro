@@ -45,18 +45,19 @@ export function capsState(u: UserRow): CapsState {
   const mine = userCaps(u.id);
   const locks: CapsState["locks"] = {};
   const run = runner();
-  if (!can(u, "sandbox")) { locks.code = "admin"; locks.net = "admin"; }
-  else if (!run) { locks.code = "server"; locks.net = "server"; }
+  if (!can(u, "sandbox")) { locks.code = "admin"; locks.net = "admin"; locks.web = "admin"; }
+  else if (!run) { locks.code = "server"; locks.net = "server"; locks.web = "server"; }
   const caps: Caps = { ...mine };
   if (!can(u, "code") || !can(u, "sandbox")) locks.browse = "admin";
   else if (!wsConfigured()) locks.browse = "server";
   if (!can(u, "chrome")) locks.mine = "admin";
   else if (!wsConfigured()) locks.mine = "server";
   const paired = !locks.mine && hasDevice(u.id);
-  if (locks.code) { caps.code = false; caps.net = false; }
+  if (locks.code) { caps.code = false; caps.net = false; caps.web = false; }
   if (!paired) caps.mine = false;
   if (locks.browse && !paired) caps.browse = false;
   if (!caps.code) caps.net = false;
+  if (!caps.net) caps.web = false;
   if (!caps.art) caps.ai = false;
   return { caps, locks, runner: run, paired };
 }

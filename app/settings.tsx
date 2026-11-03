@@ -391,7 +391,8 @@ function Capabilities({ go }: { go: (t: string) => void }) {
       <H>Code execution and file creation</H>
       <Row t="Code execution and file creation" d={<>Synchro can execute code and create and edit docs, spreadsheets, presentations, PDFs, and data reports. Required for skills.
         {lockNote("code") ? <span className="cap-note warn">{lockNote("code")}</span> : st.runner && v.code ? <span className="cap-note">{RUNNER[st.runner]}</span> : null}</>} top>{t("code")}</Row>
-      <div className={`inset ${!v.code ? "dim" : ""}`}><Row t="Allow network egress" d={<>Allow Synchro to access common package managers to install packages and libraries for data analysis, visualizations, and file processing. <A onClick={() => setModal("domains")}>View package manager domains</A>. Monitor chats closely as this comes with <A onClick={() => setModal("risks")}>security risks</A>.</>} top>{t("net", !v.code)}</Row></div>
+      <div className={`inset ${!v.code ? "dim" : ""}`}><Row t="Allow network egress" d={<>Allow Synchro to access common package managers to install packages and libraries for data analysis, visualizations, and file processing. <A onClick={() => setModal("domains")}>View package manager domains</A>. Monitor chats closely as this comes with <A onClick={() => setModal("risks")}>security risks</A>.</>} top>{t("net", !v.code)}</Row>
+        <Row t="Reach the whole public web" d={<>Code can also download images, fonts and data from any public website and call public APIs, not just package registries. Addresses inside the server and private networks stay blocked.</>} top>{t("web", !v.code || !v.net)}</Row></div>
       <H>Skills</H>
       <p className="d" style={{ marginTop: -6 }}>Skills and plugins live in the <A onClick={() => go("Skill Hub")}>Skill Hub</A>.{!v.code && !locks.code && <span className="cap-note">Skills are paused while code execution and file creation is off.</span>}</p>
       <Fade show={!!modal}>
@@ -401,15 +402,15 @@ function Capabilities({ go }: { go: (t: string) => void }) {
             {modal === "domains" ? (
               <>
                 <h2>Package manager domains</h2>
-                <p className="d">With network egress on, code can only reach these registries (and their subdomains). Every other address is blocked.</p>
+                <p className="d">With network egress on, code can reach these registries (and their subdomains). Turn on “Reach the whole public web” to let it reach any public website as well. Addresses inside the server and private networks are always blocked.</p>
                 <div className="cap-domains">{PKG_DOMAINS.map((g) => <div key={g.group}><b>{g.group}</b>{g.hosts.map((h) => <code key={h}>{h}</code>)}</div>)}</div>
               </>
             ) : (
               <>
                 <h2>Security risks of network egress</h2>
                 <ul className="cap-risks">
-                  <li>Packages from public registries can contain malicious code. It runs inside the isolated sandbox, which is deleted after each run.</li>
-                  <li>Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Only package registries are reachable, which limits but does not remove that risk.</li>
+                  <li>Packages from public registries can contain malicious code. It runs inside an isolated sandbox, separate from the server and from other accounts.</li>
+                  <li>Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries reachable, which limits but does not remove that risk.</li>
                   <li>Review what Synchro runs, especially in chats that use files or connectors you don&apos;t fully trust. Turn this off when you don&apos;t need extra packages.</li>
                 </ul>
               </>

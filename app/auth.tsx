@@ -438,6 +438,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
         <div className={cn("flex w-full flex-1 h-full items-center justify-center bg-card", "relative overflow-hidden")}>
             <div className="absolute inset-0 z-0"><GradientBackground /></div>
+            <div className="auth-scroll">
             <AnimatePresence mode="wait">
             {stage === "form" ? (
             <motion.fieldset key="form" exit={{ opacity: 0, scale: 0.96, filter: "blur(10px)", transition: { duration: 0.35, ease: EASE } }} className="relative z-10 flex flex-col items-center gap-8 w-[280px] mx-auto p-4">
@@ -551,6 +552,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
               <AuthStage key="stage" stage={stage} kind={kind} user={doneUser} fallbackName={email.split("@")[0]} error={errorMsg} onRetry={() => setStage("form")} />
             )}
             </AnimatePresence>
+            </div>
         </div>
     </motion.div>
     {leaving && !still && <div className="auth-fly" aria-hidden><span ref={flyRef}><Mark size={46} state={flyOpen ? "s" : "sync"} /></span></div>}

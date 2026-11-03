@@ -17,7 +17,8 @@ const MIME: Record<string, string> = {
   pdf: "application/pdf", csv: "text/csv", tsv: "text/tab-separated-values", txt: "text/plain", md: "text/markdown", json: "application/json",
   html: "text/html", xml: "application/xml", yaml: "text/yaml", yml: "text/yaml", py: "text/x-python", js: "text/javascript", ts: "text/plain", sql: "text/plain",
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
-  zip: "application/zip", mp3: "audio/mpeg", wav: "audio/wav", mp4: "video/mp4",
+  zip: "application/zip", mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", ogg: "audio/ogg", oga: "audio/ogg", flac: "audio/flac",
+  mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska", gltf: "model/gltf+json", glb: "model/gltf-binary",
 };
 export const mimeOf = (name: string) => MIME[name.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
 
@@ -56,13 +57,19 @@ export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
   });
 }
 
-export function readOutput(uid: string, id: string): (OutFile & { data: Buffer }) | null {
+/** Thông tin và đường dẫn tệp trên đĩa (không đọc nội dung): tải về theo từng đoạn cho video / tệp lớn. */
+export function outputFile(uid: string, id: string): (OutFile & { path: string }) | null {
   if (!/^[\w-]{8,40}$/.test(id)) return null;
   const r = init().prepare("SELECT id, name, mime, size, created_at FROM outputs WHERE id = ? AND user_id = ?").get(id, uid) as (OutFile & { created_at: number }) | undefined;
   if (!r || Date.now() - r.created_at > TTL) return null;
   const p = path.join(ROOT, uid, id);
   if (!fs.existsSync(p)) return null;
-  return { id: r.id, name: r.name, mime: r.mime, size: r.size, data: fs.readFileSync(p) };
+  return { id: r.id, name: r.name, mime: r.mime, size: fs.statSync(p).size, path: p };
+}
+
+export function readOutput(uid: string, id: string): (OutFile & { data: Buffer }) | null {
+  const f = outputFile(uid, id);
+  return f ? { id: f.id, name: f.name, mime: f.mime, size: f.size, data: fs.readFileSync(f.path) } : null;
 }
 
 export function removeUserOutputs(uid: string) {

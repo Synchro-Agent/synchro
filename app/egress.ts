@@ -1,4 +1,5 @@
-// Proxy ra internet cho code chạy trên máy cục bộ (giả lập, CODE_RUN=local): chỉ cho tới các kho thư viện trong PKG_DOMAINS.
+// Proxy ra internet cho code chạy trên máy cục bộ (giả lập, CODE_RUN=local): chỉ cho tới các kho thư viện trong PKG_DOMAINS, hoặc
+// mọi trang web công khai khi bật "Mọi trang web công khai" (proxy thứ hai, cổng riêng).
 // Code trong sandbox bị chặn mọi kết nối mạng trừ tới proxy này; pip/npm/curl đi qua proxy nhờ biến HTTPS_PROXY.
 // Proxy tự phân giải tên miền và từ chối địa chỉ nội bộ, nên không dùng được để vào máy chủ hay mạng nội bộ.
 import http from "node:http";
@@ -7,23 +8,23 @@ import { lookup } from "node:dns/promises";
 import { pkgHostAllowed } from "./catalog";
 import { isPrivate } from "./safefetch";
 
-type G = { __synchroEgress?: Promise<number> };
+type G = { __synchroEgress?: Promise<number>; __synchroEgressWeb?: Promise<number> };
 const g = globalThis as G;
 
-async function target(host: string, port: number) {
-  if (!pkgHostAllowed(host)) throw new Error(`blocked: ${host} is not a package registry`);
+async function target(host: string, port: number, web: boolean) {
+  if (!web && !pkgHostAllowed(host)) throw new Error(`blocked: ${host} is not a package registry`);
   if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
   const ips = (await lookup(host, { all: true })).map((x) => x.address);
   if (!ips.length || ips.some(isPrivate)) throw new Error(`blocked: ${host} resolves to a private address`);
   return ips.find((x) => net.isIP(x) === 4) ?? ips[0];
 }
 
-function start(): Promise<number> {
+function start(web: boolean): Promise<number> {
   const srv = http.createServer(async (req, res) => {
     // Yêu cầu HTTP thường (apt, một số gói cũ): chuyển tiếp nếu tên miền được phép.
     try {
       const u = new URL(req.url ?? "");
-      const ip = await target(u.hostname, Number(u.port || 80));
+      const ip = await target(u.hostname, Number(u.port || 80), web);
       const up = http.request({ host: ip, port: Number(u.port || 80), path: u.pathname + u.search, method: req.method, headers: { ...req.headers, host: u.host } }, (r) => {
         res.writeHead(r.statusCode ?? 502, r.headers);
         r.pipe(res);
@@ -39,7 +40,7 @@ function start(): Promise<number> {
     sock.on("error", () => {});
     const [host, p] = String(req.url ?? "").split(":");
     try {
-      const ip = await target(host, Number(p || 443));
+      const ip = await target(host, Number(p || 443), web);
       const up = net.connect(Number(p || 443), ip, () => {
         sock.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         if (head?.length) up.write(head);
@@ -58,7 +59,7 @@ function start(): Promise<number> {
 }
 
 // Cổng của proxy (khởi động một lần cho cả tiến trình).
-export function egressPort(): Promise<number> {
-  if (!g.__synchroEgress) g.__synchroEgress = start().catch((e) => { g.__synchroEgress = undefined; throw e; });
-  return g.__synchroEgress;
+export function egressPort(web = false): Promise<number> {
+  if (web) return (g.__synchroEgressWeb ??= start(true).catch((e) => { g.__synchroEgressWeb = undefined; throw e; }));
+  return (g.__synchroEgress ??= start(false).catch((e) => { g.__synchroEgress = undefined; throw e; }));
 }

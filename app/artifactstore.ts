@@ -39,6 +39,12 @@ export function getArtifact(uid: string, id: string): ArtRow | null {
   return r ? parse(r) : null;
 }
 
+/** Artifact theo đoạn chat + identifier (model đọc lại / kiểm tra bản đã lưu khi lịch sử gửi lên không còn chứa nó). */
+export function getArtifactByIdent(uid: string, conv: string, ident: string): ArtRow | null {
+  const r = init().prepare("SELECT * FROM artifacts WHERE user_id = ? AND conv = ? AND ident = ?").get(uid, conv, ident) as Raw | undefined;
+  return r ? parse(r) : null;
+}
+
 export type ArtInput = { ident: string; title: string; type: ArtType; lang?: string | null; content: string };
 export function validArt(x: unknown): ArtInput | null {
   const o = x as Partial<ArtInput>;

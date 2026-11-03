@@ -8,12 +8,21 @@ type State = { providers: ProviderInfo[]; default: string | null; allowed: strin
 let state: State = { providers: [], default: null, allowed: [], effort: {}, loaded: false };
 const subs = new Set<() => void>();
 let inflight: Promise<void> | null = null;
+// Lần hỏi đầu có thể lỗi hoặc chưa có hãng nào (máy chủ vừa khởi động lại sau deploy, nginx nạp lại cấu hình, mạng chập chờn): bộ chọn
+// model từng trống "đã kết nối ()" tới khi tải lại trang. Hỏi lại sau 2, 5, 10, 20 giây cho tới khi có danh sách.
+// Mỗi lúc chỉ một hẹn giờ: nhiều thành phần cùng hỏi lúc trang mới mở mà lỗi dồn dập thì không tiêu hết các lần hỏi lại trong vài giây.
+const RETRY_S = [2, 5, 10, 20];
+let tries = 0, again: ReturnType<typeof setTimeout> | null = null;
 
 export function refreshModels() {
   inflight ??= fetch("/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } })
-    .catch(() => {})
+    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
+    .catch(() => false)
+    .then((ok) => {
+      if (ok) tries = 0;
+      else if (!again && tries < RETRY_S.length) again = setTimeout(() => { again = null; refreshModels(); }, RETRY_S[tries++] * 1000);
+    })
     .finally(() => { inflight = null; });
   return inflight;
 }

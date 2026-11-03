@@ -11,6 +11,7 @@ function client(init = "") {
     let j = null; try { j = await r.json(); } catch {}
     return { s: r.status, j };
   };
+  f.cookie = () => cookie;
   return f;
 }
 // run-all đăng nhập quản trị một lần rồi chia phiên (tránh giới hạn số lần đăng nhập); chạy riêng lẻ thì tự đăng nhập.
@@ -131,6 +132,14 @@ r = await admin("GET", `/api/outputs/${png?.id}?inline=1`, undefined, true);
 ok(r.headers.get("content-type") === "image/png" && /^inline/.test(r.headers.get("content-disposition") ?? ""), "ảnh xem được ngay trong chat");
 r = await admin("GET", `/api/outputs/${xl?.id}?inline=1`, undefined, true);
 ok(/^attachment/.test(r.headers.get("content-disposition") ?? ""), "tệp không phải ảnh luôn tải về");
+{
+  // Tải theo đoạn (Range): trình phát video tua được, Safari mới phát MP4.
+  const res = await fetch(`${B}/api/outputs/${png?.id}`, { headers: { cookie: admin.cookie(), range: "bytes=0-7" } });
+  const buf = Buffer.from(await res.arrayBuffer());
+  ok(res.status === 206 && /^bytes 0-7\/\d+$/.test(res.headers.get("content-range") ?? "") && buf.length === 8 && buf.subarray(0, 4).toString("latin1") === "\x89PNG", "tải theo đoạn: 206, đúng 8 byte đầu", `${res.status} ${res.headers.get("content-range")} ${buf.length}`);
+  const bad = await fetch(`${B}/api/outputs/${png?.id}`, { headers: { cookie: admin.cookie(), range: "bytes=999999999-" } });
+  ok(bad.status === 416, "đoạn ngoài tệp: 416", String(bad.status));
+}
 r = await chat(admin, "Đếm số nguyên tố dưới 1 triệu");
 ok(/78,498 số nguyên tố/.test(r.j?.text ?? ""), "tính toán thật", (r.j?.text ?? "").slice(0, 200));
 
@@ -145,18 +154,40 @@ t = await run(`open('${(await import("node:os")).tmpdir()}/synchro-escape.txt','
 ok(/PermissionError|lỗi/i.test(t), "không ghi được ra ngoài thư mục chạy", t.slice(0, 300));
 t = await run("import os; print(sorted(os.listdir('.')))");
 ok(/main\.py/.test(t) && /outputs/.test(t), "mỗi lần chạy là thư mục trống mới", t.slice(0, 200));
+// Trong một đoạn chat, thư mục làm việc giữ nguyên giữa các lần chạy (bước sau dùng lại tệp bước trước); đoạn chat khác không thấy.
+const runIn = async (conv, code, extra = {}) => {
+  const x = await admin("POST", "/api/llm", { system: "", conv, messages: [{ role: "user", content: `#tool=run_code #args=${JSON.stringify({ language: "python", code, ...extra })}` }], model: M, skills: true });
+  return x.j ?? {};
+};
+const keepConv = "keep-" + Date.now().toString(36);
+let k = await runIn(keepConv, "import os\nos.makedirs('assets', exist_ok=True)\nopen('assets/frame.txt','w').write('buoc-1')\nopen('outputs/a.txt','w').write('a')\nprint('xong buoc 1')");
+ok((k.files ?? []).some((f) => f.name === "a.txt"), "bước 1 gửi tệp outputs/a.txt", JSON.stringify(k).slice(0, 300));
+k = await runIn(keepConv, "import os\nprint('doc lai:', open('assets/frame.txt').read())\nprint('outputs cu:', sorted(os.listdir('outputs')))");
+ok(/doc lai: buoc-1/.test(k.text ?? "") && /outputs cu: \[\]/.test(k.text ?? ""), "bước 2 cùng đoạn chat đọc lại được tệp bước 1; outputs/ không gửi lại tệp cũ", (k.text ?? "").slice(0, 300));
+k = await runIn("khac-" + Date.now().toString(36), "import os\nprint('co assets:', os.path.exists('assets'))");
+ok(/co assets: False/.test(k.text ?? ""), "đoạn chat khác không thấy thư mục của đoạn chat này", (k.text ?? "").slice(0, 300));
+k = await runIn(keepConv, "import time\ntime.sleep(20)", { timeout: 6 });
+ok(/quá 6 giây/.test(k.text ?? ""), "tham số timeout của run_code được áp dụng", (k.text ?? "").slice(0, 300));
 
 console.log("8. Mạng");
 r = await chat(admin, "Thử truy cập mạng");
 ok(/pypi.org\S* → bị chặn/.test(r.j?.text ?? "") && /example.com\S* → bị chặn/.test(r.j.text), "tắt mạng: mọi địa chỉ bị chặn", (r.j?.text ?? "").slice(0, 400));
 r = await chat(admin, "Cài thư viện humanize bằng pip");
 ok(/pip exit code: [1-9]/.test(r.j?.text ?? "") || /lỗi/.test(r.j?.text ?? ""), "tắt mạng: pip install thất bại", (r.j?.text ?? "").slice(0, 300));
-await setCaps(admin, { net: true });
+await setCaps(admin, { net: true, web: false });
 r = await chat(admin, "Thử truy cập mạng");
-ok(/pypi.org\S* → truy cập được/.test(r.j?.text ?? "") && /example.com\S* → bị chặn/.test(r.j.text), "bật mạng: kho thư viện được, trang khác bị chặn", (r.j?.text ?? "").slice(0, 400));
+ok(/pypi.org\S* → truy cập được/.test(r.j?.text ?? "") && /example.com\S* → bị chặn/.test(r.j.text), "bật mạng, tắt “mọi trang web công khai”: kho thư viện được, trang khác bị chặn", (r.j?.text ?? "").slice(0, 400));
 r = await chat(admin, "Cài thư viện humanize bằng pip");
 ok(/Đã cài humanize/.test(r.j?.text ?? ""), "bật mạng: pip install được", (r.j?.text ?? "").slice(0, 400));
+await setCaps(admin, { web: true });
+r = await chat(admin, "Thử truy cập mạng");
+ok(/pypi.org\S* → truy cập được/.test(r.j?.text ?? "") && /example.com\S* → truy cập được/.test(r.j.text), "bật “mọi trang web công khai”: trang web thường cũng tải được", (r.j?.text ?? "").slice(0, 400));
+r = await admin("GET", "/api/caps");
+ok(r.j.caps.web === true, "lưu được “mọi trang web công khai”");
 await setCaps(admin, { net: false });
+r = await admin("GET", "/api/caps");
+ok(r.j.caps.web === false, "tắt mạng thì “mọi trang web công khai” cũng tắt", JSON.stringify(r.j.caps));
+await setCaps(admin, { web: false });
 
 console.log("9. Tắt chạy code / quyền quản trị viên");
 await setCaps(admin, { code: false });

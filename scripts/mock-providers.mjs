@@ -434,6 +434,11 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const brain = CLI.mockBrain(q);
   if (brain) return { text: brain, q };
   if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
+  // "#artimg": artifact có ảnh từ URL ngoài (ảnh tĩnh của chính máy giả lập) — kiểm thử khung xem trước tự nhúng ảnh (artdoc.ts).
+  if (q.includes("#artimg")) {
+    const app = `http://localhost:${process.env.PORT ?? 3200}`;
+    return { text: `Trang có ảnh.\n<artifact identifier="anh-ngoai" type="text/html" title="Ảnh ngoài">\n<!doctype html><html><body style="margin:0"><img id="logo" src="${app}/icon-192.png" style="width:96px;height:96px"><div id="nen" style="width:96px;height:96px;background:url('${app}/icon-512.png') center/cover"></div></body></html>\n</artifact>`, q };
+  }
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;

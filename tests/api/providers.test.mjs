@@ -58,6 +58,11 @@ console.log("3. Model của gói trong bộ chọn model và chat bằng gói");
   ok(r1.s === 200 && /lượt 1/.test(r1.j.text) && r1.j.via === "claude", "chat bằng gói Claude", JSON.stringify(r1.j));
   const r2 = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", system: "Trả lời ngắn.", messages: [...msgs, { role: "assistant", content: r1.j.text }, { role: "user", content: "tiếp" }], conv, skills: true });
   ok(r2.s === 200 && /lượt 2/.test(r2.j.text), "câu tiếp theo nối đúng phiên của CLI", JSON.stringify(r2.j));
+  // Hướng dẫn hệ thống rất dài (nhiều skill, studio, connector; tiếng Việt 2–3 byte mỗi chữ): Linux không cho một tham số quá 128 KB,
+  // CLI không khởi động được ("spawn E2BIG", synchro.net.nz khi làm slide). CLI giả lập làm như Linux; Synchro phải đưa qua tệp.
+  const longSys = "Hướng dẫn trình bày slide chỉn chu, đúng bố cục, không chữ đè chữ. ".repeat(3000);
+  const big = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", system: longSys, messages: [{ role: "user", content: "làm một slide mới" }], conv: `${conv}-long`, skills: true });
+  ok(big.s === 200 && !/E2BIG/.test(JSON.stringify(big.j)) && /lượt 1/.test(big.j?.text ?? ""), `hướng dẫn hệ thống ${Math.round(Buffer.byteLength(longSys) / 1024)} KB: Claude Code nhận qua tệp, không lỗi E2BIG`, JSON.stringify(big.j).slice(0, 300));
   const run = await admin("POST", "/api/llm", { model: "sub-claude/haiku", messages: [{ role: "user", content: "chạy nền" }], conv: `${conv}-bg`, skills: true, async: true });
   let res = null;
   for (let i = 0; i < 40 && run.j?.run; i++) { const x = await admin("GET", `/api/runs/${run.j.run}?json=1`); if (x.j?.run?.status && x.j.run.status !== "running") { res = x.j.run; break; } await sleep(300); }

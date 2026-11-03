@@ -267,10 +267,12 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         )}
         {!none && (
           <button className="menu-item mline mauto" onClick={() => pick(AUTO)} onMouseEnter={() => setSub(null)}>
-            <span className="mauto-t"><b>Tự động</b><em>{`Chọn qua mọi hãng đã kết nối (${providers.map((p) => p.name).join(", ")}): việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó`}</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
+            <span className="mauto-t"><b>Tự động</b><em>{`Chọn qua mọi hãng đã kết nối${providers.length ? ` (${providers.map((p) => p.name).join(", ")})` : ""}: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó`}</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
           </button>
         )}
         {!none && <hr />}
+        {/* Danh sách chưa về (máy chủ vừa khởi động lại còn kiểm tra đăng nhập gói): báo đang tải thay vì để trống. */}
+        {!loaded && <div className="mload" role="status"><span className="art-spin sm" /><span>Đang tải danh sách model…</span></div>}
         {providers.map((pv) => (
           <button key={pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
             {pv.name}<span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>

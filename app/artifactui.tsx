@@ -20,23 +20,8 @@ import { buildPptx, PPTX_FRAME_JS, type DeckSlide } from "./deckpptx";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-const V = "/vendor/";
-// Thư viện cho artifact React: tải từ /vendor của Synchro; nếu trình duyệt chặn (khung cô lập không được gọi về máy
-// localhost khi chạy thử cục bộ) thì tải bản giống hệt từ jsDelivr. Mã băm toàn vẹn (SRI) bảo đảm đúng từng byte.
-const LIBS: [string, string, string][] = [
-  ["tailwind-browser-4.3.3.js", "@tailwindcss/browser@4.3.3/dist/index.global.js", "sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB"],
-  ["react-18.3.1.min.js", "react@18.3.1/umd/react.production.min.js", "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"],
-  ["react-dom-18.3.1.min.js", "react-dom@18.3.1/umd/react-dom.production.min.js", "sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"],
-  ["prop-types-15.8.1.min.js", "prop-types@15.8.1/prop-types.min.js", "sha384-/AfDwVDXNopzPvhxMPQ11y1OCpR6mVkWx47qzSwIiquvxkcMkZddEzDNtIOtfCpk"],
-  ["recharts-2.15.4.min.js", "recharts@2.15.4/umd/Recharts.js", "sha384-8WLbYxXTeAFm5KD1lWOhUghb4T1QP+Y15d4aEGIFc6zzN2BMObhTK1u7mXiLbp8p"],
-  ["lucide-react-0.460.0.min.js", "lucide-react@0.460.0/dist/umd/lucide-react.min.js", "sha384-JEoKym/kMViouWwSkyVNKeAyxFMvD/XeYv4VtG86kNEtGxzuvjSjTqWulOQd6dNY"],
-  ["babel-7.29.11.min.js", "@babel/standalone@7.29.11/babel.min.js", "sha384-WLl8kKG54INe3zxB+zrpQr6Z1cgCoBg+ZirrqnCcjzA5sjvtSirQ11bgyU91deI+"],
-];
-// Thư viện tải khi cần: chụp ảnh PNG của artifact (html-to-image); xuất PowerPoint cũng dùng nó để chụp nền từng slide (deckpptx.ts).
-export const H2I: [string, string, string] = ["html-to-image-1.11.11.js", "html-to-image@1.11.11/dist/html-to-image.js", "sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz"];
-export const libUrls = (origin: string, l: [string, string, string]) => [`${origin}${V}${l[0]}`, `https://cdn.jsdelivr.net/npm/${l[1]}`, l[2]];
-const CDNS = "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com";
-const esc = (s: string) => s.replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+import { buildDocCore, deckExport, externalImageUrls, H2I, isDeck, libUrls, swapUrls } from "./artdoc";
+export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
 // báo lỗi và chiều cao nội dung về cho Synchro. Chỉ trao đổi qua postMessage với đúng khung cha.
@@ -73,7 +58,7 @@ function at(el){return el&&el.closest?el.closest("[data-sx-loc]"):null}
 addEventListener("keyup",function(e){if(e.key==="Alt"&&!pk&&hl)hl.style.display="none"},true);
 addEventListener("mouseover",function(e){if(e.target===hl)return;if(!pk&&!(e.altKey&&at(e.target))){if(hl&&!pk)hl.style.display="none";return}var r=e.target.getBoundingClientRect(),b=box();b.style.display="block";b.style.left=r.left+"px";b.style.top=r.top+"px";b.style.width=r.width+"px";b.style.height=r.height+"px"},true);
 addEventListener("click",function(e){var el=e.target,L=at(el);if(!pk&&!(e.altKey&&L))return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(el===document.body||el===document.documentElement)return;if(hl&&!pk)hl.style.display="none";
-post({t:"picked",sel:where(el),tag:el.tagName.toLowerCase(),text:String(el.innerText||el.textContent||"").replace(/\\s+/g," ").trim().slice(0,200),html:el.outerHTML.replace(/\\s+data-sx-loc="[^"]*"/g,"").slice(0,1500),loc:L?L.getAttribute("data-sx-loc"):""})},true);
+post({t:"picked",sel:where(el),tag:el.tagName.toLowerCase(),text:String(el.innerText||el.textContent||"").replace(/\\s+/g," ").trim().slice(0,200),html:el.outerHTML.replace(/\\s+data-sx-loc="[^"]*"/g,"").replace(/(data:[\\w\\/+.-]+;base64,)[A-Za-z0-9+\\/=]{40,}/g,"$1…").slice(0,1500),loc:L?L.getAttribute("data-sx-loc"):""})},true);
 addEventListener("keydown",function(e){if(pk&&e.key==="Escape"){e.preventDefault();post({t:"picked",cancel:true})}},true);
 addEventListener("error",function(e){post({t:"error",message:String(e.message||(e.error&&e.error.message)||"Lỗi không rõ"),line:e.lineno||0})});
 addEventListener("unhandledrejection",function(e){var r=e.reason;post({t:"error",message:String(r&&r.message||r)})});
@@ -81,72 +66,9 @@ var last=0;function h(f){var v=Math.ceil(Math.max(document.documentElement.scrol
 addEventListener("load",function(){h(1);post({t:"ready"});setTimeout(function(){h(1)},250);setTimeout(function(){h(1)},1200);try{new ResizeObserver(function(){h()}).observe(document.body||document.documentElement)}catch(e){setInterval(h,500)}});
 })();</script>`;
 
-// Bản trình bày HTML: mỗi slide là <section class="slide"> (hoặc các <section> nối nhau của bản trình chiếu tự viết).
-// Synchro điều khiển: chỉ hiện slide đang xem, nhận lệnh chuyển slide, báo số slide; in thì mỗi slide một trang (PDF 16:9).
-// fixed: khung ảnh thu nhỏ chỉ hiện đúng một slide, không nhận thao tác.
-export const isDeck = (a: { type: ArtType; content: string }) => a.type === "html" &&
-  ((a.content.match(/<section\b[^>]*(class=["'][^"']*\bslide\b|data-slide)/gi)?.length ?? 0) >= 2 || ((a.content.match(/<section\b/gi)?.length ?? 0) >= 2 && /ArrowRight|PageDown/.test(a.content)));
-const deckRuntime = (fixed: number | null) => `<style>[data-sx-hide]{display:none!important}[data-sx-on]{opacity:1!important;visibility:visible!important;transform:none!important}
-${fixed !== null ? "html{pointer-events:none}html,body{overflow:hidden!important}" : ""}
-@media print{@page{size:13.333in 7.5in;margin:0}html,body{height:auto!important;overflow:visible!important}[data-sx-slide]{position:relative!important;inset:auto!important;left:auto!important;top:auto!important;opacity:1!important;visibility:visible!important;transform:none!important;width:100vw!important;height:100vh!important;break-after:page;page-break-after:always;box-sizing:border-box}[data-sx-noprint]{display:none!important}}</style>
-<script>(function(){var fixed=${fixed === null ? "null" : fixed},cur=0,S=[],CL=["on","active","current","is-active","visible","present"];
-function post(m){m.__synchro=window.__sxCh;try{parent.postMessage(m,"*")}catch(e){}}
-function find(){var s=[].slice.call(document.querySelectorAll("section.slide,[data-slide]"));if(s.length<2)s=[].slice.call(document.querySelectorAll("body>section,body>main>section,body>div>section,.slides>section"));return s.length>1?s:[]}
-function show(i){S=find();if(!S.length){post({t:"slides",n:0,cur:0});return}cur=Math.max(0,Math.min(i,S.length-1));
-S.forEach(function(el,k){el.setAttribute("data-sx-slide","");if(k===cur){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","");CL.forEach(function(c){el.classList.add(c)})}else{el.setAttribute("data-sx-hide","");el.removeAttribute("data-sx-on");CL.forEach(function(c){el.classList.remove(c)})}});
-if(fixed===null)post({t:"slides",n:S.length,cur:cur})}
-window.__sxGo=function(i){show(i)};window.__sxCur=function(){return S[cur]||null};window.__sxAll=function(){S=find();return S};window.__sxIdx=function(){return cur};
-function reveal(){S=find();S.forEach(function(el){el.removeAttribute("data-sx-hide");el.setAttribute("data-sx-on","")});
-[].forEach.call(document.body.querySelectorAll("*"),function(el){if(S.indexOf(el)<0&&!S.some(function(s){return s.contains(el)||el.contains(s)})&&getComputedStyle(el).position==="fixed")el.setAttribute("data-sx-noprint","")})}
-window.__sxPrint=function(){reveal();setTimeout(function(){print();show(cur)},60)};
-addEventListener("beforeprint",reveal);addEventListener("afterprint",function(){show(cur)});
-if(fixed===null){addEventListener("keydown",function(e){var k=e.key,n=["ArrowRight","ArrowDown","PageDown"," ","Enter"].indexOf(k)>=0?1:["ArrowLeft","ArrowUp","PageUp","Backspace"].indexOf(k)>=0?-1:0;
-if(k==="Home"||k==="End"){e.preventDefault();e.stopImmediatePropagation();show(k==="Home"?0:1e9);return}if(n){e.preventDefault();e.stopImmediatePropagation();show(cur+n)}},true);
-addEventListener("click",function(e){if(e.target.closest&&e.target.closest("a,button,input,select,textarea,label,[onclick]"))return;e.stopImmediatePropagation();if(window.__sxPresent)show(cur+(e.clientX>innerWidth/3?1:-1))},true)}
-function start(){show(fixed===null?0:fixed);setTimeout(function(){show(fixed===null?cur:fixed)},120)}
-if(document.readyState==="loading")addEventListener("DOMContentLoaded",start);else start()})();</script>`;
-
-function csp(origin: string) {
-  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' ${origin}${V} ${CDNS}; style-src 'unsafe-inline' https://fonts.googleapis.com ${CDNS}; font-src https://fonts.gstatic.com ${CDNS} data:; img-src data: blob:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">`;
-}
-const BASE_CSS = `<style>:root{color-scheme:light dark}html,body{margin:0}body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>`;
-
-// Chèn vào <head> của trang (hoặc bọc trang nếu model chỉ viết phần thân).
-function withHead(content: string, head: string) {
-  if (/<head[^>]*>/i.test(content)) return content.replace(/<head[^>]*>/i, (m) => m + head);
-  if (/<html[^>]*>/i.test(content)) return content.replace(/<html[^>]*>/i, (m) => `${m}<head>${head}</head>`);
-  return `<!doctype html><html><head>${head}${BASE_CSS}</head><body>${content}</body></html>`;
-}
-// Tệp HTML tải về của bản trình bày: mở bằng trình duyệt là trình chiếu được (phím mũi tên, bấm chuột), in ra mỗi slide một trang.
-export const deckExport = (content: string) => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`);
-
-// loc: đánh dấu dòng mã nguồn lên từng phần tử (Alt+Click → đúng dòng), chỉ ở khung xem trước, không có trong bản tải về.
+// Khung xem trước: trang dựng ở artdoc.ts kèm cầu nối với Synchro (postMessage).
 export function buildDoc(type: ArtType, content: string, origin: string, ch: string, dark: boolean, deck?: { fixed: number | null }, title = "", loc = false): string {
-  if (loc && (type === "html" || type === "svg")) content = instrumentHtml(content);
-  const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${csp(origin)}${bridge(ch, origin)}${deck && type === "html" ? `<script>window.__sxCh=${JSON.stringify(ch)}</script>${deckRuntime(deck.fixed)}` : ""}`;
-  // Chèn CSP + cầu nối; trang HTML giữ tiêu đề của chính nó, React / SVG lấy tên artifact (tên mặc định khi lưu PDF).
-  if (type === "html") return withHead(content, head);
-  const titled = title ? `${head}<title>${htmlEsc(title)}</title>` : head;
-  if (type === "svg") {
-    return `<!doctype html><html><head>${titled}<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${dark ? "#1b1b1b" : "#fff"}}svg{max-width:100%;max-height:100vh;height:auto}</style></head><body>${content}</body></html>`;
-  }
-  // React: tải thư viện theo thứ tự, dịch JSX/TSX bằng Babel trong khung, import được react, recharts, lucide-react; có Tailwind.
-  const libs = LIBS.map(([f, cdn, sri]) => [`${origin}${V}${f}`, `https://cdn.jsdelivr.net/npm/${cdn}`, sri]);
-  const loading = `<style>.__ld{position:fixed;inset:0;display:grid;place-items:center}.__ld i{width:22px;height:22px;border-radius:50%;border:2px solid #d6d6d0;border-top-color:#545452;animation:__s .8s linear infinite}@keyframes __s{to{transform:rotate(360deg)}}</style><div class="__ld"><i></i></div>`;
-  return `<!doctype html><html><head>${titled}${BASE_CSS}</head><body><div id="root">${loading}</div>
-<script>(function(){var src=${esc(JSON.stringify(content))},libs=${JSON.stringify(libs)},i=0;
-function load(u,sri,cb){var s=document.createElement("script");s.src=u;s.crossOrigin="anonymous";s.integrity=sri;s.onload=function(){cb(true)};s.onerror=function(){s.remove();cb(false)};document.head.appendChild(s)}
-function next(){if(i>=libs.length)return run();var l=libs[i++];load(l[0],l[2],function(ok){if(ok)return step();load(l[1],l[2],function(ok2){if(!ok2)throw new Error("Không tải được thư viện cho artifact. Kiểm tra kết nối mạng rồi bấm Chạy lại.");step()})})}
-function step(){if(window.React&&!window.react)window.react=window.React;next()}
-function run(){var mods={"react":React,"react-dom":ReactDOM,"react-dom/client":ReactDOM,"recharts":Recharts,"lucide-react":LucideReact,"prop-types":PropTypes};
-function req(n){if(mods[n])return mods[n];throw new Error('Thư viện "'+n+'" không có sẵn trong artifact (chỉ có react, recharts, lucide-react).')}
-${loc ? `function sxLoc(b){var t=b.types;return{visitor:{JSXOpeningElement:function(p){var n=p.node,el=p.parent;if(!n.loc||n.name.type!=="JSXIdentifier"||!/^[a-z]/.test(n.name.name))return;if(n.attributes.some(function(a){return a.type==="JSXAttribute"&&a.name&&a.name.name==="${LOC_ATTR}"}))return;n.attributes.push(t.jsxAttribute(t.jsxIdentifier("${LOC_ATTR}"),t.stringLiteral(n.loc.start.line+"-"+(el&&el.loc?el.loc.end.line:n.loc.end.line))))}}}}
-` : ""}var out=Babel.transform(src,{filename:"App.tsx",presets:[["typescript",{isTSX:true,allExtensions:true}],["react",{runtime:"classic"}]],plugins:[${loc ? "sxLoc," : ""}"transform-modules-commonjs"]}).code;
-var module={exports:{}};new Function("module","exports","require","React",out)(module,module.exports,req,React);
-var C=module.exports.default||module.exports.App||Object.values(module.exports).find(function(v){return typeof v==="function"});
-if(!C)throw new Error("Không tìm thấy component (cần export default).");
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(C))}
-next()})();</script></body></html>`;
+  return buildDocCore(type, content, origin, ch, dark, bridge(ch, origin), deck, title, loc);
 }
 
 const isDark = () => typeof document !== "undefined" && document.documentElement.dataset.theme === "dark";
@@ -158,6 +80,38 @@ export type FrameSend = (m: FrameMsg) => void;
 // store: nơi lưu dữ liệu cho window.storage ({ app } ứng dụng đã xuất bản, { art } artifact đang thử trong chat); không có thì báo không lưu được.
 // client: mã của tab (ứng dụng đã xuất bản), để tab ghi dữ liệu không nhận lại thông báo "vừa đổi" của chính mình.
 export type StoreRef = { app: string; client?: string } | { art: { conv: string; ident: string } };
+// Ảnh từ URL ngoài (xem artdoc.ts): tải qua /api/artimg rồi nhúng thành data: trước khi dựng khung. Chờ tối đa 6 giây; ảnh nào
+// không tải được thì giữ URL (khung báo ảnh hỏng như trước). Nhớ theo URL cho cả phiên (ảnh thu nhỏ, phiên bản khác dùng lại).
+const imgCache = new Map<string, Promise<string | null>>();
+const dataUrl = (u: string) => {
+  let p = imgCache.get(u);
+  if (!p) {
+    p = fetch(`/api/artimg?u=${encodeURIComponent(u)}`).then((r) => (r.ok ? r.blob() : null))
+      .then((b) => b && new Promise<string>((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result)); f.onerror = no; f.readAsDataURL(b); }))
+      .catch(() => null);
+    imgCache.set(u, p);
+    p.then((d) => { if (!d) imgCache.delete(u); });
+  }
+  return p;
+};
+function useInlineImages(content: string, on: boolean): string | null {
+  const urls = useMemo(() => (on ? externalImageUrls(content) : []), [content, on]);
+  const [out, setOut] = useState<{ src: string; v: string } | null>(null);
+  useEffect(() => {
+    if (!urls.length) return;
+    let live = true;
+    const t = setTimeout(() => { if (live) setOut((o) => (o?.src === content ? o : { src: content, v: content })); }, 6000);
+    Promise.all(urls.map(async (u) => [u, await dataUrl(u)] as const)).then((got) => {
+      if (!live) return;
+      clearTimeout(t);
+      setOut({ src: content, v: swapUrls(content, new Map(got.filter((g): g is readonly [string, string] => !!g[1]))) });
+    });
+    return () => { live = false; clearTimeout(t); };
+  }, [content, urls]);
+  if (!urls.length) return content;
+  return out?.src === content ? out.v : null;
+}
+
 export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl, store, loc }: {
   type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties;
   deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void; store?: StoreRef; loc?: boolean;
@@ -165,7 +119,8 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
   const deckKey = deck ? String(deck.fixed) : "";
-  const doc = useMemo(() => buildDoc(type, content, location.origin, ch, isDark(), deck, title, loc), [type, content, ch, deckKey, title, loc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = useInlineImages(content, type === "html" || type === "react" || type === "svg");
+  const doc = useMemo(() => (shown === null ? "" : buildDoc(type, shown, location.origin, ch, isDark(), deck, title, loc)), [type, shown, ch, deckKey, title, loc]); // eslint-disable-line react-hooks/exhaustive-deps
   const cb = useRef({ onError, onHeight, ai, onMsg, store });
   cb.current = { onError, onHeight, ai, onMsg, store };
   useEffect(() => { ctl?.((m) => ref.current?.contentWindow?.postMessage({ ...m, __synchro: ch }, "*"), ref.current); });
@@ -196,6 +151,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
     addEventListener("message", h);
     return () => removeEventListener("message", h);
   }, [ch]);
+  if (shown === null) return <div className={className} style={{ ...style, display: "grid", placeItems: "center" }} aria-busy="true"><span className="art-spin" /></div>;
   return <iframe ref={ref} key={ch} title={title} className={className} style={style} srcDoc={doc}
     sandbox="allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads" allow="clipboard-write" referrerPolicy="no-referrer" />;
 }
@@ -770,11 +726,14 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
 
 // ---------------------------------------------------------------- tệp code đã tạo (run_code → outputs/)
 // Bấm thẻ để xem trước trong khung bên cạnh; nút mũi tên tải thẳng về máy.
+// Video MP4 / WebM phát ngay trong tin nhắn như ảnh (chỉ tải phần đầu để lấy khung đầu và thời lượng).
 export function OutputFiles({ files, onOpen, active }: { files: OutFile[]; onOpen?: (f: OutFile) => void; active?: string }) {
   const imgs = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.mime));
+  const vids = files.filter((f) => /^video\/(mp4|webm|quicktime)$/.test(f.mime));
   return (
     <div className="outs">
       {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <button key={f.id} onClick={() => onOpen?.(f)} aria-label={f.name}><img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" /></button>)}</div>}
+      {vids.length > 0 && <div className="outs-imgs outs-vids">{vids.map((f) => <video key={f.id} controls playsInline preload="metadata" src={`/api/outputs/${f.id}?inline=1`} aria-label={f.name} />)}</div>}
       {files.map((f) => {
         const k = fileKind(f.name);
         return (

@@ -2262,7 +2262,7 @@ Object.assign(VI2EN, {
     [/^Quét (\S+) skill$/, (m) => `Scan ${sk(m[1])}`],
     [/^Đã (tắt|bật lại|xóa) (\S+) skill$/, (m) => `${({ "tắt": "Turned off", "bật lại": "Turned on", "xóa": "Deleted" } as Record<string, string>)[m[1]]} ${sk(m[2])}`],
     [/^Xóa skill "(.+)" khỏi thư viện (.+)\?$/, (m) => `Delete skill "${m[1]}" from the ${m[2]} library?`],
-    [/^Chọn qua mọi hãng đã kết nối \((.*)\): việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó$/, (m) => `Picks across every connected provider (${m[1]}): quick models for easy tasks, the strongest model suited to the job for hard ones`],
+    [/^Chọn qua mọi hãng đã kết nối(?: \((.*)\))?: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó$/, (m) => `Picks across every connected provider${m[1] ? ` (${m[1]})` : ""}: quick models for easy tasks, the strongest model suited to the job for hard ones`],
     [/^Xóa skill "(.+)"\?$/, (m) => `Delete skill "${m[1]}"?`],
     [/^Đã xóa (\S+) skill · đã gỡ (\S+) thư viện trống$/, (m) => `Deleted ${sk(m[1])} · uninstalled ${m[2]} empty ${m[2] === "1" ? "library" : "libraries"}`],
   );
@@ -2286,6 +2286,16 @@ Object.assign(VI2EN, { "Ẩn/hiện bảng phiên": "Show or hide the session pa
 // Chữ gợi ý bản ngắn khi ô nhập hẹp (phfit.ts chọn bản dài nhất còn vừa ô).
 Object.assign(VI2EN, {
   "Tìm lệnh, đoạn chat, skill…": "Search commands, chats, skills…", "Tìm kiếm…": "Search…",
-  "Nhắn thêm vào việc đang làm…": "Add to the current task…", "Viết tin nhắn… gõ @ để chọn tệp": "Write a message… type @ to pick files", "Viết tin nhắn…": "Write a message…",
+  "Nhắn thêm vào việc đang làm…": "Add to the current task…", "Đang tải danh sách model…": "Loading models…",
+  "Địa chỉ ảnh không hợp lệ.": "Invalid image address.", "Không tải được ảnh.": "Couldn't load the image.", "Thư mục giữ lại không hợp lệ.": "Invalid kept folder.", "Viết tin nhắn… gõ @ để chọn tệp": "Write a message… type @ to pick files", "Viết tin nhắn…": "Write a message…",
 });
 Object.assign(EN2VI, { "Paste a git repository link (GitHub, GitLab…)": "Dán link repo git (GitHub, GitLab…)", "Paste a git repository link": "Dán link repo git" });
+
+// Chạy code ra mọi trang web công khai (Cài đặt → Khả năng).
+Object.assign(EN2VI, {
+  "Reach the whole public web": "Truy cập mọi trang web công khai",
+  "Code can also download images, fonts and data from any public website and call public APIs, not just package registries. Addresses inside the server and private networks stay blocked.": "Code tải được cả ảnh, phông chữ, dữ liệu từ mọi trang web công khai và gọi API công khai, không chỉ kho thư viện. Địa chỉ bên trong máy chủ và mạng riêng vẫn bị chặn.",
+  "With network egress on, code can reach these registries (and their subdomains). Turn on “Reach the whole public web” to let it reach any public website as well. Addresses inside the server and private networks are always blocked.": "Khi bật truy cập mạng, code tới được các kho thư viện này (và tên miền con của chúng). Bật “Truy cập mọi trang web công khai” để code tới được cả mọi trang web công khai. Địa chỉ bên trong máy chủ và mạng riêng luôn bị chặn.",
+  "Packages from public registries can contain malicious code. It runs inside an isolated sandbox, separate from the server and from other accounts.": "Gói từ kho công khai có thể chứa mã độc. Mã đó chỉ chạy trong sandbox cô lập, tách khỏi máy chủ và các tài khoản khác.",
+  "Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries reachable, which limits but does not remove that risk.": "Nội dung Synchro đọc (trang web, tệp, kết quả connector) có thể tìm cách lừa nó cài gói hoặc gửi dữ liệu ra ngoài. Tắt “Truy cập mọi trang web công khai” thì chỉ kho thư viện là truy cập được, nên rủi ro giảm bớt nhưng không mất hẳn.",
+});

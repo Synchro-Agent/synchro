@@ -2,6 +2,10 @@
 // dev:mock chép các tệp này vào <engine home>/.local/bin kèm mock-cli.json ({ base: địa chỉ máy chủ giả lập }).
 const fs = require("fs"), path = require("path"), crypto = require("crypto"), readline = require("readline");
 
+// Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): CLI thật không khởi động được ("spawn E2BIG"). macOS không có
+// giới hạn này nên CLI giả lập tự làm như Linux, để kiểm thử bắt được chỗ còn nhét prompt / hướng dẫn dài vào tham số.
+if (process.argv.some((x) => Buffer.byteLength(x, "utf8") > 131072)) { process.stderr.write("spawn E2BIG\n"); process.exit(126); }
+
 const cfg = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, "mock-cli.json"), "utf8")); } catch { return { base: "http://127.0.0.1:4010" }; } })();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");

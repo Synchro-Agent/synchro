@@ -18,7 +18,7 @@ const url = (f: OutFile, inline = false) => `/api/outputs/${f.id}${inline ? "?in
 const TEXT = /\.(txt|log|md|markdown|json|jsonl|py|js|mjs|ts|tsx|jsx|css|sql|sh|yml|yaml|xml|ini|toml|html?|svg)$/i;
 type Mode = "image" | "audio" | "video" | "office" | "text" | "none";
 const modeOf = (f: OutFile): Mode =>
-  /^image\/(png|jpeg|gif|webp)$/.test(f.mime) ? "image" : f.mime.startsWith("audio/") ? "audio" : f.mime.startsWith("video/") ? "video"
+  /^image\/(png|jpeg|gif|webp)$/.test(f.mime) ? "image" : /^audio\/(mpeg|wav|mp4|ogg|flac)$/.test(f.mime) ? "audio" : /^video\/(mp4|webm|quicktime)$/.test(f.mime) ? "video"
     : officeKind(f.name) ? "office" : TEXT.test(f.name) && f.size <= 2_000_000 ? "text" : "none";
 export const canPreview = (f: OutFile) => modeOf(f) !== "none";
 
