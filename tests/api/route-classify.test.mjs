@@ -42,6 +42,9 @@ const CASES = [
   ["Which is correct: 'less people' or 'fewer people'?", "language", "medium"],
   ["Check my grammar please: I has a dog and she like play outside.", "language", "medium"],
   ["IELTS writing task 2: give me a band 8 sample answer about online learning", ["language", "write"], "high"],
+  // "kế toán", "thanh toán"… không phải toán học (từng đưa email chào hàng sang model suy luận, chờ ~10 giây).
+  ["Viết giúp tôi một email chào hàng ngắn (cold email) giới thiệu phần mềm kế toán cho chủ quán cà phê", ["write"], "medium"],
+  ["Thanh toán bằng thẻ có an toàn không?", ["qa"], "medium"],
   ["Check grammar for me:\n\n" + essay, "language", "medium"],
   [essay + "\n\nSửa ngữ pháp giúp mình", "language", "medium"],
   ["Từ đồng nghĩa với 'happy' là gì?", "language", "medium"],
