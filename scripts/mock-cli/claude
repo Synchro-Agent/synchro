@@ -4,8 +4,9 @@
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
-// Hướng dẫn hệ thống: --append-system-prompt <chữ> hoặc --append-system-prompt-file <tệp> (Synchro dùng tệp khi hướng dẫn dài).
-const SYS = C.flag(a, "--append-system-prompt") ?? (C.flag(a, "--append-system-prompt-file") ? fs.readFileSync(C.flag(a, "--append-system-prompt-file"), "utf8") : undefined);
+// Hướng dẫn hệ thống: --system-prompt <chữ> hoặc --system-prompt-file <tệp> (Synchro dùng tệp khi hướng dẫn dài; bản cũ dùng --append-…).
+const sysFlag = (n) => C.flag(a, n) ?? (C.flag(a, n + "-file") ? fs.readFileSync(C.flag(a, n + "-file"), "utf8") : undefined);
+const SYS = sysFlag("--system-prompt") ?? sysFlag("--append-system-prompt");
 const dir = process.env.CLAUDE_CONFIG_DIR || path.join(process.env.HOME || "/tmp", ".claude");
 const loginFile = path.join(dir, ".mock-login");
 
@@ -97,6 +98,8 @@ const loginFile = path.join(dir, ".mock-login");
     if (mcpUrl) {
       if (ask && allowed.includes("mcp__synchro")) {
         await delta(`Mình sẽ dùng công cụ ${ask.name} của Synchro.`);
+        // Như CLI thật: luồng đầu ra báo khối tool_use bắt đầu trước khi gọi máy chủ MCP.
+        C.out({ type: "stream_event", event: { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_mock", name: `mcp__synchro__${ask.name}`, input: {} } }, session_id: sid });
         C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_mock", name: `mcp__synchro__${ask.name}`, input: ask.args }] }, session_id: sid });
         const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
         const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).map((c) => c.text).join("\n");

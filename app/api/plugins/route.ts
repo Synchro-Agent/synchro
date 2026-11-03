@@ -1,5 +1,5 @@
 import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../authstore";
-import { findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
+import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
 import { PLUGIN_DIR } from "../../plugindir";
 import { closedReason, dirDef, dirEntry } from "../../claudedir";
 import { clearRemoved, freeSlug } from "../../plugjob";
@@ -19,7 +19,7 @@ export const GET = handle(async (req: Request) => {
   const view = new URL(req.url).searchParams.get("view");
   if (view === "meta") return Response.json({ admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
   if (view === "lite") return Response.json({ plugins: listPluginsLite(user.id), admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
-  return Response.json({ plugins: listPlugins(user.id), directory: PLUGIN_DIR, admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
+  return Response.json({ plugins: listPlugins(user.id), catalogInstalled: catalogInstalled(user.id), directory: PLUGIN_DIR, admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
 });
 
 // { action: "preview" | "install", catalogId? | url?, scope: "org" | "personal", skip?: string[] }

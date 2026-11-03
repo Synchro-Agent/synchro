@@ -224,7 +224,7 @@ export async function apiModelName(key: string | null) {
 /** Người dùng có được dùng model gói này không (đã đăng nhập CLI đó). */
 export async function ownsSub(u: UserRow, key: string) {
   const cli = subCli(key);
-  return !!cli && !!find(cli) && !!(await status(cli, u.id).catch(() => null))?.loggedIn;
+  return !!cli && !!find(cli) && !!(await status(cli, u.id, { stale: true }).catch(() => null))?.loggedIn;
 }
 export const forgetSubModels = (cli: Cli, uid: string) => g.models.delete(`${cli}:${uid}`);
 
@@ -369,6 +369,20 @@ export function planBlock(cli: Cli, uid: string): number | null {
     if ((w.status === "rejected" || (w.usedPct ?? 0) >= 100) && w.resetsAt && w.resetsAt > now) until = Math.max(until, w.resetsAt);
   }
   const q = g.quota.get(k);
+  if (q && q > now) until = Math.max(until, q);
+  return until || null;
+}
+
+/** Gói Google: nhóm model Claude / GPT (kể cả GPT-OSS) qua Antigravity hết hạn mức tới lúc nào — tính riêng với nhóm Gemini (planBlock).
+ *  Trước đây không ai theo dõi nhóm này: chế độ Tự động cứ chọn GPT-OSS khi nhóm đã hết, lượt chat báo lỗi hoặc treo. */
+export function agyOtherBlock(uid: string): number | null {
+  const k = `agy:${uid}`, now = Date.now();
+  let until = 0;
+  for (const w of g.limits.get(k)?.windows ?? []) {
+    const grp = (w as PlanWindow).group;
+    if (grp && !/gemini/i.test(grp) && (w.status === "rejected" || (w.usedPct ?? 0) >= 100) && w.resetsAt && w.resetsAt > now) until = Math.max(until, w.resetsAt);
+  }
+  const q = g.quota.get(`agy-other:${uid}`);
   if (q && q > now) until = Math.max(until, q);
   return until || null;
 }
@@ -534,13 +548,18 @@ function saveAttachments(work: string, atts: Attachment[]) {
 }
 
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean };
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean };
 export type SubResult = { status: number; json: Json };
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
-  const s = await status(cli, o.user.id);
+  // Đo thời gian từng chặng của lượt (ghi vào nhật ký máy chủ, không ghi nội dung): kiểm tra đăng nhập → khởi động CLI → sự kiện đầu → chữ đầu → xong.
+  const T0 = Date.now(), tm: Record<string, number> = {};
+  // Trạng thái đăng nhập đã biết dùng ngay, kiểm tra lại ở nền (stale): trước đây quá 60 giây là lượt chat phải chờ chạy CLI kiểm tra
+  // đăng nhập (vài giây đến hơn chục giây) trước khi gọi model. Phiên đăng nhập thật sự hết hạn thì lượt vẫn báo đăng nhập lại (lỗi auth).
+  const s = await status(cli, o.user.id, { stale: true });
+  tm.status = Date.now() - T0;
   if (!s.installed) return { status: 503, json: { error: `${SUB[cli].name} CLI chưa được cài trên máy chủ. Quản trị viên cài ở Cài đặt → Providers.` } };
   if (!s.loggedIn) return { status: 409, json: { error: `Bạn chưa đăng nhập gói ${SUB[cli].name}. Đăng nhập ở Cài đặt → Providers.`, relogin: cli } };
   const msgs = (Array.isArray(o.messages) ? o.messages : []) as Msg[];
@@ -571,8 +590,11 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
   const eng = engineFor(cli);
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
+  tm.prep = Date.now() - T0;
   for await (const e of eng.runTurn(req)) {
-    if (e.kind === "text") { text += e.text; o.onDelta?.(e.text); }
+    tm.event ??= Date.now() - T0;
+    if (e.kind === "text") { tm.text ??= Date.now() - T0; text += e.text; o.onDelta?.(e.text); }
+    else if (e.kind === "tooluse") o.onToolUse?.();
     else if (e.kind === "session") {
       session = e.id;
       // Ghi nhớ model thật của tên gọi tắt Claude (để bộ chọn model hiện "Claude Opus 5.5" thay vì "Claude Opus").
@@ -585,6 +607,8 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     else if (e.kind === "usage" && e.usage.limits?.length) saveLimits(cli, o.user.id, e.usage.limits);
     else if (e.kind === "error") err = { message: e.message, code: e.code };
   }
+  tm.end = Date.now() - T0;
+  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
   if (err && final === null) {
     if (err.code === "aborted") return { status: 200, json: { model: o.model, text, cancelled: true } };
     const apiModel = await apiEquivalent(o.user, o.model), apiName = await apiModelName(apiModel);
@@ -594,6 +618,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     }
     if (err.code === "quota") {
       // Gói Google: model Claude / GPT qua Antigravity có hạn mức riêng; hết nhóm đó thì model Gemini của gói vẫn dùng được.
+      if (cli === "agy" && !isGeminiId(splitKey(o.model).id) && !agyOtherBlock(o.user.id)) g.quota.set(`agy-other:${o.user.id}`, Date.now() + 30 * 60_000);
       if (cli === "agy" && !isGeminiId(splitKey(o.model).id)) return { status: 429, json: { error: "Hạn mức model Claude / GPT trong gói Google (Antigravity) đã hết. Model Gemini của gói vẫn dùng được.", detail: redact(err.message).slice(0, 200) } };
       // Gói không báo mốc đặt lại thì tạm coi là hết trong 30 phút; codex đọc lại hạn mức ở lần mở vòng tròn sau.
       if (!planBlock(cli, o.user.id)) g.quota.set(`${cli}:${o.user.id}`, Date.now() + 30 * 60_000);

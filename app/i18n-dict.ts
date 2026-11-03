@@ -694,7 +694,7 @@ Object.assign(EN2VI, {
   "Puzzles": "Giải đố", "Travel": "Du lịch", "Health & fitness": "Sức khỏe & thể hình", "Games": "Trò chơi", "Shopping": "Mua sắm", "Government": "Chính phủ",
   "Family & relationships": "Gia đình & các mối quan hệ", "Media & entertainment": "Truyền thông & giải trí", "Education": "Giáo dục", "Food": "Ẩm thực", "Sports": "Thể thao",
   "Faith": "Tín ngưỡng", "Travel & hospitality": "Du lịch & lưu trú", "Nonprofit": "Phi lợi nhuận",
-  "Learning & study": "Học tập", "Paused: GitHub is limiting downloads": "Tạm nghỉ: GitHub đang giới hạn lượt tải, sẽ tự chạy tiếp", "Closed license, not installed.": "Giấy phép đóng, không cài.", "Open alternatives:": "Thư viện mở thay thế:", "No open alternative yet.": "Chưa có thư viện mở tương đương.", "Open alternative to": "Thư viện mở thay cho", "Closed license": "Giấy phép đóng", "Home & living": "Nhà cửa & đời sống", "More categories": "Thêm mục", "Fewer categories": "Thu gọn mục", "Partner": "Đối tác",
+  "Learning & study": "Học tập", "installed for everyone, sorted by category in Discover": "đã cài cho mọi người, xem theo mục ngành nghề ở Khám phá", "Paused: GitHub is limiting downloads": "Tạm nghỉ: GitHub đang giới hạn lượt tải, sẽ tự chạy tiếp", "Closed license, not installed.": "Giấy phép đóng, không cài.", "Open alternatives:": "Thư viện mở thay thế:", "No open alternative yet.": "Chưa có thư viện mở tương đương.", "Open alternative to": "Thư viện mở thay cho", "Closed license": "Giấy phép đóng", "Home & living": "Nhà cửa & đời sống", "More categories": "Thêm mục", "Fewer categories": "Thu gọn mục", "Partner": "Đối tác",
 });
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [

@@ -121,12 +121,14 @@ export class ClaudeCodeEngine implements Engine {
     const allow = [...(req.mcp ? ["mcp__synchro"] : []), ...(req.web ? ["WebSearch", "WebFetch"] : [])];
     if (req.mcp) args.push("--mcp-config", JSON.stringify({ mcpServers: { synchro: { type: "http", url: req.mcp.url } } }), "--strict-mcp-config");
     if (allow.length) args.push("--allowedTools", allow.join(","));
-    // Hướng dẫn hệ thống dài (nhiều skill, studio, connector): qua tệp, không qua tham số (giới hạn 128 KB mỗi tham số).
+    // Hướng dẫn hệ thống của Synchro THAY lời nhắc mặc định của Claude Code (dành cho lập trình trong terminal, vài nghìn token mỗi lượt,
+    // không dùng gì cho Synchro): lượt nhanh hơn, rẻ hơn, model không tự nhận là "Claude Code". Dài (nhiều skill, studio, connector) thì
+    // qua tệp, không qua tham số (giới hạn 128 KB mỗi tham số).
     let sysFile = "";
     if (req.system && tooLong(req.system)) {
-      try { sysFile = turnFile(req, "claude-sys", req.system); args.push("--append-system-prompt-file", sysFile); }
+      try { sysFile = turnFile(req, "claude-sys", req.system); args.push("--system-prompt-file", sysFile); }
       catch (e) { yield err(`Không chuyển được hướng dẫn cho Claude Code: ${(e as Error).message}`, "other"); return; }
-    } else if (req.system) args.push("--append-system-prompt", req.system);
+    } else if (req.system) args.push("--system-prompt", req.system);
     if (req.model) args.push("--model", req.model);
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
@@ -146,6 +148,7 @@ export class ClaudeCodeEngine implements Engine {
     for await (const o of objects(p)) {
       if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) };
       else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
+      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
       else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
         const t = (gap ? "\n\n" : "") + o.event.delta.text;
         gap = false;
@@ -276,7 +279,11 @@ export class AntigravityEngine implements Engine {
     const mine = new Promise<void>((r) => { release = r; });
     const chain = prev.then(() => mine);
     agyLocks.set(home, chain);
-    await prev;
+    // Chờ lượt trước của cùng tài khoản tối đa 90 giây: lượt trước bị bỏ dở mà không nhả khóa thì mọi lượt Antigravity có công cụ
+    // sau đó từng chờ mãi (không tiến trình nào chạy, người dùng chỉ thấy vòng xoay). Quá hạn thì chạy tiếp.
+    let stale = false;
+    await Promise.race([prev, new Promise<void>((ok) => setTimeout(() => { stale = true; ok(); }, 90_000))]);
+    if (stale) console.error("[agy] lượt trước của tài khoản không nhả khóa sau 90 giây: chạy tiếp");
     try {
       const ok = await agyBridge(req, req.mcp.url).catch(() => false);
       yield* this.turn(ok ? req : { ...req, mcp: undefined });

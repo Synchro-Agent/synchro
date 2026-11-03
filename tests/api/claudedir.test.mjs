@@ -45,7 +45,8 @@ const pid = r.j.plugin?.id;
 ok(/^[0-9a-f]{40}$/.test(Object.values(r.j.plugin?.commits ?? {})[0] ?? ""), "ghim commit", JSON.stringify(r.j.plugin?.commits));
 r = await api("GET", "/api/plugins");
 const sum = r.j.plugins.find((p) => p.id === pid);
-ok(sum && sum.skills.length >= 1 && !("report" in sum.skills[0]) && !("description" in sum.skills[0]), "danh sách thư viện chỉ có tên skill (nhẹ)", JSON.stringify(sum?.skills?.[0]));
+// Thư viện của danh mục không nằm trong danh sách "Của bạn" (xem theo trang ở Khám phá), chỉ có số đã cài.
+ok(!sum && r.j.catalogInstalled?.libraries >= 1 && r.j.catalogInstalled?.skills >= 1, "danh sách Của bạn nhẹ: thư viện danh mục chỉ hiện số đã cài", JSON.stringify(r.j.catalogInstalled));
 r = await api("GET", `/api/plugins/${pid}`);
 ok(r.s === 200 && r.j.plugin.skills[0].report?.license, "mở chi tiết: đủ mô tả, giấy phép, rủi ro", JSON.stringify(r.j).slice(0, 300));
 r = await api("GET", `/api/plugins/catalog?cat=${CAT}&only=installed`);

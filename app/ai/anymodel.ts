@@ -7,7 +7,7 @@ import { catalog, mainModels, resolveModel } from "../providers";
 import { routeModel, type RouteInput } from "../router";
 import { chatOnce, HttpErr } from "../llmcall";
 import { overLimit, withUsage } from "../usage";
-import { isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
+import { agyOtherBlock, isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
 
 /** allowed: mọi model bộ chọn model hiện cho người này; usable: bỏ gói đang hết hạn mức hoặc cần đăng nhập lại. */
 export async function usableModels(user: UserRow) {
@@ -19,7 +19,9 @@ export async function usableModels(user: UserRow) {
     const plan = (p as { plan?: { cli?: string; blockedUntil?: number | null; relogin?: boolean } }).plan;
     if (plan?.relogin) return p.models.map((m) => m.key);
     // Gói Google: hạn mức đang hết là của nhóm Gemini; model Claude / GPT qua Antigravity tính riêng nên vẫn dùng được.
-    return plan?.blockedUntil ? p.models.filter((m) => plan.cli !== "agy" || isGeminiId(m.id)).map((m) => m.key) : [];
+    // Nhóm Claude / GPT của Antigravity có hạn mức riêng (agyOtherBlock): hết thì bỏ các model đó, nhóm Gemini vẫn dùng được.
+    const other = plan?.cli === "agy" && agyOtherBlock(user.id) ? p.models.filter((m) => !isGeminiId(m.id)).map((m) => m.key) : [];
+    return [...other, ...(plan?.blockedUntil ? p.models.filter((m) => plan.cli !== "agy" || isGeminiId(m.id)).map((m) => m.key) : [])];
   }));
   const usable = allowed.filter((k) => !blocked.has(k));
   // groups: model dùng được theo nhóm hãng, kèm tên hiện ở bộ chọn model (hộp chọn model của các việc phụ, ví dụ Quét skill rác).

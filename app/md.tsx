@@ -248,11 +248,15 @@ export function Markdown({ text: text0, say, dev, viz, live }: { text: string; s
         let ord = false;
         const flush = () => {
           if (!list.length) return;
-          const items = list.map((l, k) => <li key={k}><Inline t={l} /></li>);
+          // Ô đánh dấu của checklist ("- [ ] việc", "- [x] đã xong"): hiện ô vuông, không phải chữ "[ ]".
+          const items = list.map((l, k) => { const c = /^\[([ xX])\]\s+(.*)/.exec(l); return c ? <li key={k} className="task"><span className={`tick${c[1] === " " ? "" : " on"}`} aria-hidden="true" /><Inline t={c[2]} /></li> : <li key={k}><Inline t={l} /></li>; });
           out.push(ord ? <ol key={out.length}>{items}</ol> : <ul key={out.length}>{items}</ul>);
           list = [];
         };
         let tbl: string[] = [];
+        // Đoạn trích dẫn ("> …"): gom các dòng liền nhau thành một khung.
+        let quote: string[] = [];
+        const flushQ = () => { if (!quote.length) return; out.push(<blockquote key={out.length}>{quote.map((q, k) => (q.trim() ? <p key={k}><Inline t={q} /></p> : null))}</blockquote>); quote = []; };
         const cells = (r: string) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
         const flushT = () => {
           if (!tbl.length) return;
@@ -262,8 +266,12 @@ export function Markdown({ text: text0, say, dev, viz, live }: { text: string; s
           tbl = [];
         };
         lines.forEach((l) => {
+          const q = /^\s*>\s?(.*)$/.exec(l);
+          if (q) { flush(); flushT(); quote.push(q[1]); return; }
+          flushQ();
           if (/^\s*\|.*\|\s*$/.test(l)) { flush(); tbl.push(l); return; }
           flushT();
+          if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(l)) { flush(); out.push(<hr key={out.length} />); return; }
           const b = l.match(/^\s*[-*]\s+(.*)/);
           const n = l.match(/^\s*\d+\.\s+(.*)/);
           const h = l.match(/^(#{1,6})\s+(.*)/);
@@ -273,7 +281,7 @@ export function Markdown({ text: text0, say, dev, viz, live }: { text: string; s
           if (h) { const H = `h${Math.min(h[1].length, 4)}` as "h1" | "h2" | "h3" | "h4"; out.push(<H key={out.length}><Inline t={h[2]} /></H>); }
           else if (l.trim()) out.push(<p key={out.length}><Inline t={l} /></p>);
         });
-        flush(); flushT();
+        flush(); flushT(); flushQ();
         return <div key={i}>{out}</div>;
       })}
       {meta && <div className="cb-cx"><span>⏱ Time {meta.time}</span><span>▤ Space {meta.space}</span>{meta.canOptimize && <span className="opt">Có thể tối ưu thêm</span>}</div>}

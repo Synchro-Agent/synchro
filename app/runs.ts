@@ -39,7 +39,8 @@ function init() {
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
-type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; step?: AbortController };
+type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; step?: AbortController;
+  tools?: number; toolsTaken?: number; toolWaiters?: (() => void)[] };
 const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
 // Lượt đang chạy trong tiến trình này: chữ đang viết (để người mở lại trang thấy ngay phần đã có) và bộ hủy.
@@ -95,6 +96,27 @@ export function delta(t: string) {
   if (!l || !t) return;
   l.text += t;
   notify(s!.id, { delta: { s: l.s, t } });
+}
+// Claude Code: chữ model viết đi qua luồng đầu ra của CLI, còn lời gọi công cụ đi qua cầu nối MCP (HTTP) — hai đường riêng. Đoạn chữ ngắn
+// ngay trước lời gọi (vd. bản sửa mode="patch" rồi check_artifact) có thể chưa đọc xong khi cầu nối nhận lời gọi: công cụ kiểm tra từng
+// thấy bản cũ, model phải viết lại cả tệp. Engine báo mỗi khi luồng đầu ra tới khối tool_use (toolUseSeen); cầu nối chờ tới đó rồi mới chạy.
+export function toolUseSeen() {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l) return;
+  l.tools = (l.tools ?? 0) + 1;
+  for (const f of l.toolWaiters?.splice(0) ?? []) f();
+}
+/** Chờ luồng đầu ra của CLI tới lời gọi công cụ đang được cầu nối xử lý (tối đa ms). */
+export async function awaitToolUse(ms = 2500) {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l) return;
+  const want = (l.toolsTaken = (l.toolsTaken ?? 0) + 1);
+  if ((l.tools ?? 0) >= want) return;
+  await new Promise<void>((ok) => {
+    const t = setTimeout(ok, ms);
+    const check = () => { if ((l.tools ?? 0) >= want) { clearTimeout(t); ok(); } else (l.toolWaiters ??= []).push(check); };
+    (l.toolWaiters ??= []).push(check);
+  });
 }
 /** Bắt đầu bước mới của vòng lặp công cụ: chữ của bước trước (thường là câu dẫn trước khi gọi công cụ) được thay. */
 export function deltaStep() {

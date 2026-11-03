@@ -14,7 +14,7 @@ import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED,
 import { PageBar, usePage } from "./pager";
 import { SkillScan } from "./skillscanui";
 
-type Data = { plugins: PluginSummary[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
+type Data = { plugins: PluginSummary[]; catalogInstalled?: { libraries: number; skills: number }; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -251,6 +251,13 @@ export function SkillHub() {
   };
   const sc = useSkillScores(d);
   const [open, setOpen] = useState<string | null>(null);
+  const [extra, setExtra] = useState<PublicPlugin | null>(null);
+  useEffect(() => {
+    if (!open || d?.plugins.some((p) => p.id === open)) return;
+    let on = true;
+    api<{ plugin: PublicPlugin }>("GET", `/api/plugins/${open}`).then((r) => { if (on) setExtra(r.plugin); }).catch((e) => app.say(e.message));
+    return () => { on = false; };
+  }, [open, d]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const addRef = useRef<HTMLDivElement>(null);
@@ -316,7 +323,8 @@ export function SkillHub() {
       confirm: (l) => { const m = l.filter(canManage); return { title: `${tr("Gỡ")} ${m.length} ${tr("thư viện")}?`, text: `${m.reduce((n, p) => n + p.skills.length, 0)} ${tr("skill sẽ bị gỡ")}${m.some((p) => p.scope === "org") ? tr(" (thư viện cho mọi người: gỡ cho cả nhóm)") : ""}.${m.length < l.length ? ` ${l.length - m.length} ${tr("thư viện không thuộc quyền bạn được giữ nguyên.")}` : ""}`, ok: "Gỡ" }; },
       run: async (l) => { let last: PluginSummary[] | null = null; await each(l.filter(canManage), async (p) => { last = (await api<{ plugins: PluginSummary[] }>("DELETE", `/api/plugins/${p.id}`)).plugins; }); if (last) setD((x) => (x ? { ...x, plugins: last! } : x)); fire(); app.say(tr("Đã gỡ các thư viện đã chọn")); } },
   ];
-  const cur = d.plugins.find((p) => p.id === open);
+  // Thư viện của danh mục Claude không có trong danh sách (xem ở Khám phá): mở chi tiết thì tải riêng thư viện đó.
+  const cur = d.plugins.find((p) => p.id === open) ?? (extra?.id === open ? extra : undefined);
   const featured = d.directory.find((x) => x.catalogId === "design-studio")!;
   const plusBtn = (x: DirPlugin) => {
     const inst = byCat.get(x.catalogId);
@@ -389,6 +397,14 @@ export function SkillHub() {
             </div>
           )}
           {org.length > 0 && <><div className="pl-sec">Libraries for everyone <i>{org.length}</i><span className="pl-sec-r"><BulkButton b={bk} compact /></span></div><div className="pl-rows2">{pgOrg.items.map(row)}</div><PageBar pg={pgOrg} /></>}
+          {!!d.catalogInstalled?.libraries && !qlib && (
+            <button className="pl-row2 cd-sum" onClick={() => setTab("discover")}>
+              <span className="pl-mark" style={{ width: 36, height: 36 }}><I.SquaresFour size={17} /></span>
+              <div className="pl-row2-t"><div className="pl-row2-h"><b>Claude skill directory</b></div>
+                <span><span data-notr>{d.catalogInstalled.libraries.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN")}</span> {tr("libraries")} · <span data-notr>{d.catalogInstalled.skills.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN")}</span> skill · {tr("installed for everyone, sorted by category in Discover")}</span></div>
+              <I.ChevronR size={16} />
+            </button>
+          )}
           {mine.length > 0 && <><div className="pl-sec">Your libraries <i>{mine.length}</i>{!org.length && <span className="pl-sec-r"><BulkButton b={bk} compact /></span>}</div><div className="pl-rows2">{pgMine.items.map(row)}</div><PageBar pg={pgMine} /></>}
           <BulkBar b={bk} acts={libActs} noun="thư viện" />
           <SkillsPanel q={q} Toggle={Toggle} />

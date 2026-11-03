@@ -49,7 +49,9 @@ export type Event =
   /** via: engine thực sự trả lời (vd. "api:anthropic" khi đã chuyển sang khóa API dự phòng). */
   /** denied: công cụ CLI tự chặn trong lượt (agy -p) — lượt dừng sớm; bên gọi nhắc model làm tiếp bằng công cụ được phép. */
   | { kind: "final"; text: string; via?: string; denied?: string[] }
-  | { kind: "error"; message: string; code?: ErrorCode };
+  | { kind: "error"; message: string; code?: ErrorCode }
+  /** Luồng đầu ra tới một khối gọi công cụ (Claude Code): chữ viết trước lời gọi đã nhận đủ. */
+  | { kind: "tooluse" };
 
 export interface Engine {
   readonly id: string;

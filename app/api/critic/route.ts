@@ -1,6 +1,7 @@
 import { handle, limit, requireUser, sameOrigin } from "../../authstore";
 import { tierOf, vendorOf, type Tier } from "../../router";
 import { mergeFindings, numbered, parseFindings, type Finding } from "../../critic";
+import { isDeck } from "../../artdoc";
 import { OneShotErr, oneShot, usableModels } from "../../ai/anymodel";
 
 export const runtime = "nodejs";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 // Hội đồng phản biện: 1–2 model của hãng khác với model vừa viết sản phẩm (nhìn bằng "mắt khác" thì bắt lỗi tốt hơn),
 // chạy song song, trả về lỗi theo dòng dạng JSON; ý kiến trùng chỗ được gộp lại. Model lấy từ đúng các model người dùng
 // dùng được (gói subscription hoặc khóa API), hãng tính theo nhà làm model nên "sub-claude/opus" và "anthropic/…" cùng một hãng.
+const DECK_NOTE = `
+Đây là bộ slide trình chiếu: mỗi slide là một khung 16:9 cố định, cả khung được thu nhỏ đúng tỉ lệ để vừa màn hình (như PowerPoint, Keynote). Đó là cách trình bày đúng, không phải lỗi: không nêu "không đọc được / không co giãn trên điện thoại", "chữ quá nhỏ khi màn hẹp" hay "nên chuyển sang bố cục dọc". Chỉ nêu lỗi thật của bộ slide: chữ đè chữ, tràn hoặc bị cắt khỏi khung, ảnh hỏng, tương phản kém, sai nội dung, lỗi script điều khiển chuyển slide.`;
 const CRITIC = `<critic_review>
 Bạn là một thành viên hội đồng phản biện, đọc lại sản phẩm một model khác vừa viết (code, trang web hoặc ứng dụng React) để tìm lỗi thật trước khi người dùng dùng.
 Chỉ nêu vấn đề đáng sửa: chạy sai hoặc hỏng, lỗ hổng bảo mật, mất dữ liệu, không dùng được trên điện thoại hoặc bằng bàn phím và trình đọc màn hình, hiệu năng tệ rõ rệt. Không nêu ý kiến về phong cách, cách đặt tên hay sở thích. Không có vấn đề thì trả về danh sách rỗng.
@@ -44,10 +47,13 @@ export const POST = handle(async (req: Request) => {
   const { allowed, usable } = await usableModels(user);
   const picks = pickCritics(usable.length ? usable : allowed, gen ? vendorOf(gen) : "", gen);
   if (!picks.length) return Response.json({ error: "Synchro chưa được kết nối với model nào." }, { status: 503 });
-  const kind = LABEL[String(b.type)] ?? "code";
+  // Bộ slide (HTML có các <section class="slide">) được trình chiếu ở khung 16:9 thu nhỏ đúng tỉ lệ như PowerPoint: không xếp lại theo màn hình
+  // điện thoại. Phản biện như trang web thì luôn báo nhầm "chữ quá nhỏ trên điện thoại" (badge đỏ trên bộ slide không lỗi).
+  const deck = String(b.type) === "html" && isDeck({ type: "html", content });
+  const kind = deck ? "bộ slide HTML trình chiếu 16:9" : LABEL[String(b.type)] ?? "code";
   const ask = `Sản phẩm: “${String(b.title ?? "").slice(0, 200)}” (${kind}${b.lang ? `, ${String(b.lang).slice(0, 30)}` : ""}).${typeof b.question === "string" && b.question.trim() ? `\nYêu cầu gốc của người dùng: ${b.question.trim().slice(0, 1500)}` : ""}\n\n<code>\n${numbered(content)}\n</code>`;
   const runs = await Promise.allSettled(picks.map(async (key) => {
-    const text = await oneShot(user, key, CRITIC, [{ role: "user", content: ask }], { maxTokens: 1800 });
+    const text = await oneShot(user, key, deck ? CRITIC.replace("</critic_review>", `${DECK_NOTE}\n</critic_review>`) : CRITIC, [{ role: "user", content: ask }], { maxTokens: 1800 });
     return { by: key, findings: parseFindings(text, lines) };
   }));
   const ok = runs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));

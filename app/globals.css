@@ -3402,6 +3402,8 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .cd-fail{display:flex;flex-direction:column;gap:1px;font-size:12.5px;min-width:0}
 .cd-fail b{font-weight:500;color:var(--text)}
 .cd-fail span{color:var(--text-3);overflow-wrap:anywhere}
+.cd-sum{width:100%;text-align:left;margin:4px 0 8px;font:inherit;color:inherit}
+.cd-sum>svg:last-child{flex:none;color:var(--text-3)}
 .cd-alt{display:flex;gap:5px;align-items:flex-start;font-size:11.5px;color:var(--text-3);line-height:1.4;margin-top:2px}
 .cd-alt>svg{flex:none;margin-top:2px}
 .pl-tip{display:flex;gap:8px;align-items:flex-start;margin-top:18px}
@@ -5038,3 +5040,11 @@ body{text-wrap-style:pretty}
 /* Link trong câu trả lời (Markdown [chữ](https://…)): màu link của giao diện, gạch chân mảnh, ngắt được khi URL dài. */
 :where(.ai-msg, .mdx) a[href]{color:var(--link);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;overflow-wrap:anywhere}
 :where(.ai-msg, .mdx) a[href]:hover{text-decoration-thickness:2px}
+
+/* Markdown: trích dẫn, đường kẻ, ô đánh dấu của checklist (md.tsx). */
+:where(.ai-msg,.mdx) blockquote{margin:10px 0;padding:6px 14px;border-left:3px solid var(--border-strong);color:var(--text-2);background:color-mix(in srgb,var(--hover) 45%,transparent);border-radius:0 8px 8px 0}
+:where(.ai-msg,.mdx) blockquote p{margin:4px 0}
+:where(.ai-msg,.mdx) hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+:where(.ai-msg,.mdx) li.task{list-style:none;margin-left:-1.2em;display:flex;gap:8px;align-items:baseline}
+:where(.ai-msg,.mdx) li.task .tick{flex:none;width:13px;height:13px;border:1.5px solid var(--text-3);border-radius:3px;transform:translateY(2px)}
+:where(.ai-msg,.mdx) li.task .tick.on{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--bg)}

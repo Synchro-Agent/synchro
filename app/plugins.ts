@@ -554,9 +554,17 @@ export const getPlugin = (id: string, uid?: string) => { const r = init().prepar
 export const pluginOwner = (id: string) => (init().prepare("SELECT owner FROM plugins WHERE id = ?").get(id) as { owner: string } | undefined)?.owner ?? null;
 // Plugin người này thấy: của tổ chức (quản trị viên cài) và của riêng họ. Đọc một lượt (không truy vấn từng plugin); mức rủi ro và giấy phép
 // của từng thư viện tính sẵn trong bộ đệm.
+// Thư viện của danh mục Claude ("cd:…", ~3.000) không nằm trong danh sách này: xem và quản lý ở tab Khám phá (theo trang). Gửi cả danh mục
+// mỗi lần mở Kho kỹ năng là 4MB+ và trang chờ 1,5 giây. catalogInstalled() đếm số đã cài để hiện một dòng tóm tắt.
+const isCatRow = (r: Row) => !!r.catalog_id?.startsWith("cd:");
 export function listPlugins(uid: string): PluginSummary[] {
   const c = snap(), prefs = prefsOf(uid);
-  return c.rows.filter((r) => r.owner === "org" || r.owner === uid).map((r) => ({ ...head(r, prefs.get(r.id)), ...c.meta.get(r.id)!, skills: c.lite.get(r.id) ?? [] }));
+  return c.rows.filter((r) => (r.owner === "org" || r.owner === uid) && !isCatRow(r)).map((r) => ({ ...head(r, prefs.get(r.id)), ...c.meta.get(r.id)!, skills: c.lite.get(r.id) ?? [] }));
+}
+export function catalogInstalled(uid: string): { libraries: number; skills: number } {
+  const c = snap();
+  const rows = c.rows.filter((r) => (r.owner === "org" || r.owner === uid) && isCatRow(r));
+  return { libraries: rows.length, skills: rows.reduce((a, r) => a + (c.lite.get(r.id)?.length ?? 0), 0) };
 }
 
 /** Bản rút gọn (trang chủ, bảng lệnh, menu + ở ô chat): chỉ tên, trạng thái và số skill — không có danh sách skill (vài MB với cả danh mục). */
