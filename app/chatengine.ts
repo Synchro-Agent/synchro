@@ -962,7 +962,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
     const cli = subCli(model)!;
     const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
-    let bridge: { url: string; close: () => void; alive: () => number } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "";
+    let bridge: { url: string; close: () => void; alive: () => number } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "", route = "";
     const usedAll: ToolRun["used"][] = [];
     let bridged = 0;
     try {
@@ -970,6 +970,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
         const st = studio ? studioSkills(c.user.id, studio) : null;
         const ss = await skillSet(c.user, body, messages, studio, st);
+        route = ss.route;
         if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
@@ -983,9 +984,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const xx: Exec = { toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => { bridged++; return bridgeCall(xx, name, input, usedAll); } });
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", ss.route].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
-      const turnMsgs = am ?? withRecall(messages, recallOf(body, c.user, convId));
+      // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
+      // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
+      // chờ hơn 10 giây chỉ để đọc lại phần này.
+      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), route);
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(), onToolUse: am ? undefined : toolUseSeen,
