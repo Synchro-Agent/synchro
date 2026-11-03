@@ -81,6 +81,8 @@ export async function registerClient(as: AsMeta, redirectUri: string, metadataUr
       body: JSON.stringify({ client_name: "Synchro", client_uri: new URL(redirectUri).origin, redirect_uris: [redirectUri], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" }),
     });
     const j = (await r.json().catch(() => null)) as Record<string, string> | null;
+    // 401 / 403: nhà cung cấp chỉ cho ứng dụng họ đã duyệt kết nối (vd. Figma chỉ mở MCP từ xa cho Claude, Cursor, VS Code…) — không phải lỗi mạng hay lỗi của Synchro.
+    if ((r.status === 401 || r.status === 403) && !j?.client_id) throw new Error(`${new URL(as.registration_endpoint).hostname} chỉ cho các ứng dụng được họ duyệt kết nối và chưa duyệt Synchro (lỗi ${r.status}). Nếu nhà cung cấp cấp cho bạn OAuth Client ID, thêm bằng "Thêm connector tùy chỉnh" → Cài đặt nâng cao.`);
     if (!r.ok || !j?.client_id) throw new Error(`Máy chủ đăng nhập từ chối đăng ký Synchro${j?.error_description ? `: ${j.error_description}` : ` (lỗi ${r.status})`}.`);
     const method = j.client_secret ? (j.token_endpoint_auth_method === "client_secret_basic" ? "client_secret_basic" : "client_secret_post") : "none";
     return { client_id: j.client_id, client_secret: j.client_secret || undefined, auth_method: method };

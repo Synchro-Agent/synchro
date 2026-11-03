@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // npm run dev:mock dùng thư mục build riêng để chạy song song với npm run dev.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Dữ liệu lúc chạy (skill đã cài, tệp người dùng, Python cục bộ…) không phải mã nguồn: không cho bước dò tệp của bản build quét vào.
+  // Từ khi cài sẵn cả danh mục skill của Claude, data/skills có hàng trăm nghìn tệp (1GB+) và bản build hết bộ nhớ khi dò qua chúng.
+  outputFileTracingExcludes: { "*": ["data/**", "data-mock/**", "workspace/**", ".mkvenv/**", "tests/**", ".next-mock/**", ".next-mockfast/**"] },
   // WebContainers cần trang cô lập (SharedArrayBuffer). credentialless vẫn cho phép tải CDN (Monaco, Pyodide).
   async headers() {
     return [{ source: "/:path*", headers: [

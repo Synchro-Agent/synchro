@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
 import { usePref, useApp, initials, resetPrefs } from "./store";
@@ -101,8 +102,9 @@ function SitesEditor({ cp, save }: { cp: CodePrefs; save: (p: Partial<CodePrefs>
 }
 const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={(e) => e.key === "Enter" && onClick?.()}>{children}</a>;
 
+// Gắn vào cuối <body>: hộp con mở trong Cài đặt (Duyệt connector…) từng che mất thông báo lỗi.
 function Toasts({ msg }: { msg: string }) {
-  return msg ? <div className="toast"><I.Clock size={14} />{msg}</div> : null;
+  return msg && typeof document !== "undefined" ? createPortal(<div className="toast" role="status"><I.Clock size={14} />{msg}</div>, document.body) : null;
 }
 
 function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => void }) {

@@ -77,7 +77,7 @@ jobs:
       - name: Build và khởi động lại
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'chown -R synchro:synchro /var/www/synchro && su - synchro -c "cd /var/www/synchro && npm ci && .mkvenv/bin/pip install -q -r requirements.txt && rm -rf .next/cache && NODE_OPTIONS=--max-old-space-size=2048 npx next build && rm -rf .next/server/route-cache && pm2 restart synchro --update-env" && bash /var/www/synchro/workspace/setup.sh'
+            'bash /var/www/synchro/scripts/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/workspace/setup.sh'
 
   deploy-staging:
     needs: verify
@@ -103,4 +103,4 @@ jobs:
       - name: Build và khởi động lại staging
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'chown -R synchro:synchro /var/www/synchro-staging && su - synchro -c "cd /var/www/synchro-staging && npm ci && rm -rf .next/cache && NODE_OPTIONS=--max-old-space-size=2048 npx next build && (pm2 restart synchro-staging --update-env || pm2 start npm --name synchro-staging -- start -- -p 3001) && pm2 save"'
+            'bash /var/www/synchro-staging/scripts/server-build.sh /var/www/synchro-staging synchro-staging'

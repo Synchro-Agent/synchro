@@ -1824,6 +1824,7 @@ RULES_EN.push(
   [/^Không hỗ trợ loại tệp của "(.*)"\.$/, (m) => `The file type of "${m[1]}" isn't supported.`], [/^"(.*)" là tệp rỗng\.$/, (m) => `"${m[1]}" is empty.`],
   [/^"(.*)" vượt quá giới hạn (.*)MB\.$/, (m) => `"${m[1]}" is over the ${m[2]}MB limit.`], [/^Không trích được nội dung từ "(.*)"\.$/, (m) => `Couldn't extract content from "${m[1]}".`],
   [/^Máy chủ đăng nhập từ chối đăng ký Synchro(?: \(lỗi (.*)\))?\.$/, (m) => `The sign-in server refused to register Synchro${m[1] ? ` (error ${m[1]})` : ""}.`],
+  [/^(\S+) chỉ cho các ứng dụng được họ duyệt kết nối và chưa duyệt Synchro \(lỗi (\d+)\)\. Nếu nhà cung cấp cấp cho bạn OAuth Client ID, thêm bằng "Thêm connector tùy chỉnh" → Cài đặt nâng cao\.$/, (m) => `${m[1]} only lets apps it has approved connect, and Synchro isn't approved yet (error ${m[2]}). If the provider gives you an OAuth Client ID, add it with "Add custom connector" → Advanced settings.`],
   [/^Lỗi: (.*)$/, (m) => `Error: ${m[1]}`], [/^Đăng nhập bằng (.*) chưa được cấu hình trên máy chủ\.$/, (m) => `Sign-in with ${m[1]} isn't set up on the server.`],
   [/^Không có bộ chạy cho loại "(.*)"\.$/, (m) => `No runner for type "${m[1]}".`], [/^Đọc thử: (.*)\.$/, (m) => `Preview: ${m[1]}.`],
   [/^Khóa ElevenLabs chưa được cấp quyền "(.*)" nên tính năng này đang ẩn\. Vào elevenlabs\.io → API keys, sửa khóa và bật quyền này\.$/, (m) => `The ElevenLabs key lacks the "${m[1]}" permission, so this feature is hidden. Go to elevenlabs.io → API keys, edit the key and turn this permission on.`],

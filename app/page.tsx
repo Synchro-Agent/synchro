@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
 import { getLang, tr } from "./i18n";
@@ -621,8 +622,9 @@ function Toast({ text }: { text: string }) {
     const t = setTimeout(() => setShown(""), 180);
     return () => clearTimeout(t);
   }, [text]);
-  if (!shown) return null;
-  return <div className={`toast ${out ? "out" : ""}`} key={shown} role="status">{shown}</div>;
+  if (!shown || typeof document === "undefined") return null;
+  // Gắn vào cuối <body>, trên mọi lớp phủ: thông báo (vd. lỗi kết nối connector) không bị hộp đang mở che mất.
+  return createPortal(<div className={`toast ${out ? "out" : ""}`} key={shown} role="status">{shown}</div>, document.body);
 }
 
 // Tin "Chỉ và sửa": hiện gọn phần tử đã chỉ (thẻ, nội dung, dòng mã) và yêu cầu; khối <point_edit> đầy đủ chỉ dành cho model.
