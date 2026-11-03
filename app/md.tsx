@@ -8,15 +8,21 @@ import { ChartView, parseChart } from "./charts";
 import { ArtifactFrame, MermaidSvg } from "./artifactui";
 import { AskCard } from "./askcard";
 
+const words = (p: string) => p.split(/(\s+)/).map((w, k) => (/^\s*$/.test(w) ? w : <span key={k} className="w">{w}</span>));
+// Link Markdown [chữ](địa chỉ): http(s) mở tab mới. Đường dẫn tới tệp trong sandbox (sandbox:/…, outputs/… — thói quen của model quen
+// trình chạy code khác) chỉ hiện chữ: tệp đã có thẻ kèm nút tải ngay dưới tin nhắn. Từng hiện thô "[Tải video](sandbox:/outputs/…)".
+const LINK = /^\[([^\]\n]+)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)$/;
 function Inline({ t }: { t: string }) {
-  const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]\n]+\]\(\s*<?[^)\s>]+>?(?:\s+"[^"]*")?\s*\))/g);
   return (
     <>
-      {parts.map((p, i) =>
-        p.startsWith("**") && p.endsWith("**") && p.length > 4 ? <strong key={i}>{p.slice(2, -2)}</strong>
-        : p.startsWith("`") && p.endsWith("`") && p.length > 2 ? <code key={i} className="ic">{p.slice(1, -1)}</code>
-        : <span key={i}>{p.split(/(\s+)/).map((w, k) => (/^\s*$/.test(w) ? w : <span key={k} className="w">{w}</span>))}</span>
-      )}
+      {parts.map((p, i) => {
+        if (p.startsWith("**") && p.endsWith("**") && p.length > 4) return <strong key={i}>{p.slice(2, -2)}</strong>;
+        if (p.startsWith("`") && p.endsWith("`") && p.length > 2) return <code key={i} className="ic">{p.slice(1, -1)}</code>;
+        const m = LINK.exec(p);
+        if (m) return /^https?:\/\//i.test(m[2]) ? <a key={i} href={m[2]} target="_blank" rel="noopener noreferrer">{words(m[1])}</a> : <span key={i}>{words(m[1])}</span>;
+        return <span key={i}>{words(p)}</span>;
+      })}
     </>
   );
 }

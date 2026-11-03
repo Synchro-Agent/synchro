@@ -11,7 +11,12 @@ import { isPrivate } from "./safefetch";
 type G = { __synchroEgress?: Promise<number>; __synchroEgressWeb?: Promise<number> };
 const g = globalThis as G;
 
+// Giữ giống DROP_HOSTS trong workspace/agent.mjs: dịch vụ nhận tệp / dữ liệu ẩn danh luôn bị chặn.
+const DROP_HOSTS = ["tmpfiles.org", "file.io", "transfer.sh", "0x0.st", "catbox.moe", "gofile.io", "pixeldrain.com", "filebin.net", "termbin.com", "paste.rs", "ix.io",
+  "sprunge.us", "bashupload.com", "temp.sh", "uguu.se", "tempfile.org", "webhook.site", "requestbin.net", "pipedream.net", "hookbin.com", "beeceptor.com", "oast.fun", "interact.sh"];
 async function target(host: string, port: number, web: boolean) {
+  const h = host.toLowerCase().replace(/\.$/, "");
+  if (DROP_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is a file / data drop service`);
   if (!web && !pkgHostAllowed(host)) throw new Error(`blocked: ${host} is not a package registry`);
   if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
   const ips = (await lookup(host, { all: true })).map((x) => x.address);

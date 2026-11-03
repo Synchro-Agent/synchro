@@ -26,11 +26,14 @@ export async function register() {
   // Skill và plugin có từ trước khi có tính năng tự xếp mục: xếp vào Tài liệu / Trình bày / Thiết kế bằng bộ luật (model xếp lại khi
   // người dùng mở Kho kỹ năng hoặc lưu skill).
   setTimeout(async () => {
-    try { (await import("./app/plugins")).ensurePluginTags(); (await import("./app/skillstore")).ensureAllStudioTags(); }
+    try { await (await import("./app/plugins")).ensurePluginTags(); (await import("./app/skillstore")).ensureAllStudioTags(); }
     catch (e) { console.error("[skill-studio]", e); }
   }, 4000);
   // Cài sẵn 3 studio (tắt bằng SYNCHRO_DEFAULT_PLUGINS=0), rồi cập nhật studio đã cài theo danh mục mới (luôn chạy: chỉ đụng tới studio đã cài).
   const { ensureDefaultPlugins, syncStudioCatalog } = await import("./app/plugins");
   const run = process.env.SYNCHRO_DEFAULT_PLUGINS === "0" ? syncStudioCatalog : ensureDefaultPlugins;
   setTimeout(() => { run().catch((e) => console.error("[plugins]", e)); }, 5000);
+  // Đang cài hàng loạt từ danh mục skill của Claude thì máy chủ khởi động lại: chạy tiếp phần còn lại.
+  // Toàn bộ danh mục skill của Claude là skill mặc định: lần đầu và mỗi khi danh mục cập nhật, cài phần còn thiếu ở nền.
+  setTimeout(() => { import("./app/plugjob").then((m) => { m.resumeJob(); m.ensureCatalogDefaults(); }).catch((e) => console.error("[plugins]", e)); }, 8000);
 }

@@ -14,12 +14,13 @@ import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
-import { splitArtifacts } from "./artifacts";
+import { hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, routeModel, taskLabel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { ruleStudios } from "./studiorules";
-import { STUDIO_LABEL } from "./plugindir";
+import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
+import { dirCats } from "./claudedir";
 import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, type Lang } from "./coderun";
@@ -169,7 +170,8 @@ type Lib = { key: string; label: string };
 // heavy: id các lượt đọc trang / chụp màn hình (lược bớt bản cũ để ngữ cảnh không phình khi thao tác dài).
 // task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
-type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null };
+// turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
+type Exec = { list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -181,7 +183,18 @@ function sweep() {
 }
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-async function runCode(x: Exec, input: Record<string, unknown>): Promise<ToolRun> {
+// Ảnh trong outputs/ được gửi lại cho model xem (khung hình video, trang PDF, biểu đồ…): không xem được thì model từng tự đưa ảnh lên host
+// ảnh công khai để mở bằng trình duyệt. outputs/_preview/ chỉ để model xem, không thành tệp của người dùng. Thu nhỏ, đổi sang JPEG.
+const isPic = (p: string) => /\.(png|jpe?g|webp)$/i.test(p);
+async function previewOf(files: { path: string; data: Buffer }[]): Promise<string | undefined> {
+  const pic = [...files.filter((f) => f.path.startsWith("_preview/")), ...files].find((f) => isPic(f.path));
+  if (!pic) return undefined;
+  try {
+    const sharp = (await import("sharp")).default;
+    return (await sharp(pic.data).resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).flatten({ background: "#ffffff" }).jpeg({ quality: 80 }).toBuffer()).toString("base64");
+  } catch { return undefined; }
+}
+async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
   const lang = (typeof input.language === "string" && input.language in LANGS ? input.language : "python") as Lang;
   const used = { kind: "code" as const, name: lang };
   const code = typeof input.code === "string" ? input.code : "";
@@ -192,10 +205,12 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<ToolRun
     const keep = x.conv ? x.conv.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) : undefined;
     const timeout = typeof input.timeout === "number" ? input.timeout : undefined;
     const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal() });
-    const saved = saveOutputs(x.uid, r.files);
+    const saved = saveOutputs(x.uid, r.files.filter((f) => !f.path.startsWith("_preview/")));
     x.outs.push(...saved);
+    const image = await previewOf(r.files);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
-    return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}\n</run_result>`, is_error: r.exit !== 0, used };
+    const seen = image ? `\n<preview>Ảnh ${r.files.find((f) => f.path.startsWith("_preview/") && isPic(f.path))?.path ?? r.files.find((f) => isPic(f.path))?.path} đi kèm để bạn tự xem.</preview>` : "";
+    return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}${seen}\n</run_result>`, is_error: r.exit !== 0, used, ...(image ? { image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
   }
@@ -218,6 +233,7 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Khi người dùng báo lỗi: nhận trách nhiệm, tìm đúng nguyên nhân (tái hiện bằng công cụ), sửa tận gốc, kiểm tra lại, rồi báo ngắn gọn đã sửa gì. Không đổ cho công cụ hay môi trường khi còn cách khác để thử.
 - Không nói "không làm được" khi chưa thử các cách khả thi. Thật sự bị chặn thì nói đã thử gì, vì sao chưa được, và giao phương án tốt nhất có thể ngay trong lượt này.
 - Chu đáo: trình bày rõ ràng, tiếng Việt chuẩn, đúng chính tả; nêu điều quan trọng người dùng cần biết (rủi ro, giới hạn, bước tiếp theo) một cách ngắn gọn.
+- Giữ riêng tư: không đưa tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài khi họ chưa yêu cầu rõ.
 </working_standards>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
@@ -239,10 +255,28 @@ const GROK_NOTE = ", tên đầy đủ là synchro__<tên> (ví dụ synchro__lo
 const CLI_TOOLS_NOTE = (cli: string, web = false) => `<synchro_tools>
 Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : cli === "grok" ? GROK_NOTE : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng. Thư mục làm việc của CLI có thể chỉ cho đọc: đó không phải lý do để từ chối tạo tệp — tệp (Word, Excel, PowerPoint, PDF, ảnh, video…) tạo bằng run_code của Synchro, ghi vào outputs/. Máy chạy CLI (shell, công cụ dựng sẵn của bạn) không phải nơi làm việc: mọi lệnh và chương trình (ffmpeg, LibreOffice, Chromium…) chạy trong run_code.${cli === "agy" ? AGY_NOTE(web) : ""}
 </synchro_tools>`;
+// Artifact model viết giữa lượt (trước khi gọi công cụ — vd. viết bộ slide rồi check_artifact): lời dẫn chỉ giữ 4000 ký tự, không dựng
+// artifact và không thuộc câu trả lời cuối, nên bộ slide từng hiện thành mã CSS thô rồi mất hẳn, check_artifact cũng không thấy.
+// Tách artifact khỏi lời dẫn, giữ trong lượt (read_artifact / check_artifact đọc được), rồi đặt vào đầu câu trả lời cuối.
+const ART_BLOCK = /<artifact\b[^>]*>[\s\S]*?(?:<\/artifact>|$)/gi;
+function sayOut(x: Exec | null | undefined, text: string) {
+  let t = text.trim();
+  if (x && hasArtifacts(t)) t = t.replace(ART_BLOCK, (b) => {
+    (x.turnArts ??= []).push(b);
+    const title = /\btitle\s*=\s*"([^"]*)"/i.exec(b)?.[1];
+    return `_(Đã viết ${title ? `“${title}”` : "artifact"}, xem ở câu trả lời)_`;
+  }).trim();
+  if (t) progress("say", t);
+}
+// Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
+const withTurnArts = (x: Exec | null | undefined, text: string) => {
+  const full = new Set(splitArtifacts(text).flatMap((g) => (g.kind === "art" && !g.art.patch ? [g.art.ident] : [])));
+  const fresh = (x?.turnArts ?? []).filter((b) => !text.includes(b) && !splitArtifacts(b).some((g) => g.kind === "art" && full.has(g.art.ident)));
+  return fresh.length ? `${fresh.join("\n\n")}\n\n${text}` : text;
+};
 /** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
 async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>, usedAll: ToolRun["used"][]) {
-  const said = liveNow().trim();
-  if (said) progress("say", said);
+  sayOut(x, liveNow());
   deltaStep();
   const c: Call = { id: `mcp_${randomToken(8)}`, name, input };
   // Công cụ connector để chế độ "Hỏi trước mỗi lần": CLI không hỏi duyệt giữa chừng được, nên báo rõ thay vì tự chạy.
@@ -322,9 +356,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""));
-  if (c.name === "run_code" && !x.sess?.get(c.name)) return runCode(x, c.input);
+  if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
-    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: liveNow() }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
+    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
     if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
     const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz");
@@ -461,8 +495,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     catch (e) {
       // Người dùng nhắn thêm khi model đang viết: giữ phần đã viết trong nhật ký, ghép tin mới rồi gọi lại model ngay.
       if (!steered()) throw e;
-      const part = liveNow().trim();
-      if (part) progress("say", part);
+      sayOut(x, liveNow());
       takeFollowups(m);
       continue;
     }
@@ -470,13 +503,13 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     if (!r.calls.length) {
       if (r.pause) continue;
       // Tin nhắn thêm tới khi model đã viết xong câu trả lời: làm tiếp trong cùng lượt với tin mới, không chờ lượt sau.
-      if (i < steps - 1 && inboxWaiting()) { if (r.text.trim()) progress("say", r.text.trim()); takeFollowups(m); continue; }
-      if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; progress("say", r.text.trim()); m.push({ role: "user", content: NUDGE }); continue; }
+      if (i < steps - 1 && inboxWaiting()) { sayOut(x, r.text); takeFollowups(m); continue; }
+      if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; sayOut(x, r.text); m.push({ role: "user", content: NUDGE }); continue; }
       return { text: r.text, used };
     }
     acted = true;
     // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
-    if (r.text.trim()) progress("say", r.text.trim());
+    sayOut(x, r.text);
     const ask = x.task ? [] : r.calls.filter((c) => needsAsk(x, c));
     if (ask.length) {
       sweep();
@@ -567,7 +600,7 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   const usedNames = out.used.filter((u) => u.kind === "skill").map((u) => u.name);
   recordUse(c.user.id, usedNames);
   recordPluginUse(x.list.filter((k) => k.user_id.startsWith("pl_") && usedNames.includes(k.name)).map((k) => k.id));
-  return Response.json({ model, text: out.text, skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.trace.length ? { trace: x.trace } : {}), ...(out.cancelled ? { cancelled: true } : {}) });
+  return Response.json({ model, text: withTurnArts(x, out.text), skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.trace.length ? { trace: x.trace } : {}), ...(out.cancelled ? { cancelled: true } : {}) });
 }
 
 // Bản sửa artifact (mode="patch") phải áp được vào bản hiện tại. Không khớp thì nhắc model sửa lại đúng một lần (tự vá),
@@ -626,7 +659,8 @@ ${lib.map((k) => `- ${k.name}: ${k.description.slice(0, 220)}`).join("\n")}`;
 // Plugin không gắn studio: một mục "lib-…" mô tả plugin và tên các skill bên trong. Plugin nhỏ (≤ 2 skill) hiện thẳng từng skill.
 function libIndex(l: { slug: string; name: string; description: string; skills: Skill[] }): Skill {
   const names = l.skills.map((k) => k.name);
-  const body = `<library name="${l.slug}">
+  // Nội dung chỉ dựng khi model mở thư viện: thư viện chung có thể có hàng nghìn thư viện, phần lớn không được mở trong một lượt.
+  const body = () => `<library name="${l.slug}">
 Thư viện skill của plugin ${l.name}. Chọn 1-3 skill hợp nhất với yêu cầu, gọi load_skill với đúng tên để đọc (đọc thêm tài liệu tham khảo nếu skill chỉ dẫn), rồi áp dụng đúng nguyên tắc của skill.
 </library>
 
@@ -634,8 +668,34 @@ Thư viện gồm ${l.skills.length} skill:
 ${l.skills.map((k) => `- ${k.name}: ${k.description.slice(0, 220)}`).join("\n")}`;
   return indexSkill(`lib-${l.slug}`, `${l.description.slice(0, 240)} Thư viện ${names.length} skill: ${names.slice(0, 14).join(", ")}${names.length > 14 ? "…" : ""}. Khi yêu cầu liên quan, gọi load_skill("lib-${l.slug}") trước để chọn skill phù hợp.`, body);
 }
-const indexSkill = (name: string, description: string, body: string): Skill => ({ id: name, user_id: "studio", name, description, body,
-  storage_path: "", enabled: true, version: 1, versions: [1], created_at: "", updated_at: "", files: [], warnings: [], projects: [], use_count: 0, last_used_at: null, source: null });
+// Thư viện cài từ danh mục skill của Claude: gom theo mục ngành nghề như thư mục của Claude, mỗi mục một dòng "cat-…" trong prompt
+// (cả danh mục ~3.100 thư viện, liệt kê từng thư viện là hàng trăm nghìn token). Mở mục → danh sách thư viện của mục; mở thư viện → skill.
+const CAT_BODY_MAX = 30_000;
+function catIndex(key: string, label: string, ls: { slug: string; name: string; description: string; skills: Skill[] }[]): Skill {
+  const n = ls.reduce((a, l) => a + l.skills.length, 0);
+  const body = () => {
+    const lines: string[] = [];
+    let size = 0;
+    for (const l of ls) {
+      const line = l.skills.length <= 3 ? `- ${l.name}: ${l.description.slice(0, 140)} — skill: ${l.skills.map((k) => k.name).join(", ")}` : `- lib-${l.slug} (${l.name}, ${l.skills.length} skill): ${l.description.slice(0, 140)}`;
+      if (size + line.length > CAT_BODY_MAX) { lines.push(`- … và ${ls.length - lines.length} thư viện nữa: gọi search_skills với từ khóa của việc cần làm để tìm trong cả mục.`); break; }
+      lines.push(line); size += line.length;
+    }
+    return `<category name="${key}">
+Mục ${label}: ${ls.length} thư viện, ${n} skill (danh mục skill của Claude). Chọn thư viện hoặc skill hợp nhất với yêu cầu: gọi load_skill("lib-…") để xem skill trong thư viện, hoặc load_skill với tên skill để đọc thẳng. Không thấy thứ phù hợp thì gọi search_skills.
+</category>
+
+${lines.join("\n")}`;
+  };
+  // Mô tả ngắn: cả 55 mục cùng nằm trong prompt (Claude cũng chỉ dành ~1% ngữ cảnh cho phần liệt kê skill).
+  const top = ls.slice(0, 3).map((l) => l.name.slice(0, 24));
+  return indexSkill(`cat-${key}`, `${label}: ${ls.length} thư viện, ${n} skill (${top.join(", ")}${ls.length > 3 ? "…" : ""})`, body);
+}
+const indexSkill = (name: string, description: string, body: string | (() => string)): Skill => {
+  let b = typeof body === "string" ? body : null;
+  return { id: name, user_id: "studio", name, description, get body() { return (b ??= (body as () => string)()); },
+    storage_path: "", enabled: true, version: 1, versions: [1], created_at: "", updated_at: "", files: [], warnings: [], projects: [], use_count: 0, last_used_at: null, source: null };
+};
 
 // Artifact dùng AI: trang trong artifact gọi window.synchro.complete(...) → trình duyệt chuyển tới đây.
 // Không có công cụ, không có skill; chỉ tài khoản đang bật "Artifact dùng AI" mới gọi được.
@@ -694,14 +754,17 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
   // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
   for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
-  for (let i = list.length - 1; i >= 0; i--) if (list.findIndex((x) => x.name === list[i].name) !== i) list.splice(i, 1);
+  const names = new Set<string>();
+  for (let i = 0; i < list.length; i++) { if (names.has(list[i].name)) list.splice(i--, 1); else names.add(list[i].name); }
   // Mọi thư viện đã cài đều tự dùng được: mỗi studio là một mục "studio-…", mỗi plugin khác là một mục "lib-…" trong available_skills.
   // Model tự mở thư viện khi việc cần tới (load_skill), rồi chọn skill cụ thể bên trong. Prompt chỉ thêm một dòng mỗi thư viện,
   // các skill trong thư viện không chiếm chỗ cho tới khi được mở. Khi bấm nút studio, thư viện của studio đó đã mở sẵn.
   const visible = [...list];
-  const hidden = (ks: Skill[]) => { for (const k of ks) if (!list.some((x) => x.name === k.name)) list.push(k); };
+  const hidden = (ks: Skill[]) => { for (const k of ks) if (!names.has(k.name)) { names.add(k.name); list.push(k); } };
   // Một skill có thể nằm trong nhiều thư viện (theme-factory ở cả Thiết kế và Trình bày): giữ đủ để gán đúng thư viện đã mở.
   const libs: Record<string, Lib[]> = {};
+  // Skill của danh mục Claude: lớp dự phòng rộng; khi cùng hợp, skill người dùng tự cài / studio được ưu tiên trong gợi ý định tuyến.
+  const catSkills = new Set<Skill>();
   const tag = (lib: Lib, ks: Skill[]) => { libs[lib.key] = [lib]; for (const k of ks) (libs[k.name] ??= []).push(lib); };
   if (studio) tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
   if (skills && can(c.user, "skills") && skillsOn(c.user)) {
@@ -712,13 +775,30 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
       hidden(lib.skills);
       tag({ key: `studio-${s}`, label: STUDIO_LABEL[s] }, lib.skills);
     }
+    const cats = new Map<string, { slug: string; name: string; description: string; skills: Skill[] }[]>();
     for (const l of libraryPlugins(c.user.id)) {
-      const fresh = l.skills.filter((k) => !list.some((x) => x.name === k.name));
+      const fresh = l.skills.filter((k) => !names.has(k.name));
+      // Như thư mục của Claude, một thư viện nằm ở mọi mục của nó (mục chính trước), với đủ skill — kể cả skill Synchro đã xếp thêm
+      // vào một studio (Tài liệu / Trình bày / Thiết kế).
+      const lc = dirCats(l.catalogId);
+      if (lc.length) {
+        tag({ key: `lib-${l.slug}`, label: l.name }, l.skills);
+        const idx = libIndex(l);
+        for (const k of [idx, ...fresh]) catSkills.add(k);
+        for (const cat of lc) { const g = cats.get(cat) ?? []; cats.set(cat, g); g.push(l); }
+        hidden([idx]); hidden(fresh); continue;
+      }
       if (!fresh.length) continue;
       tag({ key: `lib-${l.slug}`, label: l.name }, fresh);
-      if (fresh.length <= 2) { visible.push(...fresh); list.push(...fresh); continue; }
+      if (fresh.length <= 2) { visible.push(...fresh); hidden(fresh); continue; }
       visible.push(libIndex({ ...l, skills: fresh }));
       hidden(fresh);
+    }
+    const label = new Map(PLUGIN_CATS.map((x) => [x.key, x.label]));
+    for (const [key, ls] of [...cats].sort((a, b) => b[1].length - a[1].length)) {
+      const idx = catIndex(key, label.get(key) ?? key, ls);
+      visible.push(idx); names.add(idx.name);
+      libs[idx.name] = [{ key: idx.name, label: label.get(key) ?? key }];
     }
   }
   // Định tuyến: chấm điểm toàn bộ kho skill theo yêu cầu mới nhất. Skill có ở nhiều thư viện được gán vào thư viện
@@ -726,7 +806,11 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   let route = "";
   const prefer: Record<string, string> = {};
   if (list.length) {
-    const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k })));
+    // Yêu cầu thuộc rõ một studio ("làm slide thuyết trình" → Trình bày): skill của studio đó được cộng thêm, skill của danh mục Claude
+    // giảm bớt, để thư viện chọn lọc đứng trước hàng nghìn skill na ná của danh mục.
+    const want = ruleStudios("", lastUserText(messages)).scores;
+    const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
+    const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
     const votes = new Map<string, number>();
     for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
     // Skill ở nhiều thư viện (Synchro tự xếp một skill vào 2–3 mục) mà phiếu ngang nhau: nghiêng về mục chính câu yêu cầu nói tới
@@ -940,7 +1024,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         else if (j.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(j.denied); }
         else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
         else break;
-        if (said.trim()) progress("say", said.trim());
+        sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
         r = await tryOnce(hist);
       }
@@ -957,7 +1041,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).
       const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);
       recordUse(c.user.id, names);
-      return Response.json({ ...(r.json as Record<string, unknown>), skills: usedAll, files: x.outs, libs: usedLibs(x, names), ...(x.trace.length ? { trace: x.trace } : {}) });
+      return Response.json({ ...(r.json as Record<string, unknown>), text: withTurnArts(x, String((r.json as J).text ?? "")), skills: usedAll, files: x.outs, libs: usedLibs(x, names), ...(x.trace.length ? { trace: x.trace } : {}) });
     } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });

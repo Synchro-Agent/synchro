@@ -167,6 +167,28 @@ export function parseSkillMd(raw: string): { name: string; description: string; 
   return { name, description, body, ...(fixed !== null ? { repaired: `---\n${fixed}\n---\n${text.slice(m[0].length)}` } : {}) };
 }
 
+/**
+ * Sửa nhẹ SKILL.md viết lệch chuẩn để vẫn cài được, như Claude vẫn đọc được: thiếu frontmatter, thiếu name (lấy tên thư mục), name sai dạng
+ * ("plugin:skill", chữ hoa, dấu cách → chữ thường-gạch-ngang), thiếu description (lấy đoạn văn đầu), description quá dài (cắt). Giữ các
+ * trường khác. Không cứu được (không có nội dung) thì null. Dùng cho skill tải từ repo (plugins.ts); ô tạo skill vẫn báo lỗi để người viết sửa.
+ */
+export function lenientSkillMd(raw: string, dir: string): string | null {
+  const text = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const m = text.match(/^---\n([\s\S]*?)\n---[ \t]*(?:\n|$)/);
+  let fm: Record<string, unknown> = {};
+  if (m) { for (const src of [m[1], repairFrontmatter(m[1])]) { try { const v = parseYaml(src); if (v && typeof v === "object") { fm = v as Record<string, unknown>; break; } } catch {} } }
+  const body = (m ? text.slice(m[0].length) : text).replace(/^\n+/, "");
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, LIMITS.name).replace(/-+$/, "");
+  const raw0 = typeof fm.name === "string" ? fm.name.trim() : "";
+  const name = NAME_RE.test(raw0) && raw0.length <= LIMITS.name ? raw0 : slug(raw0.split(":").pop() ?? "") || slug(dir);
+  let desc = typeof fm.description === "string" ? fm.description.replace(/\s+/g, " ").trim() : "";
+  if (!desc) desc = (body.split(/\n\s*\n/).map((p) => p.replace(/^#+\s.*$/gm, "").replace(/\s+/g, " ").trim()).find((p) => p.length > 20) ?? "");
+  if (desc.length > LIMITS.descMax) desc = desc.slice(0, LIMITS.descMax - 1).replace(/\s+\S*$/, "") + "…";
+  if (!name || !desc || !body.trim()) return null;
+  const rest = Object.entries(fm).filter(([k]) => k !== "name" && k !== "description").map(([k, v]) => `${k}: ${JSON.stringify(v)}`);
+  return `---\nname: ${name}\ndescription: ${JSON.stringify(desc)}\n${rest.map((l) => l + "\n").join("")}---\n${body}`;
+}
+
 // Cảnh báo khi SKILL.md nhắc tới file không có trong gói. Bỏ qua đường dẫn mẫu ({lang}/…, <tên>, *.md)
 // và chỉ xét thư mục quen thuộc của skill hoặc thư mục có thật trong gói, để không báo nhầm file đầu ra.
 const SKILL_DIRS = new Set(["references", "reference", "scripts", "assets", "templates", "examples", "docs"]);

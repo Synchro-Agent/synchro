@@ -1,6 +1,8 @@
 import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../authstore";
-import { findLinkDup, installPlugin, linkDupMessage, listPlugins, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
+import { findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
 import { PLUGIN_DIR } from "../../plugindir";
+import { closedReason, dirDef, dirEntry } from "../../claudedir";
+import { clearRemoved, freeSlug } from "../../plugjob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +14,11 @@ const err = (e: unknown) => (e instanceof PluginError ? Response.json({ error: e
 export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
   // studios: thư viện của Tài liệu / Trình bày / Thiết kế ở trang Artifacts, gồm cả skill Synchro tự nhận diện thuộc mục đó.
+  // ?view=lite: chỉ tên / trạng thái / số skill của từng thư viện (trang chủ, bảng lệnh, menu + ở ô chat).
+  // ?view=meta: chỉ quyền và số skill của các studio (nút Thêm skill, trang Artifacts).
+  const view = new URL(req.url).searchParams.get("view");
+  if (view === "meta") return Response.json({ admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
+  if (view === "lite") return Response.json({ plugins: listPluginsLite(user.id), admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
   return Response.json({ plugins: listPlugins(user.id), directory: PLUGIN_DIR, admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
 });
 
@@ -25,7 +32,13 @@ export const POST = handle(async (req: Request) => {
   if (scope === "org" && !isAdmin(user)) throw new AuthError("Chỉ quản trị viên mới cài được plugin cho cả tổ chức.", 403);
   let def: PluginDef | undefined;
   try {
-    if (typeof b.catalogId === "string") def = PLUGIN_DIR.find((p) => p.catalogId === b.catalogId);
+    if (typeof b.catalogId === "string") {
+      // Thư viện từ danh mục skill của Claude ("cd:…"): tên trùng một thư viện khác của cùng chủ thì đổi tên, không ghi đè.
+      const e = dirEntry(b.catalogId);
+      if (e?.closed) return Response.json({ error: closedReason(e) }, { status: 403 });
+      if (e) { const slug = freeSlug(e, scope === "org" ? "org" : user.id); if (slug) def = { ...dirDef(e), slug }; if (scope === "org") clearRemoved(b.catalogId); }
+      else def = PLUGIN_DIR.find((p) => p.catalogId === b.catalogId);
+    }
     else if (typeof b.url === "string") {
       // Link đã dùng để thêm skill / thư viện (của chính mình, hoặc thư viện cho mọi người): báo trùng, không cài lại.
       const dup = findLinkDup(user.id, b.url);

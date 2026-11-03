@@ -364,12 +364,13 @@ function Composer(p: {
   // Menu + → Kho kỹ năng / Connectors: menu con bên phải (điện thoại: thay chỗ menu chính, có nút quay lại).
   const [sub, setSub] = useState<null | "skills" | "conn" | "add" | "access">(null);
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
-  const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean }[] | null>(null);
+  const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
+  const [skq, setSkq] = useState("");
   const [cx, setCx] = useState<CxData | null>(null);
   const loadSkl = () => Promise.all([
     fetch("/api/skills").then((r) => r.json()).then((j) => (j.skills ?? []) as { name: string; enabled: boolean }[]).catch(() => []),
-    fetch("/api/plugins").then((r) => r.json()).then((j) => (j.plugins ?? []) as { slug: string; name: string; enabled: boolean; mine: { enabled: boolean } }[]).catch(() => []),
-  ]).then(([s, l]) => setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]));
+    fetch("/api/plugins?view=lite").then((r) => r.json()).then((j) => (j.plugins ?? []) as { slug: string; name: string; enabled: boolean; mine: { enabled: boolean }; catalogId: string | null }[]).catch(() => []),
+  ]).then(([s, l]) => { setSkq(""); setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: !!x.catalogId?.startsWith("cd:") })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]); });
   const loadCx = () => fetch("/api/connectors").then((r) => r.json()).then((j) => setCx(j)).catch(() => setCx({ connectors: [], directory: [] }));
   const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "add" || k === "access") void loadCx(); };
   const cxPatch = async (id: string, body: Record<string, unknown>) => {
@@ -493,9 +494,11 @@ function Composer(p: {
             <div className="menu cm-fly" role="menu">
               <button className="menu-item cm-back" onClick={() => setSub(sub === "add" || sub === "access" ? "conn" : null)}><I.ChevronL size={16} />{sub === "skills" ? "Kho kỹ năng" : sub === "add" ? "Thêm connector" : sub === "access" ? "Quyền dùng công cụ" : "Connectors"}</button>
               {sub === "skills" && (<>
+                {/* Như Claude: ô tìm ở đầu danh sách. Chưa gõ: skill và thư viện bạn tự cài; gõ: tìm cả thư viện của danh mục skill (vài nghìn). */}
+                {skl && skl.length > 8 && <div className="cm-find"><I.Search size={14} /><input autoFocus value={skq} onChange={(e) => setSkq(e.target.value)} placeholder="Tìm skill hoặc thư viện" aria-label="Tìm skill hoặc thư viện" /></div>}
                 <div className="cm-list">
                   {skl === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !skl.length ? <div className="cm-empty">Chưa có skill nào đang bật</div>
-                    : skl.map((k) => { const on = picks.some((x) => x.id === k.id); return (
+                    : (() => { const q = skq.trim().toLowerCase(); const l = (q ? skl.filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
                       <button key={k.id} className="menu-item" role="menuitemcheckbox" aria-checked={on} onClick={() => { setPicks(on ? picks.filter((x) => x.id !== k.id) : [...picks, { id: k.id, label: k.label }]); setMenu(false); setSub(null); ta.current?.focus(); }}>
                         {k.lib ? <I.Plugins /> : <I.Scroll />}<span className="cv-ell" data-notr>{k.label}</span>{on && <span className="ck"><I.Check /></span>}
                       </button>); })}

@@ -32,7 +32,15 @@ ok(r.s === 200 && /Kế hoạch quý IV và năm sau/.test(t) && /version=\\"2\\
 r = await api("POST", "/api/llm", { system: "", conv, messages: [...msgs.slice(0, 4), { role: "user", content: `#tool=read_artifact #args=${JSON.stringify({ identifier: "khong-co" })}` }], model: M, skills: true });
 ok(/Không thấy artifact \\"khong-co\\"/.test(JSON.stringify(r.j ?? {})), "identifier sai → báo rõ, không đoán", JSON.stringify(r.j).slice(0, 300));
 
-console.log("2. Ảnh từ URL ngoài cho khung artifact (/api/artimg)");
+console.log("2. Artifact viết giữa lượt (trước khi gọi công cụ)");
+// Từng sót: model viết bộ slide trong câu dẫn rồi gọi công cụ kiểm tra → slide hiện thành mã CSS thô trong nhật ký (cắt ở 4000 ký tự),
+// không có trong câu trả lời cuối, check_artifact báo chưa có artifact.
+r = await api("POST", "/api/llm", { system: "", conv: conv + "-mid", messages: [{ role: "user", content: `Làm slide #artmid #tool=read_artifact #args=${JSON.stringify({ identifier: "giua-luot" })}` }], model: M, skills: true });
+const mid = r.j?.text ?? "";
+ok(r.s === 200 && /^<artifact identifier="giua-luot" type="text\/html"[\s\S]*Slide hai[\s\S]*<\/artifact>/.test(mid), "artifact viết trong câu dẫn được đưa vào câu trả lời cuối", mid.slice(0, 300));
+ok(/<artifact_source identifier="giua-luot"[^>]*version="1"[\s\S]*Slide hai/.test(mid), "read_artifact trong cùng lượt đọc được artifact vừa viết", mid.slice(0, 600));
+
+console.log("3. Ảnh từ URL ngoài cho khung artifact (/api/artimg)");
 const img = async (u, c = cookie) => fetch(`${B}/api/artimg?u=${encodeURIComponent(u)}`, { headers: { cookie: c } });
 let res = await img(`${B}/icon-192.png`);
 let buf = Buffer.from(await res.arrayBuffer());

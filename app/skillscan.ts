@@ -43,7 +43,9 @@ const jobs = (G.__skillScans ??= new Map());
 async function collect(user: UserRow): Promise<Src[]> {
   const admin = isAdmin(user);
   const own: Src[] = (await listSkills(user.id)).map((s) => ({ key: `u:${s.name}`, name: s.name, description: s.description, where: "", kind: "skill", plugin: null, enabled: s.enabled, manage: true, body: s.body, files: s.files.length, created: Date.parse(s.created_at) || 0 }));
-  const libs: Src[] = pluginSkillsOf(user.id).flatMap(({ p, rows }) => rows.map((r): Src => ({
+  // Thư viện cài từ danh mục skill của Claude ("cd:…", ~18.000 skill, Anthropic đã duyệt) không quét: không phải skill rác người dùng thêm vào,
+  // và quét cả danh mục là hàng nghìn lượt gọi model.
+  const libs: Src[] = pluginSkillsOf(user.id, (p) => !p.catalogId?.startsWith("cd:")).flatMap(({ p, rows }) => rows.map((r): Src => ({
     key: `p:${p.id}:${r.name}`, name: r.name, description: r.description, where: p.name, kind: p.scope === "org" ? "org" : "personal", plugin: p.id,
     enabled: r.enabled, manage: p.scope === "personal" || admin, body: r.body, files: r.files, created: 0,
   })));

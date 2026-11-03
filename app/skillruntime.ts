@@ -8,12 +8,14 @@ import { rank } from "./skillroute";
 export const MAX_STEPS = 10;
 // Bật quá nhiều skill thì không liệt kê hết mô tả trong prompt mà cho model tool tìm kiếm.
 export const SEARCH_THRESHOLD = 50;
+// ~2.000 token, như Claude dành khoảng 1% ngữ cảnh cho phần liệt kê skill: mỗi lượt chat không gánh cả kho.
+const LIST_BUDGET = 8_000, CAT_BUDGET = 6_000;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const RULES = `Bạn có một kho skill: mỗi skill là bộ hướng dẫn chuyên môn cho một loại công việc. Người dùng chỉ nhắn yêu cầu, không chỉ định skill; bạn toàn quyền tự chọn và dùng skill, không cần xin phép.
 Với mỗi yêu cầu, tự quyết định theo thứ tự:
 1. Yêu cầu làm ra hoặc sửa một sản phẩm (giao diện, trang web, ứng dụng, logo, hình minh họa, slide, tài liệu, văn bản, code, dữ liệu, kiểm thử…) hoặc cần chuyên môn mà một skill mô tả: đọc skill TRƯỚC KHI làm bằng load_skill. Thường 1-3 skill là đủ; có thể gọi nhiều load_skill trong cùng một bước.
-2. Mục tên "studio-…" hoặc "lib-…" là thư viện nhiều skill: mở ra để xem danh sách rồi đọc skill hợp nhất. Skill bên trong thư viện cũng gọi thẳng được bằng tên.
+2. Mục tên "studio-…" hoặc "lib-…" là thư viện nhiều skill, "cat-…" là một mục ngành nghề gồm nhiều thư viện: mở ra (load_skill) để xem danh sách rồi đọc skill hợp nhất. Skill bên trong thư viện cũng gọi thẳng được bằng tên.
 3. Không chắc có skill phù hợp: gọi search_skills với từ khóa của việc cần làm (tiếng Việt hoặc tiếng Anh) để tìm trong toàn bộ kho.
 4. Trò chuyện, câu hỏi kiến thức ngắn, phép tính đơn giản: trả lời luôn, không cần skill.
 Đọc xong thì làm đúng theo hướng dẫn của skill; nếu hướng dẫn nhắc tới file đi kèm (ví dụ references/...), gọi read_skill_file để đọc khi cần. Yêu cầu tiếp nối một sản phẩm đã làm thì đọc lại skill đã dùng để giữ nhất quán.
@@ -26,8 +28,24 @@ export function skillsPrompt(list: Skill[], scripts = false): string {
   if (!list.length) return "";
   const RULES_ = RULES + (scripts ? SCRIPT_RULE : "");
   if (list.length > SEARCH_THRESHOLD) {
+    // Kho lớn: vẫn cho model thấy mục lục (thư viện studio, mục ngành nghề, thư viện) và skill lẻ trong một ngân sách cố định — như Claude
+    // liệt kê skill tới một giới hạn ký tự — phần còn lại tìm bằng search_skills.
+    // Giữ thứ tự của danh sách: skill của studio đang bấm và skill riêng của người dùng trước, rồi thư viện, mục ngành nghề sau cùng.
+    // Mục ngành nghề (cat-…) có phần ngân sách riêng để luôn hiện đủ, dù người dùng có nhiều skill riêng.
+    const lines: string[] = [];
+    let size = 0, csize = 0;
+    for (const s of list) {
+      const cat = s.user_id === "studio" && s.name.startsWith("cat-");
+      const line = `  <skill><name>${esc(s.name)}</name><description>${esc(s.description.slice(0, cat ? 120 : 300))}</description></skill>`;
+      if (cat ? csize + line.length > CAT_BUDGET : size + line.length > LIST_BUDGET) continue;
+      lines.push(line); if (cat) csize += line.length; else size += line.length;
+    }
     return `${RULES_}
-Người dùng đang bật ${list.length} skill, quá nhiều để liệt kê. Hãy gọi search_skills với từ khóa của yêu cầu để tìm skill phù hợp (xem cả gợi ý trong skill_routing nếu có), rồi load_skill skill tìm được.`;
+Người dùng đang bật ${list.length} mục skill và thư viện; dưới đây là ${lines.length} mục đầu. Việc cần chuyên môn mà chưa thấy mục hợp: gọi search_skills với từ khóa của yêu cầu (xem cả gợi ý trong skill_routing nếu có), rồi load_skill skill tìm được.
+
+<available_skills>
+${lines.join("\n")}
+</available_skills>`;
   }
   return `${RULES_}
 

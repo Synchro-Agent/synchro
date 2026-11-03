@@ -24,6 +24,10 @@ function init() {
   }
   return d;
 }
+// Số lần nhãn mục đổi (plugins.ts dựng lại bộ đệm skill của chat khi số này đổi). Đặt trên globalThis: mọi route dùng chung.
+const G = globalThis as unknown as { __tagRev?: number };
+export const tagRev = () => G.__tagRev ?? 0;
+const bump = () => { G.__tagRev = tagRev() + 1; };
 export const userKey = (skillId: string) => `u:${skillId}`;
 export const pluginKey = (pluginId: string, name: string) => `p:${pluginId}:${name}`;
 const sigOf = (name: string, description: string, body: string) => crypto.createHash("sha1").update(`${name}\n${description}\n${body}`).digest("hex").slice(0, 16);
@@ -50,6 +54,7 @@ export function classify(key: string, s: { name: string; description: string; bo
   const g = ruleStudios(s.name, s.description, s.body);
   d.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, model_at, at) VALUES (?, ?, 'rules', ?, ?, NULL, ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = 'rules', sig = excluded.sig, why = excluded.why, model_at = NULL, at = excluded.at")
     .run(key, JSON.stringify(g.studios), sig, g.why, Date.now());
+  bump();
   return true;
 }
 
@@ -60,15 +65,16 @@ export function setManual(key: string, studios: StudioKind[] | null, s: { name: 
   const clean = STUDIO_KINDS.filter((k) => studios.includes(k));
   d.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, model_at, at) VALUES (?, ?, 'manual', ?, '', NULL, ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = 'manual', sig = excluded.sig, why = '', at = excluded.at")
     .run(key, JSON.stringify(clean), sigOf(s.name, s.description, s.body), Date.now());
+  bump();
   return getTag(key)!;
 }
-export const dropTag = (key: string) => init().prepare("DELETE FROM skill_studios WHERE key = ?").run(key);
-export const dropPluginTags = (pluginId: string) => init().prepare("DELETE FROM skill_studios WHERE key LIKE ?").run(`p:${pluginId}:%`);
+export const dropTag = (key: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key = ?").run(key); };
+export const dropPluginTags = (pluginId: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key LIKE ?").run(`p:${pluginId}:%`); };
 /** Bỏ nhãn của skill không còn trong plugin (sau khi cập nhật gói). */
 export function keepPluginTags(pluginId: string, names: string[]) {
   const keep = new Set(names.map((n) => pluginKey(pluginId, n)));
   const del = init().prepare("DELETE FROM skill_studios WHERE key = ?");
-  for (const r of init().prepare("SELECT key FROM skill_studios WHERE key LIKE ?").all(`p:${pluginId}:%`) as { key: string }[]) if (!keep.has(r.key)) del.run(r.key);
+  for (const r of init().prepare("SELECT key FROM skill_studios WHERE key LIKE ?").all(`p:${pluginId}:%`) as { key: string }[]) if (!keep.has(r.key)) { del.run(r.key); bump(); }
 }
 
 // ---------------------------------------------------------------- nhờ model (ở nền, lần lượt từng skill)
@@ -105,6 +111,7 @@ async function ask(uid: string, key: string, s: { name: string; description: str
   // Trong lúc chờ model, người dùng có thể đã tự chọn mục hoặc lưu phiên bản mới: chỉ ghi khi vẫn là kết quả bộ luật của đúng nội dung này.
   d.prepare("UPDATE skill_studios SET studios = ?, src = 'model', why = ?, at = ? WHERE key = ? AND src = 'rules' AND sig = ?")
     .run(JSON.stringify(r.studios), r.why || `model ${pick.model}`, Date.now(), key, sig);
+  bump();
 }
 /** id các skill của người này (đang bật) đã được xếp vào mục studio. */
 export function userStudioIds(uid: string, studio: StudioKind): string[] {

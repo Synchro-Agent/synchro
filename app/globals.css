@@ -241,6 +241,10 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 .dock .composer{animation:none;padding:10px 12px;display:flex;align-items:center;gap:8px}
 .dock .composer textarea{margin:0;flex:1;min-height:24px;font-size:16px}
 .dock-note{width:min(var(--thread-w,768px),calc(100% - 48px))}
+/* Dòng lưu ý dưới ô soạn tin: chữ lưu ý chiếm phần trống, nút chọn model nằm sát vòng Mức dùng bên phải. space-between với ba phần tử
+   từng đẩy nút model ra giữa dòng khi tên ngắn ("Tự động"). */
+.dock-note{align-items:center;gap:4px}
+.dock-note>span:first-child{flex:1;min-width:0}
 .cursor{display:inline-block;width:8px;height:16px;background:var(--text);vertical-align:-2px;animation:blink 1s steps(1) infinite}
 
 /* Hiện dần bằng transition + @starting-style (chạy xong là gỡ hẳn): animation độ mờ — kể cả đã chạy xong — làm Chrome coi .page là một
@@ -3369,6 +3373,37 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .pl-plus:hover{background:var(--hover);color:var(--text)}
 .pl-plus.done{background:var(--hover);color:var(--text-3);border-color:transparent}
 .pl-plus:disabled{opacity:.5}
+/* Danh mục skill của Claude (claudedirui.tsx): lưới mục ngành nghề, thanh tiến độ cài hàng loạt. */
+.cd{margin-top:8px}
+.cd-lead{font-size:13px;color:var(--text-2);margin:-4px 0 12px;max-width:640px;line-height:1.5}
+.cd-cats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.cd-cat{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:13px;white-space:nowrap;max-width:100%;transition:background .15s,color .15s}
+.cd-cat>span{overflow:hidden;text-overflow:ellipsis}
+.cd-cat>svg{flex:none}
+.cd-cat em{font-style:normal;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.cd-cat:hover{background:var(--hover);color:var(--text)}
+.cd-cat.on{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.cd-cat.on em{color:inherit;opacity:.75}
+.cd-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.cd-tools .btn{display:inline-flex;align-items:center;gap:6px;max-width:100%}
+.cd-tools .btn>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-count{font-size:12.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.cd-job{border:.5px solid var(--border-strong);border-radius:var(--r-card);background:var(--card);padding:12px 14px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px}
+.cd-job-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--text-2)}
+.cd-job-h b{font-weight:540;color:var(--text)}
+.cd-job-h>span[data-notr]{font-variant-numeric:tabular-nums}
+.cd-job-s{color:var(--text-3)}
+.cd-link{color:var(--text-2);text-decoration:underline;text-underline-offset:2px;font-size:inherit}
+.cd-bar{height:6px;border-radius:var(--r-pill);background:var(--hover);overflow:hidden}
+.cd-bar>span{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .4s}
+.cd-job-now{font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-fails{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:6px;border-top:.5px solid var(--border);padding-top:8px}
+.cd-fails>p{font-size:12.5px;margin:0}
+.cd-fail{display:flex;flex-direction:column;gap:1px;font-size:12.5px;min-width:0}
+.cd-fail b{font-weight:500;color:var(--text)}
+.cd-fail span{color:var(--text-3);overflow-wrap:anywhere}
+.cd-alt{display:flex;gap:5px;align-items:flex-start;font-size:11.5px;color:var(--text-3);line-height:1.4;margin-top:2px}
+.cd-alt>svg{flex:none;margin-top:2px}
 .pl-tip{display:flex;gap:8px;align-items:flex-start;margin-top:18px}
 .pl-tip svg{flex:none;margin-top:2px;color:var(--text-3)}
 .modal.pl-small{max-width:520px}
@@ -4999,3 +5034,7 @@ body{text-wrap-style:pretty}
 /* Tiêu đề chia dòng đều ("Emil Kowalski Design / Engineering" → "Emil Kowalski / Design Engineering"); pretty của Chrome chỉ kéo chữ
    khi dòng cuối quá ngắn so với bề ngang, không kéo một chữ dài. */
 :where(h1, h2, h3, h4, h5, h6, b, strong):where(:not(.ai-streaming *)){text-wrap-style:balance}
+
+/* Link trong câu trả lời (Markdown [chữ](https://…)): màu link của giao diện, gạch chân mảnh, ngắt được khi URL dài. */
+:where(.ai-msg, .mdx) a[href]{color:var(--link);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;overflow-wrap:anywhere}
+:where(.ai-msg, .mdx) a[href]:hover{text-decoration-thickness:2px}

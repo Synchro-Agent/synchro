@@ -118,21 +118,34 @@ const nowSubs = new Set<() => void>();
 const setNow = (n: Now) => { nowPlaying = n; nowSubs.forEach((f) => f()); };
 export const useNowPlaying = () => useSyncExternalStore((f) => { nowSubs.add(f); return () => nowSubs.delete(f); }, () => nowPlaying, () => null);
 export const closeNowPlaying = () => { nowPlaying?.el.pause(); setNow(null); };
-async function peaksOf(src: string, n: number): Promise<number[]> {
+// Giải mã dùng chung một OfflineAudioContext (không mở thiết bị âm thanh) và lần lượt từng tệp: trước đây mỗi dạng sóng tạo một
+// AudioContext riêng, cả trang mở ra cùng lúc 5 cái → giao diện đứng 300–450ms khi vào trang Speech. Cùng một tệp chỉ giải mã một lần.
+let decoder: BaseAudioContext | null = null;
+const decoderOf = () => (decoder ??= typeof OfflineAudioContext !== "undefined" ? new OfflineAudioContext(1, 1, 44100)
+  : new (window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)());
+let queue: Promise<unknown> = Promise.resolve();
+const inflight = new Map<string, Promise<number[]>>();
+function peaksOf(src: string, n: number): Promise<number[]> {
   const k = `${n}:${src}`;
-  if (peaksCache.has(k)) return peaksCache.get(k)!;
-  const buf = await fetch(src).then((r) => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
-  const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AC();
-  try {
-    const a = await ctx.decodeAudioData(buf);
-    const d = a.getChannelData(0), step = Math.max(1, Math.floor(d.length / n)), out: number[] = [];
-    for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < Math.min(d.length, (i + 1) * step); j += 16) m = Math.max(m, Math.abs(d[j])); out.push(m); }
-    const top = Math.max(0.01, ...out);
-    const res = out.map((x) => 0.12 + 0.88 * (x / top));
+  if (peaksCache.has(k)) return Promise.resolve(peaksCache.get(k)!);
+  const cur = inflight.get(k);
+  if (cur) return cur;
+  const p = (async () => {
+    const buf = await fetch(src).then((r) => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
+    const job = queue.then(async () => {
+      const a = await decoderOf().decodeAudioData(buf);
+      const d = a.getChannelData(0), step = Math.max(1, Math.floor(d.length / n)), out: number[] = [];
+      for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < Math.min(d.length, (i + 1) * step); j += 16) m = Math.max(m, Math.abs(d[j])); out.push(m); }
+      const top = Math.max(0.01, ...out);
+      return out.map((x) => 0.12 + 0.88 * (x / top));
+    });
+    queue = job.catch(() => {});
+    const res = await job;
     peaksCache.set(k, res);
     return res;
-  } finally { ctx.close().catch(() => {}); }
+  })().finally(() => inflight.delete(k));
+  inflight.set(k, p);
+  return p;
 }
 // Dạng sóng vẽ từ chính âm thanh (giải mã trên trình duyệt); bấm để tua.
 export function Wave({ src, n = 56, progress = 0, h = 26, onSeek }: { src?: string | null; n?: number; progress?: number; h?: number; onSeek?: (f: number) => void }) {

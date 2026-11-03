@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang, tr, untranslated } from "./i18n";
-import type { PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
-import type { DirPlugin } from "./plugindir";
+import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
+import { PLUGIN_CATS, type DirPlugin } from "./plugindir";
+import { ClaudeDirectory } from "./claudedirui";
 import { GithubAdd } from "./ghadd";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
@@ -13,7 +14,7 @@ import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED,
 import { PageBar, usePage } from "./pager";
 import { SkillScan } from "./skillscanui";
 
-type Data = { plugins: PublicPlugin[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
+type Data = { plugins: PluginSummary[]; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -113,16 +114,21 @@ function SkillLine({ s, checked, disabled, onToggle, right }: { s: SkillReport; 
 }
 
 // ---------------------------------------------------------------- chi tiết một plugin đã cài
-function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boolean; onClose: () => void; onChange: (d: { plugins: PublicPlugin[]; plugin?: PublicPlugin }) => void }) {
+function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; admin: boolean; onClose: () => void; onChange: (d: { plugins: PluginSummary[]; plugin?: PublicPlugin }) => void }) {
   const app = useApp();
+  // Danh sách thư viện chỉ có tên skill: mở chi tiết thì tải đủ mô tả, giấy phép, mức rủi ro của từng skill.
+  const [full, setFull] = useState<PublicPlugin | null>(null);
+  useEffect(() => { let on = true; api<{ plugin: PublicPlugin }>("GET", `/api/plugins/${sum.id}`).then((r) => { if (on) setFull(r.plugin); }).catch((e) => app.say(e.message)); return () => { on = false; }; }, [sum.id, sum.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onChange = (d: { plugins: PluginSummary[]; plugin?: PublicPlugin | null }) => { if (d.plugin) setFull(d.plugin); up({ plugins: d.plugins, plugin: d.plugin ?? undefined }); };
+  const p: PluginSummary | PublicPlugin = full ?? sum;
   const manage = p.scope === "personal" || admin;
   const [busy, setBusy] = useState("");
   const file = useRef<HTMLInputElement>(null);
-  const patch = (body: unknown) => api<{ plugins: PublicPlugin[]; plugin: PublicPlugin }>("PATCH", `/api/plugins/${p.id}`, body).then((r) => { onChange(r); fire(); }).catch((e) => app.say(e.message));
+  const patch = (body: unknown) => api<{ plugins: PluginSummary[]; plugin: PublicPlugin }>("PATCH", `/api/plugins/${p.id}`, body).then((r) => { onChange(r); fire(); }).catch((e) => app.say(e.message));
   const act = async (action: string) => {
     setBusy(action);
     try {
-      const r = await api<{ changed?: string[]; plugins?: PublicPlugin[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, { action });
+      const r = await api<{ changed?: string[]; plugins?: PluginSummary[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, { action });
       if (action === "check") app.say(r.changed?.length ? tr("An update is available") : tr("Already up to date"));
       else { app.say(tr("Plugin updated")); fire(); }
       onChange({ plugins: r.plugins ?? [], plugin: r.plugin });
@@ -133,12 +139,12 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
     const fd = new FormData();
     setBusy("upload");
     // Gói lớn (cả repo): chỉ tải lên thư mục các skill, lọc như máy chủ (addZipToPlugin).
-    try { fd.append("file", await slimSkillZip(f, UPLOAD_MAX, "library")); const r = await api<{ added: string[]; plugins: PublicPlugin[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, fd); app.say(`${tr("Added")} ${r.added.join(", ")}`); onChange(r); fire(); }
+    try { fd.append("file", await slimSkillZip(f, UPLOAD_MAX, "library")); const r = await api<{ added: string[]; plugins: PluginSummary[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, fd); app.say(`${tr("Added")} ${r.added.join(", ")}`); onChange(r); fire(); }
     catch (e) { app.say((e as Error).message); }
     setBusy("");
   };
   const remove = () => app.confirm(`${tr("Gỡ")} ${p.name}?`, tr(`${p.skills.length} skill sẽ bị gỡ${p.scope === "org" ? " cho mọi người" : ""}. Bạn có thể cài lại từ danh mục.`), "Uninstall",
-    () => api<{ plugins: PublicPlugin[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { onChange(r); fire(); onClose(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
+    () => api<{ plugins: PluginSummary[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { onChange(r); fire(); onClose(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
   const on = p.enabled && p.mine.enabled;
   return (
     <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -148,7 +154,7 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
           <PlugMark id={p.catalogId} size={44} />
           <div><h2 data-notr>{p.name}</h2><div className="pl-tags">{p.scope === "org" ? <Badge kind="ok">Everyone</Badge> : <Badge kind="">Personal</Badge>}{p.studio && <Badge kind="studio">{STUDIO[p.studio]} studio</Badge>}<Badge kind={RISK[p.risk][1]}>{RISK[p.risk][0]}</Badge>{p.licenses.map((l) => <Badge key={l} kind="">{l}</Badge>)}</div></div>
         </div>
-        <p className="d">{p.description}</p>
+        <p className="d" data-notr={untranslated(p.description) || undefined}>{p.description}</p>
         <div className="pl-rows">
           <div className="pl-row"><div><b>Turned on</b><span>{p.scope === "org" && !admin ? "Turn it off just for you." : "Off: no skill of this plugin is used anywhere."}</span></div>
             <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} onClick={() => patch(p.scope === "org" && !admin ? { mine: { enabled: !p.mine.enabled } } : { enabled: !p.enabled })} /></div>
@@ -162,7 +168,7 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
           <span className="d">{tr("Updated")} {new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")}</span>
         </div>
         <div className="pl-list">
-          {p.skills.map((s) => <SkillLine key={s.id} s={s.report} right={<>{s.useCount > 0 && <span className="pl-use">{s.useCount}×</span>}{manage && <button className={`toggle ${s.enabled ? "on" : ""}`} role="switch" aria-checked={s.enabled} aria-label={s.name} onClick={() => patch({ skills: { [s.name]: !s.enabled } })} />}</>} />)}
+          {!full ? <div className="pl-load"><span className="art-spin" /></div> : full.skills.map((s) => <SkillLine key={s.id} s={s.report} right={<>{s.useCount > 0 && <span className="pl-use">{s.useCount}×</span>}{manage && <button className={`toggle ${s.enabled ? "on" : ""}`} role="switch" aria-checked={s.enabled} aria-label={s.name} onClick={() => patch({ skills: { [s.name]: !s.enabled } })} />}</>} />)}
         </div>
         <div className="modal-foot pl-acts">
           {manage && <button className="btn danger" onClick={remove}>Uninstall</button>}
@@ -184,11 +190,11 @@ function Detail({ p, admin, onClose, onChange }: { p: PublicPlugin; admin: boole
 // Kết hợp Claude và Synchro: hai tab Của bạn / Khám phá, nút + cài một chạm cho plugin trong danh mục (đã kiểm tra giấy phép),
 // "Thêm từ repo GitHub" có bước xem trước giấy phép và rủi ro, mỗi plugin có menu nhanh (quản lý, cập nhật, tắt, gỡ).
 // Xuất thư viện thành .zip (mọi skill, nguồn, commit, giấy phép, tùy chọn): ai thấy thư viện thì xuất được.
-async function exportLib(p: PublicPlugin, say: (m: string) => void) {
+async function exportLib(p: PluginSummary, say: (m: string) => void) {
   try { const f = await downloadExport(`/api/plugins/${encodeURIComponent(p.id)}/export`, `${p.slug}.zip`); say(`${tr("Đã xuất")} ${f}`); }
   catch (e) { say((e as Error).message); }
 }
-function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolean; onOpen: () => void; onAct: (a: "check" | "toggle" | "remove") => void }) {
+function RowMenu({ p, manage, onOpen, onAct }: { p: PluginSummary; manage: boolean; onOpen: () => void; onAct: (a: "check" | "toggle" | "remove") => void }) {
   const app = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -216,7 +222,6 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PublicPlugin; manage: boolea
 
 const Toggle = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} />;
 
-const CAT: Record<string, string> = { studio: "Studios", design: "Design", dev: "Development & testing", writing: "Writing" };
 
 // Kho kỹ năng: gộp Skills và Plugins. Thư viện (plugin, nhiều skill) và skill lẻ nằm chung một trang,
 // một ô "Thêm từ GitHub" tự nhận ra link một skill hay cả bộ, thả tệp .zip / SKILL.md vào đâu trên trang cũng được.
@@ -269,7 +274,7 @@ export function SkillHub() {
   if (err) return <div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
   if (!d) return <div className="empty" style={{ marginTop: 40 }}><span className="art-spin" /></div>;
   const view = tab ?? (d.plugins.length || ownSkills ? "yours" : "discover");
-  const merge = (r: { plugins: PublicPlugin[]; plugin?: PublicPlugin }) => setD((x) => (x ? { ...x, plugins: r.plugins.length ? r.plugins : x.plugins.map((p) => (r.plugin && p.id === r.plugin.id ? r.plugin : p)) } : x));
+  const merge = (r: { plugins: PluginSummary[]; plugin?: PluginSummary | PublicPlugin }) => setD((x) => (x ? { ...x, plugins: r.plugins.length ? r.plugins : x.plugins.map((p) => (r.plugin && p.id === r.plugin.id ? r.plugin : p)) } : x));
   const byCat = new Map(d.plugins.filter((p) => p.catalogId).map((p) => [p.catalogId!, p]));
   const ql = q.trim().toLowerCase();
   const match = (t: string) => !ql || t.toLowerCase().includes(ql);
@@ -277,28 +282,28 @@ export function SkillHub() {
   const quick = async (x: DirPlugin) => {
     setBusy(x.catalogId);
     try {
-      const r = await api<{ plugin: PublicPlugin; plugins: PublicPlugin[] }>("POST", "/api/plugins", { action: "install", catalogId: x.catalogId, scope: d.admin ? "org" : "personal" });
+      const r = await api<{ plugin: PublicPlugin; plugins: PluginSummary[] }>("POST", "/api/plugins", { action: "install", catalogId: x.catalogId, scope: d.admin ? "org" : "personal" });
       merge({ plugins: r.plugins }); fire();
       app.say(`${r.plugin.name} ${tr("is installed and ready to use")}`);
     } catch (e) { app.say((e as Error).message); }
     setBusy(null);
   };
-  const act = async (p: PublicPlugin, a: "check" | "toggle" | "remove") => {
+  const act = async (p: PluginSummary, a: "check" | "toggle" | "remove") => {
     const manage = p.scope === "personal" || d.admin;
     try {
       if (a === "check") { const r = await api<{ changed: string[]; plugin: PublicPlugin }>("POST", `/api/plugins/${p.id}`, { action: "check" }); merge({ plugins: [], plugin: r.plugin }); app.say(r.changed.length ? tr("An update is available") : tr("Already up to date")); }
       if (a === "toggle") { const on = p.enabled && p.mine.enabled; merge(await api("PATCH", `/api/plugins/${p.id}`, p.scope === "org" && !manage ? { mine: { enabled: !on } } : { enabled: !on })); fire(); }
       if (a === "remove") app.confirm(`${tr("Gỡ")} ${p.name}?`, tr(`${p.skills.length} skill sẽ bị gỡ${p.scope === "org" ? " cho mọi người" : ""}. Bạn có thể cài lại từ danh mục.`), "Uninstall",
-        () => api<{ plugins: PublicPlugin[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { setD((x) => (x ? { ...x, plugins: r.plugins } : x)); fire(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
+        () => api<{ plugins: PluginSummary[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { setD((x) => (x ? { ...x, plugins: r.plugins } : x)); fire(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
     } catch (e) { app.say((e as Error).message); }
   };
-  const canManage = (p: PublicPlugin) => p.scope === "personal" || d.admin;
-  const isOn = (p: PublicPlugin) => p.enabled && p.mine.enabled;
-  const setOnAll = async (list: PublicPlugin[], on: boolean) => {
+  const canManage = (p: PluginSummary) => p.scope === "personal" || d.admin;
+  const isOn = (p: PluginSummary) => p.enabled && p.mine.enabled;
+  const setOnAll = async (list: PluginSummary[], on: boolean) => {
     for (const p of list.filter((x) => isOn(x) !== on)) merge(await api("PATCH", `/api/plugins/${p.id}`, p.scope === "org" && !canManage(p) ? { mine: { enabled: on } } : { enabled: on }));
     fire(); app.say(on ? tr("Đã bật các thư viện đã chọn") : tr("Đã tắt các thư viện đã chọn"));
   };
-  const libActs: BulkAct<PublicPlugin>[] = [
+  const libActs: BulkAct<PluginSummary>[] = [
     { id: "on", label: "Bật", icon: <I.M icon="Play" size={14} />, when: (l) => l.some((p) => !isOn(p)), run: (l) => setOnAll(l, true) },
     { id: "off", label: "Tắt", icon: <I.M icon="Pause" size={14} />, when: (l) => l.some(isOn), run: (l) => setOnAll(l, false) },
     { id: "check", label: "Kiểm tra cập nhật", icon: <I.Retry size={14} />, when: (l) => l.some(canManage), run: async (l) => {
@@ -309,7 +314,7 @@ export function SkillHub() {
     { id: "export", label: "Xuất .zip", icon: <I.Download size={14} />, stay: true, run: (l) => each(l, (p) => exportLib(p, app.say)) },
     { id: "remove", label: "Gỡ", icon: <I.Trash size={14} />, danger: true, when: (l) => l.some(canManage),
       confirm: (l) => { const m = l.filter(canManage); return { title: `${tr("Gỡ")} ${m.length} ${tr("thư viện")}?`, text: `${m.reduce((n, p) => n + p.skills.length, 0)} ${tr("skill sẽ bị gỡ")}${m.some((p) => p.scope === "org") ? tr(" (thư viện cho mọi người: gỡ cho cả nhóm)") : ""}.${m.length < l.length ? ` ${l.length - m.length} ${tr("thư viện không thuộc quyền bạn được giữ nguyên.")}` : ""}`, ok: "Gỡ" }; },
-      run: async (l) => { let last: PublicPlugin[] | null = null; await each(l.filter(canManage), async (p) => { last = (await api<{ plugins: PublicPlugin[] }>("DELETE", `/api/plugins/${p.id}`)).plugins; }); if (last) setD((x) => (x ? { ...x, plugins: last! } : x)); fire(); app.say(tr("Đã gỡ các thư viện đã chọn")); } },
+      run: async (l) => { let last: PluginSummary[] | null = null; await each(l.filter(canManage), async (p) => { last = (await api<{ plugins: PluginSummary[] }>("DELETE", `/api/plugins/${p.id}`)).plugins; }); if (last) setD((x) => (x ? { ...x, plugins: last! } : x)); fire(); app.say(tr("Đã gỡ các thư viện đã chọn")); } },
   ];
   const cur = d.plugins.find((p) => p.id === open);
   const featured = d.directory.find((x) => x.catalogId === "design-studio")!;
@@ -330,7 +335,7 @@ export function SkillHub() {
     </div>
     );
   };
-  const row = (p: PublicPlugin) => {
+  const row = (p: PluginSummary) => {
     const manage = p.scope === "personal" || d.admin;
     return (
       <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(p.id)} {...bulkRow(bk, p)}>
@@ -347,7 +352,8 @@ export function SkillHub() {
   };
   const org = d.plugins.filter((p) => p.scope === "org" && match(`${p.name} ${p.description}`));
   const mine = d.plugins.filter((p) => p.scope === "personal" && match(`${p.name} ${p.description}`));
-  const cats = ["studio", "design", "dev", "writing"].map((c) => [c, d.directory.filter((x) => x.category === c && match(`${x.name} ${x.tagline} ${x.author}`))] as const).filter(([, l]) => l.length);
+  // Thư viện chọn lọc của Synchro, theo cùng các mục ngành nghề với danh mục của Claude.
+  const cats = PLUGIN_CATS.map((c) => [c.label, d.directory.filter((x) => x.category === c.key && match(`${x.name} ${x.tagline} ${x.author}`))] as const).filter(([, l]) => l.length);
   return (
     <>
       <div className="pl-top">
@@ -400,9 +406,9 @@ export function SkillHub() {
               <I.Palette size={72} />
             </div>
           )}
-          {cats.map(([c, list]) => <div key={c}><div className="pl-sec">{CAT[c]}</div><div className="pl-dgrid">{list.map(card)}</div></div>)}
-          {!cats.length && <div className="empty" style={{ marginTop: 40 }}><span>No plugins match your search.</span></div>}
-          <p className="d pl-tip"><I.ShieldCheck size={14} />Directory plugins only contain skills whose license allows copying. Anthropic&apos;s docx, pdf, pptx and xlsx skills are proprietary and are skipped; Synchro creates those files with code execution instead.</p>
+          {cats.map(([c, list]) => <div key={c}><div className="pl-sec">{c}</div><div className="pl-dgrid">{list.map(card)}</div></div>)}
+          <ClaudeDirectory q={q} onOpen={setOpen} onChanged={() => { load(); fire(); }} />
+          <p className="d pl-tip"><I.ShieldCheck size={14} />Only skills whose license allows copying are installed. Skills with a closed license (such as Anthropic&apos;s docx, pdf, pptx and xlsx) are skipped; Synchro creates those files with code execution instead.</p>
         </>
       )}
 
@@ -434,12 +440,12 @@ export function CustomizePage({ tab, setTab, connectors, feats }: { tab: CzTab; 
 export function useStudios() {
   const [m, setM] = useState<Partial<Record<Studio, { name: string; skills: number }>>>({});
   useEffect(() => {
-    const load = () => fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j: Data | null) => {
+    const load = () => fetch("/api/plugins?view=meta").then((r) => (r.ok ? r.json() : null)).then((j: { plugins?: { studio: Studio | null; enabled: boolean; mine: { enabled: boolean }; name: string; skillCount: number }[]; studios?: Data["studios"] } | null) => {
       if (!j) return;
       // Máy chủ đếm sẵn (gồm skill Synchro tự nhận diện thuộc mục — từ Kho kỹ năng và plugin khác); máy chủ cũ thì tự đếm plugin studio.
       if (j.studios) { setM(j.studios); return; }
       const o: Partial<Record<Studio, { name: string; skills: number }>> = {};
-      for (const p of j.plugins) if (p.studio && p.enabled && p.mine.enabled) { const c = o[p.studio]; o[p.studio] = { name: c ? `${c.name}, ${p.name}` : p.name, skills: (c?.skills ?? 0) + p.skills.filter((s) => s.enabled).length }; }
+      for (const p of j.plugins ?? []) if (p.studio && p.enabled && p.mine.enabled) { const c = o[p.studio]; o[p.studio] = { name: c ? `${c.name}, ${p.name}` : p.name, skills: (c?.skills ?? 0) + p.skillCount }; }
       setM(o);
     }).catch(() => {});
     load();

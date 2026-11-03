@@ -701,7 +701,10 @@ async function handler(req, res) {
       const want = cr?.tool ?? (b.tool_choice?.type === "none" ? null : wantTool(q, b.tools));
       // #waittool: bước gọi công cụ mất 2,5 giây (thử nhắn thêm khi lượt đang chạy, không cần code chạy chậm).
       if (want && q.includes("#waittool")) await sleep(2500);
-      if (want) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ dùng công cụ." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: want.name, input: want.args }], stop_reason: "tool_use", usage: { input_tokens: 40, output_tokens: 20 } });
+      // "#artmid": viết artifact ngay trong câu dẫn trước khi gọi công cụ (model hay làm vậy khi tự kiểm tra sản phẩm) — Synchro phải đưa
+      // artifact vào câu trả lời cuối và để read_artifact / check_artifact thấy được.
+      const lead = q.includes("#artmid") ? `Mình viết bộ slide rồi đọc lại.\n<artifact identifier="giua-luot" type="text/html" title="Viết giữa lượt">\n<!doctype html><html><body><section class="slide"><h1>Slide một</h1></section><section class="slide"><h1>Slide hai</h1></section></body></html>\n</artifact>` : "Mình sẽ dùng công cụ.";
+      if (want) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: lead }, { type: "tool_use", id: `toolu_${Date.now()}`, name: want.name, input: want.args }], stop_reason: "tool_use", usage: { input_tokens: 40, output_tokens: 20 } });
       if (await trap(res, q, (m) => err("api_error", m))) return;
       await sleep(latency(b.model));
       return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(text.length / 4) } });

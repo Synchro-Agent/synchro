@@ -670,6 +670,33 @@ export const EN2VI: Record<string, string> = {
   "The model will use this version from now on. Newer versions stay saved and can be restored later.": "Từ giờ model sẽ dùng phiên bản này. Các phiên bản mới hơn vẫn được giữ và có thể khôi phục lại.",
 };
 
+
+// Danh mục skill của Claude trong Skill Hub (claudedirui.tsx) và mục ngành nghề (plugindir.ts).
+Object.assign(VI2EN, {
+  "Chỉ quản trị viên mới cài hàng loạt cho cả tổ chức.": "Only administrators can bulk-install for the whole organization.",
+  "Tên thư viện đã được dùng.": "That library name is already taken.",
+  "Tìm skill hoặc thư viện": "Search skills or libraries", "Không có skill hoặc thư viện nào khớp": "No skill or library matches",
+});
+Object.assign(EN2VI, {
+  "the whole directory": "cả danh mục", "libraries": "thư viện", "Every library of": "Mọi thư viện của",
+  "that is not installed yet goes into Libraries for everyone. It runs on the server in the background: you can close this page. Libraries whose license does not allow copying are skipped and listed.": "chưa cài sẽ được cài vào Thư viện cho mọi người. Máy chủ cài ở nền: bạn có thể đóng trang này. Thư viện có giấy phép không cho sao chép được bỏ qua và liệt kê lại.",
+  "Claude skill directory": "Danh mục skill của Claude", "installed": "đã cài", "not installed": "chưa cài được",
+  "Every library with skills from Claude's public directory, sorted into the same categories as Claude. Each library is pinned to the commit Anthropic reviewed.": "Mọi thư viện có skill trong danh mục công khai của Claude, chia theo đúng các mục ngành nghề như Claude. Mỗi thư viện ghim đúng commit Anthropic đã duyệt.",
+  "Installing libraries": "Đang cài thư viện", "Installation stopped": "Đã dừng cài", "Installation finished": "Đã cài xong", "Now:": "Đang cài:",
+  "libraries have a license that does not allow copying; Synchro looks for open alternatives with the same skills.": "thư viện có giấy phép không cho sao chép; Synchro tìm thư viện mở có skill tương đương để thay.",
+  "Categories": "Mục ngành nghề", "No libraries match.": "Không có thư viện nào khớp.",
+  "Install all": "Cài tất cả", "Install all in": "Cài tất cả mục", "Not installed": "Chưa cài",
+  "Only skills whose license allows copying are installed. Skills with a closed license (such as Anthropic's docx, pdf, pptx and xlsx) are skipped; Synchro creates those files with code execution instead.": "Chỉ cài skill có giấy phép cho phép sao chép. Skill có giấy phép đóng (như docx, pdf, pptx và xlsx của Anthropic) được bỏ qua; Synchro tạo các loại tệp đó bằng chạy code.",
+  "Tickets & tasks": "Phiếu việc & nhiệm vụ", "Pipelines & jobs": "Pipeline & tác vụ", "Notes & memory": "Ghi chú & bộ nhớ", "Reference docs": "Tài liệu tham khảo",
+  "Websites": "Trang web", "Databases": "Cơ sở dữ liệu", "Contacts & leads": "Liên hệ & khách tiềm năng", "Servers & cloud": "Máy chủ & đám mây", "Logs & errors": "Nhật ký & lỗi",
+  "Product": "Sản phẩm", "Research": "Nghiên cứu", "Financial services": "Dịch vụ tài chính", "Jobs & career": "Việc làm & sự nghiệp", "IT & security": "CNTT & bảo mật",
+  "Retail & e-commerce": "Bán lẻ & thương mại điện tử", "Music": "Âm nhạc", "Personal finance": "Tài chính cá nhân", "Events": "Sự kiện", "Healthcare & life sciences": "Y tế & khoa học sự sống",
+  "Puzzles": "Giải đố", "Travel": "Du lịch", "Health & fitness": "Sức khỏe & thể hình", "Games": "Trò chơi", "Shopping": "Mua sắm", "Government": "Chính phủ",
+  "Family & relationships": "Gia đình & các mối quan hệ", "Media & entertainment": "Truyền thông & giải trí", "Education": "Giáo dục", "Food": "Ẩm thực", "Sports": "Thể thao",
+  "Faith": "Tín ngưỡng", "Travel & hospitality": "Du lịch & lưu trú", "Nonprofit": "Phi lợi nhuận",
+  "Learning & study": "Học tập", "Paused: GitHub is limiting downloads": "Tạm nghỉ: GitHub đang giới hạn lượt tải, sẽ tự chạy tiếp", "Closed license, not installed.": "Giấy phép đóng, không cài.", "Open alternatives:": "Thư viện mở thay thế:", "No open alternative yet.": "Chưa có thư viện mở tương đương.", "Open alternative to": "Thư viện mở thay cho", "Closed license": "Giấy phép đóng", "Home & living": "Nhà cửa & đời sống", "More categories": "Thêm mục", "Fewer categories": "Thu gọn mục", "Partner": "Đối tác",
+});
+
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^CLI không có hoạt động nào trong (\d+) phút \(có thể đã treo\) nên Synchro dừng lượt này\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `The CLI showed no activity for ${m[1]} minutes (it may have hung), so Synchro stopped this turn. Send "continue" to pick up where it left off.`],
   [/^Lượt này đã chạy ([\d.]+) giờ \(mức tối đa mỗi lượt\) nên đã dừng\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `This turn ran for ${m[1]} hours (the per-turn maximum) and was stopped. Send "continue" to pick up where it left off.`],

@@ -107,7 +107,7 @@ export async function downloadExport(url: string, fallback: string): Promise<str
 
 export function useIsAdmin() {
   const [a, setA] = useState(false);
-  useEffect(() => { let on = true; fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
+  useEffect(() => { let on = true; fetch("/api/plugins?view=meta").then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
   return a;
 }
 // Chỉ quản trị viên mới thấy lựa chọn này; tài khoản khác thêm skill vào Skill của bạn như thường.

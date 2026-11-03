@@ -25,7 +25,8 @@ const BRIDGE = "br-synchro";
 const SUBNET = env("WS_SUBNET", "172.30.0.0/16");
 // Chạy code cho chat (mỗi lần một container mới, xóa ngay sau khi chạy): mạng riêng không ra được internet,
 // chỉ tới được proxy của dịch vụ này ở cổng RUN_PROXY_PORT. Proxy cho đi tới các kho thư viện (PKG_HOSTS); lần chạy được phép ra
-// mọi trang web công khai (Cài đặt → Khả năng) mang mã riêng trong Proxy-Authorization. Địa chỉ nội bộ luôn bị chặn.
+// mọi trang web công khai (Cài đặt → Khả năng) được nhận ra theo IP cố định của container (Chromium không gửi được mật khẩu proxy
+// ghi trong URL, nên không dùng mã trong Proxy-Authorization). Địa chỉ nội bộ luôn bị chặn.
 const RUN_NET = env("WS_RUN_NETWORK", "synchro-run");
 const RUN_BRIDGE = "br-synchro-run";
 const RUN_SUBNET = env("WS_RUN_SUBNET", "172.29.0.0/24");
@@ -279,8 +280,9 @@ const keepRoot = (u) => `${ROOT}/_keep/${u}`;
 const okKeep = (k) => typeof k === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(k);
 // Lần chạy đang dùng thư mục giữ lại: chạy lần lượt trong cùng một đoạn chat để hai lần chạy không ghi đè tệp của nhau.
 const keepBusy = new Map();
-// Mã proxy của các lần chạy được ra mọi trang web công khai (chỉ sống trong lúc chạy).
-const webTokens = new Set();
+// IP cố định cho container có mạng (trong RUN_SUBNET), và các IP đang được ra mọi trang web công khai (chỉ trong lúc chạy).
+const usedIps = new Set(), webIps = new Set();
+const pickIp = () => { const pre = RUN_GW.replace(/\.\d+$/, "."); for (let i = 10; i < 250; i++) { const ip = pre + i; if (!usedIps.has(ip)) { usedIps.add(ip); return ip; } } return null; };
 function sweepKeep(u) {
   const root = keepRoot(u);
   if (!fs.existsSync(root)) return;
@@ -302,8 +304,9 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   while (keep && keepBusy.has(dir)) await keepBusy.get(dir).catch(() => {});
   let release = () => {};
   if (keep) keepBusy.set(dir, new Promise((ok) => { release = () => { keepBusy.delete(dir); ok(); }; }));
-  const token = wantNet && web ? crypto.randomBytes(18).toString("hex") : "";
-  if (token) webTokens.add(token);
+  const ip = wantNet ? pickIp() : null;
+  if (wantNet && !ip) { release(); throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây."); }
+  if (ip && web) webIps.add(ip);
   running++;
   try {
     if (keep) {
@@ -323,14 +326,15 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     }
     await run("chown", ["-R", `${UID}:${UID}`, dir]);
     fs.utimesSync(dir, new Date(), new Date());
-    const proxy = `http://${token ? `run:${token}@` : ""}${RUN_GW}:${RUN_PROXY_PORT}`;
+    const proxy = `http://${RUN_GW}:${RUN_PROXY_PORT}`;
     const envs = { HOME: HOME, LANG: "C.UTF-8", LC_ALL: "C.UTF-8", MPLBACKEND: "Agg", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1",
       PIP_BREAK_SYSTEM_PACKAGES: "1", PIP_DISABLE_PIP_VERSION_CHECK: "1", NPM_CONFIG_PREFIX: `${HOME}/.npm-global`, npm_config_update_notifier: "false",
       PATH: `${HOME}/.local/bin:${HOME}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
-      ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1" } : {}) };
+      // SYNCHRO_CHROME_PROXY: Chromium không đọc HTTPS_PROXY; /etc/chromium.d/synchro trong image thêm --proxy-server khi có biến này.
+      ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1", SYNCHRO_CHROME_PROXY: proxy } : {}) };
     // Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,
     // ffmpeg nhiều luồng: pids 1024, /dev/shm 512 MB.
-    const args = ["run", "--rm", "-i", "--name", name, "--hostname", "sandbox", "--init", "--network", wantNet ? RUN_NET : "none",
+    const args = ["run", "--rm", "-i", "--name", name, "--hostname", "sandbox", "--init", "--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : []),
       "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
       "--shm-size", "512m", "--label", `synchro.run=${u}`, "-u", UID, "-w", `${HOME}/run`, "-v", `${dir}:${HOME}/run`,
       ...Object.entries(envs).flatMap(([k, v]) => ["-e", `${k}=${v}`]), IMAGE, "timeout", "-k", "5", String(sec), ...argv];
@@ -358,7 +362,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     return { code: r.code, out: r.out, err: r.err + note, timedOut, files: out };
   } finally {
     running--;
-    if (token) webTokens.delete(token);
+    if (ip) { usedIps.delete(ip); webIps.delete(ip); }
     await run("docker", ["rm", "-f", name], { timeout: 20_000 });
     if (keep) { fs.rmSync(`${dir}/outputs`, { recursive: true, force: true }); release(); }
     else fs.rmSync(dir, { recursive: true, force: true });
@@ -369,15 +373,15 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
 let proxyUp = false;
 const v4Private = (ip) => { const [a, b] = ip.split(".").map(Number); return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224; };
 const ipPrivate = (ip) => (net.isIP(ip) === 4 ? v4Private(ip) : /^(::|::1|f[cd]|fe[89ab]|::ffff:)/i.test(ip));
-// Mã của lần chạy được ra mọi trang web công khai: "Proxy-Authorization: Basic base64(run:<mã>)" (pip, npm, curl, requests tự gửi khi
-// HTTPS_PROXY có dạng http://run:<mã>@…).
-const webRun = (req) => {
-  const m = /^Basic\s+(.+)$/i.exec(String(req.headers["proxy-authorization"] ?? ""));
-  const tok = m ? Buffer.from(m[1], "base64").toString("utf8").split(":")[1] ?? "" : "";
-  return !!tok && webTokens.has(tok);
-};
+// Lần chạy được ra mọi trang web công khai: nhận ra theo IP nguồn (IP cố định của container, gán bằng --ip).
+const webRun = (req) => webIps.has(String(req.socket?.remoteAddress ?? "").replace(/^::ffff:/, ""));
+// Dịch vụ nhận tệp / dữ liệu ẩn danh: chặn cả khi được ra mọi trang web, để code không lén đưa dữ liệu của người dùng ra ngoài
+// (một model từng tự đưa ảnh chụp sản phẩm lên tmpfiles.org để tự xem).
+const DROP_HOSTS = ["tmpfiles.org", "file.io", "transfer.sh", "0x0.st", "catbox.moe", "gofile.io", "pixeldrain.com", "filebin.net", "termbin.com", "paste.rs", "ix.io",
+  "sprunge.us", "bashupload.com", "temp.sh", "uguu.se", "tempfile.org", "webhook.site", "requestbin.net", "pipedream.net", "hookbin.com", "beeceptor.com", "oast.fun", "interact.sh"];
 async function pkgTarget(host, port, web = false) {
   const h = String(host).toLowerCase().replace(/\.$/, "");
+  if (DROP_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is a file / data drop service`);
   if (!web && !PKG_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is not a package registry (bật "Mọi trang web công khai" trong Cài đặt → Khả năng để code ra được trang này)`);
   if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
   const ips = (await lookup(h, { all: true })).map((x) => x.address);

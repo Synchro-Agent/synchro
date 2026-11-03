@@ -25,6 +25,12 @@ RUN pip install --break-system-packages --no-cache-dir \
 
 # Điều khiển Chromium có sẵn từ Node (chụp trang HTML / canvas thành khung hình, xuất PDF): require("puppeteer-core").
 RUN npm install -g --no-fund --no-audit puppeteer-core@23.11.1 && npm cache clean --force
+# Chromium chạy trong container không có quyền đặc biệt nên cần --no-sandbox; Chromium không đọc HTTPS_PROXY nên khi lần chạy có mạng
+# (dịch vụ workspace đặt SYNCHRO_CHROME_PROXY) thì đi qua proxy của Synchro. Trình khởi chạy /usr/bin/chromium đọc các tệp này.
+RUN printf '%s\n' \
+     'export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --no-sandbox"' \
+     'if [ -n "$SYNCHRO_CHROME_PROXY" ]; then export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --proxy-server=$SYNCHRO_CHROME_PROXY"; fi' \
+     > /etc/chromium.d/synchro
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium CHROME_PATH=/usr/bin/chromium PUPPETEER_SKIP_DOWNLOAD=1 \
     NODE_PATH=/usr/local/lib/node_modules:/home/user/.npm-global/lib/node_modules IMAGEIO_FFMPEG_EXE=/usr/bin/ffmpeg
 

@@ -1,4 +1,5 @@
 import { AuthError, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
+import { markRemoved } from "../../../plugjob";
 import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, removePluginSkills, setPlugin, setPref, updatePlugin, type Studio } from "../../../plugins";
 
 export const runtime = "nodejs";
@@ -15,6 +16,12 @@ async function access(req: Request, ctx: Ctx) {
   return { user, id, manage: owner === user.id || (owner === "org" && isAdmin(user)), org: owner === "org" };
 }
 const err = (e: unknown) => { if (e instanceof PluginError) return Response.json({ error: e.message }, { status: e.status }); throw e; };
+
+// Chi tiết một thư viện: mọi skill kèm mô tả, giấy phép, mức rủi ro (danh sách ở GET /api/plugins chỉ có tên skill).
+export const GET = handle(async (req: Request, ctx: Ctx) => {
+  const a = await access(req, ctx);
+  return Response.json({ plugin: getPlugin(a.id, a.user.id) });
+});
 
 // Quản lý: { enabled?, everywhere?, studio?, skills?: { tên: bật } }. Người dùng với plugin tổ chức: { mine: { enabled?, everywhere? } }.
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
@@ -34,7 +41,10 @@ export const DELETE = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const a = await access(req, ctx);
   if (!a.manage) throw new AuthError("Chỉ quản trị viên mới gỡ được plugin của tổ chức.", 403);
+  const cid = a.org ? getPlugin(a.id)?.catalogId ?? null : null;
   await removePlugin(a.id);
+  // Thư viện mặc định (danh mục của Claude) quản trị viên đã gỡ: không tự cài lại khi danh mục cập nhật.
+  markRemoved(cid);
   return Response.json({ plugins: listPlugins(a.user.id) });
 });
 

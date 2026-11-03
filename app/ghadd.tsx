@@ -10,7 +10,7 @@ import { inspectGithub, SkillAddModal, type Found } from "./skillsui";
 import { PreviewModal } from "./pluginsui";
 import type { PublicPlugin } from "./plugins";
 
-const isAdmin = () => fetch("/api/plugins").then((r) => (r.ok ? r.json() : null)).then((j) => !!j?.admin).catch(() => false);
+const isAdmin = () => fetch("/api/plugins?view=meta").then((r) => (r.ok ? r.json() : null)).then((j) => !!j?.admin).catch(() => false);
 const repoName = (u: string) => u.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\/(tree|blob)\/[^/]+/, "").replace(/\/$/, "");
 
 // focus: đổi số này để đưa con trỏ vào ô (mục "Thêm từ GitHub" trong menu Thêm).

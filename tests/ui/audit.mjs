@@ -371,7 +371,11 @@ for (const theme of THEMES) for (const size of SIZES) {
   });
   if (mobile) await step0("thanh-ben", async () => { await side(); await shot("thanh-ben"); await esc(); });
   console.log(`  · tác vụ chặn giao diện lâu nhất (sau khi tải trang): ${lagMax}ms${lagAt ? ` (${lagAt})` : ""}`);
-  ws.close(); chrome.kill(); await sleep(500);
+  // Chờ Chrome của vòng này thoát hẳn: vòng sau mở Chrome mới cùng cổng 9339; Chrome cũ còn giữ cổng thì vòng sau gắn nhầm vào nó
+  // (còn phiên đăng nhập → bước "đăng nhập" không thấy màn đăng nhập).
+  ws.close();
+  await new Promise((ok) => { if (chrome.exitCode !== null) return ok(); chrome.once("exit", ok); chrome.kill(); setTimeout(() => { chrome.kill("SIGKILL"); ok(); }, 5000); });
+  for (let i = 0; i < 25 && (await fetch("http://127.0.0.1:9339/json/version").then(() => true).catch(() => false)); i++) await sleep(200);
 }
 
 console.log(`\n━━ Vấn đề (${problems.length})`);

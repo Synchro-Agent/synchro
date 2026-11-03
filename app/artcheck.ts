@@ -73,7 +73,8 @@ export function readArtifact(a: ArtVersion | null, input: Record<string, unknown
   let out = "", n = from;
   for (; n <= lines.length && out.length < 60_000; n++) out += `${String(n).padStart(4)} | ${lines[n - 1]}\n`;
   const more = n <= lines.length ? `\n[Còn ${lines.length - n + 1} dòng: gọi lại với offset=${n}]` : "";
-  return { content: `<artifact identifier="${a.ident}" type="${a.type}" title="${a.title}" version="${a.v}" lines="${lines.length}"${a.complete ? "" : ' complete="false"'}>\n${out}</artifact>${more}`, is_error: false };
+  // Thẻ artifact_source (không phải <artifact>): model trích lại kết quả này thì không bị hiểu nhầm thành artifact mới.
+  return { content: `<artifact_source identifier="${a.ident}" type="${a.type}" title="${a.title}" version="${a.v}" lines="${lines.length}"${a.complete ? "" : ' complete="false"'}>\n${out}</artifact_source>${more}`, is_error: false };
 }
 
 // Cầu nối thay thế ở máy kiểm tra: không có khung cha, window.synchro / storage trả về rỗng để artifact vẫn dựng được.
