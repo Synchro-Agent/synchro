@@ -21,13 +21,17 @@ export type Task = "chat" | "qa" | "language" | "translate" | "summarize" | "wri
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 
 // Hạng theo tên model của các hãng (không khớp thì coi là "balanced"); "mạnh nhất" là dòng đầu bảng của từng hãng.
-const FAST = /(haiku|flash|lite|mini|nano|luna|small)/i;
+// Model mã nguồn mở chạy qua gói (GPT-OSS, Llama, Qwen, Mistral…): hạng nhanh, không mang thế mạnh của hãng lớn — "gpt-oss" từng bị coi là
+// GPT của OpenAI, được cộng điểm việc số liệu và được chọn làm bảng tính (rồi treo).
+const OPEN_WEIGHT = /(gpt-oss|llama|qwen|mistral|mixtral|gemma|phi-\d)/i;
+const FAST = /(haiku|flash|lite|mini|nano|luna|small|gpt-oss|llama|qwen|mistral|mixtral|gemma|phi-\d)/i;
 // Grok 4.5 trở lên là dòng mạnh nhất của xAI; DeepSeek V4 Pro khớp "-pro".
 const STRONG = /(opus|fable|astra|argon|ultra|-pro\b|\bpro\b|grok-4\.[5-9]|grok-[5-9])/i;
 const FRONTIER = /(fable|astra|argon|ultra)/i;
 export const tierOf = (key: string): Tier => (STRONG.test(key) ? "strong" : FAST.test(key) ? "fast" : "balanced");
 export function vendorOf(key: string): Vendor {
   const k = key.toLowerCase();
+  if (OPEN_WEIGHT.test(k)) return "other";
   if (/^(anthropic|sub-claude)\//.test(k) || /claude|opus|sonnet|haiku|fable/.test(k)) return "anthropic";
   if (/^(openai|sub-codex)\//.test(k) || /\bgpt|\bo\d|chatgpt|codex/.test(k)) return "openai";
   if (/^(google|sub-agy)\//.test(k) || /gemini/.test(k)) return "google";

@@ -145,7 +145,11 @@ export class ClaudeCodeEngine implements Engine {
     // không dính liền "…dựng deck.Đã đọc 4 skill…".
     let text = "", done = false, gap = false;
     const limits = new Map<string, RateWindow>();
+    // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
+    const T0 = Date.now(), seen = new Map<string, number>();
+    const mark = (o: Json) => { const k = [o.type, o.subtype, (o.event as Json | undefined)?.type].filter(Boolean).join(":"); if (!seen.has(k) && seen.size < 24) seen.set(k, Date.now() - T0); };
     for await (const o of objects(p)) {
+      mark(o as Json);
       if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) };
       else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
       else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
@@ -166,6 +170,7 @@ export class ClaudeCodeEngine implements Engine {
       } else if (o.type === "rate_limit_event") {
         for (const w of claudeLimits(o.rate_limit_info)) limits.set(w.window, w);
       } else if (o.type === "result") {
+        console.log(`[timing] claude-events ${[...seen].map(([k, v]) => `${k}=${v}`).join(" ")}${typeof o.duration_api_ms === "number" ? ` api=${o.duration_api_ms}` : ""}${typeof o.duration_ms === "number" ? ` total=${o.duration_ms}` : ""}`);
         for (const w of claudeLimits(o.api_error_params?.rate_limit_info)) limits.set(w.window, w);
         done = true;
         const u = (o.usage ?? {}) as Json;

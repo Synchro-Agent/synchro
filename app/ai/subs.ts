@@ -583,8 +583,14 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     try { saveAttachments(work, col.atts); }
     catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
   }
+  // Bộ canh: CLI có luồng sự kiện (Claude Code, Codex, Grok) phải báo sự kiện đầu trong 60 giây (thường 1–3 giây). Im lặng quá lâu
+  // (treo mạng, phiên kẹt) thì dừng và báo 503 để chế độ Tự động chuyển sang model khác, không để người dùng nhìn vòng xoay mãi.
+  // Antigravity chỉ trả kết quả khi xong (không có sự kiện giữa chừng) nên không canh.
+  const wd = new AbortController();
+  let stalled = false;
+  const watch = cli !== "agy" ? setTimeout(() => { stalled = true; wd.abort(); }, 60_000) : null;
   const req: TurnRequest = {
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
@@ -592,6 +598,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
   tm.prep = Date.now() - T0;
   for await (const e of eng.runTurn(req)) {
+    if (watch) clearTimeout(watch);
     tm.event ??= Date.now() - T0;
     if (e.kind === "text") { tm.text ??= Date.now() - T0; text += e.text; o.onDelta?.(e.text); }
     else if (e.kind === "tooluse") o.onToolUse?.();
@@ -607,7 +614,12 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     else if (e.kind === "usage" && e.usage.limits?.length) saveLimits(cli, o.user.id, e.usage.limits);
     else if (e.kind === "error") err = { message: e.message, code: e.code };
   }
+  if (watch) clearTimeout(watch);
   tm.end = Date.now() - T0;
+  if (stalled && !o.signal?.aborted) {
+    console.log(`[timing] ${cli} ${run.model ?? "?"} im lặng 60 giây, dừng để chuyển model khác`);
+    return { status: 503, json: { error: `${SUB[cli].name} không phản hồi sau 60 giây. Hãy thử lại hoặc chọn model khác.` } };
+  }
   console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
   if (err && final === null) {
     if (err.code === "aborted") return { status: 200, json: { model: o.model, text, cancelled: true } };

@@ -21,7 +21,8 @@ RUN pip install --break-system-packages --no-cache-dir \
       pandas numpy matplotlib openpyxl python-docx python-pptx reportlab \
       scipy scikit-learn statsmodels sympy networkx seaborn "plotly<6" "kaleido==0.2.1" pyarrow xlsxwriter tabulate \
       pillow imageio moviepy opencv-python-headless pydub cairosvg qrcode \
-      pypdf pdfplumber pymupdf pytesseract beautifulsoup4 lxml requests markdown jinja2 pyyaml
+      pypdf pdfplumber pymupdf pytesseract beautifulsoup4 lxml requests markdown jinja2 pyyaml \
+      edge-tts gTTS srt
 
 # Điều khiển Chromium có sẵn từ Node (chụp trang HTML / canvas thành khung hình, xuất PDF): require("puppeteer-core").
 RUN npm install -g --no-fund --no-audit puppeteer-core@23.11.1 && npm cache clean --force
