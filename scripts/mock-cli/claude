@@ -54,7 +54,8 @@ const loginFile = path.join(dir, ".mock-login");
     // Ghi chú nhớ lại từ bộ não Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ (không đọc lệnh thử trong đó).
     prompt = prompt.replace(/<brain_recall>[\s\S]*?<\/brain_recall>/g, "").trim();
     const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
-    const sid = C.flag(a, "--resume") || C.uuid();
+    // --fork-session (phiên ấm của Synchro): nối từ phiên có sẵn nhưng dưới mã phiên mới, như CLI thật.
+    const sid = a.includes("--fork-session") ? C.uuid() : C.flag(a, "--resume") || C.uuid();
     // Tên gọi tắt → model thật (như Claude Code báo trong system/init).
     const ALIAS = { fable: "claude-fable-5-1", opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" };
     C.out({ type: "system", subtype: "init", session_id: sid, model: ALIAS[C.flag(a, "--model")] ?? C.flag(a, "--model") ?? "claude-sonnet-5-5", cwd: process.cwd(), tools: [] });

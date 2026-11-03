@@ -551,6 +551,34 @@ function saveAttachments(work: string, atts: Attachment[]) {
 export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean };
 export type SubResult = { status: number; json: Json };
 
+// ---------------------------------------------------------------- phiên ấm (Claude Code)
+// Đo trên máy chủ thật: câu đầu của đoạn chat mới qua Claude Code chờ ~13 giây tới chữ đầu, câu nối tiếp (nối phiên có sẵn) chỉ ~4 giây —
+// phần chờ nằm ở việc CLI khởi tạo một phiên mới, không ở Synchro. Phiên ấm: sau một lượt, Synchro lặng lẽ khởi tạo sẵn ở nền một phiên
+// với đúng hướng dẫn hệ thống, model, mức nỗ lực đó; đoạn chat mới tách (--fork-session) từ phiên này thay vì mở phiên mới. Mỗi khóa
+// (tài khoản, model, nỗ lực, hướng dẫn) một phiên, dùng trong 50 phút; hướng dẫn đổi (skill, bộ nhớ…) thì khởi tạo lại.
+type Warm = { id: string; at: number };
+const warm: Map<string, Warm> = ((globalThis as { __synchroWarm?: Map<string, Warm> }).__synchroWarm ??= new Map());
+const priming = new Set<string>();
+const WARM_TTL = 50 * 60_000;
+const PRIME = "(Synchro vừa mở phiên làm việc, người dùng chưa gửi gì. Chỉ trả lời đúng một chữ: Sẵn sàng)";
+const warmKey = (uid: string, model: string, effort: string | undefined, system: string) =>
+  `${uid}|${model}|${effort ?? ""}|${crypto.createHash("sha1").update(system).digest("hex").slice(0, 16)}`;
+async function primeWarm(key: string, base: TurnRequest) {
+  if (priming.has(key)) return;
+  priming.add(key);
+  try {
+    let id: string | null = null, ok = false;
+    const req: TurnRequest = { ...base, prompt: PRIME, sessionId: undefined, fork: undefined, attachments: undefined, mcp: undefined, signal: AbortSignal.timeout(120_000) };
+    for await (const e of engineFor("claude").runTurn(req)) {
+      if (e.kind === "session") id = e.id;
+      else if (e.kind === "final") ok = true;
+      else if (e.kind === "error") { ok = false; break; }
+    }
+    if (id && ok) { warm.set(key, { id, at: Date.now() }); if (warm.size > 200) warm.delete(warm.keys().next().value!); }
+  } catch { /* không có phiên ấm thì lượt sau mở phiên mới như thường */ }
+  finally { priming.delete(key); }
+}
+
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
@@ -589,8 +617,12 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const wd = new AbortController();
   let stalled = false;
   const watch = cli !== "agy" ? setTimeout(() => { stalled = true; wd.abort(); }, 60_000) : null;
+  // Đoạn chat mới qua Claude Code: tách từ phiên ấm nếu có (xem primeWarm).
+  const wk = cli === "claude" && conv ? warmKey(o.user.id, run.model ?? "", run.effort, o.system ?? "") : null;
+  const w = wk ? warm.get(wk) : undefined;
+  const fork = !resume && w && Date.now() - w.at < WARM_TTL ? w.id : undefined;
   const req: TurnRequest = {
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
@@ -620,7 +652,9 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     console.log(`[timing] ${cli} ${run.model ?? "?"} im lặng 60 giây, dừng để chuyển model khác`);
     return { status: 503, json: { error: `${SUB[cli].name} không phản hồi sau 60 giây. Hãy thử lại hoặc chọn model khác.` } };
   }
-  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  // Phiên ấm hỏng (bị xóa, hết hạn phía CLI): bỏ đi rồi chạy lại một lần bằng phiên mới.
+  if (fork && wk && err && final === null && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return subTurn(o); }
   if (err && final === null) {
     if (err.code === "aborted") return { status: 200, json: { model: o.model, text, cancelled: true } };
     const apiModel = await apiEquivalent(o.user, o.model), apiName = await apiModelName(apiModel);
@@ -647,5 +681,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
       ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at`)
       .run(o.user.id, conv, cli, session, msgs.length + 1, Date.now());
   }
+  // Khởi tạo sẵn (hoặc làm mới) phiên ấm cho đoạn chat mới sau, ở nền, sau khi lượt này đã xong.
+  if (wk && (!w || Date.now() - w.at > WARM_TTL * 0.8)) void primeWarm(wk, req);
   return { status: 200, json: { model: o.model, text: final ?? text, via, ...(denied.length ? { denied } : {}) } };
 }

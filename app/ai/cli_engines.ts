@@ -133,6 +133,7 @@ export class ClaudeCodeEngine implements Engine {
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--resume", req.sessionId);
+    if (req.sessionId && req.fork) args.push("--fork-session");
     // Có ảnh / PDF: gửi tin nhắn dạng stream-json để kèm khối ảnh, PDF gốc (model đọc trực tiếp, không qua chữ trích ra).
     const atts = req.attachments ?? [];
     if (atts.length) args.push("--input-format", "stream-json");

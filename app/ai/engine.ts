@@ -18,6 +18,8 @@ export type TurnRequest = {
   effort?: string;
   /** Phiên của engine ở lượt trước (để CLI nối tiếp hội thoại), nếu có. */
   sessionId?: string;
+  /** Tách phiên mới từ sessionId (phiên ấm đã khởi tạo sẵn), không ghi tiếp vào phiên đó (Claude Code --fork-session). */
+  fork?: boolean;
   /** Thư mục làm việc riêng của lượt (tệp đính kèm, đầu ra). */
   workdir?: string;
   /** Lịch sử hội thoại cho engine không giữ phiên (khóa API); engine CLI dùng sessionId. */
