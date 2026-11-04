@@ -8,7 +8,8 @@ import { getLang, tr } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
-import { Fade, Menu, Thinking } from "./ui";
+import { Boundary, Fade, Menu, Thinking } from "./ui";
+import { chatError, GENERIC_ERR } from "./chaterror";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
@@ -695,8 +696,20 @@ function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
 type RowCx = {
   chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
   openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
-  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: () => void;
+  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: () => void; openProviders: () => void;
 };
+// Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
+function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
+  const e = chatError(raw);
+  return (
+    <div className="msg-err" role="alert">
+      <div className="msg-err-h"><I.M icon="WarningCircle" size={16} /><b>{tr("Câu trả lời chưa hoàn thành")}</b></div>
+      <p>{tr(e.text)}</p>
+      {e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}
+      {(onRetry || e.act) && <div className="msg-err-a">{onRetry && <button className="btn dark" onClick={onRetry}><I.Retry size={14} />{tr("Thử lại")}</button>}{e.act === "providers" && <button className="btn" onClick={onProviders}>{tr("Mở Providers")}</button>}</div>}
+    </div>
+  );
+}
 // Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
 const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
   m: Msg; i: number; last: boolean; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
@@ -722,9 +735,9 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} />) : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
-        {m.done && (
+        {m.done && !m.failed && (
           <div className="actions in">
             <button className="icon-btn" onClick={() => cx.current!.copy(key, m.text)} aria-label="Sao chép">{copied ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>
             <button className={`icon-btn ${speaking ? "like-on" : ""}`} onClick={() => cx.current!.speak(key, m.text)} aria-label="Đọc to"><I.Speaker size={16} /></button>
@@ -735,7 +748,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             <When t={m.time} />
           </div>
         )}
-        {m.done && last && !busy && <SaveSkillChip chat={c.chat} all={c.chats} say={say} />}
+        {m.done && !m.failed && last && !busy && <SaveSkillChip chat={c.chat} all={c.chats} say={say} />}
       </div>
     )}
   </>);
@@ -957,8 +970,6 @@ export default function Home() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
-  // Hiệu ứng gõ chữ của câu trả lời không truyền theo thời gian thực, theo từng đoạn chat.
-  const timers = useRef(new Map<number, ReturnType<typeof setInterval>>());
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
@@ -1186,9 +1197,6 @@ export default function Home() {
     if (id === null) return;
     if (approvalRef.current && approvalRef.current.chat === id) { approvalRef.current.resolve({}); setApproval(null); }
     gens.current.delete(id);
-    const t = timers.current.get(id);
-    if (t) clearInterval(t);
-    timers.current.delete(id);
     setBusyOf(id, false);
     const run = runs.current.get(id);
     if (user !== false && run) cancelRun(run);
@@ -1274,7 +1282,7 @@ export default function Home() {
       setQueued((q) => q.map((x) => (x.chat === id && x.mode === "steer" ? { ...x, mode: "later" as const } : x)));
       // Máy chủ trả lời kèm lý do (kể cả lỗi của gói / model, mã 5xx): hiện đúng lý do; chỉ khi không có lý do mới báo chung chung.
       failed = true;
-      reply = e instanceof LLMError && e.message && !/^(LLM|Run|Lỗi) \d+$/.test(e.message) ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
+      reply = e instanceof LLMError && e.message && !/^(LLM|Run|Lỗi) \d+$/.test(e.message) ? e.message : GENERIC_ERR;
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
         const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio); };
@@ -1287,24 +1295,20 @@ export default function Home() {
       if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply, trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
       return;
     }
-    if (streamed || cancelled) {
-      // Đã hiện dần theo thời gian thực: hiện bản cuối ngay, không giả lập gõ chữ.
-      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
-      finishReply(id, reply, pr, history, via);
+    // Lượt lỗi: hiện thẻ lỗi ngay (không giả lập gõ chữ), giữ phần đã viết và nhật ký làm việc; không tính là câu trả lời xong.
+    if (failed) {
+      const partial = pend;
+      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: partial ?? m[m.length - 1]?.text ?? "", failed: true, err: reply, done: true, time: Date.now(), dur: Date.now() - t0, outs: outs?.length ? outs : undefined }]);
+      stop(false, id);
+      doneAway(id, true);
       return;
     }
-    const usedPj = pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
+    const usedPj = !streamed && !cancelled && pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
-    // Câu báo lỗi không kèm ghi chú "đã áp dụng hướng dẫn / ngữ cảnh dự án" (lượt đó chưa chạy được).
-    const words = (reply + (failed ? "" : note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : ""))).split(/(\s+)/);
-    let i = 0;
-    let wait = 42;
-    timers.current.set(id, setInterval(() => {
-      if (wait-- > 0) return;
-      i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
-      if (i >= words.length) finishReply(id, reply, pr, history, via);
-    }, 38));
+    // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
+    const full = streamed || cancelled ? reply : reply + note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : "");
+    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: full, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+    finishReply(id, reply, pr, history, via);
   };
   // Hỏi Có / Không trước khi dùng khóa API dùng chung thay cho gói đã hết hạn mức. Đồng ý: nhóm model của hãng đó chuyển sang model API
   // (tới khi gói hồi lại), chọn model tương đương và gửi lại lượt vừa lỗi. Không đồng ý: giữ nguyên gói.
@@ -1374,7 +1378,7 @@ export default function Home() {
     const n = users.length;
     if (!n || (!force && c.titled !== undefined && !(c.titled < 3 && n >= 3 && vagueMsg(users[0].text)))) return;
     titling.current.add(id);
-    const messages = c.msgs.filter((m) => m.text.trim() && (m.role === "user" || m.done)).slice(0, 6).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", text: m.text.slice(0, 4000) }));
+    const messages = c.msgs.filter((m) => m.text.trim() && !m.failed && (m.role === "user" || m.done)).slice(0, 6).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", text: m.text.slice(0, 4000) }));
     fetch("/api/title", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages }) })
       .then(async (r) => { const j = await r.json().catch(() => null); return r.ok && typeof j?.title === "string" ? (j.title as string) : ""; })
       .catch(() => "")
@@ -1406,10 +1410,10 @@ export default function Home() {
     if (n && /^\/apps\/[\w-]{1,40}$/.test(n)) location.replace(n);
   }, [me]);
   // Câu trả lời xong khi người dùng đang ở mục khác hoặc đoạn chat khác: báo một dòng để họ biết quay lại xem.
-  const doneAway = (id: number) => {
+  const doneAway = (id: number, failed = false) => {
     if (viewRef.current === "chat" && curRef.current === id) return;
     const c = chatsRef.current.find((x) => x.id === id);
-    if (c && !document.hidden) say(getLang() === "en" ? `Synchro finished replying in “${c.title}”` : `Synchro đã trả lời xong “${c.title}”`);
+    if (c && !document.hidden) say(failed ? (getLang() === "en" ? `The reply in “${c.title}” hit an error` : `Câu trả lời trong “${c.title}” gặp lỗi`) : getLang() === "en" ? `Synchro finished replying in “${c.title}”` : `Synchro đã trả lời xong “${c.title}”`);
   };
   // Mở lại trang khi câu trả lời còn đang chạy ở máy chủ: nối vào lượt đó, hiện bước đang làm, nhận kết quả khi xong.
   const resumed = useRef(false);
@@ -1441,7 +1445,7 @@ export default function Home() {
         stop(false, c.id);
         doneAway(c.id);
         setTimeout(() => autoTitle(c.id), 300);
-      }, (e) => { if (!mine()) return; set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })); stop(false, c.id); });
+      }, (e) => { if (!mine()) return; set((m) => ({ ...m, done: true, prog: undefined, run: undefined, failed: true, err: e instanceof LLMError && e.message ? e.message : GENERIC_ERR })); stop(false, c.id); });
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
   const send = (t: string, f: string[] = [], pick?: { id: string; label: string }[]) => {
@@ -1469,23 +1473,34 @@ export default function Home() {
     // Lịch sử theo chuẩn Synchro (history.ts): kèm dấu vết công cụ, đánh dấu câu trả lời bị dừng, bỏ phần đã nén.
     const hist: LLMMsg[] = [...chatHistory(prior, chatsRef.current.find((c) => c.id === id)?.compact), { role: "user", content: t }];
     const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
+    runTurn(id, t, f, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
+  };
+  // Chạy một lượt: đọc các tệp đính kèm chưa có trên máy chủ rồi gọi model (gửi mới, thử lại, sửa tin đã gửi).
+  const runTurn = (id: number, t: string, f: string[], hist: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[]) => {
     fileContext(f, t).then(({ blocks, errors, failed }) => {
       errors.forEach((m) => say(m));
       // Nhớ mã tệp trên máy chủ: các lượt sau (kể cả khi chế độ Tự động đổi model) gửi lại tệp này cùng lịch sử.
       const fids = Object.fromEntries(f.flatMap((n) => { const x = getStatus(n)?.id; return x ? [[n, x]] : []; }));
-      if (Object.keys(fids).length) patch(id!, (ms) => ms.map((m, k) => (k === ms.length - 2 && m.role === "user" ? { ...m, fids } : m)));
+      if (Object.keys(fids).length) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 2 && m.role === "user" ? { ...m, fids: { ...m.fids, ...fids } } : m)));
       // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
-      if (failed) { patch(id!, (m) => [...m.slice(0, -1), { role: "ai", text: `⚠️ ${tr(errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.")}`, time: Date.now(), done: true }]); return; }
-      if (blocks.length) hist[hist.length - 1] = { role: "user", content: [{ type: "text", text: t || "Hãy xem các tệp đính kèm." }, ...blocks] };
-      streamReply(id, t, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
+      if (failed) { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", failed: true, err: errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.", time: Date.now(), done: true }]); return; }
+      if (blocks.length) { const c = hist[hist.length - 1].content; hist[hist.length - 1] = { role: "user", content: [...(Array.isArray(c) ? c : [{ type: "text" as const, text: t || "Hãy xem các tệp đính kèm." }]), ...blocks] }; }
+      streamReply(id, t, hist, pid, studio, picked);
     });
+  };
+  // Gửi lại tin thứ k của đoạn chat (u: nội dung tin đó, đã sửa hoặc không): bỏ mọi tin sau nó, lượt mới giữ nguyên tệp và skill đã chọn.
+  // Số tin đổi nên máy chủ tự mở phiên CLI mới kèm lịch sử (subs.ts, so số lượt) thay vì nối vào phiên cũ.
+  const resend = (c: Chat, k: number, u: Msg) => {
+    stick.current = true;
+    const upto = [...c.msgs.slice(0, k), u];
+    const compact = c.compact && c.compact.upto <= k ? c.compact : undefined;
+    setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, compact, msgs: [...upto, { role: "ai", text: "", time: Date.now() }] } : x)));
+    runTurn(c.id, u.text, (u.files ?? []).filter((n) => !u.fids?.[n]), chatHistory(upto, compact), c.project, c.studio, u.pick?.map((x) => x.id));
   };
   const retry = () => {
     if (!chat || busy) return;
-    const lastUser = [...chat.msgs].reverse().find((m) => m.role === "user");
-    patch(chat.id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]);
-    const upto = chat.msgs.slice(0, chat.msgs.lastIndexOf(lastUser!) + 1);
-    streamReply(chat.id, lastUser?.text ?? "", upto.filter((m) => m.text).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })), chat.project);
+    const k = chat.msgs.map((m) => m.role).lastIndexOf("user");
+    if (k >= 0) resend(chat, k, chat.msgs[k]);
   };
   const copy = (key: string, text: string) => {
     navigator.clipboard?.writeText(text);
@@ -1731,8 +1746,7 @@ export default function Home() {
     flushDirty();
     setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
-    for (const t of timers.current.values()) clearInterval(t);
-    timers.current.clear(); gens.current.clear(); runs.current.clear(); setRunning(new Set());
+    gens.current.clear(); runs.current.clear(); setRunning(new Set());
     approvalRef.current?.resolve({}); setApproval(null);
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
@@ -1750,7 +1764,7 @@ export default function Home() {
   };
 
   const rowCx = useRef<RowCx | null>(null);
-  if (chat) rowCx.current = { chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry };
+  if (chat) rowCx.current = { chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); } };
   // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
@@ -2003,8 +2017,8 @@ export default function Home() {
           <>
             <div className="thread" ref={threadRef} onScroll={onScroll}>
               <div className="thread-in">
-                {chat.msgs.map((m, i) => <MsgRow key={i} m={m} i={i} last={i === chat.msgs.length - 1} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
-                  fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} />)}
+                {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
+                  fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
                 {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
                 {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
                 {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
@@ -2017,6 +2031,7 @@ export default function Home() {
               </div>
             </div>
             {showDown && <button className="scroll-down" onClick={toBottom} aria-label="Cuộn xuống cuối"><I.Chevron size={16} /></button>}
+            <Boundary resetKey={`${artSel?.ident}-${fileSel?.file.id}-${brwFor}`}>
             {artOpen && artVersions && (
               <ArtifactPanel versions={artVersions} index={artIndex} setIndex={(v) => setArtSel({ chat: chat.id, ident: artSel!.ident, v, follow: false })} ai={caps.ai} onClose={closeArt}
                 expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />}
@@ -2035,6 +2050,7 @@ export default function Home() {
             {fileOpen && fileSel && (
               <FilePanel file={fileSel.file} onClose={() => setFileSel(null)} expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />} />
             )}
+            </Boundary>
             <div className="dock" ref={dockRef}>
               {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
@@ -2047,6 +2063,7 @@ export default function Home() {
           </>
         )}
 
+        <Boundary resetKey={`${view}-${curProj}`}>
         {view === "projects" && (
           <ProjectsPage projects={projects} chats={chats} say={say} onNew={() => setModal("proj")} onOpen={(id) => { setCurProj(id); setView("project"); }} patch={patchProj} onEdit={(id) => setEditProj(id)} onDelete={(id) => setDelProj(id)}
             onDeleteMany={(ids) => { const del = new Set(ids); setProjects((ps) => ps.filter((x) => !del.has(x.id))); setChats((cs) => cs.map((c) => (c.project !== undefined && del.has(c.project) ? { ...c, project: undefined } : c))); if (curProj !== null && del.has(curProj)) setCurProj(null); }} />
@@ -2080,11 +2097,12 @@ export default function Home() {
         {view === "code" && <CodeView say={say} onMeta={onCodeMeta} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "brain" && <BrainWorkspace initial={brainAt} onInitial={() => setBrainAt(null)} sideOpen={open} onSide={() => setOpen(true)} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
+        </Boundary>
       </main>
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
-      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
+      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>

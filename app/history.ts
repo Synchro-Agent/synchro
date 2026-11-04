@@ -1,5 +1,6 @@
 // Lịch sử gửi cho model theo chuẩn Synchro, dùng chung cho lượt chat và bàn trộn ngữ cảnh (để ước tính khớp với lượt thật).
 // Câu trả lời kèm dấu vết công cụ; câu trả lời bị dừng ghi rõ là chưa hoàn chỉnh; phần đã nén (compact) không gửi lại.
+// Lượt lỗi (failed) không gửi: câu báo lỗi không phải lời của model, model từng đọc nó như câu trả lời của chính mình.
 import type { Chat, Msg } from "./store";
 import type { LLMMsg } from "./llm";
 import { artBase } from "./vfs";
@@ -10,7 +11,7 @@ export function chatHistory(msgs: Msg[], compact?: Chat["compact"]): LLMMsg[] {
   const from = compact ? Math.min(Math.max(0, compact.upto), msgs.length) : 0;
   // Câu trả lời bị tách vì người dùng nhắn thêm giữa chừng: phần trước chỉ có lời dẫn (nằm trong nhật ký làm việc).
   const said = (m: Msg) => m.text || (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
-  return msgs.slice(from).filter((m) => said(m) || m.stopped || (m.role === "user" && m.files?.length)).map((m): LLMMsg => (m.role === "ai"
+  return msgs.slice(from).filter((m) => !m.failed).filter((m) => said(m) || m.stopped || (m.role === "user" && m.files?.length)).map((m): LLMMsg => (m.role === "ai"
     ? { role: "assistant", content: said(m), ...(m.trace?.length || m.stopped ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : [])] } : {}) }
     : { role: "user", content: refs(m) }));
 }

@@ -5063,3 +5063,15 @@ body{text-wrap-style:pretty}
 .err-box b{color:var(--text);font-weight:540}
 .err-box .btn{margin-top:4px}
 .err-box.sm{margin:0 0 12px}
+
+/* Thẻ lỗi của một lượt chat: khác câu trả lời thường, không có nút thích / đọc to */
+.msg-err{margin-top:6px;padding:12px 14px;border-radius:14px;border:.5px solid color-mix(in srgb,#d64545 34%,transparent);background:color-mix(in srgb,#d64545 7%,var(--bg));font-family:var(--font-sans);font-size:14px;line-height:1.5;white-space:normal;color:var(--text)}
+.msg-err-h{display:flex;align-items:center;gap:6px;font-weight:540;color:#b33a3a}
+[data-theme="dark"] .msg-err-h{color:#ef8080}
+.msg-err-h b{font-weight:inherit}
+.msg-err p{margin:4px 0 0;overflow-wrap:anywhere}
+.msg-err details{margin-top:6px;font-size:12.5px;color:var(--text-2)}
+.msg-err summary{cursor:pointer}
+.msg-err code{display:block;margin-top:4px;max-height:140px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+.msg-err-a{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.msg-err-a .btn{display:inline-flex;align-items:center;gap:6px}

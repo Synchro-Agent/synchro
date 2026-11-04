@@ -1068,7 +1068,7 @@ export function useBrainSync(chats: Chat[], on: boolean) {
       const todo = ref.current.filter((c) => !c.inc && !done.has(String(c.id)) && c.msgs.some((m) => m.role === "user" && m.text?.trim())).slice(0, 10);
       if (todo.length) {
         try {
-          const r = await fetch("/api/brain/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chats: todo.map((c) => ({ id: String(c.id), title: c.title, msgs: c.msgs.filter((m) => m.text?.trim()).map((m) => ({ role: m.role, text: m.text })) })) }) });
+          const r = await fetch("/api/brain/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chats: todo.map((c) => ({ id: String(c.id), title: c.title, msgs: c.msgs.filter((m) => m.text?.trim() && !m.failed).map((m) => ({ role: m.role, text: m.text })) })) }) });
           const j = r.ok ? await r.json() : null;
           if (j && !j.off) { for (const c of todo) done.add(String(c.id)); try { localStorage.setItem(KEY, JSON.stringify([...done].slice(-5000))); } catch {} }
           if (!j || j.off) return;
