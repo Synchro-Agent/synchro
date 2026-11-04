@@ -1,8 +1,21 @@
 import { processFile } from "../../fileproc";
 import { FileError } from "../../fileproc/types";
-import { AuthError, current, featureGate, limit } from "../../authstore";
+import { AuthError, current, featureGate, limit, sameOrigin } from "../../authstore";
+import { deleteUserFile, listUserFiles } from "../../fileproc/owners";
 
 export const runtime = "nodejs";
+
+// GET: tệp đã tải lên của tài khoản này (Cài đặt → Quyền riêng tư). DELETE ?id=: xóa một tệp; đoạn chat vẫn giữ tên tệp nhưng model không đọc được nữa.
+export async function GET(req: Request) {
+  const denied = featureGate(req, "files"); if (denied) return denied;
+  return Response.json(await listUserFiles(current(req)!.user.id));
+}
+export async function DELETE(req: Request) {
+  const denied = featureGate(req, "files"); if (denied) return denied;
+  try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
+  const ok = await deleteUserFile(current(req)!.user.id, new URL(req.url).searchParams.get("id") ?? "");
+  return ok ? Response.json({ ok: true }) : Response.json({ error: "Không tìm thấy tệp này." }, { status: 404 });
+}
 
 // POST multipart (field "file") -> { id, name, kind, tokens, large, preview, images }
 export async function POST(req: Request) {

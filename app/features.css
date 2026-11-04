@@ -50,3 +50,6 @@ html body .sy-settings .s-item.s-hit{height:auto!important;min-height:34px;paddi
 .s-flash{animation:s-flash 1.8s ease-out;border-radius:8px}
 @keyframes s-flash{0%,45%{background:var(--hover);box-shadow:0 0 0 2px var(--border-strong)}100%{background:transparent;box-shadow:0 0 0 2px transparent}}
 @media (prefers-reduced-motion:reduce){.s-flash{animation:none;background:var(--hover)}}
+/* Cài đặt → Quyền riêng tư → Tệp đã tải lên */
+.up-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-meta{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

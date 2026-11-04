@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { apiFetch } from "./apierr";
+import { apiFetch, statusText } from "./apierr";
 import { rowKeys } from "./a11y";
 import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
@@ -26,7 +26,8 @@ const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSett
 const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub));
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
-import { locale } from "./i18n";
+import { locale, tr } from "./i18n";
+import { fmtSize } from "./fileicon";
 import { SharedChats } from "./shareui";
 import { deleteServerSession, listServerSessions, saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
@@ -311,10 +312,36 @@ function Account() {
   );
 }
 
+// Tệp đã tải lên, theo máy chủ (không phải theo đoạn chat trong trình duyệt): xem dung lượng và xóa từng tệp.
+type UpFile = { id: string; name: string | null; size: number; at: number };
+function UploadedFiles() {
+  const app = useApp();
+  const [d, setD] = useState<{ files: UpFile[]; used: number; quota: number } | null>(null);
+  const [err, setErr] = useState("");
+  const load = () => {
+    setErr("");
+    apiFetch("/api/files").then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || statusText(r.status)); setD(j); }).catch((e) => setErr((e as Error).message));
+  };
+  useEffect(load, []);
+  const del = (f: UpFile) => app.confirm(tr("Xóa tệp này?"), tr("Tệp bị xóa khỏi máy chủ. Đoạn chat vẫn giữ tên tệp nhưng model không đọc được nữa."), tr("Xóa"), () => {
+    void apiFetch(`/api/files?id=${f.id}`, { method: "DELETE" }).then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || statusText(r.status)); app.say(tr("Đã xóa tệp")); load(); }).catch((e) => app.say((e as Error).message));
+  });
+  if (err && !d) return <div className="err-box sm" role="alert"><b>{tr("Chưa tải được danh sách tệp")}</b><span>{tr(err)}</span><button className="btn" onClick={load}>{tr("Thử lại")}</button></div>;
+  if (!d) return <div className="empty"><span className="art-spin" /></div>;
+  const where = (n: string | null) => (n ? app.chats.find((c) => c.msgs.some((m) => m.files?.includes(n)))?.title : undefined);
+  return (
+    <>
+      <p className="d" style={{ margin: "0 0 10px" }}><span data-notr>{fmtSize(d.used)} / {fmtSize(d.quota)}</span></p>
+      {!d.files.length ? <div className="empty">{tr("Chưa có tệp nào")}</div> : d.files.map((f) => (
+        <div key={f.id} className="item-row"><I.Clip size={14} /><span style={{ flex: 1, minWidth: 0 }}><span className="up-name" data-notr>{f.name ?? tr("Tệp đã tải lên")}</span><span className="muted up-meta"><span data-notr>{fmtSize(f.size)} · {new Date(f.at).toLocaleDateString(locale())}{where(f.name) ? ` · ${where(f.name)}` : ""}</span></span></span>
+          <button className="icon-btn" aria-label={`${tr("Xóa")} ${f.name ?? ""}`} data-tip={tr("Xóa")} onClick={() => del(f)}><I.Trash size={14} /></button></div>
+      ))}
+    </>
+  );
+}
 function Privacy({ go }: { go: (t: string) => void }) {
   const app = useApp();
   const [panel, setPanel] = useState<"" | "shared" | "files" | "feedback">("");
-  const files = app.chats.flatMap((c) => c.msgs.flatMap((m) => (m.files ?? []).map((f) => ({ f, c: c.title }))));
   const fb = app.chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
   const title = { shared: "Shared chats", artifacts: "Shared artifacts", files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
@@ -334,7 +361,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
             <button className="icon-btn" aria-label="Đóng" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{title}</h2>
             {panel === "shared" && <SharedChats say={app.say} confirm={app.confirm} />}
-            {panel === "files" && (files.length ? files.map((x, i) => <div key={i} className="item-row"><I.Clip size={14} /><span style={{ flex: 1 }}>{x.f}</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">No uploaded files.</div>)}
+            {panel === "files" && <UploadedFiles />}
             {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}
           </div>
         </div>
