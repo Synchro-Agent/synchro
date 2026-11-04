@@ -682,6 +682,8 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   // sang model khác, không để người dùng nhìn vòng xoay mãi. Đang chờ lượt khác của tài khoản, công cụ đang chạy, CLI đang thử lại: không tính.
   const wd = new AbortController();
   const lim = watchLimits(cli, run.effort ?? o.effort);
+  // Lịch sử rất dài, nhiều tệp: model đọc lâu hơn hẳn mới bắt đầu trả lời.
+  if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") > 400_000) lim.first *= 3;
   const ws: WatchState = { start: T0, last: 0, alive: 0, waiting: false };
   let stalled: "first" | "idle" | null = null;
   const watch = setInterval(() => {

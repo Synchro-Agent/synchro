@@ -358,6 +358,8 @@ export class AntigravityEngine implements Engine {
     if (!free) return;
     try {
       const ok = await agyBridge(req, req.mcp.url).catch(() => false);
+      // Lắp cầu nối xong mới là lúc model bắt đầu: bộ canh tính từ đây.
+      yield { kind: "status" };
       yield* this.turn(ok ? req : { ...req, mcp: undefined });
     } finally {
       await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
@@ -447,6 +449,7 @@ export class GrokEngine implements Engine {
       // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng) bị thay bằng cầu nối mới.
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
       const ok = await grokRun(["mcp", "add", "--transport", "http", "synchro", req.mcp.url], req).catch(() => false);
+      yield { kind: "status" };
       yield* this.turn(ok ? req : { ...req, mcp: undefined });
     } finally {
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);

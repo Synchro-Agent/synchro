@@ -1075,7 +1075,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (pc && !am && BRIDGE_CLIS.has(cli)) {
         const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
         const st = studio ? studioSkills(c.user.id, studio) : null;
+        const t1 = Date.now();
         const ss = await skillSet(c.user, body, messages, studio, st);
+        console.log(`[timing] chat skillset=${Date.now() - t1}ms (${ss.list.length} skill)`);
         route = ss.route;
         if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
         const code = pc.code;

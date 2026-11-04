@@ -200,8 +200,8 @@ const STAKES = W("đau ngực|tức ngực|khó thở|đột quỵ|co giật|ng�
 export const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
 const noMarks = (s: string) => !/[\u0300-\u036fđĐ]/.test(s.normalize("NFD"));
 const FOLDED: [Task, RegExp, number][] = [
-  ["build", W("(?:lam|tao|thiet ke|xay dung|dung|viet|code|lap trinh|phat trien)(?:(?![.?!\\n]).){0,40}?(?:trang web|website|web ?app|landing(?: page)?|ung dung|app|dashboard|game|tro choi|slides?|bai thuyet trinh|bai trinh bay|logo|banner|poster|cong cu|chatbot|he thong|phan mem|giao dien|cua hang online)"), 5],
-  ["act", W("(?:tao|ve) anh|(?:lam|tao|dung|quay|ghep|cat|xuat)(?:(?![.?!\\n]).){0,30}?(?:video|clip|phim|hinh anh|hinh minh hoa)|anh (?:quang cao|san pham|minh hoa|bia)|dang (?:bai|len)|gui (?:email|mail|thu|tin nhan|hoa don)|tao (?:su kien|lich|cuoc hop|hoa don)|dat (?:lich|ve|phong|ban)|len lich|vao trang|mo trang"), 5],
+  ["build", W("(?:lam|tao|thiet ke|xay dung|viet|lap trinh|phat trien)(?:(?![.?!\\n]).){0,40}?(?:trang web|website|web ?app|landing(?: page)?|ung dung|app|dashboard|game|tro choi|slides?|bai thuyet trinh|bai trinh bay|logo|banner|poster|cong cu|chatbot|he thong|phan mem|giao dien|cua hang online)"), 5],
+  ["act", W("(?:tao|ve) anh|(?:lam|tao|quay|ghep|xuat)(?:(?![.?!\\n]).){0,30}?(?:video|clip|phim|hinh anh|hinh minh hoa)|anh (?:quang cao|san pham|minh hoa|bia)|dang (?:bai|len)|gui (?:email|mail|thu|tin nhan|hoa don)|tao (?:su kien|lich|cuoc hop|hoa don)|dat (?:lich|ve|phong|ban)|len lich|vao trang|mo trang"), 5],
   ["reason", W("chung minh|phuong trinh|dao ham|tich phan|xac suat|bai toan|giai toan|luong giac|ma tran|so phuc"), 4],
   ["translate", W("dich (?:sang|ra|qua|giup|ho|doan|cau|bai|email)|sang tieng \\p{L}+"), 5],
   ["summarize", W("tom tat|tom luoc|y chinh"), 4],
@@ -209,7 +209,7 @@ const FOLDED: [Task, RegExp, number][] = [
   ["analyze", W("phan tich|so sanh|danh gia|uu nhuoc diem|uu diem|nhuoc diem|chien luoc"), 3],
   ["data", W("bang tinh|bieu do|so lieu|du lieu|thong ke"), 3],
   ["write", W("viet (?:bai|email|mail|thu|cau|caption|bao cao|ke hoach|don)|soan (?:thao|thu|email|bai)|bai luan|bai tho|bai van"), 3],
-  ["chat", W("xin chao|chao ban|cam on|tam biet|vang|da"), 3],
+  ["chat", W("xin chao|chao ban|cam on|tam biet"), 3],
 ];
 const HOWTO_FOLD = W("lam sao|lam the nao|the nao|cach|la gi|co nen|tai sao|vi sao");
 const STAKES_FOLD = W("dau nguc|tuc nguc|kho tho|dot quy|co giat|ho ra mau|chay mau|ngo doc|tu tu|tu sat|qua lieu|lieu thuoc|trieu chung|chan doan|mang thai|co thai|ung thu|tieu duong|huyet ap|khoi kien|ly hon|tranh chap|thua ke|hop dong|phap ly|thue|dau tu|chung khoan|bao hiem|pha san");
@@ -244,9 +244,9 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   }
   // Gõ không dấu: lượt so khớp thứ hai.
   const bare = noMarks(ins);
-  if (bare && ![...out.values()].some((n) => n >= 2)) for (const [t, re, w] of FOLDED) if (re.test(ins)) out.set(t, Math.max(out.get(t) ?? 0, w));
+  if (bare && ![...out.values()].some((n) => n >= 2)) for (const [t, re, w] of FOLDED) if (re.test(ins) && !((t === "build" || t === "act") && HOWTO_FOLD.test(ins))) out.set(t, Math.max(out.get(t) ?? 0, w));
   // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
-  if (out.has("act") && (HOWTO.test(ins) || (bare && HOWTO_FOLD.test(ins)) || (out.get("code") ?? 0) >= 3)) out.delete("act");
+  if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3)) out.delete("act");
   if (a.code) out.set("code", (out.get("code") ?? 0) + 5);
   if (a.trace) out.set("debug", (out.get("debug") ?? 0) + 6);
   if (MATH.test(ins)) out.set("reason", (out.get("reason") ?? 0) + 3);

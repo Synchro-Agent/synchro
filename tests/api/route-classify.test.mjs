@@ -170,6 +170,9 @@ const CASES = [
   ["so sanh iphone va samsung", "analyze", "high", "medium"],
   ["cam on", "chat", "low"],
   ["sai roi lam lai di", "code", "high", "medium", { turns: 3, prevAsk: "Viết code Python đọc file CSV" }],
+  ["lam the nao de dung app tot hon", "qa", "medium"],
+  ["dung app gi de hoc tieng anh", ["qa", "language"], "medium"],
+  ["cat videos are funny, why?", "qa", "medium"],
   // tiếng Anh thường không bị từ điển không dấu kéo đi
   ["What is the capital of Australia?", "qa", "medium"],
   ["Tell me about the Dung Beetle", "qa", "medium"],
