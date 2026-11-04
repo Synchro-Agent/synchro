@@ -49,6 +49,7 @@ export const VI2EN: Record<string, string> = {
   "Dừng chia sẻ?": "Stop sharing?",
   "Liên kết sẽ hết hiệu lực ngay và bản chụp trên máy chủ bị xóa.": "The link stops working right away and the snapshot on the server is deleted.",
   "{n} quy tắc định dạng có điều kiện chưa hiện được trong bản xem trước; tệp vẫn đủ, mở bằng Excel để thấy.": "{n} conditional formatting rule(s) can't be shown in this preview. The file still has them; open it in Excel to see them.",
+  "Chưa giao được: tệp vượt giới hạn dung lượng": "Not delivered: the file is over the size limit",
   "Bản chia sẻ chỉ đọc": "Read-only shared copy",
   "Người dùng": "User",
   "Phiên bản cũ của": "Older version of",

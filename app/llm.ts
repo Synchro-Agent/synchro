@@ -30,7 +30,7 @@ export const hasLLM = !!LLM_ENDPOINT;
  */
 export type SkillUse = { kind: "skill" | "file" | "tool" | "code" | "script" | "search"; name: string; path?: string };
 // Tệp code của model tạo ra trong lượt chat (tải qua /api/outputs/<id>).
-export type OutFile = { id: string; name: string; size: number; mime: string };
+export type OutFile = { id: string; name: string; size: number; mime: string; skipped?: boolean };
 
 // Công cụ connector cần người dùng duyệt trước khi chạy (máy chủ tạm dừng lượt chat và chờ quyết định).
 export type ApprovalCall = {

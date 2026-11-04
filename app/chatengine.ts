@@ -25,6 +25,7 @@ import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
+import { OUTPUT_QUOTA_MB, outputRoom } from "./outputs";
 import { removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
@@ -203,10 +204,23 @@ const recalcNote = (rc: RecalcReport | undefined) => {
 // thì bản mới thay bản cũ của lượt này: từng hiện hai ba thẻ cùng tên, người dùng có thể tải nhầm bản hỏng. Tệp của các lượt trước giữ nguyên.
 function deliver(x: Exec, r: RunOutput) {
   const kept = r.files.filter((f) => !f.path.startsWith("_preview/"));
-  if (r.exit !== 0 || r.timedOut) return { saved: [] as OutFile[], held: kept.map((f) => f.path) };
-  const saved = saveOutputs(x.uid, kept);
-  mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), kept.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
-  return { saved, held: [] as string[] };
+  if (r.exit !== 0 || r.timedOut) return { saved: [] as OutFile[], held: kept.map((f) => f.path), full: [] as string[] };
+  // Hạn mức dung lượng tệp đã tạo của tài khoản: tệp không còn chỗ thì báo như tệp quá cỡ, không xóa tệp cũ nào của người dùng.
+  let room = outputRoom(x.uid);
+  const fit = kept.filter((f) => { if (f.data.length > room) return false; room -= f.data.length; return true; });
+  const full = kept.filter((f) => !fit.includes(f)).map((f) => `${f.path}: ${Math.ceil(f.data.length / 1048576)} MB, tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo (tệp cũ tự xóa sau 30 ngày)`);
+  const saved = saveOutputs(x.uid, fit);
+  mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), fit.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
+  // Chạy lại nhỏ hơn và giao được: bỏ thẻ "chưa giao được" của đúng tệp đó.
+  for (const f of saved) { const i = x.outs.findIndex((o) => o.skipped && o.name === f.name); if (i >= 0) x.outs.splice(i, 1); }
+  return { saved, held: [] as string[], full };
+}
+// Thẻ "chưa giao được" trong tin nhắn: người dùng không có thẻ tải về thì không biết là thiếu tệp nếu model không nói. skipped: "đường-dẫn: lý do".
+function noteSkipped(x: Exec, list: string[]) {
+  for (const s of list) {
+    const name = s.split(": ")[0].split("/").pop() || "tep", mb = /(\d+) MB/.exec(s)?.[1];
+    if (!x.outs.some((o) => o.skipped && o.name === name)) x.outs.push({ id: `skip-${x.outs.length}`, name, size: Number(mb ?? 0) * 1048576, mime: "", skipped: true });
+  }
 }
 async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
   const lang = (typeof input.language === "string" && input.language in LANGS ? input.language : "python") as Lang;
@@ -219,13 +233,14 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     const keep = x.conv ? x.conv.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) : undefined;
     const timeout = typeof input.timeout === "number" ? input.timeout : undefined;
     const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
-    const { saved, held } = deliver(x, r);
+    const { saved, held, full } = deliver(x, r);
     const pv = await previewOf(r.files);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
     const hold = held.length ? `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>` : "";
     // Tệp vượt giới hạn dung lượng: chỉ thẻ này báo được, người dùng không có thẻ tệp nào để biết là thiếu. Tệp _preview/ chỉ để model xem, không cần báo.
-    const over = (r.skipped ?? []).filter((s) => !s.startsWith("_preview/"));
-    const skip = over.length ? `\n<not_delivered>\nCác tệp này KHÔNG tới người dùng và không có thẻ tải về: ${over.join("; ")}. Giới hạn ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp, ${RUN_LIMITS.total / 1048576} MB mỗi lần chạy. Nén lại (video: -crf cao hơn, hạ bitrate âm thanh) hoặc chia nhỏ rồi chạy lại; không làm được thì phải nói rõ với người dùng là tệp chưa giao được.\n</not_delivered>` : "";
+    const over = [...(r.skipped ?? []).filter((s) => !s.startsWith("_preview/")), ...full];
+    if (r.exit === 0 && !r.timedOut) noteSkipped(x, over);
+    const skip = over.length ? `\n<not_delivered>\nCác tệp này KHÔNG tới người dùng và không có thẻ tải về: ${over.join("; ")}. Giới hạn ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp, ${RUN_LIMITS.total / 1048576} MB mỗi lần chạy. Nén lại (video: -crf cao hơn, hạ bitrate âm thanh) hoặc chia nhỏ rồi chạy lại; không làm được thì phải nói rõ với người dùng là tệp chưa giao được (thẻ tệp hiện "chưa giao được").\n</not_delivered>` : "";
     // Thẻ trạng thái đứng trước log: log dài cỡ nào model vẫn thấy đã giao tệp gì, ô Excel nào lỗi, đã xem ảnh nào.
     return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${files}${hold}${skip}${recalcNote(r.recalc)}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
@@ -994,14 +1009,16 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   if (list.length) {
     // Yêu cầu thuộc rõ một studio ("làm slide thuyết trình" → Trình bày): skill của studio đó được cộng thêm, skill của danh mục Claude
     // giảm bớt, để thư viện chọn lọc đứng trước hàng nghìn skill na ná của danh mục.
-    const want = ruleStudios("", lastUserText(messages)).scores;
+    // Chỉ chữ người dùng gõ: từ khóa nằm trong tệp đính kèm không được kéo theo skill và studio không liên quan.
+    const typed = typedText((Array.isArray(messages) ? (messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
+    const want = ruleStudios("", typed).scores;
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
-    const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
+    const raw = suggest(typed, list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
     const votes = new Map<string, number>();
     for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
     // Skill ở nhiều thư viện (Synchro tự xếp một skill vào 2–3 mục) mà phiếu ngang nhau: nghiêng về mục chính câu yêu cầu nói tới
     // ("làm slide thuyết trình" → Trình bày). Điểm nhỏ, chỉ để phân định khi gần bằng nhau.
-    const intent = ruleStudios("", lastUserText(messages)).scores;
+    const intent = want;
     for (const k of STUDIOS) if (intent[k] > 0) votes.set(`studio-${k}`, (votes.get(`studio-${k}`) ?? 0) + intent[k] * 0.01);
     const pick = (n: string) => (libs[n] ?? []).slice().sort((a, b) => (votes.get(b.key) ?? 0) - (votes.get(a.key) ?? 0))[0];
     const hits = raw.map((h) => ({ ...h, lib: pick(h.skill.name) }));

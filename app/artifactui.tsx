@@ -43,7 +43,7 @@ window.synchro=api;window.claude=api;try{window.storage=storage}catch(e){}
 function lib(u,cb){if(window.htmlToImage)return cb(true);var n=0;(function tryLoad(){if(n>1)return cb(false);var s=document.createElement("script");s.src=h2i[n++];s.crossOrigin="anonymous";s.integrity=h2i[2];s.onload=function(){cb(true)};s.onerror=function(){s.remove();tryLoad()};document.head.appendChild(s)})()}
 ${PPTX_FRAME_JS}
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
-if(d.t==="pptx")lib(0,function(ok){if(!ok)return post({t:"pptx",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxPptx(d.id)});
+if(d.t==="pptx")lib(0,function(ok){if(!ok)return post({t:"pptx",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxPptx(d.id,d.fontCss)});
 else if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
 else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
 var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWidth)):2;
@@ -534,7 +534,8 @@ Yêu cầu: ${req.trim()}`);
   // PowerPoint: Synchro tự dựng ngay trong khung xem (deckpptx.ts), không nhờ model; chữ sửa được, hình giữ nguyên.
   const pptxFrame = () => withPreview(async () => {
     say(tr("Đang dựng tệp PowerPoint…"));
-    const d = await frameCall({ t: "pptx" }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
+    // Phông web cho ảnh nền của slide (chữ trong hình, SVG): khung không tự tải được, như khi xuất PNG.
+    const d = await frameCall({ t: "pptx", fontCss: await fontEmbedCss(art.content) }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
     setPptxStep("");
     const n = `${name}.pptx`;
     saveBlob(await buildPptx(d.slides as DeckSlide[], Number(d.w), Number(d.h), art.title), n); done(n);
@@ -756,13 +757,23 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
 // ---------------------------------------------------------------- tệp code đã tạo (run_code → outputs/)
 // Bấm thẻ để xem trước trong khung bên cạnh; nút mũi tên tải thẳng về máy.
 // Video MP4 / WebM phát ngay trong tin nhắn như ảnh (chỉ tải phần đầu để lấy khung đầu và thời lượng).
-export function OutputFiles({ files, onOpen, active }: { files: OutFile[]; onOpen?: (f: OutFile) => void; active?: string }) {
+export function OutputFiles({ files: all, onOpen, active }: { files: OutFile[]; onOpen?: (f: OutFile) => void; active?: string }) {
+  const files = all.filter((f) => !f.skipped), missed = all.filter((f) => f.skipped);
   const imgs = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.mime));
   const vids = files.filter((f) => /^video\/(mp4|webm|quicktime)$/.test(f.mime));
   return (
     <div className="outs">
       {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <button key={f.id} onClick={() => onOpen?.(f)} aria-label={f.name}><img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" /></button>)}</div>}
       {vids.length > 0 && <div className="outs-imgs outs-vids">{vids.map((f) => <video key={f.id} controls playsInline preload="metadata" src={`/api/outputs/${f.id}?inline=1`} aria-label={f.name} />)}</div>}
+      {missed.map((f) => {
+        const k = fileKind(f.name);
+        return (
+          <div key={f.id} className="out-card out-missed" role="status">
+            <span className="out-badge" style={{ background: k.color }}>{k.label}</span>
+            <span className="out-txt"><b data-notr>{f.name}</b><span>{tr("Chưa giao được: tệp vượt giới hạn dung lượng")}{f.size ? ` · ${fmtSize(f.size)}` : ""}</span></span>
+          </div>
+        );
+      })}
       {files.map((f) => {
         const k = fileKind(f.name);
         return (

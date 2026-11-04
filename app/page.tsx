@@ -1242,7 +1242,7 @@ export default function Home() {
   // Mọi sản phẩm của đoạn chat (artifact bản mới nhất, tệp code đã tạo), để chuyển nhanh trong khung xem trước.
   const products: Product[] = !chat ? [] : [
     ...[...arts.map.entries()].map(([ident, vs]) => { const a = vs[vs.length - 1]; return { key: `a:${ident}`, title: a.title, type: a.type, content: a.content, open: () => openArt({ chat: chat.id, ident, v: vs.length - 1, follow: false }) }; }),
-    ...chat.msgs.flatMap((m) => m.outs ?? []).map((f) => ({ key: `f:${f.id}`, title: f.name, file: f, open: () => openFile(f) })),
+    ...chat.msgs.flatMap((m) => m.outs ?? []).filter((f) => !f.skipped).map((f) => ({ key: `f:${f.id}`, title: f.name, file: f, open: () => openFile(f) })),
   ];
   const activeProduct = artOpen && artSel ? `a:${artSel.ident}` : fileOpen && fileSel ? `f:${fileSel.file.id}` : "";
   const closeArt = () => {

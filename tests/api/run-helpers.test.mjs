@@ -182,6 +182,9 @@ console.log("7. Mạng cho giọng đọc");
   ok(/lồng tiếng trước hết bằng edge-tts/.test(rules) && /edge-tts --proxy "\$HTTPS_PROXY"/.test(rules) && /proxy=os\.environ\.get\("HTTPS_PROXY"\)/.test(rules) && !/cần quyền web/.test(rules), "quy tắc: edge-tts trước, đúng cờ proxy, không đòi quyền web");
   ok(/-loglevel error -stats/.test(rules) && /-crf 23 -preset veryfast/.test(rules) && /image2pipe/.test(rules), "quy tắc: log gọn, đĩa và dung lượng");
   ok(/espeak-ng/.test(docker) && /espeak-ng/.test(rules) && /"moviepy<2"/.test(docker), "image có giọng không cần mạng, ghim moviepy 1.x");
+  ok(/const typed = typedText\(/.test(engine) && /suggest\(typed,/.test(engine) && !/suggest\(lastUserText/.test(engine), "gợi ý skill chỉ đọc chữ người dùng gõ, không đọc tệp đính kèm");
+  ok(/fontEmbedCSS:fontCss/.test(fs.readFileSync("app/deckpptx.ts", "utf8")) && /sxPptx\(d\.id,d\.fontCss\)/.test(fs.readFileSync("app/artifactui.tsx", "utf8")), "xuất PowerPoint: ảnh nền dùng đúng phông web của slide");
+  ok(/Đồ họa, ảnh dựng bằng mã/.test(rules) && /không phải ảnh do AI vẽ/.test(rules), "quy tắc đồ họa: làm kỹ và nói đúng là dựng bằng mã");
   ok(/RUN_PREVIEWS = 12/.test(agentSrc) && /PREVIEW_MAX = 12/.test(fs.readFileSync("app/runpreview.ts", "utf8")), "số ảnh tự xem khớp giữa workspace và quy tắc");
 }
 

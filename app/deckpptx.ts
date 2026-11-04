@@ -17,7 +17,7 @@ export type DeckSlide = { bg: string; boxes: DeckBox[] };
  * Viết bằng JS thuần, không dấu ` và không chuỗi đóng thẻ script (nằm trong một thẻ script).
  */
 export const PPTX_FRAME_JS = String.raw`
-function sxPptx(id){
+function sxPptx(id,fontCss){
 var all=window.__sxAll?window.__sxAll():[];
 if(!all.length||!window.__sxGo||!window.__sxCur)return post({t:"pptx",id:id,error:"Không tìm thấy slide nào"});
 var back=window.__sxIdx?window.__sxIdx():0,out=[],W=0,H=0;
@@ -75,7 +75,7 @@ g.nodes.forEach(function(t){var s=document.createElement("span");s.setAttribute(
 var saved=clears.map(function(e){var v=e.style.getPropertyValue("background-image"),pr=e.style.getPropertyPriority("background-image");e.style.setProperty("background-image","none","important");return[e,v,pr]});
 function restore(){wraps.forEach(function(s){var t=s.firstChild;if(t&&s.parentNode)s.parentNode.insertBefore(t,s);s.remove()});saved.forEach(function(x){x[0].style.removeProperty("background-image");if(x[1])x[0].style.setProperty("background-image",x[1],x[2])})}
 var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
-htmlToImage.toPng(el,{pixelRatio:Math.max(1,2560/W),skipFonts:true,backgroundColor:bg,width:W,height:H}).then(function(u){
+htmlToImage.toPng(el,{pixelRatio:Math.max(1,2560/W),skipFonts:true,fontEmbedCSS:fontCss||undefined,backgroundColor:bg,width:W,height:H}).then(function(u){
 restore();out.push({bg:u,boxes:boxes});post({t:"pptx-step",id:id,i:i+1,n:all.length});step(i+1)},function(x){fail(x,restore)})
 },80)})})}
 step(0)}

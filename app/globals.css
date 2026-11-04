@@ -3116,6 +3116,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 
 /* ---------------------------------------------------------------- tệp code đã tạo */
 .outs{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.out-card.out-missed{cursor:default;border-style:dashed;opacity:.85}
 .outs-imgs{display:flex;flex-wrap:wrap;gap:8px}
 .outs-imgs img{max-width:100%;max-height:360px;border-radius:var(--r-plate);border:.5px solid var(--border);background:#fff;display:block}
 .outs-vids video{max-width:100%;max-height:420px;border-radius:var(--r-plate);border:.5px solid var(--border);background:#000;display:block}
