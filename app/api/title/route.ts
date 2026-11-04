@@ -1,6 +1,7 @@
 import { handle, limit, requireUser, sameOrigin } from "../../authstore";
 import { splitArtifacts } from "../../artifacts";
 import { OneShotErr, quickCall } from "../../ai/anymodel";
+import { cleanTitle as clean } from "../../names";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,9 +16,6 @@ Bạn đặt tên ngắn cho một đoạn chat, giống tên đoạn chat ở t
 - Tin nhắn chỉ là lời chào hay chưa rõ ý thì đặt tên theo đúng nội dung đó (ví dụ "Lời chào", "Greeting").
 Chỉ trả về tên, không giải thích, không gì khác.
 </chat_title>`;
-
-const clean = (s: string) => s.split("\n").map((x) => x.trim()).find(Boolean)?.replace(/^(?:tên|title|tiêu đề)\s*:\s*/i, "")
-  .replace(/[*_`#>]+/g, "").replace(/^["'“”‘’«»\s]+|["'“”‘’«»\s.。!?,;:]+$/g, "").replace(/\s+/g, " ").trim() ?? "";
 
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);

@@ -27,3 +27,8 @@ export function shortName(full: string | null | undefined): string {
 
 // Lựa chọn nghề nghiệp của hồ sơ (màn hình đăng nhập, Cài đặt → Tài khoản).
 export const OCCUPATIONS = ["Student", "Engineering", "Design", "Product management", "Data science", "Marketing", "Sales", "Finance", "Operations", "Human resources", "Legal", "Other"];
+
+/** Tên đoạn chat model trả về: chỉ dòng đầu, bỏ nhãn model hay chép theo ("Tên đoạn chat: …", "Title: …"), dấu Markdown, ngoặc kép và dấu câu ở cuối. */
+export const cleanTitle = (s: string) => s.split("\n").map((x) => x.trim()).find(Boolean)?.replace(/[*_`#>]+/g, "").replace(/^["'“”‘’«»\s]+/, "")
+  .replace(/^(?:tên\s+(?:đoạn\s+chat|cuộc\s+trò\s+chuyện)|đoạn\s+chat|tên|tiêu\s+đề|chat\s+title|title)\s*[:：]\s*/i, "")
+  .replace(/^["'“”‘’«»\s]+|["'“”‘’«»\s.。!?,;:]+$/g, "").replace(/\s+/g, " ").trim() ?? "";
