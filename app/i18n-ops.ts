@@ -46,6 +46,8 @@ export const OPS_VI2EN: Record<string, string> = {
   "Sao lưu đã quá cũ": "Backups are out of date",
   "Bản sao lưu mới nhất không đạt kiểm tra": "The newest backup failed its check",
   "Nhiều người bị từ chối đăng nhập gói AI": "Several people were refused an AI plan sign-in",
+  "ảnh trong artifact không kèm được vào bản chia sẻ nên người xem sẽ không thấy.": "images in artifacts couldn't be included in the share, so viewers won't see them.",
+  "ảnh trong bản chia sẻ này không tải được.": "images in this share couldn't be loaded.",
   "Máy chủ sắp hết dung lượng nên tạm thời chưa nhận tệp mới. Hãy thử lại sau.": "The server is nearly out of disk space, so it can't take new files right now. Try again later.",
 };
 export const OPS_EN2VI: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { AuthError, handle, requireUser, sameOrigin } from "../../authstore";
+import { AuthError, handle, limit, requireUser, sameOrigin } from "../../authstore";
 import { listShares, putShare, revokeConvShare, revokeShare, shareOfConv } from "../../sharestore";
 
 export const runtime = "nodejs";
@@ -16,7 +16,10 @@ export const POST = handle(async (req) => {
   const { user } = requireUser(req);
   const b = (await req.json().catch(() => null)) as { conv?: unknown; title?: unknown; msgs?: unknown } | null;
   if (!b) throw new AuthError("Yêu cầu không hợp lệ.", 400);
-  return Response.json({ share: putShare(user.id, b.conv, b.title, b.msgs) });
+  // Mỗi lần có thể tải tới vài chục ảnh ngoài.
+  limit("share:" + user.id, 60, 60 * 60_000);
+  const { missingImages, ...share } = await putShare(user.id, b.conv, b.title, b.msgs);
+  return Response.json({ share, missingImages });
 });
 export const DELETE = handle(async (req) => {
   sameOrigin(req);

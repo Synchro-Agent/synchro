@@ -6,8 +6,9 @@ import { resolveArt, type ArtState } from "./vfs";
 
 export type ShareSeg = { k: "text"; t: string } | { k: "art"; title: string; type: ArtType; lang: string | null; content: string } | { k: "old"; title: string };
 export type ShareMsg = { r: "u" | "a"; segs: ShareSeg[]; files?: number; outs?: number };
-export type ShareSnap = { title: string; msgs: ShareMsg[] };
-export const SHARE_LIMITS = { bytes: 4_000_000, totalBytes: 100_000_000, msgs: 2000, text: 400_000, perUser: 200, title: 200 };
+// imgs: ảnh ngoài trong artifact đã được nhúng vào bản chụp (sharestore.ts); missing: số ảnh không nhúng được. Bản chụp cũ chưa có trường này được nhúng khi có người mở lần đầu.
+export type ShareSnap = { title: string; msgs: ShareMsg[]; imgs?: { missing: number } };
+export const SHARE_LIMITS = { bytes: 4_000_000, withImages: 16_000_000, totalBytes: 100_000_000, msgs: 2000, text: 400_000, perUser: 200, title: 200 };
 
 // Chú thích ẩn của giao diện (<!-- meta --> / <!-- mode -->) và ký tự điều khiển không phải là nội dung để đọc.
 const clean = (s: string) => s.replace(/<!--[\s\S]*?(-->|$)/g, "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");

@@ -32,6 +32,7 @@ export function ShareView({ snap, at }: { snap: ShareSnap; at: number }) {
       </header>
       <h1 data-notr>{snap.title}</h1>
       {ready && <><p className="sh-at">{tr("Bản chụp lúc")} <span data-notr>{new Date(at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</span></p>
+      {!!snap.imgs?.missing && <p className="sh-note"><span data-notr>{snap.imgs.missing}</span> {tr("ảnh trong bản chia sẻ này không tải được.")}</p>}
       <div className="sh-thread">
         {snap.msgs.map((m, i) => (
           <section key={i} className={m.r === "u" ? "sh-u" : "sh-a"} aria-label={tr(m.r === "u" ? "Người dùng" : "Synchro")}>

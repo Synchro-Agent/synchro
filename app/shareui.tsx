@@ -35,6 +35,8 @@ export function ShareModal({ chat, onClose, say }: { chat: Chat; onClose: () => 
       setCur(j.share);
       const ok = await copyText(urlOf(j.share.token));
       say(fresh ? (ok ? "Đã tạo liên kết và sao chép" : "Đã tạo liên kết") : "Đã cập nhật bản chia sẻ");
+      // Ảnh không nhúng được (trang ảnh lỗi, ảnh quá lớn): người xem sẽ thấy ảnh hỏng, phải báo ngay cho người chia sẻ.
+      if (j.missingImages > 0) setErr(`${j.missingImages} ${tr("ảnh trong artifact không kèm được vào bản chia sẻ nên người xem sẽ không thấy.")}`);
     } catch (e) { setErr((e as Error).message); }
     setBusy(false);
   };

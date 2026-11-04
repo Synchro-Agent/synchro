@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { publicShare } from "../../sharestore";
+import { publicShare, shareForView } from "../../sharestore";
 import { ShareView } from "../../shareview";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   return { title: s ? `${s.snap.title} – Synchro` : "Synchro", robots: { index: false, follow: false }, referrer: "no-referrer", openGraph: null, twitter: null };
 }
 export default async function SharePage({ params }: P) {
-  const s = publicShare((await params).token);
+  const s = await shareForView((await params).token);
   if (!s) notFound();
   return <ShareView snap={s.snap} at={s.at} />;
 }
