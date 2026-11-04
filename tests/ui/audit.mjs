@@ -26,6 +26,18 @@ if (!cookie) throw new Error("login failed");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
   db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run(email); db.close(); }
 
+// Mã đặt lại mật khẩu thật (tài khoản dùng một lần, thư giả lập ở data-mock/mail) để soát ô đặt mật khẩu mới; bản chia sẻ thật để soát trang công khai.
+let RESET_TOKEN = "", SHARE_TOKEN = "";
+try {
+  const fs = await import("node:fs"), path = await import("node:path"), who = `audit-${Date.now()}@synchro.test`, H = { "content-type": "application/json", origin: B };
+  await fetch(B + "/api/auth/signup", { method: "POST", headers: H, body: JSON.stringify({ email: who, password: "Audit-pass-123", profile: { fullName: "Audit", birthDate: "2000-01-01" } }) });
+  await fetch(B + "/api/auth/forgot", { method: "POST", headers: H, body: JSON.stringify({ email: who, lang: "vi" }) });
+  await new Promise((r) => setTimeout(r, 600));
+  const dir = path.resolve("data-mock/mail");
+  for (const f of fs.readdirSync(dir)) { let m; try { m = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")); } catch { continue; } if (m.to === who) { RESET_TOKEN ||= /reset#([\w-]+)/.exec(m.text ?? "")?.[1] ?? ""; fs.rmSync(path.join(dir, f)); } }
+  const sh = await fetch(B + "/api/share", { method: "POST", headers: { ...H, cookie }, body: JSON.stringify({ conv: `audit-${Date.now()}`, title: "Bản chia sẻ để soát giao diện", msgs: [{ role: "user", text: "Tóm tắt giúp mình" }, { role: "ai", text: "## Tóm tắt\n\nĐây là **bản chia sẻ** để soát giao diện.\n\n- Một\n- Hai\n\n| Cột | Giá trị |\n|---|---|\n| A | 1 |" }] }) });
+  SHARE_TOKEN = (await sh.json().catch(() => ({})))?.share?.token ?? "";
+} catch (e) { console.error("không chuẩn bị được trang lẻ", e); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const problems = [];
 const note = (where, what) => { problems.push(`${where}: ${what}`); };
@@ -169,6 +181,17 @@ const CHECK = `(() => {
     const frame = parseFloat(cs.borderTopWidth) > 0 || alpha(cs.backgroundColor) > 0.05 || cs.boxShadow !== "none";
     if (frame && b.height > 56 && rad > Math.min(18, b.height / 4)) out.push("ô nhiều dòng bo tròn " + Math.round(rad) + "px, chữ ở góc bị cắt: " + name(t));
   }
+  // Nút và icon nằm đè lên ô nhập (con mắt của ô mật khẩu, nút xóa, nút gửi) phải ở giữa ô theo chiều dọc, nằm gọn trong ô. Ô mật khẩu ở trang đặt lại từng lệch xuống dưới vì khung bao tính cả lề của ô.
+  for (const inp of document.querySelectorAll("input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file])")) {
+    if (!vis(inp)) continue; const b = inp.getBoundingClientRect(); if (b.width < 60 || b.height < 20 || b.bottom < 0 || b.top > H) continue;
+    for (const k of (inp.parentElement?.children ?? [])) {
+      if (k === inp || !vis(k) || !k.matches("button,a,svg,[role=button]") || getComputedStyle(k).position !== "absolute") continue;
+      const c = k.getBoundingClientRect(); if (!c.width || c.left < b.left - 1 || c.right > b.right + 1) continue;
+      const off = (c.top + c.bottom) / 2 - (b.top + b.bottom) / 2;
+      if (Math.abs(off) > 1.5) out.push("nút trong ô nhập lệch " + Math.round(off) + "px theo chiều dọc: " + name(k) + " trong " + name(inp));
+      else if (c.top < b.top - 1 || c.bottom > b.bottom + 1) out.push("nút trong ô nhập tràn khỏi ô: " + name(k));
+    }
+  }
   // Chữ gợi ý (placeholder) dài hơn ô nhập: bị cắt cụt, không có dấu … (ô hạn mức "Mặc định: không giới hạn" ở trang quản trị).
   { const cv = document.createElement("canvas").getContext("2d");
     for (const inp of document.querySelectorAll("input[placeholder], textarea[placeholder]")) {
@@ -307,6 +330,15 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("dang-nhap", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000, "login"); await sleep(800); await shot("dang-nhap"); });
   await step0("dieu-khoan", async () => { await P("Page.navigate", { url: B + "/terms" }); await sleep(1500); await shot("dieu-khoan"); });
   await step0("quyen-rieng-tu", async () => { await P("Page.navigate", { url: B + "/privacy" }); await sleep(1500); await shot("quyen-rieng-tu"); });
+
+  // Các trang lẻ không cần đăng nhập, đủ trạng thái (từng chỉ soát /terms, /privacy nên icon lệch ở trang đặt lại mật khẩu lọt tới người dùng).
+  await step0("dat-lai-mk-nhap-email", async () => { await P("Page.navigate", { url: B + "/reset" }); await sleep(1500); await shot("dat-lai-mk-nhap-email"); });
+  await step0("dat-lai-mk-het-han", async () => { await P("Page.navigate", { url: B + "/reset#khong-hop-le-000000000000" }); await sleep(1500); await P("Page.reload", {}); await sleep(1500); await shot("dat-lai-mk-het-han"); });
+  if (RESET_TOKEN) await step0("dat-lai-mk-nhap-moi", async () => { await P("Page.navigate", { url: B + "/reset#" + RESET_TOKEN }); await P("Page.reload", {}); await until(`!!document.querySelector("#rp-new")`, 8000, "ô mật khẩu"); await sleep(400); await shot("dat-lai-mk-nhap-moi"); });
+  await step0("xac-minh-email", async () => { await P("Page.navigate", { url: B + "/verify#khong-hop-le-000000000000" }); await sleep(1500); await shot("xac-minh-email"); });
+  await step0("tai-ung-dung", async () => { await P("Page.navigate", { url: B + "/download" }); await sleep(1500); await shot("tai-ung-dung"); });
+  if (SHARE_TOKEN) await step0("trang-chia-se", async () => { await P("Page.navigate", { url: B + "/share/" + SHARE_TOKEN }); await sleep(2000); await shot("trang-chia-se"); });
+  await step0("khong-tim-thay", async () => { await P("Page.navigate", { url: B + "/khong-co-trang-nay" }); await sleep(1500); await shot("khong-tim-thay"); });
 
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
   await step0("trang-chu", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(1500); await shot("trang-chu"); });

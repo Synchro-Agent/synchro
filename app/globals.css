@@ -4049,7 +4049,7 @@ main#main:focus{outline:0}
 .rp-l{font-size:13px;font-weight:540;margin:0 0 6px}
 .rp .field{width:100%}
 .rp-pw{position:relative}
-.rp-pw .field{padding-right:40px}
+.rp-pw .field{padding-right:40px;margin:0}
 .rp-pw .icon-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px}
 .rp-hint{margin:6px 0 14px;font-size:12.5px;line-height:1.5;color:var(--text-3)}
 .rp-hint .lnk{font-size:inherit}
