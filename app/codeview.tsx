@@ -341,7 +341,13 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     onCreate(id, t.replace(/\s+/g, " ").trim().slice(0, 40) || "Phiên code mới");
     return id;
   }, [onCreate]);
-  useEffect(() => { wsStatus().then(setStatus).catch(() => setStatus({ available: false, reason: "Không kiểm tra được workspace." })); }, [setStatus]);
+  // Không hỏi được (mất mạng, máy chủ đang khởi động lại): tự hỏi lại, không để trang kẹt ở "workspace chưa dùng được" tới khi tải lại.
+  useEffect(() => {
+    let t = 0, dead = false;
+    const check = () => wsStatus().then((j) => { if (!dead) setStatus(j); }).catch(() => { if (dead) return; setStatus({ available: false, reason: "Không kiểm tra được workspace. Synchro tự thử lại sau ít giây." }); t = window.setTimeout(check, 15_000); });
+    void check();
+    return () => { dead = true; clearTimeout(t); };
+  }, [setStatus]);
   const git = sid !== null ? gitMap[sid] : undefined;
   const refreshGit = useCallback(async (id: number | null | undefined) => {
     if (id == null || !useCodeUi.getState().status?.available) return;

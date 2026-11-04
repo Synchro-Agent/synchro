@@ -1,5 +1,7 @@
 // Bản dịch cho Dự án, Hộp thư, Giọng nói, Kho kỹ năng, Cài đặt và Synchro Code (bổ sung vào i18n-dict.ts).
 export const FX_VI2EN: Record<string, string> = {
+  "Chưa đọc được danh sách file.": "Couldn't read the file list.",
+  "Không kiểm tra được workspace. Synchro tự thử lại sau ít giây.": "Couldn't check the workspace. Synchro will try again in a few seconds.",
   "Máy này chưa có giọng đọc cho ngôn ngữ này nên có thể đọc không rõ. Thêm giọng trong cài đặt của máy": "This device has no voice for this language, so it may sound unclear. You can add a voice in your device settings",
   "Gõ để hỏi": "Type to ask",
   "Chưa nghe được bạn. Gõ câu hỏi, Synchro sẽ đọc câu trả lời, hoặc bấm micro để thử lại": "Synchro can't hear you. Type your question and it will read the answer aloud, or press the microphone to try again",

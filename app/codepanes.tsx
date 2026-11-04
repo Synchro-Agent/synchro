@@ -153,6 +153,14 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   const [tabs, setTabs] = useState<BTab[]>([]);
   const [active, setActive] = useState("");
   const [st, setSt] = useState<"connecting" | "open" | "closed">("connecting");
+  // Trình duyệt ngắt kết nối: hỏi máy chủ lý do thật (workspace tắt, chưa được bật, mất mạng); workspace vẫn chạy thì không có gì thêm để nói.
+  const [downWhy, setDownWhy] = useState("");
+  useEffect(() => {
+    if (st !== "closed") { setDownWhy(""); return; }
+    let dead = false;
+    void fetch("/api/ws").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j: { available?: boolean; reason?: string; running?: boolean } | null) => { if (!dead && !(j?.available && j.running)) setDownWhy(termDown(j, navigator.onLine !== false)); });
+    return () => { dead = true; };
+  }, [st]);
   const [loading, setLoading] = useState(false);
   const [blank, setBlank] = useState(true);
   const [ports, setPorts] = useState<number[] | null>(null);
@@ -596,7 +604,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
           </div>
         )}
         {blank && !isNew && st !== "closed" && <div className="bp-empty"><span className="ag-spin" />{sid == null ? "Đang bật trình duyệt…" : "Đang bật trình duyệt của workspace…"}</div>}
-        {st === "closed" && <div className="bp-empty"><span>Đã ngắt kết nối trình duyệt.</span><button className="btn" onClick={connect}><I.Retry size={14} />Kết nối lại</button></div>}
+        {st === "closed" && <div className="bp-empty"><span>Đã ngắt kết nối trình duyệt.</span>{downWhy && <span>{tr(downWhy)}</span>}<button className="btn" onClick={connect}><I.Retry size={14} />Kết nối lại</button></div>}
       </div>
     </div>
   );
@@ -611,6 +619,7 @@ const name = (p: string) => p.split("/").pop() || p;
 
 export function FilesPane({ sid, visible, say }: { sid: number; visible: boolean; say: Say }) {
   const [dirs, setDirs] = useState<Record<string, Ent[] | undefined>>({});
+  const [loadErr, setLoadErr] = useState("");
   const [exp, setExp] = useState<Set<string>>(new Set(["."]));
   const [docs, setDocs] = useState<Doc[]>([]);
   const [act, setAct] = useState<string | null>(null);
@@ -618,8 +627,9 @@ export function FilesPane({ sid, visible, say }: { sid: number; visible: boolean
   const want = useCodeUi((s) => s.openFile);
   const [, force] = useState(0);
   const load = useCallback(async (p: string) => {
-    try { const r = await wsOp<{ entries: Ent[] }>("list", sid, { path: p }); setDirs((d) => ({ ...d, [p]: r.entries })); }
-    catch (e) { setDirs((d) => ({ ...d, [p]: [] })); if (p === ".") say((e as Error).message); }
+    try { const r = await wsOp<{ entries: Ent[] }>("list", sid, { path: p }); setDirs((d) => ({ ...d, [p]: r.entries })); if (p === ".") setLoadErr(""); }
+    // Không đọc được thư mục gốc: nói lý do kèm nút thử lại, không hiện như thư mục trống (người dùng tưởng mất file).
+    catch (e) { setDirs((d) => ({ ...d, [p]: [] })); if (p === ".") setLoadErr((e as Error).message); else say((e as Error).message); }
   }, [sid, say]);
   const refresh = useCallback(() => { setDirs({}); for (const p of exp) load(p); }, [exp, load]);
   useEffect(() => { if (visible) refresh(); }, [visible, sid]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -692,7 +702,7 @@ export function FilesPane({ sid, visible, say }: { sid: number; visible: boolean
       </div>
       <div className="fp-tree">
         <div className="fp-search"><I.Search size={14} /><input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Lọc file" /><button className="icon-btn" onClick={refresh} aria-label="Làm mới" title="Làm mới"><I.Retry size={13} /></button></div>
-        <div className="fp-rows">{dirs["."] === undefined ? <div className="fp-note"><span className="ag-spin" />Đang tải…</div> : rows.length ? rows : <div className="fp-note">Thư mục trống. Kết nối repo GitHub hoặc nhờ agent tạo file.</div>}</div>
+        <div className="fp-rows">{dirs["."] === undefined ? <div className="fp-note"><span className="ag-spin" />Đang tải…</div> : loadErr ? <div className="fp-note" role="alert"><span>{tr("Chưa đọc được danh sách file.")} <span>{loadErr}</span></span><button className="btn sm" onClick={refresh}><I.Retry size={13} />Thử lại</button></div> : rows.length ? rows : <div className="fp-note">Thư mục trống. Kết nối repo GitHub hoặc nhờ agent tạo file.</div>}</div>
       </div>
     </div>
   );
