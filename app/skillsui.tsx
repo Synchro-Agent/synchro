@@ -96,8 +96,8 @@ export async function inspectGithub(url: string, onWait?: () => void): Promise<F
 export type Scope = "me" | "org";
 // Tải về tệp .zip xuất skill / thư viện (app/skillexport.ts): giữ đúng tên tệp máy chủ đặt, README theo ngôn ngữ giao diện.
 export async function downloadExport(url: string, fallback: string): Promise<string> {
-  const r = await fetch(`${url}?lang=${getLang()}`, { cache: "no-store" });
-  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `Error ${r.status}`); }
+  const r = await apiFetch(`${url}?lang=${getLang()}`, { cache: "no-store" });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || statusText(r.status)); }
   const blob = await r.blob();
   const m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get("content-disposition") ?? "");
   const name = m ? decodeURIComponent(m[1]) : fallback;

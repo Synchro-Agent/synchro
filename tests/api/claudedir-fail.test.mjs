@@ -69,6 +69,7 @@ const it = (id) => d.items.find((x) => x.id === `cd:${id}`);
 ok(it("repo-gone").failed === true && it("repo-gone").closed === false && it("repo-gone").failedWhy === null, "thành viên thấy thư viện lỗi, không thấy lỗi thô", JSON.stringify(it("repo-gone")));
 ok(it("repo-gone").alt.some((a) => a.id === "cd:open-contract"), "thư viện lỗi cũng có thư viện mở tương tự", JSON.stringify(it("repo-gone").alt));
 ok(it("blocked-late").closed === true && it("blocked-late").alt.some((a) => a.id === "cd:open-contract") && it("blocked-late").altAuto === true, "thư viện chỉ lúc cài mới biết giấy phép đóng: có thư viện mở tương tự", JSON.stringify(it("blocked-late")));
+ok(it("closed-none").closed === true && it("closed-none").alt.length === 0 && it("closed-none").altAuto === false, "đã xem mà không có thay thế: API không gửi gợi ý nào để giao diện mở cả mục", JSON.stringify(it("closed-none")));
 ok(d.totals.failed === 1 && d.totals.closed === 5, "số đếm tách riêng đóng và lỗi", JSON.stringify(d.totals));
 ok(d.cats.legal.failed === 1 && d.cats.legal.closed === 5, "số đếm theo mục cũng vậy", JSON.stringify(d.cats.legal));
 ok(d.totals.plugins - d.totals.installed - d.totals.closed - d.totals.failed === 6, "còn phải cài: chỉ thư viện cài được", JSON.stringify(d.totals));

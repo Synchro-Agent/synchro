@@ -235,6 +235,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   const [resetFor, setResetFor] = useState<null | { email: string; url: string }>(null);
 
   const [api, setApi] = useState<ApiState | null>(null);
+  const [showLimits, setShowLimits] = useState(false);
   const load = useCallback(() => call<Data>("GET", "/api/admin").then((x) => { setD(x); setErr(""); setMore(x.audit.length >= 100); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { call<ApiState>("GET", "/api/admin/apikeys").then(setApi).catch(() => {}); }, []);
   const saveMain = (main: string[]) => { if (!api) return; setApi({ ...api, main }); call<ApiState>("POST", "/api/admin/apikeys", { action: "main", main }).then((s) => { setApi(s); refreshModels(); }).catch((e) => app.say(e.message)); };
@@ -337,7 +338,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <h3 className="sec">Usage limits</h3>
       {/* Hạn mức ở đây chỉ tính chi phí khóa API dùng chung; model chạy bằng gói của từng người theo hạn mức của gói (chatengine, /api/llm bỏ qua overLimit). */}
       <p className="d adm-privacy"><UsageIcon size={14} />{api?.catalog.some((p) => p.models.length) ? "These limits cover models reached through a shared API key, where usage is the real API cost of each call. Models a person signs in to with their own plan follow that plan's limits instead." : "No shared API key is linked, so these limits have no effect right now. Everyone uses their own AI plan, and that plan's limits apply."}</p>
-      <UsageAdmin say={app.say} Toggle={Toggle} />
+      {/* Không có khóa dùng chung: ô đô la không chặn được gì, gập lại để quản trị viên không tưởng đã giới hạn được ai. Vẫn mở được để đặt sẵn. */}
+      {!api || api.catalog.some((p) => p.models.length) || showLimits ? <UsageAdmin say={app.say} Toggle={Toggle} /> : <button className="btn sm" onClick={() => setShowLimits(true)}>Set limits for later</button>}
 
       {d.settings.speechBudget && (
         <div className="adm-card">
