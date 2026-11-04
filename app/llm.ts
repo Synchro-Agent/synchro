@@ -70,7 +70,7 @@ export const cancelRun = (id: string) => fetch(`/api/runs/${encodeURIComponent(i
 export type RunEv = { seq: number; at: number; kind: string; text: string };
 // Kết quả phụ của một lượt (skill, tệp, dấu vết…) ghi thẳng vào meta của lượt đó: nhiều đoạn chat chạy cùng lúc không lẫn kết quả của nhau
 // (các hàm take…() đọc biến dùng chung, chỉ an toàn khi mỗi lúc một lượt).
-export type RunMeta = { skills: SkillUse[]; libs: LibUse[]; files: OutFile[]; trace: TraceItem[]; steer: string[]; cancelled: boolean; route: string | null; sources: KbSource[] };
+export type RunMeta = { skills: SkillUse[]; libs: LibUse[]; files: OutFile[]; trace: TraceItem[]; steer: string[]; cancelled: boolean; route: string | null; sources: KbSource[]; webs: { title: string; url: string }[] };
 type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void; onEvent?: (e: RunEv) => void; conv?: number | string; meta?: Partial<RunMeta> };
 // Tin nhắn thêm tới lúc model đã ở bước trả lời cuối (chưa ghép được): trả về để gửi thành lượt tiếp theo (đọc một lần).
 let lastSteer: string[] = [];
@@ -94,11 +94,34 @@ export class LLMError extends Error { constructor(m: string, public status: numb
 // Lượt chạy bền: máy chủ chạy câu trả lời ở nền, trình duyệt theo dõi qua SSE (tự nối lại khi rớt mạng).
 // onProgress nhận các bước đang làm ("Đang đọc skill …"); kết quả cuối giống hệt /api/llm trả về.
 // onDelta nhận toàn bộ chữ model đã viết ở bước hiện tại mỗi khi có thêm chữ (truyền theo thời gian thực).
+// Trình duyệt chỉ mở 6 kết nối HTTP/1.1 tới một máy chủ, và mỗi EventSource giữ một kết nối: nhiều đoạn chat chạy cùng lúc thì mọi yêu cầu khác của
+// trang bị treo. Trong một thẻ chỉ giữ tối đa 3 luồng; đoạn chat chạy thêm thì hỏi trạng thái định kỳ (vẫn đủ bước và chữ, chậm hơn chút), có chỗ thì chuyển lại luồng.
+const MAX_SSE = 3;
+let sseOpen = 0;
+async function pollRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void): Promise<{ http: number; result: Record<string, unknown> }> {
+  let seen = 0;
+  for (;;) {
+    const r = await fetch(`/api/runs/${encodeURIComponent(id)}?json=1`).catch(() => null);
+    if (r) {
+      const j = await r.json().catch(() => null);
+      if (!r.ok && r.status < 500) throw new LLMError(j?.error || `Run ${r.status}`, r.status, j ?? {});
+      if (j?.run) {
+        for (const ev of j.run.events as RunEv[]) if (ev.seq > seen) { seen = ev.seq; onEvent?.(ev); if (ev.kind === "step" || ev.kind === "tool" || ev.kind === "note") onProgress?.(ev.text); }
+        if (j.live?.text) onDelta?.(j.live.text);
+        if (j.run.status !== "running") return { http: j.run.http ?? 502, result: j.run.result ?? {} };
+      }
+    }
+    if (sseOpen < MAX_SSE) return waitRun(id, onProgress, onDelta, onEvent);
+    await new Promise((ok) => setTimeout(ok, 2000));
+  }
+}
 export function waitRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void): Promise<{ http: number; result: Record<string, unknown> }> {
+  if (sseOpen >= MAX_SSE) return pollRun(id, onProgress, onDelta, onEvent);
   return new Promise((ok, no) => {
     let settled = false;
+    sseOpen++;
     const es = new EventSource(`/api/runs/${encodeURIComponent(id)}`);
-    const end = (f: () => void) => { if (settled) return; settled = true; es.close(); f(); };
+    const end = (f: () => void) => { if (settled) return; settled = true; sseOpen--; es.close(); f(); };
     es.addEventListener("step", (e) => {
       try {
         const ev = JSON.parse((e as MessageEvent).data) as RunEv;
@@ -152,7 +175,7 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
   lastFiles = Array.isArray(j.files) ? j.files : [];
   lastRoute = j.auto && typeof j.model === "string" ? j.model : null;
   lastSources = Array.isArray(j.sources) ? j.sources : [];
-  if (cb.meta) Object.assign(cb.meta, { skills: lastSkills, libs: lastLibs, files: lastFiles, trace: lastTrace, steer: lastSteer, cancelled: lastCancelled, route: lastRoute, sources: lastSources });
+  if (cb.meta) Object.assign(cb.meta, { skills: lastSkills, libs: lastLibs, files: lastFiles, trace: lastTrace, steer: lastSteer, cancelled: lastCancelled, route: lastRoute, sources: lastSources, webs: Array.isArray(j.webSources) ? j.webSources : [] });
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model; lời nhắn của máy chủ (notice) hiện thành thông báo.
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("synchro:usage"));

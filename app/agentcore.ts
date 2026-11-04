@@ -472,7 +472,7 @@ export async function runPlanAgent(o: {
     const tryOnce = async (messages: { role: string; content: unknown }[]) => {
       const before = n;
       let res = await once(messages);
-      if (res.status >= 500 && res.status !== 504 && n === before && !o.signal.aborted) { await new Promise((ok) => setTimeout(ok, 1500)); res = await once(messages, true); }
+      if (res.status >= 500 && res.status !== 504 && !(res.json as { noRetry?: boolean }).noRetry && n === before && !o.signal.aborted) { await new Promise((ok) => setTimeout(ok, 1500)); res = await once(messages, true); }
       return res;
     };
     type J = { text?: string; error?: string; cancelled?: boolean; denied?: string[] };

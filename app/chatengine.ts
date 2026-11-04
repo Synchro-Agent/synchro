@@ -8,14 +8,14 @@ import { ConnectorSession, connectorsPrompt, RECONNECT_TOOL, type ChatTool, type
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
+import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
-import { AUTO, autoEffort, effortLabel, routeModel, taskLabel, type RouteInput } from "./router";
+import { AUTO, autoEffort, effortLabel, isAck, routeModel, taskLabel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { ruleStudios } from "./studiorules";
@@ -173,7 +173,7 @@ type Lib = { key: string; label: string };
 // task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
-type Exec = { toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; denied?: Map<string, string>; connCards?: Set<string> };
+type Exec = { effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; denied?: Map<string, string>; connCards?: Set<string> };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -236,6 +236,8 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Không nói "không làm được" khi chưa thử các cách khả thi. Thật sự bị chặn thì nói đã thử gì, vì sao chưa được, và giao phương án tốt nhất có thể ngay trong lượt này.
 - Chu đáo: trình bày rõ ràng, tiếng Việt chuẩn, đúng chính tả; nêu điều quan trọng người dùng cần biết (rủi ro, giới hạn, bước tiếp theo) một cách ngắn gọn.
 - Giữ riêng tư: không đưa tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài khi họ chưa yêu cầu rõ.
+- Thông tin dễ thay đổi (giá, tỉ giá, tin tức, lịch, phiên bản phần mềm, quy định mới): có công cụ tìm web thì tìm trước rồi mới trả lời, nói rõ dữ liệu tính đến lúc nào và ghi nguồn bằng liên kết markdown. Không tìm được thì nói rõ thông tin có thể đã cũ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
+- Sức khỏe, pháp lý, tài chính: nêu mức độ khẩn trước (dấu hiệu nguy hiểm thì khuyên gọi cấp cứu hoặc đi viện ngay), nói rõ điều chưa chắc, và khi nào cần gặp chuyên gia.
 </working_standards>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
@@ -511,7 +513,20 @@ function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
 const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSignal()?.aborted;
 const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|authorization|cookie|credential/i;
 const argLine = (input: unknown) => { try { return JSON.stringify(input ?? {}, (k, v) => (k && SECRET_KEY.test(k) ? "***" : v)).slice(0, 200); } catch { return ""; } };
+// Công cụ chỉ đọc, chạy lại lượt không gây hại gì. Còn lại (connector ghi, chạy code, thao tác trình duyệt, ghi bộ não) có thể đã làm thay đổi
+// gì đó: lỗi giữa chừng thì không tự chạy lại lượt, kể cả bằng model khác.
+const READ_TOOLS = new Set(["update_plan", "load_skill", "read_skill_file", "search_skills", "read_ref", "read_artifact", "check_artifact", "brain_search", "brain_read", "web_search", "connector_tools", "browser_navigate", "browser_read", "browser_text", "browser_find", "browser_screenshot", "browser_scroll", "browser_wait", "browser_tabs", "browser_console", "browser_downloads"]);
+function noteEffects(x: Exec, calls: Call[], d: Record<string, Decision>) {
+  for (const c of calls) {
+    const ct = x.sess?.get(c.name);
+    if (d[c.id] === "deny" || (ct ? ct.tool.annotations?.readOnlyHint === true : READ_TOOLS.has(c.name))) continue;
+    (x.effects ??= []).push(c.name);
+    // Connector ghi, thao tác trên trang thật: máy chủ khởi động lại giữa chừng cũng không được làm lại. Chạy code nằm trong hộp cát của đoạn chat, không tính ở đây.
+    if (ct || isBrowserTool(c.name)) markEffect(label(x, c));
+  }
+}
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
+  noteEffects(x, calls, d);
   const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
   let res: Run[];
   try {
@@ -1001,7 +1016,8 @@ const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && b
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
   if (Array.isArray(body.messages)) body = { ...body, messages: await expandFileRefs(body.messages, lastUserText(body.messages), c.user.id) };
-  if (body.model !== AUTO || typeof body.resume === "string") return chatTurn(body, c, scope);
+  if (typeof body.resume === "string") return chatTurn(body, c, scope);
+  if (body.model !== AUTO) return withSwitch(await chatTurn(body, c, scope), body, c.user, [String(body.model)]);
   // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,
   // không tự chuyển sang khóa API (tierOf xếp hạng được cả "sub-claude/opus", "sub-claude/haiku"…). Gói hết hạn mức thì không chọn.
   const { allowed, usable, groups } = await usableModels(c.user);
@@ -1014,25 +1030,52 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
   progress("note", `Tự động chọn ${shown(r.model)} · việc ${taskLabel(r.task)} · nỗ lực ${effortLabel(effort)}`);
-  let res = await chatTurn({ ...body, model: r.model, effort }, c, scope);
+  const fromSub = !!subCli(r.model);
+  // Còn model của CLI khác để chuyển thì không chờ lâu khi tài khoản đang chạy lượt Antigravity / Grok khác; không còn thì chờ như chọn tay.
+  const auto = r.alt.some((k) => !blocked.has(k) && !!subCli(k) && subCli(k) !== subCli(r.model));
+  let res = await chatTurn({ ...body, model: r.model, effort }, c, scope, { auto });
   let used = r.model;
-  // Model đầu lỗi / quá tải / hết hạn mức: chuyển một lần sang model dự phòng (ưu tiên hãng khác) mà người dùng không phải làm gì.
-  // Gói subscription chỉ chuyển sang gói khác, không tự sang khóa API (luôn hỏi người dùng trước khi dùng khóa API).
-  if ([429, 500, 502, 503, 529].includes(res.status) && !runSignal()?.aborted) {
-    const fromSub = !!subCli(r.model);
-    const next = r.alt.find((k) => !blocked.has(k) && (!fromSub || !!subCli(k)));
-    if (next) {
-      const j0 = await res.clone().json().catch(() => ({}));
-      if (!(j0 as { usageLimit?: boolean }).usageLimit) {
-        progress("note", `${shown(r.model)} đang bận, chuyển sang ${shown(next)}`);
-        deltaStep();
-        res = await chatTurn({ ...body, model: next, effort }, c, scope);
-        used = next;
-      }
-    }
+  const tried = [r.model];
+  // Model lỗi / quá tải / hết hạn mức / cần đăng nhập lại / treo: thử lần lượt các model dự phòng (ưu tiên hãng khác) mà người dùng không phải
+  // làm gì. Gói subscription chỉ chuyển sang gói khác, không tự sang khóa API (luôn hỏi người dùng trước khi dùng khóa API).
+  // Không bao giờ chạy lại khi lượt đã làm việc không đọc được kết quả (gửi thư, chạy code…): trả phần đã có để người dùng quyết.
+  const out = new Set<string>();
+  while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !runSignal()?.aborted && tried.length < 5) {
+    const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
+    if (j0.usageLimit || j0.partialWork) break;
+    // Hết hạn mức riêng của một model thì các model khác cùng gói vẫn thử được; lỗi khác (đăng nhập, treo, hết cả gói) thì bỏ cả CLI đó trong lượt này.
+    if (j0.quota !== "model" && subCli(used)) out.add(subCli(used)!);
+    const fresh = new Set((await usableModels(c.user).catch(() => ({ usable: [] as string[] }))).usable);
+    const next = r.alt.find((k) => !tried.includes(k) && fresh.has(k) && (!fromSub || !!subCli(k)) && !out.has(subCli(k) ?? ""));
+    if (!next) break;
+    const why = j0.quota || j0.planLimit ? "đã hết hạn mức" : j0.rate ? "đang giới hạn tốc độ" : res.status === 409 ? "cần đăng nhập lại" : j0.busy ? "đang chạy lượt khác" : j0.stalled || res.status === 504 ? "không phản hồi" : "đang gặp lỗi";
+    progress("note", `${shown(used)} ${why}, chuyển sang ${shown(next)}`);
+    deltaStep();
+    used = next; tried.push(next);
+    res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
   }
-  const j = await res.json().catch(() => ({}));
-  return Response.json({ ...j, model: j.model ?? used, auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
+  const j = await (await withSwitch(res, body, c.user, tried)).json().catch(() => ({}));
+  return Response.json({ ...j, model: j.model ?? used, ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
+}
+// Lỗi của gói mà còn model của gói khác dùng được: gợi ý sẵn để người dùng đổi bằng một lần bấm (máy chủ thật không có khóa API để đề nghị thay).
+async function withSwitch(res: Response, body: Record<string, any>, user: UserRow, tried: string[]): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (![409, 429, 500, 502, 503, 504, 529].includes(res.status) || !body.skills || body.feature === "artifact" || !subCli(tried[0])) return res;
+  const j = (await res.clone().json().catch(() => null)) as { usageLimit?: boolean; quota?: string } | null;
+  if (!j || j.usageLimit) return res;
+  const { usable, groups } = await usableModels(user).catch(() => ({ usable: [] as string[], groups: [] as { models: { key: string; name: string }[] }[] }));
+  const cli = subCli(tried[tried.length - 1]);
+  const list = usable.filter((k) => !tried.includes(k) && !!subCli(k) && (j.quota === "model" || subCli(k) !== cli));
+  const next = routeModel(routeInput(body), list);
+  if (!next) return res;
+  return Response.json({ ...j, switchTo: { model: next.model, name: groups.flatMap((g) => g.models).find((m) => m.key === next.model)?.name ?? next.model.split("/").pop() } }, { status: res.status });
+}
+// Giờ hiện tại đặt cạnh tin nhắn mới nhất (như gợi ý định tuyến skill): hướng dẫn hệ thống giữ nguyên để đọc từ bộ đệm, phiên nối tiếp vẫn biết đúng giờ.
+function nowBlock(body: Record<string, any>): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!useProfile(body)) return "";
+  const at = (timeZone?: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeStyle: "short", timeZone }).format(new Date());
+  const tz = typeof body.tz === "string" && body.tz.length <= 64 ? body.tz : "";
+  try { return `<current_time>${at(tz || undefined)}${tz ? ` (${tz})` : ""}</current_time>`; }
+  catch { return `<current_time>${at()}</current_time>`; }
 }
 // Thông tin của yêu cầu mới nhất cho bộ định tuyến: chữ, tệp / ảnh đính kèm, độ dài tài liệu, model của câu trả lời trước.
 // Chỉ chữ người dùng gõ mới quyết định loại việc; nội dung tệp đính kèm (ghi chú "Các khối <file>…", nhãn [File: …], <file>…</file>)
@@ -1054,11 +1097,20 @@ function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-l
   const files = blocks.filter((b) => b?.type === "text" && typeof b.text === "string" && b.text.startsWith("[File: ")).length;
   // Độ dài nội dung tệp: chữ trích ra trong <file>, PDF gửi nguyên dạng thì theo chữ dự phòng (không có thì ước chừng một tài liệu vừa).
   const docChars = blocks.reduce((n, b) => n + (b?.type === "text" && typeof b.text === "string" && b.text.includes("<file") ? b.text.length : b?.type === "document" ? (b.fallbackText?.length ?? 8000) : 0), 0);
+  // Lời nhờ gần nhất: bỏ qua các câu chỉ xác nhận, trả lời ngắn ở giữa ("Làm trang web" → "ok" → "màu xanh nhé").
+  let prevAsk: string | undefined;
+  for (let i = users.length - 2; i >= 0 && i >= users.length - 8; i--) {
+    const t = typedText(users[i]);
+    if (!t) continue;
+    prevAsk ??= t;
+    if (!isAck(t)) { prevAsk = t; break; }
+  }
   return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, files, docChars,
-    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk: typedText(users[users.length - 2]) || undefined };
+    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk };
 }
 
-async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
+/** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
+async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }, o: { auto?: boolean } = {}): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const T0 = Date.now();
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
   // Tiếp tục lượt chat đang chờ duyệt công cụ: { resume, decisions: { id lượt gọi: "allow" | "always" | "deny" } }.
@@ -1107,11 +1159,16 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     let bridge: { url: string; close: () => void; alive: () => number } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "", route = "";
     const usedAll: ToolRun["used"][] = [];
     let bridged = 0;
+    const webs = new Map<string, { title: string; url: string }>();
+    // Trình duyệt chỉ gửi 60 tin gần nhất: số tin đã cắt bớt, để so nối tiếp phiên CLI với số tin thật.
+    const cut = typeof body.histTotal === "number" && Array.isArray(messages) && body.histTotal > messages.length ? body.histTotal - messages.length : 0;
     try {
       if (pc && !am && BRIDGE_CLIS.has(cli)) {
         const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
         const st = studio ? studioSkills(c.user.id, studio) : null;
+        const t1 = Date.now();
         const ss = await skillSet(c.user, body, messages, studio, st);
+        console.log(`[timing] chat skillset=${Date.now() - t1}ms (${ss.list.length} skill)`);
         route = ss.route;
         if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
         const code = pc.code;
@@ -1132,11 +1189,16 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
       // chờ hơn 10 giây chỉ để đọc lại phần này.
-      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), route);
+      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, nowBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(), onToolUse: am ? undefined : toolUseSeen,
         mcp: bridge ? { url: bridge.url, alive: bridge.alive } : undefined, web: body.web === true, fresh,
+        total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
+        onStatus: am ? undefined : (t) => { progress("step", t); },
+        // Tìm web bằng công cụ dựng sẵn của CLI: hiện trong nhật ký làm việc như công cụ khác, nguồn gửi kèm kết quả.
+        onSearch: am ? undefined : (q) => { const seq = progress("tool", q.url ? `Đang đọc trang ${q.url.slice(0, 120)}` : q.query ? `Đang tìm trên web: ${q.query.slice(0, 120)}` : "Đang tìm trên web"); if (seq) progress("res", JSON.stringify({ ref: seq, ok: true })); },
+        onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url)) webs.set(s.url, s); },
       });
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.
@@ -1147,11 +1209,28 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       };
       // Lỗi tạm thời của CLI (không phải đăng nhập, hạn mức, quá giờ hay người dùng bấm Dừng) khi chưa kịp dùng công cụ nào: thử lại một
       // lần ở phiên mới kèm toàn bộ lịch sử (nối tiếp phiên ngay sau lượt trước có lúc hỏng) — tin nhắn nào cũng phải chạy được.
+      const pause = (ms: number) => new Promise<void>((ok) => { const sig = runSignal(), t = setTimeout(ok, ms); sig?.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
       const tryOnce = async (msgs: unknown) => {
         const before = bridged;
         let res = await once(msgs);
-        if (res.status >= 500 && res.status !== 504 && bridged === before && !runSignal()?.aborted) {
-          await new Promise((ok) => setTimeout(ok, 1500));
+        if (bridged !== before || runSignal()?.aborted) return res;
+        const j = res.json as { rate?: boolean; retryAfterMs?: number | null; noRetry?: boolean };
+        // Giới hạn tốc độ: chờ đúng thời gian hãng bảo rồi thử lại một lần. Chờ lâu quá (hoặc Tự động còn model khác) thì trả về luôn.
+        if (j.rate) {
+          const wait = j.retryAfterMs ?? 5000;
+          if (wait > (o.auto ? 8000 : 30_000)) return res;
+          progress("step", `Đang chờ ${Math.ceil(wait / 1000)} giây rồi thử lại`);
+          await pause(wait);
+          if (runSignal()?.aborted) return res;
+          deltaStep();
+          return once(msgs);
+        }
+        // Lượt treo, hoặc đang bận lượt khác: thử lại chỉ khiến người dùng chờ thêm chừng ấy.
+        if (res.status >= 500 && res.status !== 504 && !j.noRetry) {
+          await pause(1500);
+          if (runSignal()?.aborted) return res;
+          // Chữ của lần thử trước (nếu có) không nối vào chữ của lần này.
+          deltaStep();
           res = await once(msgs, true);
         }
         return res;
@@ -1188,11 +1267,17 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (r.status === 200 && left?.length && (!String((r.json as J).text ?? "").trim() || stalled(String((r.json as J).text))))
         r = { status: 502, json: { error: `Antigravity tự chặn công cụ (${left.join(", ")}) nên lượt này chưa làm được gì. Hãy gửi lại yêu cầu hoặc chọn model khác (để Tự động thì Synchro tự chuyển model).` } };
       else if (r.status === 200 && left) r = { ...r, json: { ...(r.json as Record<string, unknown>), denied: undefined } };
-      if (!x || r.status !== 200) return Response.json(r.json, { status: r.status });
+      const sources = webs.size ? { webSources: [...webs.values()] } : {};
+      if (!x && r.status === 200) return Response.json({ ...(r.json as Record<string, unknown>), ...sources });
       // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).
       const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);
-      recordUse(c.user.id, names);
-      return Response.json({ ...(r.json as Record<string, unknown>), text: withTurnArts(x, String((r.json as J).text ?? "")), skills: usedAll, files: x.outs, libs: usedLibs(x, names), ...(x.trace.length ? { trace: x.trace } : {}) });
+      if (x && r.status === 200) recordUse(c.user.id, names);
+      // Lỗi giữa chừng (hết hạn mức, treo…): phần đã viết, tệp đã tạo, dấu vết công cụ không bị bỏ; partialWork: đã làm việc không chạy lại được.
+      if (r.status !== 200) {
+        const partial = am ? "" : liveNow() || String((r.json as J).text ?? "");
+        return Response.json({ ...(r.json as Record<string, unknown>), ...sources, ...(partial.trim() ? { text: withTurnArts(x, partial) } : { text: undefined }), ...(x?.outs.length ? { files: x.outs } : {}), ...(x?.trace.length ? { trace: x.trace } : {}), ...(usedAll.length ? { skills: usedAll, libs: usedLibs(x!, names) } : {}), ...(x?.effects?.length ? { partialWork: true } : {}) }, { status: r.status });
+      }
+      return Response.json({ ...(r.json as Record<string, unknown>), ...sources, text: withTurnArts(x, String((r.json as J).text ?? "")), skills: usedAll, files: x!.outs, libs: usedLibs(x!, names), ...(x!.trace.length ? { trace: x!.trace } : {}) });
     } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
@@ -1234,7 +1319,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const prep = prepareHistory(messages, [route, recallOf(body, c.user, convId)], mix);
+    const prep = prepareHistory(messages, [route, recallOf(body, c.user, convId), nowBlock(body)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";

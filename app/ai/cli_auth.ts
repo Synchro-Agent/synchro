@@ -141,6 +141,8 @@ export function grokModels(out: string): { loggedIn: boolean; plan: string | nul
 /** Hãng từ chối đăng nhập trong lượt chat (401/403): đánh dấu cần đăng nhập lại cho tới khi đăng nhập xong hoặc đăng xuất. */
 export const markRelogin = (cli: Cli, scope: string) => { g.relogin.add(key(cli, scope)); forget(cli, scope); };
 export const needsRelogin = (cli: Cli, scope: string) => g.relogin.has(key(cli, scope));
+/** Một lượt chat vừa chạy được: hãng đã nhận đăng nhập, báo động trước đó (nếu có) không còn đúng. */
+export const clearRelogin = (cli: Cli, scope: string) => { g.relogin.delete(key(cli, scope)); };
 
 /** stale: có kết quả cũ thì trả ngay và kiểm tra lại ở nền (bộ chọn model không phải chờ CLI). */
 export async function status(cli: Cli, scope: string, o: { fresh?: boolean; stale?: boolean } = {}): Promise<Status> {
@@ -159,6 +161,9 @@ export async function status(cli: Cli, scope: string, o: { fresh?: boolean; stal
     g.probing.set(k, run);
   }
   const s = await run;
+  // agy, grok đọc danh sách model từ hãng: đọc được là đăng nhập còn hiệu lực (báo động nhầm tự hết). claude, codex chỉ đọc tệp đăng nhập trên
+  // máy (token bị thu hồi vẫn báo "đã đăng nhập") nên chỉ tin một lượt chat chạy được (xem subTurn) hoặc đăng nhập lại.
+  if (relogin && s.loggedIn && s.models?.length) { g.relogin.delete(k); return { ...s, login, relogin: false }; }
   return { ...s, login, relogin };
 }
 
@@ -328,7 +333,7 @@ function finish(p: Pending, ok: boolean, message?: string) {
 /** Dán mã trang đăng nhập trả về (claude, agy) rồi chờ CLI xác nhận. */
 export async function submitCode(cli: Cli, scope: string, code: string): Promise<LoginState> {
   const p = g.pending.get(key(cli, scope));
-  if (!p || p.st.state !== "open_url" || !p.st.needsCode) throw new Error("Không có lượt đăng nhập nào đang chờ mã. Bắt đầu lại nhé.");
+  if (!p || p.st.state !== "open_url" || !p.st.needsCode) throw new Error("Lượt đăng nhập này không còn (máy chủ vừa khởi động lại hoặc đã hết hạn). Hãy bấm Đăng nhập lại.");
   const c = code.trim();
   if (!c || c.length > 2048 || /[\x00-\x1f\x7f]/.test(c)) throw new Error("Mã không hợp lệ.");
   // Trạng thái đổi trong lúc chờ (đầu ra CLI, tiến trình thoát): đọc lại mỗi lần.

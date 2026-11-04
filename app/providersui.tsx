@@ -67,7 +67,8 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
       cb.current.load(true).then((s) => {
         if (stop) return;
         if (s.login?.state === "done" || s.loggedIn) { stop = true; clearInterval(t); cb.current.done(); }
-        else if (s.login?.state === "error" || !s.login) { stop = true; clearInterval(t); setLogin(null); cb.current.setErr(s.login?.message ?? "Sign-in failed."); }
+        // Máy chủ không còn lượt đăng nhập này: lượt đăng nhập nằm trong bộ nhớ tiến trình, deploy giữa chừng là mất (không phải bạn làm sai).
+        else if (s.login?.state === "error" || !s.login) { stop = true; clearInterval(t); setLogin(null); cb.current.setErr(s.login ? s.login.message ?? "Sign-in failed." : "The server restarted during sign-in. Click Sign in to start again."); }
       }).catch(() => {});
     }, 2000);
     return () => { stop = true; clearInterval(t); };

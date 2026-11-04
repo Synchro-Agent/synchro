@@ -14,7 +14,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const run = getRun(id, c.user.id);
   if (!run) return Response.json({ error: "Không tìm thấy lượt trả lời này." }, { status: 404 });
   const url = new URL(req.url);
-  if (url.searchParams.get("json")) return Response.json({ run });
+  // live: chữ đang viết, cho đoạn chat theo dõi bằng cách hỏi định kỳ (quá nhiều kết nối SSE cùng lúc, xem llm.ts).
+  if (url.searchParams.get("json")) return Response.json({ run, live: liveText(id) });
   const after = Number(req.headers.get("last-event-id") ?? url.searchParams.get("after") ?? 0) || 0;
   const enc = new TextEncoder();
   let stop = () => {};

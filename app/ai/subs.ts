@@ -10,11 +10,12 @@ import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../
 import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
-import { engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
+import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
-import type { Attachment, RateWindow, TurnRequest } from "./engine";
-import { redact } from "./errors";
+import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
+import { friendlyError, redact, retryAfterMs } from "./errors";
+import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
 
 export const SUB_PREFIX = "sub-";
 export const subCli = (key: unknown): Cli | null => {
@@ -173,7 +174,16 @@ export const VENDORS = ["anthropic", "openai", "google", "xai", "deepseek"] as c
 async function planModels(cli: Cli, u: UserRow) {
   if (!find(cli) || !everLoggedIn(cli, u.id)) return null;
   const s = await status(cli, u.id, { stale: true }).catch(() => null);
-  if (!s?.loggedIn || s.relogin) return null;
+  if (!s) return null;
+  const list = (ms: PlanModel[]) => ms.map((m) => {
+    // Hạn mức riêng của một model (tuần · Opus): chỉ model đó tạm nghỉ, các model khác của gói vẫn dùng được.
+    const own = modelBlock(cli, u.id, m.id), plan = planBlock(cli, u.id);
+    return { key: `${SUB_PREFIX}${cli}/${m.id}`, id: m.id, name: m.name, ...(own && own !== plan ? { blockedUntil: own } : {}) };
+  });
+  // Hãng từ chối đăng nhập: nhóm vẫn ở lại bộ chọn model kèm ghi chú đăng nhập lại (từng biến mất hẳn, người dùng không biết chuyện gì xảy ra).
+  // Chạy CLI đọc danh sách lúc này cũng vô ích nên dùng danh sách đã biết.
+  if (s.relogin) return list(g.models.get(`${cli}:${u.id}`)?.v ?? SUB[cli].fallback);
+  if (!s.loggedIn) return null;
   // Đọc lại khi hết hạn nhớ, hoặc khi người dùng vừa đăng nhập lại sau lần đọc trước.
   const k = `${cli}:${u.id}`, hit = g.models.get(k);
   // agy, grok: trạng thái (`… models`, đọc lại mỗi phút) cho biết danh sách hiện tại — hãng đổi danh sách (vd. gói chuyển từ dùng thử
@@ -182,7 +192,7 @@ async function planModels(cli: Cli, u: UserRow) {
   const fresh = hit && Date.now() - hit.at < MODELS_TTL && hit.at > loginTime(cli, u.id) && (src === undefined || hit.src === src);
   const models = fresh ? hit.v : await detectModels(cli, u.id, s.models);
   if (!fresh) g.models.set(k, { at: Date.now(), v: models, src });
-  return models.map((m) => ({ key: `${SUB_PREFIX}${cli}/${m.id}`, id: m.id, name: m.name }));
+  return list(models);
 }
 
 /**
@@ -198,7 +208,7 @@ export async function mergedProviders(u: UserRow, api: ProviderInfo[]): Promise<
     if (ap) used.add(ap.id);
     const models = cli ? await planModels(cli, u) : null;
     if (!models?.length) { if (ap) out.push({ ...ap, source: "api" }); continue; }
-    const plan = { cli, models, blockedUntil: planBlock(cli, u.id), usingApiUntil: apiOptIn(u.id, cli), relogin: needsRelogin(cli, u.id) };
+    const plan = { cli, models, blockedUntil: planBlock(cli, u.id), usingApiUntil: apiOptIn(u.id, cli), relogin: needsRelogin(cli, u.id), hasApi: !!ap?.models.length };
     const name = ap?.name ?? SUB[cli].name;
     if (plan.usingApiUntil && ap?.models.length) out.push({ ...ap, name, source: "api", plan });
     else out.push({ id: ap?.id ?? vendor, name, kind: SUB[cli].vendor, models, source: "plan", plan });
@@ -359,18 +369,51 @@ function agyUsage(scope: string): Promise<AgyUsage> {
   return run;
 }
 
-/** Gói đang hết hạn mức tới lúc nào (cửa sổ bị từ chối hoặc đã dùng 100% mà chưa tới mốc đặt lại), hoặc null. */
+// Claude: chỉ phiên 5 giờ và tuần chung mới là hạn mức của cả gói. seven_day_opus, seven_day_sonnet… là của riêng một dòng model: hết tuần của
+// Opus từng làm cả gói biến mất khỏi chế độ Tự động 3 ngày trong khi Sonnet, Haiku vẫn còn. Cửa sổ khác (usage credits, "model limit") không
+// nói rõ model nào: không chặn gói, chỉ chặn đúng model vừa bị hãng từ chối (xem subTurn).
+const CLAUDE_PLAN_WINDOW = /^(five_hour|seven_day)$/;
+const CLAUDE_MODEL_WINDOW = /^(?:five_hour|seven_day)_(opus|sonnet|haiku|fable)$/;
+const exhausted = (w: RateWindow, now: number) => (w.status === "rejected" || (w.usedPct ?? 0) >= 100) && !!w.resetsAt && w.resetsAt > now;
+/** Cả gói đang hết hạn mức tới lúc nào (cửa sổ của cả gói bị từ chối hoặc đã dùng 100% mà chưa tới mốc đặt lại), hoặc null. */
 export function planBlock(cli: Cli, uid: string): number | null {
   const k = `${cli}:${uid}`, now = Date.now();
   let until = 0;
   for (const w of g.limits.get(k)?.windows ?? []) {
     // agy: nhóm Gemini mới chặn model Gemini của gói.
     if (cli === "agy" && (w as PlanWindow).group && !/gemini/i.test((w as PlanWindow).group!)) continue;
-    if ((w.status === "rejected" || (w.usedPct ?? 0) >= 100) && w.resetsAt && w.resetsAt > now) until = Math.max(until, w.resetsAt);
+    if (cli === "claude" && !CLAUDE_PLAN_WINDOW.test(w.window)) continue;
+    if (exhausted(w, now)) until = Math.max(until, w.resetsAt!);
   }
   const q = g.quota.get(k);
   if (q && q > now) until = Math.max(until, q);
   return until || null;
+}
+/** Một model của gói đang hết hạn mức tới lúc nào: hạn mức của cả gói, cửa sổ riêng của dòng model đó, hoặc lần hãng vừa từ chối riêng model này. */
+export function modelBlock(cli: Cli, uid: string, id: string): number | null {
+  const now = Date.now();
+  let until = planBlock(cli, uid) ?? 0;
+  if (cli === "claude") for (const w of g.limits.get(`${cli}:${uid}`)?.windows ?? []) {
+    const fam = CLAUDE_MODEL_WINDOW.exec(w.window)?.[1];
+    if (fam && id.toLowerCase().includes(fam) && exhausted(w, now)) until = Math.max(until, w.resetsAt!);
+  }
+  const q = g.quota.get(`${cli}:${uid}:${id}`);
+  if (q && q > now) until = Math.max(until, q);
+  return until || null;
+}
+/** Hãng báo hết hạn mức: ghi nhận phạm vi đúng và trả về "plan" (cả gói) hoặc "model" (riêng model này). */
+function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" | "model" {
+  const now = Date.now(), wins = g.limits.get(`${cli}:${uid}`)?.windows ?? [];
+  if (planBlock(cli, uid)) return "plan";
+  if (modelBlock(cli, uid, id)) return "model";
+  // Mốc đặt lại trong câu báo lỗi ("… limit reached|1730000000", "try again in 2 hours"), hoặc tạm 30 phút khi hãng không nói.
+  const epoch = /\|(\d{10})\b/.exec(message), wait = retryAfterMs(message);
+  const until = epoch ? Number(epoch[1]) * 1000 : wait ? now + wait : now + 30 * 60_000;
+  // Chỉ gói Claude có hạn mức riêng theo model; Codex, Grok tính chung cả gói. Câu báo nói rõ phiên / tuần chung thì cũng là cả gói.
+  if (cli !== "claude" || /session|5[- ]hour|five[ _-]hour/i.test(message)) { g.quota.set(`${cli}:${uid}`, until); return "plan"; }
+  const unnamed = wins.filter((w) => exhausted(w, now) && !CLAUDE_PLAN_WINDOW.test(w.window) && !CLAUDE_MODEL_WINDOW.test(w.window)).map((w) => w.resetsAt!);
+  g.quota.set(`${cli}:${uid}:${id}`, unnamed.length ? Math.max(...unnamed) : until);
+  return "model";
 }
 
 /** Gói Google: nhóm model Claude / GPT (kể cả GPT-OSS) qua Antigravity hết hạn mức tới lúc nào — tính riêng với nhóm Gemini (planBlock).
@@ -404,6 +447,7 @@ export function setApiOptIn(uid: string, cli: Cli, on: boolean) {
 export function forgetPlan(cli: Cli, uid: string) {
   const k = `${cli}:${uid}`;
   g.limits.delete(k); g.models.delete(k); g.quota.delete(k);
+  for (const q of [...g.quota.keys()]) if (q.startsWith(`${k}:`)) g.quota.delete(q);
   sessDb().prepare("DELETE FROM engine_api_optin WHERE user_id = ? AND cli = ?").run(uid, cli);
 }
 
@@ -548,7 +592,9 @@ function saveAttachments(work: string, atts: Attachment[]) {
 }
 
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean };
+/** total: số tin thật của đoạn chat (trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số thật); lockMs: chờ lượt khác của tài khoản tối đa bao lâu;
+ *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -557,14 +603,20 @@ export type SubResult = { status: number; json: Json };
 // với đúng hướng dẫn hệ thống, model, mức nỗ lực đó; đoạn chat mới tách (--fork-session) từ phiên này thay vì mở phiên mới. Mỗi khóa
 // (tài khoản, model, nỗ lực, hướng dẫn) một phiên, dùng trong 50 phút; hướng dẫn đổi (skill, bộ nhớ…) thì khởi tạo lại.
 type Warm = { id: string; at: number };
+// Mặc định TẮT từ khi connector đi qua danh mục gọn (ec01701): đo lại trên máy chủ thật Haiku cold 3,4 giây, tách phiên ấm 5,5 giây (mỗi loại một lần
+// đo). Phiên ấm không có cùng bộ công cụ với lượt thật (cầu nối MCP đã đóng khi khởi tạo) nên không chắc đọc được bộ đệm, mất khi deploy, và mỗi lần
+// khởi tạo tốn một lượt thật của gói người dùng. Bật lại bằng SYNCHRO_WARM_SESSIONS=1 để đo: so "text=" ở dòng [timing] giữa resume=0 và resume=fork.
+const WARM_ON = process.env.SYNCHRO_WARM_SESSIONS === "1";
 const warm: Map<string, Warm> = ((globalThis as { __synchroWarm?: Map<string, Warm> }).__synchroWarm ??= new Map());
 const priming = new Set<string>();
 const WARM_TTL = 50 * 60_000;
 const PRIME = "(Synchro vừa mở phiên làm việc, người dùng chưa gửi gì. Chỉ trả lời đúng một chữ: Sẵn sàng)";
 const warmKey = (uid: string, model: string, effort: string | undefined, system: string) =>
   `${uid}|${model}|${effort ?? ""}|${crypto.createHash("sha1").update(system).digest("hex").slice(0, 16)}`;
-async function primeWarm(key: string, base: TurnRequest) {
+async function primeWarm(key: string, base: TurnRequest, uid: string) {
   if (priming.has(key)) return;
+  // Gói sắp chạm giới hạn: không tiêu thêm lượt để làm ấm.
+  if ((g.limits.get(`claude:${uid}`)?.windows ?? []).some((w) => (w.usedPct ?? 0) >= 80)) return;
   priming.add(key);
   try {
     let id: string | null = null, ok = false;
@@ -574,9 +626,22 @@ async function primeWarm(key: string, base: TurnRequest) {
       else if (e.kind === "final") ok = true;
       else if (e.kind === "error") { ok = false; break; }
     }
+    // Lượt làm ấm là lượt thật của gói: ghi vào số lượt (Cài đặt → Usage) để người dùng thấy đúng.
+    sessDb().prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, 'claude', ?, 'warm', ?)").run(uid, Date.now(), `sub-claude/${base.model ?? "default"}`);
     if (id && ok) { warm.set(key, { id, at: Date.now() }); if (warm.size > 200) warm.delete(warm.keys().next().value!); }
   } catch { /* không có phiên ấm thì lượt sau mở phiên mới như thường */ }
   finally { priming.delete(key); }
+}
+
+/** Link trong câu trả lời (markdown hoặc trần), bỏ phần trong artifact. */
+export function linksIn(text: string): WebSource[] {
+  const out = new Map<string, WebSource>();
+  const s = text.replace(/<artifact\b[\s\S]*?(?:<\/artifact>|$)/gi, " ").replace(/```[\s\S]*?(?:```|$)/g, " ");
+  for (const m of s.matchAll(/\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)>\]"']+)/g)) {
+    const url = (m[2] ?? m[3]).replace(/[.,;:]+$/, "");
+    if (!out.has(url) && out.size < 12) out.set(url, { title: m[1] ?? "", url });
+  }
+  return [...out.values()];
 }
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
@@ -597,7 +662,9 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const conv = o.conv && o.conv.length <= 64 ? o.conv : null;
   const prev = conv ? (d.prepare("SELECT session_id, turns FROM engine_sessions WHERE user_id = ? AND conv = ? AND cli = ?").get(o.user.id, conv, cli) as { session_id: string; turns: number } | undefined) : undefined;
   // Nối tiếp phiên của CLI khi lịch sử khớp đúng lượt trước (không sửa, không tạo lại câu trả lời); ngược lại mở phiên mới kèm lịch sử.
-  const resume = prev && !o.fresh && prev.turns === msgs.length - 1 ? prev.session_id : undefined;
+  // Trình duyệt chỉ gửi 60 tin gần nhất: so với số tin thật, không thì từ khoảng lượt 31 mỗi câu đều mở phiên mới kèm toàn bộ lịch sử.
+  const total = o.total && o.total >= msgs.length ? o.total : msgs.length;
+  const resume = prev && !o.fresh && prev.turns === total - 1 ? prev.session_id : undefined;
   // Ảnh, PDF gửi kèm nguyên dạng như khi dùng ứng dụng của hãng (không đổi thành chữ): Claude Code nhận khối ảnh / PDF qua stream-json,
   // Codex nhận ảnh bằng --image, Antigravity mở tệp trong thư mục làm việc bằng công cụ xem tệp của nó.
   const col: Collect = { atts: [], nativePdf: cli === "claude" };
@@ -611,29 +678,49 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     try { saveAttachments(work, col.atts); }
     catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
   }
-  // Bộ canh: CLI có luồng sự kiện (Claude Code, Codex, Grok) phải báo sự kiện đầu trong 60 giây (thường 1–3 giây). Im lặng quá lâu
-  // (treo mạng, phiên kẹt) thì dừng và báo 503 để chế độ Tự động chuyển sang model khác, không để người dùng nhìn vòng xoay mãi.
-  // Antigravity chỉ trả kết quả khi xong (không có sự kiện giữa chừng) nên không canh.
+  // Bộ canh lượt treo (watchdog.ts): model không có hoạt động thật quá lâu (treo mạng, phiên kẹt) thì dừng và báo 503 để chế độ Tự động chuyển
+  // sang model khác, không để người dùng nhìn vòng xoay mãi. Đang chờ lượt khác của tài khoản, công cụ đang chạy, CLI đang thử lại: không tính.
   const wd = new AbortController();
-  let stalled = false;
-  const watch = cli !== "agy" ? setTimeout(() => { stalled = true; wd.abort(); }, 60_000) : null;
+  const lim = watchLimits(cli, run.effort ?? o.effort);
+  // Lịch sử rất dài, nhiều tệp: model đọc lâu hơn hẳn mới bắt đầu trả lời.
+  if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") > 400_000) lim.first *= 3;
+  const ws: WatchState = { start: T0, last: 0, alive: 0, waiting: false };
+  let stalled: "first" | "idle" | null = null;
+  const watch = setInterval(() => {
+    const a = o.mcp?.alive?.() ?? 0;
+    if (a > T0) ws.alive = a;
+    stalled = stallOf(ws, lim);
+    if (stalled) { clearInterval(watch); wd.abort(); }
+  }, 2000);
   // Đoạn chat mới qua Claude Code: tách từ phiên ấm nếu có (xem primeWarm).
-  const wk = cli === "claude" && conv ? warmKey(o.user.id, run.model ?? "", run.effort, o.system ?? "") : null;
+  const wk = WARM_ON && cli === "claude" && conv ? warmKey(o.user.id, run.model ?? "", run.effort, o.system ?? "") : null;
   const w = wk ? warm.get(wk) : undefined;
   const fork = !resume && w && Date.now() - w.at < WARM_TTL ? w.id : undefined;
   const req: TurnRequest = {
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
   const eng = engineFor(cli);
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
   tm.prep = Date.now() - T0;
+  let searched = false, rejected = false;
+  const seenSrc = new Set<string>();
+  const addSources = (items: WebSource[]) => { const fresh = items.filter((x) => !seenSrc.has(x.url)); for (const x of fresh) seenSrc.add(x.url); if (fresh.length) o.onSources?.(fresh); };
+  try {
   for await (const e of eng.runTurn(req)) {
-    if (watch) clearTimeout(watch);
     tm.event ??= Date.now() - T0;
-    if (e.kind === "text") { tm.text ??= Date.now() - T0; text += e.text; o.onDelta?.(e.text); }
-    else if (e.kind === "tooluse") o.onToolUse?.();
+    if (e.kind === "text") { tm.text ??= Date.now() - T0; ws.last = Date.now(); text += e.text; o.onDelta?.(e.text); }
+    else if (e.kind === "activity") { tm.active ??= Date.now() - T0; ws.last = Date.now(); }
+    else if (e.kind === "status") {
+      if (e.wait !== undefined) ws.waiting = e.wait;
+      // Hết chờ lượt khác, hoặc CLI báo đang thử lại: tính lại từ lúc này.
+      if (!e.wait) ws.start = Date.now();
+      if (e.text) o.onStatus?.(e.text);
+    }
+    else if (e.kind === "search") { searched = true; ws.last = Date.now(); o.onSearch?.({ query: e.query, url: e.url }); }
+    else if (e.kind === "sources") addSources(e.items);
+    else if (e.kind === "tooluse") { ws.last = Date.now(); o.onToolUse?.(); }
     else if (e.kind === "session") {
       session = e.id;
       // Ghi nhớ model thật của tên gọi tắt Claude (để bộ chọn model hiện "Claude Opus 5.5" thay vì "Claude Opus").
@@ -643,45 +730,63 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
       }
     }
     else if (e.kind === "final") { final = e.text; via = e.via ?? cli; denied = e.denied ?? []; }
-    else if (e.kind === "usage" && e.usage.limits?.length) saveLimits(cli, o.user.id, e.usage.limits);
+    else if (e.kind === "usage" && e.usage.limits?.length) { saveLimits(cli, o.user.id, e.usage.limits); if (e.usage.limits.some((w) => w.status === "rejected")) rejected = true; }
     else if (e.kind === "error") err = { message: e.message, code: e.code };
   }
-  if (watch) clearTimeout(watch);
+  } finally { clearInterval(watch); }
   tm.end = Date.now() - T0;
+  // Hãng vừa báo cửa sổ hạn mức bị từ chối mà lượt lỗi: là hết hạn mức dù câu báo lỗi viết kiểu gì.
+  if (err && rejected && (err.code === "other" || err.code === "rate" || !err.code)) err.code = "quota";
+  // Phần đã viết trước khi lỗi không bị bỏ: bên gọi giữ lại cùng lời báo lỗi.
+  const partial = text ? { text } : {};
   if (stalled && !o.signal?.aborted) {
-    console.log(`[timing] ${cli} ${run.model ?? "?"} im lặng 60 giây, dừng để chuyển model khác`);
-    return { status: 503, json: { error: `${SUB[cli].name} không phản hồi sau 60 giây. Hãy thử lại hoặc chọn model khác.` } };
+    console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} không có ${stalled === "first" ? "hoạt động đầu tiên" : "tiến triển"}: dừng lượt ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+    // noRetry: thử lại nguyên lượt này chỉ khiến người dùng chờ thêm chừng ấy; chế độ Tự động chuyển model ngay.
+    return { status: 503, json: { error: stalled === "first" ? `${SUB[cli].name} không phản hồi sau ${waitText(lim.first)}. Hãy thử lại hoặc chọn model khác.` : `${SUB[cli].name} không có tiến triển trong ${waitText(lim.idle)}. Hãy nhắn "tiếp tục" hoặc chọn model khác.`, stalled: true, noRetry: true, ...partial } };
   }
   console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
   // Phiên ấm hỏng (bị xóa, hết hạn phía CLI): bỏ đi rồi chạy lại một lần bằng phiên mới.
-  if (fork && wk && err && final === null && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return subTurn(o); }
+  if (fork && wk && err && final === null && !text && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return subTurn(o); }
   if (err && final === null) {
     if (err.code === "aborted") return { status: 200, json: { model: o.model, text, cancelled: true } };
     const apiModel = await apiEquivalent(o.user, o.model), apiName = await apiModelName(apiModel);
+    const id = splitKey(o.model).id;
     if (err.code === "auth") {
       markRelogin(cli, o.user.id);
-      return { status: 409, json: { error: `Phiên đăng nhập gói ${SUB[cli].name} không còn hợp lệ. Đăng nhập lại ở Cài đặt → Providers.`, relogin: cli, apiModel, apiModelName: apiName, detail: redact(err.message).slice(0, 300) } };
+      return { status: 409, json: { error: `Phiên đăng nhập gói ${SUB[cli].name} không còn hợp lệ. Đăng nhập lại ở Cài đặt → Providers.`, relogin: cli, apiModel, apiModelName: apiName, detail: redact(err.message).slice(0, 300), ...partial } };
     }
+    // Giới hạn tốc độ, quá tải ngắn hạn: không phải hết gói, không khóa gói; bên gọi chờ rồi thử lại một lần hoặc chuyển model.
+    if (err.code === "rate") {
+      const after = retryAfterMs(err.message);
+      return { status: 429, json: { error: `${SUB[cli].name} đang giới hạn tốc độ hoặc quá tải. Hãy thử lại sau ${after ? waitText(after) : "ít phút"} hoặc chọn model khác.`, rate: true, retryAfterMs: after, detail: redact(err.message).slice(0, 200), ...partial } };
+    }
+    if (err.code === "busy") return { status: 503, json: { error: err.message, busy: true, noRetry: true, ...partial } };
     if (err.code === "quota") {
       // Gói Google: model Claude / GPT qua Antigravity có hạn mức riêng; hết nhóm đó thì model Gemini của gói vẫn dùng được.
-      if (cli === "agy" && !isGeminiId(splitKey(o.model).id) && !agyOtherBlock(o.user.id)) g.quota.set(`agy-other:${o.user.id}`, Date.now() + 30 * 60_000);
-      if (cli === "agy" && !isGeminiId(splitKey(o.model).id)) return { status: 429, json: { error: "Hạn mức model Claude / GPT trong gói Google (Antigravity) đã hết. Model Gemini của gói vẫn dùng được.", detail: redact(err.message).slice(0, 200) } };
-      // Gói không báo mốc đặt lại thì tạm coi là hết trong 30 phút; codex đọc lại hạn mức ở lần mở vòng tròn sau.
-      if (!planBlock(cli, o.user.id)) g.quota.set(`${cli}:${o.user.id}`, Date.now() + 30 * 60_000);
+      if (cli === "agy" && !isGeminiId(id) && !agyOtherBlock(o.user.id)) g.quota.set(`agy-other:${o.user.id}`, Date.now() + 30 * 60_000);
+      if (cli === "agy" && !isGeminiId(id)) return { status: 429, json: { error: "Hạn mức model Claude / GPT trong gói Google (Antigravity) đã hết. Model Gemini của gói vẫn dùng được.", quota: "model", resetsAt: agyOtherBlock(o.user.id), detail: redact(err.message).slice(0, 200), ...partial } };
+      const scope = noteQuota(cli, o.user.id, id, err.message);
       if (cli === "codex") { const h = g.limits.get(`${cli}:${o.user.id}`); if (h) h.at = 0; }
-      return { status: 429, json: { error: `Gói ${SUB[cli].name} của bạn đã hết hạn mức.`, planLimit: cli, resetsAt: planBlock(cli, o.user.id), apiModel, apiModelName: apiName, detail: redact(err.message).slice(0, 200) } };
+      const shown = g.models.get(`${cli}:${o.user.id}`)?.v.find((m) => m.id === id)?.name ?? SUB[cli].fallback.find((m) => m.id === id)?.name ?? id;
+      return { status: 429, json: { error: scope === "plan" ? `Gói ${SUB[cli].name} của bạn đã hết hạn mức.` : `${shown} đã hết hạn mức. Các model khác của gói ${SUB[cli].name} vẫn dùng được.`, planLimit: cli, quota: scope, resetsAt: modelBlock(cli, o.user.id, id), apiModel, apiModelName: apiName, detail: redact(err.message).slice(0, 200), ...partial } };
     }
-    if (err.code === "timeout") return { status: 504, json: { error: err.message } };
-    return { status: 502, json: { error: redact(err.message).slice(0, 500) || "Gói subscription báo lỗi." } };
+    if (err.code === "timeout") return { status: 504, json: { error: err.message, ...partial } };
+    const raw = redact(err.message);
+    return { status: 502, json: { error: friendlyError(raw, SUB[cli].name) ?? (raw.slice(0, 500) || "Gói subscription báo lỗi."), detail: raw.slice(0, 500), ...partial } };
   }
+  // Lượt chạy được: hạn mức tạm ghi nhận không còn đúng; hãng đã nhận đăng nhập nên báo động "cần đăng nhập lại" (nếu có) cũng không còn đúng.
   g.quota.delete(`${cli}:${o.user.id}`);
+  g.quota.delete(`${cli}:${o.user.id}:${splitKey(o.model).id}`);
+  clearRelogin(cli, o.user.id);
+  // Câu trả lời ghi link mà CLI không báo nguồn có cấu trúc (Antigravity, Codex): lấy nguồn từ chính câu trả lời.
+  if (o.web && (searched || cli === "agy") && !seenSrc.size) addSources(linksIn(final ?? text));
   d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), via ?? cli, o.model);
   if (conv && session) {
     d.prepare(`INSERT INTO engine_sessions (user_id, conv, cli, session_id, turns, updated_at) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at`)
-      .run(o.user.id, conv, cli, session, msgs.length + 1, Date.now());
+      .run(o.user.id, conv, cli, session, total + 1, Date.now());
   }
   // Khởi tạo sẵn (hoặc làm mới) phiên ấm cho đoạn chat mới sau, ở nền, sau khi lượt này đã xong.
-  if (wk && (!w || Date.now() - w.at > WARM_TTL * 0.8)) void primeWarm(wk, req);
+  if (wk && (!w || Date.now() - w.at > WARM_TTL * 0.8)) void primeWarm(wk, req, o.user.id);
   return { status: 200, json: { model: o.model, text: final ?? text, via, ...(denied.length ? { denied } : {}) } };
 }

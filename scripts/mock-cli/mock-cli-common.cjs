@@ -195,7 +195,9 @@ function ruleEcho(sys) {
 }
 function reply(name, prompt, turn) {
   if (isTitleAsk(prompt)) return mockTitle(prompt);
-  const last = prompt.trim().split("\n").filter(Boolean).pop() ?? "";
+  if (prompt.includes("#nowcheck")) return `NOW: ${/<current_time>([^<]*)<\/current_time>/.exec(prompt)?.[1] ?? "-"}`;
+  // Dòng giờ hiện tại Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ.
+  const last = prompt.replace(/<current_time>[^<]*<\/current_time>/g, "").trim().split("\n").filter(Boolean).pop() ?? "";
   return `Chào bạn! Mình là ${name} chạy qua CLI giả lập (lượt ${turn} của hội thoại). Bạn vừa nói: "${last.slice(0, 120)}".`;
 }
 /** Tổng số lượt đã chat (mọi phiên) trong thư mục cấu hình: dùng để giả lập phần trăm hạn mức đã dùng. */

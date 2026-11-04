@@ -1,6 +1,7 @@
 // Lượt chạy bền (chỉ chạy ở máy chủ): mỗi câu trả lời của chat là một "run" lưu trong SQLite, chạy ở nền,
 // không phụ thuộc kết nối của trình duyệt. Trình duyệt theo dõi tiến độ qua /api/runs/<id> (SSE, nối lại được),
-// tải lại trang hay đổi máy vẫn nhận đủ kết quả. Máy chủ khởi động lại giữa chừng thì lượt đó được chạy lại từ đầu.
+// tải lại trang hay đổi máy vẫn nhận đủ kết quả. Máy chủ khởi động lại giữa chừng thì lượt đó được chạy lại từ đầu, trừ khi lượt đã làm việc
+// không đọc được kết quả và không nên làm hai lần (gửi thư, tạo hóa đơn: markEffect).
 import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getUser, type UserRow } from "./authstore";
@@ -11,7 +12,7 @@ import { db, getUser, type UserRow } from "./authstore";
 // ask / asked: lượt đang chờ người dùng duyệt (JSON câu hỏi), và câu trả lời (JSON { id, ok, always }).
 export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note" | "say" | "res" | "plan" | "steer" | "ui" | "ask" | "asked" | "conn"; text: string };
 export type RunStatus = "running" | "done" | "error";
-type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number };
+type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number; effects?: string | null };
 export type PublicRun = { id: string; status: RunStatus; conv: string | null; kind: string; events: RunEvent[]; result: unknown; http: number | null; createdAt: number; updatedAt: number };
 
 // Một lượt chạy giữ tối đa 3 lần chạy lại sau sự cố máy chủ; kết quả giữ 7 ngày rồi dọn.
@@ -29,6 +30,8 @@ function init() {
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 1)`);
     d.exec("CREATE INDEX IF NOT EXISTS runs_user ON runs(user_id, created_at)");
     d.exec("CREATE INDEX IF NOT EXISTS runs_status ON runs(status)");
+    // Việc đã làm có tác động ra ngoài: bảng cũ chưa có cột này (thêm khi mở, không đụng dữ liệu cũ).
+    if (!(d.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).some((c) => c.name === "effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");
     d.prepare("DELETE FROM runs WHERE updated_at < ?").run(Date.now() - KEEP_MS);
     ready = true;
   }
@@ -152,6 +155,17 @@ export function progress(kind: RunEvent["kind"], text: string): number {
   return seq;
 }
 
+/** Lượt vừa bắt đầu một việc có tác động ra ngoài (connector ghi, thao tác trình duyệt): ghi ngay xuống đĩa, máy chủ khởi động lại thì không chạy lại lượt này. */
+export function markEffect(text: string) {
+  const s = scope.getStore();
+  if (!s) return;
+  const d = init();
+  const r = d.prepare("SELECT effects FROM runs WHERE id = ?").get(s.id) as { effects: string | null } | undefined;
+  if (!r) return;
+  const list = (r.effects ? JSON.parse(r.effects) : []) as string[];
+  if (!list.includes(text) && list.length < 20) d.prepare("UPDATE runs SET effects = ? WHERE id = ?").run(JSON.stringify([...list, text.slice(0, 160)]), s.id);
+}
+
 // ---- nhắn thêm khi lượt đang chạy ----
 /** Người dùng nhắn thêm trong lúc lượt đang chạy: xếp vào hộp thư của lượt, vòng lặp công cụ ghép vào ở bước kế tiếp. */
 export function pushInbox(id: string, uid: string, text: string): boolean {
@@ -235,6 +249,9 @@ export function resumeInterrupted() {
   for (const r of rows) {
     const user = getUser(r.user_id);
     if (!r.req || !user || r.attempts >= MAX_ATTEMPTS) { finish(r.id, 503, { error: "Lượt trả lời bị gián đoạn khi máy chủ khởi động lại. Hãy gửi lại tin nhắn." }); continue; }
+    // Chạy lại từ đầu có thể gửi thư, tạo hóa đơn lần hai: dừng ở đây, nói rõ đã làm gì để người dùng kiểm tra.
+    const done = r.effects ? (JSON.parse(r.effects) as string[]) : [];
+    if (done.length) { finish(r.id, 503, { error: `Máy chủ khởi động lại khi lượt này đang chạy. Lượt đã bắt đầu: ${done.slice(0, 3).join("; ")}. Synchro không tự chạy lại để tránh làm hai lần. Hãy kiểm tra kết quả rồi nhắn tiếp nếu cần.`, partialWork: true }); continue; }
     d.prepare("UPDATE runs SET attempts = attempts + 1, updated_at = ? WHERE id = ?").run(Date.now(), r.id);
     scope.run({ id: r.id }, () => progress("note", "Máy chủ vừa khởi động lại, Synchro đang chạy lại lượt này"));
     launch(r.id, r.kind, JSON.parse(r.req), user, r.conv);

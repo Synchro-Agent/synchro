@@ -10,7 +10,12 @@ import type { CriticEntry } from "./critic";
 export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; label: string }[]; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; fids?: Record<string, string>; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string }[]; run?: string; prog?: string; via?: string;
   // Nhật ký làm việc của lượt (lời dẫn, công cụ, danh sách việc); steer: tin nhắn thêm đã ghép vào lượt đang chạy.
   // dur: thời gian câu trả lời đã chạy (ms), cho dòng tổng kết khi xong.
-  parts?: import("./worklog").Part[]; plan?: import("./worklog").PlanItem[]; seq?: number; steer?: boolean; dur?: number };
+  parts?: import("./worklog").Part[]; plan?: import("./worklog").PlanItem[]; seq?: number; steer?: boolean; dur?: number;
+  // notice: lượt lỗi: text là lời báo khi còn giữ được phần đã viết (partial); failed: nội dung tin chính là lời báo, không gửi lại cho model ở lượt sau;
+  // at: mốc hạn mức hồi lại; switchTo: model khác dùng được để đổi bằng một lần bấm; work: đã làm việc không chạy lại được; tried: các model đã thử.
+  notice?: { text?: string; partial?: boolean; failed?: boolean; at?: number; switchTo?: { model: string; name: string }; work?: boolean; tried?: string[] };
+  // webs: nguồn web của câu trả lời (CLI tìm web).
+  webs?: { title: string; url: string }[] };
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;
 // pins: tài liệu ghim (chữ đã đọc từ tệp, luôn có trong ngữ cảnh của đoạn chat). critic: kết quả hội đồng phản biện theo từng phiên bản artifact.
 // named: người dùng tự đổi tên (không tự đặt tên nữa); titled: số tin của người dùng lúc Synchro tự đặt tên gần nhất.

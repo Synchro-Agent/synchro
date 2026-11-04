@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Claude Code giả lập (dev:mock): auth status|login|logout, setup-token (cần terminal), -p --output-format stream-json.
-// Trong prompt: [mock:quota] → hết hạn mức gói, [mock:auth401] → API trả 401 (token bị thu hồi).
+// Trong prompt: [mock:quota] → hết hạn mức gói, [mock:auth401] → API trả 401 (token bị thu hồi), [mock:ratelimit] → giới hạn tốc độ ngắn,
+// [mock:weekopus] → chỉ hết hạn mức tuần của Opus, [mock:midquota] → viết được một đoạn rồi hết hạn mức, [mock:hang] → khởi động xong rồi treo,
+// [mock:retrying] → CLI báo đang thử lại rồi trả lời, [mock:quotaonce] → hết hạn mức ở lượt có công cụ sau khi đã chạy công cụ.
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
@@ -76,6 +78,14 @@ const loginFile = path.join(dir, ".mock-login");
       result({ subtype: "success", is_error: true, result: `Claude AI usage limit reached|${sec(lim.fiveReset)}` });
       process.exit(1);
     }
+    if (prompt.includes("[mock:hang]")) { await C.sleep(600_000); return; }
+    if (prompt.includes("[mock:ratelimit]")) { result({ subtype: "success", is_error: true, result: "API Error: 429 rate_limit_error: Rate limit exceeded. Try again in 1 seconds." }); process.exit(1); }
+    if (prompt.includes("[mock:weekopus]")) {
+      C.out({ type: "rate_limit_event", uuid: C.uuid(), session_id: sid, rate_limit_info: { status: "rejected", rateLimitType: "seven_day_opus", utilization: 1, resetsAt: sec(Date.now() + 3 * 86400_000) } });
+      result({ subtype: "success", is_error: true, result: "You've hit your Opus weekly limit" });
+      process.exit(1);
+    }
+    if (prompt.includes("[mock:retrying]")) { C.out({ type: "system", subtype: "api_retry", attempt: 1, max_retries: 10, retry_delay_ms: 100, error_status: 529, error: "overloaded" }); await C.sleep(100); }
     const stl = C.stallTurn(dir, sid, prompt);
     if (stl.stall) { C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: C.STALL_TEXT }] }, session_id: sid }); result({ subtype: "success", is_error: false, result: C.STALL_TEXT }); return; }
     prompt = stl.prompt;
@@ -83,10 +93,12 @@ const loginFile = path.join(dir, ".mock-login");
     if (prompt.includes("#slow") && !prompt.includes("<user_followup>")) await C.sleep(3000);
     // Mỗi tin của model mở đầu bằng message_start rồi mới tới chữ, như Claude Code thật với --include-partial-messages.
     const delta = async (t) => { C.out({ type: "stream_event", event: { type: "message_start", message: { role: "assistant" } }, session_id: sid }); for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
+    if (prompt.includes("[mock:midquota]")) { await delta("Phần đã viết trước khi hết hạn mức."); result({ subtype: "success", is_error: true, result: "You've hit your usage limit" }); process.exit(1); }
     // [mock:twomsg]: hai tin trong một lượt (câu dẫn → công cụ dựng sẵn → câu trả lời).
     if (prompt.includes("[mock:twomsg]")) {
       await delta("Mình sẽ tìm trên web.");
       C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_ws", name: "WebSearch", input: { query: "mock" } }] }, session_id: sid });
+      C.out({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_ws", content: 'Web search results for query: "mock"\n\nLinks: [{"title":"Nguồn giả","url":"https://example.com/nguon"}]' }] }, session_id: sid });
       await delta("Theo kết quả tìm web: xong.");
       result({ subtype: "success", is_error: false, result: "Theo kết quả tìm web: xong.", usage: { input_tokens: prompt.length, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
       return;
@@ -105,6 +117,7 @@ const loginFile = path.join(dir, ".mock-login");
         const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
         const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).map((c) => c.text).join("\n");
         mcpNote = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
+        if (prompt.includes("[mock:quotaonce]")) { await delta("Đã chạy công cụ, phần còn lại chưa xong."); result({ subtype: "success", is_error: true, result: "You've hit your usage limit" }); process.exit(1); }
       } else {
         const r = await C.mcp(mcpUrl).catch(() => ({ tools: [] }));
         mcpNote = ` [công cụ Synchro: ${r.tools.length}]`;

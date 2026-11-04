@@ -9,7 +9,8 @@ export const MAX_STEPS = 10;
 // Bật quá nhiều skill thì không liệt kê hết mô tả trong prompt mà cho model tool tìm kiếm.
 export const SEARCH_THRESHOLD = 50;
 // ~2.000 token, như Claude dành khoảng 1% ngữ cảnh cho phần liệt kê skill: mỗi lượt chat không gánh cả kho.
-const LIST_BUDGET = 8_000, CAT_BUDGET = 6_000;
+// Mục ngành nghề có phần riêng đủ cho cả 55 mục: ngân sách 6.000 từng bỏ mất 16 mục (du lịch, thể hình, giáo dục, ẩm thực…) đúng là việc của người không làm kỹ thuật.
+const LIST_BUDGET = 8_000, CAT_BUDGET = 9_500;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const RULES = `Bạn có một kho skill: mỗi skill là bộ hướng dẫn chuyên môn cho một loại công việc. Người dùng chỉ nhắn yêu cầu, không chỉ định skill; bạn toàn quyền tự chọn và dùng skill, không cần xin phép.
@@ -36,7 +37,7 @@ export function skillsPrompt(list: Skill[], scripts = false): string {
     let size = 0, csize = 0;
     for (const s of list) {
       const cat = s.user_id === "studio" && s.name.startsWith("cat-");
-      const line = `  <skill><name>${esc(s.name)}</name><description>${esc(s.description.slice(0, cat ? 120 : 300))}</description></skill>`;
+      const line = `  <skill><name>${esc(s.name)}</name><description>${esc(s.description.slice(0, cat ? 90 : 300))}</description></skill>`;
       if (cat ? csize + line.length > CAT_BUDGET : size + line.length > LIST_BUDGET) continue;
       lines.push(line); if (cat) csize += line.length; else size += line.length;
     }

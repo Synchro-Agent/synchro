@@ -31,6 +31,8 @@ export type TurnRequest = {
   alive?: () => number;
   /** Người dùng bật "Tìm kiếm trên web": bật công cụ tìm web dựng sẵn của CLI. */
   web?: boolean;
+  /** Chờ lượt khác của cùng tài khoản (Antigravity, Grok chạy lần lượt) tối đa bao lâu; chế độ Tự động chờ ngắn rồi chuyển model. */
+  lockMs?: number;
   /** Biến môi trường thêm cho tiến trình (đã qua bộ lọc của cli_runtime). */
   env?: Record<string, string>;
   signal?: AbortSignal;
@@ -40,8 +42,9 @@ export type TurnRequest = {
 export type RateWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string };
 export type Usage = { input: number; output: number; cacheRead?: number; cacheWrite?: number; costUsd?: number; limits?: RateWindow[] };
 
-/** Mã lỗi: quota (hết hạn mức), auth (cần đăng nhập lại), other, aborted (người dùng bấm Dừng), timeout (CLI im lặng quá lâu hoặc chạm mức trần của lượt). */
-export type ErrorCode = "quota" | "auth" | "other" | "aborted" | "timeout";
+/** Mã lỗi: quota (hết hạn mức), rate (giới hạn tốc độ, quá tải ngắn hạn), auth (cần đăng nhập lại), other, aborted (người dùng bấm Dừng),
+ *  timeout (CLI im lặng quá lâu hoặc chạm mức trần của lượt), busy (lượt khác của cùng tài khoản đang giữ CLI quá lâu). */
+export type ErrorCode = "quota" | "rate" | "auth" | "other" | "aborted" | "timeout" | "busy";
 
 export type Event =
   | { kind: "text"; text: string }
@@ -53,7 +56,18 @@ export type Event =
   | { kind: "final"; text: string; via?: string; denied?: string[] }
   | { kind: "error"; message: string; code?: ErrorCode }
   /** Luồng đầu ra tới một khối gọi công cụ (Claude Code): chữ viết trước lời gọi đã nhận đủ. */
-  | { kind: "tooluse" };
+  | { kind: "tooluse" }
+  /** Model đang làm việc (đang nghĩ, gọi công cụ…) dù chưa có chữ. Sự kiện khởi động của CLI (init, thread.started) không phát cái này:
+   *  bộ canh lượt treo chỉ tính hoạt động thật. */
+  | { kind: "activity" }
+  /** Dòng trạng thái cho người dùng (CLI đang thử lại, chờ lượt khác). wait: đang chờ khóa của tài khoản, bộ canh tạm dừng; false: hết chờ. */
+  | { kind: "status"; text?: string; wait?: boolean }
+  /** CLI đang tìm hoặc đọc web bằng công cụ dựng sẵn. */
+  | { kind: "search"; query?: string; url?: string }
+  /** Nguồn web CLI vừa nhận được. */
+  | { kind: "sources"; items: WebSource[] };
+
+export type WebSource = { title: string; url: string };
 
 export interface Engine {
   readonly id: string;

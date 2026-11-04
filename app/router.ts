@@ -12,12 +12,14 @@
 //     chọn model rẻ, nhanh nhất vẫn đạt mức chất lượng cần (không model nào đạt thì lấy model tốt nhất);
 //     gói subscription đã trả tiền nên được ưu tiên hơn khóa API cùng mức;
 //  5) người dùng chê câu trả lời trước ("sai rồi", "làm lại") thì nâng độ khó và đổi sang model khác;
-//     câu nối tiếp ngắn ("giải thích thêm", "tiếp đi") giữ loại việc của yêu cầu trước.
+//     câu nối tiếp ngắn ("giải thích thêm", "tiếp đi") và câu xác nhận ("ok làm đi") giữ loại việc và model của yêu cầu trước;
+//  6) gõ không dấu ("lam trang web") được so khớp lượt hai trên từ điển các cụm không thể nhầm; tạo media, thao tác trên web, connector là việc
+//     nhiều bước ("act"); câu hỏi sức khỏe, pháp lý, tài chính không dùng mức thấp nhất; việc nhẹ ưu tiên model hiện chữ dần.
 
 export const AUTO = "auto";
 export type Tier = "fast" | "balanced" | "strong";
 export type Vendor = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "other";
-export type Task = "chat" | "qa" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "vision" | "longdoc" | "data";
+export type Task = "chat" | "qa" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "act" | "vision" | "longdoc" | "data";
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 
 // Hạng theo tên model của các hãng (không khớp thì coi là "balanced"); "mạnh nhất" là dòng đầu bảng của từng hãng.
@@ -43,9 +45,10 @@ const BASE: Record<Tier | "frontier", number> = { fast: 6, balanced: 7.5, strong
 const COST: Record<Tier | "frontier", number> = { fast: 1, balanced: 3, strong: 8, frontier: 12 };
 // Thế mạnh của từng hãng theo loại việc (cộng vào điểm chất lượng của model).
 const EDGE: Record<Vendor, Partial<Record<Task, number>>> = {
-  anthropic: { code: 0.7, debug: 0.6, build: 0.8, write: 0.5, analyze: 0.3, reason: 0.2, longdoc: 0.2, summarize: 0.3, language: 0.2 },
-  openai: { reason: 0.8, data: 0.6, code: 0.4, debug: 0.4, analyze: 0.4, qa: 0.3, write: 0.2, translate: 0.2, build: 0.2, language: 0.3, summarize: 0.2 },
-  google: { longdoc: 0.9, vision: 0.9, translate: 0.5, qa: 0.3, data: 0.3, reason: 0.3, code: 0.1, language: 0.3, summarize: 0.5 },
+  anthropic: { code: 0.7, debug: 0.6, build: 0.8, act: 0.4, write: 0.5, analyze: 0.3, reason: 0.2, longdoc: 0.2, summarize: 0.3, language: 0.2 },
+  openai: { reason: 0.8, data: 0.6, code: 0.4, debug: 0.4, analyze: 0.4, qa: 0.3, write: 0.2, translate: 0.2, build: 0.2, act: 0.2, language: 0.3, summarize: 0.2 },
+  // Đọc ảnh là thế mạnh thật của Gemini: model nhanh của Gemini đủ sức cho câu hỏi về ảnh mức vừa.
+  google: { longdoc: 0.9, vision: 1.6, translate: 0.5, qa: 0.3, data: 0.3, reason: 0.3, code: 0.1, language: 0.3, summarize: 0.5 },
   xai: { reason: 0.5, qa: 0.5, analyze: 0.3, code: 0.4, debug: 0.3, data: 0.3, longdoc: 0.3 },
   deepseek: { code: 0.5, debug: 0.4, reason: 0.5, data: 0.4, analyze: 0.2, longdoc: 0.3 },
   other: {},
@@ -150,6 +153,11 @@ const SIG: Partial<Record<Task, Sig[]>> = {
     [W("(?:thiết kế|làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen|bài tập|bài kiểm tra))|tạo|xây dựng|dựng|viết|code|lập trình|phát triển|build|create|make|design|develop|set up|clone)(?:(?![.?!\\n]).){0,40}?(?:trang web|website|web ?app|webapp|landing(?: page)?|ứng dụng|app|application|dashboard|game|trò chơi|slides?|bài (?:thuyết trình|trình bày)|presentation|pitch deck|deck|logo|banner|poster|công cụ|tool|extension|tiện ích|bot|chatbot|hệ thống|system|phần mềm|software|portfolio|blog|cửa hàng online|online store|e-?commerce|plugin|template|giao diện|ui|mockup|prototype)"), 5],
     [W("landing page|pitch deck|website|web app|portfolio|dashboard"), 2],
   ],
+  // Việc nhiều bước bằng công cụ: tạo ảnh, video, âm thanh; thao tác trên web và connector (đăng bài, gửi thư, tạo lịch, đặt chỗ).
+  act: [
+    [W("(?:làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen|bài tập|bài kiểm tra))|tạo|dựng|quay|sản xuất|render|xuất(?! hiện| bản| khẩu| sắc)|ghép|cắt|vẽ|generate|create|make|edit|draw)(?:(?![.?!\\n]).){0,30}?(?:video|clip|phim|ảnh(?! hưởng)|hình ảnh|hình minh họa|hình minh hoạ|hình(?! (?:học|thức|như|không gian))|image|picture|photo|illustration|nhạc|bài hát|audio|giọng đọc|podcast|voiceover)"), 5],
+    [W("đăng (?:bài|lên|status|ảnh|video|tin)|post (?:to|on)|publish|gửi (?:email|mail|thư|tin nhắn|hóa đơn|hoá đơn|báo giá)|send (?:an? |the )?(?:email|message|invoice)|tạo (?:sự kiện|lịch|cuộc họp|cuộc hẹn|hóa đơn|hoá đơn|đơn hàng|ticket|task)|đặt (?:lịch|vé|phòng|bàn|hẹn)|lên lịch|create (?:an? )?(?:event|invoice|ticket|meeting)|schedule (?:a|an)|book (?:a|an)|mở trang|vào trang|truy cập (?:trang|web)|open (?:the )?(?:website|page|site)|điền (?:form|biểu mẫu)|fill (?:in|out) (?:the |this )?form|crawl|scrape|cào dữ liệu|tải (?:về|xuống)"), 5],
+  ],
   write: [
     [W("viết|soạn|biên tập|viết lại|diễn đạt lại|paraphrase|rewrite|write|draft|compose|email|e-mail|thư (?:xin|mời|cảm ơn|cám ơn|gửi|tay|tình|ngỏ|giới thiệu|chúc|xin lỗi)|bức thư|lá thư|letter|bài (?:đăng|viết|luận|văn|báo|blog|phát biểu|diễn văn|thơ)|caption|status|tweet|thơ|bài thơ|poem|truyện|story|kịch bản|lời (?:bài hát|chúc|mời|cảm ơn|tựa)|slogan|cv|resume|cover letter|đơn (?:xin|đề nghị)|essay|article|blog post|tiểu luận|luận văn|báo cáo|report|thesis|speech|bài phát biểu"), 3],
   ],
@@ -167,7 +175,7 @@ const SIG: Partial<Record<Task, Sig[]>> = {
   ],
 };
 // Ưu tiên khi hai loại việc cùng điểm: việc cụ thể hơn đứng trước.
-const ORDER: Task[] = ["build", "debug", "code", "translate", "summarize", "language", "reason", "data", "analyze", "write", "chat", "qa"];
+const ORDER: Task[] = ["build", "act", "debug", "code", "translate", "summarize", "language", "reason", "data", "analyze", "write", "chat", "qa"];
 // Biểu thức toán (không tính "/" và "-" vì hay là ngày tháng, khoảng số: 28/10, 2020-2021).
 const MATH = /\d\s*[+*×÷^=<>≤≥]\s*\(?-?\d|√|∫|∑|π|\bx\s*\^\s*\d|\b[xy]\s*[=+]\s*\d/;
 // Chứng minh cần nghĩ kỹ (nỗ lực cao) nhưng bài quen thuộc thì model vừa đã đủ; bài thi chọn lọc mới cần model mạnh.
@@ -181,6 +189,33 @@ const BRIEF = W("ngắn gọn|ngắn thôi|nhanh thôi|trả lời nhanh|nhanh g
 // Người dùng chê câu trả lời trước → nâng độ khó, đổi model. Chỉ tính khi lời chê là chính câu nói (không phải chữ "wrong" trong câu hỏi).
 const RETRY = /^\s*(?:(?:không|ko|no)[,.!]?\s*)?(?:sai rồi|sai bét|sai|chưa đúng|không đúng|không phải|làm lại|viết lại đi|thử lại|chưa ổn|tệ quá|kém quá|chưa hay|chưa được|vẫn sai|vẫn lỗi|vẫn chưa|vẫn không|that'?s (?:wrong|not right|incorrect)|you'?re wrong|wrong answer|incorrect|try again|redo|do it again|not right|still (?:wrong|broken|not working|failing)|nope)(?![\p{L}\p{N}])|(?:bạn|câu trả lời|cái này|nó|your answer|the answer) (?:\p{L}+ )?(?:sai|chưa đúng|không đúng|is wrong|was wrong)(?![\p{L}\p{N}])/iu;
 const LIST_ITEM = /^\s*(?:[-*•]|\d+[.)])\s+\S/gm;
+// Hỏi cách làm ("Cách tạo ảnh bằng AI", "How to download a video") là hỏi đáp, không phải nhờ làm.
+const HOWTO = W("làm sao|làm thế nào|thế nào|như thế nào|cách|là gì|có nên|tại sao|vì sao|how (?:to|do|can|should)|what is|why|should i");
+// Sức khỏe, pháp lý, tài chính: trả lời sai có hại thật, không dùng model và nỗ lực thấp nhất dù câu hỏi ngắn.
+const STAKES = W("đau ngực|tức ngực|khó thở|đột quỵ|co giật|ngất|ho ra máu|chảy máu|ngộ độc|tự tử|tự sát|quá liều|liều (?:dùng|thuốc)|thuốc|triệu chứng|chẩn đoán|mang thai|có thai|ung thư|tiểu đường|huyết áp|khởi kiện|kiện|ly hôn|tranh chấp|thừa kế|bị bắt|hợp đồng|pháp lý|luật|thuế|vay|nợ|đầu tư|chứng khoán|bảo hiểm|phá sản|chest pain|shortness of breath|stroke|overdose|suicide|seizure|dosage|lawsuit|sue|divorce|legal|tax|invest\\p{L}*|loan|debt|mortgage|bankrupt\\p{L}*");
+
+// ---- gõ không dấu ----
+// Từ điển chính so khớp trên chữ còn dấu (bỏ dấu thì "bằng" thành "bảng"). Gõ không dấu thì mọi tín hiệu đều trượt và "lam giup minh trang web" thành
+// câu hỏi nỗ lực thấp: khi câu không có dấu nào và chưa có tín hiệu đủ mạnh, so thêm với các cụm không dấu không thể nhầm.
+export const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+const noMarks = (s: string) => !/[\u0300-\u036fđĐ]/.test(s.normalize("NFD"));
+const FOLDED: [Task, RegExp, number][] = [
+  ["build", W("(?:lam|tao|thiet ke|xay dung|viet|lap trinh|phat trien)(?:(?![.?!\\n]).){0,40}?(?:trang web|website|web ?app|landing(?: page)?|ung dung|app|dashboard|game|tro choi|slides?|bai thuyet trinh|bai trinh bay|logo|banner|poster|cong cu|chatbot|he thong|phan mem|giao dien|cua hang online)"), 5],
+  ["act", W("(?:tao|ve) anh|(?:lam|tao|quay|ghep|xuat)(?:(?![.?!\\n]).){0,30}?(?:video|clip|phim|hinh anh|hinh minh hoa)|anh (?:quang cao|san pham|minh hoa|bia)|dang (?:bai|len)|gui (?:email|mail|thu|tin nhan|hoa don)|tao (?:su kien|lich|cuoc hop|hoa don)|dat (?:lich|ve|phong|ban)|len lich|vao trang|mo trang"), 5],
+  ["reason", W("chung minh|phuong trinh|dao ham|tich phan|xac suat|bai toan|giai toan|luong giac|ma tran|so phuc"), 4],
+  ["translate", W("dich (?:sang|ra|qua|giup|ho|doan|cau|bai|email)|sang tieng \\p{L}+"), 5],
+  ["summarize", W("tom tat|tom luoc|y chinh"), 4],
+  ["language", W("ngu phap|tu vung|phat am|chinh ta|thanh ngu|tieng anh"), 3],
+  ["analyze", W("phan tich|so sanh|danh gia|uu nhuoc diem|uu diem|nhuoc diem|chien luoc"), 3],
+  ["data", W("bang tinh|bieu do|so lieu|du lieu|thong ke"), 3],
+  ["write", W("viet (?:bai|email|mail|thu|cau|caption|bao cao|ke hoach|don)|soan (?:thao|thu|email|bai)|bai luan|bai tho|bai van"), 3],
+  ["chat", W("xin chao|chao ban|cam on|tam biet"), 3],
+];
+const HOWTO_FOLD = W("lam sao|lam the nao|the nao|cach|la gi|co nen|tai sao|vi sao");
+const STAKES_FOLD = W("dau nguc|tuc nguc|kho tho|dot quy|co giat|ho ra mau|chay mau|ngo doc|tu tu|tu sat|qua lieu|lieu thuoc|trieu chung|chan doan|mang thai|co thai|ung thu|tieu duong|huyet ap|khoi kien|ly hon|tranh chap|thua ke|hop dong|phap ly|thue|dau tu|chung khoan|bao hiem|pha san");
+const RETRY_FOLD = /^\s*(?:(?:khong|ko|no)[,.!]?\s*)?(?:sai roi|sai bet|chua dung|khong dung|khong phai|lam lai|viet lai di|thu lai|chua on|te qua|kem qua|chua hay|chua duoc|van sai|van loi|van chua|van khong)(?![\p{L}\p{N}])/iu;
+// Câu chỉ để chào, cảm ơn, khen: trò chuyện thật. "ok", "vâng", "yes"… có thể là xác nhận cho việc đang bàn nên không nằm ở đây.
+const PLAIN_CHAT = /^(?:(?:xin chao|chao|hi|hello|hey|alo|cam on|thanks?|thank you|tks|tam biet|bye|chuc ngu ngon|good (?:morning|night|evening)|ban khoe khong|how are you|ban la ai|who are you|haha|hihi|hehe|tuyet|great|nice)(?:\s+(?:ban|em|anh|chi|nhe|nha|nhieu|a|synchro|buoi sang|so much|a lot|lam|qua|voi|voi nhe))*[\s,.!~]*)+$/i;
 
 export type RouteInput = {
   text: string; attachments: number; turns: number; studio: boolean;
@@ -190,11 +225,11 @@ export type RouteInput = {
   prevAsk?: string;
 };
 /** follow: câu nối tiếp ngắn theo việc của yêu cầu trước ("tiếp đi", "giải thích thêm"). */
-type Read = { task: Task; score: number; why: string[]; retry: boolean; think: boolean; follow?: boolean };
-const LABEL: Record<Task, string> = { chat: "trò chuyện", qa: "hỏi đáp", language: "học ngôn ngữ", translate: "dịch", summarize: "tóm tắt", write: "viết", code: "viết code", debug: "gỡ lỗi", reason: "suy luận", analyze: "phân tích", build: "tạo sản phẩm", vision: "đọc ảnh", longdoc: "tài liệu dài", data: "số liệu" };
+type Read = { task: Task; score: number; why: string[]; retry: boolean; think: boolean; follow?: boolean; long?: boolean };
+const LABEL: Record<Task, string> = { chat: "trò chuyện", qa: "hỏi đáp", language: "học ngôn ngữ", translate: "dịch", summarize: "tóm tắt", write: "viết", code: "viết code", debug: "gỡ lỗi", reason: "suy luận", analyze: "phân tích", build: "tạo sản phẩm", act: "thao tác nhiều bước", vision: "đọc ảnh", longdoc: "tài liệu dài", data: "số liệu" };
 export const taskLabel = (t: Task) => LABEL[t];
 // Điểm gốc theo loại việc: ≤ 0 dễ, 1-2 vừa, 3-4 khó, ≥ 5 rất khó.
-const BASE_D: Record<Task, number> = { chat: -2, language: 0, translate: 0, qa: 0, summarize: 1, write: 1, vision: 1, code: 2, data: 2, analyze: 2, reason: 2, debug: 3, longdoc: 3, build: 4 };
+const BASE_D: Record<Task, number> = { chat: -2, language: 0, translate: 0, qa: 0, summarize: 1, write: 1, vision: 1, code: 2, data: 2, analyze: 2, reason: 2, act: 2, debug: 3, longdoc: 3, build: 4 };
 // Trần độ khó theo loại việc: câu hỏi ngôn ngữ, dịch, hỏi đáp, tóm tắt, viết, đọc ảnh tối đa "khó" (nỗ lực cao, không cần model mạnh nhất).
 const CAP_D: Partial<Record<Task, number>> = { chat: 0, language: 4, translate: 4, qa: 4, summarize: 4, write: 4, vision: 4, data: 6 };
 // Việc nhẹ: model nhanh đã đủ khi điểm ≤ 1.
@@ -207,6 +242,11 @@ function scores(ins: string, a: Ask): Map<Task, number> {
     for (const [re, w] of sigs) if (re.test(ins)) n += w;
     if (n) out.set(t, n);
   }
+  // Gõ không dấu: lượt so khớp thứ hai.
+  const bare = noMarks(ins);
+  if (bare && ![...out.values()].some((n) => n >= 2)) for (const [t, re, w] of FOLDED) if (re.test(ins) && !((t === "build" || t === "act") && HOWTO_FOLD.test(ins))) out.set(t, Math.max(out.get(t) ?? 0, w));
+  // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
+  if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3)) out.delete("act");
   if (a.code) out.set("code", (out.get("code") ?? 0) + 5);
   if (a.trace) out.set("debug", (out.get("debug") ?? 0) + 6);
   if (MATH.test(ins)) out.set("reason", (out.get("reason") ?? 0) + 3);
@@ -239,15 +279,17 @@ function read(q: RouteInput, depth = 0): Read {
   const sc = scores(ins, a);
   let [task, strength] = pick(sc);
   const images = q.images ?? 0, docChars = q.docChars ?? 0, files = q.files ?? 0;
-  const retry = q.turns >= 2 && ins.length < 160 && RETRY.test(ins);
-  // Câu nối tiếp ngắn không tự nói việc gì ("giải thích thêm", "tiếp đi", "sai rồi, làm lại"): theo việc của yêu cầu trước.
-  if (strength < 2 && ins.length < 100 && q.prevAsk && depth === 0 && !images && !docChars) {
+  const retry = q.turns >= 2 && ins.length < 160 && (RETRY.test(ins) || (noMarks(ins) && RETRY_FOLD.test(ins)));
+  // Câu nối tiếp ngắn không tự nói việc gì ("giải thích thêm", "tiếp đi", "sai rồi, làm lại"): theo việc của yêu cầu trước. Câu xác nhận sau khi
+  // model hỏi lại trước việc lớn ("ok làm đi") cũng vậy: từng bị xếp thành trò chuyện, cả trang web được giao cho model rẻ nhất ở phiên mới.
+  const ack = task === "chat" && !PLAIN_CHAT.test(fold(ins).replace(/[.,!~]+/g, " ").trim());
+  if ((strength < 2 || (ack && q.turns >= 2)) && ins.length < 100 && q.prevAsk && depth === 0 && !images && !docChars) {
     const p = read({ ...q, text: q.prevAsk, prevAsk: undefined, turns: 0 }, 1);
     if (p.task !== "chat") {
       s = p.score; why.push(...p.why.filter((w) => w !== "bạn chưa hài lòng với câu trả lời trước"));
       task = p.task;
       if (retry) add(2, "bạn chưa hài lòng với câu trả lời trước");
-      return { task, score: s, why, retry, think: p.think, follow: true };
+      return { task, score: s, why, retry, think: p.think, follow: true, long: p.long };
     }
   }
   // Studio (Tài liệu, Slide, Thiết kế): luôn là tạo ra cả một sản phẩm.
@@ -282,11 +324,19 @@ function read(q: RouteInput, depth = 0): Read {
   if (images >= 3 || files >= 3) add(1, "nhiều tệp");
   if (retry) add(2, "bạn chưa hài lòng với câu trả lời trước");
   if (task === "chat") why.push("trò chuyện ngắn");
+  if ((task === "qa" || task === "analyze") && s < 2 && (STAKES.test(ins) || (noMarks(ins) && STAKES_FOLD.test(ins)))) { s = 2; why.push("liên quan sức khỏe, pháp lý hoặc tài chính"); }
   const cap = CAP_D[task];
   if (cap !== undefined && s > cap) s = cap;
   const think = (task === "reason" && PROOF.test(ins)) || task === "debug";
   if (task === "reason" && PROOF.test(ins)) why.push("cần chứng minh từng bước");
-  return { task, score: s, why, retry, think };
+  return { task, score: s, why, retry, think, long: body > 20_000 };
+}
+/** Câu chỉ xác nhận, trả lời ngắn, không tự nói việc gì: khi tìm lời nhờ trước đó thì bỏ qua câu này ("Làm web" → "ok" → "màu xanh nhé" vẫn là làm web). */
+export function isAck(text: string): boolean {
+  const a = splitAsk(text), ins = a.ins.toLowerCase();
+  if (ins.length >= 100 || a.content) return false;
+  const [t, n] = pick(scores(ins, a));
+  return n < 2 || t === "chat";
 }
 const memo = new WeakMap<RouteInput, Read>();
 const readOf = (q: RouteInput) => { let r = memo.get(q); if (!r) { r = read(q); memo.set(q, r); } return r; };
@@ -311,22 +361,26 @@ const EFFORT_LABEL: Record<AutoEffort, string> = { low: "thấp", medium: "trung
 export const effortLabel = (e: string) => EFFORT_LABEL[e as AutoEffort] ?? e;
 
 export type Route = { model: string; tier: Tier; vendor: Vendor; task: Task; effort: AutoEffort; why: string[]; alt: string[] };
-// Antigravity (sub-agy) trả cả câu trả lời một lần khi xong (đo trên máy chủ: 5-8 giây cho một câu chào), các gói khác hiện chữ dần:
-// cùng chất lượng và chi phí thì chọn model hiện chữ dần.
+// Antigravity (sub-agy) trả cả câu trả lời một lần khi xong (đo trên máy chủ: 5-9 giây cho một câu chào), các gói khác hiện chữ dần. Coi việc phải
+// chờ không thấy chữ là một khoản chi phí: lớn hơn cách biệt giữa model nhanh và model vừa của gói, nhỏ hơn cách biệt với model mạnh. Thế mạnh nhỏ
+// của hãng không còn thắng được (Flash từng thắng mọi câu hỏi nhờ +0,3 điểm). Đọc ảnh, tài liệu dài là lý do chất lượng thật: Gemini vẫn được chọn.
 const lag = (key: string) => (/^sub-agy\//.test(key) ? 1 : 0);
+const LAG_COST = 0.6;
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */
 export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[] } = {}): Route | null {
   if (!allowed.length) return null;
-  const { task, score, why, retry, think, follow } = readOf(q);
+  const { task, score, why, retry, think, follow, long } = readOf(q);
   const needQ = need(score, task);
+  const wait = task === "vision" || task === "longdoc" || long ? 0 : LAG_COST;
+  const price = (p: Profile) => p.cost + lag(p.key) * wait;
   const avoid = new Set([...(o.avoid ?? []), ...(retry && q.prev ? [q.prev] : [])]);
   const all = allowed.map((k, i) => ({ p: profileOf(k), i })).map((x) => ({ ...x, q: quality(x.p, task) }));
   const pool = all.filter((x) => !avoid.has(x.p.key)).length ? all.filter((x) => !avoid.has(x.p.key)) : all;
-  // Đạt mức cần: rẻ nhất → chất lượng cao hơn → hiện chữ dần → thứ tự quản trị viên hiển thị. Không ai đạt: chất lượng cao nhất.
+  // Đạt mức cần: rẻ nhất (tính cả việc phải chờ không thấy chữ) → chất lượng cao hơn → hiện chữ dần → thứ tự quản trị viên hiển thị. Không ai đạt: chất lượng cao nhất.
   const ok = pool.filter((x) => x.q >= needQ);
   const rank = ok.length
-    ? ok.sort((a, b) => a.p.cost - b.p.cost || b.q - a.q || lag(a.p.key) - lag(b.p.key) || a.i - b.i)
-    : pool.sort((a, b) => b.q - a.q || a.p.cost - b.p.cost || a.i - b.i);
+    ? ok.sort((a, b) => price(a.p) - price(b.p) || b.q - a.q || lag(a.p.key) - lag(b.p.key) || a.i - b.i)
+    : pool.sort((a, b) => b.q - a.q || price(a.p) - price(b.p) || a.i - b.i);
   // Câu nối tiếp (không phải chê câu trả lời): model của lượt trước vẫn đủ sức thì giữ nguyên, để nối đúng mạch việc đang làm
   // (phiên làm việc của gói, bộ nhớ đệm) thay vì đổi sang model khác chỉ vì rẻ hơn một chút.
   const keep = follow && !retry && q.prev ? ok.find((x) => x.p.key === q.prev) : undefined;
