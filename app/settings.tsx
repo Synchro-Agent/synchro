@@ -24,7 +24,7 @@ const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSett
 const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub));
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
-import { locale } from "./i18n";
+import { locale, tr } from "./i18n";
 import { SharedChats } from "./shareui";
 import { deleteServerSession, listServerSessions, saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
@@ -54,7 +54,7 @@ export function Select({ value, options, onChange, search, width = 160 }: { valu
   const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${rowName}: ${value}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
+      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${tr(rowName)}: ${tr(value)}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
         <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
           <div className="menu-scroll">
           {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}

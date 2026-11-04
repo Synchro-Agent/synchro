@@ -99,7 +99,8 @@ let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
 const shot = async (n) => { const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${SCR}st-${n}.png`, Buffer.from(data, "base64")); };
 const sendMsg = async (t) => { await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: t }); await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" }); };
-const lastAi = () => ev(`[...document.querySelectorAll(".ai-msg")].at(-1)?.textContent ?? ""`);
+const aiText = `(() => { const m = [...document.querySelectorAll(".ai-msg")].at(-1)?.cloneNode(true); if (!m) return ""; m.querySelectorAll(".wl-status").forEach((x) => x.remove()); return m.textContent; })()`;
+const lastAi = () => ev(aiText);
 const streams = () => fetch("http://127.0.0.1:4010/_debug/streams").then((r) => r.json());
 await fetch(B + "/api/caps", { method: "PATCH", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify({ art: true }) });
 try {
@@ -107,7 +108,7 @@ try {
   await click(byText(".nav-item", "Mới"), "new"); await sleep(800);
   const s0 = await streams();
   await sendMsg("kể một câu chuyện dài #streamslow");
-  await until(`([...document.querySelectorAll(".ai-msg")].at(-1)?.textContent ?? "").length > 20`, 15000, "first words");
+  await until(`${aiText}.length > 20`, 15000, "first words");
   const a = (await lastAi()).length; await sleep(900); const b = (await lastAi()).length;
   ok(a > 0 && b > a, `chữ hiện dần khi model đang viết (${a} → ${b} ký tự)`);
   ok(await ev(`!document.querySelector(".ai-msg .thinking")`), "có chữ rồi thì không còn dòng Đang suy nghĩ");

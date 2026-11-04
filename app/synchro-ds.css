@@ -164,7 +164,7 @@ html body .rail .user{width:36px;height:36px;padding:0;border-radius:var(--r-pil
 html body .rail .user:hover{background:var(--ds-hover)}
 html body .rail .user .avatar,html body .rail .user>span:first-child{width:26px;height:26px}
 html body .rail [data-tip]:hover::after{left:calc(100% + 10px);top:50%;bottom:auto;transform:translateY(-50%)}
-.um-head{display:flex;align-items:center;gap:10px;padding:8px 10px 6px}
+.um-head{display:flex;align-items:center;gap:10px;padding:8px 12px 6px}
 .um-head>span{display:flex;flex-direction:column;min-width:0}
 .um-head b{font-size:13.5px;font-weight:560;color:var(--ds-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .um-head em{font-style:normal;font-size:12px;color:var(--ds-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
