@@ -77,74 +77,127 @@ export function ruleStudios(name: string, description: string, body = "", strict
 }
 
 // ---------------------------------------------------------------- bộ luật chặt cho thư viện của danh mục Claude
-// Danh mục có ~18.000 skill và không nhờ model xếp lại (mỗi skill một lượt gọi model là đốt gói của người dùng), nên kết quả của bộ luật là kết quả cuối:
-// phải đúng là chính. Chỉ đọc tên và mô tả (nội dung skill nhắc tới "pdf" hay "design" không nói lên gì), và chỉ tin phần đầu mô tả, nơi skill nói mình làm gì;
+// Danh mục có ~18.000 skill và không nhờ model xếp lại (mỗi skill một lượt gọi model là đốt gói của người dùng), nên kết quả của bộ luật là kết quả cuối.
+// Chỉ đọc tên và mô tả (nội dung skill nhắc tới "pdf" hay "design" không nói lên gì), và chỉ tin phần đầu mô tả, nơi skill nói mình làm gì;
 // danh sách kích hoạt ở cuối mô tả ("use when … slides, docs, reports") hay nhắc đủ thứ.
-// Bốn lớp cho mỗi mục: tên mang đúng sản phẩm; tên gợi ý và câu đầu xác nhận; đầu mô tả nói đúng sản phẩm; câu đầu có động từ làm ra + sản phẩm. Có cụm chặn thì bỏ cả mục.
+// Năm lớp cho mỗi mục: tên mang đúng sản phẩm; tên gợi ý và câu đầu xác nhận; đầu mô tả nói đúng sản phẩm; câu đầu có động từ làm ra + sản phẩm; từ khóa tiếng không dùng chữ Latin. Có cụm chặn thì bỏ cả mục.
 // Các cụm chặn lấy từ việc đọc mẫu thật của danh mục: hợp đồng thông minh, báo cáo kiểm thử, "resume" nghĩa là chạy tiếp, deck gateway, thiết kế API / CSDL…
-// Đọc mẫu ngẫu nhiên trên 17.796 skill của danh mục: khoảng 90% skill ở Tài liệu, 96% ở Thiết kế, 98% ở Trình bày là đúng mục. Sửa bộ luật thì tăng CATALOG_RULES (skillstudio.ts) để danh mục được xếp lại.
+// Sửa bộ luật thì tăng CATALOG_RULES (skillstudio.ts) để danh mục được xếp lại.
 const WRITE = "write|writes|writing|draft|drafts|drafting|generate|generates|generating|create|creates|creating|produce|produces|producing|compose|composes|composing|prepare|prepares|preparing|author|authors|authoring|build|builds|building|edit|edits|editing|revise|revises|revising|rewrite|rewrites|rewriting|polish|polishes|polishing|make|makes|making";
+const PEN = "write|writes|writing|draft|drafts|drafting|compose|composes|composing|author|authors|authoring|edit|edits|editing|revise|revises|revising|rewrite|rewrites|rewriting";
+const DRAFT = "draft|drafts|drafting";
 const DESIGN_V = `${WRITE}|design|designs|designing|redesign|redesigns|redesigning|style|styles|styling`;
-const GAP = "(?: (?!from |into |to |for |with |of |in |on |by |via |using |about |against |over )[a-z0-9.+#]+){0,3}?";
+// Từ xen giữa động từ và sản phẩm: không vượt qua giới từ hay từ mở mệnh đề mới ("build tools for reports" không phải làm báo cáo).
+const STOP = "from|into|to|for|with|of|in|on|by|via|using|about|against|over|through|that|which|when|if|while|because|after|before|across|per|at|as|delete|deletes|deleting|list|lists|listing";
+const gap = (n: number) => `(?: (?!(?:${STOP}) )[a-z0-9.+#]+){0,${n}}?`;
+const GAP = gap(5);
 const re = (s: string) => new RegExp(` (?:${s}) `);
 const made = (verbs: string, nouns: string) => new RegExp(` (?:${verbs})${GAP} (?:${nouns}) `);
-const first = (verbs: string, nouns: string) => new RegExp(`^ (?:${verbs})${GAP} (?:${nouns}) `);
-type Strict = { name: RegExp; gated: [RegExp, RegExp][]; head: RegExp; made: RegExp[]; not: RegExp };
-const VISUAL = re("visual|visuals|layout|layouts|aesthetic|aesthetics|figma|typography|colors?|colours?|palette|palettes|styling|hierarchy|spacing|wireframes?|mockups?|css|design system|design tokens|fonts?|polish|look and feel|graphic|graphics|artwork|poster|posters");
+const first = (verbs: string, nouns: string, g = GAP) => new RegExp(`^ (?:${verbs})${g} (?:${nouns}) `);
+type Strict = { name: RegExp; gated: [RegExp, RegExp][]; head: RegExp; made: RegExp[]; raw: RegExp; not: RegExp };
+const VISUAL = re("visual|visuals|layout|layouts|aesthetic|aesthetics|figma|typography|colors?|colours?|palette|palettes|styling|hierarchy|spacing|wireframes?|mockups?|design system|design tokens|theme tokens|dark mode|responsive design|fonts?|polish|look and feel|graphic|graphics|artwork|poster|posters");
+// Tên có "css" hay "tailwind": chữ "css" trong mô tả chỉ lặp lại tên, không phải bằng chứng. Tên chỉ có "design": css là việc giao diện thật.
+const VISUAL_CSS = new RegExp(`${VISUAL.source}| css `);
+// Tiếng khác tiếng Anh, chữ Latin (fold đã bỏ dấu): danh mục có cả thư viện pháp lý tiếng Tây Ban Nha, Bồ Đào Nha.
+const ROMANCE = "monta|prepara|preparar|elabora|elaborar|redacta|redactar|redige|redigir|rediger|redigez|genera|generar|gera|gerar|crea|crear|cria|criar|cree|escribe|escribir|escreve|escrever|erstellt|erstelle|schreibt|verfasst";
+const VI_MAKE = "viet|soan|soan thao|lap|tao|lam";
 const STRICT: Record<StudioKind, Strict> = {
   docs: {
-    name: re("pdf|pdfs|docx|hwpx|word processing|spec writing|document review|review document|office documents|whitepaper|whitepapers|proposal|proposals|cover letter|cover letters|newsletter|newsletters|blog post|blog generator|blog generation|write doc|write docs|write documentation|write spec|write rfc|write prd|prd|prds|rfc|readme|technical writing|legal writing|copy edit|copyedit|copy editing|proofread|proofreading|documentation|docs writer|article writer|draft article|edit article|write article|content writer|seo writer|copywriter|copywriting|contract review|review contract|press release|meeting notes|meeting minutes"),
+    name: re("pdf|pdfs|docx|hwp|hwpx|word processing|spec writing|document review|review document|office documents|whitepaper|whitepapers|proposal|proposals|cover letter|cover letters|newsletter|newsletters|blog post|blog generator|blog generation|write doc|write docs|write documentation|write spec|write rfc|write prd|prd writing|readme|technical writing|legal writing|copy edit|copyedit|copy editing|proofread|proofreading|documentation|docs writer|article writer|draft article|edit article|write article|content writer|seo writer|copywriter|copywriting|contract review|review contract|press release|meeting notes|meeting minutes|research report|research reports|sop|sops|runbook|runbooks|postmortem|postmortems|post mortem|post mortems|release notes|internal comms|one pager|research paper|research papers|ux copy|ux writing|microcopy"),
     gated: [
       [re("resume|resumes|cv|cvs"), re("job|jobs|ats|career|hiring|recruiter|recruiters|cover letter|cv|cvs|candidate")],
       [re("report|reports"), made(WRITE, "reports?")],
       [re("memo|memos"), re("write|writes|draft|drafts|drafting|investment|decision|case|committee|privileged|structured|credit|board|counterparty")],
       [re("contract|contracts|agreement|agreements|nda|ndas"), re("contract among|legal|clause|clauses|redline|redlines|lawyer|attorney|counterparty|counterparties|negotiat[a-z]*|lease|leases|shareholders?|employment|vendor|terms and conditions|e signature|playbook|nda|ndas")],
       [re("docs|doc|document|documents"), made(WRITE, "docs?|documents?|documentation")],
-      [re("writing|writer|write|prose|editorial|humanizer|deslop|editor"), re("prose|article|articles|essay|essays|blog|editorial|ai writing|human written|copy edit|manuscript|long form|nonfiction|fiction|narrative|tone of voice")],
+      [re("writing|writer|write|prose|editorial|humanizer|deslop|editor"), re("prose|article|articles|essay|essays|blog|editorial|ai writing|ai generated writing|ai sounding|ai tells|human written|copy edit|manuscript|long form|nonfiction|fiction|narrative|tone of voice")],
+      // Tên nhắc PRD / RFC chưa đủ: nhiều skill chỉ đọc PRD để lập kế hoạch hay tách việc.
+      [re("prd|prds|rfc|rfcs"), /^(?!.* (?:manage|manages|manage prd|turn a prd|break a prd|decompose|from (?:a |an |the )?(?:prd|rfc)) )/],
+      [re("changelog|changelogs"), new RegExp(`(?: ${WRITE}|update|updates|updating|maintain|maintains|maintaining)${gap(3)} (?:changelogs?(?! page)|release notes?) | markdown changelog | changelog generation `)],
+      // Thư viện văn bản tố tụng: tên "…-draft" và mô tả mở đầu bằng "Draft".
+      [/ draft $/, /^ drafts? /],
+      [re("drafting"), re("pleading|pleadings|contract|contracts|clause|clauses|legal|skeleton|insolvency|filing|filings")],
     ],
-    head: re("copyedit|microsoft word|google docs|whitepapers?|technical documentation|cover letters?|press releases?|meeting minutes|copyediting|copy editing|proofreading|proofread"),
+    head: re("copyedit|microsoft word|google docs|whitepapers?|technical documentation|cover letters?|press releases?|meeting minutes|copyediting|copy editing|proofreading|proofread|internal communications"),
     made: [
-      made(WRITE, "memos?|proposals?|whitepapers?|white papers?|essays?|articles?|blog posts?|blogs?|newsletters?|press releases?|resumes?|cvs?|cover letters?|meeting notes|meeting minutes|handbooks?|user manuals?|user guides?|prds?|rfcs?|specifications?|tech(?:nical)? specs?|documentation|readmes?|thesis|manuscripts?|ebooks?|word documents?|case stud(?:y|ies)|research papers?|grant applications?|(?:weekly|monthly|quarterly|annual|executive|client|investor|board|written|polished|professional|formatted)(?: [a-z]+)? reports?"),
-      first(WRITE, "reports?|documents?|docs|drafts?|contracts?|agreements?|deeds?|petitions?|letters?|minutes|decision records?|(?:content|product|project|executive) briefs?"),
+      made(WRITE, "memos?|proposals?|whitepapers?|white papers?|essays?|articles?|blog posts?|blogs?|newsletters?|press releases?|resumes?(?! checkpoint)|cvs?|cover letters?|meeting notes|meeting minutes|handbooks?|user manuals?|user guides?|how to guides?|prep documents?|prep docs?|prds?|rfcs?|specifications?|tech(?:nical)? specs?|documentation|readmes?|thesis|manuscripts?|ebooks?|word documents?|case stud(?:y|ies)|research papers?|grant applications?|sops?|standard operating procedures?|runbooks?|postmortems?|post mortems?|release notes?|changelogs?|one pagers?|onepagers?|job descriptions?|lesson plans?|tutorials?(?! video)|(?:weekly|monthly|quarterly|annual|executive|client|investor|board|written|polished|professional|formatted|research|status|market|sector|industry|landscape|initiation|update|financial|diligence|analyst)(?: [a-z]+)? reports?"),
+      first(WRITE, "(?<!(?:and|or) )reports?|documents?|docs|drafts?|contracts?|agreements?|deeds?|petitions?|letters?|minutes|decision records?"),
+      made(WRITE, "(?:[a-z]+ )?briefs?(?! summar| overview| descri| note| expla| intro| messag| answer| respon| list| text| report)|briefings?"),
       made(WRITE, "agreements?|board minutes|meeting minutes|minutes"),
+      made(WRITE, "(?:[a-z]+ )?guides?(?! you| the| users?| agents?)|(?:research|reaction|analyst|disclosure|study|briefing|investment|earnings) notes?|(?:executive|meeting|market|weekly|monthly|daily)(?: [a-z]+)? summar(?:y|ies)|market overview|(?:business|strategic|account|marketing|event|media|launch|content|sales|communications?)(?: [a-z]+)? plans?"),
       made(WRITE, "(?:feature |product |technical |design |full |approved )?specs?(?: documents?)?"),
-      re("into (?:a |an )?(?:full |approved |feature |product |technical )*specs?"),
-      made(`${WRITE}|fill|fills|filling|merge|merges|merging|split|splits|splitting|sign|signs|signing|read|reads|reading|extract|extracts|extracting|highlight|highlighter|translate|translates|translating|convert|converts|converting|annotate|annotates|compress|compresses|export|exports|exporting`, "pdfs?|pdf forms?|pdf documents?|pdf files?|docx|word documents?"),
+      re("into (?:a |an )(?:full |approved |feature |product |technical )*specs?"),
+      made(PEN, "speech|speeches|novels?|short stor(?:y|ies)|screenplays?|poems?|fiction|(?:website |landing page |ux |marketing |sales |product |interface |error |listing |ad |facing )copy|copy that|microcopy"),
+      // Biên tập chữ, rà soát hợp đồng: sản phẩm là chính văn bản đó.
+      made("rewrite|rewrites|rewriting|edit|edits|editing|cut|cuts|tighten|tightens|shorten|shortens|proofread|proofreads|humanize|humanizes", "text|prose|writing|ai tells"),
+      made("review|reviews|reviewing|redline|redlines|redlining", "contracts?|agreements?|ndas?|msas?|clauses?|leases?"),
+      made("write|writes|writing", "books?|chapters?"),
+      // Văn bản tố tụng và văn bản chính thức: "Draft a Regular Bail Application", "Draft a Motor Accidents Claims Tribunal (MACT) claim petition".
+      // Chỉ với động từ "draft": "build an application" hay "write a section" là chuyện khác.
+      first(DRAFT, "applications?|appeals?|complaints?|suits?|plaints?|written statements?|notices?|counter notices?|reply to a show cause|pleadings?|petitions?|memorand(?:um|a)|litigations?|clauses?|sections?|summar(?:y|ies)|polic(?:y|ies)|written consents?|teasers?|status updates?|investor updates?|stakeholder updates?|power of attorney|last will|statements?|claims?|notifications?", gap(7)),
+      new RegExp(` (?:${WRITE}|fill|fills|filling|merge|merges|merging|split|splits|splitting|sign|signs|signing|read|reads|reading|extract|extracts|extracting|highlight|highlighter|translate|translates|translating|convert|converts|converting|annotate|annotates|compress|compresses|export|exports|exporting)${gap(3)} (?:pdfs?|pdf forms?|pdf documents?|pdf files?|docx|word documents?) `),
+      // Tây Ban Nha, Bồ Đào Nha, Pháp, Đức: "Redacta" và "Redige" luôn là viết văn bản; động từ chung thì cần đúng loại văn bản.
+      re("redacta|redactar|redaccion|redige|redigir|rediger|redigez"),
+      /^ (?:escritos?|demandas?|recursos?|solicitud|oposicion|impugnacion|querellas?|contestacion|alegaciones|denuncias?) (?:de|del|en|al|a|contra|ejecutiva|contencioso|administrativo) /,
+      /^ catalogo sin plantilla /,
+      first(ROMANCE, "en word|em word"),
+      first(ROMANCE, "contratos?|contrats?|demandas?|escritos?|cartas?|lettres?|denuncias?|solicitud(?:es)?|acuerdos?|alegaciones|reclamacion(?:es)?|expedientes?|informes?|relatorios?|rapports?|berichte?|documentos?|dokumente?|vertrag|memos?|memorandos?|pareceres?|procedimentos?|actas?|atas?|respuesta a un borrador|respuesta de la empresa"),
+      first("escribe|escribir|escreve|escrever|schreibt|verfasst", "articulos?|artigos?|procedimentos?|documentos?|cartas?|bericht|artikel"),
+      // Tiếng Việt: "Soạn hợp đồng", "Viết báo cáo tuần".
+      first(VI_MAKE, "bao cao|tai lieu|van ban|hop dong|bien ban|de xuat|cong van|don tu|thu moi|bai viet|so tay"),
     ],
-    not: re("pre contract|tla+|verify an rfc|unfinished work|lesson in|earnings press release|extraction spec|pilot spec|scaffold spec|receipts|decompose|github issues|also creates docs|for agents|vdm sl|test specs?|spec tests?|writing code|issue reports?|session usage|quality report|credit memos?|debit memos?|draft payables?|draft proposal|pending proposals?|update proposals?|failure report|what happened|signed document|file column|alerts|html report|html performance reports?|power bi|pbir|link in bio|performance reports?|traffic report|ads|campaigns|document vault|memos saved|signing pipeline|security awareness|via tools|or report|into an application|company brief|actually building|cross repo|footage brief|or resume|and resume|instantiate resume|job search|job openings|local file|dashboard|dashboards|job thesis|search documentation|upload documents|download files|smart contracts?|api contracts?|data contracts?|doc contract|contract tests?|contract testing|test reports?|bug reports?|crash reports?|coverage reports?|code review|resume session|resume work|resume the|pause resume|session resume|docs search|search docs|query docs|code samples|agents.md|claude.md|test plan|test writer|writing tests|write tests"),
+    // Hàn, Nhật, Trung, Nga: fold bỏ hết chữ không phải Latin nên phải dò trên chữ gốc.
+    raw: /한글 문서|보고서|계약서|제안서|기획서|회의록|원고|웹소설|산문|글을 쓴다|(?:ドキュメント|資料|文書|報告書|提案書|議事録|契約書|仕様書|記録)[^。]{0,60}(?:作成|生成|更新)|ドキュメントの独立|(?:起草|撰写|生成)[^。]{0,12}(?:文档|报告|合同|文章)|文章生成|成品文章|письмо|редактор|редактур|генератор текста|русского текста/,
+    not: re("tla\\+|verify an rfc|unfinished work|lesson in|earnings press release|extraction spec|pilot spec|scaffold spec|receipts|decompose|github issues|also creates docs|for agents|vdm sl|test specs?|spec tests?|writing code|issue reports?|session usage|quality report|debit memos?|draft payables?|draft proposal|pending proposals?|update proposals?|failure report|report of what happened|signed document|file column|workspace alerts|html report|html performance reports?|power bi|pbir|link in bio|performance reports?|traffic report|ads|ad reports?|ad campaigns?|document vault|memos saved|signing pipeline|security awareness|via tools|synchronize or report|into an application|company brief|actually building|cross repo|footage brief|pause or resume|coordinate or resume|and resume|instantiate resume|job search|job openings|local file|dashboard|dashboards|job thesis|search documentation|upload documents|download files|smart contracts?|api contracts?|data contracts?|doc contract|contract tests?|contract testing|test reports?|bug reports?|crash reports?|coverage reports?|code review|resume session|resume work|resume the (?:session|task|work|run|plan|interrupted|previous|last)|session resume|docs search|search docs|query docs|code samples|agents.md|(?<!legal )claude.md|create test plan|write test plan|test writer|writing tests|write tests|document and maintain|fact checking|fact check|erp|cap table report|consolidating p l|report metadata|report type|openapi|swagger|yaml change brief|ad creatives?|prompt contracts?|a prompt|code prompt|(?<!long )form drafts?|agent ready briefs?|dispatch briefs?|coding worker|context brief|find browse|agent roles|cognitive briefing|bump version|next semver|jira ticket|next agent|.?memory folder|wireframe style|row level|security clauses|groq|skill authoring|amplitude|steering documents?|webhook|ragops|crm invoices|email drafts?|topic brief|architectural decisions|http contracts?|rpc contracts?|repository contract|implement or review"),
   },
   slides: {
     name: re("slide|slides|[a-z]*pptx|ppt|odp|powerpoint|presentation|presentations|pitch deck|slide deck|deck|decks|keynote"),
     gated: [[re("pitch|pitches"), re("deck|decks|slides|presentation|presentations")]],
-    head: re("slide decks?|pitch decks?|powerpoint pptx|opendocument presentation|google slides|reveal.js|revealjs|presentation decks?|keynote decks?"),
-    made: [made(`${WRITE}|design|designs|designing|export|exports|exporting`, "slides|slide decks?|decks|deck|pitch decks?|presentations?|.?pptx|powerpoint|powerpoints|keynotes?|pitch books?")],
-    not: re("presentation layer|presentation half|presentation logic|steam deck|deck.gl|deck gateway|kong|flight deck|sliding|slider|sliders|stream deck|rate deck|rate decks|study deck|clash royale|flashcards?|anki|carousels?|deck problem|chosen deck|templafy mcp|video frames|relevant frames|podcast|document slide deck|brand board|forecast change deck|email attachment"),
+    head: re("slide decks?|pitch decks?|powerpoint pptx|opendocument presentation|google slides|reveal.js|revealjs|presentation decks?|keynote decks?|bai thuyet trinh|trinh chieu"),
+    made: [made(`${WRITE}|design|designs|designing|export|exports|exporting`, "slides|slide decks?|decks|deck|pitch decks?|presentations?|.?pptx|powerpoint|powerpoints|keynotes?|pitch books?"),
+      re("into (?:[a-z0-9]+ ){0,5}(?:presentations?|slide decks?|powerpoints?|pitch decks?)|speaker scripts?"),
+      first(ROMANCE, "presentacion(?:es)?|apresentac(?:ao|oes)|diapositivas?|praesentation(?:en)?|slides?"),
+      first(VI_MAKE, "slide|trang chieu|bai thuyet trinh|thuyet trinh")],
+    raw: /スライド|プレゼン|슬라이드|프레젠테이션|(?:制作|生成)[^。]{0,12}(?:幻灯片|演示文稿)|презентаци/,
+    not: re("presentation layer|presentation half|presentation logic|steam deck|deck.gl|deck gateway|kong|flight deck|sliding|slider|sliders|stream deck|rate deck|rate decks|study deck|clash royale|flashcards?|anki|carousels?|deck problem|chosen deck|templafy mcp|video frames|relevant frames|podcast|document slide deck|brand board|forecast change deck|email attachment|card game|deckbuilder"),
   },
   design: {
-    name: re("figma|logo|logos|poster|posters|flyer|flyers|illustration|illustrations|wireframe|wireframes|mockup|mockups|typography|color palette|colour palette|palette|palettes|design system|design systems|design tokens|ui design|ux design|ui ux|frontend design|web design|graphic design|visual design|product design|landing page|landing pages|thumbnail|thumbnails|infographic|infographics|icon design|canva|shadcn|ui polish|motion design|brand identity|website builder|website generator"),
+    name: re("design engineering|interface guidelines|figma|logo|logos|poster|posters|flyer|flyers|illustration|illustrations|wireframe|wireframes|mockup|mockups|typography|color palette|colour palette|palette|palettes|design system|design systems|design tokens|ui design|ux design|ui ux|frontend design|web design|graphic design|visual design|product design|landing page|landing pages|thumbnail|thumbnails|infographic|infographics|icon design|canva|shadcn|ui polish|motion design|brand identity|website builder|website generator|image generation|image generator|generate image|edit image|image editor|ai image|image ads?|algorithmic art|generative art"),
     gated: [
-      [re("ux|design|designer"), new RegExp(`${VISUAL.source}| (?:ui|ux|usability|user flows?|prototypes?|product design|design directions?|design decisions?|masters? designers?) `)],
+      [re("ux|design|designer"), new RegExp(`${VISUAL_CSS.source}| (?:ui|ux|usability|user flows?|prototypes?|product design|design directions?|design decisions?|masters? designers?) `)],
       [re("ui|frontend|front end|theme|themes|theming|css|tailwind|brand|branding|style|styles|visual|visuals|polish"), VISUAL],
       [re("ui|ux"), re("usability|responsiveness|ui slop|generic ui|generic it looks|ai default|ai defaults|beautiful|marketing pages|ui component|ui inspiration|ui critique|interface ux|interface s|an interface|an interface s|accessible interfaces|empty states?|first run setup|task blocking|one existing page")],
       [re("brand|branding"), re("brand kit|brand board|identity systems?|brand look|visual principles")],
       [re("animation|animations|motion|icon|icons|graphic|graphics|svg|banner|banners"), re("animation|animations|animate|transition|transitions|easing|motion graphic|motion graphics|icon|icons|illustration|graphic|graphics|logo|visual|visuals|banner|banners|branded")],
+      [re("gif|gifs"), re("gif|gifs")],
     ],
-    head: re("dark mode aesthetic|light mode aesthetic|design language|ui design|ux design|ui ux|interface design|visual design|graphic design|web design|frontend design|front end design|design systems?|design tokens|brand identity|visual identity|figma|color palettes?|colour palettes?|wireframes?|mockups?|motion graphics?|motion design"),
+    head: re("dark mode aesthetic|light mode aesthetic|design language|ui design|ux design|ui ux|interface design|visual design|graphic design|web design|frontend design|front end design|design systems?|design tokens|brand identity|visual identity|figma|color palettes?|colour palettes?|wireframes?|mockups?|motion graphics?|motion design|usability evaluation|taste audit|image generation|image editing|text to image|web animations?|algorithmic art|generative art|thiet ke giao dien|do hoa"),
     made: [made(DESIGN_V, "logos?|posters?|flyers?|banners?|mockups?|wireframes?|illustrations?|infographics?|thumbnails?|icons?|icon sets?|brand kits?|color palettes?|colour palettes?|landing pages?|websites?|web pages?|graphics?|ad creatives?|artwork|visual art|visuals"),
-      made("design|designs|designing|redesign|redesigns|redesigning", "uis?|user interfaces?|interfaces?|screens?|pages?")],
-    not: re("api and interface|hub page|one engagement|ragops|pbir|godot|unity|playcanvas|glb|tmux|formation|embed sdk|visual review|visual filters?|visual novel|brand materials|sitrep|coordination file|development guidance|make collect|solid|design patterns|inheritance|workflow chain|figma setup|pine script|udl|api interface|video work|make model|connector tool|power bi|test doc|game analysis|localization|localize|identityserver|federation|analytics|telemetry|metrics|kpis?|codebase design|module|modules|classroom|live preview|visual regressions?|regression testing|a11y|ad copy|implementation plan|brand voice|website content|pcb|circuit|database|schema|api design|system design|software design|architecture|experimental design|experiment design|clinical|trial|tracking plan|org design|instructional design|curriculum|website copy|landing page copy|terminal|tui|tuis|cli|ratatui|policy|quality score|concept test|brainstorming|research design|proofread|test design|service design|chip|in app ui"),
+      made("design|designs|designing|redesign|redesigns|redesigning", "uis?|user interfaces?|interfaces?|screens?|pages?"),
+      new RegExp(` (?:build|builds|building|migrates?|make|makes|making)${gap(3)} (?:[a-z]+ )?interfaces? `),
+      // STUDIO_SYSTEM xếp ảnh marketing và minh họa vào Thiết kế: skill tạo, sửa ảnh thuộc mục này.
+      made("generate|generates|generating|create|creates|creating|edit|edits|editing|make|makes|making|retouch|retouches|retouching", "images?|pictures?"),
+      new RegExp(` (?:build|builds|building|create|creates|creating|generate|generates|generating)${gap(3)} (?:uis?|user interfaces?|ui components?|app screens?) `),
+      first(`${ROMANCE}|disena|disenar|desenha`, "logotipos?|logos?|carteles?|disenos?|interfaces?"),
+      first(VI_MAKE, "logo|poster|banner|giao dien|do hoa|anh minh hoa")],
+    raw: /デザイン|디자인|дизайн|UI\/UX|画面設計|视觉设计|界面设计|UI设计|サイト制作/,
+    not: re("api and interface|hub page|one engagement|ragops|pbir|godot|unity|playcanvas|glb|tmux|formation|embed sdk|visual review|visual filters?|visual novel|brand materials|sitrep|coordination file|development guidance|make collect|solid|(?<!default )design patterns|inheritance|workflow chain|figma setup|pine script|udl|api interface|video work|make model|connector tool|power bi|test doc|game analysis|json localization|localize|identityserver|federation|analytics|telemetry|player metrics|kpis? tree|codebase design|module|modules|classroom|live preview|visual regressions?|regression testing|a11y|web accessibility|ad copy|implementation plan|brand voice|website content|pcb|circuit|database|api design|system design|software design|(?<!information |design system |navigation |the )architectures?|experimental design|experiment design|clinical|trial|tracking plan|org design|instructional design|curriculum|website copy|landing page copy|terminal|tui|tuis|cli ui|cli design|ratatui|policy|quality score|concept test|brainstorming|research design|proofread|test design|service design|chip|in app ui|magento|coding standards|flutter widget|mcp apps?|docker|container images?|vm images?|disk images?|base images?|os images?|test plan|generate api|groq|ffmpeg|ocr|searchable|troubleshoot|barcode|facing copy|flutter ui|gradio|hotwire|polaris|fiftyone|expo ui|(?:cli|api|sdk|graphql|command line|programming|rpc|query|chat) interfaces?"),
   },
 };
 function strictStudios(name: string, description: string): StudioGuess {
   // Dấu chấm cuối câu không dính vào từ cuối (fold giữ dấu chấm cho "reveal.js").
   const words = (t: string) => fold(t).replace(/\. /g, " ");
   const n = words(name.replace(/[-_]+/g, " ")), raw = description.replace(/\s+/g, " ").trim();
-  const lead = words(/^(.{25,280}?[.!?。])(?:\s|$)/.exec(raw)?.[1] ?? raw.slice(0, 280)), head = words(raw.slice(0, 110));
+  const sentence = /^(.{25,280}?[.!?。])(?:\s|$)/.exec(raw)?.[1] ?? raw.slice(0, 280);
+  const lead = words(sentence), head = words(raw.slice(0, 110));
+  // Từ ghép có gạch nối ("self-contained", "writer-ready") và sở hữu cách ("a publication's") chỉ là một từ khi đo khoảng cách động từ - sản phẩm.
+  // Vẫn thử bản tách rời: sản phẩm có thể có gạch nối ("slide-deck").
+  const flat = words(sentence.replace(/([\p{L}\p{N}])-(?=[\p{L}\p{N}])/gu, "$1").replace(/(\p{L})['’]s\b/gu, "$1"));
   const hits: Partial<Record<StudioKind, string>> = {}, scores = {} as Record<StudioKind, number>;
   for (const k of STUDIO_KINDS) {
     const r = STRICT[k];
     const why = r.not.test(n) || r.not.test(lead) ? null
-      : r.name.exec(n)?.[0] ?? r.gated.find(([a, b]) => a.test(n) && b.test(lead))?.[0].exec(n)?.[0] ?? r.head.exec(head)?.[0] ?? r.made.map((m) => m.exec(lead)?.[0]).find(Boolean) ?? null;
+      : r.name.exec(n)?.[0] ?? r.gated.find(([a, b]) => a.test(n) && b.test(lead))?.[0].exec(n)?.[0] ?? r.head.exec(head)?.[0] ?? r.made.map((m) => m.exec(lead)?.[0] ?? m.exec(flat)?.[0]).find(Boolean) ?? r.raw.exec(sentence)?.[0] ?? null;
     scores[k] = why ? 10 : 0;
     if (why) hits[k] = why.trim();
   }

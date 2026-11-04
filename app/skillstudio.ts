@@ -103,7 +103,7 @@ export function keepPluginTags(pluginId: string, names: string[]) {
 }
 
 // Đổi khi sửa bộ luật chặt (studiorules.ts): sau lần deploy kế, mọi skill của danh mục được xếp lại đúng một lần.
-const CATALOG_RULES = "c1";
+const CATALOG_RULES = "c2";
 /** Xếp một thư viện của danh mục Claude bằng bộ luật chặt, không nhờ model. Chỉ đọc tên và mô tả nên không cần nội dung skill.
  *  Giữ mục người dùng tự chọn và nhãn model đã xếp; chữ ký không đổi thì không làm lại. */
 export function classifyCatalog(pluginId: string, rows: { name: string; description: string }[]) {
