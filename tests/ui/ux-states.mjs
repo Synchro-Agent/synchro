@@ -173,8 +173,10 @@ try {
   for (const [w, h] of [[1280, 800], [1100, 760], [1024, 720]]) {
     await P("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
     await go(B);
-    await until(`!!document.querySelector(".chat-item")`, 15000, "đoạn chat có artifact");
-    await click(`document.querySelector(".chat-item")`);
+    // Đoạn chat theo tài khoản: danh sách còn các đoạn chat khác từ máy chủ.
+    const row = `[...document.querySelectorAll(".chat-item")].find((e) => e.textContent.includes("Có artifact"))`;
+    await until(`!!${row}`, 15000, "đoạn chat có artifact");
+    await click(row);
     await until(`!!document.querySelector(".art-card")`, 8000, "thẻ artifact");
     await click(`document.querySelector(".art-card")`);
     await until(`!!document.querySelector(".art-panel")`, 8000, "khung xem");
