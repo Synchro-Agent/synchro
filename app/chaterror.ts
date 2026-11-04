@@ -9,13 +9,20 @@ const CODE = /\b(TypeError|ReferenceError|SyntaxError|RangeError)\b|Unexpected t
 const PROVIDERS = /Providers|đăng nhập gói|đăng nhập lại|chưa được kết nối với model|Chưa kết nối model/i;
 
 export const GENERIC_ERR = "Không thể kết nối tới model. Vui lòng thử lại.";
+export const FOREIGN_ERR = "Model báo lỗi nên lượt này chưa xong. Hãy thử lại hoặc chọn model khác; nội dung lỗi nằm ở phần chi tiết.";
 
-export function chatError(raw: string | undefined): ChatErr {
+// Lỗi nguyên văn của hãng và CLI (tiếng Anh, không có trong từ điển) trên giao diện tiếng Việt, hay câu tiếng Việt chưa có bản dịch trên giao diện tiếng Anh: không đọc được ở ngôn ngữ đang dùng.
+const VIET = /[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i;
+export const isForeign = (s: string, translated: string, lang: "vi" | "en") => translated === s && (lang === "en") === VIET.test(s);
+
+export function chatError(raw: string | undefined, foreign?: (s: string) => boolean): ChatErr {
   const s = (raw ?? "").trim();
   if (!s) return { text: GENERIC_ERR };
   if (START.test(s)) return { text: "Model chưa khởi động được trên máy chủ. Hãy thử lại hoặc chọn model khác.", detail: s };
   if (NET.test(s)) return { text: "Mất kết nối tới model. Hãy kiểm tra mạng rồi thử lại.", detail: s };
   if (DIED.test(s)) return { text: "Model dừng đột ngột giữa lượt trả lời. Hãy thử lại hoặc chọn model khác.", detail: s };
   if (CODE.test(s) || s.length > 400) return { text: "Lượt này gặp lỗi ở máy chủ. Hãy thử lại hoặc chọn model khác.", detail: s };
-  return { text: s, act: PROVIDERS.test(s) ? "providers" : undefined };
+  const act = PROVIDERS.test(s) ? "providers" as const : undefined;
+  if (foreign?.(s)) return { text: FOREIGN_ERR, detail: s, act };
+  return { text: s, act };
 }

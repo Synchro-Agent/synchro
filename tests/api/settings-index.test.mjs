@@ -1,25 +1,29 @@
-// Ô tìm của Cài đặt ra đúng dòng: mục lục khớp giao diện, tìm được bằng tiếng Việt không dấu. Không cần máy chủ.
-import fs from "node:fs";
+// Ô tìm trong Cài đặt: mọi dòng cài đặt có trong mục lục, tìm không dấu và theo chữ đang hiện đều ra đúng mục. Không cần máy chủ.
+import { readFileSync } from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
-const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
-const { settingsindex: S, "i18n-dict": D } = await loadTs(["settingsindex", "i18n-dict"]);
-const src = fs.readFileSync("app/settings.tsx", "utf8");
-const rows = [...src.matchAll(/<Row t=(?:"([^"]+)"|\{"([^"]+)"\})/g)].map((m) => m[1] ?? m[2]).filter((x) => x !== "Loading…" && x !== "Break reminders"); // "Break reminders" thuộc tab không có trong thanh bên
-const all = new Set(Object.values(S.SETTINGS_INDEX).flat());
-const miss = [...new Set(rows)].filter((x) => !all.has(x));
-ok(rows.length > 50 && !miss.length, `mọi dòng trong settings.tsx (${rows.length}) đều có trong mục lục`, miss.join(" | "));
-const names = (x) => [x, D.EN2VI[x] ?? x];
-const untr = [...all].filter((x) => !D.EN2VI[x] && !/^(Python|Node\.js|HTML and JavaScript|Email|Skills|Artifacts)$/.test(x));
-ok(!untr.length, "dòng nào cũng có tên tiếng Việt để tìm", untr.join(" | "));
-const tabs = Object.keys(S.SETTINGS_INDEX);
-const hit = (q, t = tabs) => S.searchSettings(q, t, names).map((h) => `${h.tab}:${h.name}`);
-ok(hit("speed").includes("General:Speed"), "tìm bằng tiếng Anh", hit("speed"));
-ok(hit("cookies").includes("Synchro Code:Keep cookies"), "ra đúng dòng trong tab khác", hit("cookies"));
-const vi = D.EN2VI["Date of birth"].normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
-ok(hit(vi).includes("Account:Date of birth"), `tìm tiếng Việt không dấu (“${vi}”)`, hit(vi));
-ok(!hit("sign-ups", ["General", "Account"]).length && hit("sign-ups").includes("Administrator:New sign-ups"), "không hiện dòng của tab người này không mở được", hit("sign-ups"));
-ok(!hit("a").length && !hit(" ").length, "gõ một chữ chưa tìm dòng");
-ok(hit("e").length === 0 && S.searchSettings("co", tabs, names, 3).length === 3, "tối đa số kết quả");
-console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x)); };
+const { settingsindex: S } = await loadTs(["settingsindex"]);
+const src = readFileSync("app/settings.tsx", "utf8");
+const tabOf = { General: "General", Account: "Account", Privacy: "Privacy", Capabilities: "Capabilities", Memory: "Brain", CodeTab: "Synchro Code" };
+const fns = [...src.matchAll(/^(?:export )?function (\w+)\(/gm)];
+const missing = [];
+fns.forEach((f, i) => {
+  const tab = tabOf[f[1]];
+  if (!tab) return;
+  const body = src.slice(f.index, fns[i + 1]?.index ?? src.length);
+  for (const m of body.matchAll(/<Row t="([^"]*)"/g)) if (m[1] !== "Loading…" && !S.SETTINGS_INDEX[tab].rows.includes(m[1])) missing.push(`${tab}: ${m[1]}`);
+});
+ok(!missing.length, "mọi dòng trong settings.tsx có trong mục lục", missing.join("; "));
+const tabs = Object.keys(S.SETTINGS_INDEX), id = (s) => s;
+const find = (q, lb = id) => S.searchSettings(q, tabs, lb);
+ok(find("").length === tabs.length, "ô trống: đủ các mục");
+ok(find("mật khẩu").some((x) => x.tab === "Account"), "'mật khẩu' ra mục Tài khoản");
+ok(find("mat khau").some((x) => x.tab === "Account"), "gõ không dấu cũng ra");
+const pw = find("password").find((x) => x.tab === "Account");
+ok(pw?.rows.includes("Password"), "'password' chỉ đúng dòng Password", JSON.stringify(pw));
+const vi = find("giao diện", (s) => (s === "Theme" ? "Giao diện" : s)).find((x) => x.tab === "General");
+ok(vi?.rows.includes("Theme"), "tìm theo chữ đang hiện bằng tiếng Việt", JSON.stringify(vi));
+ok(find("xyzzy không có").length === 0, "không khớp: danh sách rỗng để báo không có kết quả");
+console.log(`${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

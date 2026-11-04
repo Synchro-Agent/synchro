@@ -227,7 +227,7 @@ export function InsModal({ init, onClose, onSave }: { init: string; onClose: () 
       <div className="modal pj-modal">
         <h2>Đặt hướng dẫn cho dự án</h2>
         <p className="pj-hint">Cung cấp cho Synchro hướng dẫn và thông tin liên quan cho các đoạn chat trong dự án này. Hướng dẫn này sẽ áp dụng cùng với <button type="button" className="lnk" onClick={() => { onClose(); openSettings?.("Account"); }}>hướng dẫn trong hồ sơ</button> của bạn và phong cách được chọn trong đoạn chat.</p>
-        <textarea className="field" autoFocus rows={9} placeholder="Hãy suy nghĩ từng bước và trình bày lập luận cho các vấn đề phức tạp. Sử dụng ví dụ cụ thể." value={v} onChange={(e) => setV(e.target.value)} />
+        <textarea className="field" autoFocus aria-label="Hướng dẫn" rows={9} placeholder="Hãy suy nghĩ từng bước và trình bày lập luận cho các vấn đề phức tạp. Sử dụng ví dụ cụ thể." value={v} onChange={(e) => setV(e.target.value)} />
         <div className="modal-foot">
           <button className="btn" onClick={onClose}>Hủy</button>
           <button className="btn dark" disabled={v.trim() === init.trim()} style={v.trim() === init.trim() ? { opacity: 0.4 } : undefined} onClick={() => onSave(v.trim())}>Lưu hướng dẫn</button>
@@ -245,9 +245,9 @@ export function TextCtxModal({ onClose, onSave }: { onClose: () => void; onSave:
       <div className="modal pj-modal">
         <h2>Thêm nội dung văn bản</h2>
         <label>Tiêu đề</label>
-        <input className="field" autoFocus placeholder="Ví dụ: Ghi chú cuộc họp" value={n} onChange={(e) => setN(e.target.value)} />
+        <input className="field" autoFocus aria-label="Tiêu đề" placeholder="Ví dụ: Ghi chú cuộc họp" value={n} onChange={(e) => setN(e.target.value)} />
         <label>Nội dung</label>
-        <textarea className="field" rows={8} placeholder="Dán hoặc nhập nội dung bạn muốn Synchro tham khảo" value={t} onChange={(e) => setT(e.target.value)} />
+        <textarea className="field" aria-label="Nội dung" rows={8} placeholder="Dán hoặc nhập nội dung bạn muốn Synchro tham khảo" value={t} onChange={(e) => setT(e.target.value)} />
         <div className="modal-foot">
           <button className="btn" onClick={onClose}>Hủy</button>
           <button className="btn dark" disabled={!t.trim()} style={!t.trim() ? { opacity: 0.4 } : undefined} onClick={() => onSave(n.trim() || "Nội dung văn bản", t.trim())}>Thêm</button>

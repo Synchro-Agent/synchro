@@ -6,7 +6,9 @@ import * as I from "./icons";
 import { Loader } from "./brand";
 import { getLang, tr } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
-import { ReconnectCard } from "./connectorsui";
+import { lazyView } from "./lazy";
+// Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
+const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
 // args: tham số đã gửi cho công cụ ghi của connector (đã che khóa bí mật).
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string };
@@ -52,11 +54,14 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   return { parts, plan, seq: ev.seq };
 }
 
+// Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.
+const DOING = "Đang";
+const toolLabel = (l: string) => { const v = [DOING, l].join(" "), t = tr(v); return t !== v ? t : l.charAt(0).toUpperCase() + l.slice(1); };
 function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
   const [open, setOpen] = useState(false);
   const running = live && items.some((x) => x.ok === undefined);
   const bad = items.filter((x) => x.ok === false).length;
-  const label = items.length === 1 ? items[0].label : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
+  const label = items.length === 1 ? toolLabel(items[0].label) : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
   return (
     <div className={`wl-tools ${open ? "open" : ""}`}>
       <button className="wl-tools-h" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -71,7 +76,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{x.label}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{x.sum}</small>}</div>
+              <div><b data-notr>{toolLabel(x.label)}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{x.sum}</small>}</div>
             </div>
           ))}
         </div>
@@ -106,7 +111,20 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 export function ConnCards({ parts }: { parts?: Part[] }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
-  return list.length ? <>{list.map((c) => <ReconnectCard key={c.id} c={c} done />)}</> : null;
+  // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
+  // Chỉ hỏi một lần lúc thẻ gắn: vừa kết nối lại xong ngay trên thẻ thì thẻ vẫn ở đó để báo "Đã kết nối lại".
+  const [fine, setFine] = useState<string[]>([]);
+  const sig = list.map((c) => c.id).join();
+  useEffect(() => {
+    if (!sig) return;
+    let on = true;
+    fetch("/api/connectors").then((r) => (r.ok ? r.json() : null)).then((j: { connectors?: { id: string; status: string }[] } | null) => {
+      if (on && j?.connectors) setFine(sig.split(",").filter((id) => { const c = j.connectors!.find((x) => x.id === id); return !c || c.status === "ok"; }));
+    }).catch(() => {});
+    return () => { on = false; };
+  }, [sig]);
+  const show = list.filter((c) => !fine.includes(c.id));
+  return show.length ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}</> : null;
 }
 
 /**
@@ -153,10 +171,12 @@ export function WorkStatus({ label, since, steps }: { label?: string; since: num
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   return (
-    <div className="wl-status" role="status" aria-live="polite">
+    <div className="wl-status">
+      {/* Trình đọc màn hình chỉ đọc khi việc đang làm đổi, không đọc đồng hồ đếm từng giây. */}
+      <span className="sr-only" role="status" aria-live="polite">{tr(label || "Đang suy nghĩ…")}</span>
       <Loader size={14} />
-      <span className="wl-st-t" key={label}>{label || tr("Đang suy nghĩ…")}</span>
-      <span className="wl-st-m">{dur(now - since)}{steps > 0 ? ` · ${steps} ${getLang() === "en" ? (steps === 1 ? "step" : "steps") : "bước"}` : ""}</span>
+      <span className="wl-st-t" key={label} aria-hidden="true">{tr(label || "Đang suy nghĩ…")}</span>
+      <span className="wl-st-m" aria-hidden="true">{dur(now - since)}{steps > 0 ? ` · ${steps} ${getLang() === "en" ? (steps === 1 ? "step" : "steps") : "bước"}` : ""}</span>
     </div>
   );
 }

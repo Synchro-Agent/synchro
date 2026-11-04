@@ -10,7 +10,7 @@ import type { BackupStatus, Problem, WatchdogState } from "./ops";
 
 type Disk = { key: string; path: string; freeMB: number; totalMB: number };
 type Health = {
-  now: number; build: string; uptimeSec: number; agent: boolean | null; problems: Problem[]; disks: Disk[]; boots24: number; lastBootAt: number | null;
+  now: number; build: string; uptimeSec: number; agent: boolean | null; problems: Problem[]; engines: { engine: string; ok: number; fail: number; auth: number }[]; disks: Disk[]; boots24: number; lastBootAt: number | null;
   runs24: number; runsFailed24: number; errors24: number; errors: { id: number; at: number; first_at: number; source: string; detail: string; n: number }[];
   storage: { dbMB: number; uploadsMB: number; outputsMB: number };
   mail: { sent24: number; sent7: number; failed24: number; failed7: number; lastOkAt: number | null; lastFailAt: number | null; smtp: boolean; failures: { at: number; source: string; detail: string; n: number }[] };
@@ -27,6 +27,7 @@ const WD: Record<string, [string, string]> = { restart: ["Đã khởi động l�
 
 function problemText(p: Problem) {
   const n = (p.n ?? 0).toLocaleString(locale());
+  if (p.code.startsWith("engine_fail:")) return L(`${p.code.slice(12)}: ${n} lượt lỗi trong một giờ qua, nhiều hơn số lượt thành công.`, `${p.code.slice(12)}: ${n} failed replies in the last hour, more than succeeded.`);
   switch (p.code) {
     case "disk_crit": return L(`Đĩa chỉ còn ${gb(p.n ?? 0)} trống: tệp tải lên mới bị từ chối, và cơ sở dữ liệu sẽ ngừng ghi nếu đầy hẳn.`, `Only ${gb(p.n ?? 0)} of disk left: new uploads are refused, and the database stops writing if it fills up.`);
     case "disk_low": return L(`Đĩa còn ${gb(p.n ?? 0)} trống. Nên dọn hoặc mở rộng sớm.`, `${gb(p.n ?? 0)} of disk left. Clean up or expand soon.`);
@@ -106,6 +107,11 @@ export function HealthPanel() {
         </div>
       ))}
       {h.agent !== null && <div className="row"><div><div className="t">Workspace service</div><div className="d">Runs code and Synchro Code workspaces.</div></div><span className={`s-badge ${h.agent ? "ok" : ""}`}>{h.agent ? "Running" : "Not answering"}</span></div>}
+
+      {h.engines?.length > 0 && <>
+        <h3 className="sec">Background replies, last 24 hours</h3>
+        <div className="adm-card">{h.engines.map((e) => <div key={e.engine} className="adm-kv"><span data-notr>{e.engine}</span><b data-notr style={e.fail || e.auth ? { color: "#c6422f" } : undefined}>{L(`${e.ok} thành công · ${e.fail} lỗi · ${e.auth} lỗi đăng nhập`, `${e.ok} ok · ${e.fail} failed · ${e.auth} sign-in errors`)}</b></div>)}</div>
+      </>}
 
       <h3 className="sec">Email</h3>
       <p className="d adm-privacy"><I.Alert size={14} />Synchro can only see failures that happen while sending, when the receiving server refuses outright. A message that is accepted and later bounced or sent to Spam shows as sent, because no inbox receives replies for the no-reply address.</p>

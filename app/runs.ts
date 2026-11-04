@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getUser, type UserRow } from "./authstore";
+import { noteRun, recordOps } from "./ops";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
 // plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
@@ -249,7 +250,7 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
       const f = executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return f(body, user);
-    })().then((r) => finish(id, r.http, r.json), (e) => finish(id, 502, { error: String((e as Error)?.message ?? e) }));
+    })().then((r) => { noteRun(kind, body.model, r.http, r.json); finish(id, r.http, r.json); }, (e) => { recordOps("server", `run ${kind}: ${String((e as Error)?.message ?? e)}`); finish(id, 502, { error: String((e as Error)?.message ?? e) }); });
   });
 }
 

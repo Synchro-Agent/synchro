@@ -18,6 +18,15 @@ ok(E.chatError("").text === E.GENERIC_ERR && E.chatError(undefined).text === E.G
 const server = "Bạn chưa đăng nhập gói Claude. Đăng nhập ở Cài đặt → Providers.";
 ok(E.chatError(server).text === server && E.chatError(server).act === "providers", "câu của máy chủ giữ nguyên, kèm nút mở Providers");
 ok(E.chatError("Quá nhiều yêu cầu, thử lại sau.").act === undefined, "lỗi khác không có nút Providers");
+ok(!/thoát với mã/.test(E.chatError("CLI codex thoát với mã 1.").text), "CLI thoát giữa chừng: câu đọc được, mã thoát để ở chi tiết");
+const vi = (s) => E.isForeign(s, s, "vi"), en = (s) => E.isForeign(s, s, "en");
+const raw = "Credit balance is too low to access this model";
+ok(E.chatError(raw, vi).text === E.FOREIGN_ERR && E.chatError(raw, vi).detail === raw, "lỗi tiếng Anh của hãng trên giao diện tiếng Việt: câu tiếng Việt, nguyên văn ở chi tiết");
+ok(E.chatError(raw, en).text === raw, "giao diện tiếng Anh đọc được nguyên văn");
+ok(E.chatError("Hạn mức đã hết hôm nay", en).text === E.FOREIGN_ERR, "câu tiếng Việt chưa có bản dịch trên giao diện tiếng Anh: câu chung, không để tiếng Việt");
+ok(E.chatError("Hạn mức đã hết hôm nay", vi).text === "Hạn mức đã hết hôm nay", "câu tiếng Việt trên giao diện tiếng Việt giữ nguyên");
+ok(!E.isForeign("Not signed in", "Chưa đăng nhập", "vi"), "câu tiếng Anh đã có trong từ điển không bị coi là lỗi lạ");
+ok(E.chatError("Please sign in to Providers", vi).act === "providers", "lỗi lạ vẫn giữ nút mở Providers");
 
 const msgs = [
   { role: "user", text: "câu 1", time: 1 },
@@ -32,7 +41,7 @@ ok(h.length === 4 && h.every((m) => !String(m.content).includes("ENOENT") && !St
 ok(h[h.length - 1].content === "trả lời đầy đủ", "câu trả lời thường vẫn gửi");
 
 const has = (t) => Object.prototype.hasOwnProperty.call(D.VI2EN, t) || D.RULES_EN.some(([re]) => re.test(t));
-for (const t of [spawn.text, E.chatError("fetch failed").text, E.chatError("SIGKILL").text, E.chatError("TypeError").text, E.GENERIC_ERR, "Câu trả lời chưa hoàn thành", "Khóa API bị từ chối (401): x"]) ok(has(t), `có bản tiếng Anh: ${t}`);
+for (const t of [spawn.text, E.chatError("fetch failed").text, E.chatError("SIGKILL").text, E.chatError("TypeError").text, E.GENERIC_ERR, E.FOREIGN_ERR, "CLI claude chưa được cài trên máy chủ.", "CLI codex thoát với mã 1.", "Không chuyển được tin nhắn cho Grok: x", "Không chuyển được hướng dẫn cho Claude Code: x", "Claude từ chối đăng nhập (401): phiên đăng nhập không còn hợp lệ. Đăng nhập lại trong Cài đặt → Providers.", "Câu trả lời chưa hoàn thành", "Khóa API bị từ chối (401): x"]) ok(has(t), `có bản tiếng Anh: ${t}`);
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 process.exit(fail ? 1 : 0);

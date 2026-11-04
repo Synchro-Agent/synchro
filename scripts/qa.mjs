@@ -18,6 +18,7 @@ const SUITES = [
   ["Chat chạy nền khi chuyển mục", "tests/ui/bgrun.mjs"],
   ["Chữ hiện dần, nút Dừng", "tests/ui/stream.mjs"],
   ["Lỗi, tiêu điểm, bàn phím, sửa tin, phiên hết hạn", "tests/ui/ux-states.mjs"],
+  ["Tải lại giữ đoạn chat, mất mạng lúc mở, thẻ kết nối lại, nhãn Cần bạn, một từ điển", "tests/ui/states.mjs"],
   ["Tải lại trang khi đang trả lời", "tests/ui/runs-reload.mjs"],
   ["Khung phủ nằm trên thanh bên", "tests/ui/layers.mjs"],
   ["Chuyển cảnh đăng nhập → phim → trang chủ", "tests/ui/introfilm.mjs"],

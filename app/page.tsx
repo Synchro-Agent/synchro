@@ -4,12 +4,12 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, useLangReady } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
-import { chatError, GENERIC_ERR } from "./chaterror";
+import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
 import { BrandLogo } from "./brands";
@@ -33,7 +33,7 @@ import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
-import { installFloatFit } from "./floatfit";
+import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
@@ -71,7 +71,7 @@ import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, mixExtra } from "./history";
 import { ContextMixer } from "./mixer";
-import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
+import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
 import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
@@ -83,6 +83,7 @@ import type { DirEntry } from "./connectordir";
 // Dữ liệu connector cho menu + ở ô chat (connector đã nối, danh mục để thêm).
 type CxData = { connectors: Conn[]; directory: DirEntry[] };
 import { wantsIntro } from "./introflag";
+import { rowHeight } from "./rowsize";
 type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
@@ -100,6 +101,8 @@ const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), nu
 const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
 const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel));
+const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel));
+const ArtifactsGallery = lazyView(() => import("./artifactui").then((m) => m.ArtifactsGallery));
 const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
 const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
 const ReconnectLink = lazyView(() => import("./connectorsui").then((m) => m.ReconnectLink), null);
@@ -111,7 +114,7 @@ const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm),
 const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
 // Khách chưa đăng nhập lần nào: tải sẵn màn hình đăng nhập ngay từ đầu.
 if (typeof document !== "undefined" && !document.documentElement.dataset.sess) AuthComponent.preload();
-const PRELOAD: Partial<Record<View, () => void>> = { code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
+const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
 
@@ -256,7 +259,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   };
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
-  useEffect(() => {
+  // Đo trước khi vẽ: mở bằng bàn phím, menu con từng hiện ở chỗ cũ rồi mới nhảy, phần dời vào màn hình tính theo chỗ cũ nên cách menu chính 80-200px.
+  useLayoutEffect(() => {
     if (!sub) return;
     const m = mref.current?.querySelector(".model-menu") as HTMLElement | null;
     if (!m) return;
@@ -266,7 +270,9 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     let x = r.right + 8;
     if (x + w > vw - 8) { x = r.left - 8 - w; if (x < 8) x = Math.max(8, vw - 8 - w); }
     setSubLeft(x - r.left);
-  }, [sub, mm]);
+  }, [sub, mm]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Đổi chỗ mà không đổi cỡ thì bộ theo dõi kích thước không báo: tính lại phần dời ngay.
+  useLayoutEffect(() => { mref.current?.querySelectorAll<HTMLElement>(".model-sub").forEach(fitFloat); }, [sub, subLeft, subPos]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
   // Menu mở ra bị tràn khỏi màn hình (nút nằm giữa ô soạn tin trên điện thoại): dịch ngang cho vừa.
   const [shift, setShift] = useState(0);
@@ -467,7 +473,7 @@ function Composer(p: {
     ta.current.style.height = Math.min(ta.current.scrollHeight, 240) + "px";
   }, [v]);
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "u") { e.preventDefault(); openUpload(); } };
+    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "u" && !document.querySelector(".app[inert]")) { e.preventDefault(); openUpload(); } };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, []);
@@ -732,7 +738,6 @@ function UserText({ text }: { text: string }) {
 }
 
 // Đoạn chat đang chờ người dùng duyệt công cụ: phải thấy được từ ngoài đoạn chat đó (cột bên, thông báo), không thì lượt treo tới hết giờ mà không ai biết.
-const asksNow = (c: Chat) => { const m = c.msgs[c.msgs.length - 1]; return !!m && !m.done && !!m.parts?.some((p) => p.k === "ask" && p.state === "wait"); };
 // Phiên Synchro Code ở thanh bên (danh sách lưu ở trình duyệt, đồng bộ với máy chủ khi bật).
 type CodeItem = { id: number; title: string; pinned?: boolean; archived?: boolean; state?: SessionState; reason?: string | null; running?: boolean; upd?: number; pr?: { number: number; url: string | null; state: string } | null };
 // Trạng thái phiên: đang chạy, cần bạn (hỏi lại / chờ duyệt / gặp lỗi / bị dừng), chờ xem lại (có thay đổi chưa commit / chưa push / PR chờ duyệt), xong.
@@ -785,7 +790,7 @@ type RowCx = {
 };
 // Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
 function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
-  const e = chatError(raw);
+  const e = chatError(raw, (s) => isForeign(s, tr(s), getLang()));
   return (
     <div className="msg-err" role="alert">
       <div className="msg-err-h"><I.M icon="WarningCircle" size={16} /><b>{tr("Câu trả lời chưa hoàn thành")}</b></div>
@@ -796,8 +801,9 @@ function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => 
   );
 }
 // Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
-const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
-  m: Msg; i: number; last: boolean; tail: boolean; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
+const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
+  // lang: đổi ngôn ngữ thì dòng tin đã memo cũng dịch lại các nút và lời báo.
+  m: Msg; i: number; last: boolean; lang: string; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
 }) {
   // Đang sửa tin đã gửi: nội dung đang sửa; null là không sửa.
   const [ed, setEd] = useState<string | null>(null);
@@ -805,10 +811,11 @@ const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fi
   const c = cx.current!;
   const { say, fm, arts } = c;
   const key = `${chatId}-${i}`;
+  const est = useMemo<React.CSSProperties>(() => ({ containIntrinsicSize: `auto ${rowHeight(m)}px` }), [m.text, m.files?.length, m.outs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (<>
     {mark && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}
     {m.role === "user" ? (
-      <div className="user-wrap">
+      <div className="user-wrap" style={est}>
         {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => cx.current!.fm.show(f, m.fids?.[f])} onContextMenu={(e) => cx.current!.fm.open(e, f)} />)}</div>}
         {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
         {m.pick?.length ? <div className="u-picks">{m.pick.map((k) => <span key={k.id} className="skill-chip">{k.id.startsWith("lib-") ? <I.Plugins size={13} /> : <I.Scroll size={13} />}<span data-notr>{k.label}</span></span>)}</div> : null}
@@ -816,7 +823,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fi
           <div className="u-edit">
             <textarea autoFocus rows={Math.min(10, ed.split("\n").length + 1)} value={ed} aria-label={tr("Sửa tin nhắn")} onChange={(e) => setEd(e.target.value)} onFocus={(e) => e.target.setSelectionRange(e.target.value.length, e.target.value.length)}
               onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); setEd(null); } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEd(); } }} />
-            {!tail && <div className="u-edit-n">{tr("Các tin phía sau sẽ được thay bằng câu trả lời mới.")}</div>}
+            {!last && <div className="u-edit-n">{tr("Các tin phía sau sẽ được thay bằng câu trả lời mới.")}</div>}
             <div className="u-edit-a"><button className="btn" onClick={() => setEd(null)}>{tr("Hủy")}</button><button className="btn dark" disabled={!ed.trim() || busy} onClick={saveEd}>{tr("Gửi lại")}</button></div>
           </div>
         )}
@@ -828,15 +835,15 @@ const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fi
         )}
       </div>
     ) : (
-      <div>
-        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} /> : (() => {
+      <div style={est}>
+        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
         {m.done && m.webs?.length ? <div className="msg-sources"><span>{tr("Nguồn")}</span>{m.webs.filter((w) => /^https?:\/\//.test(w.url)).map((w) => <a key={w.url} href={w.url} target="_blank" rel="noopener noreferrer" title={w.url} data-notr>{w.title || w.url.replace(/^https?:\/\/(?:www\.)?/, "").split("/")[0]}</a>)}</div> : null}
         {m.done && m.notice && ((m.notice.text && !m.failed) || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (
@@ -871,6 +878,8 @@ const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fi
 });
 
 export default function Home() {
+  // Giữ khung chờ tới khi từ điển của ngôn ngữ đang dùng về (tải riêng từng thứ tiếng, i18n.tsx): không nháy chữ sai ngôn ngữ.
+  const langReady = useLangReady();
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [, setAcct] = usePref("acct", "");
   const [call, setCall] = usePref("call", "Lâm Tùng");
@@ -1031,11 +1040,13 @@ export default function Home() {
         if (data) pushSession(x.id, x.title, data, undefined, !!x.pinned);
       }
     };
-    tick();
-    const t = setInterval(tick, 15_000);
-    const onFocus = () => { tick(); };
-    window.addEventListener("focus", onFocus);
-    return () => { stop = true; clearInterval(t); window.removeEventListener("focus", onFocus); };
+    // Lần đầu lùi lại sau khi trang đã vẽ (lấy cả danh sách, có thể hơn 100 KB). Tab ẩn không hỏi; ngoài mục Code hỏi thưa, về lại tab thì hỏi ngay.
+    let at = 0;
+    const run = () => { at = Date.now(); void tick(); };
+    const first = setTimeout(run, viewRef.current === "code" ? 0 : 3000);
+    const t = setInterval(() => { if (!document.hidden && (viewRef.current === "code" || Date.now() - at >= 60_000)) run(); }, 15_000);
+    window.addEventListener("focus", run);
+    return () => { stop = true; clearTimeout(first); clearInterval(t); window.removeEventListener("focus", run); };
   }, [me?.id, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [providers, setProviders] = useState<Providers>();
   const [signupOpen, setSignupOpen] = useState(true);
@@ -1087,9 +1098,35 @@ export default function Home() {
     loadLocal();
     setCur(null); setView("new");
   };
+  // Không hỏi được máy chủ lúc mở trang (mất mạng, máy chủ đang khởi động lại) không có nghĩa là đã đăng xuất: người đã đăng nhập thấy "không kết nối được" kèm tự thử lại,
+  // không bị đưa về màn hình đăng ký. Chỉ khi máy chủ trả lời rõ { user: null } mới coi là chưa đăng nhập.
+  const [bootErr, setBootErr] = useState(false);
+  const bootRetry = useRef<() => void>(() => {});
   useEffect(() => {
     localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
-    loadMe<{ user: AuthUser | null; providers: Providers; signupOpen?: boolean; speechReady?: boolean }>().then((j) => { setProviders(j.providers); setSignupOpen(j.signupOpen !== false); setSpeechReady(j.speechReady !== false); if (j.user) { enterAccount(j.user); syncProfile(j.user); } setMe(j.user); }).catch(() => setMe(null));
+    let dead = false, t: ReturnType<typeof setTimeout> | undefined;
+    const go = (tries?: number) => {
+      clearTimeout(t);
+      loadMe<{ user: AuthUser | null; providers: Providers; signupOpen?: boolean; speechReady?: boolean }>(tries).then((j) => {
+        if (dead) return;
+        bootRetry.current = () => {};
+        setBootErr(false); setProviders(j.providers); setSignupOpen(j.signupOpen !== false); setSpeechReady(j.speechReady !== false);
+        if (j.user) { enterAccount(j.user); syncProfile(j.user); }
+        // Lần thử lại về sau khi khách vừa đăng nhập xong ở màn hình đăng nhập: không ghi đè.
+        setMe((m) => (m && !j.user ? m : j.user));
+      }).catch(() => {
+        if (dead) return;
+        let was = false;
+        try { was = !!localStorage.getItem("signedIn"); } catch {}
+        if (was) setBootErr(true); else setMe((m) => (m === undefined ? null : m));
+        t = setTimeout(() => go(0), 5000);
+      });
+    };
+    bootRetry.current = () => go(0);
+    const online = () => bootRetry.current();
+    window.addEventListener("online", online);
+    go();
+    return () => { dead = true; clearTimeout(t); window.removeEventListener("online", online); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Phiên hết hạn khi app đang mở: phủ màn hình đăng nhập lên trên, bên dưới giữ nguyên (đoạn chat đang mở, phần đang gõ, lượt đang chạy); đăng nhập lại là dùng tiếp.
   const [expired, setExpired] = useState(false);
@@ -1175,19 +1212,17 @@ export default function Home() {
     if (saveT.current) clearTimeout(saveT.current.t);
     saveT.current = { t: setTimeout(flushChats, d), at };
   }, [chats, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Một đoạn chat vừa bắt đầu chờ duyệt mà người dùng đang ở nơi khác: báo ngay; tab đang ẩn thì gửi thông báo trình duyệt nếu họ đã bật.
-  const asked = useRef<ReadonlySet<number>>(new Set());
-  useEffect(() => {
-    if (!running.size && !asked.current.size) return;
-    const now = new Set(chats.filter((c) => running.has(c.id) && asksNow(c)).map((c) => c.id));
-    for (const c of chats) if (now.has(c.id) && !asked.current.has(c.id)) {
-      if (view !== "chat" || cur !== c.id) say(`${tr("Một đoạn chat đang chờ bạn duyệt")}: ${c.title}`);
-      if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: `${tr("Một đoạn chat đang chờ bạn duyệt")}: ${c.title}` });
-    }
-    asked.current = now;
-  }, [chats, running]); // eslint-disable-line react-hooks/exhaustive-deps
   const runN = running.size, lastRunN = useRef(runN);
   useEffect(() => { if (runN < lastRunN.current) flushDirty(); lastRunN.current = runN; }, [runN, flushDirty]);
+  const wasRunning = useRef<ReadonlySet<number>>(running);
+  useEffect(() => {
+    const id = curRef.current;
+    if (id !== null && viewRef.current === "chat" && wasRunning.current.has(id) && !running.has(id)) {
+      const m = chatsRef.current.find((c) => c.id === id)?.msgs.at(-1);
+      if (m?.role === "ai") setSayAt(m.failed ? tr("Câu trả lời chưa hoàn thành") : m.stopped ? tr("Đã dừng · giữ lại phần đã viết") : `${tr("Câu trả lời đã hoàn tất.")} ${m.text.replace(/```[\s\S]*?(```|$)|<artifact[\s\S]*?(<\/artifact>|$)/g, " ").replace(/[*_`#>|]+/g, "").replace(/\s+/g, " ").trim().slice(0, 200)}`);
+    }
+    wasRunning.current = running;
+  }, [running]);
   useEffect(() => {
     const hide = () => { if (document.visibilityState === "hidden") flushDirty(); };
     window.addEventListener("pagehide", flushDirty);
@@ -1213,6 +1248,56 @@ export default function Home() {
   }, [theme]);
 
   const chat = chats.find((c) => c.id === cur);
+  // Đoạn chat đang mở nằm trong địa chỉ trang (#c=<mã>, không tới máy chủ): F5 mở lại đúng đoạn đó, kể cả khi câu trả lời còn đang chạy (lượt tự nối lại bên dưới).
+  // Trước đây tải lại luôn về trang chủ, trông như mất câu trả lời nên người dùng gửi lại và tốn hạn mức. Đoạn chat ẩn danh không ghi vào địa chỉ.
+  const openWant = useRef<number | null>(typeof location === "undefined" ? null : Number(/^#c=(\d{1,16})$/.exec(location.hash)?.[1] ?? 0) || null);
+  useEffect(() => {
+    const id = openWant.current;
+    if (id === null || !loaded || !me) return;
+    // Người dùng đã tự đi nơi khác trong lúc chờ.
+    if (view !== "new" || cur !== null) { openWant.current = null; return; }
+    if (chats.some((c) => c.id === id && !c.inc)) { openWant.current = null; setCur(id); setView("chat"); return; }
+    // Chưa có ở trình duyệt này: đợi đồng bộ về một lúc (thiết bị mới), không có thì thôi.
+    const t = setTimeout(() => { if (openWant.current === id) { openWant.current = null; history.replaceState(null, "", location.pathname + location.search); } }, 8000);
+    return () => clearTimeout(t);
+  }, [chats, loaded, me, view, cur]);
+  const chatHash = view === "chat" && cur !== null && chat && !chat.inc ? `#c=${cur}` : "";
+  useEffect(() => {
+    if (openWant.current !== null || !loaded) return;
+    if (location.hash !== chatHash && (chatHash || /^#c=/.test(location.hash))) history.replaceState(null, "", location.pathname + location.search + chatHash);
+  }, [chatHash, loaded]);
+  // Đoạn chat đang chờ bạn duyệt công cụ: ở ngoài đoạn chat đó vẫn phải thấy, quá 10 phút không trả lời thì công cụ bị từ chối và model làm tiếp.
+  const needYou = useMemo(() => {
+    const out = new Set<number>();
+    for (const c of chats) {
+      if (!running.has(c.id)) continue;
+      const m = c.msgs[c.msgs.length - 1];
+      if (m?.role === "ai" && !m.done && m.parts?.some((p) => p.k === "ask" && p.state === "wait")) out.add(c.id);
+    }
+    if (approval?.chat !== null && approval?.chat !== undefined) out.add(approval.chat);
+    return out;
+  }, [chats, running, approval]);
+  const needSeen = useRef<ReadonlySet<number>>(new Set());
+  // Lời báo cho trình đọc màn hình: câu trả lời xong, cần duyệt. Nằm ngoài chữ đang chảy nên không đọc từng chữ.
+  const [sayAt, setSayAt] = useState("");
+  useEffect(() => {
+    const fresh = [...needYou].filter((id) => !needSeen.current.has(id));
+    needSeen.current = needYou;
+    for (const id of fresh) {
+      const c = chatsRef.current.find((x) => x.id === id), name = c?.title ?? "Synchro";
+      const open = viewRef.current === "chat" && curRef.current === id;
+      setSayAt(`${tr("Đang chờ bạn duyệt")}: ${name}`);
+      if (document.hidden && notif[0] && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: `${tr("Đang chờ bạn duyệt")}: ${name}`, tag: `ask-${id}` });
+      else if (!open && !document.hidden) say(`${tr("Đang chờ bạn duyệt")}: ${name}`);
+    }
+  }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const n = needYou.size;
+    if (!n) return;
+    const was = document.title;
+    document.title = `(${n}) ${tr("Đang chờ bạn duyệt")} · Synchro`;
+    return () => { document.title = was; };
+  }, [needYou.size]);
   // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
   const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
   const [artFull, setArtFull] = useState(false);
@@ -1244,6 +1329,8 @@ export default function Home() {
     if (!b || b.msgs.length !== n || b.msgs.some((m, k) => m !== ms[k])) artBase.current = { msgs: ms.slice(0, n), scan: scanArts(ms.slice(0, n), 0, ART_EMPTY) };
     return scanArts(ms, n, artBase.current!.scan);
   }, [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Đoạn chat có artifact: tải sẵn khung xem để bấm thẻ là mở ngay.
+  useEffect(() => { if (arts.map.size) ArtifactPanel.preload(); }, [arts.map.size]);
   const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
   const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
   const artOpen = view === "chat" && !!artVersions?.length;
@@ -1622,8 +1709,10 @@ export default function Home() {
       });
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [undoTurn, setUndoTurn] = useState<{ chat: number; msgs: Msg[]; compact: Chat["compact"]; n: number } | null>(null);
   const send = (t: string, f: string[] = [], pick?: { id: string; label: string }[]) => {
     if (busy) return;
+    setUndoTurn(null);
     if (view === "chat" && chat?.stub) return say("Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát");
     stick.current = true;
     const now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
@@ -1669,8 +1758,18 @@ export default function Home() {
     stick.current = true;
     const upto = [...c.msgs.slice(0, k), u];
     const compact = c.compact && c.compact.upto <= k ? c.compact : undefined;
+    // Sửa tin hay thử lại đều thay các tin phía sau: giữ bản cũ để khôi phục được, tới khi gửi tin mới.
+    const lost = c.msgs.slice(k + 1).filter((m) => !m.failed && m.text.trim());
+    setUndoTurn(lost.length ? { chat: c.id, msgs: c.msgs, compact: c.compact, n: lost.length } : null);
     setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, compact, msgs: [...upto, { role: "ai", text: "", time: Date.now() }] } : x)));
     runTurn(c.id, u.text, (u.files ?? []).filter((n) => !u.fids?.[n]), chatHistory(upto, compact), c.project, c.studio, u.pick?.map((x) => x.id));
+  };
+  const undoLost = () => {
+    const u = undoTurn;
+    if (!u) return;
+    setUndoTurn(null);
+    if (running.has(u.chat)) stop(true, u.chat);
+    setChats((cs) => cs.map((x) => (x.id === u.chat ? { ...x, msgs: u.msgs, compact: u.compact } : x)));
   };
   const retry = () => {
     if (!chat || busy) return;
@@ -1758,6 +1857,7 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      if (document.querySelector(".app[inert]")) return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       if (e.key === "Escape") {
@@ -1835,6 +1935,7 @@ export default function Home() {
     artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
     skillHub: (q) => { if (q) { try { sessionStorage.setItem("hub-q", q); } catch {} } goCustom(); if (q) window.dispatchEvent(new CustomEvent(HUB_SEARCH, { detail: q })); },
+    project: (id) => { setCurProj(id); setView("project"); },
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -1969,11 +2070,12 @@ export default function Home() {
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
   // Chưa biết đã đăng nhập chưa: người đã đăng nhập lần trước thấy ngay khung app (html[data-sess], layout.tsx), người mới thấy nền trống rồi tới màn hình đăng nhập.
-  if (me === undefined) return <div className="boot" aria-busy="true"><div className="boot-rail" /><div className="boot-side" /><div className="boot-main"><div className="boot-greet" /><div className="boot-box" /></div></div>;
+  if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><div className="boot-rail" /><div className="boot-side" /><div className="boot-main"><div className="boot-greet" /><div className="boot-box" /></div>
+    {bootErr && <div className="boot-err" role="alert"><Mark size={26} /><b>{tr("Chưa kết nối được tới Synchro")}</b><p>{tr("Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.")}</p><button className="btn dark" onClick={() => bootRetry.current()}>{tr("Thử lại")}</button></div>}</div>;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving || authHold || expired ? (
-    <AuthComponent key="auth" brandName="Synchro" signupOpen={signupOpen} logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={expired ? null : me} leaving={authLeaving} notice={expired ? tr("Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.") : undefined}
+    <AuthComponent key="auth" brandName="Synchro" signupOpen={signupOpen} logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={expired ? null : me} leaving={authLeaving} again={expired} notice={expired ? tr("Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.") : undefined}
       toFilm={intro} onReveal={() => setReveal("login")}
       onDone={(u, kind) => {
         setExpired(false);
@@ -1987,8 +2089,9 @@ export default function Home() {
   return (<>
     <AppCtx.Provider value={api}>
       <ConnLoginWatcher say={say} />
-    <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); const el = document.querySelector<HTMLElement>("#main textarea") ?? document.querySelector<HTMLElement>("#main"); el?.focus(); }}>Đến nội dung chính</a>
-    <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? ` app-reveal reveal-${reveal}` : ""}`}>
+    <a className="skip-link" inert={expired} href="#main" onClick={(e) => { e.preventDefault(); const el = document.querySelector<HTMLElement>("#main textarea") ?? document.querySelector<HTMLElement>("#main"); el?.focus(); }}>Đến nội dung chính</a>
+    {/* Phiên hết hạn: màn hình đăng nhập phủ lên trên, bên dưới không nhận tiêu điểm, phím hay trình đọc màn hình (trước đây chữ gõ vẫn rơi vào ô soạn tin bị che). */}
+    <div inert={expired} className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? ` app-reveal reveal-${reveal}` : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
       <div className={`shell-side ${open ? "" : "closed"}`} onClickCapture={(e) => {
         // Bấm vào một mục khác (không thuộc nhóm Speech) thì thu gọn danh sách công cụ Speech.
@@ -2048,11 +2151,11 @@ export default function Home() {
           const row = (c: Chat) => (
             <div key={c.id} className="chat-wrap" {...bulkRow(sb, { k: "chat", c })}>
               {renaming === c.id ? (
-                <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
+                <input className="field" autoFocus aria-label="Đổi tên" defaultValue={c.title} style={{ margin: 0, height: 32 }}
                   onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && (asksNow(c) ? <span className="ct-run ct-ask" role="status" aria-label={tr("Đang chờ bạn duyệt")} data-tip={tr("Đang chờ bạn duyệt")} /> : <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />)}</button>
+                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{needYou.has(c.id) ? <span className="ct-need" data-tip={tr("Đang chờ bạn duyệt")}>{tr("Cần bạn")}</span> : running.has(c.id) && <span className="ct-run" role="img" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
               )}
               {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
@@ -2076,7 +2179,7 @@ export default function Home() {
           const codeRow = (c: CodeItem) => (
             <div key={"code" + c.id} className="chat-wrap" {...bulkRow(sb, { k: "code", c })}>
               {codeRen === c.id ? (
-                <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
+                <input className="field" autoFocus aria-label="Đổi tên" defaultValue={c.title} style={{ margin: 0, height: 32 }}
                   onBlur={(e) => { codePatch(c.id, { title: e.target.value || c.title }); setCodeRen(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
@@ -2105,9 +2208,10 @@ export default function Home() {
                 <div className="chat-wrap" ref={sideProj === x.id ? sideRef : undefined}>
                   <button className={`chat-item pj-row ${view === "project" && curProj === x.id ? "active" : ""}`} onClick={() => { setCurProj(x.id); setView("project"); }}>
                     <span className="pj-ic"><I.Layers size={15} /></span>
-                    <span className="pj-tg" role="button" aria-label={open ? "Thu gọn" : "Mở rộng"} onClick={(e) => { e.stopPropagation(); setPjClosed({ ...pjClosed, [x.id]: open }); }}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></span>
                     <span>{x.name}</span>
                   </button>
+                  {/* Nút riêng đặt đè lên biểu tượng, không lồng trong nút của dòng: nút lồng nút thì bàn phím không tới được. */}
+                  <button className="pj-tg" aria-label={open ? "Thu gọn" : "Mở rộng"} aria-expanded={open} onClick={() => setPjClosed({ ...pjClosed, [x.id]: open })}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></button>
                   <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={sideProj === x.id} onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
                   {sideProj === x.id && <ProjMenu p={x} open pin style={{ top: 34, right: 0, width: 240 }}
                     onPin={() => { patchProj(x.id, { pinned: false }); setSideProj(null); }}
@@ -2162,6 +2266,7 @@ export default function Home() {
 
       <main id="main" tabIndex={-1} className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         <VerifyBanner me={me ?? null} onChange={setMe} />
+        <div className="sr-only" role="status" aria-live="polite" data-notr>{sayAt}</div>
         {syncSt.risk && <div className="sync-warn" role="alert"><I.InfoCircle size={16} /><span>{tr("Trình duyệt đã hết chỗ và máy chủ chưa nhận được bản mới nhất của")} {syncSt.pending + syncSt.tooBig} {tr("mục. Đừng đóng trang trước khi xuất dữ liệu.")}</span><button className="btn" onClick={exportData}>{tr("Xuất dữ liệu")}</button></div>}
         {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">
@@ -2234,8 +2339,9 @@ export default function Home() {
             <div className="thread" ref={threadRef} onScroll={onScroll}>
               <div className="thread-in">
                 {chat.stub && <div className="muted sync-stub" role="status"><span className="art-spin sm" />{tr("Đang tải đoạn chat từ máy chủ…")}</div>}
-                {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} tail={i >= chat.msgs.length - 2} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
+                {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
                   fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
+                {undoTurn?.chat === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={undoLost}>{tr("Khôi phục bản cũ")}</button></div></div>}
                 {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
                 {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
                 {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
@@ -2322,7 +2428,7 @@ export default function Home() {
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
+      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>

@@ -1,0 +1,38 @@
+// Giữ các lỗi giao diện đã sửa không quay lại, đọc thẳng mã nguồn (không cần máy chủ): nhãn tiến trình có bản tiếng Anh, không còn hộp prompt() của trình duyệt,
+// chữ hiện dần ở mọi nơi đang viết, nút thu gọn dự án là nút thật, hộp xem ảnh dùng cơ chế hộp thoại chung.
+import fs from "node:fs";
+import path from "node:path";
+import { loadTs } from "../lib/ts.mjs";
+
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x)); };
+const read = (f) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
+const en = (t) => D.VI2EN[t] ?? D.RULES_EN.map(([re, f]) => { const m = t.match(re); return m ? f(m) : null; }).find(Boolean);
+
+// Máy chủ ghi nhãn bằng tiếng Việt, giao diện dịch khi hiện (worklog.tsx): nhãn nào không có bản dịch thì giao diện tiếng Anh hiện nguyên tiếng Việt.
+const srcs = ["app/chatengine.ts", ...fs.readdirSync("app/ai").filter((f) => f.endsWith(".ts")).map((f) => `app/ai/${f}`)];
+const labels = new Set();
+for (const f of srcs) for (const m of read(f).matchAll(/[`"](Đang [^`"\n]{2,120})[`"]/g)) if (!/\$\{[^}]*["?(]/.test(m[1])) labels.add(m[1].replace(/\$\{[^}]*\}/g, "12").trim());
+ok(labels.size > 10, "tìm thấy các nhãn tiến trình", labels.size);
+for (const l of labels) ok(!!en(l), `có bản tiếng Anh: ${l}`);
+ok(en("Đang chờ 1 giây rồi thử lại") === "Waiting 1 second, then retrying", "một giây dùng số ít", en("Đang chờ 1 giây rồi thử lại"));
+ok(en("Đang dùng Audit: delete_page") === "Using Audit: delete_page", "nhãn công cụ connector", en("Đang dùng Audit: delete_page"));
+
+const tsx = [];
+(function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (p.endsWith(".tsx")) tsx.push(p); } })("app");
+const native = tsx.filter((f) => /(^|[^.\w])(window\.)?prompt\(/m.test(read(f)));
+ok(!native.length, "không còn hộp prompt() của trình duyệt", native);
+
+ok(/streaming=\{live && i === blocks\.length - 1\}/.test(read("app/agentui.tsx")), "Synchro Code: bước đang viết vẫn hiện chữ dần");
+ok(/streaming=\{!n\.done\}/.test(read("app/codeview.tsx")), "Synchro Code: câu trả lời đang viết vẫn hiện chữ dần");
+ok(/streaming=\{!art\.complete\}/.test(read("app/artifactui.tsx")), "Artifact đang viết vẫn hiện chữ dần");
+
+const page = read("app/page.tsx");
+ok(/<button className="pj-tg"[^>]*aria-expanded=\{open\}/.test(page), "nút thu gọn dự án là nút thật, báo trạng thái mở");
+ok(!/<span className="pj-tg" role="button"/.test(page), "không còn nút lồng trong nút ở dòng dự án");
+const lb = read("app/filemenu.tsx");
+ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true" aria-label="Xem ảnh"/.test(lb), "hộp xem ảnh dùng cơ chế hộp thoại chung");
+
+console.log(`\n${pass} đạt, ${fail} hỏng`);
+if (fail) process.exit(1);

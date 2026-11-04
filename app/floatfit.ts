@@ -6,7 +6,7 @@
 const SEL = ".menu, .model-menu, .model-sub, .usermenu";
 const M = 8;
 
-function fit(el: HTMLElement) {
+export function fit(el: HTMLElement) {
   if (!el.isConnected || el.classList.contains("out")) return;
   el.style.translate = "";
   const r = el.getBoundingClientRect();

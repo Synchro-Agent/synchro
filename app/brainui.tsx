@@ -6,6 +6,7 @@
 // - Ghi chú: thuộc tính, nội dung với [[liên kết]] (rê chuột để xem nhanh), nhúng ![[...]], đề mục, liên kết đến đây, gần nghĩa,
 //   đồ thị cục bộ. Synchro tự viết các trang; bạn thêm "Ghi chú của bạn" hoặc ghi chú riêng.
 // - Bảng, Hoạt động: việc dang dở, đoạn chat, chủ đề, tên riêng; những gì bộ não vừa tự học.
+import "./brainview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import { rowKeys } from "./a11y";
@@ -1003,7 +1004,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
               <div className="bw-grp-h"><button aria-expanded={!fold0.tags} onClick={() => setFold0({ ...fold0, tags: !fold0.tags })}><I.ChevronR size={11} /><span>{L("Thẻ", "Tags")}</span></button><em>{tags.length}</em></div>
               {!fold0.tags && <div className="bw-tags">{tags.slice(0, 40).map((t) => <button key={t.tag} className="bn-tag" onClick={() => { setQ(`tag:${t.tag}`); setFindOpen(true); search.current?.focus(); }} data-notr>#{t.tag}<em>{t.count}</em></button>)}</div>}
             </section>}
-            <BulkBar b={bkN} acts={noteActs} noun={L("ghi chú", "notes")} compact />
+            <BulkBar b={bkN} acts={noteActs} noun="ghi chú" compact />
             {g.stats.chats === 0 && <p className="bw-hint">{L("Bộ não tự lớn lên sau mỗi đoạn chat: chủ đề, tên riêng và chân dung của bạn sẽ hiện ở đây.", "The brain grows after every chat: your topics, entities and portrait show up here.")}</p>}
           </>
         )}

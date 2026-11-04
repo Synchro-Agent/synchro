@@ -5,6 +5,7 @@ import { Component, useEffect, useRef, useState } from "react";
 import { armDraft } from "./draft";
 import { labelMenu, registerMenu } from "./a11y";
 import { tr } from "./i18n";
+import { reportError } from "./errorreport";
 
 // role: menu thật (mặc định); bảng thông tin dùng chung khung này thì đặt "dialog".
 export function Menu({ open, className = "", style, children, role = "menu" }: { open: boolean; className?: string; style?: React.CSSProperties; children: React.ReactNode; role?: string }) {
@@ -58,7 +59,7 @@ export function Fade({ show, children, ms = 170 }: { show: boolean; children: Re
 export class Boundary extends Component<{ children: React.ReactNode; resetKey?: unknown; compact?: boolean }, { err: boolean }> {
   state = { err: false };
   static getDerivedStateFromError() { return { err: true }; }
-  componentDidCatch(e: unknown) { console.error(e); }
+  componentDidCatch(e: unknown) { console.error(e); reportError(e, "boundary"); }
   componentDidUpdate(p: { resetKey?: unknown }) { if (this.state.err && p.resetKey !== this.props.resetKey) this.setState({ err: false }); }
   render() {
     if (!this.state.err) return this.props.children;

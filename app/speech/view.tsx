@@ -1,6 +1,7 @@
 "use client";
 // Mục Speech (ElevenLabs): khung chung, thanh trên (gói và credit thật), trang chính, trình phát chung ở đáy. Từng công cụ nằm ở tệp riêng.
 // Công cụ chỉ hiện khi gói ElevenLabs quét được có tính năng đó; gói cao hơn tự hiện thêm khi được nâng.
+import "./speech.css";
 import { useEffect, useState } from "react";
 import { SideToggle } from "../brand";
 import * as I from "../icons";

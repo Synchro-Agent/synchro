@@ -77,7 +77,7 @@ function ModelPick({ value, onChange }: { value: string; onChange: (k: string) =
   const m = useModels();
   const groups = m.providers.map((p) => ({ name: p.name, models: p.models.filter((x) => allowsModel(m.allowed, x.key)) })).filter((g) => g.models.length);
   return (
-    <select className="field" value={value} onChange={(e) => onChange(e.target.value)}>
+    <select className="field" aria-label="Model" value={value} onChange={(e) => onChange(e.target.value)}>
       <option value={AUTO}>{tr("Tự động: chọn model hợp với việc, lỗi thì chuyển model khác")}</option>
       {groups.map((g) => <optgroup key={g.name} label={g.name}>{g.models.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}</optgroup>)}
       {value !== AUTO && !groups.some((g) => g.models.some((x) => x.key === value)) && <option value={value}>{modelName(value)}</option>}
@@ -217,7 +217,7 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
       {pl.source && <a className="tk-src" href={pl.source} target="_blank" rel="noopener noreferrer" data-notr><I.External size={12} />{pl.source.replace(/^https?:\/\//, "").slice(0, 80)}</a>}
       {(p.kind === "skill" || p.kind === "action") && p.status === "pending" && <>
         <button type="button" className={`tk-more ${open ? "on" : ""}`} onClick={() => setOpen(!open)}><I.Chevron size={12} />{p.kind === "skill" ? tr("Xem và sửa SKILL.md") : tr("Xem và sửa việc Synchro sẽ làm")}{pl.files?.length ? ` · ${pl.files.length} ${tr("tệp kèm theo")}` : ""}</button>
-        {open && <textarea className="field mono tk-prop-md" value={draft ?? body} onChange={(e) => setDraft(e.target.value)} rows={12} spellCheck={false} data-notr />}
+        {open && <textarea className="field mono tk-prop-md" aria-label={p.kind === "skill" ? tr("Xem và sửa SKILL.md") : tr("Xem và sửa việc Synchro sẽ làm")} value={draft ?? body} onChange={(e) => setDraft(e.target.value)} rows={12} spellCheck={false} data-notr />}
       </>}
       {err && <div className="sk-err"><span data-notr>{err}</span></div>}
       {p.kind === "skill" && p.status === "pending" && <ScopeChoice value={scope} onChange={setScope} admin={admin} disabled={!!busy} />}
@@ -404,7 +404,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               </div>
             ))}</div>
           </section>
-        ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
+        ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun="kết quả" /></div>
       ))}
 
       {tab === "approve" && (props === null ? (propsErr ? <LoadErr title={tr("Chưa tải được danh sách cần duyệt")} err={propsErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !pending.length && !decided.length ? (
@@ -442,7 +442,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               <button className="icon-btn" aria-label="Xóa việc tự động" data-tip="Xóa việc tự động" onClick={() => del(t)}><I.Trash size={15} /></button>
             </div>}
           </div>
-        ))}<PageBar pg={pgJ} /><BulkBar b={bkJ} acts={jobActs} noun={tr("việc")} /></div>
+        ))}<PageBar pg={pgJ} /><BulkBar b={bkJ} acts={jobActs} noun="việc" /></div>
       ))}
       {edit && <TaskEditor init={edit === "new" ? null : edit.task ?? null} plan={edit === "new" ? null : edit.plan ?? null} say={say} onClose={() => setEdit(null)}
         onSaved={(_t, ran) => { setEdit(null); load(); setTab(ran ? "results" : edit !== "new" && edit.task ? tab : "jobs"); }} />}

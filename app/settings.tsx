@@ -55,10 +55,11 @@ export function Select({ value, options, onChange, search, width = 160 }: { valu
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useAway(() => setOpen(false));
+  const rowName = useContext(RowName);
   const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="sel" aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
+      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${tr(rowName)}: ${tr(value)}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
         <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
           <div className="menu-scroll">
           {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}
@@ -236,13 +237,13 @@ function Account() {
     <>
       <H first>Profile</H>
       <Row t="Profile photo" d="PNG or JPG up to 10MB." top><AvatarButton name={name} /></Row>
-      <Row t="Full name"><input className="field" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
-      <Row t="What should Synchro call you?"><input className="field" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
-      <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
+      <Row t="Full name"><input className="field" aria-label="Full name" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
+      <Row t="What should Synchro call you?"><input className="field" aria-label="What should Synchro call you?" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
+      <Row t="Date of birth"><input className="field" aria-label="Date of birth" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work || "Choose"} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
-      <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
+      <textarea className="textarea" aria-label="Instructions for Synchro" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
       <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString()} characters over the limit · ` : ""}{ins.length.toLocaleString()} / 20,000</span></div>
       {ins.trim() !== server.trim() && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -304,7 +305,7 @@ function Account() {
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Delete your account?</h2>
-            <p className="d" style={{ margin: "0 0 12px" }}>Your account, sign-in methods and sessions will be permanently removed, and chats stored in this browser will be erased. This can&apos;t be undone.</p>
+            <p className="d" style={{ margin: "0 0 12px" }}>Your account and everything stored with it on the server (chats, projects, files, Brain, connectors, sessions) are permanently deleted, and the copy in this browser is erased. This can&apos;t be undone.</p>
             {me?.hasPassword && <input className="field" type="password" autoFocus autoComplete="current-password" placeholder="Enter your password to confirm" value={del ?? ""} onChange={(e) => setDel(e.target.value)} />}
             <div className="modal-foot"><button className="btn" onClick={() => setDel(null)}>Cancel</button><button className="btn danger" disabled={busy || (!!me?.hasPassword && !del)} onClick={deleteAccount}>Delete account</button></div>
           </div>
@@ -326,8 +327,8 @@ function Privacy({ go }: { go: (t: string) => void }) {
       <Row t="Export data" d="Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them." top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Download everything on the server" d="A JSON file with your profile, chats, projects, artifacts, brain notes, tasks and the list of your files, from any device. No passwords or tokens." top><a className="btn" href="/api/auth/account/export" download>Download</a></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
-      <Row t="Uploaded files"><button className="btn" onClick={() => setPanel("files")}>Manage</button></Row>
-      <Row t="Your feedback"><button className="btn" onClick={() => setPanel("feedback")}>Manage</button></Row>
+      <Row t="Uploaded files" d="Files attached to your chats. They are deleted with your account."><button className="btn" onClick={() => setPanel("files")}>View</button></Row>
+      <Row t="Your feedback" d="Replies you rated. Press the thumb again on a reply to take the rating back."><button className="btn" onClick={() => setPanel("feedback")}>View</button></Row>
       <Row t="Memory preferences"><button className="btn" onClick={() => go("Brain")}>Manage ↗</button></Row>
       <Row t="Privacy policy"><a className="btn" href="/privacy" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
       <Row t="Terms of Service"><a className="btn" href="/terms" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
@@ -612,7 +613,7 @@ function CodeTab() {
       <H>Defaults</H>
       <Row t="Default mode" d="Mode used when you open Synchro Code. Plan only outlines steps, Code writes full files, Debug traces errors to the root cause." top><Seg value={modeLabel(mode)} onChange={(l) => setMode(MODES.find((m) => m.short === l)?.k ?? "code")} options={MODES.map((m) => m.short)} /></Row>
       <Row t="Tech stack rules" d="Added to every Code request so answers follow your stack."><Select value={presetLabel(rules.preset)} width={260} onChange={(l) => setRules({ ...rules, preset: presetKey(l) })} options={[...PRESETS.map((p) => p.label), "Custom rules", "No rules"]} /></Row>
-      {rules.preset === "custom" && <textarea className="textarea" style={{ marginTop: 4 }} placeholder="e.g. Use Go 1.22, no global state, return errors explicitly" value={rules.custom} onChange={(e) => setRules({ ...rules, custom: e.target.value })} />}
+      {rules.preset === "custom" && <textarea className="textarea" aria-label="Tech stack rules" style={{ marginTop: 4 }} placeholder="e.g. Use Go 1.22, no global state, return errors explicitly" value={rules.custom} onChange={(e) => setRules({ ...rules, custom: e.target.value })} />}
       <H>Sessions</H>
       {cp ? <>
         <Row t="Classify session states" d="After every turn, a fast model marks the session in the sidebar as needs you, ready for review, or done. Counts toward your usage." top><Toggle on={cp.classify} set={(v) => save({ classify: v })} /></Row>
@@ -630,7 +631,7 @@ function CodeTab() {
         <Row t="Allowed and blocked sites" d={<>{`${cp.sites.length} allowed · ${cp.blocked.length} blocked`}</>}><button className="btn" onClick={() => setSitesOpen(!sitesOpen)}>{sitesOpen ? "Done" : "Manage"}</button></Row>
         {sitesOpen && <SitesEditor cp={cp} save={save} />}
         <H>Pull requests</H>
-        <Row t="Branch prefix" d="Added to the branches Synchro creates, for example synchro/fix-login." top><input className="field" style={{ width: 180, margin: 0 }} defaultValue={cp.branchPrefix} key={cp.branchPrefix} placeholder="synchro" onBlur={(e) => e.target.value !== cp.branchPrefix && save({ branchPrefix: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></Row>
+        <Row t="Branch prefix" d="Added to the branches Synchro creates, for example synchro/fix-login." top><input className="field" aria-label="Branch prefix" style={{ width: 180, margin: 0 }} defaultValue={cp.branchPrefix} key={cp.branchPrefix} placeholder="synchro" onBlur={(e) => e.target.value !== cp.branchPrefix && save({ branchPrefix: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></Row>
         <Row t="Create pull requests automatically" d="When you push from a Code session, Synchro opens a pull request without asking. Pushing from the default branch first moves the work to a new branch with your prefix."><Toggle on={cp.autoPr} set={(v) => save({ autoPr: v })} /></Row>
         <Row t="Auto-fix pull requests" d={<>Synchro watches the pull requests it opened. When CI fails or someone leaves a comment, it works on the fix in the same session, pushes to the branch, and replies on the pull request.{!cp.allowBypass && <span className="cap-note warn">Turn on Allow auto mode above: fixes run while you're away, with nobody to approve them.</span>}</>}><Toggle on={cp.autoFix} set={(v) => save({ autoFix: v })} /></Row>
         <Row t="Archive after merge or close" d="When a pull request is merged or closed, archive its session. After a merge Synchro also deletes the branch on GitHub and the session's workspace folder, unless something there isn't pushed yet."><Toggle on={cp.autoArchivePr} set={(v) => save({ autoArchivePr: v })} /></Row>
@@ -648,7 +649,7 @@ function CodeTab() {
         ))}
       </div>
       <Row t="Editor theme" d="Theme for the code editor panel. Auto follows the interface theme."><Seg value={edTheme} onChange={setEdTheme} options={["Auto", "Light", "Dark"]} /></Row>
-      <Row t="Code font" d="Monospace font for code blocks and the editor. Must be installed on your device."><input className="field" style={{ width: 200, margin: 0 }} placeholder="e.g. JetBrains Mono" value={cf} onChange={(e) => setCf(e.target.value)} /></Row>
+      <Row t="Code font" d="Monospace font for code blocks and the editor. Must be installed on your device."><input className="field" aria-label="Code font" style={{ width: 200, margin: 0 }} placeholder="e.g. JetBrains Mono" value={cf} onChange={(e) => setCf(e.target.value)} /></Row>
       <Row t="Code font size" d="Applies to code blocks and the editor."><Seg value={size} onChange={setSize} options={["12", "13", "14", "16"]} /></Row>
       <H>Run code</H>
       <Row t="HTML and JavaScript" d="Runs in a sandboxed preview frame next to the chat." top><Badge ok>Ready</Badge></Row>

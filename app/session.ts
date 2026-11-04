@@ -1,6 +1,7 @@
 "use client";
 // Phiên đăng nhập hết hạn khi app đang mở: mọi lệnh gọi /api của app đều đi qua đây, gặp 401 thì hỏi lại /api/auth/me cho chắc (vài API có thể trả 401
 // vì lý do riêng) rồi báo cho trang. Trang giữ nguyên mọi thứ đang mở, chỉ phủ màn hình đăng nhập lên trên; thay cho từng chỗ hiện "Bạn cần đăng nhập." hay sập.
+import { tr } from "./i18n";
 let installed = false;
 let raw: typeof fetch | null = null;
 let notify: (() => void) | null = null;
@@ -26,6 +27,21 @@ export function watchSession(onExpired: () => void) {
     return r;
   });
   return () => { notify = null; };
+}
+
+// Mất mạng: trình duyệt ném "Failed to fetch" / "Load failed" / "NetworkError…" và nhiều nơi hiện thẳng e.message cho người dùng. Đổi ở một chỗ thành câu đọc được, theo ngôn ngữ giao diện.
+const NET = /^(failed to fetch|load failed|networkerror when attempting to fetch resource\.?|network request failed)$/i;
+let netWrapped = false;
+export function installNetError() {
+  if (netWrapped || typeof window === "undefined") return;
+  netWrapped = true;
+  const orig = window.fetch;
+  window.fetch = function (this: unknown, ...a: Parameters<typeof fetch>) {
+    return orig.apply(this === undefined ? window : (this as typeof window), a).catch((e: unknown) => {
+      if (e instanceof TypeError && NET.test(e.message)) throw new TypeError(tr("Không kết nối được tới Synchro. Kiểm tra mạng rồi thử lại."), { cause: e });
+      throw e;
+    });
+  } as typeof fetch;
 }
 
 /** Lần đọc đầu lúc mở trang: máy chủ đang khởi động lại (502, HTML thay vì JSON) không có nghĩa là đã đăng xuất. Thử lại vài lần rồi mới coi như chưa đăng nhập. */

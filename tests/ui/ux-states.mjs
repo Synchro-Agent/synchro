@@ -207,10 +207,10 @@ try {
   await click(`document.querySelector(".rail .user")`); await sleep(400);
   await click(`[...document.querySelectorAll(".menu-item")].find((e) => /^(Cài đặt|Settings)/.test(e.textContent.trim()))`); await until(`!!document.querySelector(".modal.settings")`, 10000, "mở Cài đặt");
   await click(`document.querySelector(".modal.settings .s-search input")`); await type("cookie");
-  await until(`!!document.querySelector(".modal.settings .s-hit")`, 5000, "kết quả tìm");
-  await click(`document.querySelector(".modal.settings .s-hit")`);
-  await until(`!!document.querySelector(".modal.settings .s-flash")`, 8000, "dòng được làm nổi");
-  ok(await ev(`/cookie/i.test(document.querySelector(".modal.settings .s-flash").textContent)`), "bấm kết quả: mở đúng tab, cuộn tới đúng dòng");
+  await until(`!!document.querySelector(".modal.settings .s-found")`, 5000, "kết quả tìm");
+  await click(`document.querySelector(".modal.settings .s-found")`);
+  await until(`!!document.querySelector(".modal.settings .s-hit")`, 8000, "dòng được làm nổi");
+  ok(await ev(`/cookie/i.test(document.querySelector(".modal.settings .s-hit").textContent)`), "bấm kết quả: mở đúng tab, cuộn tới đúng dòng");
   await click(`document.querySelector(".modal.settings .close")`); await sleep(300);
 
   console.log("Hộp thư: tab nào lỗi cũng có nút thử lại, không quay mãi");

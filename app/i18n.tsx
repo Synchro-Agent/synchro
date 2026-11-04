@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { usePref } from "./store";
-import { EN2VI, RULES_EN, RULES_VI, VI2EN } from "./i18n-dict";
 
 export type Lang = "vi" | "en";
 
@@ -11,6 +10,28 @@ if (typeof window !== "undefined") {
   try { const v = JSON.parse(localStorage.getItem("p:uilang") ?? '"vi"'); cur = v === "en" ? "en" : "vi"; } catch {}
 }
 export const getLang = () => cur;
+
+// Mỗi trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (từng chiếm một phần ba JS tải đầu). Từ điển về sau khung trang: trang chính giữ khung chờ tới lúc đó (useLangReady),
+// các trang khác dịch ngay khi từ điển về. Hỏng mạng thì vẫn mở được bằng chữ gốc, không kẹt ở khung chờ.
+type Dict = { map: Record<string, string>; rules: [RegExp, (m: RegExpMatchArray) => string][] };
+const dicts: Partial<Record<Lang, Dict>> = {};
+const loads: Partial<Record<Lang, Promise<void>>> = {};
+const settled: Partial<Record<Lang, boolean>> = {};
+const subs = new Set<() => void>();
+let langVer = 0;
+const ping = () => { langVer++; subs.forEach((f) => f()); };
+export function loadDict(l: Lang): Promise<void> {
+  return (loads[l] ??= (l === "en"
+    ? import("./i18n-dict").then((m): Dict => ({ map: m.VI2EN, rules: m.RULES_EN }))
+    : import("./i18n-vi").then((m): Dict => ({ map: m.EN2VI, rules: m.RULES_VI })))
+    .then((d) => { dicts[l] = d; })
+    // Tab mở từ bản cũ: tệp đã bị thay. Ném lại để ChunkGuard tải lại trang một lần; lần đổi ngôn ngữ sau tải lại từ đầu.
+    .catch((e) => { loads[l] = undefined; setTimeout(() => { throw e; }); })
+    .finally(() => { settled[l] = true; ping(); }));
+}
+if (typeof window !== "undefined") void loadDict(cur);
+/** Từ điển của ngôn ngữ đang dùng đã về (hoặc tải hỏng): dựng giao diện được rồi. Đổi ngôn ngữ thì nơi dùng hook này vẽ lại. */
+export const useLangReady = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => (settled[cur] ? langVer + 1 : 0), () => 0) > 0;
 /** Định dạng ngày giờ, con số theo ngôn ngữ giao diện (không theo ngôn ngữ của trình duyệt). */
 export const locale = () => (cur === "en" ? "en-US" : "vi-VN");
 export const LANG_NAMES: Record<Lang, string> = { vi: "Tiếng Việt", en: "English" };
@@ -18,10 +39,12 @@ export const LANG_NAMES: Record<Lang, string> = { vi: "Tiếng Việt", en: "Eng
 export function tr(s: string, lang: Lang = cur): string {
   const t = s.trim();
   if (!t) return s;
-  const map = lang === "en" ? VI2EN : EN2VI;
+  const d = dicts[lang];
+  if (!d) return s;
+  const map = d.map;
   let out: string | undefined = Object.prototype.hasOwnProperty.call(map, t) ? map[t] : undefined;
   if (out === undefined) {
-    for (const [re, f] of lang === "en" ? RULES_EN : RULES_VI) {
+    for (const [re, f] of d.rules) {
       const m = t.match(re);
       if (m) { out = f(m); break; }
     }
@@ -83,28 +106,33 @@ let titleSrc: string | null = null, titleTr = "";
 export function I18n() {
   const [lang] = usePref<Lang>("uilang", "vi");
   useEffect(() => {
-    cur = lang;
     const html = document.documentElement;
     html.lang = lang;
     html.dataset.lang = lang;
-    const run = () => walk(document.body, lang);
-    run();
-    // Tiêu đề thẻ trình duyệt (trang pháp lý, 404): dịch từ bản gốc để đổi qua lại được.
-    if (titleSrc === null || (document.title !== titleTr && document.title !== titleSrc)) titleSrc = document.title;
-    titleTr = tr(titleSrc, lang);
-    if (document.title !== titleTr) document.title = titleTr;
-    const mo = new MutationObserver((list) => {
-      mo.disconnect();
-      for (const r of list) {
-        if (r.type === "characterData") doText(r.target as Text, lang);
-        else if (r.type === "attributes") doAttrs(r.target as Element, lang);
-        else r.addedNodes.forEach((n) => walk(n, lang));
-      }
-      mo.observe(document.body, cfg);
+    let mo: MutationObserver | null = null, off = false;
+    void loadDict(lang).then(() => {
+      if (off) return;
+      // Đổi ngôn ngữ: chỉ chuyển khi từ điển mới đã về, nơi dùng useLangReady vẽ lại bằng ngôn ngữ mới.
+      if (cur !== lang) { cur = lang; ping(); }
+      walk(document.body, lang);
+      // Tiêu đề thẻ trình duyệt (trang pháp lý, 404): dịch từ bản gốc để đổi qua lại được.
+      if (titleSrc === null || (document.title !== titleTr && document.title !== titleSrc)) titleSrc = document.title;
+      titleTr = tr(titleSrc, lang);
+      if (document.title !== titleTr) document.title = titleTr;
+      const cfg: MutationObserverInit = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS };
+      const o = new MutationObserver((list) => {
+        o.disconnect();
+        for (const r of list) {
+          if (r.type === "characterData") doText(r.target as Text, lang);
+          else if (r.type === "attributes") doAttrs(r.target as Element, lang);
+          else r.addedNodes.forEach((n) => walk(n, lang));
+        }
+        o.observe(document.body, cfg);
+      });
+      mo = o;
+      o.observe(document.body, cfg);
     });
-    const cfg: MutationObserverInit = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS };
-    mo.observe(document.body, cfg);
-    return () => mo.disconnect();
+    return () => { off = true; mo?.disconnect(); };
   }, [lang]);
   return null;
 }

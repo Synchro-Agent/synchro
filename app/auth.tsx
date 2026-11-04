@@ -12,7 +12,8 @@ import { Mark } from "./brand";
 import { usePref } from "./store";
 import { OCCUPATIONS } from "./names";
 export { OCCUPATIONS };
-import { getLang, LANG_NAMES, type Lang } from "./i18n";
+import { getLang } from "./i18n";
+import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
 
@@ -239,19 +240,10 @@ interface AuthComponentProps {
   onSignOut?: () => void;
   // Vì sao màn hình đăng nhập hiện ra (phiên đã hết hạn khi app đang mở).
   notice?: string;
+  // Phiên vừa hết hạn: đây là đăng nhập lại, không phải bắt đầu dùng Synchro.
+  again?: boolean;
   // Quản trị viên đóng đăng ký: email chưa có tài khoản dừng ngay ở bước đầu, không phải điền hết biểu mẫu mới biết.
   signupOpen?: boolean;
-}
-
-// Đổi ngôn ngữ ngay ở màn hình đăng nhập: người chưa có tài khoản không phải đăng ký bằng thứ tiếng họ không đọc được.
-function LangSwitch() {
-  const [lang, setLang] = usePref<Lang>("uilang", "vi");
-  const [, setVlang] = usePref("vlang", "Vietnamese");
-  return (
-    <div className="auth-lang" role="group" aria-label="Ngôn ngữ" data-notr>
-      {(["vi", "en"] as Lang[]).map((k) => <button key={k} type="button" className={lang === k ? "on" : ""} aria-pressed={lang === k} lang={k} onClick={() => { setLang(k); setVlang(k === "en" ? "English" : "Vietnamese"); }}>{LANG_NAMES[k]}</button>)}
-    </div>
-  );
 }
 
 // Máy chủ không có khóa API dùng chung: nói trước khi đăng ký rằng cần gói AI của chính mình, không để người mới đăng ký xong mới biết. Không hỏi được thì thôi.
@@ -261,7 +253,7 @@ function PlanNote() {
   return need ? <p className="auth-note">Synchro runs on your own paid AI plan: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.</p> : null;
 }
 
-export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, signupOpen = true }: AuthComponentProps) => {
+export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, again, signupOpen = true }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -406,7 +398,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   }, [authStep, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const titles: Record<string, [string, string]> = {
-    email: ["Get started", "Continue with"],
+    email: [again ? "Sign in again" : "Get started", "Continue with"],
     password: [isLogin ? "Enter your password" : "Create your password", isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."],
     pending: ["Check your email", "We sent the next step to this address. If you already have an account, sign in or reset your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
@@ -499,7 +491,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <div className="glass-input-wrap w-full"><div className="glass-input">
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
-                                        <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
+                                        <input type="email" autoComplete="email" autoFocus={!!again} readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
                                         <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                     </div></div>
                                     {emailErr && authStep === "email" && <p id="auth-email-err" className="auth-field-err" role="alert">{emailErr}</p>}

@@ -18,6 +18,7 @@ function t() {
     d.exec(`CREATE TABLE IF NOT EXISTS ops_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, first_at INTEGER NOT NULL, kind TEXT NOT NULL, source TEXT NOT NULL,
         detail TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 1, user_id TEXT);
       CREATE INDEX IF NOT EXISTS ops_kind_at ON ops_events(kind, at)`);
+    d.exec("CREATE TABLE IF NOT EXISTS ops_runs (hour INTEGER NOT NULL, engine TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 0, fail INTEGER NOT NULL DEFAULT 0, auth INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (hour, engine))");
     d.prepare("DELETE FROM ops_events WHERE at < ?").run(Date.now() - KEEP);
     ready = true;
   }
@@ -76,7 +77,7 @@ const DISK_WARN_MB = 5000, DISK_CRIT_MB = 2000;
 export type Problem = { code: string; level: "crit" | "warn"; n?: number; at?: number };
 
 /** Những gì quản trị viên cần xử lý. Mã để giao diện viết thành câu theo ngôn ngữ; cũng là khóa để cảnh báo không lặp lại. */
-export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "mail" | "cli" | "backup" | "watchdog" | "errors24">): Problem[] {
+export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "mail" | "cli" | "backup" | "watchdog" | "errors24"> & { engineHour?: EngineRuns[] }): Problem[] {
   const out: Problem[] = [];
   const low = Math.min(...r.disks.map((x) => x.freeMB), Infinity);
   if (low < DISK_CRIT_MB) out.push({ code: "disk_crit", level: "crit", n: low }); else if (low < DISK_WARN_MB) out.push({ code: "disk_low", level: "warn", n: low });
@@ -93,6 +94,7 @@ export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "m
   const users = r.cli.reduce((a, c) => Math.max(a, c.users24), 0);
   if (users >= 3) out.push({ code: "cli_auth", level: "crit", n: users });
   if (r.errors24 >= 200) out.push({ code: "errors_many", level: "warn", n: r.errors24 });
+  for (const e of r.engineHour ?? []) if (e.fail >= 5 && e.fail >= e.ok) out.push({ code: `engine_fail:${e.engine}`, level: "warn", n: e.fail });
   return out;
 }
 
@@ -117,8 +119,9 @@ export function opsSnapshot() {
   let wdEvents: WatchdogEvent[] = [];
   try { wdEvents = fs.readFileSync(path.join(ops, "watchdog.jsonl"), "utf8").trim().split("\n").slice(-10).reverse().flatMap((l) => { try { return [JSON.parse(l) as WatchdogEvent]; } catch { return []; } }); } catch { /* chưa có */ }
   const runs24 = sum("SELECT COUNT(*) n FROM runs WHERE created_at > ?", now - DAY), runsFailed24 = sum("SELECT COUNT(*) n FROM runs WHERE status = 'error' AND created_at > ?", now - DAY);
+  const hour = Math.floor(now / 3_600_000), engineRows = (from: number) => d.prepare("SELECT engine, SUM(ok) ok, SUM(fail) fail, SUM(auth) auth FROM ops_runs WHERE hour >= ? GROUP BY engine ORDER BY engine").all(from) as EngineRuns[];
   return {
-    now, disks: uniqueDisks, mail, cli: cliRows, cliRecent, errors, errors24: count("error", now - DAY), csp, backup, watchdog, wdEvents, runs24, runsFailed24,
+    engines: engineRows(hour - 24), engineHour: engineRows(hour - 1), now, disks: uniqueDisks, mail, cli: cliRows, cliRecent, errors, errors24: count("error", now - DAY), csp, backup, watchdog, wdEvents, runs24, runsFailed24,
     boots24: count("boot", now - DAY), lastBootAt: lastAt("boot"),
     storage: {
       dbMB: fileMB(path.join(DATA_DIR, "synchro.db")) + fileMB(path.join(DATA_DIR, "synchro.db-wal")),
@@ -160,4 +163,25 @@ export async function opsWatch() {
       if (p.code !== "mail_failing") sendMail(a.email, opsAlertMail({ base, title, text, titleEn, textEn }), "alert");
     }
   }
+}
+
+export type EngineRuns = { engine: string; ok: number; fail: number; auth: number };
+/** Lỗi từ trình duyệt và lượt chạy nền: cùng sổ với lỗi máy chủ, đã làm sạch ở opsEvent. */
+export const recordOps = (kind: "browser" | "server", msg: unknown) => opsEvent("error", kind, String(msg ?? ""));
+
+/** "sub-claude/sonnet" → "claude"; khóa API "openai/…" → "openai". */
+export const engineOf = (model: unknown) => { const m = typeof model === "string" ? model : ""; return (m.split("/")[0] || "unknown").replace(/^sub-/, "").slice(0, 24); };
+
+/** Kết quả một lượt chat chạy nền, theo giờ và theo từng gói. Hết hạn mức và lỗi do yêu cầu (4xx) không phải sự cố; đăng nhập hỏng tính riêng. Giữ 8 ngày, không có mã người dùng. */
+export function noteRun(kind: string, model: unknown, http: number, json: unknown) {
+  if (kind !== "chat") return;
+  try {
+    const j = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
+    if (j.cancelled || j.planLimit) return;
+    const auth = !!j.relogin, fail = !auth && http >= 500, ok = http >= 200 && http < 300;
+    if (!auth && !fail && !ok) return;
+    const engine = engineOf(j.relogin ? `sub-${String(j.relogin)}/` : j.route ?? j.model ?? model), hour = Math.floor(Date.now() / 3_600_000), d = t();
+    d.prepare("INSERT INTO ops_runs (hour, engine, ok, fail, auth) VALUES (?, ?, ?, ?, ?) ON CONFLICT(hour, engine) DO UPDATE SET ok = ok + excluded.ok, fail = fail + excluded.fail, auth = auth + excluded.auth").run(hour, engine, ok ? 1 : 0, fail ? 1 : 0, auth ? 1 : 0);
+    d.prepare("DELETE FROM ops_runs WHERE hour < ?").run(hour - 24 * 8);
+  } catch (e) { console.error("[ops]", e); }
 }

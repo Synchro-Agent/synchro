@@ -237,14 +237,14 @@ try {
   await sendMsg(pageA, `#tool=mock_notes__create_note #args={"title":"Thẻ duyệt"}`);
   const ALLOW_BTN = `document.querySelector(".ag-ask:not(.cn-rc) .ag-ask-a .btn.dark")`;
   say(await pageA.until(`!!${ALLOW_BTN}`, 40000), "có thẻ duyệt");
-  say(await pageA.until(`!!document.querySelector(".ct-run.ct-ask")`, 5000), "cột bên có dấu riêng cho đoạn chat đang chờ duyệt");
+  say(await pageA.until(`!!document.querySelector(".ct-need")`, 5000), "cột bên có dấu riêng cho đoạn chat đang chờ duyệt");
   await pageA.click(ALLOW_BTN);
   say(await pageA.until(`!!document.querySelector(".ag-ask:not(.cn-rc) .api-err")`, 5000), "gửi hỏng: thẻ báo lỗi");
   say(await pageA.until(`!${ALLOW_BTN}?.disabled`, 3000), "gửi hỏng: nút mở lại");
   await pageA.ev(`window.__fail = false`);
   await pageA.click(ALLOW_BTN);
   say(await pageA.until(`!!document.querySelector(".ag-asked")`, 15000), "bấm lại: câu trả lời được nhận");
-  say(await pageA.until(`!document.querySelector(".ct-run.ct-ask")`, 15000), "hết chờ thì mất dấu ở cột bên");
+  say(await pageA.until(`!document.querySelector(".ct-need")`, 15000), "hết chờ thì mất dấu ở cột bên");
 } finally {
   await wipe().catch(() => {});
   chrome.kill();

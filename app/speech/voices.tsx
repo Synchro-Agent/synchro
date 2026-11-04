@@ -60,9 +60,11 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
   const slots = plan?.voices;
   const own = (mine ?? []).filter((v) => v.category !== "premade");
   const [src, setSrc] = useState<Voice | null>(null);
-  const remove = (v: Voice) => app.confirm(tr(`Xóa giọng “${v.name}” khỏi tài khoản ElevenLabs? Không hoàn tác được.`), "", tr("Xóa"), () => {
-    del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
-  });
+  const remove = (v: Voice) => {
+    app.confirm("Xóa giọng?", tr(`Xóa giọng “${v.name}” khỏi tài khoản ElevenLabs? Không hoàn tác được.`), "Xóa", () => {
+      del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
+    });
+  };
   const card = (v: Voice, extra?: React.ReactNode) => (
     <div key={v.id} className={`sp-vcard${bkV.on && !delOk(v) ? " bk-dim" : ""}`} {...(delOk(v) ? bulkRow(bkV, v) : {})}>
       <div className="sp-vcard-t">

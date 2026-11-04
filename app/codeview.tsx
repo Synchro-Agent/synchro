@@ -1,5 +1,6 @@
 "use client";
 
+import "./codeview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MODES, PRESETS } from "./codeconst";
 export { MODES, PRESETS };
@@ -1023,7 +1024,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               ))}
               <hr />
               <div className="cv-custom">
-                <textarea rows={3} value={rules.custom} placeholder="Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…" onChange={(e) => setRules({ preset: "custom", custom: e.target.value })} />
+                <textarea rows={3} aria-label="Luật riêng" value={rules.custom} placeholder="Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…" onChange={(e) => setRules({ preset: "custom", custom: e.target.value })} />
                 <div className="cv-custom-r">
                   <button className="btn" onClick={() => { setRules({ preset: "none", custom: "" }); setMenu(""); }}>Bỏ luật</button>
                   <button className="btn dark" onClick={() => { setRules({ ...rules, preset: "custom" }); setMenu(""); say("Đã lưu luật tùy chỉnh"); }}>Lưu</button>
@@ -1059,7 +1060,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                       {n.atts.length > 0 && <div className="cv-atts end">{n.atts.map((a, k) => <button key={k} className={`cv-att ${a.k}`} onClick={() => setViewer(a)}>{a.k === "error" ? <I.M icon="Alert" size={14} /> : <I.M icon="Code" size={14} />}{a.name}</button>)}</div>}
                       {editing?.id === n.id ? (
                         <div className="cv-edit">
-                          <textarea autoFocus value={editing.text} rows={Math.min(6, editing.text.split("\n").length + 1)} onChange={(e) => setEditing({ id: n.id, text: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) branch(n, editing.text); if (e.key === "Escape") setEditing(null); }} />
+                          <textarea autoFocus aria-label="Sửa tin nhắn" value={editing.text} rows={Math.min(6, editing.text.split("\n").length + 1)} onChange={(e) => setEditing({ id: n.id, text: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) branch(n, editing.text); if (e.key === "Escape") setEditing(null); }} />
                           <div className="cv-edit-r"><span>Gửi lại sẽ tạo nhánh mới, bản cũ vẫn được giữ.</span><button className="btn" onClick={() => setEditing(null)}>Hủy</button><button className="btn dark" onClick={() => branch(n, editing.text)}>Gửi nhánh mới</button></div>
                         </div>
                       ) : (
@@ -1078,7 +1079,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
-                      <div className={`ai-msg${n.done ? "" : " ai-streaming"}`}>{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className={`ai-msg${n.done ? "" : " ai-streaming"}`}>{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} streaming={!n.done} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">
@@ -1108,7 +1109,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               <div className="cv-mention">
                 {docMode ? (
                   <div className="cv-doc"><div className="cv-mh">Thêm tài liệu từ link</div>
-                    <input autoFocus placeholder="https://docs.example.com/api" onKeyDown={(e) => { if (e.key === "Enter") addDoc((e.target as HTMLInputElement).value); if (e.key === "Escape") { setDocMode(false); setMention(null); ta.current?.focus(); } }} />
+                    <input autoFocus aria-label="Thêm tài liệu từ link" placeholder="https://docs.example.com/api" onKeyDown={(e) => { if (e.key === "Enter") addDoc((e.target as HTMLInputElement).value); if (e.key === "Escape") { setDocMode(false); setMention(null); ta.current?.focus(); } }} />
                     <small>Nhấn Enter để thêm · Esc để hủy</small></div>
                 ) : mentionItems.length === 0 ? <div className="cv-none">Chưa có tệp nào. Dùng + để tải tệp, thư mục hoặc .zip.</div> : (
                   ["Codebase", "File", "Hàm", "Folder", "Docs"].map((g) => grp(g).length > 0 && (
@@ -1127,7 +1128,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               {errOpen && (
                 <div className="cv-errbox">
                   <div className="cv-mh"><I.Alert size={14} />Dán log lỗi / stack trace</div>
-                  <textarea autoFocus rows={6} value={errText} onChange={(e) => setErrText(e.target.value)} placeholder={"TypeError: Cannot read properties of undefined\n    at login (src/lib/auth.ts:12:18)"} />
+                  <textarea autoFocus aria-label="Dán log lỗi / stack trace" rows={6} value={errText} onChange={(e) => setErrText(e.target.value)} placeholder={"TypeError: Cannot read properties of undefined\n    at login (src/lib/auth.ts:12:18)"} />
                   <div className="cv-custom-r"><button className="btn" onClick={() => { setErrText(""); setErrOpen(false); }}>Hủy</button><button className="btn dark" onClick={addErr} disabled={!errText.trim()}>Đính kèm</button></div>
                 </div>
               )}

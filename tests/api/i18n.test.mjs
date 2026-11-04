@@ -13,7 +13,8 @@ ok(!missing.filter((m) => m.need === "en").length, "chữ tiếng Việt đều 
 ok(!missing.filter((m) => m.need === "vi").length, "chữ tiếng Anh đều có bản tiếng Việt (hoặc là tên riêng / thuật ngữ giữ nguyên)", show(missing.filter((m) => m.need === "vi")));
 
 console.log("2. Dịch đúng câu");
-const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
+const { "i18n-dict": D0, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
+const D = { ...D0, EN2VI: V.EN2VI, RULES_VI: V.RULES_VI };
 const tr = (s, lang) => {
   const map = lang === "en" ? D.VI2EN : D.EN2VI;
   if (Object.prototype.hasOwnProperty.call(map, s)) return map[s];

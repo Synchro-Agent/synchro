@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { Markdown } from "./md";
 import { Loader } from "./brand";
 import { tr } from "./i18n";
-import { ConnLogo } from "./connectorsui";
+import { ConnLogo } from "./connlogo";
 import { ASK_GONE } from "./codesync";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
@@ -200,7 +200,7 @@ export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { st
       {blocks.map((b, i) => b.k === "steer"
         ? <div key={i} className="ag-steer"><span>Bạn nhắn thêm</span><p data-notr>{b.text}</p></div>
         : b.k === "text"
-        ? <Markdown key={i} text={b.text} say={say} />
+        ? <Markdown key={i} text={b.text} say={say} streaming={live && i === blocks.length - 1} />
         : b.k === "think"
         ? <Think key={i} text={b.text} open={view === "verbose" || (view === "thinking" && live && i === blocks.length - 1)} />
         : b.k === "ask"

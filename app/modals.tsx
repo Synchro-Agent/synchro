@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { searchSettings } from "./settingsindex";
 import * as I from "./icons";
 import { UsageIcon } from "./usageui";
@@ -21,6 +21,23 @@ export function Confirm({ title, text, ok, onCancel, onOk, children }: { title: 
         <div className="modal-foot"><button className="btn" onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
       </div>
     </div>
+  );
+}
+
+// Hỏi một dòng chữ, thay cho hộp hỏi có sẵn của trình duyệt: hộp đó không theo giao diện, không dịch được nút và chặn cả trang. Gắn vào <body> vì nơi gọi có thể nằm trong khung cuộn.
+export function AskText({ title, init = "", ok, need, onCancel, onOk }: { title: string; init?: string; ok: string; need?: boolean; onCancel: () => void; onOk: (v: string) => void }) {
+  const [v, setV] = useState(init);
+  const go = () => { const t = v.trim(); if (t || !need) onOk(t); };
+  return createPortal(
+    <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <form className="modal sm" style={{ width: 420 }} onSubmit={(e) => { e.preventDefault(); go(); }}>
+        <h2 style={{ fontSize: 15, margin: "0 0 12px" }}>{title}</h2>
+        <input className="field" autoFocus value={v} aria-label={title} onChange={(e) => setV(e.target.value)} onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); onCancel(); } }} />
+        <div className="modal-foot" style={{ marginTop: 20 }}><button type="button" className="btn" onClick={onCancel}>Hủy</button><button className="btn dark" disabled={need && !v.trim()}>{ok}</button></div>
+      </form>
+    </div>,
+    document.body,
   );
 }
 
@@ -183,24 +200,6 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
 export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
   const [tab, setTab] = useState(initial);
   const [q, setQ] = useState("");
-  // Dòng cài đặt vừa chọn từ kết quả tìm: cuộn tới và làm nổi lên một lúc (các tab tải dần nên chờ dòng xuất hiện).
-  const [spot, setSpot] = useState<{ tab: string; name: string } | null>(null);
-  const body = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!spot) return;
-    let n = 0, t = 0;
-    const want = new Set([spot.name, tr(spot.name)].map((x) => x.trim()));
-    const look = () => {
-      const el = [...(body.current?.querySelectorAll<HTMLElement>(".row .t, h3, .adm-card-h b, .adm-perm-row .t") ?? [])].find((x) => want.has((x.textContent ?? "").trim()));
-      if (!el) { if (n++ < 30) t = window.setTimeout(look, 100); return; }
-      const row = el.closest<HTMLElement>(".row, .adm-perm-row, .adm-card") ?? el;
-      row.scrollIntoView({ block: "center" });
-      row.classList.add("s-flash");
-      t = window.setTimeout(() => row.classList.remove("s-flash"), 1800);
-    };
-    look();
-    return () => clearTimeout(t);
-  }, [spot]);
   const me = useApp().me;
   const admin = me?.isAdmin;
   const feat = me?.perms.features;
@@ -214,26 +213,37 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ...(feat?.skills !== false ? [["Skill Hub", <I.Plugins key="pl" />] as [string, React.ReactNode]] : []),
     ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
   ];
-  // Tìm theo cả tên gốc (tiếng Anh) lẫn tên đang hiện ở giao diện tiếng Việt.
-  const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => [n, tr(n, "vi")].some((x) => x.toLowerCase().includes(q.trim().toLowerCase())));
-  const hits = searchSettings(q, [...items, ...custom].map(([n]) => n), (x) => [x, tr(x, "vi"), tr(x, "en")]);
-  const item = (n: string, ic: React.ReactNode) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} aria-current={tab === n ? "page" : undefined} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>;
+  // Tìm theo tên mục và từng dòng cài đặt (settingsindex.ts), cả chữ gốc lẫn chữ đang hiện. Dòng khớp hiện ngay dưới mục, bấm là tới đúng chỗ.
+  const found = searchSettings(q, [...items, ...custom].map(([n]) => n), (s) => tr(s));
+  const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => found.some((x) => x.tab === n));
+  const [goRow, setGoRow] = useState<{ row: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!goRow) return;
+    // Phần thân có thể tải chậm: thử vài lần tới khi dòng hiện ra. Thẻ .t đã được dịch nên so với cả hai.
+    let n = 0;
+    const t = setInterval(() => {
+      const el = [...document.querySelectorAll<HTMLElement>(".s-body .row .t, .s-body h3, .s-body .adm-card-h b, .s-body .adm-perm-row .t")].find((x) => [goRow.row, tr(goRow.row)].includes(x.textContent?.trim() ?? ""));
+      if (el) { const r = el.closest<HTMLElement>(".row, .adm-perm-row, .adm-card") ?? el; r.scrollIntoView({ block: "center" }); r.classList.remove("s-hit"); void r.offsetWidth; r.classList.add("s-hit"); (r.querySelector<HTMLElement>("input,button,select,a") ?? r).focus({ preventScroll: true }); }
+      if (el || ++n > 12) clearInterval(t);
+    }, 120);
+    return () => clearInterval(t);
+  }, [goRow]);
+  const item = (n: string, ic: React.ReactNode) => <Fragment key={n}><button className={`s-item ${tab === n ? "on" : ""}`} aria-current={tab === n ? "page" : undefined} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>
+    {found.find((x) => x.tab === n)?.rows.slice(0, 6).map((r) => <button key={r} className="s-found" onClick={() => { setTab(n); setGoRow({ row: r, n: Date.now() }); }}>{r}</button>)}</Fragment>;
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal settings sy-settings">
+      {/* Tên cố định: phần thân vẽ lại khi đổi mục nên tiêu đề bên trong không dùng làm tên hộp thoại được. */}
+      <div className="modal settings sy-settings" aria-label="Settings">
         <div className="s-nav">
           <div className="sy-snav-h"><b>Settings</b></div>
           <div className="s-search"><I.Search size={15} /><input placeholder="Search" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          {hits.length > 0 && <>
-            <div className="s-group">Matching settings</div>
-            {hits.map((h) => <button key={`${h.tab}:${h.name}`} className="s-item s-hit" onClick={() => { setTab(h.tab); setSpot({ ...h }); }}><span className="s-lbl">{h.name}<small>{h.tab}</small></span></button>)}
-          </>}
           <div className="s-group">Settings</div>
           {f(items).map(([n, ic]) => item(n, ic))}
           <div className="s-group">Customize</div>
           {f(custom).map(([n, ic]) => item(n, ic))}
+          {q.trim() && !found.length && <div className="s-none" role="status">No results</div>}
         </div>
-        <div className="s-body" key={tab} ref={body}>
+        <div className="s-body" key={tab}>
           <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
           <Boundary resetKey={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
         </div>
