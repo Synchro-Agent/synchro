@@ -27,6 +27,8 @@ export function storeRef(uid: string, conv: string | undefined, name: string, co
   init().prepare("INSERT INTO tool_refs (id, user_id, conv, name, content, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, uid, conv ?? null, name.slice(0, 200), content.slice(0, MAX_REF), Date.now());
   return id;
 }
+/** Trang quyền riêng tư hứa giữ 30 ngày: dọn mỗi ngày, không chờ lần khởi động lại. */
+export const sweepRefs = () => { init().prepare("DELETE FROM tool_refs WHERE created_at < ?").run(Date.now() - KEEP_MS); };
 export const removeUserRefs = (uid: string) => { init().prepare("DELETE FROM tool_refs WHERE user_id = ?").run(uid); };
 
 const typeOf = (v: unknown): string => (v === null ? "null" : Array.isArray(v) ? `array(${v.length})` : typeof v);

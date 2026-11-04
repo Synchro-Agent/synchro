@@ -14,29 +14,33 @@ const RUN_MS = Number(process.env.SYNCHRO_PARSE_MS) || 120_000;
 const OUT_MAX = 128 * 1048576;
 const BUSY = "Máy chủ đang đọc nhiều tệp cùng lúc. Hãy thử lại sau ít phút.";
 
-let running = 0;
-const queue: (() => void)[] = [];
-const perUser = new Map<string, number>();
+// Giữ ở globalThis: mỗi route của Next có thể nạp module riêng, đếm riêng thì giới hạn không còn ý nghĩa.
+type Pool = { running: number; queue: (() => void)[]; perUser: Map<string, number> };
+const pools = ((globalThis as unknown as { __synchroParse?: Record<string, Pool> }).__synchroParse ??= {});
+const poolOf = (name: string) => (pools[name] ??= { running: 0, queue: [], perUser: new Map() });
 
 /** Chờ tới lượt rồi chạy fn. Hàng đợi đầy, một người gửi quá nhiều hay chờ quá lâu thì báo bận thay vì giữ kết nối mãi. */
-export async function withParseSlot<T>(uid: string | undefined, fn: () => Promise<T>): Promise<T> {
-  const who = uid ?? "";
-  const mine = perUser.get(who) ?? 0;
-  if (queue.length >= MAX_WAIT || (who && mine >= MAX_USER)) throw new FileError(BUSY);
-  perUser.set(who, mine + 1);
+async function withSlot<T>(name: string, lim: { run: number; wait: number; user: number }, uid: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const p = poolOf(name), who = uid ?? "";
+  const mine = p.perUser.get(who) ?? 0;
+  if (p.queue.length >= lim.wait || (who && mine >= lim.user)) throw new FileError(BUSY);
+  p.perUser.set(who, mine + 1);
   try {
-    if (running >= MAX_RUN) await new Promise<void>((ok, no) => {
+    if (p.running >= lim.run) await new Promise<void>((ok, no) => {
       const go = () => { clearTimeout(t); ok(); };
-      const t = setTimeout(() => { const i = queue.indexOf(go); if (i >= 0) queue.splice(i, 1); no(new FileError(BUSY)); }, WAIT_MS);
-      queue.push(go);
+      const t = setTimeout(() => { const i = p.queue.indexOf(go); if (i >= 0) p.queue.splice(i, 1); no(new FileError(BUSY)); }, WAIT_MS);
+      p.queue.push(go);
     });
-    running++;
-    try { return await fn(); } finally { running--; queue.shift()?.(); }
+    p.running++;
+    try { return await fn(); } finally { p.running--; p.queue.shift()?.(); }
   } finally {
-    const n = (perUser.get(who) ?? 1) - 1;
-    if (n > 0) perUser.set(who, n); else perUser.delete(who);
+    const n = (p.perUser.get(who) ?? 1) - 1;
+    if (n > 0) p.perUser.set(who, n); else p.perUser.delete(who);
   }
 }
+export const withParseSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("parse", { run: MAX_RUN, wait: MAX_WAIT, user: MAX_USER }, uid, fn);
+/** MarkItDown và OCR chạy tới hàng chục phút: hàng riêng, mỗi người một việc, để không chiếm chỗ của tệp đính kèm trong chat. */
+export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("convert", { run: Number(process.env.SYNCHRO_CONVERT_MAX) || 2, wait: 6, user: 1 }, uid, fn);
 
 /** Nhường CPU cho web và các lượt chat. Không đặt được cũng không sao. */
 export function lowPriority(pid?: number) {

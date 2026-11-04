@@ -37,6 +37,8 @@ function init() {
   }
   return d;
 }
+/** Trang quyền riêng tư hứa tự xóa sau 7 ngày: dọn mỗi ngày, không chờ lần khởi động lại. Lượt đang chạy thì không đụng. */
+export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_at < ? AND status != 'running'").run(Date.now() - KEEP_MS); };
 
 // Người đang theo dõi từng lượt (các kết nối SSE); toàn cục để sống qua lần nạp lại module khi phát triển.
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).

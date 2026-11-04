@@ -1,14 +1,17 @@
 // Tệp do code của model tạo ra (outputs/ của mỗi lần run_code): lưu trên đĩa máy chủ theo tài khoản, tải về qua
-// /api/outputs/<id>. Chỉ chủ tài khoản tải được; tệp tự xóa sau 30 ngày.
+// /api/outputs/<id>. Chỉ chủ tài khoản tải được; tệp tự xóa sau 30 ngày, tài khoản vượt hạn mức thì mất tệp cũ nhất trước.
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db } from "./authstore";
+import { diskLow } from "./diskfloor";
 import { randomToken } from "./mcpauth";
 import type { RunFile } from "./coderun";
 
 export type OutFile = { id: string; name: string; size: number; mime: string };
 const TTL = 30 * 86_400_000;
 const ROOT = path.join(DATA_DIR, "outputs");
+// Mỗi lần chạy lưu tới 150 MB: không có trần thì một tài khoản lấp đầy đĩa trong vài trăm lần chạy.
+const QUOTA_MB = () => Number(process.env.SYNCHRO_OUTPUT_QUOTA_MB) || 5000;
 
 const MIME: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -34,6 +37,11 @@ function init() {
   return d;
 }
 
+/** Đĩa đã xuống dưới sàn: lần chạy vẫn xong nhưng tệp không lưu, model phải báo cho người dùng. */
+export const outputsFull = () => diskLow(DATA_DIR);
+
+/** Xóa tệp quá 30 ngày. Chạy lúc khởi động và mỗi ngày (máy chủ có thể chạy hàng tháng không khởi động lại). */
+export function sweepOutputs() { init(); sweep(); }
 function sweep() {
   const d = db();
   const old = d.prepare("SELECT id, user_id FROM outputs WHERE created_at < ?").all(Date.now() - TTL) as { id: string; user_id: string }[];
@@ -45,9 +53,9 @@ const safeName = (p: string) => (path.basename(p).replace(/[\u0000-\u001f\\/:*?"
 
 export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
   const d = init();
-  if (!files.length) return [];
+  if (!files.length || outputsFull()) return [];
   fs.mkdirSync(path.join(ROOT, uid), { recursive: true, mode: 0o700 });
-  return files.map((f) => {
+  const saved = files.map((f) => {
     const id = randomToken(12);
     const name = safeName(f.path);
     fs.writeFileSync(path.join(ROOT, uid, id), f.data, { mode: 0o600 });
@@ -55,6 +63,21 @@ export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
     d.prepare("INSERT INTO outputs (id, user_id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, uid, name, o.mime, o.size, Date.now());
     return o;
   });
+  trimOutputs(uid, new Set(saved.map((o) => o.id)));
+  return saved;
+}
+
+/** Vượt hạn mức: bỏ tệp cũ nhất trước, không đụng tệp vừa tạo. */
+function trimOutputs(uid: string, keep: Set<string>) {
+  const d = init(), max = QUOTA_MB() * 1048576;
+  let used = (d.prepare("SELECT COALESCE(SUM(size), 0) AS n FROM outputs WHERE user_id = ?").get(uid) as { n: number }).n;
+  if (used <= max) return;
+  for (const o of d.prepare("SELECT id, size FROM outputs WHERE user_id = ? ORDER BY created_at, id").all(uid) as { id: string; size: number }[]) {
+    if (used <= max) break;
+    if (keep.has(o.id)) continue;
+    removeOutput(uid, o.id);
+    used -= o.size;
+  }
 }
 
 /** Xóa một tệp vừa tạo mà người dùng chưa nhận (bản mới của cùng đường dẫn trong cùng lượt thay thế). */

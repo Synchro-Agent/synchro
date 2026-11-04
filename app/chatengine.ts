@@ -24,7 +24,7 @@ import { dirCats } from "./claudedir";
 import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, type Lang, type RecalcReport, type RunOutput } from "./coderun";
-import { removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { outputsFull, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
@@ -202,7 +202,7 @@ const recalcNote = (rc: RecalcReport | undefined) => {
 // thì bản mới thay bản cũ của lượt này: từng hiện hai ba thẻ cùng tên, người dùng có thể tải nhầm bản hỏng. Tệp của các lượt trước giữ nguyên.
 function deliver(x: Exec, r: RunOutput) {
   const kept = r.files.filter((f) => !f.path.startsWith("_preview/"));
-  if (r.exit !== 0 || r.timedOut) return { saved: [] as OutFile[], held: kept.map((f) => f.path) };
+  if (r.exit !== 0 || r.timedOut || (kept.length && outputsFull())) return { saved: [] as OutFile[], held: kept.map((f) => f.path) };
   const saved = saveOutputs(x.uid, kept);
   mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), kept.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
   return { saved, held: [] as string[] };
@@ -221,7 +221,7 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     const { saved, held } = deliver(x, r);
     const pv = await previewOf(r.files);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
-    const hold = held.length ? `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>` : "";
+    const hold = held.length ? (r.exit === 0 && !r.timedOut ? `\n<not_delivered>\nMáy chủ sắp hết dung lượng đĩa nên các tệp này CHƯA tới người dùng: ${held.join(", ")}. Hãy nói rõ điều này với người dùng và đề nghị thử lại sau; đừng nói là đã gửi tệp.\n</not_delivered>` : `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>`) : "";
     return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}${hold}${recalcNote(r.recalc)}${previewNote(pv)}\n</run_result>`, is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };

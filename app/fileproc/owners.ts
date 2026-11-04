@@ -3,6 +3,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { AuthError, db } from "../authstore";
+import { diskLow } from "../diskfloor";
 
 const DIR = path.join(process.cwd(), ".cache", "files");
 // Hạn mức tệp tải lên của mỗi tài khoản: một người không lấp đầy đĩa của mọi người (tệp đã giới hạn 30 MB mỗi tệp, số tệp thì chưa).
@@ -38,7 +39,8 @@ export function uploadedBytes(uid: string) {
 
 /** Trước khi nhận tệp mới: chặn khi vượt hạn mức (tính cả tệp này). */
 export function checkQuota(uid: string, size: number) {
-  if (uploadedBytes(uid) + size > QUOTA_MB() * 1048576) throw new AuthError(`Bạn đã dùng hết ${QUOTA_MB()} MB dung lượng tệp tải lên.`, 413);
+  if (diskLow(process.cwd())) throw new AuthError("Máy chủ sắp hết dung lượng nên tạm thời chưa nhận tệp mới. Hãy thử lại sau.", 507);
+  if (uploadedBytes(uid) + size > QUOTA_MB() * 1048576) throw new AuthError(`Bạn đã dùng hết ${QUOTA_MB()} MB dung lượng tệp tải lên. Xóa bớt tệp cũ ở Cài đặt → Quyền riêng tư.`, 413);
 }
 
 /** Xóa tài khoản: bỏ quyền chủ của người này; tệp không còn ai là chủ thì xóa khỏi đĩa. Tệp người khác vẫn đang dùng giữ nguyên. */
