@@ -909,7 +909,7 @@ const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && b
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
-  if (Array.isArray(body.messages)) body = { ...body, messages: await expandFileRefs(body.messages, lastUserText(body.messages)) };
+  if (Array.isArray(body.messages)) body = { ...body, messages: await expandFileRefs(body.messages, lastUserText(body.messages), c.user.id) };
   if (body.model !== AUTO || typeof body.resume === "string") return chatTurn(body, c, scope);
   // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,
   // không tự chuyển sang khóa API (tierOf xếp hạng được cả "sub-claude/opus", "sub-claude/haiku"…). Gói hết hạn mức thì không chọn.

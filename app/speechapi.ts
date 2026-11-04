@@ -357,6 +357,12 @@ const KEEP = 300;
 const dirOf = (u: UserRow) => path.join(DATA_DIR, "speech", u.id.replace(/[^\w-]/g, ""));
 const rowOut = (r: ItemRow): Item => ({ id: r.id, kind: r.kind, title: r.title, meta: JSON.parse(r.meta || "{}"), mime: r.mime, size: r.size, createdAt: r.created_at, url: r.file ? `/api/speech/file?id=${r.id}` : null });
 
+/** Xóa tài khoản: tệp âm thanh trên đĩa (các dòng speech_items do purge.ts xóa). */
+export function removeUserSpeech(uid: string) {
+  const safe = uid.replace(/[^\w-]/g, "");
+  if (safe) fs.rmSync(path.join(DATA_DIR, "speech", safe), { recursive: true, force: true });
+}
+
 export function saveItem(u: UserRow, kind: string, title: string, meta: Record<string, unknown>, file?: { buf: Buffer; mime: string; ext: string }): Item {
   const id = crypto.randomBytes(9).toString("base64url");
   let rel: string | null = null;

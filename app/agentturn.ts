@@ -122,7 +122,7 @@ export async function runAgentTurn(o: {
       const placed = await placeUploads(user.id, d, ups);
       for (const e of placed.errors) o.emit({ t: "text", text: `⚠️ ${e}` });
       const one = ups.filter((f) => !f.folder);
-      const blocks = await buildContext(one.map((f) => f.id), Object.fromEntries(one.map((f) => [f.id, f.name])), lastText);
+      const blocks = await buildContext(one.map((f) => f.id), Object.fromEntries(one.map((f) => [f.id, f.name])), lastText, user.id);
       const note = placed.lines.length ? `\n\n<attachments>\nNgười dùng gửi kèm, đã chép nguyên vẹn vào workspace (dùng được bằng mọi công cụ: đọc, giải nén, chạy):\n${placed.lines.join("\n")}${blocks.length ? "\nẢnh, PDF và nội dung tệp chữ gửi kèm ngay bên dưới." : ""}\n</attachments>` : "";
       last.content = [{ type: "text", text: lastText + note }, ...blocks];
     }

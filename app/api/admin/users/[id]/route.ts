@@ -1,17 +1,5 @@
 import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, sameOrigin, sessionsOf } from "../../../../authstore";
-import { removeUserSkillFiles } from "../../../../skillstore";
-import { removeUserConnectors } from "../../../../connectors";
-import { removeUserCaps } from "../../../../caps";
-import { removeUserDevices } from "../../../../browserext";
-import { removeUserOutputs } from "../../../../outputs";
-import { removeUserArtifacts } from "../../../../artifactstore";
-import { removeUserApps } from "../../../../appstore";
-import { removeUserTasks } from "../../../../tasks";
-import { removeUserVotes } from "../../../../feedback";
-import { removeUserComments } from "../../../../collab";
-import { removeUserUsage } from "../../../../usage";
-import { removeUserPlugins } from "../../../../plugins";
-import { destroyWorkspace } from "../../../../workspace";
+import { purgeUser } from "../../../../purge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,18 +30,6 @@ export const DELETE = handle(async (req, { params }: Ctx) => {
   const { confirm } = await req.json();
   const id = (await params).id;
   adminDelete(req, user, id, confirm);
-  await removeUserSkillFiles(id);
-  removeUserConnectors(id);
-  removeUserCaps(id);
-  await removeUserDevices(id);
-  removeUserOutputs(id);
-  removeUserArtifacts(id);
-  removeUserApps(id);
-  removeUserTasks(id);
-  removeUserVotes(id);
-  removeUserComments(id);
-  removeUserUsage(id);
-  await removeUserPlugins(id);
-  await destroyWorkspace(id);
+  await purgeUser(id);
   return Response.json({ ok: true });
 });

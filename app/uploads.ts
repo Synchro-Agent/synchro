@@ -37,7 +37,7 @@ export async function placeUploads(u: string, d: string, list: Upload[]) {
   if (!list.length) return { lines, errors };
   await exec(u, d, { cmd: `mkdir -p ${UPLOADS} && ${EXCLUDE_SYNCHRO}`, timeout: 20 });
   for (const f of list) {
-    const s = await storedFile(f.id);
+    const s = await storedFile(f.id, u);
     const name = safe(f.name);
     if (!s) { errors.push(`"${f.name}" không còn trên máy chủ, hãy tải lên lại.`); continue; }
     try {
