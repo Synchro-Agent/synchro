@@ -280,7 +280,8 @@ for (const theme of THEMES) for (const size of SIZES) {
     if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") errs.push("console: " + m.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 200));
     if (m.method === "Network.responseReceived" && m.params.response.status >= 500) errs.push(`HTTP ${m.params.response.status}: ${m.params.response.url.slice(0, 100)}`);
   });
-  const send = (method, params = {}, sessionId) => new Promise((ok, no) => { const id = ++seq; waits.set(id, [ok, no]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
+  // Chrome không trả lời (hộp thoại chặn, tab treo): báo lỗi của bước đó thay vì treo cả bộ soát hàng giờ.
+  const send = (method, params = {}, sessionId) => new Promise((ok, no) => { const id = ++seq; const tm = setTimeout(() => { waits.delete(id); no(new Error("Chrome không trả lời: " + method)); }, 90_000); waits.set(id, [(v) => { clearTimeout(tm); ok(v); }, (e) => { clearTimeout(tm); no(e); }]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
   const { targetId } = await send("Target.createTarget", { url: "about:blank" });
   const { sessionId: S } = await send("Target.attachToTarget", { targetId, flatten: true });
   const P = (method, params) => send(method, params, S);
