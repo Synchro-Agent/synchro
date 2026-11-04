@@ -58,7 +58,7 @@ export function PublishButton({ conv, art, say }: { conv: string; art: ArtVersio
           <>
             <label className="pub-l">{tr("Tên ứng dụng")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} /></label>
             <div className="pub-vis" role="radiogroup">
-              <button role="radio" aria-checked={vis === "org"} className={vis === "org" ? "on" : ""} onClick={() => setVis("org")}><I.Users size={15} /><span><b>{tr("Cả tổ chức")}</b><em>{tr("Mọi tài khoản trên Synchro này mở được")}</em></span></button>
+              <button role="radio" aria-checked={vis === "org"} className={vis === "org" ? "on" : ""} onClick={() => setVis("org")}><I.Users size={15} /><span><b>{tr("Ai có đường dẫn")}</b><em>{tr("Mọi người có tài khoản Synchro và có đường dẫn đều mở được")}</em></span></button>
               <button role="radio" aria-checked={vis === "private"} className={vis === "private" ? "on" : ""} onClick={() => setVis("private")}><I.Lock size={15} /><span><b>{tr("Chỉ mình tôi")}</b><em>{tr("Chỉ bạn mở được")}</em></span></button>
             </div>
             {cur && (
@@ -101,7 +101,7 @@ export function AppsGallery({ q, say }: { q: string; say: (m: string) => void })
             <b data-notr>{a.title}</b>
             {/* Dấu "·" dính vào chữ đứng trước (khoảng trắng không ngắt) và "2 lượt mở", "của Lan Anh" không bị tách: màn hẹp từng đẩy
                 "· 2/11/2026" xuống đầu dòng, bẻ tên "apps- / a", "Download / Tester". Gạch nối trong tên là gạch không ngắt. */}
-            <span>{[a.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi"), a.mine ? "" : `${tr("của")} ${a.ownerName}`.replace(/ /g, "\u00a0").replace(/-/g, "\u2011"), `${a.opens} ${tr("lượt mở")}`.replace(/ /g, "\u00a0"),
+            <span>{[a.visibility === "org" ? tr("Ai có đường dẫn") : tr("Chỉ mình tôi"), a.mine ? "" : `${tr("của")} ${a.ownerName}`.replace(/ /g, "\u00a0").replace(/-/g, "\u2011"), `${a.opens} ${tr("lượt mở")}`.replace(/ /g, "\u00a0"),
               new Date(a.updated_at).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")].filter(Boolean).join("\u00a0· ")}</span>
           </div>
           <a className="btn" href={`/apps/${a.id}`} target="_blank" rel="noreferrer">{tr("Mở")}</a>
@@ -149,7 +149,7 @@ export function AppRunner({ id }: { id: string }) {
         <a href="/" className="app-home" aria-label="Synchro">Synchro</a>
         <span className="app-sep" />
         <b data-notr>{app.title}</b>
-        <span className="app-meta">{app.visibility === "org" ? tr("Cả tổ chức") : tr("Chỉ mình tôi")}{app.mine ? "" : ` · ${tr("của")} ${app.ownerName}`}</span>
+        <span className="app-meta">{app.visibility === "org" ? tr("Ai có đường dẫn") : tr("Chỉ mình tôi")}{app.mine ? "" : ` · ${tr("của")} ${app.ownerName}`}</span>
         <span style={{ flex: 1 }} />
         <Presence people={live.people} me={me} />
         <button className={`btn app-cmt ${panel ? "on" : ""}`} onClick={() => setPanel(!panel)} aria-pressed={panel}><I.Chat2 size={15} />{tr("Bình luận")}{n > 0 && <span className="cl-n">{n}</span>}</button>

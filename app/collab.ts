@@ -2,7 +2,7 @@
 // và kênh trực tiếp: ai đang mở ứng dụng, dữ liệu chung vừa đổi, bình luận mới — mọi người đang mở thấy ngay, không cần tải lại.
 import crypto from "node:crypto";
 import { db, getUser, type UserRow } from "./authstore";
-import { AppError, getApp } from "./appstore";
+import { appPeople, AppError, getApp, noteVisit } from "./appstore";
 import { addNotice } from "./tasks";
 import { enter, publish, type LiveEvent } from "./live";
 
@@ -23,6 +23,7 @@ const nameOf = (u?: Pick<UserRow, "name" | "email" | "full_name" | "nickname"> |
 /** Vào phòng trực tiếp của ứng dụng; trả về hàm rời phòng. */
 export function join(u: UserRow, app: string, send: (e: LiveEvent) => void) {
   seeApp(u, app);
+  noteVisit(u.id, app);
   return enter(app, u.id, nameOf(u), send);
 }
 
@@ -43,22 +44,20 @@ export function listComments(u: UserRow, app: string) {
 }
 
 const fold = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
-/** Người có thể nhắc tên trong ứng dụng: ứng dụng của cả tổ chức thì mọi người đang hoạt động, ứng dụng riêng thì chỉ chủ.
- *  Tìm không cần dấu; tên bắt đầu bằng chữ đã gõ xếp trước, rồi tên chứa chữ đó, cuối cùng là email. */
+/** Người có thể nhắc tên: chủ ứng dụng và những người đã mở / bình luận ứng dụng này (ứng dụng riêng thì chỉ chủ). Không bao giờ là toàn bộ người dùng
+ *  và không trả email: đăng ký đang mở, người lạ không được dò danh sách thành viên qua ô @nhắc.
+ *  Tìm không cần dấu; tên bắt đầu bằng chữ đã gõ xếp trước, rồi tên chứa chữ đó. */
 export function mentionable(u: UserRow, app: string, q: string) {
-  const a = seeApp(u, app);
+  seeApp(u, app);
   const f = fold(q.trim()).slice(0, 60);
-  const rows = init().prepare("SELECT id, email, name, full_name, nickname FROM users WHERE status = 'active' AND id != ? ORDER BY last_seen_at DESC LIMIT 2000")
-    .all(u.id) as (Pick<UserRow, "id" | "email" | "name" | "full_name" | "nickname">)[];
-  const score = (r: (typeof rows)[number]) => {
+  const rows = appPeople(app).filter((id) => id !== u.id).map((id) => getUser(id)).filter((r): r is UserRow => r?.status === "active" && !!getApp(r.id, app));
+  const score = (r: UserRow) => {
     if (!f) return 1;
     const n = fold(nameOf(r));
     if (n.startsWith(f) || n.split(/\s+/).some((w) => w.startsWith(f))) return 3;
-    if (n.includes(f)) return 2;
-    return fold(r.email).startsWith(f) ? 1 : 0;
+    return n.includes(f) ? 2 : 0;
   };
-  return rows.map((r) => ({ r, s: score(r) })).filter((x) => x.s > 0).sort((x, y) => y.s - x.s)
-    .filter((x) => a.visibility === "org" || getApp(x.r.id, app)).slice(0, 8).map(({ r }) => ({ id: r.id, name: nameOf(r), email: r.email }));
+  return rows.map((r) => ({ r, s: score(r) })).filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 8).map(({ r }) => ({ id: r.id, name: nameOf(r) }));
 }
 
 export function addComment(u: UserRow, app: string, body: unknown, mentions: unknown) {
@@ -68,9 +67,11 @@ export function addComment(u: UserRow, app: string, body: unknown, mentions: unk
   if (text.length > 4000) fail("Bình luận tối đa 4.000 ký tự.");
   const d = init();
   if ((d.prepare("SELECT COUNT(*) AS n FROM app_comments WHERE app = ?").get(app) as { n: number }).n >= 2000) fail("Ứng dụng đã có quá nhiều bình luận.");
-  // Chỉ giữ người được nhắc thật sự xem được ứng dụng (ứng dụng riêng thì người khác không mở được).
+  // Chỉ giữ người đã tham gia ứng dụng và thật sự xem được nó: không gửi được thông báo cho một người lạ bất kỳ trên Synchro.
+  noteVisit(u.id, app);
+  const people = new Set(appPeople(app));
   const ids = [...new Set((Array.isArray(mentions) ? mentions : []).filter((x): x is string => typeof x === "string"))].slice(0, 20)
-    .filter((id) => id !== u.id && getUser(id)?.status === "active" && !!getApp(id, app));
+    .filter((id) => id !== u.id && people.has(id) && getUser(id)?.status === "active" && !!getApp(id, app));
   const row: Row = { id: "cmt_" + crypto.randomBytes(8).toString("base64url"), app, user_id: u.id, body: text, mentions: JSON.stringify(ids), resolved: 0, created_at: Date.now() };
   d.prepare("INSERT INTO app_comments (id, app, user_id, body, mentions, resolved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(row.id, row.app, row.user_id, row.body, row.mentions, 0, row.created_at);
   const who = nameOf(u), link = `app:${app}`;

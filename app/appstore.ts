@@ -23,7 +23,9 @@ function init() {
       opens INTEGER NOT NULL DEFAULT 0, UNIQUE(owner, conv, ident));
       CREATE INDEX IF NOT EXISTS apps_owner ON apps(owner, updated_at);
       CREATE TABLE IF NOT EXISTS app_data (ref TEXT NOT NULL, owner TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, size INTEGER NOT NULL,
-      updated_by TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (ref, owner, key))`);
+      updated_by TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (ref, owner, key));
+      CREATE TABLE IF NOT EXISTS app_visits (app TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (app, user_id));
+      CREATE INDEX IF NOT EXISTS app_visits_user ON app_visits(user_id)`);
     ready = true;
   }
   return d;
@@ -31,19 +33,31 @@ function init() {
 
 const pub = (r: AppRow, uid: string): PublicApp => {
   const { content: _c, owner, ...rest } = r;
-  return { ...rest, mine: owner === uid, ownerName: owner === uid ? "" : getUser(owner)?.name || getUser(owner)?.email || "" };
+  return { ...rest, mine: owner === uid, ownerName: owner === uid ? "" : getUser(owner)?.name || "" };
 };
 const canSee = (r: AppRow, uid: string) => r.owner === uid || r.visibility === "org";
 
-/** Ứng dụng của mình và ứng dụng cả tổ chức dùng được. */
+// "org" = ai có tài khoản và có đường dẫn đều mở được. Đăng ký đang mở cho mọi người nên đây không phải là một tổ chức thật: người lạ vừa đăng ký
+// không được thấy danh sách ứng dụng của người khác; ứng dụng chỉ hiện trong danh sách của người đã mở nó (hoặc đã bình luận, được nhắc).
+export function noteVisit(uid: string, app: string) {
+  init().prepare("INSERT INTO app_visits (app, user_id, at) VALUES (?, ?, ?) ON CONFLICT(app, user_id) DO UPDATE SET at = excluded.at").run(app, uid, Date.now());
+}
+/** Những người đã tham gia ứng dụng (đã mở, đã bình luận): nhóm duy nhất được gợi ý khi @nhắc tên, kèm chủ ứng dụng. */
+export function appPeople(app: string): string[] {
+  const d = init();
+  const owner = (d.prepare("SELECT owner FROM apps WHERE id = ?").get(app) as { owner: string } | undefined)?.owner;
+  return [...new Set([...(owner ? [owner] : []), ...(d.prepare("SELECT user_id FROM app_visits WHERE app = ? ORDER BY at DESC LIMIT 500").all(app) as { user_id: string }[]).map((r) => r.user_id)])];
+}
+
+/** Ứng dụng của mình và ứng dụng dùng chung mình đã từng mở. */
 export function listApps(uid: string): PublicApp[] {
-  return (init().prepare("SELECT * FROM apps WHERE owner = ? OR visibility = 'org' ORDER BY updated_at DESC LIMIT 300").all(uid) as AppRow[]).map((r) => pub(r, uid));
+  return (init().prepare("SELECT * FROM apps WHERE owner = ? OR (visibility = 'org' AND id IN (SELECT app FROM app_visits WHERE user_id = ?)) ORDER BY updated_at DESC LIMIT 300").all(uid, uid) as AppRow[]).map((r) => pub(r, uid));
 }
 
 export function getApp(uid: string, id: string, open = false): (PublicApp & { content: string }) | null {
   const r = init().prepare("SELECT * FROM apps WHERE id = ?").get(id) as AppRow | undefined;
   if (!r || !canSee(r, uid)) return null;
-  if (open) init().prepare("UPDATE apps SET opens = opens + 1 WHERE id = ?").run(id);
+  if (open) { init().prepare("UPDATE apps SET opens = opens + 1 WHERE id = ?").run(id); noteVisit(uid, id); }
   return { ...pub(r, uid), content: r.content };
 }
 
@@ -80,13 +94,13 @@ export function updateApp(uid: string, id: string, p: { title?: unknown; visibil
 function dropComments(ids: string[]) { try { for (const id of ids) init().prepare("DELETE FROM app_comments WHERE app = ?").run(id); } catch { /* chưa có bảng */ } }
 export function removeApp(uid: string, id: string) {
   const ok = init().prepare("DELETE FROM apps WHERE id = ? AND owner = ?").run(id, uid).changes > 0;
-  if (ok) { init().prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`); dropComments([id]); }
+  if (ok) { init().prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`); init().prepare("DELETE FROM app_visits WHERE app = ?").run(id); dropComments([id]); }
   return ok;
 }
 export function removeUserApps(uid: string) {
   const d = init();
   const ids = (d.prepare("SELECT id FROM apps WHERE owner = ?").all(uid) as { id: string }[]).map((r) => r.id);
-  for (const id of ids) d.prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`);
+  for (const id of ids) { d.prepare("DELETE FROM app_data WHERE ref = ?").run(`app:${id}`); d.prepare("DELETE FROM app_visits WHERE app = ?").run(id); }
   dropComments(ids);
   d.prepare("DELETE FROM apps WHERE owner = ?").run(uid);
   d.prepare("DELETE FROM app_data WHERE owner = ? OR ref LIKE ?").run(uid, `art:${uid}:%`);

@@ -60,7 +60,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     }
     if (rem) {
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
-      for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng của tổ chức" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
+      for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng dùng chung" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
       for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: go.skillHub });
       for (const l of rem.libs) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skillCount} skill`, icon: <I.Plugins size={16} />, run: go.skillHub });
     }

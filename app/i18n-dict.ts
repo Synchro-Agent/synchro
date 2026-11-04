@@ -2179,6 +2179,18 @@ addNew(VI2EN, { "Đang tắt": "Turned off", "Việc tự động không dùng �
 
 // Xuất skill / thư viện thành .zip (app/skillexport.ts).
 Object.assign(VI2EN, { "Đã xuất": "Exported", "Không xuất được skill này.": "Could not export this skill.", "Không có skill này.": "This skill does not exist.", "Không tìm thấy thư viện.": "Library not found." });
+// Bảo mật, quyền riêng tư, xóa dữ liệu
+Object.assign(VI2EN, {
+  "Ai có đường dẫn": "Anyone with the link", "Mọi người có tài khoản Synchro và có đường dẫn đều mở được": "Anyone with a Synchro account and the link can open it", "Ứng dụng dùng chung": "Shared app",
+  "Codex định chạy lệnh trực tiếp trên máy chủ nên Synchro đã dừng lượt này để bảo vệ dữ liệu. Hãy nhắn lại, hoặc dùng model khác.": "Codex tried to run a command directly on the server, so Synchro stopped this turn to protect your data. Send your message again or use another model.",
+  "Máy chủ sắp hết dung lượng đĩa nên tạm không nhận việc mới. Hãy thử lại sau.": "The server is almost out of disk space and is not taking new work for now. Try again later.",
+  "Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.": "The server is updating the workspace. Try again in a few minutes.",
+  "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.": "The server is running a lot of code right now. Try again in a few seconds.",
+});
+RULES_EN.push(
+  [/^Bạn đã dùng hết (\d+) MB dung lượng tệp tải lên\.$/, (m) => `You have used all ${m[1]} MB of your upload storage.`],
+  [/^Workspace đã vượt xa hạn mức (\d+) MB nên không bật được\. Hãy liên hệ quản trị viên để dọn bớt\.$/, (m) => `This workspace is far over its ${m[1]} MB limit and cannot start. Ask an administrator to clear some space.`],
+);
 
 // Giao diện "Instrument": đầu trang, tab, nút mới.
 Object.assign(EN2VI, { "Libraries and skills Synchro uses when it works for you: add one from a repository link, upload one, or browse the license-checked directory.": "Thư viện và skill Synchro dùng khi làm việc cho bạn: thêm từ link repo, tải lên, hoặc khám phá danh mục đã kiểm tra giấy phép." });
