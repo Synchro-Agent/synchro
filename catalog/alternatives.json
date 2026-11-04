@@ -67,5 +67,20 @@
     { "repo": "arnons1/great-event-planning-skill", "name": "Great Event Planning", "summary": "Plan intimate side events at conferences: dinners, cocktail evenings, breakfasts, demo nights." },
     { "repo": "winterje90/event-playbook-skills", "name": "Event Playbook", "summary": "Event planning across the full lifecycle: evaluate, plan, brief, debrief and dashboard." }] },
   "Robin": { "catalog": [], "github": [{ "repo": "ardaorkin/nyc-apartment-search-skill", "name": "Apartment Search", "summary": "Search and re-check public rental listings with a deduplicated, ranked, change-tracked shortlist." }] },
-  "Syndic8": { "catalog": ["curetcore/karrito-claude-plugin", "openclips/skills"] }
+  "Syndic8": { "catalog": ["curetcore/karrito-claude-plugin", "openclips/skills"] },
+  "Phished": { "catalog": ["scanmalware/scanmalware-plugin"] },
+  "XiaoHongShu RedNote Local Guide to China": { "catalog": ["h5kk/tineo-claude-plugin"] },
+  "DeSlop": { "catalog": ["amolvenkataraman/make-poster", "starrykit/starrykit-plugin"] },
+  "AirPrompter": { "catalog": ["franmastromarino/claude-prompt-library"] },
+  "Antevo Wealth": { "catalog": ["wealthstoryline-asdgene/wealthstoryline-plugin", "cashflow-tech/plugin"] },
+  "BetterOff": { "catalog": ["cashflow-tech/plugin", "mindcraftersgroup/sprout-claude-plugin"] },
+  "Joboostr": { "catalog": ["vndck/mokaru-mcp", "kasovy/neverapply-mcp", "flodirka/cv-builder-plugin"] },
+  "Aqteron": { "catalog": ["exepad/claude-plugin", "workiom/workiom-plugin"] },
+  "KOTC Full-Length Review": { "catalog": ["najikay/claude-study-desk", "jvsena42/loopky/plugins-loopky"] },
+  "Rancher": { "catalog": [] },
+  "I Do Crew": { "catalog": [] },
+  "TickerTrac": { "catalog": [] },
+  "Flowglad": { "catalog": [] },
+  "EnergyFlowX": { "catalog": [] },
+  "LOCI": { "catalog": [] }
 }

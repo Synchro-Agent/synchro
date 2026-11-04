@@ -80,6 +80,8 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
   const missing = (c: string) => (d?.cats[c]?.plugins ?? 0) - (d?.cats[c]?.installed ?? 0) - (d?.cats[c]?.closed ?? 0) - (d?.cats[c]?.failed ?? 0);
   const missingAll = d ? d.totals.plugins - d.totals.installed - d.totals.closed - d.totals.failed : 0;
   const altNames = (x: Item) => x.alt.map((a, i) => <span key={a.id}>{i > 0 && ", "}{a.installed ? <button className="cd-link" data-notr onClick={() => onOpen(a.installed!)}>{a.name}</button> : d?.canInstall ? <button className="cd-link" data-notr disabled={!!busy || running} aria-label={`${tr("Install")} ${a.name}`} onClick={() => install(a)}>{busy === a.id ? <span className="art-spin sm" /> : null}{a.name}</button> : <span data-notr>{a.name}</span>}</span>);
+  // Không có thư viện mở làm cùng việc: vẫn có đường đi tiếp, mở cả mục ngành nghề của thư viện đó.
+  const browse = (x: Item) => { const c = x.cats[0]; return c && c !== cat && CAT.has(c) ? <> <button className="cd-link" onClick={() => { setCat(c); setOnly(""); }}>{tr("See other libraries in")} {tr(CAT.get(c)!.label)}</button></> : null; };
   const askAll = (c: string | null) => {
     const left = c ? missing(c) : missingAll;
     const label = c ? tr(CAT.get(c)?.label ?? c) : tr("the whole directory");
@@ -147,8 +149,8 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
               <div className="pl-dcard-t">
                 <b data-notr>{x.name}</b>
                 <span data-notr>{x.summary || x.skills.join(", ")}</span>
-                {x.failed && <div className="cd-alt" title={x.failedWhy ?? undefined}><I.Alert size={12} /><span>{d.admin ? tr("Could not install from its source.") : tr("Not available right now: it could not be installed from its source.")}{x.alt.length ? <> {x.altAuto ? tr("Similar open libraries:") : tr("Open alternatives:")} {altNames(x)}</> : null}</span></div>}
-                {x.closed && <div className="cd-alt" title={x.closedWhy ?? undefined}><I.Lock size={12} /><span>{tr("Closed license, not installed.")}{x.alt.length ? <> {x.altAuto ? tr("Similar open libraries:") : tr("Open alternatives:")} {altNames(x)}</> : <> {tr("No open alternative yet.")}</>}</span></div>}
+                {x.failed && <div className="cd-alt" title={x.failedWhy ?? undefined}><I.Alert size={12} /><span>{d.admin ? tr("Could not install from its source.") : tr("Not available right now: it could not be installed from its source.")}{x.alt.length ? <> {x.altAuto ? tr("Similar open libraries:") : tr("Open alternatives:")} {altNames(x)}</> : browse(x)}</span></div>}
+                {x.closed && <div className="cd-alt" title={x.closedWhy ?? undefined}><I.Lock size={12} /><span>{tr("Closed license, not installed.")}{x.alt.length ? <> {x.altAuto ? tr("Similar open libraries:") : tr("Open alternatives:")} {altNames(x)}</> : <> {tr("No open alternative yet.")}{browse(x)}</>}</span></div>}
                 {x.github && x.altFor.length > 0 && <div className="cd-alt"><I.GitHub size={12} /><span>{tr("Open alternative to")} <span data-notr>{x.altFor.join(", ")}</span></span></div>}
                 {/* Thư mục của Claude không ghi giấy phép cho mọi thư viện (vd. của Anthropic): khi đó không đoán, giấy phép thật được đọc từ repo lúc cài. */}
                 <em><span><span data-notr>{x.author}</span> ·</span> <span>{x.github ? "GitHub" : `${x.skillCount} skill`}</span>{x.license ? <> <span>· <span data-notr>{x.license}</span></span></> : null}{x.verified === "anthropic" ? <> <span>· Anthropic</span></> : x.verified === "partner" ? <> <span>· {tr("Partner")}</span></> : null}</em>

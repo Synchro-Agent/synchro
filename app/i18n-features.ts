@@ -45,6 +45,7 @@ export const FX_EN2VI: Record<string, string> = {
   "Could not install from its source.": "Không cài được từ nguồn của nó.",
   "Not available right now: it could not be installed from its source.": "Hiện chưa dùng được: không cài được từ nguồn của nó.",
   "Similar open libraries:": "Thư viện mở tương tự:",
+  "See other libraries in": "Xem thư viện khác trong mục",
   "Could not install": "Không cài được",
   "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan.": "Kết nối Claude, ChatGPT, Gemini và Grok bằng gói của chính bạn. Hiện chưa liên kết khóa API dùng chung, nên mỗi người đăng nhập bằng gói của mình.",
   "The model picker keeps one group per provider and shows your plan's models while you are signed in.": "Bộ chọn model có một nhóm cho mỗi hãng và hiện model của gói khi bạn đã đăng nhập.",

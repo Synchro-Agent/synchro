@@ -36,7 +36,7 @@ export const GET = handle(async (req: Request) => {
     totals: { plugins: all.length, skills: all.reduce((a, e) => a + e.skills.length, 0), installed: all.filter((e) => have.has(CD + e.id)).length, closed: all.filter((e) => isClosed(e.id)).length, failed: all.filter((e) => isFailed(e.id)).length },
     cats: Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, { ...v, installed: done[k] ?? 0, failed: failedIn[k] ?? 0 }])),
     ...pg, items: pg.items.map((e) => ({ id: CD + e.id, name: e.name, summary: e.summary, author: e.author, cats: e.cats, license: e.license, skillCount: e.skills.length, skills: e.skills.slice(0, 8), homepage: e.homepage, verified: e.verified ?? null, installed: have.get(CD + e.id) ?? null,
-      closed: isClosed(e.id), closedWhy: blocked.get(CD + e.id)?.reason ?? null, failed: isFailed(e.id), failedWhy: isFailed(e.id) && isAdmin(user) ? failed.get(CD + e.id)?.reason ?? null : null, github: !!e.github, altFor: e.altFor ?? [], altAuto: !e.alt?.length, alt: (isClosed(e.id) || isFailed(e.id) ? altsOf(e) : e.alt ?? []).map((a) => ({ id: CD + a, name: dirById(a)?.name ?? a, installed: have.get(CD + a) ?? null })) })),
+      closed: isClosed(e.id), closedWhy: blocked.get(CD + e.id)?.reason ?? null, failed: isFailed(e.id), failedWhy: isFailed(e.id) && isAdmin(user) ? failed.get(CD + e.id)?.reason ?? null : null, github: !!e.github, altFor: e.altFor ?? [], altAuto: !e.alt, alt: (isClosed(e.id) || isFailed(e.id) ? altsOf(e) : e.alt ?? []).map((a) => ({ id: CD + a, name: dirById(a)?.name ?? a, installed: have.get(CD + a) ?? null })) })),
     job: isAdmin(user) ? { ...getJob(), running: jobRunning() } : null,
   });
 });

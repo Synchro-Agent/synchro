@@ -11,7 +11,7 @@ export type DirEntry = { id: string; slug: string; name: string; summary: string
   closed?: boolean; alt?: string[]; github?: boolean; altFor?: string[] };
 type File = { synced: string; plugins: DirEntry[] };
 
-const G = globalThis as unknown as { __claudeDir?: { at: number; file: string; data: File; byId: Map<string, DirEntry>; text: Map<string, string>; tok?: Map<string, Set<string>>; df?: Map<string, number>; near?: Map<string, string[]> } };
+const G = globalThis as unknown as { __claudeDir?: { at: number; file: string; data: File; byId: Map<string, DirEntry>; text: Map<string, string>; tok?: Map<string, Set<string>>; df?: Map<string, number>; near?: Map<string, string[]>; weight?: Map<string, number> } };
 const fileOf = () => process.env.CLAUDE_DIR_FILE || path.join(process.cwd(), "catalog", "claude-directory.json");
 function load() {
   const file = fileOf();
@@ -50,7 +50,11 @@ export function dirDef(e: DirEntry): PluginDef {
 const OPEN_LICENSE = /^\(?\s*(MIT|MIT-0|Apache|BSD|0BSD|ISC|MPL|CC-BY|CC0|Unlicense\b|Zlib|WTFPL|PSF|Python|EPL|BSL-1\.0|LGPL|GPL|AGPL|Artistic|Unicode|BlueOak)/i;
 export const openLicense = (l: string) => !!l && !/^\s*UNLICENSED\s*$/i.test(l) && l.split(/\s+(?:OR|AND|WITH)\s+/i).some((x) => OPEN_LICENSE.test(x.trim()));
 const NOISE = new Set("the and for with your you from that this skill skills plugin plugins agent agents claude code tool tools using use into via of to in on a an by or is are as at it mcp server official".split(" "));
-const toks = (e: DirEntry) => new Set(`${e.name} ${e.summary} ${e.skills.join(" ")}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !NOISE.has(w)));
+// Gộp đuôi biến thể tiếng Anh: "invoices" và "invoice", "reconciling" và "reconcile" là một từ; không gộp thì nhiều thư viện cùng việc không khớp nhau.
+// Động từ và từ chung thư viện nào cũng có: trùng các từ này không nói lên hai thư viện làm cùng việc (đã qua stem).
+const VERBS = new Set("creat manag connect build help workflow review account support work run runs get gets new read writ edit updat add adds list check find search generat track analyz provid assistant integration access directly easily automat your full complet".split(" "));
+const stem = (w: string) => (w.length > 4 ? w.replace(/ies$/, "y").replace(/(ing|ed|es|s)$/, "").replace(/e$/, "") : w);
+const toks = (e: DirEntry) => new Set(`${e.name} ${e.summary} ${e.skills.join(" ")}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !NOISE.has(w)).map(stem).filter((w) => !VERBS.has(w)));
 /**
  * Thư viện mở làm việc gần giống nhất với một thư viện không cài được: cùng mục ngành nghề, trùng nhiều từ hiếm trong tên, mô tả và tên skill.
  * Chỉ dùng thư viện khai giấy phép mở. Điểm dưới ngưỡng thì thôi: thà nói chưa có còn hơn gợi ý cho có.
@@ -63,27 +67,32 @@ export function similarOpen(e: DirEntry, k = 3): string[] {
     c.df = new Map();
     for (const t of c.tok.values()) for (const w of t) c.df.set(w, (c.df.get(w) ?? 0) + 1);
     c.near = new Map();
+    c.weight = new Map();
   }
   const memo = c.near!.get(e.id);
   if (memo) return memo.slice(0, k);
   const mine = c.tok.get(e.id) ?? toks(e), N = c.data.plugins.length, cats = new Set(e.cats);
   const idf = (w: string) => Math.log(1 + N / (1 + (c.df!.get(w) ?? 0)));
-  const self = [...mine].reduce((a, w) => a + idf(w), 0) || 1;
+  const self = [...mine].reduce((a, w) => a + idf(w), 0) || 1, weight = c.weight!;
+  if (!weight.size) for (const [id, t] of c.tok) weight.set(id, [...t].reduce((a, w) => a + idf(w), 0) || 1);
   const hits = c.data.plugins
     .filter((p) => p.id !== e.id && !p.closed && openLicense(p.license) && p.cats.some((x) => cats.has(x)))
     .map((p) => {
       const t = c.tok!.get(p.id)!;
       let s = 0, n = 0;
       for (const w of mine) if (t.has(w)) { s += idf(w); n++; }
-      return { id: p.id, s: s / self, n };
+      // cos đo theo cả hai phía: thư viện khổng lồ nhiều từ không thắng chỉ vì chứa đủ mọi từ.
+      return { id: p.id, s: s / self, cos: s / Math.sqrt(self * (weight.get(p.id) ?? 1)), n };
     })
-    .filter((x) => x.s >= 0.2 && x.n >= 3)
-    .sort((a, b) => b.s - a.s).slice(0, 6).map((x) => x.id);
-  c.near!.set(e.id, hits);
-  return hits.slice(0, k);
+    .filter((x) => x.n >= 3 && x.s >= 0.2 && x.cos >= 0.12)
+    .sort((a, b) => b.cos - a.cos).slice(0, 6);
+  // Bỏ phần đuôi kém xa thư viện gần nhất: gợi ý thêm cho đủ số chỉ làm người ta mất công.
+  const near = hits.filter((x) => x.cos >= hits[0].cos * 0.6).map((x) => x.id);
+  c.near!.set(e.id, near);
+  return near.slice(0, k);
 }
-/** Thư viện mở thay thế: chọn tay trong danh mục nếu có, không thì tự tìm. */
-export const altsOf = (e: DirEntry, k = 3) => (e.alt?.length ? e.alt : similarOpen(e, k));
+/** Thư viện mở thay thế: đã chọn tay trong danh mục thì theo đó (rỗng: đã xem, không có thư viện làm cùng việc), chưa ai xem thì tự tìm. */
+export const altsOf = (e: DirEntry, k = 3) => e.alt ?? similarOpen(e, k);
 
 /** Số thư viện và số skill mỗi mục (đếm cả mục phụ, như Claude). */
 export function dirCounts() {

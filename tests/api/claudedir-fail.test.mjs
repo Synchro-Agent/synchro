@@ -21,7 +21,11 @@ const CATALOG = { synced: "t", plugins: [
   lib("open-other", "Apache-2.0", "Tax filing bookkeeping invoices", ["tax-filing"]),
   lib("no-license", "", "Contract review clause redlining negotiation playbook", ["contract-review"]),
   lib("closed-hand", "Proprietary", "Hand-picked closed", ["x"], { closed: true, alt: ["open-other"] }),
-  lib("closed-auto", "LicenseRef-Secret", "Contract review clause redlining negotiation", ["contract-review"], { closed: true, alt: [] }),
+  lib("closed-auto", "LicenseRef-Secret", "Contract review clause redlining negotiation", ["contract-review"], { closed: true }),
+  lib("closed-none", "LicenseRef-Secret", "Contract review clause redlining negotiation", ["contract-review"], { closed: true, alt: [] }),
+  lib("open-invoices", "MIT", "Reconciling invoices for bookkeepers", ["invoice-reconciliation"], { cats: ["finance"] }),
+  lib("open-huge", "MIT", `Invoice ${Array.from({ length: 200 }, (_, i) => `word${i}`).join(" ")}`, ["reconcile-invoice", "bookkeeper"], { cats: ["finance"] }),
+  lib("late-invoice", "", "Reconcile an invoice for a bookkeeper", ["invoice-reconcile"], { cats: ["finance"] }),
   lib("npm-unlicensed", "UNLICENSED", "Contract clause redlining review", ["contract-review"]),
   lib("repo-gone", "MIT", "Contract clause redlining negotiation playbook", ["clause-redline"]),
   lib("blocked-late", "", "Contract clause redlining playbook review", ["clause-redline"]),
@@ -44,6 +48,11 @@ const near = C.similarOpen(C.dirById("closed-auto"));
 ok(near.includes("open-contract"), "thư viện đóng không có thay thế chọn tay: tự tìm thư viện mở cùng việc", JSON.stringify(near));
 ok(!near.includes("no-license") && !near.includes("open-other") && !near.includes("closed-hand"), "không gợi ý thư viện chưa rõ giấy phép, khác việc, hay cũng đóng", JSON.stringify(near));
 ok(JSON.stringify(C.altsOf(C.dirById("closed-hand"))) === '["open-other"]', "có thay thế chọn tay thì dùng chọn tay");
+ok(JSON.stringify(C.altsOf(C.dirById("closed-none"))) === "[]", "alt rỗng là đã xem: không tự gợi ý cho có");
+ok(/Chưa có thư viện mở/.test(C.closedReason(C.dirById("closed-none"))), "lý do từ chối nói thật là chưa có");
+const inv = C.similarOpen(C.dirById("late-invoice"));
+ok(inv[0] === "open-invoices", "khớp qua số nhiều và đuôi từ (invoices, reconciling, bookkeepers)", JSON.stringify(inv));
+ok(!inv.includes("open-huge"), "thư viện khổng lồ nhiều từ không thắng chỉ vì chứa đủ từ", JSON.stringify(inv));
 ok(/Thay bằng thư viện mở: open-contract/.test(C.closedReason(C.dirById("closed-auto"))), "lý do từ chối chỉ ra thư viện mở", C.closedReason(C.dirById("closed-auto")));
 
 console.log("3. Lỗi không phải giấy phép được nhớ lại");
@@ -60,12 +69,12 @@ const it = (id) => d.items.find((x) => x.id === `cd:${id}`);
 ok(it("repo-gone").failed === true && it("repo-gone").closed === false && it("repo-gone").failedWhy === null, "thành viên thấy thư viện lỗi, không thấy lỗi thô", JSON.stringify(it("repo-gone")));
 ok(it("repo-gone").alt.some((a) => a.id === "cd:open-contract"), "thư viện lỗi cũng có thư viện mở tương tự", JSON.stringify(it("repo-gone").alt));
 ok(it("blocked-late").closed === true && it("blocked-late").alt.some((a) => a.id === "cd:open-contract") && it("blocked-late").altAuto === true, "thư viện chỉ lúc cài mới biết giấy phép đóng: có thư viện mở tương tự", JSON.stringify(it("blocked-late")));
-ok(d.totals.failed === 1 && d.totals.closed === 4, "số đếm tách riêng đóng và lỗi", JSON.stringify(d.totals));
-ok(d.cats.legal.failed === 1 && d.cats.legal.closed === 4, "số đếm theo mục cũng vậy", JSON.stringify(d.cats.legal));
-ok(d.totals.plugins - d.totals.installed - d.totals.closed - d.totals.failed === 3, "còn phải cài: chỉ thư viện cài được", JSON.stringify(d.totals));
+ok(d.totals.failed === 1 && d.totals.closed === 5, "số đếm tách riêng đóng và lỗi", JSON.stringify(d.totals));
+ok(d.cats.legal.failed === 1 && d.cats.legal.closed === 5, "số đếm theo mục cũng vậy", JSON.stringify(d.cats.legal));
+ok(d.totals.plugins - d.totals.installed - d.totals.closed - d.totals.failed === 6, "còn phải cài: chỉ thư viện cài được", JSON.stringify(d.totals));
 const miss = await cat(member, "?size=100&only=missing"), un = await cat(member, "?size=100&only=unavailable");
-ok(miss.items.length === 3 && !miss.items.some((x) => x.failed || x.closed), "lọc Chưa cài: không còn thư viện không cài được", JSON.stringify(miss.items.map((x) => x.name)));
-ok(un.items.length === 5 && un.items.every((x) => x.failed || x.closed), "lọc Không cài được: đủ thư viện đóng và lỗi", JSON.stringify(un.items.map((x) => x.name)));
+ok(miss.items.length === 6 && !miss.items.some((x) => x.failed || x.closed), "lọc Chưa cài: không còn thư viện không cài được", JSON.stringify(miss.items.map((x) => x.name)));
+ok(un.items.length === 6 && un.items.every((x) => x.failed || x.closed), "lọc Không cài được: đủ thư viện đóng và lỗi", JSON.stringify(un.items.map((x) => x.name)));
 
 const denied = await P.POST(req(member, "/api/plugins", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", catalogId: "cd:repo-gone", scope: "personal" }) }));
 ok(denied.status === 409 && /Quản trị viên/.test((await denied.json()).error), "thành viên cài thư viện đã lỗi: câu dễ hiểu, không thử tải lại");
@@ -73,7 +82,7 @@ ok(denied.status === 409 && /Quản trị viên/.test((await denied.json()).erro
 console.log("5. Đã cài từ trước vẫn là đã cài");
 AS.db().prepare("INSERT INTO plugins (id, owner, slug, name, catalog_id, description, sources, created_at, updated_at) VALUES ('p1', 'org', 'npm-unlicensed', 'npm-unlicensed', 'cd:npm-unlicensed', '', '[]', 0, 0)").run();
 d = await cat(member, "?size=100");
-ok(it("npm-unlicensed").installed === "p1" && it("npm-unlicensed").closed === false && d.totals.installed === 1 && d.totals.closed === 3, "giấy phép bị xếp lại là đóng không gỡ hay giấu thư viện đã cài", JSON.stringify(it("npm-unlicensed")));
+ok(it("npm-unlicensed").installed === "p1" && it("npm-unlicensed").closed === false && d.totals.installed === 1 && d.totals.closed === 4, "giấy phép bị xếp lại là đóng không gỡ hay giấu thư viện đã cài", JSON.stringify(it("npm-unlicensed")));
 
 console.log("6. Thử lại và đổi commit");
 J.clearFailed("cd:repo-gone");
