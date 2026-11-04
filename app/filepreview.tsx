@@ -4,7 +4,7 @@
 // văn bản, Markdown, JSON, mã nguồn đọc thẳng; trang HTML và SVG chạy trong khung artifact. Luôn có nút tải về.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { Markdown } from "./md";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
@@ -26,7 +26,7 @@ export const canPreview = (f: OutFile) => modeOf(f) !== "none";
 function OfficeFrame({ f, kind, onPages }: { f: OutFile; kind: OfficeKind; onPages: (n: number) => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2), [f.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const doc = useMemo(() => officeDoc(kind, f.name, location.origin, ch), [kind, f.name, ch]);
+  const doc = useMemo(() => officeDoc(kind, f.name, location.origin, ch, (s) => tr(s), locale()), [kind, f.name, ch]);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const buf = useRef<Promise<ArrayBuffer> | null>(null);
