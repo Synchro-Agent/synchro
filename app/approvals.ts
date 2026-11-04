@@ -3,9 +3,11 @@
 import crypto from "node:crypto";
 import { allowSite, getPrefs, siteHost, siteIn, type PermMode } from "./codestore";
 
-export type AskKind = "edit" | "bash" | "site";
-export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string };
-export type Answer = { ok: boolean; always?: boolean; note?: string };
+export type AskKind = "edit" | "bash" | "site" | "connector";
+// conn, about, destructive: chỉ với công cụ connector (hiện logo, mô tả công cụ, cảnh báo xóa dữ liệu trên thẻ).
+export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; destructive?: boolean };
+// chat: "Cho phép trong đoạn chat này" (công cụ connector).
+export type Answer = { ok: boolean; always?: boolean; chat?: boolean; note?: string };
 
 type Wait = { uid: string; done: (a: Answer) => void };
 const g = globalThis as unknown as { __synchroAsks?: Map<string, Wait> };
@@ -25,7 +27,7 @@ export function waitAnswer(uid: string, id: string, signal?: AbortSignal): Promi
 export function answer(uid: string, id: string, a: Answer) {
   const w = waits.get(id);
   if (!w || w.uid !== uid) return false;
-  w.done({ ok: !!a.ok, always: !!a.always, note: String(a.note ?? "").slice(0, 2000) });
+  w.done({ ok: !!a.ok, always: !!a.always, chat: !!a.chat, note: String(a.note ?? "").slice(0, 2000) });
   return true;
 }
 

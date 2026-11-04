@@ -206,7 +206,10 @@ const chunks = (t, n = 12) => Array.from({ length: Math.ceil(t.length / n) }, (_
 async function mcp(url, call) {
   const rpc = async (method, params, id) => {
     const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
-    return r.json();
+    // Lời gọi lâu (chờ duyệt): cầu nối chuyển sang luồng SSE, như CLI thật phải đọc được cả hai kiểu.
+    if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return r.json();
+    const msgs = (await r.text()).split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6)));
+    return msgs.find((m) => m.id === id) ?? {};
   };
   await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mock-cli", version: "1" } }, 1);
   await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });

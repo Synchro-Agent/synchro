@@ -6,10 +6,13 @@ import * as I from "./icons";
 import { Loader } from "./brand";
 import { getLang, tr } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
+import { ReconnectCard } from "./connectorsui";
 
-export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string };
-// ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép).
-export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep;
+// args: tham số đã gửi cho công cụ ghi của connector (đã che khóa bí mật).
+export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string };
+// ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
+export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string };
+export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -27,22 +30,24 @@ export function applyEvent(w: Work, ev: RunEv): Work {
     else parts.push({ k: "tools", items: [item] });
   } else if (ev.kind === "res") {
     try {
-      const r = JSON.parse(ev.text) as { ref: number; ok: boolean; sum?: string };
+      const r = JSON.parse(ev.text) as { ref: number; ok: boolean; sum?: string; args?: string };
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
-        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum } : x)) }; break; }
+        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum, args: r.args } : x)) }; break; }
       }
     } catch {}
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
   } else if (ev.kind === "ask") {
-    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, state: "wait" }); } catch {}
+    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, conn: a.conn, about: a.about, destructive: a.destructive, state: "wait" }); } catch {}
   } else if (ev.kind === "asked") {
     try {
-      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean };
+      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean; chat?: boolean; gone?: boolean };
       const i = parts.findIndex((p) => p.k === "ask" && p.id === a.id);
-      if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.ok ? (a.always ? "always" : "ok") : "no" };
+      if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" };
     } catch {}
+  } else if (ev.kind === "conn") {
+    try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
   return { parts, plan, seq: ev.seq };
 }
@@ -65,7 +70,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{x.label}</b>{x.sum && <small data-notr>{x.sum}</small>}</div>
+              <div><b data-notr>{x.label}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{x.sum}</small>}</div>
             </div>
           ))}
         </div>
@@ -94,7 +99,13 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
 export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
+    : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
+}
+/** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
+export function ConnCards({ parts }: { parts?: Part[] }) {
+  const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
+  return list.length ? <>{list.map((c) => <ReconnectCard key={c.id} c={c} />)}</> : null;
 }
 
 /**

@@ -2328,3 +2328,45 @@ Object.assign(EN2VI, {
   "Packages from public registries can contain malicious code. It runs inside an isolated sandbox, separate from the server and from other accounts.": "Gói từ kho công khai có thể chứa mã độc. Mã đó chỉ chạy trong sandbox cô lập, tách khỏi máy chủ và các tài khoản khác.",
   "Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries reachable, which limits but does not remove that risk.": "Nội dung Synchro đọc (trang web, tệp, kết quả connector) có thể tìm cách lừa nó cài gói hoặc gửi dữ liệu ra ngoài. Tắt “Truy cập mọi trang web công khai” thì chỉ kho thư viện là truy cập được, nên rủi ro giảm bớt nhưng không mất hẳn.",
 });
+
+// Connector: duyệt công cụ ngay trong chat qua CLI, kết nối lại trong khung chat, token tự nhập, hãng chưa duyệt Synchro, lỗi tạm thời.
+SAME_WORDS.add("Authorization");
+for (const e of DIRECTORY) if (e.access) { EN2VI[e.access.why] = e.access.whyVi; VI2EN[e.access.whyVi] = e.access.why; }
+Object.assign(EN2VI, {
+  "Your browser blocked the sign-in window.": "Trình duyệt đã chặn cửa sổ đăng nhập.", "Open sign-in window": "Mở cửa sổ đăng nhập",
+  "Checked just now": "Vừa kiểm tra", "Needs vendor approval": "Cần nhà cung cấp duyệt", "Waiting for you to sign in…": "Đang chờ bạn đăng nhập…", "Token rejected": "Token bị từ chối",
+  "Update token": "Nhập lại token", "Reconnect": "Kết nối lại", "Use a token instead": "Dùng token thay thế", "Use my OAuth client": "Dùng OAuth client của tôi",
+  "You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.": "Bạn có thể thử bằng token hoặc API key của mình, dù hãng này có thể không nhận. Nếu hãng đã cấp cho bạn một OAuth client, bạn có thể dùng client đó.",
+  "A tool needs more access than this sign-in allows. Other tools keep working.": "Một công cụ cần nhiều quyền hơn lần đăng nhập này cho phép. Các công cụ khác vẫn chạy bình thường.",
+  "Grant more access": "Cấp thêm quyền", "Last check failed. Tools keep working with the list from the last good check.": "Lần kiểm tra gần nhất không thành công. Công cụ vẫn chạy theo danh sách của lần kiểm tra tốt gần nhất.",
+  "Unclassified": "Chưa phân loại", "The server doesn't say whether this tool changes data. Synchro judged it read-only from its name. Set it to Ask every time if you prefer.": "Máy chủ không cho biết công cụ này có thay đổi dữ liệu không. Synchro xếp nó vào chỉ đọc theo tên công cụ. Bạn có thể đặt thành Hỏi mỗi lần nếu muốn.",
+  "Dismiss": "Đóng", "How to sign in": "Cách đăng nhập", "Automatic": "Tự động", "Token or API key": "Token hoặc API key", "My OAuth client": "OAuth client của tôi", "Header name": "Tên header", "OAuth Client ID": "OAuth Client ID",
+  "Sent as Authorization: Bearer … unless you name another header, such as X-API-Key. Saved encrypted and never shown again.": "Gửi dưới dạng Authorization: Bearer …, trừ khi bạn đặt header khác như X-API-Key. Được lưu mã hóa và không bao giờ hiện lại.",
+  "Connect with your own credentials. They are encrypted on the server and never shown again.": "Kết nối bằng thông tin đăng nhập của bạn. Chúng được mã hóa trên máy chủ và không bao giờ hiện lại.",
+  "Connect Notion, Linear, Supabase and more, or any remote MCP server, so Synchro can search and work in them during your chats.": "Kết nối Notion, Linear, Supabase và nhiều ứng dụng khác, hoặc bất kỳ máy chủ MCP từ xa nào, để Synchro tìm kiếm và làm việc trong đó ngay khi trò chuyện.",
+});
+RULES_VI.push(
+  [/^Checked (\d+) min ago$/, (m) => `Kiểm tra ${m[1]} phút trước`], [/^Checked (\d+) h ago$/, (m) => `Kiểm tra ${m[1]} giờ trước`], [/^Checked (\d+) d ago$/, (m) => `Kiểm tra ${m[1]} ngày trước`],
+  [/^(\d+) of (\d+) tools$/, (m) => `${m[1]} trên ${m[2]} công cụ`],
+);
+Object.assign(VI2EN, {
+  "Máy chủ của connector đưa địa chỉ đăng nhập không an toàn nên Synchro không mở.": "The connector's server gave an unsafe sign-in address, so Synchro didn't open it.",
+  "Đã kết nối lại. Hãy gửi lại yêu cầu của bạn.": "Reconnected. Send your request again.", "Đang chờ bạn đăng nhập trong cửa sổ vừa mở…": "Waiting for you to sign in in the window that opened…",
+  "Connector này cần kết nối lại để Synchro dùng được.": "This connector needs reconnecting before Synchro can use it.", "Trình duyệt đã chặn cửa sổ đăng nhập.": "Your browser blocked the sign-in window.",
+  "Mở cửa sổ đăng nhập": "Open sign-in window", "Mở lại cửa sổ đăng nhập": "Open the sign-in window again", "Đang chờ đăng nhập…": "Waiting for sign-in…", "Nhập lại token": "Update token", "Cần hãng duyệt": "Needs vendor approval",
+  "Hãy nhập token hoặc API key.": "Enter a token or API key.", "Token hoặc API key không hợp lệ.": "That token or API key isn't valid.", "Tên header không hợp lệ.": "That header name isn't valid.",
+  "Cho phép trong đoạn chat này": "Allow in this chat", "trang này": "this site", "Cho Synchro dùng công cụ này?": "Let Synchro use this tool?", "Đã gửi": "Sent",
+  "Connector cần thêm quyền để làm việc này. Hãy cấp thêm quyền trong Cài đặt → Connectors.": "The connector needs more access for this. Grant it in Settings → Connectors.",
+  "Máy chủ từ chối token hoặc API key này. Hãy kiểm tra lại rồi nhập lại.": "The server rejected this token or API key. Check it and enter it again.",
+  "Tham số phải là một đối tượng JSON. Công cụ chưa chạy; hãy gửi lại.": "Arguments must be a JSON object. The tool didn't run; send them again.",
+  "Bạn có thể đóng cửa sổ này.": "You can close this window.", "Chưa kết nối được": "Couldn't connect", "Máy chủ im lặng quá lâu khi đang chạy công cụ.": "The server went silent for too long while running the tool.",
+});
+RULES_EN.unshift(
+  [/^(.+) đang tạm thời không phản hồi(?: \(lỗi (\d+)\))?\. Đây là sự cố phía nhà cung cấp; hãy thử lại sau ít phút\.$/, (m) => `${m[1]} isn't responding right now${m[2] ? ` (error ${m[2]})` : ""}. This is a problem on the vendor's side; try again in a few minutes.`],
+  [/^Trang đăng nhập của (\S+) từ chối Synchro \((.+)\)\. Hãng cần chấp nhận địa chỉ quay về của Synchro; nếu hãng cấp cho bạn OAuth Client ID hoặc token, hãy dùng chúng thay thế\.$/, (m) => `${m[1]}'s sign-in page rejected Synchro (${m[2]}). The vendor has to accept Synchro's return address. If the vendor gave you an OAuth Client ID or token, use that instead.`],
+  [/^(.+) Bạn có thể thử bằng token hoặc API key, hoặc OAuth Client ID riêng trong Cài đặt nâng cao\.$/, (m) => `${VI2EN[m[1]] ?? m[1]} You can try a token or API key, or your own OAuth Client ID in the advanced settings.`],
+  [/^Máy chủ đăng nhập của connector khai báo địa chỉ (.+) không an toàn \(phải là https\)\.$/, (m) => `The connector's sign-in server gave an unsafe ${({ "đăng nhập": "sign-in", "lấy mã truy cập": "token", "đăng ký ứng dụng": "registration" } as Record<string, string>)[m[1]] ?? m[1]} address (it must be https).`],
+  [/^Tham số không phải JSON hợp lệ \((.*)\)\. Công cụ chưa chạy; hãy gửi lại đúng một đối tượng JSON\.$/, (m) => `The arguments aren't valid JSON (${m[1]}). The tool didn't run; send one JSON object.`],
+  [/^Đã kết nối (.+)$/, (m) => `Connected ${m[1]}`],
+  [/^Kết nối tới (\S+) bị ngắt giữa chừng\.$/, (m) => `The connection to ${m[1]} dropped partway through.`],
+);

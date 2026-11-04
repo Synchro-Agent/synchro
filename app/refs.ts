@@ -85,30 +85,53 @@ function walk(v: unknown, path: string): unknown {
 
 export const READ_REF_TOOL = {
   name: "read_ref",
-  description: "Đọc dữ liệu đầy đủ đã lưu theo mã ref_… (kết quả công cụ lớn ở lượt này hoặc các lượt trước). path: đường dẫn trong JSON (ví dụ data.items hoặc items[3].name); query: chỉ lấy phần tử / dòng có chứa từ này (không phân biệt dấu); offset, limit: phân trang theo phần tử hoặc dòng.",
+  description: "Đọc dữ liệu đầy đủ đã lưu theo mã ref_… (kết quả công cụ lớn ở lượt này hoặc các lượt trước). path: đường dẫn trong JSON (ví dụ data.items hoặc items[3].name); query: chỉ lấy phần tử / dòng / đoạn có chứa từ này (không phân biệt dấu); offset, limit: phân trang theo phần tử hoặc dòng; văn bản dài, chuỗi hay đối tượng lớn thì theo ký tự. Kết quả ghi rõ offset để đọc tiếp.",
   input_schema: { type: "object", properties: { ref: { type: "string" }, path: { type: "string" }, query: { type: "string" }, offset: { type: "integer" }, limit: { type: "integer" } }, required: ["ref"] },
 };
+
+// Trang theo ký tự: chuỗi dài, đối tượng không phải danh sách, hay một dòng dài hơn phần đọc được một lần. Có query thì lấy các đoạn quanh chỗ khớp.
+function charPage(text: string, off: number, lim: number | null, q: string, query: unknown): string {
+  if (q) {
+    const f = fold(text), hits: number[] = [];
+    // fold giữ nguyên độ dài với hầu hết chữ tiếng Việt dựng sẵn; lệch vài ký tự không ảnh hưởng vì mỗi đoạn lấy rộng hơn chỗ khớp.
+    for (let i = f.indexOf(q); i >= 0 && hits.length < 200; i = f.indexOf(q, i + q.length)) hits.push(i);
+    if (!hits.length) return `Không có chỗ nào khớp "${String(query)}" trong ${text.length} ký tự.`;
+    const page = hits.slice(off, off + Math.min(lim ?? 10, 50));
+    const out = page.map((i) => `[ký tự ${Math.max(0, i - 200)}] …${text.slice(Math.max(0, i - 200), i + q.length + 300)}…`).join("\n\n").slice(0, OUT_CAP);
+    return `${out}\n(${page.length} / ${hits.length} chỗ khớp "${String(query)}", từ vị trí ${off}${off + page.length < hits.length ? `; đọc tiếp: offset=${off + page.length}` : ""})`;
+  }
+  const size = Math.min(OUT_CAP, lim ?? OUT_CAP);
+  const end = Math.min(text.length, off + size);
+  return `${text.slice(off, end)}\n(ký tự ${off}-${end} / ${text.length}${end < text.length ? `; đọc tiếp: offset=${end}` : "; đã hết"})`;
+}
 
 export function readRef(uid: string, input: Record<string, unknown>): { content: string; is_error: boolean } {
   const id = String(input.ref ?? "");
   const r = init().prepare("SELECT content FROM tool_refs WHERE id = ? AND user_id = ?").get(id, uid) as { content: string } | undefined;
   if (!r) return { content: `Không tìm thấy dữ liệu ${id} (mã sai hoặc đã quá 30 ngày).`, is_error: true };
   const off = Math.max(0, Number(input.offset) || 0), lim = Math.min(500, Math.max(1, Number(input.limit) || 50));
+  // Với đọc theo ký tự, limit là số ký tự (tối đa OUT_CAP); không truyền thì đọc đủ một trang.
+  const charLim = Number(input.limit) > 0 ? Number(input.limit) : null;
   const q = typeof input.query === "string" && input.query.trim() ? fold(input.query.trim()) : "";
   const j = tryJson(r.content);
-  const cap = (s: string, note: string) => (s.length > OUT_CAP ? `${s.slice(0, OUT_CAP)}\n…(cắt ở ${OUT_CAP} ký tự; dùng offset/limit hoặc query để đọc tiếp)` : s) + note;
+  const cap = (s: string, note: string) => (s.length > OUT_CAP ? `${s.slice(0, OUT_CAP)}\n…(cắt ở ${OUT_CAP} ký tự; dùng offset/limit nhỏ hơn hoặc query để đọc tiếp)` : s) + note;
   if (j !== undefined) {
     let v = typeof input.path === "string" && input.path.trim() ? walk(j, input.path.trim()) : (mainArray(j)?.arr ?? j);
     if (v === undefined) return { content: `Không có đường dẫn ${String(input.path)} trong dữ liệu.`, is_error: true };
     if (Array.isArray(v)) {
       const all = q ? v.filter((x) => fold(JSON.stringify(x)).includes(q)) : v;
       v = all.slice(off, off + lim);
-      return { content: cap(JSON.stringify(v, null, 1), `\n(${(v as unknown[]).length} / ${all.length} phần tử${q ? ` khớp "${input.query}"` : ""}, từ vị trí ${off})`), is_error: false };
+      return { content: cap(JSON.stringify(v, null, 1), `\n(${(v as unknown[]).length} / ${all.length} phần tử${q ? ` khớp "${input.query}"` : ""}, từ vị trí ${off}${off + lim < all.length ? `; đọc tiếp: offset=${off + lim}` : ""})`), is_error: false };
     }
-    return { content: cap(JSON.stringify(v, null, 1), ""), is_error: false };
+    // Chuỗi đọc nguyên văn (không có dấu ngoặc kép, \n thật); đối tượng đọc theo ký tự của bản JSON.
+    const text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
+    return { content: text.length > OUT_CAP || off || q ? charPage(text, off, charLim, q, input.query) : text, is_error: false };
   }
   const lines = r.content.split("\n");
   const pick = q ? lines.map((l, i) => [i + 1, l] as const).filter(([, l]) => fold(l).includes(q)) : lines.map((l, i) => [i + 1, l] as const);
+  // Vài dòng rất dài (Markdown một dòng, CSV không xuống dòng): không có offset theo dòng nào đọc được phần sau, nên đọc theo ký tự.
+  if (!q && r.content.length > OUT_CAP && r.content.length / lines.length > OUT_CAP / 4) return { content: charPage(r.content, off, charLim, "", input.query), is_error: false };
+  if (q && pick.some(([, l]) => l.length > OUT_CAP)) return { content: charPage(r.content, off, charLim, q, input.query), is_error: false };
   const page = pick.slice(off, off + lim);
-  return { content: cap(page.map(([n, l]) => `${n}: ${l}`).join("\n"), `\n(${page.length} / ${pick.length} dòng${q ? ` khớp "${input.query}"` : ""}, từ vị trí ${off})`), is_error: false };
+  return { content: cap(page.map(([n, l]) => `${n}: ${l}`).join("\n"), `\n(${page.length} / ${pick.length} dòng${q ? ` khớp "${input.query}"` : ""}, từ vị trí ${off}${off + lim < pick.length ? `; đọc tiếp: offset=${off + lim}` : ""})`), is_error: false };
 }

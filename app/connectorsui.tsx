@@ -9,24 +9,28 @@ import { DIR_CATS, type DirCat, type DirEntry } from "./connectordir";
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
+import { tr } from "./i18n";
 
 type Perm = "allow" | "chat" | "ask" | "block";
-type Tool = { name: string; title: string; description: string; readOnly: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
+type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
-  status: "ok" | "needs_auth" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth"; tools: Tool[]; checkedAt: number | null;
-  settings: Settings; adminBlocked: boolean;
+  status: "ok" | "needs_auth" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
+  settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null;
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
 type Data = { connectors: Conn[]; directory: DirEntry[]; policy: Policy };
 const allowed = (p: Policy, dir: string) => p.allowed.includes("*") || p.allowed.includes(dir);
 type Res = { connectors: Conn[]; connector?: Conn; authorizeUrl?: string; error?: string };
 
+const NO_SERVER = "Không kết nối được tới Synchro. Kiểm tra mạng rồi thử lại.";
 async function api<T = Res>(method: string, url: string, body?: unknown): Promise<T> {
-  const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((j as { error?: string }).error || `Lỗi ${r.status}`);
+  // Mất mạng hay máy chủ đang khởi động lại: không để lộ "Failed to fetch" của trình duyệt.
+  const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }).catch(() => { throw new Error(NO_SERVER); });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((j as { error?: string } | null)?.error || (r.status >= 500 ? NO_SERVER : `Lỗi ${r.status}`));
+  if (j === null) throw new Error(NO_SERVER);
   return j as T;
 }
 
@@ -73,11 +77,118 @@ export function ConnLogo({ logo, color, icon, name, size = 36 }: { logo?: string
   );
 }
 
-// Mở cửa sổ đăng nhập NGAY khi bấm (trình duyệt chỉ cho mở cửa sổ bật lên trong lúc bấm), rồi mới chuyển tới trang đăng nhập.
-function preOpen(): Window | null {
-  const w = window.open("", "synchro-connector", "popup,width=560,height=720");
-  try { if (w) w.document.write(`<!doctype html><meta charset="utf-8"><title>Synchro</title><body style="margin:0;display:grid;place-items:center;min-height:100vh;font:14px system-ui;color:#6b6a65;background:#fcfcfa">Đang mở trang đăng nhập…</body>`); } catch {}
-  return w;
+// ---- đăng nhập trong cửa sổ bật lên ----
+// Trang Synchro gửi COOP same-origin (WebContainer cần): cửa sổ đăng nhập vừa sang trang của hãng là bị tách khỏi trang này, window.opener mất và w.closed luôn báo true.
+// Nên không theo dõi cửa sổ nữa: trang quay về báo kết quả qua BroadcastChannel; phòng khi trình duyệt không chuyển được tin, trang chính tự hỏi lại máy chủ mỗi 2 giây và khi
+// người dùng quay lại tab. Chỉ mở cửa sổ khi đã có địa chỉ đăng nhập: connector bị từ chối hay không cần đăng nhập thì không có cửa sổ nào chớp lên.
+const CHANNEL = "synchro-connector";
+const FLOW_TTL = 15 * 60_000;
+type LoginResult = { ok: boolean; id: string | null; message: string };
+// Địa chỉ đăng nhập do máy chủ của connector khai báo: chỉ https. Nó được mở trong cửa sổ cùng nguồn với Synchro, địa chỉ javascript: sẽ chạy mã bằng phiên của người dùng.
+const safeLogin = (raw: string) => { try { const u = new URL(raw); return u.protocol === "https:" || (u.protocol === "http:" && location.protocol === "http:"); } catch { return false; } };
+const openLogin = (url: string) => window.open(url, "synchro-connector", "popup,width=560,height=720");
+const tag = (c: Conn) => ({ id: c.id, checked: c.checkedAt, lastErr: c.lastError ?? null, at: Date.now() });
+
+/** any: nhận cả kết quả của luồng do thẻ khác mở (trang Connectors); mặc định chỉ nhận luồng của chính nó. */
+function useLoginFlow(onDone: (m: LoginResult) => void, o: { any?: boolean; onList?: (d: Data) => void } = {}) {
+  const flow = useRef<ReturnType<typeof tag> | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+  // Trình duyệt chặn cửa sổ (đã quá lâu kể từ lúc bấm): cần người dùng bấm thêm một lần.
+  const [blocked, setBlocked] = useState<{ id: string; url: string } | null>(null);
+  const cb = useRef({ onDone, ...o });
+  cb.current = { onDone, ...o };
+  const finish = useCallback((m: LoginResult) => { flow.current = null; setPending(null); setBlocked(null); cb.current.onDone(m); }, []);
+  useEffect(() => {
+    const seen = new Set<string>();
+    const take = (d: LoginResult & { type?: string; nonce?: string }) => {
+      if (d?.type !== CHANNEL || (d.nonce && seen.has(d.nonce))) return;
+      if (d.nonce) seen.add(d.nonce);
+      if (cb.current.any || (flow.current && flow.current.id === d.id)) finish({ ok: d.ok, id: d.id, message: d.message });
+    };
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(CHANNEL);
+      bc.onmessage = (e) => { if (e.data?.type === CHANNEL) { bc?.postMessage({ type: `${CHANNEL}-ack`, nonce: e.data.nonce }); take(e.data); } };
+    } catch {}
+    const onMsg = (e: MessageEvent) => { if (e.origin === location.origin) take(e.data); };
+    window.addEventListener("message", onMsg);
+    const check = async () => {
+      const f = flow.current;
+      if (!f) return;
+      if (Date.now() - f.at > FLOW_TTL) { flow.current = null; setPending(null); return; }
+      const d = await api<Data>("GET", "/api/connectors").catch(() => null);
+      if (!d || flow.current !== f) return;
+      cb.current.onList?.(d);
+      const c = d.connectors.find((x) => x.id === f.id);
+      if (!c) { flow.current = null; setPending(null); return; }
+      if (c.status === "ok" && c.checkedAt !== f.checked) finish({ ok: true, id: c.id, message: `Đã kết nối ${c.name}` });
+      else if (c.status !== "ok" && c.error) finish({ ok: false, id: c.id, message: c.error });
+      else if (c.status === "ok" && (c.lastError ?? null) !== f.lastErr && c.lastError) finish({ ok: false, id: c.id, message: c.lastError });
+    };
+    window.addEventListener("focus", check);
+    const t = window.setInterval(check, 2000);
+    return () => { bc?.close(); window.removeEventListener("message", onMsg); window.removeEventListener("focus", check); clearInterval(t); };
+  }, [finish]);
+  // Sau khi máy chủ trả về: có địa chỉ đăng nhập thì mở cửa sổ và bắt đầu chờ. true: đang chờ đăng nhập.
+  const follow = useCallback((r: Res) => {
+    if (!r.authorizeUrl || !r.connector) return false;
+    if (!safeLogin(r.authorizeUrl)) throw new Error("Máy chủ của connector đưa địa chỉ đăng nhập không an toàn nên Synchro không mở.");
+    flow.current = tag(r.connector);
+    setPending(r.connector.id);
+    if (openLogin(r.authorizeUrl)) setBlocked(null); else setBlocked({ id: r.connector.id, url: r.authorizeUrl });
+    return true;
+  }, []);
+  // Bấm lại sau khi bị chặn; vẫn bị chặn (chính sách trình duyệt) thì đăng nhập ngay trong tab này.
+  const reopen = useCallback(() => { if (!blocked) return; if (openLogin(blocked.url)) setBlocked(null); else location.href = blocked.url; }, [blocked]);
+  return { follow, pending, blocked, reopen };
+}
+
+const LoginBlocked = ({ onOpen }: { onOpen: () => void }) => (
+  <div className="cn-pop"><I.External size={14} /><span>Your browser blocked the sign-in window.</span><button className="btn" onClick={onOpen}>Open sign-in window</button></div>
+);
+const ago = (t: number) => {
+  const m = Math.max(0, Math.round((Date.now() - t) / 60_000));
+  return m < 1 ? "Checked just now" : m < 60 ? `Checked ${m} min ago` : m < 2880 ? `Checked ${Math.round(m / 60)} h ago` : `Checked ${Math.round(m / 1440)} d ago`;
+};
+
+// Connector cần kết nối lại, ngay trong khung chat (Synchro nói cần tới nó, hoặc nó vừa mất đăng nhập giữa lượt). Nằm trong .ai-msg nên chữ giao diện dịch bằng tr().
+export function ReconnectCard({ c }: { c: { id: string; name: string; logo?: string; color?: string } }) {
+  const [state, setState] = useState<"idle" | "busy" | "ok">("idle");
+  const [err, setErr] = useState("");
+  const f = useLoginFlow((m) => { setState(m.ok ? "ok" : "idle"); if (!m.ok) setErr(m.message); });
+  const go = async () => {
+    setState("busy"); setErr("");
+    try {
+      const r = await api("POST", `/api/connectors/${c.id}/connect`);
+      if (f.follow(r)) return;
+      setState(r.connector?.status === "ok" ? "ok" : "idle");
+    } catch (x) { setState("idle"); setErr((x as Error).message); }
+  };
+  const waiting = !!f.pending && state !== "ok";
+  return (
+    <div className="ag-ask cn-rc" role="group" aria-label={c.name}>
+      <div className="ag-ask-h"><ConnLogo logo={c.logo} color={c.color} name={c.name} size={28} />
+        <div><b data-notr>{c.name}</b><span>{tr(state === "ok" ? "Đã kết nối lại. Hãy gửi lại yêu cầu của bạn." : waiting ? "Đang chờ bạn đăng nhập trong cửa sổ vừa mở…" : "Connector này cần kết nối lại để Synchro dùng được.")}</span></div>
+      </div>
+      {err && <div className="api-err" role="alert"><I.Alert size={14} /><span data-notr>{tr(err)}</span></div>}
+      {f.blocked && <div className="cn-pop"><I.External size={14} /><span>{tr("Trình duyệt đã chặn cửa sổ đăng nhập.")}</span><button className="btn" onClick={f.reopen}>{tr("Mở cửa sổ đăng nhập")}</button></div>}
+      {state !== "ok" && !f.blocked && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={go}>{state === "busy" && !waiting ? <span className="api-spin" /> : null}{tr(waiting ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : "Kết nối lại")}</button></div>}
+    </div>
+  );
+}
+// Menu + ở ô chat: connector chưa dùng được thì thay nút bật / tắt bằng liên kết kết nối lại. Hãng chưa duyệt Synchro thì đưa tới Connectors để xem lý do.
+export function ReconnectLink({ c, onDone, onManage, say }: { c: Conn; onDone: () => void; onManage: () => void; say: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const f = useLoginFlow((m) => { say(m.message); onDone(); });
+  if (c.vendorBlocked || c.auth === "token") return <button className="cn-link cm-rec" onClick={onManage}>{c.vendorBlocked ? "Cần hãng duyệt" : "Nhập lại token"}</button>;
+  const go = async () => {
+    if (f.blocked) return f.reopen();
+    setBusy(true);
+    try { const r = await api("POST", `/api/connectors/${c.id}/connect`); if (!f.follow(r)) { say(r.connector?.status === "ok" ? `Đã kết nối ${c.name}` : c.name); onDone(); } }
+    catch (x) { say((x as Error).message); onDone(); }
+    finally { setBusy(false); }
+  };
+  return <button className="cn-link cm-rec" disabled={busy} onClick={go}>{busy ? <span className="api-spin" /> : f.blocked ? "Mở cửa sổ đăng nhập" : f.pending ? "Đang chờ đăng nhập…" : "Kết nối lại"}</button>;
 }
 
 function PermSelect({ value, onChange, label, mixed, locked }: { value: Perm; onChange: (p: Perm) => void; label: string; mixed?: boolean; locked?: string }) {
@@ -139,7 +250,7 @@ function ToolGroup({ title, hint, kind, tools, onPerm, onGroup }: { title: strin
       {tools.map((t) => (
         <div key={t.name} className="cn-tool">
           <div className="cn-tool-m">
-            <div className="cn-tool-n" data-notr>{t.title}{t.title !== t.name && <span className="mono-s">{t.name}</span>}</div>
+            <div className="cn-tool-n"><span data-notr>{t.title}</span>{t.title !== t.name && <span className="mono-s" data-notr>{t.name}</span>}{t.guessed && <span className="cn-tag" title="The server doesn't say whether this tool changes data. Synchro judged it read-only from its name. Set it to Ask every time if you prefer.">Unclassified</span>}</div>
             {t.description && <div className="cn-tool-d" data-notr>{t.description}</div>}
           </div>
           <PermSelect label={`Permission for ${t.title}`} value={t.perm} onChange={(p) => onPerm(t, p)} locked={t.locked ? LOCK_NOTE[t.locked] : undefined} />
@@ -149,8 +260,8 @@ function ToolGroup({ title, hint, kind, tools, onPerm, onGroup }: { title: strin
   );
 }
 
-function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnect, onRefresh, onRemove, onPerm, onGroup, onSettings, bk }: {
-  c: Conn; policy: Policy; open: boolean; busy: boolean; onToggleOpen: () => void; onEnable: (v: boolean) => void; onConnect: () => void; onRefresh: () => void; onRemove: () => void;
+function ConnectorCard({ c, policy, open, busy, waiting, onToggleOpen, onEnable, onConnect, onReauth, onCreds, onRefresh, onRemove, onPerm, onGroup, onSettings, bk }: {
+  c: Conn; policy: Policy; open: boolean; busy: boolean; waiting: boolean; onToggleOpen: () => void; onEnable: (v: boolean) => void; onConnect: () => void; onReauth: () => void; onCreds: (mode: CredMode) => void; onRefresh: () => void; onRemove: () => void;
   onPerm: (t: Tool, p: Perm) => void; onGroup: (k: "read" | "write", p: Perm) => void; onSettings: (s: Partial<Settings>) => void; bk: Bulk<Conn>;
 }) {
   const [menu, setMenu] = useState(false);
@@ -164,7 +275,8 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
   }, [menu]);
   const ql = q.trim().toLowerCase();
   const shown = c.tools.filter((t) => !ql || t.title.toLowerCase().includes(ql) || t.name.toLowerCase().includes(ql) || t.description.toLowerCase().includes(ql));
-  const status = c.adminBlocked ? "Turned off by your administrator" : c.status === "ok" ? (c.enabled ? `${c.tools.length} ${c.tools.length === 1 ? "tool" : "tools"}` : "Turned off") : c.status === "needs_auth" ? "Needs to be connected" : "Connection problem";
+  const toolCount = c.toolsTotal ? `${c.tools.length} of ${c.toolsTotal} tools` : `${c.tools.length} ${c.tools.length === 1 ? "tool" : "tools"}`;
+  const status = c.adminBlocked ? "Turned off by your administrator" : c.status === "ok" ? (c.enabled ? toolCount : "Turned off") : c.vendorBlocked ? "Needs vendor approval" : waiting ? "Waiting for you to sign in…" : c.auth === "token" && c.status === "needs_auth" ? "Token rejected" : c.status === "needs_auth" ? "Needs to be connected" : "Connection problem";
   return (
     <div className={`cn-card ${open && !bk.on ? "open" : ""} ${c.status !== "ok" || c.adminBlocked ? "attn" : ""}`} {...bulkRow(bk, c)}>
       <div className="cn-card-h">
@@ -180,20 +292,32 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
         {!bk.on && <div className="cn-actions">
           {c.status === "ok" || c.adminBlocked
             ? <button className={`cn-switch ${c.enabled && !c.adminBlocked ? "on" : ""}`} role="switch" aria-checked={c.enabled && !c.adminBlocked} aria-label={c.enabled ? "Turn off connector" : "Turn on connector"} onClick={() => onEnable(!c.enabled)} disabled={busy || c.adminBlocked}><i /></button>
-            : <button className="btn dark cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{c.status === "error" ? "Try again" : "Connect"}</button>}
+            : c.vendorBlocked ? <button className="btn cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}Try again</button>
+            : c.auth === "token" && c.status === "needs_auth" ? <button className="btn dark cn-connect" onClick={() => onCreds("token")} disabled={busy}>Update token</button>
+            : <button className="btn dark cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{c.status === "error" ? "Try again" : c.status === "needs_auth" && c.checkedAt ? "Reconnect" : "Connect"}</button>}
           <div className="cn-more" ref={mref}>
             <button className="icon-btn" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)} disabled={busy}>{busy && c.status === "ok" ? <span className="api-spin" /> : <I.Dots size={16} />}</button>
             {menu && (
               <div className="cn-menu" role="menu">
                 {c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onRefresh(); }}><I.Retry size={15} />Refresh tools</button>}
-                {c.auth === "oauth" && c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onConnect(); }}><I.Key size={15} />Reconnect account</button>}
+                {c.auth === "oauth" && c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onReauth(); }}><I.Key size={15} />Reconnect account</button>}
+                {c.auth === "token" && <button role="menuitem" onClick={() => { setMenu(false); onCreds("token"); }}><I.Key size={15} />Update token</button>}
                 <button role="menuitem" className="danger" onClick={() => { setMenu(false); onRemove(); }}><I.Trash size={15} />Disconnect</button>
               </div>
             )}
           </div>
         </div>}
       </div>
-      {c.status !== "ok" && c.error && <div className="api-err in"><I.Alert size={14} /><span>{c.error}</span></div>}
+      {c.status !== "ok" && c.vendorBlocked && (
+        <div className="cn-vendor">
+          <p>{c.vendorBlocked.why}</p>
+          <p className="d">You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.</p>
+          <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds("token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds("client")}>Use my OAuth client</button></div>
+        </div>
+      )}
+      {c.status !== "ok" && c.error && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{c.error}</span></div>}
+      {c.status === "ok" && c.needsScope && <div className="cn-pop in"><I.Key size={14} /><span>A tool needs more access than this sign-in allows. Other tools keep working.</span><button className="btn" disabled={busy} onClick={onReauth}>Grant more access</button></div>}
+      {c.status === "ok" && c.lastError && <div className="cn-warnline"><I.Alert size={13} /><span>Last check failed. Tools keep working with the list from the last good check. </span><span>{c.lastError}</span></div>}
       {open && !bk.on && c.status === "ok" && (
         <div className="cn-body">
           <ConnSettings c={c} policy={policy} onSettings={onSettings} />
@@ -203,20 +327,21 @@ function ConnectorCard({ c, policy, open, busy, onToggleOpen, onEnable, onConnec
             <ToolGroup title="Tools that can make changes" hint="May create, change or delete data, or the server doesn't say they're read-only." kind="write" tools={shown.filter((t) => !t.readOnly)} onPerm={onPerm} onGroup={onGroup} />
             {ql && !shown.length && <p className="d cn-empty-tools">No tools match your search.</p>}
           </>}
-          <div className="cn-foot" data-notr>{c.serverName ? `${c.serverName} · ` : ""}{c.url}</div>
+          <div className="cn-foot"><span data-notr>{c.serverName ? `${c.serverName} · ` : ""}{c.url}</span>{c.checkedAt ? <span> · {ago(c.checkedAt)}</span> : null}</div>
         </div>
       )}
     </div>
   );
 }
 
-function Browse({ data, busy, onClose, onConnect, onCustom }: { data: Data; busy: string | null; onClose: () => void; onConnect: (e: DirEntry) => void; onCustom: () => void }) {
+function Browse({ data, busy, errs, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: string | null; errs: Record<string, string>; onClose: () => void; onConnect: (e: DirEntry) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
   const pol = data.policy;
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<DirCat | "all">("all");
   const ql = q.trim().toLowerCase();
   const list = data.directory.filter((e) => (cat === "all" || e.cat === cat) && (!ql || e.name.toLowerCase().includes(ql) || e.desc.toLowerCase().includes(ql) || e.descVi.toLowerCase().includes(ql)));
   const have = (e: DirEntry) => data.connectors.find((c) => c.dir === e.id);
+  const [why, setWhy] = useState<string | null>(null);
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal cn-browse" role="dialog" aria-label="Browse connectors">
@@ -229,14 +354,24 @@ function Browse({ data, busy, onClose, onConnect, onCustom }: { data: Data; busy
         <div className="cn-grid">
           {list.map((e) => {
             const c = have(e);
-            const state = !allowed(pol, e.id) ? "blocked" : busy === e.id ? "busy" : c?.status === "ok" ? "ok" : c ? "pending" : "none";
+            const state = !allowed(pol, e.id) ? "blocked" : busy === e.id ? "busy" : c?.status === "ok" ? "ok" : e.access && (!c || c.vendorBlocked) ? "vendor" : c ? "pending" : "none";
+            const err = errs[e.id];
             return (
-              <div key={e.id} className="cn-item">
+              <div key={e.id} className={`cn-item${err || why === e.id ? " wide" : ""}`}>
                 <ConnLogo logo={e.logo} color={e.color} name={e.name} size={40} />
                 <div className="cn-item-m"><b data-notr>{e.name}</b><span>{e.desc}</span></div>
                 {state === "blocked" ? <span className="cn-done off" title="Your administrator hasn't allowed this connector for your account."><I.Lock size={13} />Not allowed</span>
                   : state === "ok" ? <span className="cn-done"><I.Check size={14} />Connected</span>
-                  : <button className="btn cn-item-btn" disabled={state === "busy" || !!busy} onClick={() => onConnect(e)}>{state === "busy" ? <span className="api-spin" /> : state === "pending" ? "Finish" : "Connect"}</button>}
+                  : state === "vendor" ? <button className="cn-vendor-tag" aria-expanded={why === e.id} onClick={() => setWhy(why === e.id ? null : e.id)}><I.Lock size={13} />Needs vendor approval</button>
+                  : <button className="btn cn-item-btn" disabled={state === "busy" || !!busy} onClick={() => onConnect(e)}>{state === "busy" ? <span className="api-spin" /> : err ? "Try again" : state === "pending" ? "Finish" : "Connect"}</button>}
+                {state === "vendor" && why === e.id && e.access && (
+                  <div className="cn-vendor">
+                    <p>{e.access.why}</p>
+                    <p className="d">You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.</p>
+                    <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button></div>
+                  </div>
+                )}
+                {err && <div className="api-err in cn-item-err" role="alert"><I.Alert size={14} /><span>{err}</span><button className="icon-btn" aria-label="Dismiss" onClick={() => onDismiss(e.id)}><I.X size={13} /></button></div>}
               </div>
             );
           })}
@@ -248,41 +383,63 @@ function Browse({ data, busy, onClose, onConnect, onCustom }: { data: Data; busy
   );
 }
 
-function Custom({ onClose, onAdd }: { onClose: () => void; onAdd: (v: { name: string; url: string; clientId: string; clientSecret: string }, done: (err?: string) => void) => void }) {
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [adv, setAdv] = useState(false);
+// Cách đăng nhập khi thêm connector: tự động (không cần đăng nhập, hoặc OAuth), token / API key tự nhập, hay OAuth client riêng.
+type CredMode = "auto" | "token" | "client";
+type CustomInit = { name?: string; url?: string; mode?: CredMode; id?: string; locked?: boolean };
+type CustomValues = { name: string; url: string; clientId: string; clientSecret: string; token: string; header: string };
+function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => void; onAdd: (v: CustomValues, done: (err?: string) => void) => void }) {
+  const [name, setName] = useState(init.name ?? "");
+  const [url, setUrl] = useState(init.url ?? "");
+  const [mode, setMode] = useState<CredMode>(init.mode ?? "auto");
   const [cid, setCid] = useState("");
   const [sec, setSec] = useState("");
+  const [token, setToken] = useState("");
+  const [header, setHeader] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const urlOk = /^https?:\/\/[^\s/]+/i.test(url.trim());
-  const can = !busy && name.trim().length > 0 && urlOk;
-  const submit = () => { if (!can) return; setBusy(true); setErr(""); onAdd({ name, url, clientId: cid, clientSecret: sec }, (e) => { setBusy(false); if (e) setErr(e); }); };
+  const can = !busy && name.trim().length > 0 && urlOk && (mode !== "token" || token.trim().length > 0) && (mode !== "client" || cid.trim().length > 0);
+  const submit = () => {
+    if (!can) return;
+    setBusy(true); setErr("");
+    onAdd({ name, url, clientId: mode === "client" ? cid : "", clientSecret: mode === "client" ? sec : "", token: mode === "token" ? token : "", header: mode === "token" ? header : "" }, (e) => { setBusy(false); if (e) setErr(e); });
+  };
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <form className="modal sm cn-custom" role="dialog" aria-label="Add custom connector" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <div className="cn-custom-h"><h2>Add custom connector</h2><span className="cn-beta">Beta</span></div>
-        <p className="d">Connect Synchro to any remote MCP server. If the server needs you to sign in, a window opens so you can approve access.</p>
-        <label className="api-lbl" htmlFor="cn-name">Name</label>
-        <input id="cn-name" className="field" autoFocus maxLength={60} placeholder="e.g. Company wiki" value={name} onChange={(e) => setName(e.target.value)} />
-        <label className="api-lbl" htmlFor="cn-url">Remote MCP server URL</label>
-        <input id="cn-url" className="field" data-notr spellCheck={false} autoComplete="off" placeholder="https://example.com/mcp" value={url} onChange={(e) => setUrl(e.target.value)} />
-        <button type="button" className="api-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}><I.ChevronR size={13} />Advanced settings</button>
-        {adv && (
-          <>
-            <label className="api-lbl" htmlFor="cn-cid">OAuth Client ID<span className="d"> · optional</span></label>
-            <input id="cn-cid" className="field" data-notr spellCheck={false} autoComplete="off" value={cid} onChange={(e) => setCid(e.target.value)} />
-            <label className="api-lbl" htmlFor="cn-sec">OAuth Client Secret<span className="d"> · optional</span></label>
-            <input id="cn-sec" className="field" data-notr type="password" spellCheck={false} autoComplete="off" value={sec} onChange={(e) => setSec(e.target.value)} />
-            <p className="cn-hint">Only needed when the server doesn&apos;t let apps register themselves. Use this callback URL in that app&apos;s settings: <span className="mono-s" data-notr>{`${location.origin}/api/connectors/oauth/callback`}</span></p>
-          </>
-        )}
-        <div className="cn-warn"><I.Alert size={15} /><span>Only use connectors from developers you trust. Synchro doesn&apos;t review custom connectors, and a connector can read what you share with it and act in that service on your behalf.</span></div>
+      <form className="modal sm cn-custom" role="dialog" aria-label={init.locked ? "Connect" : "Add custom connector"} onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <div className="cn-custom-h"><h2>{init.locked ? <span data-notr>{name}</span> : "Add custom connector"}</h2>{!init.locked && <span className="cn-beta">Beta</span>}</div>
+        <p className="d">{init.locked ? "Connect with your own credentials. They are encrypted on the server and never shown again." : "Connect Synchro to any remote MCP server. If the server needs you to sign in, a window opens so you can approve access."}</p>
+        {!init.locked && <>
+          <label className="api-lbl" htmlFor="cn-name">Name</label>
+          <input id="cn-name" className="field" autoFocus maxLength={60} placeholder="e.g. Company wiki" value={name} onChange={(e) => setName(e.target.value)} />
+          <label className="api-lbl" htmlFor="cn-url">Remote MCP server URL</label>
+          <input id="cn-url" className="field" data-notr spellCheck={false} autoComplete="off" placeholder="https://example.com/mcp" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </>}
+        <div className="api-lbl" id="cn-mode">How to sign in</div>
+        <div className="cn-pills cn-modes" role="radiogroup" aria-labelledby="cn-mode">
+          {!init.locked && <button type="button" role="radio" aria-checked={mode === "auto"} className={mode === "auto" ? "on" : ""} onClick={() => setMode("auto")}>Automatic</button>}
+          <button type="button" role="radio" aria-checked={mode === "token"} className={mode === "token" ? "on" : ""} onClick={() => setMode("token")}>Token or API key</button>
+          <button type="button" role="radio" aria-checked={mode === "client"} className={mode === "client" ? "on" : ""} onClick={() => setMode("client")}>My OAuth client</button>
+        </div>
+        {mode === "token" && <>
+          <label className="api-lbl" htmlFor="cn-token">Token or API key</label>
+          <input id="cn-token" className="field" data-notr type="password" spellCheck={false} autoComplete="off" autoFocus={init.locked} value={token} onChange={(e) => setToken(e.target.value)} />
+          <label className="api-lbl" htmlFor="cn-header">Header name<span className="d"> · optional</span></label>
+          <input id="cn-header" className="field" data-notr spellCheck={false} autoComplete="off" placeholder="Authorization" value={header} onChange={(e) => setHeader(e.target.value)} />
+          <p className="cn-hint">Sent as Authorization: Bearer … unless you name another header, such as X-API-Key. Saved encrypted and never shown again.</p>
+        </>}
+        {mode === "client" && <>
+          <label className="api-lbl" htmlFor="cn-cid">OAuth Client ID</label>
+          <input id="cn-cid" className="field" data-notr spellCheck={false} autoComplete="off" value={cid} onChange={(e) => setCid(e.target.value)} />
+          <label className="api-lbl" htmlFor="cn-sec">OAuth Client Secret<span className="d"> · optional</span></label>
+          <input id="cn-sec" className="field" data-notr type="password" spellCheck={false} autoComplete="off" value={sec} onChange={(e) => setSec(e.target.value)} />
+          <p className="cn-hint">Only needed when the server doesn&apos;t let apps register themselves. Use this callback URL in that app&apos;s settings: <span className="mono-s" data-notr>{`${location.origin}/api/connectors/oauth/callback`}</span></p>
+        </>}
+        {!init.locked && <div className="cn-warn"><I.Alert size={15} /><span>Only use connectors from developers you trust. Synchro doesn&apos;t review custom connectors, and a connector can read what you share with it and act in that service on your behalf.</span></div>}
         {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
         <div className="api-actions">
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" className="btn dark" disabled={!can}>{busy ? <><span className="api-spin" />Connecting…</> : "Add"}</button>
+          <button type="submit" className="btn dark" disabled={!can}>{busy ? <><span className="api-spin" />Connecting…</> : init.locked ? "Connect" : "Add"}</button>
         </div>
       </form>
     </div>
@@ -296,8 +453,9 @@ export function ConnectorsPanel() {
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [browse, setBrowse] = useState(false);
-  const [custom, setCustom] = useState(false);
-  const watch = useRef<number | null>(null);
+  const [custom, setCustom] = useState<CustomInit | null>(null);
+  // Lỗi kết nối từ danh mục: nằm ngay trên mục đó tới khi người dùng đóng hay thử lại (thông báo nhanh biến mất sau vài giây, không kịp đọc lời giải thích).
+  const [errs, setErrs] = useState<Record<string, string>>({});
   // Menu + ở ô chat → "Thêm connector": mở thẳng danh mục connector.
   useEffect(() => {
     const go = () => { try { sessionStorage.removeItem("cn-browse"); } catch {} setBrowse(true); };
@@ -309,45 +467,29 @@ export function ConnectorsPanel() {
   useEffect(() => { load(); }, [load]);
   const apply = (r: Res) => setData((d) => (d ? { ...d, connectors: r.connectors } : d));
 
-  // Cửa sổ đăng nhập báo kết quả về đây; người dùng tự đóng cửa sổ thì tải lại danh sách.
-  useEffect(() => {
-    const onMsg = (e: MessageEvent) => {
-      if (e.origin !== location.origin || (e.data as { type?: string })?.type !== "synchro-connector") return;
-      const m = e.data as { ok: boolean; message: string; id: string | null };
-      app.say(m.message);
-      load().then(() => { if (m.ok && m.id) setOpen(m.id); });
-    };
-    window.addEventListener("message", onMsg);
-    return () => { window.removeEventListener("message", onMsg); if (watch.current) clearInterval(watch.current); };
-  }, [app, load]);
-
-  const follow = (w: Window | null, r: Res) => {
-    apply(r);
-    if (!r.authorizeUrl) { w?.close(); if (r.connector?.status === "ok") { app.say(`Connected ${r.connector.name}`); setOpen(r.connector.id); } return; }
-    if (!w || w.closed) { location.href = r.authorizeUrl; return; }
-    w.location.href = r.authorizeUrl;
-    w.focus();
-    if (watch.current) clearInterval(watch.current);
-    watch.current = window.setInterval(() => { if (w.closed) { clearInterval(watch.current!); watch.current = null; load(); } }, 800);
-  };
+  // Kết quả đăng nhập: báo từ cửa sổ đăng nhập, hoặc tự thấy khi hỏi lại máy chủ (xem useLoginFlow).
+  const login = useLoginFlow((m) => {
+    app.say(m.message);
+    load().then(() => { if (m.ok && m.id) { setOpen(m.id); setBrowse(false); } });
+  }, { any: true, onList: (d) => setData(d) });
+  const finished = (r: Res) => { apply(r); if (r.connector?.status === "ok") { app.say(`Connected ${r.connector.name}`); setOpen(r.connector.id); } };
 
   const connectEntry = async (e: DirEntry) => {
-    const w = e.noAuth ? null : preOpen();
     setBusy(e.id);
-    try { const r = await api("POST", "/api/connectors", { dir: e.id }); follow(w, r); if (!r.authorizeUrl) setBrowse(false); }
-    catch (x) { w?.close(); app.say((x as Error).message); }
+    setErrs(({ [e.id]: _, ...rest }) => rest);
+    try { const r = await api("POST", "/api/connectors", { dir: e.id }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
+    catch (x) { setErrs((m) => ({ ...m, [e.id]: (x as Error).message })); load(); }
     finally { setBusy(null); }
   };
-  const addCustom = async (v: { name: string; url: string; clientId: string; clientSecret: string }, done: (err?: string) => void) => {
-    const w = preOpen();
-    try { const r = await api("POST", "/api/connectors", v); done(); setCustom(false); follow(w, r); }
-    catch (x) { w?.close(); done((x as Error).message); }
+  const addCustom = async (init: CustomInit, v: CustomValues, done: (err?: string) => void) => {
+    // Connector đã có (thẻ Canva chờ kết nối…): dùng thông tin mới cho chính nó, giữ quyền đã đặt.
+    try { const r = init.id ? await api("POST", `/api/connectors/${init.id}/connect`, { token: v.token, header: v.header, clientId: v.clientId, clientSecret: v.clientSecret }) : await api("POST", "/api/connectors", v); done(); setCustom(null); setBrowse(false); apply(r); if (!login.follow(r)) finished(r); }
+    catch (x) { done((x as Error).message); load(); }
   };
-  const reconnect = async (c: Conn) => {
-    const w = c.auth === "oauth" || c.status !== "ok" ? preOpen() : null;
+  const reconnect = async (c: Conn, force = false) => {
     setBusy(c.id);
-    try { follow(w, await api("POST", `/api/connectors/${c.id}/connect`)); }
-    catch (x) { w?.close(); app.say((x as Error).message); load(); }
+    try { const r = await api("POST", `/api/connectors/${c.id}/connect`, force ? { force: true } : undefined); apply(r); if (!login.follow(r)) finished(r); }
+    catch (x) { app.say((x as Error).message); load(); }
     finally { setBusy(null); }
   };
   const refresh = async (c: Conn) => {
@@ -394,21 +536,22 @@ export function ConnectorsPanel() {
       {head}
       <div className="cn-bar">
         <button className="btn dark" onClick={() => setBrowse(true)}><I.Search size={14} />Browse connectors</button>
-        {data.policy.custom && <button className="btn" onClick={() => setCustom(true)}><I.Plus size={14} />Add custom connector</button>}
+        {data.policy.custom && <button className="btn" onClick={() => setCustom({})}><I.Plus size={14} />Add custom connector</button>}
         {conns.length > 0 && <><span style={{ flex: 1 }} /><BulkButton b={bk} /></>}
       </div>
+      {login.blocked && <LoginBlocked onOpen={login.reopen} />}
       {conns.length === 0 ? (
         <div className="cn-empty">
-          <div className="cn-empty-art" aria-hidden>{["notion", "linear", "figma", "stripe"].map((l) => <ConnLogo key={l} logo={l} name={l} size={40} />)}</div>
+          <div className="cn-empty-art" aria-hidden>{["notion", "linear", "supabase", "stripe"].map((l) => <ConnLogo key={l} logo={l} name={l} size={40} />)}</div>
           <b>No connectors yet</b>
-          <span className="d">Connect Notion, Linear, Figma and more, or any remote MCP server, so Synchro can search and work in them during your chats.</span>
+          <span className="d">Connect Notion, Linear, Supabase and more, or any remote MCP server, so Synchro can search and work in them during your chats.</span>
         </div>
       ) : (
         <div className="cn-list">
           {pgC.items.map((c) => (
-            <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy === c.id} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
+            <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy === c.id} waiting={login.pending === c.id} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
               onEnable={(v) => patch(c, { enabled: v }, (x) => ({ ...x, enabled: v }))}
-              onConnect={() => reconnect(c)} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
+              onConnect={() => reconnect(c)} onReauth={() => reconnect(c, true)} onCreds={(mode) => setCustom({ name: c.name, url: c.url, mode, id: c.id, locked: true })} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
               onPerm={(t, p) => patch(c, { perms: { [t.name]: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) }))}
               onGroup={(k, p) => patch(c, { group: { kind: k, perm: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.readOnly === (k === "read") ? { ...y, perm: p } : y)) }))}
               onSettings={(st) => patch(c, { settings: st }, (x) => ({ ...x, settings: { ...x.settings, ...st } }))} bk={bk} />
@@ -418,8 +561,9 @@ export function ConnectorsPanel() {
         </div>
       )}
       <p className="cn-note"><I.Lock size={12} />Sign-ins are encrypted on the server. Tools that change data ask before running unless you allow them.</p>
-      {browse && <Browse data={data} busy={busy} onClose={() => setBrowse(false)} onConnect={connectEntry} onCustom={() => { setBrowse(false); setCustom(true); }} />}
-      {custom && <Custom onClose={() => setCustom(false)} onAdd={addCustom} />}
+      {browse && <Browse data={data} busy={busy} errs={errs} onClose={() => setBrowse(false)} onConnect={connectEntry} onDismiss={(id) => setErrs(({ [id]: _, ...rest }) => rest)}
+        onCreds={(e, mode) => { const c = conns.find((x) => x.dir === e.id); setCustom({ name: e.name, url: e.url, mode, id: c?.id, locked: true }); }} onCustom={() => { setBrowse(false); setCustom({}); }} />}
+      {custom && <Custom init={custom} onClose={() => setCustom(null)} onAdd={(v, done) => addCustom(custom, v, done)} />}
     </>
   );
 }
