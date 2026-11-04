@@ -24,6 +24,8 @@ function init() {
   }
   return d;
 }
+/** Máy chủ mới chưa xếp skill nào thì chưa có bảng: bên đọc thẳng bảng (plugins.ts) gọi trước, không thì lượt chat đầu lỗi "no such table". */
+export const tagsTable = () => init();
 // Số lần nhãn mục đổi (plugins.ts dựng lại bộ đệm skill của chat khi số này đổi). Đặt trên globalThis: mọi route dùng chung.
 const G = globalThis as unknown as { __tagRev?: number };
 export const tagRev = () => G.__tagRev ?? 0;
