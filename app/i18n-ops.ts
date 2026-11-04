@@ -52,6 +52,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "Bản sao lưu có tệp hỏng": "The backup contains damaged files",
   "Bản sao lưu không giải mã được": "The backup can't be decrypted",
   "Tải về": "Download",
+  "Bạn có thể tải về mọi dữ liệu máy chủ giữ của mình, xóa từng tệp đã tải lên ở Cài đặt → Quyền riêng tư.": "You can download everything the server keeps about you, and delete individual uploaded files, in Settings → Privacy.",
   "Máy chủ sắp hết dung lượng nên tạm thời chưa nhận tệp mới. Hãy thử lại sau.": "The server is nearly out of disk space, so it can't take new files right now. Try again later.",
 };
 export const OPS_EN2VI: Record<string, string> = {

@@ -6,6 +6,7 @@ import { locale, tr } from "./i18n";
 
 type MyFile = { id: string; name: string; size: number; at: number; kind: string };
 const PAGE = 50;
+const NAME: React.CSSProperties = { fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const fmt = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(n >= 104857600 ? 0 : 1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 export function UploadedFiles({ say, confirm }: { say: (m: string) => void; confirm: (title: string, text: string, ok: string, fn: () => void) => void }) {
@@ -35,7 +36,7 @@ export function UploadedFiles({ say, confirm }: { say: (m: string) => void; conf
       {d.files.slice(0, shown).map((f) => (
         <div key={f.id} className="item-row sh-row">
           <I.Clip size={14} />
-          <span className="sh-row-t">{f.name ? <b style={{ fontWeight: 500 }} data-notr>{f.name}</b> : <b style={{ fontWeight: 500 }}>Tệp không có tên</b>}<em data-notr>{fmt(f.size)} · {new Date(f.at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</em></span>
+          <span className="sh-row-t">{f.name ? <b style={NAME} data-notr title={f.name}>{f.name}</b> : <b style={NAME}>Tệp không có tên</b>}<em data-notr>{fmt(f.size)} · {new Date(f.at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</em></span>
           <a className="icon-btn" href={`/api/files/mine?download=${f.id}`} download aria-label="Tải về" title="Tải về"><I.Download size={14} /></a>
           <button className="btn danger" style={{ height: 26 }} onClick={() => del(f)}>Xóa</button>
         </div>

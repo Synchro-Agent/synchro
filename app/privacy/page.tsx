@@ -39,6 +39,7 @@ export default function Privacy() {
         <li>Không dùng cookie quảng cáo hay theo dõi. Cookie chỉ dùng để giữ phiên đăng nhập và hoàn tất đăng nhập.</li>
       </ul>
       <h2>Xóa dữ liệu</h2>
+      <p>Bạn có thể tải về mọi dữ liệu máy chủ giữ của mình, xóa từng tệp đã tải lên ở Cài đặt → Quyền riêng tư.</p>
       <p>Bạn có thể xóa tài khoản bất cứ lúc nào trong Cài đặt → Tài khoản → Xóa tài khoản. Synchro xóa mọi dữ liệu nêu trên của bạn, đăng xuất các gói AI và xóa workspace. Nhật ký bảo mật giữ lại sự kiện nhưng bỏ email và IP, trừ dòng ghi nhận việc xóa tài khoản. Dữ liệu còn trong bản sao lưu của máy chủ (nếu có) mất đi theo vòng xoay, tối đa khoảng 5 tuần. Dữ liệu đã gửi cho nhà cung cấp AI hoặc dịch vụ bạn kết nối do họ giữ theo chính sách của họ.</p>
       <h2>Liên hệ</h2>
       <p>Nếu có câu hỏi về quyền riêng tư, hãy liên hệ quản trị viên Synchro qua email hỗ trợ hiển thị trên màn hình đăng nhập.</p>

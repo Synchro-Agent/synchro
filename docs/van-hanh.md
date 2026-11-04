@@ -130,6 +130,10 @@ Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "c
 - CSP script chạy thử (`Content-Security-Policy-Report-Only` trong `next.config.ts`): chỉ báo vào trang Sức khỏe hệ thống, chưa chặn. Báo cáo sạch một thời gian thì chuyển thành chặn thật.
 - Người dùng tải được mọi dữ liệu máy chủ giữ của họ ở Cài đặt → Quyền riêng tư (`/api/auth/account/export`).
 
+## Xóa đoạn chat và đoạn chat ẩn danh
+
+Xóa đoạn chat xóa thêm lịch sử phiên của CLI trên đĩa (tìm theo mã phiên trong `logins/<cli>/<tài khoản>`, `engine_session_log` nhớ cả phiên cũ), kết quả công cụ, tệp do code tạo và tệp tải lên chỉ đoạn chat đó dùng. Artifact chỉ xóa khi người dùng chọn. Bản đã có trong sao lưu mất đi theo vòng xoay. Đoạn chat ẩn danh: không nối phiên (mỗi lượt gửi kèm lịch sử nên chậm hơn), xóa lịch sử phiên ngay sau lượt, xóa lượt chạy sau 10 phút (`SYNCHRO_EPHEMERAL_MS`). Lượt không thuộc đoạn chat nào (đặt tên, chưng cất) cũng được xóa lịch sử phiên. Cách này tìm theo tên tệp: kiểm tra lại với CLI thật sau mỗi lần CLI đổi phiên bản lớn (`find <thư mục đăng nhập> -name '*<mã phiên>*'`). Tệp lịch sử chung của CLI (nếu có, không theo mã phiên) không nằm trong phạm vi này.
+
 ## Xác minh email
 
 Tài khoản đăng ký bằng mật khẩu sau khi có tính năng này nhận thư xác minh; chưa xác minh vẫn chat được, nhưng chưa dùng được tệp đính kèm, connector, tác vụ, giọng nói, Synchro Code (Cài đặt → Quản trị viên → "Require a verified email": tắt khi thư đang lỗi). Tài khoản cũ và tài khoản Google, GitHub, Apple không bị ảnh hưởng. Mốc phân biệt: `settings.verify_since`.
