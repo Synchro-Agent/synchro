@@ -401,6 +401,8 @@ export const VI2EN: Record<string, string> = {
 Object.assign(VI2EN, {
   "Chỉ quản trị viên mới cài hàng loạt cho cả tổ chức.": "Only administrators can bulk-install for the whole organization.",
   "Tên thư viện đã được dùng.": "That library name is already taken.",
+  "Số này gồm cả skill Synchro tự nhận diện trong các thư viện đã cài: skill của bạn, thư viện chọn lọc và danh mục skill của Claude.": "This number includes skills Synchro detected automatically in your installed libraries: your own skills, curated libraries and Claude's skill directory.",
+  "Xem và tìm skill của mục này": "See and search the skills in this category", "Không có skill nào khớp": "No matching skills",
   "Tìm skill hoặc thư viện": "Search skills or libraries", "Không có skill hoặc thư viện nào khớp": "No skill or library matches",
 });
 
@@ -425,6 +427,7 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Lượt này đã chạy ([\d.]+) giờ \(mức tối đa mỗi lượt\) nên đã dừng\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `This turn ran for ${m[1]} hours (the per-turn maximum) and was stopped. Send "continue" to pick up where it left off.`],
   [/^Đã thêm (.+) vào thư viện cho mọi người$/, (m) => `Added ${m[1]} to the Library for everyone`],
   [/^Đã tạo skill (.+) và thêm vào thư viện cho mọi người\.$/, (m) => `Created skill ${m[1]} and added it to the Library for everyone.`],
+  [/^([\d.,]+) skill, gồm ([\d.,]+) skill Synchro tự nhận diện$/, (m) => `${m[1]} skills, including ${m[2]} Synchro detected automatically`],
   [/^Thư viện cho mọi người đã đủ (\d+) mục\.$/, (m) => `The Library for everyone already has ${m[1]} items.`],
   // Antigravity vẫn tự chặn công cụ sau khi đã nhắc (app/chatengine.ts, app/agentcore.ts)
   [/^Antigravity tự chặn công cụ \((.+)\) nên lượt này chưa làm được gì\. Hãy gửi lại yêu cầu hoặc chọn model khác( \(để Tự động thì Synchro tự chuyển model\))?\.$/, (m) => `Antigravity blocked its tools (${m[1]}), so this turn couldn't do anything. Send the request again or pick another model${m[2] ? " (on Auto, Synchro switches models for you)" : ""}.`],

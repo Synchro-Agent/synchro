@@ -20,6 +20,7 @@ import { hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
+import { rank } from "./skillroute";
 import { ruleStudios } from "./studiorules";
 import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
@@ -642,7 +643,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     return { content: hit ? `Đã hiện nút "Kết nối lại" cho ${hit.name} trong khung chat. Hãy nói người dùng bấm nút rồi nhắc lại yêu cầu.` : `Không có connector "${String(c.input?.connector ?? "")}" đang chờ kết nối lại.`, is_error: !hit, used: { kind: "search", name: c.name } };
   }
   const ct = x.sess?.get(c.name);
-  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
+  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
   if (x.task && x.sess!.perm(c.name) === "ask") return { content: queueTool(x.uid, x.task, c, { connector: ct.cname, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name }), is_error: true, used };
   if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
@@ -895,13 +896,16 @@ function lastUserText(messages: unknown): string {
 }
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
-function routingPrompt(hits: Hit[], recent: { name: string; lib?: Lib }[], picked: string[] = []) {
-  if (!hits.length && !recent.length && !picked.length) return "";
+function routingPrompt(hits: Hit[], recent: { name: string; lib?: Lib }[], picked: string[] = [], open?: { lib: Lib; skills: Skill[] }) {
+  const picks = (open?.skills ?? []).filter((k) => !hits.some((h) => h.skill.name === k.name));
+  if (!hits.length && !recent.length && !picked.length && !picks.length) return "";
   const where = (l?: Lib) => (l ? ` (thư viện ${l.label} · ${l.key})` : "");
   return `<skill_routing>
 ${picked.length ? `Người dùng đã tự chọn skill cho tin nhắn này (menu + ở ô chat): ${picked.join(", ")}. Bắt buộc đọc các skill này bằng load_skill trước khi trả lời và làm theo hướng dẫn trong đó.` : ""}
 ${hits.length ? `Hệ thống đã đối chiếu yêu cầu mới nhất với toàn bộ kho skill. Các skill có vẻ liên quan nhất (gợi ý tự động, có thể chưa đúng):
 ${hits.map((h) => `- ${h.skill.name}${where(h.lib)}: ${h.skill.description.replace(/\s+/g, " ").slice(0, 180)}`).join("\n")}` : ""}
+${picks.length ? `Trong thư viện ${open!.lib.label} đang mở (${open!.lib.key}), các skill hợp yêu cầu này nhất:
+${picks.map((k) => `- ${k.name}: ${k.description.replace(/\s+/g, " ").slice(0, 140)}`).join("\n")}` : ""}
 ${recent.length ? `Các lượt trước trong đoạn chat này đã dùng: ${recent.map((r) => `${r.name}${where(r.lib)}`).join(", ")}. Nếu yêu cầu mới sửa hoặc tiếp tục sản phẩm đó, hãy đọc lại các skill này để giữ cùng phong cách và nguyên tắc.` : ""}
 Bạn tự quyết định: đọc ngay các skill hợp bằng load_skill (gọi thẳng tên skill, không cần mở thư viện), bỏ qua skill không hợp, hoặc dùng search_skills để tìm thêm.
 </skill_routing>`.replace(/\n{2,}/g, "\n");
@@ -962,9 +966,11 @@ const STUDIO_TASK: Record<Studio, string> = {
   slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF); khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
   docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code.",
 };
+// Thư viện lớn hơn số này thì available_skills chỉ có skill chọn lọc đầu thư viện (studioListed), skill hợp yêu cầu của từng lượt đi ở skill_routing (studioPicks), phần còn lại tìm bằng search_skills.
+const STUDIO_DIRECT = 20;
 const STUDIO_RULES = (s: Studio, plugins: string[], n: number) => `<studio name="${s}">
 Người dùng đang ở chế độ ${STUDIO_TASK[s]}
-${n ? `Bạn có thư viện ${n} skill chuyên môn${plugins.length ? ` (từ ${plugins.join(", ")})` : ""} trong available_skills. Trước khi làm, tự chọn 1-3 skill hợp nhất với yêu cầu và gọi load_skill để đọc (đọc thêm tài liệu tham khảo nếu skill chỉ dẫn), rồi áp dụng đúng nguyên tắc của skill.` : "Chưa có thư viện skill cho studio này: dùng kiến thức chuyên môn tốt nhất của bạn."}
+${n ? `Bạn có thư viện ${n} skill chuyên môn${plugins.length ? ` (từ ${plugins.slice(0, 6).join(", ")})` : ""}${n > STUDIO_DIRECT ? `: available_skills chỉ có một phần thư viện, skill hợp nhất với yêu cầu mới nhất (nếu có) nằm trong skill_routing cạnh tin nhắn. Chưa thấy skill hợp thì gọi search_skills với từ khóa và library="studio-${s}" để tìm trong cả thư viện` : " trong available_skills"}. Trước khi làm, tự chọn 1-3 skill hợp nhất với yêu cầu và gọi load_skill để đọc (đọc thêm tài liệu tham khảo nếu skill chỉ dẫn), rồi áp dụng đúng nguyên tắc của skill.` : "Chưa có thư viện skill cho studio này: dùng kiến thức chuyên môn tốt nhất của bạn."}
 Đừng hỏi lại người dùng về phong cách, màu sắc, bố cục hay giọng văn: hãy tự đưa ra lựa chọn có chủ đích, nhất quán và đẹp, rồi làm luôn bản hoàn chỉnh. Chỉ hỏi khi thiếu thông tin không thể tự đoán (ví dụ tên thương hiệu thật).
 Sau sản phẩm, nêu ngắn gọn 2-3 quyết định chính bạn đã chọn và gợi ý hướng chỉnh sửa.
 </studio>`;
@@ -975,12 +981,39 @@ const STUDIO_WHEN: Record<Studio, string> = {
   slides: "bản trình bày, slide, pitch deck, thuyết trình, báo cáo dạng slide",
   docs: "viết tài liệu, đề xuất, báo cáo, kế hoạch, thư, thông báo nội bộ, quy trình, văn bản cần trình bày đẹp",
 };
-function studioIndex(s: Studio, plugins: string[], lib: Skill[]): Skill {
-  const body = `${STUDIO_RULES(s, plugins, lib.length)}
+// Nội dung chỉ dựng khi model mở thư viện. Cả thư viện dài quá CAT_BODY_MAX thì chỉ liệt kê skill chọn lọc: skill của danh mục Claude đứng sau theo tên thư viện,
+// không theo độ hợp với yêu cầu, liệt kê tới hết giới hạn chỉ là ~10.000 token phần lớn không liên quan. Phần còn lại tìm bằng search_skills.
+function studioIndex(s: Studio, plugins: string[], lib: Skill[], curated = lib.length): Skill {
+  const body = () => {
+    const line = (k: Skill) => `- ${k.name}: ${k.description.slice(0, 220)}`;
+    const fits = lib.reduce((n, k) => n + line(k).length, 0) <= CAT_BODY_MAX;
+    const lines: string[] = [];
+    let size = 0;
+    for (const k of fits ? lib : lib.slice(0, curated)) {
+      const l = line(k);
+      if (size + l.length > CAT_BODY_MAX) break;
+      lines.push(l); size += l.length;
+    }
+    if (lines.length < lib.length) lines.push(`- … và ${lib.length - lines.length} skill nữa: gọi search_skills với từ khóa của việc cần làm và library="studio-${s}" để tìm trong cả thư viện.`);
+    return `${STUDIO_RULES(s, plugins, lib.length)}
 
 Thư viện gồm ${lib.length} skill (gọi load_skill với đúng tên để đọc skill bạn chọn):
-${lib.map((k) => `- ${k.name}: ${k.description.slice(0, 220)}`).join("\n")}`;
+${lines.join("\n")}`;
+  };
   return indexSkill(`studio-${s}`, `Thư viện ${lib.length} skill chuyên môn cho ${STUDIO_WHEN[s]}. Khi yêu cầu thuộc loại này, gọi load_skill("studio-${s}") trước để chọn skill phù hợp trong thư viện.`, body);
+}
+// Bấm nút studio mà thư viện lớn: phần liệt kê trong prompt cố định, không phụ thuộc tin nhắn. Phần này nằm ở đầu prompt: đổi theo từng câu là mất bộ đệm của cả prompt lẫn lịch sử phía sau,
+// đoạn chat mới không dùng lại được phần đầu của đoạn chat khác, và gói qua CLI phải gửi lại cả khối skill mỗi lượt. Không sắp theo số lần dùng vì số đó đổi theo từng lượt.
+const studioListed = (st: ReturnType<typeof studioSkills>) => (st.skills.length <= STUDIO_DIRECT ? st.skills : st.skills.slice(0, Math.min(st.curated, STUDIO_DIRECT)));
+// Skill hợp nhất với yêu cầu mới nhất (cùng cách chấm với định tuyến), đi ở skill_routing cạnh tin nhắn. Luôn chừa chỗ cho skill khớp trong danh mục Claude,
+// để việc mà thư viện chọn lọc không có vẫn thấy skill đúng. Không có skill khớp thì không thêm gì: mỗi dòng ở đây còn lại trong lịch sử của đoạn chat.
+const STUDIO_PICKS = 8, CATALOG_SLOTS = 4;
+function studioPicks(typed: string, st: ReturnType<typeof studioSkills>): Skill[] {
+  if (st.skills.length <= STUDIO_DIRECT) return [];
+  const own = new Set(st.skills.slice(0, st.curated));
+  const hits = rank(typed, st.skills.map((skill) => ({ skill, weight: own.has(skill) ? 1 : 0.5 })), STUDIO_PICKS * 3).map((h) => h.skill);
+  const cat = hits.filter((k) => !own.has(k)).slice(0, CATALOG_SLOTS);
+  return [...hits.filter((k) => own.has(k)).slice(0, STUDIO_PICKS - cat.length), ...cat];
 }
 // Plugin không gắn studio: một mục "lib-…" mô tả plugin và tên các skill bên trong. Plugin nhỏ (≤ 2 skill) hiện thẳng từng skill.
 function libIndex(l: { slug: string; name: string; description: string; skills: Skill[] }): Skill {
@@ -1078,10 +1111,14 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   const c = { user };
   const { skills, project } = body;
   const list = skills && can(c.user, "skills") && skillsOn(c.user) ? [...await enabledSkills(c.user.id, project ? String(project) : null), ...everywhereSkills(c.user.id)] : [];
+  // Chỉ chữ người dùng gõ: từ khóa nằm trong tệp đính kèm không được kéo theo skill và studio không liên quan.
+  const typed = typedText((Array.isArray(messages) ? (messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
   // Skill của studio luôn có khi người dùng chủ động bấm nút studio. Skill cá nhân trùng tên được ưu tiên.
-  for (const k of st?.skills ?? []) if (!list.some((x) => x.name === k.name)) list.push(k);
+  // Thư viện lớn: prompt chỉ có phần cố định; cả thư viện vẫn nằm trong list (ẩn) để load_skill và search_skills dùng được.
+  const direct = st ? studioListed(st) : [];
   const names = new Set<string>();
   for (let i = 0; i < list.length; i++) { if (names.has(list[i].name)) list.splice(i--, 1); else names.add(list[i].name); }
+  for (const k of direct) if (!names.has(k.name)) { names.add(k.name); list.push(k); }
   // Mọi thư viện đã cài đều tự dùng được: mỗi studio là một mục "studio-…", mỗi plugin khác là một mục "lib-…" trong available_skills.
   // Model tự mở thư viện khi việc cần tới (load_skill), rồi chọn skill cụ thể bên trong. Prompt chỉ thêm một dòng mỗi thư viện,
   // các skill trong thư viện không chiếm chỗ cho tới khi được mở. Khi bấm nút studio, thư viện của studio đó đã mở sẵn.
@@ -1092,12 +1129,16 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   // Skill của danh mục Claude: lớp dự phòng rộng; khi cùng hợp, skill người dùng tự cài / studio được ưu tiên trong gợi ý định tuyến.
   const catSkills = new Set<Skill>();
   const tag = (lib: Lib, ks: Skill[]) => { libs[lib.key] = [lib]; for (const k of ks) (libs[k.name] ??= []).push(lib); };
-  if (studio) tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
+  if (studio) {
+    tag({ key: `studio-${studio}`, label: STUDIO_LABEL[studio] }, st!.skills);
+    // Thư viện đang bấm không có mục lục riêng trong prompt: mọi yêu cầu đều thuộc thư viện này nên mô tả "mở trước" sẽ khiến model đọc mục lục ở mọi lượt. Lối xem phần chưa liệt kê là search_skills (STUDIO_RULES).
+    if (direct.length < st!.skills.length) hidden(st!.skills);
+  }
   if (skills && can(c.user, "skills") && skillsOn(c.user)) {
     for (const s of STUDIOS) {
       const lib = s === studio ? null : studioSkills(c.user.id, s);
       if (!lib?.skills.length) continue;
-      visible.push(studioIndex(s, lib.plugins, lib.skills));
+      visible.push(studioIndex(s, lib.plugins, lib.skills, lib.curated));
       hidden(lib.skills);
       tag({ key: `studio-${s}`, label: STUDIO_LABEL[s] }, lib.skills);
     }
@@ -1110,7 +1151,8 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
       if (lc.length) {
         tag({ key: `lib-${l.slug}`, label: l.name }, l.skills);
         const idx = libIndex(l);
-        for (const k of [idx, ...fresh]) catSkills.add(k);
+        // Mọi skill của danh mục đều tính nhẹ trong định tuyến, kể cả skill đã xếp vào một studio (nằm ngoài fresh): không để hàng trăm skill của danh mục chen trước thư viện chọn lọc.
+        for (const k of [idx, ...l.skills]) catSkills.add(k);
         for (const cat of lc) { const g = cats.get(cat) ?? []; cats.set(cat, g); g.push(l); }
         hidden([idx]); hidden(fresh); continue;
       }
@@ -1127,6 +1169,8 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
       libs[idx.name] = [{ key: idx.name, label: label.get(key) ?? key }];
     }
   }
+  // Không có gì để liệt kê thì không có công cụ skill: giữ một mục để model vẫn tìm được trong thư viện đang bấm.
+  if (studio && !visible.length && st!.skills.length) visible.push(studioIndex(studio, st!.plugins, st!.skills, st!.curated));
   // Định tuyến: chấm điểm toàn bộ kho skill theo yêu cầu mới nhất. Skill có ở nhiều thư viện được gán vào thư viện
   // mà các gợi ý khác cùng thuộc về (đề xuất dự án → Tài liệu, không phải Trình bày).
   let route = "";
@@ -1134,8 +1178,6 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   if (list.length) {
     // Yêu cầu thuộc rõ một studio ("làm slide thuyết trình" → Trình bày): skill của studio đó được cộng thêm, skill của danh mục Claude
     // giảm bớt, để thư viện chọn lọc đứng trước hàng nghìn skill na ná của danh mục.
-    // Chỉ chữ người dùng gõ: từ khóa nằm trong tệp đính kèm không được kéo theo skill và studio không liên quan.
-    const typed = typedText((Array.isArray(messages) ? (messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
     const want = ruleStudios("", typed).scores;
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
     const raw = suggest(typed, list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
@@ -1153,7 +1195,7 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     // Skill người dùng tự chọn ở menu + (tên skill, hoặc lib-… để mở cả thư viện): chỉ nhận tên có trong kho đang bật.
     const known = new Set([...list.map((k) => k.name), ...Object.values(libs).flat().map((l) => l.key)]);
     const picked = Array.isArray(body.pickedSkills) ? [...new Set((body.pickedSkills as unknown[]).filter((n): n is string => typeof n === "string" && known.has(n)))].slice(0, 8) : [];
-    route = routingPrompt(hits, recent, picked);
+    route = routingPrompt(hits, recent, picked, studio ? { lib: libs[`studio-${studio}`][0], skills: studioPicks(typed, st!) } : undefined);
   }
   return { list, visible, libs, prefer, route };
 }

@@ -580,6 +580,8 @@ Object.assign(EN2VI, {
   "Personal": "Cá nhân", "Turned on": "Đang bật", "Turn it off just for you.": "Tắt cho riêng bạn.", "Off: no skill of this plugin is used anywhere.": "Tắt: không skill nào của plugin này được dùng.",
   "List every skill directly": "Liệt kê thẳng từng skill", "Off: Synchro opens this library on its own when a request needs it. On: each skill is listed in every chat, which uses more context.": "Tắt: Synchro tự mở thư viện này khi yêu cầu cần tới. Bật: từng skill được liệt kê trong mọi cuộc trò chuyện, tốn ngữ cảnh hơn.",
   "Studio button": "Nút studio", "Pressing this Artifacts button gives Synchro the whole library of this plugin.": "Bấm nút này ở trang Artifacts là Synchro có cả thư viện của plugin.",
+  "Auto-detect": "Tự động nhận diện", "Synchro sorts each skill of this plugin into Docs, Slides or Design by itself.": "Synchro tự xếp từng skill của plugin này vào Tài liệu, Trình bày hoặc Thiết kế.",
+  "This plugin's skills are not put into any category. Synchro can still open them in chat when a request needs them.": "Skill của plugin này không được xếp vào mục nào. Synchro vẫn mở được chúng trong chat khi yêu cầu cần tới.",
   "None": "Không", "Design": "Thiết kế", "Slides": "Trình bày", "Docs": "Tài liệu", "Uninstall": "Gỡ cài đặt", "Add skills from zip": "Thêm skill từ file zip", "Export .zip": "Xuất .zip",
   "Update": "Cập nhật", "Check for updates": "Kiểm tra cập nhật", "No scripts": "Không có script", "Scripts, sandboxed": "Có script, chạy trong sandbox",
   "Review scripts": "Nên xem script", "High risk": "Rủi ro cao", "files": "tệp", "skills": "skill",

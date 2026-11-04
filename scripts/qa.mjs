@@ -27,6 +27,7 @@ const SUITES = [
   ["Đăng nhập connector quay về dù có COOP", "tests/ui/connector-login.mjs"],
   ["Ảnh từ URL ngoài trong artifact", "tests/ui/artimg.mjs"],
   ["Tạo ảnh: chip, trạng thái, thẻ ảnh, tải về", "tests/ui/imagegen.mjs"],
+  ["Nút studio của plugin, số skill và danh sách ở trang Artifacts", "tests/ui/studio-select.mjs"],
 ];
 const only = process.argv.slice(2);
 
