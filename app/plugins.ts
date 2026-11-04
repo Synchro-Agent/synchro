@@ -13,7 +13,7 @@ import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
 import { warmSkillIndex } from "./skillroute";
-import { classify, dropPluginTags, dropTag, keepPluginTags, pluginKey, refine, tagRev, userStudioIds } from "./skillstudio";
+import { bumpTags, classify, classifyCatalog, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
@@ -357,20 +357,31 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
 
 // Skill của plugin không gắn studio: Synchro tự xếp vào Tài liệu / Trình bày / Thiết kế (skillstudio.ts) để chúng vào thư viện của mục đó
 // ở trang Artifacts. Plugin studio giữ đúng danh sách đã chọn, không tự thêm sang mục khác. by: tài khoản có model để xếp lại ở nền.
-function tagPlugin(id: string, by?: string) {
-  const pl = init().prepare("SELECT studio, catalog_id FROM plugins WHERE id = ?").get(id) as { studio: string | null; catalog_id: string | null } | undefined;
+// Thư viện của danh mục Claude (~18.000 skill) chỉ qua bộ luật chặt: nhờ model từng skill là đốt gói của người dùng.
+function tagOne(id: string, by?: string) {
+  const d = init();
+  const pl = d.prepare("SELECT studio, catalog_id FROM plugins WHERE id = ?").get(id) as { studio: string | null; catalog_id: string | null } | undefined;
   if (!pl) return;
-  // Thư viện của danh mục Claude (~18.000 skill) dùng qua mục ngành nghề như Claude, không tự xếp vào studio (studio sẽ ngập hàng nghìn skill).
-  if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { keepPluginTags(id, []); return; }
-  const rows = init().prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
+  if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { classifyCatalog(id, d.prepare("SELECT name, description FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string }[]); return; }
+  const rows = d.prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
   keepPluginTags(id, rows.map((r) => r.name));
   if (pl.studio) return;
   for (const r of rows) { const key = pluginKey(id, r.name); if (classify(key, r) && by) refine(by, key, r); }
 }
-/** Xếp mục cho mọi skill của plugin chưa xếp (khi máy chủ khởi động: plugin cài trước khi có tính năng này). */
-// Nhường vòng lặp sự kiện giữa các plugin: thư viện chung có thể có hàng nghìn plugin, không để máy chủ đứng hình lúc khởi động.
+function tagPlugin(id: string, by?: string) { if (holdTags(() => tagOne(id, by))) bumpTags(); }
+/** Xếp mục cho mọi skill của plugin chưa xếp, một lần sau mỗi lần khởi động (kể cả sau deploy, không ai phải bấm gì). Chữ ký không đổi thì bỏ qua, nên các lần sau rất nhanh.
+ *  Mỗi đợt tối đa ~12 ms rồi nhường vòng lặp sự kiện (luồng chữ của mọi người không dừng theo), ghi cả đợt trong một giao dịch.
+ *  Chỉ báo đổi nhãn một lần sau cùng: báo giữa chừng là bộ đệm skill của chat phải dựng lại liên tục. */
 export async function ensurePluginTags() {
-  for (const r of init().prepare("SELECT id FROM plugins WHERE studio IS NULL").all() as { id: string }[]) { tagPlugin(r.id); await new Promise((ok) => setImmediate(ok)); }
+  const d = init();
+  const ids = (d.prepare("SELECT id FROM plugins WHERE studio IS NULL").all() as { id: string }[]).map((r) => r.id);
+  let i = 0, changed = false;
+  while (i < ids.length) {
+    const t0 = Date.now();
+    if (holdTags(() => d.transaction(() => { while (i < ids.length && Date.now() - t0 < 12) tagOne(ids[i++]); })())) changed = true;
+    await new Promise((ok) => setImmediate(ok));
+  }
+  if (changed) bumpTags();
 }
 
 // Thêm skill từ file zip tải lên (vd. bộ skill không có trên GitHub) vào một plugin có sẵn.
@@ -612,7 +623,7 @@ export function setPref(uid: string, id: string, p: { enabled?: boolean; everywh
 // nên mọi skill đều gọi được bằng một tên duy nhất.
 type CRow = { id: string; plugin_id: string; name: string; description: string; storage_path: string; use_count: number; enabled: number; report: string; last_used_at: number | null };
 type Cache = { rev: number; tags: number; at: number; rows: Row[]; meta: Map<string, { risk: Risk; licenses: string[] }>; lite: Map<string, PluginSummary["skills"]>;
-  skills: Map<string, Skill[]>; studio: Map<string, Set<Studio>> };
+  skills: Map<string, Skill[]>; tagged: Record<Studio, Map<string, Skill[]>> };
 const CG = globalThis as unknown as { __plRev?: number; __plCache?: Cache | null; __plBulk?: boolean };
 // Cài hàng loạt (plugjob.ts) đặt __plBulk: hàng nghìn thư viện được thêm liên tục trong vài giờ, dựng lại bộ đệm sau mỗi thư viện thì lượt chat
 // nào cũng phải chờ dựng lại cả kho. Khi đó giữ bộ đệm cũ tối đa 60 giây (thư viện mới vào chat chậm tối đa một phút), chat vẫn mượt.
@@ -656,11 +667,13 @@ function snap(): Cache {
     const cat = isCat(p) === 1;
     skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name); }));
   }
-  const studio = new Map<string, Set<Studio>>();
-  for (const r of d.prepare("SELECT key, studios FROM skill_studios WHERE key LIKE 'p:%' AND studios <> '[]'").all() as { key: string; studios: string }[]) studio.set(r.key, new Set(JSON.parse(r.studios) as Studio[]));
+  // Skill đã xếp mục của từng thư viện, tính sẵn một lần: studioSkills chạy 3–4 lần mỗi lượt chat, không tra lại nhãn của từng skill trong ~18.000 skill.
+  const tags = new Map(pluginTagRows().map((r) => [r.key, JSON.parse(r.studios) as Studio[]]));
+  const tagged: Cache["tagged"] = { design: new Map(), slides: new Map(), docs: new Map() };
+  for (const p of rows) for (const k of skills.get(p.id) ?? []) for (const st of tags.get(pluginKey(p.id, rawName(k, p.slug))) ?? []) { const m = tagged[st]; if (!m) continue; const l = m.get(p.id); if (l) l.push(k); else m.set(p.id, [k]); }
   // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
   void warmSkillIndex([...skills.values()].flat()).catch(() => {});
-  return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, studio });
+  return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, tagged });
 }
 // Tên gốc của skill (bỏ tiền tố "thư-viện:" khi trùng tên) để tra nhãn mục.
 const rawName = (k: Skill, slug: string) => (k.name.startsWith(slug + ":") ? k.name.slice(slug.length + 1) : k.name);
@@ -676,10 +689,10 @@ export const MINE_LABEL = "Kho kỹ năng của bạn";
 // gắn với studio, cộng skill Synchro tự nhận diện thuộc mục này — skill của người dùng (Kho kỹ năng) và skill của plugin không gắn studio.
 // Trùng tên: skill của người dùng trước, rồi plugin studio, rồi plugin khác. auto: những skill được tự thêm (from: nguồn).
 export function studioSkills(uid: string, studio: Studio, act = active(uid)): { skills: Skill[]; plugins: string[]; auto: { name: string; from: string }[] } {
-  const tags = snap().studio;
+  const tagged = snap().tagged[studio];
   const ps = act.filter((p) => p.studio === studio);
   const mine = enabledSkillsByIds(uid, userStudioIds(uid, studio));
-  const others = act.filter((p) => !p.studio).map((p) => ({ p, skills: skillsOfPlugin(p.id).filter((k) => tags.get(pluginKey(p.id, rawName(k, p.slug)))?.has(studio)) })).filter((x) => x.skills.length);
+  const others = act.flatMap((p) => { const skills = p.studio ? undefined : tagged.get(p.id); return skills ? [{ p, skills }] : []; });
   const skills: Skill[] = [], auto: { name: string; from: string }[] = [], seen = new Set<string>();
   const add = (k: Skill, from?: string) => { if (seen.has(k.name)) return; seen.add(k.name); skills.push(k); if (from) auto.push({ name: k.name, from }); };
   for (const k of mine) add(k, MINE_LABEL);

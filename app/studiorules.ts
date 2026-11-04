@@ -1,6 +1,7 @@
 // Nhận diện skill thuộc mục nào trong ba mục tạo mới ở trang Artifacts: Tài liệu (docs), Trình bày (slides), Thiết kế (design).
 // Phần thuần (không DB, không mạng) dùng chung cho máy chủ (app/skillstudio.ts) và kiểm thử:
 // - ruleStudios: bộ luật từ khóa Việt + Anh trên tên, mô tả và phần đầu nội dung skill — luôn chạy được, không cần model.
+//   strict: bộ luật chặt cho danh mục Claude, nơi không có model xếp lại phía sau.
 // - STUDIO_SYSTEM / studioAsk / parseStudios: lời nhờ model xếp mục và đọc câu trả lời (model của người dùng, khi có).
 export type StudioKind = "docs" | "slides" | "design";
 export const STUDIO_KINDS: StudioKind[] = ["docs", "slides", "design"];
@@ -58,7 +59,8 @@ function score(hay: string, k: StudioKind) {
 export type StudioGuess = { studios: StudioKind[]; scores: Record<StudioKind, number>; why: string };
 /** Xếp mục bằng từ khóa: tên ×3, mô tả ×2, phần đầu nội dung ×0,5 (tối đa 6 điểm). Lấy mục đạt 8 điểm, trong đó tên + mô tả góp ít nhất
  *  5 điểm (nội dung chỉ bổ sung, không tự quyết), và không quá lép so với mục mạnh nhất (≥ 25%). */
-export function ruleStudios(name: string, description: string, body = ""): StudioGuess {
+export function ruleStudios(name: string, description: string, body = "", strict = false): StudioGuess {
+  if (strict) return strictStudios(name, description);
   const n = fold(name.replace(/[-_]+/g, " ")), d = fold(description), b = fold(body.slice(0, 3000));
   const scores = {} as Record<StudioKind, number>, head = {} as Record<StudioKind, number>;
   const hits: Record<StudioKind, string[]> = { docs: [], slides: [], design: [] };
@@ -72,6 +74,76 @@ export function ruleStudios(name: string, description: string, body = ""): Studi
   const studios = STUDIO_KINDS.filter((k) => scores[k] >= 8 && head[k] >= 5 && scores[k] >= 0.25 * top);
   const why = studios.length ? studios.map((k) => `${k}: ${hits[k].join(", ")}`).join("; ") : "không khớp từ khóa của Tài liệu / Trình bày / Thiết kế";
   return { studios, scores, why };
+}
+
+// ---------------------------------------------------------------- bộ luật chặt cho thư viện của danh mục Claude
+// Danh mục có ~18.000 skill và không nhờ model xếp lại (mỗi skill một lượt gọi model là đốt gói của người dùng), nên kết quả của bộ luật là kết quả cuối:
+// phải đúng là chính. Chỉ đọc tên và mô tả (nội dung skill nhắc tới "pdf" hay "design" không nói lên gì), và chỉ tin phần đầu mô tả, nơi skill nói mình làm gì;
+// danh sách kích hoạt ở cuối mô tả ("use when … slides, docs, reports") hay nhắc đủ thứ.
+// Bốn lớp cho mỗi mục: tên mang đúng sản phẩm; tên gợi ý và câu đầu xác nhận; đầu mô tả nói đúng sản phẩm; câu đầu có động từ làm ra + sản phẩm. Có cụm chặn thì bỏ cả mục.
+// Các cụm chặn lấy từ việc đọc mẫu thật của danh mục: hợp đồng thông minh, báo cáo kiểm thử, "resume" nghĩa là chạy tiếp, deck gateway, thiết kế API / CSDL…
+// Đọc mẫu ngẫu nhiên trên 17.796 skill: Tài liệu 92%, Trình bày và Thiết kế ≥ 94% đúng. Sửa bộ luật thì tăng CATALOG_RULES (skillstudio.ts) để danh mục được xếp lại.
+const WRITE = "write|writes|writing|draft|drafts|drafting|generate|generates|generating|create|creates|creating|produce|produces|producing|compose|composes|composing|prepare|prepares|preparing|author|authors|authoring|build|builds|building|edit|edits|editing|revise|revises|revising|rewrite|rewrites|rewriting|polish|polishes|polishing|make|makes|making";
+const DESIGN_V = `${WRITE}|design|designs|designing|redesign|redesigns|redesigning|style|styles|styling`;
+const GAP = "(?: (?!from |into |to |for |with |of |in |on |by |via |using |about |against |over )[a-z0-9.+#]+){0,3}?";
+const re = (s: string) => new RegExp(` (?:${s}) `);
+const made = (verbs: string, nouns: string) => new RegExp(` (?:${verbs})${GAP} (?:${nouns}) `);
+const first = (verbs: string, nouns: string) => new RegExp(`^ (?:${verbs})${GAP} (?:${nouns}) `);
+type Strict = { name: RegExp; gated: [RegExp, RegExp][]; head: RegExp; made: RegExp[]; not: RegExp };
+const VISUAL = re("visual|visuals|layout|layouts|aesthetic|aesthetics|figma|typography|colors?|colours?|palette|palettes|styling|hierarchy|spacing|wireframes?|mockups?|css|design system|design tokens|fonts?|polish|look and feel|graphic|graphics|artwork|poster|posters");
+const STRICT: Record<StudioKind, Strict> = {
+  docs: {
+    name: re("pdf|pdfs|docx|hwpx|word processing|whitepaper|whitepapers|proposal|proposals|cover letter|cover letters|newsletter|newsletters|blog post|blog generator|blog generation|write doc|write docs|write documentation|write spec|write rfc|write prd|prd|prds|rfc|readme|technical writing|legal writing|copy edit|copyedit|copy editing|proofread|proofreading|documentation|docs writer|article writer|draft article|edit article|write article|content writer|seo writer|copywriter|copywriting|contract review|review contract|press release|meeting notes|meeting minutes"),
+    gated: [
+      [re("resume|resumes|cv|cvs"), re("job|jobs|ats|career|hiring|recruiter|recruiters|interview|cover letter|cv|cvs|candidate")],
+      [re("report|reports"), made(WRITE, "reports?")],
+      [re("memo|memos"), re("write|writes|draft|drafts|drafting|investment|decision|case|committee|privileged|structured|credit|board|counterparty")],
+      [re("contract|contracts|agreement|agreements|nda|ndas"), re("contract among|legal|clause|clauses|redline|redlines|lawyer|attorney|counterparty|counterparties|negotiat[a-z]*|lease|leases|shareholders?|employment|vendor|terms and conditions|e signature|playbook|nda|ndas")],
+      [re("docs|doc|document|documents"), made(WRITE, "docs?|documents?|documentation")],
+      [re("writing|writer|write|prose|editorial|humanizer|deslop|editor"), re("prose|article|articles|essay|essays|blog|editorial|ai writing|human written|copy edit|manuscript|long form|nonfiction|fiction|narrative|tone of voice")],
+    ],
+    head: re("microsoft word|google docs|whitepapers?|technical documentation|cover letters?|press releases?|meeting minutes|copyediting|copy editing|proofreading|proofread"),
+    made: [
+      made(WRITE, "memos?|proposals?|whitepapers?|white papers?|essays?|articles?|blog posts?|blogs?|newsletters?|press releases?|resumes?|cvs?|cover letters?|meeting notes|meeting minutes|handbooks?|user manuals?|user guides?|prds?|rfcs?|specifications?|tech(?:nical)? specs?|documentation|readmes?|thesis|manuscripts?|ebooks?|word documents?|case stud(?:y|ies)|research papers?|grant applications?|(?:weekly|monthly|quarterly|annual|executive|client|investor|board|written|polished|professional|formatted)(?: [a-z]+)? reports?"),
+      first(WRITE, "reports?|documents?|docs|drafts?|contracts?|agreements?|minutes|decision records?|(?:content|product|project|executive) briefs?"),
+      made(WRITE, "agreements?|board minutes|meeting minutes|minutes"),
+      made(`${WRITE}|fill|fills|filling|merge|merges|merging|split|splits|splitting|sign|signs|signing|read|reads|reading|extract|extracts|extracting|highlight|highlighter|summarize|summarizes|translate|translates|translating|convert|converts|converting|annotate|annotates|compress|compresses|export|exports|exporting`, "pdfs?|pdf forms?|pdf documents?|pdf files?|docx|word documents?"),
+    ],
+    not: re("writing code|issue reports?|session usage|quality report|credit memos?|debit memos?|draft payables?|draft proposal|pending proposals?|update proposals?|failure report|what happened|signed document|file column|alerts|html report|html performance reports?|power bi|pbir|link in bio|performance reports?|traffic report|ads|campaigns|document vault|memos saved|signing pipeline|security awareness|via tools|or report|into an application|company brief|actually building|cross repo|footage brief|or resume|and resume|instantiate resume|job search|job openings|local file|dashboard|dashboards|job thesis|search documentation|upload documents|download files|smart contracts?|api contracts?|data contracts?|doc contract|contract tests?|contract testing|test reports?|bug reports?|crash reports?|coverage reports?|code review|resume session|resume work|resume the|pause resume|session resume|docs search|search docs|query docs|code samples|agents.md|claude.md|test plan|test writer|writing tests|write tests"),
+  },
+  slides: {
+    name: re("slide|slides|[a-z]*pptx|ppt|odp|powerpoint|presentation|presentations|pitch deck|slide deck|deck|decks|keynote"),
+    gated: [],
+    head: re("slide decks?|pitch decks?|powerpoint pptx|opendocument presentation|google slides|reveal.js|revealjs|presentation decks?|keynote decks?"),
+    made: [made(`${WRITE}|design|designs|designing|export|exports|exporting`, "slides|slide decks?|decks|deck|pitch decks?|presentations?|.?pptx|powerpoint|powerpoints|keynotes?|pitch books?")],
+    not: re("presentation layer|presentation half|presentation logic|steam deck|deck.gl|deck gateway|kong|flight deck|sliding|slider|sliders|stream deck|rate deck|rate decks|study deck|clash royale|flashcards?|anki|carousels?|deck problem|chosen deck|templafy mcp|video frames|relevant frames|podcast|document slide deck|brand board|forecast change deck|email attachment"),
+  },
+  design: {
+    name: re("figma|logo|logos|poster|posters|flyer|flyers|illustration|illustrations|wireframe|wireframes|mockup|mockups|typography|color palette|colour palette|palette|palettes|design system|design systems|design tokens|ui design|ux design|ui ux|frontend design|web design|graphic design|visual design|product design|landing page|landing pages|thumbnail|thumbnails|infographic|infographics|icon design|canva|shadcn|ui polish|motion design|brand identity|website builder|website generator"),
+    gated: [
+      [re("ux|design|designer"), new RegExp(`${VISUAL.source}| (?:ui|ux|usability|user flows?|prototypes?|product design|design directions?|design decisions?|masters? designers?) `)],
+      [re("ui|frontend|front end|theme|themes|theming|css|tailwind|brand|branding|style|styles|visual|visuals|polish"), VISUAL],
+      [re("animation|animations|motion|icon|icons|graphic|graphics|svg|banner|banners"), re("animation|animations|animate|transition|transitions|easing|motion graphic|motion graphics|icon|icons|illustration|graphic|graphics|logo|visual|visuals|banner|banners")],
+    ],
+    head: re("dark mode aesthetic|light mode aesthetic|design language|ui design|ux design|ui ux|interface design|visual design|graphic design|web design|frontend design|front end design|design systems?|design tokens|brand identity|visual identity|figma|color palettes?|colour palettes?|wireframes?|mockups?|motion graphics?|motion design"),
+    made: [made(DESIGN_V, "logos?|posters?|flyers?|banners?|mockups?|wireframes?|illustrations?|infographics?|thumbnails?|icons?|icon sets?|brand kits?|color palettes?|colour palettes?|landing pages?|websites?|web pages?|graphics?|ad creatives?|artwork|visual art|visuals"),
+      made("design|designs|designing|redesign|redesigns|redesigning", "uis?|user interfaces?|interfaces?|screens?|pages?")],
+    not: re("pbir|godot|unity|playcanvas|glb|tmux|formation|embed sdk|visual review|visual filters?|visual novel|brand materials|sitrep|coordination file|development guidance|make collect|solid|design patterns|inheritance|workflow chain|figma setup|pine script|udl|api interface|video work|make model|connector tool|power bi|test doc|game analysis|localization|localize|identityserver|federation|analytics|telemetry|metrics|kpis?|codebase|module|modules|classroom|live preview|visual regressions?|regression testing|accessibility|a11y|ad copy|implementation plan|brand voice|website content|pcb|circuit|database|schema|api design|system design|software design|architecture|experimental design|experiment design|clinical|trial|tracking plan|org design|instructional design|curriculum|website copy|landing page copy|terminal|tui|tuis|cli|ratatui|policy|quality score|concept test|brainstorming|research design|proofread|test design|service design|chip|in app ui"),
+  },
+};
+function strictStudios(name: string, description: string): StudioGuess {
+  const n = fold(name.replace(/[-_]+/g, " ")), raw = description.replace(/\s+/g, " ").trim();
+  const lead = fold(/^(.{25,280}?[.!?。])(?:\s|$)/.exec(raw)?.[1] ?? raw.slice(0, 280)), head = fold(raw.slice(0, 110)), d = fold(raw);
+  const hits: Partial<Record<StudioKind, string>> = {}, scores = {} as Record<StudioKind, number>;
+  for (const k of STUDIO_KINDS) {
+    const r = STRICT[k];
+    const why = r.not.test(n) || r.not.test(lead) ? null
+      : r.name.exec(n)?.[0] ?? r.gated.find(([a, b]) => a.test(n) && b.test(lead))?.[0].exec(n)?.[0] ?? r.head.exec(head)?.[0] ?? r.made.map((m) => m.exec(lead)?.[0]).find(Boolean) ?? null;
+    scores[k] = why ? 10 : 0;
+    if (why) hits[k] = why.trim();
+  }
+  const studios = STUDIO_KINDS.filter((k) => hits[k]);
+  return { studios, scores, why: studios.map((k) => `${k}: ${hits[k]}`).join("; ") };
 }
 
 // ---------------------------------------------------------------- nhờ model xếp mục

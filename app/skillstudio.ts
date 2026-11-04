@@ -1,10 +1,11 @@
 // Tự xếp skill vào ba mục tạo mới ở trang Artifacts — Tài liệu (docs), Trình bày (slides), Thiết kế (design) — chỉ chạy ở máy chủ.
-// Áp cho skill của người dùng (Kho kỹ năng → Skill) và skill của plugin không gắn studio. Skill thuộc mục nào thì vào thư viện của
+// Áp cho skill của người dùng (Kho kỹ năng → Skill) và skill của plugin đang ở chế độ Tự động nhận diện. Skill thuộc mục nào thì vào thư viện của
 // mục đó: bấm Tài liệu / Trình bày / Thiết kế là model có skill ấy, như skill của studio plugin (plugins.ts → studioSkills).
 // - Ngay khi lưu: bộ luật từ khóa (studiorules.ts) — luôn có kết quả, không cần model.
 // - Ngay sau đó, ở nền: model của chính người dùng (gói hoặc khóa API, như mọi việc phụ) đọc skill rồi xếp lại; có kết quả thì thay bộ luật.
 // - Người dùng tự chọn mục (Kho kỹ năng → skill → Mục ở Artifacts) thì giữ nguyên, không tự xếp lại.
 // Nội dung skill đổi (phiên bản mới, cập nhật plugin) thì xếp lại.
+// Thư viện của danh mục Claude (~18.000 skill): chỉ dùng bộ luật chặt, không bao giờ nhờ model (classifyCatalog).
 import crypto from "node:crypto";
 import { db, getUser, type UserRow } from "./authstore";
 import { oneShot, pickModel } from "./ai/anymodel";
@@ -27,7 +28,18 @@ function init() {
 // Số lần nhãn mục đổi (plugins.ts dựng lại bộ đệm skill của chat khi số này đổi). Đặt trên globalThis: mọi route dùng chung.
 const G = globalThis as unknown as { __tagRev?: number };
 export const tagRev = () => G.__tagRev ?? 0;
-const bump = () => { G.__tagRev = tagRev() + 1; };
+export const bumpTags = () => { G.__tagRev = tagRev() + 1; };
+// Mỗi lần báo là bộ đệm skill của chat phải dựng lại: xếp cả nghìn skill thì gộp lại, chỉ báo một lần sau cùng. fn chạy đồng bộ.
+let held = 0, dirty = false;
+const bump = () => { if (held) dirty = true; else bumpTags(); };
+/** Chạy fn không báo đổi nhãn; trả về true nếu có nhãn đổi (người gọi tự gọi bumpTags khi xong cả đợt). */
+export function holdTags(fn: () => void): boolean {
+  const outer = dirty;
+  held++; dirty = false;
+  try { fn(); return dirty; } finally { held--; dirty = dirty || outer; if (!held) dirty = false; }
+}
+// Khóa của một plugin dưới dạng khoảng ("p:<id>:" … "p:<id>;"): đi theo khóa chính. LIKE không dùng được chỉ mục, thành quét cả bảng ~18.000 dòng cho mỗi plugin.
+const range = (pluginId: string) => [`p:${pluginId}:`, `p:${pluginId};`] as const;
 export const userKey = (skillId: string) => `u:${skillId}`;
 export const pluginKey = (pluginId: string, name: string) => `p:${pluginId}:${name}`;
 const sigOf = (name: string, description: string, body: string) => crypto.createHash("sha1").update(`${name}\n${description}\n${body}`).digest("hex").slice(0, 16);
@@ -69,12 +81,47 @@ export function setManual(key: string, studios: StudioKind[] | null, s: { name: 
   return getTag(key)!;
 }
 export const dropTag = (key: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key = ?").run(key); };
-export const dropPluginTags = (pluginId: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key LIKE ?").run(`p:${pluginId}:%`); };
+export const dropPluginTags = (pluginId: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key >= ? AND key < ?").run(...range(pluginId)); };
+/** Plugin chuyển sang Không xếp mục: bỏ nhãn tự động (bộ luật, model), giữ mục người dùng tự chọn. */
+export function dropAutoTags(pluginId: string) {
+  if (init().prepare("DELETE FROM skill_studios WHERE key >= ? AND key < ? AND src <> 'manual'").run(...range(pluginId)).changes) bump();
+}
+/** Nhãn mục của mọi skill plugin (khác rỗng), cho bộ đệm skill của chat. */
+export const pluginTagRows = () => init().prepare("SELECT key, studios FROM skill_studios WHERE key >= 'p:' AND key < 'p;' AND studios <> '[]'").all() as { key: string; studios: string }[];
+/** Số skill của plugin đã được xếp vào từng mục (bảng chi tiết của plugin). */
+export function pluginDetected(pluginId: string): Partial<Record<StudioKind, number>> {
+  const out: Partial<Record<StudioKind, number>> = {};
+  for (const r of init().prepare("SELECT studios FROM skill_studios WHERE key >= ? AND key < ? AND studios <> '[]'").all(...range(pluginId)) as { studios: string }[])
+    for (const k of JSON.parse(r.studios) as StudioKind[]) out[k] = (out[k] ?? 0) + 1;
+  return out;
+}
 /** Bỏ nhãn của skill không còn trong plugin (sau khi cập nhật gói). */
 export function keepPluginTags(pluginId: string, names: string[]) {
   const keep = new Set(names.map((n) => pluginKey(pluginId, n)));
   const del = init().prepare("DELETE FROM skill_studios WHERE key = ?");
-  for (const r of init().prepare("SELECT key FROM skill_studios WHERE key LIKE ?").all(`p:${pluginId}:%`) as { key: string }[]) if (!keep.has(r.key)) { del.run(r.key); bump(); }
+  for (const r of init().prepare("SELECT key FROM skill_studios WHERE key >= ? AND key < ?").all(...range(pluginId)) as { key: string }[]) if (!keep.has(r.key)) { del.run(r.key); bump(); }
+}
+
+// Đổi khi sửa bộ luật chặt (studiorules.ts): sau lần deploy kế, mọi skill của danh mục được xếp lại đúng một lần.
+const CATALOG_RULES = "c1";
+/** Xếp một thư viện của danh mục Claude bằng bộ luật chặt, không nhờ model. Chỉ đọc tên và mô tả nên không cần nội dung skill.
+ *  Giữ mục người dùng tự chọn và nhãn model đã xếp; chữ ký không đổi thì không làm lại. */
+export function classifyCatalog(pluginId: string, rows: { name: string; description: string }[]) {
+  const d = init();
+  const cur = new Map((d.prepare("SELECT key, studios, src, sig FROM skill_studios WHERE key >= ? AND key < ?").all(...range(pluginId)) as Pick<Row, "key" | "studios" | "src" | "sig">[]).map((r) => [r.key, r]));
+  const put = d.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, model_at, at) VALUES (?, ?, 'rules', ?, ?, NULL, ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = 'rules', sig = excluded.sig, why = excluded.why, model_at = NULL, at = excluded.at");
+  const now = Date.now();
+  for (const r of rows) {
+    const key = pluginKey(pluginId, r.name), c = cur.get(key);
+    cur.delete(key);
+    if (c && c.src !== "rules") continue;
+    const sig = `${sigOf(r.name, r.description, "")}:${CATALOG_RULES}`;
+    if (c?.sig === sig) continue;
+    const g = ruleStudios(r.name, r.description, "", true), studios = JSON.stringify(g.studios);
+    put.run(key, studios, sig, g.why, now);
+    if ((c?.studios ?? "[]") !== studios) bump();
+  }
+  if (cur.size) { const del = d.prepare("DELETE FROM skill_studios WHERE key = ?"); for (const k of cur.keys()) del.run(k); bump(); }
 }
 
 // ---------------------------------------------------------------- nhờ model (ở nền, lần lượt từng skill)
