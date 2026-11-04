@@ -278,6 +278,8 @@ try {
   await ev(`(() => { const f = window.fetch; window.__git = []; window.__prompted = 0; window.prompt = () => { window.__prompted++; return null; }; window.fetch = (u, o) => { let b = null; try { b = u === "/api/ws" && o?.body ? JSON.parse(o.body) : null; } catch {} if (b?.op === "git") { window.__git.push(b); return Promise.resolve(new Response(JSON.stringify({ git: true, repo: "a/b", branch: "main", ahead: 0, files: [] }), { status: 200, headers: { "content-type": "application/json" } })); } return f(u, o); }; })()`);
   await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Code"))`);
   if (await until(`!!document.querySelector(".cv textarea, .cv-compose textarea, main textarea")`, 15000)) {
+    // Màn Code tải dần và có thể đổi khung soạn ngay sau khi mở: chờ ô nhập ổn định rồi mới gửi.
+    await sleep(1500); await until(`!!document.querySelector("textarea")`, 15000);
     await sendMsg("Thử hộp hỏi");
     await until(`!!document.querySelector(".cv-bar")`, 15000); await sleep(1500);
     if (!(await ev(`!!document.querySelector("aside.sr")`))) await click(`document.querySelector(".cv-bar [aria-label='Ẩn/hiện bảng phiên']")`);
@@ -292,9 +294,11 @@ try {
     await click(srBtn("Nhánh mới")); await until(`document.activeElement?.matches(".overlay .modal input")`, 4000);
     await P("Input.insertText", { text: "synchro/thu" }); await enter();
     ok(await until(`window.__git.some((b) => b.action === "branch" && b.name === "synchro/thu")`, 4000), "Enter: tạo nhánh đúng tên đã gõ");
+    // Lệnh trước còn đang chạy thì các nút tạm khóa.
+    await until(`${srBtn("Tạo PR")} && !${srBtn("Tạo PR")}.disabled`, 8000);
     await click(srBtn("Tạo PR")); await until(`document.activeElement?.matches(".overlay .modal input")`, 4000);
     await P("Input.insertText", { text: "Tiêu đề thử" }); await enter();
-    ok(await until(`window.__git.some((b) => b.action === "pr" && b.title === "Tiêu đề thử")`, 4000), "Tạo PR: gửi đúng tiêu đề");
+    ok(await until(`window.__git.some((b) => b.action === "pr" && b.title === "Tiêu đề thử")`, 4000), "Tạo PR: gửi đúng tiêu đề", JSON.stringify(await ev(`({ git: window.__git.slice(-3), active: document.activeElement?.tagName, modal: document.querySelector(".overlay .modal")?.innerText?.slice(0,120), btn: ${srBtn("Tạo PR")}?.disabled })`)));
   } else ok(false, "bảng phiên hiện nút Nhánh mới", JSON.stringify(await ev(`({ text: document.querySelector("aside.sr")?.innerText.slice(0, 400) ?? "không có bảng phiên", git: window.__git?.length })`)));
 
   console.log("━━ Một từ điển ngôn ngữ");
