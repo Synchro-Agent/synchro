@@ -338,7 +338,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
       <UsageAdmin say={app.say} Toggle={Toggle} />
 
       <h3 className="sec">Access</h3>
-      <p className="d adm-privacy"><I.Lock size={14} />Choose which models and features people can use. Administrators always have full access. Conversations, projects and files stay on each person&apos;s own device: administrators can&apos;t see them.</p>
+      <p className="d adm-privacy"><I.Lock size={14} />Choose which models and features people can use. Administrators always have full access. This page has no view of anyone&apos;s conversations or files, though chat data needed to answer, uploads and memory are stored on this server.</p>
       <div className="adm-card">
         <div className="adm-card-h"><b>Default for everyone</b><span className="d">Applies to every account without custom access.</span></div>
         <PermsEditor catalog={api?.catalog ?? []} Toggle={Toggle} value={d.settings.defaultPerms} onChange={(p) => { setD({ ...d, settings: { ...d.settings, defaultPerms: p } }); act(() => call("PATCH", "/api/admin/settings", { defaultPerms: p }), "Default access saved"); }} />

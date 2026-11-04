@@ -97,7 +97,7 @@ if ! healthy "$NEWID"; then
   mv "$APP/.next" "$SIDE/.synchro-failed-$NAME/next"
   mv "$PREV/next" "$APP/.next"
   if [ -d "$PREV/node_modules" ]; then mv "$APP/node_modules" "$SIDE/.synchro-failed-$NAME/node_modules"; mv "$PREV/node_modules" "$APP/node_modules"; fi
-  restart
+  restart || true
   if up; then echo "Đã trả lại bản $OLDID, web đang chạy bình thường. Bản lỗi giữ ở $SIDE/.synchro-failed-$NAME để xem." >&2
   else echo "ĐÃ TRẢ LẠI BẢN $OLDID NHƯNG VẪN KHÔNG ĐẠT: cần xử lý tay ngay (xem docs/van-hanh.md)." >&2; fi
   exit 1

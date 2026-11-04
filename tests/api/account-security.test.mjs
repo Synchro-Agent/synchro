@@ -1,4 +1,6 @@
 // Bảo mật tài khoản: đổi mật khẩu đăng xuất phiên khác, đường dẫn đặt lại mật khẩu, tệp tải lên có chủ, tiêu đề bảo mật, /api/health, xóa tài khoản qua API.
+import fs from "node:fs";
+import path from "node:path";
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
@@ -100,6 +102,15 @@ ok(!(await gone("GET", "/api/auth/me")).j?.user, "phiên đã mất");
 ok((await admin("GET", `/api/admin/users/${gid}`)).s === 404, "tài khoản không còn");
 const relogin = await signup(`gone2-${tag}@synchro.test`);
 ok((await relogin("POST", "/api/files/context", { ids: [gu.j.id], names: {}, query: "" })).j.blocks.length === 0, "tệp riêng đã bị xóa cùng tài khoản");
+
+console.log("8. Nhật ký quản trị có nhãn cho mọi hành động");
+{
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
+  const actions = new Set(walk("app").flatMap((f) => [...fs.readFileSync(f, "utf8").matchAll(/\baudit\("([a-z_]+)"/g)].map((m) => m[1])));
+  const ui = fs.readFileSync("app/adminui.tsx", "utf8");
+  const missing = [...actions].filter((a) => !new RegExp(`\\b${a}: \\[`).test(ui));
+  ok(actions.size > 15 && !missing.length, `${actions.size} hành động đều có nhãn`, missing.join());
+}
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
