@@ -151,6 +151,30 @@ await admin("GET", "/api/plugins");
 r = await other("PATCH", `/api/plugins/${ORG}`, { studio: "none" });
 ok(r.s === 403, `thành viên không đổi được plugin của tổ chức (${r.s})`, JSON.stringify(r.j));
 
+console.log("9. Đổi menu trên plugin riêng: không tiêu gói của người dùng, nhãn model không mất");
+const PL2 = "pl_studiocatalogown";
+const wipe2 = () => db.transaction(() => { db.prepare("DELETE FROM skill_studios WHERE key >= ? AND key < ?").run(`p:${PL2}:`, `p:${PL2};`); db.prepare("DELETE FROM plugin_skills WHERE plugin_id = ?").run(PL2); db.prepare("DELETE FROM plugins WHERE id = ?").run(PL2); })();
+wipe2();
+db.transaction(() => {
+  insP.run(PL2, uid, "own-plugin-menu", null, "Own Plugin Menu", "Plugin riêng không thuộc danh mục", now, now);
+  for (let i = 0; i < 12; i++) insS.run(`${PL2}-${i}`, PL2, `own-report-${i}`, "Viết báo cáo tuần cho sếp theo mẫu của công ty: kết quả, chỉ số, vướng mắc, kế hoạch tuần tới.", "Soạn báo cáo ngắn gọn.", report);
+})();
+const ownTag = (n) => db.prepare("SELECT studios, src, model_at FROM skill_studios WHERE key = ?").get(`p:${PL2}:${n}`);
+r = await me("PATCH", `/api/plugins/${PL2}`, { studio: "none" });
+r = await me("PATCH", `/api/plugins/${PL2}`, { studio: "auto" });
+ok(r.j.plugin.studioMode === "auto" && r.j.plugin.detected.docs === 12, "bộ luật xếp ngay", JSON.stringify(r.j.plugin.detected));
+ok(!(await me("GET", "/api/skills")).j?.refining, "đổi None rồi Tự động: không xếp hàng lượt gọi model nào");
+ok(!db.prepare("SELECT COUNT(*) n FROM skill_studios WHERE key >= ? AND key < ? AND model_at IS NOT NULL").get(`p:${PL2}:`, `p:${PL2};`).n, "không skill nào bị nhờ model");
+db.prepare("UPDATE skill_studios SET studios = '[\"slides\"]', src = 'model', model_at = ? WHERE key = ?").run(now, `p:${PL2}:own-report-3`);
+r = await me("PATCH", `/api/plugins/${PL2}`, { studio: "none" });
+ok(ownTag("own-report-3")?.src === "model" && ownTag("own-report-1") === undefined, "Không: nhãn model còn lưu, nhãn bộ luật bỏ", JSON.stringify([ownTag("own-report-3"), ownTag("own-report-1")]));
+r = await me("GET", "/api/plugins?view=meta");
+ok(!r.j.studios.slides?.auto?.some((a) => a.name === "own-report-3"), "Không: nhãn model không đưa skill vào mục", JSON.stringify(r.j.studios.slides?.auto?.slice(0, 3)));
+r = await me("PATCH", `/api/plugins/${PL2}`, { studio: "auto" });
+ok(r.j.plugin.detected.slides === 1 && ownTag("own-report-3")?.src === "model", "bật lại Tự động: nhãn model dùng lại, không hỏi lại", JSON.stringify(r.j.plugin.detected));
+ok(!(await me("GET", "/api/skills")).j?.refining, "bật lại Tự động: không có việc chờ model");
+await me("DELETE", `/api/plugins/${PL2}`); wipe2();
+
 await me("DELETE", `/api/plugins/${PID}`); await admin("DELETE", `/api/plugins/${ORG}`);
 wipe();
 r = await me("GET", "/api/plugins?view=meta");

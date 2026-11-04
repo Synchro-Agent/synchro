@@ -82,16 +82,17 @@ export function setManual(key: string, studios: StudioKind[] | null, s: { name: 
 }
 export const dropTag = (key: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key = ?").run(key); };
 export const dropPluginTags = (pluginId: string) => { bump(); return init().prepare("DELETE FROM skill_studios WHERE key >= ? AND key < ?").run(...range(pluginId)); };
-/** Plugin chuyển sang Không xếp mục: bỏ nhãn tự động (bộ luật, model), giữ mục người dùng tự chọn. */
+/** Plugin chuyển sang Không xếp mục: bỏ nhãn của bộ luật (tính lại lúc nào cũng được), giữ mục người dùng tự chọn.
+ *  Nhãn model cũng giữ, chỉ không dùng khi plugin ở Không (bộ đệm chat lọc theo auto_tag): bật lại Tự động không phải hỏi lại model từng skill. */
 export function dropAutoTags(pluginId: string) {
-  if (init().prepare("DELETE FROM skill_studios WHERE key >= ? AND key < ? AND src <> 'manual'").run(...range(pluginId)).changes) bump();
+  if (init().prepare("DELETE FROM skill_studios WHERE key >= ? AND key < ? AND src = 'rules'").run(...range(pluginId)).changes) bump();
 }
 /** Nhãn mục của mọi skill plugin (khác rỗng), cho bộ đệm skill của chat. */
-export const pluginTagRows = () => init().prepare("SELECT key, studios FROM skill_studios WHERE key >= 'p:' AND key < 'p;' AND studios <> '[]'").all() as { key: string; studios: string }[];
-/** Số skill của plugin đã được xếp vào từng mục (bảng chi tiết của plugin). */
-export function pluginDetected(pluginId: string): Partial<Record<StudioKind, number>> {
+export const pluginTagRows = () => init().prepare("SELECT key, studios, src FROM skill_studios WHERE key >= 'p:' AND key < 'p;' AND studios <> '[]'").all() as { key: string; studios: string; src: StudioSrc }[];
+/** Số skill của plugin đã được xếp vào từng mục (bảng chi tiết của plugin). manualOnly: plugin ở Không xếp mục, chỉ còn mục người dùng tự chọn. */
+export function pluginDetected(pluginId: string, manualOnly = false): Partial<Record<StudioKind, number>> {
   const out: Partial<Record<StudioKind, number>> = {};
-  for (const r of init().prepare("SELECT studios FROM skill_studios WHERE key >= ? AND key < ? AND studios <> '[]'").all(...range(pluginId)) as { studios: string }[])
+  for (const r of init().prepare(`SELECT studios FROM skill_studios WHERE key >= ? AND key < ? AND studios <> '[]'${manualOnly ? " AND src = 'manual'" : ""}`).all(...range(pluginId)) as { studios: string }[])
     for (const k of JSON.parse(r.studios) as StudioKind[]) out[k] = (out[k] ?? 0) + 1;
   return out;
 }
@@ -156,9 +157,11 @@ async function ask(uid: string, key: string, s: { name: string; description: str
   const r = parseStudios(raw);
   if (!r) return;
   // Trong lúc chờ model, người dùng có thể đã tự chọn mục hoặc lưu phiên bản mới: chỉ ghi khi vẫn là kết quả bộ luật của đúng nội dung này.
-  d.prepare("UPDATE skill_studios SET studios = ?, src = 'model', why = ?, at = ? WHERE key = ? AND src = 'rules' AND sig = ?")
-    .run(JSON.stringify(r.studios), r.why || `model ${pick.model}`, Date.now(), key, sig);
-  bump();
+  const studios = JSON.stringify(r.studios);
+  const done = d.prepare("UPDATE skill_studios SET studios = ?, src = 'model', why = ?, at = ? WHERE key = ? AND src = 'rules' AND sig = ?")
+    .run(studios, r.why || `model ${pick.model}`, Date.now(), key, sig).changes;
+  // Mỗi lần báo là cả máy chủ dựng lại bộ đệm skill (~70 ms với 18.000 skill): model chỉ xác nhận lại mục cũ thì không báo.
+  if (done && studios !== cur.studios) bump();
 }
 /** id các skill của người này (đang bật) đã được xếp vào mục studio. */
 export function userStudioIds(uid: string, studio: StudioKind): string[] {

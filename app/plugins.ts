@@ -573,7 +573,7 @@ function pub(r: Row, uid?: string): PublicPlugin {
   const skills = (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? ORDER BY name").all(r.id) as SRow[]).map((s) => ({ id: s.id, name: s.name, description: s.description, enabled: !!s.enabled, report: JSON.parse(s.report) as SkillReport, useCount: s.use_count, lastUsed: s.last_used_at }));
   const pref = uid ? (init().prepare("SELECT enabled, everywhere FROM plugin_prefs WHERE user_id = ? AND plugin_id = ?").get(uid, r.id) as Pref | undefined) : undefined;
   const risk = skills.reduce<Risk>((a, s) => (RANK[s.report.risk] > RANK[a] ? s.report.risk : a), "none");
-  return { ...head(r, pref), skills, risk, licenses: [...new Set(skills.map((s) => s.report.license))], detected: pluginDetected(r.id) };
+  return { ...head(r, pref), skills, risk, licenses: [...new Set(skills.map((s) => s.report.license))], detected: pluginDetected(r.id, !r.auto_tag) };
 }
 export const getPlugin = (id: string, uid?: string) => { const r = init().prepare("SELECT * FROM plugins WHERE id = ?").get(id) as Row | undefined; return r ? pub(r, uid) : null; };
 export const pluginOwner = (id: string) => (init().prepare("SELECT owner FROM plugins WHERE id = ?").get(id) as { owner: string } | undefined)?.owner ?? null;
@@ -616,8 +616,8 @@ export function setPlugin(id: string, patch:{ enabled?: boolean; everywhere?: bo
   const m = patch.studio;
   if (m === null || m === "auto" || m === "none" || (typeof m === "string" && STUDIOS.includes(m))) {
     d.prepare("UPDATE plugins SET studio = ?, auto_tag = ? WHERE id = ?").run(m === null || m === "auto" || m === "none" ? null : m, m === "none" ? 0 : 1, id);
-    const owner = pluginOwner(id);
-    tagPlugin(id, owner && owner !== "org" ? owner : undefined);
+    // Không truyền tài khoản: đổi menu chỉ chạy bộ luật, không tiêu gói của người dùng cho từng skill mà không báo trước. Model xếp lại khi cài hoặc cập nhật plugin.
+    tagPlugin(id);
   }
   if (patch.skills && typeof patch.skills === "object") for (const [n, on] of Object.entries(patch.skills)) d.prepare("UPDATE plugin_skills SET enabled = ? WHERE plugin_id = ? AND name = ?").run(on ? 1 : 0, id, n);
   touch();
@@ -683,9 +683,14 @@ function snap(): Cache {
     skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name); }));
   }
   // Skill đã xếp mục của từng thư viện, tính sẵn một lần: studioSkills chạy 3–4 lần mỗi lượt chat, không tra lại nhãn của từng skill trong ~18.000 skill.
-  const tags = new Map(pluginTagRows().map((r) => [r.key, JSON.parse(r.studios) as Studio[]]));
+  const tags = new Map(pluginTagRows().map((r) => [r.key, r]));
   const tagged: Cache["tagged"] = { design: new Map(), slides: new Map(), docs: new Map() };
-  for (const p of rows) for (const k of skills.get(p.id) ?? []) for (const st of tags.get(pluginKey(p.id, rawName(k, p.slug))) ?? []) { const m = tagged[st]; if (!m) continue; const l = m.get(p.id); if (l) l.push(k); else m.set(p.id, [k]); }
+  for (const p of rows) for (const k of skills.get(p.id) ?? []) {
+    const row = tags.get(pluginKey(p.id, rawName(k, p.slug)));
+    // Plugin ở Không xếp mục: nhãn model còn lưu nhưng không dùng, chỉ giữ mục người dùng tự chọn.
+    if (!row || (!p.auto_tag && row.src !== "manual")) continue;
+    for (const st of JSON.parse(row.studios) as Studio[]) { const m = tagged[st]; if (!m) continue; const l = m.get(p.id); if (l) l.push(k); else m.set(p.id, [k]); }
+  }
   // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
   void warmSkillIndex([...skills.values()].flat()).catch(() => {});
   return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, tagged });
