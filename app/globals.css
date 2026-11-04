@@ -230,9 +230,13 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 
 .thread{flex:1;overflow:auto;padding:16px 24px 24px}
 .thread-in{max-width:var(--thread-w,768px);margin:0 auto;display:flex;flex-direction:column;gap:28px}
+/* Tin ngoài màn hình không dựng khung, không vẽ (trình duyệt nhớ chiều cao thật sau lần vẽ đầu); ba phần tử cuối (tin đang viết) luôn vẽ đủ.
+   Đệm cắt để bóng và viền focus sát mép dòng không bị mất. */
+.thread-in>:not(:nth-last-child(-n+3)){content-visibility:auto;contain-intrinsic-size:auto 160px;overflow-clip-margin:24px}
 .user-msg{align-self:flex-end;background:var(--user-bubble);border-radius:14px;padding:8px 14px;font-size:16px;max-width:80%;white-space:pre-wrap;animation:rise .35s var(--ease) both}
 .ai-msg{font-family:var(--font-sans);font-size:17px;line-height:1.6;white-space:pre-wrap}
-.ai-msg .w{animation:wIn .6s cubic-bezier(.2,.6,.2,1) both}
+/* Hiệu ứng hiện chữ chỉ cho câu trả lời đang viết, và chỉ ở khối cuối: mở lại đoạn chat cũ không chạy hàng chục nghìn hiệu ứng làm mờ. */
+.ai-streaming :is(p,li,h1,h2,h3,h4,td,th,blockquote):last-child .w{animation:wIn .6s cubic-bezier(.2,.6,.2,1) both}
 @keyframes wIn{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:none}}
 .actions{display:flex;align-items:center;gap:2px;margin-top:8px;color:var(--text-3);font-family:var(--font-sans);font-size:12px}
 .actions .icon-btn{width:28px;height:28px}

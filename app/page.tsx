@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
@@ -657,6 +657,90 @@ function CodeBadge({ c }: { c: CodeItem }) {
   return <span className={`cb ${c.state}`} title={c.reason ? `${t}: ${c.reason}` : t} aria-label={t} />;
 }
 
+// Giờ gửi của một tin: dòng đã memo thì không tự vẽ lại, tin còn mới tự đếm "N phút trước" theo đồng hồ riêng.
+function When({ t }: { t: number }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (Date.now() - t > 3600_000) return;
+    const x = setInterval(() => tick((n) => n + 1), 60_000);
+    return () => clearInterval(x);
+  }, [t]);
+  return <span className="when">{ago(t)}</span>;
+}
+
+// Bảng artifact của đoạn chat: mỗi identifier một danh sách phiên bản; bản sửa (mode="patch") áp vào phiên bản trước thành bản đầy đủ (vfs.ts).
+type ArtScan = { map: Map<string, (ArtVersion & { msg: number })[]>; at: Record<number, { ident: string; v: number }[]> };
+const ART_EMPTY: ArtScan = { map: new Map(), at: {} };
+// Kết quả tách artifact theo từng tin: tin đã xong không đổi nên không tách lại mỗi khung hình.
+const artSegs = new WeakMap<Msg, ReturnType<typeof splitArtifacts>>();
+function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
+  const map: ArtScan["map"] = new Map(), at = { ...base.at };
+  for (const [k, v] of base.map) map.set(k, [...v]);
+  for (let i = from; i < msgs.length; i++) {
+    const m = msgs[i];
+    if (m.role !== "ai" || !hasArtifacts(m.text)) continue;
+    let segs = artSegs.get(m);
+    if (!segs) { segs = splitArtifacts(m.text); artSegs.set(m, segs); }
+    for (const sg of segs) if (sg.kind === "art") {
+      const l = map.get(sg.art.ident) ?? [];
+      l.push({ ...resolveArt(l[l.length - 1], sg.art), msg: i });
+      map.set(sg.art.ident, l);
+      (at[i] = [...(at[i] ?? [])]).push({ ident: sg.art.ident, v: l.length - 1 });
+    }
+  }
+  return { map, at };
+}
+
+// Những gì một dòng tin cần từ trang (luôn là bản mới nhất, đọc qua ref): đổi hàm không làm cả danh sách vẽ lại.
+type RowCx = {
+  chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
+  openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
+  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: () => void;
+};
+// Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
+const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
+  m: Msg; i: number; last: boolean; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
+}) {
+  const c = cx.current!;
+  const { say, fm, arts } = c;
+  const key = `${chatId}-${i}`;
+  return (<>
+    {mark && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}
+    {m.role === "user" ? (
+      <div className="user-wrap">
+        {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => cx.current!.fm.show(f, m.fids?.[f])} onContextMenu={(e) => cx.current!.fm.open(e, f)} />)}</div>}
+        {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
+        {m.pick?.length ? <div className="u-picks">{m.pick.map((k) => <span key={k.id} className="skill-chip">{k.id.startsWith("lib-") ? <I.Plugins size={13} /> : <I.Scroll size={13} />}<span data-notr>{k.label}</span></span>)}</div> : null}
+        <div className="user-msg"><UserText text={m.text} /></div>
+      </div>
+    ) : (
+      <div>
+        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={(id, ok, o) => { answerAsk(id, ok, o).then((err) => err && say(err)); }} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} /> : (() => {
+          const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
+          const total = arts.map.get(sg.art.ident)?.length ?? 1;
+          const v = pos?.v ?? 0;
+          const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
+          const full = arts.map.get(sg.art.ident)?.[v];
+          return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} />) : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
+        {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
+        {m.done && (
+          <div className="actions in">
+            <button className="icon-btn" onClick={() => cx.current!.copy(key, m.text)} aria-label="Sao chép">{copied ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>
+            <button className={`icon-btn ${speaking ? "like-on" : ""}`} onClick={() => cx.current!.speak(key, m.text)} aria-label="Đọc to"><I.Speaker size={16} /></button>
+            <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, 1)} aria-label="Hữu ích" aria-pressed={m.like === 1}><I.ThumbUp size={16} /></button>
+            <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
+            {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
+            {m.via && <span className="via" title="Chế độ Tự động đã chọn model này">{modelName(m.via)}</span>}
+            <When t={m.time} />
+          </div>
+        )}
+        {m.done && last && !busy && <SaveSkillChip chat={c.chat} all={c.chats} say={say} />}
+      </div>
+    )}
+  </>);
+});
+
 export default function Home() {
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [, setAcct] = usePref("acct", "");
@@ -845,6 +929,7 @@ export default function Home() {
       setIns(u.profile.instructions ?? "");
     }
   };
+  const flushDirtyRef = useRef<() => void>(() => {});
   // Chat, dự án, model đã chọn… của tài khoản đang dùng (localStorage đã tách theo tài khoản).
   const loadLocal = () => {
     try {
@@ -857,6 +942,7 @@ export default function Home() {
   // Chuyển sang vùng dữ liệu của tài khoản u: mỗi tài khoản có chat, dự án, cài đặt, ảnh đại diện riêng.
   const enterAccount = (u: AuthUser) => {
     if (userScope() === u.id) return;
+    flushDirtyRef.current();
     setUserScope(u.id);
     if (u.isAdmin) adoptLegacyData(u.id);
     reloadPrefs();
@@ -923,13 +1009,40 @@ export default function Home() {
     window.addEventListener("synchro:forget", forget);
     return () => window.removeEventListener("synchro:forget", forget);
   }, []);
+  // Lưu đoạn chat: gộp ghi, không ghi toàn bộ lịch sử mỗi khung hình lúc chữ đang chảy. Có tin mới, lượt chạy mới thì ghi gần như ngay
+  // (tải lại trang vẫn nối được vào lượt đó); đang chảy chữ thì vài giây một lần; xong lượt, rời trang thì ghi ngay.
+  const saveT = useRef<{ t: ReturnType<typeof setTimeout>; at: number } | null>(null);
+  const savedSig = useRef("");
+  const saveSig = () => `${chatsRef.current.length}:${chatsRef.current.reduce((n, c) => n + c.msgs.length, 0)}:${runs.current.size}`;
+  const flushChats = useCallback(() => {
+    if (saveT.current) clearTimeout(saveT.current.t);
+    saveT.current = null;
+    savedSig.current = saveSig();
+    ls.set("chats", JSON.stringify(chatsRef.current.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true, prog: undefined })) }))));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const flushDirty = useCallback(() => { if (saveT.current) flushChats(); }, [flushChats]);
+  flushDirtyRef.current = flushDirty;
   useEffect(() => {
     if (!loaded) return;
-    ls.set("chats", JSON.stringify(chats.filter((c) => !c.inc).map((c) => ({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true, prog: undefined })) }))));
+    const d = saveSig() !== savedSig.current ? 300 : running.size ? 5000 : 800, at = Date.now() + d;
+    if (saveT.current && saveT.current.at <= at) return;
+    if (saveT.current) clearTimeout(saveT.current.t);
+    saveT.current = { t: setTimeout(flushChats, d), at };
+  }, [chats, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runN = running.size, lastRunN = useRef(runN);
+  useEffect(() => { if (runN < lastRunN.current) flushDirty(); lastRunN.current = runN; }, [runN, flushDirty]);
+  useEffect(() => {
+    const hide = () => { if (document.visibilityState === "hidden") flushDirty(); };
+    window.addEventListener("pagehide", flushDirty);
+    document.addEventListener("visibilitychange", hide);
+    return () => { window.removeEventListener("pagehide", flushDirty); document.removeEventListener("visibilitychange", hide); };
+  }, [flushDirty]);
+  useEffect(() => {
+    if (!loaded) return;
     ls.set("projects", JSON.stringify(projects));
     ls.set("model", model);
     ls.set("banner", banner ? "1" : "0");
-  }, [chats, projects, model, banner, loaded]);
+  }, [projects, model, banner, loaded]);
 
   const setTheme = (t: string) => {
     setThemeS(t);
@@ -966,22 +1079,14 @@ export default function Home() {
   // Tệp do code tạo đang xem trước (cùng khung bên cạnh với artifact; mở cái này thì đóng cái kia).
   const [fileSel, setFileSel] = useState<{ chat: number; file: OutFile } | null>(null);
   const artDismissed = useRef("");
-  const arts = (() => {
-    // Bản sửa (mode="patch") được áp vào phiên bản trước để thành phiên bản đầy đủ (vfs.ts).
-    const map = new Map<string, (ArtVersion & { msg: number })[]>();
-    const at: Record<number, { ident: string; v: number }[]> = {};
-    if (!chat || !caps.art) return { map, at };
-    chat.msgs.forEach((m, i) => {
-      if (m.role !== "ai" || !hasArtifacts(m.text)) return;
-      for (const sg of splitArtifacts(m.text)) if (sg.kind === "art") {
-        const l = map.get(sg.art.ident) ?? [];
-        l.push({ ...resolveArt(l[l.length - 1], sg.art), msg: i });
-        map.set(sg.art.ident, l);
-        (at[i] ??= []).push({ ident: sg.art.ident, v: l.length - 1 });
-      }
-    });
-    return { map, at };
-  })();
+  // Quét theo tiền tố: các tin trước tin cuối không đổi trong lúc chữ đang chảy, chỉ tin cuối phải tách và áp bản sửa lại.
+  const artBase = useRef<{ msgs: Msg[]; scan: ArtScan } | null>(null);
+  const arts = useMemo(() => {
+    if (!chat || !caps.art) return ART_EMPTY;
+    const ms = chat.msgs, n = Math.max(0, ms.length - 1), b = artBase.current;
+    if (!b || b.msgs.length !== n || b.msgs.some((m, k) => m !== ms[k])) artBase.current = { msgs: ms.slice(0, n), scan: scanArts(ms.slice(0, n), 0, ART_EMPTY) };
+    return scanArts(ms, n, artBase.current!.scan);
+  }, [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
   const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
   const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
   const artOpen = view === "chat" && !!artVersions?.length;
@@ -1037,10 +1142,26 @@ export default function Home() {
     setShowDown(far);
   };
   const toBottom = () => { threadRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); };
+  // Mở một đoạn chat: đứng ngay ở tin cuối, không trôi từ đầu xuống (trôi mượt chỉ dành cho nút "cuộn xuống").
+  useLayoutEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    stick.current = true;
+    setShowDown(false);
+    el.scrollTop = el.scrollHeight;
+  }, [chat?.id, view]);
   useEffect(() => {
     const el = threadRef.current;
-    if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: busy ? "auto" : "smooth" });
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [chat?.msgs, busy]);
+  // Tin ngoài màn hình chỉ có chiều cao ước tính (content-visibility), vẽ thật mới đủ cao; ảnh, biểu đồ cũng nở sau. Đang đứng ở cuối thì giữ ở cuối.
+  useEffect(() => {
+    const el = threadRef.current, inner = el?.firstElementChild;
+    if (!el || !inner) return;
+    const ro = new ResizeObserver(() => { if (stick.current) el.scrollTop = el.scrollHeight; });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [chat?.id, view]);
 
   // Theo từng đoạn chat: mã lượt chạy ở máy chủ, và số thế hệ của lần theo dõi hiện tại (Dừng hay chạy lại thì số cũ hết hiệu lực,
   // mọi cập nhật đến muộn của lần trước bị bỏ qua).
@@ -1607,6 +1728,7 @@ export default function Home() {
   // Xóa phiên trên máy chủ. Dữ liệu của tài khoản vẫn được giữ (đã tách theo tài khoản) cho lần đăng nhập sau.
   const logout = () => {
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    flushDirty();
     setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
     for (const t of timers.current.values()) clearInterval(t);
@@ -1623,9 +1745,14 @@ export default function Home() {
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
     unshare: (id: number) => { setChats((cs) => cs.map((c) => (c.id === id ? { ...c, shared: false } : c))); say("Đã dừng chia sẻ"); },
-    wipe: (what: "all" | "chats") => { if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
+    wipe: (what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
     me: me ?? null, setMe, logout,
   };
+
+  const rowCx = useRef<RowCx | null>(null);
+  if (chat) rowCx.current = { chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry };
+  // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
+  const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
   if (me === undefined) return <div style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
@@ -1876,40 +2003,8 @@ export default function Home() {
           <>
             <div className="thread" ref={threadRef} onScroll={onScroll}>
               <div className="thread-in">
-                {chat.msgs.map((m, i) => <Fragment key={i}>{chat.compact?.upto === i && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}{
-                  m.role === "user" ? (
-                    <div key={i} className="user-wrap">
-                      {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => fm.show(f, m.fids?.[f])} onContextMenu={(e) => fm.open(e, f)} />)}</div>}
-                      {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
-                      {m.pick?.length ? <div className="u-picks">{m.pick.map((k) => <span key={k.id} className="skill-chip">{k.id.startsWith("lib-") ? <I.Plugins size={13} /> : <I.Scroll size={13} />}<span data-notr>{k.label}</span></span>)}</div> : null}
-                      <div className="user-msg"><UserText text={m.text} /></div>
-                    </div>
-                  ) : (
-                    <div key={i}>
-                      <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={(id, ok, o) => { answerAsk(id, ok, o).then((err) => err && say(err)); }} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
-                        const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
-                        const total = arts.map.get(sg.art.ident)?.length ?? 1;
-                        const v = pos?.v ?? 0;
-                        const active = artOpen && artSel?.ident === sg.art.ident && artIndex === v;
-                        const full = arts.map.get(sg.art.ident)?.[v];
-                        return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
-                      })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
-                      {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
-                      {m.done && (
-                        <div className="actions in">
-                          <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>
-                          <button className={`icon-btn ${speaking === `${chat.id}-${i}` ? "like-on" : ""}`} onClick={() => speak(`${chat.id}-${i}`, m.text)} aria-label="Đọc to"><I.Speaker size={16} /></button>
-                          <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => like(i, 1)} aria-label="Hữu ích"><I.ThumbUp size={16} /></button>
-                          <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => like(i, -1)} aria-label="Không hữu ích"><I.ThumbDown size={16} /></button>
-                          {i === chat.msgs.length - 1 && <button className="icon-btn" onClick={retry} aria-label="Thử lại"><I.Retry size={16} /></button>}
-                          {m.via && <span className="via" title="Chế độ Tự động đã chọn model này">{modelName(m.via)}</span>}
-                          <span className="when">{ago(m.time)}</span>
-                        </div>
-                      )}
-                      {m.done && i === chat.msgs.length - 1 && !busy && <SaveSkillChip chat={chat} all={chats} say={say} />}
-                    </div>
-                  )
-                }</Fragment>)}
+                {chat.msgs.map((m, i) => <MsgRow key={i} m={m} i={i} last={i === chat.msgs.length - 1} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
+                  fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} />)}
                 {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
                 {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
                 {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
