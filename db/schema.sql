@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS password_resets (
   created_by TEXT
 );
 
+-- Xác minh email khi đăng ký: lưu băm của mã, mỗi tài khoản một mã còn hiệu lực.
+CREATE TABLE IF NOT EXISTS email_verifications (
+  token_hash TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email      TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

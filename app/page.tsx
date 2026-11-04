@@ -26,6 +26,7 @@ import { toSpeech, VI } from "./voiceflow";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
+import { VerifyBanner } from "./verifybanner";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
@@ -966,6 +967,7 @@ export default function Home() {
   const [titleMenu, setTitleMenu] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
   const [delId, setDelId] = useState<number | null>(null);
+  const [delArts, setDelArts] = useState(false);
   const [delProj, setDelProj] = useState<number | null>(null);
   const [theme, setThemeS] = useState("light");
   const [banner, setBanner] = useState(true);
@@ -2123,6 +2125,7 @@ export default function Home() {
       {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
       <main id="main" tabIndex={-1} className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
+        <VerifyBanner me={me ?? null} onChange={setMe} />
         {syncSt.risk && <div className="sync-warn" role="alert"><I.InfoCircle size={16} /><span>{tr("Trình duyệt đã hết chỗ và máy chủ chưa nhận được bản mới nhất của")} {syncSt.pending + syncSt.tooBig} {tr("mục. Đừng đóng trang trước khi xuất dữ liệu.")}</span><button className="btn" onClick={exportData}>{tr("Xuất dữ liệu")}</button></div>}
         {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">
@@ -2142,7 +2145,7 @@ export default function Home() {
           </div>
           {(view === "new" || view === "chat") && pill}
           <div className="right">
-            {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { armDraft(); setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh" aria-pressed={incog}><I.Ghost /></button>}
+            {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { armDraft(); setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: không lưu vào lịch sử, không vào Bộ não"); }} aria-label="Ẩn danh" aria-pressed={incog}><I.Ghost /></button>}
             {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
             {view === "chat" && chat && brwOk && <button className={`icon-btn brw-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} />{chat.browser && <span className="brw-dot" aria-hidden />}</button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
@@ -2290,7 +2293,7 @@ export default function Home() {
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
-      <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Đoạn chat sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú của nó trong Bộ não và liên kết chia sẻ nếu có. Artifact đã lưu vẫn ở trang Artifacts. Không hoàn tác được." ok="Xóa" onCancel={() => setDelId(null)} onOk={() => { if (delId !== null) removeChat(delId); setDelId(null); say("Đã xóa đoạn chat"); }} /></Fade>
+      <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Đoạn chat sẽ bị xóa khỏi mọi thiết bị, cùng với lịch sử phiên của model, ghi chú trong Bộ não, liên kết chia sẻ, và tệp chỉ đoạn chat này dùng. Bản đã có trong sao lưu của máy chủ mất đi theo vòng xoay, tối đa khoảng 5 tuần. Không hoàn tác được." ok="Xóa" onCancel={() => { setDelId(null); setDelArts(false); }} onOk={() => { if (delId !== null) { if (delArts) void fetch(`/api/artifacts?conv=${delId}`, { method: "DELETE" }).catch(() => {}); removeChat(delId); } setDelId(null); setDelArts(false); say("Đã xóa đoạn chat"); }}><label style={{ display: "flex", gap: 8, alignItems: "center", margin: "0 0 16px", fontSize: 14 }}><input type="checkbox" checked={delArts} onChange={(e) => setDelArts(e.target.checked)} />Xóa cả artifact của đoạn chat này (nếu không, chúng vẫn ở trang Artifacts)</label></Confirm></Fade>
       <Fade show={!!(delProj !== null)}><Confirm title="Xóa dự án?" text="Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại." ok="Xóa" onCancel={() => setDelProj(null)} onOk={() => { setProjects((ps) => ps.filter((x) => x.id !== delProj)); if (delProj !== null) chatSync.forget("project", [delProj]); setChats((cs) => cs.map((c) => (c.project === delProj ? { ...c, project: undefined } : c))); setDelProj(null); say("Đã xóa dự án"); }} /></Fade>
       <Fade show={!!(modal === "proj")}><ProjectModal onClose={() => setModal(null)} onCreate={(n, d) => { const id = Date.now(); setProjects([{ id, name: n, desc: d, upd: id, pinned: true }, ...projects]); setModal(null); setCurProj(id); setView("project"); say("Đã tạo dự án"); }} /></Fade>
       <Fade show={editProj !== null}><ProjectModal title="Chỉnh sửa dự án" ok="Lưu" init={projects.find((x) => x.id === editProj)} onClose={() => setEditProj(null)} onCreate={(n, d) => { if (editProj !== null) patchProj(editProj, { name: n, desc: d }); setEditProj(null); say("Đã cập nhật dự án"); }} /></Fade>

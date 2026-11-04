@@ -2,6 +2,8 @@
 // bật bộ hẹn giờ tác vụ nền, và cài sẵn các plugin studio cho cả tổ chức nếu chưa từng cài.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Lỗi máy chủ hiện ở Cài đặt → Sức khỏe hệ thống; bật sớm nhất để không sót lỗi lúc khởi động.
+  (await import("./app/ops")).captureConsole();
   setTimeout(async () => {
     try {
       await import("./app/chatengine");
@@ -15,6 +17,16 @@ export async function register() {
       // Connector: kiểm tra lại ở nền theo nhịp của bộ hẹn giờ (công cụ mới, token bị thu hồi, giữ refresh token còn sống).
       const { onTick } = await import("./app/tasks");
       const { recheckConnectors } = await import("./app/connectors");
+      // Vấn đề nghiêm trọng (đĩa, thư, sao lưu, nhiều người mất đăng nhập gói): báo quản trị viên, kiểm tra mỗi giờ.
+      let opsAt = 0;
+      onTick("ops", (now) => { if (now - opsAt < 3_600_000) return; opsAt = now; void import("./app/ops").then((m) => m.opsWatch()).catch((e) => console.error("[ops]", e)); });
+      // Dọn mỗi ngày những gì đã hứa giữ có hạn: tệp do code tạo, lượt chạy, kết quả công cụ. Máy chủ có thể chạy hàng tháng không khởi động lại.
+      let sweptAt = Date.now();
+      onTick("sweep", (now) => {
+        if (now - sweptAt < 86_400_000) return;
+        sweptAt = now;
+        void Promise.all([import("./app/outputs"), import("./app/runs"), import("./app/refs")]).then(([o, r, f]) => { o.sweepOutputs(); r.sweepRuns(); f.sweepRefs(); }).catch((e) => console.error("[sweep]", e));
+      });
       onTick("connectors", (now) => { void recheckConnectors(now).catch((e) => console.error("[connectors]", e)); });
       // Giữ kết nối GitHub luôn dùng được: làm mới token có hạn, dùng token định kỳ (mỗi 30 phút xem một lượt).
       const { keepLinksAlive } = await import("./app/github");

@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
+import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
@@ -376,6 +377,7 @@ export async function addZipToPlugin(id: string, buf: Buffer) {
   if (!pl) fail("Không tìm thấy plugin.", 404);
   if (buf.length > PLUGIN_LIMITS.zip) fail("File zip quá lớn.");
   const zip = await JSZip.loadAsync(buf).catch(() => fail("Không đọc được file zip."));
+  await measureZip(zip, SKILL_ZIP_MAX).catch(() => fail("Dung lượng sau khi giải nén quá lớn hoặc file nén bị hỏng"));
   const files = Object.values(zip.files).filter((f) => !f.dir).map((f) => ({ f, p: f.name.replace(/\\/g, "/") })).filter(({ p }) => !p.split("/").includes("..") && !p.startsWith("/") && p.split("/").every(okSeg));
   const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
   let roots = files.filter(({ p }) => path.posix.basename(p) === "SKILL.md").map(({ p }) => dirOf(p));

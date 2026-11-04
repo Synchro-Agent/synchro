@@ -1,4 +1,4 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
+import { AuthError, handle, limit, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../authstore";
 import { createTask, listTasks, TaskError } from "../../tasks";
 
 export const runtime = "nodejs";
@@ -9,6 +9,7 @@ export const GET = handle(async (req: Request) => Response.json({ tasks: listTas
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);
   const { user } = requireUser(req);
+  if (verifyLocked(user)) throw new AuthError(VERIFY_FIRST, 403);
   limit("task-new:" + user.id, 60, 10 * 60_000);
   try { return Response.json({ task: createTask(user.id, await req.json().catch(() => ({}))) }); }
   catch (e) { if (e instanceof TaskError) return Response.json({ error: e.message }, { status: e.status }); throw e; }

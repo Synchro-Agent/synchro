@@ -45,6 +45,9 @@ export function getArtifactByIdent(uid: string, conv: string, ident: string): Ar
   return r ? parse(r) : null;
 }
 
+/** Người dùng chọn xóa cả artifact khi xóa đoạn chat. */
+export const removeConvArtifacts = (uid: string, conv: string) => init().prepare("DELETE FROM artifacts WHERE user_id = ? AND conv = ?").run(uid, conv).changes;
+
 export type ArtInput = { ident: string; title: string; type: ArtType; lang?: string | null; content: string };
 export function validArt(x: unknown): ArtInput | null {
   const o = x as Partial<ArtInput>;

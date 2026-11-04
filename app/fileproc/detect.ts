@@ -1,5 +1,27 @@
-import JSZip from "jszip";
 import { FileError } from "./types";
+
+// Tên các tệp trong zip, đọc thẳng từ danh mục trung tâm: không giải nén, không tạo đối tượng cho từng mục (zip độc hại có thể khai hàng trăm nghìn mục).
+// Trả về null nếu tệp không phải zip đọc được.
+export function zipNames(buf: Buffer, want: Set<string>): Set<string> | null {
+  const min = Math.max(0, buf.length - 65_557);
+  let end = -1;
+  for (let i = buf.length - 22; i >= min; i--) if (buf.readUInt32LE(i) === 0x06054b50) { end = i; break; }
+  if (end < 0) return null;
+  const size = buf.readUInt32LE(end + 12), off = buf.readUInt32LE(end + 16), found = new Set<string>();
+  // ZIP64: không theo dõi tiếp, coi như zip thường; tiến trình đọc tệp tự xử lý.
+  if (off === 0xffffffff || size === 0xffffffff) return found;
+  // Tệp có phần đầu thêm vào (tự giải nén): vị trí khai lệch so với thực tế.
+  let p = end - size;
+  if (p < 0 || off > p) return null;
+  while (p + 46 <= end && buf.readUInt32LE(p) === 0x02014b50) {
+    const n = buf.readUInt16LE(p + 28), x = buf.readUInt16LE(p + 30), c = buf.readUInt16LE(p + 32);
+    if (n <= 64) { const name = buf.toString("utf8", p + 46, p + 46 + n); if (want.has(name)) found.add(name); }
+    p += 46 + n + x + c;
+  }
+  return found;
+}
+
+const OOXML = new Set(["word/document.xml", "xl/workbook.xml", "ppt/presentation.xml"]);
 
 // Nhận diện loại thật bằng magic bytes. Đuôi file chỉ dùng làm gợi ý cho loại văn bản.
 export async function detectKind(buf: Buffer, name: string): Promise<string> {
@@ -11,14 +33,9 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
   if (startsWith(0x52, 0x49, 0x46, 0x46) && buf.subarray(8, 12).toString() === "WEBP") return "image/webp";
   if (buf.subarray(0, 5).toString() === "%PDF-") return "application/pdf";
   if (startsWith(0x50, 0x4b, 0x03, 0x04)) {
-    try {
-      const z = await JSZip.loadAsync(buf);
-      if (z.file("word/document.xml")) return "docx";
-      if (z.file("xl/workbook.xml")) return "xlsx";
-      if (z.file("ppt/presentation.xml")) return "pptx";
-      return "zip";
-    } catch { /* zip hỏng */ }
-    throw new FileError(`"${name}" là tệp nén bị hỏng, không mở được.`);
+    const z = zipNames(buf, OOXML);
+    if (!z) throw new FileError(`"${name}" là tệp nén bị hỏng, không mở được.`);
+    return z.has("word/document.xml") ? "docx" : z.has("xl/workbook.xml") ? "xlsx" : z.has("ppt/presentation.xml") ? "pptx" : "zip";
   }
   if (startsWith(0xd0, 0xcf, 0x11, 0xe0)) throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
   const head = buf.subarray(0, 8192);

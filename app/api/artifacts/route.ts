@@ -1,5 +1,5 @@
 import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { listArtifacts, saveArtifact, validArt } from "../../artifactstore";
+import { listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../artifactstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,4 +16,13 @@ export const POST = handle(async (req: Request) => {
   if (!conv || !Array.isArray(body.items)) return Response.json({ error: "Dữ liệu không hợp lệ." }, { status: 400 });
   const ids = (body.items as unknown[]).slice(0, 10).map(validArt).map((a) => (a ? saveArtifact(user.id, conv, a) : null));
   return Response.json({ ids });
+});
+
+// DELETE ?conv=: xóa mọi artifact của một đoạn chat (người dùng chọn khi xóa đoạn chat đó).
+export const DELETE = handle(async (req: Request) => {
+  sameOrigin(req);
+  const { user } = requireUser(req);
+  const conv = new URL(req.url).searchParams.get("conv") ?? "";
+  if (!/^[\w-]{1,64}$/.test(conv)) return Response.json({ error: "Dữ liệu không hợp lệ." }, { status: 400 });
+  return Response.json({ removed: removeConvArtifacts(user.id, conv) });
 });

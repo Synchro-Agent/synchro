@@ -60,6 +60,8 @@ const loginFile = path.join(dir, ".mock-login");
     const sid = a.includes("--fork-session") ? C.uuid() : C.flag(a, "--resume") || C.uuid();
     // Tên gọi tắt → model thật (như Claude Code báo trong system/init).
     const ALIAS = { fable: "claude-fable-5-1", opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" };
+    // Lịch sử phiên trên đĩa như CLI thật (nguyên văn tin nhắn): kiểm thử xóa đoạn chat, đoạn chat ẩn danh.
+    if (ok) { const pd = path.join(dir, "projects", "mock"); fs.mkdirSync(pd, { recursive: true }); fs.appendFileSync(path.join(pd, `${sid}.jsonl`), JSON.stringify({ prompt }) + "\n"); }
     C.out({ type: "system", subtype: "init", session_id: sid, model: ALIAS[C.flag(a, "--model")] ?? C.flag(a, "--model") ?? "claude-sonnet-5-5", cwd: process.cwd(), tools: [] });
     const result = (o) => C.out({ type: "result", session_id: sid, usage: { input_tokens: 0, output_tokens: 0 }, total_cost_usd: 0, ...o });
     if (!ok) { result({ subtype: "success", is_error: true, result: "Not logged in · Please run /login" }); process.exit(1); }

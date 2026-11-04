@@ -37,7 +37,7 @@ const RUN_MAX = Number(env("WS_RUN_MAX", 3));
 // Dựng video / chuyển tài liệu bằng LibreOffice / Chromium cần nhiều bộ nhớ hơn một script phân tích dữ liệu.
 const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
 // Tệp code ghi vào outputs/ được gửi về: tối đa 20 tệp, mỗi tệp 100 MB, tổng 150 MB (đủ cho video MP4 vài phút).
-const RUN_FILES = 20, RUN_PREVIEWS = 8, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
+const RUN_FILES = 20, RUN_PREVIEWS = 12, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
 // Hết chỗ chạy thì xếp hàng (có giới hạn) thay vì báo lỗi ngay: một chỗ luôn dành cho lần chạy ngắn, người đang chạy ít nhất được chọn trước.
 const RUN_QUEUE = Number(env("WS_RUN_QUEUE", 20)), RUN_QUEUE_USER = Number(env("WS_RUN_QUEUE_USER", 4)), RUN_WAIT_SEC = Number(env("WS_RUN_WAIT_SEC", 240));
 // Bảo vệ đĩa: một lần chạy không dùng quá RUN_DISK_MB (cả thư mục làm việc lẫn lớp ghi của container); dưới MIN_FREE_MB trống thì không
@@ -138,6 +138,8 @@ async function setupHost() {
   }
   // Container ra được internet (npm, pip, git…) nhưng không vào được máy chủ, mạng nội bộ hay container khác.
   for (const net of ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "100.64.0.0/10"]) await rule("DOCKER-USER", ["-i", BRIDGE, "-d", net, "-j", "DROP"]);
+  // Không gửi thư trực tiếp từ workspace: máy chủ tự gửi email đặt lại mật khẩu, IP bị đưa vào danh sách đen vì thư rác thì email của mọi người hỏng theo.
+  await rule("DOCKER-USER", ["-i", BRIDGE, "-p", "tcp", "-m", "multiport", "--dports", "25,465,587", "-j", "DROP"]);
   await rule("DOCKER-USER", ["-i", BRIDGE, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "RETURN"]);
   await rule("INPUT", ["-i", BRIDGE, "-j", "DROP"]);
   await rule("INPUT", ["-i", BRIDGE, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT"]);
@@ -268,6 +270,14 @@ setInterval(async () => {
   } catch (e) { log("sweep", e.message); }
 }, 60_000);
 
+// Dừng workspace không trả lại đĩa, một người dùng lấp đầy đĩa thì mọi người đều bị từ chối chạy code. Xóa phần tải lại được (bộ nhớ đệm, không phải tệp của người dùng).
+function clearCaches(u) {
+  if (!okUser(u)) return;
+  for (const d of [`${ROOT}/${u}/.cache`, `${ROOT}/${u}/.npm/_cacache`, `${ROOT}/${u}/.npm/_logs`, keepRoot(u)]) {
+    try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { log("không xóa được bộ nhớ đệm", d, String(e?.message ?? e)); }
+  }
+}
+
 // Hạn mức đĩa theo từng phút: lệnh dd trong workspace chạy suốt, kiểm tra lúc bật container là không đủ.
 let keepSwept = 0;
 async function quotaSweep() {
@@ -276,13 +286,13 @@ async function quotaSweep() {
     const mb = (await usageMB(u)) + (await layerMB(cname(u))), s = st(u);
     sizes.push({ u, mb });
     s.over = mb > DISK_MB;
-    if (mb > HARD_MB * 1.25 || (mb > HARD_MB && Date.now() - (s.started ?? 0) > QUOTA_GRACE_MS)) { log("workspace vượt hạn mức đĩa, dừng", u, `${mb} MB`); await stop(u); }
+    if (mb > HARD_MB * 1.25 || (mb > HARD_MB && Date.now() - (s.started ?? 0) > QUOTA_GRACE_MS)) { log("workspace vượt hạn mức đĩa, dừng", u, `${mb} MB`); await stop(u); clearCaches(u); }
   }
   const free = freeMB();
   if (free < MIN_FREE_MB) {
     log(`đĩa còn ${free} MB trống`);
     const big = sizes.filter((x) => x.mb > 500).sort((a, b) => b.mb - a.mb)[0];
-    if (big) { log("đĩa sắp đầy, dừng workspace tốn đĩa nhất", big.u, `${big.mb} MB`); await stop(big.u); }
+    if (big) { log("đĩa sắp đầy, dừng workspace tốn đĩa nhất", big.u, `${big.mb} MB`); await stop(big.u); clearCaches(big.u); }
   }
   // Thư mục giữ lại của người không chạy gì nữa: sweepKeep chỉ gọi khi chính họ chạy tiếp nên có thể nằm mãi.
   if (Date.now() - keepSwept > 3600_000) {
@@ -452,7 +462,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     }
     const got = clean ? collectOutputs(`${dir}/outputs`, { files: RUN_FILES, previews: RUN_PREVIEWS, fileBytes: RUN_FILE_MB * 1048576, totalBytes: RUN_TOTAL_MB * 1048576 }) : { files: [], skipped: ["outputs: không dừng được container"] };
     const timedOut = r.code === 124;
-    const note = (waited >= 2 ? `\n[Đã chờ ${waited} giây vì máy chủ đang bận]` : "") + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : "") + overDisk + (got.skipped.length ? `\n[Không gửi được: ${got.skipped.join("; ")}]` : "");
+    const note = (waited >= 2 ? `\n[Đã chờ ${waited} giây vì máy chủ đang bận]` : "") + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : r.code === 137 ? `\n[Hệ thống đã dừng tiến trình (mã 137), thường do vượt giới hạn bộ nhớ ${RUN_MEMORY}. Hãy giảm độ phân giải, xử lý từng phần, hoặc dùng ít tiến trình song song hơn]` : "") + overDisk + (got.skipped.length ? `\n[Không gửi được: ${got.skipped.join("; ")}]` : "");
     return { code: r.code, out: r.out, err: r.err + note, timedOut, files: got.files, ...(book ? { recalc: book } : {}) };
   } finally {
     if (watcher) clearInterval(watcher);

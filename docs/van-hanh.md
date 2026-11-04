@@ -7,6 +7,21 @@
 - `db`: ghi được SQLite. `disk`: còn trên 1 GB trống. `agent`: dịch vụ workspace trả lời (`null` nếu máy không bật workspace).
 - Trỏ một dịch vụ theo dõi ngoài vào `https://synchro.net.nz/api/health` để biết khi web chết. Máy chủ không tự báo được khi chính nó chết.
 
+## Sức khỏe hệ thống và watchdog
+
+Quản trị viên xem ở **Cài đặt → Sức khỏe hệ thống**: lỗi máy chủ gần đây (đã bỏ email, token), người bị hãng từ chối đăng nhập gói AI, đĩa, thư gửi lỗi và nút gửi thử, tuổi và kết quả kiểm tra của bản sao lưu mới nhất, watchdog. Vấn đề nghiêm trọng (đĩa, thư, sao lưu, từ 3 người mất đăng nhập gói) còn được báo vào Hộp thư và email của quản trị viên, mỗi loại tối đa một lần mỗi ngày.
+
+`workspace/setup.sh` (deploy chạy mỗi lần) cài `synchro-watchdog.timer`: mỗi phút gọi `/api/health` ở máy chủ. Web không trả lời hoặc `db` sai 3 lần liên tiếp thì `pm2 restart`; tối thiểu 10 phút giữa hai lần, tối đa 3 lần mỗi giờ. Đang deploy thì bỏ qua (khóa `/run/synchro-deploy.lock`). Báo 503 vì đĩa hay dịch vụ workspace thì chỉ ghi lại, khởi động lại web không chữa được.
+
+```bash
+systemctl status synchro-watchdog.timer
+cat /var/lib/synchro-ops/watchdog-state.json; tail /var/lib/synchro-ops/watchdog.jsonl
+```
+
+Cấu hình ở `/etc/synchro-ops.env` (chỉ root đọc): `APP`, `PM2`, `PORT`, `WEB_USER`, `SYNCHRO_BACKUP_HOOK`.
+
+Quyền sở hữu: `scripts/server-build.sh` để thư mục app, `scripts/`, `workspace/` thuộc root; dịch vụ workspace chạy từ `/opt/synchro-ws` (bản sao, chỉ root ghi). Web user chỉ ghi được `data/`, `.cache/`, `.next/`, `node_modules/`, `.mkvenv/` và mã ứng dụng của chính nó. Tiến trình đọc tệp tải lên (`scripts/extract-worker.mjs`) chạy ưu tiên thấp, giới hạn bộ nhớ (`SYNCHRO_PARSE_HEAP_MB`, 1024), thời gian (`SYNCHRO_PARSE_MS`), số việc cùng lúc (`SYNCHRO_PARSE_MAX`, 2), không có biến môi trường bí mật, và theo mô hình quyền của Node chỉ đọc được mã của chính nó.
+
 ## Deploy và trả lại bản trước
 
 `scripts/server-build.sh` dựng bản mới ở thư mục riêng, tráo bản, khởi động lại, rồi gọi `/api/health` tối đa khoảng 90 giây.
@@ -28,20 +43,27 @@ su - synchro -c "pm2 restart synchro --update-env"
 
 ## Sao lưu
 
-`scripts/backup.sh` tạo bản sao cục bộ nhất quán, 7 bản ngày và 4 bản tuần. Chưa bật sẵn. Bật bằng cron:
+`scripts/backup.sh` tạo bản sao cục bộ nhất quán, 7 bản ngày và 4 bản tuần. `workspace/setup.sh` tự thêm lịch nếu máy chưa có:
 
 ```
 # /etc/cron.d/synchro-backup
 0 3 * * * root bash /var/www/synchro/scripts/backup.sh /var/www/synchro /var/backups/synchro >> /var/log/synchro-backup.log 2>&1
 ```
 
+Sau mỗi bản, script mở lại chính bản vừa lưu và kiểm tra (`integrity_check`, số bảng, số tài khoản, có `secret.key` và khóa mở được một hộp đã mã hóa trong bản sao, đủ tệp tải lên, đọc lại tối đa 200 tệp ngẫu nhiên theo mã băm, `CHECK_FILES`), ghi vào `/var/lib/synchro-ops/backup-status.json`. Trang Sức khỏe hệ thống báo khi lỗi hoặc quá 36 giờ không có bản mới. Đây chưa phải diễn tập khôi phục: vẫn làm phần "Khôi phục" dưới đây mỗi quý.
+
 Trong mỗi bản: `synchro.db` (đã chạy `integrity_check`), `data/` (trừ kho skill dựng sẵn và bản cài CLI), `uploads/` (tệp tải lên), `engine-logins/`, `env.production`, `synchro-ws.env`.
 
 Không có trong bản sao, tải / dựng lại được: `data/skills/_plugins`, bản cài CLI, thư mục làm việc của CLI, workspace của người dùng ở `/srv/synchro-ws` (giới hạn 5 GB mỗi người, tổng có thể rất lớn; nếu muốn giữ, cần chọn nơi lưu riêng).
 
-Bản sao nằm cùng đĩa với dữ liệu, nên **không chống được hỏng đĩa hay mất máy chủ**. Muốn chống phải đẩy ra ngoài (`SYNCHRO_BACKUP_HOOK`) và mã hóa, vì bản sao chứa `data/secret.key` và tệp môi trường.
+Bản sao nằm cùng đĩa với dữ liệu, nên **không chống được hỏng đĩa hay mất máy chủ**. Muốn chống phải đẩy ra ngoài và mã hóa, vì bản sao chứa `data/secret.key` và tệp môi trường. Đặt lệnh trong `/etc/synchro-ops.env` (không đặt trong `.env.production`: lệnh này chạy bằng root):
 
-Kiểm tra sao lưu còn chạy: `/var/backups/synchro/LAST_OK` phải mới trong vòng 24 giờ.
+```bash
+# Ví dụ: mã hóa bằng age với khóa công khai (khóa riêng giữ ngoài máy chủ) rồi đẩy đi bằng rclone. Nơi lưu do chủ dịch vụ chọn.
+SYNCHRO_BACKUP_HOOK=/root/synchro-offsite.sh
+```
+
+Lệnh nhận đường dẫn bản vừa tạo làm tham số đầu; lỗi thì bản cục bộ vẫn giữ và trang sức khỏe báo.
 
 ### Khôi phục
 
@@ -97,5 +119,21 @@ Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "c
 ## Hạn mức đĩa
 
 - Dịch vụ workspace kiểm tra mỗi phút: quá 5 GB (`WS_DISK_MB`) thì cảnh báo, quá 6 GB thì dừng workspace (cho 5 phút sau khi bật để người dùng dọn), dưới 3 GB trống (`WS_MIN_FREE_MB`) thì không nhận việc mới và dừng workspace tốn đĩa nhất.
+- Khi dừng vì vượt hạn mức hoặc đĩa sắp đầy, dịch vụ xóa thêm bộ nhớ đệm của workspace đó (`.cache`, `.npm/_cacache`, thư mục giữ lại giữa các lần chạy). Không đụng tệp của người dùng.
 - Đây là kiểm tra định kỳ, không phải hạn mức của hệ thống tệp: một lệnh `dd` nhanh vẫn ghi được vài GB trong một phút. Muốn chặn cứng cần đặt `/srv/synchro-ws` trên phân vùng riêng có project quota (XFS / ext4).
-- Tệp tải lên: 2 GB mỗi tài khoản (`SYNCHRO_UPLOAD_QUOTA_MB`), 300 tệp mỗi giờ.
+- Tệp tải lên: 2 GB mỗi tài khoản (`SYNCHRO_UPLOAD_QUOTA_MB`), 300 tệp mỗi giờ; đĩa dưới 2 GB trống (`SYNCHRO_MIN_FREE_MB`) thì từ chối tệp mới. Người dùng tự xóa tệp ở Cài đặt → Quyền riêng tư.
+- Tệp do code tạo: 5 GB mỗi tài khoản (`SYNCHRO_OUTPUT_QUOTA_MB`), vượt thì xóa tệp cũ nhất; đĩa dưới mức trên thì không lưu tệp mới và báo cho model. Tệp quá 30 ngày được dọn mỗi ngày.
+
+## Giới hạn và theo dõi khác
+
+- Giọng nói (khóa ElevenLabs dùng chung): 30.000 credit mỗi ngày cho mỗi tài khoản (`SYNCHRO_SPEECH_DAILY_CREDITS`), quản trị viên không tính. Cuộc gọi trực tiếp (`live`, `voice`) tính theo thời gian nên hãng không báo số credit từng lượt: chỉ có giới hạn số phiên.
+- CSP script chạy thử (`Content-Security-Policy-Report-Only` trong `next.config.ts`): chỉ báo vào trang Sức khỏe hệ thống, chưa chặn. Báo cáo sạch một thời gian thì chuyển thành chặn thật.
+- Người dùng tải được mọi dữ liệu máy chủ giữ của họ ở Cài đặt → Quyền riêng tư (`/api/auth/account/export`).
+
+## Xóa đoạn chat và đoạn chat ẩn danh
+
+Xóa đoạn chat xóa thêm lịch sử phiên của CLI trên đĩa (tìm theo mã phiên trong `logins/<cli>/<tài khoản>`, `engine_session_log` nhớ cả phiên cũ), kết quả công cụ, tệp do code tạo và tệp tải lên chỉ đoạn chat đó dùng. Artifact chỉ xóa khi người dùng chọn. Bản đã có trong sao lưu mất đi theo vòng xoay. Đoạn chat ẩn danh: không nối phiên (mỗi lượt gửi kèm lịch sử nên chậm hơn), xóa lịch sử phiên ngay sau lượt, xóa lượt chạy sau 10 phút (`SYNCHRO_EPHEMERAL_MS`). Lượt không thuộc đoạn chat nào (đặt tên, chưng cất) cũng được xóa lịch sử phiên. Cách này tìm theo tên tệp: kiểm tra lại với CLI thật sau mỗi lần CLI đổi phiên bản lớn (`find <thư mục đăng nhập> -name '*<mã phiên>*'`). Tệp lịch sử chung của CLI (nếu có, không theo mã phiên) không nằm trong phạm vi này.
+
+## Xác minh email
+
+Tài khoản đăng ký bằng mật khẩu sau khi có tính năng này nhận thư xác minh; chưa xác minh vẫn chat được, nhưng chưa dùng được tệp đính kèm, connector, tác vụ, giọng nói, Synchro Code (Cài đặt → Quản trị viên → "Require a verified email": tắt khi thư đang lỗi). Tài khoản cũ và tài khoản Google, GitHub, Apple không bị ảnh hưởng. Mốc phân biệt: `settings.verify_since`.

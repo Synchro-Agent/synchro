@@ -27,13 +27,13 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
     const hit = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")) as Stored;
     if (hit.raw && !o.raw) throw new FileError(hit.err ?? `Không trích được nội dung từ "${name}".`);
     // Có đúng nội dung tệp trong tay nên được là chủ, không lộ gì thêm.
-    claimFile(uid, id, buf.length);
+    claimFile(uid, id, buf.length, name);
     return { ...hit, name };
   } catch (e) { if (e instanceof FileError) throw e; /* chưa có cache */ }
   let kind = "binary", blocks: ContentBlock[] = [];
   try {
     kind = await detectKind(buf, name);
-    blocks = await pickExtractor(kind, name).run(buf, { name, kind });
+    blocks = await pickExtractor(kind, name).run(buf, { name, kind, uid });
     const textLen = blocks.reduce((a, b) => a + (b.type === "text" ? b.text.length : b.type === "document" ? (b.fallbackText?.length ?? 0) : 0), 0);
     if (!blocks.length || (kind !== "application/pdf" && !kind.startsWith("image/") && textLen === 0)) throw new FileError(`Không trích được nội dung từ "${name}".`);
   } catch (e) {
@@ -42,14 +42,14 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
     const rec: Stored = { id, name, kind, tokens: 0, large: false, raw: true, err, blocks: [{ type: "text", text: `(Tệp "${name}", ${buf.length.toLocaleString("vi-VN")} byte: không đọc được nội dung dạng chữ. ${err})` }] };
     await writeFile(path.join(DIR, id + ".bin"), buf);
     await writeFile(path.join(DIR, id + ".json"), JSON.stringify(rec));
-    claimFile(uid, id, buf.length);
+    claimFile(uid, id, buf.length, name);
     return rec;
   }
   const tokens = estTokens(blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join(""));
   const rec: Stored = { id, name, kind, tokens, large: tokens > LARGE_TOKENS, blocks };
   await writeFile(path.join(DIR, id + ".bin"), buf);
   await writeFile(path.join(DIR, id + ".json"), JSON.stringify(rec));
-  claimFile(uid, id, buf.length);
+  claimFile(uid, id, buf.length, name);
   return rec;
 }
 

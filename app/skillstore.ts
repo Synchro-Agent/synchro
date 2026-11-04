@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
+import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import { parse as parseYaml } from "yaml";
 import { db, DATA_DIR } from "./authstore";
 import { runner } from "./coderun";
@@ -253,6 +254,8 @@ export async function parseUpload(filename: string, buf: Buffer, opts: { pick?: 
     } });
   } catch { return fail("Không đọc được file zip (file bị hỏng hoặc không phải zip)"); }
   if (unsafe) fail(`Đường dẫn không an toàn trong file nén: "${unsafe}" (chứa ".." hoặc bắt đầu bằng "/")`);
+  // Zip bomb: đếm số byte giải nén thật trước khi đọc tệp nào vào bộ nhớ.
+  await measureZip(zip, SKILL_ZIP_MAX).catch(() => fail("Dung lượng sau khi giải nén quá lớn hoặc file nén bị hỏng"));
   // Bỏ rác của hệ điều hành và thư mục ẩn (.git, .github…): không phải một phần của skill.
   let all = Object.values(zip.files).filter((f) => !f.dir).map((f) => ({ f, p: cleanPath(f.name) }))
     .filter(({ p }) => !p.split("/").some((seg) => seg === "__MACOSX" || seg === ".DS_Store" || seg === "Thumbs.db" || seg.startsWith(".")));

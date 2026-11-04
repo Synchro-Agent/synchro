@@ -65,8 +65,8 @@ export default function ResetPassword() {
         {stage === "sent" && <>
           <div className="rp-ico"><Mail size={20} /></div>
           <h1>Hãy kiểm tra email</h1>
-          <p className="rp-lead">Nếu <b data-notr>{email.trim()}</b> có tài khoản Synchro, bạn sẽ nhận được đường dẫn đặt lại mật khẩu trong vài phút. Đường dẫn có hiệu lực 60 phút.</p>
-          <p className="rp-hint">Chưa thấy email? Hãy xem mục Spam, hoặc <button className="lnk" onClick={again2}>gửi lại</button>. Tài khoản đăng nhập bằng Google, GitHub hoặc Apple có thể đăng nhập bằng các nút đó mà không cần mật khẩu.</p>
+          <p className="rp-lead">Nếu <b data-notr>{email.trim()}</b> có tài khoản Synchro, Synchro đã gửi một đường dẫn đặt lại mật khẩu tới địa chỉ này. Thư thường tới trong vài phút, nhưng Synchro không kiểm soát được hộp thư của bạn. Đường dẫn có hiệu lực 60 phút.</p>
+          <p className="rp-hint">Chưa thấy email? Hãy xem mục Spam, hoặc <button className="lnk" onClick={again2}>gửi lại</button>. Tài khoản đăng nhập bằng Google, GitHub hoặc Apple có thể đăng nhập bằng các nút đó mà không cần mật khẩu. Vẫn không có thư sau 10 phút? Hãy nhờ quản trị viên tạo đường dẫn đặt lại.</p>
           <Link className="rp-back" href="/">Quay lại đăng nhập</Link>
         </>}
         {stage === "set" && <>

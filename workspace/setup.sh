@@ -29,6 +29,20 @@ fi
 # KillMode=mixed chỉ gửi SIGTERM cho tiến trình chính (không đụng lệnh docker con của nó), TimeoutStopSec lớn hơn WS_DRAIN_SEC (mặc định 300 giây).
 UNIT=/etc/systemd/system/synchro-ws.service
 STAMP=/etc/synchro-ws.hash
+# Dịch vụ chạy bằng root nên mã của nó nằm ở nơi chỉ root ghi được, không chạy trực tiếp từ thư mục app và node_modules (của web user):
+# lỗi đọc tệp hay lỗi nào khác cho chiếm được web user không leo lên root được qua đây. Chép mã trước khi khởi động lại; tiến trình đang chạy đã nạp xong nên không ảnh hưởng.
+WSBIN=/opt/synchro-ws
+mkdir -p "$WSBIN/node_modules"
+install -o root -g root -m 644 "$APP"/workspace/*.mjs "$WSBIN"/
+WSV=$(sed -n '/"node_modules\/ws": {/,/}/s/.*"version": "\(.*\)".*/\1/p' "$APP/package-lock.json" | head -1)
+if [ "$(cat "$WSBIN/node_modules/.ws-version" 2>/dev/null || true)" != "$WSV" ] || [ ! -f "$WSBIN/node_modules/ws/package.json" ]; then
+  # Cài mới từ npm (đúng phiên bản trong package-lock, không chạy script cài đặt); không có mạng thì chép từ bản của app.
+  if ! npm install --prefix "$WSBIN" --no-audit --no-fund --no-save --no-package-lock --ignore-scripts "ws@$WSV" >/dev/null 2>&1; then
+    rm -rf "$WSBIN/node_modules/ws"; cp -a "$APP/node_modules/ws" "$WSBIN/node_modules/ws"
+  fi
+  echo "$WSV" > "$WSBIN/node_modules/.ws-version"
+fi
+chown -R root:root "$WSBIN"; chmod -R go-w "$WSBIN"
 NEWUNIT=$(cat <<EOF
 [Unit]
 Description=Synchro Code workspace agent
@@ -37,8 +51,8 @@ Requires=docker.service
 
 [Service]
 EnvironmentFile=$ENVF
-WorkingDirectory=$APP
-ExecStart=/usr/bin/node $APP/workspace/agent.mjs
+WorkingDirectory=$WSBIN
+ExecStart=/usr/bin/node $WSBIN/agent.mjs
 Restart=always
 RestartSec=3
 KillMode=mixed
@@ -87,4 +101,42 @@ if ! grep -q 'snippets/synchro-ws.conf' "$SITE"; then
   RELOAD=1
 fi
 if [ -n "$RELOAD" ]; then nginx -t -q && systemctl reload nginx; fi
+
+# 5. Watchdog của web và sao lưu hằng đêm (Cài đặt → Sức khỏe hệ thống đọc kết quả ở /var/lib/synchro-ops). Lỗi ở đây không được làm hỏng deploy.
+install_ops() {
+  local OPS=/opt/synchro-ops ENVO=/etc/synchro-ops.env PM2_NAME=synchro PORT
+  mkdir -p "$OPS" /var/lib/synchro-ops
+  chmod 755 /var/lib/synchro-ops
+  install -o root -g root -m 755 "$APP/scripts/watchdog.sh" "$OPS/watchdog.sh"
+  PORT=$(su - synchro -c "pm2 jlist" 2>/dev/null | PM2_NAME="$PM2_NAME" node -e '
+    let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      try {
+        const e = JSON.parse(s.slice(s.indexOf("["))).find((x) => x.name === process.env.PM2_NAME)?.pm2_env ?? {};
+        const a = [].concat(e.args ?? []).map(String), i = a.indexOf("-p");
+        process.stdout.write(String(i >= 0 ? a[i + 1] : e.PORT ?? e.env?.PORT ?? ""));
+      } catch {}
+    });' || true)
+  # Tệp này root đọc rồi chạy nên chỉ root ghi được; giữ nguyên những gì chủ dịch vụ đã thêm (SYNCHRO_BACKUP_HOOK).
+  [ -f "$ENVO" ] || (umask 077; : > "$ENVO")
+  chown root:root "$ENVO"; chmod 600 "$ENVO"
+  grep -q '^APP=' "$ENVO" || echo "APP=$APP" >> "$ENVO"
+  grep -q '^PM2=' "$ENVO" || echo "PM2=$PM2_NAME" >> "$ENVO"
+  grep -q '^WEB_USER=' "$ENVO" || echo "WEB_USER=synchro" >> "$ENVO"
+  grep -q '^PORT=' "$ENVO" || echo "PORT=${PORT:-3001}" >> "$ENVO"
+  local SVC=/etc/systemd/system/synchro-watchdog.service TMR=/etc/systemd/system/synchro-watchdog.timer
+  local NS NT
+  NS=$(printf '[Unit]\nDescription=Synchro web watchdog\n\n[Service]\nType=oneshot\nExecStart=/bin/bash %s/watchdog.sh\nTimeoutStartSec=120\n' "$OPS")
+  NT=$(printf '[Unit]\nDescription=Synchro web watchdog, every minute\n\n[Timer]\nOnBootSec=3min\nOnUnitActiveSec=1min\nAccuracySec=10s\n\n[Install]\nWantedBy=timers.target\n')
+  if [ "$(cat "$SVC" 2>/dev/null || true)" != "$NS" ] || [ "$(cat "$TMR" 2>/dev/null || true)" != "$NT" ]; then
+    printf '%s\n' "$NS" > "$SVC"; printf '%s\n' "$NT" > "$TMR"
+    systemctl daemon-reload
+  fi
+  systemctl enable -q --now synchro-watchdog.timer
+  # Sao lưu: chỉ thêm lịch khi máy chưa có; đã có lịch thì giữ nguyên của chủ dịch vụ.
+  if ! grep -qs 'backup\.sh' /etc/crontab /etc/cron.d/* && ! crontab -l 2>/dev/null | grep -q 'backup\.sh'; then
+    printf '0 3 * * * root bash %s/scripts/backup.sh %s /var/backups/synchro >> /var/log/synchro-backup.log 2>&1\n' "$APP" "$APP" > /etc/cron.d/synchro-backup
+    chmod 644 /etc/cron.d/synchro-backup
+  fi
+}
+install_ops || echo "CẢNH BÁO: chưa cài được watchdog hoặc lịch sao lưu (trang Sức khỏe hệ thống sẽ báo)." >&2
 echo "Workspace sẵn sàng."

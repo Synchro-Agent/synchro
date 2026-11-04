@@ -16,9 +16,21 @@ set -euo pipefail
 APP="${1:-/var/www/synchro}"; PM2="${2:-synchro}"; PIP="${3:-}"; PORT="${4:-}"
 SIDE="$(dirname "$APP")"; NAME="$(basename "$APP")"
 PREV="$SIDE/.synchro-prev-$NAME"; STATICS="$SIDE/.synchro-statics-$NAME"
+# Một lần deploy mỗi lúc; watchdog (scripts/watchdog.sh) thấy khóa này thì không khởi động lại web giữa chừng. Lần sau chờ lần trước xong, không cắt ngang lúc đang tráo bản.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>/run/synchro-deploy.lock
+  flock -w 900 9 || { echo "Đang có lần deploy khác chạy quá lâu." >&2; exit 1; }
+fi
 B=$(mktemp -d "$SIDE/.build-$NAME.XXXXXX")
 trap 'rm -rf "$B"' EXIT
 chown -R synchro:synchro "$APP"
+# Mã do root chạy (scripts/, workspace/: sao lưu, cài đặt, deploy) chỉ root ghi được, kể cả thư mục app (ai sở hữu thư mục cha đổi tên được thư mục con).
+# Nhờ vậy chiếm được web user (lỗi trong bộ đọc tệp chẳng hạn) không leo được lên root qua cron hay lần deploy sau. Web user vẫn ghi được data/, .cache/, .next/, node_modules/.
+mkdir -p "$APP/.cache" "$APP/data"
+chown synchro:synchro "$APP/.cache" "$APP/data"
+chown root:root "$APP"; chmod 755 "$APP"
+chown -R root:root "$APP/scripts" "$APP/workspace"; chmod -R go-w "$APP/scripts" "$APP/workspace"
+if [ -d "$APP/workspace/data" ]; then chown -R synchro:synchro "$APP/workspace/data"; fi
 [ -n "$PIP" ] && su - synchro -c "cd $APP && .mkvenv/bin/pip install -q -r requirements.txt"
 rsync -a --exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git --exclude /workspace/data --exclude /.mkvenv "$APP/" "$B/"
 LOCK=$(sha1sum "$APP/package-lock.json" | cut -d' ' -f1)
@@ -62,7 +74,8 @@ if [ -z "$PORT" ]; then
 fi
 [ -z "$PORT" ] && [ "$PM2" = "synchro" ] && PORT=3001
 
-restart() { su - synchro -c "pm2 restart $PM2 --update-env" || su - synchro -c "cd $APP && pm2 start npm --name $PM2 -- start -- -p ${PORT:-3001} && pm2 save"; }
+# 9>&-: tiến trình nền của pm2 không được mang theo khóa deploy.
+restart() { su - synchro -c "pm2 restart $PM2 --update-env" 9>&- || su - synchro -c "cd $APP && pm2 start npm --name $PM2 -- start -- -p ${PORT:-3001} && pm2 save" 9>&-; }
 # Đạt khi: /api/health báo đúng bản $1 (không phải tiến trình cũ còn sót), ghi được cơ sở dữ liệu và trang chủ không lỗi.
 # Không xét mã 503 của /api/health: đĩa gần đầy hay dịch vụ workspace tắt không phải lỗi của bản mới, trả bản cũ về cũng không hết.
 healthy() {

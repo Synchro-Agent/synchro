@@ -10,12 +10,13 @@ import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 import { Boundary } from "./ui";
 
-export function Confirm({ title, text, ok, onCancel, onOk }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void }) {
+export function Confirm({ title, text, ok, onCancel, onOk, children }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void; children?: React.ReactNode }) {
   return (
     <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal sm" style={{ width: 420 }}>
         <h2 style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
         <p style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>
+        {children}
         <div className="modal-foot"><button className="btn" onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
       </div>
     </div>
@@ -185,7 +186,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   const admin = me?.isAdmin;
   const feat = me?.perms.features;
   const items: [string, React.ReactNode][] = [
-    ["General", <I.SetGeneral key="g" />], ...(admin ? [["Administrator", <I.SetAdmin key="ad" />] as [string, React.ReactNode]] : []), ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
+    ["General", <I.SetGeneral key="g" />], ...(admin ? [["Administrator", <I.SetAdmin key="ad" />] as [string, React.ReactNode], ["Health", <I.Alert key="hl" size={18} />] as [string, React.ReactNode]] : []), ["Account", <I.SetAccount key="a" />], ["Privacy", <I.SetPrivacy key="p" />],
     ["Capabilities", <I.SetCapabilities key="c" />], ["Usage", <UsageIcon key="u" size={18} />], ["Brain", <I.Brain key="m" size={18} />],
     ...(feat?.code !== false ? [["Synchro Code", <I.Code key="cc" />] as [string, React.ReactNode]] : []),
     ["Providers", <I.SetChip key="pv" />],

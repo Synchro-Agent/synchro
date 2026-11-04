@@ -1,10 +1,11 @@
 // Speech (ElevenLabs) phía máy chủ: gọi API thật bằng khóa ở Cài đặt → Providers (khóa không bao giờ rời máy chủ),
 // đọc gói đăng ký để bật / tắt từng tính năng, và lưu sản phẩm (âm thanh, bản chép lời) riêng cho từng người.
 // Tính năng của gói cao hơn vẫn nằm trong mã; chỉ hiện khi gói quét được cho phép.
+import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { DATA_DIR, db, getSetting, setSetting, type UserRow } from "./authstore";
+import { DATA_DIR, db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 import { elevenMissing, serviceKey } from "./providers";
 
 export class SpeechErr extends Error {
@@ -251,11 +252,34 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
     .finally(() => { st.busy = null; });
   return st.busy;
 }
+// Khóa ElevenLabs dùng chung và tính tiền theo credit: giới hạn tốc độ không chặn được một tài khoản đọc hết credit của cả tháng. Mỗi tài khoản có trần theo ngày; quản trị viên không bị tính.
+export const SPEECH_DAILY = () => Number(process.env.SYNCHRO_SPEECH_DAILY_CREDITS) || 30_000;
+const speechScope = new AsyncLocalStorage<string>();
+/** Mọi lời gọi tạo âm thanh trong fn được tính cho tài khoản này. */
+export const asSpender = <T>(uid: string, fn: () => T) => speechScope.run(uid, fn);
+const today = () => new Date().toISOString().slice(0, 10);
+function spendDb() {
+  const d = db();
+  d.exec("CREATE TABLE IF NOT EXISTS speech_spend (user_id TEXT NOT NULL, day TEXT NOT NULL, credits INTEGER NOT NULL, PRIMARY KEY (user_id, day))");
+  return d;
+}
+export const spentToday = (uid: string) => (spendDb().prepare("SELECT credits FROM speech_spend WHERE user_id = ? AND day = ?").get(uid, today()) as { credits: number } | undefined)?.credits ?? 0;
+/** Trước khi gọi ElevenLabs: hết trần trong ngày thì báo rõ. */
+export function checkSpend(u: UserRow) {
+  if (isAdmin(u) || spentToday(u.id) < SPEECH_DAILY()) return;
+  throw new SpeechErr("Bạn đã dùng hết hạn mức giọng nói của hôm nay. Hạn mức mở lại vào ngày mai (giờ UTC). Cần thêm thì hãy nhờ quản trị viên.", 429, "budget");
+}
 /** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại. */
 export function spent(r: Response) {
   const n = Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0);
   const p = G().plan;
   if (p && n > 0) p.credits.used += n;
+  const uid = speechScope.getStore();
+  if (uid && n > 0) {
+    const d = spendDb();
+    d.prepare("INSERT INTO speech_spend (user_id, day, credits) VALUES (?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET credits = credits + excluded.credits").run(uid, today(), n);
+    d.prepare("DELETE FROM speech_spend WHERE user_id = ? AND day < ?").run(uid, new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10));
+  }
   return n;
 }
 export async function need(f: Feat) {

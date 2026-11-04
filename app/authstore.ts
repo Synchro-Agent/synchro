@@ -1,7 +1,7 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
 import { sendMail } from "./mailer";
-import { changedMail, resetMail, type MailLang } from "./mailtpl";
+import { changedMail, resetMail, signupTakenMail, verifyMail, type MailLang } from "./mailtpl";
 import Database from "better-sqlite3";
 import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
 import crypto from "node:crypto";
@@ -48,6 +48,8 @@ export function db() {
   if (!sk.has("last_used_at")) d.exec("ALTER TABLE skills ADD COLUMN last_used_at INTEGER");
   // Link repo đã dùng để thêm skill (khóa so trùng của plugins.linkKey): không cho thêm lại cùng một link.
   if (!sk.has("source")) d.exec("ALTER TABLE skills ADD COLUMN source TEXT");
+  // Mốc bật xác minh email: tài khoản tạo trước mốc này giữ nguyên quyền như cũ, không phải làm gì thêm.
+  d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('verify_since', ?)").run(String(Date.now()));
   return (g.__synchroDb = d);
 }
 
@@ -150,9 +152,12 @@ export function createUser(o: { email: string; name: string; passwordHash?: stri
   return getUser(id)!;
 }
 
+// Ảnh tự tải lên lưu dạng data URL (có thể hàng trăm KB): /api/auth/me và danh sách quản trị chỉ trả đường dẫn kèm mã phiên bản, trình duyệt nhớ lâu theo mã đó.
+const avatarUrl = (u: UserRow) => (u.avatar?.startsWith("data:") ? `/api/auth/avatar?u=${encodeURIComponent(u.id)}&v=${crypto.createHash("sha1").update(u.avatar).digest("base64url").slice(0, 12)}` : u.avatar || null);
 export function publicUser(u: UserRow) {
   return {
-    id: u.id, email: u.email, name: u.name, avatar: u.avatar || null, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
+    id: u.id, email: u.email, name: u.name, avatar: avatarUrl(u), isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
+    verifyPending: needsVerify(u), verifyLocked: verifyLocked(u),
     profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation, instructions: u.instructions ?? "" },
     needsProfile: !u.full_name || !u.birth_date,
     perms: permsOf(u),
@@ -162,11 +167,22 @@ export function publicUser(u: UserRow) {
 // ---- quyền dùng model / tính năng ----
 // Mặc định áp cho mọi người; quản trị có thể đặt quyền riêng cho từng tài khoản. Quản trị viên luôn có toàn quyền.
 export const defaultPerms = (): Perms => { try { return normPerms(JSON.parse(getSetting("default_perms", "null"))); } catch { return FULL_PERMS; } };
-export function permsOf(u: UserRow): Perms {
+/** Quyền quản trị viên đã đặt, chưa tính khóa tạm vì chưa xác minh email (màn hình sửa quyền dùng cái này, không thì lưu nhầm khóa tạm thành quyền thật). */
+export function basePerms(u: UserRow): Perms {
   if (isAdmin(u)) return FULL_PERMS;
   const d = defaultPerms();
   if (!u.perms) return d;
   try { return normPerms(JSON.parse(u.perms), d); } catch { return d; }
+}
+// Tài khoản mới chưa xác minh email chưa dùng được phần tốn tài nguyên hoặc gắn được thứ sống lâu vào tài khoản: chat vẫn dùng bình thường.
+// Chặn người đăng ký trước bằng email của người khác rồi cài sẵn connector, tác vụ; và chặn lấp đầy đĩa bằng tài khoản ảo.
+const VERIFY_GATED: Feature[] = ["files", "connectors", "speech", "sandbox", "code", "chrome"];
+export function permsOf(u: UserRow): Perms {
+  const p = basePerms(u);
+  if (!verifyLocked(u)) return p;
+  const features = { ...p.features };
+  for (const f of VERIFY_GATED) features[f] = false;
+  return { ...p, features };
 }
 export const can = (u: UserRow, f: Feature) => permsOf(u).features[f];
 export const canModel = (u: UserRow, model: string) => allowsModel(permsOf(u).models, model);
@@ -175,7 +191,7 @@ export const canModel = (u: UserRow, model: string) => allowsModel(permsOf(u).mo
 export function featureGate(req: Request, f: Feature) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
-  if (!can(c.user, f)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng tính năng này." }, { status: 403 });
+  if (!can(c.user, f)) return verifyLocked(c.user) ? Response.json({ error: VERIFY_FIRST, verify: true }, { status: 403 }) : Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng tính năng này." }, { status: 403 });
   return null;
 }
 
@@ -308,12 +324,11 @@ export const publicSession = (s: SessionRow, cur?: string) => ({ id: s.id, curre
 export const sessionsOf = (userId: string) => db().prepare("SELECT * FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC").all(userId, Date.now()) as SessionRow[];
 
 // ---- đăng ký / đăng nhập bằng email ----
+/** Tab mở từ bản cũ còn gọi bước kiểm tra email: không còn cho biết email có tài khoản hay không, bản cũ đi tiếp sang ô mật khẩu. */
 export function lookup(req: Request, email: string) {
-  // Chưa có email xác minh nên màn hình đăng nhập phải biết email đã có tài khoản chưa (đăng ký cũng báo trùng): chỉ giới hạn được tốc độ dò.
   limit("check:" + clientIp(req), 30, 10 * MIN);
-  const em = normEmail(email);
-  const u = findByEmail(em);
-  return { exists: !!u, hasPassword: !!u?.password_hash, methods: u ? methodsOf(u).filter((m) => m !== "password") : [], reserved: !u && ADMIN_EMAILS.has(em) };
+  normEmail(email);
+  return { exists: true, hasPassword: true, methods: [] as string[], reserved: false };
 }
 
 export async function login(req: Request, email0: unknown, pw: unknown) {
@@ -325,23 +340,31 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   limit("login-em:" + email, 100, 15 * MIN);
   const u = findByEmail(email);
   const ok = typeof pw === "string" && pw.length <= PW_MAX && (await verifyPassword(pw, u?.password_hash ?? null));
-  if (!u || !ok) { audit("login_failed", { target: u, targetEmail: email, ip }); throw new AuthError("Email hoặc mật khẩu không đúng.", 401); }
+  if (!u || !ok) { audit("login_failed", { target: u, targetEmail: email, ip }); throw new AuthError("Email hoặc mật khẩu không đúng. Nếu bạn đăng ký bằng Google, GitHub hoặc Apple, hãy dùng nút đó.", 401); }
   if (u.status !== "active") { audit("login_blocked", { target: u, ip }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
   audit("login", { actor: u, ip, detail: "password" });
   return { user: u, cookie: createSession(u, req, "password") };
 }
 
-export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}) {
+/** pending: email này không tạo mới được (đã có tài khoản hoặc được dành riêng). Không báo trùng: chủ email nhận thư hướng dẫn, người khác không biết thêm gì. */
+export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}, lang?: unknown): Promise<{ pending: true; user?: undefined; cookie?: undefined } | { pending?: false; user: UserRow; cookie: string }> {
   const ip = clientIp(req);
   limit("signup:" + ip, 10, 60 * MIN);
   const email = normEmail(email0);
   const pw = checkPassword(pw0, email);
-  if (ADMIN_EMAILS.has(email)) throw new AuthError("Email này được dành riêng. Hãy đăng nhập bằng Google hoặc liên hệ quản trị viên.", 403);
   if (!signupOpen()) throw new AuthError("Synchro hiện tạm ngừng nhận đăng ký mới.", 403);
-  if (findByEmail(email)) throw new AuthError("Email này đã có tài khoản. Hãy đăng nhập.", 409);
   if (profile.fullName === undefined || profile.birthDate === undefined) throw new AuthError("Hãy điền họ tên và ngày sinh.");
   const prof = cleanProfile(profile);
+  // Băm trước khi xem email có tồn tại: hai trường hợp tốn cùng thời gian.
   const hash = await hashPassword(pw);
+  const taken = () => {
+    // Dò email qua đăng ký vẫn có dấu hiệu (không có phiên đăng nhập) nên giới hạn chặt theo IP, và mỗi lần dò chủ email đều nhận thư.
+    limit("signup-taken:" + ip, 3, 60 * MIN);
+    audit("signup_email_taken", { targetEmail: email, ip });
+    try { limit("signup-taken-mail:" + email, 3, 60 * MIN); sendMail(email, signupTakenMail({ base: appUrl(req), url: `${appUrl(req)}/reset`, lang: mailLang(req, lang) }), "signup_taken"); } catch { /* đủ thư rồi */ }
+    return { pending: true as const };
+  };
+  if (ADMIN_EMAILS.has(email) || findByEmail(email)) return taken();
   // Tạo tài khoản và hồ sơ trong cùng một transaction: lỗi giữa chừng không để lại tài khoản dở.
   let id: string;
   try {
@@ -352,19 +375,68 @@ export async function signup(req: Request, email0: unknown, pw0: unknown, profil
     })();
   } catch (e) {
     // Hai yêu cầu đăng ký cùng email chạy song song: cái sau vướng ràng buộc UNIQUE.
-    if ((e as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") throw new AuthError("Email này đã có tài khoản. Hãy đăng nhập.", 409);
+    if ((e as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") return taken();
     throw e;
   }
   const u = getUser(id)!;
   audit("signup", { actor: u, ip, detail: "password" });
+  issueVerify(req, u, lang);
   return { user: u, cookie: createSession(u, req, "password") };
+}
+
+// ---- xác minh email: mềm, không chặn đăng nhập hay chat ----
+// Mã nằm sau dấu # của đường dẫn (không vào nhật ký máy chủ) và phải bấm nút trên trang /verify (trình quét liên kết của hộp thư không xác minh hộ được).
+const VERIFY_TTL = 7 * DAY;
+export const VERIFY_FIRST = "Hãy xác minh email để dùng tính năng này. Mở thư Synchro đã gửi, hoặc gửi lại từ dải thông báo trên cùng.";
+const verifySince = () => Number(getSetting("verify_since", "0")) || Infinity;
+export const verifyGateOn = () => getSetting("verify_gate", process.env.SYNCHRO_VERIFY_GATE_DEFAULT === "0" ? "0" : "1") === "1";
+export const setVerifyGate = (on: boolean) => setSetting("verify_gate", on ? "1" : "0");
+/** Tài khoản đăng ký bằng mật khẩu sau khi có tính năng này và chưa bấm xác minh. Tài khoản cũ, tài khoản Google / GitHub / Apple không bị ảnh hưởng. */
+export const needsVerify = (u: UserRow) => !u.email_verified && u.created_at >= verifySince();
+/** Quản trị viên có thể tắt khóa này (Cài đặt → Quản trị viên), ví dụ khi thư đang không gửi được. */
+export const verifyLocked = (u: UserRow) => needsVerify(u) && verifyGateOn();
+function issueVerify(req: Request, u: UserRow, lang?: unknown) {
+  const token = crypto.randomBytes(32).toString("base64url"), base = appUrl(req);
+  db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
+  db().prepare("INSERT INTO email_verifications (token_hash, user_id, email, expires_at) VALUES (?, ?, ?, ?)").run(sha256(token), u.id, u.email, Date.now() + VERIFY_TTL);
+  audit("email_verify_sent", { target: u, ip: clientIp(req) });
+  sendMail(u.email, verifyMail({ base, name: u.name, url: `${base}/verify#${token}`, days: VERIFY_TTL / DAY, lang: mailLang(req, lang) }), "verify");
+}
+export function resendVerify(req: Request, u: UserRow, lang?: unknown) {
+  if (u.email_verified) return;
+  limit("verify-mail:" + u.id, 5, 60 * MIN);
+  issueVerify(req, u, lang);
+}
+const BAD_VERIFY = "Đường dẫn xác minh không hợp lệ hoặc đã hết hạn. Hãy đăng nhập rồi gửi lại thư xác minh.";
+function verifyRow(req: Request, token: unknown) {
+  limit("verify:" + clientIp(req), 30, 15 * MIN);
+  const r = typeof token === "string" && token.length <= 100 ? db().prepare("SELECT * FROM email_verifications WHERE token_hash = ?").get(sha256(token)) as { user_id: string; email: string; expires_at: number } | undefined : undefined;
+  const u = r && r.expires_at > Date.now() ? getUser(r.user_id) : undefined;
+  if (!u || u.email !== r!.email || u.status !== "active") throw new AuthError(BAD_VERIFY, 400);
+  return u;
+}
+export const checkVerifyLink = (req: Request, token: unknown) => { verifyRow(req, token); };
+export function confirmVerify(req: Request, token: unknown) {
+  const u = verifyRow(req, token);
+  db().prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(u.id);
+  db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
+  audit("email_verified", { actor: u, target: u, ip: clientIp(req) });
+  return u;
+}
+/** "Không phải tôi đăng ký": chủ email (có đường dẫn trong thư) xóa tài khoản người khác lập bằng email của họ. Chỉ với tài khoản chưa xác minh, tạo sau khi có tính năng này. */
+export function denyVerify(req: Request, token: unknown) {
+  const u = verifyRow(req, token);
+  if (!needsVerify(u)) throw new AuthError(BAD_VERIFY, 400);
+  db().prepare("DELETE FROM users WHERE id = ?").run(u.id);
+  audit("email_denied", { target: u, ip: clientIp(req) });
+  return u;
 }
 
 // ---- đăng nhập bằng Google / GitHub / Apple ----
 export type OAuthProfile = { provider: string; subject: string; email: string | null; emailVerified: boolean; name: string; avatar: string | null };
 export function oauthLogin(req: Request, p: OAuthProfile) {
   const ip = clientIp(req);
-  let claimed: "" | "password" | "nopassword" = "";
+  let claimed: "" | "password" | "nopassword" = "", fresh = false;
   const ident = db().prepare("SELECT user_id FROM identities WHERE provider = ? AND subject = ?").get(p.provider, p.subject) as { user_id: string } | undefined;
   let u = ident ? getUser(ident.user_id) : undefined;
   if (!u) {
@@ -376,6 +448,7 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
       // Nhà cung cấp vừa xác minh chủ thật của email nên xóa mật khẩu và mọi phiên cũ; route báo cho người dùng biết (claimed), gỡ thiết bị đã ghép, tắt connector.
       if (!u.email_verified) {
         claimed = u.password_hash ? "password" : "nopassword";
+        fresh = needsVerify(u);
         db().prepare("UPDATE users SET email_verified = 1, password_hash = NULL WHERE id = ?").run(u.id);
         db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
       }
@@ -394,7 +467,7 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
   const fromGithub = !!u.avatar?.includes("avatars.githubusercontent.com");
   if (p.avatar && (u.avatar === null || (p.provider === "google" && fromGithub))) db().prepare("UPDATE users SET avatar = ? WHERE id = ?").run(p.avatar, u.id);
   audit("login", { actor: u, ip, detail: p.provider });
-  return { user: u, claimed, cookie: createSession(u, req, p.provider) };
+  return { user: u, claimed, fresh, cookie: createSession(u, req, p.provider) };
 }
 
 // ---- tài khoản của chính mình ----
@@ -429,11 +502,11 @@ export function requestPasswordReset(req: Request, email0: unknown, lang?: unkno
   db().prepare("INSERT INTO password_resets (token_hash, user_id, expires_at, created_by) VALUES (?, ?, ?, ?)").run(sha256(token), u.id, Date.now() + RESET_MIN * MIN, u.id);
   audit("password_reset_request", { target: u, ip });
   const base = appUrl(req);
-  sendMail(u.email, resetMail({ base, name: u.name, url: `${base}/reset#${token}`, minutes: RESET_MIN, lang: mailLang(req, lang) }));
+  sendMail(u.email, resetMail({ base, name: u.name, url: `${base}/reset#${token}`, minutes: RESET_MIN, lang: mailLang(req, lang) }), "reset");
 }
 const notifyChanged = (req: Request, u: UserRow, lang?: unknown) => {
   const l = mailLang(req, lang);
-  sendMail(u.email, changedMail({ base: appUrl(req), name: u.name, lang: l, when: `${new Date().toLocaleString(l === "vi" ? "vi-VN" : "en-GB", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })} (GMT+7)` }));
+  sendMail(u.email, changedMail({ base: appUrl(req), name: u.name, lang: l, when: `${new Date().toLocaleString(l === "vi" ? "vi-VN" : "en-GB", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })} (GMT+7)` }), "changed");
 };
 /** Đường dẫn còn dùng được không: trang đặt lại báo hết hạn ngay, trước khi người dùng gõ mật khẩu. */
 export function checkResetLink(req: Request, token: unknown) {
@@ -454,19 +527,23 @@ export async function redeemResetLink(req: Request, token: unknown, next: unknow
   limit("reset:" + ip, 10, 15 * MIN);
   const bad = () => new AuthError(BAD_RESET, 400);
   if (typeof token !== "string" || token.length > 100) throw bad();
-  const r = db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null } | undefined;
+  const r = db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null; created_by: string | null } | undefined;
   const u = r && !r.used_at && r.expires_at > Date.now() ? getUser(r.user_id) : undefined;
   if (!u || u.status !== "active") throw bad();
   const pw = checkPassword(next, u.email);
   const hash = await hashPassword(pw);
+  // Đường dẫn gửi tới hộp thư là bằng chứng sở hữu email; đường dẫn quản trị viên tạo thì không. Không đánh dấu thì lần đăng nhập Google sau sẽ xóa mất mật khẩu vừa đặt.
+  const proved = r!.created_by === u.id, fresh = proved && needsVerify(u);
   db().transaction(() => {
-    db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, u.id);
+    db().prepare(`UPDATE users SET password_hash = ?${proved ? ", email_verified = 1" : ""} WHERE id = ?`).run(hash, u.id);
     db().prepare("UPDATE password_resets SET used_at = ? WHERE token_hash = ?").run(Date.now(), sha256(token));
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
+    if (proved) db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
   })();
   audit("password_reset", { actor: u, target: u, ip });
+  if (fresh) audit("account_claimed", { target: u, ip, detail: "reset" });
   notifyChanged(req, u, lang);
-  return u;
+  return { user: u, fresh };
 }
 
 export async function deleteOwnAccount(req: Request, u: UserRow, pw: unknown) {
@@ -496,7 +573,7 @@ export function adminStats() {
 export function adminUsers() {
   const rows = db().prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 2000").all() as UserRow[];
   const sess = new Map((db().prepare("SELECT user_id, COUNT(*) n FROM sessions WHERE expires_at > ? GROUP BY user_id").all(Date.now()) as { user_id: string; n: number }[]).map((r) => [r.user_id, r.n]));
-  return rows.map((u) => ({ ...publicUser(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0, protected: ADMIN_EMAILS.has(u.email.toLowerCase()), customPerms: !!u.perms }));
+  return rows.map((u) => ({ ...publicUser(u), perms: basePerms(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0, protected: ADMIN_EMAILS.has(u.email.toLowerCase()), customPerms: !!u.perms }));
 }
 
 export function adminAudit(lim = 100, before?: number) {
@@ -520,6 +597,13 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
     db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), t.id);
     if (body.signOut !== false) db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
     audit("admin_set_password", { actor: admin, target: t, ip });
+    return;
+  }
+  if (action === "mark_verified") {
+    // Quản trị viên đã đối chiếu người này bằng cách khác, hoặc thư không tới được họ.
+    db().prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(t.id);
+    db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(t.id);
+    audit("admin_mark_verified", { actor: admin, target: t, ip });
     return;
   }
   if (action === "set_perms") {

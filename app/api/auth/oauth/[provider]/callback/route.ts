@@ -1,7 +1,5 @@
 import { appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
-import { removeUserDevices } from "../../../../../browserext";
-import { disableUserConnectors } from "../../../../../connectors";
-import { addNotice } from "../../../../../tasks";
+import { afterClaim } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
 import { clearState, finish, isProvider, purposeOf } from "../../../../../oauth";
 
@@ -27,13 +25,11 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       h.set("Location", `${appUrl(req)}/api/github/done`);
       return new Response(null, { status: 303, headers: h });
     }
-    const { cookie, user, claimed } = oauthLogin(req, r);
+    const { cookie, user, claimed, fresh } = oauthLogin(req, r);
     h.append("Set-Cookie", cookie);
     if (claimed) {
       // Nhận lại tài khoản chưa xác minh: thứ người đăng ký trước có thể đã gắn vào phải tắt, và người dùng phải được báo (không âm thầm mất mật khẩu).
-      await removeUserDevices(user.id).catch((e) => console.error("[oauth]", e));
-      const off = disableUserConnectors(user.id);
-      addNotice(user.id, "Đã xác minh email của bạn", `${claimed === "password" ? "Mật khẩu cũ đã được gỡ vì email chưa từng được xác minh, nên có thể do người khác đặt. Nếu vẫn muốn đăng nhập bằng email, hãy đặt mật khẩu mới trong Cài đặt → Tài khoản. " : ""}Các thiết bị khác đã được đăng xuất, tiện ích Chrome đã ghép nối được gỡ${off ? ", connector đã được tắt (bật lại trong Cài đặt nếu đúng là của bạn)" : ""}. Hãy kiểm tra hướng dẫn tùy chỉnh trong Cài đặt.`, "settings:Account");
+      await afterClaim(user.id, fresh, "oauth", claimed === "password");
     }
   } catch (e) {
     if (!(e instanceof AuthError)) console.error("[oauth]", e);

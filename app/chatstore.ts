@@ -95,6 +95,25 @@ export function wipeItems(uid: string, at: number): string[] {
   })();
 }
 
+export type ChatRefs = { files: string[]; outs: string[] };
+const addRefs = (data: string | null, f: Set<string>, o: Set<string>) => {
+  try {
+    for (const m of (JSON.parse(data ?? "{}") as { msgs?: { fids?: Record<string, unknown>; outs?: { id?: unknown }[] }[] }).msgs ?? []) {
+      for (const v of Object.values(m?.fids ?? {})) if (typeof v === "string") f.add(v);
+      if (Array.isArray(m?.outs)) for (const x of m.outs) if (typeof x?.id === "string") o.add(x.id);
+    }
+  } catch { /* bản lưu hỏng: không có gì để dọn */ }
+};
+/** Tệp tải lên và tệp do code tạo mà các đoạn chat này dùng. Đọc trước khi xóa: xóa xong nội dung không còn. ids rỗng (undefined): mọi đoạn chat của tài khoản ("xóa tất cả"). */
+export function chatRefs(uid: string, ids?: string[]): ChatRefs {
+  const f = new Set<string>(), o = new Set<string>(), d = t();
+  if (ids) { const q = d.prepare("SELECT data FROM user_items WHERE user_id = ? AND kind = 'chat' AND id = ? AND deleted = 0"); for (const id of ids) addRefs((q.get(uid, id) as { data: string | null } | undefined)?.data ?? null, f, o); }
+  else for (const r of d.prepare("SELECT data FROM user_items WHERE user_id = ? AND kind = 'chat' AND deleted = 0").iterate(uid) as Iterable<{ data: string | null }>) addRefs(r.data, f, o);
+  return { files: [...f], outs: [...o] };
+}
+/** Có mục nào khác của tài khoản (đoạn chat tách nhánh, dự án) còn nhắc tới mã này không. */
+export const itemMentions = (uid: string, id: string) => !!t().prepare("SELECT 1 FROM user_items WHERE user_id = ? AND deleted = 0 AND instr(data, ?) > 0 LIMIT 1").get(uid, id);
+
 /** Đoạn chat đã bị xóa (hoặc nằm trong lần "xóa tất cả"): bộ não không học lại từ nó nữa. */
 export function chatGone(uid: string, conv: string, upd = 0) {
   const r = t().prepare("SELECT deleted, upd FROM user_items WHERE user_id = ? AND kind = 'chat' AND id = ?").get(uid, conv) as { deleted: number; upd: number } | undefined;

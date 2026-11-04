@@ -19,6 +19,8 @@ export type PublicRun = { id: string; status: RunStatus; conv: string | null; ki
 const MAX_ATTEMPTS = 3;
 const KEEP_MS = 7 * 24 * 3600_000;
 const REQ_MAX = 8 * 1024 * 1024;
+// Đủ để trình duyệt nhận nốt kết quả khi mạng chập chờn; sau đó lượt ẩn danh không còn trên máy chủ.
+const EPHEMERAL_MS = 10 * 60_000;
 
 let ready = false;
 function init() {
@@ -31,12 +33,18 @@ function init() {
     d.exec("CREATE INDEX IF NOT EXISTS runs_user ON runs(user_id, created_at)");
     d.exec("CREATE INDEX IF NOT EXISTS runs_status ON runs(status)");
     // Việc đã làm có tác động ra ngoài: bảng cũ chưa có cột này (thêm khi mở, không đụng dữ liệu cũ).
-    if (!(d.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).some((c) => c.name === "effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");
+    const cols = (d.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");
+    // Lượt của đoạn chat ẩn danh: không giữ yêu cầu, xóa ít phút sau khi xong. Máy chủ vừa khởi động thì mọi lượt ẩn danh đã xong đều đã quá hạn.
+    if (!cols.includes("ephemeral")) d.exec("ALTER TABLE runs ADD COLUMN ephemeral INTEGER");
+    d.prepare("DELETE FROM runs WHERE ephemeral = 1 AND status != 'running'").run();
     d.prepare("DELETE FROM runs WHERE updated_at < ?").run(Date.now() - KEEP_MS);
     ready = true;
   }
   return d;
 }
+/** Trang quyền riêng tư hứa tự xóa sau 7 ngày: dọn mỗi ngày, không chờ lần khởi động lại. Lượt đang chạy thì không đụng. */
+export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_at < ? AND status != 'running'").run(Date.now() - KEEP_MS); };
 
 // Người đang theo dõi từng lượt (các kết nối SSE); toàn cục để sống qua lần nạp lại module khi phát triển.
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
@@ -220,6 +228,14 @@ function finish(id: string, http: number, json: unknown) {
   init().prepare("UPDATE runs SET status = ?, http = ?, result = ?, req = NULL, updated_at = ? WHERE id = ?").run(status, http, JSON.stringify(json), Date.now(), id);
   const r = getRun(id);
   if (r) notify(id, { done: r });
+  const raw = init().prepare("SELECT user_id, conv, ephemeral FROM runs WHERE id = ?").get(id) as { user_id: string; conv: string | null; ephemeral: number | null } | undefined;
+  if (raw?.ephemeral) setTimeout(() => dropEphemeral(id, raw.user_id, raw.conv), Number(process.env.SYNCHRO_EPHEMERAL_MS) || EPHEMERAL_MS).unref?.();
+}
+/** Xóa lượt ẩn danh đã xong và kết quả công cụ lớn lưu kèm nó. */
+function dropEphemeral(id: string, uid: string, conv: string | null) {
+  const d = init();
+  d.prepare("DELETE FROM runs WHERE id = ? AND status != 'running'").run(id);
+  if (conv) try { d.prepare("DELETE FROM tool_refs WHERE user_id = ? AND conv = ?").run(uid, conv); } catch { /* chưa có bảng */ }
 }
 
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null) {
@@ -242,8 +258,9 @@ export function startRun(user: UserRow, kind: string, body: Record<string, unkno
   const id = "run_" + crypto.randomBytes(12).toString("base64url");
   const raw = JSON.stringify(body);
   const now = Date.now();
-  init().prepare("INSERT INTO runs (id, user_id, conv, kind, status, req, events, created_at, updated_at) VALUES (?, ?, ?, ?, 'running', ?, '[]', ?, ?)")
-    .run(id, user.id, conv ?? null, kind, raw.length <= REQ_MAX ? raw : null, now, now);
+  const eph = body.incognito === true;
+  init().prepare("INSERT INTO runs (id, user_id, conv, kind, status, req, events, created_at, updated_at, ephemeral) VALUES (?, ?, ?, ?, 'running', ?, '[]', ?, ?, ?)")
+    .run(id, user.id, conv ?? null, kind, !eph && raw.length <= REQ_MAX ? raw : null, now, now, eph ? 1 : null);
   launch(id, kind, body, user, conv ?? null);
   return id;
 }

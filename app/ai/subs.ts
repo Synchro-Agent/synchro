@@ -10,9 +10,9 @@ import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../
 import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
-import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, status } from "./cli_auth";
+import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
-import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
+import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
 import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
@@ -507,10 +507,12 @@ function sessDb() {
     d.exec(`CREATE TABLE IF NOT EXISTS engine_sessions (user_id TEXT NOT NULL, conv TEXT NOT NULL, cli TEXT NOT NULL, session_id TEXT NOT NULL, turns INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, conv, cli));
       CREATE TABLE IF NOT EXISTS engine_turns (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, cli TEXT NOT NULL, at INTEGER NOT NULL, via TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS engine_turns_user ON engine_turns(user_id, cli, at);
-      CREATE TABLE IF NOT EXISTS engine_api_optin (user_id TEXT NOT NULL, cli TEXT NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (user_id, cli))`);
+      CREATE TABLE IF NOT EXISTS engine_api_optin (user_id TEXT NOT NULL, cli TEXT NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (user_id, cli));
+      CREATE TABLE IF NOT EXISTS engine_session_log (user_id TEXT NOT NULL, conv TEXT NOT NULL, cli TEXT NOT NULL, session_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, conv, cli, session_id))`);
     // Model của từng lượt (cho Cài đặt → Usage theo model); bảng cũ chưa có cột này.
     if (!(d.prepare("PRAGMA table_info(engine_turns)").all() as { name: string }[]).some((c) => c.name === "model")) d.exec("ALTER TABLE engine_turns ADD COLUMN model TEXT");
     d.prepare("DELETE FROM engine_sessions WHERE updated_at < ?").run(Date.now() - 90 * 86_400_000);
+    d.prepare("DELETE FROM engine_session_log WHERE at < ?").run(Date.now() - 90 * 86_400_000);
     d.prepare("DELETE FROM engine_turns WHERE at < ?").run(Date.now() - 30 * 86_400_000);
     ready = true;
   }
@@ -525,6 +527,14 @@ export function planModelName(uid: string, key: string): string | null {
   if (!cli) return null;
   const id = splitKey(key).id;
   return g.models.get(`${cli}:${uid}`)?.v.find((m: { id: string; name: string }) => m.id === id)?.name ?? SUB[cli].fallback.find((m) => m.id === id)?.name ?? null;
+}
+/** Đoạn chat bị xóa: bỏ mọi phiên CLI của nó (engine_session_log nhớ cả phiên cũ đã được thay bằng phiên mới), xóa lịch sử phiên khỏi đĩa. */
+export async function removeConvSessions(uid: string, conv: string) {
+  const d = sessDb();
+  const rows = d.prepare("SELECT cli, session_id FROM engine_sessions WHERE user_id = ? AND conv = ? UNION SELECT cli, session_id FROM engine_session_log WHERE user_id = ? AND conv = ?").all(uid, conv, uid, conv) as { cli: Cli; session_id: string }[];
+  d.prepare("DELETE FROM engine_sessions WHERE user_id = ? AND conv = ?").run(uid, conv);
+  d.prepare("DELETE FROM engine_session_log WHERE user_id = ? AND conv = ?").run(uid, conv);
+  for (const r of rows) await removeSessionFiles(scopeDir(r.cli, uid), r.session_id);
 }
 export function removeUserSubs(uid: string) {
   const d = sessDb();
@@ -594,7 +604,8 @@ function saveAttachments(work: string, atts: Attachment[]) {
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
 /** total: số tin thật của đoạn chat (trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số thật); lockMs: chờ lượt khác của tài khoản tối đa bao lâu;
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+/** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
+export type SubTurn = { ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -646,6 +657,13 @@ export function linksIn(text: string): WebSource[] {
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
+  // Lượt không thuộc đoạn chat nào (đặt tên, chưng cất…) cũng không có gì nối tiếp: để lại lịch sử phiên thì không có đường nào xóa được khi người dùng xóa đoạn chat.
+  if (o.conv && !o.ephemeral) return runTurn(o);
+  const cli = subCli(o.model), seen = new Set<string>();
+  try { return await runTurn({ ...o, conv: undefined, onSession: (id) => seen.add(id) }); }
+  finally { if (cli) for (const id of seen) void removeSessionFiles(scopeDir(cli, o.user.id), id); }
+}
+async function runTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
   // Đo thời gian từng chặng của lượt (ghi vào nhật ký máy chủ, không ghi nội dung): kiểm tra đăng nhập → khởi động CLI → sự kiện đầu → chữ đầu → xong.
   const T0 = Date.now(), tm: Record<string, number> = {};
@@ -723,6 +741,9 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     else if (e.kind === "tooluse") { ws.last = Date.now(); o.onToolUse?.(); }
     else if (e.kind === "session") {
       session = e.id;
+      o.onSession?.(e.id);
+      // Ghi ngay khi biết mã phiên: lượt bị dừng giữa chừng vẫn để lại lịch sử trên đĩa, xóa đoạn chat phải tìm được.
+      if (conv) d.prepare("INSERT OR IGNORE INTO engine_session_log (user_id, conv, cli, session_id, at) VALUES (?, ?, ?, ?, ?)").run(o.user.id, conv, cli, e.id, Date.now());
       // Ghi nhớ model thật của tên gọi tắt Claude (để bộ chọn model hiện "Claude Opus 5.5" thay vì "Claude Opus").
       if (cli === "claude" && e.model && run.model) {
         const k = `claude:${o.user.id}`, cur = g.resolved.get(k) ?? {};
@@ -746,7 +767,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   }
   console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
   // Phiên ấm hỏng (bị xóa, hết hạn phía CLI): bỏ đi rồi chạy lại một lần bằng phiên mới.
-  if (fork && wk && err && final === null && !text && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return subTurn(o); }
+  if (fork && wk && err && final === null && !text && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return runTurn(o); }
   if (err && final === null) {
     if (err.code === "aborted") return { status: 200, json: { model: o.model, text, cancelled: true } };
     const apiModel = await apiEquivalent(o.user, o.model), apiName = await apiModelName(apiModel);

@@ -20,5 +20,5 @@ export class FileError extends Error {}
 export type Extractor = {
   name: string;
   match: (kind: string) => boolean;
-  run: (buf: Buffer, ctx: { name: string; kind: string }) => Promise<ContentBlock[]>;
+  run: (buf: Buffer, ctx: { name: string; kind: string; uid?: string }) => Promise<ContentBlock[]>;
 };

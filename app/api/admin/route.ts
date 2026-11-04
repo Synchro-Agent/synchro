@@ -1,4 +1,4 @@
-import { adminAudit, adminStats, adminUsers, ADMIN_EMAILS, defaultPerms, handle, requireAdmin, signupOpen } from "../../authstore";
+import { adminAudit, adminStats, adminUsers, ADMIN_EMAILS, defaultPerms, handle, requireAdmin, signupOpen, verifyGateOn } from "../../authstore";
 import { providerFailures, providerStatus } from "../../oauth";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export const GET = handle(async (req) => {
     stats: adminStats(),
     users: adminUsers(),
     audit: adminAudit(100),
-    settings: { signupOpen: signupOpen(), defaultPerms: defaultPerms() },
+    settings: { signupOpen: signupOpen(), defaultPerms: defaultPerms(), verifyGate: verifyGateOn() },
     providers: providerStatus(),
     providerFailures: providerFailures(),
     admins: [...ADMIN_EMAILS],

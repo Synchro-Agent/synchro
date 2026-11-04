@@ -3,7 +3,7 @@
 // - Biến môi trường lọc theo danh sách cho phép (không lọt khóa API, DATA_KEY… của Synchro sang CLI).
 // - Mỗi tiến trình là một process group riêng: bấm Dừng, CLI im lặng quá lâu (treo) hoặc chạm mức trần của lượt thì kill cả nhóm.
 // - SYNCHRO_ENGINE_USER: chạy CLI bằng user hệ thống riêng qua `sudo -n -u` (xem scripts/setup-engine-user.sh).
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -79,6 +79,20 @@ export function removeDir(dir: string) {
   if (!path.resolve(dir).startsWith(home + path.sep)) throw new Error("Đường dẫn nằm ngoài thư mục engine.");
   if (!engineUser()) { fs.rmSync(dir, { recursive: true, force: true }); return; }
   asEngine("rm", ["-rf", "--", dir]);
+}
+
+/** Xóa tệp và thư mục có tên chứa mã phiên trong thư mục đăng nhập của một CLI: lịch sử phiên chứa nguyên văn đoạn chat. Tìm theo tên thay vì đoán cấu trúc của từng hãng
+ *  (Claude Code: projects/<thư mục làm việc>/<mã>.jsonl; Codex: sessions/<ngày>/rollout-…-<mã>.jsonl), cấu trúc đổi theo phiên bản CLI. Chạy nền: xóa nhiều đoạn chat không được chặn máy chủ. */
+export function removeSessionFiles(dir: string, id: string): Promise<void> {
+  const home = path.resolve(engineHome());
+  // Mã do CLI trả về: chỉ nhận dạng an toàn, đủ dài để không khớp nhầm tệp khác (kể cả tệp đăng nhập).
+  if (!/^[\w-]{8,100}$/.test(id) || !path.resolve(dir).startsWith(home + path.sep)) return Promise.resolve();
+  const args = [dir, "-maxdepth", "10", "-name", `*${id}*`, "-prune", "-exec", "rm", "-rf", "--", "{}", "+"];
+  const u = engineUser();
+  return new Promise((ok) => execFile(u ? "sudo" : "find", u ? ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "find", ...args] : args, { timeout: 60_000 }, (e, _o, err) => {
+    if (e && !/No such file/i.test(String(err))) console.error("[engine] không xóa được lịch sử phiên", String(err || e.message).slice(0, 200));
+    ok();
+  }));
 }
 
 /** Đường dẫn CLI nếu đã cài trong <home>/.local/bin (kể cả liên kết tới gói npm, miễn là vẫn nằm trong thư mục nhà engine). */
