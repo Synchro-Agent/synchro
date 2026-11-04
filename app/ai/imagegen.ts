@@ -6,14 +6,15 @@
 //   rồi quét có giới hạn tệp mới trong thư mục đăng nhập của đúng tài khoản.
 // - Codex 0.164 ẩn công cụ image_gen với gói Free; vị trí $CODEX_HOME/generated_images/<thread_id>/ chỉ theo báo cáo công khai.
 // An toàn: mỗi lượt một thư mục tạm, không --dangerously-skip-permissions, không cầu nối MCP, cùng đường spawnCli (user riêng, bubblewrap) và env của đúng tài khoản; chữ người dùng
-// chỉ là mô tả ảnh, không phải lệnh. Xong lượt xóa thư mục tạm và tệp phiên của CLI để câu lệnh không nằm lại trên đĩa.
+// chỉ là mô tả ảnh, không phải lệnh. Xong lượt, kể cả khi bị dừng hay CLI chết giữa chừng, xóa thư mục tạm, tệp phiên và tệp ảnh gốc của CLI để câu lệnh không nằm lại trên đĩa.
+// Riêng máy chủ khởi động lại đúng lúc đang tạo ảnh thì không còn ai dọn: danh sách phiên chỉ nằm trong bộ nhớ, sau đó không phân biệt được với phiên của đoạn chat khác.
 import crypto from "node:crypto";
 import path from "node:path";
 import { CODEX_LOCAL, CODEX_SAFE, agyDenied, agyQuiet, GROK_DENY } from "./cli_engines";
 import { engineEnv, everLoggedIn, safeScope, scopeDir, status } from "./cli_auth";
-import { type Cli, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
+import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
-import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, type FileCtx } from "./imagefiles";
+import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, type FileCtx } from "./imagefiles";
 import { codexRpc } from "./subs";
 
 export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const;
@@ -110,12 +111,14 @@ async function viaAgy(r: Run): Promise<Tried> {
   }
   const release = st.value;
   if (!release) return { fail: lockFail ?? { kind: "busy" } };
-  let conv = "";
+  const watch = await watchSessions(r.login);
+  let conv = "", paths: string[] = [];
   try {
     // Có ảnh gốc: agy có thể tự chặn công cụ mở tệp ở print mode. Đọc nhật ký để nói thật khi ảnh tạo ra không dựa trên ảnh gốc.
     const log = r.refPath ? path.join(r.work, ".agy.log") : "";
     const args = ["--output-format", "json", ...(log ? ["--log-file", log] : []), "-p", imagePrompt("agy", { ...r.q, count: r.count }, r.refPath)];
     const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: "", signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
+    cliRunning(r.login, p);
     let out = "";
     for await (const l of p.lines) out += l + "\n";
     const e = await p.done;
@@ -129,14 +132,17 @@ async function viaAgy(r: Run): Promise<Tried> {
     }
     const said = typeof inner.response === "string" ? inner.response : "";
     const dir = /^[\w-]{8,100}$/.test(conv) ? agyBrainDir(r.login, conv) : "";
-    const paths = [...(dir ? await listImageFiles(dir, r.c) : []), ...namedPaths(said)];
+    paths = [...(dir ? await listImageFiles(dir, r.c) : []), ...namedPaths(said)];
     const g = await gatherImages(paths, r.c, { max: r.count, skip: r.refHash });
     if (!g.files.length) return none(g, said);
     const denied = log ? await agyDenied({ env: r.env, workdir: r.work }, log).catch(() => [] as string[]) : [];
     return { files: g.files, notes: denied.some((x) => /view|read/i.test(x)) ? [`Antigravity không mở được ảnh gốc (công cụ ${denied.join(", ")} bị chặn) nên ảnh này có thể không dựa trên ảnh gốc: hãy nói rõ với người dùng.`] : [] };
   } finally {
-    await release().catch(() => {});
+    // Trong khóa của tài khoản: chưa có lượt mới nào chen vào lúc đang so danh sách phiên. Lượt báo được mã vẫn quét: image-generator là tiến trình con, có thể có phiên riêng.
+    await removeNewFiles(paths, r.stamp, r.c).catch(() => {});
     if (conv) await removeSessionFiles(r.login, conv);
+    await watch.sweep().catch(() => {});
+    await release().catch(() => {});
   }
 }
 
@@ -148,8 +154,10 @@ async function viaGrok(r: Run): Promise<Tried> {
   writeEngineFile(file, Buffer.from(imagePrompt("grok", { ...r.q, count: r.count }), "utf8"));
   const args = ["--prompt-file", file, "--output-format", "streaming-json", "--always-approve", "--no-memory", "--no-subagents", "--no-auto-update",
     "--tools", "image_gen", "--disallowed-tools", "search_tool,use_tool", ...GROK_DENY.flatMap((t) => ["--deny", t]), "--deny", "WebSearch", "--disable-web-search"];
+  const watch = await watchSessions(r.login);
   const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: "", signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
-  let said = "", sid = "", called = false, failed = "", lastErr = "";
+  cliRunning(r.login, p);
+  let said = "", sid = "", called = false, failed = "", lastErr = "", paths: string[] = [];
   const named: unknown[] = [];
   for await (const l of p.lines) {
     if (!l.trim().startsWith("{")) continue;
@@ -168,7 +176,7 @@ async function viaGrok(r: Run): Promise<Tried> {
     const gone = exitFail(e);
     if (gone) return { fail: gone };
     // Đường dẫn trong kết quả công cụ trước, rồi thư mục làm việc, rồi quét có giới hạn các tệp mới trong thư mục đăng nhập của đúng tài khoản này.
-    let paths = namedPaths([named, said]);
+    paths = namedPaths([named, said]);
     if (!paths.length) paths = await listImageFiles(r.work, r.c, { stamp: r.stamp });
     if (!paths.length) paths = await listImageFiles(r.login, r.c, { depth: 7, stamp: r.stamp });
     const g = await gatherImages(paths, r.c, { max: r.count, skip: r.refHash });
@@ -176,7 +184,13 @@ async function viaGrok(r: Run): Promise<Tried> {
     const m = [failed, lastErr, e.code ? stripAnsi(p.stderr()) : ""].filter(Boolean).join("\n");
     if (m) return { fail: { kind: errKind(m), detail: clip(m) } };
     return called ? none(g, said) : { fail: { kind: "notool" } };
-  } finally { if (sid) await removeSessionFiles(r.login, sid); }
+  } finally {
+    // Chưa biết Grok lưu ảnh ở đâu nên quét lại, kể cả khi lượt bị dừng trước khi nói đường dẫn. Lượt chat của Grok không có image_gen nên ảnh mới trong thư mục này chỉ là của lượt này.
+    const left = await listImageFiles(r.login, { ...r.c, signal: undefined }, { depth: 7, stamp: r.stamp }).catch(() => [] as string[]);
+    await removeNewFiles([...paths, ...left], r.stamp, r.c).catch(() => {});
+    if (sid) await removeSessionFiles(r.login, sid);
+    await watch.sweep().catch(() => {});
+  }
 }
 
 /** Codex: đúng các cờ tắt shell của CodexEngine, không cầu nối. Không có image_gen thì model trả lời bằng chữ: coi là không có công cụ, chuyển gói kế. */
@@ -185,7 +199,7 @@ async function viaCodex(r: Run): Promise<Tried> {
   if (!bin) return { fail: { kind: "other", detail: "CLI chưa được cài" } };
   const args = ["exec", ...CODEX_SAFE, ...(r.refPath ? [`--image=${r.refPath}`] : []), "-"];
   const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: imagePrompt("codex", { ...r.q, count: r.count }), signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
-  let said = "", thread = "", failed = "", shell = false;
+  let said = "", thread = "", failed = "", shell = false, paths: string[] = [];
   const named: unknown[] = [];
   for await (const l of p.lines) {
     if (!l.trim().startsWith("{")) continue;
@@ -203,10 +217,13 @@ async function viaCodex(r: Run): Promise<Tried> {
     const gone = exitFail(e);
     if (gone) return { fail: gone };
     if (failed) return { fail: { kind: errKind(failed), detail: clip(failed) } };
-    const paths = [...(/^[\w-]{8,100}$/.test(thread) ? await listImageFiles(path.join(r.login, "generated_images", thread), r.c) : []), ...namedPaths([named, said])];
+    paths = [...(/^[\w-]{8,100}$/.test(thread) ? await listImageFiles(path.join(r.login, "generated_images", thread), r.c) : []), ...namedPaths([named, said])];
     const g = await gatherImages(paths.length ? paths : await listImageFiles(r.work, r.c, { stamp: r.stamp }), r.c, { max: r.count, skip: r.refHash });
     return g.files.length ? { files: g.files } : none(g, said);
-  } finally { if (thread) await removeSessionFiles(r.login, thread); }
+  } finally {
+    await removeNewFiles(paths, r.stamp, r.c).catch(() => {});
+    if (thread) await removeSessionFiles(r.login, thread);
+  }
 }
 
 /** Một lượt tạo ảnh trên một gói của đúng tài khoản q.uid, trong thư mục tạm riêng; luôn dọn thư mục tạm khi xong. */

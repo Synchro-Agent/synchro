@@ -31,7 +31,8 @@ async function grokImage(prompt) {
   const sess = path.join(home, "sessions", `${sid}.json`);
   fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
   const end = (text = "") => { if (text) C.out({ type: "text", data: text }); C.out({ type: "end", stopReason: "end_turn", sessionId: sid, usage: { input_tokens: 1, output_tokens: 1 } }); };
-  if (m.mode === "slow") { fs.writeFileSync(path.join(process.env.HOME || home, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
+  if (m.mode === "slow") { C.saveImage(path.join(home, "cache", "dang_do.png"), "png"); fs.writeFileSync(path.join(process.env.HOME || home, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
+  if (m.delayMs) await C.sleep(m.delayMs);
   if (m.mode === "fail") { C.out({ type: "error", message: "internal server error" }); return end(); }
   if (m.mode === "none" || !tools.includes("image_gen")) return end("I can't create images here.");
   for (let i = 0; i < n; i++) {
@@ -43,6 +44,8 @@ async function grokImage(prompt) {
     if (m.mode === "text") { C.out({ type: "tool_call_update", toolCallId: id, status: "completed", rawOutput: { ok: true } }); continue; }
     const f = m.mode === "scan" ? path.join(home, "cache", `img_${i}.png`) : m.mode === "workdir" ? path.join(process.cwd(), `img_${i}.png`) : path.join(home, "generated_images", sid, `img_${i}.png`);
     C.saveImage(f, "png");
+    // Mỗi lượt một nội dung, biết được ảnh nào của lượt nào: byte thừa sau PNG không làm hỏng ảnh.
+    fs.appendFileSync(f, /<image_description>\n([\s\S]*?)\n<\/image_description>/.exec(prompt)?.[1] ?? "");
     C.out({ type: "tool_call_update", toolCallId: id, status: "completed", rawOutput: m.mode === "scan" || m.mode === "workdir" ? { ok: true } : { path: f } });
   }
   return end("Done.");

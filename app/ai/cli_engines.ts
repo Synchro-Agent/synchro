@@ -3,7 +3,7 @@
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
-import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
+import { type Cli, cliRunning, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 
@@ -15,7 +15,10 @@ function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, timeou
   // Không có workdir riêng thì chạy trong <home>/work (CLI chỉ ghi trong thư mục làm việc).
   const cwd = req.workdir ?? path.join(engineHome(), "work");
   makeDir(cwd);
-  return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
+  const p = spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
+  // Hai CLI chỉ báo mã phiên cuối lượt: lượt tạo ảnh cần biết lượt nào còn chạy trước khi dọn phiên của nó (watchSessions).
+  if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(req.env.HOME, p);
+  return p;
 }
 // Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): vượt là "spawn E2BIG", lượt chết trước khi chạy. Đo bằng byte
 // (tiếng Việt có dấu 2–3 byte mỗi chữ), chừa chỗ: nội dung dài hơn ARG_MAX_BYTES thì đi qua tệp hoặc stdin.
@@ -536,7 +539,7 @@ export class AntigravityEngine implements Engine {
     try { o = JSON.parse(t.slice(t.indexOf("{"))) as Json; } catch {}
     // Lượt bị dừng hoặc CLI không in gì: nhật ký của lượt không còn ai đọc, xóa để khỏi đọng tệp trong thư mục làm việc.
     if (!o) { if (log) await rmEngineFile(req, log).catch(() => {}); yield exitError("agy", p, e); return; }
-    if (typeof o.conversation_id === "string" && o.conversation_id) yield { kind: "session", id: o.conversation_id };
+    if (typeof o.conversation_id === "string" && o.conversation_id) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.conversation_id); yield { kind: "session", id: o.conversation_id }; }
     const u = (o.usage ?? {}) as Json;
     if (o.usage) yield { kind: "usage", usage: { input: num(u.input_tokens) ?? 0, output: (num(u.output_tokens) ?? 0) + (num(u.thinking_tokens) ?? 0), cacheRead: num(u.cache_read_tokens) } };
     if (o.status === "ERROR" || o.error || e.code !== 0) {
@@ -645,7 +648,7 @@ export class GrokEngine implements Engine {
         if (classify(lastErr) === "auth") { p.kill(); done = true; yield err(lastErr, "auth"); break; }
       } else if (o.type === "end") {
         done = true;
-        if (typeof o.sessionId === "string" && o.sessionId) yield { kind: "session", id: o.sessionId };
+        if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.sessionId); yield { kind: "session", id: o.sessionId }; }
         const u = (o.usage ?? {}) as Json;
         yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
         if (lastErr && !all) { yield err(lastErr, classify(lastErr)); break; }

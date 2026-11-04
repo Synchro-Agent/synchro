@@ -35,9 +35,10 @@ chmod 700 "$ENGINE_HOME/logins" "$ENGINE_HOME/work"
 
 # Synchro chỉ được chạy lệnh bằng user CLI (không phải root): `sudo -n -u synchro-cli -- env -i … <CLI>`.
 RULE="/etc/sudoers.d/synchro-cli"
-echo "$APP_USER ALL=($CLI_USER) NOPASSWD: /usr/bin/env" > "$RULE.tmp"
-chmod 440 "$RULE.tmp"
-visudo -c -f "$RULE.tmp" >/dev/null
+# Không ghi lệnh được phép vào nhật ký hệ thống: Antigravity chỉ nhận prompt qua tham số -p, mặc định sudo chép cả dòng lệnh (lời nhắn và câu lệnh tạo ảnh của người dùng,
+# kể cả đoạn chat ẩn danh) vào auth.log và journal, sống lâu hơn mọi hạn xóa Synchro cam kết. Lệnh bị từ chối vẫn được ghi. sudo cũ chưa có log_allowed thì tắt hẳn nhật ký của user này.
+write_rule() { printf 'Defaults:%s %s\n%s ALL=(%s) NOPASSWD: /usr/bin/env\n' "$APP_USER" "$1" "$APP_USER" "$CLI_USER" > "$RULE.tmp"; chmod 440 "$RULE.tmp"; visudo -c -f "$RULE.tmp" >/dev/null 2>&1; }
+write_rule '!log_allowed' || write_rule '!syslog, !logfile' || { echo "visudo không nhận quy tắc sudo." >&2; rm -f "$RULE.tmp"; exit 1; }
 mv "$RULE.tmp" "$RULE"
 
 cat <<MSG

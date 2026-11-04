@@ -94,6 +94,13 @@ export async function removeFile(file: string, c: Pick<FileCtx, "env" | "cwd">) 
   await spawnCli("/bin/sh", ["-c", 'rm -f -- "$1"', "sh", file], { env: c.env, cwd: c.cwd, stdin: "" }).done;
 }
 
+/** Xóa tệp ảnh CLI để lại trong thư mục đăng nhập sau khi đã đọc vào bộ nhớ: không có hạn sử dụng, không tính vào dung lượng của người dùng. Chỉ tệp mới hơn tệp mốc của lượt:
+ *  đường dẫn có thể do model nói ra, ảnh của đoạn chat khác không được đụng tới. */
+export async function removeNewFiles(files: string[], stamp: string, c: FileCtx) {
+  const list = [...new Set(files)].filter((f) => path.isAbsolute(f) && c.roots.some((r) => inside(r, f)));
+  if (list.length) await spawnCli("/bin/sh", ["-c", 'stamp=$1; shift; find "$@" -maxdepth 0 -type f -newer "$stamp" -exec rm -f -- {} +', "sh", stamp, ...list.map((f) => path.resolve(f))], { env: c.env, cwd: c.cwd, stdin: "", timeoutMs: 30_000 }).done;
+}
+
 /** Thư mục Antigravity lưu mọi thứ của một hội thoại, kể cả ảnh image-generator của nó tạo. */
 export const agyBrainDir = (home: string, conv: string) => path.join(home, ".gemini", "antigravity-cli", "brain", conv);
 

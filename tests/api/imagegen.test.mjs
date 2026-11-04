@@ -192,6 +192,108 @@ try {
     ok(c.ok && c.cli === "codex" && !cl.length, "codex: xóa tệp phiên và ảnh gốc của CLI", cl);
   }
 
+  console.log("6b. Dừng, quá giờ, CLI chết: vẫn dọn phiên chưa biết mã");
+  {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const U = "u_kill"; signIn(U, ["agy"]);
+    const cli = path.join(loginDir("agy", U), ".gemini", "antigravity-cli");
+    const OLD = "aaaaaaaa-1111-2222-3333-444444444444";
+    fs.mkdirSync(path.join(cli, "brain", OLD), { recursive: true }); fs.mkdirSync(path.join(cli, "conversations"), { recursive: true });
+    fs.writeFileSync(path.join(cli, "brain", OLD, "cu.jpg"), "x"); fs.writeFileSync(path.join(cli, "conversations", `${OLD}.pb`), "x");
+    const sessions = () => [...fs.readdirSync(path.join(cli, "brain")), ...fs.readdirSync(path.join(cli, "conversations"))].sort();
+    const old = [OLD, `${OLD}.pb`].sort();
+    const stop = async (uid, cliName, o = {}) => {
+      mode(uid, cliName, { mode: "slow" });
+      const pidFile = path.join(loginDir(cliName, uid), "mock-image.pid"); fs.rmSync(pidFile, { force: true });
+      const ac = new AbortController(), pending = gen(uid, { signal: ac.signal, ...o });
+      for (let i = 0; i < 100 && !fs.existsSync(pidFile); i++) await sleep(100);
+      ac.abort();
+      return pending;
+    };
+    const r = await stop(U, "agy", { prompt: "câu-lệnh-riêng-tư-xyz" });
+    ok(!r.ok && r.kind === "aborted", "agy: bấm Dừng", r);
+    ok(sessions().join() === old.join(), "agy bị dừng, không có mã phiên: phiên và ảnh dở vẫn được xóa, phiên cũ của đoạn chat còn nguyên", sessions());
+    ok(!walk(loginDir("agy", U)).some((f) => !/mock-image/.test(f) && /câu-lệnh/.test((() => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } })())), "câu lệnh không còn trên đĩa");
+    // Quá giờ: CLI bị giết, không có gói kế.
+    process.env.SYNCHRO_IMAGE_TIMEOUT_SEC = "1"; mode(U, "agy", { mode: "slow" });
+    const late = await gen(U);
+    delete process.env.SYNCHRO_IMAGE_TIMEOUT_SEC;
+    ok(!late.ok && late.tried[0].kind === "timeout" && sessions().join() === old.join(), "agy quá giờ: cũng được xóa", sessions());
+    // CLI chết không in JSON.
+    mode(U, "agy", { mode: "crash" });
+    const dead = await gen(U);
+    ok(!dead.ok && sessions().join() === old.join(), "agy chết giữa lượt: cũng được xóa", [dead, sessions()]);
+
+    // Lượt chat song song của cùng tài khoản: có phiên trên đĩa, mã chỉ báo khi xong. Không được xóa nhầm.
+    const { "ai/cli_engines": E } = await loadTs(["ai/cli_engines"]);
+    const chat = (async () => { let id = ""; for await (const e of new E.AntigravityEngine().runTurn({ prompt: "[mock:keepsession=2500] chào", env: A.engineEnv("agy", U), workdir: path.join(HOME, "work", U) })) if (e.kind === "session") id = e.id; return id; })();
+    await sleep(500);
+    const during = await stop(U, "agy");
+    ok(!during.ok && during.kind === "aborted", "dừng lượt tạo ảnh khi lượt chat đang chạy", during);
+    const id = await chat;
+    await sleep(800);
+    ok(!!id && fs.existsSync(path.join(cli, "conversations", `${id}.pb`)), "phiên của lượt chat đang chạy còn nguyên", [id, sessions()]);
+    ok(sessions().filter((x) => !x.startsWith(id)).join() === old.join(), "phiên của lượt tạo ảnh bị dừng được xóa sau khi lượt chat xong", sessions());
+
+    // Lượt chat mở sau khi đã chụp danh sách phiên, còn chạy khi lượt tạo ảnh bị dừng: phiên của nó là mã mới mà chưa ai báo.
+    {
+      mode(U, "agy", { mode: "slow" });
+      const pidFile = path.join(loginDir("agy", U), "mock-image.pid"); fs.rmSync(pidFile, { force: true });
+      const ac = new AbortController(), pending = gen(U, { signal: ac.signal });
+      for (let i = 0; i < 100 && !fs.existsSync(pidFile); i++) await sleep(100);
+      const late2 = (async () => { let k = ""; for await (const e of new E.AntigravityEngine().runTurn({ prompt: "[mock:keepsession=1500] chào", env: A.engineEnv("agy", U), workdir: path.join(HOME, "work", U) })) if (e.kind === "session") k = e.id; return k; })();
+      await sleep(500);
+      const t0 = Date.now();
+      ac.abort();
+      const stopped = await pending;
+      ok(stopped.kind === "aborted" && Date.now() - t0 < 1400, "lượt tạo ảnh dừng ngay, không chờ lượt chat xong", Date.now() - t0);
+      const k = await late2;
+      await sleep(800);
+      ok(!!k && fs.existsSync(path.join(cli, "conversations", `${k}.pb`)), "phiên mới của lượt chat còn nguyên", [k, sessions()]);
+      ok(!sessions().some((x) => ![OLD, id, k].some((v) => x.startsWith(v))), "phiên của lượt bị dừng được xóa khi lượt chat xong", sessions());
+      for (const f of fs.readdirSync(path.join(cli, "conversations"))) if (f.startsWith(k)) fs.rmSync(path.join(cli, "conversations", f));
+    }
+
+    // Lượt chat bắt đầu và xong ngay trong lúc tạo ảnh.
+    mode(U, "agy", { delayMs: 1500 });
+    const both = gen(U);
+    await sleep(300);
+    let id2 = ""; for await (const e of new E.AntigravityEngine().runTurn({ prompt: "[mock:keepsession=200] chào", env: A.engineEnv("agy", U), workdir: path.join(HOME, "work", U) })) if (e.kind === "session") id2 = e.id;
+    const okRun = await both;
+    await sleep(300);
+    ok(okRun.ok && !!id2 && fs.existsSync(path.join(cli, "conversations", `${id2}.pb`)), "lượt chat xong trong lúc tạo ảnh: phiên của nó còn nguyên", [id2, sessions()]);
+    ok(!sessions().some((x) => ![OLD, id, id2].some((k) => x.startsWith(k))), "phiên của lượt tạo ảnh thành công được xóa", sessions());
+
+    const G = "u_killg"; signIn(G, ["grok"]);
+    const left = () => walk(loginDir("grok", G)).filter((f) => /sessions|\.png$/.test(f));
+    const g = await stop(G, "grok");
+    ok(!g.ok && g.kind === "aborted" && !left().length, "grok bị dừng: không còn tệp phiên, không còn ảnh dở", left());
+  }
+
+  console.log("6c. Tệp ảnh gốc của CLI nằm ngoài tên phiên");
+  {
+    const U = "u_src"; signIn(U, ["grok"]);
+    const png = () => walk(loginDir("grok", U)).filter((f) => /\.png$/.test(f));
+    const keep = path.join(loginDir("grok", U), ".grok", "cu.png");
+    fs.writeFileSync(keep, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(100, 3)])); fs.utimesSync(keep, new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000));
+    for (const m of ["scan", "ok"]) {
+      mode(U, "grok", { mode: m });
+      const r = await gen(U);
+      ok(r.ok && r.files[0].data.length > 100, `Grok chế độ ${m}: ảnh đã đọc vào bộ nhớ`, r);
+      ok(png().join() === keep, `Grok chế độ ${m}: tệp gốc đã xóa, ảnh cũ của tài khoản còn nguyên`, png());
+    }
+    // Model nói đường dẫn tới ảnh cũ: không đụng tới.
+    mode(U, "grok", { mode: "other", otherPath: keep });
+    const said = await gen(U);
+    ok(fs.existsSync(keep), "đường dẫn model nói tới ảnh cũ: không bị xóa", said);
+  }
+
+  console.log("6d. Nhật ký hệ thống");
+  {
+    const sh = fs.readFileSync("scripts/setup-engine-user.sh", "utf8");
+    ok(/Defaults:%s/.test(sh) && /!log_allowed/.test(sh) && /!syslog, !logfile/.test(sh), "quy tắc sudo không ghi dòng lệnh (có cả lời nhắn) vào auth.log");
+  }
+
   console.log("7. Cấu hình chung của Antigravity");
   {
     const U = "u_bridge"; signIn(U, ["agy"]);

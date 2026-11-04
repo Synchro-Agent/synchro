@@ -43,8 +43,10 @@ async function agyImage(prompt, conv) {
   fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
   const done = (response, extra = {}) => console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response, error: "", duration_seconds: 1, num_turns: 1, usage: usage0, ...extra }));
   const fail = (error) => { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error, duration_seconds: 0.1, num_turns: 0, usage: usage0 })); process.exit(1); };
-  if (m.mode === "slow") { fs.writeFileSync(path.join(home, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
+  // Bị giết giữa chừng: phiên và ảnh dở đã nằm trên đĩa mà mã phiên chỉ in ra khi xong lượt.
+  if (m.mode === "slow") { C.saveImage(path.join(dir, "partial.jpg")); fs.writeFileSync(path.join(home, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
   if (m.delayMs) await C.sleep(m.delayMs);
+  if (m.mode === "crash") { C.saveImage(path.join(dir, "partial.jpg")); console.error("panic: runtime error"); process.exit(2); }
   if (m.mode === "quota") return fail("RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.");
   if (m.mode === "fail") return fail("INTERNAL: upstream connection reset");
   if (m.mode === "none") return done("NO_IMAGE_TOOL");
@@ -100,6 +102,13 @@ async function agyImage(prompt, conv) {
       process.exit(1);
     }
     if (C.isImageTurn(prompt)) return agyImage(prompt, conv);
+    // [mock:keepsession]: lượt chat chạy lâu và có phiên trên đĩa ngay từ đầu, mã phiên chỉ báo khi xong: lượt tạo ảnh chạy song song không được xóa nhầm.
+    if (prompt.includes("[mock:keepsession")) {
+      const sess = path.join(cli, "conversations", `${conv}.pb`);
+      fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
+      await C.sleep(Number(/\[mock:keepsession=(\d+)\]/.exec(prompt)?.[1] ?? 1500));
+      return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: "ok", error: "", duration_seconds: 1, num_turns: 1, usage: usage0 }));
+    }
     if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
     // Như agy 1.4.11 thật (nhật ký trên VPS 2026-10-30): model Claude / GPT qua Antigravity không nhận --effort, lượt dừng ngay.
     {
