@@ -397,6 +397,8 @@ Object.assign(VI2EN, {
   "Tìm skill hoặc thư viện": "Search skills or libraries", "Không có skill hoặc thư viện nào khớp": "No skill or library matches",
 });
 
+Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy thử lại hoặc chọn model khác; nội dung lỗi nằm ở phần chi tiết.": "The model reported an error, so this turn didn't finish. Try again or pick another model; the error is in the details." });
+
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],
   [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
@@ -405,6 +407,10 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one could not start. Try again when it finishes, or pick another model.`],
   [/^Claude đang thử lại sau lỗi tạm thời(?: \(lần (\d+)(?:\/(\d+))?\))?$/, (m) => `Claude is retrying after a temporary error${m[1] ? ` (attempt ${m[1]}${m[2] ? ` of ${m[2]}` : ""})` : ""}`],
   [/^(.+) đã hết hạn mức\. Các model khác của gói (.+) vẫn dùng được\.$/, (m) => `${m[1]} has hit its limit. Other ${m[2]} plan models still work.`],
+  [/^CLI (.+) chưa được cài trên máy chủ\.$/, (m) => `The ${m[1]} CLI isn't installed on the server.`],
+  [/^CLI (.+) thoát với mã (.+)\.$/, (m) => `The ${m[1]} CLI exited with code ${m[2]}.`],
+  [/^Không chuyển được (hướng dẫn|tin nhắn) cho (.+): ([\s\S]+)$/, (m) => `Couldn't pass the ${m[1] === "tin nhắn" ? "message" : "instructions"} to ${m[2]}: ${m[3]}`],
+  [/^Claude từ chối đăng nhập \((.+?)\): ([\s\S]+)\. Đăng nhập lại trong Cài đặt → Providers\.$/, (m) => `Claude rejected the sign-in (${m[1]}): ${m[2] === "phiên đăng nhập không còn hợp lệ" ? "the session is no longer valid" : m[2]}. Sign in again in Settings → Providers.`],
   [/^Gói (.+) hiện không có model này\. Hãy chọn model khác\.$/, (m) => `Your ${m[1]} plan doesn't include this model right now. Pick another model.`],
   [/^Mất kết nối tới (.+)\. Hãy thử lại sau ít phút\.$/, (m) => `Lost the connection to ${m[1]}. Try again in a few minutes.`],
   [/^(.+) đang gặp sự cố phía hãng\. Hãy thử lại sau ít phút hoặc chọn model khác\.$/, (m) => `${m[1]} is having a problem on its side. Try again in a few minutes or pick another model.`],

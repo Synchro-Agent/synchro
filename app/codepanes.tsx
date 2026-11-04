@@ -769,7 +769,7 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
               <button className="sr-sum" onClick={() => setList(!list)} disabled={!files.length} title={files.length ? "Xem các file thay đổi" : undefined}>
                 <I.File size={16} />{files.length ? <span className="ag-diff"><b>+{add}</b><i>−{del}</i></span> : <span className="sr-dim">Không có thay đổi</span>}
               </button>
-              {git.repo && <button className="ctxp-btn" disabled={!!busy} onClick={() => { const t = prompt("Tiêu đề pull request", ""); if (t !== null) run("pr", { title: t }); }}>Tạo PR</button>}
+              {git.repo && <button className="ctxp-btn" disabled={!!busy} onClick={() => { const t = prompt(tr("Tiêu đề pull request"), ""); if (t !== null) run("pr", { title: t }); }}>Tạo PR</button>}
             </div>
             {list && files.length > 0 && (
               <div className="sr-files">
@@ -791,7 +791,7 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
               <div className="sr-acts">
                 <button className="ctxp-btn" disabled={!!busy} onClick={() => run("push", {}, "Đã push lên GitHub")}>{busy === "push" ? "Đang push…" : `Push${git.ahead ? ` (${git.ahead})` : ""}`}</button>
                 <button className="ctxp-btn" disabled={!!busy} onClick={() => run("pull", {}, "Đã cập nhật từ GitHub")}>Pull</button>
-                <button className="ctxp-btn" disabled={!!busy} onClick={() => { const b = prompt("Tên nhánh mới", `synchro/${new Date().toISOString().slice(0, 10)}`); if (b) run("branch", { name: b }, `Đã chuyển sang nhánh ${b}`); }}>Nhánh mới</button>
+                <button className="ctxp-btn" disabled={!!busy} onClick={() => { const b = prompt(tr("Tên nhánh mới"), `synchro/${new Date().toISOString().slice(0, 10)}`); if (b) run("branch", { name: b }, `Đã chuyển sang nhánh ${b}`); }}>Nhánh mới</button>
               </div>
             )}
           </>}

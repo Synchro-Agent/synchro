@@ -9,7 +9,7 @@ import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
-import { chatError, GENERIC_ERR } from "./chaterror";
+import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
 import { BrandLogo } from "./brands";
@@ -773,7 +773,7 @@ type RowCx = {
 };
 // Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
 function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
-  const e = chatError(raw);
+  const e = chatError(raw, (s) => isForeign(s, tr(s), getLang()));
   return (
     <div className="msg-err" role="alert">
       <div className="msg-err-h"><I.M icon="WarningCircle" size={16} /><b>{tr("Câu trả lời chưa hoàn thành")}</b></div>
