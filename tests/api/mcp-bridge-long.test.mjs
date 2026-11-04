@@ -71,8 +71,12 @@ let parks = 0;
 b2.onPark(() => parks++);
 ok(parks === 0, "chưa chờ duyệt thì chưa nhả chỗ");
 b2.park(); b2.park();
+ok(parks === 1, "chờ duyệt: báo cho người đã đăng ký, mỗi người một lần", parks);
+// Cầu nối sống cả lượt chat: lần chạy CLI sau (nhắc làm tiếp, tin nhắn thêm) đăng ký lại, phải giữ khóa tới khi chính nó dừng chờ.
 b2.onPark(() => parks++);
-ok(parks === 2, "chờ duyệt: báo cho người đã đăng ký và cả người đăng ký sau, mỗi người một lần", parks);
+ok(parks === 1, "lần chạy CLI sau trên cùng cầu nối không bị nhả khóa ngay", parks);
+b2.park();
+ok(parks === 2, "lần chạy sau dừng chờ duyệt: nhả khóa", parks);
 b2.close();
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

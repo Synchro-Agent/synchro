@@ -107,6 +107,7 @@ try {
   await until(`!!document.querySelector(".wl-plans") && !document.querySelector(".wl-status")`, 40000, "thẻ khi hết hạn mức");
   const card = await ev(`document.querySelector(".wl-plans span").textContent`);
   ok(/chưa tạo được ảnh lúc này/.test(card) && !/^Đăng nhập gói/.test(card), "đã đăng nhập mà hết hạn mức: không bảo đăng nhập", card);
+  ok((await ev(`document.querySelectorAll(".wl-plans").length`)) === 1, "thẻ chỉ hiện một lần, sau câu trả lời", await ev(`document.querySelectorAll(".wl-plans").length`));
   await shot("1b-quota");
 
   console.log("1c. Tiếng Anh");
