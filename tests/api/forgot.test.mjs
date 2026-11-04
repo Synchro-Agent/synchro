@@ -37,8 +37,9 @@ const none = await other("POST", "/api/auth/forgot", { email: `khong-co-${Date.n
 r = await other("POST", "/api/auth/forgot", { email, lang: "vi" });
 ok(none.s === 200 && r.s === 200 && JSON.stringify(none.j) === JSON.stringify(r.j), "email có và không có tài khoản trả lời giống nhau", JSON.stringify([none, r]));
 await new Promise((ok) => setTimeout(ok, 300));
-const sent = mails(email);
-ok(sent.length === 1 && sent[0].subject === "Đặt lại mật khẩu Synchro", "gửi đúng một thư", sent.length);
+// Đăng ký bằng email cũng gửi thư xác minh: chỉ đếm thư đặt lại.
+const sent = mails(email).filter((x) => x.subject === "Đặt lại mật khẩu Synchro");
+ok(sent.length === 1, "gửi đúng một thư", sent.length);
 const token = /reset#([\w-]+)/.exec(sent[0]?.text ?? "")?.[1];
 ok(!!token, "thư có mã đặt lại");
 r = await other("POST", "/api/auth/reset", { token: "sai", check: true }); ok(r.s === 400, "mã sai bị từ chối");

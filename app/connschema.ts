@@ -131,7 +131,7 @@ function forGemini(v: unknown, depth = 0): unknown {
     if (has) s.type = "object";
     else {
       const { properties: _p, default: _d, ...rest } = s;
-      s = { ...rest, type: "string", ...(s.type === "object" ? { description: `${typeof s.description === "string" ? `${s.description} ` : ""}(đối tượng, viết thành chuỗi JSON)` } : {}) };
+      s = { ...rest, type: "string", ...(s.type === "object" ? { description: `${typeof s.description === "string" ? `${s.description} ` : ""}(object, written as a JSON string)` } : {}) };
     }
   }
   if (s.type === "string" && typeof s.format === "string" && s.format !== "date-time" && s.format !== "enum") delete s.format;

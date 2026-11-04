@@ -3,7 +3,7 @@
 export const SETTINGS_INDEX: Record<string, { rows: string[]; also?: string[] }> = {
   General: { rows: ["Theme", "Chat font", "Transcript text size", "Motion", "Transcript width", "Language", "Voice", "Speed", "Response completions"], also: ["dark mode", "giao diện tối", "ngôn ngữ", "phông chữ", "thông báo", "giọng nói", "notifications"] },
   Account: { rows: ["Profile photo", "Full name", "What should Synchro call you?", "Date of birth", "What best describes your work?", "Email", "Password", "Log out of all devices", "Delete your account", "Account ID"], also: ["mật khẩu", "đăng xuất", "ảnh đại diện", "xóa tài khoản", "phiên đăng nhập", "active sessions"] },
-  Privacy: { rows: ["Export data", "Shared chats", "Uploaded files", "Your feedback", "Memory preferences", "Privacy policy", "Terms of Service"], also: ["xuất dữ liệu", "chia sẻ", "tệp đã tải lên", "điều khoản"] },
+  Privacy: { rows: ["Export data", "Download everything on the server", "Shared chats", "Uploaded files", "Your feedback", "Memory preferences", "Privacy policy", "Terms of Service"], also: ["xuất dữ liệu", "chia sẻ", "tệp đã tải lên", "điều khoản"] },
   Capabilities: { rows: ["Switch models when a message is flagged", "Artifacts", "AI-powered artifacts", "Inline visualizations", "Critic council", "Browser control", "Your browser", "Code execution and file creation", "Allow network egress", "Reach the whole public web"], also: ["biểu đồ", "trình duyệt", "chạy code", "hội đồng phản biện"] },
   Usage: { rows: [], also: ["mức dùng", "hạn mức", "giới hạn", "limits", "token"] },
   Brain: { rows: ["Generate memory from chats", "Include sensitive topics in memory", "Import memory from other AI providers"], also: ["bộ nhớ", "bộ não", "memory", "ký ức"] },

@@ -983,3 +983,7 @@ Object.assign(EN2VI, {
   "Synchro tells you when it resets and offers another plan you have connected.": "Synchro báo lúc gói hồi lại và gợi ý gói khác bạn đã kết nối.",
   "The model picker keeps one group per provider. A group shows your plan's models while you are signed in.": "Bộ chọn model có một nhóm cho mỗi hãng. Nhóm đó hiện các model của gói khi bạn đã đăng nhập.",
 });
+Object.assign(EN2VI, { "Changed email verification rule": "Đã đổi quy tắc xác minh email", "Marked email as verified": "Đã đánh dấu email là đã xác minh", "Background replies, last 24 hours": "Câu trả lời chạy nền, 24 giờ qua" });
+// Chữ chỉ model hoặc bản giả lập thấy, không hiện cho người dùng.
+Object.assign(EN2VI, { "550 5.1.1 mailbox does not exist": "550 5.1.1 hộp thư không tồn tại" });
+RULES_VI.push([/^(.*)\(object, written as a JSON string\)$/, (m) => `${m[1]}(đối tượng, viết thành chuỗi JSON)`]);

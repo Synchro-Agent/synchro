@@ -72,7 +72,7 @@ export type MailKind = "reset" | "changed" | "verify" | "signup_taken" | "alert"
 
 // Bản giả lập: ghi ra tệp. Địa chỉ @bounce.synchro.test giả lập máy chủ thư từ chối hẳn, để kiểm thử đường báo lỗi cho quản trị viên.
 function capture(dir: string, to: string, m: Mail) {
-  if (to.endsWith("@bounce.synchro.test")) throw new Permanent("550 5.1.1 hộp thư không tồn tại");
+  if (to.endsWith("@bounce.synchro.test")) throw new Permanent("550 5.1.1 mailbox does not exist");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, `${Date.now()}-${crypto.randomBytes(3).toString("hex")}.json`), JSON.stringify({ to, ...m }));
 }

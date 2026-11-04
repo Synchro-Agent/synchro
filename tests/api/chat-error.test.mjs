@@ -19,14 +19,14 @@ const server = "Bạn chưa đăng nhập gói Claude. Đăng nhập ở Cài đ
 ok(E.chatError(server).text === server && E.chatError(server).act === "providers", "câu của máy chủ giữ nguyên, kèm nút mở Providers");
 ok(E.chatError("Quá nhiều yêu cầu, thử lại sau.").act === undefined, "lỗi khác không có nút Providers");
 ok(!/thoát với mã/.test(E.chatError("CLI codex thoát với mã 1.").text), "CLI thoát giữa chừng: câu đọc được, mã thoát để ở chi tiết");
-const vi = (s) => E.isForeign(s, s, "vi"), en = (s) => E.isForeign(s, s, "en");
+const viF = (s) => E.isForeign(s, s, "vi"), enF = (s) => E.isForeign(s, s, "en");
 const raw = "Credit balance is too low to access this model";
-ok(E.chatError(raw, vi).text === E.FOREIGN_ERR && E.chatError(raw, vi).detail === raw, "lỗi tiếng Anh của hãng trên giao diện tiếng Việt: câu tiếng Việt, nguyên văn ở chi tiết");
-ok(E.chatError(raw, en).text === raw, "giao diện tiếng Anh đọc được nguyên văn");
-ok(E.chatError("Hạn mức đã hết hôm nay", en).text === E.FOREIGN_ERR, "câu tiếng Việt chưa có bản dịch trên giao diện tiếng Anh: câu chung, không để tiếng Việt");
-ok(E.chatError("Hạn mức đã hết hôm nay", vi).text === "Hạn mức đã hết hôm nay", "câu tiếng Việt trên giao diện tiếng Việt giữ nguyên");
+ok(E.chatError(raw, viF).text === E.FOREIGN_ERR && E.chatError(raw, viF).detail === raw, "lỗi tiếng Anh của hãng trên giao diện tiếng Việt: câu tiếng Việt, nguyên văn ở chi tiết");
+ok(E.chatError(raw, enF).text === raw, "giao diện tiếng Anh đọc được nguyên văn");
+ok(E.chatError("Hạn mức đã hết hôm nay", enF).text === E.FOREIGN_ERR, "câu tiếng Việt chưa có bản dịch trên giao diện tiếng Anh: câu chung, không để tiếng Việt");
+ok(E.chatError("Hạn mức đã hết hôm nay", viF).text === "Hạn mức đã hết hôm nay", "câu tiếng Việt trên giao diện tiếng Việt giữ nguyên");
 ok(!E.isForeign("Not signed in", "Chưa đăng nhập", "vi"), "câu tiếng Anh đã có trong từ điển không bị coi là lỗi lạ");
-ok(E.chatError("Please sign in to Providers", vi).act === "providers", "lỗi lạ vẫn giữ nút mở Providers");
+ok(E.chatError("Please sign in to Providers", viF).act === "providers", "lỗi lạ vẫn giữ nút mở Providers");
 
 const msgs = [
   { role: "user", text: "câu 1", time: 1 },
