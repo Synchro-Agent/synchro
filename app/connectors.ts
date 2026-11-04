@@ -540,7 +540,7 @@ export const removeUserConnectors = (uid: string) => {
 export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; icon?: string; tool: McpTool };
 /** Connector đang bật mà chưa dùng được (cần đăng nhập lại, đang lỗi, hãng chưa duyệt): model được báo để nói với người dùng, khung chat có nút kết nối lại. */
 // name: có thể kèm địa chỉ khi hai connector trùng tên; base: tên gốc. auth: token tự nhập thì thẻ kết nối lại cho nhập token, không có trang đăng nhập để mở.
-export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; why: "auth" | "error" | "vendor"; auth?: Auth["mode"] };
+export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; why: "auth" | "error" | "vendor"; auth?: Auth["mode"]; refused?: boolean };
 
 // Tên công cụ gửi cho model: "<connector>__<công cụ>", chỉ chữ, số, _ và -. Các hãng giới hạn tên công cụ 64 ký tự và CLI còn thêm tiền tố của nó trước tên
 // (mcp__synchro__ dài 14 ký tự trên Claude Code và Codex, mcp_synchro_ trên Antigravity), nên chỉ dùng 50 ký tự. Dài hơn thì cắt và thêm mã băm ngắn, ổn định giữa các lượt.
@@ -575,7 +575,7 @@ export class ConnectorSession {
       const where = (u: string) => { try { return new URL(u); } catch { return null; } };
       const u = where(r.url);
       if (!u) return r.name;
-      return `${r.name} (${twins.filter((x) => where(x.url)?.host === u.host).length > 1 ? `${u.host}${u.pathname.replace(/\/$/, "")}` : u.host})`;
+      return `${r.name} (${twins.filter((x) => where(x.url)?.host === u.host).length > 1 ? `${u.host}${u.pathname.replace(/\/$/, "")}${u.search}` : u.host})`;
     };
     for (const r of rows) {
       const st = settingsOf(r);
@@ -657,7 +657,7 @@ export class ConnectorSession {
     } catch (e) {
       if (e instanceof McpError && e.kind === "auth") return { content: needLogin, is_error: true, reconnect: off() };
       // Một công cụ bị 403: kiểm tra lại danh sách công cụ ở nền, cả danh sách cũng bị từ chối thì connector mới chuyển sang trạng thái bị từ chối.
-      if (e instanceof McpError && e.kind === "forbidden") { syncTools(ct.cid).catch(() => {}); return { content: refused, is_error: true, reconnect: off() }; }
+      if (e instanceof McpError && e.kind === "forbidden") { syncTools(ct.cid).catch(() => {}); return { content: refused, is_error: true, reconnect: { ...off(), refused: true } }; }
       if (e instanceof McpError && e.kind === "scope") return { content: `${ct.cname} cần thêm quyền để dùng công cụ này; các công cụ khác vẫn dùng được. Hãy báo người dùng bấm "Cấp thêm quyền" (Cài đặt → Connectors).`, is_error: true };
       // Công cụ không còn trên máy chủ: làm mới danh sách để lượt sau đúng.
       if (e instanceof McpError && e.kind === "rpc" && (e.code === -32602 || e.code === -32601) && /unknown tool|tool not found|no such tool|not found/i.test(e.message)) syncTools(ct.cid).catch(() => {});

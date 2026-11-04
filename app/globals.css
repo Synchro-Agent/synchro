@@ -3996,6 +3996,7 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .wl-tools-h svg:last-child{transition:transform .2s var(--ease)}
 .wl-tools.open .wl-tools-h svg:last-child{transform:rotate(90deg)}
 .wl-tools-h em{font-style:normal;color:#c4452e;font-size:12px}
+.wl-fail{max-width:min(46ch,60vw);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;color:var(--text-3)}
 .wl-tools-b{margin:6px 0 2px 2px;padding-left:12px;border-left:1.5px solid var(--border);display:flex;flex-direction:column;gap:6px;animation:rise .2s var(--ease) both}
 .wl-tool{display:flex;gap:8px;align-items:flex-start;font-size:13px}
 .wl-tool b{font-weight:450;color:var(--text-2)}

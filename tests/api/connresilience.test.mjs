@@ -21,7 +21,7 @@ const { connectors: C, mcp: M, connproxy: P, refs: R, safefetch: F, mcpauth: A, 
 // ---- máy chủ MCP giả lập điều khiển được ----
 const S = {
   calls: {}, seen: [], down: 0, downOnly: null, downStatus: 503, era: "legacy", auth: null, token: null, tools: null, oauth: null, redirect: null, scopeTool: null, authorize: null, register: null, register403: false,
-  tokenFail: null, count(n) { return this.calls[n] ?? 0; }, reset() { Object.assign(this, { calls: {}, seen: [], down: 0, downOnly: null, downStatus: 503, era: "legacy", auth: null, tools: null, oauth: null, redirect: null, scopeTool: null, authorize: null, register: null, register403: false, tokenFail: null }); },
+  tokenFail: null, count(n) { return this.calls[n] ?? 0; }, reset() { Object.assign(this, { calls: {}, seen: [], down: 0, downOnly: null, downStatus: 503, era: "legacy", auth: null, tools: null, oauth: null, redirect: null, scopeTool: null, authorize: null, register: null, register403: false, tokenFail: null, forbid: null, forbidTool: null, hangPost: false, hangWk: false, sse: null, sseStream: null, list: undefined }); },
 };
 const TOOLS = [
   { name: "get_doc", description: "Read a doc", inputSchema: { type: "object", properties: { id: { type: "string" } } } },
@@ -39,6 +39,20 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, BASE);
   const p = u.pathname;
   S.seen.push({ p, method: req.method, auth: req.headers.authorization, key: req.headers["x-api-key"] });
+  if (S.hangWk && p.startsWith("/.well-known/")) return;
+  // Thế hệ HTTP+SSE: GET mở luồng, POST /messages trả lời qua luồng. sse.postStatus: POST lỗi; sse.silent: công cụ không bao giờ trả lời.
+  if (S.sse && p === "/mcp" && req.method === "GET") { res.writeHead(200, { "content-type": "text/event-stream" }); res.write("event: endpoint\ndata: /messages\n\n"); S.sseStream = res; return; }
+  if (S.sse && p === "/messages") {
+    const m = JSON.parse(await body(req) || "{}");
+    S.calls[m.method] = (S.calls[m.method] ?? 0) + 1;
+    if (m.method === "tools/call") { S.calls[`call:${m.params.name}`] = (S.calls[`call:${m.params.name}`] ?? 0) + 1; S.sse.lastSignal = Date.now(); }
+    if (S.sse.postStatus && m.method === "tools/call") { const c = S.sse.postStatus; S.sse.postStatus = S.sse.postOnce ? 0 : c; res.writeHead(c); return res.end(); }
+    res.writeHead(202); res.end();
+    if (m.id === undefined || (m.method === "tools/call" && S.sse.silent)) return;
+    const result = m.method === "initialize" ? { protocolVersion: "2024-11-05", capabilities: {}, serverInfo: { name: "sse" } } : m.method === "tools/list" ? { tools: S.tools ?? TOOLS } : { content: [{ type: "text", text: `ok ${m.params?.name}` }] };
+    S.sseStream?.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: m.id, result })}\n\n`);
+    return;
+  }
   if (p === "/moved") { res.writeHead(307, { location: `${OTHER}/sink` }); return res.end(); }
   if (p === "/.well-known/oauth-protected-resource" || p === "/.well-known/oauth-protected-resource/mcp") return S.oauth ? send(res, 200, { resource: `${BASE}/mcp`, authorization_servers: [BASE] }) : send(res, 404, {});
   if (p === "/.well-known/oauth-authorization-server") return S.oauth ? send(res, 200, { issuer: BASE, authorization_endpoint: S.oauth.authorize ?? `${BASE}/authorize`, token_endpoint: `${BASE}/token`, registration_endpoint: `${BASE}/register`, code_challenge_methods_supported: ["S256"], ...(S.oauth.cimd ? { client_id_metadata_document_supported: true } : {}) }) : send(res, 404, {});
@@ -52,6 +66,7 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { access_token: `at_${S.calls.token}`, refresh_token: `rt_${S.calls.token}`, expires_in: 3600 });
   }
   if (p !== "/mcp") return send(res, 404, { error: "no" });
+  if (S.hangPost && req.method === "POST") return;
   if (req.method === "GET") return send(res, 405, {});
   if (req.method === "DELETE") return send(res, 200, {});
   const m = JSON.parse(await body(req) || "{}");
@@ -64,16 +79,19 @@ const server = http.createServer(async (req, res) => {
     const want = S.auth ? S.auth.value : S.oauth.valid;
     if (got !== want) return send(res, 401, { error: "invalid_token" }, { "www-authenticate": 'Bearer error="invalid_token"' });
   }
+  if (S.forbid && (S.forbid === true || S.forbid(m))) return send(res, 403, { error: "forbidden" });
   if (m.method === "server/discover") return S.era === "modern" ? send(res, 200, { jsonrpc: "2.0", id: m.id, result: { serverInfo: { name: "m" }, capabilities: {} } }) : send(res, 404, {});
   // Máy chủ "modern" không còn nhận initialize; "legacy" không biết _meta thế hệ mới.
   if (S.era === "modern" && m.method === "initialize") return send(res, 400, { error: "no" });
   if (S.era === "legacy" && req.headers["mcp-protocol-version"] === M.MODERN) return send(res, 400, {});
   if (m.id === undefined) { res.writeHead(202); return res.end(); }
   if (m.method === "initialize") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2025-11-25", capabilities: {}, serverInfo: { name: "fake" } } });
-  if (m.method === "tools/list") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: { tools: S.tools ?? TOOLS } });
+  if (m.method === "tools/list") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: S.list !== undefined ? S.list : { tools: S.tools ?? TOOLS } });
   if (m.method === "tools/call") {
     const n = m.params.name;
     if (S.scopeTool === n) return send(res, 403, { error: "insufficient_scope" }, { "www-authenticate": 'Bearer error="insufficient_scope", scope="docs:write"' });
+    if (S.forbidTool === n) return send(res, 403, { error: "forbidden" });
+    if (n === "get_charts") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "ba biểu đồ" }, ...[1, 2, 3].map(() => ({ type: "image", data: PNG.toString("base64"), mimeType: "image/png" }))] } });
     if (n === "get_chart") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "chart" }, { type: "image", data: PNG.toString("base64"), mimeType: "image/png" }] } });
     if (n === "slow_ping") {
       // Luồng SSE: im một lúc nhưng có ping, rồi mới có kết quả.
@@ -529,6 +547,258 @@ try {
     e = await A.refreshTokens(asMeta, client, { refreshToken: "r", resource: url }).catch((x) => x);
     ok(e instanceof F.TempFail, "temporarily_unavailable: lỗi tạm thời");
     S.reset();
+  }
+
+  console.log("24. Đoán công cụ đọc: so cả từ, không đoán khi có dấu hiệu chạy lệnh");
+  {
+    const g = (name, extra = {}) => M.guessedRead({ name, ...extra });
+    ok(g("get_credits") && g("list_posts") && g("get_asset") && g("get_post") && g("list_run_logs") && g("search") && g("fetch"), "tên đọc thường không còn bị hỏi vì khớp chuỗi con (edit, post, set, run)");
+    ok(!g("query") && !g("find"), "query, find đứng một mình không phải công cụ đọc");
+    ok(!g("find_records", { description: "Runs any SQL you give it" }) && !g("query_db", { description: "Execute a statement" }) && !g("query_db", { description: "Used for running any SQL" }), "mô tả nói chạy / thực thi: không đoán là đọc");
+    ok(!g("query_db", { inputSchema: { type: "object", properties: { sql: { type: "string" } } } }) && !g("find_x", { inputSchema: { type: "object", properties: { command: { type: "string" } } } }), "tham số sql, command: không đoán là đọc");
+    ok(!g("query_db", { inputSchema: { type: "object", properties: { q: { type: "string", description: "SQL statement" } } } }), "tham số có mô tả là SQL: không đoán là đọc");
+    ok(g("search_docs", { inputSchema: { type: "object", properties: { query: { type: "string" } } } }) && g("get_workflow_run", { description: "Get a workflow run" }), "tham số query và danh từ run vẫn là đọc");
+    ok(!g("get_or_create_user") && !g("find_and_update") && !g("find_and_delete") && !g("get_or_set"), "động từ ghi đi sau and / or vẫn là ghi");
+    ok(!g("create_page") && !g("do_thing"), "không bắt đầu bằng động từ đọc");
+    const d = (name, annotations) => M.destructiveLike({ name, annotations });
+    ok(d("delete_page") && d("create_page") && d("do_thing"), "công cụ ghi không khai báo: tính là có thể xóa dữ liệu (mặc định của đặc tả MCP)");
+    ok(d("x", { readOnlyHint: false }) && d("x", { destructiveHint: true }), "khai báo có thể ghi, hoặc có thể xóa");
+    ok(!d("x", { readOnlyHint: true }) && !d("x", { destructiveHint: false }) && !d("get_doc") && !d("ask_question"), "khai báo không xóa, công cụ đọc, động từ không ghi: không cảnh báo");
+    S.tools = [...TOOLS, { name: "delete_page", description: "Delete", inputSchema: { type: "object", properties: {} } }, { name: "query", description: "Run any SQL", inputSchema: { type: "object", properties: { sql: { type: "string" } } } }];
+    const r = await add();
+    const id = r.connector.id;
+    let c = row(id);
+    ok(c.tools.find((t) => t.name === "delete_page").destructive && !c.tools.find((t) => t.name === "delete_page").locked, "thẻ connector đánh dấu delete_page có thể xóa dữ liệu");
+    ok(c.tools.find((t) => t.name === "query").perm === "ask", "query chạy SQL phải hỏi trước", JSON.stringify(c.tools.find((t) => t.name === "query")));
+    C.updateConnector(uid, id, { settings: { destructive: false } }, pol);
+    c = row(id);
+    ok(c.tools.find((t) => t.name === "delete_page").locked === "setting", "tắt công cụ xóa dữ liệu thì delete_page không khai báo cũng bị khóa");
+    ok(!session("x24").tools.some((t) => t.tool.name === "delete_page"), "công cụ bị khóa không tới model");
+    wipe();
+  }
+
+  console.log("25. Chỉ gọi lại công cụ khi máy chủ khai báo rõ");
+  {
+    const r = await add();
+    const id = r.connector.id;
+    C.updateConnector(uid, id, { perms: { get_doc: "allow" } }, pol);
+    const s = session("x25");
+    S.down = 1; S.downOnly = "tools/call"; S.calls = {};
+    const out = await s.call(s.tools.find((t) => t.tool.name === "get_doc").fq, {});
+    ok(S.count("call:get_doc") === 1 && out.is_error, "get_doc chỉ đoán là đọc: 503 không tự gọi lại", JSON.stringify(S.calls));
+    await s.close();
+    wipe();
+  }
+
+  console.log("26. Lấy lại danh sách công cụ không xóa quyền đã đặt");
+  {
+    const r = await add();
+    const id = r.connector.id;
+    C.updateConnector(uid, id, { perms: { search_docs: "block", create_page: "allow" } }, pol);
+    const perm = (n) => row(id).tools.find((t) => t.name === n)?.perm;
+    S.list = {};
+    const msg = await thrown(C.refreshConnector(uid, id));
+    ok(/không hợp lệ/.test(msg) && perm("search_docs") === "block" && perm("create_page") === "allow", "thiếu mảng tools: báo lỗi, quyền nguyên vẹn", msg);
+    S.list = { tools: [] };
+    await C.refreshConnector(uid, id);
+    ok(row(id).tools.length === TOOLS.length && perm("search_docs") === "block" && /danh sách công cụ trống/.test(row(id).lastError ?? ""), "danh sách rỗng lần đầu: chưa tin, giữ nguyên, có ghi lại", JSON.stringify(row(id).lastError));
+    S.list = undefined;
+    await C.refreshConnector(uid, id);
+    ok(!row(id).lastError, "có lại công cụ: hết cảnh báo");
+    S.list = { tools: [] };
+    await C.refreshConnector(uid, id);
+    await C.refreshConnector(uid, id);
+    ok(row(id).tools.length === 0, "rỗng hai lần liên tiếp: chấp nhận là thật");
+    S.list = undefined;
+    await C.refreshConnector(uid, id);
+    ok(perm("search_docs") === "block" && perm("create_page") === "allow", "công cụ quay lại: đúng quyền cũ, Chặn không thành Luôn cho phép", `${perm("search_docs")} ${perm("create_page")}`);
+    S.tools = TOOLS.filter((t) => t.name !== "search_docs");
+    await C.refreshConnector(uid, id);
+    S.tools = null;
+    await C.refreshConnector(uid, id);
+    ok(perm("search_docs") === "block", "công cụ vắng một lần rồi quay lại vẫn bị chặn");
+    wipe();
+  }
+
+  console.log("26b. Xét lại quyền tự cấp theo quy tắc đoán cũ");
+  {
+    S.tools = [...TOOLS, { name: "query", description: "Run any SQL", inputSchema: { type: "object", properties: { sql: { type: "string" } } } }];
+    const r = await add();
+    const id = r.connector.id;
+    // Dữ liệu cũ: chưa có dấu đã xét, query đang "allow" do quy tắc cũ tự cấp.
+    AS.db().prepare("UPDATE connectors SET perms = json_set(perms, '$.query', 'allow'), settings = '{}' WHERE id = ?").run(id);
+    ok(row(id).tools.find((t) => t.name === "query").perm === "allow", "trước khi xét lại: allow");
+    await C.refreshConnector(uid, id);
+    ok(row(id).tools.find((t) => t.name === "query").perm === "ask", "lần lấy danh sách đầu tiên: về Hỏi trước");
+    ok(row(id).tools.find((t) => t.name === "get_doc").perm === "allow", "công cụ đọc thật không đổi");
+    C.updateConnector(uid, id, { perms: { query: "allow" } }, pol);
+    await C.refreshConnector(uid, id);
+    ok(row(id).tools.find((t) => t.name === "query").perm === "allow", "người dùng chọn lại Luôn cho phép: giữ, không hạ lần nữa");
+    wipe();
+  }
+
+  console.log("27. 403 là trạng thái riêng");
+  {
+    S.oauth = { need: true, valid: "Bearer at_1" };
+    const r = await add();
+    const id = r.connector.id;
+    // finishAuth cần phiên đăng nhập: đặt trực tiếp token như đã đăng nhập xong.
+    const cur = JSON.parse(PR.openSecret(AS.db().prepare("SELECT enc_auth FROM connectors WHERE id = ?").get(id).enc_auth));
+    AS.db().prepare("UPDATE connectors SET enc_auth = ?, status = 'ok', tools = ?, checked_at = 1 WHERE id = ?").run(PR.sealSecret(JSON.stringify({ ...cur, mode: "oauth", tokens: { access_token: "at_1" } })), JSON.stringify(TOOLS), id);
+    S.forbid = true;
+    let msg = await thrown(C.refreshConnector(uid, id));
+    ok(row(id).status === "forbidden" && /từ chối quyền truy cập/.test(row(id).error ?? "") && !/hết hạn/.test(row(id).error ?? ""), "OAuth 403 ở danh sách công cụ: trạng thái riêng, lời đúng", JSON.stringify([row(id).status, row(id).error, msg]));
+    const s = session("x27");
+    ok(s.offline[0]?.why === "auth", "connector bị từ chối hiện nút kết nối lại trong chat", JSON.stringify(s.offline));
+    const again = await C.connect(req, uid, id, pol);
+    ok(/\/authorize/.test(again.authorizeUrl ?? ""), "Kết nối lại đi tới trang đăng nhập", JSON.stringify(again).slice(0, 200));
+    S.forbid = null;
+    await C.refreshConnector(uid, id);
+    ok(row(id).status === "ok", "máy chủ cho vào lại: tự lành");
+    S.forbidTool = "get_doc";
+    const s2 = session("x27b");
+    const out = await s2.call(s2.tools.find((t) => t.tool.name === "get_doc").fq, {});
+    ok(out.is_error && out.reconnect?.refused && /403/.test(out.content), "403 của một công cụ: có nút kết nối lại, nói đúng lý do", JSON.stringify(out));
+    await sleep(100);
+    ok(row(id).status === "ok", "403 của một công cụ không làm hỏng connector (danh sách công cụ vẫn được)", row(id).status);
+    await s2.close();
+    wipe();
+    S.forbid = true;
+    msg = await thrown(add());
+    ok(/từ chối truy cập \(lỗi 403\)/.test(msg) && !/không phải máy chủ MCP/.test(msg), "connector mới bị 403: không nói là không phải MCP", msg);
+    ok(C.listConnectors(uid).length === 0, "connector mới bị từ chối không ở lại");
+    S.forbid = (m) => m.method === "server/discover";
+    const okR = await add();
+    ok(okR.connector.status === "ok", "chỉ một kiểu gọi bị 403: vẫn kết nối được bằng kiểu khác", JSON.stringify(okR.connector).slice(0, 200));
+    wipe();
+  }
+
+  console.log("28. Token mới được thử trước khi lưu");
+  {
+    S.auth = { header: "authorization", value: "Bearer tot" };
+    const r = await add({ token: "tot" });
+    const id = r.connector.id;
+    const msg = await thrown(C.connect(req, uid, id, pol, { token: "go-nham" }));
+    ok(/từ chối token/.test(msg), "token gõ nhầm: báo lỗi", msg);
+    ok(row(id).status === "ok" && !row(id).error, "trạng thái connector không đổi", JSON.stringify(row(id)).slice(0, 200));
+    await C.refreshConnector(uid, id);
+    ok(row(id).status === "ok", "token cũ vẫn còn và vẫn chạy");
+    S.auth = { header: "authorization", value: "Bearer moi" };
+    await C.connect(req, uid, id, pol, { token: "moi" });
+    ok(row(id).status === "ok", "token đúng: lưu và chạy");
+    S.scopeTool = "get_doc";
+    const s = session("x28");
+    await s.call(s.tools.find((t) => t.tool.name === "get_doc").fq, {});
+    ok(row(id).needsScope, "công cụ thiếu quyền: có lời nhắc");
+    C.updateConnector(uid, id, { dismissScope: true }, pol);
+    ok(!row(id).needsScope && row(id).status === "ok", "bỏ qua lời nhắc thiếu quyền được");
+    await s.close();
+    wipe();
+  }
+
+  console.log("29. Nút Kết nối có hạn");
+  {
+    S.oauth = { need: true, valid: "x" };
+    S.hangWk = true;
+    let t0 = Date.now();
+    const msg = await thrown(add());
+    const took = Date.now() - t0;
+    ok(took < 30_000 && /tạm thời không phản hồi|quá lâu/.test(msg), `metadata treo: báo sau ${Math.round(took / 1000)} giây (trước đây ~3 phút)`, `${took} ${msg}`);
+    wipe();
+    S.hangPost = true; S.sse = {};
+    t0 = Date.now();
+    const r = await add();
+    ok(r.connector.status === "ok" && r.connector.tools.length === TOOLS.length && Date.now() - t0 < 28_000, `máy chủ treo khi nhận POST: vẫn thử được SSE (${Math.round((Date.now() - t0) / 1000)} giây)`, JSON.stringify(r.connector).slice(0, 200));
+    wipe();
+  }
+
+  console.log("30. Thế hệ SSE: Dừng, im lặng, lỗi tạm thời");
+  {
+    S.sse = {}; S.hangPost = false;
+    S.era = "sse";
+    const c = new M.McpClient(url, undefined, "sse");
+    const tools = await c.listTools();
+    ok(tools.length === TOOLS.length, "SSE: lấy được danh sách công cụ");
+    const read = { name: "search_docs", annotations: { readOnlyHint: true } }, write = { name: "create_page", annotations: { readOnlyHint: false } };
+    S.sse.silent = true;
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 100);
+    let t0 = Date.now();
+    let e = await c.callTool(read, {}, { signal: ctl.signal }).catch((x) => x);
+    ok(e instanceof Error && Date.now() - t0 < 2000, "bấm Dừng: thôi chờ ngay", `${Date.now() - t0} ${e}`);
+    t0 = Date.now();
+    e = await c.callTool(write, {}, { idle: 150 }).catch((x) => x);
+    ok(e instanceof F.TempFail && /im lặng/.test(e.message) && Date.now() - t0 < 4000, "công cụ im lặng: báo sau thời gian im lặng", `${Date.now() - t0} ${e}`);
+    S.sse.silent = false;
+    S.sse.postStatus = 503; S.sse.postOnce = true; S.calls = {};
+    const good = await c.callTool(read, {}).catch((x) => x);
+    ok(good?.content?.[0]?.text === "ok search_docs" && S.count("call:search_docs") === 2, "công cụ đọc gặp 503: tự thử lại một lần", JSON.stringify(good) + JSON.stringify(S.calls));
+    S.sse.postStatus = 503; S.sse.postOnce = false; S.calls = {};
+    e = await c.callTool(write, {}).catch((x) => x);
+    ok(e instanceof F.TempFail && e.status === 503 && S.count("call:create_page") === 1, "công cụ ghi gặp 503: lỗi tạm thời, không gọi lại", `${e} ${JSON.stringify(S.calls)}`);
+    S.sse.postStatus = 0;
+    await c.close();
+    S.sseStream?.end();
+    wipe();
+  }
+
+  console.log("31. Kiểm tra lại ở nền không bị kẹt sau connector hỏng");
+  {
+    const db = AS.db();
+    const seal = PR.sealSecret(JSON.stringify({ mode: "none" }));
+    // 42 connector hỏng cũ nằm đầu danh sách (trỏ tới địa chỉ không có), một connector tốt đứng sau.
+    for (let i = 0; i < 42; i++) db.prepare("INSERT INTO connectors (id, user_id, name, url, enabled, status, enc_auth, tools, created_at, updated_at, checked_at) VALUES (?, ?, ?, ?, 1, 'error', ?, '[]', 1, 1, ?)").run(`cn_bad${i}`, "u_old", `Bad ${i}`, "http://127.0.0.1:9/mcp", seal, i + 1);
+    const r = await add();
+    const id = r.connector.id;
+    db.prepare("UPDATE connectors SET checked_at = 1000 WHERE id = ?").run(id);
+    let now = Date.now(), turns = 0;
+    while (row(id).checkedAt === 1000 && turns++ < 15) await C.recheckConnectors(now);
+    ok(row(id).checkedAt !== 1000, `connector tốt tới lượt sau ${turns} đợt`, turns);
+    db.prepare("DELETE FROM connectors WHERE user_id = 'u_old'").run();
+    globalThis.__synchroConnTried?.clear();
+    wipe();
+  }
+
+  console.log("32. Nhiều ảnh, connector trùng tên");
+  {
+    S.tools = [...TOOLS, { name: "get_charts", description: "Charts", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } }];
+    const r = await add();
+    const s = session("x32");
+    const out = await s.call(s.tools.find((t) => t.tool.name === "get_charts").fq, {});
+    ok(out.images?.length === 3 && out.imagesAll === 3 && out.image === out.images[0].data, "trả về đủ cả ba ảnh", JSON.stringify(out).slice(0, 200));
+    ok(!/đã kèm theo/.test(out.content), "chữ không còn tự nhận đã kèm mọi ảnh", out.content);
+    await s.close();
+    await C.addConnector(req, uid, { name: r.connector.name, url: `${url}?b=1` }, pol);
+    const a = session("x32b");
+    const names = [...new Set(a.tools.map((t) => t.cname))];
+    ok(names.length === 2 && names.every((n) => n.includes("127.0.0.1")) && names[0] !== names[1], "hai connector trùng tên: tên hiện kèm địa chỉ", JSON.stringify(names));
+    ok(new Set(a.tools.map((t) => t.fq)).size === a.tools.length, "tên công cụ gửi cho model không trùng");
+    await a.close();
+    wipe();
+  }
+
+  console.log("33. Proxy: tên, tham số, trang");
+  {
+    const mk = (cname, name) => ({ fq: `${cname.toLowerCase()}__${name}`, cname, tool: { name } });
+    const list = [mk("Docs", "a"), mk("Docs", "b"), mk("Docs", "c"), mk("Docs", "d")];
+    ok(P.resolveTool(list, "synchro__docs__a")?.tool.name === "a" && P.resolveTool(list, "mcp_synchro_docs__a")?.tool.name === "a" && P.resolveTool(list, "mcp__synchro__docs__a")?.tool.name === "a", "nhận cả tiền tố synchro__ mà Grok được dặn dùng");
+    ok(JSON.stringify(P.callArgs({ tool: "x", arguments: { id: 1 } }).args) === '{"id":1}' && JSON.stringify(P.callArgs({ tool: "x", params: { id: 1 } }).args) === '{"id":1}' && JSON.stringify(P.callArgs({ tool: "x", args: { id: 1 } }).args) === '{"id":1}', "gỡ lớp bọc arguments / params / args");
+    ok(JSON.stringify(P.callArgs({ tool: "x", arguments: "chuỗi" }).args) === '{"arguments":"chuỗi"}' && JSON.stringify(P.callArgs({ tool: "x", args: { a: 1 }, b: 2 }).args) === '{"args":{"a":1},"b":2}', "tham số thật tên args (không phải lớp bọc) giữ nguyên");
+    const pg = P.rankTools(list, "*", "", 3, 0);
+    ok(pg.hits.length === 3 && pg.more === 1 && P.rankTools(list, "*", "", 3, 3).hits[0].tool.name === "d", "query=* xem tiếp được theo trang", JSON.stringify(pg.more));
+  }
+
+  console.log("34. read_ref và tóm tắt");
+  {
+    const big = "x".repeat(60_000);
+    const id = R.storeRef(uid, "c", "t", big);
+    let o = R.readRef(uid, { ref: id, limit: 30_000 });
+    ok(o.content.startsWith("x".repeat(30_000)) && /offset=30000/.test(o.content) && /còn 1 lần đọc/.test(o.content), "limit tới 30.000 ký tự, nói còn mấy lần đọc", o.content.slice(-120));
+    o = R.readRef(uid, { ref: id });
+    ok(/offset=8000/.test(o.content) && /còn 7 lần đọc/.test(o.content), "mặc định vẫn 8.000 ký tự một lần", o.content.slice(-120));
+    const text = `<run_result language="python" exit_code="0">\n<stdout>\n${"dòng\n".repeat(4000)}</stdout>\n<stderr>\n\n</stderr>\n<files>\noutputs/a.xlsx (3 KB)\n</files>\n</run_result>`;
+    const sum = R.summarize(text, "ref_x");
+    ok(/outputs\/a\.xlsx/.test(sum) && sum.length < 6000, "kết quả chạy code lớn vẫn giữ danh sách tệp đã tạo", sum.slice(-300));
   }
 } finally {
   server.closeAllConnections?.(); server.close(); other.close();

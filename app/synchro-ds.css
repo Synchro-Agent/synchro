@@ -1024,6 +1024,8 @@ html body .shell-side .chat-item:has(.ct-run){padding-right:30px}
 .chat-item .ct-run::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ds-ink);opacity:0;animation:ct-run 1.6s var(--ds-ease) infinite}
 @keyframes ct-run{0%{transform:scale(.5);opacity:.5}100%{transform:scale(1.25);opacity:0}}
 .chat-wrap:hover .ct-run{opacity:0}
+.chat-item .ct-run.ct-ask{background:var(--ds-warn)}
+.chat-item .ct-run.ct-ask::after{border-color:var(--ds-warn)}
 @media (prefers-reduced-motion:reduce){.chat-item .ct-run::after{animation:none}}
 html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 

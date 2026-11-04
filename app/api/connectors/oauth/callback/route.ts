@@ -11,7 +11,8 @@ const en = (s: string) => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) 
 
 // Máy chủ đăng nhập của connector chuyển về đây. Trang Synchro gửi header COOP same-origin (WebContainer cần), nên khi cửa sổ đăng nhập đi qua trang của hãng thì
 // bị tách khỏi trang đã mở nó: không còn window.opener. Vì vậy báo kết quả qua BroadcastChannel (cùng nguồn, không cần opener), chờ trang chính xác nhận rồi tự đóng.
-// Không trang nào xác nhận (mở ngay trong tab vì trình duyệt chặn cửa sổ bật lên, hay trang chính đã đóng) thì quay về Cài đặt → Connectors.
+// Không trang nào xác nhận: thử tự đóng trước (cửa sổ bật lên, trang chính đã đóng hay đã chuyển đi: nạp cả ứng dụng vào cửa sổ nhỏ này là vô ích; kết nối vẫn đã xong).
+// Vẫn còn mở sau đó tức là đây là tab thường (đăng nhập ngay trong tab vì trình duyệt chặn cửa sổ bật lên) thì quay về Cài đặt → Connectors.
 export async function GET(req: Request) {
   const r = await finishAuth(req, new URL(req.url).searchParams).catch((e) => ({ ok: false, id: undefined, message: `Lỗi không mong muốn: ${(e as Error).message}` }));
   const data = { type: "synchro-connector", ok: r.ok, id: r.id ?? null, message: r.message, nonce: randomToken(12) };
@@ -26,6 +27,6 @@ try{if(JSON.parse(localStorage.getItem("p:uilang")||'""')==="en"){var E=${js({ t
 function done(){if(acked)return;acked=true;setTimeout(function(){window.close();setTimeout(function(){document.getElementById("h").hidden=false},300)},${r.ok ? 400 : 1800})}
 try{ch=new BroadcastChannel("synchro-connector");ch.onmessage=function(e){if(e.data&&e.data.type==="synchro-connector-ack"&&e.data.nonce===d.nonce)done()};ch.postMessage(d);setTimeout(function(){if(!acked)ch.postMessage(d)},300)}catch(e){}
 try{if(window.opener&&!window.opener.closed){window.opener.postMessage(d,location.origin);done()}}catch(e){}
-setTimeout(function(){if(!acked)location.replace(${js(back)})},${700})})()</script></body></html>`;
+setTimeout(function(){if(acked)return;window.close();setTimeout(function(){if(!acked)location.replace(${js(back)})},300)},${700})})()</script></body></html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" } });
 }

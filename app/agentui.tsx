@@ -8,6 +8,7 @@ import { Markdown } from "./md";
 import { Loader } from "./brand";
 import { tr } from "./i18n";
 import { ConnLogo } from "./connectorsui";
+import { ASK_GONE } from "./codesync";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
@@ -19,7 +20,8 @@ export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } |
 /** Kiểu xem lượt của agent: bình thường (gọn), kèm suy nghĩ, chi tiết (mọi công cụ mở sẵn, kèm đầu vào / đầu ra). */
 export type TView = "normal" | "thinking" | "verbose";
 export const TVIEW_LABEL: Record<TView, string> = { normal: "Bình thường", thinking: "Suy nghĩ", verbose: "Chi tiết" };
-export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => void;
+// Trả về lời báo lỗi (nếu có) để thẻ mở lại các nút: gửi hỏng mà nút vẫn khóa thì chỉ còn cách tải lại trang.
+export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => void | Promise<string | null | void>;
 type Say = (m: string) => void;
 
 const base = (p: string) => p.split("/").pop() || p;
@@ -129,13 +131,24 @@ function Think({ text, open: init }: { text: string; open: boolean }) {
 export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnAnswer }) {
   const [note, setNote] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const go = (ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => { if (!onAnswer || sending) return; setSending(true); onAnswer(a.id, ok, o); };
+  const [err, setErr] = useState("");
+  const [gone, setGone] = useState(false);
+  const go = (ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => {
+    if (!onAnswer || sending) return;
+    setSending(true); setErr("");
+    Promise.resolve().then(() => onAnswer(a.id, ok, o)).then((e) => {
+      if (!e) return;
+      setSending(false);
+      if (e === ASK_GONE) setGone(true); else setErr(e);
+    }, () => { setSending(false); setErr("Không gửi được câu trả lời."); });
+  };
   const conn = a.kind === "connector" ? a.conn : undefined;
+  const state = gone ? "gone" : a.state;
   // Thẻ nằm trong .ai-msg (bộ dịch tự động bỏ qua nội dung câu trả lời) nên chữ giao diện dịch bằng tr().
-  if (a.state !== "wait") return (
-    <div className={`ag-asked ${a.state === "no" || a.state === "gone" ? "no" : ""}`}>
-      {a.state === "no" || a.state === "gone" ? <I.X size={13} /> : <I.Check size={13} />}
-      <span>{tr(a.state === "no" ? "Đã từ chối" : a.state === "gone" ? "Không còn chờ" : a.state === "chat" ? "Cho phép trong đoạn chat này" : a.state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : conn ? "Luôn cho phép" : "Luôn cho phép trong phiên") : "Đã cho phép")}: <b data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</b></span>
+  if (state !== "wait") return (
+    <div className={`ag-asked ${state === "no" || state === "gone" ? "no" : ""}`}>
+      {state === "no" || state === "gone" ? <I.X size={13} /> : <I.Check size={13} />}
+      <span>{tr(state === "no" ? "Đã từ chối" : state === "gone" ? "Không còn chờ" : state === "chat" ? "Cho phép trong đoạn chat này" : state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : conn ? "Luôn cho phép" : "Luôn cho phép trong phiên") : "Đã cho phép")}: <b data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</b></span>
     </div>
   );
   const always = a.kind === "site" ? `${tr("Luôn cho phép")} ${a.host ?? tr("trang này")}` : tr(a.kind === "connector" ? "Luôn cho phép" : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này");
@@ -146,6 +159,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
       {a.about && <p className="ag-ask-about" data-notr>{a.about}</p>}
       {a.destructive && <div className="ap-warn"><I.Alert size={14} /><span>{tr("Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.")}</span></div>}
       {a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
+      {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{tr(err)}</span></div>}
       {note !== null ? (
         <div className="ag-ask-note">
           <input autoFocus value={note} placeholder={tr("Bảo Synchro nên làm thế nào thay vào đó…")} onChange={(e) => setNote(e.target.value)}

@@ -375,7 +375,7 @@ function showReconnect(x: Exec, c: OfflineConn) {
   const seen = (x.connCards ??= new Set());
   if (seen.has(c.id)) return;
   seen.add(c.id);
-  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, auth: c.auth }));
+  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, auth: c.auth, ...(c.refused ? { refused: true } : {}) }));
 }
 // Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
 const MODEL_IMG = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
