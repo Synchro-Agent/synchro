@@ -7,18 +7,24 @@
 // Mạng: tắt "Cho phép truy cập mạng" thì không ra được internet; bật thì tới được kho thư viện (PKG_DOMAINS), thêm "Mọi trang web
 // công khai" (web) thì tới mọi trang công khai. Địa chỉ nội bộ (máy chủ, mạng riêng) luôn bị chặn.
 // keep: thư mục làm việc giữ nguyên giữa các lần chạy trong cùng một đoạn chat (tệp tải về, khung hình, dự án dựng dở), outputs/ mỗi lần
-// chỉ chứa tệp của lần đó. Không có keep (script của skill) thì mỗi lần một thư mục trống.
+// chỉ chứa tệp của lần đó; hết lần chạy tệp chuyển sang .last_outputs/ để lần sau đọc, kiểm tra được. Không có keep (script của skill) thì
+// mỗi lần một thư mục trống.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PKG_HOSTS } from "./catalog";
+import { PREVIEW_MAX } from "./runpreview";
 import { agent, wsConfigured } from "./workspace";
 
 export type RunFile = { path: string; data: Buffer };
-// signal: người dùng bấm Dừng thì dừng tiến trình ngay (chỉ máy cục bộ; nơi chạy khác thì bỏ chờ kết quả).
-export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: string; net: boolean; web?: boolean; keep?: string; timeout?: number; signal?: AbortSignal };
-export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean };
+// signal: người dùng bấm Dừng thì dừng ngay: máy cục bộ giết tiến trình, workspace ngắt kết nối để dịch vụ xóa container, E2B xóa sandbox.
+// recalc: sau lần chạy thành công, tính lại công thức trong .xlsx ở outputs/ bằng LibreOffice và ghi giá trị vào chính tệp (chỉ image workspace có).
+export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: string; net: boolean; web?: boolean; keep?: string; timeout?: number; signal?: AbortSignal; recalc?: boolean };
+// recalc: báo cáo của workspace/xlsx_recalc.py; không có nghĩa là lần chạy này không có sổ tính nào được tính lại.
+export type RecalcBook = { path: string; formulas: number; filled: number; errors: { sheet: string; cell: string; value: string; formula?: string }[]; sample: string[] };
+export type RecalcReport = { files?: RecalcBook[]; failed?: { path: string; reason: string }[]; error?: string };
+export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean; recalc?: RecalcReport };
 export type Runner = "e2b" | "workspace" | "local";
 
 // timeout: mặc định mỗi lần chạy; maxTimeout: model xin thêm khi dựng video, chuyển tài liệu lớn (tham số timeout của run_code).
@@ -57,7 +63,7 @@ async function runLocal(i: RunInput, timeout: number): Promise<RunOutput> {
     try { if (Date.now() - fs.statSync(p).mtimeMs > 24 * 3_600_000) fs.rmSync(p, { recursive: true, force: true }); } catch {}
   }
   const keep = i.keep ? path.join(keepRoot, i.uid.replace(/[^\w-]/g, "_"), i.keep) : "";
-  if (keep) { fs.mkdirSync(keep, { recursive: true }); fs.rmSync(path.join(keep, "outputs"), { recursive: true, force: true }); fs.utimesSync(keep, new Date(), new Date()); }
+  if (keep) { fs.mkdirSync(keep, { recursive: true }); rotateOutputs(keep); fs.utimesSync(keep, new Date(), new Date()); }
   const dir = fs.realpathSync(keep || fs.mkdtempSync(path.join(os.tmpdir(), "synchro-run-")));
   try {
     for (const f of i.files) { fs.mkdirSync(path.dirname(path.join(dir, f.path)), { recursive: true }); fs.writeFileSync(path.join(dir, f.path), f.data); }
@@ -92,8 +98,23 @@ async function runLocal(i: RunInput, timeout: number): Promise<RunOutput> {
     const skipped: string[] = [], files = collect(dir, skipped);
     return { ...res, stderr: res.stderr + (skipped.length ? `\n[Không gửi được: ${skipped.join("; ")}]` : ""), files };
   } finally {
-    fs.rmSync(keep ? path.join(dir, "outputs") : dir, { recursive: true, force: true });
+    if (keep) rotateOutputs(dir); else fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// Hết lần chạy, tệp trong outputs/ chuyển sang .last_outputs/ (giữ giống workspace/agent.mjs). Lần chạy không ghi gì thì giữ nguyên bản trước;
+// lần chỉ có _preview/ (chỉ để kiểm tra) thì giữ nguyên sản phẩm, chỉ thay ảnh xem, để kiểm tra nhiều lần trên cùng một tệp.
+function rotateOutputs(dir: string) {
+  const out = path.join(dir, "outputs"), last = path.join(dir, ".last_outputs");
+  try {
+    const names = fs.lstatSync(out, { throwIfNoEntry: false })?.isDirectory() ? fs.readdirSync(out) : [];
+    if (names.some((n) => n !== "_preview")) { fs.rmSync(last, { recursive: true, force: true }); fs.renameSync(out, last); return; }
+    if (names.length) {
+      if (fs.lstatSync(last, { throwIfNoEntry: false })?.isDirectory() !== true) { fs.rmSync(last, { recursive: true, force: true }); fs.mkdirSync(last); }
+      fs.rmSync(path.join(last, "_preview"), { recursive: true, force: true });
+      fs.renameSync(path.join(out, "_preview"), path.join(last, "_preview"));
+    }
+  } finally { fs.rmSync(out, { recursive: true, force: true }); }
 }
 
 function spawnCapped(cmd: string, args: string[], o: { cwd: string; env: Record<string, string>; stdin?: string; timeout: number; signal?: AbortSignal }) {
@@ -141,12 +162,13 @@ function collect(dir: string, skipped: string[] = []): RunFile[] {
 
 // ---------------------------------------------------------------- container dùng một lần trên VPS
 async function runWorkspace(i: RunInput, timeout: number): Promise<RunOutput> {
-  const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[] }>("/run", {
-    u: i.uid, argv: i.argv, stdin: i.stdin ?? null, net: i.net, web: !!i.web, keep: i.keep ?? null, timeout,
+  // Thêm 150 giây cho bước tính lại công thức (giới hạn riêng 120 giây ở dịch vụ workspace).
+  const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[]; recalc?: RecalcReport }>("/run", {
+    u: i.uid, argv: i.argv, stdin: i.stdin ?? null, net: i.net, web: !!i.web, keep: i.keep ?? null, timeout, recalc: !!i.recalc,
     files: i.files.map((f) => ({ path: f.path, b64: f.data.toString("base64") })),
-  }, (timeout + 90) * 1000);
+  }, (timeout + 90 + (i.recalc ? 150 : 0)) * 1000, i.signal);
   return {
-    exit: r.code, stdout: r.out ?? "", stderr: r.err ?? "", timedOut: !!r.timedOut,
+    exit: r.code, stdout: r.out ?? "", stderr: r.err ?? "", timedOut: !!r.timedOut, ...(r.recalc ? { recalc: r.recalc } : {}),
     files: (r.files ?? []).filter((f) => okRel(f.path)).map((f) => ({ path: f.path, data: Buffer.from(f.b64, "base64") })),
   };
 }
@@ -159,6 +181,7 @@ async function runE2b(i: RunInput, timeout: number): Promise<RunOutput> {
     ...(i.net && i.web ? { allowInternetAccess: true } : i.net ? { network: { denyOut: ["0.0.0.0/0"], allowOut: PKG_HOSTS } } : { allowInternetAccess: false }),
   });
   const base = "/home/user/run";
+  i.signal?.addEventListener("abort", () => { sbx.kill().catch(() => {}); }, { once: true });
   try {
     if (i.files.length) await sbx.files.write(i.files.map((f) => ({ path: `${base}/${f.path}`, data: f.data.buffer.slice(f.data.byteOffset, f.data.byteOffset + f.data.byteLength) as ArrayBuffer })));
     const shq = (x: string) => `'${x.replace(/'/g, "'\\''")}'`;
@@ -214,12 +237,12 @@ export function runCodeTool(net: boolean, web = false) {
 
 export const CODE_RULES = (net: boolean, web = false) => `Bạn có công cụ run_code để chạy code thật (Python, JavaScript, bash) trong sandbox Linux.
 Dùng nó khi cần tính toán chính xác, phân tích dữ liệu, kiểm tra code, hoặc khi người dùng muốn một tệp (Word, Excel, PowerPoint, PDF, CSV, ảnh, âm thanh, video): viết code tạo tệp vào outputs/ rồi chạy. Tệp trong outputs/ sẽ hiện trong tin nhắn (kèm nút tải, video phát ngay) để người dùng xem và tải về, nên đừng dán nội dung tệp vào câu trả lời và đừng viết link hay đường dẫn tới tệp (sandbox:/…, outputs/…); chỉ nói ngắn gọn tệp chứa gì.
-Thư mục làm việc giữ nguyên giữa các lần chạy trong đoạn chat này: chia việc lớn thành nhiều lần chạy (chuẩn bị tài nguyên → dựng → kiểm tra) thay vì một script khổng lồ.
-Tự xem kết quả: ảnh đầu tiên (PNG / JPEG / WebP) trong outputs/ của mỗi lần chạy được gửi lại cho bạn xem; ảnh chỉ để bạn xem (khung hình trích từ video, trang PDF chụp lại, ảnh ghép) thì lưu vào outputs/_preview/ — không thành tệp của người dùng.
+Thư mục làm việc giữ nguyên giữa các lần chạy trong đoạn chat này: chia việc lớn thành nhiều lần chạy (chuẩn bị tài nguyên → dựng → kiểm tra) thay vì một script khổng lồ. Hết mỗi lần chạy, outputs/ được dọn: tệp vừa tạo chuyển sang .last_outputs/ — lần kiểm tra sau đọc từ đó (ffprobe .last_outputs/video.mp4, soffice --convert-to pdf .last_outputs/bao-cao.xlsx…), không dựng lại; muốn người dùng nhận thêm tệp thì ghi lại vào outputs/. Chỉ lần chạy thành công (exit 0) mới gửi tệp: chạy lỗi hay quá giờ thì tệp không tới người dùng (vẫn nằm ở .last_outputs/, dùng được thì chép sang outputs/ ở lần sau). Tạo lại cùng đường dẫn trong outputs/ thì bản mới thay bản cũ của lượt này.
+Tự xem kết quả: tối đa ${PREVIEW_MAX} ảnh (PNG / JPEG / WebP) của mỗi lần chạy, ưu tiên outputs/_preview/, được ghép thành một tấm gửi lại cho bạn; thẻ <preview> trong kết quả ghi đúng những ảnh nào có trong tấm đó. Ảnh chỉ để bạn xem (khung hình trích từ video, trang PDF chụp lại) lưu vào outputs/_preview/ — không thành tệp của người dùng. Chỉ nói đã xem những gì <preview> liệt kê; kết quả không có ảnh kèm thì kiểm tra bằng số liệu (ffprobe, pdftotext, openpyxl) và nói rõ là chưa xem bằng mắt.
 Không tải tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài (host ảnh / tệp tạm, pastebin…) trừ khi người dùng yêu cầu rõ.
-Video, hoạt hình: dựng khung hình (Pillow, matplotlib, cairosvg, hoặc chụp trang HTML / canvas / SVG động bằng Chromium headless qua puppeteer-core) rồi ghép bằng ffmpeg (-c:v libx264 -pix_fmt yuv420p -movflags +faststart) vào outputs/…mp4; âm thanh bằng ffmpeg, SoX hoặc pydub. Kiểm tra bằng ffprobe (thời lượng, kích thước, số khung) và trích vài khung xem thử trước khi báo xong. Đặt timeout 300–600 cho lần dựng. Video có lời (giới thiệu, hướng dẫn, quảng cáo, kể chuyện): lồng tiếng bằng edge-tts (hoặc python3 -m edge_tts; --write-media giong.mp3 --write-subtitles giong.srt cho luôn phụ đề khớp từng câu) — giọng tiếng Việt tự nhiên vi-VN-HoaiMyNeural (nữ) / vi-VN-NamMinhNeural (nam), tiếng Anh en-US-AriaNeural / en-US-GuyNeural; cần quyền web, luôn thêm --proxy "$HTTPS_PROXY" khi biến này có; lỗi mạng thì dùng gTTS (lang="vi"). Đo thời lượng từng câu bằng ffprobe rồi canh cảnh theo giọng; xuất phụ đề .srt (thư viện srt) và đốt vào video bằng ffmpeg -vf "subtitles=x.srt:force_style='FontName=Noto Sans,FontSize=22,Outline=2'"; nhạc nền nhẹ tự tổng hợp (numpy / SoX) đặt thấp hơn giọng ~18 dB. Hình ảnh: ảnh thật từ Wikimedia Commons hoặc khung hình dựng bằng HTML + Chromium, có chuyển cảnh mượt (xfade), không để khung tĩnh quá 4 giây.
-Bảng tính đạt chuẩn người làm nghề: tiêu đề cột in đậm có nền, cố định hàng tiêu đề (freeze panes), độ rộng cột vừa nội dung, định dạng số đúng loại (tiền "#,##0 ₫", ngày dd/mm/yyyy, phần trăm 0.0%), dữ liệu dạng Excel Table có lọc, danh sách chọn (data validation) cho cột phân loại, tổng / tỉ lệ bằng công thức (SUMIFS, COUNTIFS, XLOOKUP…) — không ghi cứng số đã tính, biểu đồ có tiêu đề và nhãn, tên sheet tiếng Việt ngắn gọn, căn lề in vừa một trang ngang.
+Video, hoạt hình: dựng khung hình (Pillow, matplotlib, cairosvg, hoặc chụp trang HTML / canvas / SVG động bằng Chromium headless qua puppeteer-core) rồi ghép bằng ffmpeg (-c:v libx264 -pix_fmt yuv420p -movflags +faststart) vào outputs/…mp4; âm thanh bằng ffmpeg, SoX hoặc pydub. Kiểm tra bằng ffprobe (thời lượng, kích thước, số khung) và trích vài khung xem thử trước khi báo xong. Đặt timeout 300–${RUN_LIMITS.maxTimeout} cho lần dựng; quá giờ thì lần chạy bị dừng, không có tệp nào tới người dùng: video dài thì dựng từng đoạn vào thư mục làm việc qua nhiều lần chạy rồi ghép. Video có lời (giới thiệu, hướng dẫn, quảng cáo, kể chuyện): lồng tiếng bằng edge-tts (hoặc python3 -m edge_tts; --write-media giong.mp3 --write-subtitles giong.srt cho luôn phụ đề khớp từng câu) — giọng tiếng Việt tự nhiên vi-VN-HoaiMyNeural (nữ) / vi-VN-NamMinhNeural (nam), tiếng Anh en-US-AriaNeural / en-US-GuyNeural; cần quyền web, luôn thêm --proxy "$HTTPS_PROXY" khi biến này có; lỗi mạng thì dùng gTTS (lang="vi"). Đo thời lượng từng câu bằng ffprobe rồi canh cảnh theo giọng. Phụ đề: có tệp .srt (edge-tts hoặc thư viện srt) thì chuyển bằng python3 /opt/synchro/subfit.py giong.srt phu-de.ass 1920x1080 (đúng kích thước video, 1080x1920 với video dọc; tự chọn cỡ chữ, chia câu dài thành nhiều phụ đề tối đa 2 dòng, 42 ký tự mỗi dòng) rồi đốt bằng ffmpeg -vf "ass=phu-de.ass". Không đốt trực tiếp .srt với force_style FontSize lớn: ffmpeg tính cỡ chữ theo khung cao 288 điểm nên FontSize=22 ra ~82 px ở 1080p, che gần hết hình; nhạc nền nhẹ tự tổng hợp (numpy / SoX) đặt thấp hơn giọng ~18 dB. Hình ảnh: ảnh thật từ Wikimedia Commons hoặc khung hình dựng bằng HTML + Chromium, có chuyển cảnh mượt (xfade), không để khung tĩnh quá 4 giây.
+Bảng tính đạt chuẩn người làm nghề: tiêu đề cột in đậm có nền, cố định hàng tiêu đề (freeze panes), độ rộng cột vừa nội dung, định dạng số đúng loại (tiền #,##0 "₫" — ký hiệu tiền phải nằm trong ngoặc kép; ngày dd/mm/yyyy, phần trăm 0.0%), dữ liệu dạng Excel Table có lọc, danh sách chọn (data validation) cho cột phân loại, tổng / tỉ lệ bằng công thức (SUM, SUMIFS, COUNTIFS, INDEX + MATCH, IFERROR…) — không ghi cứng số đã tính; không dùng hàm mới (XLOOKUP, FILTER, UNIQUE, SORT, LET, SEQUENCE…) vì LibreOffice ở đây không tính được và openpyxl ghi thiếu tiền tố _xlfn thì Excel báo #NAME?, biểu đồ có tiêu đề và nhãn, tên sheet tiếng Việt ngắn gọn, căn lề in vừa một trang ngang.
 Video đạt chuẩn: 1920×1080 (hoặc 1080×1920 cho video dọc), 30 khung/giây, có cảnh mở đầu và kết thúc, ảnh tĩnh có chuyển động nhẹ (zoom / pan) và chuyển cảnh xfade, chữ trong vùng an toàn cách mép ≥ 5%, một bộ font (Noto Sans) cho cả video, âm thanh chuẩn hóa ffmpeg loudnorm=I=-16; trích 4–6 khung hình vào outputs/_preview/ và nghe lại thời lượng bằng ffprobe trước khi giao.
-Tệp Word / Excel / PowerPoint: TRƯỚC KHI GIAO luôn tự kiểm tra như người làm nghề, không giao tệp chưa mở: soffice --headless --convert-to pdf (cả .xlsx) rồi pdftoppm -png -r 70 -f 1 -l 3 vào outputs/_preview/ để tự xem bố cục, chữ tiếng Việt, biểu đồ; Excel: mở lại tệp đã tính lại (soffice --headless --convert-to xlsx sang thư mục khác, rồi openpyxl data_only=True) để chắc mọi công thức ra giá trị, không có #REF!, #NAME?, #DIV/0!. Thấy lỗi thì sửa rồi kiểm tra lại; chỉ báo đã kiểm tra khi đã thật sự làm.
+Tệp Word / Excel / PowerPoint: TRƯỚC KHI GIAO luôn tự kiểm tra như người làm nghề, không giao tệp chưa mở: lần chạy sau đọc .last_outputs/, soffice --headless --convert-to pdf (cả .xlsx) rồi pdftoppm -png -r 70 -f 1 -l 3 vào outputs/_preview/ để tự xem bố cục, chữ tiếng Việt, biểu đồ. Excel: sau mỗi lần chạy thành công Synchro tự tính lại công thức trong outputs/*.xlsx bằng LibreOffice, ghi giá trị vào chính tệp và báo trong thẻ <excel_recalc> (số công thức, ô lỗi, vài giá trị): đối chiếu các giá trị đó với số bạn tự tính bằng Python (in ra stdout), ô lỗi #REF!, #NAME?, #DIV/0! hay số 0 bất thường đều phải sửa. Thấy lỗi thì sửa rồi kiểm tra lại; chỉ báo đã kiểm tra khi đã thật sự làm.
 Tải từ web: luôn đặt header User-Agent riêng (vd. "SynchroBot/1.0 (+https://synchro.net.nz)") — Wikimedia và nhiều trang chặn hoặc giới hạn (403 / 429) yêu cầu không có User-Agent; ảnh Wikimedia dùng cỡ thumbnail chuẩn (vd. 1280px) và tải lần lượt.
 Nếu code lỗi, đọc stderr, sửa và chạy lại. Một cách bị chặn thì thử cách khác trong sandbox trước khi kết luận là không làm được. Không kết thúc lượt khi chưa có sản phẩm: nếu thật sự không tạo được đúng định dạng người dùng muốn, vẫn giao bản gần nhất (vd. artifact HTML chạy được thay cho video) và nói rõ còn thiếu gì. ${NET_NOTE(net, web)}`;

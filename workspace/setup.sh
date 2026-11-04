@@ -16,7 +16,7 @@ fi
 mkdir -p /srv/synchro-ws && chmod 711 /srv/synchro-ws
 
 # 2. Build lại image khi Dockerfile hoặc file đi kèm thay đổi.
-HASH=$(cat "$APP/workspace/Dockerfile" "$APP/workspace/fsop.js" "$APP/workspace/browser.sh" | sha256sum | cut -c1-16)
+HASH=$(cat "$APP/workspace/Dockerfile" "$APP/workspace/fsop.js" "$APP/workspace/browser.sh" "$APP/workspace/subfit.py" "$APP/workspace/xlsx_recalc.py" | sha256sum | cut -c1-16)
 CUR=$(docker image inspect -f '{{index .Config.Labels "synchro.hash"}}' "$IMAGE" 2>/dev/null || true)
 if [ "$HASH" != "$CUR" ]; then
   echo "Đang build image $IMAGE…"

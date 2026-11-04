@@ -290,7 +290,27 @@ function sweepKeep(u) {
   for (const d of dirs) if (Date.now() - d.at > KEEP_MS && !keepBusy.has(d.p)) fs.rmSync(d.p, { recursive: true, force: true });
   return dirs.filter((d) => fs.existsSync(d.p));
 }
-async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, web = false, timeout = 120, keep = null }) {
+// Hết lần chạy, tệp trong outputs/ chuyển sang .last_outputs/ để lần sau đọc, kiểm tra được (ffprobe, soffice…) mà không phải dựng lại, và tệp dở của
+// lần chạy lỗi / quá giờ / bị dừng không mất. Lần chạy không ghi gì thì giữ nguyên bản trước; lần chỉ có _preview/ (chỉ để kiểm tra) thì giữ nguyên sản phẩm,
+// chỉ thay ảnh xem. Container đã bị xóa khi gọi hàm này; lstat trước khi ghi vào: .last_outputs do code trong sandbox tạo, có thể là liên kết tượng trưng.
+function rotateOutputs(dir) {
+  const out = `${dir}/outputs`, last = `${dir}/.last_outputs`;
+  try {
+    // Code trong sandbox có thể thay outputs bằng liên kết tượng trưng trỏ ra ngoài: dịch vụ chạy bằng root, không đi theo (khối finally xóa liên kết).
+    const isDir = fs.lstatSync(out, { throwIfNoEntry: false })?.isDirectory() === true;
+    const names = isDir ? fs.readdirSync(out) : [];
+    if (names.some((n) => n !== "_preview")) { fs.rmSync(last, { recursive: true, force: true }); fs.renameSync(out, last); return; }
+    if (names.length) {
+      if (fs.lstatSync(last, { throwIfNoEntry: false })?.isDirectory() !== true) { fs.rmSync(last, { recursive: true, force: true }); fs.mkdirSync(last); }
+      fs.rmSync(`${last}/_preview`, { recursive: true, force: true });
+      fs.renameSync(`${out}/_preview`, `${last}/_preview`);
+    }
+  } catch (e) { log("không chuyển được outputs", e.message); } finally { fs.rmSync(out, { recursive: true, force: true }); }
+}
+// Có sổ tính trong outputs/ không (bước tính lại công thức chỉ chạy khi có), bỏ thư mục _preview/.
+const hasBook = (d, depth = 0) => depth <= 3 && fs.existsSync(d) && fs.readdirSync(d, { withFileTypes: true }).some((e) =>
+  e.isDirectory() ? e.name !== "_preview" && hasBook(`${d}/${e.name}`, depth + 1) : e.isFile() && /\.xls[xm]$/i.test(e.name));
+async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, web = false, timeout = 120, keep = null, recalc = false, signal = null }) {
   if (!okUser(u)) throw new E(400, "Tài khoản không hợp lệ");
   if (!Array.isArray(argv) || !argv.length || argv.length > 60 || argv.some((a) => typeof a !== "string" || a.length > 4000)) throw new E(400, "Lệnh không hợp lệ");
   if (!Array.isArray(files) || files.length > 6000 || files.some((f) => !safeRel(f?.path) || typeof f.b64 !== "string")) throw new E(400, "Tệp không hợp lệ");
@@ -300,8 +320,10 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   const sec = Math.max(5, Math.min(Number(timeout) || 120, 900));
   const id = crypto.randomBytes(8).toString("hex");
   const dir = keep ? `${keepRoot(u)}/${keep}` : runDir(id), name = "srun-" + id;
-  // Chờ lần chạy trước trong cùng thư mục giữ lại xong.
-  while (keep && keepBusy.has(dir)) await keepBusy.get(dir).catch(() => {});
+  // Chờ lần chạy trước trong cùng thư mục giữ lại xong; người dùng bấm Dừng lúc đang chờ thì thôi, không chạy nữa.
+  const stopped = new Promise((ok) => signal?.addEventListener("abort", ok, { once: true }));
+  while (keep && keepBusy.has(dir) && !signal?.aborted) await Promise.race([keepBusy.get(dir).catch(() => {}), stopped]);
+  if (signal?.aborted) throw new E(499, "Đã dừng");
   let release = () => {};
   if (keep) keepBusy.set(dir, new Promise((ok) => { release = () => { keepBusy.delete(dir); ok(); }; }));
   const ip = wantNet ? pickIp() : null;
@@ -315,8 +337,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
       const du = await run("du", ["-sm", keepRoot(u)], { timeout: 15_000 }).catch(() => null);
       let mb = Number(du?.out?.split(/\s/)[0]) || 0;
       for (const d of dirs) { if (mb <= KEEP_MB) break; if (d.p === dir || keepBusy.has(d.p)) continue; const m = await run("du", ["-sm", d.p], { timeout: 15_000 }).catch(() => null); fs.rmSync(d.p, { recursive: true, force: true }); mb -= Number(m?.out?.split(/\s/)[0]) || 0; }
-      // outputs/ chỉ chứa tệp của lần chạy này: tệp lần trước đã gửi cho người dùng.
-      fs.rmSync(`${dir}/outputs`, { recursive: true, force: true });
+      // outputs/ chỉ chứa tệp của lần chạy này: tệp lần trước đã ở .last_outputs/ (dịch vụ khởi động lại giữa chừng thì chuyển nốt ở đây).
+      rotateOutputs(dir);
     }
     fs.mkdirSync(`${dir}/outputs`, { recursive: true, mode: 0o700 });
     for (const f of files) {
@@ -334,11 +356,29 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
       ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1", SYNCHRO_CHROME_PROXY: proxy } : {}) };
     // Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,
     // ffmpeg nhiều luồng: pids 1024, /dev/shm 512 MB.
-    const args = ["run", "--rm", "-i", "--name", name, "--hostname", "sandbox", "--init", "--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : []),
+    const boxArgs = (nm, netArgs, cmdSec, cmd) => ["run", "--rm", "-i", "--name", nm, "--hostname", "sandbox", "--init", ...netArgs,
       "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
       "--shm-size", "512m", "--label", `synchro.run=${u}`, "-u", UID, "-w", `${HOME}/run`, "-v", `${dir}:${HOME}/run`,
-      ...Object.entries(envs).flatMap(([k, v]) => ["-e", `${k}=${v}`]), IMAGE, "timeout", "-k", "5", String(sec), ...argv];
-    const r = await run("docker", args, { input: stdin ?? "", timeout: (sec + 30) * 1000, max: 400_000 });
+      ...Object.entries(envs).flatMap(([k, v]) => ["-e", `${k}=${v}`]), IMAGE, "timeout", "-k", "5", String(cmdSec), ...cmd];
+    // Người dùng bấm Dừng (Next ngắt kết nối): xóa container ngay để nhường chỗ và nhả thư mục giữ lại. Lặp tới khi lệnh docker run kết thúc:
+    // lúc container đang khởi động, docker rm chưa tìm thấy tên.
+    const inBox = async (nm, a, o) => {
+      let over = false;
+      const kill = async () => { while (!over) { await run("docker", ["rm", "-f", nm], { timeout: 20_000 }); await new Promise((ok) => setTimeout(ok, 1000)); } };
+      if (signal?.aborted) kill(); else signal?.addEventListener("abort", kill, { once: true });
+      try { return await run("docker", a, o); } finally { over = true; signal?.removeEventListener("abort", kill); }
+    };
+    const r = await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, max: 400_000 });
+    // Đã dừng: không ai chờ kết quả; tệp dở nằm lại ở .last_outputs/ (khối finally).
+    if (signal?.aborted) return { code: 130, out: r.out, err: r.err, timedOut: false, files: [] };
+    // Sổ tính: openpyxl không ghi sẵn giá trị công thức, xlsxwriter ghi 0, nên bản xem trước và Excel ở Protected View thấy ô trống / số 0. Tính lại bằng
+    // LibreOffice rồi ghi giá trị vào chính tệp, trong container mới (không mạng, 120 giây); lỗi thì giữ nguyên tệp và báo cho model.
+    let book = null;
+    if (recalc && r.code === 0 && hasBook(`${dir}/outputs`)) {
+      const rc = await inBox(name + "-x", boxArgs(name + "-x", ["--network", "none"], 120, ["python3", "/opt/synchro/xlsx_recalc.py", "outputs"]), { input: "", timeout: 150_000, max: 400_000 });
+      if (signal?.aborted) return { code: 130, out: r.out, err: r.err, timedOut: false, files: [] };
+      try { book = JSON.parse(rc.out); } catch { book = { error: (rc.err || rc.out || `exit ${rc.code}`).trim().slice(-300) }; }
+    }
     const out = [], skipped = [];
     let total = 0;
     const walk = (d, depth) => {
@@ -359,12 +399,12 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     walk(`${dir}/outputs`, 0);
     const timedOut = r.code === 124;
     const note = (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : "") + (skipped.length ? `\n[Không gửi được: ${skipped.join("; ")}]` : "");
-    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: out };
+    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: out, ...(book ? { recalc: book } : {}) };
   } finally {
     running--;
     if (ip) { usedIps.delete(ip); webIps.delete(ip); }
     await run("docker", ["rm", "-f", name], { timeout: 20_000 });
-    if (keep) { fs.rmSync(`${dir}/outputs`, { recursive: true, force: true }); release(); }
+    if (keep) { rotateOutputs(dir); release(); }
     else fs.rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -524,7 +564,12 @@ const server = http.createServer(async (req, res) => {
         return reply(res, 200, { exists: !!c, running: !!c?.State?.Running, last: live.get(b.u)?.last ?? null, idleMin: IDLE_MS / 60_000 });
       }
       case "/exec": return reply(res, 200, await exec(b.u, b));
-      case "/run": return reply(res, 200, await runOnce(b.u, b));
+      case "/run": {
+        // Next ngắt kết nối giữa chừng nghĩa là người dùng đã bấm Dừng: dừng container (runOnce), không để chiếm chỗ và thư mục tới hết giờ.
+        const ac = new AbortController();
+        res.on("close", () => { if (!res.writableFinished) ac.abort(); });
+        return reply(res, 200, await runOnce(b.u, { ...b, signal: ac.signal }));
+      }
       case "/browser": return reply(res, 200, await browserTool(b.u, b));
       case "/ext": return reply(res, 200, await X.http(b));
       case "/stop": await stop(b.u); return reply(res, 200, { ok: true });

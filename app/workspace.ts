@@ -1,6 +1,8 @@
 // Cầu nối máy chủ Next -> dịch vụ workspace (workspace/agent.mjs trên VPS).
 // Mỗi người dùng một container; mỗi phiên Synchro Code một thư mục /home/user/work/s<id>.
 import crypto from "node:crypto";
+import http from "node:http";
+import https from "node:https";
 import { appUrl, AuthError, can, type UserRow } from "./authstore";
 
 const AGENT = (process.env.WS_AGENT_URL ?? "").replace(/\/$/, "");
@@ -21,15 +23,35 @@ export function sdir(sid: unknown) {
   return "s" + s;
 }
 
-export async function agent<T = Record<string, unknown>>(path: string, body: Record<string, unknown>, timeoutMs = 180_000): Promise<T> {
-  let r: Response;
+// Dùng node:http, không dùng fetch: fetch của Node (undici) tự cắt sau đúng 5 phút nếu chưa có header trả lời, mà /run và /exec chỉ trả lời khi
+// lệnh xong (dựng video 300–600 giây luôn lỗi, container vẫn chạy, kết quả mất). Hạn chờ duy nhất là timeoutMs. Mỗi yêu cầu một kết nối riêng:
+// signal ngắt kết nối thì dịch vụ workspace biết để dừng container (nút Dừng).
+function post(path: string, data: string, sig: AbortSignal) {
+  const u = new URL(AGENT + path);
+  return new Promise<{ status: number; text: string }>((ok, no) => {
+    const req = (u.protocol === "https:" ? https : http).request(u, { method: "POST", agent: false, signal: sig, headers: { Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } }, (res) => {
+      const ch: Buffer[] = [];
+      res.on("data", (c: Buffer) => ch.push(c));
+      res.on("end", () => ok({ status: res.statusCode ?? 502, text: Buffer.concat(ch).toString("utf8") }));
+      res.on("error", no);
+    });
+    req.on("error", no);
+    req.end(data);
+  });
+}
+
+export async function agent<T = Record<string, unknown>>(path: string, body: Record<string, unknown>, timeoutMs = 180_000, signal?: AbortSignal): Promise<T> {
+  const limit = AbortSignal.timeout(timeoutMs);
+  let r: { status: number; text: string };
   try {
-    r = await fetch(AGENT + path, { method: "POST", headers: { Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+    r = await post(path, JSON.stringify(body), signal ? AbortSignal.any([limit, signal]) : limit);
   } catch (e) {
-    throw new AuthError((e as Error).name === "TimeoutError" ? "Workspace phản hồi quá lâu." : "Không kết nối được workspace.", 502);
+    if (signal?.aborted) throw new DOMException("Đã dừng", "AbortError");
+    throw new AuthError(limit.aborted ? "Workspace phản hồi quá lâu." : "Không kết nối được workspace.", 502);
   }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new AuthError((j as { error?: string }).error || `Workspace lỗi ${r.status}`, r.status === 401 ? 502 : r.status);
+  let j: unknown = {};
+  try { j = JSON.parse(r.text); } catch { /* lỗi không phải JSON: báo theo mã trạng thái */ }
+  if (r.status < 200 || r.status >= 300) throw new AuthError((j as { error?: string }).error || `Workspace lỗi ${r.status}`, r.status === 401 ? 502 : r.status);
   return j as T;
 }
 
