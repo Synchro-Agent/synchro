@@ -218,6 +218,9 @@ function addToIx(k: Skill) {
 }
 /** Dựng sẵn chỉ mục ở nền, từng ít một, để lượt chat đầu tiên sau khi bộ đệm plugin dựng lại không phải chờ. */
 export async function warmSkillIndex(skills: Skill[]) {
+  // Ghi nhận cả kho, không chỉ lần chấm: chấm riêng một thư viện nhỏ ngay sau khi khởi động mà còn so với 0 thì xóa chỉ mục vừa dựng.
+  const ix = ixOf();
+  ix.peak = Math.max(ix.peak, skills.length);
   for (let i = 0; i < skills.length; i += 300) {
     for (const k of skills.slice(i, i + 300)) addToIx(k);
     await new Promise((ok) => setImmediate(ok));

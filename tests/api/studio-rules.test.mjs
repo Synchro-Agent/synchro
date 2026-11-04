@@ -257,5 +257,15 @@ ok(strict("x", "Làm bài thuyết trình bán hàng cho khách hàng doanh nghi
 ok(strict("x", "Thiết kế giao diện trang đích cho sản phẩm mới của công ty.").includes("design"), "tiếng Việt → design");
 ok(strict("x", "Create and push Docker images to the registry.").length === 0, "ảnh Docker không phải ảnh");
 ok(!strict("formal-spec", "Use when writing formal specifications in TLA+ to verify system properties.").includes("docs"), "cụm chặn có dấu + khớp đúng (tla+)");
+console.log("6. Chỉ mục skill đã dựng sẵn không bị xóa khi chấm riêng một thư viện nhỏ");
+{
+  const { skillroute: SR } = await loadTs(["skillroute"]);
+  const kho = Array.from({ length: 5000 }, (_, i) => ({ name: `kho-${i}`, description: `Skill mẫu số ${i} về zebra.` }));
+  await SR.warmSkillIndex(kho);
+  const ix = globalThis.__skillIx;
+  ok(ix.n === 5000 && ix.peak === 5000, `dựng sẵn ghi nhận cỡ kho (${ix.n}, ${ix.peak})`, JSON.stringify({ n: ix.n, peak: ix.peak }));
+  SR.rank("zebra", kho.slice(0, 100).map((skill) => ({ skill })), 5);
+  ok(globalThis.__skillIx === ix && ix.n === 5000, "chấm 100 skill ngay sau khi dựng: chỉ mục còn nguyên", JSON.stringify({ n: globalThis.__skillIx.n }));
+}
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

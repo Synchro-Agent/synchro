@@ -54,6 +54,8 @@ const M = "anthropic/claude-sonnet-5-5";
 const ask = (body) => me("POST", "/api/llm", { system: "", max_tokens: 300, skills: true, model: M, ...body });
 const avail = (sys) => { const a = /<available_skills>([\s\S]*?)<\/available_skills>/.exec(sys)?.[1] ?? ""; return [...a.matchAll(/<name>(.*?)<\/name>/g)].map((m) => m[1]); };
 const lastSys = async () => { const a = (await LAST()).anthropic; return JSON.stringify(a?.system ?? a ?? ""); };
+// skill_routing nằm cạnh tin nhắn mới nhất (tầng động).
+const lastMsgs = async () => JSON.stringify((await LAST()).anthropic?.messages ?? "");
 
 console.log("1. Thư viện của danh mục: xếp bằng bộ luật, không nhờ model");
 let r = await me("PATCH", `/api/plugins/${PID}`, { studio: "auto" });
@@ -80,26 +82,40 @@ ok(r.j.matched === 1 && r.j.skills[0].name === "zebra-keynote-deck", "tìm trong
 r = await me("GET", "/api/plugins?view=studio&studio=video");
 ok(r.s === 200 && r.j.total === 0, "mục không có thật: rỗng", JSON.stringify(r.j));
 
-console.log("3. Bấm nút studio: prompt có giới hạn, có skill hợp yêu cầu, có lối tìm tiếp");
+console.log("3. Bấm nút studio: phần đầu prompt cố định, skill hợp yêu cầu đi cạnh tin nhắn, có lối tìm tiếp");
 r = await ask({ studio: "slides", messages: [{ role: "user", content: "Làm deck về zebra conservation" }] });
 ok(r.s === 200, "lượt chat chạy được", JSON.stringify(r.j).slice(0, 300));
 let sys = await lastSys(), names = avail(sys);
 const samples = names.filter((x) => /^sample-deck-/.test(x));
-ok(names.includes("zebra-keynote-deck"), "có skill hợp nhất với yêu cầu", names.join());
-ok(names.includes("studio-slides") && /library=\\?"studio-slides/.test(sys), "có mục lục và lối search_skills trong thư viện", names.slice(0, 5).join());
-ok(samples.length <= 20 && names.filter((x) => !/^(cat|lib|studio)-/.test(x)).length <= 30, `không liệt kê cả thư viện (${samples.length} skill mẫu, ${names.length} mục)`, names.join());
+const route1 = await lastMsgs();
+ok(/<skill_routing>/.test(route1) && route1.includes("zebra-keynote-deck"), "skill hợp nhất với yêu cầu nằm trong skill_routing", route1.slice(-600));
+ok(!names.includes("zebra-keynote-deck") && !samples.length, "skill của danh mục không nằm trong phần đầu prompt", names.join());
+ok(/library=\\?"studio-slides/.test(sys), "có lối search_skills trong thư viện");
+ok(!names.includes("studio-slides") && !/load_skill\(\\?"studio-slides/.test(sys), "thư viện đang bấm không có mục lục bảo model mở trước", names.slice(0, 5).join());
+ok(names.filter((x) => !/^(cat|lib|studio)-/.test(x)).length <= 30, `không liệt kê cả thư viện (${names.length} mục)`, names.join());
+r = await ask({ studio: "slides", messages: [{ role: "user", content: "Thêm phần phụ lục về rủi ro pháp lý cho deck này" }] });
+const sys2 = await lastSys();
+ok(sys2 === sys, "câu hỏi đổi mà phần đầu prompt giữ nguyên từng chữ (đọc được từ bộ đệm)", `${sys.length} / ${sys2.length}`);
+ok(!(await lastMsgs()).includes("zebra-keynote-deck"), "skill hợp yêu cầu đổi theo câu hỏi");
 const sized = await ask({ studio: "slides", estimate: true, messages: [{ role: "user", content: "Làm deck về zebra conservation" }] });
 const sysB = sized.j.blocks.find((b) => b.key === "system").chars, skB = sized.j.blocks.find((b) => b.key === "skills").chars;
 ok(skB < 45_000, `khối skill có giới hạn: ${skB} ký tự (system ${sysB})`, skB);
 r = await ask({ studio: "slides", messages: [{ role: "user", content: "xin chào" }] });
 names = avail(await lastSys());
-ok(!names.some((x) => /^sample-deck-/.test(x)) && names.includes("studio-slides"), "câu không rõ việc: không kéo skill bất kỳ của danh mục vào prompt", names.join());
+ok(!names.some((x) => /^sample-deck-/.test(x)) && !(await lastMsgs()).includes("sample-deck-"), "câu không rõ việc: không kéo skill bất kỳ của danh mục vào lượt chat", names.join());
 
 console.log("4. Chat thường: không liệt kê đôi");
 r = await ask({ messages: [{ role: "user", content: "xin chào" }] });
 names = avail(await lastSys());
 ok(!names.some((x) => /^sample-/.test(x)), "skill của danh mục không nằm thẳng trong available_skills", names.join());
 ok(names.filter((x) => x === "studio-slides").length === 1 && names.some((x) => x.startsWith("studio-")), "mỗi studio một mục lục");
+
+r = await ask({ messages: [{ role: "user", content: "#tool=load_skill #args={\"name\":\"studio-docs\"}" }] });
+{
+  const opened = await lastMsgs(), body = /Thư viện gồm[\s\S]*/.exec(opened)?.[0] ?? "";
+  ok(body.includes("skill nữa") && body.includes('studio-docs'), "mở thư viện dài: có lối search_skills", opened.slice(-400));
+  ok(!body.includes("sample-proposal-") && body.length < 30_000, `mở thư viện dài: chỉ skill chọn lọc, không liệt kê skill của danh mục (${body.length} ký tự)`, body.slice(0, 300));
+}
 
 console.log("5. Không xếp mục: bỏ nhãn tự động, giữ mục người dùng tự chọn");
 db.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, at) VALUES (?, '[\"docs\"]', 'manual', 'x', '', ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = 'manual'").run(`p:${PID}:manual-crypto-note`, now);
