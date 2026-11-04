@@ -253,7 +253,9 @@ async function startAuth(req: Request, id: string, www: string, keep = false): P
   const scope = [...new Set([...(a.scope ?? "").split(/\s+/), ...(d.scope ?? "").split(/\s+/), ...(a.scopeNeeded?.scope ?? "").split(/\s+/)].filter(Boolean))].join(" ") || undefined;
   // Dùng lại client đã đăng ký với cùng máy chủ đăng nhập; đổi máy chủ hoặc địa chỉ quay về thì đăng ký lại.
   const saved = a.client && a.as?.issuer === d.as.issuer && a.redirect === redirect && (!a.preset?.clientId || a.client.client_id === a.preset.clientId) ? a.client : null;
-  let client = saved ?? await registerClient(d.as, redirect, cimd, a.preset);
+  // Máy chủ đòi đăng nhập mà không khai báo OAuth, đoán đường dẫn cũng không ra: nhiều khả năng nó chỉ nhận token. Nói thẳng cách kết nối thay vì lỗi đăng ký khó hiểu.
+  const noOauth = (e: unknown) => { if (d.guessed && !(e instanceof TempFail)) throw new ConnectorError(NO_OAUTH); throw e; };
+  let client = saved ?? await registerClient(d.as, redirect, cimd, a.preset).catch(noOauth);
   // Dò trước trang đăng nhập: hãng từ chối thẳng client hay địa chỉ quay về thì báo ngay, không đưa người dùng tới trang lỗi của hãng.
   if (process.env.CONNECTOR_PREFLIGHT !== "0") {
     const probe = (c: OAuthClient) => authorizeRejected(d.as, c, { redirectUri: redirect, resource: d.resource, scope });
@@ -277,6 +279,7 @@ async function startAuth(req: Request, id: string, www: string, keep = false): P
   return authorizeUrl(d.as, client, { redirectUri: redirect, state, verifier, resource: d.resource, scope });
 }
 
+const NO_OAUTH = "Máy chủ này đòi đăng nhập nhưng không hỗ trợ đăng nhập OAuth tự động. Hãy kết nối bằng token hoặc API key.";
 // Connector trong danh mục đổi địa chỉ (hãng chuyển máy chủ): cập nhật theo danh mục khi kết nối lại, khỏi phải gỡ rồi thêm lại (mất quyền đã đặt).
 function followDirectory(r: Row) {
   const dir = r.dir ? DIRECTORY.find((x) => x.id === r.dir) : undefined;
@@ -320,8 +323,8 @@ export async function connect(req: Request, uid: string, id: string, pol: ConnPo
     throw new ConnectorError(errText(e), e instanceof ConnectorError ? e.status : status);
   };
   // Đang chạy tốt mà đăng nhập lại: bỏ dở thì vẫn giữ kết nối cũ.
-  const healthy = row.status === "ok" && !!a.tokens;
-  if (a.mode === "oauth" && (o.force || a.scopeNeeded)) {
+  const healthy = row.status === "ok";
+  if ((a.mode === "oauth" && o.force) || (a.mode !== "token" && a.scopeNeeded)) {
     try { return { authorizeUrl: await startAuth(req, id, "", healthy), connector: publicOf(rowById(id)!, pol) }; }
     catch (e) { if (healthy) throw new ConnectorError(errText(e), e instanceof ConnectorError ? e.status : 502); return fail(e, 400); }
   }
@@ -587,7 +590,7 @@ export class ConnectorSession {
       // Công cụ không còn trên máy chủ: làm mới danh sách để lượt sau đúng.
       if (e instanceof McpError && e.kind === "rpc" && (e.code === -32602 || e.code === -32601) && /unknown tool|tool not found|no such tool|not found/i.test(e.message)) syncTools(ct.cid).catch(() => {});
       // Lỗi tạm thời (mạng, quá giờ, hãng đang lỗi): connector không bị tắt. Công cụ ghi có thể đã chạy xong dù không nhận được trả lời.
-      const transient = e instanceof TempFail || (e instanceof McpError && e.kind === "protocol" && !e.status);
+      const transient = e instanceof TempFail || (e instanceof McpError && e.kind === "protocol" && e.status < 400);
       if (transient && sent && !readLike(ct.tool)) return { content: `Không rõ kết quả khi gọi ${ct.cname}: ${errText(e)} Công cụ này có thể đã chạy xong ở phía ${ct.cname}. Hãy kiểm tra trước khi thử lại, đừng tự gọi lại ngay.`, is_error: true };
       if (transient) return { content: `Tạm thời chưa gọi được ${ct.cname}: ${errText(e)} Có thể thử lại một lần sau ít phút.`, is_error: true };
       return { content: `Không gọi được ${ct.cname}: ${errText(e)}`, is_error: true };
@@ -655,7 +658,8 @@ export async function recheckConnectors(now = Date.now()) {
     await Promise.all(rows.map(async (r) => {
       tried.set(r.id, now);
       try { await syncTools(r.id); tried.delete(r.id); }
-      catch (e) { if (!isAuthErr(e)) syncFailed(r.id, e); }
+      // Lỗi đăng nhập thì ngày mai mới thử lại (thử nhiều cũng không tự lành); lỗi tạm thời thử lại sau một giờ.
+      catch (e) { if (isAuthErr(e)) tried.set(r.id, now + RECHECK_AFTER * 2 - RECHECK_RETRY); else syncFailed(r.id, e); }
     }));
   } finally { g.__synchroConnBusy = false; }
   return rows.length;

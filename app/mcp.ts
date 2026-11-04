@@ -227,6 +227,7 @@ export class McpClient {
   private async initialize() {
     const r = await this.post(this.url, { jsonrpc: "2.0", id: this.nextId++, method: "initialize", params: { protocolVersion: LEGACY, capabilities: {}, clientInfo: CLIENT } }, {}, { timeout: 20_000, retry: true });
     const res = r.reply?.result as { protocolVersion?: string; serverInfo?: { name?: string; title?: string; icons?: ServerIcon[] } } | undefined;
+    if (!res && isDown(r.status)) throw new TempFail(this.downMsg(r.status), r.status);
     if (!res) throw new McpError(r.reply?.error?.message ?? `Máy chủ trả về lỗi ${r.status} khi bắt tay.`, "protocol", r.status);
     this.session = r.headers.get("mcp-session-id") ?? undefined;
     this.version = res.protocolVersion || LEGACY;
@@ -256,6 +257,7 @@ export class McpClient {
       .catch((e) => { throw ctl.signal.aborted ? ctl.signal.reason : e; })
       .finally(() => clearTimeout(wait));
     if (res.status === 401 || res.status === 403) { await res.body?.cancel(); throw this.authError(res.status, res.headers.get("www-authenticate") ?? ""); }
+    if (isDown(res.status)) { await res.body?.cancel(); throw new TempFail(this.downMsg(res.status), res.status); }
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) { await res.body?.cancel(); throw new McpError(`Máy chủ trả về lỗi ${res.status}.`, "protocol", res.status); }
     const state = { endpoint: "", ctl, pending: new Map<string | number, (m: Rpc) => void>() } as NonNullable<McpClient["sse"]>;
     this.sse = state;
@@ -365,7 +367,7 @@ export class McpClient {
     } else if (this.era === "legacy") r = await this.legacy(method, params, o);
     else { if (!this.ready) await this.sseOpen(); r = await this.sseSend(method, params, o.timeout); }
     // Máy chủ đang lỗi (429, 5xx) mà chưa có kết quả: sự cố tạm thời phía nhà cung cấp.
-    if (isDown(r.status) && !r.reply?.result) throw new TempFail(this.downMsg(r.status), r.status, retryAfterMs(r.headers.get("retry-after")));
+    if (isDown(r.status) && !r.reply) throw new TempFail(this.downMsg(r.status), r.status, retryAfterMs(r.headers.get("retry-after")));
     if (!r.reply) throw new McpError(r.status >= 400 ? `Máy chủ MCP trả về lỗi ${r.status}.` : "Máy chủ MCP không trả lời.", "protocol", r.status);
     if (r.reply.error) {
       // Lỗi JSON-RPC đi kèm HTTP 400 / 404 trước khi có phiên / bắt tay vẫn là "ở cửa": cho request() dò lại thế hệ nếu cần.

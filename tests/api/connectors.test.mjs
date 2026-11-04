@@ -76,7 +76,7 @@ ok(/từ chối cấp quyền/.test(o.html), "người dùng bấm Từ chối �
 r = await admin("POST", `/api/connectors/${notesId}/connect`);
 const firstAuth = r.j.authorizeUrl;
 o = await oauth(admin, firstAuth);
-ok(/Đã kết nối/.test(o.html) && /postMessage/.test(o.html), "đăng nhập xong, trang báo về cửa sổ chính", o.html?.slice(0, 200));
+ok(/Đã kết nối/.test(o.html) && /BroadcastChannel\("synchro-connector"\)/.test(o.html) && /postMessage/.test(o.html), "đăng nhập xong, trang báo về cửa sổ chính (qua BroadcastChannel vì COOP cắt window.opener)", o.html?.slice(0, 200));
 const replay = await fetch(o.back, { headers: { cookie: admin.cookie() } }).then((x) => x.text());
 ok(/đã dùng|hết hạn/.test(replay), "dùng lại state cũ bị chặn");
 r = await admin("GET", "/api/connectors");
@@ -162,8 +162,11 @@ console.log("9. Connector thật trên Internet (không cần đăng nhập)");
 r = await admin("POST", "/api/connectors", { dir: "deepwiki" });
 ok(r.s === 200 && r.j.connector?.status === "ok" && r.j.connector.tools.length > 0, `DeepWiki thật: ${r.j.connector?.tools?.map((t) => t.name).join(", ")}`, JSON.stringify(r.j).slice(0, 300));
 r = await chat(admin, C, `#tool=read_wiki_structure #args={"repoName":"modelcontextprotocol/modelcontextprotocol"}`);
-ok(r.j.approval?.calls?.[0]?.tool?.destructive === false, "công cụ không khai báo chỉ đọc: hỏi trước nhưng không cảnh báo xóa dữ liệu", JSON.stringify(r.j).slice(0, 300));
-r = await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "allow" });
+// Máy chủ không khai báo mà tên rõ là đọc (read_): dùng luôn. Nếu DeepWiki có khai báo là công cụ ghi thì vẫn hỏi; không cảnh báo xóa dữ liệu.
+if (r.j.approval) {
+  ok(r.j.approval.calls[0].tool.destructive === false, "công cụ DeepWiki: hỏi trước nhưng không cảnh báo xóa dữ liệu", JSON.stringify(r.j).slice(0, 300));
+  r = await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "allow" });
+}
 ok(r.s === 200 && /Đã gọi công cụ deepwiki__read_wiki_structure/.test(r.j.text) && r.j.text.length > 80, "gọi công cụ DeepWiki thật trong chat", JSON.stringify(r.j).slice(0, 400));
 console.log("     ↳", r.j.text?.slice(0, 160).replace(/\n/g, " "));
 r = await admin("POST", "/api/connectors", { dir: "context7" });

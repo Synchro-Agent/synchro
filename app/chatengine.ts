@@ -326,12 +326,13 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const wait = waitAnswer(x.uid, id, runSignal());
     const late = setTimeout(() => answerAsk(x.uid, id, { ok: false, note: ASK_LATE }), ASK_WAIT);
     progress("ask", JSON.stringify(askOf(x, c, id)));
+    progress("step", "Đang chờ bạn duyệt");
     const a = await wait;
     clearTimeout(late);
     const timedOut = a.note === ASK_LATE;
     progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always, chat: !!a.chat, ...(timedOut ? { gone: true } : {}) }));
     if (timedOut) return deny("Người dùng chưa trả lời yêu cầu duyệt sau 10 phút nên công cụ chưa chạy. Hãy báo họ biết; nếu vẫn cần thì nhắc lại yêu cầu để Synchro hỏi lại.");
-    if (!a.ok) return deny(a.note && a.note !== "Người dùng đã dừng." ? `${REFUSED} Lời nhắn của người dùng: ${a.note}` : REFUSED);
+    if (!a.ok) return deny(a.note && a.note !== "Người dùng đã dừng." ? `Người dùng từ chối công cụ này. Lời nhắn của họ: ${a.note}. Làm theo lời nhắn nếu được; đừng tìm cách khác để lách.` : REFUSED);
     if (a.always) { x.sess!.allowAlways(c.name); return "always"; }
     if (a.chat) { x.sess!.allowChat(c.name); return "chat"; }
     return "allow";
@@ -488,6 +489,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
   if (c.name === "brain_write") return `Đang ghi vào bộ não: ${String(c.input?.title ?? "").slice(0, 80)}`;
+  if (c.name === RECONNECT_TOOL.name && x.sess && !x.sess.get(c.name)) return "Đang hiện nút kết nối lại";
   if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return `Đang tìm công cụ connector: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {}, browserTargetOf(c.input, x.bctx));
   const ct = x.sess?.get(c.name);

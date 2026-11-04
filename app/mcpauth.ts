@@ -62,7 +62,8 @@ export function parseWww(h: string) {
 export const canonical = (u: string) => { const x = new URL(u); x.hash = ""; return x.toString().replace(/\/$/, ""); };
 const sameIssuer = (a: string, b: string) => a.replace(/\/$/, "") === b.replace(/\/$/, "");
 
-export type Discovery = { resource: string; as: AsMeta; scope?: string };
+// guessed: máy chủ không khai báo OAuth, đường dẫn đăng nhập chỉ là đoán theo mặc định của đặc tả cũ.
+export type Discovery = { resource: string; as: AsMeta; scope?: string; guessed?: boolean };
 
 export async function discover(mcpUrl: string, www = ""): Promise<Discovery> {
   const u = new URL(mcpUrl);
@@ -87,6 +88,7 @@ export async function discover(mcpUrl: string, www = ""): Promise<Discovery> {
   // Máy chủ đăng nhập đang lỗi tạm thời: báo đúng là sự cố tạm thời, không đoán đường dẫn rồi đưa người dùng tới trang 404 của hãng.
   if (!md && seen.down) throw new TempFail(downText(seen.down.host, seen.down.status), seen.down.status);
   // Máy chủ đời 2025-03-26 không có metadata: dùng đường dẫn mặc định ngay trên máy chủ MCP.
+  const guessed = !md && !prm;
   if (!md && !prm) md = { issuer: u.origin, authorization_endpoint: `${u.origin}/authorize`, token_endpoint: `${u.origin}/token`, registration_endpoint: `${u.origin}/register` };
   if (!md) throw new Error("Không tìm thấy máy chủ đăng nhập (OAuth) của connector này.");
   md.issuer = md.issuer || asId;
@@ -95,7 +97,7 @@ export async function discover(mcpUrl: string, www = ""): Promise<Discovery> {
   if (md.registration_endpoint) checkEndpoint(md.registration_endpoint, "đăng ký ứng dụng");
   if (md.code_challenge_methods_supported?.length && !md.code_challenge_methods_supported.includes("S256")) throw new Error("Máy chủ đăng nhập của connector không hỗ trợ PKCE S256 nên không an toàn để kết nối.");
   const scopes = Array.isArray(prm?.scopes_supported) ? (prm!.scopes_supported as string[]) : [];
-  return { resource: prm?.resource ? String(prm.resource) : canonical(mcpUrl), as: md, scope: w.scope || (scopes.length ? scopes.join(" ") : undefined) };
+  return { resource: prm?.resource ? String(prm.resource) : canonical(mcpUrl), as: md, scope: w.scope || (scopes.length ? scopes.join(" ") : undefined), ...(guessed ? { guessed } : {}) };
 }
 
 // Lấy client_id cho Synchro ở máy chủ đăng nhập này, theo thứ tự ưu tiên của đặc tả.
