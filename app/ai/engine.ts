@@ -20,6 +20,10 @@ export type TurnRequest = {
   sessionId?: string;
   /** Tách phiên mới từ sessionId (phiên ấm đã khởi tạo sẵn), không ghi tiếp vào phiên đó (Claude Code --fork-session). */
   fork?: boolean;
+  /** Lượt không có công cụ, được dùng tiến trình Claude Code khởi động sẵn (cli_pool.ts); hỏng thì tự rơi về khởi động mới. */
+  pool?: boolean;
+  /** Phiên nối tiếp của CLI chỉ nhận hướng dẫn hệ thống ở lượt đầu (Codex, Antigravity): phần hướng dẫn mới so với những gì phiên đã có. */
+  sysUpdate?: string;
   /** Thư mục làm việc riêng của lượt (tệp đính kèm, đầu ra). */
   workdir?: string;
   /** Lịch sử hội thoại cho engine không giữ phiên (khóa API); engine CLI dùng sessionId. */
@@ -60,6 +64,8 @@ export type Event =
   /** Model đang làm việc (đang nghĩ, gọi công cụ…) dù chưa có chữ. Sự kiện khởi động của CLI (init, thread.started) không phát cái này:
    *  bộ canh lượt treo chỉ tính hoạt động thật. */
   | { kind: "activity" }
+  /** Lượt dùng hồ tiến trình: có sẵn tiến trình đang chờ (hit) hay phải khởi động (cold). Chỉ để đo thời gian. */
+  | { kind: "pool"; state: "hit" | "cold" }
   /** Dòng trạng thái cho người dùng (CLI đang thử lại, chờ lượt khác). wait: đang chờ khóa của tài khoản, bộ canh tạm dừng; false: hết chờ. */
   | { kind: "status"; text?: string; wait?: boolean }
   /** CLI đang tìm hoặc đọc web bằng công cụ dựng sẵn. */

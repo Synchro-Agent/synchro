@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
 import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
+import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -160,11 +161,128 @@ export function claudeLimits(info: unknown): RateWindow[] {
   return [...out.values()];
 }
 
+// Lượt dùng tiến trình khởi động sẵn: đúng các cờ của lượt thường, thêm stream-json để gửi tin qua stdin. Các cờ này chỉ đọc lúc khởi động nên nằm trong khóa của hồ.
+function poolSpec(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">, bin: string, tools: string): PoolSpec {
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", tools, "--input-format", "stream-json"];
+  if (req.system) args.push("--system-prompt", req.system);
+  if (req.model) args.push("--model", req.model);
+  const ce = cliEffort(req.effort);
+  if (ce) args.push("--effort", ce);
+  return { bin, args, env: req.env ?? {}, cwd: req.workdir ?? path.join(engineHome(), "work"), account: req.env?.CLAUDE_CONFIG_DIR ?? "" };
+}
+type ClaudeEnd = { done: boolean; failed: boolean; session: string | null; spoke: boolean };
+
 export class ClaudeCodeEngine implements Engine {
   readonly id = "claude";
   /** tools: công cụ dựng sẵn của Claude Code được bật ("" = tắt hết; công cụ của Synchro đi qua MCP). */
   constructor(private o: { tools?: string } = {}) {}
+  /** Khởi động sẵn tiến trình cho lượt không công cụ kế tiếp của tài khoản này (không tốn lượt nào của gói). */
+  prestart(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) {
+    const bin = find("claude");
+    if (!bin || tooLong(req.system)) return;
+    const spec = poolSpec(req, bin, this.o.tools ?? "");
+    makeDir(spec.cwd);
+    prestart(spec);
+  }
+  /** true: lượt đã chạy xong bằng hồ (kể cả báo lỗi). false: chưa có gì tới người dùng, chạy lại bằng tiến trình mới. */
+  private async *pooled(req: TurnRequest): AsyncGenerator<Event, boolean, unknown> {
+    const bin = find("claude");
+    if (!bin || tooLong(req.system)) return false;
+    const spec = poolSpec(req, bin, this.o.tools ?? "");
+    makeDir(spec.cwd);
+    const lease = takeProcess(spec, req.sessionId);
+    if (!lease) return false;
+    yield { kind: "pool", state: lease.hit ? "hit" : "cold" };
+    let r: ClaudeEnd = { done: false, failed: false, session: null, spoke: false }, closed = false;
+    try {
+      lease.send(claudeInput(req.prompt, req.attachments ?? []));
+      // Có tiến trình sẵn thì dòng đầu tới ngay khi CLI nhận tin; vừa khởi động thì còn phải chờ khởi động xong. SYNCHRO_CLAUDE_POOL_FIRST_SEC: rút ngắn khi kiểm thử.
+      const firstMs = Number(process.env.SYNCHRO_CLAUDE_POOL_FIRST_SEC) * 1000 || (lease.hit ? 12_000 : 20_000);
+      r = yield* this.events(lease.events(req.signal, firstMs), () => lease.discard());
+      const end = lease.ended();
+      if (end === "aborted") { lease.discard(); closed = true; yield err("Đã dừng.", "aborted"); return true; }
+      if (r.done) {
+        // Lượt báo lỗi (hết hạn mức, đăng nhập…): không biết tiến trình còn dùng được không.
+        if (r.failed) lease.discard();
+        else { lease.release(r.session); this.prestart(req); }
+        closed = true;
+        return true;
+      }
+      lease.discard(); closed = true;
+      if (!r.spoke) { poolStrike(end === "silent" ? "tiến trình không phản hồi tin nhắn" : "tiến trình thoát giữa lượt"); return false; }
+      yield exitError("claude", lease.proc, await lease.done());
+      return true;
+    } finally { if (!closed) lease.discard(); }
+  }
+  /** Đọc sự kiện của một lượt, dù là tiến trình riêng hay tiến trình trong hồ. */
+  private async *events(src: AsyncIterable<Json>, kill: () => void): AsyncGenerator<Event, ClaudeEnd, unknown> {
+    // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
+    // không dính liền "…dựng deck.Đã đọc 4 skill…".
+    let text = "", done = false, gap = false, failed = false, session: string | null = null;
+    const limits = new Map<string, RateWindow>(), webIds = new Set<string>();
+    // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
+    const T0 = Date.now(), seen = new Map<string, number>();
+    const mark = (o: Json) => { const k = [o.type, o.subtype, (o.event as Json | undefined)?.type].filter(Boolean).join(":"); if (!seen.has(k) && seen.size < 24) seen.set(k, Date.now() - T0); };
+    for await (const o of src) {
+      mark(o as Json);
+      // Model đã phản hồi: có sự kiện của API (kể cả đang nghĩ) hoặc tin của model. init và rate_limit_event không tính: CLI tự in khi khởi động.
+      // CLI đang tự rút gọn hội thoại dài cũng là đang làm việc: báo status / compact_boundary, chưa có sự kiện API nào; bộ canh 90 giây từng cắt nhầm lượt khỏe.
+      if (o.type === "stream_event" || o.type === "assistant" || o.type === "user" || (o.type === "system" && (o.subtype === "status" || o.subtype === "compact_boundary"))) yield { kind: "activity" };
+      if (o.type === "assistant") {
+        for (const b of (o.message?.content ?? []) as Json[]) {
+          if ((b.type === "tool_use" || b.type === "server_tool_use") && WEB_TOOL.test(String(b.name ?? ""))) {
+            if (typeof b.id === "string") webIds.add(b.id);
+            yield { kind: "search", query: typeof b.input?.query === "string" ? b.input.query : undefined, url: typeof b.input?.url === "string" ? b.input.url : undefined };
+          } else if (b.type === "web_search_tool_result") { const items = webSources(b.content); if (items.length) yield { kind: "sources", items }; }
+        }
+      } else if (o.type === "user" && webIds.size) {
+        const hits = ((o.message?.content ?? []) as Json[]).filter((b) => b?.type === "tool_result" && webIds.has(String(b.tool_use_id)));
+        if (hits.length) { const items = webSources([hits, o.tool_use_result]); if (items.length) yield { kind: "sources", items }; }
+      }
+      if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") { session = o.session_id; yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) }; }
+      else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
+      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
+      else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
+        const t = (gap ? "\n\n" : "") + o.event.delta.text;
+        gap = false;
+        text += t;
+        yield { kind: "text", text: t };
+      } else if (o.type === "system" && o.subtype === "api_retry") {
+        // Claude Code tự thử lại khi API lỗi; 401/403 thì thử lại vô ích (token hết hạn, bị thu hồi): dừng ngay, báo đăng nhập lại.
+        const st = num(o.error_status) ?? num(o.status) ?? num(o.error?.status);
+        const m = String(o.error?.message ?? o.error ?? o.message ?? "");
+        if (st === 401 || st === 403 || (!st && classify(m) === "auth")) {
+          kill(); done = true; failed = true;
+          yield err(`Claude từ chối đăng nhập (${st ?? "auth"}): ${m || "phiên đăng nhập không còn hợp lệ"}. Đăng nhập lại trong Cài đặt → Providers.`, "auth");
+          break;
+        }
+        // Còn lại CLI tự chờ rồi thử lại: cho người dùng biết (không phải treo); bộ canh tính lại từ lúc này.
+        yield { kind: "status", text: `Claude đang thử lại sau lỗi tạm thời${num(o.attempt) ? ` (lần ${o.attempt}${num(o.max_retries) ? `/${o.max_retries}` : ""})` : ""}` };
+      } else if (o.type === "rate_limit_event") {
+        for (const w of claudeLimits(o.rate_limit_info)) limits.set(w.window, w);
+      } else if (o.type === "result") {
+        console.log(`[timing] claude-events ${[...seen].map(([k, v]) => `${k}=${v}`).join(" ")}${typeof o.duration_api_ms === "number" ? ` api=${o.duration_api_ms}` : ""}${typeof o.duration_ms === "number" ? ` total=${o.duration_ms}` : ""}`);
+        for (const w of claudeLimits(o.api_error_params?.rate_limit_info)) limits.set(w.window, w);
+        done = true;
+        // Tiến trình sống qua nhiều lượt có thể chỉ in init một lần: mã phiên lấy thêm từ kết quả của lượt.
+        if (!session && typeof o.session_id === "string") { session = o.session_id; yield { kind: "session", id: o.session_id }; }
+        const u = (o.usage ?? {}) as Json;
+        const usage: Usage = { input: num(u.input_tokens) ?? 0, output: num(u.output_tokens) ?? 0, cacheRead: num(u.cache_read_input_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) };
+        if (limits.size) usage.limits = [...limits.values()];
+        yield { kind: "usage", usage };
+        if (o.is_error || (o.subtype && o.subtype !== "success")) {
+          failed = true;
+          const m = String(o.result || o.error || o.subtype || "Claude Code báo lỗi.");
+          yield err(m, classify(m, num(o.api_error_status)));
+        } else yield { kind: "final", text: typeof o.result === "string" && o.result ? o.result : text, via: "claude" };
+      }
+    }
+    return { done, failed, session, spoke: !!text };
+  }
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
+    if (req.pool && !req.mcp && !req.web && !req.fork && (yield* this.pooled(req))) return;
+    // Lượt này nối tiếp một phiên bằng tiến trình riêng: tiến trình đang đợi sẵn với phiên đó không còn biết hết hội thoại.
+    if (req.sessionId) forgetSession(req.env?.CLAUDE_CONFIG_DIR ?? "", req.sessionId);
     // Công cụ dựng sẵn: chỉ tìm / đọc web khi người dùng bật "Tìm kiếm trên web"; công cụ của Synchro đi qua cầu nối MCP.
     const builtin = req.web ? "WebSearch,WebFetch" : this.o.tools ?? "";
     const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", builtin];
@@ -192,65 +310,9 @@ export class ClaudeCodeEngine implements Engine {
     const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
     if (sysFile) void p?.done.finally(() => rmEngineFile(req, sysFile).catch(() => {}));
     if (!p) { if (sysFile) await rmEngineFile(req, sysFile).catch(() => {}); yield notInstalled("claude"); return; }
-    // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
-    // không dính liền "…dựng deck.Đã đọc 4 skill…".
-    let text = "", done = false, gap = false;
-    const limits = new Map<string, RateWindow>(), webIds = new Set<string>();
-    // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
-    const T0 = Date.now(), seen = new Map<string, number>();
-    const mark = (o: Json) => { const k = [o.type, o.subtype, (o.event as Json | undefined)?.type].filter(Boolean).join(":"); if (!seen.has(k) && seen.size < 24) seen.set(k, Date.now() - T0); };
-    for await (const o of objects(p)) {
-      mark(o as Json);
-      // Model đã phản hồi: có sự kiện của API (kể cả đang nghĩ) hoặc tin của model. init và rate_limit_event không tính: CLI tự in khi khởi động.
-      if (o.type === "stream_event" || o.type === "assistant" || o.type === "user") yield { kind: "activity" };
-      if (o.type === "assistant") {
-        for (const b of (o.message?.content ?? []) as Json[]) {
-          if ((b.type === "tool_use" || b.type === "server_tool_use") && WEB_TOOL.test(String(b.name ?? ""))) {
-            if (typeof b.id === "string") webIds.add(b.id);
-            yield { kind: "search", query: typeof b.input?.query === "string" ? b.input.query : undefined, url: typeof b.input?.url === "string" ? b.input.url : undefined };
-          } else if (b.type === "web_search_tool_result") { const items = webSources(b.content); if (items.length) yield { kind: "sources", items }; }
-        }
-      } else if (o.type === "user" && webIds.size) {
-        const hits = ((o.message?.content ?? []) as Json[]).filter((b) => b?.type === "tool_result" && webIds.has(String(b.tool_use_id)));
-        if (hits.length) { const items = webSources([hits, o.tool_use_result]); if (items.length) yield { kind: "sources", items }; }
-      }
-      if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) };
-      else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
-      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
-      else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
-        const t = (gap ? "\n\n" : "") + o.event.delta.text;
-        gap = false;
-        text += t;
-        yield { kind: "text", text: t };
-      } else if (o.type === "system" && o.subtype === "api_retry") {
-        // Claude Code tự thử lại khi API lỗi; 401/403 thì thử lại vô ích (token hết hạn, bị thu hồi): dừng ngay, báo đăng nhập lại.
-        const st = num(o.error_status) ?? num(o.status) ?? num(o.error?.status);
-        const m = String(o.error?.message ?? o.error ?? o.message ?? "");
-        if (st === 401 || st === 403 || (!st && classify(m) === "auth")) {
-          p.kill(); done = true;
-          yield err(`Claude từ chối đăng nhập (${st ?? "auth"}): ${m || "phiên đăng nhập không còn hợp lệ"}. Đăng nhập lại trong Cài đặt → Providers.`, "auth");
-          break;
-        }
-        // Còn lại CLI tự chờ rồi thử lại: cho người dùng biết (không phải treo); bộ canh tính lại từ lúc này.
-        yield { kind: "status", text: `Claude đang thử lại sau lỗi tạm thời${num(o.attempt) ? ` (lần ${o.attempt}${num(o.max_retries) ? `/${o.max_retries}` : ""})` : ""}` };
-      } else if (o.type === "rate_limit_event") {
-        for (const w of claudeLimits(o.rate_limit_info)) limits.set(w.window, w);
-      } else if (o.type === "result") {
-        console.log(`[timing] claude-events ${[...seen].map(([k, v]) => `${k}=${v}`).join(" ")}${typeof o.duration_api_ms === "number" ? ` api=${o.duration_api_ms}` : ""}${typeof o.duration_ms === "number" ? ` total=${o.duration_ms}` : ""}`);
-        for (const w of claudeLimits(o.api_error_params?.rate_limit_info)) limits.set(w.window, w);
-        done = true;
-        const u = (o.usage ?? {}) as Json;
-        const usage: Usage = { input: num(u.input_tokens) ?? 0, output: num(u.output_tokens) ?? 0, cacheRead: num(u.cache_read_input_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) };
-        if (limits.size) usage.limits = [...limits.values()];
-        yield { kind: "usage", usage };
-        if (o.is_error || (o.subtype && o.subtype !== "success")) {
-          const m = String(o.result || o.error || o.subtype || "Claude Code báo lỗi.");
-          yield err(m, classify(m, num(o.api_error_status)));
-        } else yield { kind: "final", text: typeof o.result === "string" && o.result ? o.result : text, via: "claude" };
-      }
-    }
+    const r = yield* this.events(objects(p), p.kill);
     const e = await p.done;
-    if (!done) yield exitError("claude", p, e);
+    if (!r.done) yield exitError("claude", p, e);
   }
 }
 
@@ -260,8 +322,9 @@ export const CODEX_LOCAL = /command|shell|exec|file_change|patch|read_file|list_
 export class CodexEngine implements Engine {
   readonly id = "codex";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
-    // Codex không có tham số system riêng: đặt system lên đầu prompt ở lượt mở hội thoại (lượt resume đã có trong lịch sử).
-    const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
+    // Codex không có tham số system riêng: đặt system lên đầu prompt ở lượt mở hội thoại; lượt resume đã có trong lịch sử, chỉ thêm phần mới (subs.ts).
+    const head = req.sessionId ? req.sysUpdate : req.system;
+    const prompt = head ? `${head}\n\n---\n\n${req.prompt}` : req.prompt;
     // Hộp cát "chỉ đọc" của Codex vẫn đọc được cả đĩa, mà mọi thư mục đăng nhập thuộc cùng một user hệ thống: lệnh shell trên máy chủ đọc được
     // đăng nhập của người khác. Tắt hẳn công cụ shell và xem tệp (việc thật đều chạy trong workspace qua công cụ của Synchro); bản Codex nào không
     // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
@@ -282,8 +345,10 @@ export class CodexEngine implements Engine {
     const p = start("codex", args, req, prompt);
     if (!p) { yield notInstalled("codex"); return; }
     const parts: string[] = [];
-    let done = false, lastErr = "", tools = false;
+    let done = false, lastErr = "", tools = false, partial = "";
     const asked = new Set<string>();
+    // codex exec thường chỉ báo chữ khi xong cả một mục: nói trước để người dùng không tưởng là treo.
+    yield { kind: "status", text: "ChatGPT đang viết, chữ sẽ hiện khi xong từng đoạn" };
     for await (const o of objects(p)) {
       if (/^item\./.test(String(o.type)) && CODEX_LOCAL.test(String(o.item?.type ?? o.item?.item_type ?? ""))) {
         // Không ghi nội dung lệnh vào nhật ký: có thể chứa dữ liệu của người dùng.
@@ -301,9 +366,15 @@ export class CodexEngine implements Engine {
       }
       if (o.type === "thread.started" && typeof o.thread_id === "string") yield { kind: "session", id: o.thread_id };
       else if (o.type === "item.started" && /mcp_tool_call|web_search/.test(String(o.item?.type ?? ""))) tools = true;
-      else if (o.type === "item.completed" && (o.item?.type === "agent_message" || o.item?.item_type === "assistant_message") && typeof o.item.text === "string") {
+      // Bản Codex nào báo chữ dần (item.updated) thì hiện dần; chỉ phần chưa hiện mới gửi đi, mục xong không lặp lại chữ.
+      else if (o.type === "item.updated" && (o.item?.type === "agent_message" || o.item?.item_type === "assistant_message") && typeof o.item.text === "string" && o.item.text.startsWith(partial) && o.item.text.length > partial.length) {
+        yield { kind: "text", text: (!partial && parts.length ? "\n\n" : "") + o.item.text.slice(partial.length) };
+        partial = o.item.text;
+      } else if (o.type === "item.completed" && (o.item?.type === "agent_message" || o.item?.item_type === "assistant_message") && typeof o.item.text === "string") {
         parts.push(o.item.text);
-        yield { kind: "text", text: (parts.length > 1 ? "\n\n" : "") + o.item.text };
+        const rest = partial && o.item.text.startsWith(partial) ? o.item.text.slice(partial.length) : (parts.length > 1 ? "\n\n" : "") + o.item.text;
+        partial = "";
+        if (rest) yield { kind: "text", text: rest };
       } else if (o.type === "turn.completed") {
         done = true;
         const u = (o.usage ?? {}) as Json;
@@ -380,7 +451,8 @@ export class AntigravityEngine implements Engine {
     // Print mode của agy chỉ nhận chữ: tệp gửi kèm đã lưu trong thư mục làm việc, model mở bằng công cụ xem tệp (đọc được ảnh, PDF).
     const files = fileList(req.attachments ?? [], "Hãy mở từng tệp bằng công cụ xem tệp để thấy đúng nội dung (ảnh, PDF) trước khi trả lời; không đoán nội dung tệp.");
     // Print mode của agy chỉ nhận prompt qua tham số -p: quá 128 KB thì lược phần đầu lịch sử (giữ hướng dẫn hệ thống và tin mới nhất).
-    const sys = req.system && !req.sessionId ? `${req.system}\n\n---\n\n` : "";
+    const sysHead = req.sessionId ? req.sysUpdate : req.system;
+    const sys = sysHead ? `${sysHead}\n\n---\n\n` : "";
     const body = req.prompt + files;
     const prompt = !tooLong(sys + body) ? sys + body
       : tooLong(sys) ? fitTail(sys + body, ARG_MAX_BYTES) : sys + fitTail(body, ARG_MAX_BYTES - Buffer.byteLength(sys, "utf8"));
@@ -396,7 +468,7 @@ export class AntigravityEngine implements Engine {
     const p = start("agy", args, req, "");
     if (!p) { yield notInstalled("agy"); return; }
     // Print mode không có sự kiện giữa chừng: nói trước để người dùng không tưởng là treo.
-    yield { kind: "status", text: "Antigravity đang viết, chữ sẽ hiện một lần khi xong" };
+    yield { kind: "status", text: "Antigravity đang viết, chữ sẽ hiện một lần khi xong (thường 5 đến 10 giây)" };
     // agy in một object JSON duy nhất khi xong lượt (có thể trải nhiều dòng).
     let out = "";
     for await (const l of p.lines) out += l + "\n";

@@ -510,6 +510,10 @@ function sessDb() {
       CREATE TABLE IF NOT EXISTS engine_api_optin (user_id TEXT NOT NULL, cli TEXT NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (user_id, cli))`);
     // Model của từng lượt (cho Cài đặt → Usage theo model); bảng cũ chưa có cột này.
     if (!(d.prepare("PRAGMA table_info(engine_turns)").all() as { name: string }[]).some((c) => c.name === "model")) d.exec("ALTER TABLE engine_turns ADD COLUMN model TEXT");
+    // tooled: phiên đã có lời gọi công cụ (NULL với phiên cũ: chưa biết, coi như có). sys_parts: dấu của các đoạn hướng dẫn phiên đã nhận (Codex, Antigravity).
+    const cols = (d.prepare("PRAGMA table_info(engine_sessions)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("tooled")) d.exec("ALTER TABLE engine_sessions ADD COLUMN tooled INTEGER");
+    if (!cols.includes("sys_parts")) d.exec("ALTER TABLE engine_sessions ADD COLUMN sys_parts TEXT");
     d.prepare("DELETE FROM engine_sessions WHERE updated_at < ?").run(Date.now() - 90 * 86_400_000);
     d.prepare("DELETE FROM engine_turns WHERE at < ?").run(Date.now() - 30 * 86_400_000);
     ready = true;
@@ -526,6 +530,24 @@ export function planModelName(uid: string, key: string): string | null {
   const id = splitKey(key).id;
   return g.models.get(`${cli}:${uid}`)?.v.find((m: { id: string; name: string }) => m.id === id)?.name ?? SUB[cli].fallback.find((m) => m.id === id)?.name ?? null;
 }
+/** Đoạn chat này chưa có phiên của CLI, hoặc phiên chưa từng gọi công cụ: đi đường nhanh được. Lịch sử có khối gọi công cụ mà lượt lại không khai báo công cụ thì API có thể từ chối. */
+export function sessionPlain(uid: string, conv: string | undefined, cli: Cli): boolean {
+  if (!conv) return true;
+  const r = sessDb().prepare("SELECT tooled FROM engine_sessions WHERE user_id = ? AND conv = ? AND cli = ?").get(uid, conv, cli) as { tooled: number | null } | undefined;
+  return !r || r.tooled === 0;
+}
+/** Khởi động sẵn tiến trình Claude Code cho lượt không công cụ kế tiếp của người dùng (mở trang, đổi model). Không tốn lượt nào của gói. */
+export function prewarmClaude(o: { user: UserRow; model: string; system: string; effort?: string }) {
+  if (subCli(o.model) !== "claude") return;
+  const run = resolvePlanModel("claude", o.user.id, splitKey(o.model).id, o.effort);
+  const eng = engineFor("claude") as unknown as { prestart?: (r: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) => void };
+  eng.prestart?.({ system: o.system || undefined, model: run.model, effort: run.effort, env: engineEnv("claude", o.user.id), workdir: path.join(engineHome(), "work", safeScope(o.user.id)) });
+}
+// Codex, Antigravity chỉ nhận hướng dẫn hệ thống ở lượt mở phiên. Lượt nối tiếp gửi thêm các đoạn phiên chưa có (đoạn tài liệu dự án mới tìm được, hướng dẫn vừa sửa, danh mục connector mới, lượt có công cụ sau lượt đường nhanh);
+// nhớ dấu của từng đoạn để không gửi lại cả hướng dẫn mỗi khi bộ nhớ thêm một dòng.
+const RESEND = new Set<Cli>(["codex", "agy"]);
+const sysSections = (s: string) => [...new Set(s.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean))];
+const sysMark = (s: string) => crypto.createHash("sha1").update(s).digest("hex").slice(0, 10);
 export function removeUserSubs(uid: string) {
   const d = sessDb();
   d.prepare("DELETE FROM engine_sessions WHERE user_id = ?").run(uid);
@@ -594,7 +616,7 @@ function saveAttachments(work: string, atts: Attachment[]) {
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
 /** total: số tin thật của đoạn chat (trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số thật); lockMs: chờ lượt khác của tài khoản tối đa bao lâu;
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -660,7 +682,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   if (!last || last.role !== "user") return { status: 400, json: { error: "Thiếu tin nhắn của người dùng." } };
   const d = sessDb();
   const conv = o.conv && o.conv.length <= 64 ? o.conv : null;
-  const prev = conv ? (d.prepare("SELECT session_id, turns FROM engine_sessions WHERE user_id = ? AND conv = ? AND cli = ?").get(o.user.id, conv, cli) as { session_id: string; turns: number } | undefined) : undefined;
+  const prev = conv ? (d.prepare("SELECT session_id, turns, tooled, sys_parts FROM engine_sessions WHERE user_id = ? AND conv = ? AND cli = ?").get(o.user.id, conv, cli) as { session_id: string; turns: number; tooled: number | null; sys_parts: string | null } | undefined) : undefined;
   // Nối tiếp phiên của CLI khi lịch sử khớp đúng lượt trước (không sửa, không tạo lại câu trả lời); ngược lại mở phiên mới kèm lịch sử.
   // Trình duyệt chỉ gửi 60 tin gần nhất: so với số tin thật, không thì từ khoảng lượt 31 mỗi câu đều mở phiên mới kèm toàn bộ lịch sử.
   const total = o.total && o.total >= msgs.length ? o.total : msgs.length;
@@ -685,10 +707,12 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   // Lịch sử rất dài, nhiều tệp: model đọc lâu hơn hẳn mới bắt đầu trả lời.
   if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") > 400_000) lim.first *= 3;
   const ws: WatchState = { start: T0, last: 0, alive: 0, waiting: false };
-  let stalled: "first" | "idle" | null = null;
+  let stalled: "first" | "idle" | null = null, slowTold = false;
   const watch = setInterval(() => {
     const a = o.mcp?.alive?.() ?? 0;
     if (a > T0) ws.alive = a;
+    // CLI hiện chữ dần mà sau 30 giây chưa có gì: nói cho người dùng biết đang xảy ra chuyện gì, đừng để họ nhìn vòng xoay tới lúc tự chuyển model.
+    if (!slowTold && lim.first <= 120_000 && lim.first > 30_000 && !ws.waiting && !ws.last && !ws.alive && Date.now() - ws.start > 30_000) { slowTold = true; o.onStatus?.(`${SUB[cli].name} phản hồi chậm hơn bình thường, Synchro vẫn đang chờ`); }
     stalled = stallOf(ws, lim);
     if (stalled) { clearInterval(watch); wd.abort(); }
   }, 2000);
@@ -696,7 +720,13 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const wk = WARM_ON && cli === "claude" && conv ? warmKey(o.user.id, run.model ?? "", run.effort, o.system ?? "") : null;
   const w = wk ? warm.get(wk) : undefined;
   const fork = !resume && w && Date.now() - w.at < WARM_TTL ? w.id : undefined;
+  const sysNow = RESEND.has(cli) ? sysSections(o.system ?? "") : [];
+  let sysHad = new Set<string>();
+  if (resume) { try { sysHad = new Set(JSON.parse(prev?.sys_parts ?? "[]") as string[]); } catch {} }
+  const sysNew = resume ? sysNow.filter((x) => !sysHad.has(sysMark(x))) : [];
   const req: TurnRequest = {
+    pool: !!o.fast && cli === "claude",
+    sysUpdate: sysNew.length ? `<system_update>\nHướng dẫn của Synchro có phần mới cho lượt này. Áp dụng cùng với hướng dẫn đã nhận:\n\n${sysNew.join("\n\n")}\n</system_update>` : undefined,
     prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
@@ -704,7 +734,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const eng = engineFor(cli);
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
   tm.prep = Date.now() - T0;
-  let searched = false, rejected = false;
+  let searched = false, rejected = false, poolState = "";
   const seenSrc = new Set<string>();
   const addSources = (items: WebSource[]) => { const fresh = items.filter((x) => !seenSrc.has(x.url)); for (const x of fresh) seenSrc.add(x.url); if (fresh.length) o.onSources?.(fresh); };
   try {
@@ -718,6 +748,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
       if (!e.wait) ws.start = Date.now();
       if (e.text) o.onStatus?.(e.text);
     }
+    else if (e.kind === "pool") poolState = e.state;
     else if (e.kind === "search") { searched = true; ws.last = Date.now(); o.onSearch?.({ query: e.query, url: e.url }); }
     else if (e.kind === "sources") addSources(e.items);
     else if (e.kind === "tooluse") { ws.last = Date.now(); o.onToolUse?.(); }
@@ -744,7 +775,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     // noRetry: thử lại nguyên lượt này chỉ khiến người dùng chờ thêm chừng ấy; chế độ Tự động chuyển model ngay.
     return { status: 503, json: { error: stalled === "first" ? `${SUB[cli].name} không phản hồi sau ${waitText(lim.first)}. Hãy thử lại hoặc chọn model khác.` : `${SUB[cli].name} không có tiến triển trong ${waitText(lim.idle)}. Hãy nhắn "tiếp tục" hoặc chọn model khác.`, stalled: true, noRetry: true, ...partial } };
   }
-  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0}${o.fast ? " fast=1" : ""}${poolState ? ` pool=${poolState}` : ""} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
   // Phiên ấm hỏng (bị xóa, hết hạn phía CLI): bỏ đi rồi chạy lại một lần bằng phiên mới.
   if (fork && wk && err && final === null && !text && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return subTurn(o); }
   if (err && final === null) {
@@ -782,9 +813,12 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   if (o.web && (searched || cli === "agy") && !seenSrc.size) addSources(linksIn(final ?? text));
   d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), via ?? cli, o.model);
   if (conv && session) {
-    d.prepare(`INSERT INTO engine_sessions (user_id, conv, cli, session_id, turns, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at`)
-      .run(o.user.id, conv, cli, session, total + 1, Date.now());
+    // Phiên nối tiếp giữ dấu "đã gọi công cụ" (phiên cũ chưa có dấu: coi như có); phiên mới tính từ lượt này.
+    const tooled = searched || (o.mcp?.alive?.() ?? 0) > T0 || (resume ? prev?.tooled !== 0 : false);
+    const parts = RESEND.has(cli) ? JSON.stringify([...new Set([...sysHad, ...sysNow.map(sysMark)])].slice(-800)) : null;
+    d.prepare(`INSERT INTO engine_sessions (user_id, conv, cli, session_id, turns, updated_at, tooled, sys_parts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at, tooled = excluded.tooled, sys_parts = excluded.sys_parts`)
+      .run(o.user.id, conv, cli, session, total + 1, Date.now(), tooled ? 1 : 0, parts);
   }
   // Khởi tạo sẵn (hoặc làm mới) phiên ấm cho đoạn chat mới sau, ở nền, sau khi lượt này đã xong.
   if (wk && (!w || Date.now() - w.at > WARM_TTL * 0.8)) void primeWarm(wk, req, o.user.id);

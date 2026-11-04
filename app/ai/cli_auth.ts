@@ -13,6 +13,7 @@ import path from "node:path";
 import { openSecret, sealSecret } from "../providers";
 import { DATA_DIR } from "../authstore";
 import { type Cli, engineHome, find, makeDir, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
+import { dropAccount } from "./cli_pool";
 import { redact } from "./errors";
 
 export type Method = "token" | "oauth" | "chatgpt" | "apikey" | "google" | "grok" | null;
@@ -88,9 +89,10 @@ export async function forgetCliMemory(scope: string) {
 }
 
 // ---------------------------------------------------------------- trạng thái
-type G = { cache: Map<string, Status>; pending: Map<string, Pending>; relogin: Set<string>; probing: Map<string, Promise<Status>> };
-const g: G = ((globalThis as { __synchroCliAuth?: G }).__synchroCliAuth ??= { cache: new Map(), pending: new Map(), relogin: new Set(), probing: new Map() });
+type G = { cache: Map<string, Status>; pending: Map<string, Pending>; relogin: Set<string>; reloginAt: Map<string, number>; probing: Map<string, Promise<Status>> };
+const g: G = ((globalThis as { __synchroCliAuth?: G }).__synchroCliAuth ??= { cache: new Map(), pending: new Map(), relogin: new Set(), reloginAt: new Map(), probing: new Map() });
 g.relogin ??= new Set();
+g.reloginAt ??= new Map();
 g.probing ??= new Map();
 const key = (cli: Cli, scope: string) => `${cli}:${safeScope(scope)}`;
 export const forget = (cli: Cli, scope?: string) => {
@@ -139,14 +141,18 @@ export function grokModels(out: string): { loggedIn: boolean; plan: string | nul
 }
 
 /** Hãng từ chối đăng nhập trong lượt chat (401/403): đánh dấu cần đăng nhập lại cho tới khi đăng nhập xong hoặc đăng xuất. */
-export const markRelogin = (cli: Cli, scope: string) => { g.relogin.add(key(cli, scope)); forget(cli, scope); };
-export const needsRelogin = (cli: Cli, scope: string) => g.relogin.has(key(cli, scope));
+// Một lần 401 có thể chỉ là trục trặc tạm thời phía hãng: báo động tự hết sau RELOGIN_TTL để chế độ Tự động thử lại gói đó (từng biến mất khỏi Tự động tới khi dùng tay hoặc khởi động lại).
+// Token hỏng thật thì lượt thử kế tiếp lại đánh dấu, Tự động chuyển model ngay, người dùng không phải chờ.
+const RELOGIN_TTL = 10 * 60_000;
+const reloginOn = (k: string) => { const at = g.reloginAt.get(k); if (g.relogin.has(k) && at && Date.now() - at > RELOGIN_TTL) { g.relogin.delete(k); g.reloginAt.delete(k); return false; } return g.relogin.has(k); };
+export const markRelogin = (cli: Cli, scope: string) => { const k = key(cli, scope); g.relogin.add(k); g.reloginAt.set(k, Date.now()); forget(cli, scope); if (cli === "claude") dropAccount(scopeDir(cli, scope)); };
+export const needsRelogin = (cli: Cli, scope: string) => reloginOn(key(cli, scope));
 /** Một lượt chat vừa chạy được: hãng đã nhận đăng nhập, báo động trước đó (nếu có) không còn đúng. */
 export const clearRelogin = (cli: Cli, scope: string) => { g.relogin.delete(key(cli, scope)); };
 
 /** stale: có kết quả cũ thì trả ngay và kiểm tra lại ở nền (bộ chọn model không phải chờ CLI). */
 export async function status(cli: Cli, scope: string, o: { fresh?: boolean; stale?: boolean } = {}): Promise<Status> {
-  const k = key(cli, scope), hit = g.cache.get(k), login = loginState(cli, scope), relogin = g.relogin.has(k);
+  const k = key(cli, scope), hit = g.cache.get(k), login = loginState(cli, scope), relogin = reloginOn(k);
   if (!o.fresh && hit && Date.now() - hit.checkedAt < STATUS_TTL_MS) return { ...hit, login, relogin };
   if (o.stale && hit && !o.fresh) { void status(cli, scope, { fresh: true }).catch(() => null); return { ...hit, login, relogin }; }
   // Nhiều lời gọi cùng lúc (bộ chọn model của mọi thẻ đang mở, lượt chat) dùng chung một lần chạy CLI.
@@ -323,6 +329,8 @@ function finish(p: Pending, ok: boolean, message?: string) {
   // Ghi lại đoạn cuối đầu ra (đã che token, mã dán vào) để chẩn đoán khi đăng nhập không thành công.
   if (!ok) console.warn(`[engine-login] ${p.cli} không thành công: ${message ?? ""}\n${tail(p)}`);
   forget(p.cli, p.scope);
+  // Đăng nhập mới: tiến trình đang đợi sẵn của tài khoản giữ đăng nhập cũ.
+  if (ok && p.cli === "claude") dropAccount(scopeDir(p.cli, p.scope));
   if (ok) { g.relogin.delete(key(p.cli, p.scope)); fs.writeFileSync(marker(p.cli, p.scope), String(Date.now()), { mode: 0o600 }); }
   update(p, ok ? { state: "done", message: undefined } : { state: "error", message: message ?? (tail(p) || "Đăng nhập không thành công.") });
   p.proc.kill();
@@ -383,6 +391,7 @@ export function cancelLogin(cli: Cli, scope: string) {
 /** Đăng xuất: chạy lệnh đăng xuất của CLI (nếu có) rồi xóa hẳn thư mục cấu hình của tài khoản (kể cả token đã lưu). */
 export async function logout(cli: Cli, scope: string) {
   cancelLogin(cli, scope);
+  if (cli === "claude") dropAccount(scopeDir(cli, scope));
   const bin = find(cli), dir = scopeDir(cli, scope), env = engineEnv(cli, scope);
   if (bin && cli !== "agy") await runCli(bin, cli === "claude" ? ["auth", "logout"] : ["logout"], { env, cwd: dir, timeoutMs: 20_000 }).catch(() => null);
   removeDir(dir);

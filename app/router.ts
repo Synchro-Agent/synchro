@@ -406,7 +406,8 @@ export type Route = { model: string; tier: Tier; vendor: Vendor; task: Task; eff
 // Antigravity (sub-agy) trả cả câu trả lời một lần khi xong (đo trên máy chủ: 5-9 giây cho một câu chào), các gói khác hiện chữ dần. Coi việc phải
 // chờ không thấy chữ là một khoản chi phí: lớn hơn cách biệt giữa model nhanh và model vừa của gói, nhỏ hơn cách biệt với model mạnh. Thế mạnh nhỏ
 // của hãng không còn thắng được (Flash từng thắng mọi câu hỏi nhờ +0,3 điểm). Đọc ảnh, tài liệu dài là lý do chất lượng thật: Gemini vẫn được chọn.
-const lag = (key: string) => (/^sub-agy\//.test(key) ? 1 : 0);
+// Codex cũng chỉ báo chữ khi xong từng mục, câu ngắn là hiện một lần.
+const lag = (key: string) => (/^sub-(?:agy|codex)\//.test(key) ? 1 : 0);
 const LAG_COST = 0.6;
 // Fable của gói Claude có thể tính vào usage credits (tiền thật ngoài gói): Tự động không tự tiêu, người dùng vẫn chọn tay được. Danh sách chỉ còn nó thì vẫn dùng.
 const CREDIT = /^sub-claude\/.*fable/i;
@@ -449,7 +450,8 @@ const FRESH = W("giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời
  * Những câu này đi đường nhanh: hướng dẫn hệ thống rất ngắn, không cầu nối MCP, không mục lục skill (chatengine.ts). Đoán sai không mất gì: model báo cần công cụ thì chạy lại lượt đầy đủ.
  */
 export function needsNoTools(q: RouteInput): boolean {
-  if (q.attachments || q.images || q.files || q.docChars || q.studio) return false;
+  // Dấu "#…", "[…:…]" là lệnh hoặc nhãn người dùng gõ có chủ đích: để lượt đầy đủ xử lý.
+  if (q.attachments || q.images || q.files || q.docChars || q.studio || /(?:^|\s)#\w|\[\w+:/.test(q.text)) return false;
   const r = readOf(q), a = splitAsk(q.text);
   if (r.follow || r.retry || r.stakes || a.code || a.trace) return false;
   if (r.task === "chat") return true;

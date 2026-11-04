@@ -89,7 +89,8 @@ console.log("3. Model của gói trong bộ chọn model và chat bằng gói");
   const art = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "vẽ biểu đồ" }], skills: true });
   ok(art.s === 200 && /có hướng dẫn artifact/.test(art.j.text), "lượt chat bằng gói được gửi kèm hướng dẫn artifact / biểu đồ của Synchro", JSON.stringify(art.j).slice(0, 200));
   // Cầu nối MCP: gói Claude dùng được công cụ của Synchro (skill, chạy code, danh sách việc…) như model khóa API.
-  const tl = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "chào" }], skills: true });
+  // Câu có lệnh "#…" đi lượt đầy đủ (câu chào thường đi đường nhanh, không cầu nối: xem claude-pool.test).
+  const tl = await admin("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: "chào #mcp" }], skills: true });
   const n = Number(/\[công cụ Synchro: (\d+)\]/.exec(tl.j?.text ?? "")?.[1] ?? 0);
   ok(tl.s === 200 && n >= 5, `gói Claude nối được ${n} công cụ của Synchro qua cầu nối MCP`, JSON.stringify(tl.j).slice(0, 300));
   const waitRun = async (id) => { for (let i = 0; i < 60 && id; i++) { const x = await admin("GET", `/api/runs/${id}?json=1`); if (x.j?.run?.status && x.j.run.status !== "running") return x.j.run; await sleep(300); } return null; };

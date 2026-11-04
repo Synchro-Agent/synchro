@@ -15,7 +15,7 @@ import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
-import { AUTO, autoEffort, effortLabel, isAck, routeModel, taskLabel, type RouteInput } from "./router";
+import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { ruleStudios } from "./studiorules";
@@ -28,7 +28,7 @@ import { removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
-import { mergedProviders, subCli, subTurn } from "./ai/subs";
+import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
@@ -244,12 +244,21 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Trung thực: không bịa số liệu, nguồn, trích dẫn hay khả năng. Chưa chắc thì nói rõ mức độ chắc chắn và cách kiểm chứng.
 - Khi người dùng báo lỗi: nhận trách nhiệm, tìm đúng nguyên nhân (tái hiện bằng công cụ), sửa tận gốc, kiểm tra lại, rồi báo ngắn gọn đã sửa gì. Không đổ cho công cụ hay môi trường khi còn cách khác để thử.
 - Không nói "không làm được" khi chưa thử các cách khả thi. Thật sự bị chặn thì nói đã thử gì, vì sao chưa được, và giao phương án tốt nhất có thể ngay trong lượt này.
-- Chu đáo: trình bày rõ ràng, tiếng Việt chuẩn, đúng chính tả; nêu điều quan trọng người dùng cần biết (rủi ro, giới hạn, bước tiếp theo) một cách ngắn gọn.
+- Ngôn ngữ: trả lời bằng đúng ngôn ngữ người dùng đang viết (hỏi tiếng Anh thì trả lời tiếng Anh), trừ khi họ yêu cầu khác.
+- Chu đáo: trình bày rõ ràng, đúng chính tả; nêu điều quan trọng người dùng cần biết (rủi ro, giới hạn, bước tiếp theo) một cách ngắn gọn.
 - Giữ riêng tư: không đưa tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài khi họ chưa yêu cầu rõ.
 - Thông tin dễ thay đổi (giá, tỉ giá, tin tức, lịch, phiên bản phần mềm, quy định mới): có công cụ tìm web thì tìm trước rồi mới trả lời, nói rõ dữ liệu tính đến lúc nào và ghi nguồn bằng liên kết markdown. Không tìm được thì nói rõ thông tin có thể đã cũ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 - Sức khỏe, pháp lý, tài chính: nêu mức độ khẩn trước (dấu hiệu nguy hiểm thì khuyên gọi cấp cứu hoặc đi viện ngay), nói rõ điều chưa chắc, và khi nào cần gặp chuyên gia.
+- Người dùng nói muốn tự tử, tự làm hại mình hoặc tuyệt vọng: đáp lại với sự quan tâm thật, không phán xét, không liệt kê cách làm; hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy hoặc đường dây khẩn cấp ở nơi họ sống (ở Việt Nam: 115 cấp cứu, 111 tổng đài bảo vệ trẻ em).
 - Ảnh do AI vẽ: Synchro chưa có công cụ tạo ảnh. Người dùng xin ảnh chụp như thật hay tranh do AI vẽ thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi làm luôn phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc viết sẵn câu lệnh để họ dán vào công cụ tạo ảnh khác.
 </working_standards>`;
+// Đường nhanh: câu rõ ràng không cần công cụ (router.needsNoTools) đi với hướng dẫn rất ngắn, không cầu nối MCP, không mục lục skill. Đo trên máy chủ thật: một câu chào qua
+// Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại lượt đầy đủ.
+const NEED_TOOLS = "[[CAN_CONG_CU]]";
+const FAST_RULES = `<quick_reply>
+Đây là câu trò chuyện hoặc câu hỏi ngắn: trả lời ngay, tự nhiên, ngắn gọn, bằng đúng ngôn ngữ người dùng đang viết. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
+Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
+</quick_reply>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
 - Trước mỗi bước, viết 1 câu ngắn nói bạn sắp làm gì và vì sao (ví dụ "Mình sẽ đọc tài liệu của skill trước để làm đúng định dạng.").
@@ -1021,6 +1030,41 @@ function withRecall(messages: unknown, recall: string): unknown {
   out[i] = { ...out[i], content: typeof c === "string" ? `${c}\n\n${recall}` : Array.isArray(c) ? [...c, { type: "text", text: recall }] : c };
   return out;
 }
+/** Lượt này đi đường nhanh được không: chat thường, không tệp, không skill tự chọn, không dự án hay hướng dẫn riêng, phiên của CLI chưa từng gọi công cụ, và câu hỏi rõ ràng không cần công cụ. */
+function fastTurn(body: Record<string, any>, user: UserRow, cli: NonNullable<ReturnType<typeof subCli>>, conv?: string): boolean { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (process.env.SYNCHRO_FAST_CHAT === "0" || body.noFast || !body.skills || body.feature === "code" || body.feature === "artifact" || body.project || body.studio || taskOf(body)) return false;
+  if ((body.system && body.system !== DEFAULT_SYSTEM) || (Array.isArray(body.pinned) && body.pinned.length) || (Array.isArray(body.pickedSkills) && body.pickedSkills.length)) return false;
+  return needsNoTools(routeInput(body)) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? "")) && sessionPlain(user.id, conv, cli);
+}
+const DEFAULT_SYSTEM = "Bạn là một trợ lý AI hữu ích.";
+/** Giữ chữ đầu của đường nhanh tới khi chắc đó không phải NEED_TOOLS (dấu hiệu này không được hiện cho người dùng). */
+function holdNeedTools(out?: (t: string) => void) {
+  let buf = "", open = false;
+  return (t: string) => {
+    if (open) { out?.(t); return; }
+    buf += t;
+    const s = buf.trimStart();
+    if (NEED_TOOLS.startsWith(s) || s.startsWith(NEED_TOOLS)) return;
+    open = true; out?.(buf);
+  };
+}
+const prewarmed = new Map<string, number>();
+/** Mở trang: khởi động sẵn tiến trình cho câu chào đầu tiên của người dùng, đúng model và hướng dẫn đường nhanh sẽ dùng. Mỗi người tối đa một lần mỗi phút; không tốn lượt nào của gói. */
+export async function prewarmChat(user: UserRow) {
+  if (process.env.SYNCHRO_FAST_CHAT === "0") return;
+  const now = Date.now();
+  if (now - (prewarmed.get(user.id) ?? 0) < 60_000) return;
+  if (prewarmed.size > 2000) prewarmed.clear();
+  prewarmed.set(user.id, now);
+  const { usable } = await usableModels(user);
+  const q: RouteInput = { text: "xin chào", attachments: 0, turns: 1, studio: false };
+  const r = routeModel(q, usable);
+  if (!r || subCli(r.model) !== "claude") return;
+  const body = { skills: true, feature: "chat" };
+  const pc = capsState(user).caps;
+  if (!pc) return;
+  prewarmClaude({ user, model: r.model, effort: r.effort, system: [`${topRule(user.id)}\n\n${DEFAULT_SYSTEM}`, FAST_RULES, contextOf(body, user)].filter(Boolean).join("\n\n") });
+}
 const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
@@ -1150,7 +1194,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const { messages, max_tokens = 1500, skills, model: picked, feature, project, effort: wanted, conv } = body;
   // Quy tắc hàng đầu (ghim trong bộ não) mở đầu lời nhắc hệ thống của mọi lượt người dùng trò chuyện: chat, Synchro Code, việc tự động,
   // giọng nói nối tiếp; gói subscription lẫn khóa API. Lời gọi nội bộ (đặt tên, rút bộ nhớ…) và artifact không kèm.
-  const system: string = useProfile(body) ? `${topRule(c.user.id)}\n\n${body.system || "Bạn là một trợ lý AI hữu ích."}` : body.system;
+  const system: string = useProfile(body) ? `${topRule(c.user.id)}\n\n${body.system || DEFAULT_SYSTEM}` : body.system;
   scope.feature = feature === "artifact" ? "artifact" : feature === "code" ? "code" : skills ? "chat" : "internal";
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
@@ -1162,7 +1206,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (feature === "artifact" && !am) return Response.json({ error: "Nội dung gửi tới model không hợp lệ." }, { status: 400 });
     // Hướng dẫn thuần văn bản theo Cài đặt → Khả năng (hỏi lại, artifact, hình minh họa trong chat).
     const pc = skills ? capsState(c.user).caps : null;
-    const planSys = pc ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
+    const fast = !!pc && !am && fastTurn(body, c.user, subCli(model)!, typeof conv === "string" && conv.length <= 64 ? conv : undefined);
+    const planSys = fast ? FAST_RULES : pc ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
     // Công cụ của Synchro cho gói (Claude Code, Codex, Antigravity): skill, thư viện plugin, connector, chạy code, dữ liệu đã lưu, danh sách việc —
     // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
     const cli = subCli(model)!;
@@ -1174,7 +1219,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // Trình duyệt chỉ gửi 60 tin gần nhất: số tin đã cắt bớt, để so nối tiếp phiên CLI với số tin thật.
     const cut = typeof body.histTotal === "number" && Array.isArray(messages) && body.histTotal > messages.length ? body.histTotal - messages.length : 0;
     try {
-      if (pc && !am && BRIDGE_CLIS.has(cli)) {
+      if (pc && !am && !fast && BRIDGE_CLIS.has(cli)) {
         const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
         const st = studio ? studioSkills(c.user.id, studio) : null;
         const t1 = Date.now();
@@ -1200,11 +1245,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
       // chờ hơn 10 giây chỉ để đọc lại phần này.
+      const say = am ? undefined : fast ? holdNeedTools(live()) : live();
       const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, nowBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-        messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: am ? undefined : live(), onToolUse: am ? undefined : toolUseSeen,
-        mcp: bridge ? { url: bridge.url, alive: bridge.alive } : undefined, web: body.web === true, fresh,
+        messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
+        fast, mcp: bridge ? { url: bridge.url, alive: bridge.alive } : undefined, web: !fast && body.web === true, fresh,
         total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
         onStatus: am ? undefined : (t) => { progress("step", t); },
         // Tìm web bằng công cụ dựng sẵn của CLI: hiện trong nhật ký làm việc như công cụ khác, nguồn gửi kèm kết quả.
@@ -1238,6 +1284,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         }
         // Lượt treo, hoặc đang bận lượt khác: thử lại chỉ khiến người dùng chờ thêm chừng ấy.
         if (res.status >= 500 && res.status !== 504 && !j.noRetry) {
+          // Đường nhanh lỗi: lượt đầy đủ bên dưới tự thử lại, không thử thêm ở đây.
+          if (fast) return res;
           await pause(1500);
           if (runSignal()?.aborted) return res;
           // Chữ của lần thử trước (nếu có) không nối vào chữ của lần này.
@@ -1249,6 +1297,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       type J = { text?: unknown; denied?: string[]; error?: unknown; cancelled?: boolean };
       let hist = turnMsgs as unknown[];
       let r = await tryOnce(hist);
+      // Đường nhanh không đủ: model báo cần công cụ, hoặc CLI lỗi (kể cả phiên cũ không nhận lượt không công cụ). Chưa có chữ nào tới người dùng: chạy lượt đầy đủ.
+      const needFull = () => fast && !runSignal()?.aborted && ((r.status === 200 && String((r.json as J).text ?? "").trim().startsWith(NEED_TOOLS)) || (r.status >= 500 && r.status !== 504 && !(r.json as { noRetry?: boolean }).noRetry));
+      if (needFull()) { deltaStep(); return chatTurn({ ...body, noFast: true }, c, scope, o); }
       // good: câu trả lời tốt gần nhất — lượt nhắc / tin nhắn thêm sau đó có lỗi thì vẫn giữ phần đã trả lời.
       let good: typeof r | null = null;
       // Lượt của CLI xong mà còn tin nhắn thêm chưa đọc: làm tiếp ngay trong cùng phiên của CLI (không chờ lượt sau). Gói mới báo
@@ -1268,6 +1319,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
         r = await tryOnce(hist);
+        // Tin nhắn thêm trong lúc đi đường nhanh mà cần công cụ: chạy lượt đầy đủ với cả tin nhắn đó.
+        if (needFull()) { deltaStep(); return chatTurn({ ...body, messages: hist, noFast: true }, c, scope, o); }
       }
       if (r.status !== 200 && good && r.status !== 499) {
         const g = good.json as J;
