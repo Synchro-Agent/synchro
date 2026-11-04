@@ -64,3 +64,4 @@ html body .sy-settings .s-item.s-hit{height:auto!important;min-height:34px;paddi
 .sp-bv{max-width:560px;margin:10px auto;gap:10px}
 .fp-note[role=alert]{flex-wrap:wrap}
 .bp-empty span+span{max-width:420px;text-align:center}
+.pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:11.5px;line-height:1.3}

@@ -1,5 +1,7 @@
 // Bản dịch cho Dự án, Hộp thư, Giọng nói, Kho kỹ năng, Cài đặt và Synchro Code (bổ sung vào i18n-dict.ts).
 export const FX_VI2EN: Record<string, string> = {
+  "Model chưa đọc được": "Not readable by models",
+  "Không trích được chữ từ tệp này nên model không đọc được": "No text could be extracted from this file, so models can't read it",
   "Chưa đọc được danh sách file.": "Couldn't read the file list.",
   "Không kiểm tra được workspace. Synchro tự thử lại sau ít giây.": "Couldn't check the workspace. Synchro will try again in a few seconds.",
   "Máy này chưa có giọng đọc cho ngôn ngữ này nên có thể đọc không rõ. Thêm giọng trong cài đặt của máy": "This device has no voice for this language, so it may sound unclear. You can add a voice in your device settings",

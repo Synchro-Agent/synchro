@@ -439,6 +439,8 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
                       <button className="pj-file-x" aria-label="Xóa" onClick={(e) => { e.stopPropagation(); delCtx([c.id]); }}><I.X size={12} /></button>
                       <b title={c.name}>{c.name}</b>
                       <span>{fmtSize(c.size ?? c.chars ?? 0)}</span>
+                      {/* Tệp không trích được chữ (ảnh, PDF scan hỏng): vẫn giữ tệp, nhưng nói rõ để không tưởng model đã đọc. */}
+                      {c.chars === 0 && !c.chunks?.length && <span className="pj-file-warn" data-tip="Không trích được chữ từ tệp này nên model không đọc được">Model chưa đọc được</span>}
                       <div className="pj-file-f"><em>{ext}</em><button className={`pj-cb ${sel.has(c.id) ? "on" : ""}`} aria-label="Chọn" onClick={(e) => { e.stopPropagation(); toggle(c.id); }}>{sel.has(c.id) && <I.Check size={12} />}</button></div>
                     </div>
                   );
