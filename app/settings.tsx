@@ -27,6 +27,7 @@ import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
 import { locale } from "./i18n";
 import { SharedChats } from "./shareui";
+import { UploadedFiles } from "./filesui";
 import { deleteServerSession, listServerSessions, saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
@@ -313,12 +314,11 @@ function Account() {
 function Privacy({ go }: { go: (t: string) => void }) {
   const app = useApp();
   const [panel, setPanel] = useState<"" | "shared" | "files" | "feedback">("");
-  const files = app.chats.flatMap((c) => c.msgs.flatMap((m) => (m.files ?? []).map((f) => ({ f, c: c.title }))));
   const fb = app.chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
   const title = { shared: "Shared chats", artifacts: "Shared artifacts", files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
     <>
-      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats and projects are kept in this browser and synced to your account on that server (incognito chats never leave the browser). The server also keeps what it needs to answer and run your tools: recent replies (7 days), the sessions of the AI plans you signed in to, memory and brain notes, uploaded files, skills, connectors, apps and your Synchro Code workspace. What you send to a model goes to that provider (Anthropic, OpenAI, Google or xAI), normally through the plan you signed in with. <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: "underline" }}>Privacy policy</a></p>
+      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats and projects are kept in this browser and synced to your account on that server (incognito chats are not synced, but still pass through the server to reach the model, and are removed from it about 10 minutes after each reply). The server also keeps what it needs to answer and run your tools: recent replies (7 days), the sessions of the AI plans you signed in to, memory and brain notes, uploaded files, skills, connectors, apps and your Synchro Code workspace. What you send to a model goes to that provider (Anthropic, OpenAI, Google or xAI), normally through the plan you signed in with. <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: "underline" }}>Privacy policy</a></p>
       <H>Your data</H>
       <Row t="Export data" d="Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them." top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
@@ -333,7 +333,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
             <button className="icon-btn" aria-label="Đóng" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{title}</h2>
             {panel === "shared" && <SharedChats say={app.say} confirm={app.confirm} />}
-            {panel === "files" && (files.length ? files.map((x, i) => <div key={i} className="item-row"><I.Clip size={14} /><span style={{ flex: 1 }}>{x.f}</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">No uploaded files.</div>)}
+            {panel === "files" && <UploadedFiles say={app.say} confirm={app.confirm} />}
             {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}
           </div>
         </div>

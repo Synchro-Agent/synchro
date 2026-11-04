@@ -125,13 +125,14 @@ export function opsSnapshot() {
   };
 }
 
-const ALERT_TEXT: Record<string, [string, string]> = {
-  disk_crit: ["Đĩa máy chủ sắp đầy", "Đĩa còn rất ít chỗ trống: Synchro từ chối tệp mới và cơ sở dữ liệu có thể ngừng ghi."],
-  mail_failing: ["Gửi email đang lỗi", "Thư gần nhất gửi không được, nên email đặt lại mật khẩu và xác minh có thể không tới người dùng."],
-  backup_failed: ["Sao lưu lỗi", "Lần sao lưu gần nhất thất bại."],
-  backup_stale: ["Sao lưu đã quá cũ", "Không có bản sao lưu mới trong hơn 36 giờ."],
-  backup_integrity: ["Bản sao lưu mới nhất không đạt kiểm tra", "Bản sao lưu mới nhất không qua kiểm tra toàn vẹn."],
-  cli_auth: ["Nhiều người bị từ chối đăng nhập gói AI", "Từ 3 người trở lên bị hãng từ chối đăng nhập trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó."],
+// Tiếng Việt, tiếng Anh: Hộp thư tự dịch theo ngôn ngữ của người đọc, còn email gửi cả hai vì máy chủ không biết ngôn ngữ của quản trị viên.
+const ALERT_TEXT: Record<string, [string, string, string, string]> = {
+  disk_crit: ["Đĩa máy chủ sắp đầy", "Đĩa còn rất ít chỗ trống: Synchro từ chối tệp mới và cơ sở dữ liệu có thể ngừng ghi.", "The server disk is almost full", "Very little disk space is left: Synchro refuses new files and the database may stop writing."],
+  mail_failing: ["Gửi email đang lỗi", "Thư gần nhất gửi không được, nên email đặt lại mật khẩu và xác minh có thể không tới người dùng.", "Email sending is failing", "The latest emails could not be sent, so password reset and verification emails may not reach people."],
+  backup_failed: ["Sao lưu lỗi", "Lần sao lưu gần nhất thất bại.", "Backup failed", "The last backup failed."],
+  backup_stale: ["Sao lưu đã quá cũ", "Không có bản sao lưu mới trong hơn 36 giờ.", "Backups are out of date", "No new backup in over 36 hours."],
+  backup_integrity: ["Bản sao lưu mới nhất không đạt kiểm tra", "Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.", "The newest backup failed its check", "The newest backup failed its integrity check."],
+  cli_auth: ["Nhiều người bị từ chối đăng nhập gói AI", "Từ 3 người trở lên bị hãng từ chối đăng nhập trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.", "Several people were refused an AI plan sign-in", "Three or more people were refused sign-in by a vendor in the last 24 hours. A CLI or vendor may have changed something."],
 };
 
 /** Chạy nền mỗi giờ: vấn đề nghiêm trọng mới thì báo vào Hộp thư và email của quản trị viên, mỗi loại tối đa một lần mỗi ngày. */
@@ -146,12 +147,12 @@ export async function opsWatch() {
   const base = (process.env.APP_URL ?? "https://synchro.net.nz").replace(/\/$/, "");
   const admins = db().prepare(`SELECT id, email, name FROM users WHERE email_verified = 1 AND status = 'active' AND email IN (${[...ADMIN_EMAILS].map(() => "?").join(",") || "''"})`).all(...ADMIN_EMAILS) as { id: string; email: string; name: string }[];
   for (const p of fresh) {
-    const [title, text] = ALERT_TEXT[p.code];
+    const [title, text, titleEn, textEn] = ALERT_TEXT[p.code];
     setSetting(`ops:alert:${p.code}`, String(Date.now()));
     for (const a of admins) {
       addNotice(a.id, title, `${text} Xem chi tiết ở Cài đặt → Sức khỏe hệ thống.`, "settings:Health");
       // Thư lỗi thì báo bằng thư cũng vô ích: Hộp thư ở trên là đủ.
-      if (p.code !== "mail_failing") sendMail(a.email, opsAlertMail({ base, title, text }), "alert");
+      if (p.code !== "mail_failing") sendMail(a.email, opsAlertMail({ base, title, text, titleEn, textEn }), "alert");
     }
   }
 }

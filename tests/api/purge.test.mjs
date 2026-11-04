@@ -113,6 +113,8 @@ console.log("5. Tệp tải lên có chủ");
   ok(OWN.mayUse(B.id, ids.shared) && OWN.mayUse(B.id, ids.onlyB), "chủ tệp đọc được");
   ok(!OWN.mayUse(X.id, ids.onlyB), "người khác biết mã băm vẫn không đọc được");
   const legacy = fid("d");
+  fs.mkdirSync(CACHE, { recursive: true }); fs.writeFileSync(path.join(CACHE, legacy + ".json"), "{}");
+  ok(!OWN.mayUse(X.id, fid("9")), "tệp đã bị xóa hẳn: biết mã băm cũng không nhận làm chủ được");
   ok(OWN.mayUse(X.id, legacy), "tệp cũ chưa có chủ: người đầu tiên dùng thành chủ (không làm hỏng lịch sử chat cũ)");
   ok(!OWN.mayUse(Y.id, legacy), "… rồi người khác không đọc được");
   process.env.SYNCHRO_UPLOAD_QUOTA_MB = "1";

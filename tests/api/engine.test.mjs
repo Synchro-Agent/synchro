@@ -26,7 +26,8 @@ const PORT = 4300 + Math.floor(Math.random() * 500);
 await startMock(PORT);
 const M = `http://127.0.0.1:${PORT}`;
 
-const mods = await loadTs(["ai/engine", "ai/selector", "ai/errors", "ai/cli_runtime", "ai/cli_auth", "ai/cli_engines", "ai/api_engine", "ai/subs", "providers"]);
+const mods = await loadTs(["ai/engine", "ai/selector", "ai/errors", "ai/cli_runtime", "ai/cli_auth", "ai/cli_engines", "ai/api_engine", "ai/subs", "providers", "authstore"]);
+const AS0 = mods.authstore;
 const { "ai/engine": E, "ai/selector": S, "ai/errors": X, "ai/cli_runtime": R, "ai/cli_auth": A, "ai/cli_engines": CE, "ai/api_engine": API, "ai/subs": SUBS, providers: P } = mods;
 const all = async (it) => { const a = []; for await (const e of it) a.push(e); return a; };
 
@@ -348,6 +349,34 @@ try {
     ok(t2.status === 200 && /lượt 2/.test(t2.json.text), "subTurn: câu tiếp theo nối đúng phiên CLI", JSON.stringify(t2));
     const t3 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "câu khác" }], conv });
     ok(t3.status === 200 && /lượt 1/.test(t3.json.text), "subTurn: lịch sử không khớp (sửa / tạo lại) → mở phiên mới", JSON.stringify(t3));
+    // Lịch sử phiên trên đĩa: đoạn chat ẩn danh không để lại gì, xóa đoạn chat xóa mọi phiên của nó (kể cả phiên cũ đã bị thay), không đụng đoạn chat khác.
+    {
+      const sdir = path.join(A.scopeDir("claude", me.id), "projects", "mock");
+      const sess = () => { try { return fs.readdirSync(sdir); } catch { return []; } };
+      const holds = (t) => sess().some((f) => fs.readFileSync(path.join(sdir, f), "utf8").includes(t));
+      ok(sess().length >= 2 && holds("câu khác"), "CLI giả lập ghi lịch sử phiên ra đĩa", sess().join());
+      const inc = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "bí mật ẩn danh 1" }], conv: "conv-inc", ephemeral: true });
+      await sleep(400);
+      ok(inc.status === 200 && !holds("bí mật ẩn danh 1"), "ẩn danh: trả lời bình thường, lịch sử phiên bị xóa ngay", JSON.stringify(inc));
+      const inc2 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "bí mật ẩn danh 1" }, { role: "assistant", content: "đáp" }, { role: "user", content: "bí mật ẩn danh 2" }], conv: "conv-inc", ephemeral: true });
+      await sleep(400);
+      ok(inc2.status === 200 && /lượt 1/.test(inc2.json.text) && !holds("bí mật ẩn danh"), "ẩn danh: không nối phiên, mỗi lượt gửi kèm lịch sử", JSON.stringify(inc2));
+      const row = AS0.db().prepare("SELECT COUNT(*) n FROM engine_sessions WHERE user_id = ? AND conv = 'conv-inc'").get(me.id).n;
+      ok(row === 0, "ẩn danh: không nhớ mã phiên");
+      const once = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "đặt tên giúp mình 123" }] });
+      await sleep(400);
+      ok(once.status === 200 && !holds("đặt tên giúp mình 123"), "lượt không thuộc đoạn chat nào cũng không để lại lịch sử");
+      const keep = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "đoạn chat khác còn giữ" }], conv: "conv-keep" });
+      ok(keep.status === 200 && holds("câu khác") && holds("tiếp nhé"), "đoạn chat thường vẫn có lịch sử, kể cả phiên cũ");
+      await SUBS.removeConvSessions(me.id, conv);
+      ok(!holds("câu khác") && !holds("tiếp nhé"), "xóa đoạn chat: mọi phiên của nó (phiên mới lẫn phiên đã bị thay) khỏi đĩa");
+      ok(holds("đoạn chat khác còn giữ"), "đoạn chat khác không bị đụng");
+      ok(fs.existsSync(path.join(A.scopeDir("claude", me.id), ".mock-login")) || !!A.engineEnv("claude", me.id).CLAUDE_CODE_OAUTH_TOKEN, "đăng nhập gói còn nguyên");
+      const again = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "chào" }, { role: "assistant", content: "x" }, { role: "user", content: "tiếp" }], conv });
+      ok(again.status === 200 && /lượt 1/.test(again.json.text), "đoạn chat đã xóa không còn nối vào phiên cũ", JSON.stringify(again));
+      await SUBS.removeConvSessions(me.id, conv);
+      ok(R.removeSessionFiles("/etc", "abcdefgh12345") instanceof Promise && (await R.removeSessionFiles(A.scopeDir("claude", me.id), "*")) === undefined, "mã phiên lạ hay đường dẫn ngoài nhà engine: không làm gì");
+    }
     // Quá 60 tin: trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số tin thật.
     const hist = (n) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `tin ${i}` }));
     const lg = "conv-long";

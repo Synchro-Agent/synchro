@@ -29,6 +29,7 @@ export function storeRef(uid: string, conv: string | undefined, name: string, co
 }
 /** Trang quyền riêng tư hứa giữ 30 ngày: dọn mỗi ngày, không chờ lần khởi động lại. */
 export const sweepRefs = () => { init().prepare("DELETE FROM tool_refs WHERE created_at < ?").run(Date.now() - KEEP_MS); };
+export const removeConvRefs = (uid: string, conv: string) => { init().prepare("DELETE FROM tool_refs WHERE user_id = ? AND conv = ?").run(uid, conv); };
 export const removeUserRefs = (uid: string) => { init().prepare("DELETE FROM tool_refs WHERE user_id = ?").run(uid); };
 
 const typeOf = (v: unknown): string => (v === null ? "null" : Array.isArray(v) ? `array(${v.length})` : typeof v);

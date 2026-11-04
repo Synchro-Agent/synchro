@@ -110,11 +110,11 @@ export function testMail(o: { base: string; lang: MailLang; when: string }): Mai
 }
 
 /** Cảnh báo vận hành gửi cho quản trị viên. */
-export function opsAlertMail(o: { base: string; title: string; text: string }): Mail {
+export function opsAlertMail(o: { base: string; title: string; text: string; titleEn: string; textEn: string }): Mail {
   const url = `${o.base}/`;
   return {
-    subject: `[Synchro] ${o.title}`,
-    html: frame(o.base, "vi", { pre: o.title, title: o.title, lead: esc(o.text), cta: { label: "Mở Synchro", url }, note: "Xem chi tiết ở Cài đặt → Sức khỏe hệ thống. Mỗi loại cảnh báo gửi tối đa một lần mỗi ngày." }),
-    text: `${o.title}\n\n${o.text}\n\nXem chi tiết ở Cài đặt → Sức khỏe hệ thống: ${url}\n\nSynchro`,
+    subject: `[Synchro] ${o.title} / ${o.titleEn}`,
+    html: frame(o.base, "vi", { pre: o.title, title: o.title, lead: `${esc(o.text)}<br><br>${esc(o.titleEn)}: ${esc(o.textEn)}`, cta: { label: "Mở Synchro / Open Synchro", url }, note: "Xem chi tiết ở Cài đặt → Sức khỏe hệ thống. Mỗi loại cảnh báo gửi tối đa một lần mỗi ngày. / See Settings → System health. Each kind of alert is sent at most once a day." }),
+    text: `${o.title}\n\n${o.text}\n\n${o.titleEn}\n\n${o.textEn}\n\nCài đặt → Sức khỏe hệ thống / Settings → System health: ${url}\n\nSynchro`,
   };
 }
