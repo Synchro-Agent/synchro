@@ -372,7 +372,7 @@ function Composer(p: {
     fetch("/api/skills").then((r) => r.json()).then((j) => (j.skills ?? []) as { name: string; enabled: boolean }[]).catch(() => []),
     fetch("/api/plugins?view=lite").then((r) => r.json()).then((j) => (j.plugins ?? []) as { slug: string; name: string; enabled: boolean; mine: { enabled: boolean }; catalogId: string | null }[]).catch(() => []),
   ]).then(([s, l]) => { setSkq(""); setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: !!x.catalogId?.startsWith("cd:") })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]); });
-  const loadCx = () => fetch("/api/connectors").then((r) => r.json()).then((j) => setCx(j)).catch(() => setCx({ connectors: [], directory: [] }));
+  const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [], directory: [] }));
   const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "add" || k === "access") void loadCx(); };
   const cxPatch = async (id: string, body: Record<string, unknown>) => {
     const r = await fetch(`/api/connectors/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

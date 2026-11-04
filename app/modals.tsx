@@ -7,6 +7,7 @@ import { SettingsBody } from "./settings";
 import { usePref, useApp } from "./store";
 import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
+import { Boundary } from "./ui";
 
 export function Confirm({ title, text, ok, onCancel, onOk }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void }) {
   return (
@@ -236,7 +237,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
         </div>
         <div className="s-body" key={tab}>
           <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
-          <SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} />
+          <Boundary resetKey={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
         </div>
       </div>
     </div>

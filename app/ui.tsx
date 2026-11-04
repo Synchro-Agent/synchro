@@ -1,7 +1,9 @@
 "use client";
 
 import { Loader } from "./brand";
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
+import { armDraft } from "./draft";
+import { tr } from "./i18n";
 
 export function Menu({ open, className = "", style, children }: { open: boolean; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(open);
@@ -44,4 +46,23 @@ export function Fade({ show, children, ms = 170 }: { show: boolean; children: Re
   }, [show, ms]);
   if (!show && !mounted) return null;
   return <div className={`lw ${show ? "" : "closing"}`}>{show ? children : last.current}</div>;
+}
+
+// Khung bắt lỗi cho một phần của trang: một tin nhắn hay một tab Cài đặt lỗi không kéo sập cả app (và không mất phần đang gõ).
+// resetKey đổi (đổi mục, tin nhắn có thêm chữ) thì tự thử dựng lại.
+export class Boundary extends Component<{ children: React.ReactNode; resetKey?: unknown; compact?: boolean }, { err: boolean }> {
+  state = { err: false };
+  static getDerivedStateFromError() { return { err: true }; }
+  componentDidCatch(e: unknown) { console.error(e); }
+  componentDidUpdate(p: { resetKey?: unknown }) { if (this.state.err && p.resetKey !== this.props.resetKey) this.setState({ err: false }); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className={`err-box${this.props.compact ? " sm" : ""}`} role="alert">
+        <b>{tr("Phần này gặp lỗi khi hiển thị")}</b>
+        <span>{tr("Các phần khác của Synchro vẫn dùng được bình thường.")}</span>
+        <button className="btn" onClick={() => { armDraft(); this.setState({ err: false }); }}>{tr("Thử lại")}</button>
+      </div>
+    );
+  }
 }

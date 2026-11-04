@@ -36,9 +36,10 @@ export function useUsage(provider?: string) {
   const key = provider ?? "";
   const [st, setSt] = useState<UsageState | null>(cache?.key === key ? cache.v : null);
   const [, tick] = useState(0);
-  const load = useCallback((fresh = false) => {
+  // idle: lượt hỏi định kỳ, không ai vừa yêu cầu số mới: máy chủ trả số đã có, không mở CLI (codex, agy) chỉ để đọc hạn mức.
+  const load = useCallback((fresh = false, idle = false) => {
     const q = provider === "*" ? "?all=1" : provider ? `?provider=${encodeURIComponent(provider)}` : "";
-    fetch(`/api/usage${q}${fresh ? `${q ? "&" : "?"}fresh=1` : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    fetch(`/api/usage${q}${fresh ? `${q ? "&" : "?"}fresh=1` : idle ? `${q ? "&" : "?"}idle=1` : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
       if (j?.limits) { cache = { key, v: j }; setSt(j); listeners.forEach((f) => f()); }
     }).catch(() => {});
   }, [provider, key]);
@@ -48,7 +49,8 @@ export function useUsage(provider?: string) {
     const vis = () => { if (!document.hidden) load(); };
     window.addEventListener("synchro:usage", on);
     document.addEventListener("visibilitychange", vis);
-    const t = setInterval(load, 60_000);
+    // Tab đang ẩn thì không hỏi; quay lại tab thì vis() đọc lại ngay.
+    const t = setInterval(() => { if (!document.hidden) load(false, true); }, 60_000);
     // Đồng hồ đếm ngược "Đặt lại sau…" tự cập nhật mỗi 30 giây.
     const c = setInterval(() => tick((x) => x + 1), 30_000);
     return () => { window.removeEventListener("synchro:usage", on); document.removeEventListener("visibilitychange", vis); clearInterval(t); clearInterval(c); };
@@ -377,12 +379,20 @@ function DailyChart({ d, cost }: { d: Details | null; cost: boolean }) {
 export function UsageSettings({ go }: { go?: (t: string) => void }) {
   const st = useUsage("*");
   const [d, setD] = useState<Details | null>(null);
-  useEffect(() => {
-    const load = () => fetch(`/api/usage/details?tz=${new Date().getTimezoneOffset()}`, { cache: "no-store" }).then((r) => r.json()).then(setD).catch(() => {});
-    load();
-    window.addEventListener("synchro:usage", load);
-    return () => window.removeEventListener("synchro:usage", load);
+  const [dErr, setDErr] = useState(false);
+  // Máy chủ trả lỗi dạng { error } (phiên hết hạn, mất kết nối): từng làm cả app sập ở d.days.reduce. Chỉ nhận đúng dữ liệu, còn lại báo lỗi kèm nút thử lại.
+  const loadD = useCallback(() => {
+    setDErr(false);
+    return fetch(`/api/usage/details?tz=${new Date().getTimezoneOffset()}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => {
+      if (!Array.isArray(j?.days)) throw new Error("bad");
+      setD({ ...j, byModel: j.byModel ?? [], byPlan: j.byPlan ?? [], byFeature: j.byFeature ?? [] });
+    }).catch(() => setDErr(true));
   }, []);
+  useEffect(() => {
+    void loadD();
+    window.addEventListener("synchro:usage", loadD);
+    return () => window.removeEventListener("synchro:usage", loadD);
+  }, [loadD]);
   // Hãng chỉ có khóa API (DeepSeek) mà chưa nối: chỉ quản trị viên mới nối được nên chỉ hiện cho quản trị viên.
   const vendors = (st?.vendors ?? []).filter((v) => v.mode !== "none" || !!v.cli || st?.admin);
   const callsOf = (v: VendorUsage["vendor"]) => d?.days.reduce((a, x) => a + (x.calls[v] ?? 0), 0) ?? 0;
@@ -445,6 +455,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       )}
 
       <h3 className="sec">{L("30 ngày qua", "Last 30 days")}</h3>
+      {dErr && !d && <div className="err-box sm" role="alert"><b>{L("Chưa tải được số liệu mức dùng", "Couldn't load usage figures")}</b><button className="btn" onClick={() => void loadD()}>{L("Thử lại", "Try again")}</button></div>}
       <div className="us-stats" style={{ "--n": Math.min(stats.length, 4) } as React.CSSProperties}>{stats.slice(0, 4).map(([v, t]) => <div key={t}><b>{v}</b><span>{t}</span></div>)}</div>
       <DailyChart d={d} cost={apiNow} />
 
