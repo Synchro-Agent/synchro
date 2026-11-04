@@ -7,5 +7,16 @@ export const FX_VI2EN: Record<string, string> = {
   "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây.": "Synchro is restarting to update. Try again in a few seconds.",
   "Máy chủ phản hồi quá lâu. Thử lại sau ít phút.": "The server took too long to respond. Try again in a few minutes.",
   "Lỗi máy chủ. Vui lòng thử lại.": "Server error. Please try again.",
+  "Không hỏi được máy chủ Synchro. Thử lại sau ít phút.": "Couldn't reach the Synchro server. Try again in a few minutes.",
+  "Trình duyệt đang mất mạng. Có mạng lại thì bấm Kết nối lại.": "Your browser is offline. Press Reconnect once you're back online.",
+  "Workspace chưa dùng được.": "The workspace isn't available.",
+  "Workspace đang tắt. Bấm Kết nối lại để bật.": "The workspace is off. Press Reconnect to start it.",
+  "Workspace vẫn chạy nhưng terminal chưa nối được. Bấm Kết nối lại, nếu vẫn lỗi thì báo quản trị viên.": "The workspace is running but the terminal couldn't connect. Press Reconnect, and tell your administrator if it keeps failing.",
 };
-export const FX_EN2VI: Record<string, string> = {};
+export const FX_EN2VI: Record<string, string> = {
+  "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan.": "Kết nối Claude, ChatGPT, Gemini và Grok bằng gói của chính bạn. Hiện chưa liên kết khóa API dùng chung, nên mỗi người đăng nhập bằng gói của mình.",
+  "The model picker keeps one group per provider and shows your plan's models while you are signed in.": "Bộ chọn model có một nhóm cho mỗi hãng và hiện model của gói khi bạn đã đăng nhập.",
+  "Synchro shows when the plan resets. Until then you can keep going with another provider's plan if you signed in to one.": "Synchro cho biết khi nào gói hồi lại. Trong lúc chờ, bạn dùng tiếp bằng gói của hãng khác nếu đã đăng nhập.",
+  "These limits cover models reached through a shared API key, where usage is the real API cost of each call. Models a person signs in to with their own plan follow that plan's limits instead.": "Các hạn mức này áp dụng cho model chạy qua khóa API dùng chung, tính theo chi phí API thật của mỗi lần gọi. Model mà mỗi người đăng nhập bằng gói riêng thì theo hạn mức của gói đó.",
+  "No shared API key is linked, so these limits have no effect right now. Everyone uses their own AI plan, and that plan's limits apply.": "Chưa liên kết khóa API dùng chung nên các hạn mức này hiện chưa có tác dụng. Mọi người dùng gói AI của chính mình và theo hạn mức của gói đó.",
+};

@@ -5,8 +5,8 @@ import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type Pro
 import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
-type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
-let state: State = { providers: [], default: null, allowed: [], effort: {}, loaded: false };
+type State = { providers: ProviderInfo[]; sharedApi: boolean; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
+let state: State = { providers: [], sharedApi: false, default: null, allowed: [], effort: {}, loaded: false };
 const subs = new Set<() => void>();
 let inflight: Promise<void> | null = null;
 // Lần hỏi đầu có thể lỗi hoặc chưa có hãng nào (máy chủ vừa khởi động lại sau deploy, nginx nạp lại cấu hình, mạng chập chờn): bộ chọn
@@ -21,7 +21,7 @@ export const modelsSettled = () => tries >= RETRY_S.length;
 export function refreshModels() {
   inflight ??= fetch("/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => { if (j) { state = { providers: j.providers ?? [], default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
+    .then((j) => { if (j) { state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
     .catch(() => false)
     .then((ok) => {
       if (ok) tries = 0;

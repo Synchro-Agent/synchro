@@ -334,7 +334,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       </div>
 
       <h3 className="sec">Usage limits</h3>
-      <p className="d adm-privacy"><UsageIcon size={14} />Synchro uses models through their APIs. Usage is the real API cost of each call, so you can cap how much each person spends.</p>
+      {/* Hạn mức ở đây chỉ tính chi phí khóa API dùng chung; model chạy bằng gói của từng người theo hạn mức của gói (chatengine, /api/llm bỏ qua overLimit). */}
+      <p className="d adm-privacy"><UsageIcon size={14} />{api?.catalog.some((p) => p.models.length) ? "These limits cover models reached through a shared API key, where usage is the real API cost of each call. Models a person signs in to with their own plan follow that plan's limits instead." : "No shared API key is linked, so these limits have no effect right now. Everyone uses their own AI plan, and that plan's limits apply."}</p>
       <UsageAdmin say={app.say} Toggle={Toggle} />
 
       <h3 className="sec">Access</h3>

@@ -18,5 +18,6 @@ export async function GET(req: Request) {
   // khóa API dùng chung khi chưa đăng nhập gói hay người dùng đã đồng ý dùng API thay gói. Model của gói luôn dùng được với chính họ.
   const merged = await mergedProviders(c.user, providers).catch(() => providers);
   const subKeys = merged.flatMap((p) => p.plan?.models.map((m) => m.key) ?? []);
-  return Response.json({ providers: merged, default: pickDefault(cat, main), allowed: perms.models.includes(ALL) ? perms.models : [...perms.models, ...subKeys], effort: perms.effort ?? {} });
+  // sharedApi: máy chủ có model qua khóa API dùng chung (giao diện chỉ nói về khóa dùng chung khi có thật).
+  return Response.json({ providers: merged, sharedApi: providers.length > 0, default: pickDefault(cat, main), allowed: perms.models.includes(ALL) ? perms.models : [...perms.models, ...subKeys], effort: perms.effort ?? {} });
 }

@@ -2,6 +2,7 @@
 // Các khung bên phải của Synchro Code: terminal (PTY thật trong workspace), trình duyệt (Chromium của workspace,
 // người dùng và agent cùng điều khiển), file (cây thư mục + Monaco) và session rail (môi trường, ngữ cảnh, thay đổi git).
 import { tr } from "./i18n";
+import { termDown } from "./apierr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import "@xterm/xterm/css/xterm.css";
@@ -81,12 +82,18 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
             if (typeof e.data === "string") { try { const j = JSON.parse(e.data); if (j.error) t.write(`\r\n\x1b[31m${j.error}\x1b[0m\r\n`); } catch {} }
             else t.write(new Uint8Array(e.data as ArrayBuffer));
           };
-          // Đứt kết nối (đổi mạng, máy chủ khởi động lại): tự nối lại vài lần, thưa dần, và nói rõ lý do; hết lượt thì mới hiện nút Kết nối lại.
+          // Đứt kết nối (đổi mạng, máy chủ khởi động lại, workspace tắt): tự nối lại vài lần, thưa dần. Mã 1006 chỉ có nghĩa là kết nối đứt,
+          // không nói được do đâu, nên chỉ nói mất mạng khi trình duyệt báo mất mạng; hết lượt thì hỏi máy chủ tình trạng thật rồi mới hiện nút Kết nối lại.
           s.onclose = (e) => {
             if (ws !== s || disposed) return;
-            const why = e.reason ? `: ${e.reason}` : e.code === 1006 ? `: ${tr("mất kết nối mạng")}` : "";
+            const why = e.reason ? `: ${e.reason}` : navigator.onLine === false ? `: ${tr("mất kết nối mạng")}` : "";
             if (retries < 4) { const wait = 1000 * 2 ** retries++; t.write(`\r\n\x1b[2m[${tr("Đã ngắt kết nối")}${why}. ${tr("Đang nối lại…")}]\x1b[0m\r\n`); setSt("connecting"); timer = setTimeout(() => { if (!disposed) void connect(); }, wait); return; }
             setSt("closed"); t.write(`\r\n\x1b[2m[${tr("Đã ngắt kết nối")}${why}]\x1b[0m\r\n`);
+            void fetch("/api/ws").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j: { available?: boolean; reason?: string; running?: boolean } | null) => {
+              if (disposed || ws !== s) return;
+              const msg = termDown(j, navigator.onLine !== false);
+              t.write(`\x1b[2m${tr(msg)}\x1b[0m\r\n`);
+            });
           };
         } catch (e) { t.write(`\x1b[31m${(e as Error).message}\x1b[0m\r\n`); setSt("closed"); }
       };
