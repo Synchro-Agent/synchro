@@ -118,6 +118,30 @@ const tall = await P.previewOf([{ path: "_preview/p1.png", data: await png(1080,
 const tm = await meta(tall.image);
 ok(tm.height > 1400, "video dọc: ô cao theo ảnh, không thu bé lại thành một vệt", `${tm.width}x${tm.height}`);
 
+console.log("4. Chạy lại cùng đường dẫn");
+{
+  const outs = [], by = new Map(), gone = [];
+  const rm = (id) => gone.push(id);
+  P.mergeOuts(outs, by, ["bao-cao.xlsx", "a/x.png"], [{ id: "1" }, { id: "2" }], rm);
+  P.mergeOuts(outs, by, ["khac.pdf"], [{ id: "3" }], rm);
+  P.mergeOuts(outs, by, ["bao-cao.xlsx"], [{ id: "4" }], rm);
+  ok(outs.map((o) => o.id).join() === "4,2,3", "bản mới thay bản cũ tại chỗ, không thêm thẻ trùng", JSON.stringify(outs));
+  ok(gone.join() === "1", "bản cũ bị xóa khỏi kho", gone.join());
+  P.mergeOuts(outs, by, ["b/x.png"], [{ id: "5" }], rm);
+  ok(outs.length === 4, "cùng tên nhưng khác thư mục: hai tệp khác nhau");
+}
+
+console.log("5. Quy tắc cho model khớp với thực tế");
+const rules = fs.readFileSync("app/coderun.ts", "utf8"), docker = fs.readFileSync("workspace/Dockerfile", "utf8"), setup = fs.readFileSync("workspace/setup.sh", "utf8"), engine = fs.readFileSync("app/chatengine.ts", "utf8");
+ok(!/công thức \([^)]*XLOOKUP/.test(rules) && /không dùng hàm mới \(XLOOKUP/.test(rules), "không khuyên XLOOKUP (LibreOffice trong image không tính được)");
+ok(rules.includes('#,##0 "₫"') && !rules.includes('"#,##0 ₫"'), "định dạng tiền có ngoặc kép");
+ok(/\.last_outputs/.test(rules) && !/FontSize=22,Outline=2'"; /.test(rules) && /subfit\.py/.test(rules), "nói đúng nơi đọc tệp lần trước và cách làm phụ đề");
+ok(!/ảnh đầu tiên/.test(rules) && /PREVIEW_MAX/.test(rules), "nói đúng số ảnh model được xem");
+ok(/fonts-crosextra-carlito/.test(docker) && /fonts-crosextra-caladea/.test(docker), "image có font thay thế Calibri, Cambria");
+ok(/libreoffice-calc-nogui/.test(docker) && /COPY[^\n]*subfit\.py[^\n]*xlsx_recalc\.py/.test(docker) && /xlsx_recalc\.py --write-profile/.test(docker), "image có LibreOffice, công cụ đi kèm, hồ sơ luôn tính lại");
+ok(/subfit\.py/.test(setup) && /xlsx_recalc\.py/.test(setup), "đổi công cụ đi kèm thì image được build lại");
+ok(/recalc: true/.test(engine) && /Synchro chưa có công cụ tạo ảnh/.test(engine), "run_code bật tính lại; model nói thật về việc tạo ảnh");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

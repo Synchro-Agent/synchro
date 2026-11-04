@@ -48,6 +48,16 @@ export async function previewOf(files: { path: string; data: Buffer }[]): Promis
   } catch { return undefined; }
 }
 
+/** Bản mới của cùng đường dẫn trong cùng lượt thay bản cũ tại chỗ (giữ thứ tự thẻ tệp), xóa bản cũ khỏi kho. by: đường dẫn → id đã giao trong lượt. */
+export function mergeOuts<T extends { id: string }>(outs: T[], by: Map<string, string>, paths: string[], saved: T[], remove: (id: string) => void) {
+  saved.forEach((o, i) => {
+    const old = by.get(paths[i]), at = old ? outs.findIndex((f) => f.id === old) : -1;
+    if (old) remove(old);
+    if (at >= 0) outs[at] = o; else outs.push(o);
+    by.set(paths[i], o.id);
+  });
+}
+
 /** Thẻ <preview> trong kết quả công cụ: nói đúng những ảnh model thực sự được xem. */
 export function previewNote(p: Preview | undefined): string {
   if (!p) return "";

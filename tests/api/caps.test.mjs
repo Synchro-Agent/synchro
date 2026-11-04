@@ -168,6 +168,18 @@ k = await runIn("khac-" + Date.now().toString(36), "import os\nprint('co assets:
 ok(/co assets: False/.test(k.text ?? ""), "đoạn chat khác không thấy thư mục của đoạn chat này", (k.text ?? "").slice(0, 300));
 k = await runIn(keepConv, "import time\ntime.sleep(20)", { timeout: 6 });
 ok(/quá 6 giây/.test(k.text ?? ""), "tham số timeout của run_code được áp dụng", (k.text ?? "").slice(0, 300));
+// Tệp hỏng không thành tệp của người dùng; lần sau vẫn đọc được để kiểm tra hoặc cứu.
+k = await runIn(keepConv, "import time\nopen('outputs/do-dang.mp4','w').write('do dang')\ntime.sleep(20)", { timeout: 6 });
+ok(!(k.files ?? []).some((f) => f.name === "do-dang.mp4"), "lần chạy quá giờ: tệp dở không tới người dùng", JSON.stringify(k.files));
+k = await runIn(keepConv, "print('doc lai:', open('.last_outputs/do-dang.mp4').read())");
+ok(/doc lai: do dang/.test(k.text ?? ""), "tệp dở vẫn đọc được ở .last_outputs/", (k.text ?? "").slice(0, 300));
+k = await runIn(keepConv, "open('outputs/loi.csv','w').write('a')\nraise SystemExit(3)");
+ok(!(k.files ?? []).some((f) => f.name === "loi.csv"), "lần chạy lỗi: không giao tệp", JSON.stringify(k.files));
+k = await runIn(keepConv, "open('outputs/tot.csv','w').write('a,b')\nprint('xong')");
+const tot = (k.files ?? []).find((f) => f.name === "tot.csv");
+ok(!!tot, "lần chạy thành công: giao tệp", JSON.stringify(k.files));
+k = await runIn(keepConv, "import subprocess\nprint('co san pham:', open('.last_outputs/tot.csv').read())");
+ok(/co san pham: a,b/.test(k.text ?? "") && !(k.files ?? []).length, "lần kiểm tra đọc tệp lần trước mà không tạo thêm thẻ tệp, không phải dựng lại", (k.text ?? "").slice(0, 300));
 
 console.log("8. Mạng");
 r = await chat(admin, "Thử truy cập mạng");

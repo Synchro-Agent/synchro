@@ -186,11 +186,13 @@ try {
   if (run("doc")) {
     console.log("Tài liệu");
     await ask("Soạn kế hoạch ra mắt sản phẩm mới");
-    await check("Tài liệu", "Word (.doc)", {}, (n, s) => n.endsWith(".doc") && s > 500);
+    await check("Tài liệu", "Word (.docx)", {}, (n, s) => n.endsWith(".docx") && s > 3000);
     await check("Tài liệu", "PDF", { expectFile: false }, (p) => p.html.length > 500);
     await check("Tài liệu", "Markdown (.md)", {}, (n, s) => n.endsWith(".md") && s > 100);
-    const doc = readFileSync(`${DL}/de-xuat-trien-khai-plugins.doc`, "utf8");
-    ok(/<h1>/.test(doc) && (doc.match(/<h2>/g) ?? []).length >= 3 && !/class="w"/.test(doc), `Word: tiêu đề h1 + ${(doc.match(/<h2>/g) ?? []).length} mục h2, không còn span từng chữ`, doc.slice(0, 600));
+    // Tệp Word thật (.docx): tiêu đề đúng cấp theo Markdown gốc.
+    const raw = readFileSync(`${DL}/de-xuat-trien-khai-plugins.docx`);
+    const doc = await (await createRequire(process.cwd() + "/package.json")("jszip").loadAsync(raw)).file("word/document.xml").async("string");
+    ok(raw.subarray(0, 2).toString() === "PK" && /w:val="Heading1"/.test(doc) && (doc.match(/w:val="Heading2"/g) ?? []).length >= 3, `Word: tệp .docx thật, tiêu đề Heading1 + ${(doc.match(/w:val="Heading2"/g) ?? []).length} mục Heading2`, doc.slice(0, 600));
     const pr = prints["Tài liệu-PDF"]?.html ?? "";
     ok(/<h1>/.test(pr) && !/class="w"/.test(pr), "PDF tài liệu: tiêu đề đúng cấp", pr.slice(0, 400));
   }

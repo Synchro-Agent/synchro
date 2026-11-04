@@ -95,6 +95,7 @@ function pdfBook(n) {
 const docs = new Map();
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, "http://x");
+  if (u.pathname === "/htmlblocks.mjs") { r.writeHead(200, { "content-type": "text/javascript", "access-control-allow-origin": "*" }); return r.end(R("typescript").transpileModule(fs.readFileSync("app/htmlblocks.ts", "utf8"), { compilerOptions: { module: 99, target: 9 } }).outputText); }
   if (u.pathname.startsWith("/vendor/")) { const f = path.join(process.cwd(), "public", "vendor", path.basename(u.pathname)); if (fs.existsSync(f)) { r.writeHead(200, { "content-type": "text/javascript", "access-control-allow-origin": "*" }); return r.end(fs.readFileSync(f)); } r.writeHead(404); return r.end(); }
   r.writeHead(200, { "content-type": "text/html; charset=utf-8" }); r.end(docs.get(u.pathname) ?? "<!doctype html>");
 });
@@ -201,7 +202,22 @@ try {
   r = await open("ngan.pdf", pdfBook(3));
   ok(r.st?.pages === 3 && (await ev(`document.querySelector(".note")`)) === null, "tệp ngắn không có dòng báo");
 
-  console.log("5. Bản dịch");
+  console.log("5. Tài liệu đã dựng → khối cho tệp Word");
+  await P("Page.navigate", { url: `${B}/blank` }); await sleep(200);
+  const blocks = await ev(`import("${B}/htmlblocks.mjs").then((m)=>{const d=new DOMParser().parseFromString(${JSON.stringify(`<div><h1>Tiêu <span class="w">đề</span></h1><p>Đoạn <strong>đậm</strong> <em>nghiêng</em> <a href="https://a.vn/x">link</a> <a href="javascript:alert(1)">xấu</a> <code>mã</code></p><div class="wrap"><button>Sao chép</button><pre><code>dòng 1\ndòng 2\n</code></pre></div><ul><li>Một<ul><li>Con</li></ul></li><li><p>Hai</p></li></ul><ol><li>A</li></ol><ol><li>B</li></ol><blockquote><p>Trích</p></blockquote><hr><div><table><thead><tr><th>C1</th></tr></thead><tbody><tr><td>v <strong>1</strong></td></tr></tbody></table></div><p><img src="data:image/png;base64,AAAA" alt="Ảnh A"></p><div><svg viewBox="0 0 1 1"></svg></div>chữ rời</div>`)},"text/html");return m.htmlToBlocks(d.body)})`);
+  const kinds = blocks.map((b) => b.k).join();
+  ok(kinds === "h,p,code,li,li,li,li,li,quote,hr,table,img,img,p", "đủ loại khối, đúng thứ tự, nút giao diện bị bỏ", kinds);
+  ok(blocks[0].level === 1 && blocks[0].runs.map((r) => r.t).join("") === "Tiêu đề", "tiêu đề đúng cấp", JSON.stringify(blocks[0]));
+  const rs = blocks[1].runs;
+  ok(rs.find((r) => r.t === "đậm")?.b === 1 && rs.find((r) => r.t === "nghiêng")?.i === 1 && rs.find((r) => r.t === "link")?.href === "https://a.vn/x" && rs.find((r) => r.t === "mã")?.code === 1, "định dạng trong đoạn", JSON.stringify(rs));
+  ok(!rs.find((r) => r.t === "xấu")?.href, "link javascript: bị bỏ", JSON.stringify(rs));
+  ok(blocks[2].text === "dòng 1\ndòng 2", "khối mã giữ xuống dòng", JSON.stringify(blocks[2]));
+  ok(blocks[3].level === 0 && blocks[4].level === 1 && blocks[4].runs[0].t === "Con" && blocks[5].runs[0].t === "Hai", "danh sách lồng nhau đúng cấp", JSON.stringify(blocks.slice(3, 6)));
+  ok(blocks[6].ordered && blocks[7].ordered && blocks[6].list !== blocks[7].list, "hai danh sách số là hai danh sách riêng (đánh số lại từ 1)", JSON.stringify(blocks.slice(6, 8)));
+  ok(blocks[10].rows[0].head && !blocks[10].rows[1].head && blocks[10].rows[1].cells[0].some((r) => r.b), "bảng có dòng tiêu đề", JSON.stringify(blocks[10]));
+  ok(blocks[11].src?.startsWith("data:image/png") && blocks[12].svg?.includes("svg"), "ảnh và sơ đồ giữ lại", JSON.stringify(blocks.slice(11, 13)));
+
+  console.log("6. Bản dịch");
   const dict = fs.readFileSync("app/i18n-dict.ts", "utf8");
   const missing = V.STRINGS.filter((s) => !dict.includes(JSON.stringify(s) + ":"));
   ok(!missing.length, "mọi chuỗi của khung xem có tiếng Anh", missing.join(" | "));

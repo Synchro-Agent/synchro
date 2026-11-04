@@ -25,7 +25,7 @@ import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { removeOutput, saveOutputs, type OutFile } from "./outputs";
-import { previewNote, previewOf } from "./runpreview";
+import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, subCli, subTurn } from "./ai/subs";
@@ -202,13 +202,7 @@ function deliver(x: Exec, r: RunOutput) {
   const kept = r.files.filter((f) => !f.path.startsWith("_preview/"));
   if (r.exit !== 0 || r.timedOut) return { saved: [] as OutFile[], held: kept.map((f) => f.path) };
   const saved = saveOutputs(x.uid, kept);
-  const by = (x.outPaths ??= new Map<string, string>());
-  saved.forEach((o, i) => {
-    const old = by.get(kept[i].path), at = old ? x.outs.findIndex((f) => f.id === old) : -1;
-    if (old) removeOutput(x.uid, old);
-    if (at >= 0) x.outs[at] = o; else x.outs.push(o);
-    by.set(kept[i].path, o.id);
-  });
+  mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), kept.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
   return { saved, held: [] as string[] };
 }
 async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
@@ -250,6 +244,7 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Không nói "không làm được" khi chưa thử các cách khả thi. Thật sự bị chặn thì nói đã thử gì, vì sao chưa được, và giao phương án tốt nhất có thể ngay trong lượt này.
 - Chu đáo: trình bày rõ ràng, tiếng Việt chuẩn, đúng chính tả; nêu điều quan trọng người dùng cần biết (rủi ro, giới hạn, bước tiếp theo) một cách ngắn gọn.
 - Giữ riêng tư: không đưa tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài khi họ chưa yêu cầu rõ.
+- Ảnh do AI vẽ: Synchro chưa có công cụ tạo ảnh. Người dùng xin ảnh chụp như thật hay tranh do AI vẽ thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi làm luôn phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc viết sẵn câu lệnh để họ dán vào công cụ tạo ảnh khác.
 </working_standards>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
