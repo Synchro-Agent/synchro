@@ -126,8 +126,8 @@ try {
   await click(`document.querySelector(".us-page .err-box .btn")`, "Thử lại");
   await until(`!document.querySelector(".us-page .err-box")`, 10000, "thử lại được");
   ok(true, "Thử lại tải được số liệu");
-  await key("Escape"); await sleep(300);
-  ok(await ev(`!document.querySelector(".settings")`), "Esc đóng Cài đặt");
+  await key("Escape");
+  ok(await until(`!document.querySelector(".settings")`, 3000, "Esc đóng Cài đặt").then(() => true, () => false), "Esc đóng Cài đặt");
 
   console.log("Thẻ lỗi của lượt chat");
   await ev(`(() => { const f = window.fetch; window.__llm = []; window.fetch = (u, i) => { if (String(u).includes("/api/llm") && i?.body) window.__llm.push(i.body); return f(u, i); }; })()`);

@@ -840,9 +840,9 @@ function routeStep(S, M, q, toolNames) {
   const r = /<skill_routing>([\s\S]*?)<\/skill_routing>/.exec(S);
   if (!r || !toolNames.includes("load_skill")) return null;
   // Như model thật tự cân nhắc: biểu đồ, sơ đồ trong chat hay chạy code thì làm luôn, không cần đọc skill thiết kế được gợi ý.
-  if (/\b(bieu do|so do|mermaid|matplotlib|png|chart|python)\b/.test(norm(q))) return null;
+  if (/\b(bieu do|so do|mermaid|matplotlib|png|chart|python|cong van|to trinh|bien ban)\b/.test(norm(q))) return null;
   const item = /([a-z0-9-]+)(?: \(thư viện ([^·)]+) · ([a-z0-9-]+)\))?/;
-  const hinted = [...r[1].matchAll(/^- ([a-z0-9-]+)(?: \(thư viện ([^·)]+) · ([a-z0-9-]+)\))?:/gm)].map((x) => ({ name: x[1], label: x[2]?.trim(), key: x[3] }));
+  const hinted = [...r[1].matchAll(/^- ([a-z0-9-]+(?::[a-z0-9-]+)?)(?: \(thư viện ([^·)]+) · ([a-z0-9-]+)\))?:/gm)].map((x) => ({ name: x[1], label: x[2]?.trim(), key: x[3] }));
   const recent = (/đã dùng: ([^\n]*?)\. Nếu/.exec(r[1])?.[1] ?? "").split(/, (?=[a-z0-9-]+(?: \(|$))/).map((p) => item.exec(p)).filter(Boolean).map((x) => ({ name: x[1], label: x[2]?.trim(), key: x[3] }));
   const edit = /\b(doi|sua|them|bot|lam lai|chinh|tong mau)\b/.test(norm(q));
   const want = (edit && recent.length ? [...recent, ...hinted] : [...hinted, ...recent]).slice(0, 2);

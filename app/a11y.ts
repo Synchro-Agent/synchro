@@ -164,8 +164,12 @@ function wall() {
 function syncModals() {
   const live = document.getElementsByClassName("overlay");
   if (live.length === modals.length && modals.every((m) => m.ov.isConnected)) return;
-  for (let i = modals.length - 1; i >= 0; i--) if (!modals[i].ov.isConnected) {
-    const [m] = modals.splice(i, 1), a = active();
+  const closed: Modal[] = [];
+  for (let i = modals.length - 1; i >= 0; i--) if (!modals[i].ov.isConnected) closed.push(...modals.splice(i, 1));
+  // Mở lại phần nền trước: phần tử inert không nhận tiêu điểm.
+  if (closed.length) wall();
+  for (const m of closed) {
+    const a = active();
     // Đóng hộp: tiêu điểm về chỗ cũ, trừ khi người dùng hay hộp đã chuyển nó đi nơi khác có chủ đích.
     if (m.back?.isConnected && (!a || a === document.body)) m.back.focus({ preventScroll: true });
   }

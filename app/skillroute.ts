@@ -169,12 +169,12 @@ export function expand(q: string): { terms: Set<string>; weak: Set<string>; conc
 // Chấm điểm theo IDF: từ hiếm trong cả kho (như "animation") nặng hơn từ phổ biến (như "design"); khớp tên skill nhân ba.
 // Từ của tên và mô tả mỗi skill được tách một lần rồi giữ theo chính đối tượng skill (thư viện chung có ~18.000 skill, nằm sẵn trong bộ đệm
 // của plugins.ts); IDF chỉ tính cho các từ của câu hỏi, không cho mọi từ của cả kho.
-type Doc = { key: string; name: Set<string>; body: Set<string>; folded: string };
+type Doc = { key: string; name: Set<string>; body: Set<string>; folded: string; vi: boolean };
 const docCache = new WeakMap<Skill, Doc>();
 function docOf(k: Skill): Doc {
   const key = `${k.name}\n${k.description}`;
   let d = docCache.get(k);
-  if (!d || d.key !== key) docCache.set(k, (d = { key, name: new Set(tokens(k.name.replace(/[-:]/g, " "))), body: new Set(tokens(k.description)), folded: fold(k.name) }));
+  if (!d || d.key !== key) docCache.set(k, (d = { key, name: new Set(tokens(k.name.replace(/[-:]/g, " "))), body: new Set(tokens(k.description)), folded: fold(k.name), vi: HAS_VI.test(k.description) }));
   return d;
 }
 export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
@@ -185,12 +185,13 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
   const df = new Map<string, number>();
   for (const w of terms) { let n = 0; for (const d of docs) if (d.name.has(w) || d.body.has(w)) n++; df.set(w, n); }
   const idf = (w: string) => Math.log(1 + docs.length / (df.get(w) || docs.length));
-  return docs.map(({ c, name, body, folded }) => {
+  return docs.map(({ c, name, body, folded, vi }) => {
     let score = hasPhrase(t, folded) ? 6 : 0, strong = score > 0, soft = 0;
     for (const w of terms) {
       const m = name.has(w) ? 3 : body.has(w) ? 1 : 0;
       if (!m) continue;
-      if (weak.has(w)) { soft++; score += m * idf(w) * 0.25; } else { strong = true; score += m * idf(w); }
+      // Mô tả bằng tiếng Việt (skill người dùng tự viết): trùng âm tiết là trùng thật, không phải tình cờ với chữ tiếng Anh.
+      if (weak.has(w)) { soft++; score += m * idf(w) * (vi ? 1 : 0.25); } else { strong = true; score += m * idf(w); }
     }
     // Chỉ trùng một âm tiết thì chưa nói lên gì: cần một từ thật, hoặc ít nhất hai âm tiết (mô tả skill bằng tiếng Việt).
     if (!strong && soft < 2) score = 0;

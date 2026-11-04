@@ -513,7 +513,9 @@ async function trap(res, q, fmt) {
   // Lời gọi chưng cất / tổng hợp của bộ não và đặt tên đoạn chat chép lại cả đoạn chat (có thể chứa chữ "#429" của câu trả lời giả lập).
   if (/^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Skill cần phân loại:)/.test(q)) return false;
   if (q.includes("#slow")) await sleep(8000);
-  const code = q.includes("#401") ? 401 : q.includes("#404") ? 404 : q.includes("#429") ? 429 : q.includes("#500") ? 500 : 0;
+  // Chỉ dòng cuối: lượt lỗi không gửi lại cho model nên tin hỏi trước đó được ghép chung với tin mới; thẻ lỗi cũ không được làm lượt mới lỗi theo.
+  const tail = q.split("\n").filter(Boolean).pop() ?? "";
+  const code = tail.includes("#401") ? 401 : tail.includes("#404") ? 404 : tail.includes("#429") ? 429 : tail.includes("#500") ? 500 : 0;
   if (!code) return false;
   const msg = { 401: "invalid x-api-key", 404: "model not found", 429: "Rate limit reached. Please try again later.", 500: "Internal server error" }[code];
   send(res, code, fmt(msg));
