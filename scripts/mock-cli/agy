@@ -37,7 +37,7 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
 async function agyImage(prompt, conv) {
   const m = C.imageMode(home, "agy"), dir = path.join(cli, "brain", conv), n = C.imageCount(prompt);
   const ref = /image at (\S+) as the reference/.exec(prompt)?.[1];
-  C.imageLog(home, { args: a.filter((x) => x !== prompt), home, cwd: process.cwd(), bridge: !!readJson(mcpFile).mcpServers?.synchro, prompt, ref: ref ?? null, refOk: !!ref && fs.existsSync(ref) });
+  C.imageLog(home, { args: a.filter((x) => x !== prompt), home, cwd: process.cwd(), bridge: !!readJson(mcpFile).mcpServers?.synchro, webHook: hookAllows("search_web"), prompt, ref: ref ?? null, refOk: !!ref && fs.existsSync(ref) });
   // Phiên trên đĩa chứa nguyên văn câu lệnh, như CLI thật: Synchro phải xóa sau lượt.
   const sess = path.join(cli, "conversations", `${conv}.pb`);
   fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
@@ -87,6 +87,7 @@ async function agyImage(prompt, conv) {
       return console.log(`Added MCP server "${name}" (http)`);
     }
     if (a[1] === "remove") {
+      if (C.imageMode(home, "agy").mcpRemove === "fail") { console.error("mcp remove failed"); process.exit(1); }
       if (!c.mcpServers[a[2]]) { console.error(`MCP server "${a[2]}" not found`); process.exit(1); }
       delete c.mcpServers[a[2]]; fs.writeFileSync(mcpFile, JSON.stringify(c, null, 2));
       return console.log(`Removed MCP server "${a[2]}"`);

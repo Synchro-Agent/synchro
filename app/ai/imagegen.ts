@@ -10,7 +10,8 @@
 // Riêng máy chủ khởi động lại đúng lúc đang tạo ảnh thì không còn ai dọn: danh sách phiên chỉ nằm trong bộ nhớ, sau đó không phân biệt được với phiên của đoạn chat khác.
 import crypto from "node:crypto";
 import path from "node:path";
-import { CODEX_LOCAL, CODEX_SAFE, agyDenied, agyQuiet, GROK_DENY } from "./cli_engines";
+import { CODEX_LOCAL, CODEX_SAFE, agyDenied, agyQuiet, GROK_DENY, grokImageLock } from "./cli_engines";
+import type { Event } from "./engine";
 import { engineEnv, everLoggedIn, safeScope, scopeDir, status } from "./cli_auth";
 import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
@@ -31,6 +32,8 @@ export type ImgReq = {
   /** Ảnh người dùng muốn sửa hoặc lấy làm mẫu. */
   reference?: ImgFile;
   signal?: AbortSignal;
+  /** CLI sắp chạy thật (đã qua hàng chờ của tài khoản). */
+  onBegin?: () => void;
   onStatus?: (text: string) => void;
   onNote?: (text: string) => void;
 };
@@ -60,9 +63,9 @@ export function imageBudget(uid: string, n: number, now = Date.now()): number {
 }
 
 // ---------------------------------------------------------------- câu lệnh
-/** Chữ người dùng nằm trong khối dữ liệu, không thoát ra được, mô hình chỉ coi đó là mô tả ảnh. */
+/** Chữ người dùng nằm trong khối dữ liệu, mô hình chỉ coi đó là mô tả ảnh. Đổi mọi dấu ngoặc nhọn thay vì lọc theo tên thẻ: "</image_description x>", "< /image_description>" đều không còn là thẻ. */
 export function imagePrompt(cli: ImgCli, q: Pick<ImgReq, "prompt" | "aspect" | "count">, refPath?: string): string {
-  const n = q.count ?? 1, what = q.prompt.replace(/<\/?\s*image_description\s*>/gi, " ").slice(0, 4000);
+  const n = q.count ?? 1, what = q.prompt.replace(/</g, "‹").replace(/>/g, "›").slice(0, 4000);
   const tool = cli === "grok" ? `the image_gen tool${q.aspect ? ` with aspect_ratio ${q.aspect}` : ""}, one call per image` : cli === "codex" ? "the image_gen tool" : "your image generation capability";
   return `This is an image generation step inside an app. Your only job in this turn is to create ${n === 1 ? "one image file" : `exactly ${n} separate image files`} using ${tool}.
 Do not run commands, browse, read or change other files, or ask questions.${q.aspect ? `\nAspect ratio: ${q.aspect}.` : ""}${refPath ? `\nUse the image at ${refPath} as the reference picture: keep what the description does not ask to change.` : ""}
@@ -96,24 +99,30 @@ const lastObject = (out: string): Record<string, unknown> | null => {
 /** Không thấy ảnh: phân biệt model không có công cụ / có tệp nhưng hỏng, quá cỡ / CLI nói xong mà không có tệp. */
 const none = (g: { bad: number; big: number }, said: string): Tried => ({ fail: g.bad ? { kind: "bad" } : g.big ? { kind: "big" } : NO_TOOL_TEXT.test(said) ? { kind: "notool" } : { kind: "nofile", detail: clip(said) } });
 
+/** Chờ khóa của tài khoản, nói cho người dùng biết đang chờ gì. */
+async function locked<T>(r: Run, gen: AsyncGenerator<Event, T | null, unknown>): Promise<{ got?: T; fail?: Tried["fail"] }> {
+  let st = await gen.next(), fail: Tried["fail"] | null = null;
+  while (!st.done) {
+    const e = st.value;
+    if (e.kind === "status" && e.text) r.q.onStatus?.(e.text);
+    else if (e.kind === "error") fail = e.code === "aborted" ? { kind: "aborted" } : { kind: "busy" };
+    st = await gen.next();
+  }
+  return st.value ? { got: st.value } : { fail: fail ?? { kind: "busy" } };
+}
+/** Đã có khóa: đặt lại tệp mốc (ảnh lượt trước ghi trong lúc chờ không phải của lượt này), rồi mới báo đang tạo và đếm giờ. */
+const begin = (r: Run) => { writeEngineFile(r.stamp, Buffer.alloc(0)); r.q.onBegin?.(); };
+
 /** Antigravity: `--output-format json` như lượt chat; mã hội thoại ở cấp ngoài, bản stream-json lồng trong result. Không thêm cờ nào: agy đã đủ quyền chạy image-generator ở print mode. */
 async function viaAgy(r: Run): Promise<Tried> {
   const bin = find("agy");
   if (!bin) return { fail: { kind: "other", detail: "CLI chưa được cài" } };
-  const base = { prompt: "", env: r.env, workdir: r.work, signal: r.q.signal, lockMs: AGY_LOCK_MS };
-  const gen = agyQuiet(base);
-  let st = await gen.next(), lockFail: Tried["fail"] | null = null;
-  while (!st.done) {
-    const e = st.value;
-    if (e.kind === "status" && e.text) r.q.onStatus?.(e.text);
-    else if (e.kind === "error") lockFail = e.code === "aborted" ? { kind: "aborted" } : { kind: "busy" };
-    st = await gen.next();
-  }
-  const release = st.value;
-  if (!release) return { fail: lockFail ?? { kind: "busy" } };
+  const { got: release, fail } = await locked(r, agyQuiet({ prompt: "", env: r.env, workdir: r.work, signal: r.q.signal, lockMs: AGY_LOCK_MS }));
+  if (!release) return { fail };
   const watch = await watchSessions(r.login);
   let conv = "", paths: string[] = [];
   try {
+    begin(r);
     // Có ảnh gốc: agy có thể tự chặn công cụ mở tệp ở print mode. Đọc nhật ký để nói thật khi ảnh tạo ra không dựa trên ảnh gốc.
     const log = r.refPath ? path.join(r.work, ".agy.log") : "";
     const args = ["--output-format", "json", ...(log ? ["--log-file", log] : []), "-p", imagePrompt("agy", { ...r.q, count: r.count }, r.refPath)];
@@ -150,6 +159,11 @@ async function viaAgy(r: Run): Promise<Tried> {
 async function viaGrok(r: Run): Promise<Tried> {
   const bin = find("grok");
   if (!bin) return { fail: { kind: "other", detail: "CLI chưa được cài" } };
+  const { got: free, fail } = await locked(r, grokImageLock({ prompt: "", env: r.env, workdir: r.work, signal: r.q.signal, lockMs: AGY_LOCK_MS }));
+  if (!free) return { fail };
+  try { begin(r); return await grokTurn(r, bin); } finally { free(); }
+}
+async function grokTurn(r: Run, bin: string): Promise<Tried> {
   const file = path.join(r.work, ".prompt.txt");
   writeEngineFile(file, Buffer.from(imagePrompt("grok", { ...r.q, count: r.count }), "utf8"));
   const args = ["--prompt-file", file, "--output-format", "streaming-json", "--always-approve", "--no-memory", "--no-subagents", "--no-auto-update",
@@ -197,6 +211,7 @@ async function viaGrok(r: Run): Promise<Tried> {
 async function viaCodex(r: Run): Promise<Tried> {
   const bin = find("codex");
   if (!bin) return { fail: { kind: "other", detail: "CLI chưa được cài" } };
+  r.q.onBegin?.();
   const args = ["exec", ...CODEX_SAFE, ...(r.refPath ? [`--image=${r.refPath}`] : []), "-"];
   const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: imagePrompt("codex", { ...r.q, count: r.count }), signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
   let said = "", thread = "", failed = "", shell = false, paths: string[] = [];
@@ -305,11 +320,14 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
     const skip = (kind: ImgKind) => { tried.push({ cli, kind }); };
     if (q.reference && !TAKES_REF[cli]) { skip("noref"); continue; }
     if (cli === "codex" && (await codexPlan(q.uid)) === "free") { skip("free"); continue; }
-    // Lần đầu nói rõ sẽ chờ bao lâu; sau đó đếm giây để người dùng biết vẫn đang chạy.
-    const T0 = Date.now();
-    q.onStatus?.(`Đang tạo ảnh bằng ${name}`);
-    const tick = setInterval(() => q.onStatus?.(`Đang tạo ảnh bằng ${name}, đã ${Math.round((Date.now() - T0) / 1000)} giây`), Number(process.env.SYNCHRO_IMAGE_TICK_MS) || 10_000);
-    const r = await runBackend(cli, q).finally(() => clearInterval(tick));
+    // Lần đầu nói rõ sẽ chờ bao lâu; sau đó đếm giây để người dùng biết vẫn đang chạy. Tính từ lúc CLI chạy thật, không tính lúc xếp hàng chờ lượt khác của tài khoản.
+    let tick: ReturnType<typeof setInterval> | undefined;
+    const onBegin = () => {
+      const T0 = Date.now();
+      q.onStatus?.(`Đang tạo ảnh bằng ${name}`);
+      tick = setInterval(() => q.onStatus?.(`Đang tạo ảnh bằng ${name}, đã ${Math.round((Date.now() - T0) / 1000)} giây`), Number(process.env.SYNCHRO_IMAGE_TICK_MS) || 10_000);
+    };
+    const r = await runBackend(cli, { ...q, onBegin }).finally(() => clearInterval(tick));
     if (r.files?.length) {
       const notes = [...(r.notes ?? [])];
       if (r.files.length < count) notes.push(`Chỉ tạo được ${r.files.length}/${count} ảnh.`);

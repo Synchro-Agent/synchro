@@ -442,31 +442,55 @@ async function agyRun(args: string[], req: TurnRequest) {
   for await (const _ of p.lines) { /* bỏ qua */ }
   return (await p.done).code === 0;
 }
+// Ghi hook bằng đúng user của engine (thư mục đăng nhập 0700 của user đó).
+const agyPutHook = (req: TurnRequest, text: string) => spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: text }).done.then((e) => e.code === 0);
 async function agyBridge(req: TurnRequest, url: string) {
   if (!(await agyRun(["mcp", "add", "synchro", url], req))) return false;
-  // Ghi hook bằng đúng user của engine (thư mục đăng nhập 0700 của user đó).
-  const sh = spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: AGY_HOOK(req.web) });
-  return (await sh.done).code === 0;
+  return agyPutHook(req, AGY_HOOK(req.web));
+}
+/** Cầu nối còn trong cấu hình chung không. `agy mcp remove` trả mã lỗi cả khi vốn không có cầu nối nên phải đọc tệp; không đọc được thì coi như còn. grep: 1 không thấy, 2 không có tệp. */
+const agyHasBridge = (req: TurnRequest) => spawnCli("/bin/sh", ["-c", 'grep -q "\\"synchro\\"" "$HOME/.gemini/config/mcp_config.json" 2>/dev/null'], { env: req.env, cwd: req.workdir, stdin: "", timeoutMs: 20_000 }).done.then((e) => e.code !== 1 && e.code !== 2);
+/** Gỡ hook khỏi cấu hình chung; trả nội dung cũ ("" nếu không có), null nếu không gỡ được. */
+async function agyTakeHook(req: TurnRequest): Promise<string | null> {
+  const sh = spawnCli("/bin/sh", ["-c", 'f="$HOME/.gemini/config/hooks.json"; [ -e "$f" ] || exit 0; cat "$f" && rm -f "$f"'], { env: req.env, cwd: req.workdir, stdin: "", timeoutMs: 20_000 });
+  let out = "";
+  for await (const l of sh.lines) out += l + "\n";
+  return (await sh.done).code === 0 ? out : null;
 }
 
-// Cầu nối của các lượt Antigravity còn đang chạy (kể cả lượt đã nhả khóa), để lượt tạo ảnh trả lại đúng cầu nối nó tạm gỡ.
-const agyLive = new Set<string>();
+// Cầu nối của các lượt Antigravity còn đang chạy, kể cả lượt đã nhả khóa (địa chỉ → HOME của tài khoản), để lượt tạo ảnh trả lại đúng thứ nó tạm gỡ.
+const agyLive = new Map<string, string>();
 /**
- * Lượt tạo ảnh chạy agy với cùng HOME mà không được có công cụ của Synchro: agy chỉ đọc cầu nối từ cấu hình chung, cầu nối của một lượt chat đang mở nằm sẵn ở đó và model có thể
- * gọi lại chính generate_image hay công cụ của lượt kia. Giữ khóa tài khoản rồi gỡ cầu nối; lượt đang chạy đã đọc cấu hình nên không ảnh hưởng, xong thì trả lại phòng khi CLI đọc lại.
- * Trả về hàm nhả; null khi không chờ được khóa (đã báo lỗi qua sự kiện).
+ * Lượt tạo ảnh chạy agy với cùng HOME mà không được có quyền của lượt chat: agy chỉ đọc cầu nối và hook từ cấu hình chung, cầu nối của một lượt chat đang mở nằm sẵn ở đó (model có thể gọi lại
+ * chính generate_image hay công cụ của lượt kia, câu lệnh lại có thể do trang web độc viết ra), hook của lượt chat trước vẫn cho phép search_web dù lượt này tắt tìm web.
+ * Giữ khóa tài khoản rồi gỡ cả hai, giống trạng thái đã đo agy tạo được ảnh; không gỡ được thì không chạy. Lượt đang chạy đã đọc cấu hình nên không ảnh hưởng; xong thì trả lại phòng khi CLI đọc lại,
+ * không còn lượt chat nào thì thôi, lượt chat sau tự ghi lại đúng quyền của nó.
+ * Trả về hàm nhả; null khi không chờ được khóa hay không gỡ được (đã báo lỗi qua sự kiện).
  */
 export async function* agyQuiet(req: TurnRequest): AsyncGenerator<Event, (() => Promise<void>) | null, unknown> {
-  const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
+  const account = String(req.env?.HOME ?? "");
+  const free = yield* turnLock(agyLocks, account, req, "Antigravity");
   if (!free) return null;
-  const home = ownerKey("agy", String(req.env?.HOME ?? "")), prev = configOwner.get(home);
+  const home = ownerKey("agy", account), prev = configOwner.get(home);
   configOwner.delete(home);
   await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
-  return async () => {
+  const stuck = await agyHasBridge(req).catch(() => true);
+  const hooks = stuck ? null : await agyTakeHook(req).catch(() => null);
+  const back = async () => {
+    if (hooks && [...agyLive.values()].includes(account)) await agyPutHook(req, hooks).catch(() => false);
     if (prev && agyLive.has(prev) && !configOwner.has(home) && await agyRun(["mcp", "add", "synchro", prev], req).catch(() => false)) configOwner.set(home, prev);
     free();
   };
+  if (hooks !== null) return back;
+  if (stuck) { if (prev) configOwner.set(home, prev); free(); } else await back();
+  yield err("Chưa tách được lượt tạo ảnh khỏi công cụ của lượt chat đang mở nên chưa chạy.", "busy");
+  return null;
 }
+
+// Lượt tạo ảnh của Grok tìm ảnh bằng cách quét tệp mới trong thư mục đăng nhập (chưa biết Grok lưu ở đâu): chạy song song thì lượt này lấy nhầm ảnh của lượt kia. Khóa riêng cho ảnh:
+// lượt chat của Grok không có image_gen nên không cần chờ nó.
+const grokImgLocks = new Map<string, Slot>();
+export const grokImageLock = (req: TurnRequest) => turnLock(grokImgLocks, String(req.env?.HOME ?? ""), req, "Grok");
 
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
@@ -476,7 +500,7 @@ export class AntigravityEngine implements Engine {
     if (!free) return;
     const home = ownerKey("agy", String(req.env?.HOME ?? "")), url = req.mcp.url;
     req.mcp.onPark?.(free);
-    agyLive.add(url);
+    agyLive.set(url, String(req.env?.HOME ?? ""));
     try {
       // Cầu nối của lượt trước (đang chờ duyệt, hoặc bị dừng giữa chừng) bị thay bằng cầu nối mới.
       await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
