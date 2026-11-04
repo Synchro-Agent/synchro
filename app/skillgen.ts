@@ -5,6 +5,7 @@
 //   tài liệu và phần đầu của mọi tệp văn bản trong giới hạn độ dài một lượt; không có model / model lỗi thì dựng từ README.
 import path from "node:path";
 import JSZip from "jszip";
+import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import type { UserRow } from "./authstore";
 import { oneShot, pickModel } from "./ai/anymodel";
 import { parseSkillMd, type Entry } from "./skillstore";
@@ -30,6 +31,7 @@ export type RepoFile = { path: string; size: number; text: string | null; data: 
 /** Mọi tệp của repo trong zip, giới hạn trong thư mục sub nếu có. stripTop: zip của GitHub có thư mục gốc "<repo>-<nhánh>/", bỏ đi. */
 export async function readRepo(buf: Buffer, sub = "", o: { stripTop?: boolean } = {}): Promise<{ files: RepoFile[]; skipped: number }> {
   const zip = await JSZip.loadAsync(buf);
+  await measureZip(zip, SKILL_ZIP_MAX);
   let all = Object.values(zip.files).filter((f) => !f.dir).map((f) => ({ f, p: path.posix.normalize(f.name.replace(/\\/g, "/")) }))
     .filter(({ p }) => !p.startsWith("/") && !p.split("/").includes("..") && !p.split("/").some(JUNK));
   const tops = new Set(all.map(({ p }) => p.split("/")[0]));

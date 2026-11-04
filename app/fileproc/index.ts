@@ -33,7 +33,7 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
   let kind = "binary", blocks: ContentBlock[] = [];
   try {
     kind = await detectKind(buf, name);
-    blocks = await pickExtractor(kind, name).run(buf, { name, kind });
+    blocks = await pickExtractor(kind, name).run(buf, { name, kind, uid });
     const textLen = blocks.reduce((a, b) => a + (b.type === "text" ? b.text.length : b.type === "document" ? (b.fallbackText?.length ?? 0) : 0), 0);
     if (!blocks.length || (kind !== "application/pdf" && !kind.startsWith("image/") && textLen === 0)) throw new FileError(`Không trích được nội dung từ "${name}".`);
   } catch (e) {

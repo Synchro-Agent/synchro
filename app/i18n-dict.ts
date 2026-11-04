@@ -1,6 +1,7 @@
 import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 import { UX_EN2VI, UX_RULES_EN, UX_RULES_VI, UX_VI2EN } from "./i18n-ux";
+import { OPS_EN2VI, OPS_RULES_EN, OPS_RULES_VI, OPS_VI2EN } from "./i18n-ops";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
   "Trình duyệt đang chặn nhận dạng giọng nói": "The browser is blocking speech recognition",
@@ -2092,6 +2093,10 @@ addNew(VI2EN, UX_VI2EN);
 addNew(EN2VI, UX_EN2VI);
 RULES_EN.push(...UX_RULES_EN);
 RULES_VI.push(...UX_RULES_VI);
+addNew(VI2EN, OPS_VI2EN);
+addNew(EN2VI, OPS_EN2VI);
+RULES_EN.push(...OPS_RULES_EN);
+RULES_VI.push(...OPS_RULES_VI);
 // Dịch một mảnh chèn trong chuỗi ghép (qua từ điển rồi luật dịch).
 const enDeep = (s: string): string => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s]; for (const [re, f] of RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
 addNew(VI2EN, {
