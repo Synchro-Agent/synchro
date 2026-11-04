@@ -27,7 +27,7 @@ const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSett
 const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub));
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
-import { locale, tr } from "./i18n";
+import { getLang, locale, tr } from "./i18n";
 import { fmtSize } from "./fileicon";
 import { SharedChats } from "./shareui";
 import { UploadedFiles } from "./filesui";
@@ -223,6 +223,16 @@ function Account() {
     try { await api("DELETE", "/api/auth/account", { password: del }); setDel(null); app.wipe("all"); resetPrefs(); app.logout(); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
+  // Quên mật khẩu hiện tại ngay trong hộp đổi mật khẩu: gửi thư đặt lại tới email của tài khoản, không phải đăng xuất rồi tìm lại trang đăng nhập.
+  const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState(false);
+  useEffect(() => { if (!pw) setResetSent(false); }, [pw]);
+  const sendReset = async () => {
+    if (!me?.email || resetBusy) return;
+    setResetBusy(true);
+    try { await api("POST", "/api/auth/forgot", { email: me.email, lang: getLang() }); setResetSent(true); }
+    catch (e) { app.say((e as Error).message); }
+    finally { setResetBusy(false); }
+  };
   const pwOk = !!pw && pw.next.length >= 8 && pw.again.length >= 8 && (!me?.hasPassword || pw.cur.length > 0);
   const [dob, setDob] = useState(me?.profile.birthDate ? me.profile.birthDate.split("-").reverse().join("/") : "");
   // Lưu một trường hồ sơ lên máy chủ (gọi khi rời ô nhập / chọn xong).
@@ -294,6 +304,9 @@ function Account() {
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
             {me?.hasPassword && <input className="field" type="password" autoComplete="current-password" placeholder="Current password" value={pw?.cur ?? ""} onChange={(e) => setPw((o) => o && { ...o, cur: e.target.value })} />}
+            {me?.hasPassword && (resetSent
+              ? <p className="d pw-forgot" role="status">We sent a reset link to <span data-notr>{me.email}</span>. It works for 60 minutes. Check Spam if you don&apos;t see it.</p>
+              : <p className="d pw-forgot"><button type="button" className="lnk" disabled={resetBusy} onClick={sendReset}>{resetBusy ? "Sending…" : "Forgot your current password?"}</button></p>)}
             <input className="field" type="password" autoComplete="new-password" placeholder="New password (at least 8 characters)" value={pw?.next ?? ""} onChange={(e) => setPw((o) => o && { ...o, next: e.target.value })} />
             <input className="field" type="password" autoComplete="new-password" placeholder="Confirm new password" value={pw?.again ?? ""} onChange={(e) => setPw((o) => o && { ...o, again: e.target.value })} onKeyDown={(e) => e.key === "Enter" && pwOk && savePw()} />
             <div className="modal-foot"><button className="btn" onClick={() => setPw(null)}>Cancel</button><button className="btn dark" disabled={!pwOk || busy} style={!pwOk ? { opacity: 0.4 } : undefined} onClick={savePw}>Save</button></div>

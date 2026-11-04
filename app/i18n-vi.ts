@@ -987,3 +987,4 @@ Object.assign(EN2VI, { "Changed email verification rule": "Đã đổi quy tắc
 // Chữ chỉ model hoặc bản giả lập thấy, không hiện cho người dùng.
 Object.assign(EN2VI, { "550 5.1.1 mailbox does not exist": "550 5.1.1 hộp thư không tồn tại" });
 RULES_VI.push([/^(.*)\(object, written as a JSON string\)$/, (m) => `${m[1]}(đối tượng, viết thành chuỗi JSON)`]);
+Object.assign(EN2VI, { "Forgot your current password?": "Quên mật khẩu hiện tại?", "Sending…": "Đang gửi…", "We sent a reset link to": "Đã gửi đường dẫn đặt lại tới", ". It works for 60 minutes. Check Spam if you don't see it.": ". Đường dẫn có hiệu lực 60 phút. Không thấy thư thì xem cả mục Spam." });

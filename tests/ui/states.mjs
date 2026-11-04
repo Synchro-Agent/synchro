@@ -107,6 +107,17 @@ try {
   ok(await until(`[...document.querySelectorAll(".s-found")].some((b) => /Password|Mật khẩu/.test(b.textContent)) || [...document.querySelectorAll(".s-item")].some((b) => /Account|Tài khoản/.test(b.textContent))`, 2000), "tìm 'mat khau': ra mục Tài khoản");
   await ev(`(() => { const e = document.querySelector(".s-search input"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(e, "zzqq"); e.dispatchEvent(new Event("input", { bubbles: true })); })()`);
   ok(await until(`!!document.querySelector(".s-none")`, 2000), "không khớp: nói rõ không có kết quả");
+  // Đổi mật khẩu: quên mật khẩu hiện tại thì gửi thư đặt lại ngay trong hộp này.
+  await ev(`(() => { const e = document.querySelector(".s-search input"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(e, ""); e.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  await click(`[...document.querySelectorAll(".s-item")].find((b) => /Account|Tài khoản/.test(b.textContent))`);
+  await until(`[...document.querySelectorAll(".row .t")].some((t) => /^(Password|Mật khẩu)$/.test(t.textContent.trim()))`, 6000);
+  await click(`[...document.querySelectorAll(".row")].find((r) => /^(Password|Mật khẩu)$/.test(r.querySelector(".t")?.textContent.trim())).querySelector("button")`);
+  ok(await until(`!!document.querySelector(".pw-forgot .lnk")`, 3000), "hộp đổi mật khẩu có lối quên mật khẩu");
+  await click(`document.querySelector(".pw-forgot .lnk")`);
+  ok(await until(`/synchro\\.test/.test(document.querySelector(".pw-forgot[role=status]")?.textContent ?? "")`, 5000), "gửi thư đặt lại, báo đúng email của tài khoản");
+  await key("Escape", "Escape", 27); await sleep(300);
+  await ev(`document.querySelector(".overlay .modal.sm .modal-foot .btn")?.click()`); await sleep(300);
+  await click(`[...document.querySelectorAll(".s-item")].find((b) => /General|Chung/.test(b.textContent))`).catch(() => {});
   const name1 = await ev(`document.querySelector(".sy-settings").getAttribute("aria-label")`);
   ok(!!name1, "hộp Cài đặt có tên cố định", name1);
   await key("Escape", "Escape", 27); await sleep(400);

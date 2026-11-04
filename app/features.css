@@ -78,3 +78,7 @@ html body .overlay.ft-lightbox:not(.auth-root *){background:rgba(0,0,0,.72)}
 .fp-note[role=alert]{flex-wrap:wrap}
 .bp-empty span+span{max-width:420px;text-align:center}
 .pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:11.5px;line-height:1.3}
+/* Hộp đổi mật khẩu: lối quên mật khẩu hiện tại, ngay dưới ô đó */
+.pw-forgot{margin:-10px 0 14px;font-size:13px}
+.pw-forgot .lnk{background:none;border:0;padding:0;font:inherit;cursor:pointer}
+.pw-forgot .lnk:disabled{opacity:.6;cursor:default}
