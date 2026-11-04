@@ -866,6 +866,8 @@ export default function Home() {
   useEffect(() => installTips(), []);
   useEffect(() => installFloatFit(), []);
   useEffect(() => installA11y(), []);
+  // Bảng lệnh ⌘K cần mở tức thì: tải sẵn khi trang đã rảnh.
+  useEffect(() => { const t = setTimeout(() => CommandPalette.preload(), 4000); return () => clearTimeout(t); }, []);
   useEffect(() => {
     setApprover((calls, conv) => new Promise((resolve) => setApproval({ chat: conv !== undefined && Number.isFinite(Number(conv)) ? Number(conv) : curRef.current, calls, resolve })));
     return () => setApprover(null);
