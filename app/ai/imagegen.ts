@@ -12,7 +12,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { CODEX_LOCAL, CODEX_SAFE, agyDenied, agyQuiet, GROK_DENY, grokImageLock } from "./cli_engines";
 import type { Event } from "./engine";
-import { engineEnv, everLoggedIn, safeScope, scopeDir, status } from "./cli_auth";
+import { engineEnv, everLoggedIn, markRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, scrubServerPaths, type FileCtx } from "./imagefiles";
@@ -342,6 +342,8 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
     }
     const f: ImgFail = { cli, kind: r.fail?.kind ?? "nofile", detail: r.fail?.detail };
     tried.push(f);
+    // Như lượt chat: bộ chọn model và thẻ Providers biết gói này cần đăng nhập lại, lần sau không chạy CLI vô ích.
+    if (f.kind === "auth") markRelogin(cli as Cli, q.uid);
     if (f.kind === "aborted") return { ok: false, kind: "aborted", text: "Đã dừng tạo ảnh.", tried, providers: false };
     const next = plans.slice(i + 1).find((c) => !q.reference || TAKES_REF[c]);
     if (next) q.onNote?.(`${reason(f)}. Đang thử ${IMG_NAME[next]}`);

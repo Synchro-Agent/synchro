@@ -114,6 +114,8 @@ try {
     mode(C, "codex", { mode: "errorevent" });
     const a = await gen(C);
     ok(!a.ok && a.tried[0].kind === "auth" && a.providers && /đăng nhập lại/.test(a.text), "Codex: 401 chỉ trong sự kiện error: báo đăng nhập lại, có nút Providers", a);
+    ok(A.needsRelogin("codex", C), "gói bị đánh dấu cần đăng nhập lại như lượt chat", A.needsRelogin("codex", C));
+    A.clearRelogin?.("codex", C); A.forget("codex", C);
     mode(C, "codex", { mode: "stderr" });
     const b = await gen(C);
     ok(!b.ok && b.tried[0].kind === "quota" && b.providers && /hết hạn mức/.test(b.text), "Codex: hết hạn mức chỉ trong stderr: báo hết hạn mức, có nút Providers", b);
@@ -459,6 +461,13 @@ try {
     ok(en("Đang tạo ảnh bằng Grok, đã 20 giây") === "Creating the image with Grok, 20 seconds so far", "trạng thái đếm giây tiếng Anh", en("Đang tạo ảnh bằng Grok, đã 20 giây"));
     ok(en("Đang tạo ảnh: quả táo đỏ") === "Creating an image: quả táo đỏ", "dòng công cụ tiếng Anh", en("Đang tạo ảnh: quả táo đỏ"));
     ok(/trying Grok/.test(en("Antigravity: gói đã hết hạn mức tạo ảnh. Đang thử Grok")), "báo chuyển gói tiếng Anh", en("Antigravity: gói đã hết hạn mức tạo ảnh. Đang thử Grok"));
+    for (const [vi, re] of [["Đã tạo 1 ảnh bằng Antigravity. qua-tao-do.jpg (1 KB) — đã gửi cho người dùng Ảnh đã hiện thành", /^Created 1 image with Antigravity\.$/], ["Đã tạo 3 ảnh bằng Grok.", /^Created 3 images with Grok\.$/],
+      ["Chưa tạo được ảnh, không có ảnh nào được giao. Antigravity: gói đã hết hạn mức tạo ảnh. Hãy chờ", /^The image wasn't created/], [I.NO_PLAN_TEXT.slice(0, 140), /signed in to a plan/], ["Thiếu mô tả ảnh (prompt).", /missing/], ["Mô tả ảnh quá dài (tối đa 4.000 ký tự).", /too long/],
+      ["Máy chủ sắp hết dung lượng đĩa nên chưa tạo ảnh được. Hãy nói rõ", /disk space/], ["Tài khoản đã dùng hết 5120 MB dung lượng tệp đã tạo nên chưa lưu thêm được ảnh (tệp cũ", /5120 MB/], ["Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng 12 phút.", /12 minutes/],
+      ["Grok đã tạo 2 ảnh nhưng chưa lưu được vì tài khoản", /Grok created 2 images/], ['Không thấy ảnh "last" trong đoạn chat. Hãy nhờ', /Couldn't find the image "last"/], ["Ảnh gốc quá lớn (tối đa 20 MB).", /too large/], ["Ảnh gốc phải là PNG, JPEG hoặc WebP.", /must be PNG/],
+      ["Đăng nhập lại gói ở Providers để tạo ảnh", /again/], ["Các gói đã đăng nhập chưa tạo được ảnh lúc này. Có thể đăng nhập thêm gói khác ở Providers", /right now/]]) ok(re.test(en(vi)), `tiếng Anh: ${vi.slice(0, 50)}`, en(vi));
+    ok(!Object.prototype.hasOwnProperty.call(D.VI2EN, "Tạo ảnh "), "tr() cắt khoảng trắng nên không có khóa kết thúc bằng dấu cách");
+    ok(/getLang\(\) === "en" \? "Create an image of " : "Tạo ảnh "/.test(fs.readFileSync("app/page.tsx", "utf8")), "chip Tạo ảnh điền đúng câu theo ngôn ngữ");
     ok(!!D.VI2EN["Tạo ảnh"] && !!D.VI2EN["Đăng nhập gói tạo được ảnh ở Providers"] && !!V.EN2VI["Creates images in chat when you ask for a photo, illustration, logo or poster."], "chip, thẻ Providers, ghi chú Providers có đủ bản dịch");
   }
 

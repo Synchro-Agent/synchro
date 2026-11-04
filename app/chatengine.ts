@@ -520,7 +520,7 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   const r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
     onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
   if (!r.ok) {
-    if (r.providers) progress("plans", r.text);
+    if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
     return fail(r.text);
   }
   const { saved, left } = keepImages(x.uid, r.files, x.outs);

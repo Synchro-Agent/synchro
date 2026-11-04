@@ -1685,7 +1685,7 @@ Object.assign(VI2EN, {
   "Chưa kết nối được tới Synchro": "Can't reach Synchro", "Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.": "Your chats and what you were typing are still here. Synchro is retrying.",
   "Câu trả lời cũ đã được thay bằng lượt mới.": "The earlier reply was replaced by this new turn.", "Khôi phục bản cũ": "Restore the earlier version",
 });
-Object.assign(VI2EN, { "CLI chưa được cài": "The CLI isn't installed", "Codex định chạy lệnh trên máy chủ nên đã bị dừng": "Codex tried to run a command on the server, so it was stopped", "Đã dừng tạo ảnh.": "Stopped creating the image.", "Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập": "Create photos, paintings, logos and posters with your signed-in plan", "Tạo ảnh": "Create image", "Tạo ảnh ": "Create an image of ", "Chưa tạo được ảnh": "The image wasn't created", "Đăng nhập gói tạo được ảnh ở Providers": "Sign in to a plan that can create images in Providers", "Đang hiện": "Showing", "Gõ thêm để thu hẹp.": "Type more to narrow it down.", "Kết quả": "Results", "Dự án": "Projects" });
+Object.assign(VI2EN, { "CLI chưa được cài": "The CLI isn't installed", "Codex định chạy lệnh trên máy chủ nên đã bị dừng": "Codex tried to run a command on the server, so it was stopped", "Đã dừng tạo ảnh.": "Stopped creating the image.", "Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập": "Create photos, paintings, logos and posters with your signed-in plan", "Tạo ảnh": "Create image", "Chưa tạo được ảnh": "The image wasn't created", "Đăng nhập gói tạo được ảnh ở Providers": "Sign in to a plan that can create images in Providers", "Đăng nhập lại gói ở Providers để tạo ảnh": "Sign in to your plan again in Providers to create images", "Các gói đã đăng nhập chưa tạo được ảnh lúc này. Có thể đăng nhập thêm gói khác ở Providers": "Your signed-in plans can't create images right now. You can sign in to another plan in Providers", "Thiếu mô tả ảnh (prompt).": "The image description is missing.", "Mô tả ảnh quá dài (tối đa 4.000 ký tự).": "The image description is too long (4,000 characters at most).", "Ảnh gốc phải là PNG, JPEG hoặc WebP.": "The source image must be PNG, JPEG or WebP.", "Đang hiện": "Showing", "Gõ thêm để thu hẹp.": "Type more to narrow it down.", "Kết quả": "Results", "Dự án": "Projects" });
 // Nhãn công cụ trong nhật ký làm việc (chatengine.ts: describe, browsertools.ts: describeBrowser), hiện ở worklog.tsx.
 Object.assign(VI2EN, {
   "Đang": "Running", "ghi chú": "notes",
@@ -1703,6 +1703,15 @@ RULES_EN.push(
   [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
   [/^Đang tạo ảnh bằng (.+), đã (\d+) giây$/, (m) => `Creating the image with ${m[1]}, ${m[2]} seconds so far`], [/^Đang tạo ảnh bằng (.+)$/, (m) => `Creating the image with ${m[1]}`], [/^Đang tạo ảnh: (.*)$/, (m) => `Creating an image: ${m[1]}`],
   [/^Chưa tạo được ảnh, không có ảnh nào được giao\. (.*)$/, () => "The image wasn't created, so nothing was delivered. See the details in the reply."],
+  // Tóm tắt kết quả công cụ trong nhật ký làm việc: đã cắt ở 140 ký tự nên chỉ so phần đầu.
+  [/^Đã tạo (\d+) ảnh bằng ([^.]+)\.(?: .*)?$/, (m) => `Created ${m[1]} ${m[1] === "1" ? "image" : "images"} with ${m[2]}.`],
+  [/^Chưa tạo được ảnh vì tài khoản chưa đăng nhập gói nào/, () => "The image wasn't created because you haven't signed in to a plan that can create images. Sign in under Settings → Providers."],
+  [/^Máy chủ sắp hết dung lượng đĩa nên chưa tạo ảnh được/, () => "The server is almost out of disk space, so the image wasn't created."],
+  [/^Tài khoản đã dùng hết (\d+) MB dung lượng tệp đã tạo nên chưa lưu thêm được ảnh/, (m) => `You've used all ${m[1]} MB of space for created files, so no more images can be saved.`],
+  [/^Tài khoản đã tạo nhiều ảnh trong một giờ qua\. Hãy thử lại sau khoảng (\d+) phút/, (m) => `This account has created many images in the past hour. Try again in about ${m[1]} minutes.`],
+  [/^(Antigravity|Grok|ChatGPT) đã tạo (\d+) ảnh nhưng chưa lưu được/, (m) => `${m[1]} created ${m[2]} ${m[2] === "1" ? "image" : "images"}, but they couldn't be saved because the storage is full.`],
+  [/^Không thấy ảnh "(.*?)" trong đoạn chat/, (m) => `Couldn't find the image "${m[1]}" in this chat.`],
+  [/^Ảnh gốc quá lớn \(tối đa (\d+) MB\)/, (m) => `The source image is too large (${m[1]} MB at most).`],
   [/^(Antigravity|Grok|ChatGPT): (.+)\. Đang thử (.+)$/, (m) => `${m[1]} couldn't make the image, trying ${m[3]}`],
   [/^Đang dùng công cụ (.+)$/, (m) => `Using tool ${m[1]}`], [/^Đang dùng ([^:]+): (.+)$/, (m) => `Using ${m[1]}: ${m[2]}`],
 );

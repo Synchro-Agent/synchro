@@ -56,7 +56,7 @@ const roughTitle = (t: string) => {
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
-import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
+import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, useModels } from "./models";
 import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
@@ -192,8 +192,6 @@ type TplKey = "doc" | "slides" | "design";
 // Mỗi mẫu là một "studio": gắn với plugin cùng tên (Design / Slides / Docs Studio) để model có cả thư viện skill chuyên môn.
 const STUDIO_OF: Record<TplKey, "docs" | "slides" | "design"> = { doc: "docs", slides: "slides", design: "design" };
 const NARROW = "(max-width: 760px)";
-// Gói tạo được ảnh bằng generate_image (ai/imagegen.ts): chip "Tạo ảnh" ở trang chủ chỉ hiện khi đã đăng nhập ít nhất một gói này.
-const IMAGE_PLANS = new Set(["agy", "grok", "codex"]);
 const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; sys: string }[] = [
   { k: "doc", name: "Tài liệu", label: "Synchro Docs", ph: "Tài liệu này nên nói về chủ đề gì?", desc: "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.",
     sys: "Tôi tạo một tài liệu soạn thảo bằng công cụ Docs, gồm tiêu đề và nội dung các phần. Tài liệu này có thể xuất ra Word, PDF hoặc Markdown." },
@@ -2320,7 +2318,7 @@ export default function Home() {
               <div className="hero-quick" aria-label="Bắt đầu nhanh">
                 {TPLS.map((t) => { const Ic = t.k === "doc" ? I.Article : t.k === "slides" ? I.Slides : I.PenNib; return (
                   <button key={t.k} className="hero-chip" onClick={() => setTplMode(t.k)}><Ic size={16} /><span>{t.name}</span></button>); })}
-                {models.providers.some((p) => p.plan && IMAGE_PLANS.has(p.plan.cli)) && <button className="hero-chip" data-tip="Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập" onClick={() => setPrefill((p) => ({ t: tr("Tạo ảnh "), n: p.n + 1 }))}><I.Image size={16} /><span>Tạo ảnh</span></button>}
+                {models.providers.some((p) => p.plan && IMAGE_PLANS.has(p.plan.cli)) && <button className="hero-chip" data-tip="Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập" onClick={() => setPrefill((p) => ({ t: getLang() === "en" ? "Create an image of " : "Tạo ảnh ", n: p.n + 1 }))}><I.Image size={16} /><span>Tạo ảnh</span></button>}
               </div>
             )}
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (
