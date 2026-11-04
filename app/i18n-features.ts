@@ -1,5 +1,18 @@
 // Bản dịch cho Dự án, Hộp thư, Giọng nói, Kho kỹ năng, Cài đặt và Synchro Code (bổ sung vào i18n-dict.ts).
 export const FX_VI2EN: Record<string, string> = {
+  "Máy này chưa có giọng đọc cho ngôn ngữ này nên có thể đọc không rõ. Thêm giọng trong cài đặt của máy": "This device has no voice for this language, so it may sound unclear. You can add a voice in your device settings",
+  "Gõ để hỏi": "Type to ask",
+  "Chưa nghe được bạn. Gõ câu hỏi, Synchro sẽ đọc câu trả lời, hoặc bấm micro để thử lại": "Synchro can't hear you. Type your question and it will read the answer aloud, or press the microphone to try again",
+  "Trình duyệt này chưa nghe được giọng nói (Chrome, Edge và Safari nghe được). Gõ câu hỏi, Synchro sẽ đọc câu trả lời": "This browser can't listen to speech (Chrome, Edge and Safari can). Type your question and Synchro will read the answer aloud",
+  "Gõ câu hỏi…": "Type your question…",
+  "Gõ câu hỏi": "Type your question",
+  "Chưa đọc được gói ElevenLabs": "Couldn't read the ElevenLabs plan",
+  "Kiểm tra kết nối mạng rồi thử lại.": "Check your connection and try again.",
+  "Không có khóa vẫn dùng được: đọc to câu trả lời, nhập và trò chuyện bằng giọng nói trong khung chat đều chạy bằng giọng của trình duyệt. Tạo giọng, nhạc, lồng tiếng thì cần khóa.": "These still work without a key, using your browser's voice: reading answers aloud, and dictating or talking in the chat. Creating voices, music and dubbing need a key.",
+  "Nghe bằng giọng của trình duyệt": "Listen with your browser's voice",
+  "Dán một đoạn văn để nghe thử": "Paste some text to hear it",
+  "Chỉ nghe, không tải về được": "Listen only, no download",
+  "Dừng": "Stop",
   "Xóa việc tự động này?": "Delete this automation?",
   "Kết quả cũ trong Hộp thư cũng bị xóa.": "Its past results in the Inbox are deleted too.",
   "Chưa tải được danh sách cần duyệt": "Couldn't load your approvals",

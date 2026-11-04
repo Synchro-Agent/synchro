@@ -119,6 +119,42 @@ try {
   ok(thread.length === 1 && thread[0] === "Làm trang web cho quán cà phê" && card >= 1, "khung chat có câu hỏi và câu trả lời đầy đủ (kèm sản phẩm)", JSON.stringify([thread, card]));
   ok(ackDelay > 0, "đã ghi nhận thời điểm đọc");
 
+  console.log("1b. Không có khóa và trình duyệt không nghe được: gõ câu hỏi, vẫn nghe câu trả lời");
+  await ev(`window.__sr = window.webkitSpeechRecognition; window.webkitSpeechRecognition = undefined; window.SpeechRecognition = undefined; window.__ask = ""; window.__say.length = 0; 1`);
+  await click(byText(".nav-item", "Mới"), "new chat"); await sleep(600);
+  await click(`document.querySelector(".vm-open")`, "voice no sr");
+  await until(`!!document.querySelector(".vm-type input")`, 8000, "typed fallback");
+  ok(await ev(`!!document.querySelector(".vm") && document.querySelector(".vm-state")?.textContent === "Gõ để hỏi"`), "màn hình giọng nói không tự đóng, mời gõ câu hỏi", await state());
+  ok(await ev(`document.querySelector(".vm-btn").disabled === true`), "nút micro tắt vì trình duyệt không nghe được");
+  ok(await ev(`/Chrome, Edge/.test(document.querySelector(".vm-cap .hint")?.textContent ?? "")`), "nói rõ trình duyệt nào nghe được");
+  await shot("1b-typed");
+  await ev(`document.querySelector(".vm-type input").focus(); 1`);
+  await P("Input.insertText", { text: "Thủ đô của Pháp là gì?" });
+  await sleep(200);
+  await click(`document.querySelector(".vm-type button")`, "send typed");
+  await until(`window.__say.length >= 1`, 60000, "typed answer read aloud");
+  ok(true, "câu trả lời được đọc bằng giọng của trình duyệt");
+  await until(`document.querySelector(".vm-state")?.textContent === "Gõ để hỏi"`, 60000, "back to typing");
+  ok(await ev(`!!document.querySelector(".vm-type input")`), "đọc xong quay lại ô gõ, không kẹt ở Đang trả lời");
+  await click(`document.querySelector(".vm-btn.end")`, "end typed"); await sleep(800);
+  const typedThread = await ev(`[...document.querySelectorAll(".user-msg")].map((e) => e.textContent)`);
+  ok(typedThread.length === 1 && typedThread[0] === "Thủ đô của Pháp là gì?", "câu đã gõ nằm trong khung chat", JSON.stringify(typedThread));
+  await ev(`window.webkitSpeechRecognition = window.__sr; window.SpeechRecognition = window.__sr; 1`);
+
+  console.log("1c. Mục Speech khi chưa có khóa: có đường đi tiếp");
+  await click(byText(".nav-item", "Speech"), "speech nav");
+  await until(`!!document.querySelector(".sp-bv textarea")`, 15000, "browser voice card");
+  ok(await ev(`[...document.querySelectorAll(".sp-detect .btn")].some((b) => b.textContent.includes("Providers"))`), "quản trị viên có nút mở Cài đặt → Providers");
+  await shot("1c-speech-nokey");
+  await ev(`document.querySelector(".sp-bv textarea").focus(); 1`);
+  await P("Input.insertText", { text: "Xin chào, đây là giọng của trình duyệt." });
+  await sleep(200);
+  await ev(`window.__say.length = 0; 1`);
+  await click(`document.querySelector(".sp-bv .sp-go")`, "read browser voice");
+  await until(`window.__say.length >= 1`, 5000, "browser voice read");
+  ok(await ev(`window.__say[0].text.includes("Xin chào")`), "nghe được ngay bằng giọng của trình duyệt, không cần khóa", await ev(`JSON.stringify(window.__say)`));
+  await click(byText(".nav-item", "Mới"), "back to chat"); await sleep(600);
+
   console.log("2. Chế độ ElevenLabs Realtime (giả lập): giao việc qua công cụ");
   await api("POST", "/api/admin/apikeys", { id: "elevenlabs", kind: "elevenlabs", key: "sk_mock_eleven_0001", baseUrl: `${LLM}/elevenlabs` });
   await rtCfg({ tools: true, say: "Làm trang web cho quán cà phê" });

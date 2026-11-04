@@ -99,7 +99,7 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
   const [recent] = useItems([]);
   useEffect(() => { const t = setInterval(() => setHint((h) => (h + 1) % HINTS.length), 3800); return () => clearInterval(t); }, []);
   const model = plan?.tts.find((m) => m.id === "eleven_v4") ?? plan?.tts[0];
-  if (plan && !plan.connected) return <div className="sp-home"><h1 className="sp-hero">Bạn muốn <em>tạo</em> gì hôm nay?</h1><NotReady admin={admin} /></div>;
+  if (!plan || !plan.connected) return <div className="sp-home"><h1 className="sp-hero">Bạn muốn <em>tạo</em> gì hôm nay?</h1><NotReady admin={admin} /></div>;
   const quick = QUICK.filter((q) => toolOn(plan, q.t));
   return (
     <div className="sp-home">

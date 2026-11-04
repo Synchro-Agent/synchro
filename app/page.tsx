@@ -23,6 +23,7 @@ import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { aiVoiceNote, elSpeed, speakAI, type Speaking } from "./speak";
 import { toSpeech, VI } from "./voiceflow";
+import { readBrowser, stopBrowserRead } from "./browserspeak";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
@@ -1662,7 +1663,7 @@ export default function Home() {
   };
   // Đọc to câu trả lời bằng giọng ElevenLabs (giọng chọn ở Cài đặt → Giọng nói); chưa có ElevenLabs thì dùng giọng của trình duyệt.
   const aiSpeak = useRef<Speaking | null>(null);
-  const stopSpeak = () => { aiSpeak.current?.stop(); aiSpeak.current = null; window.speechSynthesis?.cancel(); };
+  const stopSpeak = () => { aiSpeak.current?.stop(); aiSpeak.current = null; stopBrowserRead(); };
   const speak = async (key: string, text: string) => {
     if (speaking === key) { stopSpeak(); setSpeaking(null); return; }
     stopSpeak();
@@ -1671,19 +1672,11 @@ export default function Home() {
     const parts = toSpeech(text), clean = parts.join(" ");
     if (!clean) { setSpeaking(null); return say("Câu trả lời này chỉ có sản phẩm, không có chữ để đọc"); }
     const browserRead = (list: string[]) => {
-      const s = window.speechSynthesis;
-      if (!s) { setSpeaking(null); return say("Trình duyệt không hỗ trợ đọc to"); }
       // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt. Đọc từng đoạn: trình duyệt hay dừng giữa chừng với đoạn dài.
       const pref = VOICE_LANG[vlang] ?? "vi-VN", lang = VI.test(clean) ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref;
-      s.cancel();
-      list.forEach((c, i) => {
-        const u = new SpeechSynthesisUtterance(c);
-        u.lang = lang; u.rate = VOICE_RATE[vspeed] ?? 1;
-        if (i === list.length - 1) u.onend = () => setSpeaking((k) => (k === key ? null : k));
-        // Máy không có giọng cho ngôn ngữ này, giọng lỗi: dừng và báo một lần, không kẹt ở trạng thái đang đọc. Bị hủy do người dùng dừng thì thôi.
-        u.onerror = (e) => { if (e.error === "canceled" || e.error === "interrupted") return; s.cancel(); setSpeaking((k) => (k === key ? null : k)); say("Trình duyệt chưa đọc được đoạn này. Hãy kiểm tra giọng đọc của máy"); };
-        s.speak(u);
-      });
+      const off = () => setSpeaking((k) => (k === key ? null : k));
+      // Máy không có giọng, giọng lỗi: dừng và báo một lần, không kẹt ở trạng thái đang đọc.
+      readBrowser(list, { lang, rate: VOICE_RATE[vspeed] ?? 1, onEnd: off, onFail: (m) => { off(); say(m); }, onNote: say });
     };
     const ai = await speakAI(clean, { voice: vvoice, speed: elSpeed(VOICE_RATE[vspeed] ?? 1) });
     if (ai) {

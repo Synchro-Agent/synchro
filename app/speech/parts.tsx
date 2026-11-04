@@ -5,7 +5,10 @@ import { createPortal } from "react-dom";
 import { tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
-import { CAT_LABEL, LANGS, api, fmtDur, fmtNum, hueOf, on, post, reloadVoices, useMyVoices, usePlan, type Voice } from "./client";
+import { readBrowser, stopBrowserRead } from "../browserspeak";
+import { useApp, usePref, VOICE_RATE } from "../store";
+import { toSpeech, VI } from "../voiceflow";
+import { CAT_LABEL, LANGS, api, fmtDur, fmtNum, hueOf, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { AGES, CATEGORIES, GENDERS } from "./data";
 
 // Mức hoạt động khi đang phát (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
@@ -449,12 +452,43 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
 /** Trạng thái khi chưa gắn ElevenLabs hoặc gói chưa có tính năng. */
 export function NotReady({ admin }: { admin: boolean }) {
   const plan = usePlan();
-  if (!plan) return <div className="sp-empty"><Spin /> Đang đọc gói ElevenLabs…</div>;
+  const failed = usePlanFailed();
+  const app = useApp();
+  if (!plan) return failed
+    ? <div className="sp-card sp-detect"><span className="sp-tic big"><I.Speaker size={26} /></span><b>Chưa đọc được gói ElevenLabs</b><p>Kiểm tra kết nối mạng rồi thử lại.</p><button className="btn" onClick={() => { void refreshPlan(true); }}><I.Retry size={14} />Thử lại</button></div>
+    : <div className="sp-empty"><Spin /> Đang đọc gói ElevenLabs…</div>;
   return (
-    <div className="sp-card sp-detect">
-      <span className="sp-tic big"><I.Speaker size={26} /></span>
-      <b>{plan.connected ? "Gói ElevenLabs hiện tại chưa có tính năng này" : "Chưa kết nối ElevenLabs"}</b>
-      <p>{plan.note ?? (plan.connected ? "Tính năng sẽ tự hiện khi gói được nâng." : admin ? "Thêm khóa API ElevenLabs ở Cài đặt → Providers để dùng giọng nói thật." : "Nhờ quản trị viên thêm khóa API ElevenLabs ở Cài đặt → Providers.")}</p>
+    <>
+      <div className="sp-card sp-detect">
+        <span className="sp-tic big"><I.Speaker size={26} /></span>
+        <b>{plan.connected ? "Gói ElevenLabs hiện tại chưa có tính năng này" : "Chưa kết nối ElevenLabs"}</b>
+        <p>{plan.note ?? (plan.connected ? "Tính năng sẽ tự hiện khi gói được nâng." : admin ? "Thêm khóa API ElevenLabs ở Cài đặt → Providers để dùng giọng nói thật." : "Nhờ quản trị viên thêm khóa API ElevenLabs ở Cài đặt → Providers.")}</p>
+        {!plan.connected && <p>Không có khóa vẫn dùng được: đọc to câu trả lời, nhập và trò chuyện bằng giọng nói trong khung chat đều chạy bằng giọng của trình duyệt. Tạo giọng, nhạc, lồng tiếng thì cần khóa.</p>}
+        {!plan.connected && admin && <button className="btn" onClick={() => app.openSettings?.("Providers")}><I.Cog size={14} />Mở Cài đặt → Providers</button>}
+      </div>
+      {!plan.connected && <BrowserVoice />}
+    </>
+  );
+}
+// Đọc thử một đoạn bằng giọng của trình duyệt khi chưa có ElevenLabs: chỉ nghe, không tải về được và không tốn credit.
+function BrowserVoice() {
+  const app = useApp();
+  const [text, setText] = useState("");
+  const [reading, setReading] = useState(false);
+  const [rate] = usePref("vspeed", "Normal");
+  useEffect(() => () => stopBrowserRead(), []);
+  const go = () => {
+    if (reading) { stopBrowserRead(); setReading(false); return; }
+    const parts = toSpeech(text);
+    if (!parts.length) return;
+    setReading(true);
+    readBrowser(parts, { lang: VI.test(text) ? "vi-VN" : "en-US", rate: VOICE_RATE[rate] ?? 1, onEnd: () => setReading(false), onFail: (m) => { setReading(false); app.say(m); }, onNote: app.say });
+  };
+  return (
+    <div className="sp-card sp-bv">
+      <div className="sp-card-h">Nghe bằng giọng của trình duyệt</div>
+      <textarea className="sp-input ta" rows={4} value={text} aria-label="Văn bản cần đọc" onChange={(e) => setText(e.target.value)} placeholder="Dán một đoạn văn để nghe thử" />
+      <div className="sp-gen"><span className="sp-muted">Chỉ nghe, không tải về được</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!reading && !text.trim()} onClick={go}>{reading ? <I.Stop size={13} /> : <I.Play size={13} />}{reading ? "Dừng" : "Đọc"}</button></div>
     </div>
   );
 }
