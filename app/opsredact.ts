@@ -1,7 +1,9 @@
 // Làm sạch dòng lỗi trước khi lưu cho quản trị viên xem (hàm thuần, kiểm thử ở tests/api/ops-redact.test.mjs): lỗi có thể chứa email, token, đường dẫn có mã.
 const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
   [/-----BEGIN [^-]+-----[\s\S]*?(-----END [^-]+-----|$)/g, "[khóa]"],
-  [/\b(bearer|token|authorization|cookie|password|passwd|secret|api[_-]?key|code)(["'\s:=]+)[^\s"',;&]+/gi, (_, k, s) => `${k}${s}[ẩn]`],
+  [/\b(bearer|basic)\s+[^\s"',;&]+/gi, (_, k) => `${k} [ẩn]`],
+  [/\b(token|authorization|cookie|password|passwd|secret|api[_-]?key)(["'\s:=]+)[^\s"',;&]+/gi, (_, k, s) => `${k}${s}[ẩn]`],
+  [/\bcode=[^\s"',;&]+/g, "code=[ẩn]"],
   [/\b(sk|pk|rk|ghp|gho|ghu|ghs|xox[abp]|ya29|sess)[-_.][\w.-]{8,}/g, "[ẩn]"],
   [/\beyJ[\w-]{10,}\.[\w-]{10,}(\.[\w-]+)?/g, "[ẩn]"],
   [/([\w.+-]+)@([\w-]+(\.[\w-]+)+)/g, (_, __, d) => `***@${d}`],

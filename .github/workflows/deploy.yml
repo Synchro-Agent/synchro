@@ -6,12 +6,12 @@ on:
     branches: [main, staging]
   workflow_dispatch:
 
-concurrency:
-  group: deploy-${{ github.ref_name }}
-  cancel-in-progress: true
-
+# Lần đẩy mới chỉ hủy bước kiểm tra đang chạy, không bao giờ hủy bước deploy: hủy giữa lúc tráo bản thì web dừng ở trạng thái dở dang.
 jobs:
   verify:
+    concurrency:
+      group: verify-${{ github.ref_name }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -56,6 +56,9 @@ jobs:
   deploy:
     needs: verify
     if: github.ref_name == 'main'
+    concurrency:
+      group: deploy-${{ github.ref_name }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,11 +80,14 @@ jobs:
       - name: Build và khởi động lại
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'bash /var/www/synchro/scripts/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/workspace/setup.sh'
+            'nohup bash -c "bash /var/www/synchro/scripts/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/workspace/setup.sh" > /var/log/synchro-deploy.log 2>&1 & p=$!; tail -n +1 --pid=$p -f /var/log/synchro-deploy.log & t=$!; wait $p; c=$?; sleep 1; kill $t 2>/dev/null; exit $c'
 
   deploy-staging:
     needs: verify
     if: github.ref_name == 'staging'
+    concurrency:
+      group: deploy-${{ github.ref_name }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
