@@ -82,7 +82,8 @@ export function ruleStudios(name: string, description: string, body = "", strict
 // danh sách kích hoạt ở cuối mô tả ("use when … slides, docs, reports") hay nhắc đủ thứ.
 // Năm lớp cho mỗi mục: tên mang đúng sản phẩm; tên gợi ý và câu đầu xác nhận; đầu mô tả nói đúng sản phẩm; câu đầu có động từ làm ra + sản phẩm; từ khóa tiếng không dùng chữ Latin. Có cụm chặn thì bỏ cả mục.
 // Các cụm chặn lấy từ việc đọc mẫu thật của danh mục: hợp đồng thông minh, báo cáo kiểm thử, "resume" nghĩa là chạy tiếp, deck gateway, thiết kế API / CSDL…
-// Sửa bộ luật thì tăng CATALOG_RULES (skillstudio.ts) để danh mục được xếp lại.
+// Đọc tay mẫu ngẫu nhiên trên 17.796 skill của danh mục: khoảng 94-98% skill ở Tài liệu, 92-98% ở Thiết kế là đúng mục; ở Trình bày đọc hết, 2-3 trong 83 đáng ngờ; trong số chưa xếp mục, 1-2% đáng lẽ thuộc một mục.
+// Email và bài mạng xã hội cố ý không vào Tài liệu: phần lớn là gửi qua connector, không phải làm văn bản. Sửa bộ luật thì tăng CATALOG_RULES (skillstudio.ts) để danh mục được xếp lại.
 const WRITE = "write|writes|writing|draft|drafts|drafting|generate|generates|generating|create|creates|creating|produce|produces|producing|compose|composes|composing|prepare|prepares|preparing|author|authors|authoring|build|builds|building|edit|edits|editing|revise|revises|revising|rewrite|rewrites|rewriting|polish|polishes|polishing|make|makes|making";
 const PEN = "write|writes|writing|draft|drafts|drafting|compose|composes|composing|author|authors|authoring|edit|edits|editing|revise|revises|revising|rewrite|rewrites|rewriting";
 const DRAFT = "draft|drafts|drafting";
