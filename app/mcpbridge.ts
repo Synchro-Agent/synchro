@@ -8,7 +8,7 @@ import { currentRun, inRun } from "./runs";
 
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code (JPEG) hay ảnh connector trả về (mime cho biết loại ảnh).
-type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string }>; exp: number; busy: number; last: number };
+type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[] }>; exp: number; busy: number; last: number };
 const g = globalThis as unknown as { __synchroBridges?: Map<string, Bridge> };
 const bridges = (g.__synchroBridges ??= new Map());
 
@@ -53,7 +53,7 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
       try {
         b.busy++; b.last = Date.now();
         const r = await inRun(b.run, () => b.call(name, args)).finally(() => { b.busy--; b.last = Date.now(); });
-        return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: r.mime ?? "image/jpeg" }] : [])], isError: r.is_error });
+        return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: r.mime ?? "image/jpeg" }] : []), ...(r.more ?? []).map((i) => ({ type: "image", data: i.data, mimeType: i.mime }))], isError: r.is_error });
       } catch (e) {
         return ok(m.id, { content: [{ type: "text", text: `Lỗi: ${(e as Error).message}` }], isError: true });
       }

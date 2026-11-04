@@ -8,7 +8,7 @@ import { DIRECTORY } from "./connectordir";
 import { allowsDir, FULL_CONN, type ConnPolicy } from "./catalog";
 import { detectIcon } from "./connicons";
 import crypto from "node:crypto";
-import { guessedRead, McpClient, McpError, readLike, resultImage, resultText, type Era, type McpTool } from "./mcp";
+import { guessedRead, McpClient, McpError, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
@@ -565,8 +565,8 @@ export class ConnectorSession {
   }
   /** Công cụ chỉ đọc (khai báo hoặc đoán theo tên). */
   isRead(name: string) { const ct = this.by.get(name); return !!ct && readLike(ct.tool); }
-  // image, mime: ảnh công cụ trả về. reconnect: connector vừa mất đăng nhập, khung chat hiện nút kết nối lại.
-  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; reconnect?: OfflineConn }> {
+  // image, mime: ảnh công cụ trả về; more: các ảnh sau ảnh đầu. reconnect: connector vừa mất đăng nhập, khung chat hiện nút kết nối lại.
+  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[]; reconnect?: OfflineConn }> {
     const ct = this.by.get(name);
     if (!ct) return { content: `Không có công cụ ${name}.`, is_error: true };
     const r = rowById(ct.cid);
@@ -583,8 +583,8 @@ export class ConnectorSession {
     try {
       const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, args && typeof args === "object" ? args : {}, { signal }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
-      const img = resultImage(res);
-      return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime } : {}) };
+      const [img, ...more] = resultImages(res);
+      return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime } : {}), ...(more.length ? { more } : {}) };
     } catch (e) {
       if (e instanceof McpError && e.kind === "auth") return { content: needLogin, is_error: true, reconnect: off() };
       if (e instanceof McpError && e.kind === "scope") return { content: `${ct.cname} cần thêm quyền để dùng công cụ này; các công cụ khác vẫn dùng được. Hãy báo người dùng bấm "Cấp thêm quyền" (Cài đặt → Connectors).`, is_error: true };

@@ -51,12 +51,12 @@ type Call = { id: string; name: string; input: Record<string, unknown> };
 // pause: công cụ phía máy chủ của hãng (tìm web) chưa chạy xong trong một lần gọi — gửi lại để model làm tiếp.
 type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean };
 // image: ảnh JPEG (base64) đi kèm kết quả công cụ, ví dụ ảnh chụp trình duyệt; mỗi hãng nhận theo cách riêng.
-// mime: loại ảnh khi không phải JPEG (ảnh do connector trả về).
-type Run = ToolRun & { image?: string; mime?: string };
+// mime: loại ảnh khi không phải JPEG (ảnh do connector trả về). more: các ảnh sau ảnh đầu của cùng kết quả.
+type Run = ToolRun & { image?: string; mime?: string; more?: { data: string; mime: string }[] };
 type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[] };
 // Ảnh chụp trình duyệt cho model dùng Chat Completions / Responses: tin nhắn công cụ chỉ nhận chữ, nên ảnh đi kèm một tin người dùng ngay sau.
 const SHOT = (id: string) => `Ảnh chụp màn hình trình duyệt (kết quả công cụ ${id}).`;
-const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:${r.mime ?? "image/jpeg"};base64,${r.image}` } }] }] : []);
+const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:${r.mime ?? "image/jpeg"};base64,${r.image}` } }, ...(r.more ?? []).map((m) => ({ type: "image_url", image_url: { url: `data:${m.mime};base64,${m.data}` } }))] }] : []);
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
 // Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
@@ -102,7 +102,7 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
     };
   },
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, is_error: res[i].is_error,
-    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: res[i].mime ?? "image/jpeg", data: res[i].image } }] : res[i].content })) }],
+    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: res[i].mime ?? "image/jpeg", data: res[i].image } }, ...(res[i].more ?? []).map((m) => ({ type: "image", source: { type: "base64", media_type: m.mime, data: m.data } }))] : res[i].content })) }],
 });
 
 const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
@@ -309,7 +309,7 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   await execute(cap, m, x, [c], usedAll, decisions);
   const follow = (m.find((v) => (v as { role?: string }).role === "user") as { content?: unknown } | undefined)?.content;
   const r = (res as Run | null) ?? { content: "Không có kết quả.", is_error: true };
-  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image, mime: (r as Run).mime } : {}) };
+  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image, mime: (r as Run).mime, more: (r as Run).more } : {}) };
 }
 // Thẻ duyệt công cụ connector trong lượt chạy qua CLI (cùng cơ chế với hỏi dùng trình duyệt): CLI giữ lời gọi công cụ trong lúc chờ.
 // Chờ tối đa 10 phút rồi coi như chưa được phép; bấm Dừng thì thôi chờ ngay.
@@ -365,16 +365,27 @@ function showReconnect(x: Exec, c: OfflineConn) {
 }
 // Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
 const MODEL_IMG = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const IMG_ONE = 6_500_000, IMG_TOTAL = 16_000_000;
 const IMG_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg" };
-function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; image?: string; mime?: string }): Pick<Run, "content" | "image" | "mime"> {
+function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; image?: string; mime?: string; more?: { data: string; mime: string }[] }): Pick<Run, "content" | "image" | "mime" | "more"> {
   if (!r.image) return { content: r.content };
-  const data = Buffer.from(r.image, "base64");
-  const saved = data.length && IMG_EXT[r.mime ?? ""] ? saveOutputs(x.uid, [{ path: `${ct.tool.name.replace(/[^\w-]+/g, "_").slice(0, 60)}-${(x.outs.length + 1)}.${IMG_EXT[r.mime!]}`, data }]) : [];
-  x.outs.push(...saved);
-  const note = saved.length ? `\n<files>\noutputs/${saved[0].name} (${fmtSize(saved[0].size)}) — đã gửi cho người dùng\n</files>` : "";
-  if (!MODEL_IMG.has(r.mime ?? "") || r.image.length > 6_500_000) return { content: r.content + note };
+  const all = [{ data: r.image, mime: r.mime ?? "" }, ...(r.more ?? [])];
+  const names: string[] = [];
+  for (const i of all) {
+    const data = Buffer.from(i.data, "base64");
+    const saved = data.length && IMG_EXT[i.mime] ? saveOutputs(x.uid, [{ path: `${ct.tool.name.replace(/[^\w-]+/g, "_").slice(0, 60)}-${(x.outs.length + 1)}.${IMG_EXT[i.mime]}`, data }]) : [];
+    x.outs.push(...saved);
+    if (saved.length) names.push(`outputs/${saved[0].name} (${fmtSize(saved[0].size)}) — đã gửi cho người dùng`);
+  }
+  // Một kết quả không gửi quá IMG_TOTAL (mỗi ảnh tối đa IMG_ONE) cho model: giới hạn yêu cầu của các hãng. Ảnh còn lại vẫn thành tệp của người dùng và được nói rõ.
+  let room = IMG_TOTAL;
+  const send = all.filter((i) => { if (!MODEL_IMG.has(i.mime) || i.data.length > IMG_ONE || i.data.length > room) return false; room -= i.data.length; return true; });
+  const left = all.length - send.length;
+  const note = (names.length ? `\n<files>\n${names.join("\n")}\n</files>` : "") + (left ? `\n[${left}/${all.length} ảnh không kèm theo kết quả này vì quá lớn hoặc model không đọc được loại ảnh đó; đừng mô tả các ảnh đó như đã xem.]` : "");
+  if (!send.length) return { content: r.content + note };
   (x.heavy ??= []).push(c.id);
-  return { content: r.content + note, image: r.image, mime: r.mime };
+  const [first, ...more] = send;
+  return { content: r.content + note, image: first.data, mime: first.mime, ...(more.length ? { more } : {}) };
 }
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ, hoặc ngay khi model đang viết).
 function addFollowup(m: unknown[], text: string) {

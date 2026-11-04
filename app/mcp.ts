@@ -404,10 +404,9 @@ export class McpClient {
   }
 }
 
-// Ảnh đầu tiên công cụ trả về (base64 + loại ảnh), để gửi cho model và lưu thành tệp cho người dùng.
-export function resultImage(r: Record<string, unknown>): { data: string; mime: string } | null {
-  const c = ((r.content as Record<string, unknown>[] | undefined) ?? []).find((x) => x?.type === "image" && typeof x.data === "string" && x.data);
-  return c ? { data: String(c.data), mime: String(c.mimeType ?? "image/png").toLowerCase() } : null;
+// Mọi ảnh công cụ trả về (base64 + loại ảnh), để gửi cho model và lưu thành tệp cho người dùng. Lấy mỗi ảnh đầu thì model được báo "đã kèm" cả ba ảnh mà chỉ thấy một.
+export function resultImages(r: Record<string, unknown>): { data: string; mime: string }[] {
+  return ((r.content as Record<string, unknown>[] | undefined) ?? []).filter((x) => x?.type === "image" && typeof x.data === "string" && x.data).map((c) => ({ data: String(c.data), mime: String(c.mimeType ?? "image/png").toLowerCase() }));
 }
 
 // Kết quả tools/call → văn bản cho model (âm thanh chỉ ghi chú; nội dung có cấu trúc thành JSON).

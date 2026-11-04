@@ -29,6 +29,7 @@ const TOOLS = [
   { name: "create_page", description: "Create a page", inputSchema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] }, annotations: { readOnlyHint: false } },
   { name: "get_or_create_user", description: "Upsert", inputSchema: { type: "object", properties: {} } },
   { name: "get_chart", description: "A chart image", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
+  { name: "get_charts", description: "Three chart images", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
   { name: "slow_ping", description: "Silent then done", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
 ];
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
@@ -75,6 +76,7 @@ const server = http.createServer(async (req, res) => {
     const n = m.params.name;
     if (S.scopeTool === n) return send(res, 403, { error: "insufficient_scope" }, { "www-authenticate": 'Bearer error="insufficient_scope", scope="docs:write"' });
     if (n === "get_chart") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "chart" }, { type: "image", data: PNG.toString("base64"), mimeType: "image/png" }] } });
+    if (n === "get_charts") return send(res, 200, { jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "charts" }, ...[0, 1, 2].map(() => ({ type: "image", data: PNG.toString("base64"), mimeType: "image/png" }))] } });
     if (n === "slow_ping") {
       // Luồng SSE: im một lúc nhưng có ping, rồi mới có kết quả.
       res.writeHead(200, { "content-type": "text/event-stream" });
@@ -398,6 +400,8 @@ try {
     const s = session();
     const out = await s.call(s.tools.find((t) => t.tool.name === "get_chart").fq, {});
     ok(out.mime === "image/png" && Buffer.from(out.image, "base64").equals(PNG) && !out.is_error, "ảnh đi kèm kết quả, đúng loại ảnh", JSON.stringify(out).slice(0, 200));
+    const many = await s.call(s.tools.find((t) => t.tool.name === "get_charts").fq, {});
+    ok(many.image && many.more?.length === 2 && many.more.every((i) => i.mime === "image/png"), "công cụ trả ba ảnh: cả ba tới được model", JSON.stringify(many).slice(0, 200));
     await s.close();
     wipe();
   }
