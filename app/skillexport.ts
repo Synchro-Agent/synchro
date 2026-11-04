@@ -156,7 +156,7 @@ export async function exportPlugin(uid: string, id: string, lang: Lang): Promise
     format: "synchro-library-export", formatVersion: 1, exportedAt: new Date().toISOString(),
     library: {
       id: p.id, slug: p.slug, catalogId: row.catalog_id, name: p.name, description: p.description, author: p.author, homepage: p.homepage, color: p.color,
-      scope: p.scope, studio: p.studio, enabled: p.enabled, listEverySkill: p.everywhere, yourChoice: { enabled: p.mine.enabled, listEverySkill: p.mine.everywhere },
+      scope: p.scope, studio: p.studio, studioMode: p.studioMode, enabled: p.enabled, listEverySkill: p.everywhere, yourChoice: { enabled: p.mine.enabled, listEverySkill: p.mine.everywhere },
       folder: root, size: p.size, createdAt: iso(row.created_at), updatedAt: iso(p.updatedAt), checkedForUpdatesAt: iso(p.checkedAt),
       updateAvailable: p.updateAvailable, latestCommit: row.latest, risk: p.risk, licenses: p.licenses, feedback: fb[`lib-${p.slug}`] ?? { up: 0, down: 0, low: false },
     },

@@ -8,7 +8,7 @@ import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
 import { getLang, tr, untranslated } from "./i18n";
-import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
+import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio, StudioInfo, StudioMode } from "./plugins";
 import { PLUGIN_CATS, type DirPlugin } from "./plugindir";
 import { ClaudeDirectory } from "./claudedirui";
 import { GithubAdd } from "./ghadd";
@@ -18,7 +18,7 @@ import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED,
 import { PageBar, usePage } from "./pager";
 import { SkillScan } from "./skillscanui";
 
-type Data = { plugins: PluginSummary[]; catalogInstalled?: { libraries: number; skills: number }; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
+type Data = { plugins: PluginSummary[]; catalogInstalled?: { libraries: number; skills: number }; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, StudioInfo>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await apiFetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -28,6 +28,18 @@ async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
 const fire = () => window.dispatchEvent(new Event(PLUGINS_CHANGED));
 
 const STUDIO: Record<Studio, string> = { design: "Design", slides: "Slides", docs: "Docs" };
+const STUDIO_ORDER: Studio[] = ["design", "slides", "docs"];
+// Dòng "12 skill ở Thiết kế, 3 skill ở Tài liệu" dưới nút studio: số lấy từ máy chủ nên dựng theo ngôn ngữ, không qua từ điển.
+function detectedText(d: Partial<Record<Studio, number>>) {
+  const en = getLang() === "en";
+  const parts = STUDIO_ORDER.filter((k) => d[k]).map((k) => (en ? `${d[k]!.toLocaleString("en-US")} ${d[k] === 1 ? "skill" : "skills"} in ${STUDIO[k]}` : `${d[k]!.toLocaleString("vi-VN")} skill ở ${tr(STUDIO[k])}`));
+  return parts.length ? parts.join(", ") : en ? "No skill of this plugin fits Docs, Slides or Design." : "Chưa có skill nào của plugin này thuộc Tài liệu, Trình bày hay Thiết kế.";
+}
+const MODE_TEXT: Record<"auto" | "none" | "named", string> = {
+  auto: "Synchro sorts each skill of this plugin into Docs, Slides or Design by itself.",
+  none: "This plugin's skills are not put into any category. Synchro can still open them in chat when a request needs them.",
+  named: "Pressing this Artifacts button gives Synchro the whole library of this plugin.",
+};
 const RISK: Record<Risk, [string, string]> = { none: ["No scripts", "ok"], low: ["Scripts, sandboxed", "low"], medium: ["Review scripts", "mid"], high: ["High risk", "high"] };
 const mb = (n: number) => (n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`);
 
@@ -147,6 +159,7 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
   const remove = () => app.confirm(`${tr("Gỡ")} ${p.name}?`, tr(`${p.skills.length} skill sẽ bị gỡ${p.scope === "org" ? " cho mọi người" : ""}. Bạn có thể cài lại từ danh mục.`), "Uninstall",
     () => api<{ plugins: PluginSummary[] }>("DELETE", `/api/plugins/${p.id}`).then((r) => { onChange(r); fire(); onClose(); app.say(tr("Plugin uninstalled")); }).catch((e) => app.say(e.message)));
   const on = p.enabled && p.mine.enabled;
+  const mode: StudioMode = p.studioMode ?? p.studio ?? "auto";
   return (
     <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal pl-modal">
@@ -161,8 +174,8 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
             <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label="Turned on" onClick={() => patch(p.scope === "org" && !admin ? { mine: { enabled: !p.mine.enabled } } : { enabled: !p.enabled })} /></div>
           <div className="pl-row"><div><b>List every skill directly</b><span>Off: Synchro opens this library on its own when a request needs it. On: each skill is listed in every chat, which uses more context.</span></div>
             <button className={`toggle ${p.mine.everywhere ? "on" : ""}`} role="switch" aria-checked={p.mine.everywhere} aria-label="List every skill directly" onClick={() => patch(p.scope === "org" ? { mine: { everywhere: !p.mine.everywhere } } : { everywhere: !p.everywhere })} /></div>
-          {manage && <div className="pl-row"><div><b>Studio button</b><span>Pressing this Artifacts button gives Synchro the whole library of this plugin.</span></div>
-            <select className="pl-sel" aria-label="Studio button" value={p.studio ?? ""} onChange={(e) => patch({ studio: e.target.value || null })}><option value="">None</option><option value="design">Design</option><option value="slides">Slides</option><option value="docs">Docs</option></select></div>}
+          {manage && <div className="pl-row pl-row-sel"><div><b>Studio button</b><span>{MODE_TEXT[mode === "auto" || mode === "none" ? mode : "named"]}</span>{mode === "auto" && full?.detected && <span className="pl-det" data-notr>{detectedText(full.detected)}</span>}</div>
+            <select className="pl-sel" aria-label="Studio button" value={mode} onChange={(e) => patch({ studio: e.target.value })}><option value="auto">Auto-detect</option><option value="none">None</option><option value="design">Design</option><option value="slides">Slides</option><option value="docs">Docs</option></select></div>}
         </div>
         <div className="pl-src">
           {Object.entries(p.commits).map(([r, c]) => <a key={r} href={`https://github.com/${r}/tree/${c}`} target="_blank" rel="noreferrer" data-notr><I.GitHub size={13} />{r}<em>{c.slice(0, 7)}</em></a>)}

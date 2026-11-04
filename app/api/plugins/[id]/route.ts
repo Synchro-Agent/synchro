@@ -1,6 +1,6 @@
 import { AuthError, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
 import { markRemoved } from "../../../plugjob";
-import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, removePluginSkills, setPlugin, setPref, updatePlugin, type Studio } from "../../../plugins";
+import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, removePluginSkills, setPlugin, setPref, updatePlugin, type StudioMode } from "../../../plugins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,13 +23,13 @@ export const GET = handle(async (req: Request, ctx: Ctx) => {
   return Response.json({ plugin: getPlugin(a.id, a.user.id) });
 });
 
-// Quản lý: { enabled?, everywhere?, studio?, skills?: { tên: bật } }. Người dùng với plugin tổ chức: { mine: { enabled?, everywhere? } }.
+// Quản lý: { enabled?, everywhere?, studio?: "auto" | "none" | "design" | "slides" | "docs", skills?: { tên: bật } }. Người dùng với plugin tổ chức: { mine: { enabled?, everywhere? } }.
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const a = await access(req, ctx);
   const b = await req.json().catch(() => ({}));
   if (b.mine && typeof b.mine === "object") setPref(a.user.id, a.id, { enabled: b.mine.enabled, everywhere: b.mine.everywhere });
-  const admin = { enabled: b.enabled, everywhere: b.everywhere, studio: b.studio as Studio | null | undefined, skills: b.skills };
+  const admin = { enabled: b.enabled, everywhere: b.everywhere, studio: b.studio as StudioMode | null | undefined, skills: b.skills };
   if (Object.values(admin).some((v) => v !== undefined)) {
     if (!a.manage) throw new AuthError("Chỉ quản trị viên mới đổi được plugin của tổ chức.", 403);
     setPlugin(a.id, admin);

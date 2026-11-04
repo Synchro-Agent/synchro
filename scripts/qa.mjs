@@ -26,6 +26,7 @@ const SUITES = [
   ["Danh sách model lỗi ở lần hỏi đầu", "tests/ui/models-retry.mjs"],
   ["Đăng nhập connector quay về dù có COOP", "tests/ui/connector-login.mjs"],
   ["Ảnh từ URL ngoài trong artifact", "tests/ui/artimg.mjs"],
+  ["Nút studio của plugin, số skill và danh sách ở trang Artifacts", "tests/ui/studio-select.mjs"],
 ];
 const only = process.argv.slice(2);
 

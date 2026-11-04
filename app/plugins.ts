@@ -13,10 +13,12 @@ import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
 import { fold, warmSkillIndex } from "./skillroute";
-import { bumpTags, classify, classifyCatalog, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
+import { bumpTags, classify, classifyCatalog, dropAutoTags, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginDetected, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
+// Nút studio của một plugin: auto: Synchro tự xếp từng skill vào các mục (mặc định); none: không vào mục nào; tên mục: cả thư viện vào nút đó.
+export type StudioMode = "auto" | "none" | Studio;
 export type Source = { repo: string; ref?: string; path?: string; include?: string[]; exclude?: string[] };
 export type PluginDef = { catalogId?: string; slug: string; name: string; description: string; author?: string; homepage?: string; studio?: Studio | null; everywhere?: boolean; color?: string; sources: Source[] };
 export type Risk = "none" | "low" | "medium" | "high";
@@ -46,6 +48,8 @@ function init() {
         last_used_at INTEGER, UNIQUE(plugin_id, name));
       CREATE TABLE IF NOT EXISTS plugin_prefs (user_id TEXT NOT NULL, plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, enabled INTEGER, everywhere INTEGER, PRIMARY KEY (user_id, plugin_id));
       CREATE TABLE IF NOT EXISTS plugin_removed (plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, name TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (plugin_id, name))`);
+    // Cột riêng cho "Không xếp mục": cột studio chỉ chứa mục thật, nơi khác coi studio có giá trị là studio thật. Dòng cũ studio NULL trở thành Tự động nhận diện (mặc định 1), đúng việc chúng vẫn làm.
+    if (!(d.prepare("PRAGMA table_info(plugins)").all() as { name: string }[]).some((c) => c.name === "auto_tag")) d.exec("ALTER TABLE plugins ADD COLUMN auto_tag INTEGER NOT NULL DEFAULT 1");
     ready = true;
   }
   return d;
@@ -290,7 +294,7 @@ export async function previewPlugin(def: PluginDef): Promise<Preview> {
 
 // ---------------------------------------------------------------- cài / cập nhật / gỡ
 type Row = { id: string; owner: string; slug: string; catalog_id: string | null; name: string; description: string; author: string | null; homepage: string | null; color: string | null;
-  studio: string | null; everywhere: number; enabled: number; sources: string; commits: string; size: number; created_at: number; updated_at: number; checked_at: number | null; latest: string | null };
+  studio: string | null; auto_tag: number; everywhere: number; enabled: number; sources: string; commits: string; size: number; created_at: number; updated_at: number; checked_at: number | null; latest: string | null };
 type SRow = { id: string; plugin_id: string; name: string; description: string; body: string; storage_path: string; files: string; report: string; enabled: number; use_count: number; last_used_at: number | null };
 
 const slugOk = (s: string) => /^[a-z0-9][a-z0-9-]{0,40}$/.test(s);
@@ -360,8 +364,10 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
 // Thư viện của danh mục Claude (~18.000 skill) chỉ qua bộ luật chặt: nhờ model từng skill là đốt gói của người dùng.
 function tagOne(id: string, by?: string) {
   const d = init();
-  const pl = d.prepare("SELECT studio, catalog_id FROM plugins WHERE id = ?").get(id) as { studio: string | null; catalog_id: string | null } | undefined;
+  const pl = d.prepare("SELECT studio, catalog_id, auto_tag FROM plugins WHERE id = ?").get(id) as { studio: string | null; catalog_id: string | null; auto_tag: number } | undefined;
   if (!pl) return;
+  // Không xếp mục: bỏ nhãn tự động, giữ mục người dùng tự chọn cho từng skill.
+  if (!pl.studio && !pl.auto_tag) { keepPluginTags(id, (d.prepare("SELECT name FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string }[]).map((r) => r.name)); dropAutoTags(id); return; }
   if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { classifyCatalog(id, d.prepare("SELECT name, description FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string }[]); return; }
   const rows = d.prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
   keepPluginTags(id, rows.map((r) => r.name));
@@ -374,7 +380,7 @@ function tagPlugin(id: string, by?: string) { if (holdTags(() => tagOne(id, by))
  *  Chỉ báo đổi nhãn một lần sau cùng: báo giữa chừng là bộ đệm skill của chat phải dựng lại liên tục. */
 export async function ensurePluginTags() {
   const d = init();
-  const ids = (d.prepare("SELECT id FROM plugins WHERE studio IS NULL").all() as { id: string }[]).map((r) => r.id);
+  const ids = (d.prepare("SELECT id FROM plugins WHERE studio IS NULL AND auto_tag = 1").all() as { id: string }[]).map((r) => r.id);
   let i = 0, changed = false;
   while (i < ids.length) {
     const t0 = Date.now();
@@ -543,9 +549,11 @@ function restoreUploads(id: string, uploads: SRow[], owner: string) {
 export type PluginSkill = { id: string; name: string; description: string; enabled: boolean; report: SkillReport; useCount: number; lastUsed: number | null };
 export type PublicPlugin = {
   id: string; scope: "org" | "personal"; slug: string; catalogId: string | null; name: string; description: string; author: string | null; homepage: string | null; color: string | null;
-  studio: Studio | null; everywhere: boolean; enabled: boolean; mine: { enabled: boolean; everywhere: boolean }; sources: Source[]; commits: Record<string, string>; size: number;
+  studio: Studio | null; studioMode: StudioMode; everywhere: boolean; enabled: boolean; mine: { enabled: boolean; everywhere: boolean }; sources: Source[]; commits: Record<string, string>; size: number;
   updatedAt: number; checkedAt: number | null; updateAvailable: boolean; skills: PluginSkill[];
   risk: Risk; licenses: string[];
+  /** Số skill của thư viện này đã nằm trong từng mục (Tự động nhận diện, và mục người dùng tự chọn). */
+  detected?: Partial<Record<Studio, number>>;
 };
 // Danh sách thư viện (Kho kỹ năng, menu +, bảng lệnh): mỗi skill chỉ có tên và trạng thái. Thư viện chung có thể chứa cả danh mục của Claude
 // (~3.100 thư viện, ~18.000 skill): gửi đủ mô tả và báo cáo của mọi skill mỗi lần mở trang là vài chục MB. Chi tiết: getPlugin (GET /api/plugins/[id]).
@@ -553,10 +561,11 @@ export type PluginSummary = Omit<PublicPlugin, "skills"> & { skills: { id: strin
 type Pref = { enabled: number | null; everywhere: number | null };
 const mineOf = (r: Pick<Row, "everywhere">, pref?: Pref) => ({ enabled: pref?.enabled === null || pref?.enabled === undefined ? true : !!pref.enabled, everywhere: pref?.everywhere === null || pref?.everywhere === undefined ? !!r.everywhere : !!pref.everywhere });
 const prefsOf = (uid: string) => new Map((init().prepare("SELECT plugin_id, enabled, everywhere FROM plugin_prefs WHERE user_id = ?").all(uid) as (Pref & { plugin_id: string })[]).map((p) => [p.plugin_id, p]));
+const modeOf = (r: Pick<Row, "studio" | "auto_tag">): StudioMode => (r.studio as Studio | null) ?? (r.auto_tag ? "auto" : "none");
 function head(r: Row, pref?: Pref): Omit<PublicPlugin, "skills" | "risk" | "licenses"> {
   return {
     id: r.id, scope: r.owner === "org" ? "org" : "personal", slug: r.slug, catalogId: r.catalog_id, name: r.name, description: r.description, author: r.author, homepage: r.homepage, color: r.color,
-    studio: (r.studio as Studio) ?? null, everywhere: !!r.everywhere, enabled: !!r.enabled, mine: mineOf(r, pref),
+    studio: (r.studio as Studio) ?? null, studioMode: modeOf(r), everywhere: !!r.everywhere, enabled: !!r.enabled, mine: mineOf(r, pref),
     sources: JSON.parse(r.sources), commits: JSON.parse(r.commits), size: r.size, updatedAt: r.updated_at, checkedAt: r.checked_at, updateAvailable: !!r.latest,
   };
 }
@@ -564,7 +573,7 @@ function pub(r: Row, uid?: string): PublicPlugin {
   const skills = (init().prepare("SELECT * FROM plugin_skills WHERE plugin_id = ? ORDER BY name").all(r.id) as SRow[]).map((s) => ({ id: s.id, name: s.name, description: s.description, enabled: !!s.enabled, report: JSON.parse(s.report) as SkillReport, useCount: s.use_count, lastUsed: s.last_used_at }));
   const pref = uid ? (init().prepare("SELECT enabled, everywhere FROM plugin_prefs WHERE user_id = ? AND plugin_id = ?").get(uid, r.id) as Pref | undefined) : undefined;
   const risk = skills.reduce<Risk>((a, s) => (RANK[s.report.risk] > RANK[a] ? s.report.risk : a), "none");
-  return { ...head(r, pref), skills, risk, licenses: [...new Set(skills.map((s) => s.report.license))] };
+  return { ...head(r, pref), skills, risk, licenses: [...new Set(skills.map((s) => s.report.license))], detected: pluginDetected(r.id) };
 }
 export const getPlugin = (id: string, uid?: string) => { const r = init().prepare("SELECT * FROM plugins WHERE id = ?").get(id) as Row | undefined; return r ? pub(r, uid) : null; };
 export const pluginOwner = (id: string) => (init().prepare("SELECT owner FROM plugins WHERE id = ?").get(id) as { owner: string } | undefined)?.owner ?? null;
@@ -599,11 +608,17 @@ export function pluginSkillsOf(uid: string, keep: (p: PluginSummary) => boolean 
   return listPlugins(uid).filter(keep).map((p) => ({ p, rows: (st.all(p.id) as Pick<SRow, "name" | "description" | "body" | "files" | "enabled">[]).map((r) => ({ name: r.name, description: r.description, body: r.body, files: (JSON.parse(r.files) as unknown[]).length, enabled: !!r.enabled })) }));
 }
 
-export function setPlugin(id: string, patch:{ enabled?: boolean; everywhere?: boolean; studio?: Studio | null; skills?: Record<string, boolean> }) {
+// studio: "auto" | "none" | tên mục. null (bản cũ của trang) nghĩa là Tự động nhận diện: đúng việc plugin không gắn studio vẫn làm từ trước.
+export function setPlugin(id: string, patch:{ enabled?: boolean; everywhere?: boolean; studio?: StudioMode | null; skills?: Record<string, boolean> }) {
   const d = init();
   if (typeof patch.enabled === "boolean") d.prepare("UPDATE plugins SET enabled = ? WHERE id = ?").run(patch.enabled ? 1 : 0, id);
   if (typeof patch.everywhere === "boolean") d.prepare("UPDATE plugins SET everywhere = ? WHERE id = ?").run(patch.everywhere ? 1 : 0, id);
-  if (patch.studio === null || (typeof patch.studio === "string" && STUDIOS.includes(patch.studio))) { d.prepare("UPDATE plugins SET studio = ? WHERE id = ?").run(patch.studio, id); tagPlugin(id); }
+  const m = patch.studio;
+  if (m === null || m === "auto" || m === "none" || (typeof m === "string" && STUDIOS.includes(m))) {
+    d.prepare("UPDATE plugins SET studio = ?, auto_tag = ? WHERE id = ?").run(m === null || m === "auto" || m === "none" ? null : m, m === "none" ? 0 : 1, id);
+    const owner = pluginOwner(id);
+    tagPlugin(id, owner && owner !== "org" ? owner : undefined);
+  }
   if (patch.skills && typeof patch.skills === "object") for (const [n, on] of Object.entries(patch.skills)) d.prepare("UPDATE plugin_skills SET enabled = ? WHERE plugin_id = ? AND name = ?").run(on ? 1 : 0, id, n);
   touch();
 }
