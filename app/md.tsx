@@ -8,12 +8,13 @@ import { ChartView, parseChart } from "./charts";
 import { ArtifactFrame, MermaidSvg } from "./artifactui";
 import { AskCard } from "./askcard";
 
-const words = (p: string) => p.split(/(\s+)/).map((w, k) => (/^\s*$/.test(w) ? w : <span key={k} className="w">{w}</span>));
+// Bọc từng chữ để hiện dần: chỉ ở các dòng cuối của câu trả lời đang viết. Tin đã xong là chữ thường: đoạn chat 120 tin từng giữ gần 20.000 thẻ <span> chỉ để phục vụ hiệu ứng đã chạy xong.
+const words = (p: string, w?: boolean) => (w ? p.split(/(\s+)/).map((x, k) => (/^\s*$/.test(x) ? x : <span key={k} className="w">{x}</span>)) : p);
 // Link Markdown [chữ](địa chỉ): http(s) mở tab mới. Đường dẫn tới tệp trong sandbox (sandbox:/…, outputs/… — thói quen của model quen
 // trình chạy code khác) chỉ hiện chữ: tệp đã có thẻ kèm nút tải ngay dưới tin nhắn. Từng hiện thô "[Tải video](sandbox:/outputs/…)".
 const LINK = /^\[([^\]\n]+)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)$/;
 // memo: chữ đang chảy chỉ dài thêm ở dòng cuối, các dòng trước không phải dựng lại từng chữ mỗi khung hình.
-const Inline = memo(function Inline({ t }: { t: string }) {
+const Inline = memo(function Inline({ t, w }: { t: string; w?: boolean }) {
   const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]\n]+\]\(\s*<?[^)\s>]+>?(?:\s+"[^"]*")?\s*\))/g);
   return (
     <>
@@ -21,8 +22,8 @@ const Inline = memo(function Inline({ t }: { t: string }) {
         if (p.startsWith("**") && p.endsWith("**") && p.length > 4) return <strong key={i}>{p.slice(2, -2)}</strong>;
         if (p.startsWith("`") && p.endsWith("`") && p.length > 2) return <code key={i} className="ic">{p.slice(1, -1)}</code>;
         const m = LINK.exec(p);
-        if (m) return /^https?:\/\//i.test(m[2]) ? <a key={i} href={m[2]} target="_blank" rel="noopener noreferrer">{words(m[1])}</a> : <span key={i}>{words(m[1])}</span>;
-        return <span key={i}>{words(p)}</span>;
+        if (m) return /^https?:\/\//i.test(m[2]) ? <a key={i} href={m[2]} target="_blank" rel="noopener noreferrer">{words(m[1], w)}</a> : <span key={i}>{words(m[1], w)}</span>;
+        return <span key={i}>{words(p, w)}</span>;
       })}
     </>
   );
@@ -228,17 +229,19 @@ function MdTable({ head, rows, say }: { head: string[]; rows: string[][]; say: (
 }
 
 // Một đoạn giữa hai khối code. memo theo chuỗi: câu trả lời đang viết chỉ phân tích lại đoạn cuối, không phân tích lại cả bài mỗi khung hình.
-const MdText = memo(function MdText({ s, say }: { s: string; say: (m: string) => void }) {
+const MdText = memo(function MdText({ s, say, live }: { s: string; say: (m: string) => void; live?: boolean }) {
   const lines = s.split("\n");
   const out: React.ReactNode[] = [];
-  let list: string[] = [];
+  // Đang chảy chữ: chỉ ba dòng cuối còn bọc từng chữ (đủ cho phần vừa về đang mờ dần), phần trên đã là chữ thường.
+  const tail = live ? lines.length - 3 : Infinity;
+  let list: string[] = [], listW: boolean[] = [];
   let ord = false;
   const flush = () => {
     if (!list.length) return;
     // Ô đánh dấu của checklist ("- [ ] việc", "- [x] đã xong"): hiện ô vuông, không phải chữ "[ ]".
-    const items = list.map((l, k) => { const c = /^\[([ xX])\]\s+(.*)/.exec(l); return c ? <li key={k} className="task"><span className={`tick${c[1] === " " ? "" : " on"}`} aria-hidden="true" /><Inline t={c[2]} /></li> : <li key={k}><Inline t={l} /></li>; });
+    const items = list.map((l, k) => { const c = /^\[([ xX])\]\s+(.*)/.exec(l); return c ? <li key={k} className="task"><span className={`tick${c[1] === " " ? "" : " on"}`} aria-hidden="true" /><Inline t={c[2]} w={listW[k]} /></li> : <li key={k}><Inline t={l} w={listW[k]} /></li>; });
     out.push(ord ? <ol key={out.length}>{items}</ol> : <ul key={out.length}>{items}</ul>);
-    list = [];
+    list = []; listW = [];
   };
   let tbl: string[] = [];
   // Đoạn trích dẫn ("> …"): gom các dòng liền nhau thành một khung.
@@ -252,7 +255,8 @@ const MdText = memo(function MdText({ s, say }: { s: string; say: (m: string) =>
     out.push(<MdTable key={out.length} head={head} rows={rows} say={say} />);
     tbl = [];
   };
-  lines.forEach((l) => {
+  lines.forEach((l, li) => {
+    const w = li >= tail;
     const q = /^\s*>\s?(.*)$/.exec(l);
     if (q) { flush(); flushT(); quote.push(q[1]); return; }
     flushQ();
@@ -262,17 +266,18 @@ const MdText = memo(function MdText({ s, say }: { s: string; say: (m: string) =>
     const b = l.match(/^\s*[-*]\s+(.*)/);
     const n = l.match(/^\s*\d+\.\s+(.*)/);
     const h = l.match(/^(#{1,6})\s+(.*)/);
-    if (b || n) { const o = !!n; if (list.length && o !== ord) flush(); ord = o; list.push((b || n)![1]); return; }
+    if (b || n) { const o = !!n; if (list.length && o !== ord) flush(); ord = o; list.push((b || n)![1]); listW.push(w); return; }
     flush();
     // Giữ đúng cấp tiêu đề (# lớn nhất … #### trở xuống cùng cỡ) để tài liệu dài vẫn thấy rõ bố cục.
-    if (h) { const H = `h${Math.min(h[1].length, 4)}` as "h1" | "h2" | "h3" | "h4"; out.push(<H key={out.length}><Inline t={h[2]} /></H>); }
-    else if (l.trim()) out.push(<p key={out.length}><Inline t={l} /></p>);
+    if (h) { const H = `h${Math.min(h[1].length, 4)}` as "h1" | "h2" | "h3" | "h4"; out.push(<H key={out.length}><Inline t={h[2]} w={w} /></H>); }
+    else if (l.trim()) out.push(<p key={out.length}><Inline t={l} w={w} /></p>);
   });
   flush(); flushT(); flushQ();
   return <div>{out}</div>;
 });
 
-export const Markdown = memo(function Markdown({ text: text0, say, dev, viz, live }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean }) {
+// live: thẻ hỏi lại còn bấm được. streaming: câu trả lời đang viết (chữ hiện dần ở đoạn cuối).
+export const Markdown = memo(function Markdown({ text: text0, say, dev, viz, live, streaming }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean; streaming?: boolean }) {
   let cbi = 0;
   const { text, meta } = useMemo(() => (dev ? splitMeta(text0) : { text: text0, meta: null }), [text0, !!dev]); // eslint-disable-line react-hooks/exhaustive-deps
   const segs = useMemo(() => text.split(/(```[\s\S]*?(?:```|$))/g), [text]);
@@ -288,7 +293,7 @@ export const Markdown = memo(function Markdown({ text: text0, say, dev, viz, liv
           if (viz && (l === "chart" || l === "mermaid" || l === "widget")) return <Visual key={i} lang={l} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} closed={/```\s*$/.test(s) && s.length > 6} say={say} />;
           return <Code key={i} lang={lang.trim()} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} say={say} dev={dev} idx={cbi++} />;
         }
-        return <MdText key={i} s={s} say={say} />;
+        return <MdText key={i} s={s} say={say} live={streaming && i === segs.length - 1} />;
       })}
       {meta && <div className="cb-cx"><span>⏱ Time {meta.time}</span><span>▤ Space {meta.space}</span>{meta.canOptimize && <span className="opt">Có thể tối ưu thêm</span>}</div>}
     </>

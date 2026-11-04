@@ -1024,6 +1024,12 @@ html body .shell-side .chat-item:has(.ct-run){padding-right:30px}
 .chat-item .ct-run::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ds-ink);opacity:0;animation:ct-run 1.6s var(--ds-ease) infinite}
 @keyframes ct-run{0%{transform:scale(.5);opacity:.5}100%{transform:scale(1.25);opacity:0}}
 .chat-wrap:hover .ct-run{opacity:0}
+/* Đoạn chat đang chờ bạn duyệt: thấy được khi đang ở đoạn chat khác. */
+html body .shell-side .chat-item:has(.ct-need){padding-right:84px}
+.chat-item .ct-need{position:absolute;right:8px;top:50%;translate:0 -50%;max-width:72px;height:18px;padding:0 7px;border-radius:999px;background:var(--ds-warn);color:#fff;font-size:11px;font-weight:600;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .15s}
+[data-theme="dark"] .chat-item .ct-need{color:#111210}
+.chat-wrap:hover .ct-need{opacity:0}
+.turn-undo{margin-top:-14px}
 @media (prefers-reduced-motion:reduce){.chat-item .ct-run::after{animation:none}}
 html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 

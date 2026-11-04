@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { Markdown } from "./md";
 import { Loader } from "./brand";
 import { tr } from "./i18n";
-import { ConnLogo } from "./connectorsui";
+import { ConnLogo } from "./connlogo";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };

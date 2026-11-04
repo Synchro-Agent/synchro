@@ -7,7 +7,8 @@ import { createRequire } from "node:module";
 import { loadTs } from "../tests/lib/ts.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
-const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
+const { "i18n-dict": D0, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
+const D = { ...D0, EN2VI: V.EN2VI, RULES_VI: V.RULES_VI };
 const args = process.argv.slice(2);
 const out = args.includes("--json") ? args[args.indexOf("--json") + 1] : null;
 const only = args.includes("--files") ? args[args.indexOf("--files") + 1] : "app";

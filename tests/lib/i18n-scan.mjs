@@ -173,7 +173,8 @@ export function extract(file) {
 }
 
 export async function scan({ files } = {}) {
-  const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
+  const { "i18n-dict": D0, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
+  const D = { ...D0, EN2VI: V.EN2VI, RULES_VI: V.RULES_VI };
   const has = (m, k) => Object.prototype.hasOwnProperty.call(m, k);
   const rule = (rules, t) => rules.some(([re]) => re.test(t));
   const sameWords = D.SAME_WORDS ?? new Set();
@@ -190,7 +191,7 @@ export async function scan({ files } = {}) {
   const enOk = (t) => has(D.VI2EN, t) || rule(D.RULES_EN, t) || same.has(t);
   const viOk = (t) => has(D.EN2VI, t) || rule(D.RULES_VI, t) || same.has(t);
   const all = walkDir(path.join(process.cwd(), "app"));
-  const list = files ?? all.filter((f) => !/i18n(-dict)?\.ts$|speech[\\/]i18n\.ts$/.test(f));
+  const list = files ?? all.filter((f) => !/i18n(-dict|-vi)?\.ts$|speech[\\/]i18n\.ts$/.test(f));
   const missing = [];
   let total = 0;
   for (const f of list) {

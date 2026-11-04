@@ -239,6 +239,8 @@ interface AuthComponentProps {
   onSignOut?: () => void;
   // Vì sao màn hình đăng nhập hiện ra (phiên đã hết hạn khi app đang mở).
   notice?: string;
+  // Phiên vừa hết hạn: đây là đăng nhập lại, không phải bắt đầu dùng Synchro.
+  again?: boolean;
   // Quản trị viên đóng đăng ký: email chưa có tài khoản dừng ngay ở bước đầu, không phải điền hết biểu mẫu mới biết.
   signupOpen?: boolean;
 }
@@ -254,7 +256,7 @@ function LangSwitch() {
   );
 }
 
-export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, signupOpen = true }: AuthComponentProps) => {
+export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, again, signupOpen = true }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -405,7 +407,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   }, [authStep, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const titles: Record<string, [string, string]> = {
-    email: ["Get started", "Continue with"],
+    email: [again ? "Sign in again" : "Get started", "Continue with"],
     password: [isLogin ? "Welcome back" : "Create your password", isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
@@ -497,7 +499,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <div className="glass-input-wrap w-full"><div className="glass-input">
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
-                                        <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
+                                        <input type="email" autoComplete="email" autoFocus={!!again} readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
                                         <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground">{checking ? <Loader size={16} /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
                                     </div></div>
                                     {emailErr && authStep === "email" && <p id="auth-email-err" className="auth-field-err" role="alert">{emailErr}</p>}
