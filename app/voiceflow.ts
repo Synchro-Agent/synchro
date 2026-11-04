@@ -10,7 +10,7 @@ export function toSpeech(md: string) {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, " ")
     // Dòng kẻ của bảng, đường kẻ ngang, dấu đầu dòng: đọc lên chỉ là ký hiệu. Hết ô bảng hay hết dòng thì ngắt câu để giọng đọc nghỉ.
     .replace(/^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/gm, " ").replace(/^\s*[-+*]\s+/gm, " ").replace(/^\s*(#{1,6}\s+)(.+)$/gm, "$2.").replace(/^\s*\|\s*/gm, "").replace(/\s*\|\s*(?=\S)/g, ", ")
-    .replace(/[#>*_~|]+/g, " ").replace(/\s+/g, " ").replace(/^[\s,]+/, "").trim();
+    .replace(/[*_~]+/g, "").replace(/[#>|]+/g, " ").replace(/\s+/g, " ").replace(/^[\s,]+/, "").trim();
   const parts = plain.match(/[^.!?。…]+[.!?。…]*\s*/g) ?? [plain];
   const out: string[] = [];
   for (const s of parts) { if (out.length && (out[out.length - 1] + s).length < 180) out[out.length - 1] += s; else out.push(s); }

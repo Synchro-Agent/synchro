@@ -25,6 +25,7 @@ async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
 export const PLUGINS_CHANGED = "synchro:plugins";
 const fire = () => window.dispatchEvent(new Event(PLUGINS_CHANGED));
 export const HUB_DISCOVER = "synchro:hub-discover";
+export const HUB_SEARCH = "synchro:hub-search";
 
 const STUDIO: Record<Studio, string> = { design: "Design", slides: "Slides", docs: "Docs" };
 const RISK: Record<Risk, [string, string]> = { none: ["No scripts", "ok"], low: ["Scripts, sandboxed", "low"], medium: ["Review scripts", "mid"], high: ["High risk", "high"] };
@@ -259,7 +260,9 @@ export function SkillHub() {
     return () => { on = false; };
   }, [open, d]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<string | null>(null);
-  const [q, setQ] = useState("");
+  // Mở từ bảng lệnh ⌘K: lọc sẵn theo đúng skill / thư viện vừa chọn.
+  const [q, setQ] = useState(() => { try { const v = sessionStorage.getItem("hub-q"); if (v) sessionStorage.removeItem("hub-q"); return v ?? ""; } catch { return ""; } });
+  useEffect(() => { const h = (e: Event) => { try { sessionStorage.removeItem("hub-q"); } catch {} setQ(String((e as CustomEvent).detail ?? "")); }; window.addEventListener(HUB_SEARCH, h); return () => window.removeEventListener(HUB_SEARCH, h); }, []);
   const addRef = useRef<HTMLDivElement>(null);
   const qlib = q.trim().toLowerCase();
   const libs = (d?.plugins ?? []).filter((p) => !qlib || `${p.name} ${p.description}`.toLowerCase().includes(qlib)).sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "org" ? -1 : 1));

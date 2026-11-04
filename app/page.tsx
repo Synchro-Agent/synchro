@@ -75,7 +75,7 @@ import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifac
 import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
-import { CustomizePage, HUB_DISCOVER, useStudios, type CzTab } from "./pluginsui";
+import { CustomizePage, HUB_DISCOVER, HUB_SEARCH, useStudios, type CzTab } from "./pluginsui";
 import { CONNECTORS_BROWSE, ConnLogo, ConnectorsPanel, type Conn } from "./connectorsui";
 import type { DirEntry } from "./connectordir";
 // Dữ liệu connector cho menu + ở ô chat (connector đã nối, danh mục để thêm).
@@ -1523,7 +1523,7 @@ export default function Home() {
     chat: (id) => { setCur(id); setView("chat"); },
     artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
-    skillHub: goCustom,
+    skillHub: (q) => { if (q) { try { sessionStorage.setItem("hub-q", q); } catch {} } goCustom(); if (q) window.dispatchEvent(new CustomEvent(HUB_SEARCH, { detail: q })); },
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {

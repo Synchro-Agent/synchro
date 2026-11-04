@@ -234,6 +234,7 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
     const uid = o.uid;
     if (!o.loaded || !uid || userScope() !== uid) return;
     const meta = parseMeta(ls.get("chatSync"));
+    fit.current = { chat: new Set(), project: new Set() }; full.current = { chat: false, project: false };
     const s: Sess = { on: true, scope: uid, meta, prev: { chat: new Map(), project: new Map() }, fromServer: new WeakSet(), timer: null, busy: false, fails: 0, tooBig: new Map(), lastPush: new Map(), pulling: false };
     sess.current = s;
     const need: string[] = [], here = new Set<string>();
@@ -261,6 +262,7 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
       window.removeEventListener("focus", tick); window.removeEventListener("online", tick); document.removeEventListener("visibilitychange", vis);
       saveMeta(s);
       if (sess.current === s) sess.current = null;
+      setStatus({ pending: 0, tooBig: 0, localFull: false, offline: false });
     };
   }, [o.loaded, o.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -286,6 +288,9 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
     // Không đặt lại đồng hồ đang chạy: chữ đang chảy mỗi khung hình không được làm trễ mãi việc đẩy.
     if (any && !s.timer) later(s);
   }, [o.chats, o.projects]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Câu trả lời vừa xong: đẩy bản cuối ngay, không chờ hết nhịp đẩy thưa của lúc đang chạy.
+  useEffect(() => { const s = sess.current; if (s && ok(s) && Object.keys(s.meta.dirty).length) later(s); }, [o.running]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- API cho trang ----
   const api = useRef<ChatSync | null>(null);
