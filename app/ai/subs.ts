@@ -208,7 +208,7 @@ export async function mergedProviders(u: UserRow, api: ProviderInfo[]): Promise<
     if (ap) used.add(ap.id);
     const models = cli ? await planModels(cli, u) : null;
     if (!models?.length) { if (ap) out.push({ ...ap, source: "api" }); continue; }
-    const plan = { cli, models, blockedUntil: planBlock(cli, u.id), usingApiUntil: apiOptIn(u.id, cli), relogin: needsRelogin(cli, u.id) };
+    const plan = { cli, models, blockedUntil: planBlock(cli, u.id), usingApiUntil: apiOptIn(u.id, cli), relogin: needsRelogin(cli, u.id), hasApi: !!ap?.models.length };
     const name = ap?.name ?? SUB[cli].name;
     if (plan.usingApiUntil && ap?.models.length) out.push({ ...ap, name, source: "api", plan });
     else out.push({ id: ap?.id ?? vendor, name, kind: SUB[cli].vendor, models, source: "plan", plan });

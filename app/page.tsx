@@ -339,7 +339,7 @@ function PlanNote({ pv }: { pv: ProviderInfo }) {
   if (p.blockedUntil) return (
     <div className="msub-note msub-plan">
       <span>{en ? `Your plan hit its limit. It resets ${at(p.blockedUntil)}.` : `Gói đã hết hạn mức, hồi lại ${at(p.blockedUntil)}.`}</span>
-      <button className="lnk" onClick={() => set(true)}>{en ? "Use the shared API key" : "Dùng khóa API dùng chung"}</button>
+      {p.hasApi && <button className="lnk" onClick={() => set(true)}>{en ? "Use the shared API key" : "Dùng khóa API dùng chung"}</button>}
     </div>
   );
   return <div className="msub-note msub-plan"><span>{en ? "From your plan" : "Từ gói của bạn"}</span></div>;
