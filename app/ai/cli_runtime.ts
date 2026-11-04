@@ -103,7 +103,9 @@ export function sweepEngineTemp(): Promise<void> {
     execFile(u ? "sudo" : "find", u ? ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "find", ...args] : args, { timeout: 120_000 }, (e) => { if (e && e.code !== 1) console.warn("[engines] dọn tệp tạm:", String(e.message).slice(0, 200)); ok(); });
   });
   return run([work, "-mindepth", "1", "-maxdepth", "2", "-type", "f", "-name", ".synchro-*", "-mmin", `+${Math.ceil(MAX_TURN_MS / 60_000) + 60}`, "-delete"])
-    .then(() => run([work, "-mindepth", "3", "-maxdepth", "3", "-type", "d", "-path", "*/att/*", "-mtime", "+7", "-exec", "rm", "-rf", "{}", "+"]));
+    .then(() => run([work, "-mindepth", "3", "-maxdepth", "3", "-type", "d", "-path", "*/att/*", "-mtime", "+7", "-exec", "rm", "-rf", "{}", "+"]))
+    // Thư mục tạm của lượt tạo ảnh bị bỏ dở (ảnh gốc, câu lệnh của người dùng). Lượt tạo ảnh chỉ vài phút nên 2 giờ là chắc chắn đã xong.
+    .then(() => run([work, "-mindepth", "2", "-maxdepth", "2", "-type", "d", "-name", ".synchro-img-*", "-mmin", "+120", "-exec", "rm", "-rf", "{}", "+"]));
 }
 
 /** Đường dẫn CLI nếu đã cài trong <home>/.local/bin (kể cả liên kết tới gói npm, miễn là vẫn nằm trong thư mục nhà engine). */

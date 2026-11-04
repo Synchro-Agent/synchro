@@ -33,6 +33,35 @@ const hookAllows = (tool) => Object.values(readJson(hooksFile)).some((h) => h?.e
 }));
 const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "utf8")).onboardingComplete === true; } catch { return false; } };
 
+// Lượt tạo ảnh của Synchro: như agy 1.5.0 đo thật, image-generator ghi JPEG vào brain/<conversation_id>/, câu trả lời có link đường dẫn tuyệt đối.
+async function agyImage(prompt, conv) {
+  const m = C.imageMode(home, "agy"), dir = path.join(cli, "brain", conv), n = C.imageCount(prompt);
+  const ref = /image at (\S+) as the reference/.exec(prompt)?.[1];
+  C.imageLog(home, { args: a.filter((x) => x !== prompt), home, cwd: process.cwd(), bridge: !!readJson(mcpFile).mcpServers?.synchro, prompt, ref: ref ?? null, refOk: !!ref && fs.existsSync(ref) });
+  // Phiên trên đĩa chứa nguyên văn câu lệnh, như CLI thật: Synchro phải xóa sau lượt.
+  const sess = path.join(cli, "conversations", `${conv}.pb`);
+  fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
+  const done = (response, extra = {}) => console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response, error: "", duration_seconds: 1, num_turns: 1, usage: usage0, ...extra }));
+  const fail = (error) => { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error, duration_seconds: 0.1, num_turns: 0, usage: usage0 })); process.exit(1); };
+  if (m.mode === "slow") { fs.writeFileSync(path.join(home, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
+  if (m.delayMs) await C.sleep(m.delayMs);
+  if (m.mode === "quota") return fail("RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.");
+  if (m.mode === "fail") return fail("INTERNAL: upstream connection reset");
+  if (m.mode === "none") return done("NO_IMAGE_TOOL");
+  if (m.mode === "text") return done("Đã tạo xong ảnh quả táo đỏ, rất đẹp.");
+  if (m.mode === "other") return done(`[ảnh](${m.otherPath})`);
+  fs.mkdirSync(dir, { recursive: true });
+  if (m.mode === "symlink") { fs.symlinkSync(m.otherPath, path.join(dir, "leak.jpg")); return done("xong"); }
+  // Ảnh gốc được agy chép vào hội thoại: không phải kết quả.
+  if (ref && fs.existsSync(ref)) fs.copyFileSync(ref, path.join(dir, `media__upload${path.extname(ref)}`));
+  if (m.mode === "refdenied") { const lf = C.flag(a, "--log-file"); if (lf) fs.appendFileSync(lf, 'tool_confirmation_manager.go:221] Print mode: soft-denying tool confirmation "view_file" at step 2\n'); }
+  const files = Array.from({ length: n }, (_, i) => path.join(dir, `small_red_apple_${Date.now()}_${i}.jpg`));
+  for (const f of files) C.saveImage(f, m.mode === "bad" ? "bad" : m.mode === "big" ? "big" : "jpg");
+  // Mỗi ảnh một nội dung, như ảnh thật: byte thừa sau dấu kết thúc JPEG không làm hỏng ảnh.
+  files.forEach((f, i) => fs.appendFileSync(f, `${Date.now()}-${i}-${Math.random()}`));
+  return done(files.map((f) => `[${path.basename(f)}](${f})`).join("\n"));
+}
+
 (async () => {
   if (a[0] === "--version") return console.log("1.4.11 [mock]");
   const li = fs.existsSync(loginFile);
@@ -70,6 +99,7 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
       console.error("Error: authentication required. Run 'agy' to log in, then retry.");
       process.exit(1);
     }
+    if (C.isImageTurn(prompt)) return agyImage(prompt, conv);
     if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
     // Như agy 1.4.11 thật (nhật ký trên VPS 2026-10-30): model Claude / GPT qua Antigravity không nhận --effort, lượt dừng ngay.
     {
@@ -136,6 +166,12 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
     const att = /<attachments>([\s\S]*?)<\/attachments>/.exec(prompt)?.[1] ?? "";
     const files = [...att.matchAll(/^\d+\. (\S+) \(/gm)].map((m) => m[1]);
     const seen = files.map((f) => !path.resolve(f).startsWith(process.cwd() + path.sep) ? `ngoài thư mục làm việc: ${f}` : !fs.existsSync(f) ? `không có tệp: ${f}` : `${C.mediaDesc(fs.readFileSync(f))} (view_file)`);
+    // [mock:nativeimage]: model tự gọi image-generator của Antigravity ngay trong lượt chat: ảnh nằm trong thư mục hội thoại, câu trả lời chỉ ghi đường dẫn trên máy chủ.
+    if (prompt.includes("[mock:nativeimage]") || prompt.includes("mocknativeimage")) {
+      const f = path.join(cli, "brain", conv, `native_${Date.now()}.jpg`);
+      C.saveImage(f);
+      return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: `Mình đã tạo ảnh: ![táo](${f}) và [tải ảnh](file://${f}). Lưu tại ${f}`, error: "", duration_seconds: 37, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 } }));
+    }
     const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(seen) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : ""));
     await C.sleep(200);
     return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: text, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length, thinking_tokens: 12, cache_read_tokens: 0, total_tokens: prompt.length + text.length + 12 } }));

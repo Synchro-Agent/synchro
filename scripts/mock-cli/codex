@@ -41,7 +41,7 @@ const authFile = path.join(dir, "auth.json");
         { id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false, supportedReasoningEfforts: ["low", "medium", "high", "xhigh"].map((e) => ({ reasoningEffort: e })) },
         { id: "codex-internal", model: "codex-internal", displayName: "Internal", hidden: true },
       ] });
-      if (m.method === "account/read") return reply(m.id, li() ? { account: { type: "chatgpt", email: "owner@example.com", planType: "plus" }, requiresOpenaiAuth: true } : { account: null, requiresOpenaiAuth: true });
+      if (m.method === "account/read") return reply(m.id, li() ? { account: { type: "chatgpt", email: "owner@example.com", planType: C.imageMode(dir, "codex").plan ?? "plus" }, requiresOpenaiAuth: true } : { account: null, requiresOpenaiAuth: true });
       if (m.method === "account/rateLimits/read") {
         if (!li()) return reply(m.id, null, { code: -32600, message: "codex account authentication required to read rate limits" });
         const turns = C.totalTurns(dir);
@@ -64,6 +64,21 @@ const authFile = path.join(dir, "auth.json");
       await C.sleep(400);
       C.out({ type: "turn.failed", error: { message: "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header" } });
       process.exit(1);
+    }
+    // Lượt tạo ảnh của Synchro. Vị trí generated_images/<thread_id>/ theo báo cáo công khai, CHƯA kiểm chứng trên tài khoản thật: gói Free của chủ máy chủ không có công cụ này.
+    if (C.isImageTurn(prompt)) {
+      const m = C.imageMode(dir, "codex");
+      C.imageLog(dir, { args: a, codexHome: dir, cwd: process.cwd(), prompt });
+      const sess = path.join(dir, "sessions", "2026", `rollout-${tid}.jsonl`);
+      fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
+      const say = (text) => C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text } });
+      const end = () => C.out({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } });
+      if (m.mode === "slow") { fs.writeFileSync(path.join(dir, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
+      if (m.mode === "quota") { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
+      if (m.mode === "fail") { C.out({ type: "turn.failed", error: { message: "stream disconnected before completion" } }); process.exit(1); }
+      if (m.mode === "none") { say("I'm sorry, no image generation tool is available in this environment."); return end(); }
+      for (let i = 0; i < C.imageCount(prompt); i++) C.saveImage(path.join(dir, "generated_images", tid, `ig_${i}.png`), "png");
+      say("Saved."); return end();
     }
     if (prompt.includes("[mock:quota]")) { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
     const turn = C.bumpSession(dir, tid);

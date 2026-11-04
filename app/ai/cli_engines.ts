@@ -331,6 +331,8 @@ export class ClaudeCodeEngine implements Engine {
 // ---------------------------------------------------------------- Codex
 // Loại mục trong luồng sự kiện của codex exec là công cụ chạy trên máy chủ (không qua Synchro): lệnh shell, sửa / đọc tệp.
 export const CODEX_LOCAL = /command|shell|exec|file_change|patch|read_file|list_dir|grep_files|view_image/i;
+/** Cờ tắt shell và xem tệp của Codex (lý do ở runTurn bên dưới); lượt tạo ảnh dùng đúng các cờ này. */
+export const CODEX_SAFE = ["--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', "-c", "features.shell_tool=false", "-c", "features.unified_exec=false", "-c", "tools.view_image=false"];
 export class CodexEngine implements Engine {
   readonly id = "codex";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
@@ -340,7 +342,7 @@ export class CodexEngine implements Engine {
     // Hộp cát "chỉ đọc" của Codex vẫn đọc được cả đĩa, mà mọi thư mục đăng nhập thuộc cùng một user hệ thống: lệnh shell trên máy chủ đọc được
     // đăng nhập của người khác. Tắt hẳn công cụ shell và xem tệp (việc thật đều chạy trong workspace qua công cụ của Synchro); bản Codex nào không
     // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
-    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', "-c", "features.shell_tool=false", "-c", "features.unified_exec=false", "-c", "tools.view_image=false"];
+    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật. codex exec không có ai bấm duyệt
     // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
     // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho
@@ -423,7 +425,7 @@ const AGY_TICK_MS = Number(process.env.SYNCHRO_AGY_TICK_MS) || 15_000;
 // engine, đọc được thư mục đăng nhập của tài khoản khác và địa chỉ nội bộ.
 const AGY_HOOK = (web?: boolean) => JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: `mcp_synchro_.*|CallMcpTool${web ? "|search_web|web_search" : ""}`, hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
 /** Công cụ agy tự từ chối trong lượt (đọc nhật ký của lượt bằng chính user của engine, rồi xóa nhật ký). */
-async function agyDenied(req: TurnRequest, log: string): Promise<string[]> {
+export async function agyDenied(req: Pick<TurnRequest, "env" | "workdir">, log: string): Promise<string[]> {
   const sh = spawnCli("/bin/sh", ["-c", 'grep -o "soft-denying tool confirmation \\"[A-Za-z_]*\\"" "$1" 2>/dev/null; rm -f "$1"', "sh", log], { env: req.env, cwd: path.dirname(log) });
   let out = "";
   for await (const l of sh.lines) out += l + "\n";
@@ -444,6 +446,25 @@ async function agyBridge(req: TurnRequest, url: string) {
   return (await sh.done).code === 0;
 }
 
+// Cầu nối của các lượt Antigravity còn đang chạy (kể cả lượt đã nhả khóa), để lượt tạo ảnh trả lại đúng cầu nối nó tạm gỡ.
+const agyLive = new Set<string>();
+/**
+ * Lượt tạo ảnh chạy agy với cùng HOME mà không được có công cụ của Synchro: agy chỉ đọc cầu nối từ cấu hình chung, cầu nối của một lượt chat đang mở nằm sẵn ở đó và model có thể
+ * gọi lại chính generate_image hay công cụ của lượt kia. Giữ khóa tài khoản rồi gỡ cầu nối; lượt đang chạy đã đọc cấu hình nên không ảnh hưởng, xong thì trả lại phòng khi CLI đọc lại.
+ * Trả về hàm nhả; null khi không chờ được khóa (đã báo lỗi qua sự kiện).
+ */
+export async function* agyQuiet(req: TurnRequest): AsyncGenerator<Event, (() => Promise<void>) | null, unknown> {
+  const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
+  if (!free) return null;
+  const home = ownerKey("agy", String(req.env?.HOME ?? "")), prev = configOwner.get(home);
+  configOwner.delete(home);
+  await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
+  return async () => {
+    if (prev && agyLive.has(prev) && !configOwner.has(home) && await agyRun(["mcp", "add", "synchro", prev], req).catch(() => false)) configOwner.set(home, prev);
+    free();
+  };
+}
+
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
@@ -452,6 +473,7 @@ export class AntigravityEngine implements Engine {
     if (!free) return;
     const home = ownerKey("agy", String(req.env?.HOME ?? "")), url = req.mcp.url;
     req.mcp.onPark?.(free);
+    agyLive.add(url);
     try {
       // Cầu nối của lượt trước (đang chờ duyệt, hoặc bị dừng giữa chừng) bị thay bằng cầu nối mới.
       await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
@@ -463,6 +485,7 @@ export class AntigravityEngine implements Engine {
       yield { kind: "status" };
       yield* this.turn(req);
     } finally {
+      agyLive.delete(url);
       if (configOwner.get(home) === url) { configOwner.delete(home); await agyRun(["mcp", "remove", "synchro"], req).catch(() => false); }
       free();
     }
@@ -543,7 +566,7 @@ export class AntigravityEngine implements Engine {
 //   các lượt có công cụ của cùng một tài khoản chạy lần lượt (như Antigravity).
 // - Ảnh / PDF gửi kèm: đã lưu trong thư mục làm việc, prompt tham chiếu bằng @<đường dẫn> (cách đính kèm tệp của Grok CLI).
 const grokLocks = new Map<string, Slot>();
-const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
+export const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
 async function grokRun(args: string[], req: TurnRequest) {
   const p = start("grok", args, { ...req, signal: undefined }, "", 60_000);
   if (!p) return false;

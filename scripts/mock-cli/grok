@@ -21,6 +21,33 @@ const readMcp = () => { try { return Object.fromEntries([...fs.readFileSync(cfgF
 const writeMcp = (o) => { fs.mkdirSync(home, { recursive: true }); fs.writeFileSync(cfgFile, Object.entries(o).map(([n, u]) => `[mcp_servers.${n}]\nurl = "${u}"\nenabled = true\n`).join("\n")); };
 const all = (n) => a.flatMap((x, i) => (x === n ? [a[i + 1]] : []));
 
+// Lượt tạo ảnh của Synchro, theo Grok CLI 1.0.70 đo thật: công cụ image_gen với rawInput {prompt, aspect_ratio}; thiếu --always-approve thì "permission required";
+// tài khoản hết tiền thì tool_call_update failed với HTTP 403 spending-limit. Chỗ lưu ảnh khi thành công CHƯA biết trên tài khoản thật: mode ok nêu đường dẫn trong kết quả công cụ,
+// scan lưu trong thư mục đăng nhập mà không nói, workdir lưu trong thư mục làm việc.
+async function grokImage(prompt) {
+  const m = C.imageMode(process.env.HOME || home, "grok"), sid = C.uuid(), n = C.imageCount(prompt);
+  const tools = (C.flag(a, "--tools") ?? "").split(",").filter(Boolean), disallowed = (C.flag(a, "--disallowed-tools") ?? "").split(",").filter(Boolean);
+  C.imageLog(process.env.HOME || home, { args: a, home: process.env.HOME, grokHome: home, cwd: process.cwd(), tools, disallowed, deny: all("--deny"), prompt });
+  const sess = path.join(home, "sessions", `${sid}.json`);
+  fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
+  const end = (text = "") => { if (text) C.out({ type: "text", data: text }); C.out({ type: "end", stopReason: "end_turn", sessionId: sid, usage: { input_tokens: 1, output_tokens: 1 } }); };
+  if (m.mode === "slow") { fs.writeFileSync(path.join(process.env.HOME || home, "mock-image.pid"), String(process.pid)); await C.sleep(120_000); }
+  if (m.mode === "fail") { C.out({ type: "error", message: "internal server error" }); return end(); }
+  if (m.mode === "none" || !tools.includes("image_gen")) return end("I can't create images here.");
+  for (let i = 0; i < n; i++) {
+    const id = `call_${i}`;
+    C.out({ type: "tool_call", toolCallId: id, title: "image_gen", toolName: "image_gen", kind: "other", status: "in_progress", rawInput: { prompt: "x", aspect_ratio: "1:1" } });
+    if (!a.includes("--always-approve")) { C.out({ type: "tool_call_update", toolCallId: id, status: "failed", rawOutput: "permission required" }); return end(); }
+    if (m.mode === "quota") { C.out({ type: "tool_call_update", toolCallId: id, status: "failed", rawOutput: 'HTTP 403 {"code":"personal-team-blocked:spending-limit","error":"Your team has reached its monthly spending limit"}' }); return end("I couldn't generate it."); }
+    if (m.mode === "other") { C.out({ type: "tool_call_update", toolCallId: id, status: "completed", rawOutput: { path: m.otherPath } }); continue; }
+    if (m.mode === "text") { C.out({ type: "tool_call_update", toolCallId: id, status: "completed", rawOutput: { ok: true } }); continue; }
+    const f = m.mode === "scan" ? path.join(home, "cache", `img_${i}.png`) : m.mode === "workdir" ? path.join(process.cwd(), `img_${i}.png`) : path.join(home, "generated_images", sid, `img_${i}.png`);
+    C.saveImage(f, "png");
+    C.out({ type: "tool_call_update", toolCallId: id, status: "completed", rawOutput: m.mode === "scan" || m.mode === "workdir" ? { ok: true } : { path: f } });
+  }
+  return end("Done.");
+}
+
 (async () => {
   if (a[0] === "--version" || a[0] === "version") return console.log("grok 0.1.42 [mock]");
   if (a[0] === "models") {
@@ -68,6 +95,7 @@ const all = (n) => a.flatMap((x, i) => (x === n ? [a[i + 1]] : []));
     if (fmt !== "streaming-json") { console.error("mock grok: chỉ hỗ trợ --output-format streaming-json"); process.exit(2); }
     const fail = (message) => { C.out({ type: "error", message }); process.exit(1); };
     if (!li()) return fail("Not authenticated. Run `grok login` to sign in, or set XAI_API_KEY.");
+    if (C.isImageTurn(prompt)) return grokImage(prompt);
     if (prompt.includes("[mock:quota]")) return fail("Rate limit exceeded: you've reached your SuperGrok usage limit. Try again in 2 hours.");
     const model = C.flag(a, "-m") ?? C.flag(a, "--model") ?? MODELS[0], effort = C.flag(a, "--effort");
     if (!MODELS.includes(model)) return fail(`Unknown model '${model}'. Run \`grok models\` to see available models.`);
