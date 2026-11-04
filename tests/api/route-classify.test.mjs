@@ -146,6 +146,54 @@ const CASES = [
   ["giải thích thêm đi", "language", "medium", undefined, { turns: 3, prevAsk: "What does 'take off' mean?" }],
   ["cảm ơn nhé", "chat", "low", undefined, { turns: 3, prevAsk: "Viết code Python đọc file CSV" }],
   ["That's wrong, try again", "reason", "max", "high", { turns: 3, prevAsk: "Chứng minh căn bậc hai của 2 là số vô tỉ" }],
+  // câu xác nhận sau khi model hỏi lại trước việc lớn: giữ đúng việc (từng thành trò chuyện, cả trang web giao cho model rẻ nhất)
+  ["ok làm đi", "build", "high", "high", { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  ["ok", "build", "high", "high", { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  ["vâng", "code", "medium", "medium", { turns: 3, prevAsk: "Viết code Python đọc file CSV" }],
+  ["yes please", "build", "high", "high", { turns: 3, prevAsk: "Create a dashboard to track my expenses" }],
+  ["oke luôn", "build", "high", "high", { turns: 3, prevAsk: "Thiết kế logo cho thương hiệu trà sữa" }],
+  ["ok lam di", "build", "high", "high", { turns: 3, prevAsk: "lam trang web ban giay" }],
+  // câu chỉ để cảm ơn, chào, khen: vẫn là trò chuyện
+  ["cảm ơn", "chat", "low", undefined, { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  ["thank you so much!", "chat", "low", undefined, { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  ["cam on ban nhieu", "chat", "low", undefined, { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  ["tuyệt quá", "chat", "low", undefined, { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  ["xin chào", "chat", "low", undefined, { turns: 3, prevAsk: "Làm trang web bán giày" }],
+  // gõ không dấu
+  ["lam giup minh trang web ban hang", "build", "high", "high"],
+  ["tao app quan ly chi tieu", "build", "high", "high"],
+  ["lam slide gioi thieu cong ty", "build", "high", "high"],
+  ["giai phuong trinh x^2 - 5x + 6 = 0", "reason", "high", "medium"],
+  ["dich sang tieng anh: hom nay troi dep", "translate", "medium"],
+  ["tom tat giup minh bai bao nay", "summarize", "high"],
+  ["viet email xin nghi phep", "write", "medium"],
+  ["so sanh iphone va samsung", "analyze", "high", "medium"],
+  ["cam on", "chat", "low"],
+  ["sai roi lam lai di", "code", "high", "medium", { turns: 3, prevAsk: "Viết code Python đọc file CSV" }],
+  // tiếng Anh thường không bị từ điển không dấu kéo đi
+  ["What is the capital of Australia?", "qa", "medium"],
+  ["Tell me about the Dung Beetle", "qa", "medium"],
+  // tạo media, thao tác trên web, connector: nhiều bước, không phải câu hỏi nhỏ
+  ["Làm video giới thiệu sản phẩm 30 giây", "act", "high", "medium"],
+  ["Tạo ảnh quảng cáo cho quán cà phê", "act", "high", "medium"],
+  ["Đăng bài lên fanpage giúp mình", "act", "high", "medium"],
+  ["Tạo sự kiện lịch họp nhóm 9h sáng mai", "act", "high", "medium"],
+  ["Gửi email báo giá cho khách hàng A", "act", "high", "medium"],
+  ["Make a 30 second promo video for my shop", "act", "high", "medium"],
+  ["tao anh quang cao cho quan ca phe", "act", "high", "medium"],
+  ["dang bai len fanpage giup minh", "act", "high", "medium"],
+  // ... nhưng hỏi cách làm, hoặc nhờ viết code thì không
+  ["Cách tạo ảnh bằng AI là gì?", "qa", "medium"],
+  ["How to download a video from YouTube?", "qa", "medium"],
+  ["Viết code Python cắt video bằng ffmpeg", ["code", "build"], "high", "medium"],
+  ["Ảnh hưởng của mạng xã hội tới học sinh là gì?", ["qa", "analyze"], "medium"],
+  ["Làm bài tập hình học lớp 9", ["qa", "reason"], "high"],
+  // sức khỏe, pháp lý, tài chính: không dùng mức thấp nhất
+  ["Tôi bị đau ngực khó thở, nên làm gì?", "qa", "high", "medium"],
+  ["toi bi dau nguc kho tho nen lam gi", "qa", "high", "medium"],
+  ["Trẻ 2 tuổi uống bao nhiêu liều thuốc hạ sốt?", "qa", "high", "medium"],
+  ["Hàng xóm lấn đất thì khởi kiện thế nào?", "qa", "high", "medium"],
+  ["Should I take out a loan to invest in stocks?", "qa", "high", "medium"],
 ];
 
 console.log("1. Loại việc và mức nỗ lực trên bộ câu có nhãn");
@@ -156,6 +204,10 @@ for (const [text, task, max, min, o] of CASES) {
   const good = tasks.includes(t) && RANK.indexOf(e) <= RANK.indexOf(max) && (!min || RANK.indexOf(e) >= RANK.indexOf(min));
   ok(good, `${text.replace(/\s+/g, " ").slice(0, 60) || "(chỉ có ảnh)"} → ${t} · ${e}`, `mong đợi ${tasks.join("/")} · nỗ lực ${min ? `${min}–` : "≤ "}${max}; được ${t} · ${e} (điểm ${score}: ${why.join(", ")})`);
 }
+
+console.log("1b. Tìm lời nhờ gần nhất: bỏ qua câu xác nhận ở giữa");
+ok(R.isAck("ok") && R.isAck("ok làm đi") && R.isAck("màu xanh nhé") && !R.isAck("Làm trang web bán giày") && !R.isAck("Tóm tắt bài này"), "câu xác nhận và trả lời ngắn được nhận ra");
+ok(R.fold("Đau ngực khó thở") === "Dau nguc kho tho", "bỏ dấu tiếng Việt");
 
 console.log("2. Lời chê chỉ tính khi đúng là lời chê câu trả lời trước");
 ok(R.difficulty(q("Sai rồi, làm lại đi", { turns: 3, prevAsk: "Viết code Python" })).why.includes("bạn chưa hài lòng với câu trả lời trước"), "“Sai rồi, làm lại đi” sau một câu trả lời → chê");
@@ -203,6 +255,36 @@ ok(!r.why.includes("nối tiếp việc đang làm với model trước"), `câu
 // Antigravity trả cả câu một lần khi xong (5-8 giây cho câu chào); cùng chất lượng và chi phí thì chọn gói hiện chữ dần.
 r = R.routeModel(q("Chào bạn"), ["sub-agy/gemini-3.8-flash", "sub-claude/haiku"]);
 ok(r.model === "sub-claude/haiku", `câu chào: chọn model hiện chữ dần thay vì Antigravity: ${r.model}`, JSON.stringify(r));
+
+console.log("9. Việc nhẹ ưu tiên model hiện chữ dần; Gemini vẫn thắng ảnh và tài liệu dài");
+{
+  const PLAN = ["sub-claude/fable", "sub-claude/opus", "sub-claude/sonnet", "sub-claude/haiku", "sub-codex/gpt-6-luna", "sub-codex/gpt-6.1-sol", "sub-agy/gemini-3.8-flash", "sub-agy/gemini-3.1-pro", "sub-grok/grok-4.7"];
+  for (const text of ["Xin chào", "Thủ đô của Úc là gì?", "Why is the sky blue?", "Dịch sang tiếng Anh: Hôm nay trời đẹp, mình đi dạo bờ hồ.", "Tóm tắt giúp mình đoạn này: trời đẹp, gió mát, mọi người vui.", "Viết caption Instagram cho quán cà phê", "Từ 'serendipity' nghĩa là gì?"]) {
+    const x = R.routeModel(q(text), PLAN);
+    ok(!x.model.startsWith("sub-agy/"), `việc nhẹ không chọn engine chờ hết mới hiện chữ: “${text.slice(0, 40)}” → ${x.model}`, JSON.stringify(x));
+  }
+  // Thiếu model nhanh của hãng khác: thà dùng Sonnet hiện chữ dần còn hơn Flash không hiện gì; nhưng không đốt Opus cho câu hỏi nhỏ.
+  ok(!R.routeModel(q("Thủ đô của Úc là gì?"), ["sub-agy/gemini-3.8-flash", "sub-claude/sonnet"]).model.startsWith("sub-agy/"), "Flash và Sonnet: chọn Sonnet hiện chữ dần");
+  ok(R.routeModel(q("Thủ đô của Úc là gì?"), ["sub-agy/gemini-3.8-flash", "sub-claude/opus"]).model.startsWith("sub-agy/"), "Flash và Opus: không đốt Opus cho câu hỏi nhỏ");
+  ok(R.routeModel(q("Thủ đô của Úc là gì?"), ["sub-agy/gemini-3.8-flash"]).model === "sub-agy/gemini-3.8-flash", "chỉ có gói Gemini: vẫn trả lời được");
+  let v = R.routeModel(q("Ảnh này là gì?", { images: 1, attachments: 1 }), PLAN);
+  ok(v.model.startsWith("sub-agy/"), `đọc ảnh: Gemini vẫn thắng → ${v.model}`, JSON.stringify(v));
+  v = R.routeModel(q("Rà soát tài liệu đính kèm", { files: 1, docChars: 100_000 }), PLAN);
+  ok(v.task === "longdoc" && v.vendor === "google", `tài liệu dài: Gemini vẫn thắng → ${v.model}`, JSON.stringify(v));
+  v = R.routeModel(q("Đọc và tóm tắt tài liệu này", { files: 1, docChars: 100_000 }), PLAN);
+  ok(v.vendor === "google", `tóm tắt tài liệu rất dài: Gemini vẫn thắng → ${v.model}`, JSON.stringify(v));
+  // Câu xác nhận giữ đúng model đang làm, không đổi phiên.
+  v = R.routeModel(q("ok làm đi", { turns: 3, prevAsk: "Làm trang web bán giày", prev: "sub-claude/opus" }), PLAN);
+  ok(v.model === "sub-claude/opus" && v.task === "build" && v.effort === "high", `“ok làm đi” sau yêu cầu làm web: giữ Opus, nỗ lực cao → ${v.model} · ${v.effort}`, JSON.stringify(v));
+  // Câu hỏi nguy hiểm không dùng model thấp nhất; việc nhiều bước cần model vừa trở lên.
+  v = R.routeModel(q("Tôi bị đau ngực khó thở, nên làm gì?"), PLAN);
+  ok(v.tier !== "fast" && v.effort === "medium" && v.why.some((w) => /sức khỏe/.test(w)), `đau ngực: không dùng model nhanh nhất → ${v.model} · ${v.effort}`, JSON.stringify(v));
+  v = R.routeModel(q("Làm video giới thiệu sản phẩm 30 giây"), PLAN);
+  ok(v.tier !== "fast" && v.effort === "medium" && !v.model.startsWith("sub-agy/"), `làm video: model vừa, hiện chữ dần → ${v.model} · ${v.effort}`, JSON.stringify(v));
+  // Danh sách dự phòng có đủ các hãng khác để thử lần lượt.
+  v = R.routeModel(q("Thủ đô của Úc là gì?"), PLAN);
+  ok(v.alt.length === PLAN.length - 1 && new Set(v.alt.slice(0, 3).map((k) => k.split("/")[0])).size >= 2 && !v.alt.includes(v.model), "dự phòng: đủ model còn lại, hãng khác đứng trước", JSON.stringify(v.alt));
+}
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
