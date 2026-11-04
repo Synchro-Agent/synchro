@@ -16,8 +16,10 @@ export const GET = handle(async (req: Request) => {
   // Thư viện chỉ lúc cài mới biết giấy phép đóng, và thư viện đã cài lỗi từ nguồn của nó: không tính là còn phải cài, ở mọi số đếm và thẻ thư viện.
   // Thư viện đã cài từ trước thì vẫn là đã cài, kể cả khi giờ danh mục coi giấy phép của nó là đóng.
   const blocked = blockedLibs(), failed = failedLibs();
-  const isClosed = (id: string) => !have.has(CD + id) && (!!dirById(id)?.closed || blocked.has(CD + id));
-  const isFailed = (id: string) => !have.has(CD + id) && !isClosed(id) && failed.has(CD + id);
+  const entries = dirEntries(); // tính sẵn một lượt: mỗi lần đọc danh mục đều kiểm tra tệp trên đĩa, gọi cho từng thư viện thì chậm
+  const closedSet = new Set(entries.filter((e) => !have.has(CD + e.id) && (e.closed || blocked.has(CD + e.id))).map((e) => e.id));
+  const failedSet = new Set(entries.filter((e) => !have.has(CD + e.id) && !closedSet.has(e.id) && failed.has(CD + e.id)).map((e) => e.id));
+  const isClosed = (id: string) => closedSet.has(id), isFailed = (id: string) => failedSet.has(id);
   for (const c of Object.values(counts)) c.closed = 0;
   const failedIn: Record<string, number> = {};
   for (const e of dirEntries()) { if (isClosed(e.id)) for (const c of e.cats) { if (counts[c]) counts[c].closed++; } else if (isFailed(e.id)) for (const c of e.cats) failedIn[c] = (failedIn[c] ?? 0) + 1; }
