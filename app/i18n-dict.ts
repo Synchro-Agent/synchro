@@ -1655,3 +1655,4 @@ RULES_EN.push(
   [/^(.+): (\d+) lượt báo hỏng đăng nhập gói trong một giờ qua\.$/, (m) => `${m[1]}: ${m[2]} replies reported a broken plan sign-in in the last hour.`], [/^(.+): (\d+) lượt lỗi, (\d+) lượt thành công trong một giờ qua\.$/, (m) => `${m[1]}: ${m[2]} failed and ${m[3]} succeeded in the last hour.`],
   [/^(\d+) lỗi giao diện và máy chủ trong một giờ qua\.$/, (m) => `${m[1]} page and server errors in the last hour.`],
 );
+Object.assign(VI2EN, { "Xóa giọng?": "Delete voice?", "Lưu trữ từ điển?": "Archive dictionary?" });

@@ -24,7 +24,7 @@
   --ds-faint:#666760;            /* 4,5:1 trên nền Ivory */
   --ds-inv:#111210;             /* tấm mực (mục đang chọn, nút chính) */
   --ds-inv-fg:#EEECE5;
-  --ds-ok:#2F7A4F; --ds-warn:#A86412; --ds-bad:#B8412F;
+  --ds-ok:#2A7048; --ds-warn:#8F5208; --ds-bad:#B8412F; /* tối thiểu 4,5:1 trên nền Ivory */
   --ds-h:34px; --ds-h-sm:28px; --ds-h-lg:44px;
   /* Hình khối — một thang duy nhất, tròn ra tròn, vuông ra vuông (không góc "lưng chừng"):
      pill: mọi thứ một dòng (nút, ô nhập, bộ chọn, nhãn, mục menu / danh sách, thông báo, chú thích) · ô biểu tượng vuông: 25% cạnh · phím tắt: 5px
@@ -140,7 +140,7 @@ html body .rail .nav-item:not(.auth-root *):focus-visible .rail-ic{box-shadow:va
 .rail-ic>svg,.rail-ic>.ph-hover,.rail-ic .ph-hover svg{width:18px;height:18px}
 html body .rail .nav-item:not(.active):hover .rail-ic{background:var(--ds-hover)}
 html body .rail .nav-item:not(.active):active .rail-ic{background:var(--ds-press)}
-.rail-l{position:relative;z-index:1;font-size:10.5px;line-height:13px;letter-spacing:.005em;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease}
+.rail-l{position:relative;z-index:1;font-size:11px;line-height:13px;letter-spacing:.005em;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease}
 html body .rail .nav-item.active:not(.auth-root *){color:var(--ds-ink);font-weight:560}
 .rail-nav{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 0;scrollbar-width:none}
 .rail-nav::-webkit-scrollbar{display:none}
@@ -289,7 +289,7 @@ html body .ds-head h1{margin:0;font:400 24px/30px var(--font-display);letter-spa
   transition:background-color var(--ds-mid) var(--ds-ease),color var(--ds-mid) var(--ds-ease)}
 .ds-seg>button:hover{color:var(--ds-ink)}
 .ds-seg>button.on{background:var(--ds-inv);color:var(--ds-inv-fg)}
-.ds-seg>button i{font-style:normal;font-size:11.5px;font-weight:560;opacity:.7}
+.ds-seg>button i{font-style:normal;font-size:11.5px;font-weight:560}
 .ds-sec{display:flex;align-items:center;gap:12px;margin:28px 0 12px}
 .ds-sec h2{margin:0;font-size:13px;font-weight:560;color:var(--ds-ink);white-space:nowrap}
 .ds-sec i{font-style:normal;font-size:12px;color:var(--ds-faint)}

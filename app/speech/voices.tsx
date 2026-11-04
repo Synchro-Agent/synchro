@@ -3,6 +3,7 @@
 // Nhân bản chỉ hiện khi gói cho phép (cờ của chính gói ElevenLabs); thư viện ở gói Free chỉ có giọng cho phép người dùng miễn phí.
 import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
+import { useApp } from "../store";
 import { CAT_LABEL, LANGS, api, del, fmtNum, hueOf, on, post, postForm, reloadVoices, useMyVoices, usePlan, type Voice } from "./client";
 import { getLang, tr, untranslated } from "../i18n";
 import { AGES, DESIGN_PRESETS, GENDERS, REMIX_IDEAS } from "./data";
@@ -58,9 +59,11 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
   const slots = plan?.voices;
   const own = (mine ?? []).filter((v) => v.category !== "premade");
   const [src, setSrc] = useState<Voice | null>(null);
+  const app = useApp();
   const remove = (v: Voice) => {
-    if (!confirm(tr(`Xóa giọng “${v.name}” khỏi tài khoản ElevenLabs? Không hoàn tác được.`))) return;
-    del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
+    app.confirm("Xóa giọng?", tr(`Xóa giọng “${v.name}” khỏi tài khoản ElevenLabs? Không hoàn tác được.`), "Xóa", () => {
+      del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
+    });
   };
   const card = (v: Voice, extra?: React.ReactNode) => (
     <div key={v.id} className={`sp-vcard${bkV.on && !delOk(v) ? " bk-dim" : ""}`} {...(delOk(v) ? bulkRow(bkV, v) : {})}>

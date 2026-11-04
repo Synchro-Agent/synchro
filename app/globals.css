@@ -3952,7 +3952,7 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .sel-t{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Màu thẻ chế độ ở ô soạn tin (Tài liệu / Trình bày / Thiết kế), cùng tông với ảnh mẫu của từng chế độ. */
 .mode-tag{--mc:var(--accent)}
-.mode-tag.mt-doc{--mc:#2f6fdb}.mode-tag.mt-slides{--mc:#b36a10}.mode-tag.mt-design{--mc:#7452d1}
+.mode-tag.mt-doc{--mc:#2558b8}.mode-tag.mt-slides{--mc:#8f5208}.mode-tag.mt-design{--mc:#6a47c8}
 [data-theme="dark"] .mode-tag.mt-doc{--mc:#7fb0ff}[data-theme="dark"] .mode-tag.mt-slides{--mc:#f0b46a}[data-theme="dark"] .mode-tag.mt-design{--mc:#b9a0ff}
 
 
