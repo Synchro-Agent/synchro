@@ -115,9 +115,7 @@ try {
   ok(await until(`!!document.querySelector(".pw-forgot .lnk")`, 3000), "hộp đổi mật khẩu có lối quên mật khẩu");
   await click(`document.querySelector(".pw-forgot .lnk")`);
   ok(await until(`/synchro\\.test/.test(document.querySelector(".pw-forgot[role=status]")?.textContent ?? "")`, 5000), "gửi thư đặt lại, báo đúng email của tài khoản");
-  await key("Escape", "Escape", 27); await sleep(300);
-  await ev(`document.querySelector(".overlay .modal.sm .modal-foot .btn")?.click()`); await sleep(300);
-  await click(`[...document.querySelectorAll(".s-item")].find((b) => /General|Chung/.test(b.textContent))`).catch(() => {});
+  await ev(`document.querySelector(".modal.sm .modal-foot .btn")?.click()`); await sleep(300);
   const name1 = await ev(`document.querySelector(".sy-settings").getAttribute("aria-label")`);
   ok(!!name1, "hộp Cài đặt có tên cố định", name1);
   await key("Escape", "Escape", 27); await sleep(400);
