@@ -280,7 +280,7 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   if (x.toolSync) await awaitToolUse();
   sayOut(x, liveNow());
   deltaStep();
-  const c: Call = { id: `mcp_${randomToken(8)}`, name, input };
+  const c = unwrapConn(x, { id: `mcp_${randomToken(8)}`, name, input });
   // Công cụ connector để chế độ "Hỏi trước mỗi lần": CLI không hỏi duyệt giữa chừng được, nên báo rõ thay vì tự chạy.
   if (needsAsk(x, c) && !x.task) return { content: "Công cụ này đang để chế độ hỏi duyệt trước mỗi lần dùng; gói chạy qua CLI chưa hỏi duyệt được. Hãy cho người dùng biết: đổi quyền công cụ thành \"Luôn cho phép\" trong Connectors, hoặc dùng model khóa API cho việc này.", is_error: true };
   let res: ToolRun | null = null;
@@ -386,6 +386,8 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
     return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
   }
+  if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return { content: findConnTools(x.sess, String(c.input?.query ?? ""), String(c.input?.connector ?? "")), is_error: false, used: { kind: "search", name: c.name } };
+  if (c.name === CONN_CALL && x.sess && !x.sess.get(c.name)) return { content: `Không có công cụ connector "${String(c.input?.tool ?? "")}". Tìm đúng tên bằng ${CONN_FIND} rồi gọi lại.`, is_error: true, used: { kind: "search", name: c.name } };
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
@@ -409,6 +411,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
   if (c.name === "brain_write") return `Đang ghi vào bộ não: ${String(c.input?.title ?? "").slice(0, 80)}`;
+  if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return `Đang tìm công cụ connector: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {}, browserTargetOf(c.input, x.bctx));
   const ct = x.sess?.get(c.name);
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
@@ -510,6 +513,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
       return { text: r.text, used };
     }
     acted = true;
+    r.calls = r.calls.map((c) => unwrapConn(x, c));
     // Lời dẫn trước khi dùng công cụ: giữ lại trong khung chat (bước sau không xóa mất).
     sayOut(x, r.text);
     const ask = x.task ? [] : r.calls.filter((c) => needsAsk(x, c));
@@ -559,6 +563,53 @@ function connectorToolDefs(sess: ConnectorSession, gemini: boolean) {
       input_schema: { ...schema, type: "object", properties: schema.properties && typeof schema.properties === "object" ? schema.properties : {} },
     };
   });
+}
+// Connector có hàng trăm công cụ (Vercel ~240, Higgsfield ~190): gửi đủ định nghĩa mỗi lượt là hàng trăm nghìn token (đo trên máy chủ:
+// 530 công cụ ≈ 465.000 token), câu đầu của đoạn chat mới chờ ~18 giây và tốn hạn mức gói. Quá ngưỡng thì model chỉ nhận danh mục tên
+// công cụ trong hướng dẫn cùng hai công cụ: connector_tools (tìm, trả định nghĩa đầy đủ) và connector_call (gọi). Lời gọi qua
+// connector_call được đổi thành lời gọi công cụ thật trước mọi bước kiểm tra (quyền, hỏi duyệt, dấu vết), như gọi trực tiếp.
+const CONN_DIRECT_MAX = 40_000;
+const CONN_FIND = "connector_tools", CONN_CALL = "connector_call";
+const proxyOf = new WeakMap<ConnectorSession, boolean>();
+function connProxy(s: ConnectorSession) {
+  let p = proxyOf.get(s);
+  if (p === undefined) { p = JSON.stringify(connectorToolDefs(s, false)).length > CONN_DIRECT_MAX; proxyOf.set(s, p); }
+  return p;
+}
+// gemini: Gemini từ chối tham số kiểu object không khai báo thuộc tính, nên nhận tham số dạng chuỗi JSON.
+const connProxyTools = (gemini: boolean) => [
+  { name: CONN_FIND, description: "Tìm công cụ của các connector người dùng đã kết nối (danh mục tên ở phần connector trong hướng dẫn). Trả về tên đầy đủ, mô tả và tham số của các công cụ khớp nhất. Gọi trước connector_call khi chưa có định nghĩa của công cụ cần dùng.",
+    input_schema: { type: "object", properties: { query: { type: "string", description: "Việc cần làm hoặc tên công cụ, tiếng Anh cho khớp tên (vd. \"list deployments\", \"create page\")" }, connector: { type: "string", description: "Tên connector để chỉ tìm trong đó (vd. Vercel, Notion); bỏ trống để tìm tất cả" } }, required: ["query"] } },
+  { name: CONN_CALL, description: "Gọi một công cụ connector bằng tên đầy đủ (dạng connector__tên, lấy từ connector_tools) với tham số đúng định nghĩa của nó.",
+    input_schema: { type: "object", properties: { tool: { type: "string", description: "Tên đầy đủ của công cụ, vd. vercel__list_deployments" },
+      ...(gemini ? { input_json: { type: "string", description: "Tham số của công cụ, dạng một đối tượng JSON" } } : { input: { type: "object", description: "Tham số của công cụ theo định nghĩa connector_tools trả về", additionalProperties: true } }) }, required: ["tool"] } },
+];
+const connTools = (s: ConnectorSession, gemini: boolean) => (connProxy(s) ? connProxyTools(gemini) : connectorToolDefs(s, gemini));
+function unwrapConn(x: Exec, c: Call): Call {
+  if (c.name !== CONN_CALL || !x.sess) return c;
+  const tool = String(c.input?.tool ?? "");
+  if (!x.sess.get(tool)) return c;
+  let input: unknown = c.input?.input ?? c.input?.input_json;
+  if (typeof input === "string") try { input = JSON.parse(input); } catch { input = {}; }
+  return { id: c.id, name: tool, input: input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {} };
+}
+const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
+function findConnTools(s: ConnectorSession, query: string, connector: string) {
+  const words = fold(query).split(/[^a-z0-9]+/).filter((w) => w.length > 1);
+  const cf = fold(connector).trim();
+  const defs = connectorToolDefs(s, false);
+  const hits = s.tools.map((ct, i) => {
+    if (cf && !fold(ct.cname).includes(cf) && !ct.fq.startsWith(cf)) return null;
+    const name = fold(ct.tool.name.replace(/[_-]+/g, " ")), desc = fold(`${ct.tool.title ?? ""} ${ct.tool.description ?? ""}`);
+    let score = 0;
+    for (const w of words) score += name.includes(w) ? 3 : desc.includes(w) ? 1 : 0;
+    return { i, score };
+  }).filter((h): h is { i: number; score: number } => !!h && (h.score > 0 || !words.length)).sort((a, b) => b.score - a.score).slice(0, 8);
+  if (!hits.length) return `Không có công cụ connector nào khớp "${query}"${connector ? ` trong ${connector}` : ""}. Thử từ khóa khác (tiếng Anh, theo tên công cụ trong danh mục).`;
+  return hits.map(({ i }) => {
+    const d = defs[i];
+    return `## ${d.name}\n${d.description}\nTham số: ${JSON.stringify(d.input_schema).slice(0, 4000)}`;
+  }).join("\n\n") + `\n\nGọi bằng ${CONN_CALL} với tool là tên sau dấu ##.`;
 }
 
 // Văn bản của tin nhắn người dùng mới nhất (nội dung có thể là chuỗi hoặc danh sách khối).
@@ -980,11 +1031,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const task = taskOf(body);
         // Đọc lại / tự kiểm tra artifact (Artifacts bật): kiểm tra hiển thị cần Chromium của workspace.
         const arts = !!pc.art, check = arts && runner() === "workspace";
-        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connectorToolDefs(sess, false) : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
+        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
         const xx: Exec = { toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => { bridged++; return bridgeCall(xx, name, input, usedAll); } });
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
@@ -1112,11 +1163,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (visible.length || sess || code || refs || web || brain || browse || task || arts) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connectorToolDefs(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
+      const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
-      if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess) : "", JSON.stringify(tools)], pinned, prep); }
+      if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
       const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)

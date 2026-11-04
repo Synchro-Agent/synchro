@@ -311,6 +311,9 @@ const EFFORT_LABEL: Record<AutoEffort, string> = { low: "thấp", medium: "trung
 export const effortLabel = (e: string) => EFFORT_LABEL[e as AutoEffort] ?? e;
 
 export type Route = { model: string; tier: Tier; vendor: Vendor; task: Task; effort: AutoEffort; why: string[]; alt: string[] };
+// Antigravity (sub-agy) trả cả câu trả lời một lần khi xong (đo trên máy chủ: 5-8 giây cho một câu chào), các gói khác hiện chữ dần:
+// cùng chất lượng và chi phí thì chọn model hiện chữ dần.
+const lag = (key: string) => (/^sub-agy\//.test(key) ? 1 : 0);
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */
 export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[] } = {}): Route | null {
   if (!allowed.length) return null;
@@ -319,10 +322,10 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   const avoid = new Set([...(o.avoid ?? []), ...(retry && q.prev ? [q.prev] : [])]);
   const all = allowed.map((k, i) => ({ p: profileOf(k), i })).map((x) => ({ ...x, q: quality(x.p, task) }));
   const pool = all.filter((x) => !avoid.has(x.p.key)).length ? all.filter((x) => !avoid.has(x.p.key)) : all;
-  // Đạt mức cần: rẻ nhất → chất lượng cao hơn → nhanh hơn → thứ tự quản trị viên hiển thị. Không ai đạt: chất lượng cao nhất.
+  // Đạt mức cần: rẻ nhất → chất lượng cao hơn → hiện chữ dần → thứ tự quản trị viên hiển thị. Không ai đạt: chất lượng cao nhất.
   const ok = pool.filter((x) => x.q >= needQ);
   const rank = ok.length
-    ? ok.sort((a, b) => a.p.cost - b.p.cost || b.q - a.q || a.i - b.i)
+    ? ok.sort((a, b) => a.p.cost - b.p.cost || b.q - a.q || lag(a.p.key) - lag(b.p.key) || a.i - b.i)
     : pool.sort((a, b) => b.q - a.q || a.p.cost - b.p.cost || a.i - b.i);
   // Câu nối tiếp (không phải chê câu trả lời): model của lượt trước vẫn đủ sức thì giữ nguyên, để nối đúng mạch việc đang làm
   // (phiên làm việc của gói, bộ nhớ đệm) thay vì đổi sang model khác chỉ vì rẻ hơn một chút.

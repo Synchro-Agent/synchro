@@ -21,6 +21,12 @@ export function startMockMcp(port = 4011) {
     { name: "create_note", title: "Create note", description: "Tạo ghi chú mới.", inputSchema: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title"] }, annotations: { readOnlyHint: false, destructiveHint: false } },
     { name: "delete_note", title: "Delete note", description: "Xóa một ghi chú theo id.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }, annotations: { readOnlyHint: false, destructiveHint: true } },
   ];
+  const BIG_TOOLS = Array.from({ length: 300 }, (_, i) => ({
+    name: `${["list", "get", "create", "update", "delete"][i % 5]}_widget_${i}`,
+    description: `${["List", "Get", "Create", "Update", "Delete"][i % 5]} widget group ${i}. ${"Long description of parameters and behaviour. ".repeat(6)}`,
+    annotations: { readOnlyHint: i % 5 < 2 },
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project id or slug" }, limit: { type: "number", description: "Max items" }, filter: { type: "string", description: "Filter expression" } } },
+  }));
   const MODERN_TOOLS = [
     { name: "get_time", title: "Get time", description: "Giờ hiện tại của máy chủ.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
     { name: "lookup_region", title: "Lookup region", description: "Tra thông tin một vùng.", inputSchema: { type: "object", properties: { region: { type: "string", "x-mcp-header": "Region" }, detail: { type: "boolean" } }, required: ["region"] }, annotations: { readOnlyHint: true } },
@@ -118,6 +124,22 @@ export function startMockMcp(port = 4011) {
       return send(res, 400, { error: "unsupported_grant_type" });
     }
     if (p === "/__expire" && req.method === "POST") { for (const v of access.values()) v.exp = 0; return send(res, 200, { ok: true }); }
+
+    // ---------------- /big: 300 công cụ (như Vercel / Higgsfield), không cần đăng nhập, không phiên ----------------
+    if (p === "/big") {
+      if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+      const m = json(await body(req));
+      if (!m) return send(res, 400, err(null, -32700, "Parse error"));
+      if (m.id === undefined) { res.writeHead(202); return res.end(); }
+      if (m.method === "initialize") return send(res, 200, ok(m.id, { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "mock-big", title: "Mock Big", version: "1.0.0" } }));
+      if (m.method === "tools/list") return send(res, 200, ok(m.id, { tools: BIG_TOOLS }));
+      if (m.method === "tools/call") {
+        const t = BIG_TOOLS.find((x) => x.name === m.params?.name);
+        if (!t) return send(res, 200, err(m.id, -32602, `Unknown tool ${m.params?.name}`));
+        return send(res, 200, ok(m.id, { content: [{ type: "text", text: `Big ${t.name}: ${JSON.stringify(m.params.arguments ?? {})}` }] }));
+      }
+      return send(res, 200, err(m.id, -32601, "Method not found"));
+    }
 
     // ---------------- /mcp: Streamable HTTP đời 2025, có đăng nhập ----------------
     if (p === "/mcp") {

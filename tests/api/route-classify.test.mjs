@@ -200,5 +200,9 @@ ok(r.model === first.model, `model trước không còn trong danh sách đượ
 r = R.routeModel(q("Viết bài thơ về mùa thu", { turns: 3, prevAsk: prevQ, prev: "anthropic/claude-opus-5-5" }), ALL);
 ok(!r.why.includes("nối tiếp việc đang làm với model trước"), `câu hỏi mới (không nối tiếp) chọn lại từ đầu: ${r.model}`, JSON.stringify(r));
 
+// Antigravity trả cả câu một lần khi xong (5-8 giây cho câu chào); cùng chất lượng và chi phí thì chọn gói hiện chữ dần.
+r = R.routeModel(q("Chào bạn"), ["sub-agy/gemini-3.8-flash", "sub-claude/haiku"]);
+ok(r.model === "sub-claude/haiku", `câu chào: chọn model hiện chữ dần thay vì Antigravity: ${r.model}`, JSON.stringify(r));
+
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
