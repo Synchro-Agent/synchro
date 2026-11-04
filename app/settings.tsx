@@ -151,7 +151,7 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
           <Select search width={260} value={voiceLabel(voices.find((x) => x.id === voice))} options={[voiceLabel(undefined), ...voices.map((x) => voiceLabel(x))]} onChange={(l) => setVoice(voices.find((x) => voiceLabel(x) === l)?.id ?? "")} />
         </Row>
       )}
-      {plan && !plan.connected && <Row t="Voice" d="Using your browser's voice. Add an ElevenLabs key in Settings → Providers for natural AI voices."><span className="d">Browser</span></Row>}
+      {plan && !plan.connected && <Row t="Voice" d={app.me?.isAdmin ? "Using your browser's voice. Add an ElevenLabs key in Settings → Providers for natural AI voices." : "Using your browser's voice."}><span className="d">Browser</span></Row>}
       <Row t="Speed"><Select value={speed} onChange={setSpeed} options={["Slow", "Normal", "Fast"]} /></Row>
       <H>Notifications</H>
       <Row t="Response completions" d="Get notified when Synchro has finished a response. Useful for long-running tasks." top><Toggle on={tg[0]} set={set(0)} /></Row>
@@ -320,6 +320,8 @@ function Privacy({ go }: { go: (t: string) => void }) {
       <Row t="Uploaded files"><button className="btn" onClick={() => setPanel("files")}>Manage</button></Row>
       <Row t="Your feedback"><button className="btn" onClick={() => setPanel("feedback")}>Manage</button></Row>
       <Row t="Memory preferences"><button className="btn" onClick={() => go("Brain")}>Manage ↗</button></Row>
+      <Row t="Privacy policy"><a className="btn" href="/privacy" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
+      <Row t="Terms of Service"><a className="btn" href="/terms" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
       <Fade show={!!panel}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPanel("")}>
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>

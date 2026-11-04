@@ -10,7 +10,7 @@ import { PLUGIN_CATS } from "./plugindir";
 import { Pager } from "./pager";
 
 type Item = { id: string; name: string; summary: string; author: string; cats: string[]; license: string; skillCount: number; skills: string[]; homepage: string; verified: string | null; installed: string | null;
-  closed: boolean; github: boolean; altFor: string[]; alt: { id: string; name: string; installed: string | null }[] };
+  closed: boolean; closedWhy: string | null; github: boolean; altFor: string[]; alt: { id: string; name: string; installed: string | null }[] };
 type Fail = { id: string; name: string; reason: string; kind: "license" | "missing" | "other" };
 type Job = { cat: string | null; paused?: number | null; started: number; finished: number | null; stopped: boolean; total: number; done: number; installed: number; skills: number; failed: Fail[]; current: string[]; running: boolean };
 type Data = { totals: { plugins: number; skills: number; installed: number; closed: number }; cats: Record<string, { plugins: number; skills: number; installed: number; closed: number }>; items: Item[]; total: number; page: number; pages: number; admin: boolean; canInstall: boolean; job: Job | null };
@@ -143,7 +143,7 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
               <div className="pl-dcard-t">
                 <b data-notr>{x.name}</b>
                 <span data-notr>{x.summary || x.skills.join(", ")}</span>
-                {x.closed && <div className="cd-alt"><I.Lock size={12} /><span>{tr("Closed license, not installed.")}{x.alt.length ? <> {tr("Open alternatives:")} <span data-notr>{x.alt.map((a) => a.name).join(", ")}</span></> : <> {tr("No open alternative yet.")}</>}</span></div>}
+                {x.closed && <div className="cd-alt" title={x.closedWhy ?? undefined}><I.Lock size={12} /><span>{tr("Closed license, not installed.")}{x.alt.length ? <> {tr("Open alternatives:")} <span data-notr>{x.alt.map((a) => a.name).join(", ")}</span></> : <> {tr("No open alternative yet.")}</>}</span></div>}
                 {x.github && x.altFor.length > 0 && <div className="cd-alt"><I.GitHub size={12} /><span>{tr("Open alternative to")} <span data-notr>{x.altFor.join(", ")}</span></span></div>}
                 {/* Thư mục của Claude không ghi giấy phép cho mọi thư viện (vd. của Anthropic): khi đó không đoán, giấy phép thật được đọc từ repo lúc cài. */}
                 <em><span><span data-notr>{x.author}</span> ·</span> <span>{x.github ? "GitHub" : `${x.skillCount} skill`}</span>{x.license ? <> <span>· <span data-notr>{x.license}</span></span></> : null}{x.verified === "anthropic" ? <> <span>· Anthropic</span></> : x.verified === "partner" ? <> <span>· {tr("Partner")}</span></> : null}</em>

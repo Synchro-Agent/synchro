@@ -82,11 +82,15 @@ const plugins = list.map((p) => {
 const OPEN = /^\(?\s*(MIT|MIT-0|Apache|BSD|0BSD|ISC|MPL|CC-BY|CC0|Unlicense|Zlib|WTFPL|PSF|Python|EPL|BSL-1\.0|LGPL|GPL|AGPL|Artistic|Unicode|BlueOak)/i;
 const isOpen = (l) => !l || l.split(/\s+(?:OR|AND|WITH)\s+/i).some((x) => OPEN.test(x.trim()));
 const ALT = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "catalog", "alternatives.json"), "utf8"));
+// Thư viện thư mục không ghi giấy phép nhưng lúc cài đọc ra giấy phép đóng (quản trị viên lấy từ GET /api/plugins/catalog?blocked=1, lưu thành catalog/license-blocked.json).
+const blockedFile = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "catalog", "license-blocked.json");
+const BLOCKED = fs.existsSync(blockedFile) ? JSON.parse(fs.readFileSync(blockedFile, "utf8")) : {};
 const byId = new Map(plugins.map((p) => [p.id, p]));
 const extra = new Map();
 for (const p of plugins) {
-  if (isOpen(p.license)) continue;
+  if (isOpen(p.license) && !BLOCKED[`cd:${p.id}`]) continue;
   p.closed = true;
+  if (!p.license) p.license = "Độc quyền";
   const a = ALT[p.name] ?? {};
   const ids = (a.catalog ?? []).filter((id) => { const o = byId.get(id); if (!o) console.warn(`! ${p.name}: không có ${id} trong danh mục`); return o && isOpen(o.license); });
   for (const g of a.github ?? []) {

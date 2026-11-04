@@ -27,6 +27,9 @@ export const lastTime = (c: ChatLike) => (c.msgs ?? []).reduce((a, m) => Math.ma
 /** Bản lưu của đoạn chat: như bản lưu trong trình duyệt từ trước tới nay (mọi tin coi như xong, bỏ dòng tiến độ). */
 export const serialChat = (c: { msgs: object[] }) => JSON.stringify({ ...c, msgs: c.msgs.map((m) => ({ ...m, done: true, prog: undefined })) });
 
+/** Bản lưu của dự án: không lưu hai lần chữ của tài liệu (đoạn nhỏ tính lại từ chữ khi cần, llm.ts). */
+export const serialProject = (p: { ctx?: { text?: string; chunks?: string[] }[] }) => JSON.stringify(p.ctx?.some((c) => c.chunks && c.text !== undefined) ? { ...p, ctx: p.ctx.map((c) => { if (c.text === undefined) return c; const { chunks: _c, ...rest } = c; return rest; }) } : p);
+
 /** So sánh lúc khởi động: mục chưa từng lên máy chủ hoặc nội dung đã khác bản đã xác nhận thì cần đẩy lên. */
 export function startupDirty(meta: SyncMeta, key: string, hash: string, time: number): number | null {
   const k = meta.known[key];

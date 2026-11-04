@@ -31,3 +31,13 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .sync-warn span{flex:1;min-width:0}
 .sync-warn svg{flex:none;color:var(--danger,#c4453c)}
 .sync-stub{display:flex;align-items:center;gap:8px;padding:24px 0;font-size:13.5px}
+/* Màn đăng nhập: báo lỗi ngay tại ô email, liên kết pháp lý, ghi chú quên mật khẩu */
+.auth-field-err{margin:8px 4px 0;font-size:13px;color:var(--danger,#c4453c)}
+.auth-note{margin-top:12px;font-size:12.5px;line-height:1.5;color:var(--text-2);text-align:center}
+.auth-legal{margin-top:4px}
+.auth-legal a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+/* Hộp thoại nhận tiêu điểm khi không có ô nhập: không vẽ viền quanh cả hộp */
+.modal[tabindex="-1"]:focus{outline:none}
+.lnk-in{color:inherit;text-decoration:underline}
+.tk-more{display:flex;justify-content:center;margin:12px 0 4px}
+.tk-more .btn{gap:6px}

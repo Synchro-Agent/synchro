@@ -54,6 +54,13 @@ ok(spokenPlan("| A | B |\n|---|---|\n| 1 | 2 |") === "brief" && spokenPlan("x ".
 const lb = localBrief('Mình đã làm xong trang giới thiệu. Trang có ba phần.\n\n<artifact identifier="a" type="text/html" title="T">\n<h1>Tiêu đề</h1>\n</artifact>', "vi");
 ok(lb.startsWith("Mình đã làm xong trang giới thiệu.") && lb.endsWith("khung chat.") && !lb.includes("<h1>"), `tóm tắt dự phòng không đọc mã: “${lb}”`);
 ok(!toSpeech('Xem nhé <artifact identifier="a" type="text/html" title="T">\n<p>bí mật</p>\n</artifact> hết').join(" ").includes("bí mật"), "không bao giờ đọc to nội dung artifact");
+{
+  const spoken = toSpeech("# Tiêu đề\n\nĐây là **đậm** và `mã`. Xem [trang](https://vi.du/x) tại https://vi.du/y\n\n- Mục một\n- Mục hai\n\n| Cột A | Cột B |\n|---|:--:|\n| 1 | 2 |\n\n---\n\n```js\nconst bi = \"mat\";\n```\n<!-- meta: an -->").join(" ");
+  ok(!/[#*`|]|https?:|const bi|meta: an|---/.test(spoken), `đọc to bỏ ký hiệu Markdown, đường dẫn, khối code và chú thích ẩn: “${spoken}”`);
+  ok(/Tiêu đề/.test(spoken) && /đậm/.test(spoken) && /trang/.test(spoken) && /Mục hai/.test(spoken) && /Cột A, Cột B/.test(spoken), "đọc to vẫn giữ đủ chữ", spoken);
+  ok(toSpeech('<artifact identifier="a" type="text/html" title="T"><p>x</p></artifact>').length === 0, "câu trả lời chỉ có sản phẩm thì không có gì để đọc (giao diện báo rõ)");
+  ok(!toSpeech('Đây <artifact identifier="a" type="text/html" title="T"><p>đang viết dở').join(" ").includes("đang viết"), "artifact chưa đóng thẻ cũng không bị đọc");
+}
 
 console.log("3. API tóm tắt để đọc to");
 let cookie = process.env.SYNCHRO_ADMIN_COOKIE ?? "";

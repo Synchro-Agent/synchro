@@ -2,7 +2,7 @@ import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from 
 import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
 import { PLUGIN_DIR } from "../../plugindir";
 import { closedReason, dirDef, dirEntry } from "../../claudedir";
-import { clearRemoved, freeSlug } from "../../plugjob";
+import { blockedLibs, clearRemoved, freeSlug, noteInstallError } from "../../plugjob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +36,8 @@ export const POST = handle(async (req: Request) => {
       // Thư viện từ danh mục skill của Claude ("cd:…"): tên trùng một thư viện khác của cùng chủ thì đổi tên, không ghi đè.
       const e = dirEntry(b.catalogId);
       if (e?.closed) return Response.json({ error: closedReason(e) }, { status: 403 });
+      const blocked = blockedLibs().get(b.catalogId);
+      if (blocked) return Response.json({ error: blocked.reason }, { status: 403 });
       if (e) { const slug = freeSlug(e, scope === "org" ? "org" : user.id); if (slug) def = { ...dirDef(e), slug }; if (scope === "org") clearRemoved(b.catalogId); }
       else def = PLUGIN_DIR.find((p) => p.catalogId === b.catalogId);
     }
@@ -52,7 +54,7 @@ export const POST = handle(async (req: Request) => {
     if (b.action === "install") {
       limit("plugin:" + user.id, 20, 3600_000);
       const skip = Array.isArray(b.skip) ? b.skip.filter((x: unknown): x is string => typeof x === "string").slice(0, 200) : [];
-      const plugin = await installPlugin(scope === "org" ? "org" : user.id, def, { skip, by: user.id });
+      const plugin = await installPlugin(scope === "org" ? "org" : user.id, def, { skip, by: user.id }).catch((e) => { noteInstallError(def!.catalogId, def!.name, String((e as Error).message ?? e)); throw e; });
       return Response.json({ plugin, plugins: listPlugins(user.id) });
     }
     limit("plugin-preview:" + user.id, 60, 3600_000);

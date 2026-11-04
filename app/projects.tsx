@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { Fade, Menu } from "./ui";
 import { useApp, type Chat, type Project } from "./store";
-import { chunkText, extractText } from "./llm";
+import { extractText, PROJECT_CTX_LIMIT } from "./llm";
+import { tr } from "./i18n";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 import { ghConnect } from "./wsclient";
@@ -220,11 +221,12 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
 
 export function InsModal({ init, onClose, onSave }: { init: string; onClose: () => void; onSave: (t: string) => void }) {
   const [v, setV] = useState(init);
+  const { openSettings } = useApp();
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal pj-modal">
         <h2>Đặt hướng dẫn cho dự án</h2>
-        <p className="pj-hint">Cung cấp cho Synchro hướng dẫn và thông tin liên quan cho các đoạn chat trong dự án này. Hướng dẫn này sẽ áp dụng cùng với <a>hướng dẫn trong hồ sơ</a> của bạn và phong cách được chọn trong đoạn chat.</p>
+        <p className="pj-hint">Cung cấp cho Synchro hướng dẫn và thông tin liên quan cho các đoạn chat trong dự án này. Hướng dẫn này sẽ áp dụng cùng với <button type="button" className="lnk" onClick={() => { onClose(); openSettings?.("Account"); }}>hướng dẫn trong hồ sơ</button> của bạn và phong cách được chọn trong đoạn chat.</p>
         <textarea className="field" autoFocus rows={9} placeholder="Hãy suy nghĩ từng bước và trình bày lập luận cho các vấn đề phức tạp. Sử dụng ví dụ cụ thể." value={v} onChange={(e) => setV(e.target.value)} />
         <div className="modal-foot">
           <button className="btn" onClick={onClose}>Hủy</button>
@@ -278,7 +280,8 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const [ins, setIns] = useState(false);
   const [txt, setTxt] = useState(false);
   const [menu, setMenu] = useState(false);
-  const canSkills = useApp().me?.perms.features.skills !== false;
+  const app = useApp();
+  const canSkills = app.me?.perms.features.skills !== false;
   const [add, setAdd] = useState(false);
   const mRef = useAway(() => setMenu(false));
   const aRef = useAway(() => setAdd(false));
@@ -303,13 +306,22 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const [drag, setDrag] = useState(false);
   const toggle = (id: number) => setSel((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const shownCtx = ctx.filter((c) => !sq || c.name.toLowerCase().includes(sq.toLowerCase()));
-  const pct = Math.max(1, Math.ceil(ctx.reduce((n, c) => n + (c.chars ?? 0), 0) / 10000));
+  // Dung lượng thật của dự án: tổng số ký tự ngữ cảnh so với giới hạn (đầy thì không thêm được). Dự án cũ đang vượt giới hạn vẫn giữ nguyên, chỉ không thêm được nữa.
+  const usedChars = ctx.reduce((n, c) => n + (c.chars ?? 0), 0);
+  const pct = Math.min(100, Math.max(1, Math.ceil((usedChars / PROJECT_CTX_LIMIT) * 100)));
+  const delCtx = (ids: number[], after?: () => void) => {
+    const del = new Set(ids), one = ctx.find((x) => del.has(x.id));
+    app.confirm(ids.length > 1 ? `${tr("Xóa")} ${ids.length} ${tr("mục ngữ cảnh?")}` : `${tr("Xóa")} “${one?.name ?? ""}”?`, "Synchro sẽ không dùng nội dung này trong dự án nữa. Không hoàn tác được.", "Xóa", () => { patch(proj.id, { ctx: ctx.filter((x) => !del.has(x.id)) }); after?.(); });
+  };
   const [memOpen, setMemOpen] = useState(false);
   const [tab, setTab] = useState<PTab>("chats");
   const [upl, setUpl] = useState(false);
   const [ghOpen, setGhOpen] = useState(false);
   const fm = useFileMenu(say);
-  const addCtx = (n: string, kind: "file" | "text", text: string) => patch(proj.id, { ctx: [...(proj.ctx ?? []), { id: Date.now() + Math.random(), name: n, kind, text, chars: text.length, chunks: chunkText(text) }] });
+  const addCtx = (n: string, kind: "file" | "text", text: string) => {
+    if (usedChars + text.length > PROJECT_CTX_LIMIT) return say("Dự án đã đầy dung lượng ngữ cảnh. Hãy xóa bớt tệp hoặc tạo dự án mới");
+    patch(proj.id, { ctx: [...(proj.ctx ?? []), { id: Date.now() + Math.random(), name: n, kind, text, chars: text.length }] });
+  };
   const addFiles = async (fs: File[]) => {
     let ok = 0;
     setBusyCtx(true);
@@ -320,7 +332,8 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
       try { t = await extractText(f); } catch {}
       saveBlob(f.name, f);
       if (!t.trim()) say(`Không trích được chữ từ "${f.name}" — AI sẽ chưa đọc được tệp này`);
-      acc = [...acc, { id: Date.now() + Math.random(), name: f.name, kind: "file", text: t, chars: t.length, size: f.size, chunks: chunkText(t) }];
+      if (acc.reduce((n, c) => n + (c.chars ?? 0), 0) + t.length > PROJECT_CTX_LIMIT) { say(`"${f.name}" ${tr("không được thêm: dự án đã đầy dung lượng ngữ cảnh")}`); continue; }
+      acc = [...acc, { id: Date.now() + Math.random(), name: f.name, kind: "file", text: t, chars: t.length, size: f.size }];
       ok++;
     }
     await new Promise((r) => setTimeout(r, Math.max(0, 900 - (Date.now() - t0))));
@@ -399,14 +412,14 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
             {ctx.length > 0 && (
               <div className="pj-usage">
                 <div className="pj-bar"><i style={{ width: `${Math.max(pct, 1.5)}%` }} /></div>
-                <div className="pj-usage-t"><span>Đã dùng {pct}% dung lượng dự án</span><span className="pj-info" data-tip="Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat" tabIndex={0}><I.InfoCircle size={16} /></span></div>
+                <div className="pj-usage-t"><span>Đã dùng {pct}% dung lượng dự án</span><span className="pj-info" data-tip="Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat. Mỗi dự án chứa tối đa 2 triệu ký tự." tabIndex={0}><I.InfoCircle size={16} /></span></div>
               </div>
             )}
             {sel.size > 0 && (
               <div className="pj-selbar">
                 <span className="pj-cb on"><I.Check size={12} /></span>
                 <span className="pj-sel-n">Đã chọn {sel.size}</span>
-                <button className="icon-btn" data-tip={`Xóa ${sel.size} mục đã chọn`} aria-label="Xóa mục đã chọn" onClick={() => { patch(proj.id, { ctx: ctx.filter((x) => !sel.has(x.id)) }); setSel(new Set()); }}><I.Trash size={16} /></button>
+                <button className="icon-btn" data-tip={`Xóa ${sel.size} mục đã chọn`} aria-label="Xóa mục đã chọn" onClick={() => delCtx([...sel], () => setSel(new Set()))}><I.Trash size={16} /></button>
                 <button className="icon-btn pj-sel-x" aria-label="Bỏ chọn" onClick={() => setSel(new Set())}><I.X size={16} /></button>
               </div>
             )}
@@ -423,7 +436,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
                   const ext = (c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").slice(0, 4).toUpperCase()) || "FILE";
                   return (
                     <div key={c.id} className={`pj-file ${sel.has(c.id) ? "is-sel" : ""} ${sel.size ? "selmode" : ""}`} onContextMenu={(e) => fm.open(e, c.name, c.text)} onClick={() => sel.size && toggle(c.id)}>
-                      <button className="pj-file-x" aria-label="Xóa" onClick={(e) => { e.stopPropagation(); patch(proj.id, { ctx: ctx.filter((x) => x.id !== c.id) }); }}><I.X size={12} /></button>
+                      <button className="pj-file-x" aria-label="Xóa" onClick={(e) => { e.stopPropagation(); delCtx([c.id]); }}><I.X size={12} /></button>
                       <b title={c.name}>{c.name}</b>
                       <span>{fmtSize(c.size ?? c.chars ?? 0)}</span>
                       <div className="pj-file-f"><em>{ext}</em><button className={`pj-cb ${sel.has(c.id) ? "on" : ""}`} aria-label="Chọn" onClick={(e) => { e.stopPropagation(); toggle(c.id); }}>{sel.has(c.id) && <I.Check size={12} />}</button></div>

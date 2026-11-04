@@ -6,7 +6,7 @@
 // - Trình duyệt hết chỗ: rút gọn các đoạn chat cũ đã có trên máy chủ (nội dung tải lại khi mở trang). Chưa kịp lên máy chủ thì báo ngay kèm nút xuất dữ liệu.
 // - Đoạn chat ẩn danh không bao giờ rời trình duyệt.
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { batches, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, startupDirty, decideRemote, stubOf, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
+import { batches, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
 import { tr } from "./i18n";
 import type { Chat, Project } from "./store";
 import { ls, userScope } from "./userscope";
@@ -20,7 +20,7 @@ type Result = { kind: SyncKind; id: string; ok: boolean; upd: number; deleted?: 
 const cacheS = new WeakMap<object, { s: string; h: string }>();
 const serial = (kind: SyncKind, x: Chat | Project) => {
   let v = cacheS.get(x);
-  if (!v) { const s = kind === "chat" ? serialChat(x as Chat) : JSON.stringify(x); v = { s, h: hashOf(s) }; cacheS.set(x, v); }
+  if (!v) { const s = kind === "chat" ? serialChat(x as Chat) : serialProject(x as Project); v = { s, h: hashOf(s) }; cacheS.set(x, v); }
   return v;
 };
 

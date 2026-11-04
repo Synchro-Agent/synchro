@@ -114,7 +114,7 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
 
   const mine = models.providers.find((x) => x.plan?.cli === v.cli)?.plan?.models ?? [];
   const hasApi = !!st?.apiModel;
-  const state = !st ? "Checking…" : !st.installed ? "Not installed" : st.relogin ? "Sign in again" : st.loggedIn ? "Signed in" : "Not signed in";
+  const state = !st ? (err ? "Couldn't check" : "Checking…") : !st.installed ? "Not installed" : st.relogin ? "Sign in again" : st.loggedIn ? "Signed in" : "Not signed in";
   return (
     <div className="pv-pane">
       <div className="pv-pane-h">
@@ -187,7 +187,7 @@ function VendorItem({ v, admin, api, apiState, setApi }: { v: Vendor; admin: boo
   // Hãng chỉ có khóa API: mở ra là thấy luôn phần khóa API.
   const [mode, setMode] = useState<"plan" | "api" | null>(v.cli ? null : "api");
   const st = plan.st;
-  const planText = !st ? "Checking…" : !st.installed ? "Not installed" : st.relogin ? "Sign in again" : st.loggedIn ? "Signed in" : "Not signed in";
+  const planText = !st ? (plan.err ? "Couldn't check" : "Checking…") : !st.installed ? "Not installed" : st.relogin ? "Sign in again" : st.loggedIn ? "Signed in" : "Not signed in";
   const apiText = !api ? "" : !api.configured ? "Not connected" : api.status === "error" ? "Needs attention" : `Connected · ${api.models.length} models`;
   const credit = apiState?.credits?.find((c) => c.provider === v.id) ?? null;
   return (

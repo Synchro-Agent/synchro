@@ -20,6 +20,7 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { elSpeed, speakAI, type Speaking } from "./speak";
+import { toSpeech, VI } from "./voiceflow";
 import { applyEvent, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
@@ -29,6 +30,7 @@ import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { installFloatFit } from "./floatfit";
+import { installDialogFocus } from "./dialogfocus";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
@@ -338,7 +340,9 @@ function PlanNote({ pv }: { pv: ProviderInfo }) {
   return <div className="msub-note msub-plan"><span>{en ? "From your plan" : "Từ gói của bạn"}</span></div>;
 }
 
-type Rec = { lang: string; interimResults: boolean; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void; onend: () => void; start: () => void; stop: () => void };
+type Rec = { lang: string; interimResults: boolean; continuous: boolean; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void; onerror: (e: { error: string }) => void; onend: () => void; start: () => void; stop: () => void };
+// Lỗi nhận dạng của trình duyệt → một câu cho người dùng. Không có tiếng (no-speech) và bị dừng (aborted) không phải lỗi.
+const REC_ERR: Record<string, string> = { "not-allowed": "Không mở được micro: hãy cho phép Synchro dùng micro", "service-not-allowed": "Trình duyệt đang chặn nhận dạng giọng nói", "audio-capture": "Không tìm thấy micro trên máy này", network: "Nhận dạng giọng nói của trình duyệt cần kết nối mạng", "language-not-supported": "Trình duyệt chưa nhận dạng được ngôn ngữ này" };
 
 function Composer(p: {
   onSend: (t: string, f: string[], pick?: { id: string; label: string }[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
@@ -431,10 +435,13 @@ function Composer(p: {
     const SR = (window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Rec }).webkitSpeechRecognition;
     if (!SR) { setRec(false); return say("Trình duyệt này không hỗ trợ nhập bằng giọng nói"); }
     const r = new SR();
-    r.lang = lang; r.interimResults = true;
+    // continuous: nghe tiếp qua các khoảng nghỉ, tới khi người dùng bấm dừng (hoặc trình duyệt tự kết thúc).
+    r.lang = lang; r.interimResults = true; r.continuous = true;
     r.onresult = (e) => setV(base + Array.from(e.results).map((x) => x[0].transcript).join(""));
+    r.onerror = (e) => { const m = REC_ERR[e.error]; if (m) say(m); };
     r.onend = () => setRec(false);
-    recRef.current = r; r.start();
+    recRef.current = r;
+    try { r.start(); } catch { setRec(false); say("Không mở được nhận dạng giọng nói, hãy thử lại"); }
   };
   // Dán ảnh / tệp từ bộ nhớ tạm (⌘V) như Claude, ChatGPT: thành tệp đính kèm; ảnh dán không tên thì đặt tên theo giờ.
   const paste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -707,6 +714,7 @@ export default function Home() {
   // Gợi ý khi rê chuột tự lật xuống dưới / canh theo mép khi sát mép màn hình hay mép khung (tips.ts).
   useEffect(() => installTips(), []);
   useEffect(() => installFloatFit(), []);
+  useEffect(() => installDialogFocus(), []);
   useEffect(() => {
     setApprover((calls, conv) => new Promise((resolve) => setApproval({ chat: conv !== undefined && Number.isFinite(Number(conv)) ? Number(conv) : curRef.current, calls, resolve })));
     return () => setApprover(null);
@@ -823,6 +831,9 @@ export default function Home() {
     return () => { stop = true; clearInterval(t); window.removeEventListener("focus", onFocus); };
   }, [me?.id, cpPage?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [providers, setProviders] = useState<Providers>();
+  const [signupOpen, setSignupOpen] = useState(true);
+  // Máy chủ chưa có khóa ElevenLabs: thành viên không thấy mục Speech (không có gì để dùng, và họ không thêm khóa được); quản trị viên vẫn thấy để biết phải thêm khóa.
+  const [speechReady, setSpeechReady] = useState(true);
   const [authLeaving, setAuthLeaving] = useState(false);
   // Phim giới thiệu cho tài khoản mới (app/introfilm.tsx): giữ màn đăng nhập tới khi phim phủ kín màn hình. Vào app (từ phim hoặc từ lời
   // chào khi đăng nhập lại): logo bay về chỗ, trang chủ lắp lại quanh đó (app/handoff.ts); reveal giấu logo thật của app tới khi bản sao
@@ -869,7 +880,7 @@ export default function Home() {
   };
   useEffect(() => {
     localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
-    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); if (j.user) { enterAccount(j.user); syncProfile(j.user); } setMe(j.user); }).catch(() => setMe(null));
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); setSignupOpen(j.signupOpen !== false); setSpeechReady(j.speechReady !== false); if (j.user) { enterAccount(j.user); syncProfile(j.user); } setMe(j.user); }).catch(() => setMe(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
@@ -915,10 +926,10 @@ export default function Home() {
   useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
   useEffect(() => {
     if (me && view === "code" && !me.perms.features.code) setView("new");
-    if (me && view === "speech" && !me.perms.features.speech) setView("new");
+    if (me && view === "speech" && (!me.perms.features.speech || (!speechReady && !me.isAdmin))) setView("new");
     if (me && view === "customize" && !me.perms.features.skills) setView("new");
     if (me && (view === "projects" || view === "project") && !me.perms.features.projects) setView("new");
-  }, [me, model, view]);
+  }, [me, model, view, speechReady]);
   // Xóa bộ não (Cài đặt → Bộ não): quên luôn bộ nhớ của các dự án (lưu trong trình duyệt).
   useEffect(() => {
     const forget = () => setProjects((ps) => ps.map((p) => (p.mem?.length ? { ...p, mem: [] } : p)));
@@ -1384,17 +1395,24 @@ export default function Home() {
     if (speaking === key) { stopSpeak(); setSpeaking(null); return; }
     stopSpeak();
     setSpeaking(key);
-    const clean = text.replace(/```[\s\S]*?```/g, " ");
+    // Không đọc mã nguồn artifact, khối code và ký hiệu Markdown; câu trả lời chỉ có sản phẩm thì nói rõ thay vì im lặng.
+    const parts = toSpeech(text), clean = parts.join(" ");
+    if (!clean) { setSpeaking(null); return say("Câu trả lời này chỉ có sản phẩm, không có chữ để đọc"); }
     const ai = await speakAI(clean, { voice: vvoice, speed: elSpeed(VOICE_RATE[vspeed] ?? 1) });
     if (ai) { aiSpeak.current = ai; void ai.done.then(() => { if (aiSpeak.current === ai) aiSpeak.current = null; setSpeaking((k) => (k === key ? null : k)); }); return; }
     const s = window.speechSynthesis;
     if (!s) { setSpeaking(null); return say("Trình duyệt không hỗ trợ đọc to"); }
-    const u = new SpeechSynthesisUtterance(clean);
-    // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt.
-    const vi = /[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i.test(text);
-    const pref = VOICE_LANG[vlang] ?? "vi-VN";
-    u.lang = vi ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref; u.rate = VOICE_RATE[vspeed] ?? 1; u.onend = () => setSpeaking(null);
-    s.speak(u);
+    // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt. Đọc từng đoạn: trình duyệt hay dừng giữa chừng với đoạn dài.
+    const pref = VOICE_LANG[vlang] ?? "vi-VN", lang = VI.test(clean) ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref;
+    s.cancel();
+    parts.forEach((c, i) => {
+      const u = new SpeechSynthesisUtterance(c);
+      u.lang = lang; u.rate = VOICE_RATE[vspeed] ?? 1;
+      if (i === parts.length - 1) u.onend = () => setSpeaking((k) => (k === key ? null : k));
+      // Máy không có giọng cho ngôn ngữ này, giọng lỗi: dừng và báo một lần, không kẹt ở trạng thái đang đọc. Bị hủy do người dùng dừng thì thôi.
+      u.onerror = (e) => { if (e.error === "canceled" || e.error === "interrupted") return; s.cancel(); setSpeaking((k) => (k === key ? null : k)); say("Trình duyệt chưa đọc được đoạn này. Hãy kiểm tra giọng đọc của máy"); };
+      s.speak(u);
+    });
   };
   const like = (i: number, v: 1 | -1) => {
     if (!chat) return;
@@ -1638,7 +1656,7 @@ export default function Home() {
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving || authHold ? (
-    <AuthComponent key="auth" brandName="Synchro" logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
+    <AuthComponent key="auth" brandName="Synchro" signupOpen={signupOpen} logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
       toFilm={intro} onReveal={() => setReveal("login")}
       onDone={(u, kind) => {
         enterAccount(u); syncProfile(u); setMe(u);
@@ -1671,7 +1689,7 @@ export default function Home() {
           {nav({ v: "inbox", icon: <I.Inbox />, label: "Hộp thư", badge: inboxN })}
           {nav({ v: "brain", icon: <I.Brain />, label: "Bộ não" })}
           {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => setCodeCur(null) })}
-          {me?.perms.features.speech !== false && nav({ v: "speech", icon: <I.Speech />, label: "Speech", onPick: () => setSpTool("home") })}
+          {me?.perms.features.speech !== false && (speechReady || me?.isAdmin) && nav({ v: "speech", icon: <I.Speech />, label: "Speech", onPick: () => setSpTool("home") })}
           {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: "Kỹ năng", tip: "Kho kỹ năng" })}
         </div>
         <div className="rail-foot">
@@ -1752,7 +1770,7 @@ export default function Home() {
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
                 <button className="menu-item" onClick={() => { codePatch(c.id, { archived: !c.archived }); setCodeMenu(null); say(c.archived ? "Đã khôi phục phiên code" : "Đã lưu trữ phiên code"); }}>{c.archived ? <I.M icon="Retry" /> : <I.M icon="Inbox" />}{c.archived ? "Khôi phục" : "Lưu trữ"}</button>
                 <hr />
-                <button className="menu-item del" onClick={() => { setCodeMenu(null); setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (cpPage?.sync) deleteServerSession(c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); }}><I.Trash />Xóa</button>
+                <button className="menu-item del" onClick={() => { setCodeMenu(null); setGc({ title: "Xóa phiên code?", text: "Phiên code và lịch sử của nó sẽ bị xóa, kể cả trên máy chủ nếu đang bật đồng bộ. Không hoàn tác được.", ok: "Xóa", fn: () => { setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (cpPage?.sync) deleteServerSession(c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); } }); }}><I.Trash />Xóa</button>
               </Menu>
             </div>
           );

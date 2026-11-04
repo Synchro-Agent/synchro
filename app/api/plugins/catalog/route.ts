@@ -1,17 +1,23 @@
 import { AuthError, can, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
 import { CD, dirById, dirCounts, dirEntries, dirPage, dirSynced } from "../../../claudedir";
-import { getJob, jobRunning, orgInstalled, startJob, stopJob } from "../../../plugjob";
+import { blockedLibs, getJob, jobRunning, orgInstalled, startJob, stopJob } from "../../../plugjob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Danh mục skill của Claude cho tab Khám phá: số thư viện / skill / đã cài mỗi mục, một trang thư viện (lọc mục, từ khóa, đã cài / chưa cài)
 // và tiến độ cài hàng loạt. ?cat=engineering&q=pdf&page=0&only=missing
+const u_ = (req: Request) => new URL(req.url);
 export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
   const u = new URL(req.url);
   const have = orgInstalled(user.id);
   const counts = dirCounts();
+  // Thư viện chỉ lúc cài mới biết giấy phép đóng: tính như thư viện đóng trong mọi số đếm và thẻ thư viện.
+  const blocked = blockedLibs();
+  for (const e of dirEntries()) if (!e.closed && blocked.has(CD + e.id)) for (const c of e.cats) if (counts[c]) counts[c].closed++;
+  // Quản trị viên lấy danh sách để đưa vào catalog/license-blocked.json, lần chạy scripts/sync-claude-directory.mjs sau ghi hẳn vào danh mục.
+  if (u_(req).searchParams.get("blocked") && isAdmin(user)) return Response.json(Object.fromEntries(blocked));
   const done: Record<string, number> = {};
   for (const e of dirEntries()) if (have.has(CD + e.id)) for (const c of e.cats) done[c] = (done[c] ?? 0) + 1;
   const only = u.searchParams.get("only");
@@ -20,10 +26,10 @@ export const GET = handle(async (req: Request) => {
   const all = dirEntries();
   return Response.json({
     synced: dirSynced(), admin: isAdmin(user), canInstall: can(user, "skills"),
-    totals: { plugins: all.length, skills: all.reduce((a, e) => a + e.skills.length, 0), installed: all.filter((e) => have.has(CD + e.id)).length, closed: all.filter((e) => e.closed).length },
+    totals: { plugins: all.length, skills: all.reduce((a, e) => a + e.skills.length, 0), installed: all.filter((e) => have.has(CD + e.id)).length, closed: all.filter((e) => e.closed || blocked.has(CD + e.id)).length },
     cats: Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, { ...v, installed: done[k] ?? 0 }])),
     ...pg, items: pg.items.map((e) => ({ id: CD + e.id, name: e.name, summary: e.summary, author: e.author, cats: e.cats, license: e.license, skillCount: e.skills.length, skills: e.skills.slice(0, 8), homepage: e.homepage, verified: e.verified ?? null, installed: have.get(CD + e.id) ?? null,
-      closed: !!e.closed, github: !!e.github, altFor: e.altFor ?? [], alt: (e.alt ?? []).map((a) => ({ id: CD + a, name: dirById(a)?.name ?? a, installed: have.get(CD + a) ?? null })) })),
+      closed: !!e.closed || blocked.has(CD + e.id), closedWhy: blocked.get(CD + e.id)?.reason ?? null, github: !!e.github, altFor: e.altFor ?? [], alt: (e.alt ?? []).map((a) => ({ id: CD + a, name: dirById(a)?.name ?? a, installed: have.get(CD + a) ?? null })) })),
     job: isAdmin(user) ? { ...getJob(), running: jobRunning() } : null,
   });
 });

@@ -51,7 +51,7 @@ function init() {
       for (const [c, def] of cols) if (!have.has(c)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${def}`);
     };
     add("tasks", [["browser", "TEXT NOT NULL DEFAULT 'auto'"], ["memory", "INTEGER NOT NULL DEFAULT 1"], ["wait_since", "INTEGER"], ["retries", "INTEGER NOT NULL DEFAULT 0"], ["engine", "TEXT NOT NULL DEFAULT 'chat'"]]);
-    add("task_runs", [["kind", "TEXT NOT NULL DEFAULT 'run'"], ["note", "TEXT"], ["retried", "INTEGER NOT NULL DEFAULT 0"]]);
+    add("task_runs", [["kind", "TEXT NOT NULL DEFAULT 'run'"], ["note", "TEXT"], ["retried", "INTEGER NOT NULL DEFAULT 0"], ["result", "TEXT"]]);
     ready = true;
   }
   return d;
@@ -362,29 +362,67 @@ export function settleProposal(uid: string, id: string, status: ProposalStatus, 
 
 // ---------------------------------------------------------------- hộp thư
 export type InboxItem = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number };
-export function inbox(uid: string, limit = 50): { items: InboxItem[]; unread: number; pending: number } {
+type RunRow = { run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null; result: string | null };
+type Kept = { status: string; text?: string; error?: string; model?: string };
+export const INBOX_KEEP = 1000;
+const TOO_OLD = "Kết quả này đã quá cũ nên không còn lưu.";
+// Lượt chạy chỉ được giữ 7 ngày (runs.ts) nên kết quả cuối được chép sang dòng Hộp thư ngay khi xong: báo cáo tuần trước vẫn đọc được.
+// Mỗi người giữ tối đa INBOX_KEEP kết quả đầy đủ; cũ hơn thì còn dòng và thời gian, không còn nội dung.
+function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
+  const run = getRun(r.run_id, uid);
+  if (run?.status === "running") return null;
+  const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
+  const k: Kept = run ? { status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}), ...(typeof res.model === "string" ? { model: res.model } : {}) } : { status: "error", error: TOO_OLD };
   const d = init();
-  const rows = d.prepare("SELECT * FROM task_runs WHERE owner = ? ORDER BY at DESC LIMIT ?").all(uid, limit) as { run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null }[];
+  d.prepare("UPDATE task_runs SET result = ? WHERE run_id = ? AND owner = ?").run(JSON.stringify(k), r.run_id, uid);
+  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ? AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(JSON.stringify({ status: "error", error: TOO_OLD }), uid, uid, INBOX_KEEP);
+  return k;
+}
+/** Nhịp đều của máy chủ: chép kết quả của các lượt vừa xong, kể cả khi không ai mở Hộp thư. */
+export function archiveInbox(max = 50) {
+  const rows = init().prepare("SELECT run_id, owner FROM task_runs WHERE result IS NULL ORDER BY at LIMIT ?").all(max) as { run_id: string; owner: string }[];
+  for (const r of rows) keepResult(r.owner, r);
+}
+onTick("inbox-archive", () => archiveInbox());
+
+const UNREAD_RUNS = "owner = ? AND read = 0 AND NOT (result IS NULL AND run_id IN (SELECT id FROM runs WHERE status = 'running'))";
+const unreadCount = (uid: string) => {
+  const d = init();
+  getRun("", uid); // tạo bảng runs nếu máy chủ vừa khởi động
+  return (d.prepare(`SELECT COUNT(*) AS n FROM task_runs WHERE ${UNREAD_RUNS}`).get(uid) as { n: number }).n + (d.prepare("SELECT COUNT(*) AS n FROM notices WHERE owner = ? AND read = 0").get(uid) as { n: number }).n;
+};
+const pendingCount = (uid: string) => (init().prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND status = 'pending'").get(uid) as { n: number }).n;
+
+/** Số trên thanh bên: chỉ đếm và vài dòng mới nhất để báo thông báo, không gửi nội dung kết quả. */
+export function inboxCount(uid: string) {
+  const d = init(), unread = unreadCount(uid);
+  const rows = unread ? d.prepare(`SELECT run_id, title, at FROM task_runs WHERE ${UNREAD_RUNS} UNION ALL SELECT id AS run_id, title, at FROM notices WHERE owner = ? AND read = 0 ORDER BY at DESC LIMIT 20`).all(uid, uid) as { run_id: string; title: string; at: number }[] : [];
+  const n = d.prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND run_id = ?");
+  return { unread, pending: pendingCount(uid), fresh: rows.map((r) => ({ run: r.run_id, title: r.title, proposals: (n.get(uid, r.run_id) as { n: number }).n })) };
+}
+
+/** Một trang Hộp thư, mới nhất trước. before: mốc thời gian của dòng cuối trang trước. */
+export function inbox(uid: string, o: { limit?: number; before?: number } = {}): { items: InboxItem[]; unread: number; pending: number; more: boolean } {
+  const d = init(), limit = Math.min(Math.max(o.limit ?? 50, 1), 100), before = o.before && o.before > 0 ? o.before : Number.MAX_SAFE_INTEGER;
+  const rows = d.prepare("SELECT * FROM task_runs WHERE owner = ? AND at < ? ORDER BY at DESC LIMIT ?").all(uid, before, limit + 1) as RunRow[];
   const props = new Map((d.prepare("SELECT run_id, COUNT(*) AS n FROM proposals WHERE owner = ? AND run_id IS NOT NULL GROUP BY run_id").all(uid) as { run_id: string; n: number }[]).map((x) => [x.run_id, x.n]));
   const items = rows.map((r): InboxItem => {
-    const run = getRun(r.run_id, uid);
-    const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
+    let k: Kept | null = null;
+    if (r.result) { try { k = JSON.parse(r.result) as Kept; } catch {} }
+    k ??= keepResult(uid, r);
     return {
-      run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: run?.status ?? "error", text: String(res.text ?? "").slice(0, 60_000), kind: r.kind === "action" ? "action" : "task",
-      ...(r.note ? { note: r.note } : {}), ...(typeof res.model === "string" ? { model: res.model } : {}), ...(props.get(r.run_id) ? { proposals: props.get(r.run_id) } : {}),
-      ...(res.error ? { error: String(res.error) } : !run ? { error: "Kết quả đã quá 7 ngày nên không còn lưu." } : {}),
+      run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: k?.status ?? "running", text: k?.text ?? "", kind: r.kind === "action" ? "action" : "task",
+      ...(r.note ? { note: r.note } : {}), ...(k?.model ? { model: k.model } : {}), ...(props.get(r.run_id) ? { proposals: props.get(r.run_id) } : {}), ...(k?.error ? { error: k.error } : {}),
     };
   });
-  const notes = (d.prepare("SELECT * FROM notices WHERE owner = ? ORDER BY at DESC LIMIT ?").all(uid, limit) as { id: string; title: string; text: string; link: string | null; at: number; read: number }[])
+  const notes = (d.prepare("SELECT * FROM notices WHERE owner = ? AND at < ? ORDER BY at DESC LIMIT ?").all(uid, before, limit + 1) as { id: string; title: string; text: string; link: string | null; at: number; read: number }[])
     .map((n): InboxItem => ({ run: n.id, task: "", title: n.title, at: n.at, read: !!n.read, status: "done", text: n.text, kind: "notice", ...(n.link ? { link: n.link } : {}) }));
-  // Việc đang chờ Chrome của người dùng kết nối lại: hiện như một dòng "đang chờ" ở đầu Hộp thư.
-  const waits = (d.prepare("SELECT id, title, wait_since FROM tasks WHERE owner = ? AND wait_since IS NOT NULL").all(uid) as { id: string; title: string; wait_since: number }[])
+  // Việc đang chờ Chrome của người dùng kết nối lại: hiện như một dòng "đang chờ" ở đầu Hộp thư (chỉ ở trang đầu).
+  const waits = o.before ? [] : (d.prepare("SELECT id, title, wait_since FROM tasks WHERE owner = ? AND wait_since IS NOT NULL").all(uid) as { id: string; title: string; wait_since: number }[])
     .map((t): InboxItem => ({ run: `wait_${t.id}`, task: t.id, title: t.title, at: t.wait_since, read: true, status: "waiting", text: "", kind: "task" }));
-  const all = [...waits, ...items, ...notes].sort((a, b) => b.at - a.at).slice(0, limit);
-  // Chỉ tính chưa đọc khi đã có kết quả (đang chạy thì chưa báo).
-  const unread = all.filter((x) => !x.read && x.status !== "running").length;
-  const pending = (d.prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND status = 'pending'").get(uid) as { n: number }).n;
-  return { items: all, unread, pending };
+  const merged = [...items, ...notes].sort((a, b) => b.at - a.at);
+  const all = [...waits, ...merged.slice(0, limit)].sort((a, b) => b.at - a.at);
+  return { items: all, unread: unreadCount(uid), pending: pendingCount(uid), more: merged.length > limit };
 }
 export function markRead(uid: string, runs: string[] | "all") {
   const d = init();
