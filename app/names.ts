@@ -24,3 +24,6 @@ export function shortName(full: string | null | undefined): string {
   const last2 = nice.slice(-2);
   return MIDDLES.has(fold(last2[0])) ? last2[1] : last2.join(" ");
 }
+
+// Lựa chọn nghề nghiệp của hồ sơ (màn hình đăng nhập, Cài đặt → Tài khoản).
+export const OCCUPATIONS = ["Student", "Engineering", "Design", "Product management", "Data science", "Marketing", "Sales", "Finance", "Operations", "Human resources", "Legal", "Other"];

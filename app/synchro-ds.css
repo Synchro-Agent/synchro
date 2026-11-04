@@ -21,7 +21,7 @@
   --ds-ink:#111210;
   --ds-ink-2:#3E3F39;
   --ds-muted:#5F6058;
-  --ds-faint:#75766E;
+  --ds-faint:#666760;            /* 4,5:1 trên nền Ivory */
   --ds-inv:#111210;             /* tấm mực (mục đang chọn, nút chính) */
   --ds-inv-fg:#EEECE5;
   --ds-ok:#2F7A4F; --ds-warn:#A86412; --ds-bad:#B8412F;
@@ -591,7 +591,7 @@ html body .tk-page .ds-seg .tk-badge,html body .tk-page .ds-seg .tk-count{displa
   background:var(--ds-ink);color:var(--ds-inv-fg);opacity:1}
 html body .tk-page .ds-seg button.on .tk-badge,html body .tk-page .ds-seg button.on .tk-count{background:var(--ds-inv-fg);color:var(--ds-inv)}
 html body .tk-page .ds-seg .tk-badge.warn{background:var(--ds-warn);color:#fff}
-html body .tk-page .tk-count{background:transparent!important;color:inherit!important;opacity:.7!important;padding:0!important;min-width:0!important}
+html body .tk-page .tk-count{background:transparent!important;color:inherit!important;padding:0!important;min-width:0!important}
 html body .tk-page .tk-filter.field{height:var(--ds-h);max-width:200px;padding:0 12px;border-radius:var(--r-pill);font-size:13px}
 html body .tk-page .tk-tabs>.btn{height:var(--ds-h)}
 html body .tk-page .tk-feed{gap:20px}

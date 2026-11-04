@@ -839,7 +839,8 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [findOpen]);
-  const load = useCallback(() => fetch("/api/brain", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j?.nodes) { setG(j); setVer((v) => v + 1); } }).catch(() => {}), []);
+  const [gErr, setGErr] = useState(false);
+  const load = useCallback(() => { setGErr(false); return fetch("/api/brain", { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => { if (j?.nodes) { setG(j); setVer((v) => v + 1); } }).catch(() => setGErr(true)); }, []);
   // Chọn hàng loạt ở cột trái: ghim / bỏ ghim / xóa nhiều ghi chú (quy tắc hàng đầu và trang hệ thống không chọn được).
   const pickable = (g?.nodes ?? []).filter((n) => ["map", "topic", "entity", "note", "chat", "code", "daily"].includes(n.kind));
   const bkN = useBulk(pickable, (n) => n.title);
@@ -968,7 +969,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
         </div>
       </header>
       <aside className="bw-left" aria-label={L("Khám phá bộ não", "Explore the brain")}>
-        {!g ? <div className="us-empty"><span className="art-spin sm" /></div> : (
+        {!g ? (gErr ? <div className="err-box sm" role="alert"><b>{L("Chưa tải được bộ não", "Couldn't load the brain")}</b><button className="btn" onClick={() => void load()}>{L("Thử lại", "Try again")}</button></div> : <div className="us-empty"><span className="art-spin sm" /></div>) : (
           <>
             {pickable.length > 0 && <div className="bk-head bw-bk"><BulkButton b={bkN} compact /></div>}
             <nav className="bw-entry">
@@ -1051,32 +1052,3 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   );
 }
 
-/**
- * Tự nạp các đoạn chat cũ đang nằm trong trình duyệt lên bộ não (không có nút bấm): mỗi lần 10 đoạn, cách nhau 20 giây, đoạn đã gửi
- * được nhớ trong trình duyệt. Không gửi đoạn chat ẩn danh; máy chủ bỏ qua khi người dùng tắt học.
- */
-export function useBrainSync(chats: Chat[], on: boolean) {
-  const ref = useRef(chats);
-  ref.current = chats;
-  useEffect(() => {
-    if (!on) return;
-    let stop = false, timer: ReturnType<typeof setTimeout> | null = null;
-    const KEY = "bn:synced";
-    const read = () => { try { return new Set<string>(JSON.parse(localStorage.getItem(KEY) ?? "[]")); } catch { return new Set<string>(); } };
-    const run = async () => {
-      const done = read();
-      const todo = ref.current.filter((c) => !c.inc && !done.has(String(c.id)) && c.msgs.some((m) => m.role === "user" && m.text?.trim())).slice(0, 10);
-      if (todo.length) {
-        try {
-          const r = await fetch("/api/brain/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chats: todo.map((c) => ({ id: String(c.id), title: c.title, msgs: c.msgs.filter((m) => m.text?.trim()).map((m) => ({ role: m.role, text: m.text })) })) }) });
-          const j = r.ok ? await r.json() : null;
-          if (j && !j.off) { for (const c of todo) done.add(String(c.id)); try { localStorage.setItem(KEY, JSON.stringify([...done].slice(-5000))); } catch {} }
-          if (!j || j.off) return;
-        } catch { return; }
-      }
-      if (!stop && todo.length) timer = setTimeout(run, 20_000);
-    };
-    timer = setTimeout(run, 8000);
-    return () => { stop = true; if (timer) clearTimeout(timer); };
-  }, [on, chats.length]);
-}

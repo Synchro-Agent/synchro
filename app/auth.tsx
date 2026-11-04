@@ -9,6 +9,10 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
 import { Loader, Mark } from "./brand";
+import { usePref } from "./store";
+import { OCCUPATIONS } from "./names";
+export { OCCUPATIONS };
+import { LANG_NAMES, type Lang } from "./i18n";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
 
@@ -84,7 +88,6 @@ export type AuthUser = { id: string; email: string; name: string; avatar: string
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;
 // Cùng danh sách với Cài đặt → Tài khoản để hai nơi hiển thị khớp nhau.
-export const OCCUPATIONS = ["Student", "Engineering", "Design", "Product management", "Data science", "Marketing", "Sales", "Finance", "Operations", "Human resources", "Legal", "Other"];
 
 type Kind = "login" | "signup" | "profile";
 type Stage = "form" | "loading" | "success" | "error";
@@ -232,9 +235,22 @@ interface AuthComponentProps {
   onDone?: (user: AuthUser, kind: Kind) => void;
   onLeft?: () => void;
   onSignOut?: () => void;
+  // Vì sao màn hình đăng nhập hiện ra (phiên đã hết hạn khi app đang mở).
+  notice?: string;
 }
 
-export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut }: AuthComponentProps) => {
+// Đổi ngôn ngữ ngay ở màn hình đăng nhập: người chưa có tài khoản không phải đăng ký bằng thứ tiếng họ không đọc được.
+function LangSwitch() {
+  const [lang, setLang] = usePref<Lang>("uilang", "vi");
+  const [, setVlang] = usePref("vlang", "Vietnamese");
+  return (
+    <div className="auth-lang" role="group" aria-label="Ngôn ngữ" data-notr>
+      {(["vi", "en"] as Lang[]).map((k) => <button key={k} type="button" className={lang === k ? "on" : ""} aria-pressed={lang === k} lang={k} onClick={() => { setLang(k); setVlang(k === "en" ? "English" : "Vietnamese"); }}>{LANG_NAMES[k]}</button>)}
+    </div>
+  );
+}
+
+export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -435,6 +451,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
             {logo}
             <h1 className="sr-only">{brandName}</h1>
         </div>
+        <LangSwitch />
 
         <div className={cn("flex w-full flex-1 h-full items-center justify-center bg-card", "relative overflow-hidden")}>
             <div className="absolute inset-0 z-0"><GradientBackground /></div>
@@ -442,6 +459,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
             <AnimatePresence mode="wait">
             {stage === "form" ? (
             <motion.fieldset key="form" exit={{ opacity: 0, scale: 0.96, filter: "blur(10px)", transition: { duration: 0.35, ease: EASE } }} className="relative z-10 flex flex-col items-center gap-8 w-[280px] mx-auto p-4">
+                {notice && <p className="auth-notice" role="alert">{notice}</p>}
                 <AnimatePresence mode="wait" initial={true}>
                     {authStep === "email" && <motion.div key="email-content" exit={stepExit} className="w-full flex flex-col items-center gap-4">
                         <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="auth-title text-foreground">{titles.email[0]}</p></div></BlurFade>

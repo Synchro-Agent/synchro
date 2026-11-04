@@ -1,6 +1,7 @@
 "use client";
 // Bảng lệnh ⌘K: một ô tìm cho mọi thứ — lệnh nhanh, đoạn chat, artifact, ứng dụng nội bộ, skill và thư viện.
 // Tìm không cần gõ dấu ("bao cao" khớp "Báo cáo"), mũi tên lên / xuống để chọn, Enter để mở. Dữ liệu máy chủ tải một lần mỗi lần mở bảng.
+import { cachedJson } from "./studios";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
@@ -11,7 +12,8 @@ export type PaletteGo = {
   chat: (id: number) => void;
   artifact: (conv: string, title: string) => void;
   app: (id: string) => void;
-  skillHub: () => void;
+  /** name: mở Kho kỹ năng lọc sẵn theo skill / thư viện này. */
+  skillHub: (name?: string) => void;
 };
 type Row = { key: string; group: string; label: string; sub?: string; icon: ReactNode; keys?: string; hay: string; run: () => void };
 
@@ -43,7 +45,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts"), get("/api/apps"), get("/api/skills"), get("/api/plugins?view=lite")]).then(([a, ap, sk, pl]) => {
+    Promise.all([get("/api/artifacts"), get("/api/apps"), cachedJson<any>("/api/skills"), cachedJson<any>("/api/plugins?view=lite")]).then(([a, ap, sk, pl]) => {
       if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [] });
     });
     return () => { live = false; };
@@ -61,8 +63,8 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     if (rem) {
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
       for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng dùng chung" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
-      for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: go.skillHub });
-      for (const l of rem.libs) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skillCount} skill`, icon: <I.Plugins size={16} />, run: go.skillHub });
+      for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: () => go.skillHub(s.name) });
+      for (const l of rem.libs) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skillCount} skill`, icon: <I.Plugins size={16} />, run: () => go.skillHub(l.name) });
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm tối đa 6 kết quả, nhóm theo thứ tự cố định.
     if (!words.length) return [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, 6)];

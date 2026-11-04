@@ -36,9 +36,10 @@ export function useUsage(provider?: string) {
   const key = provider ?? "";
   const [st, setSt] = useState<UsageState | null>(cache?.key === key ? cache.v : null);
   const [, tick] = useState(0);
-  const load = useCallback((fresh = false) => {
+  // idle: lượt hỏi định kỳ, không ai vừa yêu cầu số mới: máy chủ trả số đã có, không mở CLI (codex, agy) chỉ để đọc hạn mức.
+  const load = useCallback((fresh = false, idle = false) => {
     const q = provider === "*" ? "?all=1" : provider ? `?provider=${encodeURIComponent(provider)}` : "";
-    fetch(`/api/usage${q}${fresh ? `${q ? "&" : "?"}fresh=1` : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    fetch(`/api/usage${q}${fresh ? `${q ? "&" : "?"}fresh=1` : idle ? `${q ? "&" : "?"}idle=1` : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
       if (j?.limits) { cache = { key, v: j }; setSt(j); listeners.forEach((f) => f()); }
     }).catch(() => {});
   }, [provider, key]);
@@ -48,7 +49,8 @@ export function useUsage(provider?: string) {
     const vis = () => { if (!document.hidden) load(); };
     window.addEventListener("synchro:usage", on);
     document.addEventListener("visibilitychange", vis);
-    const t = setInterval(load, 60_000);
+    // Tab đang ẩn thì không hỏi; quay lại tab thì vis() đọc lại ngay.
+    const t = setInterval(() => { if (!document.hidden) load(false, true); }, 60_000);
     // Đồng hồ đếm ngược "Đặt lại sau…" tự cập nhật mỗi 30 giây.
     const c = setInterval(() => tick((x) => x + 1), 30_000);
     return () => { window.removeEventListener("synchro:usage", on); document.removeEventListener("visibilitychange", vis); clearInterval(t); clearInterval(c); };
@@ -255,7 +257,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
       <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>
         <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" /></svg>
       </button>
-      <Menu open={open} className={`us-pop ${up ? "up" : "down"}`}>
+      <Menu open={open} role="dialog" className={`us-pop ${up ? "up" : "down"}`}>
         <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
           <>
@@ -377,12 +379,20 @@ function DailyChart({ d, cost }: { d: Details | null; cost: boolean }) {
 export function UsageSettings({ go }: { go?: (t: string) => void }) {
   const st = useUsage("*");
   const [d, setD] = useState<Details | null>(null);
-  useEffect(() => {
-    const load = () => fetch(`/api/usage/details?tz=${new Date().getTimezoneOffset()}`, { cache: "no-store" }).then((r) => r.json()).then(setD).catch(() => {});
-    load();
-    window.addEventListener("synchro:usage", load);
-    return () => window.removeEventListener("synchro:usage", load);
+  const [dErr, setDErr] = useState(false);
+  // Máy chủ trả lỗi dạng { error } (phiên hết hạn, mất kết nối): từng làm cả app sập ở d.days.reduce. Chỉ nhận đúng dữ liệu, còn lại báo lỗi kèm nút thử lại.
+  const loadD = useCallback(() => {
+    setDErr(false);
+    return fetch(`/api/usage/details?tz=${new Date().getTimezoneOffset()}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => {
+      if (!Array.isArray(j?.days)) throw new Error("bad");
+      setD({ ...j, byModel: j.byModel ?? [], byPlan: j.byPlan ?? [], byFeature: j.byFeature ?? [] });
+    }).catch(() => setDErr(true));
   }, []);
+  useEffect(() => {
+    void loadD();
+    window.addEventListener("synchro:usage", loadD);
+    return () => window.removeEventListener("synchro:usage", loadD);
+  }, [loadD]);
   // Hãng chỉ có khóa API (DeepSeek) mà chưa nối: chỉ quản trị viên mới nối được nên chỉ hiện cho quản trị viên.
   const vendors = (st?.vendors ?? []).filter((v) => v.mode !== "none" || !!v.cli || st?.admin);
   const callsOf = (v: VendorUsage["vendor"]) => d?.days.reduce((a, x) => a + (x.calls[v] ?? 0), 0) ?? 0;
@@ -445,6 +455,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       )}
 
       <h3 className="sec">{L("30 ngày qua", "Last 30 days")}</h3>
+      {dErr && !d && <div className="err-box sm" role="alert"><b>{L("Chưa tải được số liệu mức dùng", "Couldn't load usage figures")}</b><button className="btn" onClick={() => void loadD()}>{L("Thử lại", "Try again")}</button></div>}
       <div className="us-stats" style={{ "--n": Math.min(stats.length, 4) } as React.CSSProperties}>{stats.slice(0, 4).map(([v, t]) => <div key={t}><b>{v}</b><span>{t}</span></div>)}</div>
       <DailyChart d={d} cost={apiNow} />
 
@@ -502,7 +513,7 @@ function Money({ value, onSave, placeholder = "No limit" }: { value: number | nu
   return <span className="us-money"><i>$</i><input inputMode="decimal" value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></span>;
 }
 
-export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
+export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement }) {
   const [d, setD] = useState<AdminData | null>(null);
   const [showPrices, setShowPrices] = useState(false);
   const [pq, setPq] = useState("");
@@ -519,7 +530,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
       <div className="adm-card-h"><b>Default limits</b><span className="d">API cost each person can use. Leave empty for no limit. When a limit is reached, chats pause until it resets.</span></div>
       <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with a person&apos;s first message.</div></div><Money value={c.session} onSave={(v) => patch({ config: { session: v } }, "Session limit saved")} /></div>
       <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money value={c.weekly} onSave={(v) => patch({ config: { weekly: v } }, "Weekly limit saved")} /></div>
-      <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
+      <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} label="Apply to administrators" set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
       {d.users.length > 10 && <div className="s-search us-ppl-s"><I.Search size={14} /><input placeholder="Search by name or email" value={pq} onChange={(e) => setPq(e.target.value)} /></div>}

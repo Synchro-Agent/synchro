@@ -467,13 +467,13 @@ const NOTE: Record<Cli, string> = {
 /** Antigravity đang chờ người dùng hoàn tất bước làm quen (đã thấy ở lần đọc hạn mức gần nhất). */
 export const agySetupPending = (uid: string) => !!g.limits.get(`agy:${uid}`)?.setup;
 
-/** fresh: bỏ qua bộ nhớ (người dùng bấm làm mới). */
-export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean } = {}): Promise<SubUsage> {
+/** fresh: bỏ qua bộ nhớ (người dùng bấm làm mới). idle: lượt hỏi định kỳ của giao diện: đã có số thì không mở CLI. */
+export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?: boolean } = {}): Promise<SubUsage> {
   const k = `${cli}:${u.id}`;
   let hit = g.limits.get(k);
   // Claude báo hạn mức trong mỗi lượt chat (rate_limit_event); codex đọc qua app-server (tối đa mỗi phút);
   // agy đọc bảng /usage (tối đa 5 phút một lần vì phải mở cả CLI).
-  const age = hit ? Date.now() - hit.at : Infinity;
+  const age = o.idle && hit ? 0 : hit ? Date.now() - hit.at : Infinity;
   if (cli === "codex" && (o.fresh || age > 60_000)) {
     const [acc, rl] = await codexRpc(u.id, [{ method: "account/read" }, { method: "account/rateLimits/read" }]).catch(() => [null, null]);
     const c = codexWindows(rl);

@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { CodePrefs } from "./codestore";
 import { mergeData } from "./codemerge";
+import { userScope } from "./userscope";
 
 export type { CodePrefs };
 export type SessionState = "blocked" | "review" | "done" | null;
@@ -26,7 +27,7 @@ export function loadCodePrefs(force = false) {
 }
 /** Cài đặt Synchro Code của tài khoản (null khi chưa tải xong). */
 export function useCodePrefs(): CodePrefs | null {
-  return useSyncExternalStore((f) => { subs.add(f); if (!prefs) loadCodePrefs(); return () => subs.delete(f); }, () => prefs, () => null);
+  return useSyncExternalStore((f) => { subs.add(f); if (!prefs && userScope() !== "anon") loadCodePrefs(); return () => subs.delete(f); }, () => prefs, () => null);
 }
 export const codePrefsNow = () => prefs;
 export async function saveCodePrefs(patch: Partial<CodePrefs>): Promise<string | null> {

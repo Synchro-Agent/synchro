@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
@@ -12,7 +12,8 @@ const words = (p: string) => p.split(/(\s+)/).map((w, k) => (/^\s*$/.test(w) ? w
 // Link Markdown [chữ](địa chỉ): http(s) mở tab mới. Đường dẫn tới tệp trong sandbox (sandbox:/…, outputs/… — thói quen của model quen
 // trình chạy code khác) chỉ hiện chữ: tệp đã có thẻ kèm nút tải ngay dưới tin nhắn. Từng hiện thô "[Tải video](sandbox:/outputs/…)".
 const LINK = /^\[([^\]\n]+)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)$/;
-function Inline({ t }: { t: string }) {
+// memo: chữ đang chảy chỉ dài thêm ở dòng cuối, các dòng trước không phải dựng lại từng chữ mỗi khung hình.
+const Inline = memo(function Inline({ t }: { t: string }) {
   const parts = t.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]\n]+\]\(\s*<?[^)\s>]+>?(?:\s+"[^"]*")?\s*\))/g);
   return (
     <>
@@ -25,7 +26,7 @@ function Inline({ t }: { t: string }) {
       })}
     </>
   );
-}
+});
 
 export type DevBlock = { lang: string; code: string };
 export type DevCtx = { prev?: DevBlock[]; onPanel: (b: { lang: string; code: string; name: string; run?: boolean }) => void; files?: { name: string; text: string }[]; onAccept?: (name: string, code: string) => void; onExpand?: (name: string, code: string) => void };
@@ -226,10 +227,55 @@ function MdTable({ head, rows, say }: { head: string[]; rows: string[][]; say: (
   );
 }
 
-export function Markdown({ text: text0, say, dev, viz, live }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean }) {
+// Một đoạn giữa hai khối code. memo theo chuỗi: câu trả lời đang viết chỉ phân tích lại đoạn cuối, không phân tích lại cả bài mỗi khung hình.
+const MdText = memo(function MdText({ s, say }: { s: string; say: (m: string) => void }) {
+  const lines = s.split("\n");
+  const out: React.ReactNode[] = [];
+  let list: string[] = [];
+  let ord = false;
+  const flush = () => {
+    if (!list.length) return;
+    // Ô đánh dấu của checklist ("- [ ] việc", "- [x] đã xong"): hiện ô vuông, không phải chữ "[ ]".
+    const items = list.map((l, k) => { const c = /^\[([ xX])\]\s+(.*)/.exec(l); return c ? <li key={k} className="task"><span className={`tick${c[1] === " " ? "" : " on"}`} aria-hidden="true" /><Inline t={c[2]} /></li> : <li key={k}><Inline t={l} /></li>; });
+    out.push(ord ? <ol key={out.length}>{items}</ol> : <ul key={out.length}>{items}</ul>);
+    list = [];
+  };
+  let tbl: string[] = [];
+  // Đoạn trích dẫn ("> …"): gom các dòng liền nhau thành một khung.
+  let quote: string[] = [];
+  const flushQ = () => { if (!quote.length) return; out.push(<blockquote key={out.length}>{quote.map((q, k) => (q.trim() ? <p key={k}><Inline t={q} /></p> : null))}</blockquote>); quote = []; };
+  const cells = (r: string) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const flushT = () => {
+    if (!tbl.length) return;
+    const hasSep = tbl.length > 1 && /^[\s|:-]+$/.test(tbl[1]);
+    const head = cells(tbl[0]), rows = tbl.slice(hasSep ? 2 : 1).map(cells);
+    out.push(<MdTable key={out.length} head={head} rows={rows} say={say} />);
+    tbl = [];
+  };
+  lines.forEach((l) => {
+    const q = /^\s*>\s?(.*)$/.exec(l);
+    if (q) { flush(); flushT(); quote.push(q[1]); return; }
+    flushQ();
+    if (/^\s*\|.*\|\s*$/.test(l)) { flush(); tbl.push(l); return; }
+    flushT();
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(l)) { flush(); out.push(<hr key={out.length} />); return; }
+    const b = l.match(/^\s*[-*]\s+(.*)/);
+    const n = l.match(/^\s*\d+\.\s+(.*)/);
+    const h = l.match(/^(#{1,6})\s+(.*)/);
+    if (b || n) { const o = !!n; if (list.length && o !== ord) flush(); ord = o; list.push((b || n)![1]); return; }
+    flush();
+    // Giữ đúng cấp tiêu đề (# lớn nhất … #### trở xuống cùng cỡ) để tài liệu dài vẫn thấy rõ bố cục.
+    if (h) { const H = `h${Math.min(h[1].length, 4)}` as "h1" | "h2" | "h3" | "h4"; out.push(<H key={out.length}><Inline t={h[2]} /></H>); }
+    else if (l.trim()) out.push(<p key={out.length}><Inline t={l} /></p>);
+  });
+  flush(); flushT(); flushQ();
+  return <div>{out}</div>;
+});
+
+export const Markdown = memo(function Markdown({ text: text0, say, dev, viz, live }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean }) {
   let cbi = 0;
-  const { text, meta } = dev ? splitMeta(text0) : { text: text0, meta: null };
-  const segs = text.split(/(```[\s\S]*?(?:```|$))/g);
+  const { text, meta } = useMemo(() => (dev ? splitMeta(text0) : { text: text0, meta: null }), [text0, !!dev]); // eslint-disable-line react-hooks/exhaustive-deps
+  const segs = useMemo(() => text.split(/(```[\s\S]*?(?:```|$))/g), [text]);
   return (
     <>
       {segs.map((s, i) => {
@@ -242,50 +288,9 @@ export function Markdown({ text: text0, say, dev, viz, live }: { text: string; s
           if (viz && (l === "chart" || l === "mermaid" || l === "widget")) return <Visual key={i} lang={l} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} closed={/```\s*$/.test(s) && s.length > 6} say={say} />;
           return <Code key={i} lang={lang.trim()} code={nl === -1 ? "" : body.slice(nl + 1).replace(/\n$/, "")} say={say} dev={dev} idx={cbi++} />;
         }
-        const lines = s.split("\n");
-        const out: React.ReactNode[] = [];
-        let list: string[] = [];
-        let ord = false;
-        const flush = () => {
-          if (!list.length) return;
-          // Ô đánh dấu của checklist ("- [ ] việc", "- [x] đã xong"): hiện ô vuông, không phải chữ "[ ]".
-          const items = list.map((l, k) => { const c = /^\[([ xX])\]\s+(.*)/.exec(l); return c ? <li key={k} className="task"><span className={`tick${c[1] === " " ? "" : " on"}`} aria-hidden="true" /><Inline t={c[2]} /></li> : <li key={k}><Inline t={l} /></li>; });
-          out.push(ord ? <ol key={out.length}>{items}</ol> : <ul key={out.length}>{items}</ul>);
-          list = [];
-        };
-        let tbl: string[] = [];
-        // Đoạn trích dẫn ("> …"): gom các dòng liền nhau thành một khung.
-        let quote: string[] = [];
-        const flushQ = () => { if (!quote.length) return; out.push(<blockquote key={out.length}>{quote.map((q, k) => (q.trim() ? <p key={k}><Inline t={q} /></p> : null))}</blockquote>); quote = []; };
-        const cells = (r: string) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-        const flushT = () => {
-          if (!tbl.length) return;
-          const hasSep = tbl.length > 1 && /^[\s|:-]+$/.test(tbl[1]);
-          const head = cells(tbl[0]), rows = tbl.slice(hasSep ? 2 : 1).map(cells);
-          out.push(<MdTable key={out.length} head={head} rows={rows} say={say} />);
-          tbl = [];
-        };
-        lines.forEach((l) => {
-          const q = /^\s*>\s?(.*)$/.exec(l);
-          if (q) { flush(); flushT(); quote.push(q[1]); return; }
-          flushQ();
-          if (/^\s*\|.*\|\s*$/.test(l)) { flush(); tbl.push(l); return; }
-          flushT();
-          if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(l)) { flush(); out.push(<hr key={out.length} />); return; }
-          const b = l.match(/^\s*[-*]\s+(.*)/);
-          const n = l.match(/^\s*\d+\.\s+(.*)/);
-          const h = l.match(/^(#{1,6})\s+(.*)/);
-          if (b || n) { const o = !!n; if (list.length && o !== ord) flush(); ord = o; list.push((b || n)![1]); return; }
-          flush();
-          // Giữ đúng cấp tiêu đề (# lớn nhất … #### trở xuống cùng cỡ) để tài liệu dài vẫn thấy rõ bố cục.
-          if (h) { const H = `h${Math.min(h[1].length, 4)}` as "h1" | "h2" | "h3" | "h4"; out.push(<H key={out.length}><Inline t={h[2]} /></H>); }
-          else if (l.trim()) out.push(<p key={out.length}><Inline t={l} /></p>);
-        });
-        flush(); flushT(); flushQ();
-        return <div key={i}>{out}</div>;
+        return <MdText key={i} s={s} say={say} />;
       })}
       {meta && <div className="cb-cx"><span>⏱ Time {meta.time}</span><span>▤ Space {meta.space}</span>{meta.canOptimize && <span className="opt">Có thể tối ưu thêm</span>}</div>}
     </>
   );
-}
-
+});

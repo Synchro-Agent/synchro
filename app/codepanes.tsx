@@ -1,6 +1,7 @@
 "use client";
 // Các khung bên phải của Synchro Code: terminal (PTY thật trong workspace), trình duyệt (Chromium của workspace,
 // người dùng và agent cùng điều khiển), file (cây thư mục + Monaco) và session rail (môi trường, ngữ cảnh, thay đổi git).
+import { tr } from "./i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import "@xterm/xterm/css/xterm.css";
@@ -53,6 +54,7 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
     let ws: WebSocket | null = null;
     let ro: ResizeObserver | null = null;
     let term: import("@xterm/xterm").Terminal | null = null;
+    let stopRetry = () => {};
     (async () => {
       const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]);
       if (disposed || !host.current) return;
@@ -62,8 +64,11 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
       t.loadAddon(fit);
       t.open(host.current);
       const refit = () => { try { if (host.current?.offsetWidth) fit.fit(); } catch {} if (ws?.readyState === 1) ws.send(JSON.stringify({ r: [t.cols, t.rows] })); };
+      let retries = 0, timer: ReturnType<typeof setTimeout> | null = null;
+      stopRetry = () => { if (timer) clearTimeout(timer); };
       const connect = async () => {
-        ws?.close();
+        if (timer) clearTimeout(timer);
+        const old = ws; ws = null; old?.close();
         setSt("connecting");
         try {
           const { url } = await wsOp<{ url: string }>("ticket", sid, { kind });
@@ -71,24 +76,30 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
           const s = new WebSocket(`${url}&cols=${t.cols}&rows=${t.rows}`);
           ws = s;
           s.binaryType = "arraybuffer";
-          s.onopen = () => { setSt("open"); refit(); };
+          s.onopen = () => { retries = 0; setSt("open"); refit(); };
           s.onmessage = (e) => {
             if (typeof e.data === "string") { try { const j = JSON.parse(e.data); if (j.error) t.write(`\r\n\x1b[31m${j.error}\x1b[0m\r\n`); } catch {} }
             else t.write(new Uint8Array(e.data as ArrayBuffer));
           };
-          s.onclose = () => { if (ws === s) { setSt("closed"); t.write("\r\n\x1b[2m[Đã ngắt kết nối]\x1b[0m\r\n"); } };
+          // Đứt kết nối (đổi mạng, máy chủ khởi động lại): tự nối lại vài lần, thưa dần, và nói rõ lý do; hết lượt thì mới hiện nút Kết nối lại.
+          s.onclose = (e) => {
+            if (ws !== s || disposed) return;
+            const why = e.reason ? `: ${e.reason}` : e.code === 1006 ? `: ${tr("mất kết nối mạng")}` : "";
+            if (retries < 4) { const wait = 1000 * 2 ** retries++; t.write(`\r\n\x1b[2m[${tr("Đã ngắt kết nối")}${why}. ${tr("Đang nối lại…")}]\x1b[0m\r\n`); setSt("connecting"); timer = setTimeout(() => { if (!disposed) void connect(); }, wait); return; }
+            setSt("closed"); t.write(`\r\n\x1b[2m[${tr("Đã ngắt kết nối")}${why}]\x1b[0m\r\n`);
+          };
         } catch (e) { t.write(`\x1b[31m${(e as Error).message}\x1b[0m\r\n`); setSt("closed"); }
       };
       t.onData((d) => { if (ws?.readyState === 1) ws.send(JSON.stringify({ i: d })); });
       ro = new ResizeObserver(refit);
       ro.observe(host.current);
-      api.current = { fit: refit, connect, focus: () => t.focus() };
+      api.current = { fit: refit, connect: () => { retries = 0; return connect(); }, focus: () => t.focus() };
       refit();
       connect();
     })();
     const theme = new MutationObserver(() => { if (term) term.options.theme = isDark() ? THEMES.dark : THEMES.light; });
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => { disposed = true; theme.disconnect(); ro?.disconnect(); const s = ws; ws = null; s?.close(); term?.dispose(); };
+    return () => { disposed = true; stopRetry(); theme.disconnect(); ro?.disconnect(); const s = ws; ws = null; s?.close(); term?.dispose(); };
   }, [sid, kind]);
   useEffect(() => { if (visible) setTimeout(() => { api.current?.fit(); if (kind === "term") api.current?.focus(); }, 30); }, [visible, kind]);
   return (

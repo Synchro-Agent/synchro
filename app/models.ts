@@ -2,6 +2,7 @@
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
 import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "./catalog";
+import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
 type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
@@ -13,6 +14,9 @@ let inflight: Promise<void> | null = null;
 // Mỗi lúc chỉ một hẹn giờ: nhiều thành phần cùng hỏi lúc trang mới mở mà lỗi dồn dập thì không tiêu hết các lần hỏi lại trong vài giây.
 const RETRY_S = [2, 5, 10, 20];
 let tries = 0, again: ReturnType<typeof setTimeout> | null = null;
+
+/** Đã hỏi hết các lần mà vẫn chưa có hãng nào: danh sách trống là thật, không phải máy chủ vừa khởi động lại. */
+export const modelsSettled = () => tries >= RETRY_S.length;
 
 export function refreshModels() {
   inflight ??= fetch("/api/models", { cache: "no-store" })
@@ -29,7 +33,8 @@ export function refreshModels() {
 
 export function useModels() {
   return useSyncExternalStore(
-    (f) => { subs.add(f); if (!state.loaded) refreshModels(); return () => subs.delete(f); },
+    // Chưa biết tài khoản (trang vừa mở): chờ, page.tsx hỏi ngay khi đăng nhập xong. Hỏi sớm vừa trùng vừa nhận 401 ở màn hình đăng nhập.
+    (f) => { subs.add(f); if (!state.loaded && userScope() !== "anon") refreshModels(); return () => subs.delete(f); },
     () => state,
     () => state,
   );

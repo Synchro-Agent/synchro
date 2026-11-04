@@ -15,7 +15,9 @@ export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; labe
   // at: mốc hạn mức hồi lại; switchTo: model khác dùng được để đổi bằng một lần bấm; work: đã làm việc không chạy lại được; tried: các model đã thử.
   notice?: { text?: string; partial?: boolean; failed?: boolean; at?: number; switchTo?: { model: string; name: string }; work?: boolean; tried?: string[] };
   // webs: nguồn web của câu trả lời (CLI tìm web).
-  webs?: { title: string; url: string }[] };
+  webs?: { title: string; url: string }[];
+  // failed: lượt này lỗi, không có câu trả lời hoàn chỉnh (hiện thẻ lỗi, không gửi lại cho model ở lượt sau); err: câu lỗi gốc của máy chủ.
+  failed?: boolean; err?: string };
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;
 // pins: tài liệu ghim (chữ đã đọc từ tệp, luôn có trong ngữ cảnh của đoạn chat). critic: kết quả hội đồng phản biện theo từng phiên bản artifact.
 // named: người dùng tự đổi tên (không tự đặt tên nữa); titled: số tin của người dùng lúc Synchro tự đặt tên gần nhất.

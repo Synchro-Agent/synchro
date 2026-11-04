@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { SKILLS_CHANGED, SKILL_STUDIOS } from "./studios";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
@@ -27,9 +28,8 @@ type Detail = Item & { body: string; files: FileInfo[]; patches?: Patch[] };
 // Hộp thoại gắn thẳng vào <body> để không bị thanh bên hay khung chứa có z-index cao hơn che mất.
 const portal = (n: ReactNode) => (typeof document === "undefined" ? n : createPortal(n, document.body));
 
-export const SKILLS_CHANGED = "skills:changed";
+export { SKILLS_CHANGED, SKILL_STUDIOS };
 // Mục ở trang Artifacts của skill vừa đổi (model xếp lại xong, người dùng tự chọn): trang Artifacts đếm lại số skill mỗi mục.
-export const SKILL_STUDIOS = "skills:studios";
 export const SKILLS_UPLOAD = "skills:upload";
 // Kho kỹ năng nhận tệp thả vào trang rồi chuyển cho danh sách skill (detail = File).
 export const SKILLS_DROP = "skills:drop";
@@ -195,7 +195,7 @@ export function ScoreBadge({ s }: { s?: SkillScore }) {
   );
 }
 
-export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void }> }) {
+export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void; label?: string }> }) {
   const app = useApp();
   const [list, setList] = useState<Item[] | null>(null);
   const [loadErr, setLoadErr] = useState("");
@@ -298,7 +298,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
               <span data-notr>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
-            {!bs.on && <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} set={(v) => toggle(s.name, v)} /></span>}
+            {!bs.on && <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} label={s.name} set={(v) => toggle(s.name, v)} /></span>}
           </div>
         ))}
       </div>

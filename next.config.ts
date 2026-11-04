@@ -30,7 +30,13 @@ const nextConfig: NextConfig = {
         { key: "Access-Control-Allow-Origin", value: "*" },
         { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
       ],
-    }];
+    }, {
+      // Phông chữ không đổi nội dung theo bản phát hành: giữ lâu, mở lại không phải hỏi lại máy chủ từng tệp.
+      source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+    }, ...["/brand/:path*", "/connectors/:path*", "/icon-:size(\\d+).png", "/icon-maskable-:size(\\d+).png"].map((source) => ({
+      // Biểu tượng, logo: tên tệp không đổi khi nội dung đổi nên giữ một tuần, sau đó vẫn dùng bản cũ trong lúc tải bản mới.
+      source, headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" }],
+    }))];
   },
 };
 

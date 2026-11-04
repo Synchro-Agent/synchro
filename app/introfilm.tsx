@@ -16,12 +16,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
 import { getLang } from "./i18n";
+import { SEEN, wantsIntro } from "./introflag";
+export { wantsIntro };
 
 const BG = "#10100d"; // nền phim sau khi nén (Carbon #111210 + grain + vignette), đo ở mép khung đầu và khung cuối
 const IVORY = "#EEECE5";
 const OUT = "cubic-bezier(.33,1,.68,1)";
 const VOLUME = 0.9;
-const SEEN = (uid: string) => `synchro:intro-seen:${uid}`;
 const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 // Chấm mở đầu của phim (synchro-intro-film/src/scenes/Product.tsx): mark khoá cao 42px (cả khung S, 3R) ở giữa khung 1920×1080, đủ cỡ từ 0,3 s.
 const DOT = 42, DOT_AT = 0.3;
@@ -31,11 +32,6 @@ const vignette = () => {
   return `radial-gradient(ellipse ${(960 * k).toFixed(0)}px ${(540 * k).toFixed(0)}px at 50% 50%, rgb(25,25,23) 0%, rgb(24,24,22) 40%, rgb(20,20,18) 62%, rgb(18,18,16) 82%, rgb(16,16,14) 100%, rgb(15,15,13) 140%)`;
 };
 
-/** Tài khoản vừa tạo (đăng ký bằng email, hoặc vừa điền hồ sơ lần đầu sau khi đăng nhập Google / GitHub / Apple) và chưa xem phim trên máy này. */
-export function wantsIntro(u: { id: string; createdAt: number }, kind: string) {
-  const fresh = kind === "signup" || (kind === "profile" && Date.now() - u.createdAt < 2 * 3600_000);
-  try { return fresh && !localStorage.getItem(SEEN(u.id)); } catch { return fresh; }
-}
 
 // Một thẻ video dùng chung: tải từ lúc hiện lời chào, màn phim gắn chính thẻ này vào nên phần đã tải không mất.
 let shared: HTMLVideoElement | null = null;
