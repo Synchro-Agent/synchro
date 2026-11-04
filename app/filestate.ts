@@ -82,12 +82,13 @@ export function ingestFile(f: File, onError?: (m: string) => void, o: { raw?: bo
     x.open("POST", o.raw ? "/api/files?raw=1" : "/api/files");
     x.upload.onprogress = (e) => e.lengthComputable && set(key, { state: "uploading", pct: Math.round((e.loaded / e.total) * 90) });
     x.onload = () => {
-      let j: { id?: string; error?: string; preview?: string; large?: boolean; tokens?: number } = {};
+      let j: { id?: string; error?: string; preview?: string; large?: boolean; tokens?: number; note?: string } = {};
       try { j = JSON.parse(x.responseText); } catch { /* ignore */ }
       if (x.status >= 200 && x.status < 300 && j.id) {
         if (j.preview) text.set(key, j.preview);
         else if (!thumb && !o.raw) serverExtract(f).then((t) => { if (t) { text.set(key, t); emit(); } }).catch(() => {});
         set(key, { state: "ready", pct: 100, id: j.id, large: j.large, tokens: j.tokens });
+        if (j.note) onError?.(j.note);
       } else { const m = j.error || `Lỗi ${x.status} khi xử lý "${key}"`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); }
       resolve();
     };

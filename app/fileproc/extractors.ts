@@ -13,6 +13,10 @@ import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MA
 const run = promisify(execFile);
 const PDF_NATIVE = process.env.LLM_PDF_NATIVE ? process.env.LLM_PDF_NATIVE === "1" : (process.env.LLM_PROVIDER ?? "anthropic") === "anthropic";
 const PDF_MAX_PAGES = Number(process.env.PDF_MAX_PAGES ?? 20);
+// Chữ lấy nhiều trang hơn ảnh rất nhiều: rẻ, và tệp dài thì tìm đoạn liên quan (RAG). Từng chỉ lấy 20 trang đầu của mọi tệp.
+const PDF_TEXT_PAGES = Math.max(PDF_MAX_PAGES, Number(process.env.PDF_TEXT_PAGES ?? 600));
+// Giới hạn số trang một tệp PDF gửi thẳng cho Claude (theo tài liệu API của hãng); chưa thử được trên CLI thật.
+const PDF_NATIVE_PAGES = Number(process.env.PDF_NATIVE_PAGES ?? 100);
 const XLSX_MAX_ROWS = 200;
 
 // Giải mã văn bản, tự phát hiện encoding (mặc định UTF-8).
@@ -48,32 +52,38 @@ const pdfExtractor: Extractor = {
   match: (k) => k === "application/pdf",
   async run(buf, { name }) {
     if (PDF_NATIVE) {
-      // Provider hỗ trợ PDF trực tiếp: gửi nguyên văn bản gốc, kèm text dự phòng cho nhánh khác.
-      const fb = await pdfFallback(buf).catch(() => null);
-      return [{ type: "document", media_type: "application/pdf", data: buf.toString("base64"), name, fallbackText: fb?.text, fallbackImages: fb?.images }];
+      // Provider hỗ trợ PDF trực tiếp: gửi nguyên văn bản gốc, kèm text dự phòng cho nhánh khác. Không có Python để đọc thử thì vẫn gửi như cũ.
+      const fb = await pdfFallback(buf).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); return null; });
+      // Dài quá giới hạn số trang của API (lỗi cả lượt, có thể cả các lượt sau của phiên): gửi phần chữ, các lượt hỏi về tệp vẫn tìm được đoạn liên quan.
+      if (!fb || fb.total <= PDF_NATIVE_PAGES) return [{ type: "document", media_type: "application/pdf", data: buf.toString("base64"), name, fallbackText: fb?.text, fallbackImages: fb?.images }];
+      return textBlocks(fb);
     }
-    const fb = await pdfFallback(buf);
-    const out: ContentBlock[] = [];
-    if (fb.text) out.push({ type: "text", text: fb.text });
-    out.push(...fb.images.map((data) => ({ type: "image" as const, media_type: "image/jpeg", data })));
-    return out;
+    return textBlocks(await pdfFallback(buf).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); throw e; }));
   },
 };
+const textBlocks = (fb: { text: string; images: string[] }) => {
+  const out: ContentBlock[] = [];
+  if (fb.text) out.push({ type: "text", text: fb.text });
+  out.push(...fb.images.map((data) => ({ type: "image" as const, media_type: "image/jpeg", data })));
+  return out;
+};
 
-async function pdfFallback(buf: Buffer): Promise<{ text: string; images: string[] }> {
+class BadPdf extends Error {}
+async function pdfFallback(buf: Buffer): Promise<{ total: number; text: string; images: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), "pdf-"));
   try {
     const src = path.join(dir, "in.pdf");
     await writeFile(src, buf);
     const py = process.env.PYTHON_BIN || path.join(process.cwd(), ".mkvenv", "bin", "python");
-    const { stdout } = await run(py, [path.join(process.cwd(), "scripts", "pdf_extract.py"), src, String(PDF_MAX_PAGES), "1.3"], { maxBuffer: 256 * 1024 * 1024, timeout: 120_000 });
-    const j = JSON.parse(stdout) as { total: number; texts: string[]; images: string[] };
+    const { stdout } = await run(py, [path.join(process.cwd(), "scripts", "pdf_extract.py"), src, String(PDF_MAX_PAGES), "1.3", String(PDF_TEXT_PAGES)], { maxBuffer: 256 * 1024 * 1024, timeout: 120_000 });
+    const j = JSON.parse(stdout) as { bad?: string; total: number; texts: string[]; images: string[] };
+    if (j.bad) throw new BadPdf(j.bad);
     const chars = j.texts.join("").replace(/\s+/g, "").length;
     const scanned = chars < 20 * Math.max(1, j.texts.length);
     // PDF scan (không có lớp text): chỉ dùng ảnh trang.
     const text = scanned ? "" : j.texts.map((t, i) => `--- Trang ${i + 1} ---\n${t}`).join("\n\n");
-    const note = j.total > PDF_MAX_PAGES ? `\n\n(Chỉ xử lý ${PDF_MAX_PAGES}/${j.total} trang đầu.)` : "";
-    return { text: text ? text + note : "", images: j.images };
+    const note = !text ? "" : j.total > j.texts.length ? `\n\n(Chỉ có chữ của ${j.texts.length}/${j.total} trang đầu.)` : "";
+    return { total: j.total, text: text ? text + note : j.total > PDF_MAX_PAGES ? `(PDF dạng ảnh ${j.total} trang: chỉ có ảnh của ${PDF_MAX_PAGES} trang đầu. Hãy nói rõ điều này với người dùng.)` : "", images: j.images };
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 

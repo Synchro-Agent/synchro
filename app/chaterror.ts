@@ -4,7 +4,7 @@ export type ChatErr = { text: string; detail?: string; act?: "providers" };
 
 const NET = /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|UND_ERR_\w+)\b|fetch failed|failed to fetch|load failed|networkerror|network error|socket hang up/i;
 const START = /\bspawn\b|\b(ENOENT|EACCES|EPERM|E2BIG)\b/;
-const DIED = /\bSIG(KILL|TERM|SEGV|ABRT)\b|exit(ed)?( with)?( code| status)? \d+|\bexit code\b/i;
+const DIED = /\bSIG(KILL|TERM|SEGV|ABRT)\b|exit(ed)?( with)?( code| status)? \d+|\bexit code\b|thoát với mã \d+/i;
 const CODE = /\b(TypeError|ReferenceError|SyntaxError|RangeError)\b|Unexpected token|Cannot read propert|is not a function|\n\s+at .+:\d+:\d+/;
 const PROVIDERS = /Providers|đăng nhập gói|đăng nhập lại|chưa được kết nối với model|Chưa kết nối model/i;
 

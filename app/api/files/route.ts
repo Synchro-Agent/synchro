@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     // ?raw=1 (Synchro Code): nhận mọi loại tệp, tệp không đọc được chữ vẫn được giữ để chép nguyên vào workspace.
     const r = await processFile(Buffer.from(await f.arrayBuffer()), f.name, uid, { raw: new URL(req.url).searchParams.get("raw") === "1" });
     const text = r.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).filter(Boolean).join("\n\n");
-    return Response.json({ id: r.id, name: f.name, kind: r.kind, tokens: r.tokens, large: r.large, preview: r.raw ? "" : text.slice(0, 200_000), images: r.blocks.filter((b) => b.type === "image").length, ...(r.raw ? { raw: true } : {}) });
+    return Response.json({ id: r.id, name: f.name, kind: r.kind, tokens: r.tokens, large: r.large, ...(r.note ? { note: r.note } : {}), preview: r.raw ? "" : text.slice(0, 200_000), images: r.blocks.filter((b) => b.type === "image").length, ...(r.raw ? { raw: true } : {}) });
   } catch (e) {
     if (e instanceof AuthError) return Response.json({ error: e.message }, { status: e.status });
     const user = e instanceof FileError;
