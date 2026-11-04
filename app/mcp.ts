@@ -272,15 +272,17 @@ export class McpClient {
     this.serverName = res.serverInfo?.title || res.serverInfo?.name;
     this.serverIcons = Array.isArray(res.serverInfo?.icons) ? res.serverInfo!.icons : undefined;
     this.ready = true;
-    await this.post(this.url, { jsonrpc: "2.0", method: "notifications/initialized" }, this.legacyHeaders(), { timeout: 10_000 }).catch(() => {});
+    await this.post(this.url, { jsonrpc: "2.0", method: "notifications/initialized" }, this.legacyHeaders(), { timeout: 10_000, signal: o.signal }).catch(() => {});
   }
   private async legacy(method: string, params: Record<string, unknown>, o: PostOpts): Promise<Sent> {
-    if (!this.ready) await this.initialize();
+    // Bắt tay nằm trong cùng hạn và cùng nút Dừng với lời gọi: không thì máy chủ treo ở bước này giữ nút Làm mới, Kết nối cả phút dù đã hết hạn.
+    const hello: PostOpts = { timeout: 20_000, retry: true, signal: o.signal };
+    if (!this.ready) await this.initialize(hello);
     let r = await this.post(this.url, { jsonrpc: "2.0", id: this.nextId++, method, params }, this.legacyHeaders(), o);
     // Phiên hết hạn: 404, hoặc 400 kèm lời báo về phiên (máy chủ từ chối ngay ở cửa, công cụ chưa chạy). Bắt tay lại một lần.
     if (this.session && (r.status === 404 || (r.status === 400 && /session/i.test(r.reply?.error?.message ?? "")))) {
       this.session = undefined; this.ready = false;
-      await this.initialize();
+      await this.initialize(hello);
       r = await this.post(this.url, { jsonrpc: "2.0", id: this.nextId++, method, params }, this.legacyHeaders(), o);
     }
     return r;

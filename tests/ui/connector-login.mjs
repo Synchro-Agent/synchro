@@ -9,7 +9,7 @@ const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-conn-
 rmSync(PROF, { recursive: true, force: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
-const say = (ok, msg) => { if (!ok) fails++; console.log(`  ${ok ? "✓" : "✗"} ${msg}`); };
+const say = (ok, msg, x = "") => { if (!ok) fails++; console.log(`  ${ok ? "✓" : "✗"} ${msg}`, ok ? "" : String(x ?? "")); };
 
 let cookie = "";
 {
@@ -73,6 +73,7 @@ try {
     const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }, sessionId);
     return r.result?.value;
   };
+  const ALLOW = `new Promise((r) => { const t = setInterval(() => { const a = document.querySelector("#allow"); if (a) { clearInterval(t); r(true); a.click(); } }, 100); })`;
   const addCustom = async (page, name, url) => {
     await page.click(ADD);
     await page.until(`!!document.querySelector("#cn-name")`);
@@ -143,6 +144,107 @@ try {
   say(await page.until(`!!document.querySelector("#cn-token")`), "Dùng token thay thế: mở ô nhập token");
   const leftover = (await api("GET", "/api/connectors")).connectors ?? [];
   say(leftover.length === 0, "xem lý do không tạo hàng connector nào");
+
+  // ---- các ca dưới đều đi theo đúng đường người dùng, nhưng tránh mọi hãng thật: danh mục giả qua fetch, còn lại dùng máy chủ MCP giả lập ----
+  console.log("━━ trình duyệt chặn cửa sổ khi đang mở danh mục: lời nhắc nằm ngay trong danh mục, bấm là mở lại đúng địa chỉ");
+  const LOGIN = `${MCP}/authorize?state=thu`;
+  const FAKE = { id: "conn-gia", name: "Notion", url: "https://mcp.notion.com/mcp", host: "mcp.notion.com", dir: "notion", enabled: true, status: "needs_auth", error: null, serverName: null, auth: "none", tools: [], checkedAt: null, settings: { chat: true, projects: true, newTools: "auto", destructive: true, maxCalls: 0 }, adminBlocked: false };
+  const pageB = await open(`${B}/?settings=Connectors`, `window.__opens = []; window.__posts = 0; window.open = (u) => { window.__opens.push(String(u)); return window.__opens.length > 1 ? { closed: false } : null; };
+    { const f = window.fetch, json = (x) => new Response(JSON.stringify(x), { status: 200, headers: { "content-type": "application/json" } }); let made = false;
+      window.fetch = async (u, i) => { const p = String(u);
+        if (p.endsWith("/api/connectors") && i?.method === "POST") { window.__posts++; made = true; return json({ connector: ${JSON.stringify(FAKE)}, authorizeUrl: ${JSON.stringify(LOGIN)} }); }
+        if (p.endsWith("/api/connectors") && made) { const j = await (await f(u, i)).json(); j.connectors.push(${JSON.stringify(FAKE)}); return json(j); }
+        return f(u, i); }; }`);
+  await pageB.until(`!!${BROWSE}`, 30000);
+  await pageB.click(BROWSE);
+  await pageB.until(`!!document.querySelector(".cn-browse")`);
+  const notion = byText(".cn-browse .cn-item", "Notion");
+  await pageB.until(`!!${notion}?.querySelector(".cn-item-btn")`);
+  await pageB.click(`${notion}.querySelector(".cn-item-btn")`);
+  say(await pageB.until(`!!${notion}?.querySelector(".cn-pop button")`), "bị chặn: lời nhắc hiện ngay trên mục trong danh mục");
+  const inView = await pageB.ev(`(() => { const b = ${notion}.querySelector(".cn-pop button").getBoundingClientRect(); return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest(".cn-browse") != null; })()`);
+  say(inView, "nút mở lại nằm trên cùng, không bị che");
+  await pageB.click(`${notion}.querySelector(".cn-pop button")`);
+  say(await pageB.until(`window.__opens.length === 2`, 3000), "bấm: mở cửa sổ ngay trong lúc bấm");
+  say(await pageB.ev(`window.__opens[1] === window.__opens[0] && window.__posts === 1`), "dùng lại đúng địa chỉ, không gọi máy chủ lần nữa");
+  say(await pageB.until(`!${notion}?.querySelector(".cn-pop")`, 3000), "mở được rồi thì lời nhắc biến mất");
+  await pageB.P("Page.navigate", { url: "about:blank" });
+
+  // Mọi trang Synchro khác rời đi để không ai xác nhận hộ cửa sổ đăng nhập.
+  await page2.P("Page.navigate", { url: "about:blank" });
+  console.log("━━ đã rời màn hình Connectors: cửa sổ tự đóng, trang chính vẫn báo kết quả");
+  await page.P("Page.navigate", { url: `${B}/?settings=Connectors` });
+  await page.until(`!!${ADD}`, 30000);
+  await sleep(300);
+  let k3 = new Set(popups.keys());
+  await addCustom(page, "Mock Notes", `${MCP}/mcp`);
+  const pop4 = await openedPopup(page, k3);
+  say(!!pop4, "mở cửa sổ đăng nhập");
+  await page.P("Page.navigate", { url: `${B}/` });
+  await page.until(`!!document.querySelector("textarea")`, 30000);
+  await sleep(500);
+  if (pop4) await inPopup(pop4, ALLOW);
+  say(await page.until(`/(Đã kết nối|Connected) Mock Notes/.test(document.body.innerText)`, 12000), "trang chính có thông báo đã kết nối");
+  for (let i = 0; i < 40 && popups.has(pop4); i++) await sleep(100);
+  say(!popups.has(pop4), "cửa sổ tự đóng");
+
+  console.log("━━ không còn trang nào: cửa sổ tự đóng, không nạp cả ứng dụng vào đó");
+  await wipe();
+  await page.P("Page.navigate", { url: `${B}/?settings=Connectors` });
+  await page.until(`!!${ADD}`, 30000);
+  await sleep(300);
+  k3 = new Set(popups.keys());
+  await addCustom(page, "Mock Notes", `${MCP}/mcp`);
+  const pop5 = await openedPopup(page, k3);
+  say(!!pop5, "mở cửa sổ đăng nhập");
+  await page.P("Page.navigate", { url: "about:blank" });
+  await sleep(500);
+  if (pop5) await inPopup(pop5, ALLOW);
+  let sawApp = false;
+  for (let i = 0; i < 60 && popups.has(pop5); i++) { if (/settings=Connectors/.test(popups.get(pop5)?.url ?? "")) sawApp = true; await sleep(100); }
+  say(!popups.has(pop5) && !sawApp, "cửa sổ tự đóng, không chuyển sang ứng dụng", popups.get(pop5)?.url);
+  const made = (await api("GET", "/api/connectors")).connectors ?? [];
+  say(made.some((c) => c.name === "Mock Notes" && c.status === "ok"), "kết nối vẫn thành công");
+
+  console.log("━━ thẻ kết nối lại ở lại sau khi trả lời xong");
+  await fetch(`${MCP}/__revoke`, { method: "POST" });
+  const notesId = made.find((c) => c.name === "Mock Notes")?.id;
+  await api("POST", `/api/connectors/${notesId}/refresh`);
+  await page.P("Page.navigate", { url: `${B}/` });
+  await page.until(`!!document.querySelector("textarea")`, 30000);
+  await sleep(1500);
+  const sendMsg = async (pg, text) => { await pg.click(`document.querySelector("textarea")`); await pg.P("Input.insertText", { text }); await pg.P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" }); };
+  await sendMsg(page, "Mock Notes của mình có gì mới?");
+  say(await page.until(`!!document.querySelector(".cn-rc")`, 30000), "khi đang trả lời: có thẻ kết nối lại");
+  await page.until(`!document.querySelector(".ai-streaming") && !!document.querySelector(".ai-msg")`, 40000);
+  await sleep(1500);
+  say(await page.ev(`!!document.querySelector(".cn-rc")`), "trả lời xong: thẻ vẫn còn");
+  k3 = new Set(popups.keys());
+  await page.click(`document.querySelector(".cn-rc .btn.dark")`);
+  const pop6 = await openedPopup(page, k3);
+  say(!!pop6, "bấm Kết nối lại: mở cửa sổ đăng nhập");
+  if (pop6) await inPopup(pop6, ALLOW);
+  say(await page.until(`/Đã kết nối lại|Reconnected/.test(document.querySelector(".cn-rc")?.textContent ?? "")`, 15000), "đăng nhập xong: thẻ báo đã kết nối lại");
+
+  console.log("━━ thẻ duyệt: gửi câu trả lời hỏng thì nút mở lại, cột bên có dấu chờ duyệt");
+  const uid = (await api("GET", "/api/auth/me")).user.id;
+  await api("POST", "/api/engines/claude/login/start", {});
+  await api("POST", "/api/engines/claude/login/code", { code: /id="code"[^>]*>([^<]+)</.exec(await fetch("http://127.0.0.1:4010/mock-login/claude").then((x) => x.text()))?.[1] });
+  const pageA = await open(`${B}/`, `try { localStorage.setItem("u:${uid}:model", "sub-claude/sonnet"); } catch {}
+    window.__fail = true; { const f = window.fetch; window.fetch = (u, i) => String(u).includes("/api/approve") && window.__fail ? Promise.resolve(new Response(JSON.stringify({ error: "Không gửi được câu trả lời." }), { status: 500, headers: { "content-type": "application/json" } })) : f(u, i); }`);
+  await pageA.until(`!!document.querySelector("textarea")`, 30000);
+  await sleep(1500);
+  await sendMsg(pageA, `#tool=mock_notes__create_note #args={"title":"Thẻ duyệt"}`);
+  const ALLOW_BTN = `document.querySelector(".ag-ask:not(.cn-rc) .ag-ask-a .btn.dark")`;
+  say(await pageA.until(`!!${ALLOW_BTN}`, 40000), "có thẻ duyệt");
+  say(await pageA.until(`!!document.querySelector(".ct-run.ct-ask")`, 5000), "cột bên có dấu riêng cho đoạn chat đang chờ duyệt");
+  await pageA.click(ALLOW_BTN);
+  say(await pageA.until(`!!document.querySelector(".ag-ask:not(.cn-rc) .api-err")`, 5000), "gửi hỏng: thẻ báo lỗi");
+  say(await pageA.until(`!${ALLOW_BTN}?.disabled`, 3000), "gửi hỏng: nút mở lại");
+  await pageA.ev(`window.__fail = false`);
+  await pageA.click(ALLOW_BTN);
+  say(await pageA.until(`!!document.querySelector(".ag-asked")`, 15000), "bấm lại: câu trả lời được nhận");
+  say(await pageA.until(`!document.querySelector(".ct-run.ct-ask")`, 15000), "hết chờ thì mất dấu ở cột bên");
 } finally {
   await wipe().catch(() => {});
   chrome.kill();

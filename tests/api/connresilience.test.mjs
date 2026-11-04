@@ -710,6 +710,16 @@ try {
     const r = await add();
     ok(r.connector.status === "ok" && r.connector.tools.length === TOOLS.length && Date.now() - t0 < 28_000, `máy chủ treo khi nhận POST: vẫn thử được SSE (${Math.round((Date.now() - t0) / 1000)} giây)`, JSON.stringify(r.connector).slice(0, 200));
     wipe();
+    S.reset();
+    const live = (await add()).connector;
+    S.hangPost = true;
+    t0 = Date.now();
+    const late = await thrown(C.refreshConnector(uid, live.id));
+    ok(Date.now() - t0 < 32_000 && /quá lâu/.test(late), `Làm mới khi máy chủ treo: báo sau ${Math.round((Date.now() - t0) / 1000)} giây`, late);
+    const after = C.listConnectors(uid).find((x) => x.id === live.id);
+    ok(after.status === "ok" && after.tools.length === TOOLS.length, "Làm mới treo: connector và công cụ vẫn nguyên", JSON.stringify(after).slice(0, 200));
+    S.reset();
+    wipe();
   }
 
   console.log("30. Thế hệ SSE: Dừng, im lặng, lỗi tạm thời");
