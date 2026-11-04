@@ -110,7 +110,7 @@ try {
   // Dữ liệu của lần chạy trước (đoạn chat nay đi theo tài khoản): bắt đầu sạch.
   await fetch(B + "/api/chats", { method: "PUT", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify({ wipe: Date.now() }) });
   await sleep(20);
-  const base = Date.now() - 1e4;
+  const base = Date.now();
   const chats = Array.from({ length: 25 }, (_, i) => ({ id: base + i, title: `Báo cáo tháng ${i + 1}`, msgs: [{ role: "user", text: "Tóm tắt giúp", time: base + i, done: true, files: i === 0 ? ["hop-dong-mau.pdf"] : undefined }, { role: "ai", done: true, time: base + i + 1, text: "# Tiêu đề\n\nĐây là **đậm**.\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n<artifact identifier=\"a\" type=\"text/html\" title=\"Trang\">\n<h1>MA_NGUON_BI_MAT</h1>\n</artifact>" }] }));
   const projId = base + 100;
   await ev(`localStorage.setItem("u:${uid}:chats", ${JSON.stringify(JSON.stringify(chats))}); localStorage.setItem("u:${uid}:projects", ${JSON.stringify(JSON.stringify([{ id: projId, name: "Dự án thử", desc: "", upd: projId, pinned: true, ctx: [{ id: 1, name: "tai-lieu.txt", kind: "text", text: "Nội dung", chars: 8 }] }]))}); 1`);
