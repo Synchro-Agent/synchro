@@ -983,6 +983,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
       <div className={`cv-body ${pane && paneMax ? "pane-max" : ""}`}>
       <div className="cv-col" ref={colRef}>
+      <h1 className="sr-only" data-notr>{title}</h1>
       <div className="cv-bar">
         <div className="cv-bar-l">
           {!sideOpen && <SideToggle onClick={onSide} />}
@@ -1207,7 +1208,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               </div>
               <div className="cv-sp" />
               {/* Bộ chọn model + mức nỗ lực dùng chung với khung chat thường (khóa model quản trị viên chưa cho phép). */}
-              <div className="cv-model" data-notr>{modelPicker}</div>
+              <div className="cv-model">{modelPicker}</div>
               <div style={{ position: "relative" }}>
                 {/* Mức dùng API (giới hạn phiên, tuần, hạn mức nhà cung cấp) kèm ngữ cảnh của phiên code này. */}
                 <UsageRing model={model} onDetails={() => app.openSettings?.("Usage")} extra={<div className="us-ctx"><div className="us-sub">Ngữ cảnh phiên chat · {Math.round(pct)}%</div>{ctxPanel}</div>} />

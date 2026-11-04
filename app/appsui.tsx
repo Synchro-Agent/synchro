@@ -1,6 +1,7 @@
 "use client";
 // Ứng dụng nội bộ: nút Xuất bản trên khung artifact, danh sách ứng dụng (trang Artifacts → Ứng dụng) và trang chạy ứng dụng /apps/<id>.
 import { useEffect, useRef, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
@@ -10,9 +11,9 @@ import { PUBLISHABLE } from "./artifacts";
 
 export type AppInfo = { id: string; title: string; type: "html" | "react" | "svg"; visibility: "private" | "org"; conv: string; ident: string; created_at: number; updated_at: number; opens: number; mine: boolean; ownerName: string };
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
-  const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
+  if (!r.ok) throw new Error(j.error || statusText(r.status));
   return j as T;
 };
 export { PUBLISHABLE };

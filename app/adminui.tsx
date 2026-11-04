@@ -2,6 +2,7 @@
 
 // Tab Quản trị viên. Chỉ hiện với tài khoản quản trị; mọi quyền vẫn được kiểm tra lại ở /api/admin/*.
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
 import { Avatar } from "./avatar";
 import { Fade } from "./ui";
 import { useApp } from "./store";
@@ -29,10 +30,10 @@ type Sess = { id: string; device: string; ip: string | null; method: string; cre
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
 
 export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const r = await fetch(url, { method, cache: "no-store", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch(url, { method, cache: "no-store", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   // Không có lời nhắn JSON: proxy trả lỗi khi Synchro đang khởi động lại (cập nhật) hoặc phản hồi quá lâu.
-  if (!r.ok) throw new Error(j.error || (r.status === 502 || r.status === 503 ? "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây." : r.status === 504 ? "Máy chủ phản hồi quá lâu. Thử lại sau ít phút." : "Lỗi máy chủ. Vui lòng thử lại."));
+  if (!r.ok) throw new Error(j.error || (r.status >= 500 ? statusText(r.status) : "Lỗi máy chủ. Vui lòng thử lại."));
   return j as T;
 }
 

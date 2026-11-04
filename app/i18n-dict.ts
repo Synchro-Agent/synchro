@@ -1,6 +1,7 @@
 import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 import { UX_EN2VI, UX_RULES_EN, UX_RULES_VI, UX_VI2EN } from "./i18n-ux";
+import { FX_EN2VI, FX_VI2EN } from "./i18n-features";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
   "Trình duyệt đang chặn nhận dạng giọng nói": "The browser is blocking speech recognition",
@@ -2090,6 +2091,8 @@ EN2VI["Paired a browser (Synchro extension)"] = "Ghép nối trình duyệt (ti�
 const addNew = (d: Record<string, string>, o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) if (!Object.prototype.hasOwnProperty.call(d, k)) d[k] = v; };
 addNew(VI2EN, UX_VI2EN);
 addNew(EN2VI, UX_EN2VI);
+addNew(VI2EN, FX_VI2EN);
+addNew(EN2VI, FX_EN2VI);
 RULES_EN.push(...UX_RULES_EN);
 RULES_VI.push(...UX_RULES_VI);
 // Dịch một mảnh chèn trong chuỗi ghép (qua từ điển rồi luật dịch).
