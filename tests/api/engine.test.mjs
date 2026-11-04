@@ -501,6 +501,11 @@ try {
     }
     // Antigravity không có chữ dần: nói đã chờ bao lâu, và dòng này không làm bộ canh tính lại.
     {
+      // Tài khoản này đã đăng xuất ở phần trên: cần tệp đăng nhập của CLI giả lập để lượt chạy tới lúc báo giờ.
+      const agyDir = path.join(HOME, "logins", "agy", "user_A", ".gemini", "antigravity-cli");
+      fs.mkdirSync(path.join(agyDir, "cache"), { recursive: true });
+      fs.writeFileSync(path.join(agyDir, "antigravity-oauth-token"), "x");
+      fs.writeFileSync(path.join(agyDir, "cache", "onboarding.json"), JSON.stringify({ onboardingComplete: true }));
       const ev = await all(S.engineFor("agy").runTurn({ prompt: "chào", env: A.engineEnv("agy", "user_A") }));
       ok(ev.some((e) => e.kind === "status" && e.tick === true && /vẫn đang viết, đã \d+ giây/.test(e.text ?? "")), "agy: báo thời gian đã chờ", JSON.stringify(ev));
     }

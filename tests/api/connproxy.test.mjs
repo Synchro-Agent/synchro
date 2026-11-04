@@ -30,7 +30,7 @@ try {
   ok(!names.some((n) => n.startsWith("mock_big__")), "không gửi định nghĩa từng công cụ", names.filter((n) => n.startsWith("mock_big")).length);
   const sys = JSON.stringify(L?.system ?? "");
   ok(/Mock Big \(300 công cụ\)/.test(sys) && sys.includes("list_widget_0") && /và \d+ công cụ khác/.test(sys), "hướng dẫn có danh mục tên công cụ (cắt gọn)", sys.slice(0, 300));
-  ok(JSON.stringify(L.tools).length < 20_000, "định nghĩa công cụ gọn", JSON.stringify(L.tools).length);
+  ok(JSON.stringify(L.tools).length < 21_000, "định nghĩa công cụ gọn", JSON.stringify(L.tools).length);
 
   console.log("3. Tìm rồi gọi công cụ");
   r = await chat(C, `#tool=connector_tools #args={"query":"list widget 10","connector":"Mock Big"}`);

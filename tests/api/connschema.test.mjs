@@ -64,7 +64,7 @@ console.log("4. Mảng thiếu items, tham số tự do trên Gemini");
 r = S.normalizeSchema({ type: "object", properties: { ids: { type: "array", description: "Danh sách" }, tags: { type: ["array", "null"] } } });
 ok(J(r.properties.ids.items) === "{}" && J(r.properties.tags.items) === "{}", "mảng thiếu items được khai báo items rỗng", J(r));
 r = S.normalizeSchema({ type: "object", properties: { meta: { type: "object", description: "Dữ liệu thêm", default: {}, additionalProperties: true }, any: {}, ids: { type: "array" }, pair: { type: "array", items: [{ type: "number" }, { type: "string" }] }, keep: { type: "object", properties: { a: { type: "string" } } }, opt: { anyOf: [{ type: "object" }, { type: "null" }] } } }, "gemini");
-ok(r.properties.meta.type === "string" && /chuỗi JSON/.test(r.properties.meta.description) && /Dữ liệu thêm/.test(r.properties.meta.description) && r.properties.meta.default === undefined, "object không khai báo thuộc tính: thành chuỗi JSON, giữ mô tả", J(r));
+ok(r.properties.meta.type === "string" && /JSON string/.test(r.properties.meta.description) && /Dữ liệu thêm/.test(r.properties.meta.description) && r.properties.meta.default === undefined, "object không khai báo thuộc tính: thành chuỗi JSON, giữ mô tả", J(r));
 ok(r.properties.any.type === "string" && r.properties.ids.items.type === "string", "tham số và phần tử không có kiểu: thành chuỗi", J(r));
 ok(r.properties.pair.items.type === "number" && !Array.isArray(r.properties.pair.items), "mảng theo vị trí: một schema cho mọi phần tử", J(r));
 ok(r.properties.keep.type === "object" && r.properties.keep.properties.a.type === "string", "object có thuộc tính giữ nguyên", J(r));

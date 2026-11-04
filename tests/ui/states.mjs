@@ -196,12 +196,15 @@ try {
   ok(await until(`!!document.querySelector(".ag-ask")`, 30000), "lượt gọi công cụ ghi: có thẻ duyệt trong đoạn chat", await ev(`document.querySelector(".thread")?.textContent.slice(0, 200)`));
   await click(`document.querySelector(".nav-item.rail-new")`);
   ok(await until(`!!document.querySelector(".chat-item .ct-need")`, 5000), "sang màn hình khác: thanh bên hiện nhãn Cần bạn");
-  ok(await until(`/^\\(1\\)/.test(document.title)`, 3000), "tiêu đề thẻ trình duyệt báo có việc cần bạn", await ev("document.title"));
+  // Đoạn chat chờ duyệt của bộ kiểm trước có thể còn trong tài khoản thử: chỉ xét có số, và số giảm sau khi trả lời.
+  const needN = () => ev(`Number(/^\\((\\d+)\\)/.exec(document.title)?.[1] ?? 0)`);
+  ok(await until(`/^\\(\\d+\\)/.test(document.title)`, 3000), "tiêu đề thẻ trình duyệt báo có việc cần bạn", await ev("document.title"));
+  const needBefore = await needN();
   await click(`document.querySelector(".chat-item .ct-need").closest(".chat-item")`);
   await until(`!!document.querySelector(".ag-ask")`, 5000);
   await click(`[...document.querySelectorAll(".ag-ask .btn")].find((b) => /Từ chối|Deny|Không/.test(b.textContent))`);
   ok(await until(`!document.querySelector(".ct-need")`, 15000), "trả lời xong: nhãn Cần bạn biến mất");
-  ok(await until(`!/^\\(1\\)/.test(document.title)`, 3000), "tiêu đề thẻ trở lại bình thường", await ev("document.title"));
+  ok(await until(`Number(/^\\((\\d+)\\)/.exec(document.title)?.[1] ?? 0) < ${needBefore}`, 3000), "tiêu đề thẻ bớt một việc sau khi trả lời", await ev("document.title"));
   await until(`!document.querySelector(".ai-streaming")`, 30000);
   await api("DELETE", `/api/connectors/${nt.j.connector.id}`);
   await ev(`localStorage.removeItem("u:${uid}:model"); 1`);
@@ -292,7 +295,7 @@ try {
     await click(srBtn("Tạo PR")); await until(`document.activeElement?.matches(".overlay .modal input")`, 4000);
     await P("Input.insertText", { text: "Tiêu đề thử" }); await enter();
     ok(await until(`window.__git.some((b) => b.action === "pr" && b.title === "Tiêu đề thử")`, 4000), "Tạo PR: gửi đúng tiêu đề");
-  } else ok(false, "bảng phiên hiện nút Nhánh mới", await ev(`document.querySelector("aside.sr")?.innerText.slice(0, 300) ?? "không có bảng phiên"`));
+  } else ok(false, "bảng phiên hiện nút Nhánh mới", JSON.stringify(await ev(`({ text: document.querySelector("aside.sr")?.innerText.slice(0, 400) ?? "không có bảng phiên", git: window.__git?.length })`)));
 
   console.log("━━ Một từ điển ngôn ngữ");
   await P("Network.setCacheDisabled", { cacheDisabled: true });
