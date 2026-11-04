@@ -27,11 +27,13 @@ import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
-import { OUTPUT_QUOTA_MB, outputRoom, outputsFull, removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
+import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME } from "./ai/imagegen";
+import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
@@ -177,7 +179,8 @@ type Lib = { key: string; label: string };
 // task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
-type Exec = { effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void };
+// image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
+type Exec = { image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -271,14 +274,14 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Thông tin dễ thay đổi (giá, tỉ giá, tin tức, lịch, phiên bản phần mềm, quy định mới): có công cụ tìm web thì tìm trước rồi mới trả lời, nói rõ dữ liệu tính đến lúc nào và ghi nguồn bằng liên kết markdown. Không tìm được thì nói rõ thông tin có thể đã cũ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 - Sức khỏe, pháp lý, tài chính: nêu mức độ khẩn trước (dấu hiệu nguy hiểm thì khuyên gọi cấp cứu hoặc đi viện ngay), nói rõ điều chưa chắc, và khi nào cần gặp chuyên gia.
 - Người dùng nói muốn tự tử, tự làm hại mình hoặc tuyệt vọng: đáp lại với sự quan tâm thật, không phán xét, không liệt kê cách làm; hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy hoặc đường dây khẩn cấp ở nơi họ sống (ở Việt Nam: 115 cấp cứu, 111 tổng đài bảo vệ trẻ em).
-- Ảnh do AI vẽ: Synchro chưa có công cụ tạo ảnh. Người dùng xin ảnh chụp như thật hay tranh do AI vẽ thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi làm luôn phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc viết sẵn câu lệnh để họ dán vào công cụ tạo ảnh khác.
+- Ảnh do AI tạo: dùng công cụ generate_image nếu có (xem <image_generation>). Không có công cụ đó, hoặc công cụ báo chưa tạo được, thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi đề xuất phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc câu lệnh để họ dán vào công cụ tạo ảnh khác.
 </working_standards>`;
 // Đường nhanh: câu rõ ràng không cần công cụ (router.needsNoTools) đi với hướng dẫn rất ngắn, không cầu nối MCP, không mục lục skill. Đo trên máy chủ thật: một câu chào qua
 // Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại lượt đầy đủ.
 const NEED_TOOLS = "[[CAN_CONG_CU]]";
 const FAST_RULES = `<quick_reply>
 Đây là câu trò chuyện hoặc câu hỏi ngắn: trả lời ngay, tự nhiên, ngắn gọn, bằng đúng ngôn ngữ người dùng đang viết. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
-Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
+Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, tạo ảnh bằng AI, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
 </quick_reply>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
@@ -294,18 +297,18 @@ const BRIDGE_CLIS = new Set(["claude", "codex", "agy", "grok"]);
 // Antigravity (-p): công cụ dựng sẵn của nó cần duyệt nên bị tự chặn (lượt dừng sau câu dẫn) — nói trước để model dùng ngay công cụ của
 // Synchro thay vì thử công cụ của agy rồi mới được nhắc (tin đầu "tóm tắt video YouTube" từng dừng ở "Mình sẽ lấy phụ đề qua lệnh script").
 const AGY_NOTE = (web: boolean) => `
-Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}`;
+Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""} Tạo ảnh chỉ bằng mcp_synchro_generate_image, không dùng image-generator của Antigravity: chỉ công cụ đó mới giao được ảnh tới người dùng.`;
 // Grok CLI: công cụ MCP nằm sau search_tool / use_tool, tên đầy đủ là synchro__<tên>; công cụ dựng sẵn (shell, đọc / sửa tệp) bị tắt.
 const GROK_NOTE = ", tên đầy đủ là synchro__<tên> (ví dụ synchro__load_skill): tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó. Công cụ dựng sẵn của Grok (shell, đọc / sửa tệp) đã tắt ở đây";
 const CLI_TOOLS_NOTE = (cli: string, web = false) => `<synchro_tools>
-Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : cli === "grok" ? GROK_NOTE : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng. Thư mục làm việc của CLI có thể chỉ cho đọc: đó không phải lý do để từ chối tạo tệp — tệp (Word, Excel, PowerPoint, PDF, ảnh, video…) tạo bằng run_code của Synchro, ghi vào outputs/. Máy chạy CLI (shell, công cụ dựng sẵn của bạn) không phải nơi làm việc: mọi lệnh và chương trình (ffmpeg, LibreOffice, Chromium…) chạy trong run_code.${cli === "agy" ? AGY_NOTE(web) : ""}
+Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, generate_image, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : cli === "grok" ? GROK_NOTE : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng. Thư mục làm việc của CLI có thể chỉ cho đọc: đó không phải lý do để từ chối tạo tệp — tệp (Word, Excel, PowerPoint, PDF, ảnh, video…) tạo bằng run_code của Synchro, ghi vào outputs/. Máy chạy CLI (shell, công cụ dựng sẵn của bạn) không phải nơi làm việc: mọi lệnh và chương trình (ffmpeg, LibreOffice, Chromium…) chạy trong run_code.${cli === "agy" ? AGY_NOTE(web) : ""}
 </synchro_tools>`;
 // Artifact model viết giữa lượt (trước khi gọi công cụ — vd. viết bộ slide rồi check_artifact): lời dẫn chỉ giữ 4000 ký tự, không dựng
 // artifact và không thuộc câu trả lời cuối, nên bộ slide từng hiện thành mã CSS thô rồi mất hẳn, check_artifact cũng không thấy.
 // Tách artifact khỏi lời dẫn, giữ trong lượt (read_artifact / check_artifact đọc được), rồi đặt vào đầu câu trả lời cuối.
 const ART_BLOCK = /<artifact\b[^>]*>[\s\S]*?(?:<\/artifact>|$)/gi;
 function sayOut(x: Exec | null | undefined, text: string) {
-  let t = text.trim();
+  let t = scrubServerPaths(text.trim());
   if (x && hasArtifacts(t)) t = t.replace(ART_BLOCK, (b) => {
     (x.turnArts ??= []).push(b);
     const title = /\btitle\s*=\s*"([^"]*)"/i.exec(b)?.[1];
@@ -410,6 +413,8 @@ function showReconnect(x: Exec, c: OfflineConn) {
 // Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
 const MODEL_IMG = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const IMG_ONE = 6_500_000, IMG_TOTAL = 16_000_000;
+// Một kết quả không gửi quá IMG_TOTAL (mỗi ảnh tối đa IMG_ONE) cho model: giới hạn yêu cầu của các hãng.
+const imagesForModel = (all: { data: string; mime: string }[]) => { let room = IMG_TOTAL; return all.filter((i) => { if (!MODEL_IMG.has(i.mime) || i.data.length > IMG_ONE || i.data.length > room) return false; room -= i.data.length; return true; }); };
 const IMG_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg" };
 function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; image?: string; mime?: string; more?: { data: string; mime: string }[]; imagesAll?: number }): Pick<Run, "content" | "image" | "mime" | "more"> {
   if (!r.image) return { content: r.content };
@@ -421,15 +426,91 @@ function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; im
     x.outs.push(...saved);
     if (saved.length) names.push(`outputs/${saved[0].name} (${fmtSize(saved[0].size)}) — đã gửi cho người dùng`);
   }
-  // Một kết quả không gửi quá IMG_TOTAL (mỗi ảnh tối đa IMG_ONE) cho model: giới hạn yêu cầu của các hãng. Ảnh còn lại vẫn thành tệp của người dùng và được nói rõ.
-  let room = IMG_TOTAL;
-  const send = all.filter((i) => { if (!MODEL_IMG.has(i.mime) || i.data.length > IMG_ONE || i.data.length > room) return false; room -= i.data.length; return true; });
+  // Ảnh không gửi được cho model vẫn thành tệp của người dùng và được nói rõ.
+  const send = imagesForModel(all);
   const left = all.length - send.length;
   const note = (names.length ? `\n<files>\n${names.join("\n")}\n</files>` : "") + (left ? `\n[${left}/${all.length} ảnh không kèm theo kết quả này vì quá lớn hoặc model không đọc được loại ảnh đó; đừng mô tả các ảnh đó như đã xem.]` : "") + ((r.imagesAll ?? all.length) > all.length ? `\n[Công cụ trả về ${r.imagesAll} ảnh; ${r.imagesAll! - all.length} ảnh sau không được lấy vì vượt giới hạn ${all.length} ảnh mỗi kết quả.]` : "");
   if (!send.length) return { content: r.content + note };
   (x.heavy ??= []).push(c.id);
   const [first, ...more] = send;
   return { content: r.content + note, image: first.data, mime: first.mime, ...(more.length ? { more } : {}) };
+}
+// ---------------------------------------------------------------- tạo ảnh bằng AI (ai/imagegen.ts)
+/** Lưu ảnh thành tệp của người dùng theo hạn mức dung lượng; ảnh không còn chỗ thành thẻ "chưa giao được". */
+function keepImages(uid: string, files: ImgFile[], outs: OutFile[]) {
+  let room = outputsFull() ? 0 : outputRoom(uid);
+  const fit = files.filter((f) => { if (f.data.length > room) return false; room -= f.data.length; return true; });
+  const saved = saveOutputs(uid, fit.map((f) => ({ path: f.name, data: f.data })));
+  outs.push(...saved);
+  const left = files.filter((f) => !saved.some((s) => s.name === f.name));
+  for (const f of left) if (!outs.some((o) => o.skipped && o.name === f.name)) outs.push({ id: `skip-${f.name}`, name: f.name, size: f.data.length, mime: "", skipped: true });
+  return { saved, left };
+}
+const IMG_REF_MAX = 20 * 1048576;
+/** Ảnh gốc của lời gọi generate_image: ảnh người dùng gửi trong tin gần nhất có ảnh, hoặc theo tên tệp trong đoạn chat (ảnh Synchro đã tạo ở lượt này hay lượt trước). */
+async function refImage(x: Exec, ref: string): Promise<ImgFile | string> {
+  const want = ref.trim(), msgs = (Array.isArray(x.msgs) ? x.msgs : []) as { role?: string; content?: unknown }[];
+  type B = { type?: string; data?: string; media_type?: string; name?: string; source?: { data?: string; media_type?: string } };
+  let latest: ImgFile[] = [];
+  for (const m of [...msgs].reverse()) {
+    if (m?.role !== "user" || !Array.isArray(m.content)) continue;
+    latest = (m.content as B[]).flatMap((b, i) => { const d = b?.type === "image" ? b.data ?? b.source?.data : undefined; return typeof d === "string" && d ? [{ name: b.name ?? `anh-${i + 1}`, mime: b.media_type ?? b.source?.media_type ?? "", data: Buffer.from(d, "base64") }] : []; });
+    if (latest.length) break;
+  }
+  const mine = () => x.outs.filter((o) => !o.skipped && o.mime.startsWith("image/"));
+  let pick: ImgFile | undefined;
+  if (!want || /^(last|latest)$/i.test(want)) {
+    pick = latest[latest.length - 1];
+    if (!pick && mine().length) { const o = outputByName(x.uid, mine()[mine().length - 1].name); if (o) pick = { name: o.name, mime: o.mime, data: o.data }; }
+  } else if (/^\d+$/.test(want)) pick = latest[Number(want) - 1];
+  else {
+    const all = await chatFiles(msgs, x.uid, () => x.outs)().catch(() => []);
+    const f = (s: string) => s.toLowerCase().normalize("NFC");
+    const hit = all.filter((a) => a.mime.startsWith("image/")).find((a) => f(a.name) === f(want) || f(a.name).includes(f(want))) ?? outputByName(x.uid, want);
+    if (hit) pick = { name: hit.name, mime: hit.mime, data: hit.data };
+  }
+  if (!pick) return `Không thấy ảnh "${want || "last"}" trong đoạn chat${latest.length ? ` (tin gần nhất có ${latest.length} ảnh)` : ""}. Hãy nhờ người dùng gửi lại ảnh; đừng tạo ảnh mới như thể đã dựa trên ảnh đó.`;
+  if (pick.data.length > IMG_REF_MAX) return `Ảnh gốc quá lớn (tối đa ${IMG_REF_MAX / 1048576} MB).`;
+  if (!imageKind(pick.data)) return "Ảnh gốc phải là PNG, JPEG hoặc WebP.";
+  return pick;
+}
+async function runImage(x: Exec, c: Call): Promise<Run> {
+  const used = { kind: "search" as const, name: IMAGE_TOOL.name };
+  const fail = (content: string): Run => ({ content, is_error: true, used });
+  const prompt = typeof c.input?.prompt === "string" ? c.input.prompt.trim() : "";
+  if (!prompt) return fail("Thiếu mô tả ảnh (prompt).");
+  if (prompt.length > 4000) return fail("Mô tả ảnh quá dài (tối đa 4.000 ký tự).");
+  const aspect = (ASPECTS as readonly string[]).includes(String(c.input?.aspect_ratio)) ? String(c.input.aspect_ratio) : undefined;
+  const count = Math.min(4, Math.max(1, Math.floor(Number(c.input?.count)) || 1));
+  if (outputsFull()) return fail("Máy chủ sắp hết dung lượng đĩa nên chưa tạo ảnh được. Hãy nói rõ với người dùng và đề nghị thử lại sau.");
+  if (outputRoom(x.uid) < 2 * 1048576) return fail(`Tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo nên chưa lưu thêm được ảnh (tệp cũ tự xóa sau 30 ngày).`);
+  let reference: ImgFile | undefined;
+  if (typeof c.input?.reference === "string" || typeof c.input?.reference === "number") {
+    const r = await refImage(x, String(c.input.reference));
+    if (typeof r === "string") return fail(r);
+    reference = r;
+  }
+  const wait = imageBudget(x.uid, count);
+  if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+  // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
+  x.park?.();
+  const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
+  const r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
+    onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
+  if (!r.ok) {
+    if (r.providers) progress("plans", r.text);
+    return fail(r.text);
+  }
+  const { saved, left } = keepImages(x.uid, r.files, x.outs);
+  if (!saved.length) return fail(`${IMG_NAME[r.cli]} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
+  const lines = saved.map((f) => `${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`);
+  const send = imagesForModel(r.files.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
+  const notes = [...r.notes, ...(left.length ? [`${left.length} ảnh không lưu được vì hết dung lượng: ${left.map((f) => f.name).join(", ")}.`] : []), ...(send.length < saved.length ? [`${saved.length - send.length} ảnh quá lớn nên không kèm ở đây để bạn xem (tối đa ${IMAGE_MAX_MB()} MB mỗi ảnh vẫn giao được cho người dùng); đừng mô tả các ảnh đó như đã xem.`] : [])];
+  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): đừng chèn đường dẫn hay liên kết.`;
+  if (!send.length) return { content, is_error: false, used };
+  (x.heavy ??= []).push(c.id);
+  const [first, ...more] = send;
+  return { content, is_error: false, used, image: first.data, mime: first.mime, ...(more.length ? { more } : {}) };
 }
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ, hoặc ngay khi model đang viết).
 function addFollowup(m: unknown[], text: string) {
@@ -499,6 +580,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
+  if (c.name === IMAGE_TOOL.name && x.image && !x.sess?.get(c.name)) return runImage(x, c);
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
@@ -561,6 +643,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "search_skills") return "Đang tìm skill phù hợp";
   if (c.name === "run_skill_script") return `Đang chạy script của skill ${n}`;
   if (c.name === "run_code") return `Đang chạy code ${String(c.input?.language ?? "python")}`;
+  if (c.name === IMAGE_TOOL.name && x.image) return `Đang tạo ảnh: ${String(c.input?.prompt ?? "").replace(/\s+/g, " ").slice(0, 100)}`;
   if (c.name === "web_search" && x.search) return `Đang tìm trên web: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
@@ -573,7 +656,7 @@ function describe(x: Exec, c: Call) {
 }
 // Công cụ lấy dữ liệu (connector, chạy code, script của skill): kết quả lớn lưu theo tham chiếu và có trong dấu vết của lượt.
 // Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
-const isData = (x: Exec, c: Call) => !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script";
+const isData = (x: Exec, c: Call) => !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL.name;
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
@@ -853,7 +936,7 @@ async function healPatch(ad: Adapter, m: unknown[], history: { role: string; con
 
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
 const STUDIO_TASK: Record<Studio, string> = {
-  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG).",
+  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG); ảnh chụp hay tranh đặt trong thiết kế thì tạo bằng generate_image.",
   slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF); khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
   docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code.",
 };
@@ -1265,6 +1348,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const usedAll: ToolRun["used"][] = [];
     let bridged = 0;
     const webs = new Map<string, { title: string; url: string }>();
+    // Ảnh Antigravity tự tạo ở lượt đường nhanh (chưa có Exec).
+    const natOuts: OutFile[] = [];
     // Trình duyệt chỉ gửi 60 tin gần nhất: số tin đã cắt bớt, để so nối tiếp phiên CLI với số tin thật.
     const cut = typeof body.histTotal === "number" && Array.isArray(messages) && body.histTotal > messages.length ? body.histTotal - messages.length : 0;
     try {
@@ -1284,18 +1369,22 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const task = taskOf(body);
         // Đọc lại / tự kiểm tra artifact (Artifacts bật): kiểm tra hiển thị cần Chromium của workspace.
         const arts = !!pc.art, check = arts && runner() === "workspace";
-        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
-        const xx: Exec = { toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
+        // Tạo ảnh: lượt chat thường của mọi model, gói nào đăng nhập thì công cụ tự chọn (Synchro Code có cách làm việc riêng).
+        const image = feature !== "code";
+        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [IMAGE_TOOL] : []), PLAN_TOOL];
+        const xx: Exec = { image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); } });
         xx.park = bridge.park;
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
       // chờ hơn 10 giây chỉ để đọc lại phần này.
-      const say = am ? undefined : fast ? holdNeedTools(live()) : live();
+      const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
+      // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
+      const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
       const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, nowBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
@@ -1303,6 +1392,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark } : undefined, web: !fast && body.web === true, fresh,
         total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
         onStatus: am ? undefined : (t) => { progress("step", t); },
+        onNativeImages: am ? undefined : (files) => { keepImages(c.user.id, files, x?.outs ?? natOuts); },
         // Tìm web bằng công cụ dựng sẵn của CLI: hiện trong nhật ký làm việc như công cụ khác, nguồn gửi kèm kết quả.
         onSearch: am ? undefined : (q) => { const seq = progress("tool", q.url ? `Đang đọc trang ${q.url.slice(0, 120)}` : q.query ? `Đang tìm trên web: ${q.query.slice(0, 120)}` : "Đang tìm trên web"); if (seq) progress("res", JSON.stringify({ ref: seq, ok: true })); },
         onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url)) webs.set(s.url, s); },
@@ -1382,14 +1472,15 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         r = { status: 502, json: { error: `Antigravity tự chặn công cụ (${left.join(", ")}) nên lượt này chưa làm được gì. Hãy gửi lại yêu cầu hoặc chọn model khác (để Tự động thì Synchro tự chuyển model).` } };
       else if (r.status === 200 && left) r = { ...r, json: { ...(r.json as Record<string, unknown>), denied: undefined } };
       const sources = webs.size ? { webSources: [...webs.values()] } : {};
-      if (!x && r.status === 200) return Response.json({ ...(r.json as Record<string, unknown>), ...sources });
+      if (!am && typeof (r.json as J).text === "string") r = { ...r, json: { ...(r.json as Record<string, unknown>), text: scrubServerPaths(String((r.json as J).text)) } };
+      if (!x && r.status === 200) return Response.json({ ...(r.json as Record<string, unknown>), ...sources, ...(natOuts.length ? { files: natOuts } : {}) });
       // Như lượt khóa API: skill / thư viện đã dùng, tệp đã tạo, dấu vết công cụ (lượt sau model nào cũng biết đã làm gì).
       const names = usedAll.filter((u) => u.kind === "skill").map((u) => u.name);
       if (x && r.status === 200) recordUse(c.user.id, names);
       // Lỗi giữa chừng (hết hạn mức, treo…): phần đã viết, tệp đã tạo, dấu vết công cụ không bị bỏ; partialWork: đã làm việc không chạy lại được.
       if (r.status !== 200) {
-        const partial = am ? "" : liveNow() || String((r.json as J).text ?? "");
-        return Response.json({ ...(r.json as Record<string, unknown>), ...sources, ...(partial.trim() ? { text: withTurnArts(x, partial) } : { text: undefined }), ...(x?.outs.length ? { files: x.outs } : {}), ...(x?.trace.length ? { trace: x.trace } : {}), ...(usedAll.length ? { skills: usedAll, libs: usedLibs(x!, names) } : {}), ...(x?.effects?.length ? { partialWork: true } : {}) }, { status: r.status });
+        const partial = am ? "" : scrubServerPaths(liveNow() || String((r.json as J).text ?? ""));
+        return Response.json({ ...(r.json as Record<string, unknown>), ...sources, ...(partial.trim() ? { text: withTurnArts(x, partial) } : { text: undefined }), ...(x?.outs.length || natOuts.length ? { files: x?.outs ?? natOuts } : {}), ...(x?.trace.length ? { trace: x.trace } : {}), ...(usedAll.length ? { skills: usedAll, libs: usedLibs(x!, names) } : {}), ...(x?.effects?.length ? { partialWork: true } : {}) }, { status: r.status });
       }
       return Response.json({ ...(r.json as Record<string, unknown>), ...sources, text: withTurnArts(x, String((r.json as J).text ?? "")), skills: usedAll, files: x!.outs, libs: usedLibs(x!, names), ...(x!.trace.length ? { trace: x!.trace } : {}) });
     } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
@@ -1420,7 +1511,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   // Nút Thiết kế / Trình bày / Tài liệu (studio): nạp thư viện skill của plugin gắn với studio đó.
   const studio = skills && can(c.user, "skills") ? studioOf(body.studio) : null;
   const st = studio ? studioSkills(c.user.id, studio) : null;
-  const capSys = cs ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net, cs.caps.web) : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
+  const image = !!skills && t.kind !== "mock" && feature !== "code";
+  const capSys = cs ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net, cs.caps.web) : "", image ? IMAGE_RULES : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
   // Bàn trộn ngữ cảnh (trình duyệt gửi): tắt khối tầng động, chỉ gửi N tin gần nhất, tóm tắt các lượt cũ đã nén.
   const mixer = (body.mixer && typeof body.mixer === "object" ? body.mixer : {}) as { artifacts?: unknown; tools?: unknown; recent?: unknown };
   const base = cleanBase(body.artBase);
@@ -1451,15 +1543,15 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const task = skills && t.kind !== "mock" ? taskOf(body) : null;
     // Đọc lại / tự kiểm tra artifact (Artifacts bật): kiểm tra hiển thị cần Chromium của workspace.
     const arts = !!skills && t.kind !== "mock" && !!cs?.caps.art, check = arts && runner() === "workspace";
-    if (visible.length || sess || code || refs || web || brain || browse || task || arts) {
+    if (visible.length || sess || code || refs || web || brain || browse || task || arts || image) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
+      const tools = [...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [IMAGE_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      const x: Exec = { image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       if (sess) announceOffline(x, messages);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)

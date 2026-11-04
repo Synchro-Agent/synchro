@@ -90,6 +90,12 @@ export function outputFile(uid: string, id: string): (OutFile & { path: string }
   return { id: r.id, name: r.name, mime: r.mime, size: fs.statSync(p).size, path: p };
 }
 
+/** Tệp gần nhất cùng tên của tài khoản (tên model nhớ từ lượt trước, không có mã tệp). */
+export function outputByName(uid: string, name: string): (OutFile & { data: Buffer }) | null {
+  const r = init().prepare("SELECT id FROM outputs WHERE user_id = ? AND name = ? AND created_at >= ? ORDER BY created_at DESC LIMIT 1").get(uid, name, Date.now() - TTL) as { id: string } | undefined;
+  return r ? readOutput(uid, r.id) : null;
+}
+
 export function readOutput(uid: string, id: string): (OutFile & { data: Buffer }) | null {
   const f = outputFile(uid, id);
   return f ? { id: f.id, name: f.name, mime: f.mime, size: f.size, data: fs.readFileSync(f.path) } : null;

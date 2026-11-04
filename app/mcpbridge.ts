@@ -52,7 +52,7 @@ async function handle(b: Bridge, m: Rpc, gone?: AbortSignal): Promise<unknown | 
         protocolVersion: typeof m.params?.protocolVersion === "string" ? m.params.protocolVersion : "2025-06-18",
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: "synchro", title: "Synchro", version: "1.0.0" },
-        instructions: "Công cụ của Synchro: skill và thư viện plugin, connector của người dùng, chạy code, đọc dữ liệu đã lưu, danh sách việc.",
+        instructions: "Công cụ của Synchro: skill và thư viện plugin, connector của người dùng, chạy code, tạo ảnh, đọc dữ liệu đã lưu, danh sách việc.",
       });
     case "ping": return ok(m.id, {});
     case "tools/list":

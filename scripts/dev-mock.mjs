@@ -110,7 +110,8 @@ for (const [name, url] of [["Mock Notes", `${MC}/mcp`], ["Mock Status", `${MC}/m
   if (r.status !== 200) { console.error(`Không nối được connector ${name}:`, r.j?.error); continue; }
   if (r.j.authorizeUrl) await approve(r.j.authorizeUrl);
 }
-if (!conns.some((x) => x.dir === "deepwiki")) await call("POST", "/api/connectors", { dir: "deepwiki" }).catch(() => {});
+// SYNCHRO_MOCK_OFFLINE=1: không nối DeepWiki thật, chạy hoàn toàn không ra Internet.
+if (!process.env.SYNCHRO_MOCK_OFFLINE && !conns.some((x) => x.dir === "deepwiki")) await call("POST", "/api/connectors", { dir: "deepwiki" }).catch(() => {});
 const connected = ((await call("GET", "/api/connectors")).j?.connectors ?? []).filter((x) => x.status === "ok");
 // Cài đặt → Khả năng: lần chạy đầu bật đủ mọi khả năng (kể cả artifact dùng AI và truy cập mạng) để thử ngay; sau đó giữ lựa chọn của bạn.
 // Code chạy trên máy này trong sandbox của macOS (CODE_RUN=local): không đọc được thư mục cá nhân, mạng chỉ tới kho thư viện.
