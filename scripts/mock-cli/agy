@@ -49,6 +49,7 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
       const rest = a.slice(2), headers = {};
       while (rest[0] === "--header" || rest[0] === "-H") { const [k, ...v] = rest[1].split(":"); headers[k.trim()] = v.join(":").trim(); rest.splice(0, 2); }
       const [name, url] = rest;
+      if (C.cfg.failMcpAdd) { console.error("mcp add failed"); process.exit(1); }
       if (!name || !url) { console.error("Usage: agy mcp add [flags] <name> <commandOrUrl> [args...]"); process.exit(2); }
       c.mcpServers[name] = { disabled: false, ...(Object.keys(headers).length ? { headers } : {}), serverUrl: url };
       fs.mkdirSync(cfgDir, { recursive: true }); fs.writeFileSync(mcpFile, JSON.stringify(c, null, 2));

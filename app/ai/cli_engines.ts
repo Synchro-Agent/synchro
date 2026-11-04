@@ -87,7 +87,9 @@ const WEB_TOOL = /^(WebSearch|WebFetch|web_search|search_web|web_fetch)$/;
 // ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok)
 // Hai CLI này chỉ đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
 // phải: dừng được ngay khi bấm Dừng, có giới hạn, và báo cho người dùng biết đang chờ gì (một câu "chào" từng chờ trống 2 phút rồi báo lỗi sai).
-type Slot = { chain: Promise<void>; at: number };
+// who: các lượt đang giữ hoặc xếp trước, để biết có lượt nào đang dừng chờ người dùng duyệt không. Lượt B từng hết 5 phút chờ rồi báo sai "lượt khác chạy lâu" trong khi
+// lượt A chỉ đợi một cú bấm ở thẻ duyệt (thẻ đợi được 10 phút). Giờ B nói rõ cần trả lời ở đoạn chat kia và chờ tiếp chừng nào thẻ còn mở.
+type Slot = { chain: Promise<void>; at: number; who: (() => boolean)[] };
 const LOCK_WAIT_MS = 5 * 60_000;
 async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnRequest, name: string): AsyncGenerator<Event, (() => void) | null, unknown> {
   const held = locks.get(home);
@@ -95,22 +97,27 @@ async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnReques
   const prev = held && Date.now() - held.at < MAX_TURN_MS + 60_000 ? held.chain : Promise.resolve();
   let release = () => {};
   const mine = new Promise<void>((r) => { release = r; });
-  const slot: Slot = { chain: prev.then(() => mine), at: Date.now() };
+  const slot: Slot = { chain: prev.then(() => mine), at: Date.now(), who: [...(held?.who ?? []), req.awaitingUser ?? (() => false)] };
   locks.set(home, slot);
   void slot.chain.then(() => { if (locks.get(home) === slot) locks.delete(home); });
   if (!held) return release;
   yield { kind: "status", text: `Đang chờ lượt ${name} khác của tài khoản này xong`, wait: true };
-  let stop = () => {};
-  const got = await Promise.race([
-    prev.then(() => "ok" as const),
-    new Promise<"aborted" | "late">((ok) => {
-      const t = setTimeout(() => ok("late"), req.lockMs ?? LOCK_WAIT_MS);
-      const f = () => ok("aborted");
-      if (req.signal?.aborted) f(); else req.signal?.addEventListener("abort", f, { once: true });
-      stop = () => { clearTimeout(t); req.signal?.removeEventListener("abort", f); };
-    }),
-  ]);
-  stop();
+  const limit = req.lockMs ?? LOCK_WAIT_MS;
+  let deadline = Date.now() + limit, told = false, wake = () => {};
+  const st: { got: "ok" | "aborted" | "late" | null } = { got: null };
+  void prev.then(() => { st.got ??= "ok"; wake(); });
+  const onAbort = () => { st.got ??= "aborted"; wake(); };
+  if (req.signal?.aborted) onAbort(); else req.signal?.addEventListener("abort", onAbort, { once: true });
+  while (!st.got) {
+    // Chế độ Tự động chờ ngắn (lockMs) rồi chuyển model nên không chờ theo thẻ duyệt.
+    if (!req.lockMs && held?.who.some((f) => f())) {
+      deadline = Date.now() + limit;
+      if (!told) { told = true; yield { kind: "status", text: `Một đoạn chat ${name} khác đang chờ bạn duyệt. Hãy trả lời ở đoạn chat đó, lượt này sẽ chạy ngay sau đó`, wait: true }; }
+    } else if (Date.now() >= deadline) { st.got = "late"; break; }
+    await new Promise<void>((ok) => { const t = setTimeout(ok, Math.min(1000, Math.max(50, deadline - Date.now()))); wake = () => { clearTimeout(t); ok(); }; });
+  }
+  req.signal?.removeEventListener("abort", onAbort);
+  const got = st.got;
   if (got === "ok") { yield { kind: "status", wait: false }; return release; }
   // Bỏ chờ: nhả chỗ của mình; lượt xếp sau vẫn chờ đúng lượt đang chạy (chain vẫn gồm prev).
   release();
@@ -118,6 +125,7 @@ async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnReques
   return null;
 }
 const notInstalled = (cli: Cli): Event => err(`CLI ${cli} chưa được cài trên máy chủ.`, "other");
+const bridgeFailed = (name: string): Event => err(`Không nối được công cụ của Synchro với ${name} nên lượt này chưa chạy. Hãy thử lại hoặc chọn model khác.`, "other");
 
 export const timeoutText = (e: Pick<Exit, "idle">) => e.idle
   ? `CLI không có hoạt động nào trong ${Math.round(IDLE_MS / 60_000)} phút (có thể đã treo) nên Synchro dừng lượt này. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở.`
@@ -438,10 +446,14 @@ export class AntigravityEngine implements Engine {
     const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
     if (!free) return;
     try {
+      // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng) bị thay bằng cầu nối mới.
+      await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
       const ok = await agyBridge(req, req.mcp.url).catch(() => false);
+      // Không lắp được: báo lỗi để Tự động chuyển model, đừng chạy tiếp (prompt vẫn hứa load_skill, run_code nên model không làm được việc hoặc nói đã làm).
+      if (!ok) { yield bridgeFailed("Antigravity"); return; }
       // Lắp cầu nối xong mới là lúc model bắt đầu: bộ canh tính từ đây.
       yield { kind: "status" };
-      yield* this.turn(ok ? req : { ...req, mcp: undefined });
+      yield* this.turn(req);
     } finally {
       await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
       free();
@@ -531,8 +543,9 @@ export class GrokEngine implements Engine {
       // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng) bị thay bằng cầu nối mới.
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
       const ok = await grokRun(["mcp", "add", "--transport", "http", "synchro", req.mcp.url], req).catch(() => false);
+      if (!ok) { yield bridgeFailed("Grok"); return; }
       yield { kind: "status" };
-      yield* this.turn(ok ? req : { ...req, mcp: undefined });
+      yield* this.turn(req);
     } finally {
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
       free();

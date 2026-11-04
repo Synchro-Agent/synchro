@@ -37,6 +37,8 @@ export type TurnRequest = {
   web?: boolean;
   /** Chờ lượt khác của cùng tài khoản (Antigravity, Grok chạy lần lượt) tối đa bao lâu; chế độ Tự động chờ ngắn rồi chuyển model. */
   lockMs?: number;
+  /** Lượt này đang dừng chờ người dùng duyệt một công cụ: lượt khác đang chờ khóa của tài khoản cần biết để báo đúng lý do và chờ tiếp. */
+  awaitingUser?: () => boolean;
   /** Biến môi trường thêm cho tiến trình (đã qua bộ lọc của cli_runtime). */
   env?: Record<string, string>;
   signal?: AbortSignal;

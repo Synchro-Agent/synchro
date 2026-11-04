@@ -11,6 +11,7 @@ import JSZip from "jszip";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
+import { warmSkillIndex } from "./skillroute";
 import { classify, dropPluginTags, dropTag, keepPluginTags, pluginKey, refine, tagRev, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
@@ -625,7 +626,8 @@ function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_p
 }
 function snap(): Cache {
   const t = tagRev(), c = CG.__plCache;
-  if (c && c.rev === (CG.__plRev ?? 0) && c.tags === t && Date.now() - c.at < 10 * 60_000) return c;
+  // touch() và tagRev() đã báo mọi thay đổi trong tiến trình này; hạn 6 giờ chỉ để phòng thay đổi từ script chạy ngoài. Hạn 10 phút cũ khiến cứ 10 phút một lượt chat phải chờ dựng lại.
+  if (c && c.rev === (CG.__plRev ?? 0) && c.tags === t && Date.now() - c.at < 6 * 3600_000) return c;
   if (c && CG.__plBulk && Date.now() - c.at < 60_000) return c;
   const d = init();
   const rows = d.prepare("SELECT * FROM plugins ORDER BY owner = 'org' DESC, name").all() as Row[];
@@ -650,6 +652,8 @@ function snap(): Cache {
   }
   const studio = new Map<string, Set<Studio>>();
   for (const r of d.prepare("SELECT key, studios FROM skill_studios WHERE key LIKE 'p:%' AND studios <> '[]'").all() as { key: string; studios: string }[]) studio.set(r.key, new Set(JSON.parse(r.studios) as Studio[]));
+  // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
+  void warmSkillIndex([...skills.values()].flat()).catch(() => {});
   return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, studio });
 }
 // Tên gốc của skill (bỏ tiền tố "thư-viện:" khi trùng tên) để tra nhãn mục.

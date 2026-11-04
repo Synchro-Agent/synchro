@@ -446,6 +446,24 @@ try {
     const waited = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp }));
     ok(waited.some((e) => e.kind === "status" && e.wait === false) && waited.some((e) => e.kind === "final"), "chờ xong thì lượt chạy bình thường", JSON.stringify(waited.map((e) => e.kind)));
     ok((await long).some((e) => e.kind === "final"), "lượt đang giữ cầu nối vẫn xong");
+    // Lượt giữ khóa đang chờ người dùng duyệt: lượt sau nói đúng lý do và không tính thời gian chờ.
+    {
+      const held = all(S.engineFor("grok").runTurn({ prompt: "[mock:holdgrok] duyệt", env, mcp, awaitingUser: () => true }));
+      await sleep(1200);
+      const ac2 = new AbortController(); setTimeout(() => ac2.abort(), 1500);
+      const w = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, signal: ac2.signal }));
+      ok(w.some((e) => e.kind === "status" && e.wait === true && /đang chờ bạn duyệt/.test(e.text ?? "")) && w.at(-1).code === "aborted", "chat khác đang giữ thẻ duyệt: báo cần trả lời ở chat đó", JSON.stringify(w));
+      const quick = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, lockMs: 300 }));
+      ok(quick.at(-1).code === "busy", "chế độ Tự động không chờ theo thẻ duyệt, vẫn chuyển model sớm", JSON.stringify(quick));
+      await held;
+    }
+    // Không lắp được cầu nối: báo lỗi để Tự động chuyển model, không chạy tiếp với prompt đang hứa công cụ.
+    {
+      fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M, failMcpAdd: true }));
+      const g = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp }));
+      fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M }));
+      ok(g.at(-1).kind === "error" && /Không nối được công cụ/.test(g.at(-1).message) && !g.some((e) => e.kind === "text"), "Grok: lắp cầu nối hỏng thì báo lỗi, không chạy lượt thiếu công cụ", JSON.stringify(g));
+    }
     const me = { id: UG, email: "g@synchro.test", email_verified: 1, status: "active" };
     await A.status("grok", UG, { fresh: true });
     const slow = await SUBS.subTurn({ user: me, model: "sub-grok/grok-4.7", system: "", messages: [{ role: "user", content: "[mock:slowgrok] chào" }] });

@@ -140,30 +140,53 @@ const tokens = (s: string) => fold(s).split(/[^a-z0-9]+/).filter((w) => (w.lengt
 const HAS_VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
 const hasPhrase = (text: string, p: string) => !!p && text.includes(p) && new RegExp(`(^|[^a-z0-9])${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`).test(text);
 
+// Bỏ dấu làm vài từ ngắn trùng hẳn nghĩa khác: "thuê nhà" thành "thue" (thuế), "danh sách" thành "sach" (sách), "nhắc tôi" thành "nhac" (nhạc), "Việt Nam" thành "viet" (viết).
+// Với các từ này: câu có dấu thì so trên chữ còn dấu; câu không dấu nào thì so trên chữ đã bỏ dấu, trừ các cụm chắc chắn là nghĩa khác.
+const AMBIGUOUS: Record<string, { vi: string; not?: RegExp }> = {
+  thue: { vi: "thuế", not: /\b(?:thue (?:nha|xe|phong|mat bang|can ho|may|nguoi)|cho thue|di thue)\b/ },
+  sach: { vi: "sách", not: /\b(?:danh sach|chinh sach|ngan sach)\b/ },
+  nhac: { vi: "nhạc", not: /\b(?:nhac (?:toi|minh|em|nho|lai|hen|lich|hop|den)|nhac nho)\b/ },
+  viet: { vi: "viết", not: /\b(?:viet nam|tieng viet|nguoi viet)\b/ },
+  dep: { vi: "đẹp", not: /\bdep (?:lao|kep|tong)\b/ },
+  truyen: { vi: "truyện", not: /\b(?:truyen (?:thong|hinh|tai|du lieu)|tuyen truyen|di truyen|lan truyen)\b/ },
+};
+const VI_WORD_EDGE = (w: string) => new RegExp(`(?<![\\p{L}\\p{N}])${w}(?![\\p{L}\\p{N}])`, "iu");
+const AMBI_VI = new Map(Object.entries(AMBIGUOUS).map(([k, v]) => [k, VI_WORD_EDGE(v.vi)]));
+// "danh sách", "chính sách", "ngân sách" vẫn có đúng chữ "sách": bỏ trước khi so.
+const NOT_BOOK = /(?:danh|chính|ngân) sách/giu;
+function triggered(q: string, t: string, marked: boolean, p: string): boolean {
+  const am = AMBIGUOUS[p];
+  if (!am) return hasPhrase(t, p);
+  if (marked) return AMBI_VI.get(p)!.test(p === "sach" ? q.replace(NOT_BOOK, " ") : q);
+  return hasPhrase(t, p) && !am.not?.test(t);
+}
+
 // weight: hệ số điểm (skill của danh mục Claude 0,6: thư viện người dùng tự chọn được ưu tiên khi cùng hợp).
 export type Candidate = { skill: Skill; lib?: { key: string; label: string }; weight?: number };
 export type Hit = Candidate & { score: number };
 
 // Từ khóa mở rộng của yêu cầu: chính các từ người dùng viết, cộng từ khóa tiếng Anh của mọi khái niệm khớp.
 // weak: từ chỉ tính nhẹ: âm tiết tiếng Việt của câu hỏi (mô tả skill phần lớn bằng tiếng Anh, khớp được là do trùng chữ; chỉ có ích khi mô tả cũng
-// bằng tiếng Việt) và từ khóa của khái niệm về hình thức khi câu đã nói rõ lĩnh vực.
-export function expand(q: string): { terms: Set<string>; weak: Set<string>; concepts: number } {
+// bằng tiếng Việt) và từ khóa của khái niệm về hình thức khi câu đã nói rõ lĩnh vực. literal: từ người dùng thật sự viết; groups: từ khóa của từng khái niệm.
+export function expand(q: string): { terms: Set<string>; weak: Set<string>; concepts: number; literal: Set<string>; groups: string[][] } {
   const t = fold(q);
-  const terms = new Set<string>(), weak = new Set<string>();
+  const terms = new Set<string>(), weak = new Set<string>(), literal = new Set<string>();
   const vi = HAS_VI.test(q);
   for (const w of q.split(/[^\p{L}\p{N}]+/u)) for (const x of tokens(w)) {
     if (VI_STOP.has(x) && (vi || HAS_VI.test(w))) continue;
-    terms.add(x);
+    terms.add(x); literal.add(x);
     if (HAS_VI.test(w) || (vi && x.length < 5)) weak.add(x);
   }
   let concepts = 0;
-  const hit = CONCEPTS.filter(([trig]) => trig.some((p) => hasPhrase(t, p)));
+  const hit = CONCEPTS.filter(([trig]) => trig.some((p) => triggered(q, t, vi, p)));
   const special = hit.some(([, , generic]) => !generic);
+  const groups: string[][] = [];
   for (const [, kw, generic] of hit) {
     concepts++;
+    groups.push(kw);
     for (const k of kw) { if (generic && special && !terms.has(k)) weak.add(k); else weak.delete(k); terms.add(k); }
   }
-  return { terms, weak, concepts };
+  return { terms, weak, concepts, literal, groups };
 }
 
 // Chấm điểm theo IDF: từ hiếm trong cả kho (như "animation") nặng hơn từ phổ biến (như "design"); khớp tên skill nhân ba.
@@ -177,26 +200,68 @@ function docOf(k: Skill): Doc {
   if (!d || d.key !== key) docCache.set(k, (d = { key, name: new Set(tokens(k.name.replace(/[-:]/g, " "))), body: new Set(tokens(k.description)), folded: fold(k.name), vi: HAS_VI.test(k.description) }));
   return d;
 }
+// Chỉ mục ngược: từ → các skill có từ đó. Chấm hết 18.000 skill mỗi lượt từng chặn Node gần 200 ms (luồng chữ của mọi người dừng theo). Giờ chỉ chấm skill có từ của câu hỏi.
+// Một đối tượng skill vào chỉ mục đúng một lần; bản dựng lại của bộ đệm plugin tạo đối tượng mới nên chỉ mục chứa nhiều bản cũ quá thì dựng lại từ đầu.
+const G = globalThis as unknown as { __skillIx?: { post: Map<string, Skill[]>; first: Map<string, Skill[]>; seen: WeakSet<Skill>; n: number } };
+const rawWords = (s: string) => s.split(/[^a-z0-9]+/).filter(Boolean);
+const freshIx = () => ({ post: new Map<string, Skill[]>(), first: new Map<string, Skill[]>(), seen: new WeakSet<Skill>(), n: 0 });
+const ixOf = () => (G.__skillIx ??= freshIx());
+function addToIx(k: Skill) {
+  const ix = ixOf();
+  if (ix.seen.has(k)) return;
+  ix.seen.add(k); ix.n++;
+  const d = docOf(k);
+  for (const w of new Set([...d.name, ...d.body])) { const l = ix.post.get(w); if (l) l.push(k); else ix.post.set(w, [k]); }
+  // Gọi đúng tên skill: mọi từ của tên đều nằm trong câu, nên tra theo từ đầu của tên là đủ.
+  const head = rawWords(d.folded)[0];
+  if (head) { const l = ix.first.get(head); if (l) l.push(k); else ix.first.set(head, [k]); }
+}
+/** Dựng sẵn chỉ mục ở nền, từng ít một, để lượt chat đầu tiên sau khi bộ đệm plugin dựng lại không phải chờ. */
+export async function warmSkillIndex(skills: Skill[]) {
+  for (let i = 0; i < skills.length; i += 300) {
+    for (const k of skills.slice(i, i + 300)) addToIx(k);
+    await new Promise((ok) => setImmediate(ok));
+  }
+}
+const LITERAL = 3;
 export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
   if (!q.trim() || !cands.length) return [];
-  const { terms, weak } = expand(q);
+  const { terms, weak, literal, groups } = expand(q);
   const t = fold(q);
-  const docs = cands.map((c) => ({ c, ...docOf(c.skill) }));
-  const df = new Map<string, number>();
-  for (const w of terms) { let n = 0; for (const d of docs) if (d.name.has(w) || d.body.has(w)) n++; df.set(w, n); }
-  const idf = (w: string) => Math.log(1 + docs.length / (df.get(w) || docs.length));
-  return docs.map(({ c, name, body, folded, vi }) => {
+  if (ixOf().n > cands.length * 3 + 2000) G.__skillIx = freshIx();
+  for (const c of cands) addToIx(c.skill);
+  const ix = ixOf(), cand = new Map(cands.map((c) => [c.skill, c]));
+  const df = new Map<string, number>(), hit = new Set<Skill>();
+  for (const w of terms) {
+    let n = 0;
+    for (const k of ix.post.get(w) ?? []) if (cand.has(k)) { n++; hit.add(k); }
+    df.set(w, n);
+  }
+  for (const w of rawWords(t)) for (const k of ix.first.get(w) ?? []) if (cand.has(k)) hit.add(k);
+  const idf = (w: string) => Math.log(1 + cands.length / (df.get(w) || cands.length));
+  const extra = groups.map((g) => g.filter((w) => !literal.has(w)));
+  const out: Hit[] = [];
+  for (const k of hit) {
+    const { name, body, folded, vi } = docOf(k), c = cand.get(k)!;
     let score = hasPhrase(t, folded) ? 6 : 0, strong = score > 0, soft = 0;
-    for (const w of terms) {
-      const m = name.has(w) ? 3 : body.has(w) ? 1 : 0;
-      if (!m) continue;
+    // Mô tả dài nhồi nhiều từ khóa thì khớp từ nào cũng dễ: khớp trong mô tả tính nhẹ dần theo độ dài. Tên skill không bị ảnh hưởng.
+    const lenFit = Math.min(1.3, Math.sqrt(40 / Math.max(body.size, 5)));
+    const value = (w: string) => {
+      const m = name.has(w) ? 3 : body.has(w) ? lenFit : 0;
+      if (!m) return 0;
       // Mô tả bằng tiếng Việt (skill người dùng tự viết): trùng âm tiết là trùng thật, không phải tình cờ với chữ tiếng Anh.
-      if (weak.has(w)) { soft++; score += m * idf(w) * (vi ? 1 : 0.25); } else { strong = true; score += m * idf(w); }
-    }
+      if (weak.has(w)) { soft++; return m * idf(w) * (vi ? 1 : 0.25); }
+      strong = true;
+      return m * idf(w);
+    };
+    // Từ người dùng thật sự viết ("seo") nặng hơn từ khóa suy ra từ khái niệm; mỗi khái niệm chỉ tính từ khớp tốt nhất, để mô tả kể lể mọi từ của một khái niệm không vượt được skill đúng tên.
+    for (const w of literal) { const v = value(w); score += weak.has(w) ? v : v * LITERAL; }
+    for (const g of extra) { let best = 0; for (const w of g) best = Math.max(best, value(w)); score += best; }
     // Chỉ trùng một âm tiết thì chưa nói lên gì: cần một từ thật, hoặc ít nhất hai âm tiết (mô tả skill bằng tiếng Việt).
     if (!strong && soft < 2) score = 0;
-    return { ...c, score: score * (c.weight ?? 1) };
-  }).filter((h) => h.score > 0).sort((a, b) => b.score - a.score).slice(0, limit);
+    if (score > 0) out.push({ ...c, score: score * (c.weight ?? 1) });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 // Gợi ý cho lượt chat: chỉ khi yêu cầu có dấu hiệu là một việc cần chuyên môn (khớp khái niệm hoặc gọi đúng tên skill),
