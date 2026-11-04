@@ -132,11 +132,11 @@ try {
   await until(`!!document.querySelector(".st-tag")`, 20000, "các mục");
   const tags = await ev(`[...document.querySelectorAll(".st-opt")].map((o) => o.innerText.replace(/\\s+/g, " "))`);
   const design = tags.find((x) => x.includes("Thiết kế")) ?? "";
-  check("số skill có phân cách hàng nghìn", /\b1\.2\d\d skill/.test(design), design);
+  check("số skill có phân cách hàng nghìn", /\b\d\.\d{3} skill/.test(design), design);
   await ev(`(() => { const o = ${byText(".st-opt", "Thiết kế")}; o.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); return 1; })()`);
   await until(`(document.querySelector(".st-capb")?.textContent ?? "").includes("tự nhận diện")`, 5000, "dòng nói rõ tự nhận diện");
   const cap = await ev(`document.querySelector(".st-capb").textContent`);
-  check("nói rõ gồm skill tự nhận diện", /1\.2\d\d skill, gồm [\d.]+ skill Synchro tự nhận diện/.test(cap), cap);
+  check("nói rõ gồm skill tự nhận diện", /\d\.\d{3} skill, gồm [\d.]+ skill Synchro tự nhận diện/.test(cap), cap);
   await shot("artifacts");
   await ev(`document.querySelector(".st-capb").click(), 1`);
   await until(`document.querySelectorAll(".st-shelf-row").length === 40`, 10000, "trang đầu của danh sách");

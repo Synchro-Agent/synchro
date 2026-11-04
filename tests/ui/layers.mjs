@@ -79,7 +79,8 @@ try {
   await ev(`document.querySelector(".art-tile .icon-btn").focus(), 1`);
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await P("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
-  await sleep(500);
+  // Khung hỏi lại tải dần trên máy bận: chờ tới khi hiện, rồi xét không có khung xem artifact.
+  { const t = Date.now(); while (Date.now() - t < 4000 && !(await ev(`!!document.querySelector(".overlay.cf-top")`))) await sleep(150); }
   ok(await ev(`!!document.querySelector(".overlay.cf-top") && !document.querySelector(".art-modal")`), "nút xóa hỏi lại, không mở artifact đằng sau");
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await sleep(400);

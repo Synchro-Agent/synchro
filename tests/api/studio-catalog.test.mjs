@@ -124,8 +124,11 @@ ok(r.s === 200 && r.j.plugin.studioMode === "none" && r.j.plugin.studio === null
 ok(db.prepare("SELECT studio, auto_tag FROM plugins WHERE id = ?").get(PID).auto_tag === 0, "cột riêng auto_tag = 0");
 ok(tag("sample-deck-1") === undefined && tag("manual-crypto-note")?.src === "manual", "nhãn tự động bị bỏ, mục tự chọn còn", JSON.stringify([tag("sample-deck-1"), tag("manual-crypto-note")]));
 r = await me("GET", "/api/plugins?view=meta");
-ok(!r.j.studios.slides?.autoTotal, "Trình bày không còn skill của thư viện này", JSON.stringify(r.j.studios.slides));
-ok(r.j.studios.docs?.auto.some((a) => a.name === "manual-crypto-note"), "skill tự chọn vẫn ở Tài liệu", JSON.stringify(r.j.studios.docs));
+// Tìm trong đúng mục: danh sách auto bị giới hạn, và dữ liệu thử có cả thư viện khác cùng mục.
+const inStudio = async (st, q) => (await me("GET", `/api/plugins?view=studio&studio=${st}&q=${q}`)).j;
+const sl = await inStudio("slides", "sample-deck"), dc = await inStudio("docs", "manual-crypto-note");
+ok(!sl.skills?.length, "Trình bày không còn skill của thư viện này", JSON.stringify(sl).slice(0, 300));
+ok(dc.skills?.some((a) => a.name === "manual-crypto-note"), "skill tự chọn vẫn ở Tài liệu", JSON.stringify(dc).slice(0, 300));
 r = await ask({ studio: "none", messages: [{ role: "user", content: "xin chào" }] });
 ok(r.s === 200 && !r.j.libs?.some((l) => l.forced), "gửi studio=none trong chat không bị coi là một studio thật", JSON.stringify(r.j.libs));
 
