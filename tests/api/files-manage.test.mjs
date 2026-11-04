@@ -1,0 +1,52 @@
+// Cài đặt → Quyền riêng tư → Tệp đã tải lên: xem và xóa từng tệp thật trên máy chủ, không đụng tới tệp của người khác. Không cần máy chủ.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { loadTs } from "../lib/ts.mjs";
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-files-"));
+process.env.DATA_DIR = path.join(tmp, "data");
+process.env.DATA_KEY = "files-key";
+fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
+const { "fileproc/owners": O, authstore: AS, "api/files/mine/route": R } = await loadTs(["fileproc/owners", "authstore", "api/files/mine/route"]);
+const A = AS.createUser({ email: "a@files.test", name: "A", verified: true }), B = AS.createUser({ email: "b@files.test", name: "B", verified: true });
+const CACHE = path.join(process.cwd(), ".cache", "files");
+fs.mkdirSync(CACHE, { recursive: true });
+const fid = (c) => c.repeat(40);
+const ids = { mine: fid("1"), both: fid("2"), old: fid("3") };
+const written = [];
+const touch = (id, name) => { for (const [x, v] of [[".bin", "x"], [".json", JSON.stringify({ id, name, blocks: [] })]]) { const f = path.join(CACHE, id + x); fs.writeFileSync(f, v); written.push(f); } };
+const on = (id) => fs.existsSync(path.join(CACHE, id + ".bin"));
+touch(ids.mine, "cua-toi.pdf"); touch(ids.both, "ten-cua-B.pdf"); touch(ids.old, "cu.pdf");
+O.claimFile(A.id, ids.mine, 2048, "cua-toi.pdf");
+O.claimFile(A.id, ids.both, 1048576, "ten-cua-A.pdf");
+O.claimFile(B.id, ids.both, 1048576, "ten-cua-B.pdf");
+O.claimFile(A.id, ids.old, 10);
+
+const req = (u, url, init = {}) => { const s = AS.createSession(u, new Request("http://localhost/"), "password"); return new Request(`http://localhost${url}`, { ...init, headers: { cookie: s.split(";")[0], origin: "http://localhost" } }); };
+let l = await (await R.GET(req(A, "/api/files/mine"))).json();
+const by = (id) => l.files.find((f) => f.id === id);
+ok(l.files.length === 3 && l.used === 2048 + 1048576 + 10 && l.quota > 0, "liệt kê tệp của mình, dung lượng đã dùng, hạn mức", JSON.stringify(l));
+ok(by(ids.both).name === "ten-cua-A.pdf", "tên do chính mình đặt, không phải tên người khác đặt cho cùng nội dung", JSON.stringify(by(ids.both)));
+ok(by(ids.old).name === "cu.pdf", "bản ghi cũ chưa lưu tên: lấy từ tệp kết quả", JSON.stringify(by(ids.old)));
+O.claimFile(B.id, ids.old, 10);
+l = await (await R.GET(req(A, "/api/files/mine"))).json();
+ok(by(ids.old).name === "", "bản ghi cũ mà tệp có chủ khác: không đoán tên (có thể là tên của họ)", JSON.stringify(by(ids.old)));
+ok(!(await (await R.GET(req(B, "/api/files/mine"))).json()).files.some((f) => f.id === ids.mine), "người khác không thấy tệp của mình");
+
+console.log("Xóa");
+const del = (u, id, init) => R.DELETE(req(u, `/api/files/mine?id=${id}`, { method: "DELETE", ...init }));
+ok((await del(B, ids.mine)).status === 404 && on(ids.mine), "không xóa được tệp của người khác");
+ok((await del(A, "../../etc/passwd")).status === 404, "mã tệp lạ: không tìm thấy");
+ok((await del(A, ids.mine)).status === 200 && !on(ids.mine) && !fs.existsSync(path.join(CACHE, ids.mine + ".json")), "tệp chỉ mình có: xóa khỏi đĩa");
+ok(!O.mayUse(B.id, ids.both) === false && (await del(A, ids.both)).status === 200 && on(ids.both) && O.mayUse(B.id, ids.both) && !O.mayUse(A.id, ids.both), "tệp người khác cũng có: chỉ bỏ quyền của mình, tệp vẫn còn cho họ");
+const bad = await R.DELETE(new Request(`http://localhost/api/files/mine?id=${ids.both}`, { method: "DELETE", headers: { cookie: AS.createSession(B, new Request("http://localhost/"), "password").split(";")[0], origin: "https://evil.test" } }));
+ok(bad.status === 403 && on(ids.both), "yêu cầu từ trang khác bị chặn", bad.status);
+l = await (await R.GET(req(A, "/api/files/mine"))).json();
+ok(l.used === 10, "dung lượng giảm sau khi xóa", l.used);
+
+for (const f of written) fs.rmSync(f, { force: true });
+fs.rmSync(tmp, { recursive: true, force: true });
+console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
+process.exit(fail ? 1 : 0);

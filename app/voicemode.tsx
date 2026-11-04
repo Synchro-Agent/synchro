@@ -4,7 +4,7 @@
 // Giọng của trình duyệt không tự nhận được tiếng: dùng ngôn ngữ ở Cài đặt → Giọng nói, đổi ngay trên màn hình này.
 // Mặc định dùng Eleven Realtime v1 Max (máy chủ cấp khoá tạm): tự nhận ngôn ngữ, trả lời bằng giọng ElevenLabs, nói chen được.
 // Không mở được Realtime (hết phút của gói, khóa thiếu quyền) nhưng có ElevenLabs: chế độ nối tiếp, Scribe nghe → model chat → giọng ElevenLabs đọc.
-// Khi máy chủ chưa có khoá ElevenLabs: dự phòng bằng nhận dạng giọng nói + đọc to của trình duyệt, câu hỏi đi qua model chat.
+// Khi máy chủ chưa có khoá ElevenLabs: dự phòng bằng nhận dạng giọng nói + đọc to của trình duyệt, câu hỏi đi qua model chat. Trình duyệt không nghe được thì gõ, vẫn đọc câu trả lời.
 // Hai luồng: nói ngay một câu xác nhận, việc chính chạy trong khung chat; xong thì đọc bản tóm tắt vài câu (bản đầy đủ ở khung chat).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -16,6 +16,7 @@ import { startRealtime, type RtPhase } from "./realtime";
 import { startScribe, type Scribe } from "./scribe";
 import { elSpeed, speakAI, type Speaking } from "./speak";
 import { createVad } from "./vad";
+import { readBrowser, stopBrowserRead } from "./browserspeak";
 import { ACK_DELAY, ackPlan, localBrief, spokenPlan, toSpeech, VI, type Lang } from "./voiceflow";
 
 type Phase = "connecting" | "listen" | "think" | "work" | "speak" | "paused";
@@ -23,6 +24,7 @@ type Rec = { lang: string; interimResults: boolean; continuous: boolean; onresul
 // Việc đang làm: câu hỏi, lúc gửi, ngôn ngữ; done (chế độ realtime) nhận lời tóm tắt để model giọng nói đọc.
 type Job = { id: number; q: string; at: number; lang: Lang; done?: (brief: string) => void; ackT?: number };
 // Mã ngôn ngữ ElevenLabs nhận ra ("vi", "en", "ja"…) → ngôn ngữ của câu xác nhận / câu nhắc (tiếng khác: đoán theo chữ).
+const srOf = () => (window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Rec }).webkitSpeechRecognition;
 const known = (l: string | null | undefined, q: string): Lang => (l === "vi" || l === "en" ? l : VI.test(q) ? "vi" : "en");
 
 const LABEL: Record<Phase, string> = { connecting: "Đang kết nối…", listen: "Đang nghe…", think: "Đang suy nghĩ…", work: "Đang làm việc…", speak: "Đang trả lời…", paused: "Đã tắt micro" };
@@ -51,6 +53,10 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
   // Ngôn ngữ nhận dạng của trình duyệt (khi không có ElevenLabs): theo Cài đặt → Giọng nói, không đoán từ câu trước (nói tiếng Anh mà nghe bằng tiếng Việt thì chép sai hết).
   const [vlang, setVlang] = usePref("vlang", getLang() === "en" ? "English" : "Vietnamese");
   const noVoice = useRef(false);
+  // Không nghe được (trình duyệt không có nhận dạng, chặn micro, dịch vụ nhận dạng lỗi): gõ câu hỏi ngay trên màn hình này, Synchro vẫn đọc câu trả lời.
+  const [typing, setTyping] = useState(false);
+  const [draft, setDraft] = useState("");
+  const micBad = useRef(false);
   const [barge, setBarge] = usePref("vmBarge", true);
   const micLv = useRef(0), aiLv = useRef(0);
   const level = useMemo(() => ({ get current() { return Math.max(micLv.current, aiLv.current); }, set current(_v: number) {} }), []);
@@ -74,7 +80,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
   useSpeakingLevel(mode === "browser" && phase === "speak", aiLv);
   const scribe = useRef<Scribe | null>(null);
   const voiceOut = useRef<Speaking | null>(null);
-  const stopVoice = () => { voiceOut.current?.stop(); voiceOut.current = null; window.speechSynthesis?.cancel(); };
+  const stopVoice = () => { voiceOut.current?.stop(); voiceOut.current = null; stopBrowserRead(); };
 
   const close = () => { setOut(true); job.current?.done?.(""); job.current = null; stopVoice(); recRef.current?.abort(); scribe.current?.stop(); scribe.current = null; rt.current?.close(); rt.current = null; setTimeout(onClose, 220); };
 
@@ -137,36 +143,22 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
         voiceOut.current = v;
         const ok = await v.done;
         if (voiceOut.current === v) voiceOut.current = null;
-        if (ok && alive.current && gen.current === my) onEnd();
+        if (!alive.current || gen.current !== my) return;
+        if (ok) onEnd();
+        // Giọng AI dừng giữa chừng (hết hạn mức, mất mạng): đọc nốt bằng giọng của trình duyệt rồi nghe tiếp, không kẹt ở "Đang trả lời…".
+        else if (v.rest()) browserSpeak(toSpeech(v.rest()), l, onEnd);
       });
       return;
     }
     browserSpeak(chunks, l, onEnd);
   };
   const browserSpeak = (chunks: string[], l: Lang, onEnd: () => void) => {
-    const s = window.speechSynthesis;
-    if (!s || !chunks.length) { onEnd(); return; }
-    const voice = s.getVoices().find((v) => v.lang.toLowerCase().startsWith(l));
     go("speak");
-    let over = false, started = false;
     // Xong hay lỗi đều đi tiếp đúng một lần: không kẹt ở "Đang trả lời…" với micro đóng.
-    const end = () => { if (over) return; over = true; clearTimeout(guard); onEnd(); };
-    const fail = (e?: { error?: string }) => {
-      if (e?.error === "canceled" || e?.error === "interrupted") return;
-      s.cancel();
+    readBrowser(chunks, { lang: l === "vi" ? "vi-VN" : "en-US", rate, onStart: setCaption, onEnd, onNote: say, onFail: () => {
       if (!noVoice.current) { noVoice.current = true; say("Trình duyệt chưa đọc được bằng giọng nói. Câu trả lời đầy đủ có trong khung chat"); }
-      end();
-    };
-    // Có máy không có giọng nào và không báo gì cả: quá 5 giây chưa bắt đầu đọc thì coi như lỗi.
-    const guard = window.setTimeout(() => { if (!started && phaseRef.current === "speak") fail(); }, 5000);
-    chunks.forEach((c, i) => {
-      const u = new SpeechSynthesisUtterance(c);
-      u.lang = l === "vi" ? "vi-VN" : "en-US"; u.rate = rate; if (voice) u.voice = voice;
-      u.onstart = () => { started = true; setCaption(c); };
-      if (i === chunks.length - 1) u.onend = end;
-      u.onerror = fail;
-      s.speak(u);
-    });
+      onEnd();
+    } });
   };
 
   // Chọn chế độ: xin khoá tạm từ máy chủ; có khoá thì nối Eleven Realtime, không thì dùng trình duyệt.
@@ -197,7 +189,8 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
           rt.current = conn;
           setMode("rt");
           return;
-        } catch { if (!dead) { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); setMode("rt"); setPhase("paused"); } return; }
+        // Không nối được hay không có micro: về chế độ trình duyệt, ở đó mới biết có nghe được không và còn cách gõ; không đứng yên ở "Đã tắt micro" với nút micro không làm gì.
+        } catch { if (!dead) { setMode("browser"); setPhase("listen"); } return; }
       }
       if (s.error) say(s.error);
       setMode(s.cascade ? "ai" : "browser"); setPhase("listen");
@@ -219,7 +212,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
       if (dead) { x?.stop(); return; }
       if (!x) { setMode("browser"); return; }
       scribe.current = x;
-    }).catch(() => { if (!dead) { say("Synchro cần quyền dùng micro để trò chuyện bằng giọng nói"); go("paused"); } });
+    }).catch(() => { if (!dead) setMode("browser"); });
     return () => { dead = true; scribe.current?.stop(); scribe.current = null; };
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   // Chỉ gửi âm thanh lên khi đang nghe (tránh chép lại chính giọng Synchro đang đọc).
@@ -227,8 +220,8 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
 
   // ---- Chế độ trình duyệt ----
   const listen = () => {
-    const SR = (window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Rec }).webkitSpeechRecognition;
-    if (!SR) { say("Trình duyệt này chưa hỗ trợ nhận dạng giọng nói (hãy dùng Chrome, Edge hoặc Safari)"); close(); return; }
+    const SR = srOf();
+    if (!SR) { setTyping(true); go("paused"); return; }
     recRef.current?.abort();
     const r = new SR();
     r.lang = VOICE_LANG[vlang] ?? "vi-VN"; r.interimResults = true; r.continuous = false;
@@ -236,11 +229,12 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
     r.onresult = (e) => {
       let t = "";
       for (let i = 0; i < e.results.length; i++) { t += e.results[i][0].transcript; if (e.results[i].isFinal) finalText = t; }
-      setHeard(t);
+      setHeard(t); setTyping(false);
     };
     r.onerror = (e) => {
       if (e.error === "no-speech" || e.error === "aborted") return;
       say(e.error === "not-allowed" || e.error === "service-not-allowed" ? "Synchro cần quyền dùng micro để trò chuyện bằng giọng nói" : "Trình duyệt chưa nhận dạng được giọng nói, hãy thử lại");
+      micBad.current = true; setTyping(true);
       go("paused");
     };
     r.onend = () => {
@@ -257,6 +251,8 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
   useEffect(() => {
     if (mode !== "browser") return;
     if (phase !== "listen") { if (phase === "think" || phase === "work") aiLv.current = 0.08; return; }
+    // Đã biết là không nghe được: đọc xong thì quay lại ô gõ, không xin micro và báo lỗi lại sau mỗi câu. Bấm nút micro là thử lại.
+    if (micBad.current || !srOf()) { setTyping(true); go("paused"); return; }
     let stop: (() => void) | null = null, dead = false;
     startMicLevel(micLv).then((s) => { if (dead) s(); else stop = s; }).catch(() => {});
     listen();
@@ -293,15 +289,24 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
   };
   const toggleMic = () => {
     if (mode === "rt") { mutedRef.current = !mutedRef.current; setPhase(mutedRef.current ? "paused" : "listen"); return; }
-    if (phase === "paused") go("listen"); else { recRef.current?.abort(); stopVoice(); setCaption(""); go("paused"); }
+    if (phase === "paused") { micBad.current = false; go("listen"); } else { recRef.current?.abort(); stopVoice(); setCaption(""); go("paused"); }
   };
 
   // Chế độ realtime: model giọng nói đã xác nhận, Synchro đang làm việc chính trong lúc chờ.
   const shown: Phase = working && (phase === "listen" || phase === "think") ? "work" : phase;
+  const canSR = mode !== "browser" || !!srOf();
+  const canType = shown === "paused" || shown === "listen" || shown === "speak";
+  const sendTyped = () => {
+    const q = draft.trim();
+    if (!q || !canType) return;
+    setDraft("");
+    if (phaseRef.current === "speak") interrupt();
+    startJob(q);
+  };
   return createPortal(
     <div className={`vm ${out ? "out" : ""}`} role="dialog" aria-modal="true" aria-label="Trò chuyện bằng giọng nói">
       <div className="vm-top">
-        <span className={`vm-state ${shown}`}><i />{LABEL[shown]}</span>
+        <span className={`vm-state ${shown}`}><i />{typing && shown === "paused" ? "Gõ để hỏi" : LABEL[shown]}</span>
         {mode && <button className={`vm-opt ${barge ? "on" : ""}`} aria-pressed={barge} onClick={() => setBarge(!barge)} title="Đang trả lời mà bạn nói thì Synchro dừng lại để nghe">Nói chen để ngắt</button>}
         {mode === "browser" && <button className="vm-opt on" onClick={() => setVlang(VOICE_LANG[vlang]?.startsWith("vi") ? "English" : "Vietnamese")} title="Ngôn ngữ trình duyệt dùng để nghe bạn nói"><span data-notr>{VOICE_LANG[vlang]?.startsWith("vi") ? "Tiếng Việt" : "English"}</span></button>}
       </div>
@@ -314,10 +319,16 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
         {shown === "think" && <p className="me">{heard}</p>}
         {shown === "work" && <><p className="me">{heard}</p><p className="hint">Kết quả đầy đủ sẽ có trong khung chat</p></>}
         {shown === "speak" && <p>{caption}</p>}
-        {shown === "paused" && <p className="hint">Bấm micro để tiếp tục</p>}
+        {shown === "paused" && <p className="hint">{typing ? (canSR ? "Chưa nghe được bạn. Gõ câu hỏi, Synchro sẽ đọc câu trả lời, hoặc bấm micro để thử lại" : "Trình duyệt này chưa nghe được giọng nói (Chrome, Edge và Safari nghe được). Gõ câu hỏi, Synchro sẽ đọc câu trả lời") : "Bấm micro để tiếp tục"}</p>}
       </div>
+      {typing && (
+        <form className="vm-type" onSubmit={(e) => { e.preventDefault(); sendTyped(); }}>
+          <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Gõ câu hỏi…" aria-label="Gõ câu hỏi" />
+          <button type="submit" className="vm-opt on" disabled={!draft.trim() || !canType}>Gửi</button>
+        </form>
+      )}
       <div className="vm-ctl">
-        <button className={`vm-btn ${phase === "paused" ? "off" : ""}`} onClick={toggleMic} aria-label={phase === "paused" ? "Bật micro" : "Tắt micro"} aria-pressed={phase === "paused"}><I.Mic size={22} /></button>
+        <button className={`vm-btn ${phase === "paused" ? "off" : ""}`} disabled={!canSR} onClick={toggleMic} aria-label={phase === "paused" ? "Bật micro" : "Tắt micro"} aria-pressed={phase === "paused"}><I.Mic size={22} /></button>
         <button className="vm-btn end" onClick={close} aria-label="Kết thúc trò chuyện bằng giọng nói"><I.X size={22} /></button>
       </div>
       {phase === "speak" && <span className="vm-tip">{barge ? "Nói chen hoặc chạm vào sóng để ngắt lời" : "Chạm vào sóng để ngắt lời"}</span>}

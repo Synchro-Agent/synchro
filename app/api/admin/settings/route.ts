@@ -1,12 +1,17 @@
 import { audit, clientIp, defaultPerms, handle, requireAdmin, sameOrigin, setSetting, setVerifyGate, signupOpen, verifyGateOn } from "../../../authstore";
 import { normPerms } from "../../../catalog";
+import { setSpeechBudget, speechBudget, spentToday } from "../../../speechapi";
 
 export const runtime = "nodejs";
 
 export const PATCH = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
-  const { signupOpen: open, defaultPerms: dp, verifyGate } = await req.json();
+  const { signupOpen: open, defaultPerms: dp, verifyGate, speechBudget: sb } = await req.json();
+  if (sb && typeof sb === "object") {
+    setSpeechBudget(sb);
+    audit("admin_speech_budget", { actor: user, ip: clientIp(req) });
+  }
   if (typeof verifyGate === "boolean" && verifyGate !== verifyGateOn()) {
     setVerifyGate(verifyGate);
     audit("admin_verify_gate", { actor: user, ip: clientIp(req), detail: verifyGate ? "on" : "off" });
@@ -19,5 +24,5 @@ export const PATCH = handle(async (req) => {
     setSetting("signup_open", open ? "1" : "0");
     audit(open ? "admin_signup_open" : "admin_signup_closed", { actor: user, ip: clientIp(req) });
   }
-  return Response.json({ settings: { signupOpen: signupOpen(), defaultPerms: defaultPerms(), verifyGate: verifyGateOn() } });
+  return Response.json({ settings: { signupOpen: signupOpen(), defaultPerms: defaultPerms(), verifyGate: verifyGateOn(), speechBudget: speechBudget(), speechToday: spentToday() } });
 });

@@ -3,7 +3,7 @@
 // bật trong Đọc văn bản để AI đọc đúng tên riêng, thương hiệu, từ viết tắt.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
-import { usePref } from "../store";
+import { useApp, usePref } from "../store";
 import { tr } from "../i18n";
 import { api, post, reloadDicts, setDicts, useDicts, type Dict, type Item, type Rule } from "./client";
 import { ErrBox, Field, Player, Spin } from "./parts";
@@ -17,6 +17,7 @@ let seq = 1;
 const row = (r?: Partial<Rule>): Row => ({ key: seq++, word: "", type: "alias", say: "", alphabet: "ipa", cs: false, ...r });
 
 export function DictTool({ say, voice }: ToolProps) {
+  const app = useApp();
   const list = useDicts(true);
   const [sel, setSel] = usePref<DictSel[]>("spDicts", []);
   const [edit, setEdit] = useState<{ id: string | null; name: string; desc: string; rows: Row[] } | null>(null);
@@ -49,8 +50,8 @@ export function DictTool({ say, voice }: ToolProps) {
       }
     } catch (e) { setErr((e as Error).message); } finally { setBusy(""); }
   };
-  const archive = async (d: Dict) => {
-    if (!confirm(tr(`Lưu trữ từ điển “${d.name}”? Từ điển sẽ không còn dùng được khi đọc.`))) return;
+  const archive = (d: Dict) => app.confirm(tr(`Lưu trữ từ điển “${d.name}”? Từ điển sẽ không còn dùng được khi đọc.`), "", tr("Lưu trữ"), () => { void doArchive(d); });
+  const doArchive = async (d: Dict) => {
     try { await post("dicts/archive", { id: d.id }); setDicts((l) => l.filter((x) => x.id !== d.id)); setSel(sel.filter((s) => s.id !== d.id)); if (edit?.id === d.id) setEdit(null); say("Đã lưu trữ từ điển"); }
     catch (e) { say((e as Error).message); }
   };

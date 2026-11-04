@@ -4,6 +4,8 @@
 // - UsageSettings: trang Cài đặt → Usage (chi tiết 30 ngày theo model, tính năng, ngày).
 // - UsageAdmin: quản trị viên đặt hạn mức (USD), hạn mức riêng từng người và bảng giá model.
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "./apierr";
+import { rowKeys } from "./a11y";
 import { Menu } from "./ui";
 import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
@@ -487,7 +489,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       <p className="d" style={{ marginTop: 16 }}>
         {planNow && L("Gói subscription tính theo hạn mức hãng báo về; hãng không báo số token của gói nên Synchro đếm theo lượt. ", "Plans follow the limits each provider reports; providers don't report plan tokens, so Synchro counts calls. ")}
         {apiNow && L("Khóa API tính theo giá niêm yết của từng hãng, gồm cả đọc và ghi cache; hóa đơn của hãng là số cuối cùng.", "API keys are billed at each provider's list price, including cache reads and writes; the provider's invoice is final.")}
-        {st?.admin && go && apiNow && <> {L("Quản trị viên đổi hạn mức và bảng giá ở", "Administrators can change limits and prices in")} <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")}>{L("Quản trị → Hạn mức sử dụng", "Administrator → Usage limits")}</a>.</>}</p>
+        {st?.admin && go && apiNow && <> {L("Quản trị viên đổi hạn mức và bảng giá ở", "Administrators can change limits and prices in")} <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")} onKeyDown={rowKeys(() => go("Administrator"))}>{L("Quản trị → Hạn mức sử dụng", "Administrator → Usage limits")}</a>.</>}</p>
     </div>
   );
 }
@@ -499,7 +501,7 @@ type AdminData = { apiKeys?: boolean;
   prices: { model: string; in: number; out: number; cache: number; src: "official" | "estimate" | "custom" }[];
 };
 async function adm(method: string, body?: unknown): Promise<AdminData> {
-  const r = await fetch("/api/admin/usage", { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch("/api/admin/usage", { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
   return j;

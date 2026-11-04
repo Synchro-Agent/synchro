@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
+import { rowKeys } from "./a11y";
 import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
@@ -25,7 +27,8 @@ const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSett
 const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub));
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
-import { locale } from "./i18n";
+import { locale, tr } from "./i18n";
+import { fmtSize } from "./fileicon";
 import { SharedChats } from "./shareui";
 import { UploadedFiles } from "./filesui";
 import { deleteServerSession, listServerSessions, saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
@@ -109,7 +112,7 @@ function SitesEditor({ cp, save }: { cp: CodePrefs; save: (p: Partial<CodePrefs>
   );
   return <div className="sites-box">{list("sites", a, setA, "example.com")}{list("blocked", b, setB, "ads.example.com")}</div>;
 }
-const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={(e) => e.key === "Enter" && onClick?.()}>{children}</a>;
+const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={onClick && rowKeys(onClick)}>{children}</a>;
 
 // Gắn vào cuối <body>: hộp con mở trong Cài đặt (Duyệt connector…) từng che mất thông báo lỗi.
 function Toasts({ msg }: { msg: string }) {
@@ -441,7 +444,7 @@ function Memory() {
   const [txt, setTxt] = useState("");
   const call = async (method: string, body?: unknown, q = "") => {
     try {
-      const r = await fetch(`/api/memory${q}`, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+      const r = await apiFetch(`/api/memory${q}`, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
       setSt(j);

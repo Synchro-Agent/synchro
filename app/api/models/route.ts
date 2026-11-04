@@ -22,5 +22,6 @@ export async function GET(req: Request) {
   void import("../../chatengine").then((m) => m.prewarmChat(c.user)).catch(() => {});
   // default: chỉ model quản trị viên đặt; không đặt thì người dùng mới bắt đầu ở Tự động (models.ts), không phải model đầu danh sách.
   const d = defaultModel();
-  return Response.json({ providers: merged, default: d && cat.some((p) => p.models.some((m) => m.key === d)) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...perms.models, ...subKeys], effort: perms.effort ?? {} });
+  // sharedApi: máy chủ có model qua khóa API dùng chung (giao diện chỉ nói về khóa dùng chung khi có thật).
+  return Response.json({ providers: merged, sharedApi: providers.length > 0, default: d && cat.some((p) => p.models.some((m) => m.key === d)) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...perms.models, ...subKeys], effort: perms.effort ?? {} });
 }

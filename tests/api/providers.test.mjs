@@ -30,6 +30,8 @@ console.log("1. Trạng thái và quyền");
   ok((await admin("POST", "/api/engines/claude/login/start", {}, { noOrigin: true })).s === 403, "POST khác nguồn → 403");
   ok((await member("POST", "/api/engines/claude/install")).s === 403, "thành viên không cài được CLI");
   ok((await member("GET", "/api/admin/apikeys")).s === 403, "thành viên không xem được khóa API dùng chung");
+  ok(typeof (await client()("GET", "/api/auth/me")).j?.plansOnly === "boolean", "trang đăng nhập biết máy chủ có cần gói AI riêng hay không, chưa đăng nhập vẫn hỏi được");
+  ok(typeof (await member("GET", "/api/models")).j?.sharedApi === "boolean", "danh sách model báo máy chủ có khóa API dùng chung hay không (trợ giúp Providers dựa vào đây)");
 }
 
 console.log("2. Claude: setup-token qua giao diện web");

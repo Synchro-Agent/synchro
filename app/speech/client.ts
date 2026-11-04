@@ -1,6 +1,7 @@
 "use client";
 // Phía trình duyệt của Speech: gọi /api/speech, giữ gói ElevenLabs (credit, tính năng) dùng chung cho mọi công cụ và thanh bên.
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { NO_SERVER } from "../apierr";
 import { locale } from "../i18n";
 
 export type Feat = "tts" | "dialogue" | "stt" | "live" | "agent" | "sfx" | "isolate" | "changer" | "align" | "music" | "design" | "remix" | "ivc" | "pvc" | "dub" | "dubClean" | "podcast" | "book" | "dict" | "native";
@@ -28,7 +29,7 @@ export type Effects = { filters: { id: string; name: string }[]; spaces: { id: s
 export class SpeechError extends Error { constructor(msg: string, public code?: string, public status = 0) { super(msg); } }
 
 export async function api<T = Record<string, unknown>>(path: string, init: RequestInit = {}): Promise<T> {
-  const r = await fetch(`/api/speech/${path}`, init).catch(() => { throw new SpeechError("Không kết nối được tới Synchro. Kiểm tra mạng rồi thử lại."); });
+  const r = await fetch(`/api/speech/${path}`, init).catch(() => { throw new SpeechError(NO_SERVER); });
   const j = (await r.json().catch(() => ({}))) as T & { error?: string; code?: string; credits?: Credits };
   if (!r.ok) {
     if (j.code === "plan") void refreshPlan(false);
@@ -42,12 +43,13 @@ export const postForm = <T = Record<string, unknown>>(op: string, fd: FormData) 
 export const del = (op: string, id: string) => api(`${op}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // ---- gói dùng chung (một lần quét cho cả trang) ----
-let plan: Plan | null = null, loading: Promise<void> | null = null;
+let plan: Plan | null = null, loading: Promise<void> | null = null, planFailed = false;
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 export async function refreshPlan(fresh = false) {
   if (loading && !fresh) return loading;
-  loading = fetch(`/api/speech/plan${fresh ? "?fresh=1" : ""}`).then(async (r) => { if (r.ok) { plan = (await r.json()) as Plan; emit(); } }).catch(() => {}).finally(() => { loading = null; });
+  // Không đọc được gói (mất mạng, máy chủ lỗi): báo để trang hiện nút thử lại, không quay mãi.
+  loading = fetch(`/api/speech/plan${fresh ? "?fresh=1" : ""}`).then(async (r) => { if (!r.ok) throw new Error(String(r.status)); plan = (await r.json()) as Plan; planFailed = false; emit(); }).catch(() => { planFailed = true; emit(); }).finally(() => { loading = null; });
   return loading;
 }
 export function setCredits(c: Credits) { if (plan) { plan = { ...plan, credits: c }; emit(); } }
@@ -56,6 +58,7 @@ export function usePlan(enabled = true) {
   useEffect(() => { if (enabled && !plan) void refreshPlan(); }, [enabled]);
   return p;
 }
+export const usePlanFailed = () => useSyncExternalStore((f) => { subs.add(f); return () => subs.delete(f); }, () => planFailed, () => false);
 export const on = (p: Plan | null, f: Feat) => !!p?.connected && !!p.features[f];
 
 // ---- giọng của tài khoản (dùng chung) ----

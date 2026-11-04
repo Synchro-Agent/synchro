@@ -41,3 +41,25 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .lnk-in{color:inherit;text-decoration:underline}
 .tk-more{display:flex;justify-content:center;margin:12px 0 4px}
 .tk-more .btn{gap:6px}
+/* Ô số trong Quản trị (credit giọng AI mỗi ngày) */
+.adm-num{width:112px;flex:none;margin:0;text-align:right}
+/* Cài đặt: kết quả tìm theo dòng, và dòng vừa chọn nổi lên một lúc */
+html body .sy-settings .s-item.s-hit{height:auto!important;min-height:34px;padding:5px 10px!important;text-align:left}
+.s-item.s-hit .s-lbl{display:flex;flex-direction:column;gap:1px;white-space:normal;line-height:1.3}
+.s-item.s-hit small{font-size:11px;color:var(--text-3)}
+.s-flash{animation:s-flash 1.8s ease-out;border-radius:8px}
+@keyframes s-flash{0%,45%{background:var(--hover);box-shadow:0 0 0 2px var(--border-strong)}100%{background:transparent;box-shadow:0 0 0 2px transparent}}
+@media (prefers-reduced-motion:reduce){.s-flash{animation:none;background:var(--hover)}}
+/* Cài đặt → Quyền riêng tư → Tệp đã tải lên */
+/* Trò chuyện bằng giọng nói: gõ câu hỏi khi trình duyệt không nghe được */
+.vm-type{display:flex;align-items:center;gap:8px;width:min(560px,100%);margin-top:16px}
+.vm-type input{flex:1;min-width:0;height:40px;padding:0 14px;border-radius:var(--r-pill);border:0;outline:none;color:#fff;font-size:15px;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.2)}
+.vm-type input::placeholder{color:rgba(255,255,255,.55)}
+.vm-type input:focus-visible{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}
+.vm-type .vm-opt{height:40px;padding:0 16px;font-size:13px}
+.vm-type .vm-opt:disabled{opacity:.45;cursor:default}
+.vm-btn:disabled{opacity:.35;cursor:default}
+.sp-bv{max-width:560px;margin:10px auto;gap:10px}
+.fp-note[role=alert]{flex-wrap:wrap}
+.bp-empty span+span{max-width:420px;text-align:center}
+.pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:11.5px;line-height:1.3}

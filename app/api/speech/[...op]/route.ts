@@ -2,8 +2,8 @@ import fs from "node:fs";
 import { Readable } from "node:stream";
 import { can, current, isAdmin, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
 import {
-  SpeechErr, asSpender, audioOf, checkSpend, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, sideRead, sideWrite, spent, updateItem, voiceOut, type Feat, type Plan,
+  SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
+  scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, type Feat, type Plan,
 } from "../../../speechapi";
 import { quickCall } from "../../../ai/anymodel";
 
@@ -217,7 +217,7 @@ async function speak(b: Record<string, unknown>) {
   const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128&optimize_streaming_latency=2`, {
     ...jsonBody({ text: text.slice(0, model?.max ?? 5000), model_id: model?.id, voice_settings: { stability: 0.5, similarity_boost: 0.75, speed } }), feat: "tts",
   });
-  spent(r);
+  spent(r, text.length);
   return new Response(r.body, { headers: { "content-type": r.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store", "x-accel-buffering": "no" } });
 }
 async function stt(u: UserRow, form: FormData) {
@@ -677,7 +677,18 @@ async function agentSession(u: UserRow, b: Record<string, unknown>) {
   }
 }
 
+// Thao tác tốn credit của ElevenLabs. Số là ước lượng credit cho thao tác hãng không báo chi phí trong header (spent() tính phần còn lại theo số thật).
+const BUDGET_EST: Record<string, number> = { tts: 0, dialogue: 0, speak: 0, sfx: 0, music: 0, "music/video": 0, "music/stems": 0, isolate: 0, changer: 0, align: 0, stt: 300, "live/token": 300, "agent/session": 1000, dub: 3000, podcast: 3000, book: 3000, native: 1000, design: 300, remix: 300 };
+
 async function POSTop(req: Request, u: UserRow, op: string[]) {
+  const key = op.join("/");
+  const est = BUDGET_EST[key];
+  if (est !== undefined) checkBudget(u);
+  const res = await POSTrun(req, u, op);
+  if (est && res.ok) addSpend(u.id, est);
+  return res;
+}
+async function POSTrun(req: Request, u: UserRow, op: string[]) {
   const key = op.join("/");
   const isForm = (req.headers.get("content-type") ?? "").includes("multipart/form-data");
   const form = isForm ? await req.formData().catch(() => { throw new SpeechErr("Không đọc được tệp tải lên (tệp quá lớn hoặc bị ngắt giữa chừng)."); }) : null;
@@ -735,7 +746,7 @@ async function run(req: Request, ctx: Ctx, method: "GET" | "POST" | "DELETE") {
   const { op } = await ctx.params;
   try {
     if (method === "GET") return await GETop(req, c.user, op.join("/"));
-    if (method === "POST") { checkSpend(c.user); return await asSpender(c.user.id, () => POSTop(req, c.user, op)); }
+    if (method === "POST") return await spender.run(c.user.id, () => POSTop(req, c.user, op));
     const q = new URL(req.url).searchParams;
     if (op[0] === "items") return Response.json({ ok: deleteItem(c.user, q.get("id") ?? "") });
     if (op[0] === "voices") {

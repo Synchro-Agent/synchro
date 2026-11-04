@@ -1,6 +1,6 @@
 import { can, current, limit, sameOrigin } from "../../../authstore";
 import { serviceKey } from "../../../providers";
-import { SpeechErr, mintRealtime, plan } from "../../../speechapi";
+import { SpeechErr, addSpend, checkBudget, mintRealtime, plan } from "../../../speechapi";
 import { userContext } from "../../../memory";
 import { topRule } from "../../../brain";
 
@@ -36,6 +36,8 @@ export async function POST(req: Request) {
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
   // Chưa gắn khoá ElevenLabs, hoặc tài khoản chưa được bật Speech: trình duyệt dùng chế độ dự phòng (nhận dạng và đọc bằng trình duyệt).
   if (!serviceKey("elevenlabs") || !can(c.user, "speech")) return Response.json({ fallback: true });
+  // Hết hạn mức giọng AI trong ngày: trò chuyện vẫn chạy bằng nhận dạng và giọng của trình duyệt.
+  try { checkBudget(c.user); } catch (e) { return Response.json({ fallback: true, error: (e as Error).message }); }
   try { limit("voice:" + c.user.id, 20, 60 * 60_000); } catch { return Response.json({ error: "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau." }, { status: 429 }); }
   const b = (await req.json().catch(() => ({}))) as { voice?: string };
   const voice = typeof b.voice === "string" && /^[\w-]{3,40}$/.test(b.voice) ? b.voice : VOICE;
@@ -46,6 +48,7 @@ export async function POST(req: Request) {
   try {
     // Không đặt ngôn ngữ: Eleven Realtime tự nhận ngôn ngữ người nói và trả lời đúng ngôn ngữ đó.
     const s = await mintRealtime({ model: MODEL, voice, instructions: [topRule(c.user.id), INSTRUCTIONS + DELEGATE, userContext(c.user, { memory: true })].filter(Boolean).join("\n\n"), eagerness: "medium", maxSeconds: 900, tools: TOOLS });
+    addSpend(c.user.id, 1000);
     return Response.json({ value: s.value, expiresAt: s.expiresAt, model: s.model, url: s.url, tools: s.tools });
   } catch (e) {
     const err = e as SpeechErr;

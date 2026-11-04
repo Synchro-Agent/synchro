@@ -2,6 +2,7 @@
 // Giao diện Artifact: thẻ trong tin nhắn, khung xem bên cạnh cuộc trò chuyện (xem trước / mã / phiên bản),
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { rowKeys } from "./a11y";
 import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { Markdown } from "./md";
@@ -718,7 +719,7 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
           <div className="bk-head"><span className="bk-head-n">{shown.length} artifact</span><BulkButton b={bk} /></div>
           <div className="art-grid">
             {pg.items.map((a) => (
-              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={(e) => e.key === "Enter" && show(a.id)} {...bulkRow(bk, a)}>
+              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={rowKeys(() => show(a.id))} {...bulkRow(bk, a)}>
                 {bk.on && <BulkCheck on={bk.has(a)} />}
                 <Thumb a={a} />
                 <div className="art-tile-meta">
@@ -756,7 +757,7 @@ export function OutputFiles({ files, onOpen, active }: { files: OutFile[]; onOpe
       {files.map((f) => {
         const k = fileKind(f.name);
         return (
-          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} role="button" tabIndex={0} onClick={() => onOpen?.(f)} onKeyDown={(e) => { if (e.key === "Enter") onOpen?.(f); }} title={tr("Xem trước")}>
+          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} role="button" tabIndex={0} onClick={() => onOpen?.(f)} onKeyDown={rowKeys(() => onOpen?.(f))} title={tr("Xem trước")}>
             <span className="out-badge" style={{ background: k.color }}>{k.label}</span>
             <span className="out-txt"><b data-notr>{f.name}</b><span>{tr(KIND[k.ext] ?? "Tệp")} · {fmtSize(f.size)}</span></span>
             <a className="out-dl" href={`/api/outputs/${f.id}`} download={f.name} onClick={(e) => e.stopPropagation()} aria-label={tr("Tải về")} data-tip="Tải về"><I.Download size={15} /></a>

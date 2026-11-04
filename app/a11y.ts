@@ -23,6 +23,16 @@ function openerOf(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/**
+ * Phím cho một hàng / thẻ có vai trò nút mà bên trong còn nút khác: Enter hoặc Space mở hàng, nhưng chỉ khi tiêu điểm ở chính hàng đó
+ * (Enter trên nút ⋮ bên trong chỉ mở menu của nút đó). preventDefault để Space không cuộn trang.
+ */
+export const rowKeys = (act: () => void) => (e: { key: string; target: EventTarget | null; currentTarget: EventTarget | null; preventDefault: () => void }) => {
+  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  act();
+};
+
 /** Menu vừa mở: nhớ nút mở, báo trạng thái cho trình đọc màn hình; mở bằng bàn phím thì đưa tiêu điểm vào mục đang chọn hoặc mục đầu. Trả về hàm dọn khi menu đóng. */
 export function registerMenu(el: HTMLElement) {
   const nested = !!el.parentElement?.closest(".menu");

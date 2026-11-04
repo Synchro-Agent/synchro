@@ -4,6 +4,7 @@
 // Đóng hộp thoại hay chuyển trang thì việc quét vẫn chạy (nút có vòng xoay), quét xong khi còn ở Kho kỹ năng thì báo một dòng.
 // Tắt, bật lại hay xóa skill ngay trong bảng; thư viện cho mọi người chỉ quản trị viên đổi được. Không tự tắt hay xóa gì.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp, usePref } from "./store";
@@ -14,9 +15,9 @@ import type { ScanItem, ScanJob, Verdict } from "./skillscan";
 type Group = { name: string; models: { key: string; name: string }[] };
 type Data = { job: ScanJob | null; count: number; models: Group[] };
 async function call<T>(url: string, method = "GET", body?: unknown): Promise<T> {
-  const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  if (!r.ok) throw new Error(j.error || statusText(r.status));
   return j as T;
 }
 const TABS: { v: Verdict; label: string; empty: string }[] = [

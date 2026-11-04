@@ -7,6 +7,8 @@
 //   đồ thị cục bộ. Synchro tự viết các trang; bạn thêm "Ghi chú của bạn" hoặc ghi chú riêng.
 // - Bảng, Hoạt động: việc dang dở, đoạn chat, chủ đề, tên riêng; những gì bộ não vừa tự học.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
+import { rowKeys } from "./a11y";
 import { SideToggle } from "./brand";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
@@ -45,10 +47,11 @@ const timeStr = (ms: number) => new Date(ms).toLocaleTimeString(en() ? "en-US" :
 const HUB_TITLE = "Bộ não";
 const slug = (s: string) => fold(s).replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
 
+const LoadRetry = ({ err, retry }: { err: string; retry: () => void }) => <div className="us-empty" role="alert"><span>{err}</span><button className="btn sm" onClick={retry}>{L("Thử lại", "Try again")}</button></div>;
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const r = await fetch(path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch(path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((j as { error?: string }).error || `Lỗi ${r.status}`);
+  if (!r.ok) throw new Error((j as { error?: string }).error || statusText(r.status));
   return j as T;
 }
 
@@ -728,12 +731,16 @@ function Bases({ onOpen, version }: { onOpen: Open; version: number }) {
   const [rows, setRows] = useState<unknown[] | null>(null);
   const [sort, setSort] = useState<{ k: string; dir: 1 | -1 }>({ k: "date", dir: -1 });
   const [showDone, setShowDone] = useState(false);
-  useEffect(() => { setRows(null); fetch(`/api/brain?table=${view}`, { cache: "no-store" }).then((r) => r.json()).then((j) => setRows(j.rows ?? [])).catch(() => setRows([])); }, [view, version]);
+  // Không tải được: báo lỗi và cho thử lại, không hiện bảng trống như thể chưa có gì.
+  const [err, setErr] = useState("");
+  const [again, setAgain] = useState(0);
+  useEffect(() => { setRows(null); setErr(""); api<{ rows?: unknown[] }>("GET", `/api/brain?table=${view}`).then((j) => setRows(j.rows ?? [])).catch((e) => setErr((e as Error).message)); }, [view, version, again]);
   const toggle = (r: TaskRow) => void api<{ rows: TaskRow[] }>("POST", "/api/brain/task", { title: r.title, task: r.task, done: !r.done }).then((j) => setRows(j.rows)).catch((e) => say((e as Error).message));
   const sorted = useMemo(() => [...(rows ?? [])].sort((a, b) => { const x = (a as Record<string, unknown>)[sort.k], y = (b as Record<string, unknown>)[sort.k]; return (typeof x === "number" && typeof y === "number" ? x - y : String(x ?? "").localeCompare(String(y ?? ""))) * sort.dir; }), [rows, sort]);
   const th = (k: string, label: string) => <th><button onClick={() => setSort({ k, dir: sort.k === k ? (sort.dir === 1 ? -1 : 1) : -1 })}>{label}{sort.k === k ? (sort.dir === 1 ? " ↑" : " ↓") : ""}</button></th>;
   const tasks = (sorted as TaskRow[]).filter((r) => showDone || !r.done);
   const link = (t: string) => <button className="bn-link" onClick={() => onOpen(t)} onMouseEnter={(e) => peek(t, e.currentTarget)} onMouseLeave={() => peek(null)} data-notr>{t}</button>;
+  if (err) return <div className="bn-bases"><LoadRetry err={err} retry={() => setAgain((n) => n + 1)} /></div>;
   return (
     <div className="bn-bases">
       <header className="bw-page-h">
@@ -771,13 +778,16 @@ const ACT: [RegExp, (p: { size?: number }) => React.ReactNode, [string, string]]
 ];
 function Activity({ onOpen, version }: { onOpen: Open; version: number }) {
   const [rows, setRows] = useState<{ at: number; text: string }[] | null>(null);
-  useEffect(() => { fetch("/api/brain?log=1", { cache: "no-store" }).then((r) => r.json()).then((j) => setRows(j.log ?? [])).catch(() => setRows([])); }, [version]);
+  const [err, setErr] = useState("");
+  const [again, setAgain] = useState(0);
+  useEffect(() => { setErr(""); api<{ log?: { at: number; text: string }[] }>("GET", "/api/brain?log=1").then((j) => setRows(j.log ?? [])).catch((e) => setErr((e as Error).message)); }, [version, again]);
   const head = (
     <header className="bw-page-h">
       <h2>{L("Hoạt động", "Activity")}</h2>
       <p>{L("Những gì bộ não tự học và tự sắp xếp, mới nhất trước. Bạn không cần làm gì: Synchro tự chạy sau mỗi đoạn chat và định kỳ.", "What the brain learned and organized on its own, newest first. Nothing to do on your side: Synchro runs after every chat and on a schedule.")}</p>
     </header>
   );
+  if (err && !rows) return <div className="bw-act-page">{head}<LoadRetry err={err} retry={() => setAgain((n) => n + 1)} /></div>;
   if (!rows) return <div className="bw-act-page">{head}<div className="us-empty"><span className="art-spin sm" /></div></div>;
   if (!rows.length) return <div className="bw-act-page">{head}<p className="bn-empty">{L("Bộ não chưa học gì. Sau mỗi đoạn chat, Synchro tự học và ghi lại ở đây.", "Nothing learned yet. After each chat, Synchro learns on its own and logs it here.")}</p></div>;
   const days = new Map<string, typeof rows>();
@@ -998,7 +1008,8 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
           </>
         )}
       </aside>
-      <main className="bw-main">
+      <div className="bw-main">
+        <h1 className="sr-only">{L("Bộ não", "Brain")}</h1>
         {!g ? <div className="us-empty"><span className="art-spin sm" /></div> : <>
           {/* Đồ thị luôn chạy (ẩn khi xem tab khác) để quay lại vẫn y nguyên như lúc rời đi. */}
           <div className="bw-graph" hidden={tab !== "graph"}>
@@ -1011,7 +1022,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
           {tab === "note" && at ? <div className="bw-reader"><NoteView key={`${at.title}`} title={at.title} sub={at.sub} exists={exists} onOpen={open} onChanged={() => void load()} onLoaded={setCur} /></div>
             : tab === "bases" ? <div className="bw-pad"><Bases onOpen={open} version={ver} /></div> : tab === "activity" ? <div className="bw-pad"><Activity onOpen={open} version={ver} /></div> : null}
         </>}
-      </main>
+      </div>
       {tab === "note" && cur && g && <aside className="bw-right" aria-label={L("Liên kết của ghi chú", "Note links")}><NoteSide d={cur} graph={g} exists={exists} onOpen={open} /></aside>}
       {side && <button className="bw-scrim" aria-label={L("Đóng", "Close")} onClick={() => setSide("")} />}
     </div>
@@ -1023,7 +1034,8 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
   const app = useApp();
   const [g, setG] = useState<Graph | null>(null);
   const [gs] = useGS("mini");
-  const load = useCallback(() => fetch("/api/brain", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j?.nodes) setG(j); }).catch(() => {}), []);
+  const [err, setErr] = useState("");
+  const load = useCallback(() => { setErr(""); return api<Graph>("GET", "/api/brain").then((j) => { if (j?.nodes) setG(j); }).catch((e) => setErr((e as Error).message)); }, []);
   useEffect(() => { void load(); }, [load]);
   const openBrain = (title?: string) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title: title ?? null } }));
   const setAuto = (on: boolean) => void api("PUT", "/api/brain/instructions", { auto: on }).then(() => { void load(); app.say(on ? L("Synchro sẽ tự cập nhật hướng dẫn từ các đoạn chat", "Synchro will update your instructions from your chats") : L("Đã tắt tự cập nhật hướng dẫn", "Automatic instruction updates are off")); }).catch((e) => app.say(e.message));
@@ -1040,9 +1052,9 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
         <span><b>{s.topics}</b>{L("chủ đề", "topics")}</span><span><b>{s.entities}</b>{L("tên riêng", "entities")}</span>
         {s.pending > 0 && <span className="wait"><b>{s.pending}</b>{L("đang học", "learning")}</span>}
       </div>}
-      {g ? <div className="bn-mini" role="button" tabIndex={0} aria-label={L("Mở bộ não", "Open the brain")} onKeyDown={(e) => e.key === "Enter" && openBrain()}>
+      {g ? <div className="bn-mini" role="button" tabIndex={0} aria-label={L("Mở bộ não", "Open the brain")} onKeyDown={rowKeys(() => openBrain())}>
         <BrainGraph data={g} gs={gs} mini height={220} onOpen={(t) => openBrain(t)} onBg={() => openBrain()} />
-      </div> : <div className="us-empty"><span className="art-spin sm" /></div>}
+      </div> : err ? <LoadRetry err={err} retry={() => void load()} /> : <div className="us-empty"><span className="art-spin sm" /></div>}
       <div className="bn-acts" style={{ margin: "12px 0 18px" }}>
         <button className="btn dark" onClick={() => openBrain()}><I.Brain size={14} />{L("Mở bộ não", "Open the brain")}</button>
         <a className="btn" href="/api/brain/export" download><I.Download size={13} />{L("Tải bộ não về (.zip Markdown)", "Download the brain (.zip Markdown)")}</a>

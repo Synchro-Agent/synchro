@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { apiFetch, statusText } from "./apierr";
+import { rowKeys } from "./a11y";
 import { SKILLS_CHANGED, SKILL_STUDIOS } from "./studios";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
@@ -34,10 +36,10 @@ export const SKILLS_UPLOAD = "skills:upload";
 // Kho kỹ năng nhận tệp thả vào trang rồi chuyển cho danh sách skill (detail = File).
 export const SKILLS_DROP = "skills:drop";
 const api = async (url: string, init?: RequestInit) => {
-  const r = await fetch(url, init);
+  const r = await apiFetch(url, init);
   const j = await r.json().catch(() => ({}));
   // 413 không kèm lời giải thích: nginx chặn trước khi tới máy chủ (tệp vượt giới hạn mỗi lần tải lên).
-  if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : `Lỗi ${r.status}`));
+  if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : statusText(r.status)));
   return j;
 };
 // Dung lượng tối đa một gói skill tải lên (LIMITS.zip trong skillstore.ts): gói lớn hơn được lọc trong trình duyệt, chỉ giữ thư mục các skill.
@@ -94,8 +96,8 @@ export async function inspectGithub(url: string, onWait?: () => void): Promise<F
 export type Scope = "me" | "org";
 // Tải về tệp .zip xuất skill / thư viện (app/skillexport.ts): giữ đúng tên tệp máy chủ đặt, README theo ngôn ngữ giao diện.
 export async function downloadExport(url: string, fallback: string): Promise<string> {
-  const r = await fetch(`${url}?lang=${getLang()}`, { cache: "no-store" });
-  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `Error ${r.status}`); }
+  const r = await apiFetch(`${url}?lang=${getLang()}`, { cache: "no-store" });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || statusText(r.status)); }
   const blob = await r.blob();
   const m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get("content-disposition") ?? "");
   const name = m ? decodeURIComponent(m[1]) : fallback;
@@ -290,7 +292,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       {list !== null && !list.length && !q && <div className="hub-empty"><I.Scroll size={18} /><span>Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.</span></div>}
       <div className="pl-rows2">
         {pgS.items.map((s) => (
-          <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={(e) => e.key === "Enter" && open(s.name)} {...bulkRow(bs, s)}>
+          <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={rowKeys(() => open(s.name))} {...bulkRow(bs, s)}>
             {bs.on && <BulkCheck on={bs.has(s)} />}
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
             <div className="pl-row2-t">

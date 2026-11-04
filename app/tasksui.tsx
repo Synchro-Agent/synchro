@@ -3,6 +3,7 @@
 // Việc chạy nền trên máy chủ theo lịch, kể cả khi máy người dùng tắt hay đã đóng trang. Ba mục: Kết quả (theo ngày, xem tiến độ đang chạy, nhật ký),
 // Cần duyệt (đề xuất của việc tự động: tạo skill, hành động, trang web, công cụ — duyệt là Synchro làm), Việc tự động (lịch, bật / tắt, chạy ngay).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
 import { tr } from "./i18n";
 import { INBOX_CHANGED, useInboxCount } from "./inboxcount";
@@ -28,9 +29,9 @@ type Plan = { title: string; prompt: string; schedule: Schedule; browser: Browse
 type RunEv = { seq: number; at: number; kind: string; text: string };
 
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
-  const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
+  if (!r.ok) throw new Error(j.error || statusText(r.status));
   return j as T;
 };
 const DAYS = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
@@ -272,8 +273,10 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
 }
 
 // ---------------------------------------------------------------- trang Hộp thư
+const LoadErr = ({ title, err, retry }: { title: string; err: string; retry: () => void }) => <div className="err-box" role="alert"><b>{title}</b><span>{tr(err)}</span><button className="btn" onClick={retry}>{tr("Thử lại")}</button></div>;
 export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model?: string; onOpenChat: (title: string, text: string) => void }) {
-  const { openSettings } = useApp();
+  const app = useApp();
+  const { openSettings } = app;
   const [tab, setTab] = useState<"results" | "approve" | "jobs">("results");
   const [items, setItems] = useState<Item[] | null>(null);
   // Trang cũ hơn đã mở bằng "Xem kết quả cũ hơn"; trang đầu vẫn tự làm mới.
@@ -288,12 +291,15 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const [open, setOpen] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ task?: Task; plan?: Plan } | "new" | null>(null);
   const older_ = useRef(0);
+  // Mỗi tab tải riêng: lỗi của tab nào hiện ở tab đó kèm nút thử lại, không quay mãi.
   const [loadErr, setLoadErr] = useState("");
+  const [tasksErr, setTasksErr] = useState("");
+  const [propsErr, setPropsErr] = useState("");
   const load = useCallback(() => {
-    setLoadErr("");
+    setLoadErr(""); setTasksErr(""); setPropsErr("");
     api<{ items: Item[]; more: boolean }>("GET", "/api/inbox").then((j) => { setItems(j.items); setMore((m) => (older_.current ? m : j.more)); }).catch((e) => setLoadErr(e.message));
-    api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch(() => {});
-    api<{ proposals: Proposal[] }>("GET", "/api/inbox/proposals?all=1").then((j) => setProps(j.proposals)).catch(() => {});
+    api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch((e) => setTasksErr(e.message));
+    api<{ proposals: Proposal[] }>("GET", "/api/inbox/proposals?all=1").then((j) => setProps(j.proposals)).catch((e) => setPropsErr(e.message));
   }, [say]);
   useEffect(() => {
     load();
@@ -321,7 +327,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running" && x.status !== "waiting") read([x.run]); };
   const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } catch (e) { say((e as Error).message); } };
   const setOn = async (t: Task) => { try { await api("PATCH", `/api/tasks/${t.id}`, { enabled: !t.enabled }); load(); } catch (e) { say((e as Error).message); } };
-  const del = async (t: Task) => { if (!window.confirm(tr("Xóa việc tự động này? Kết quả cũ trong Hộp thư cũng bị xóa."))) return; try { await api("DELETE", `/api/tasks/${t.id}`); say(tr("Đã xóa việc tự động")); load(); } catch (e) { say((e as Error).message); } };
+  const del = (t: Task) => app.confirm(tr("Xóa việc tự động này?"), tr("Kết quả cũ trong Hộp thư cũng bị xóa."), tr("Xóa"), () => { void api("DELETE", `/api/tasks/${t.id}`).then(() => { say(tr("Đã xóa việc tự động")); load(); }).catch((e) => say((e as Error).message)); });
   const byId = useMemo(() => new Map((tasks ?? []).map((t) => [t.id, t])), [tasks]);
   const all = useMemo(() => { const first = items ?? [], have = new Set(first.map((x) => x.run)); return [...first, ...older.filter((x) => !have.has(x.run))]; }, [items, older]);
   const unread = all.filter((x) => !x.read && x.status !== "running" && x.status !== "waiting").length;
@@ -380,7 +386,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         {tab === "jobs" && <BulkButton b={bkJ} />}
       </div>
 
-      {tab === "results" && (items === null ? (loadErr ? <div className="err-box" role="alert"><b>{tr("Chưa tải được Hộp thư")}</b><span>{tr(loadErr)}</span><button className="btn" onClick={load}>{tr("Thử lại")}</button></div> : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
+      {tab === "results" && (items === null ? (loadErr ? <LoadErr title={tr("Chưa tải được Hộp thư")} err={loadErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
         <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy và gửi kết quả vào đây.")}</span></div>
       ) : (
         <div className="tk-feed">{groups.map(([d, list]) => (
@@ -401,7 +407,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
       ))}
 
-      {tab === "approve" && (props === null ? <div className="empty"><span className="art-spin" /></div> : !pending.length && !decided.length ? (
+      {tab === "approve" && (props === null ? (propsErr ? <LoadErr title={tr("Chưa tải được danh sách cần duyệt")} err={propsErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !pending.length && !decided.length ? (
         <div className="apps-empty"><I.ShieldCheck size={22} /><b>{tr("Không có gì cần duyệt")}</b><span>{tr("Việc cần bạn đồng ý (tạo skill, gửi tin, mở trang web mới…) Synchro không tự làm mà gửi vào đây. Bạn chỉ việc duyệt.")}</span></div>
       ) : (
         <div className="tk-props">
@@ -411,7 +417,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         </div>
       ))}
 
-      {tab === "jobs" && (tasks === null ? <div className="empty"><span className="art-spin" /></div> : !tasks.length ? (
+      {tab === "jobs" && (tasks === null ? (tasksErr ? <LoadErr title={tr("Chưa tải được danh sách việc tự động")} err={tasksErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !tasks.length ? (
         <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa có việc tự động nào")}</b><span>{tr("Giao việc ở ô phía trên, Synchro lên kế hoạch để bạn xem lại trước khi tạo.")}</span></div>
       ) : (
         <div className="tk-jobs">{pgJ.items.map((t) => (

@@ -6,7 +6,7 @@ import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-export-"));
-process.env.DATA_DIR = tmp; process.env.DATA_KEY = "export-key"; process.env.SYNCHRO_SPEECH_DAILY_CREDITS = "100"; process.env.ADMIN_EMAILS = "boss@export.test";
+process.env.DATA_DIR = tmp; process.env.DATA_KEY = "export-key"; process.env.ADMIN_EMAILS = "boss@export.test";
 const CACHE = path.join(process.cwd(), ".cache", "files");
 fs.mkdirSync(CACHE, { recursive: true });
 const m = await loadTs(["authstore", "chatstore", "artifactstore", "speechapi", "ops", "fileproc/owners", "api/auth/account/export/route", "api/auth/avatar/route", "api/csp-report/route", "api/files/mine/route"]);
@@ -42,21 +42,7 @@ try {
   ok((await FR.GET(req(`/api/files/mine?download=${fid}`, cb))).status === 404, "người khác không tải được");
   ok((await FR.GET(req(`/api/files/mine?download=../../x`, ca))).status === 404, "mã lạ: không thoát thư mục");
 
-  console.log("3. Trần giọng nói");
-  const res = (n) => new Response("", { headers: { "character-cost": String(n) } });
-  SP.asSpender(u.id, () => SP.spent(res(60)));
-  ok(SP.spentToday(u.id) === 60, "cộng đúng credit", SP.spentToday(u.id));
-  SP.checkSpend(AS.getUser(u.id));
-  ok(true, "chưa tới trần: cho chạy");
-  await SP.asSpender(u.id, async () => { await new Promise((o) => setTimeout(o, 5)); SP.spent(res(50)); });
-  ok(SP.spentToday(u.id) === 110, "vẫn tính đúng người sau các bước bất đồng bộ", SP.spentToday(u.id));
-  let e = null; try { SP.checkSpend(AS.getUser(u.id)); } catch (x) { e = x; }
-  ok(e?.status === 429 && /hôm nay/.test(e.message), "hết trần: báo rõ, 429", e?.message);
-  SP.checkSpend(AS.getUser(v.id));
-  ok(SP.spentToday(v.id) === 0, "không ảnh hưởng người khác");
-  SP.asSpender(boss.id, () => SP.spent(res(500)));
-  let e2 = null; try { SP.checkSpend(AS.getUser(boss.id)); } catch (x) { e2 = x; }
-  ok(!e2, "quản trị viên không bị chặn", e2?.message);
+  // Trần giọng nói theo ngày: xem speech-budget.test.mjs.
 
   console.log("4. Báo cáo CSP");
   const report = { "csp-report": { "document-uri": `${B}/share/ma-bi-mat?x=1`, "blocked-uri": "https://evil.example/a.js?token=abc", "effective-directive": "script-src-elem", "violated-directive": "script-src" } };

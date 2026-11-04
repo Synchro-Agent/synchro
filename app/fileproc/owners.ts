@@ -84,14 +84,17 @@ export async function releaseFile(uid: string, id: string) {
   return true;
 }
 
+async function dropOrphans(ids: string[]) {
+  const left = table().prepare("SELECT 1 FROM file_owners WHERE file_id = ? LIMIT 1");
+  for (const id of ids) {
+    if (!/^[a-f0-9]{40}$/.test(id) || left.get(id)) continue;
+    await Promise.all([".bin", ".json"].map((x) => rm(path.join(DIR, id + x), { force: true })));
+  }
+}
 /** Xóa tài khoản: bỏ quyền chủ của người này; tệp không còn ai là chủ thì xóa khỏi đĩa. Tệp người khác vẫn đang dùng giữ nguyên. */
 export async function releaseUserFiles(uid: string) {
   const d = table();
   const ids = (d.prepare("SELECT file_id FROM file_owners WHERE user_id = ?").all(uid) as { file_id: string }[]).map((r) => r.file_id);
   d.prepare("DELETE FROM file_owners WHERE user_id = ?").run(uid);
-  const left = d.prepare("SELECT 1 FROM file_owners WHERE file_id = ? LIMIT 1");
-  for (const id of ids) {
-    if (!/^[a-f0-9]{40}$/.test(id) || left.get(id)) continue;
-    await Promise.all([".bin", ".json"].map((x) => rm(path.join(DIR, id + x), { force: true })));
-  }
+  await dropOrphans(ids);
 }

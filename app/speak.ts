@@ -1,10 +1,15 @@
 "use client";
 // Đọc to bằng giọng ElevenLabs thật (máy chủ gọi API, trình duyệt phát dần khi âm thanh còn đang tạo).
 // Không dùng được (chưa gắn khóa, tài khoản chưa được bật Speech, khóa thiếu quyền) thì trả null để nơi gọi dùng giọng của trình duyệt.
+// Câu trả lời dài được chia phần (voiceflow.ts) và đọc nối tiếp bằng một phần tử âm thanh duy nhất. Giữa chừng hết hạn mức, hết credit, lỗi mạng: done báo false,
+// rest() trả về phần chưa đọc để nơi gọi đọc nốt bằng giọng của trình duyệt, không dừng giữa câu như đã xong.
 import type { LevelRef } from "./voicefx";
+import { splitSpeech } from "./voiceflow";
 
-export type Speaking = { stop: () => void; done: Promise<boolean> };
-let off = false, offWhy = "";
+export type Speaking = { stop: () => void; done: Promise<boolean>; rest: () => string };
+let off = false, offWhy = "", note = "";
+/** Câu báo một lần khi tài khoản đã hết hạn mức giọng AI trong ngày (đọc xong thì xóa). */
+export const aiVoiceNote = () => { const m = note; note = ""; return m; };
 /** Lý do lần gần nhất không đọc được bằng giọng AI (để báo một lần). */
 export const aiVoiceIssue = () => offWhy;
 export const aiVoiceOff = () => off;
@@ -12,44 +17,72 @@ export const aiVoiceOff = () => off;
 /** speed theo cài đặt Tốc độ (Chậm / Bình thường / Nhanh) → phạm vi 0,7–1,2 của ElevenLabs. */
 export const elSpeed = (rate: number) => Math.min(1.2, Math.max(0.7, 1 + (rate - 1) * 0.5));
 
-export async function speakAI(text: string, o: { voice?: string; speed?: number; level?: LevelRef; onStart?: () => void } = {}): Promise<Speaking | null> {
+type Opts = { voice?: string; speed?: number; level?: LevelRef; onStart?: () => void };
+
+async function openPart(text: string, o: Opts, signal: AbortSignal): Promise<Response | null> {
+  const r = await fetch("/api/speech/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, voice: o.voice || undefined, speed: o.speed }), signal }).catch(() => null);
+  if (r?.ok && r.body) return r;
+  const j = (await r?.json().catch(() => ({}))) as { error?: string; code?: string } | undefined;
+  offWhy = j?.error ?? "";
+  // Hết hạn mức trong ngày: cả phiên dùng giọng trình duyệt, báo một lần.
+  if (j?.code === "budget") { off = true; note = offWhy; return null; }
+  // Chưa gắn khóa / không có quyền: cả phiên dùng giọng trình duyệt. Hết credit, bận: lần sau thử lại.
+  if (!signal.aborted && (!r || r.status === 503 || r.status === 401 || (r.status === 403 && j?.code !== "plan" && j?.code !== "quota"))) off = true;
+  return null;
+}
+
+export async function speakAI(text: string, o: Opts = {}): Promise<Speaking | null> {
   if (off || !text.trim()) return null;
+  const parts = splitSpeech(text);
   const ac = new AbortController();
-  const r = await fetch("/api/speech/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, voice: o.voice || undefined, speed: o.speed }), signal: ac.signal }).catch(() => null);
-  if (!r?.ok || !r.body) {
-    const j = (await r?.json().catch(() => ({}))) as { error?: string; code?: string } | undefined;
-    offWhy = j?.error ?? "";
-    // Chưa gắn khóa / không có quyền: cả phiên dùng giọng trình duyệt. Hết credit, bận: lần sau thử lại.
-    if (!r || r.status === 503 || r.status === 401 || (r.status === 403 && j?.code !== "plan" && j?.code !== "quota")) off = true;
-    return null;
-  }
+  const r0 = await openPart(parts[0], o, ac.signal);
+  if (!r0) return null;
+  // Một phần tử âm thanh cho mọi phần: trình duyệt đã cho phát sau lần bấm đầu, phần tử mới có thể bị chặn tự phát (Safari).
   const audio = new Audio();
-  const ct = (r.headers.get("content-type") ?? "").split(";")[0];
-  let url = "", stopped = false;
-  // Phát dần qua MediaSource khi trình duyệt hỗ trợ MP3; không thì tải hết rồi phát (vẫn nhanh với câu ngắn).
-  if (ct === "audio/mpeg" && typeof MediaSource !== "undefined" && MediaSource.isTypeSupported("audio/mpeg")) {
-    const ms = new MediaSource();
-    url = URL.createObjectURL(ms);
-    audio.src = url;
-    ms.addEventListener("sourceopen", async () => {
-      const sb = ms.addSourceBuffer("audio/mpeg");
-      const reader = r.body!.getReader();
-      const wait = () => new Promise<void>((ok) => (sb.updating ? sb.addEventListener("updateend", () => ok(), { once: true }) : ok()));
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done || stopped) break;
+  let stopped = false, url = "", idx = 0, started = false;
+  const release = () => { if (url) { const u = url; url = ""; setTimeout(() => URL.revokeObjectURL(u), 1000); } };
+  // Phát một phần; loaded: đã tải xong âm thanh của phần này, lúc đó mới xin phần sau (không tốn credit cho phần chưa chắc đọc tới).
+  const play = async (r: Response) => {
+    const ct = (r.headers.get("content-type") ?? "").split(";")[0];
+    let loadedFn: () => void = () => {};
+    const loaded = new Promise<void>((res) => { loadedFn = res; });
+    release();
+    // Phát dần qua MediaSource khi trình duyệt hỗ trợ MP3; không thì tải hết rồi phát (vẫn nhanh với câu ngắn).
+    if (ct === "audio/mpeg" && typeof MediaSource !== "undefined" && MediaSource.isTypeSupported("audio/mpeg")) {
+      const ms = new MediaSource();
+      url = URL.createObjectURL(ms);
+      audio.src = url;
+      ms.addEventListener("sourceopen", async () => {
+        const sb = ms.addSourceBuffer("audio/mpeg");
+        const reader = r.body!.getReader();
+        const wait = () => new Promise<void>((ok) => (sb.updating ? sb.addEventListener("updateend", () => ok(), { once: true }) : ok()));
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done || stopped) break;
+            await wait();
+            sb.appendBuffer(value);
+          }
           await wait();
-          sb.appendBuffer(value);
-        }
-        await wait();
-        if (ms.readyState === "open") ms.endOfStream();
-      } catch { if (ms.readyState === "open") try { ms.endOfStream(); } catch {} }
-    }, { once: true });
-  } else {
-    url = URL.createObjectURL(await r.blob());
-    audio.src = url;
-  }
+          if (ms.readyState === "open") ms.endOfStream();
+        } catch { if (ms.readyState === "open") try { ms.endOfStream(); } catch {} }
+        loadedFn();
+      }, { once: true });
+    } else {
+      url = URL.createObjectURL(await r.blob());
+      audio.src = url;
+      loadedFn();
+    }
+    const done = new Promise<boolean>((res) => {
+      audio.onended = () => res(true);
+      audio.onerror = () => res(false);
+    });
+    audio.onplaying = () => { if (!started) { started = true; o.onStart?.(); } };
+    await audio.play();
+    return { done, loaded };
+  };
+  let first: Awaited<ReturnType<typeof play>>;
+  try { first = await play(r0); } catch { ac.abort(); release(); return null; }
   // Mức âm lượng thật của giọng đang phát cho sóng / quả cầu.
   let raf = 0, ctx: AudioContext | null = null;
   if (o.level) {
@@ -62,18 +95,30 @@ export async function speakAI(text: string, o: { voice?: string; speed?: number;
       tick();
     } catch { ctx = null; }
   }
-  let finish: (ok: boolean) => void = () => {};
-  const done = new Promise<boolean>((res) => { finish = res; });
-  const cleanup = (ok: boolean) => {
+  let wake: (ok: boolean) => void = () => {};
+  const halted = new Promise<boolean>((res) => { wake = res; });
+  const finish = (ok: boolean) => {
     cancelAnimationFrame(raf);
     if (o.level) o.level.current = 0;
     ctx?.close().catch(() => {});
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    finish(ok);
+    release();
+    return ok;
   };
-  audio.onended = () => cleanup(true);
-  audio.onerror = () => cleanup(false);
-  audio.onplaying = () => o.onStart?.();
-  try { await audio.play(); } catch { ac.abort(); cleanup(false); return null; }
-  return { stop: () => { stopped = true; ac.abort(); audio.pause(); cleanup(false); }, done };
+  const done = (async () => {
+    let cur = first;
+    for (;;) {
+      // Xin phần sau khi phần này đã tải xong, để nối liền không có khoảng lặng dài.
+      const at = idx + 1;
+      const next = at < parts.length ? cur.loaded.then(() => (stopped ? null : openPart(parts[at], o, ac.signal))) : null;
+      const ok = await Promise.race([cur.done, halted]);
+      if (!ok || stopped) return finish(false);
+      if (!next) return finish(true);
+      const r = await Promise.race([next, halted.then(() => null)]);
+      if (stopped) return finish(false);
+      idx = at;
+      if (!r) return finish(false);
+      try { cur = await play(r); } catch { return finish(false); }
+    }
+  })();
+  return { stop: () => { stopped = true; ac.abort(); audio.pause(); wake(false); }, done, rest: () => (stopped ? "" : parts.slice(idx).join(" ")) };
 }

@@ -1,6 +1,8 @@
 "use client";
 // Kho kỹ năng (gộp Skills và Plugins; ở thanh bên, Tùy chỉnh và Cài đặt) và trang Tùy chỉnh có hai mục Kho kỹ năng / Connectors.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch, statusText } from "./apierr";
+import { rowKeys } from "./a11y";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
@@ -18,9 +20,9 @@ import { SkillScan } from "./skillscanui";
 
 type Data = { plugins: PluginSummary[]; catalogInstalled?: { libraries: number; skills: number }; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const r = await fetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
+  const r = await apiFetch(url, { method, headers: body instanceof FormData ? undefined : { "content-type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : `Error ${r.status}`));
+  if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : statusText(r.status)));
   return j as T;
 }
 const fire = () => window.dispatchEvent(new Event(PLUGINS_CHANGED));
@@ -347,7 +349,7 @@ export function SkillHub() {
   const row = (p: PluginSummary) => {
     const manage = p.scope === "personal" || d.admin;
     return (
-      <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(p.id)} {...bulkRow(bk, p)}>
+      <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={rowKeys(() => setOpen(p.id))} {...bulkRow(bk, p)}>
         {bk.on && <BulkCheck on={bk.has(p)} />}
         <PlugMark id={p.catalogId} size={36} />
         <div className="pl-row2-t">

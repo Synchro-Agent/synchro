@@ -126,7 +126,7 @@ Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "c
 
 ## Giới hạn và theo dõi khác
 
-- Giọng nói (khóa ElevenLabs dùng chung): 30.000 credit mỗi ngày cho mỗi tài khoản (`SYNCHRO_SPEECH_DAILY_CREDITS`), quản trị viên không tính. Cuộc gọi trực tiếp (`live`, `voice`) tính theo thời gian nên hãng không báo số credit từng lượt: chỉ có giới hạn số phiên.
+- Giọng nói (khóa ElevenLabs dùng chung): có trần credit mỗi ngày cho tài khoản đã xác minh, chưa xác minh và cả máy chủ, sửa ở Cài đặt → Quản trị (`speechBudget`), quản trị viên không tính. Hết trần thì dùng giọng của trình duyệt.
 - CSP script chạy thử (`Content-Security-Policy-Report-Only` trong `next.config.ts`): chỉ báo vào trang Sức khỏe hệ thống, chưa chặn. Báo cáo sạch một thời gian thì chuyển thành chặn thật.
 - Người dùng tải được mọi dữ liệu máy chủ giữ của họ ở Cài đặt → Quyền riêng tư (`/api/auth/account/export`).
 

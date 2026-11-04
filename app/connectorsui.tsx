@@ -3,6 +3,7 @@
 // Danh mục connector có sẵn, thêm connector tùy chỉnh bằng địa chỉ máy chủ MCP, đăng nhập OAuth trong cửa sổ bật lên,
 // bật/tắt từng connector và đặt quyền từng công cụ (luôn cho phép / hỏi trước / chặn). Kèm thẻ duyệt công cụ dùng trong chat.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch, NO_SERVER } from "./apierr";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { CONNECTORS_BROWSE, ConnLogo } from "./connlogo";
@@ -27,10 +28,8 @@ type Data = { connectors: Conn[]; directory: DirEntry[]; policy: Policy };
 const allowed = (p: Policy, dir: string) => p.allowed.includes("*") || p.allowed.includes(dir);
 type Res = { connectors: Conn[]; connector?: Conn; authorizeUrl?: string; error?: string };
 
-const NO_SERVER = "Không kết nối được tới Synchro. Kiểm tra mạng rồi thử lại.";
 async function api<T = Res>(method: string, url: string, body?: unknown): Promise<T> {
-  // Mất mạng hay máy chủ đang khởi động lại: không để lộ "Failed to fetch" của trình duyệt.
-  const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }).catch(() => { throw new Error(NO_SERVER); });
+  const r = await apiFetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => null);
   if (!r.ok) throw new Error((j as { error?: string } | null)?.error || (r.status >= 500 ? NO_SERVER : `Lỗi ${r.status}`));
   if (j === null) throw new Error(NO_SERVER);

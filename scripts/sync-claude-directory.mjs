@@ -100,7 +100,8 @@ for (const p of plugins) {
     e.altFor.push(p.name);
     extra.set(id, e); ids.push(id);
   }
-  p.alt = [...new Set(ids)];
+  // Không có trong alternatives.json (chưa ai xem): để trống alt, lúc chạy claudedir.ts tự tìm thư viện mở gần nhất. Có mà rỗng: đã xem, danh mục không có.
+  if (ALT[p.name]) p.alt = [...new Set(ids)];
 }
 plugins.push(...extra.values());
 const out = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "catalog", "claude-directory.json");

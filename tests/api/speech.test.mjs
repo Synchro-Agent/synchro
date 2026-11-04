@@ -277,6 +277,22 @@ await el({ noPerms: ["pronunciation_dictionaries_write", "audio_native_write"] }
 p = (await admin("GET", "/api/speech/plan?fresh=1")).j;
 ok(!p.features.dict && !p.features.native && p.perms.dict && p.perms.native, "khóa thiếu quyền từ điển / Audio Native: ẩn hai công cụ", JSON.stringify({ f: [p.features.dict, p.features.native], perms: p.perms }));
 
+console.log("Hạn mức credit trong ngày: khóa dùng chung không bị một tài khoản tiêu hết");
+await el({ tier: "creator", studio: false, lockMusic: false, used: 0, reset: true, noPerms: [] });
+await admin("GET", "/api/speech/plan?fresh=1");
+const saved = (await admin("GET", "/api/admin")).j.settings.speechBudget;
+await admin("PATCH", "/api/admin/settings", { speechBudget: { user: 1, unverified: 1, global: 1000000 } });
+const m2 = client();
+await m2("POST", "/api/auth/signup", { email: `sp-budget-${Date.now()}@synchro.test`, password: "Member-pass-123", profile: { fullName: "Budget Member", birthDate: "2000-01-01" } });
+let s1 = await m2("POST", "/api/speech/speak", { text: "Câu đầu tiên trong ngày của tài khoản này." }, { raw: true });
+const first = s1.status; await s1.arrayBuffer().catch(() => {});
+let s2 = await m2("POST", "/api/speech/speak", { text: "Câu thứ hai." });
+ok(first === 200 && s2.s === 429 && s2.j?.code === "budget", "hết hạn mức: báo mã budget (trình duyệt chuyển sang giọng của nó), không gọi ElevenLabs nữa", JSON.stringify({ first, s2 }));
+const vs = await m2("POST", "/api/voice/session", {});
+ok(vs.s === 200 && vs.j?.fallback === true && !vs.j.cascade, "trò chuyện giọng nói khi hết hạn mức: dùng nhận dạng và giọng của trình duyệt", JSON.stringify(vs.j));
+ok((await admin("POST", "/api/speech/speak", { text: "Quản trị viên không bị chặn." }, { raw: true })).status === 200, "quản trị viên không bị chặn bởi hạn mức");
+await admin("PATCH", "/api/admin/settings", { speechBudget: saved });
+
 await el({ tier: "free", studio: false, lockMusic: false, used: 0, reset: true, noPerms: [] });
 await admin("GET", "/api/speech/plan?fresh=1");
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);

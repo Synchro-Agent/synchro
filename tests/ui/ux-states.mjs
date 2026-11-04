@@ -201,6 +201,28 @@ try {
   await key("Escape"); await sleep(300);
   await P("Page.removeScriptToEvaluateOnNewDocument", { identifier });
 
+  console.log("Ô tìm của Cài đặt ra đúng dòng");
+  await go(B);
+  await until(`!!document.querySelector(${JSON.stringify(COMPOSER)})`);
+  await click(`document.querySelector(".rail .user")`); await sleep(400);
+  await click(`[...document.querySelectorAll(".menu-item")].find((e) => /^(Cài đặt|Settings)/.test(e.textContent.trim()))`); await until(`!!document.querySelector(".modal.settings")`, 10000, "mở Cài đặt");
+  await click(`document.querySelector(".modal.settings .s-search input")`); await type("cookie");
+  await until(`!!document.querySelector(".modal.settings .s-hit")`, 5000, "kết quả tìm");
+  await click(`document.querySelector(".modal.settings .s-hit")`);
+  await until(`!!document.querySelector(".modal.settings .s-flash")`, 8000, "dòng được làm nổi");
+  ok(await ev(`/cookie/i.test(document.querySelector(".modal.settings .s-flash").textContent)`), "bấm kết quả: mở đúng tab, cuộn tới đúng dòng");
+  await click(`document.querySelector(".modal.settings .close")`); await sleep(300);
+
+  console.log("Hộp thư: tab nào lỗi cũng có nút thử lại, không quay mãi");
+  await ev(`(() => { window.__f = window.fetch; window.fetch = (u, i) => (/\\/api\\/(tasks|inbox)/.test(String(u)) ? Promise.reject(new TypeError("Failed to fetch")) : window.__f(u, i)); })()`);
+  await click(`document.querySelector("[data-nav=inbox]")`);
+  await until(`!!document.querySelector(".err-box")`, 8000, "hộp lỗi tab Kết quả");
+  ok(!/Failed to fetch/.test(await ev(`document.querySelector(".err-box").textContent`)), "không lộ Failed to fetch", await ev(`document.querySelector(".err-box").textContent`));
+  await ev(`window.fetch = window.__f`);
+  await click(`document.querySelector(".err-box .btn")`);
+  await until(`!document.querySelector(".err-box")`, 8000, "thử lại được");
+  ok(true, "bấm Thử lại: tải lại được");
+
   console.log("Phiên hết hạn");
   await go(B);
   await until(`!!document.querySelector(${JSON.stringify(COMPOSER)})`);

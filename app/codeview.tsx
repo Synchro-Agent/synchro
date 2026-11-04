@@ -341,7 +341,13 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     onCreate(id, t.replace(/\s+/g, " ").trim().slice(0, 40) || "Phiên code mới");
     return id;
   }, [onCreate]);
-  useEffect(() => { wsStatus().then(setStatus).catch(() => setStatus({ available: false, reason: "Không kiểm tra được workspace." })); }, [setStatus]);
+  // Không hỏi được (mất mạng, máy chủ đang khởi động lại): tự hỏi lại, không để trang kẹt ở "workspace chưa dùng được" tới khi tải lại.
+  useEffect(() => {
+    let t = 0, dead = false;
+    const check = () => wsStatus().then((j) => { if (!dead) setStatus(j); }).catch(() => { if (dead) return; setStatus({ available: false, reason: "Không kiểm tra được workspace. Synchro tự thử lại sau ít giây." }); t = window.setTimeout(check, 15_000); });
+    void check();
+    return () => { dead = true; clearTimeout(t); };
+  }, [setStatus]);
   const git = sid !== null ? gitMap[sid] : undefined;
   const refreshGit = useCallback(async (id: number | null | undefined) => {
     if (id == null || !useCodeUi.getState().status?.available) return;
@@ -978,6 +984,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
       <div className={`cv-body ${pane && paneMax ? "pane-max" : ""}`}>
       <div className="cv-col" ref={colRef}>
+      <h1 className="sr-only" data-notr>{title}</h1>
       <div className="cv-bar">
         <div className="cv-bar-l">
           {!sideOpen && <SideToggle onClick={onSide} />}
@@ -1202,7 +1209,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               </div>
               <div className="cv-sp" />
               {/* Bộ chọn model + mức nỗ lực dùng chung với khung chat thường (khóa model quản trị viên chưa cho phép). */}
-              <div className="cv-model" data-notr>{modelPicker}</div>
+              <div className="cv-model">{modelPicker}</div>
               <div style={{ position: "relative" }}>
                 {/* Mức dùng API (giới hạn phiên, tuần, hạn mức nhà cung cấp) kèm ngữ cảnh của phiên code này. */}
                 <UsageRing model={model} onDetails={() => app.openSettings?.("Usage")} extra={<div className="us-ctx"><div className="us-sub">Ngữ cảnh phiên chat · {Math.round(pct)}%</div>{ctxPanel}</div>} />
