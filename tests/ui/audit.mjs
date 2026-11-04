@@ -83,6 +83,8 @@ const CHECK = `(() => {
   for (let i = 0; i < boxes.length && over < 6; i++) for (let j = i + 1; j < boxes.length && over < 6; j++) {
     const A = boxes[i], Bx = boxes[j];
     if (A.p === Bx.p || A.p.contains(Bx.p) || Bx.p.contains(A.p)) continue;
+    // Phần nền của hộp thoại (inert): trình duyệt bỏ qua khi dò theo điểm, nên không xác định được lớp nào che lớp nào; người dùng cũng không tương tác với nó.
+    if (A.p.closest("[inert]") || Bx.p.closest("[inert]")) continue;
     const ix = Math.min(A.r.right, Bx.r.right) - Math.max(A.r.left, Bx.r.left), iy = Math.min(A.r.bottom, Bx.r.bottom) - Math.max(A.r.top, Bx.r.top);
     if (ix <= 2 || iy <= 3) continue;
     const small = Math.min(A.r.width * A.r.height, Bx.r.width * Bx.r.height);

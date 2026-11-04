@@ -5111,6 +5111,7 @@ body{text-wrap-style:pretty}
 /* Hộp thoại nhận tiêu điểm khi không có ô nào để bấm: không vẽ viền */
 [role="dialog"][tabindex="-1"]:focus{outline:0}
 /* Khung soạn rất hẹp: ô nhập một dòng riêng, các nút ở dòng dưới */
+.dock[data-tight] .composer{flex-wrap:wrap}
 .dock[data-tight] .composer textarea{flex:1 0 100%!important;order:-1;min-width:0}
 .main.has-art .dock .composer,.main.has-art .dock>.dock-mode,.main.has-art .dock>.wl-queue{width:min(var(--thread-w,768px),calc(100% - 8px))}
 /* Sửa, sao chép tin đã gửi */

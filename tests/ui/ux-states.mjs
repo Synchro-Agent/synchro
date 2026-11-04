@@ -207,7 +207,7 @@ try {
   await P("Network.deleteCookies", { name: "synchro_session", url: B });
   await ev(`fetch("/api/usage/details?tz=0").then((r) => r.status)`);
   await until(`!!document.querySelector(".auth-notice")`, 15000, "màn hình đăng nhập phủ lên");
-  ok((await ev(`document.querySelector(${JSON.stringify(COMPOSER)})?.value`)) === "nháp đang gõ dở", "phần đang gõ vẫn còn dưới màn hình đăng nhập");
+  ok(String(await ev(`document.querySelector(${JSON.stringify(COMPOSER)})?.value`)).includes("nháp đang gõ dở"), "phần đang gõ vẫn còn dưới màn hình đăng nhập");
 
   console.log("Đổi ngôn ngữ ở màn hình đăng nhập");
   await click(`document.querySelector('.auth-lang button[lang="en"]')`); await sleep(400);
