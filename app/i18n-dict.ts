@@ -2,6 +2,14 @@ import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 // Chuỗi gốc tiếng Việt → tiếng Anh
 export const VI2EN: Record<string, string> = {
+  "(bản trên thiết bị này)": "(copy from this device)",
+  "Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát": "This chat is loading from the server. Try again in a moment.",
+  "Trình duyệt đã hết chỗ và máy chủ chưa nhận được bản mới nhất của": "Your browser is out of storage and the server has not received the latest version of",
+  "mục. Đừng đóng trang trước khi xuất dữ liệu.": "items. Don't close this page before exporting your data.",
+  "Xuất dữ liệu": "Export data",
+  "Đang tải đoạn chat từ máy chủ…": "Loading this chat from the server…",
+  "Đoạn chat sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú của nó trong Bộ não và liên kết chia sẻ nếu có. Artifact đã lưu vẫn ở trang Artifacts. Không hoàn tác được.": "This chat will be deleted from all your devices, along with its note in the Brain and any share link. Saved artifacts stay on the Artifacts page. This can't be undone.",
+  "Các đoạn chat đã chọn sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú trong Bộ não và liên kết chia sẻ. Không hoàn tác được.": "The selected chats will be deleted from all your devices, along with their notes in the Brain and any share links. This can't be undone.",
   "Bạn đang chia sẻ quá nhiều đoạn chat. Hãy dừng bớt trong Cài đặt → Quyền riêng tư.": "You are sharing too many chats. Stop some in Settings → Privacy.",
   "Liên kết chia sẻ": "Share link",
   "Đoạn chat ẩn danh không chia sẻ được.": "Incognito chats can't be shared.",
@@ -2276,6 +2284,8 @@ Object.assign(EN2VI, { "Search by email or IP": "Tìm theo email hoặc IP", "Pr
     [/^Bỏ skill (.+)$/, (m) => `Remove skill ${m[1]}`],
     [/^Đã gỡ (\d+) đoạn chat khỏi dự án$/, (m) => `Removed ${m[1]} ${nn(m[1], "đoạn chat")} from the project`],
     [/^Đã thêm (\d+) đoạn chat vào "(.+)"$/, (m) => `Added ${m[1]} ${nn(m[1], "đoạn chat")} to "${m[2]}"`],
+    [/^(\d+) đoạn chat và (\d+) phiên code sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú trong Bộ não và liên kết chia sẻ\. Không hoàn tác được\.$/, (m) => `${m[1]} ${nn(m[1], "đoạn chat")} and ${m[2]} ${nn(m[2], "phiên code")} will be deleted from all your devices, along with their notes in the Brain and any share links. This can't be undone.`],
+    [/^(\d+) (đoạn chat|phiên code) sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú trong Bộ não và liên kết chia sẻ\. Không hoàn tác được\.$/, (m) => `${m[1]} ${nn(m[1], m[2])} will be deleted from all your devices, along with their notes in the Brain and any share links. This can't be undone.`],
     [/^(\d+) đoạn chat và (\d+) phiên code sẽ bị xóa, không hoàn tác được\.$/, (m) => `${m[1]} ${nn(m[1], "đoạn chat")} and ${m[2]} ${nn(m[2], "phiên code")} will be deleted. This can't be undone.`],
     [/^(\d+) (đoạn chat|phiên code) sẽ bị xóa, không hoàn tác được\.$/, (m) => `${m[1]} ${nn(m[1], m[2])} will be deleted. This can't be undone.`],
     [/^(.*) sẽ bị xóa, không hoàn tác được\.$/, (m) => `${m[1]} will be deleted. This can't be undone.`],

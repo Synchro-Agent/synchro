@@ -15,6 +15,7 @@ import { forgetCliMemory } from "./ai/cli_auth";
 import { quickCall } from "./ai/anymodel";
 import { clearMemory, listMemory, memCfg } from "./memory";
 import { splitArtifacts } from "./artifacts";
+import { chatGone } from "./chatstore";
 import { vendorOf } from "./router";
 import { onTick } from "./tasks";
 
@@ -332,7 +333,7 @@ const learning = (uid: string) => memCfg(uid).gen;
 export function afterTurn(user: UserRow, body: Record<string, unknown>, json: Record<string, unknown>) {
   if (!body.skills || body.incognito || body.feature === "artifact" || typeof json.text !== "string" || !learning(user.id)) return;
   const conv = typeof body.conv === "string" && body.conv.length <= 64 ? body.conv : null;
-  if (!conv) return;
+  if (!conv || chatGone(user.id, conv)) return;
   const msgs = (Array.isArray(body.messages) ? body.messages : []) as { role?: string; content?: unknown }[];
   const snap: Snap = [...msgs.map((m) => ({ r: (m.role === "assistant" ? "a" : "u") as "u" | "a", t: plain(m.content) })), { r: "a" as const, t: plain(json.text) }]
     .filter((m) => m.t).slice(-40).map((m) => ({ ...m, t: m.t.slice(0, 1500) }));
@@ -785,7 +786,7 @@ export function importChats(user: UserRow, chats: { id: string; title?: string; 
   for (const c of chats.slice(0, 50)) {
     const conv = String(c.id).slice(0, 64);
     const ex = conv ? byConv(user.id, conv) : undefined;
-    if (!conv || (ex && parse(ex).props.distilledAt)) continue;
+    if (!conv || (ex && parse(ex).props.distilledAt) || chatGone(user.id, conv)) continue;
     const snap: Snap = c.msgs.map((m) => ({ r: (m.role === "ai" || m.role === "assistant" ? "a" : "u") as "u" | "a", t: plain(m.text) })).filter((m) => m.t).slice(-40).map((m) => ({ ...m, t: m.t.slice(0, 1500) }));
     if (snap.filter((m) => m.r === "u").map((m) => m.t).join(" ").length < 12) continue;
     d.prepare(`INSERT INTO brain_queue (user_id, conv, feature, snapshot, updated_at, tries) VALUES (?, ?, 'chat', ?, ?, 0)
@@ -1072,6 +1073,44 @@ export function deleteNote(user: UserRow, title: string) {
   t().prepare("DELETE FROM brain_links WHERE src = ?").run(n.id);
   t().prepare("DELETE FROM brain_notes WHERE id = ?").run(n.id);
   if (n.conv) t().prepare("DELETE FROM brain_queue WHERE user_id = ? AND conv = ?").run(user.id, n.conv);
+  return true;
+}
+/**
+ * Đoạn chat bị xóa: bộ não quên phần sinh ra từ nó. Xóa ghi chú nhánh và hàng chờ học; gỡ các điều đã biết có nguồn là đoạn chat đó khỏi trang chủ đề, tên riêng và Về bạn
+ * (phần tóm lược viết từ các điều đó được bỏ và đánh dấu biên soạn lại); trang chủ đề không còn điều gì và không còn đoạn chat nào nhắc tới thì xóa luôn;
+ * gỡ dòng nhật ký nhắc tên nó. Gọi lại nhiều lần vẫn an toàn. Ghi chú do người dùng tự viết không đụng tới.
+ */
+export function forgetConv(uid: string, conv: string) {
+  const d = t();
+  d.prepare("DELETE FROM brain_queue WHERE user_id = ? AND conv = ?").run(uid, conv);
+  const row = byConv(uid, conv);
+  if (!row) return false;
+  const gone = parse(row), key = fold(gone.title);
+  d.prepare("DELETE FROM brain_links WHERE src = ?").run(gone.id);
+  d.prepare("DELETE FROM brain_notes WHERE id = ?").run(gone.id);
+  const notes = allNotes(uid);
+  const talks = (n: Note, title: string) => [...(n.props.topics ?? []), ...(n.props.entities ?? [])].some((x) => fold(x) === fold(title));
+  for (const n of notes) {
+    if (n.kind === "chat" || n.kind === "code") {
+      if (n.props.related?.some((x) => fold(x) === key)) rebuild(uid, n, { ...n.props, related: n.props.related.filter((x) => fold(x) !== key) });
+    } else if (WIKI.includes(n.kind) && (n.props.facts?.some((f) => f.src && fold(f.src) === key) || n.props.related?.some((x) => fold(x) === key))) {
+      const facts = (n.props.facts ?? []).filter((f) => !f.src || fold(f.src) !== key), lost = facts.length !== (n.props.facts ?? []).length;
+      if (!facts.length && !n.props.userNote?.trim() && !n.props.pinned && !notes.some((o) => (o.kind === "chat" || o.kind === "code") && talks(o, n.title))) {
+        d.prepare("DELETE FROM brain_links WHERE src = ?").run(n.id);
+        d.prepare("DELETE FROM brain_notes WHERE id = ?").run(n.id);
+        continue;
+      }
+      rebuild(uid, n, { ...n.props, facts, related: n.props.related?.filter((x) => fold(x) !== key), ...(lost ? { summary: undefined, stale: true } : {}) });
+    } else if (n.kind === "about" && n.props.profile?.some((f) => f.src && fold(f.src) === key)) {
+      const u = getUser(uid);
+      const ap = { ...n.props, profile: n.props.profile.filter((f) => !f.src || fold(f.src) !== key), portrait: undefined, stale: true };
+      if (u) { put(uid, { id: n.id, kind: "about", title: ABOUT, body: aboutBody(u, ap), props: ap }); setState(uid, { profile_dirty: state(uid).profile_dirty + 1 }); }
+    }
+  }
+  d.prepare("DELETE FROM brain_log WHERE user_id = ? AND instr(text, ?) > 0").run(uid, L(gone.title));
+  refreshLog(uid);
+  if (gone.props.date) refreshDaily(uid, gone.props.date);
+  setState(uid, { dirty: state(uid).dirty + 1 });
   return true;
 }
 /**

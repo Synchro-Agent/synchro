@@ -1,7 +1,7 @@
 "use client";
 // Trang xem một đoạn chat được chia sẻ. Người xem chưa đăng nhập, nên trang không gọi API nào của tài khoản: artifact chạy trong đúng khung cô lập
 // như trong chat (sandbox không cùng nguồn gốc, CSP chặn mạng), không có AI, không có kho dữ liệu; chữ của người dùng là văn bản thuần.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArtifactFrame, MermaidSvg, VbhcView } from "./artifactui";
 import { Lockup } from "./brand";
 import { locale, tr } from "./i18n";
@@ -21,14 +21,17 @@ function ArtSeg({ s }: { s: Extract<ShareSeg, { k: "art" }> }) {
 }
 
 export function ShareView({ snap, at }: { snap: ShareSnap; at: number }) {
+  // Khung artifact, ngày giờ và ngôn ngữ phụ thuộc trình duyệt: dựng sau khi gắn để không lệch với bản dựng ở máy chủ.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   return (
     <main className="sh-page">
       <header className="sh-head">
         <a href="/" className="brand-lock" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></a>
-        <span className="sh-tag">{tr("Bản chia sẻ chỉ đọc")}</span>
+        <span className="sh-tag">Bản chia sẻ chỉ đọc</span>
       </header>
       <h1 data-notr>{snap.title}</h1>
-      <p className="sh-at">{tr("Bản chụp lúc")} <span data-notr>{new Date(at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</span></p>
+      {ready && <><p className="sh-at">{tr("Bản chụp lúc")} <span data-notr>{new Date(at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</span></p>
       <div className="sh-thread">
         {snap.msgs.map((m, i) => (
           <section key={i} className={m.r === "u" ? "sh-u" : "sh-a"} aria-label={tr(m.r === "u" ? "Người dùng" : "Synchro")}>
@@ -44,7 +47,7 @@ export function ShareView({ snap, at }: { snap: ShareSnap; at: number }) {
       <footer className="sh-foot">
         <span>{tr("Nội dung do người chia sẻ chọn đăng và có thể chứa lỗi của AI.")}</span>
         <nav><a href="/">Synchro</a><a href="/privacy">{tr("Quyền riêng tư")}</a><a href="/terms">{tr("Điều khoản sử dụng")}</a></nav>
-      </footer>
+      </footer></>}
     </main>
   );
 }

@@ -18,8 +18,9 @@ export type Chat = { id: number; title: string; named?: boolean; titled?: number
   mixer?: { artifacts?: boolean; tools?: boolean; recent?: number }; compact?: { upto: number; text: string; at: number }; pins?: { name: string; text: string }[];
   critic?: Record<string, CriticEntry>;
   // browser: Synchro đã thao tác trình duyệt trong đoạn chat này (hiện nút mở lại khung trình duyệt cạnh đoạn chat).
-  browser?: boolean };
-export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[] };
+  // stub: trình duyệt hết chỗ nên chỉ giữ dòng ở thanh bên, nội dung đang ở máy chủ (chatsync.ts).
+  browser?: boolean; stub?: boolean };
+export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[]; stub?: boolean };
 
 const defs = new Map<string, unknown>();
 const cache = new Map<string, unknown>();

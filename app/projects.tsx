@@ -292,7 +292,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const pgC = usePage(mine, 10), pgMem = usePage(mem, 10);
   const chatActs: BulkAct<Chat>[] = [
     { id: "unlink", label: "Gỡ khỏi dự án", icon: <I.Layers size={14} />, run: (l) => { onChats(l.map((c) => c.id), "unlink"); say(`Đã gỡ ${l.length} đoạn chat khỏi dự án`); } },
-    { id: "del", label: "Xóa", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} đoạn chat?`, text: "Các đoạn chat đã chọn sẽ bị xóa, không hoàn tác được.", ok: "Xóa" }), run: (l) => { onChats(l.map((c) => c.id), "delete"); say(`Đã xóa ${l.length} đoạn chat`); } },
+    { id: "del", label: "Xóa", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} đoạn chat?`, text: "Các đoạn chat đã chọn sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú trong Bộ não và liên kết chia sẻ. Không hoàn tác được.", ok: "Xóa" }), run: (l) => { onChats(l.map((c) => c.id), "delete"); say(`Đã xóa ${l.length} đoạn chat`); } },
   ];
   const memActs: BulkAct<{ id: number; content: string }>[] = [
     { id: "del", label: "Xóa", icon: <I.Trash size={14} />, danger: true, confirm: (l) => ({ title: `Xóa ${l.length} mục bộ nhớ?`, text: "Synchro sẽ không dùng các mục này trong dự án nữa.", ok: "Xóa" }), run: (l) => { const ids = new Set(l.map((m) => m.id)); patch(proj.id, { mem: mem.filter((m) => !ids.has(m.id)) }); say(`Đã xóa ${l.length} mục bộ nhớ`); } },
