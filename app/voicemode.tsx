@@ -1,6 +1,7 @@
 "use client";
 // Chế độ trò chuyện bằng giọng nói: làm mờ toàn màn hình, chỉ còn sóng Siri.
-// Không có nút chọn ngôn ngữ: nói tiếng nào thì Synchro nhận ra tiếng đó (ElevenLabs tự nhận từng câu) và trả lời, đọc bằng đúng tiếng đó.
+// Có ElevenLabs: nói tiếng nào thì Synchro nhận ra tiếng đó (ElevenLabs tự nhận từng câu) và trả lời, đọc bằng đúng tiếng đó.
+// Giọng của trình duyệt không tự nhận được tiếng: dùng ngôn ngữ ở Cài đặt → Giọng nói, đổi ngay trên màn hình này.
 // Mặc định dùng Eleven Realtime v1 Max (máy chủ cấp khoá tạm): tự nhận ngôn ngữ, trả lời bằng giọng ElevenLabs, nói chen được.
 // Không mở được Realtime (hết phút của gói, khóa thiếu quyền) nhưng có ElevenLabs: chế độ nối tiếp, Scribe nghe → model chat → giọng ElevenLabs đọc.
 // Khi máy chủ chưa có khoá ElevenLabs: dự phòng bằng nhận dạng giọng nói + đọc to của trình duyệt, câu hỏi đi qua model chat.
@@ -9,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { getLang } from "./i18n";
-import { usePref } from "./store";
+import { usePref, VOICE_LANG } from "./store";
 import { SiriWave, startMicLevel, useSpeakingLevel } from "./voicefx";
 import { startRealtime, type RtPhase } from "./realtime";
 import { startScribe, type Scribe } from "./scribe";
@@ -47,8 +48,9 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
   const [caption, setCaption] = useState("");
   const [working, setWorking] = useState(false);
   const [out, setOut] = useState(false);
-  // Ngôn ngữ của câu người dùng nói gần nhất (chỉ dùng cho nhận dạng của trình duyệt khi không có ElevenLabs).
-  const lastLang = useRef<Lang>(getLang() === "en" ? "en" : "vi");
+  // Ngôn ngữ nhận dạng của trình duyệt (khi không có ElevenLabs): theo Cài đặt → Giọng nói, không đoán từ câu trước (nói tiếng Anh mà nghe bằng tiếng Việt thì chép sai hết).
+  const [vlang, setVlang] = usePref("vlang", getLang() === "en" ? "English" : "Vietnamese");
+  const noVoice = useRef(false);
   const [barge, setBarge] = usePref("vmBarge", true);
   const micLv = useRef(0), aiLv = useRef(0);
   const level = useMemo(() => ({ get current() { return Math.max(micLv.current, aiLv.current); }, set current(_v: number) {} }), []);
@@ -80,7 +82,6 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
   // Gửi câu hỏi vào khung chat; chế độ trình duyệt thì nói câu xác nhận (ngay nếu là việc cần làm, hoặc khi trả lời lâu hơn 1,2 giây).
   const startJob = (q: string, done?: (brief: string) => void, heardLang?: string | null) => {
     const l = known(heardLang, q);
-    lastLang.current = l;
     // Ngôn ngữ khác tiếng Việt / tiếng Anh: không đọc câu xác nhận có sẵn (model sẽ trả lời bằng đúng tiếng đó).
     const other = !!heardLang && heardLang !== "vi" && heardLang !== "en";
     const plan = ackPlan(q, l);
@@ -147,11 +148,23 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
     if (!s || !chunks.length) { onEnd(); return; }
     const voice = s.getVoices().find((v) => v.lang.toLowerCase().startsWith(l));
     go("speak");
+    let over = false, started = false;
+    // Xong hay lỗi đều đi tiếp đúng một lần: không kẹt ở "Đang trả lời…" với micro đóng.
+    const end = () => { if (over) return; over = true; clearTimeout(guard); onEnd(); };
+    const fail = (e?: { error?: string }) => {
+      if (e?.error === "canceled" || e?.error === "interrupted") return;
+      s.cancel();
+      if (!noVoice.current) { noVoice.current = true; say("Trình duyệt chưa đọc được bằng giọng nói. Câu trả lời đầy đủ có trong khung chat"); }
+      end();
+    };
+    // Có máy không có giọng nào và không báo gì cả: quá 5 giây chưa bắt đầu đọc thì coi như lỗi.
+    const guard = window.setTimeout(() => { if (!started && phaseRef.current === "speak") fail(); }, 5000);
     chunks.forEach((c, i) => {
       const u = new SpeechSynthesisUtterance(c);
       u.lang = l === "vi" ? "vi-VN" : "en-US"; u.rate = rate; if (voice) u.voice = voice;
-      u.onstart = () => setCaption(c);
-      if (i === chunks.length - 1) u.onend = onEnd;
+      u.onstart = () => { started = true; setCaption(c); };
+      if (i === chunks.length - 1) u.onend = end;
+      u.onerror = fail;
       s.speak(u);
     });
   };
@@ -218,7 +231,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
     if (!SR) { say("Trình duyệt này chưa hỗ trợ nhận dạng giọng nói (hãy dùng Chrome, Edge hoặc Safari)"); close(); return; }
     recRef.current?.abort();
     const r = new SR();
-    r.lang = lastLang.current === "en" ? "en-US" : "vi-VN"; r.interimResults = true; r.continuous = false;
+    r.lang = VOICE_LANG[vlang] ?? "vi-VN"; r.interimResults = true; r.continuous = false;
     let finalText = "";
     r.onresult = (e) => {
       let t = "";
@@ -248,7 +261,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
     startMicLevel(micLv).then((s) => { if (dead) s(); else stop = s; }).catch(() => {});
     listen();
     return () => { dead = true; stop?.(); };
-  }, [phase, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, mode, vlang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nói chen để ngắt (chế độ trình duyệt): đo micro trong lúc đọc, VAD tại chỗ phát hiện người dùng nói trong ~150 ms.
   // Giọng đọc của trình duyệt không đo được nên ngưỡng học theo tiếng vọng nghe thấy lúc mới đọc.
@@ -290,6 +303,7 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
       <div className="vm-top">
         <span className={`vm-state ${shown}`}><i />{LABEL[shown]}</span>
         {mode && <button className={`vm-opt ${barge ? "on" : ""}`} aria-pressed={barge} onClick={() => setBarge(!barge)} title="Đang trả lời mà bạn nói thì Synchro dừng lại để nghe">Nói chen để ngắt</button>}
+        {mode === "browser" && <button className="vm-opt on" onClick={() => setVlang(VOICE_LANG[vlang]?.startsWith("vi") ? "English" : "Vietnamese")} title="Ngôn ngữ trình duyệt dùng để nghe bạn nói"><span data-notr>{VOICE_LANG[vlang]?.startsWith("vi") ? "Tiếng Việt" : "English"}</span></button>}
       </div>
       <button className="vm-wave" onClick={interrupt} aria-label={phase === "speak" ? "Ngắt lời" : "Sóng giọng nói"} tabIndex={phase === "speak" ? 0 : -1}>
         <SiriWave level={level} />

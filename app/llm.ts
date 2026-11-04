@@ -293,12 +293,22 @@ export function chunkText(text: string, size = CHUNK_SIZE): string[] {
 }
 
 const words = (s: string) => (s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+/** Giới hạn ngữ cảnh của một dự án (ký tự): thanh dung lượng đo theo số này, đầy thì không thêm được. */
+export const PROJECT_CTX_LIMIT = 2_000_000;
+const chunkCache = new WeakMap<object, string[]>();
+const chunksOf = (d: NonNullable<Project["ctx"]>[number]) => {
+  if (d.chunks) return d.chunks;
+  let c = chunkCache.get(d);
+  if (!c) { c = chunkText(d.text ?? ""); chunkCache.set(d, c); }
+  return c;
+};
 
 /** Tài liệu nhỏ -> đưa hết. Tài liệu lớn -> chọn TOP_K đoạn khớp từ khóa nhất. */
 export function getRelevantContext(p: Project, query: string): string[] {
   const docs = p.ctx ?? [];
   const total = docs.reduce((n, d) => n + (d.chars ?? 0), 0);
-  const all = docs.flatMap((d) => d.chunks ?? []);
+  // Đoạn nhỏ tính từ chữ khi cần (không lưu hai lần); tài liệu cũ chỉ có đoạn đã chia thì dùng đoạn đó.
+  const all = docs.flatMap((d) => chunksOf(d));
   if (!total || !all.length) return [];
   if (total <= SMALL_DOC_LIMIT) return all;
   const q = new Set(words(query).slice(0, 10));

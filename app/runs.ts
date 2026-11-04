@@ -139,6 +139,12 @@ export function cancelRun(id: string, uid: string): boolean {
 export function cancelUserRuns(uid: string) {
   for (const l of live.values()) if (l.uid === uid) l.ctl.abort();
 }
+/** Đoạn chat bị xóa: dừng lượt đang chạy và xóa các lượt đã xong của nó (chữ, kết quả, yêu cầu đã lưu). Lượt vừa dừng tự hết hạn cùng các lượt cũ. */
+export function deleteConvRuns(uid: string, conv: string) {
+  const id = liveRunOf(uid, conv);
+  if (id) cancelRun(id, uid);
+  return init().prepare("DELETE FROM runs WHERE user_id = ? AND conv = ? AND status != 'running'").run(uid, conv).changes;
+}
 /** Ghi một bước của lượt đang chạy (lưu để mở lại trang vẫn thấy đủ) và gửi cho người đang theo dõi. Trả về số thứ tự bước. */
 export function progress(kind: RunEvent["kind"], text: string): number {
   const s = scope.getStore();

@@ -180,6 +180,8 @@ function Welcome({ kind, name }: { kind: Kind; name: string }) {
   );
 }
 
+// Báo lỗi: đưa tiêu điểm tới nút Thử lại, không để rơi về đầu trang (người dùng bàn phím, trình đọc màn hình).
+const focusOnMount = (el: HTMLButtonElement | null) => { el?.focus({ preventScroll: true }); };
 function AuthStage({ stage, kind, user, fallbackName, error, onRetry }: { stage: Stage; kind: Kind; user: AuthUser | null; fallbackName: string; error: string; onRetry: () => void }) {
   return (
     <motion.div key="stage" className="auth-stage" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)", transition: { duration: 0.25 } }}>
@@ -191,7 +193,7 @@ function AuthStage({ stage, kind, user, fallbackName, error, onRetry }: { stage:
           {stage === "error" && (
             <motion.div key="e" className="auth-error" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE }}>
               <p className="auth-error-msg" role="alert">{error}</p>
-              <GlassButton type="button" onClick={onRetry} size="sm">Try Again</GlassButton>
+              <GlassButton type="button" onClick={onRetry} size="sm" ref={focusOnMount}>Try Again</GlassButton>
             </motion.div>
           )}
         </AnimatePresence>
@@ -237,6 +239,8 @@ interface AuthComponentProps {
   onSignOut?: () => void;
   // Vì sao màn hình đăng nhập hiện ra (phiên đã hết hạn khi app đang mở).
   notice?: string;
+  // Quản trị viên đóng đăng ký: email chưa có tài khoản dừng ngay ở bước đầu, không phải điền hết biểu mẫu mới biết.
+  signupOpen?: boolean;
 }
 
 // Đổi ngôn ngữ ngay ở màn hình đăng nhập: người chưa có tài khoản không phải đăng ký bằng thứ tiếng họ không đọc được.
@@ -250,7 +254,7 @@ function LangSwitch() {
   );
 }
 
-export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice }: AuthComponentProps) => {
+export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, signupOpen = true }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -262,6 +266,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const [stage, setStage] = useState<Stage>("form");
   const [kind, setKind] = useState<Kind>("login");
   const [errorMsg, setErrorMsg] = useState("");
+  const [emailErr, setEmailErr] = useState("");
   const [doneUser, setDoneUser] = useState<AuthUser | null>(null);
   // hồ sơ
   const initialName = user?.profile.fullName || (user && user.name !== user.email.split("@")[0] ? user.name : "");
@@ -331,11 +336,14 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
   const handleProgressStep = async () => {
     if (authStep === "email") {
-      if (!isEmailValid || checking) return;
+      if (checking) return;
+      // Enter với email sai: nói rõ ngay tại ô nhập, không im lặng.
+      if (!isEmailValid) { if (email.trim()) setEmailErr("Enter a valid email address."); return; }
       setChecking(true);
       try {
         const r = await post<{ exists: boolean; hasPassword: boolean; methods: (keyof Providers)[]; reserved: boolean }>("/api/auth/check", { email });
         if (r.reserved) { fail("This email is reserved for the administrator. Sign in with Google, or create the admin account on the server."); return; }
+        if (!r.exists && !signupOpen) { fail("New sign-ups are closed. Ask your administrator for an account."); return; }
         if (r.exists && !r.hasPassword) { fail(`This account signs in with ${r.methods.map((m) => PROVIDER_NAMES[m] ?? m).join(", ")}. Use that button above.`); return; }
         setIsLogin(r.exists);
         setAuthStep("password");
@@ -489,9 +497,10 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <div className="glass-input-wrap w-full"><div className="glass-input">
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
-                                        <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
-                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" contentClassName="text-foreground/80 hover:text-foreground">{checking ? <Loader size={16} /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
+                                        <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
+                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground">{checking ? <Loader size={16} /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
                                     </div></div>
+                                    {emailErr && authStep === "email" && <p id="auth-email-err" className="auth-field-err" role="alert">{emailErr}</p>}
                                 </div>
                             </BlurFade>
                             <AnimatePresence>
@@ -510,6 +519,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                         </div></div>
                                     </div>
                                     <BlurFade delay={OUT + STEP * 3}><button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button></BlurFade>
+                                    {isLogin && <BlurFade delay={OUT + STEP * 3}><p className="auth-note">Forgot your password? Ask your administrator to set a new one.</p></BlurFade>}
                                 </BlurFade>}
                             </AnimatePresence>
                         </motion.div>}
@@ -564,6 +574,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                             </BlurFade>
                         </motion.div>}
                     </AnimatePresence>
+                    {authStep === "email" && mode === "auth" && <p className="auth-note auth-legal"><span>By continuing, you agree to the</span> <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> <span>and</span> <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>}
                 </motion.form>
             </motion.fieldset>
             ) : (

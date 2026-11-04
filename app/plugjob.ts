@@ -4,7 +4,7 @@
 // Thư viện không cài được (giấy phép đóng, repo đã xóa…) ghi lại lý do, không chặn phần còn lại.
 import { db } from "./authstore";
 import { installPlugin, isNetErr, PluginError, setBulk } from "./plugins";
-import { CD, closedReason, dirDef, dirEntries, dirSynced, type DirEntry } from "./claudedir";
+import { CD, closedReason, dirDef, dirEntries, dirEntry, dirSynced, type DirEntry } from "./claudedir";
 
 export type JobFail = { id: string; name: string; reason: string; kind: "license" | "missing" | "network" | "other" };
 export type Job = { by: string; auto?: boolean; pass?: number; paused?: number | null; cat: string | null; started: number; finished: number | null; stopped: boolean; total: number; done: number; installed: number; skills: number; failed: JobFail[]; current: string[] };
@@ -14,7 +14,8 @@ function init() {
   const d = db();
   if (!ready) {
     d.exec(`CREATE TABLE IF NOT EXISTS plugin_jobs (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS plugin_catalog_removed (catalog_id TEXT PRIMARY KEY, at INTEGER NOT NULL)`);
+      CREATE TABLE IF NOT EXISTS plugin_catalog_removed (catalog_id TEXT PRIMARY KEY, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS plugin_catalog_blocked (catalog_id TEXT PRIMARY KEY, name TEXT NOT NULL, reason TEXT NOT NULL, commit_sha TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`);
     ready = true;
   }
   return d;
@@ -33,6 +34,24 @@ export function orgInstalled(uid?: string): Map<string, string> {
   const rows = init().prepare("SELECT catalog_id, id FROM plugins WHERE (owner = 'org' OR owner = ?) AND catalog_id IS NOT NULL ORDER BY owner = 'org'").all(uid ?? "org") as { catalog_id: string; id: string }[];
   return new Map(rows.map((r) => [r.catalog_id, r.id]));
 }
+// Thư viện đọc giấy phép lúc cài mới biết là đóng (thư mục của Claude không ghi): nhớ lại theo mã danh mục, để nó không còn trông như cài được, với mọi người.
+// Danh mục đổi sang commit khác thì xét lại (tác giả có thể đã đổi giấy phép). Lần đầu chạy bản này: nhận luôn các lỗi giấy phép đã ghi trong lần cài hàng loạt trước.
+let backfilled = false;
+export function blockedLibs(): Map<string, { reason: string; name: string }> {
+  const d = init();
+  if (!backfilled) {
+    backfilled = true;
+    for (const f of getJob()?.failed ?? []) if (f.kind === "license") markBlocked(CD + f.id, f.name, f.reason);
+  }
+  const cur = (d.prepare("SELECT catalog_id, name, reason, commit_sha FROM plugin_catalog_blocked").all() as { catalog_id: string; name: string; reason: string; commit_sha: string }[]);
+  return new Map(cur.filter((r) => { const e = dirEntry(r.catalog_id); return !!e && (e.commit || "") === r.commit_sha; }).map((r) => [r.catalog_id, { reason: r.reason, name: r.name }]));
+}
+export function markBlocked(catalogId: string, name: string, reason: string) {
+  const e = dirEntry(catalogId);
+  if (e) init().prepare("INSERT OR REPLACE INTO plugin_catalog_blocked (catalog_id, name, reason, commit_sha, at) VALUES (?, ?, ?, ?, ?)").run(catalogId, name, reason.slice(0, 400), e.commit || "", Date.now());
+}
+/** Lỗi khi cài một thư viện của danh mục là lỗi giấy phép thì nhớ lại. */
+export function noteInstallError(catalogId: string | undefined, name: string, msg: string) { if (catalogId?.startsWith(CD) && kindOf(msg) === "license") markBlocked(catalogId, name, msg); }
 const kindOf = (m: string): JobFail["kind"] => (isNetErr(m) ? "network" : /độc quyền|giấy phép/i.test(m) ? "license" : /Không tìm thấy|Không tải được|404/i.test(m) ? "missing" : "other");
 
 // Tên thư viện (slug) đã có trong thư viện chung nhưng là thư viện khác (vd. plugin dựng sẵn "taste"): đổi tên, không ghi đè.
@@ -53,7 +72,8 @@ function pending(cat: string | null, auto: boolean, skip = new Set<string>()) {
   const inCat = all.filter((e) => !cat || e.cats.includes(cat));
   const ids = new Set(inCat.map((e) => e.id));
   for (const e of inCat) for (const a of e.alt ?? []) ids.add(a);
-  return all.filter((e) => ids.has(e.id) && !have.has(CD + e.id) && !removed.has(CD + e.id) && !skip.has(e.id));
+  const blocked = blockedLibs();
+  return all.filter((e) => ids.has(e.id) && !have.has(CD + e.id) && !removed.has(CD + e.id) && !skip.has(e.id) && !blocked.has(CD + e.id));
 }
 /** Quản trị viên gỡ một thư viện của danh mục: lần cài mặc định sau (danh mục cập nhật) không tự cài lại. */
 export function markRemoved(catalogId: string | null) { if (catalogId?.startsWith(CD)) init().prepare("INSERT OR REPLACE INTO plugin_catalog_removed (catalog_id, at) VALUES (?, ?)").run(catalogId, Date.now()); }
@@ -132,7 +152,7 @@ async function run(job: Job) {
             await new Promise((ok) => setTimeout(ok, wait));
             job.paused = null;
           }
-        } else job.failed.push({ id: e.id, name: e.name, reason: reason.slice(0, 400), kind });
+        } else { job.failed.push({ id: e.id, name: e.name, reason: reason.slice(0, 400), kind }); if (kind === "license" && !e.closed) markBlocked(CD + e.id, e.name, reason); }
       }
       job.current = job.current.filter((n) => n !== e!.name);
       job.done++;

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 type Studio = "design" | "slides" | "docs";
 // Báo cho thanh nhập và trang Artifacts biết plugin vừa đổi (studio có thêm skill).
 export const PLUGINS_CHANGED = "synchro:plugins";
+export const HUB_SEARCH = "synchro:hub-search";
 export const HUB_DISCOVER = "synchro:hub-discover";
 export const SKILLS_CHANGED = "skills:changed";
 export const SKILL_STUDIOS = "skills:studios";

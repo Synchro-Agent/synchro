@@ -276,6 +276,10 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const { openSettings } = useApp();
   const [tab, setTab] = useState<"results" | "approve" | "jobs">("results");
   const [items, setItems] = useState<Item[] | null>(null);
+  // Trang cũ hơn đã mở bằng "Xem kết quả cũ hơn"; trang đầu vẫn tự làm mới.
+  const [older, setOlder] = useState<Item[]>([]);
+  const [more, setMore] = useState(false);
+  const [moreBusy, setMoreBusy] = useState(false);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [props, setProps] = useState<Proposal[] | null>(null);
   const [chrome, setChrome] = useState<{ allowed: boolean; connected: boolean; devices: unknown[] } | null>(null);
@@ -283,10 +287,11 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ task?: Task; plan?: Plan } | "new" | null>(null);
+  const older_ = useRef(0);
   const [loadErr, setLoadErr] = useState("");
   const load = useCallback(() => {
     setLoadErr("");
-    api<{ items: Item[] }>("GET", "/api/inbox").then((j) => setItems(j.items)).catch((e) => setLoadErr(e.message));
+    api<{ items: Item[]; more: boolean }>("GET", "/api/inbox").then((j) => { setItems(j.items); setMore((m) => (older_.current ? m : j.more)); }).catch((e) => setLoadErr(e.message));
     api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch(() => {});
     api<{ proposals: Proposal[] }>("GET", "/api/inbox/proposals?all=1").then((j) => setProps(j.proposals)).catch(() => {});
   }, [say]);
@@ -294,29 +299,45 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
     load();
     api<{ allowed: boolean; connected: boolean; devices: unknown[] }>("GET", "/api/browser/ext").then(setChrome).catch(() => {});
     api<{ caps: Record<string, boolean>; locks: Record<string, string> }>("GET", "/api/caps").then(setCaps).catch(() => {});
-    const t = setInterval(load, 15_000);
-    return () => clearInterval(t);
+    // Tab ẩn thì thôi hỏi; quay lại tab thì cập nhật ngay.
+    const t = setInterval(() => { if (!document.hidden) load(); }, 15_000);
+    const vis = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [load]);
-  const read = async (ids: string[] | "all") => { await api("POST", "/api/inbox", { read: ids }).catch(() => {}); changed(); load(); };
+  const loadMore = async () => {
+    const list = all, last = list.filter((x) => x.status !== "waiting").at(-1);
+    if (!last || moreBusy) return;
+    setMoreBusy(true);
+    try {
+      const j = await api<{ items: Item[]; more: boolean }>("GET", `/api/inbox?before=${last.at}`);
+      older_.current++;
+      setOlder((o) => [...o, ...j.items]);
+      setMore(j.more);
+    } catch (e) { say((e as Error).message); }
+    setMoreBusy(false);
+  };
+  const read = async (ids: string[] | "all") => { await api("POST", "/api/inbox", { read: ids }).catch(() => {}); setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x))); changed(); load(); };
   const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running" && x.status !== "waiting") read([x.run]); };
   const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } catch (e) { say((e as Error).message); } };
   const setOn = async (t: Task) => { try { await api("PATCH", `/api/tasks/${t.id}`, { enabled: !t.enabled }); load(); } catch (e) { say((e as Error).message); } };
   const del = async (t: Task) => { if (!window.confirm(tr("Xóa việc tự động này? Kết quả cũ trong Hộp thư cũng bị xóa."))) return; try { await api("DELETE", `/api/tasks/${t.id}`); say(tr("Đã xóa việc tự động")); load(); } catch (e) { say((e as Error).message); } };
   const byId = useMemo(() => new Map((tasks ?? []).map((t) => [t.id, t])), [tasks]);
-  const unread = (items ?? []).filter((x) => !x.read && x.status !== "running" && x.status !== "waiting").length;
+  const all = useMemo(() => { const first = items ?? [], have = new Set(first.map((x) => x.run)); return [...first, ...older.filter((x) => !have.has(x.run))]; }, [items, older]);
+  const unread = all.filter((x) => !x.read && x.status !== "running" && x.status !== "waiting").length;
   const pending = (props ?? []).filter((p) => p.status === "pending");
   const decided = (props ?? []).filter((p) => p.status !== "pending").slice(0, 20);
-  const shown = (items ?? []).filter((x) => !filter || x.task === filter);
+  const shown = all.filter((x) => !filter || x.task === filter);
   // Chọn hàng loạt: kết quả (đã đọc / chưa đọc / gỡ khỏi Hộp thư) và việc tự động (chạy ngay, bật / tắt lịch, xóa).
   const live = (x: Item) => x.status === "running" || x.status === "waiting";
   const bkR = useBulk(shown, (x) => x.run);
   const bkJ = useBulk(tasks ?? [], (t) => t.id);
   const resActs: BulkAct<Item>[] = [
     { id: "read", label: tr("Đánh dấu đã đọc"), icon: <I.Check size={14} />, when: (l) => l.some((x) => !x.read && !live(x)), run: (l) => read(l.filter((x) => !live(x)).map((x) => x.run)) },
-    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read), run: async (l) => { await api("POST", "/api/inbox", { unread: l.map((x) => x.run) }); changed(); load(); } },
+    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read), run: async (l) => { await api("POST", "/api/inbox", { unread: l.map((x) => x.run) }); const ids = new Set(l.map((x) => x.run)); setOlder((o) => o.map((x) => (ids.has(x.run) ? { ...x, read: false } : x))); changed(); load(); } },
     { id: "rm", label: tr("Gỡ khỏi Hộp thư"), icon: <I.Trash size={14} />, danger: true, when: (l) => l.some((x) => !live(x)),
       confirm: (l) => ({ title: `${tr("Gỡ")} ${l.filter((x) => !live(x)).length} ${tr("kết quả khỏi Hộp thư?")}`, text: tr("Chỉ gỡ khỏi Hộp thư; việc tự động và lịch chạy giữ nguyên. Kết quả đang chạy được giữ lại."), ok: tr("Gỡ") }),
-      run: async (l) => { await api("POST", "/api/inbox", { remove: l.filter((x) => !live(x)).map((x) => x.run) }); changed(); load(); say(tr("Đã gỡ khỏi Hộp thư")); } },
+      run: async (l) => { const ids = l.filter((x) => !live(x)).map((x) => x.run); await api("POST", "/api/inbox", { remove: ids }); setOlder((o) => o.filter((x) => !ids.includes(x.run))); changed(); load(); say(tr("Đã gỡ khỏi Hộp thư")); } },
   ];
   const jobActs: BulkAct<Task>[] = [
     { id: "run", label: tr("Chạy ngay"), icon: <I.Play size={13} />, run: async (l) => { await each(l, (t) => api("POST", `/api/tasks/${t.id}/run`)); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } },
@@ -377,7 +398,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               </div>
             ))}</div>
           </section>
-        ))}<PageBar pg={pgR} /><BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
+        ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
       ))}
 
       {tab === "approve" && (props === null ? <div className="empty"><span className="art-spin" /></div> : !pending.length && !decided.length ? (

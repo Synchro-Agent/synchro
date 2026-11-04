@@ -11,7 +11,8 @@ export const scoped = (k: string) => (GLOBAL.has(k) ? k : prefix() + k);
 
 export const ls = {
   get(k: string) { try { return localStorage.getItem(scoped(k)); } catch { return null; } },
-  set(k: string, v: string) { try { localStorage.setItem(scoped(k), v); } catch {} },
+  // false: trình duyệt không ghi được (hết chỗ, bị chặn); nơi nào không được phép mất dữ liệu thì phải xem kết quả này.
+  set(k: string, v: string) { try { localStorage.setItem(scoped(k), v); return true; } catch { return false; } },
   remove(k: string) { try { localStorage.removeItem(scoped(k)); } catch {} },
   // Khóa (đã bỏ tiền tố) của tài khoản hiện tại.
   keys(): string[] { try { const p = prefix(); return Object.keys(localStorage).filter((k) => k.startsWith(p)).map((k) => k.slice(p.length)); } catch { return []; } },

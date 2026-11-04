@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { HUB_DISCOVER, PLUGINS_CHANGED, useStudios } from "./studios";
+import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
 import { getLang, tr, untranslated } from "./i18n";
 import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
@@ -258,8 +258,9 @@ export function SkillHub() {
     return () => { on = false; };
   }, [open, d]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<string | null>(null);
-  // Mở từ bảng lệnh ⌘K: lọc sẵn theo skill vừa chọn.
-  const [q, setQ] = useState(() => { try { const h = sessionStorage.getItem("hub-q"); if (h) sessionStorage.removeItem("hub-q"); return h ?? ""; } catch { return ""; } });
+  // Mở từ bảng lệnh ⌘K: lọc sẵn theo đúng skill / thư viện vừa chọn.
+  const [q, setQ] = useState(() => { try { const v = sessionStorage.getItem("hub-q"); if (v) sessionStorage.removeItem("hub-q"); return v ?? ""; } catch { return ""; } });
+  useEffect(() => { const h = (e: Event) => { try { sessionStorage.removeItem("hub-q"); } catch {} setQ(String((e as CustomEvent).detail ?? "")); }; window.addEventListener(HUB_SEARCH, h); return () => window.removeEventListener(HUB_SEARCH, h); }, []);
   const addRef = useRef<HTMLDivElement>(null);
   const qlib = q.trim().toLowerCase();
   const libs = (d?.plugins ?? []).filter((p) => !qlib || `${p.name} ${p.description}`.toLowerCase().includes(qlib)).sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "org" ? -1 : 1));

@@ -13,6 +13,8 @@ const SUITES = [
   ["Xuất PowerPoint", "tests/ui/pptx.mjs"],
   ["Xem trước Word, Excel, PowerPoint, PDF", "tests/ui/officeview.mjs"],
   ["Quét skill rác", "tests/ui/skillscan.mjs"],
+  ["Đoạn chat theo tài khoản, chia sẻ thật", "tests/ui/chatsync.mjs"],
+  ["Hộp thoại giữ tiêu điểm, bảng lệnh, đọc to", "tests/ui/dialogs.mjs"],
   ["Chat chạy nền khi chuyển mục", "tests/ui/bgrun.mjs"],
   ["Chữ hiện dần, nút Dừng", "tests/ui/stream.mjs"],
   ["Lỗi, tiêu điểm, bàn phím, sửa tin, phiên hết hạn", "tests/ui/ux-states.mjs"],

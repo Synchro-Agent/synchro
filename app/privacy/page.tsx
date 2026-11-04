@@ -23,8 +23,8 @@ export default function Privacy() {
         <li><b>Mức dùng:</b> số token, model, thời điểm từng lượt, để tính hạn mức.</li>
         <li><b>Nhật ký bảo mật:</b> đăng ký, đăng nhập, thao tác quản trị, kèm email và IP, để phát hiện truy cập trái phép. Giữ 50.000 sự kiện gần nhất.</li>
       </ul>
-      <h2>Dữ liệu lưu trong trình duyệt của bạn</h2>
-      <p>Danh sách đoạn chat, dự án và tùy chọn giao diện nằm trong trình duyệt này. Xóa dữ liệu trang web là mất chúng, trừ phần đã có trên máy chủ nêu ở trên.</p>
+      <h2>Đoạn chat và dự án</h2>
+      <p>Đoạn chat, dự án và tùy chọn giao diện nằm trong trình duyệt này; đoạn chat và dự án còn được đồng bộ vào tài khoản của bạn trên máy chủ để dùng được trên nhiều thiết bị. Đoạn chat ẩn danh không rời trình duyệt. Khi bạn tạo liên kết chia sẻ, một bản chụp của đoạn chat được lưu trên máy chủ và ai có liên kết đều xem được, cho tới khi bạn dừng chia sẻ. Xóa đoạn chat sẽ xóa nó khỏi máy chủ, cùng với phần Bộ não đã học từ nó và liên kết chia sẻ.</p>
       <h2>Dữ liệu được gửi cho ai</h2>
       <ul>
         <li><b>Nhà cung cấp mô hình AI bạn chọn</b> (Anthropic, OpenAI, Google, xAI): tin nhắn, tệp đính kèm, kết quả công cụ của lượt đó, thường qua gói đăng ký bạn đã đăng nhập. Cách họ dùng dữ liệu theo chính sách của họ và gói của bạn.</li>

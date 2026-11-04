@@ -11,7 +11,7 @@ import { SideToggle } from "./brand";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
 import * as I from "./icons";
-import { type Chat, useApp } from "./store";
+import { type Chat, useApp, usePref } from "./store";
 import { getLang } from "./i18n";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
@@ -27,6 +27,8 @@ type NoteData = {
 
 const en = () => getLang() === "en";
 const L = (vi: string, e: string) => (en() ? e : vi);
+// Chữ trên đồ thị vẽ bằng canvas, bộ dịch giao diện không chạm tới: tên các ghi chú khung đổi theo ngôn ngữ ở đây. Tiêu đề người dùng và Synchro đặt theo nội dung giữ nguyên.
+const noteLabel = (t: string) => (en() ? ENTRY[t]?.[1] ?? t.replace(/^Nhật ký (?=\d)/, "Journal ").replace(/^Bản đồ · /, "Map · ") : t);
 const KIND: Record<Kind, [string, string]> = {
   hub: ["Trung tâm", "Hub"], about: ["Về bạn", "About you"], model: ["Bán cầu", "Hemisphere"], chat: ["Đoạn chat", "Chat"], code: ["Synchro Code", "Synchro Code"],
   topic: ["Chủ đề", "Topic"], entity: ["Tên riêng", "Entity"], map: ["Bản đồ", "Map"], index: ["Mục lục", "Index"], log: ["Hoạt động", "Activity"],
@@ -92,6 +94,8 @@ export function BrainGraph({ data, gs, onOpen, focus, height = 420, active, cuto
   const sim = useRef({ alpha: 1, target: 0 });
   const hover = useRef<string | null>(null), hl = useRef(0), hlNode = useRef<string | null>(null);
   const raf = useRef(0), dirty = useRef(true), touched = useRef(false), fitTick = useRef(0), hot = useRef(false);
+  const [uilang] = usePref("uilang", "vi");
+  useEffect(() => { dirty.current = true; }, [uilang]);
   const colors = useRef<Record<string, string>>({});
 
   // Ghi chú hiển thị: lọc, ghi chú lẻ, chỉ ghi chú đã có, thẻ thành chấm, đồ thị cục bộ (độ sâu, liên kết đến / đi / giữa lân cận).
@@ -262,7 +266,7 @@ export function BrainGraph({ data, gs, onOpen, focus, height = 420, active, cuto
       const near1 = !!hv && on;
       const la = near1 ? 1 : Math.max(0, Math.min(1, (k - thr) / 0.35)) * (on ? 1 : 1 - 0.8 * t0);
       if (la > 0.02 && !mini) {
-        const fs = 11 + (nd.kind === "hub" ? 2 : 0), label = nd.title.length > 40 ? `${nd.title.slice(0, 39)}…` : nd.title;
+        const fs = 11 + (nd.kind === "hub" ? 2 : 0), shownT = noteLabel(nd.title), label = shownT.length > 40 ? `${shownT.slice(0, 39)}…` : shownT;
         ctx.font = `${nd.id === hv ? 600 : 400} ${fs}px var(--font-sans, system-ui), system-ui, -apple-system, sans-serif`;
         ctx.textAlign = "center"; ctx.textBaseline = "top";
         ctx.globalAlpha = la; ctx.fillStyle = C["--bn-text"];
@@ -839,8 +843,9 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [findOpen]);
-  const [gErr, setGErr] = useState(false);
-  const load = useCallback(() => { setGErr(false); return fetch("/api/brain", { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => { if (j?.nodes) { setG(j); setVer((v) => v + 1); } }).catch(() => setGErr(true)); }, []);
+  // Lỗi mạng hay lỗi máy chủ: báo rõ kèm nút thử lại, không quay mãi. Đã có dữ liệu thì giữ dữ liệu cũ và thôi báo khi đọc lại được.
+  const [loadErr, setLoadErr] = useState(false);
+  const load = useCallback(() => fetch("/api/brain", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.nodes) { setG(j); setVer((v) => v + 1); setLoadErr(false); } else setLoadErr(true); }).catch(() => setLoadErr(true)), []);
   // Chọn hàng loạt ở cột trái: ghim / bỏ ghim / xóa nhiều ghi chú (quy tắc hàng đầu và trang hệ thống không chọn được).
   const pickable = (g?.nodes ?? []).filter((n) => ["map", "topic", "entity", "note", "chat", "code", "daily"].includes(n.kind));
   const bkN = useBulk(pickable, (n) => n.title);
@@ -969,7 +974,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
         </div>
       </header>
       <aside className="bw-left" aria-label={L("Khám phá bộ não", "Explore the brain")}>
-        {!g ? (gErr ? <div className="err-box sm" role="alert"><b>{L("Chưa tải được bộ não", "Couldn't load the brain")}</b><button className="btn" onClick={() => void load()}>{L("Thử lại", "Try again")}</button></div> : <div className="us-empty"><span className="art-spin sm" /></div>) : (
+        {!g ? (loadErr ? <div className="us-empty" role="alert"><span>{L("Không tải được Bộ não.", "Couldn't load the Brain.")}</span><button className="btn sm" onClick={() => { setLoadErr(false); void load(); }}>{L("Thử lại", "Try again")}</button></div> : <div className="us-empty"><span className="art-spin sm" /></div>) : (
           <>
             {pickable.length > 0 && <div className="bk-head bw-bk"><BulkButton b={bkN} compact /></div>}
             <nav className="bw-entry">
