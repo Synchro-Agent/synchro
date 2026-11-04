@@ -2548,7 +2548,8 @@ RULES_EN.unshift(
 );
 // Lỗi và trạng thái của engine CLI: câu Việt do máy chủ viết (cli_engines.ts, subs.ts). Người dùng tiếng Anh từng đọc nguyên văn tiếng Việt khi hết đăng nhập.
 RULES_EN.unshift(
-  [/^Đoạn chat dài: (.+) chỉ đọc (\d+) tin gần nhất, (\d+) tin cũ hơn không có trong lượt này\. Điều quan trọng ở đó nên nhắc lại$/, (m) => `Long chat: ${m[1]} only reads the latest ${m[2]} messages, and ${m[3]} older ones aren't part of this reply. Repeat anything important from them`],
+  [/^Đoạn chat dài: (.+) đọc nguyên văn (\d+) tin gần nhất, (\d+) tin cũ hơn chỉ có phần trích ngắn hoặc không có\. Điều quan trọng ở đó nên nhắc lại$/, (m) => `Long chat: ${m[1]} reads the latest ${m[2]} messages in full, and the ${m[3]} older ones only as short excerpts, or not at all. Repeat anything important from them`],
+  [/^Antigravity vẫn đang viết, đã (\d+) giây$/, (m) => `Antigravity is still writing, ${m[1]} seconds so far`],
   [/^\(PDF dạng ảnh (\d+) trang: chỉ có ảnh của (\d+) trang đầu\. Hãy nói rõ điều này với người dùng\.\)$/, (m) => `(Image-only PDF with ${m[1]} pages: only the first ${m[2]} pages are available as images. Tell the user this.)`],
   [/^Không đọc được "(.+)": tệp PDF bị hỏng hoặc đang đặt mật khẩu\.$/, (m) => `Couldn't read "${m[1]}": the PDF is damaged or password protected.`],
   [/^"(.+)" quá dài để gửi nguyên tệp nên model sẽ đọc phần chữ, không thấy hình và bố cục\.$/, (m) => `"${m[1]}" is too long to send as a whole file, so the model will read its text but won't see images or layout.`],

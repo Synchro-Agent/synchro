@@ -33,7 +33,7 @@ import { installTips } from "./tips";
 import { installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
-import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
@@ -1402,7 +1402,7 @@ export default function Home() {
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
-          histTotal: hist?.length ?? 1, tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       webs = meta.webs ?? [];
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];

@@ -616,7 +616,7 @@ function saveAttachments(work: string, atts: Attachment[]) {
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
 /** total: số tin thật của đoạn chat (trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số thật); lockMs: chờ lượt khác của tài khoản tối đa bao lâu;
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
-export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -695,8 +695,9 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   // Mở phiên mới cho đoạn chat dài (đổi model, sửa tin cũ): trình duyệt chỉ gửi các tin gần nhất. Model phải biết còn phần trước đó để không khẳng định "chưa nói gì",
   // người dùng cũng phải biết để nhắc lại điều quan trọng.
   const older = !resume ? total - msgs.length : 0;
-  const prompt = (history ? `<conversation_history>\n${older > 0 ? `[Đoạn chat này còn ${older} tin cũ hơn không có ở đây. Đừng khẳng định về chúng; cần thì hỏi lại người dùng.]\n\n` : ""}${history}\n</conversation_history>\n\n` : "") + textOf(last.content, col);
-  if (older > 0) o.onStatus?.(`Đoạn chat dài: ${SUB[cli].name} chỉ đọc ${msgs.length} tin gần nhất, ${older} tin cũ hơn không có trong lượt này. Điều quan trọng ở đó nên nhắc lại`);
+  const oldNote = older <= 0 ? "" : o.older ? `[Đoạn chat này còn ${older} tin cũ hơn. Dưới đây chỉ là phần đầu của các tin đó, không đầy đủ: đừng khẳng định chi tiết; cần thì hỏi lại người dùng.]\n${o.older}\n[Hết phần trích. Từ đây là nguyên văn.]\n\n` : `[Đoạn chat này còn ${older} tin cũ hơn không có ở đây. Đừng khẳng định về chúng; cần thì hỏi lại người dùng.]\n\n`;
+  const prompt = (history ? `<conversation_history>\n${oldNote}${history}\n</conversation_history>\n\n` : "") + textOf(last.content, col);
+  if (older > 0) o.onStatus?.(`Đoạn chat dài: ${SUB[cli].name} đọc nguyên văn ${msgs.length} tin gần nhất, ${older} tin cũ hơn chỉ có phần trích ngắn hoặc không có. Điều quan trọng ở đó nên nhắc lại`);
   const run = resolvePlanModel(cli, o.user.id, splitKey(o.model).id, o.effort);
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);
@@ -749,7 +750,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
     else if (e.kind === "status") {
       if (e.wait !== undefined) ws.waiting = e.wait;
       // Hết chờ lượt khác, hoặc CLI báo đang thử lại: tính lại từ lúc này.
-      if (!e.wait) ws.start = Date.now();
+      if (!e.wait && !e.tick) ws.start = Date.now();
       if (e.text) o.onStatus?.(e.text);
     }
     else if (e.kind === "pool") poolState = e.state;

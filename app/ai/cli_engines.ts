@@ -413,6 +413,7 @@ export class CodexEngine implements Engine {
 // Synchro: mcp_synchro_… khi công cụ được nạp sẵn (cầu nối đánh dấu antigravity/alwaysLoad), CallMcpTool khi agy 1.4.x để model tự tìm
 // công cụ rồi gọi qua tên chung. Công cụ dựng sẵn của agy (lệnh shell, ghi tệp trên máy chủ) vẫn bị từ chối như trước.
 const agyLocks = new Map<string, Slot>();
+const AGY_TICK_MS = Number(process.env.SYNCHRO_AGY_TICK_MS) || 15_000;
 // Bật tìm web (Cài đặt / nút tìm web): cho phép thêm công cụ tìm web của chính agy (search_web — chỉ gọi dịch vụ tìm kiếm của Google,
 // không đụng tới máy chủ). Công cụ đọc tệp / chạy lệnh / đọc URL bất kỳ của agy vẫn bị chặn: chúng chạy trên máy chủ bằng user của
 // engine, đọc được thư mục đăng nhập của tài khoản khác và địa chỉ nội bộ.
@@ -484,8 +485,21 @@ export class AntigravityEngine implements Engine {
     // Print mode không có sự kiện giữa chừng: nói trước để người dùng không tưởng là treo.
     yield { kind: "status", text: "Antigravity đang viết, chữ sẽ hiện một lần khi xong (thường 5 đến 10 giây)" };
     // agy in một object JSON duy nhất khi xong lượt (có thể trải nhiều dòng).
+    // Không có chữ dần, không có sự kiện: ít nhất nói đã chờ bao lâu. Đang chạy công cụ thì nhật ký làm việc đã nói rồi.
     let out = "";
-    for await (const l of p.lines) out += l + "\n";
+    const it = p.lines[Symbol.asyncIterator](), T0 = Date.now();
+    for (let nx = it.next(); ;) {
+      let tk: ReturnType<typeof setTimeout> | undefined;
+      const r = await Promise.race([nx, new Promise<null>((ok) => { tk = setTimeout(() => ok(null), AGY_TICK_MS); })]);
+      clearTimeout(tk);
+      if (r === null) {
+        if (Date.now() - (req.alive?.() ?? 0) > AGY_TICK_MS) yield { kind: "status", tick: true, text: `Antigravity vẫn đang viết, đã ${Math.round((Date.now() - T0) / 1000)} giây` };
+        continue;
+      }
+      if (r.done) break;
+      out += r.value + "\n";
+      nx = it.next();
+    }
     const e = await p.done;
     let o: Json | null = null;
     const t = out.trim();

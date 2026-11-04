@@ -17,6 +17,18 @@ export const MEMORY_EVERY_N_USER_MSGS = 4;
 
 // trace: dấu vết công cụ của câu trả lời (chuẩn Synchro), gửi lại để model ở lượt sau, kể cả model khác hãng, biết đã làm gì.
 export type LLMMsg = { role: "user" | "assistant"; content: string | ContentBlock[]; trace?: TraceItem[] };
+/** Trích ngắn các tin cũ hơn HISTORY_LIMIT: đổi model giữa đoạn chat dài thì model mới không có phiên cũ và không nhận các tin này. Không gọi model nào nên không tốn lượt, gần đây ưu tiên hơn. */
+export function olderDigest(older: LLMMsg[], max = 8000): string {
+  const lines: string[] = [];
+  let n = 0;
+  for (let i = older.length - 1; i >= 0 && n < max; i--) {
+    const t = textOf(older[i].content).replace(/\s+/g, " ").trim().slice(0, 200);
+    if (!t) continue;
+    lines.unshift(`${older[i].role === "assistant" ? "assistant" : "user"}: ${t}`);
+    n += t.length + 12;
+  }
+  return lines.join("\n");
+}
 export const textOf = (c: LLMMsg["content"]) => (typeof c === "string" ? c : c.map((b) => (b.type === "text" ? b.text : b.type === "image" ? "[ảnh]" : `[PDF ${b.name ?? ""}]`)).join("\n"));
 
 // Mặc định gọi /api/llm của chính Synchro (khóa API do quản trị viên nhập ở Cài đặt → Providers).

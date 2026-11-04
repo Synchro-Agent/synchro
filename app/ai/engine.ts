@@ -69,7 +69,7 @@ export type Event =
   /** Lượt dùng hồ tiến trình: có sẵn tiến trình đang chờ (hit) hay phải khởi động (cold). Chỉ để đo thời gian. */
   | { kind: "pool"; state: "hit" | "cold" }
   /** Dòng trạng thái cho người dùng (CLI đang thử lại, chờ lượt khác). wait: đang chờ khóa của tài khoản, bộ canh tạm dừng; false: hết chờ. */
-  | { kind: "status"; text?: string; wait?: boolean }
+  | { kind: "status"; text?: string; wait?: boolean; /** Chỉ báo cho người dùng biết vẫn đang chờ, không phải dấu hiệu CLI còn sống: bộ canh không tính lại. */ tick?: boolean }
   /** CLI đang tìm hoặc đọc web bằng công cụ dựng sẵn. */
   | { kind: "search"; query?: string; url?: string }
   /** Nguồn web CLI vừa nhận được. */

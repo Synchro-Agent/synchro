@@ -19,6 +19,7 @@ process.env.SYNCHRO_ENGINE_HOME = HOME;
 process.env.DATA_KEY = "engine-test-key";
 // Bộ canh lượt treo: rút còn 4 giây để thử lượt treo; các lượt giả lập khác xong trong tích tắc.
 process.env.SYNCHRO_WATCH_SEC = "4";
+process.env.SYNCHRO_AGY_TICK_MS = "60";
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
@@ -351,6 +352,11 @@ try {
     // Quá 60 tin: trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số tin thật.
     const hist = (n) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `tin ${i}` }));
     const lg = "conv-long";
+    {
+      const said = [];
+      await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: hist(61).slice(-59), total: 61, older: "user: phần trích", onStatus: (t) => said.push(t) });
+      ok(said.some((t) => /Đoạn chat dài: .* 59 tin gần nhất, 2 tin cũ hơn/.test(t)), "mở phiên mới mà thiếu tin cũ: báo cho người dùng", JSON.stringify(said));
+    }
     const l1 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: hist(61).slice(-59), total: 61, conv: lg });
     const l2 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [...hist(61).slice(-57), { role: "assistant", content: "đáp" }, { role: "user", content: "tiếp" }], total: 63, conv: lg });
     ok(l1.status === 200 && l2.status === 200 && /lượt 2/.test(l2.json.text), "đoạn chat dài hơn 60 tin vẫn nối đúng phiên CLI", JSON.stringify([l1.json.text, l2.json.text]));
@@ -463,6 +469,11 @@ try {
       const g = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp }));
       fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M }));
       ok(g.at(-1).kind === "error" && /Không nối được công cụ/.test(g.at(-1).message) && !g.some((e) => e.kind === "text"), "Grok: lắp cầu nối hỏng thì báo lỗi, không chạy lượt thiếu công cụ", JSON.stringify(g));
+    }
+    // Antigravity không có chữ dần: nói đã chờ bao lâu, và dòng này không làm bộ canh tính lại.
+    {
+      const ev = await all(S.engineFor("agy").runTurn({ prompt: "chào", env: A.engineEnv("agy", "user_A") }));
+      ok(ev.some((e) => e.kind === "status" && e.tick === true && /vẫn đang viết, đã \d+ giây/.test(e.text ?? "")) && ev.some((e) => e.kind === "final"), "agy: báo thời gian đã chờ", JSON.stringify(ev));
     }
     // Tệp tạm của lượt bị giết: dọn tệp cũ, không đụng tệp mới hay tệp khác.
     {

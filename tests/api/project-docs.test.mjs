@@ -26,6 +26,13 @@ ok(s.includes("Hợp đồng ngắn") && s.includes("ngan.txt"), "tài liệu ng
 s = L.buildSystemPrompt(P([{ id: 2, name: "cu.txt", kind: "file", chars: 20000, chunks: ["Đoạn cũ một", "Đoạn cũ hai"] }]), "Tóm tắt");
 ok(s.includes("Đoạn cũ một"), "tài liệu cũ chỉ lưu đoạn đã chia vẫn dùng được");
 
+console.log("1b. Trích ngắn tin cũ khi đoạn chat dài đổi model");
+{
+  const msgs = Array.from({ length: 200 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `tin số ${i} ${"x".repeat(500)}` }));
+  const d = L.olderDigest(msgs);
+  ok(d.length <= 8400 && d.includes("tin số 199") && !d.includes("tin số 0 ") && d.split("\n").every((l) => l.length <= 220) && /^(user|assistant):/.test(d), "giới hạn dung lượng, ưu tiên tin gần, mỗi tin một dòng ngắn", d.slice(0, 300));
+  ok(L.olderDigest([]) === "", "không có tin cũ: rỗng");
+}
 console.log("2. Người dùng mới bắt đầu ở Tự động");
 const st = (o) => ({ providers: [{ id: "x", name: "Claude", models: [{ key: "sub-claude/fable", name: "Fable" }, { key: "sub-claude/haiku", name: "Haiku" }] }], default: null, allowed: ["*"], effort: {}, loaded: true, ...o });
 ok(M.fitModel("", st()) === "auto", "chưa chọn gì, không có mặc định → Tự động");
