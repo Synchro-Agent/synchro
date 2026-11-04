@@ -333,7 +333,7 @@ function finish(p: Pending, ok: boolean, message?: string) {
 /** Dán mã trang đăng nhập trả về (claude, agy) rồi chờ CLI xác nhận. */
 export async function submitCode(cli: Cli, scope: string, code: string): Promise<LoginState> {
   const p = g.pending.get(key(cli, scope));
-  if (!p || p.st.state !== "open_url" || !p.st.needsCode) throw new Error("Không có lượt đăng nhập nào đang chờ mã. Bắt đầu lại nhé.");
+  if (!p || p.st.state !== "open_url" || !p.st.needsCode) throw new Error("Lượt đăng nhập này không còn (máy chủ vừa khởi động lại hoặc đã hết hạn). Hãy bấm Đăng nhập lại.");
   const c = code.trim();
   if (!c || c.length > 2048 || /[\x00-\x1f\x7f]/.test(c)) throw new Error("Mã không hợp lệ.");
   // Trạng thái đổi trong lúc chờ (đầu ra CLI, tiến trình thoát): đọc lại mỗi lần.

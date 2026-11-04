@@ -303,7 +303,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
             {pv.plan && <PlanNote pv={pv} />}
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <span className="mname-t">{m.name}</span>{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
+                <span className="mname-t">{m.name}</span>{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
           </Menu>
@@ -315,6 +315,15 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
 
 // Ghi chú gói subscription trong menu con của hãng: gói hết hạn mức (đề nghị dùng khóa API, chỉ chuyển khi người dùng bấm),
 // đang dùng khóa API thay gói (quay lại gói), hay cần đăng nhập lại.
+// Lượt lỗi → thông báo kèm tin nhắn. text: lời báo khi còn giữ được phần đã viết; không thì lời báo chính là nội dung tin (failed).
+const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
+  ...(text ? { text, partial: true } : { failed: true }),
+  ...(typeof d.resetsAt === "number" ? { at: d.resetsAt } : {}),
+  ...(d.switchTo && typeof (d.switchTo as { model?: unknown }).model === "string" ? { switchTo: d.switchTo as { model: string; name: string } } : {}),
+  ...(d.partialWork ? { work: true } : {}),
+  ...(Array.isArray(d.tried) ? { tried: d.tried as string[] } : {}),
+});
+
 function PlanNote({ pv }: { pv: ProviderInfo }) {
   const p = pv.plan!;
   const en = getLang() === "en";
@@ -1100,7 +1109,7 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null;
-    let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false;
+    let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, notice: Msg["notice"], webs: Msg["webs"] = [];
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     let streamed = false, pend: string | null = null, raf = 0;
     const flush = () => { raf = 0; if (pend === null || !mine()) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
@@ -1131,7 +1140,10 @@ export default function Home() {
       reply = await callLLM(system, history, 1500, undefined, true, { project: pid, conv: id, studio: studio ?? chatsRef.current.find((c) => c.id === id)?.studio, recentSkills, pickedSkills: picked,
         onRun: (run) => { if (mine()) runs.current.set(id, run); lastMsg((m) => ({ ...m, run })); }, onProgress: (prog) => { if (mine()) lastMsg((m) => ({ ...m, prog })); }, onDelta, onEvent, meta,
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
-        extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via } });
+        extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
+          // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
+          histTotal: hist?.length ?? 1, tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+      webs = meta.webs ?? [];
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -1153,7 +1165,15 @@ export default function Home() {
       setQueued((q) => q.map((x) => (x.chat === id && x.mode === "steer" ? { ...x, mode: "later" as const } : x)));
       // Máy chủ trả lời kèm lý do (kể cả lỗi của gói / model, mã 5xx): hiện đúng lý do; chỉ khi không có lý do mới báo chung chung.
       failed = true;
-      reply = e instanceof LLMError && e.message && !/^(LLM|Run|Lỗi) \d+$/.test(e.message) ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
+      const said = e instanceof LLMError && e.message && !/^(LLM|Run|Lỗi) \d+$/.test(e.message) ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.");
+      // Lỗi giữa chừng (hết hạn mức, treo…): chữ đã viết, tệp đã tạo vẫn giữ; lời báo lỗi hiện riêng bên dưới.
+      const d = e instanceof LLMError ? e.data : {};
+      const kept = typeof d.text === "string" && d.text.trim() ? d.text : "";
+      reply = kept || said;
+      notice = noticeOf(d, kept ? said : "");
+      if (Array.isArray(d.files)) outs = d.files as Msg["outs"];
+      if (Array.isArray(d.trace)) trace = d.trace as Msg["trace"];
+      if (Array.isArray(d.webSources)) webs = d.webSources as Msg["webs"];
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
         const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio); };
@@ -1168,7 +1188,7 @@ export default function Home() {
     }
     if (streamed || cancelled) {
       // Đã hiện dần theo thời gian thực: hiện bản cuối ngay, không giả lập gõ chữ.
-      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined, notice, webs: webs?.length ? webs : undefined }]);
       finishReply(id, reply, pr, history, via);
       return;
     }
@@ -1181,7 +1201,7 @@ export default function Home() {
     timers.current.set(id, setInterval(() => {
       if (wait-- > 0) return;
       i += 2;
-      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined }]);
+      patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: words.slice(0, i).join(""), done: i >= words.length, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length && i >= words.length ? outs : undefined, via: via ?? undefined, trace: trace?.length ? trace : undefined, notice, webs: webs?.length ? webs : undefined }]);
       if (i >= words.length) finishReply(id, reply, pr, history, via);
     }, 38));
   };
@@ -1316,11 +1336,17 @@ export default function Home() {
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
         const via = meta.route ?? null;
-        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), dur: Date.now() - (last.time ?? Date.now()), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined }));
+        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), dur: Date.now() - (last.time ?? Date.now()), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined, webs: meta.webs?.length ? meta.webs : undefined }));
         stop(false, c.id);
         doneAway(c.id);
         setTimeout(() => autoTitle(c.id), 300);
-      }, (e) => { if (!mine()) return; set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại.") })); stop(false, c.id); });
+      }, (e) => {
+        if (!mine()) return;
+        const said = e instanceof LLMError && e.message ? e.message : tr("Không thể kết nối tới model. Vui lòng thử lại."), d = e instanceof LLMError ? e.data : {};
+        const kept = typeof d.text === "string" && d.text.trim() ? d.text : "";
+        set((m) => ({ ...m, done: true, prog: undefined, run: undefined, text: kept || said, notice: noticeOf(d, kept ? said : ""), ...(Array.isArray(d.files) && d.files.length ? { outs: d.files as Msg["outs"] } : {}), ...(Array.isArray(d.trace) && d.trace.length ? { trace: d.trace as Msg["trace"] } : {}) }));
+        stop(false, c.id);
+      });
     }
   }, [loaded, me]); // eslint-disable-line react-hooks/exhaustive-deps
   const send = (t: string, f: string[] = [], pick?: { id: string; label: string }[]) => {
@@ -1364,7 +1390,17 @@ export default function Home() {
     const lastUser = [...chat.msgs].reverse().find((m) => m.role === "user");
     patch(chat.id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]);
     const upto = chat.msgs.slice(0, chat.msgs.lastIndexOf(lastUser!) + 1);
-    streamReply(chat.id, lastUser?.text ?? "", upto.filter((m) => m.text).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })), chat.project);
+    // Cùng cách dựng lịch sử với lượt gửi: tệp đính kèm, phần đã nén, dấu vết công cụ. Từng chỉ gửi chữ nên "Tóm tắt file này" thử lại thì mất tệp.
+    const h = chatHistory(upto, chat.compact);
+    streamReply(chat.id, lastUser?.text ?? "", h.length ? h : [{ role: "user", content: lastUser?.text ?? "" }], chat.project, chat.studio, lastUser?.pick?.map((x) => x.id));
+  };
+  // Đổi model bằng một lần bấm sau khi lượt lỗi. Đã có phần làm dở thì làm tiếp (dấu vết công cụ nằm trong lịch sử, model mới biết việc nào đã xong),
+  // chưa có gì thì gửi lại đúng tin vừa rồi. Đang để Tự động thì giữ Tự động: máy chủ đã biết model nào đang nghỉ.
+  const switchModel = (m: Msg, key: string) => {
+    if (!chat || busy) return;
+    if (model !== AUTO) { setActiveModel(key); setModel(key); }
+    if (m.notice?.partial || m.notice?.work || m.trace?.length || m.outs?.length) send(tr("Tiếp tục từ chỗ đang dở"));
+    else retry();
   };
   const copy = (key: string, text: string) => {
     navigator.clipboard?.writeText(text);
@@ -1895,6 +1931,21 @@ export default function Home() {
                         return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={i === chat.msgs.length - 1 && !busy ? () => send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => openArt({ chat: chat.id, ident: sg.art.ident, v, follow: false })} />;
                       })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} />) : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={openFile} active={fileOpen ? fileSel?.file.id : undefined} /> : null}</div>
                       {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
+                      {m.done && m.webs?.length ? <div className="msg-sources"><span>{tr("Nguồn")}</span>{m.webs.filter((w) => /^https?:\/\//.test(w.url)).map((w) => <a key={w.url} href={w.url} target="_blank" rel="noopener noreferrer" title={w.url} data-notr>{w.title || w.url.replace(/^https?:\/\/(?:www\.)?/, "").split("/")[0]}</a>)}</div> : null}
+                      {m.done && m.notice && (m.notice.text || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (
+                        <div className="msg-notice" role="status">
+                          {m.notice.text && <p>{tr(m.notice.text)}</p>}
+                          {m.notice.work && <p>{tr("Model đã làm một phần việc nên Synchro không tự chạy lại, để tránh làm hai lần.")}</p>}
+                          {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{`${getLang() === "en" ? "Available again" : "Dùng lại được"}: ${new Date(m.notice.at).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}`}</p> : null}
+                          {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
+                          {m.notice.switchTo && i === chat.msgs.length - 1 && !busy ? (
+                            <div className="msg-notice-act">
+                              <button className="btn dark" onClick={() => switchModel(m, m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (model === AUTO ? "Try again with Auto" : `Switch to ${m.notice.switchTo.name}`) : model === AUTO ? "Thử lại bằng Tự động" : `Chuyển sang ${m.notice.switchTo.name}`}`}</button>
+                              {model !== AUTO && <button className="lnk" onClick={() => switchModel(m, AUTO)}>{tr("Dùng Tự động")}</button>}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {m.done && (
                         <div className="actions in">
                           <button className="icon-btn" onClick={() => copy(`${chat.id}-${i}`, m.text)} aria-label="Sao chép">{copied === `${chat.id}-${i}` ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>

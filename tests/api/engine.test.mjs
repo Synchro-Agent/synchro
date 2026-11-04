@@ -146,7 +146,7 @@ try {
     ok(l.state === "error" && /OAuth error/.test(l.message ?? "") && /link mới/.test(l.message ?? "") && !(l.message ?? "").includes("wrong-code") && Date.now() - t0w < 8000,
       "mã sai (Claude báo lỗi rồi đứng chờ) → báo ngay câu lỗi của Claude, không chờ hết giờ, không lộ mã đã dán", JSON.stringify({ l, ms: Date.now() - t0w }));
     let threw = ""; try { await A.submitCode("claude", U, "x"); } catch (e) { threw = e.message; }
-    ok(/Không có lượt đăng nhập/.test(threw), "dán mã khi không có lượt đăng nhập → báo lỗi", threw);
+    ok(/Lượt đăng nhập này không còn/.test(threw), "dán mã khi không có lượt đăng nhập → báo rõ (máy chủ khởi động lại hoặc hết hạn), không chung chung", threw);
     await A.startLogin("claude", U);
     const page = await fetch(`${M}/mock-login/claude`).then((r) => r.text());
     const code = /id="code"[^>]*>([^<]+)</.exec(page)?.[1];
@@ -381,6 +381,57 @@ try {
     await A.logout("agy", U);
     ok(!(await A.status("agy", U)).loggedIn, "agy: đăng xuất");
     ok((await A.status("codex", U)).loggedIn, "đăng xuất claude không ảnh hưởng codex");
+  }
+
+  // ------------------------------------------------------------------
+  console.log("8b. Grok: hàng đợi của tài khoản, đang nghĩ không phải treo, tìm web; bộ canh; lượt có việc không chạy lại sau khởi động");
+  {
+    const UG = "user_G", env = A.engineEnv("grok", UG);
+    fs.mkdirSync(env.GROK_HOME, { recursive: true }); fs.writeFileSync(path.join(env.GROK_HOME, "auth.json"), "{}");
+    const mcp = { url: "http://127.0.0.1:9/mcp" };
+    const long = all(S.engineFor("grok").runTurn({ prompt: "[mock:holdgrok] chào", env, mcp }));
+    await sleep(1500);
+    let t0 = Date.now();
+    const busy = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, lockMs: 500 }));
+    ok(busy.some((e) => e.kind === "status" && e.wait === true && /Đang chờ lượt Grok/.test(e.text)) && busy.at(-1).kind === "error" && busy.at(-1).code === "busy" && Date.now() - t0 < 3000, "lượt khác đang giữ cầu nối: báo đang chờ, hết hạn chờ thì báo bận (không phải lỗi sai)", JSON.stringify(busy));
+    t0 = Date.now();
+    const ac = new AbortController(); setTimeout(() => ac.abort(), 300);
+    const st = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, signal: ac.signal }));
+    ok(st.at(-1).kind === "error" && st.at(-1).code === "aborted" && Date.now() - t0 < 2000, "đang chờ mà bấm Dừng: dừng ngay", JSON.stringify(st));
+    const waited = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp }));
+    ok(waited.some((e) => e.kind === "status" && e.wait === false) && waited.some((e) => e.kind === "final"), "chờ xong thì lượt chạy bình thường", JSON.stringify(waited.map((e) => e.kind)));
+    ok((await long).some((e) => e.kind === "final"), "lượt đang giữ cầu nối vẫn xong");
+    const me = { id: UG, email: "g@synchro.test", email_verified: 1, status: "active" };
+    await A.status("grok", UG, { fresh: true });
+    const slow = await SUBS.subTurn({ user: me, model: "sub-grok/grok-4.7", system: "", messages: [{ role: "user", content: "[mock:slowgrok] chào" }] });
+    ok(slow.status === 200, "Grok nghĩ 6 giây chỉ có thought, bộ canh 4 giây: không bị coi là treo", JSON.stringify(slow));
+    const web = await all(S.engineFor("grok").runTurn({ prompt: "#web chào", env, web: true }));
+    ok(web.some((e) => e.kind === "search") && web.some((e) => e.kind === "sources" && e.items[0]?.url === "https://example.com/grok"), "Grok: tìm web có bước và nguồn", JSON.stringify(web.filter((e) => e.kind !== "text")));
+    const W = await loadTs(["ai/watchdog"]);
+    const D = W["ai/watchdog"];
+    delete process.env.SYNCHRO_WATCH_SEC;
+    const L = D.watchLimits("claude", "max");
+    ok(L.first === 90_000 && L.idle === 30 * 60_000 && D.watchLimits("codex", "max").first > L.first && D.watchLimits("agy", "low").first < D.watchLimits("agy", "max").first, "giới hạn theo CLI và effort", JSON.stringify(L));
+    const now = 1e9, sn = (o) => D.stallOf({ start: now - 100_000, last: 0, alive: 0, waiting: false, ...o }, L, now);
+    ok(sn({}) === "first", "CLI khởi động xong rồi im: báo treo sau 90 giây");
+    ok(sn({ waiting: true }) === null, "đang chờ lượt khác của tài khoản: không tính");
+    ok(sn({ alive: now - 1000 }) === null && sn({ last: now - 29 * 60_000, start: now - 40 * 60_000 }) === null, "công cụ đang chạy, Opus nghĩ lâu ở mức cao nhất: không tính là treo");
+    ok(sn({ last: now - 31 * 60_000, start: now - 40 * 60_000 }) === "idle", "im lặng quá mức của effort: báo treo");
+    ok(sn({ start: now - 5000 }) === null, "CLI vừa báo đang thử lại: tính lại từ lúc đó");
+    process.env.SYNCHRO_WATCH_SEC = "4";
+    // Lượt đã bắt đầu việc có tác động ra ngoài: khởi động lại máy chủ không chạy lại.
+    const { runs: RN, authstore: AU } = await loadTs(["runs", "authstore"]);
+    RN.getRun("x");
+    const ru = AU.createUser({ email: `rs${Date.now()}@synchro.test`, name: "RS", verified: true });
+    const dbr = AU.db(), now2 = Date.now();
+    const ins = dbr.prepare("INSERT INTO runs (id, user_id, conv, kind, status, req, events, created_at, updated_at, effects) VALUES (?, ?, NULL, 'none', 'running', '{}', '[]', ?, ?, ?)");
+    ins.run("run_fx", ru.id, now2, now2, JSON.stringify(["Gmail: Gửi thư"]));
+    ins.run("run_plain", ru.id, now2, now2, null);
+    RN.resumeInterrupted();
+    await sleep(200);
+    const fx = RN.getRun("run_fx"), plain = RN.getRun("run_plain");
+    ok(fx.status === "error" && /không tự chạy lại/.test(fx.result.error) && /Gmail: Gửi thư/.test(fx.result.error) && fx.result.partialWork, "khởi động lại máy chủ: lượt đã thao tác connector không chạy lại, nói rõ đã làm gì", JSON.stringify(fx));
+    ok(!/không tự chạy lại/.test(JSON.stringify(plain.result)) && plain.events.some((e) => /chạy lại lượt này/.test(e.text)), "lượt chưa làm gì có tác động: vẫn chạy lại như trước", JSON.stringify(plain));
   }
 
   // ------------------------------------------------------------------

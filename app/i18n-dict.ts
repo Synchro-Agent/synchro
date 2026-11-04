@@ -698,9 +698,9 @@ Object.assign(EN2VI, {
 });
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
-  [/^(.+) không phản hồi sau (\d+) (giây|phút)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2]} ${m[3] === "giây" ? "seconds" : "minutes"}. Try again or pick another model.`],
-  [/^(.+) không có tiến triển trong (\d+) (giây|phút)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2]} ${m[3] === "giây" ? "seconds" : "minutes"}. Send "continue" or pick another model.`],
-  [/^(.+) đang giới hạn tốc độ hoặc quá tải\. Hãy thử lại sau (ít phút|\d+ giây|\d+ phút) hoặc chọn model khác\.$/, (m) => `${m[1]} is rate limiting or overloaded. Try again in ${m[2] === "ít phút" ? "a few minutes" : m[2].replace("giây", "seconds").replace("phút", "minutes")} or pick another model.`],
+  [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],
+  [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
+  [/^(.+) đang giới hạn tốc độ hoặc quá tải\. Hãy thử lại sau (.+) hoặc chọn model khác\.$/, (m) => `${m[1]} is rate limiting or overloaded. Try again in ${m[2].replace("ít phút", "a few minutes").replace("giây", "seconds").replace("phút", "minutes")} or pick another model.`],
   [/^Đang chờ lượt (.+) khác của tài khoản này xong$/, (m) => `Waiting for another ${m[1]} reply on this account to finish`],
   [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one could not start. Try again when it finishes, or pick another model.`],
   [/^Claude đang thử lại sau lỗi tạm thời(?: \(lần (\d+)(?:\/(\d+))?\))?$/, (m) => `Claude is retrying after a temporary error${m[1] ? ` (attempt ${m[1]}${m[2] ? ` of ${m[2]}` : ""})` : ""}`],
@@ -896,6 +896,10 @@ Object.assign(VI2EN, {
   "Chưa có khóa cho nhà cung cấp này.": "There's no key for this provider yet.",
   "Máy chủ trả về dữ liệu không đọc được (có đúng địa chỉ API không?)": "The server returned data that couldn't be read (is the API address right?)",
   "Không tìm thấy model này. Hãy làm mới danh sách model.": "Model not found. Refresh the model list.",
+  "Câu trả lời trên bị ngắt giữa chừng vì lỗi của model; chưa hoàn chỉnh.": "The reply above was cut off by a model error and is incomplete.",
+  "Tiếp tục từ chỗ đang dở": "Continue from where it stopped", "Nguồn": "Sources", "Dùng Tự động": "Use Auto",
+  "Model đã làm một phần việc nên Synchro không tự chạy lại, để tránh làm hai lần.": "The model already did part of the work, so Synchro won't rerun it automatically, to avoid doing it twice.",
+  "Lượt đăng nhập này không còn (máy chủ vừa khởi động lại hoặc đã hết hạn). Hãy bấm Đăng nhập lại.": "This sign-in is no longer active (the server restarted or it expired). Click Sign in again.",
   "ChatGPT đang kết nối lại": "ChatGPT is reconnecting", "Antigravity đang viết, chữ sẽ hiện một lần khi xong": "Antigravity is writing; the text appears all at once when it's done",
   "Đoạn chat đã quá dài với model này. Hãy nén đoạn chat, mở đoạn chat mới hoặc chọn model có ngữ cảnh lớn hơn.": "This chat is too long for this model. Compact it, start a new chat, or pick a model with a larger context.",
   "Tin nhắn quá dài để gửi cho model này. Hãy rút gọn hoặc mở đoạn chat mới.": "This message is too long for this model. Shorten it or start a new chat.",
@@ -1324,6 +1328,7 @@ Object.assign(EN2VI, {
   "Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro.": "Synchro chạy ứng dụng chính chủ của hãng trên máy chủ và hiện link đăng nhập của nó. Mật khẩu của bạn không bao giờ đi qua Synchro.",
   "Chat with your plan": "Chat bằng gói của bạn",
   "Pick a model under “Your plan” in the model picker. The usage ring shows your plan's own limits.": "Chọn model trong nhóm “Gói của bạn” ở bộ chọn model. Vòng tròn mức dùng hiện đúng hạn mức của gói.",
+  "The server restarted during sign-in. Click Sign in to start again.": "Máy chủ vừa khởi động lại trong lúc đăng nhập. Hãy bấm Đăng nhập để bắt đầu lại.",
   "Keep going when the plan runs out": "Không bị gián đoạn khi gói hết hạn mức",
   "If your plan hits its limit and an administrator added an API key for the same provider, Synchro continues with that key.": "Khi gói chạm giới hạn và quản trị viên đã thêm khóa API của cùng hãng, Synchro tự chuyển sang khóa đó.",
   "Claude Pro or Max plan": "Gói Claude Pro hoặc Max", "ChatGPT Plus, Pro or Business plan": "Gói ChatGPT Plus, Pro hoặc Business", "Google AI Pro or Ultra plan": "Gói Google AI Pro hoặc Ultra",
