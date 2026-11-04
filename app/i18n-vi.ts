@@ -937,3 +937,7 @@ Object.assign(EN2VI, {
   "View": "Xem", "No results": "Không có kết quả",
   "Your account and everything stored with it on the server (chats, projects, files, Brain, connectors, sessions) are permanently deleted, and the copy in this browser is erased. This can't be undone.": "Tài khoản và mọi thứ lưu kèm trên máy chủ (đoạn chat, dự án, tệp, Bộ não, connector, phiên đăng nhập) bị xóa vĩnh viễn, bản trong trình duyệt này cũng bị xóa. Không hoàn tác được.",
 });
+Object.assign(EN2VI, {
+  "System health": "Tình trạng hệ thống", "Backups": "Sao lưu", "No backup recorded on this server yet.": "Máy chủ này chưa ghi nhận bản sao lưu nào.", "Backups have stopped. Check the backup log on the server.": "Sao lưu đã ngừng. Hãy xem nhật ký sao lưu trên máy chủ.", "Nightly backups are running.": "Sao lưu hằng đêm vẫn chạy.",
+  "Replies in the last 24 hours": "Câu trả lời trong 24 giờ qua", "Errors in the last 24 hours": "Lỗi trong 24 giờ qua", "Page and server errors, with emails and secrets removed.": "Lỗi của trang và máy chủ, đã bỏ email và mã bí mật.",
+});

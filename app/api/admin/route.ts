@@ -1,5 +1,6 @@
 import { adminAudit, adminStats, adminUsers, ADMIN_EMAILS, defaultPerms, handle, requireAdmin, signupOpen } from "../../authstore";
 import { providerFailures, providerStatus } from "../../oauth";
+import { opsStatus } from "../../ops";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,5 +17,6 @@ export const GET = handle(async (req) => {
     providers: providerStatus(),
     providerFailures: providerFailures(),
     admins: [...ADMIN_EMAILS],
+    ops: opsStatus(),
   });
 });

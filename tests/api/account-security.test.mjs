@@ -89,7 +89,7 @@ console.log("6. /api/health");
 const h = await fetch(`${B}/api/health`);
 const hj = await h.json();
 ok((h.status === 200 || h.status === 503) && typeof hj.ok === "boolean" && hj.db === true && hj.build, "trả trạng thái, không cần đăng nhập", JSON.stringify(hj));
-ok(Object.keys(hj).every((k) => ["ok", "build", "db", "disk", "agent"].includes(k)), "chỉ có cờ trạng thái, không số liệu hay đường dẫn", JSON.stringify(hj));
+ok(Object.keys(hj).every((k) => ["ok", "build", "db", "disk", "agent", "backup"].includes(k)), "chỉ có cờ trạng thái, không số liệu hay đường dẫn", JSON.stringify(hj));
 ok(!/\/|synchro\.db|@/.test(JSON.stringify(hj)), "không lộ đường dẫn, email", JSON.stringify(hj));
 
 console.log("7. Xóa tài khoản qua API");

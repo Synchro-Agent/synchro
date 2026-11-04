@@ -66,5 +66,7 @@ if [ "$(date +%u)" = "7" ]; then cp -al "$DEST/daily/$STAMP" "$DEST/weekly/$STAM
 prune() { { ls -1d "$1"/*/ 2>/dev/null || true; } | sort -r | tail -n "+$(($2 + 1))" | while read -r d; do rm -rf "$d"; done; }
 prune "$DEST/daily" "$KEEP_DAILY"; prune "$DEST/weekly" "$KEEP_WEEKLY"
 touch "$DEST/LAST_OK"
+# Web không đọc được thư mục sao lưu (chỉ root): để dấu trong thư mục dữ liệu cho /api/health và cảnh báo sao lưu ngừng (app/ops.ts).
+touch "$DATA/.backup-ok" || true
 echo "$(date -Is) Sao lưu xong: $DEST/daily/$STAMP ($(cat "$DEST/daily/$STAMP/SIZE_MB") MB)"
 if [ -n "${SYNCHRO_BACKUP_HOOK:-}" ]; then $SYNCHRO_BACKUP_HOOK "$DEST/daily/$STAMP"; fi

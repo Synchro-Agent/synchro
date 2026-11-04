@@ -23,8 +23,22 @@ type Log = { id: number; at: number; action: string; actor_email: string | null;
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[]; ops?: OpsStatus;
 };
+type OpsStatus = { backup: { ageHours: number | null; stale: boolean }; engines: { engine: string; ok: number; fail: number; auth: number }[]; errors: { at: number; kind: string; msg: string }[]; errors24h: number };
+// Tình trạng hệ thống: sao lưu, tỉ lệ lỗi theo từng CLI, lỗi gần đây (đã làm sạch, không chứa nội dung của người dùng). Số liệu từ app/ops.ts.
+function OpsPanel({ ops }: { ops: OpsStatus }) {
+  const [more, setMore] = useState(false);
+  return (
+    <>
+      <h3 className="sec">System health</h3>
+      <div className="row"><div><div className="t">Backups</div><div className="d">{ops.backup.ageHours === null ? "No backup recorded on this server yet." : ops.backup.stale ? "Backups have stopped. Check the backup log on the server." : "Nightly backups are running."}</div></div>{ops.backup.ageHours !== null && <span className={ops.backup.stale ? "ops-bad" : "muted"}>{`${ops.backup.ageHours} h`}</span>}</div>
+      {ops.engines.map((e) => <div key={e.engine} className="row"><div><div className="t" data-notr>{e.engine}</div><div className="d">Replies in the last 24 hours</div></div><span className={e.fail + e.auth > e.ok ? "ops-bad" : "muted"} data-notr>{`${e.ok} ok · ${e.fail} failed · ${e.auth} sign-in`}</span></div>)}
+      <div className="row"><div><div className="t">Errors in the last 24 hours</div><div className="d">Page and server errors, with emails and secrets removed.</div></div>{ops.errors.length > 0 ? <button className="btn" aria-expanded={more} onClick={() => setMore(!more)}>{String(ops.errors24h)}</button> : <span className="muted">0</span>}</div>
+      {more && <div className="ops-log">{ops.errors.map((e, i) => <div key={i}><time>{new Date(e.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}</time><code data-notr>{e.msg}</code></div>)}</div>}
+    </>
+  );
+}
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
 
@@ -422,6 +436,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       </div>
       <Pager page={up} pages={uPages} from={users.length ? (up - 1) * U_PER + 1 : 0} to={Math.min(up * U_PER, users.length)} total={users.length} onPage={(n) => { setUPage(n); setOpen(null); }} />
       <BulkBar b={bk} acts={userActs} noun="người dùng" />
+
+      {d?.ops && <OpsPanel ops={d.ops} />}
 
       <h3 className="sec">Audit log</h3>
       <div className="adm-bar">

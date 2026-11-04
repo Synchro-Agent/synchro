@@ -55,7 +55,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
 }
 
 // Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.
-const toolLabel = (l: string) => { const t = tr(`Đang ${l}`); return t !== `Đang ${l}` ? t : l.charAt(0).toUpperCase() + l.slice(1); };
+const DOING = "Đang";
+const toolLabel = (l: string) => { const v = [DOING, l].join(" "), t = tr(v); return t !== v ? t : l.charAt(0).toUpperCase() + l.slice(1); };
 function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
   const [open, setOpen] = useState(false);
   const running = live && items.some((x) => x.ok === undefined);

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Lockup } from "../brand";
 import { getLang, tr } from "../i18n";
+import { LangSwitch } from "../langswitch";
 import { AlertCircle, Check, Eye, EyeOff, Mail } from "lucide-react";
 
 const post = async (url: string, body: unknown) => {
@@ -48,6 +49,7 @@ export default function ResetPassword() {
   const e = err && <p className="auth-field-err rp-err" role="alert">{tr(err)}</p>;
   return (
     <main className="rp">
+      <LangSwitch />
       <div className="rp-card">
         <Link href="/" className="rp-brand" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></Link>
         {stage === "loading" && <div className="rp-wait" role="status" aria-label={tr("Đang tải")}><span className="art-spin sm" /></div>}

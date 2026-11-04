@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 import { ArtifactFrame, MermaidSvg, VbhcView } from "./artifactui";
 import { Lockup } from "./brand";
-import { locale, tr } from "./i18n";
+import { locale, tr, useLangReady } from "./i18n";
+import { LangSwitch } from "./langswitch";
 import { Markdown } from "./md";
 import type { ShareSeg, ShareSnap } from "./sharesnap";
 
@@ -24,11 +25,13 @@ export function ShareView({ snap, at }: { snap: ShareSnap; at: number }) {
   // Khung artifact, ngày giờ và ngôn ngữ phụ thuộc trình duyệt: dựng sau khi gắn để không lệch với bản dựng ở máy chủ.
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
+  // Vẽ lại khi từ điển về hoặc đổi ngôn ngữ: chữ trong câu trả lời không qua bộ dịch tự động.
+  useLangReady();
   return (
     <main className="sh-page">
       <header className="sh-head">
         <a href="/" className="brand-lock" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></a>
-        <span className="sh-tag">Bản chia sẻ chỉ đọc</span>
+        <span className="sh-tools"><span className="sh-tag">Bản chia sẻ chỉ đọc</span><LangSwitch inline /></span>
       </header>
       <h1 data-notr>{snap.title}</h1>
       {ready && <><p className="sh-at">{tr("Bản chụp lúc")} <span data-notr>{new Date(at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</span></p>

@@ -1631,6 +1631,7 @@ Object.assign(VI2EN, {
 Object.assign(VI2EN, { "Đang hiện": "Showing", "Gõ thêm để thu hẹp.": "Type more to narrow it down.", "Kết quả": "Results", "Dự án": "Projects" });
 // Nhãn công cụ trong nhật ký làm việc (chatengine.ts: describe, browsertools.ts: describeBrowser), hiện ở worklog.tsx.
 Object.assign(VI2EN, {
+  "Đang": "Running", "ghi chú": "notes",
   "Đang đọc lại artifact": "Re-reading the artifact", "Đang kiểm tra hiển thị artifact": "Checking how the artifact renders", "Đang tìm skill phù hợp": "Looking for a matching skill", "Đang tìm trên web": "Searching the web",
   "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang chụp màn hình trang": "Taking a screenshot", "Đang cuộn trang": "Scrolling the page", "Đang kéo thả trên trang": "Dragging on the page",
   "Đang xem các tệp đã tải về": "Listing downloaded files", "Đang mở tab mới": "Opening a new tab", "Đang chuyển tab": "Switching tabs", "Đang đóng tab": "Closing a tab", "Đang xem các tab": "Listing tabs", "Đang trả lời hộp thoại của trang": "Answering a page dialog", "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
@@ -1644,4 +1645,13 @@ RULES_EN.push(
   [/^Đang gõ “(.*)”$/, (m) => `Typing “${m[1]}”`], [/^Đang nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Đang chọn “(.*)”$/, (m) => `Selecting “${m[1]}”`], [/^Đang tải tệp (.*) lên trang$/, (m) => `Uploading ${m[1]} to the page`], [/^Đang đọc tệp (.*) vừa tải về$/, (m) => `Reading downloaded file ${m[1]}`],
   [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
   [/^Đang dùng công cụ (.+)$/, (m) => `Using tool ${m[1]}`], [/^Đang dùng ([^:]+): (.+)$/, (m) => `Using ${m[1]}: ${m[2]}`],
+);
+// Tình trạng hệ thống, cảnh báo cho quản trị viên (ops.ts), trang quyền riêng tư.
+Object.assign(VI2EN, {
+  "Nhật ký lỗi:": "Error log:", "thông báo lỗi kỹ thuật của trang và máy chủ, đã bỏ email và mã bí mật, không gắn với tài khoản, không chứa tin nhắn. Chỉ quản trị viên xem, giữ 500 dòng gần nhất, để sửa lỗi.": "technical error messages from the pages and the server, with emails and secrets removed, not tied to an account and without your messages. Only administrators can read it. The latest 500 lines are kept, to fix bugs.",
+});
+RULES_EN.push(
+  [/^Bản sao lưu gần nhất đã (\d+) giờ\. Xem (.+)\.$/, (m) => `The latest backup is ${m[1]} hours old. See ${m[2]}.`], [/^Sau (\d+) giờ vẫn chưa ghi nhận bản sao lưu nào\. Kiểm tra cron của (.+)\.$/, (m) => `No backup recorded after ${m[1]} hours. Check the cron job for ${m[2]}.`],
+  [/^(.+): (\d+) lượt báo hỏng đăng nhập gói trong một giờ qua\.$/, (m) => `${m[1]}: ${m[2]} replies reported a broken plan sign-in in the last hour.`], [/^(.+): (\d+) lượt lỗi, (\d+) lượt thành công trong một giờ qua\.$/, (m) => `${m[1]}: ${m[2]} failed and ${m[3]} succeeded in the last hour.`],
+  [/^(\d+) lỗi giao diện và máy chủ trong một giờ qua\.$/, (m) => `${m[1]} page and server errors in the last hour.`],
 );

@@ -12,6 +12,10 @@ export async function register() {
       (await import("./app/tasks")).startScheduler(Number(process.env.SYNCHRO_TASK_TICK_MS) || 30_000);
       // Bộ não tổng hợp: chưng cất đoạn chat theo nhịp của bộ hẹn giờ.
       await import("./app/brain");
+      // Sổ vận hành: báo quản trị viên khi sao lưu ngừng, CLI lỗi hàng loạt, đăng nhập gói hỏng.
+      const { onTick: onOpsTick } = await import("./app/tasks");
+      const { checkOps } = await import("./app/ops");
+      onOpsTick("ops", (now) => checkOps(now));
       // Connector: kiểm tra lại ở nền theo nhịp của bộ hẹn giờ (công cụ mới, token bị thu hồi, giữ refresh token còn sống).
       const { onTick } = await import("./app/tasks");
       const { recheckConnectors } = await import("./app/connectors");

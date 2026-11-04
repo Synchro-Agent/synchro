@@ -12,7 +12,7 @@ import { Loader, Mark } from "./brand";
 import { usePref } from "./store";
 import { OCCUPATIONS } from "./names";
 export { OCCUPATIONS };
-import { LANG_NAMES, type Lang } from "./i18n";
+import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
 
@@ -243,17 +243,6 @@ interface AuthComponentProps {
   again?: boolean;
   // Quản trị viên đóng đăng ký: email chưa có tài khoản dừng ngay ở bước đầu, không phải điền hết biểu mẫu mới biết.
   signupOpen?: boolean;
-}
-
-// Đổi ngôn ngữ ngay ở màn hình đăng nhập: người chưa có tài khoản không phải đăng ký bằng thứ tiếng họ không đọc được.
-function LangSwitch() {
-  const [lang, setLang] = usePref<Lang>("uilang", "vi");
-  const [, setVlang] = usePref("vlang", "Vietnamese");
-  return (
-    <div className="auth-lang" role="group" aria-label="Ngôn ngữ" data-notr>
-      {(["vi", "en"] as Lang[]).map((k) => <button key={k} type="button" className={lang === k ? "on" : ""} aria-pressed={lang === k} lang={k} onClick={() => { setLang(k); setVlang(k === "en" ? "English" : "Vietnamese"); }}>{LANG_NAMES[k]}</button>)}
-    </div>
-  );
 }
 
 export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, again, signupOpen = true }: AuthComponentProps) => {

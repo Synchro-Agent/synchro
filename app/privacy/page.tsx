@@ -21,6 +21,7 @@ export default function Privacy() {
         <li><b>Skill, plugin, connector, tác vụ tự động và thông báo:</b> của riêng tài khoản bạn. Token kết nối được mã hóa trước khi lưu.</li>
         <li><b>Synchro Code:</b> phiên làm việc khi bật đồng bộ và tệp trong workspace (container riêng của bạn). Thư mục làm việc của code chạy trong chat tự xóa sau 24 giờ không dùng.</li>
         <li><b>Mức dùng:</b> số token, model, thời điểm từng lượt, để tính hạn mức.</li>
+        <li><b>Nhật ký lỗi:</b> thông báo lỗi kỹ thuật của trang và máy chủ, đã bỏ email và mã bí mật, không gắn với tài khoản, không chứa tin nhắn. Chỉ quản trị viên xem, giữ 500 dòng gần nhất, để sửa lỗi.</li>
         <li><b>Nhật ký bảo mật:</b> đăng ký, đăng nhập, thao tác quản trị, kèm email và IP, để phát hiện truy cập trái phép. Giữ 50.000 sự kiện gần nhất.</li>
       </ul>
       <h2>Đoạn chat và dự án</h2>
