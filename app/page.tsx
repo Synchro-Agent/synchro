@@ -23,6 +23,7 @@ import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { elSpeed, speakAI, type Speaking } from "./speak";
 import { toSpeech, VI } from "./voiceflow";
+import { ConnLoginWatcher } from "./connwatch";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
@@ -716,6 +717,8 @@ function UserText({ text }: { text: string }) {
   );
 }
 
+// Đoạn chat đang chờ người dùng duyệt công cụ: phải thấy được từ ngoài đoạn chat đó (cột bên, thông báo), không thì lượt treo tới hết giờ mà không ai biết.
+const asksNow = (c: Chat) => { const m = c.msgs[c.msgs.length - 1]; return !!m && !m.done && !!m.parts?.some((p) => p.k === "ask" && p.state === "wait"); };
 // Phiên Synchro Code ở thanh bên (danh sách lưu ở trình duyệt, đồng bộ với máy chủ khi bật).
 type CodeItem = { id: number; title: string; pinned?: boolean; archived?: boolean; state?: SessionState; reason?: string | null; running?: boolean; upd?: number; pr?: { number: number; url: string | null; state: string } | null };
 // Trạng thái phiên: đang chạy, cần bạn (hỏi lại / chờ duyệt / gặp lỗi / bị dừng), chờ xem lại (có thay đổi chưa commit / chưa push / PR chờ duyệt), xong.
@@ -812,7 +815,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fi
       </div>
     ) : (
       <div>
-        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={(id, ok, o) => { answerAsk(id, ok, o).then((err) => err && say(err)); }} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} /> : (() => {
+        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
@@ -1158,6 +1161,17 @@ export default function Home() {
     if (saveT.current) clearTimeout(saveT.current.t);
     saveT.current = { t: setTimeout(flushChats, d), at };
   }, [chats, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Một đoạn chat vừa bắt đầu chờ duyệt mà người dùng đang ở nơi khác: báo ngay; tab đang ẩn thì gửi thông báo trình duyệt nếu họ đã bật.
+  const asked = useRef<ReadonlySet<number>>(new Set());
+  useEffect(() => {
+    if (!running.size && !asked.current.size) return;
+    const now = new Set(chats.filter((c) => running.has(c.id) && asksNow(c)).map((c) => c.id));
+    for (const c of chats) if (now.has(c.id) && !asked.current.has(c.id)) {
+      if (view !== "chat" || cur !== c.id) say(`${tr("Một đoạn chat đang chờ bạn duyệt")}: ${c.title}`);
+      if (notif[0] && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Synchro", { body: `${tr("Một đoạn chat đang chờ bạn duyệt")}: ${c.title}` });
+    }
+    asked.current = now;
+  }, [chats, running]); // eslint-disable-line react-hooks/exhaustive-deps
   const runN = running.size, lastRunN = useRef(runN);
   useEffect(() => { if (runN < lastRunN.current) flushDirty(); lastRunN.current = runN; }, [runN, flushDirty]);
   useEffect(() => {
@@ -1951,6 +1965,7 @@ export default function Home() {
 
   return (<>
     <AppCtx.Provider value={api}>
+      <ConnLoginWatcher say={say} />
     <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); const el = document.querySelector<HTMLElement>("#main textarea") ?? document.querySelector<HTMLElement>("#main"); el?.focus(); }}>Đến nội dung chính</a>
     <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? ` app-reveal reveal-${reveal}` : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
@@ -2016,7 +2031,7 @@ export default function Home() {
                   onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
+                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && (asksNow(c) ? <span className="ct-run ct-ask" role="status" aria-label={tr("Đang chờ bạn duyệt")} data-tip={tr("Đang chờ bạn duyệt")} /> : <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />)}</button>
               )}
               {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>

@@ -759,13 +759,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
   };
   // Trả lời câu hỏi duyệt của lượt đang chạy.
-  const onAnswer: OnAnswer = (aid, ok, o) => {
-    answerAsk(aid, ok, o).then((err) => {
-      if (!err) return;
-      say(err);
-      setNodes((ns) => ns.map((n) => (n.steps?.some((x) => x.k === "ask" && x.id === aid) ? { ...n, steps: n.steps.map((x) => (x.k === "ask" && x.id === aid ? { ...x, state: "gone" as const } : x)) } : n)));
-    });
-  };
+  // Gửi hỏng thì chính thẻ báo lỗi và mở lại nút; câu hỏi đã hết chờ thì thẻ tự chuyển trạng thái.
+  const onAnswer: OnAnswer = (aid, ok, o) => answerAsk(aid, ok, o);
 
   const onPaste = (e: React.ClipboardEvent) => {
     // Dán ảnh chụp màn hình / tệp đã sao chép: thành tệp đính kèm như Claude.

@@ -86,6 +86,10 @@ const WEB_TOOL = /^(WebSearch|WebFetch|web_search|search_web|web_fetch)$/;
 // ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok)
 // Hai CLI này chỉ đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
 // phải: dừng được ngay khi bấm Dừng, có giới hạn, và báo cho người dùng biết đang chờ gì (một câu "chào" từng chờ trống 2 phút rồi báo lỗi sai).
+// Lượt đang chờ người dùng duyệt (tới 10 phút) thì nhả khóa sớm qua mcp.onPark: lúc đó CLI đã gọi tới cầu nối, tức là đã đọc xong cấu hình, nên lượt sau được ghi đè.
+// Lượt nào ghi cấu hình sau cùng mới được gỡ nó khi xong (configOwner), để lượt đang chờ duyệt không gỡ mất cầu nối của lượt đang chạy.
+const configOwner = new Map<string, string>();
+const ownerKey = (cli: string, home: string) => `${cli}:${home}`;
 type Slot = { chain: Promise<void>; at: number };
 const LOCK_WAIT_MS = 5 * 60_000;
 async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnRequest, name: string): AsyncGenerator<Event, (() => void) | null, unknown> {
@@ -366,13 +370,18 @@ export class AntigravityEngine implements Engine {
     if (!req.mcp) { yield* this.turn(req); return; }
     const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
     if (!free) return;
+    const home = ownerKey("agy", String(req.env?.HOME ?? "")), url = req.mcp.url;
+    req.mcp.onPark?.(free);
     try {
-      const ok = await agyBridge(req, req.mcp.url).catch(() => false);
+      // Lượt trước đang chờ duyệt vẫn để cầu nối của nó trong cấu hình.
+      if (configOwner.has(home)) await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
+      configOwner.set(home, url);
+      const ok = await agyBridge(req, url).catch(() => false);
       // Lắp cầu nối xong mới là lúc model bắt đầu: bộ canh tính từ đây.
       yield { kind: "status" };
       yield* this.turn(ok ? req : { ...req, mcp: undefined });
     } finally {
-      await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
+      if (configOwner.get(home) === url) { configOwner.delete(home); await agyRun(["mcp", "remove", "synchro"], req).catch(() => false); }
       free();
     }
   }
@@ -455,14 +464,17 @@ export class GrokEngine implements Engine {
     if (!req.mcp) { yield* this.turn(req); return; }
     const free = yield* turnLock(grokLocks, String(req.env?.HOME ?? ""), req, "Grok");
     if (!free) return;
+    const home = ownerKey("grok", String(req.env?.HOME ?? "")), url = req.mcp.url;
+    req.mcp.onPark?.(free);
     try {
-      // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng) bị thay bằng cầu nối mới.
+      // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng, hay đang chờ duyệt) bị thay bằng cầu nối mới.
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
-      const ok = await grokRun(["mcp", "add", "--transport", "http", "synchro", req.mcp.url], req).catch(() => false);
+      configOwner.set(home, url);
+      const ok = await grokRun(["mcp", "add", "--transport", "http", "synchro", url], req).catch(() => false);
       yield { kind: "status" };
       yield* this.turn(ok ? req : { ...req, mcp: undefined });
     } finally {
-      await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
+      if (configOwner.get(home) === url) { configOwner.delete(home); await grokRun(["mcp", "remove", "synchro"], req).catch(() => false); }
       free();
     }
   }

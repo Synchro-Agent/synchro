@@ -8,7 +8,8 @@ import { db } from "./authstore";
 export const REF_THRESHOLD = 6000;
 const KEEP_MS = 30 * 24 * 3600_000;
 const MAX_REF = 4 * 1024 * 1024;
-const OUT_CAP = 8000;
+// Mỗi lần read_ref trả tối đa 8.000 ký tự; model tự xin limit lớn hơn thì tới 30.000 để đọc tài liệu dài không tốn nhiều bước.
+const OUT_CAP = 8000, OUT_MAX = 30_000;
 
 let ready = false;
 function init() {
@@ -66,7 +67,9 @@ export function summarize(content: string, ref: string): string {
     return `${head}\nJSON. Cấu trúc: ${schemaOf(j).slice(0, 1500)}\n${main ? `Danh sách chính: ${main.path || "(gốc)"} có ${main.arr.length} phần tử. 3 phần tử đầu:\n${sample}\n` : `Đầu dữ liệu:\n${content.slice(0, 1200)}\n`}${tail}`;
   }
   const lines = content.split("\n");
-  return `${head}\nVăn bản ${lines.length} dòng. Phần đầu:\n${lines.slice(0, 30).join("\n").slice(0, 1800)}\n${tail}`;
+  // Kết quả chạy code: stdout đứng trước nên tệp đã tạo, ảnh xem trước, kết quả tính lại nằm sau phần đầu; giữ chúng, không thì model tưởng chưa có tệp.
+  const after = content.startsWith("<run_result") ? content.slice(content.lastIndexOf("</stderr>") + 9).replace(/\s*<\/run_result>\s*$/, "").trim().slice(0, 2500) : "";
+  return `${head}\nVăn bản ${lines.length} dòng. Phần đầu:\n${lines.slice(0, 30).join("\n").slice(0, 1800)}\n${after ? `Phần cuối của kết quả:\n${after}\n` : ""}${tail}`;
 }
 
 /** Kết quả công cụ → nội dung gửi cho model: ngắn thì giữ nguyên, dài thì lưu và trả bản tóm tắt. */
@@ -88,7 +91,7 @@ function walk(v: unknown, path: string): unknown {
 
 export const READ_REF_TOOL = {
   name: "read_ref",
-  description: "Đọc dữ liệu đầy đủ đã lưu theo mã ref_… (kết quả công cụ lớn ở lượt này hoặc các lượt trước). path: đường dẫn trong JSON (ví dụ data.items hoặc items[3].name); query: chỉ lấy phần tử / dòng / đoạn có chứa từ này (không phân biệt dấu); offset, limit: phân trang theo phần tử hoặc dòng; văn bản dài, chuỗi hay đối tượng lớn thì theo ký tự. Kết quả ghi rõ offset để đọc tiếp.",
+  description: "Đọc dữ liệu đầy đủ đã lưu theo mã ref_… (kết quả công cụ lớn ở lượt này hoặc các lượt trước). path: đường dẫn trong JSON (ví dụ data.items hoặc items[3].name); query: chỉ lấy phần tử / dòng / đoạn có chứa từ này (không phân biệt dấu); offset, limit: phân trang theo phần tử hoặc dòng; văn bản dài, chuỗi hay đối tượng lớn thì theo ký tự (mặc định 8.000 ký tự một lần, limit tới 30.000 để đọc nhanh tài liệu dài). Kết quả ghi rõ offset để đọc tiếp và còn mấy lần đọc.",
   input_schema: { type: "object", properties: { ref: { type: "string" }, path: { type: "string" }, query: { type: "string" }, offset: { type: "integer" }, limit: { type: "integer" } }, required: ["ref"] },
 };
 
@@ -103,9 +106,9 @@ function charPage(text: string, off: number, lim: number | null, q: string, quer
     const out = page.map((i) => `[ký tự ${Math.max(0, i - 200)}] …${text.slice(Math.max(0, i - 200), i + q.length + 300)}…`).join("\n\n").slice(0, OUT_CAP);
     return `${out}\n(${page.length} / ${hits.length} chỗ khớp "${String(query)}", từ vị trí ${off}${off + page.length < hits.length ? `; đọc tiếp: offset=${off + page.length}` : ""})`;
   }
-  const size = Math.min(OUT_CAP, lim ?? OUT_CAP);
+  const size = Math.min(OUT_MAX, lim ?? OUT_CAP);
   const end = Math.min(text.length, off + size);
-  return `${text.slice(off, end)}\n(ký tự ${off}-${end} / ${text.length}${end < text.length ? `; đọc tiếp: offset=${end}` : "; đã hết"})`;
+  return `${text.slice(off, end)}\n(ký tự ${off}-${end} / ${text.length}${end < text.length ? `; đọc tiếp: offset=${end}, còn ${Math.ceil((text.length - end) / size)} lần đọc với limit=${size}` : "; đã hết"})`;
 }
 
 export function readRef(uid: string, input: Record<string, unknown>): { content: string; is_error: boolean } {
@@ -113,11 +116,13 @@ export function readRef(uid: string, input: Record<string, unknown>): { content:
   const r = init().prepare("SELECT content FROM tool_refs WHERE id = ? AND user_id = ?").get(id, uid) as { content: string } | undefined;
   if (!r) return { content: `Không tìm thấy dữ liệu ${id} (mã sai hoặc đã quá 30 ngày).`, is_error: true };
   const off = Math.max(0, Number(input.offset) || 0), lim = Math.min(500, Math.max(1, Number(input.limit) || 50));
-  // Với đọc theo ký tự, limit là số ký tự (tối đa OUT_CAP); không truyền thì đọc đủ một trang.
+  // Với đọc theo ký tự, limit là số ký tự (tối đa OUT_MAX); không truyền thì đọc đủ một trang.
   const charLim = Number(input.limit) > 0 ? Number(input.limit) : null;
   const q = typeof input.query === "string" && input.query.trim() ? fold(input.query.trim()) : "";
   const j = tryJson(r.content);
-  const cap = (s: string, note: string) => (s.length > OUT_CAP ? `${s.slice(0, OUT_CAP)}\n…(cắt ở ${OUT_CAP} ký tự; dùng offset/limit nhỏ hơn hoặc query để đọc tiếp)` : s) + note;
+  // limit do model tự đặt thì cho phần trả về dài tới OUT_MAX.
+  const room = charLim ? OUT_MAX : OUT_CAP;
+  const cap = (s: string, note: string) => (s.length > room ? `${s.slice(0, room)}\n…(cắt ở ${room} ký tự; dùng offset/limit nhỏ hơn hoặc query để đọc tiếp)` : s) + note;
   if (j !== undefined) {
     let v = typeof input.path === "string" && input.path.trim() ? walk(j, input.path.trim()) : (mainArray(j)?.arr ?? j);
     if (v === undefined) return { content: `Không có đường dẫn ${String(input.path)} trong dữ liệu.`, is_error: true };

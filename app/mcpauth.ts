@@ -17,18 +17,23 @@ const b64url = (b: Buffer) => b.toString("base64").replace(/\+/g, "-").replace(/
 export const randomToken = (n = 32) => b64url(crypto.randomBytes(n));
 export const pkceChallenge = (verifier: string) => b64url(crypto.createHash("sha256").update(verifier).digest());
 
-const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((ok) => { const t = setTimeout(ok, ms); signal?.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
+// Nút Kết nối không được quay hàng phút khi hãng treo: cả bước tìm máy chủ đăng nhập có chung một hạn, mỗi địa chỉ chờ tối đa 8 giây.
+const DISCOVER_MS = 25_000, PROBE_MS = 8_000;
 // Trạng thái có thể thử lại: 408, 425, 429 và lỗi 5xx (trừ 501, 505 là máy chủ thật sự không hỗ trợ).
 export const retryableStatus = (s: number) => s === 408 || s === 425 || s === 429 || (s >= 500 && s !== 501 && s !== 505);
 // Đọc metadata. seen.down: máy chủ đang lỗi tạm thời (5xx, mất mạng), khác với "không có tài liệu này" (404): chỉ khi chắc chắn không có mới đoán đường dẫn mặc định.
-async function getJson(u: string, seen?: { down?: { host: string; status: number } }): Promise<Record<string, unknown> | null> {
+// Tên miền đã quá giờ một lần thì không hỏi thêm địa chỉ khác của nó: thử tiếp chỉ làm người dùng chờ thêm.
+type Seen = { down?: { host: string; status: number }; late?: Set<string> };
+async function getJson(u: string, seen?: Seen, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
   const host = new URL(u).host;
+  if (seen?.late?.has(host)) return null;
   for (let i = 0; ; i++) {
     try {
-      const r = await safeFetch(u, { headers: { accept: "application/json" }, timeout: 15_000 });
+      const r = await safeFetch(u, { headers: { accept: "application/json" }, timeout: PROBE_MS, signal });
       if (retryableStatus(r.status)) {
         await r.body?.cancel();
-        if (i < 2) { await sleep(Math.min(retryAfterMs(r.headers.get("retry-after")) ?? 500 * 3 ** i, 10_000)); continue; }
+        if (i < 2 && !signal?.aborted) { await sleep(Math.min(retryAfterMs(r.headers.get("retry-after")) ?? 500 * 3 ** i, 10_000), signal); continue; }
         if (seen) seen.down = { host, status: r.status };
         return null;
       }
@@ -37,8 +42,9 @@ async function getJson(u: string, seen?: { down?: { host: string; status: number
       return j && typeof j === "object" ? j : null;
     } catch (e) {
       if (!(e instanceof TempFail)) return null;
-      if (i < 2) { await sleep(500 * 3 ** i); continue; }
-      if (seen) seen.down = { host, status: 0 };
+      // Quá giờ không thử lại; mất kết nối ngay thì thử lại (thường là chập chờn).
+      if (i < 2 && !e.timedOut && !signal?.aborted) { await sleep(500 * 3 ** i, signal); continue; }
+      if (seen) { seen.down = { host, status: 0 }; if (e.timedOut) (seen.late ??= new Set()).add(host); }
       return null;
     }
   }
@@ -65,15 +71,16 @@ const sameIssuer = (a: string, b: string) => a.replace(/\/$/, "") === b.replace(
 // guessed: máy chủ không khai báo OAuth, đường dẫn đăng nhập chỉ là đoán theo mặc định của đặc tả cũ.
 export type Discovery = { resource: string; as: AsMeta; scope?: string; guessed?: boolean };
 
-export async function discover(mcpUrl: string, www = ""): Promise<Discovery> {
+export async function discover(mcpUrl: string, www = "", signal?: AbortSignal): Promise<Discovery> {
+  const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(DISCOVER_MS)]) : AbortSignal.timeout(DISCOVER_MS);
   const u = new URL(mcpUrl);
   const w = parseWww(www);
   const path = u.pathname.replace(/\/$/, "");
   // 1) Protected Resource Metadata: theo header, rồi đường dẫn có path, rồi gốc tên miền.
   const prmUrls = [w.resource_metadata, path ? `${u.origin}/.well-known/oauth-protected-resource${path}` : "", `${u.origin}/.well-known/oauth-protected-resource`].filter(Boolean);
-  const seen: { down?: { host: string; status: number } } = {};
+  const seen: Seen = {};
   let prm: Record<string, unknown> | null = null;
-  for (const x of prmUrls) { prm = await getJson(x, seen); if (prm && (Array.isArray(prm.authorization_servers) || prm.resource)) break; prm = null; }
+  for (const x of prmUrls) { prm = await getJson(x, seen, stop); if (prm && (Array.isArray(prm.authorization_servers) || prm.resource)) break; prm = null; }
   // Tài liệu phải nói về đúng máy chủ này (cùng tên miền), tránh bị chỉ sang máy chủ đăng nhập lạ.
   if (prm?.resource && new URL(String(prm.resource)).origin !== u.origin) prm = null;
   const asId = (Array.isArray(prm?.authorization_servers) && prm!.authorization_servers[0] ? String(prm!.authorization_servers[0]) : u.origin);
@@ -84,7 +91,7 @@ export async function discover(mcpUrl: string, www = ""): Promise<Discovery> {
     ? [`${a.origin}/.well-known/oauth-authorization-server${ap}`, `${a.origin}/.well-known/openid-configuration${ap}`, `${a.origin}${ap}/.well-known/openid-configuration`]
     : [`${a.origin}/.well-known/oauth-authorization-server`, `${a.origin}/.well-known/openid-configuration`];
   let md: AsMeta | null = null;
-  for (const x of asUrls) { const j = await getJson(x, seen); if (j?.authorization_endpoint && j?.token_endpoint) { md = j as unknown as AsMeta; break; } }
+  for (const x of asUrls) { const j = await getJson(x, seen, stop); if (j?.authorization_endpoint && j?.token_endpoint) { md = j as unknown as AsMeta; break; } }
   // Máy chủ đăng nhập đang lỗi tạm thời: báo đúng là sự cố tạm thời, không đoán đường dẫn rồi đưa người dùng tới trang 404 của hãng.
   if (!md && seen.down) throw new TempFail(downText(seen.down.host, seen.down.status), seen.down.status);
   // Máy chủ đời 2025-03-26 không có metadata: dùng đường dẫn mặc định ngay trên máy chủ MCP.
@@ -101,7 +108,7 @@ export async function discover(mcpUrl: string, www = ""): Promise<Discovery> {
 }
 
 // Lấy client_id cho Synchro ở máy chủ đăng nhập này, theo thứ tự ưu tiên của đặc tả.
-export async function registerClient(as: AsMeta, redirectUri: string, metadataUrl: string | null, preset?: { clientId?: string; clientSecret?: string }): Promise<OAuthClient> {
+export async function registerClient(as: AsMeta, redirectUri: string, metadataUrl: string | null, preset?: { clientId?: string; clientSecret?: string }, signal?: AbortSignal): Promise<OAuthClient> {
   if (preset?.clientId) {
     const m = as.token_endpoint_auth_methods_supported;
     const method = !preset.clientSecret ? "none" : m && !m.includes("client_secret_post") && m.includes("client_secret_basic") ? "client_secret_basic" : "client_secret_post";
@@ -110,7 +117,7 @@ export async function registerClient(as: AsMeta, redirectUri: string, metadataUr
   if (metadataUrl && as.client_id_metadata_document_supported) return { client_id: metadataUrl, auth_method: "none" };
   if (as.registration_endpoint) {
     const r = await safeFetch(as.registration_endpoint, {
-      method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, timeout: 20_000,
+      method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, timeout: 20_000, signal,
       body: JSON.stringify({ client_name: "Synchro", client_uri: new URL(redirectUri).origin, redirect_uris: [redirectUri], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" }),
     });
     const j = (await r.json().catch(() => null)) as Record<string, string> | null;
@@ -145,10 +152,10 @@ export function authorizeUrl(as: AsMeta, client: OAuthClient, o: { redirectUri: 
 // nhìn trang lỗi của hãng rồi quay lại với connector "Cần kết nối" không giải thích gì (Canva: 400 "Invalid redirect URI"). Chỉ coi là từ chối khi hãng NÓI RÕ
 // điều đó; mọi trường hợp khác (200, chuyển hướng tới trang đăng nhập, 4xx mơ hồ, tường lửa chặn máy chủ, mất mạng) đều cho qua như trước, không để sót hãng đang chạy tốt.
 export const REJECT_TEXT = /invalid[_\s-]*(redirect|client)|redirect[_\s-]*ur[il]\b.{0,40}(invalid|mismatch|not\s+(allowed|registered|valid|match))|unauthorized[_\s-]*client|unknown[_\s-]*client|client.{0,20}not\s+(found|registered)/i;
-export async function authorizeRejected(as: AsMeta, client: OAuthClient, o: { redirectUri: string; resource: string; scope?: string }): Promise<string | null> {
+export async function authorizeRejected(as: AsMeta, client: OAuthClient, o: { redirectUri: string; resource: string; scope?: string; signal?: AbortSignal }): Promise<string | null> {
   try {
     const url = authorizeUrl(as, client, { ...o, state: randomToken(16), verifier: randomToken(32) });
-    const r = await safeFetch(url, { noFollow: true, timeout: 8_000, headers: { accept: "text/html,application/json" } });
+    const r = await safeFetch(url, { noFollow: true, timeout: 8_000, signal: o.signal, headers: { accept: "text/html,application/json" } });
     if (r.status >= 300 && r.status < 400) {
       await r.body?.cancel();
       const loc = r.headers.get("location") ?? "";

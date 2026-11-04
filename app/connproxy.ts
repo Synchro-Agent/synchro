@@ -27,7 +27,8 @@ const SYN: Record<string, string[]> = {
   customer: ["user", "contact"], khach: ["customer"], hang: ["customer"], payment: ["charge", "transaction"], thanh: ["payment"], toan: ["payment"], invoice: ["bill"], hoa: ["invoice"], don: ["order", "invoice"], order: ["purchase"],
 };
 
-export function rankTools<T extends ToolLike>(tools: T[], query: string, connector = "", top = 8): { hits: T[]; note: string } {
+/** query không có từ nào (vd. "*"): liệt kê theo trang, more là số công cụ còn lại sau trang này. */
+export function rankTools<T extends ToolLike>(tools: T[], query: string, connector = "", top = 8, offset = 0): { hits: T[]; note: string; more: number } {
   const cf = fold(connector).trim();
   let pool = tools;
   let note = "";
@@ -38,7 +39,7 @@ export function rankTools<T extends ToolLike>(tools: T[], query: string, connect
     else note = `Không có connector "${connector}", đã tìm trong tất cả connector.\n`;
   }
   const words = [...new Set(fold(query).split(/[^a-z0-9]+/).filter((w) => w && !STOP.has(w)).map(stem))];
-  if (!words.length) return { hits: pool.slice(0, top), note };
+  if (!words.length) return { hits: pool.slice(offset, offset + top), note, more: Math.max(0, pool.length - offset - top) };
   const scored = pool.map((t, i) => {
     const nw = new Set(nameWords(t.tool.name));
     const tw = textWords(`${t.tool.title ?? t.tool.annotations?.title ?? ""} ${t.tool.description ?? ""}`);
@@ -57,7 +58,7 @@ export function rankTools<T extends ToolLike>(tools: T[], query: string, connect
     if (full && words.length > 1) score += 8;
     return { t, i, score };
   }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score || a.t.tool.name.length - b.t.tool.name.length || a.i - b.i);
-  return { hits: scored.slice(0, top).map((x) => x.t), note };
+  return { hits: scored.slice(0, top).map((x) => x.t), note, more: 0 };
 }
 
 // ---- schema gọn: giữ đúng JSON, required đứng đầu, đủ tên và kiểu mọi tham số ----
@@ -114,6 +115,9 @@ export function callArgs(input: Record<string, unknown> | undefined): { args: Re
   let raw: unknown = c.input ?? c.input_json;
   if (raw === undefined || raw === null) {
     const { tool: _t, input: _i, input_json: _j, ...rest } = c;
+    // Model hay bọc tham số trong arguments / params / args: gửi nguyên thì công cụ nhận một tham số lạ. Chỉ gỡ khi đó là khóa duy nhất và đúng là một đối tượng.
+    const keys = Object.keys(rest), only = keys.length === 1 ? rest[keys[0]] : undefined;
+    if (only && typeof only === "object" && !Array.isArray(only) && ["arguments", "params", "args"].includes(keys[0])) return { args: only as Record<string, unknown> };
     return { args: rest };
   }
   if (typeof raw === "string") {
@@ -127,7 +131,7 @@ export function callArgs(input: Record<string, unknown> | undefined): { args: Re
 
 /** Tên công cụ model đưa → tên đầy đủ: chấp nhận thêm tiền tố của CLI, hoặc tên trần (không kèm connector) nếu chỉ một connector có công cụ đó. */
 export function resolveTool<T extends ToolLike>(tools: T[], name: string): T | null {
-  const n = name.replace(/^mcp_+synchro_+/, "");
+  const n = name.replace(/^(mcp_+)?synchro_+/, "");
   const exact = tools.find((t) => t.fq === n);
   if (exact) return exact;
   const bare = tools.filter((t) => t.tool.name === n);

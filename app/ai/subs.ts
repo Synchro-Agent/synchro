@@ -605,7 +605,7 @@ function saveAttachments(work: string, atts: Attachment[]) {
 /** total: số tin thật của đoạn chat (trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số thật); lockMs: chờ lượt khác của tài khoản tối đa bao lâu;
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
-export type SubTurn = { ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -715,7 +715,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const w = wk ? warm.get(wk) : undefined;
   const fork = !resume && w && Date.now() - w.at < WARM_TTL ? w.id : undefined;
   const req: TurnRequest = {
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).

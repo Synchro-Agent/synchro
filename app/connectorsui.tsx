@@ -12,13 +12,14 @@ import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
 import { tr } from "./i18n";
+import { CONN_CHANGED, loginClaims } from "./connwatch";
 
 type Perm = "allow" | "chat" | "ask" | "block";
 type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
-  status: "ok" | "needs_auth" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
+  status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
   settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null;
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
@@ -45,6 +46,7 @@ const PERM_LABEL: Record<Perm, string> = { allow: "Always allow", chat: "Ask onc
 // người dùng quay lại tab. Chỉ mở cửa sổ khi đã có địa chỉ đăng nhập: connector bị từ chối hay không cần đăng nhập thì không có cửa sổ nào chớp lên.
 const CHANNEL = "synchro-connector";
 const FLOW_TTL = 15 * 60_000;
+const STALE_AFTER = 10_000;
 type LoginResult = { ok: boolean; id: string | null; message: string };
 // Địa chỉ đăng nhập do máy chủ của connector khai báo: chỉ https. Nó được mở trong cửa sổ cùng nguồn với Synchro, địa chỉ javascript: sẽ chạy mã bằng phiên của người dùng.
 const safeLogin = (raw: string) => { try { const u = new URL(raw); return u.protocol === "https:" || (u.protocol === "http:" && location.protocol === "http:"); } catch { return false; } };
@@ -57,15 +59,22 @@ function useLoginFlow(onDone: (m: LoginResult) => void, o: { any?: boolean; onLi
   const [pending, setPending] = useState<string | null>(null);
   // Trình duyệt chặn cửa sổ (đã quá lâu kể từ lúc bấm): cần người dùng bấm thêm một lần.
   const [blocked, setBlocked] = useState<{ id: string; url: string } | null>(null);
+  // Địa chỉ đăng nhập của luồng đang chờ: bấm lại thì mở đúng địa chỉ này, không gọi máy chủ rồi mở cửa sổ sau một lần chờ nữa (trình duyệt sẽ lại chặn).
+  const last = useRef<string | null>(null);
+  // Người dùng đã quay lại trang mà chưa có kết quả: cửa sổ đăng nhập có thể đã đóng (COOP che mất w.closed nên không biết chắc), đừng nói mãi là "đang chờ".
+  const [stale, setStale] = useState(false);
   const cb = useRef({ onDone, ...o });
   cb.current = { onDone, ...o };
-  const finish = useCallback((m: LoginResult) => { flow.current = null; setPending(null); setBlocked(null); cb.current.onDone(m); }, []);
+  const finish = useCallback((m: LoginResult) => { flow.current = null; last.current = null; setPending(null); setBlocked(null); setStale(false); cb.current.onDone(m); }, []);
   useEffect(() => {
     const seen = new Set<string>();
+    // Không biết kết quả của connector nào (id null: phiên đăng nhập hết hạn, sai tài khoản) thì luồng đang chờ cũng đã kết thúc.
+    const mine = (id: string | null) => !!cb.current.any || (!!flow.current && (flow.current.id === id || id === null));
+    loginClaims.add(mine);
     const take = (d: LoginResult & { type?: string; nonce?: string }) => {
       if (d?.type !== CHANNEL || (d.nonce && seen.has(d.nonce))) return;
       if (d.nonce) seen.add(d.nonce);
-      if (cb.current.any || (flow.current && flow.current.id === d.id)) finish({ ok: d.ok, id: d.id, message: d.message });
+      if (mine(d.id)) finish({ ok: d.ok, id: d.id, message: d.message });
     };
     let bc: BroadcastChannel | null = null;
     try {
@@ -74,35 +83,47 @@ function useLoginFlow(onDone: (m: LoginResult) => void, o: { any?: boolean; onLi
     } catch {}
     const onMsg = (e: MessageEvent) => { if (e.origin === location.origin) take(e.data); };
     window.addEventListener("message", onMsg);
-    const check = async () => {
+    const check = async (back?: unknown) => {
       const f = flow.current;
       if (!f) return;
-      if (Date.now() - f.at > FLOW_TTL) { flow.current = null; setPending(null); return; }
+      if (Date.now() - f.at > FLOW_TTL) { flow.current = null; last.current = null; setPending(null); setStale(false); return; }
       const d = await api<Data>("GET", "/api/connectors").catch(() => null);
       if (!d || flow.current !== f) return;
       cb.current.onList?.(d);
       const c = d.connectors.find((x) => x.id === f.id);
-      if (!c) { flow.current = null; setPending(null); return; }
+      if (!c) { flow.current = null; last.current = null; setPending(null); setStale(false); return; }
       if (c.status === "ok" && c.checkedAt !== f.checked) finish({ ok: true, id: c.id, message: `Đã kết nối ${c.name}` });
       else if (c.status !== "ok" && c.error) finish({ ok: false, id: c.id, message: c.error });
       else if (c.status === "ok" && (c.lastError ?? null) !== f.lastErr && c.lastError) finish({ ok: false, id: c.id, message: c.lastError });
+      else if (back && Date.now() - f.at > STALE_AFTER) setStale(true);
     };
-    window.addEventListener("focus", check);
+    const onFocus = () => check(true);
+    window.addEventListener("focus", onFocus);
     const t = window.setInterval(check, 2000);
-    return () => { bc?.close(); window.removeEventListener("message", onMsg); window.removeEventListener("focus", check); clearInterval(t); };
+    return () => { loginClaims.delete(mine); bc?.close(); window.removeEventListener("message", onMsg); window.removeEventListener("focus", onFocus); clearInterval(t); };
   }, [finish]);
   // Sau khi máy chủ trả về: có địa chỉ đăng nhập thì mở cửa sổ và bắt đầu chờ. true: đang chờ đăng nhập.
   const follow = useCallback((r: Res) => {
     if (!r.authorizeUrl || !r.connector) return false;
     if (!safeLogin(r.authorizeUrl)) throw new Error("Máy chủ của connector đưa địa chỉ đăng nhập không an toàn nên Synchro không mở.");
     flow.current = tag(r.connector);
+    last.current = r.authorizeUrl;
     setPending(r.connector.id);
+    setStale(false);
     if (openLogin(r.authorizeUrl)) setBlocked(null); else setBlocked({ id: r.connector.id, url: r.authorizeUrl });
     return true;
   }, []);
-  // Bấm lại sau khi bị chặn; vẫn bị chặn (chính sách trình duyệt) thì đăng nhập ngay trong tab này.
-  const reopen = useCallback(() => { if (!blocked) return; if (openLogin(blocked.url)) setBlocked(null); else location.href = blocked.url; }, [blocked]);
-  return { follow, pending, blocked, reopen };
+  // Bấm lại (bị chặn, hoặc lỡ đóng cửa sổ): mở ngay trong lúc bấm nên trình duyệt cho phép. Đã bấm mà vẫn bị chặn (chính sách trình duyệt) thì đăng nhập ngay trong tab này.
+  const reopen = useCallback(() => {
+    const url = blocked?.url ?? last.current;
+    if (!url) return;
+    if (flow.current) flow.current.at = Date.now();
+    setStale(false);
+    if (openLogin(url)) setBlocked(null);
+    else if (blocked) location.href = url;
+    else if (flow.current) setBlocked({ id: flow.current.id, url });
+  }, [blocked]);
+  return { follow, pending, blocked, reopen, stale };
 }
 
 const LoginBlocked = ({ onOpen }: { onOpen: () => void }) => (
@@ -113,28 +134,56 @@ const ago = (t: number) => {
   return m < 1 ? "Checked just now" : m < 60 ? `Checked ${m} min ago` : m < 2880 ? `Checked ${Math.round(m / 60)} h ago` : `Checked ${Math.round(m / 1440)} d ago`;
 };
 
+// Danh sách connector cho thẻ kết nối lại trong chat: nhiều thẻ cùng lúc chỉ hỏi máy chủ một lần.
+let listCache: { at: number; p: Promise<Data | null> } | null = null;
+const connList = () => {
+  if (!listCache || Date.now() - listCache.at > 5000) listCache = { at: Date.now(), p: api<Data>("GET", "/api/connectors").catch(() => null) };
+  return listCache.p;
+};
 // Connector cần kết nối lại, ngay trong khung chat (Synchro nói cần tới nó, hoặc nó vừa mất đăng nhập giữa lượt). Nằm trong .ai-msg nên chữ giao diện dịch bằng tr().
-export function ReconnectCard({ c }: { c: { id: string; name: string; logo?: string; color?: string } }) {
+// done: câu trả lời đã xong: thẻ vẫn ở lại (model vừa bảo người dùng bấm nó), nhưng connector đã chạy lại rồi hay đã gỡ thì thôi không hiện.
+// refused: máy chủ từ chối một công cụ (403) dù connector còn chạy: cần đi thẳng tới trang đăng nhập để đổi tài khoản hay quyền, thử lại danh sách công cụ không giải quyết được gì.
+export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean }; done?: boolean }) {
   const [state, setState] = useState<"idle" | "busy" | "ok">("idle");
   const [err, setErr] = useState("");
+  const [token, setToken] = useState("");
+  const [info, setInfo] = useState<Conn | null | undefined>(undefined);
   const f = useLoginFlow((m) => { setState(m.ok ? "ok" : "idle"); if (!m.ok) setErr(m.message); });
+  useEffect(() => {
+    let live = true;
+    const load = () => { connList().then((d) => { if (live && d) setInfo(d.connectors.find((x) => x.id === c.id) ?? null); }); };
+    const changed = () => { listCache = null; load(); };
+    load();
+    window.addEventListener(CONN_CHANGED, changed);
+    return () => { live = false; window.removeEventListener(CONN_CHANGED, changed); };
+  }, [c.id]);
+  const isToken = (info?.auth ?? c.auth) === "token";
+  const refused = info?.status === "forbidden" || !!c.refused;
   const go = async () => {
     setState("busy"); setErr("");
     try {
-      const r = await api("POST", `/api/connectors/${c.id}/connect`);
-      if (f.follow(r)) return;
+      const body = isToken ? { token } : refused ? { force: true } : undefined;
+      const r = await api("POST", `/api/connectors/${c.id}/connect`, body);
+      listCache = null;
+      if (f.follow(r)) { setState("idle"); return; }
       setState(r.connector?.status === "ok" ? "ok" : "idle");
     } catch (x) { setState("idle"); setErr((x as Error).message); }
   };
+  if (done && state !== "ok" && !f.pending && (info === null || (info?.status === "ok" && !c.refused))) return null;
   const waiting = !!f.pending && state !== "ok";
+  const line = state === "ok" ? "Đã kết nối lại. Hãy gửi lại yêu cầu của bạn." : waiting ? (f.stale ? "Chưa đăng nhập xong? Hãy mở lại cửa sổ đăng nhập." : "Đang chờ bạn đăng nhập trong cửa sổ vừa mở…") : isToken ? "Máy chủ từ chối token của connector này. Hãy nhập token mới." : refused ? "Máy chủ từ chối quyền truy cập của tài khoản này. Hãy kết nối lại, hoặc kiểm tra quyền của tài khoản." : "Connector này cần kết nối lại để Synchro dùng được.";
   return (
     <div className="ag-ask cn-rc" role="group" aria-label={c.name}>
       <div className="ag-ask-h"><ConnLogo logo={c.logo} color={c.color} name={c.name} size={28} />
-        <div><b data-notr>{c.name}</b><span>{tr(state === "ok" ? "Đã kết nối lại. Hãy gửi lại yêu cầu của bạn." : waiting ? "Đang chờ bạn đăng nhập trong cửa sổ vừa mở…" : "Connector này cần kết nối lại để Synchro dùng được.")}</span></div>
+        <div><b data-notr>{c.name}</b><span>{tr(line)}</span></div>
       </div>
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span data-notr>{tr(err)}</span></div>}
       {f.blocked && <div className="cn-pop"><I.External size={14} /><span>{tr("Trình duyệt đã chặn cửa sổ đăng nhập.")}</span><button className="btn" onClick={f.reopen}>{tr("Mở cửa sổ đăng nhập")}</button></div>}
-      {state !== "ok" && !f.blocked && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={go}>{state === "busy" && !waiting ? <span className="api-spin" /> : null}{tr(waiting ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : "Kết nối lại")}</button></div>}
+      {state !== "ok" && isToken && !f.blocked && <form className="ag-ask-note" onSubmit={(e) => { e.preventDefault(); if (token.trim() && state !== "busy") go(); }}>
+        <input type="password" autoComplete="off" spellCheck={false} aria-label={tr("Token mới")} placeholder={tr("Token mới")} value={token} onChange={(e) => setToken(e.target.value)} />
+        <button type="submit" className="btn dark" disabled={state === "busy" || !token.trim()}>{state === "busy" ? <span className="api-spin" /> : null}{tr("Lưu token")}</button>
+      </form>}
+      {state !== "ok" && !isToken && !f.blocked && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={waiting ? f.reopen : go}>{state === "busy" ? <span className="api-spin" /> : null}{tr(waiting ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : "Kết nối lại")}</button></div>}
     </div>
   );
 }
@@ -144,7 +193,7 @@ export function ReconnectLink({ c, onDone, onManage, say }: { c: Conn; onDone: (
   const f = useLoginFlow((m) => { say(m.message); onDone(); });
   if (c.vendorBlocked || c.auth === "token") return <button className="cn-link cm-rec" onClick={onManage}>{c.vendorBlocked ? "Cần hãng duyệt" : "Nhập lại token"}</button>;
   const go = async () => {
-    if (f.blocked) return f.reopen();
+    if (f.blocked || f.pending) return f.reopen();
     setBusy(true);
     try { const r = await api("POST", `/api/connectors/${c.id}/connect`); if (!f.follow(r)) { say(r.connector?.status === "ok" ? `Đã kết nối ${c.name}` : c.name); onDone(); } }
     catch (x) { say((x as Error).message); onDone(); }
@@ -222,8 +271,8 @@ function ToolGroup({ title, hint, kind, tools, onPerm, onGroup }: { title: strin
   );
 }
 
-function ConnectorCard({ c, policy, open, busy, waiting, onToggleOpen, onEnable, onConnect, onReauth, onCreds, onRefresh, onRemove, onPerm, onGroup, onSettings, bk }: {
-  c: Conn; policy: Policy; open: boolean; busy: boolean; waiting: boolean; onToggleOpen: () => void; onEnable: (v: boolean) => void; onConnect: () => void; onReauth: () => void; onCreds: (mode: CredMode) => void; onRefresh: () => void; onRemove: () => void;
+function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, onToggleOpen, onEnable, onConnect, onReauth, onCreds, onRefresh, onRemove, onPerm, onGroup, onSettings, bk }: {
+  c: Conn; policy: Policy; open: boolean; busy: boolean; waiting: boolean; stale: boolean; onDismissScope: () => void; onToggleOpen: () => void; onEnable: (v: boolean) => void; onConnect: () => void; onReauth: () => void; onCreds: (mode: CredMode) => void; onRefresh: () => void; onRemove: () => void;
   onPerm: (t: Tool, p: Perm) => void; onGroup: (k: "read" | "write", p: Perm) => void; onSettings: (s: Partial<Settings>) => void; bk: Bulk<Conn>;
 }) {
   const [menu, setMenu] = useState(false);
@@ -238,7 +287,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, onToggleOpen, onEnable,
   const ql = q.trim().toLowerCase();
   const shown = c.tools.filter((t) => !ql || t.title.toLowerCase().includes(ql) || t.name.toLowerCase().includes(ql) || t.description.toLowerCase().includes(ql));
   const toolCount = c.toolsTotal ? `${c.tools.length} of ${c.toolsTotal} tools` : `${c.tools.length} ${c.tools.length === 1 ? "tool" : "tools"}`;
-  const status = c.adminBlocked ? "Turned off by your administrator" : c.status === "ok" ? (c.enabled ? toolCount : "Turned off") : c.vendorBlocked ? "Needs vendor approval" : waiting ? "Waiting for you to sign in…" : c.auth === "token" && c.status === "needs_auth" ? "Token rejected" : c.status === "needs_auth" ? "Needs to be connected" : "Connection problem";
+  const status = c.adminBlocked ? "Turned off by your administrator" : c.status === "ok" ? (c.enabled ? toolCount : "Turned off") : c.vendorBlocked ? "Needs vendor approval" : waiting ? (stale ? "Sign-in not finished" : "Waiting for you to sign in…") : c.status === "forbidden" ? "Access refused" : c.auth === "token" && c.status === "needs_auth" ? "Token rejected" : c.status === "needs_auth" ? "Needs to be connected" : "Connection problem";
   return (
     <div className={`cn-card ${open && !bk.on ? "open" : ""} ${c.status !== "ok" || c.adminBlocked ? "attn" : ""}`} {...bulkRow(bk, c)}>
       <div className="cn-card-h">
@@ -256,7 +305,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, onToggleOpen, onEnable,
             ? <button className={`cn-switch ${c.enabled && !c.adminBlocked ? "on" : ""}`} role="switch" aria-checked={c.enabled && !c.adminBlocked} aria-label={c.enabled ? "Turn off connector" : "Turn on connector"} onClick={() => onEnable(!c.enabled)} disabled={busy || c.adminBlocked}><i /></button>
             : c.vendorBlocked ? <button className="btn cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}Try again</button>
             : c.auth === "token" && c.status === "needs_auth" ? <button className="btn dark cn-connect" onClick={() => onCreds("token")} disabled={busy}>Update token</button>
-            : <button className="btn dark cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{c.status === "error" ? "Try again" : c.status === "needs_auth" && c.checkedAt ? "Reconnect" : "Connect"}</button>}
+            : <button className="btn dark cn-connect" onClick={c.status === "forbidden" && !waiting ? onReauth : onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{waiting ? "Open sign-in window" : c.status === "error" ? "Try again" : c.status === "forbidden" || (c.status === "needs_auth" && c.checkedAt) ? "Reconnect" : "Connect"}</button>}
           <div className="cn-more" ref={mref}>
             <button className="icon-btn" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)} disabled={busy}>{busy && c.status === "ok" ? <span className="api-spin" /> : <I.Dots size={16} />}</button>
             {menu && (
@@ -273,12 +322,12 @@ function ConnectorCard({ c, policy, open, busy, waiting, onToggleOpen, onEnable,
       {c.status !== "ok" && c.vendorBlocked && (
         <div className="cn-vendor">
           <p>{c.vendorBlocked.why}</p>
-          <p className="d">You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.</p>
+          <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
           <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds("token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds("client")}>Use my OAuth client</button></div>
         </div>
       )}
       {c.status !== "ok" && c.error && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{c.error}</span></div>}
-      {c.status === "ok" && c.needsScope && <div className="cn-pop in"><I.Key size={14} /><span>A tool needs more access than this sign-in allows. Other tools keep working.</span><button className="btn" disabled={busy} onClick={onReauth}>Grant more access</button></div>}
+      {c.status === "ok" && c.needsScope && <div className="cn-pop in"><I.Key size={14} /><span>{c.auth === "token" ? "A tool needs more access than this token allows. Other tools keep working." : "A tool needs more access than this sign-in allows. Other tools keep working."}</span>{c.auth === "token" ? <button className="btn" disabled={busy} onClick={() => onCreds("token")}>Update token</button> : <button className="btn" disabled={busy} onClick={onReauth}>Grant more access</button>}<button className="icon-btn" aria-label="Dismiss" onClick={onDismissScope}><I.X size={13} /></button></div>}
       {c.status === "ok" && c.lastError && <div className="cn-warnline"><I.Alert size={13} /><span>Last check failed. Tools keep working with the list from the last good check. </span><span>{c.lastError}</span></div>}
       {open && !bk.on && c.status === "ok" && (
         <div className="cn-body">
@@ -296,7 +345,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, onToggleOpen, onEnable,
   );
 }
 
-function Browse({ data, busy, errs, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: string | null; errs: Record<string, string>; onClose: () => void; onConnect: (e: DirEntry) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
+function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: ReadonlySet<string>; errs: Record<string, string>; login: Pick<ReturnType<typeof useLoginFlow>, "pending" | "blocked" | "reopen" | "stale">; onClose: () => void; onConnect: (e: DirEntry) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
   const pol = data.policy;
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<DirCat | "all">("all");
@@ -316,20 +365,25 @@ function Browse({ data, busy, errs, onClose, onConnect, onDismiss, onCreds, onCu
         <div className="cn-grid">
           {list.map((e) => {
             const c = have(e);
-            const state = !allowed(pol, e.id) ? "blocked" : busy === e.id ? "busy" : c?.status === "ok" ? "ok" : e.access && (!c || c.vendorBlocked) ? "vendor" : c ? "pending" : "none";
+            const state = !allowed(pol, e.id) ? "blocked" : busy.has(e.id) ? "busy" : c?.status === "ok" ? "ok" : e.access && (!c || c.vendorBlocked) ? "vendor" : c ? "pending" : "none";
             const err = errs[e.id];
+            // Đang chờ đăng nhập connector này: mở lại đúng địa chỉ đã có (mở ngay trong lúc bấm nên trình duyệt cho phép), không gọi máy chủ lần nữa.
+            const waiting = !!c && login.pending === c.id, shut = waiting && login.blocked?.id === c.id;
             return (
-              <div key={e.id} className={`cn-item${err || why === e.id ? " wide" : ""}`}>
+              <div key={e.id} className={`cn-item${err || shut || why === e.id ? " wide" : ""}`}>
                 <ConnLogo logo={e.logo} color={e.color} name={e.name} size={40} />
                 <div className="cn-item-m"><b data-notr>{e.name}</b><span>{e.desc}</span></div>
                 {state === "blocked" ? <span className="cn-done off" title="Your administrator hasn't allowed this connector for your account."><I.Lock size={13} />Not allowed</span>
                   : state === "ok" ? <span className="cn-done"><I.Check size={14} />Connected</span>
                   : state === "vendor" ? <button className="cn-vendor-tag" aria-expanded={why === e.id} onClick={() => setWhy(why === e.id ? null : e.id)}><I.Lock size={13} />Needs vendor approval</button>
-                  : <button className="btn cn-item-btn" disabled={state === "busy" || !!busy} onClick={() => onConnect(e)}>{state === "busy" ? <span className="api-spin" /> : err ? "Try again" : state === "pending" ? "Finish" : "Connect"}</button>}
+                  : waiting ? <button className="btn cn-item-btn" onClick={login.reopen}>{login.stale ? "Connect again" : "Open sign-in window"}</button>
+                  : <button className="btn cn-item-btn" disabled={state === "busy"} onClick={() => onConnect(e)}>{state === "busy" ? <span className="api-spin" /> : err ? "Try again" : state === "pending" ? "Finish" : "Connect"}</button>}
+                {shut && <div className="cn-pop in cn-item-err"><I.External size={14} /><span>Your browser blocked the sign-in window.</span><button className="btn" onClick={login.reopen}>Open sign-in window</button></div>}
+                {waiting && !shut && login.stale && <p className="d cn-item-err">Didn&apos;t finish? Connect again</p>}
                 {state === "vendor" && why === e.id && e.access && (
                   <div className="cn-vendor">
                     <p>{e.access.why}</p>
-                    <p className="d">You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.</p>
+                    <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
                     <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button></div>
                   </div>
                 )}
@@ -413,7 +467,9 @@ export function ConnectorsPanel() {
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // Nhiều mục có thể đang kết nối cùng lúc: hãng đang treo không được khóa nút của các mục khác.
+  const [busy, setBusySet] = useState<ReadonlySet<string>>(() => new Set());
+  const mark = (id: string, on: boolean) => setBusySet((b) => { const n = new Set(b); if (on) n.add(id); else n.delete(id); return n; });
   const [browse, setBrowse] = useState(false);
   const [custom, setCustom] = useState<CustomInit | null>(null);
   // Lỗi kết nối từ danh mục: nằm ngay trên mục đó tới khi người dùng đóng hay thử lại (thông báo nhanh biến mất sau vài giây, không kịp đọc lời giải thích).
@@ -437,11 +493,11 @@ export function ConnectorsPanel() {
   const finished = (r: Res) => { apply(r); if (r.connector?.status === "ok") { app.say(`Connected ${r.connector.name}`); setOpen(r.connector.id); } };
 
   const connectEntry = async (e: DirEntry) => {
-    setBusy(e.id);
+    mark(e.id, true);
     setErrs(({ [e.id]: _, ...rest }) => rest);
     try { const r = await api("POST", "/api/connectors", { dir: e.id }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
     catch (x) { setErrs((m) => ({ ...m, [e.id]: (x as Error).message })); load(); }
-    finally { setBusy(null); }
+    finally { mark(e.id, false); }
   };
   const addCustom = async (init: CustomInit, v: CustomValues, done: (err?: string) => void) => {
     // Connector đã có (thẻ Canva chờ kết nối…): dùng thông tin mới cho chính nó, giữ quyền đã đặt.
@@ -449,16 +505,18 @@ export function ConnectorsPanel() {
     catch (x) { done((x as Error).message); load(); }
   };
   const reconnect = async (c: Conn, force = false) => {
-    setBusy(c.id);
+    // Đang chờ đăng nhập: mở lại đúng địa chỉ đã có.
+    if (login.pending === c.id) return login.reopen();
+    mark(c.id, true);
     try { const r = await api("POST", `/api/connectors/${c.id}/connect`, force ? { force: true } : undefined); apply(r); if (!login.follow(r)) finished(r); }
     catch (x) { app.say((x as Error).message); load(); }
-    finally { setBusy(null); }
+    finally { mark(c.id, false); }
   };
   const refresh = async (c: Conn) => {
-    setBusy(c.id);
+    mark(c.id, true);
     try { apply(await api("POST", `/api/connectors/${c.id}/refresh`)); app.say("Tools refreshed"); }
     catch (x) { app.say((x as Error).message); load(); }
-    finally { setBusy(null); }
+    finally { mark(c.id, false); }
   };
   const patch = async (c: Conn, body: Record<string, unknown>, optimistic: (c: Conn) => Conn) => {
     setData((d) => (d ? { ...d, connectors: d.connectors.map((x) => (x.id === c.id ? optimistic(x) : x)) } : d));
@@ -501,7 +559,7 @@ export function ConnectorsPanel() {
         {data.policy.custom && <button className="btn" onClick={() => setCustom({})}><I.Plus size={14} />Add custom connector</button>}
         {conns.length > 0 && <><span style={{ flex: 1 }} /><BulkButton b={bk} /></>}
       </div>
-      {login.blocked && <LoginBlocked onOpen={login.reopen} />}
+      {login.blocked && !browse && <LoginBlocked onOpen={login.reopen} />}
       {conns.length === 0 ? (
         <div className="cn-empty">
           <div className="cn-empty-art" aria-hidden>{["notion", "linear", "supabase", "stripe"].map((l) => <ConnLogo key={l} logo={l} name={l} size={40} />)}</div>
@@ -511,7 +569,7 @@ export function ConnectorsPanel() {
       ) : (
         <div className="cn-list">
           {pgC.items.map((c) => (
-            <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy === c.id} waiting={login.pending === c.id} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
+            <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy.has(c.id)} waiting={login.pending === c.id} stale={login.stale} onDismissScope={() => patch(c, { dismissScope: true }, (x) => ({ ...x, needsScope: false }))} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
               onEnable={(v) => patch(c, { enabled: v }, (x) => ({ ...x, enabled: v }))}
               onConnect={() => reconnect(c)} onReauth={() => reconnect(c, true)} onCreds={(mode) => setCustom({ name: c.name, url: c.url, mode, id: c.id, locked: true })} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
               onPerm={(t, p) => patch(c, { perms: { [t.name]: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) }))}
@@ -523,7 +581,7 @@ export function ConnectorsPanel() {
         </div>
       )}
       <p className="cn-note"><I.Lock size={12} />Sign-ins are encrypted on the server. Tools that change data ask before running unless you allow them.</p>
-      {browse && <Browse data={data} busy={busy} errs={errs} onClose={() => setBrowse(false)} onConnect={connectEntry} onDismiss={(id) => setErrs(({ [id]: _, ...rest }) => rest)}
+      {browse && <Browse data={data} busy={busy} errs={errs} login={login} onClose={() => setBrowse(false)} onConnect={connectEntry} onDismiss={(id) => setErrs(({ [id]: _, ...rest }) => rest)}
         onCreds={(e, mode) => { const c = conns.find((x) => x.dir === e.id); setCustom({ name: e.name, url: e.url, mode, id: c?.id, locked: true }); }} onCustom={() => { setBrowse(false); setCustom({}); }} />}
       {custom && <Custom init={custom} onClose={() => setCustom(null)} onAdd={(v, done) => addCustom(custom, v, done)} />}
     </>

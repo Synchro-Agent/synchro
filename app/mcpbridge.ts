@@ -8,7 +8,8 @@ import { currentRun, inRun } from "./runs";
 
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code (JPEG) hay ảnh connector trả về (mime cho biết loại ảnh).
-type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string }>; exp: number; busy: number; last: number };
+// live: lời gọi đang chạy theo id JSON-RPC, để CLI hủy được (notifications/cancelled). cancel: tín hiệu CLI hủy lời gọi hay đã ngắt kết nối.
+type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>, cancel?: AbortSignal) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string }>; exp: number; busy: number; last: number; live: Map<string, AbortController> };
 const g = globalThis as unknown as { __synchroBridges?: Map<string, Bridge> };
 const bridges = (g.__synchroBridges ??= new Map());
 
@@ -16,24 +17,35 @@ const bridges = (g.__synchroBridges ??= new Map());
 export const internalUrl = () => (process.env.SYNCHRO_INTERNAL_URL ?? `http://127.0.0.1:${process.env.PORT || 3000}`).replace(/\/+$/, "");
 
 /** Mở cầu nối cho lượt hiện tại; close() khi lượt xong (tự hết hạn sau 35 phút nếu quên). */
+/** park / onPark: lượt đang chờ người dùng duyệt (xem khóa lượt của Antigravity, Grok ở cli_engines.ts): CLI đã kết nối xong với cầu nối này nên không cần giữ chỗ trong cấu hình chung nữa. */
 export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["call"] }) {
   const now = Date.now();
   for (const [k, b] of bridges) if (b.exp < now) bridges.delete(k);
   const token = crypto.randomBytes(24).toString("base64url");
   // Sống tới hết mức trần của lượt (lượt xong thì close() xóa ngay).
-  const b: Bridge = { ...o, run: currentRun(), exp: now + MAX_TURN_MS + 5 * 60_000, busy: 0, last: now };
+  const b: Bridge = { ...o, run: currentRun(), exp: now + MAX_TURN_MS + 5 * 60_000, busy: 0, last: now, live: new Map() };
+  let parked = false;
+  const onParked: (() => void)[] = [];
   bridges.set(token, b);
   // alive: đang chạy công cụ thì là "bây giờ", không thì lúc công cụ gần nhất xong (để biết CLI còn làm việc).
-  return { url: `${internalUrl()}/api/mcp/bridge/${token}`, close: () => { bridges.delete(token); }, alive: () => (b.busy ? Date.now() : b.last) };
+  return {
+    url: `${internalUrl()}/api/mcp/bridge/${token}`, close: () => { bridges.delete(token); }, alive: () => (b.busy ? Date.now() : b.last),
+    park: () => { parked = true; for (const f of onParked.splice(0)) f(); },
+    onPark: (f: () => void) => { if (parked) f(); else onParked.push(f); },
+  };
 }
 
 type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
 const ok = (id: Rpc["id"], result: unknown) => ({ jsonrpc: "2.0", id, result });
 const fail = (id: Rpc["id"], code: number, message: string) => ({ jsonrpc: "2.0", id, error: { code, message } });
 
-/** Xử lý một yêu cầu JSON-RPC của MCP; null với thông báo (không cần trả lời). */
-async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
-  if (m.id === undefined || m.id === null) return null;
+/** Xử lý một yêu cầu JSON-RPC của MCP; null với thông báo (không cần trả lời). gone: CLI đã ngắt kết nối của yêu cầu này. */
+async function handle(b: Bridge, m: Rpc, gone?: AbortSignal): Promise<unknown | null> {
+  if (m.id === undefined || m.id === null) {
+    // CLI hủy một lời gọi (hết kiên nhẫn, model đổi ý): lời gọi đang chờ duyệt phải thôi, được duyệt muộn cũng không chạy nữa.
+    if (m.method === "notifications/cancelled") b.live.get(String(m.params?.requestId))?.abort();
+    return null;
+  }
   switch (m.method) {
     case "initialize":
       return ok(m.id, {
@@ -50,9 +62,12 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
       const name = String(m.params?.name ?? "");
       if (!b.tools.some((t) => t.name === name)) return fail(m.id, -32602, `Không có công cụ ${name}`);
       const args = (m.params?.arguments && typeof m.params.arguments === "object" ? m.params.arguments : {}) as Record<string, unknown>;
+      const ctl = new AbortController(), key = String(m.id);
+      const cancel = gone ? AbortSignal.any([ctl.signal, gone]) : ctl.signal;
+      b.live.set(key, ctl);
       try {
         b.busy++; b.last = Date.now();
-        const r = await inRun(b.run, () => b.call(name, args)).finally(() => { b.busy--; b.last = Date.now(); });
+        const r = await inRun(b.run, () => b.call(name, args, cancel)).finally(() => { b.busy--; b.last = Date.now(); b.live.delete(key); });
         return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: r.mime ?? "image/jpeg" }] : [])], isError: r.is_error });
       } catch (e) {
         return ok(m.id, { content: [{ type: "text", text: `Lỗi: ${(e as Error).message}` }], isError: true });
@@ -69,7 +84,7 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
 // gửi nhịp giữ kết nối mỗi ping ms rồi kết quả cuối. Công cụ xong nhanh vẫn trả JSON như cũ. Đọc ở đây để kiểm thử rút ngắn được.
 export const BRIDGE_SSE = { after: 20_000, ping: 15_000 };
 const sseMsg = (x: unknown) => `event: message\ndata: ${JSON.stringify(x)}\n\n`;
-function sseReply(work: Promise<unknown[]>, tokens: unknown[], sid: string) {
+function sseReply(work: Promise<unknown[]>, tokens: unknown[], sid: string, onGone: () => void) {
   const enc = new TextEncoder();
   let timer: ReturnType<typeof setInterval> | undefined, n = 0, gone = false;
   const stream = new ReadableStream<Uint8Array>({
@@ -81,7 +96,7 @@ function sseReply(work: Promise<unknown[]>, tokens: unknown[], sid: string) {
       // CLI đã ngắt (cancel) thì thôi, ghi vào luồng đã đóng sẽ lỗi.
       work.catch(() => [] as unknown[]).then((out) => { clearInterval(timer); if (gone) return; c.enqueue(enc.encode(out.map(sseMsg).join(""))); c.close(); });
     },
-    cancel() { gone = true; clearInterval(timer); },
+    cancel() { gone = true; clearInterval(timer); onGone(); },
   });
   return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", "x-accel-buffering": "no", "mcp-session-id": sid } });
 }
@@ -98,12 +113,16 @@ export async function bridgeRoute(req: Request, token: string): Promise<Response
   if (!body) return Response.json(fail(null, -32700, "JSON không hợp lệ"), { status: 400 });
   const list = Array.isArray(body) ? body : [body];
   const sid = req.headers.get("mcp-session-id") ?? crypto.randomBytes(8).toString("hex");
-  const work = Promise.all(list.map((m) => handle(b, m))).then((r) => r.filter((x) => x !== null));
+  // CLI ngắt kết nối (req.signal, hoặc luồng SSE bị đóng): lời gọi đang chờ của yêu cầu này không còn ai nhận kết quả.
+  const gone = new AbortController();
+  const hangup = () => gone.abort();
+  if (req.signal.aborted) hangup(); else req.signal.addEventListener("abort", hangup, { once: true });
+  const work = Promise.all(list.map((m) => handle(b, m, gone.signal))).then((r) => r.filter((x) => x !== null));
   if ((req.headers.get("accept") ?? "").includes("text/event-stream") && list.some((m) => m.method === "tools/call")) {
     let t: ReturnType<typeof setTimeout> | undefined;
     const first = await Promise.race([work.then(() => true), new Promise<false>((ok) => { t = setTimeout(() => ok(false), BRIDGE_SSE.after); })]);
     clearTimeout(t);
-    if (!first) return sseReply(work, list.map((m) => (m.params?._meta as { progressToken?: unknown } | undefined)?.progressToken).filter((x) => x !== undefined), sid);
+    if (!first) return sseReply(work, list.map((m) => (m.params?._meta as { progressToken?: unknown } | undefined)?.progressToken).filter((x) => x !== undefined), sid, hangup);
   }
   const out = await work;
   if (!out.length) return new Response(null, { status: 202, headers: { "mcp-session-id": sid } });

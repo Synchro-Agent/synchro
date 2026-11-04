@@ -11,7 +11,7 @@ import { ReconnectCard } from "./connectorsui";
 // args: tham số đã gửi cho công cụ ghi của connector (đã che khóa bí mật).
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
-export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string };
+export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
 export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
@@ -63,6 +63,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
         {running ? <span className="wl-spin" /> : bad ? <I.Alert size={13} /> : null}
         <span data-notr={items.length === 1 ? true : undefined}>{label}</span>
         {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
+        {bad === 1 && items.length === 1 && items[0].sum ? <small className="wl-fail" data-notr title={items[0].sum}>{items[0].sum}</small> : null}
         <I.ChevronR size={13} />
       </button>
       {open && (
@@ -105,7 +106,7 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 export function ConnCards({ parts }: { parts?: Part[] }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
-  return list.length ? <>{list.map((c) => <ReconnectCard key={c.id} c={c} />)}</> : null;
+  return list.length ? <>{list.map((c) => <ReconnectCard key={c.id} c={c} done />)}</> : null;
 }
 
 /**
