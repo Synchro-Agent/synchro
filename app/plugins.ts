@@ -12,7 +12,7 @@ import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
-import { warmSkillIndex } from "./skillroute";
+import { fold, warmSkillIndex } from "./skillroute";
 import { bumpTags, classify, classifyCatalog, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
@@ -677,34 +677,50 @@ function snap(): Cache {
 }
 // Tên gốc của skill (bỏ tiền tố "thư-viện:" khi trùng tên) để tra nhãn mục.
 const rawName = (k: Skill, slug: string) => (k.name.startsWith(slug + ":") ? k.name.slice(slug.length + 1) : k.name);
-type Active = { id: string; slug: string; name: string; description: string; studio: Studio | null; everywhere: boolean };
+type Active = { id: string; slug: string; name: string; description: string; studio: Studio | null; everywhere: boolean; cat: boolean };
 function active(uid: string): Active[] {
   const prefs = prefsOf(uid);
   return snap().rows.filter((r) => (r.owner === "org" || r.owner === uid) && r.enabled && mineOf(r, prefs.get(r.id)).enabled)
-    .map((r) => ({ id: r.id, slug: r.slug, name: r.name, description: r.description, studio: (r.studio as Studio) ?? null, everywhere: mineOf(r, prefs.get(r.id)).everywhere }));
+    .map((r) => ({ id: r.id, slug: r.slug, name: r.name, description: r.description, studio: (r.studio as Studio) ?? null, everywhere: mineOf(r, prefs.get(r.id)).everywhere, cat: isCatRow(r) }));
 }
 const skillsOfPlugin = (id: string) => snap().skills.get(id) ?? [];
 export const MINE_LABEL = "Kho kỹ năng của bạn";
 // Thư viện của một studio (khi người dùng bấm Thiết kế / Trình bày / Tài liệu, và mục lục studio trong chat thường): skill của các plugin
 // gắn với studio, cộng skill Synchro tự nhận diện thuộc mục này — skill của người dùng (Kho kỹ năng) và skill của plugin không gắn studio.
-// Trùng tên: skill của người dùng trước, rồi plugin studio, rồi plugin khác. auto: những skill được tự thêm (from: nguồn).
-export function studioSkills(uid: string, studio: Studio, act = active(uid)): { skills: Skill[]; plugins: string[]; auto: { name: string; from: string }[] } {
+// Trùng tên: skill của người dùng trước, rồi plugin studio, rồi plugin khác, sau cùng thư viện của danh mục Claude. auto: những skill được tự thêm (from: nguồn),
+// tối đa AUTO_LIST mục, đủ số ở autoTotal. curated: skills.slice(0, curated) là skill người dùng tự cài và chọn lọc, phần sau là của danh mục.
+// plugins: tên các nguồn chọn lọc (không kể hàng nghìn thư viện của danh mục: catalogLibs là số thư viện đó).
+const AUTO_LIST = 30;
+export function studioSkills(uid: string, studio: Studio, act = active(uid)): { skills: Skill[]; plugins: string[]; auto: { name: string; from: string }[]; autoTotal: number; curated: number; catalogLibs: number } {
   const tagged = snap().tagged[studio];
   const ps = act.filter((p) => p.studio === studio);
   const mine = enabledSkillsByIds(uid, userStudioIds(uid, studio));
   const others = act.flatMap((p) => { const skills = p.studio ? undefined : tagged.get(p.id); return skills ? [{ p, skills }] : []; });
   const skills: Skill[] = [], auto: { name: string; from: string }[] = [], seen = new Set<string>();
-  const add = (k: Skill, from?: string) => { if (seen.has(k.name)) return; seen.add(k.name); skills.push(k); if (from) auto.push({ name: k.name, from }); };
+  let autoTotal = 0;
+  const add = (k: Skill, from?: string) => { if (seen.has(k.name)) return; seen.add(k.name); skills.push(k); if (from) { autoTotal++; if (auto.length < AUTO_LIST) auto.push({ name: k.name, from }); } };
   for (const k of mine) add(k, MINE_LABEL);
   for (const p of ps) for (const k of skillsOfPlugin(p.id)) add(k);
-  for (const o of others) for (const k of o.skills) add(k, o.p.name);
-  return { skills, plugins: [...ps.map((p) => p.name), ...(mine.length ? [MINE_LABEL] : []), ...others.map((o) => o.p.name)], auto };
+  const own = others.filter((o) => !o.p.cat), cat = others.filter((o) => o.p.cat);
+  for (const o of own) for (const k of o.skills) add(k, o.p.name);
+  const curated = skills.length;
+  for (const o of cat) for (const k of o.skills) add(k, o.p.name);
+  return { skills, plugins: [...ps.map((p) => p.name), ...(mine.length ? [MINE_LABEL] : []), ...own.map((o) => o.p.name)], auto, autoTotal, curated, catalogLibs: cat.length };
 }
-/** Cho trang Artifacts: mỗi studio có bao nhiêu skill, từ đâu, skill nào được tự thêm. */
+export type StudioInfo = { name: string; skills: number; autoTotal: number; catalogLibs: number; auto: { name: string; from: string }[] };
+/** Cho trang Artifacts (?view=meta, gửi mỗi lần mở trang nên phải nhỏ): mỗi studio có bao nhiêu skill, từ đâu, vài skill được tự thêm; đủ số ở autoTotal, cả danh sách ở studioPage. */
 export function studioSummary(uid: string) {
   const act = active(uid);
-  return Object.fromEntries(STUDIOS.map((s) => { const r = studioSkills(uid, s, act); return [s, { name: r.plugins.join(", "), skills: r.skills.length, auto: r.auto }]; })
-    .filter(([, v]) => (v as { skills: number }).skills > 0)) as Partial<Record<Studio, { name: string; skills: number; auto: { name: string; from: string }[] }>>;
+  return Object.fromEntries(STUDIOS.map((s) => { const r = studioSkills(uid, s, act); return [s, { name: r.plugins.slice(0, 6).join(", "), skills: r.skills.length, autoTotal: r.autoTotal, catalogLibs: r.catalogLibs, auto: r.auto }]; })
+    .filter(([, v]) => (v as StudioInfo).skills > 0)) as Partial<Record<Studio, StudioInfo>>;
+}
+const PAGE = 40;
+/** Danh sách skill của một studio theo trang, có tìm kiếm: một mục có thể có hàng nghìn skill, không gửi hết về trình duyệt. */
+export function studioPage(uid: string, studio: Studio, q = "", offset = 0) {
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  const all = studioSkills(uid, studio).skills;
+  const hit = words.length ? all.filter((k) => { const t = fold(`${k.name} ${k.description}`); return words.every((w) => t.includes(w)); }) : all;
+  return { total: all.length, matched: hit.length, offset, skills: hit.slice(offset, offset + PAGE).map((k) => ({ name: k.name, description: k.description.slice(0, 240) })) };
 }
 // Skill của plugin bật "dùng trong mọi cuộc trò chuyện".
 export function everywhereSkills(uid: string): Skill[] {

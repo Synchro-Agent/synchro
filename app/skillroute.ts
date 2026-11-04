@@ -202,9 +202,9 @@ function docOf(k: Skill): Doc {
 }
 // Chỉ mục ngược: từ → các skill có từ đó. Chấm hết 18.000 skill mỗi lượt từng chặn Node gần 200 ms (luồng chữ của mọi người dừng theo). Giờ chỉ chấm skill có từ của câu hỏi.
 // Một đối tượng skill vào chỉ mục đúng một lần; bản dựng lại của bộ đệm plugin tạo đối tượng mới nên chỉ mục chứa nhiều bản cũ quá thì dựng lại từ đầu.
-const G = globalThis as unknown as { __skillIx?: { post: Map<string, Skill[]>; first: Map<string, Skill[]>; seen: WeakSet<Skill>; n: number } };
+const G = globalThis as unknown as { __skillIx?: { post: Map<string, Skill[]>; first: Map<string, Skill[]>; seen: WeakSet<Skill>; n: number; peak: number } };
 const rawWords = (s: string) => s.split(/[^a-z0-9]+/).filter(Boolean);
-const freshIx = () => ({ post: new Map<string, Skill[]>(), first: new Map<string, Skill[]>(), seen: new WeakSet<Skill>(), n: 0 });
+const freshIx = () => ({ post: new Map<string, Skill[]>(), first: new Map<string, Skill[]>(), seen: new WeakSet<Skill>(), n: 0, peak: 0 });
 const ixOf = () => (G.__skillIx ??= freshIx());
 function addToIx(k: Skill) {
   const ix = ixOf();
@@ -228,7 +228,10 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
   if (!q.trim() || !cands.length) return [];
   const { terms, weak, literal, groups } = expand(q);
   const t = fold(q);
-  if (ixOf().n > cands.length * 3 + 2000) G.__skillIx = freshIx();
+  // So với lần chấm lớn nhất, không so với lần này: chấm riêng một thư viện nhỏ (vài trăm skill) mà xóa chỉ mục thì lượt sau phải dựng lại cả 18.000 skill, ~200 ms.
+  const ix0 = ixOf();
+  ix0.peak = Math.max(ix0.peak, cands.length);
+  if (ix0.n > ix0.peak * 3 + 2000) { G.__skillIx = freshIx(); ixOf().peak = cands.length; }
   for (const c of cands) addToIx(c.skill);
   const ix = ixOf(), cand = new Map(cands.map((c) => [c.skill, c]));
   const df = new Map<string, number>(), hit = new Set<Skill>();

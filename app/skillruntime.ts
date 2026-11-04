@@ -71,7 +71,7 @@ const BASE_TOOLS = [
 const SEARCH_TOOL = {
   name: "search_skills",
   description: "Tìm trong toàn bộ kho skill đã cài, kể cả skill nằm trong các thư viện studio / plugin. Hiểu từ khóa tiếng Việt và tiếng Anh. Trả về tối đa 10 skill (tên + mô tả) khớp nhất để đọc bằng load_skill.",
-  input_schema: { type: "object", properties: { query: { type: "string", description: "Từ khóa mô tả việc cần làm" } }, required: ["query"] },
+  input_schema: { type: "object", properties: { query: { type: "string", description: "Từ khóa mô tả việc cần làm" }, library: { type: "string", description: "Chỉ tìm trong một thư viện, ví dụ studio-docs, studio-slides, studio-design (không bắt buộc)" } }, required: ["query"] },
 };
 const SCRIPT_TOOL = {
   name: "run_skill_script",
@@ -95,7 +95,8 @@ const cut = (t: string) => clipOut(t, LIMITS.scriptOut);
 
 // Chạy script trong sandbox dùng một lần (xem coderun.ts): chép file của skill vào, chạy, rồi xóa.
 // heal: nhờ model sửa script khi script hỏng vì lỗi của chính nó (xem skillheal.ts); không có thì chỉ chạy.
-export type RunCtx = { uid: string; net: boolean; heal?: (input: { skill: string; path: string; source: string; error: string; args: string[] }) => Promise<string | null> };
+// libs: skill → các thư viện chứa nó, để search_skills tìm trong một thư viện.
+export type RunCtx = { uid: string; net: boolean; libs?: Record<string, { key: string }[]>; heal?: (input: { skill: string; path: string; source: string; error: string; args: string[] }) => Promise<string | null> };
 type Ran = { exit: number; stdout: string; stderr: string };
 const resultOf = (s: Skill, p: string, r: Ran, note = "") => ({
   ...runBlocks({ open: `<script_result skill="${esc(s.name)}" path="${esc(p)}" exit_code="${r.exit}">`, close: "</script_result>", tags: "", stdout: cut(r.stdout), stderr: cut(r.stderr), after: note ? `\n${note}` : "" }),
@@ -152,7 +153,7 @@ async function runScript(s: Skill, p0: string, args: string[], stdin: string | u
 export type ToolRun = { content: string; is_error: boolean; brief?: string; used: { kind: "skill" | "file" | "search" | "script" | "tool" | "code"; name: string; path?: string } };
 
 // Tìm theo cùng cách chấm điểm với định tuyến (hiểu tiếng Việt, ưu tiên từ hiếm); bỏ các mục thư viện vì skill bên trong đã có trong danh sách.
-const search = (list: Skill[], q: string) => rank(q, list.filter((s) => s.user_id !== "studio").map((skill) => ({ skill })), 10).map((h) => h.skill);
+const search = (list: Skill[], q: string, keep?: (s: Skill) => boolean) => rank(q, list.filter((s) => s.user_id !== "studio" && (!keep || keep(s))).map((skill) => ({ skill })), 10).map((h) => h.skill);
 
 // `list` là các skill đang bật của người dùng (đã lọc theo dự án). Trả về lỗi dạng text để model tự sửa; không ném lỗi ra ngoài vòng lặp.
 export async function runSkillTool(list: Skill[], tool: string, input: Record<string, unknown>, scripts = false, ctx: RunCtx = { uid: "", net: false }): Promise<ToolRun> {
@@ -162,7 +163,9 @@ export async function runSkillTool(list: Skill[], tool: string, input: Record<st
   try {
     if (tool === "search_skills") {
       const q = String(input?.query ?? "");
-      const hits = search(list, q);
+      const lib = typeof input?.library === "string" ? input.library : "", libs = ctx.libs;
+      // Thư viện không có thật (model gõ sai tên) thì tìm cả kho, không trả về rỗng.
+      const hits = search(list, q, lib && libs?.[lib] ? (s) => !!libs[s.name]?.some((l) => l.key === lib) : undefined);
       return { content: hits.length ? `<search_results>\n${hits.map((s) => `  <skill><name>${esc(s.name)}</name><description>${esc(s.description)}</description></skill>`).join("\n")}\n</search_results>` : `Không có skill nào khớp "${q}". Hãy thử từ khóa khác hoặc trả lời bình thường.`, is_error: false, used: { kind: "search", name: q } };
     }
     if (tool === "run_skill_script" && !scripts) return { content: "Máy chủ chưa bật chạy script của skill. Hãy làm theo hướng dẫn mà không chạy script.", is_error: true, used };

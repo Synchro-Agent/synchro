@@ -75,7 +75,7 @@ import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
 import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
-import { cachedJson, HUB_DISCOVER, HUB_SEARCH, useStudios } from "./studios";
+import { cachedJson, fmtCount, HUB_DISCOVER, HUB_SEARCH, useStudios } from "./studios";
 import type { CzTab } from "./pluginsui";
 import { CONNECTORS_BROWSE, ConnLogo } from "./connlogo";
 import type { Conn } from "./connectorsui";
@@ -2319,7 +2319,7 @@ export default function Home() {
                 <div className="modebar">
                   <span className={`mode-tag mt-${t.k}`}>{t.label}<button className="mode-x" onClick={() => setTplMode(null)} aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"><I.X size={12} /></button></span>
                   {/* Thư viện skill của studio: bấm để xem / cài plugin. */}
-                  {studios[STUDIO_OF[t.k]] ? <button className="mode-sys" onClick={openPlugins} title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={16} />Thư viện {studios[STUDIO_OF[t.k]]!.skills} skill</button>
+                  {studios[STUDIO_OF[t.k]] ? <button className="mode-sys" onClick={openPlugins} title={studios[STUDIO_OF[t.k]]!.name}><I.Plugins size={16} />Thư viện {fmtCount(studios[STUDIO_OF[t.k]]!.skills)} skill</button>
                     : <button className="mode-sys" onClick={openPlugins}><I.Plugins size={16} />Cài thư viện {t.k === "doc" ? "tài liệu" : t.k === "slides" ? "trình bày" : "thiết kế"}</button>}
                 </div>
                 <div className="starters">

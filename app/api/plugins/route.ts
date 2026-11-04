@@ -1,5 +1,5 @@
 import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../authstore";
-import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioSummary, type PluginDef } from "../../plugins";
+import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioOf, studioPage, studioSummary, type PluginDef } from "../../plugins";
 import { PLUGIN_DIR } from "../../plugindir";
 import { closedReason, dirDef, dirEntry } from "../../claudedir";
 import { blockedLibs, clearFailed, clearRemoved, failedLibs, freeSlug, noteInstallError } from "../../plugjob";
@@ -18,6 +18,12 @@ export const GET = handle(async (req: Request) => {
   // ?view=meta: chỉ quyền và số skill của các studio (nút Thêm skill, trang Artifacts).
   // ?view=lite&q=…: tìm trong các thư viện đã cài từ danh mục (bản lite thường không gửi các thư viện này).
   const view = new URL(req.url).searchParams.get("view"), find = new URL(req.url).searchParams.get("q")?.trim().slice(0, 80);
+  // ?view=studio&studio=docs&q=…&offset=…: skill của một mục ở trang Artifacts, theo trang (một mục có thể có hàng nghìn skill).
+  if (view === "studio") {
+    const sp = new URL(req.url).searchParams, st = studioOf(sp.get("studio"));
+    if (!st || !can(user, "skills")) return Response.json({ total: 0, matched: 0, offset: 0, skills: [] });
+    return Response.json(studioPage(user.id, st, find ?? "", Math.max(0, Number(sp.get("offset")) || 0)));
+  }
   if (view === "lite" && find) return Response.json({ plugins: listPluginsLite(user.id, find) });
   if (view === "meta") return Response.json({ admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
   if (view === "lite") return Response.json({ plugins: listPluginsLite(user.id), admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
