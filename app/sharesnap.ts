@@ -1,6 +1,7 @@
 // Bản chụp của đoạn chat được chia sẻ công khai (dùng chung cho máy chủ và trang xem). Chỉ giữ đúng những gì người đọc cần: vai, chữ, artifact
 // bản mới nhất. Mọi thứ khác của tin nhắn (dấu vết công cụ, tên tệp, skill, connector, model, thời gian, ghi chú hệ thống…) không đi qua hàm này,
 // và máy chủ luôn dựng lại bản chụp từ đầu nên trình duyệt có gửi thêm trường nào cũng bị bỏ.
+import { externalImageUrls, swapUrls } from "./artdoc";
 import { ART_TYPES, splitArtifacts, type ArtType } from "./artifacts";
 import { resolveArt, type ArtState } from "./vfs";
 
@@ -37,4 +38,25 @@ export function snapshotOf(title: unknown, input: unknown): ShareSnap {
   });
   const t = typeof title === "string" ? clean(title).replace(/\s+/g, " ").trim().slice(0, SHARE_LIMITS.title) : "";
   return { title: t || "Đoạn chat", msgs };
+}
+
+/**
+ * Người xem liên kết chưa đăng nhập nên không tải ảnh qua /api/artimg được, khung lại chặn mọi ảnh ngoài bằng CSP: ảnh phải nằm sẵn trong bản chụp.
+ * fetchData (máy chủ truyền vào): URL → data: đã thu nhỏ, null nếu không tải được. Ảnh làm bản chụp vượt room byte thì giữ URL và tính vào skipped.
+ */
+export async function inlineSnapImages(snap: ShareSnap, fetchData: (url: string) => Promise<string | null>, room: number): Promise<{ snap: ShareSnap; inlined: number; skipped: number }> {
+  let left = room - new TextEncoder().encode(JSON.stringify(snap)).length, inlined = 0, skipped = 0;
+  const cache = new Map<string, string | null>();
+  for (const m of snap.msgs) for (const s of m.segs) {
+    if (s.k !== "art" || !(s.type === "html" || s.type === "react" || s.type === "svg")) continue;
+    const map = new Map<string, string>();
+    for (const u of externalImageUrls(s.content)) {
+      if (!cache.has(u)) cache.set(u, await fetchData(u).catch(() => null));
+      const d = cache.get(u);
+      if (!d || d.length > left) { skipped++; continue; }
+      left -= d.length; inlined++; map.set(u, d);
+    }
+    if (map.size) s.content = swapUrls(s.content, map);
+  }
+  return { snap, inlined, skipped };
 }

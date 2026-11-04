@@ -34,7 +34,7 @@ export function ShareModal({ chat, onClose, say }: { chat: Chat; onClose: () => 
       const fresh = !cur;
       setCur(j.share);
       const ok = await copyText(urlOf(j.share.token));
-      say(fresh ? (ok ? "Đã tạo liên kết và sao chép" : "Đã tạo liên kết") : "Đã cập nhật bản chia sẻ");
+      say(j.share.imagesSkipped ? `${j.share.imagesSkipped} ảnh không đưa được vào bản chia sẻ nên người xem sẽ không thấy` : fresh ? (ok ? "Đã tạo liên kết và sao chép" : "Đã tạo liên kết") : "Đã cập nhật bản chia sẻ");
     } catch (e) { setErr((e as Error).message); }
     setBusy(false);
   };

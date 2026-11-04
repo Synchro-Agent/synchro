@@ -17,6 +17,11 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .sh-foot{margin-top:48px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;font-size:12.5px;color:var(--text-2)}
 .sh-foot nav{display:flex;gap:14px}
 .sh-foot a{color:inherit}
+.sh-foot nav{align-items:center;flex-wrap:wrap}
+.sh-warn{font-size:12.5px;color:var(--text-2);margin:0 0 8px}
+.sh-report{font-size:inherit;color:inherit;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
+.sh-report-form{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%}
+.sh-report-form .field{flex:1;min-width:200px;height:32px}
 .sh-hint{display:block;font-size:13.5px;line-height:1.55;color:var(--text-2);margin:4px 0 12px}
 .sh-hint svg{vertical-align:-2px;margin-right:2px}
 .sh-link{display:flex;gap:8px;margin:10px 0 4px}

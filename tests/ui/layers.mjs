@@ -67,9 +67,23 @@ try {
   const a = await onTop(".art-modal", ".art-modal .art-panel");
   ok(a === "overlay", "khung xem artifact nằm trên thanh bên (không bị che nửa trái)", a);
   await shot("1-artifact");
+  ok(await ev(`document.querySelector(".art-modal [role=dialog]")?.getAttribute("aria-modal") === "true" && document.querySelector("aside.sidebar").closest("[inert]") !== null`), "khung xem là hộp thoại thật: nền không nhận Tab, trình đọc màn hình biết");
+  await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+  await sleep(100);
+  ok(await ev(`!!document.activeElement?.closest(".art-modal")`), "Tab ở trong khung xem, không rơi xuống các thẻ phía sau");
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-  await ev(`document.querySelector(".art-modal")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })), 1`);
   await sleep(400);
+  ok(await ev(`!document.querySelector(".art-modal")`), "Esc đóng khung xem");
+  // Xóa một artifact: hỏi lại trước, Enter trên nút xóa không mở khung xem.
+  const tiles0 = await ev(`document.querySelectorAll(".art-tile").length`);
+  await ev(`document.querySelector(".art-tile .icon-btn").focus(), 1`);
+  await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
+  await P("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await sleep(500);
+  ok(await ev(`!!document.querySelector(".overlay.cf-top") && !document.querySelector(".art-modal")`), "nút xóa hỏi lại, không mở artifact đằng sau");
+  await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await sleep(400);
+  ok(await ev(`!document.querySelector(".overlay.cf-top") && document.querySelectorAll(".art-tile").length === ${tiles0}`), "hủy thì artifact còn nguyên");
   await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Hộp thư"))`, "inbox");
   // Thẻ "Việc tự động" của Hộp thư: nút Sửa của việc đầu tiên.
   await until(`!![...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động"))`, 15000, "jobs tab");

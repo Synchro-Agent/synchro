@@ -148,7 +148,7 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
     } catch (e) { setErr((e as Error).message); setSaving(false); }
   };
   return (
-    <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !saving && onClose()}>
+    <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !saving && onClose()}>
       <div className="sk-modal">
         <div className="sk-mh"><b>{pv.exists ? `Update ${pv.name} to v${pv.version}` : `Add ${pv.name}`}</b></div>
         {pv.source && <div className="muted" style={{ fontSize: 12, margin: "-2px 0 8px" }} data-notr>{pv.source}{src.pick ? ` · ${src.pick.split("/").slice(1).join("/")}` : ""}</div>}
@@ -307,9 +307,9 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       <input ref={verRef} type="file" hidden accept=".zip,.md" onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ""; }} />
 
       {choose && portal(
-        <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !bulk && setChoose(null)}>
+        <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !bulk && setChoose(null)}>
           <div className="sk-modal">
-            <div className="sk-mh"><b>Choose skills to add</b><span className="muted" style={{ fontSize: 12 }}>{`${choose.choices.length} found`}</span><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} disabled={!!bulk} onClick={() => setChoose(null)}>×</button></div>
+            <div className="sk-mh"><b>Choose skills to add</b><span className="muted" style={{ fontSize: 12 }}>{`${choose.choices.length} found`}</span><span style={{ flex: 1 }} /><button className="icon-btn" aria-label="Close" style={{ width: 24, height: 24 }} disabled={!!bulk} onClick={() => setChoose(null)}>×</button></div>
             <p className="d" style={{ margin: "0 0 10px" }}>This package contains several skills. Preview one to check it before adding, or add every valid skill at once.</p>
             <div className="sk-choices">
               {choose.choices.map((c) => (
@@ -331,9 +331,9 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       {pending && portal(<SkillAddModal src={pending.src} pv={pending.pv} onClose={() => setPending(null)} onDone={() => setPending(null)} />)}
 
       {detail && portal(
-        <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && setDetail(null)}>
+        <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && setDetail(null)}>
           <div className="sk-modal">
-            <div className="sk-mh"><b>{detail.name}</b><span className="muted" style={{ fontSize: 12 }}>v{detail.version}</span><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setDetail(null)}>×</button></div>
+            <div className="sk-mh"><b>{detail.name}</b><span className="muted" style={{ fontSize: 12 }}>v{detail.version}</span><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setDetail(null)} aria-label="Close">×</button></div>
             <p className="d" style={{ margin: "0 0 10px" }} data-notr>{detail.description}</p>
             <div className="sk-meta">
               <span>{detail.useCount ? `Used ${detail.useCount} times` : "Not used yet"}</span>

@@ -2090,7 +2090,18 @@ EN2VI["Paired a browser (Synchro extension)"] = "Ghép nối trình duyệt (ti�
 const addNew = (d: Record<string, string>, o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) if (!Object.prototype.hasOwnProperty.call(d, k)) d[k] = v; };
 addNew(VI2EN, UX_VI2EN);
 addNew(EN2VI, UX_EN2VI);
+// Artifact, chia sẻ, xuất tệp.
+addNew(VI2EN, {
+  "Mọi phiên bản của artifact này sẽ bị xóa, không hoàn tác được.": "Every version of this artifact will be deleted. This can't be undone.",
+  "Chưa xóa được artifact. Hãy thử lại.": "Couldn't delete the artifact. Please try again.",
+  "Xóa artifact": "Delete artifact",
+  "Phần này do người chia sẻ tạo, không phải trang của Synchro. Đừng nhập mật khẩu hay thông tin thanh toán vào đây.": "This part was made by the person who shared it and isn't a Synchro page. Don't enter passwords or payment details here.",
+  "Báo cáo nội dung này": "Report this content", "Nội dung này có vấn đề gì?": "What's wrong with this content?", "Gửi báo cáo": "Send report",
+  "Đã gửi báo cáo. Cảm ơn bạn.": "Report sent. Thank you.", "Chưa gửi được, hãy thử lại sau ít phút.": "Couldn't send it. Please try again in a few minutes.",
+  "Bản chia sẻ chỉ đọc": "Read-only shared copy", "Không tìm thấy bản chia sẻ này.": "This shared copy wasn't found.",
+});
 RULES_EN.push(...UX_RULES_EN);
+RULES_EN.push([/^(\d+) ảnh không đưa được vào bản chia sẻ nên người xem sẽ không thấy$/, (m) => `${m[1]} image(s) couldn't be included in the shared copy, so viewers won't see them`]);
 RULES_VI.push(...UX_RULES_VI);
 // Dịch một mảnh chèn trong chuỗi ghép (qua từ điển rồi luật dịch).
 const enDeep = (s: string): string => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s]; for (const [re, f] of RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };

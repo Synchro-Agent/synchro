@@ -16,7 +16,7 @@ export const POST = handle(async (req) => {
   const { user } = requireUser(req);
   const b = (await req.json().catch(() => null)) as { conv?: unknown; title?: unknown; msgs?: unknown } | null;
   if (!b) throw new AuthError("Yêu cầu không hợp lệ.", 400);
-  return Response.json({ share: putShare(user.id, b.conv, b.title, b.msgs) });
+  return Response.json({ share: await putShare(user.id, b.conv, b.title, b.msgs) });
 });
 export const DELETE = handle(async (req) => {
   sameOrigin(req);

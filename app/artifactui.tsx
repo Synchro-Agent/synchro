@@ -1,7 +1,7 @@
 "use client";
 // Giao diện Artifact: thẻ trong tin nhắn, khung xem bên cạnh cuộc trò chuyện (xem trước / mã / phiên bản),
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { Markdown } from "./md";
@@ -14,6 +14,7 @@ import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "./srcloc";
 import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "./critic";
 import { CriticNote, CriticPill } from "./criticui";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
+import { useApp } from "./store";
 import { PageBar, usePage } from "./pager";
 import { buildPptx, PPTX_FRAME_JS, type DeckSlide } from "./deckpptx";
 import { fontEmbedCss } from "./artfonts";
@@ -114,6 +115,11 @@ function useInlineImages(content: string, on: boolean): string | null {
   return out?.src === content ? out.v : null;
 }
 
+// Trang chia sẻ công khai (shareview.tsx): nội dung do người lạ tạo, hiện trên đúng tên miền của Synchro. Không cho mở cửa sổ mới thoát khung cô lập (trang giả mạo đăng nhập),
+// không gọi /api/artimg (người xem chưa đăng nhập; ảnh đã được nhúng lúc tạo liên kết, xem sharesnap.ts).
+export const PublicFrames = createContext(false);
+const SANDBOX = "allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads", SANDBOX_PUBLIC = "allow-scripts allow-forms allow-downloads";
+
 export function ArtifactFrame({ type, content, ai, onError, onHeight, title, className, style, deck, onMsg, ctl, store, loc }: {
   type: ArtType; content: string; ai: boolean; onError?: (m: string) => void; onHeight?: (h: number) => void; title: string; className?: string; style?: React.CSSProperties;
   deck?: { fixed: number | null }; onMsg?: (d: FrameMsg) => void; ctl?: (send: FrameSend, el: HTMLIFrameElement | null) => void; store?: StoreRef; loc?: boolean;
@@ -121,7 +127,8 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
   const ref = useRef<HTMLIFrameElement>(null);
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
   const deckKey = deck ? String(deck.fixed) : "";
-  const shown = useInlineImages(content, type === "html" || type === "react" || type === "svg");
+  const isPublic = useContext(PublicFrames);
+  const shown = useInlineImages(content, !isPublic && (type === "html" || type === "react" || type === "svg"));
   const doc = useMemo(() => (shown === null ? "" : buildDoc(type, shown, location.origin, ch, isDark(), deck, title, loc)), [type, shown, ch, deckKey, title, loc]); // eslint-disable-line react-hooks/exhaustive-deps
   const cb = useRef({ onError, onHeight, ai, onMsg, store });
   cb.current = { onError, onHeight, ai, onMsg, store };
@@ -155,7 +162,7 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
   }, [ch]);
   if (shown === null) return <div className={className} style={{ ...style, display: "grid", placeItems: "center" }} aria-busy="true"><span className="art-spin" /></div>;
   return <iframe ref={ref} key={ch} title={title} className={className} style={style} srcDoc={doc}
-    sandbox="allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads" allow="clipboard-write" referrerPolicy="no-referrer" />;
+    sandbox={isPublic ? SANDBOX_PUBLIC : SANDBOX} allow={isPublic ? undefined : "clipboard-write"} referrerPolicy="no-referrer" />;
 }
 
 // Sơ đồ Mermaid (vẽ ngay trong Synchro, chế độ an toàn: không chạy script trong sơ đồ).
@@ -680,6 +687,7 @@ function Thumb({ a }: { a: Summary }) {
 }
 
 export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { tab: number; q: string; ai: boolean; say: (m: string) => void; onOpenChat: (conv: string) => boolean; refreshKey?: number }) {
+  const app = useApp();
   const [list, setList] = useState<Summary[] | null>(null);
   const [open, setOpen] = useState<{ id: string; versions: ArtVersion[]; index: number; conv: string } | null>(null);
   const [loadErr, setLoadErr] = useState(false);
@@ -693,10 +701,12 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
     const versions = (a.versions as { content: string; at: number }[]).map((v) => ({ ident: a.ident, title: a.title, type: a.type, lang: a.lang, content: v.content, complete: true, at: v.at }));
     setOpen({ id, versions, index: versions.length - 1, conv: a.conv });
   };
-  const del = async (id: string) => {
-    const r = await fetch(`/api/artifacts/${id}`, { method: "DELETE" });
-    if (r.ok) { setList((l) => l?.filter((x) => x.id !== id) ?? null); if (open?.id === id) setOpen(null); say(tr("Đã xóa artifact")); }
-  };
+  // Xóa là xóa hẳn mọi phiên bản (artifactstore.ts): hỏi lại như khi xóa hàng loạt.
+  const del = (id: string, title: string) => app.confirm(`${tr("Xóa")} “${title}”?`, tr("Mọi phiên bản của artifact này sẽ bị xóa, không hoàn tác được."), tr("Xóa"), async () => {
+    const r = await fetch(`/api/artifacts/${id}`, { method: "DELETE" }).catch(() => null);
+    if (r?.ok) { setList((l) => l?.filter((x) => x.id !== id) ?? null); setOpen((o) => (o?.id === id ? null : o)); say(tr("Đã xóa artifact")); }
+    else say(tr("Chưa xóa được artifact. Hãy thử lại."));
+  });
   const shown = (tab === 2 ? [] : list ?? []).filter((a) => !q || a.title.toLowerCase().includes(q.toLowerCase()));
   // Chọn hàng loạt: xóa nhiều artifact cùng lúc.
   const bk = useBulk(shown, (a) => a.id);
@@ -718,13 +728,13 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
           <div className="bk-head"><span className="bk-head-n">{shown.length} artifact</span><BulkButton b={bk} /></div>
           <div className="art-grid">
             {pg.items.map((a) => (
-              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={(e) => e.key === "Enter" && show(a.id)} {...bulkRow(bk, a)}>
+              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); show(a.id); } }} {...bulkRow(bk, a)}>
                 {bk.on && <BulkCheck on={bk.has(a)} />}
                 <Thumb a={a} />
                 <div className="art-tile-meta">
                   <span className="art-tile-ic"><ArtIcon type={a.type} size={15} /></span>
                   <div><b data-notr>{a.title}</b><span>{tr(ART_LABEL[a.type])} · {when(a.updated_at)}{a.count > 1 ? ` · ${a.count} ${tr("phiên bản")}` : ""}</span></div>
-                  {!bk.on && <button className="icon-btn" aria-label="Xóa artifact" onClick={(e) => { e.stopPropagation(); del(a.id); }}><I.Trash size={14} /></button>}
+                  {!bk.on && <button className="icon-btn" aria-label={tr("Xóa artifact")} onClick={(e) => { e.stopPropagation(); del(a.id, a.title); }}><I.Trash size={14} /></button>}
                 </div>
               </div>
             ))}
@@ -734,9 +744,9 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
           </>
         )}
       {open && (
-        <div className="art-modal" onMouseDown={(e) => e.target === e.currentTarget && setOpen(null)}>
+        <div className="overlay art-modal" onMouseDown={(e) => e.target === e.currentTarget && setOpen(null)}>
           <ArtifactPanel versions={open.versions} index={open.index} setIndex={(i) => setOpen({ ...open, index: i })} ai={ai} onClose={() => setOpen(null)} expanded={false} setExpanded={() => {}} say={say}
-            footer={<div className="art-foot"><button className="btn" onClick={() => { if (!onOpenChat(open.conv)) say(tr("Cuộc trò chuyện gốc không còn trên thiết bị này")); }}>{tr("Mở cuộc trò chuyện")}</button><button className="btn danger" onClick={() => del(open.id)}>{tr("Xóa")}</button></div>} />
+            footer={<div className="art-foot"><button className="btn" onClick={() => { if (!onOpenChat(open.conv)) say(tr("Cuộc trò chuyện gốc không còn trên thiết bị này")); }}>{tr("Mở cuộc trò chuyện")}</button><button className="btn danger" onClick={() => del(open.id, open.versions[open.index]?.title ?? "artifact")}>{tr("Xóa")}</button></div>} />
         </div>
       )}
     </>
@@ -756,7 +766,7 @@ export function OutputFiles({ files, onOpen, active }: { files: OutFile[]; onOpe
       {files.map((f) => {
         const k = fileKind(f.name);
         return (
-          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} role="button" tabIndex={0} onClick={() => onOpen?.(f)} onKeyDown={(e) => { if (e.key === "Enter") onOpen?.(f); }} title={tr("Xem trước")}>
+          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} role="button" tabIndex={0} onClick={() => onOpen?.(f)} onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") onOpen?.(f); }} title={tr("Xem trước")}>
             <span className="out-badge" style={{ background: k.color }}>{k.label}</span>
             <span className="out-txt"><b data-notr>{f.name}</b><span>{tr(KIND[k.ext] ?? "Tệp")} · {fmtSize(f.size)}</span></span>
             <a className="out-dl" href={`/api/outputs/${f.id}`} download={f.name} onClick={(e) => e.stopPropagation()} aria-label={tr("Tải về")} data-tip="Tải về"><I.Download size={15} /></a>

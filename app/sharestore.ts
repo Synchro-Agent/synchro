@@ -1,8 +1,10 @@
 // Liên kết chia sẻ đoạn chat (chỉ chạy ở máy chủ): mỗi liên kết là một bản chụp riêng (sharesnap.ts) gắn với chủ sở hữu, không trỏ vào dữ liệu sống.
 // Mã trong đường dẫn là ngẫu nhiên 192 bit (không đoán được, không suy ra từ đoạn chat). Dừng chia sẻ là xóa hẳn bản chụp, nên liên kết cũ hết hiệu lực ngay.
 import crypto from "node:crypto";
-import { AuthError, db } from "./authstore";
-import { SHARE_LIMITS, snapshotOf, type ShareSnap } from "./sharesnap";
+import { ADMIN_EMAILS, AuthError, db } from "./authstore";
+import { shareImageData } from "./artimg";
+import { sendMail } from "./mailer";
+import { inlineSnapImages, SHARE_LIMITS, snapshotOf, type ShareSnap } from "./sharesnap";
 
 export type ShareRow = { token: string; user_id: string; conv: string; title: string; snap: string; size: number; created_at: number; updated_at: number };
 export type ShareInfo = { token: string; conv: string; title: string; size: number; createdAt: number; updatedAt: number };
@@ -14,7 +16,8 @@ function t() {
     // ON DELETE CASCADE: xóa tài khoản thì mọi liên kết của tài khoản đó mất theo.
     d.exec(`CREATE TABLE IF NOT EXISTS shares (token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, conv TEXT NOT NULL, title TEXT NOT NULL,
         snap TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id, conv));
-      CREATE INDEX IF NOT EXISTS shares_user ON shares(user_id, updated_at)`);
+      CREATE INDEX IF NOT EXISTS shares_user ON shares(user_id, updated_at);
+      CREATE TABLE IF NOT EXISTS share_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL, title TEXT NOT NULL, owner TEXT NOT NULL, reason TEXT NOT NULL, ip TEXT NOT NULL, created_at INTEGER NOT NULL)`);
     ready = true;
   }
   return d;
@@ -26,9 +29,11 @@ export const listShares = (uid: string): ShareInfo[] => (t().prepare("SELECT * F
 export const shareOfConv = (uid: string, conv: string): ShareInfo | null => { const r = t().prepare("SELECT * FROM shares WHERE user_id = ? AND conv = ?").get(uid, okConv(conv)) as ShareRow | undefined; return r ? info(r) : null; };
 
 /** Tạo liên kết, hoặc cập nhật bản chụp của liên kết đang có (giữ nguyên địa chỉ). Bản chụp luôn dựng lại ở đây: trường lạ trình duyệt gửi kèm đều bị bỏ. */
-export function putShare(uid: string, convIn: unknown, title: unknown, msgs: unknown): ShareInfo {
-  const conv = okConv(convIn), snap = snapshotOf(title, msgs);
-  if (!snap.msgs.some((m) => m.segs.length)) throw new AuthError("Đoạn chat chưa có nội dung để chia sẻ.", 400);
+export async function putShare(uid: string, convIn: unknown, title: unknown, msgs: unknown): Promise<ShareInfo & { imagesSkipped: number }> {
+  const conv = okConv(convIn), raw = snapshotOf(title, msgs);
+  if (!raw.msgs.some((m) => m.segs.length)) throw new AuthError("Đoạn chat chưa có nội dung để chia sẻ.", 400);
+  if (Buffer.byteLength(JSON.stringify(raw)) > SHARE_LIMITS.bytes) throw new AuthError("Đoạn chat quá lớn để chia sẻ.", 413);
+  const { snap, skipped } = await inlineSnapImages(raw, shareImageData, SHARE_LIMITS.bytes);
   const json = JSON.stringify(snap), size = Buffer.byteLength(json);
   if (size > SHARE_LIMITS.bytes) throw new AuthError("Đoạn chat quá lớn để chia sẻ.", 413);
   const d = t(), now = Date.now();
@@ -38,7 +43,7 @@ export function putShare(uid: string, convIn: unknown, title: unknown, msgs: unk
   if (used.b + size > SHARE_LIMITS.totalBytes) throw new AuthError("Các bản chia sẻ đã dùng hết dung lượng. Hãy dừng bớt trong Cài đặt → Quyền riêng tư.", 413);
   if (cur) d.prepare("UPDATE shares SET title = ?, snap = ?, size = ?, updated_at = ? WHERE token = ?").run(snap.title, json, size, now, cur.token);
   else d.prepare("INSERT INTO shares (token, user_id, conv, title, snap, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(crypto.randomBytes(24).toString("base64url"), uid, conv, snap.title, json, size, now, now);
-  return shareOfConv(uid, conv)!;
+  return { ...shareOfConv(uid, conv)!, imagesSkipped: skipped };
 }
 
 /** Trang công khai: chỉ trả bản chụp và mốc thời gian, không có gì về chủ sở hữu. */
@@ -53,3 +58,20 @@ export function publicShare(token: string): { snap: ShareSnap; at: number } | nu
 export const revokeShare = (uid: string, token: string) => t().prepare("DELETE FROM shares WHERE user_id = ? AND token = ?").run(uid, token).changes > 0;
 export const revokeConvShare = (uid: string, conv: string) => t().prepare("DELETE FROM shares WHERE user_id = ? AND conv = ?").run(uid, conv).changes > 0;
 export const revokeAllShares = (uid: string) => t().prepare("DELETE FROM shares WHERE user_id = ?").run(uid).changes;
+
+// Báo cáo nội dung xấu (giả mạo, lừa đảo): người xem không đăng nhập vẫn báo được, quản trị viên nhận thư và gỡ bằng /api/share/report.
+export function reportShare(token: string, reason: string, ip: string): boolean {
+  if (!/^[\w-]{20,64}$/.test(token)) return false;
+  const r = t().prepare("SELECT title, user_id FROM shares WHERE token = ?").get(token) as { title: string; user_id: string } | undefined;
+  if (!r) return false;
+  const why = reason.replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 1000) || "(không ghi lý do)";
+  t().prepare("INSERT INTO share_reports (token, title, owner, reason, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(token, r.title, r.user_id, why, ip, Date.now());
+  const link = `${process.env.APP_URL || "https://synchro.net.nz"}/share/${token}`;
+  const text = `Liên kết: ${link}\nTiêu đề: ${r.title}\nLý do: ${why}\n\nGỡ bản chia sẻ: gọi DELETE /api/share/report?token=${token} bằng tài khoản quản trị viên.`;
+  const safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  for (const to of ADMIN_EMAILS) sendMail(to, { subject: "Synchro: có báo cáo về một bản chia sẻ", text, html: `<pre style="white-space:pre-wrap;font:14px sans-serif">${safe}</pre>` });
+  return true;
+}
+export const shareReports = () => t().prepare("SELECT token, title, owner, reason, created_at AS at FROM share_reports ORDER BY id DESC LIMIT 200").all();
+/** Quản trị viên gỡ bản chia sẻ vi phạm; báo cáo giữ lại làm nhật ký. */
+export const takeDownShare = (token: string) => t().prepare("DELETE FROM shares WHERE token = ?").run(token).changes > 0;

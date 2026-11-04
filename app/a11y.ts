@@ -133,7 +133,7 @@ function setup(ov: HTMLElement) {
   box.setAttribute("aria-modal", "true");
   if (!box.hasAttribute("tabindex")) box.setAttribute("tabindex", "-1");
   if (!box.getAttribute("aria-label") && !box.getAttribute("aria-labelledby")) {
-    const h = box.querySelector<HTMLElement>("h1,h2,h3");
+    const h = box.querySelector<HTMLElement>("h1,h2,h3,.sk-mh b");
     if (h) { h.id ||= `dlg-h-${++uid}`; box.setAttribute("aria-labelledby", h.id); }
   }
   raf2(() => {
