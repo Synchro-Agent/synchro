@@ -127,7 +127,8 @@ export type CapLock = "admin" | "server";
 // paired: đã ghép nối ít nhất một trình duyệt của người dùng (tiện ích Synchro).
 export type CapsState = { caps: Caps; locks: Partial<Record<keyof Caps, CapLock>>; runner: "e2b" | "workspace" | "local" | null; paired?: boolean };
 
-// Tên miền kho thư viện được phép khi bật "Cho phép truy cập mạng" (mọi tên miền con cũng được phép).
+// Tên miền được phép khi bật "Cho phép truy cập mạng" (mọi tên miền con cũng được phép): kho thư viện, và đúng hai dịch vụ giọng đọc mà edge-tts / gTTS gọi
+// (không có thì edge-tts báo SkewAdjustmentError "No server date in headers" vì proxy trả 403). Giữ giống PKG_HOSTS trong workspace/agent.mjs.
 export const PKG_DOMAINS: { group: string; hosts: string[] }[] = [
   { group: "Python (pip)", hosts: ["pypi.org", "files.pythonhosted.org", "pythonhosted.org"] },
   { group: "JavaScript (npm, yarn)", hosts: ["registry.npmjs.org", "npmjs.org", "npmjs.com", "registry.yarnpkg.com", "yarnpkg.com"] },
@@ -136,6 +137,7 @@ export const PKG_DOMAINS: { group: string; hosts: string[] }[] = [
   { group: "Conda", hosts: ["conda.anaconda.org", "repo.anaconda.com"] },
   { group: "GitHub (packages, releases)", hosts: ["github.com", "codeload.github.com", "objects.githubusercontent.com"] },
   { group: "Linux (apt)", hosts: ["deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com"] },
+  { group: "Voice-over (edge-tts, gTTS)", hosts: ["speech.platform.bing.com", "translate.google.com"] },
 ];
 export const PKG_HOSTS = PKG_DOMAINS.flatMap((g) => g.hosts);
 export const pkgHostAllowed = (host: string) => {

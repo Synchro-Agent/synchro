@@ -86,6 +86,25 @@ export function collectOutputs(base, { files = 20, previews = 8, fileBytes = Inf
   return { files: out, skipped };
 }
 
+// ---------------------------------------------------------------- log của lần chạy
+// Giữ head byte đầu và tail byte cuối của một luồng (giống app/runtext.ts): lỗi thật của một lần dựng dài nằm ở cuối log, không phải 400 KB đầu.
+export function clipSink(head = 10_000, tail = 30_000) {
+  const first = [], last = [];
+  let nFirst = 0, nLast = 0, dropped = 0;
+  return {
+    push(c) {
+      if (nFirst < head) { const a = c.subarray(0, head - nFirst); first.push(a); nFirst += a.length; c = c.subarray(a.length); }
+      if (!c.length) return;
+      last.push(c); nLast += c.length;
+      while (last.length > 1 && nLast - last[0].length >= tail) { nLast -= last[0].length; dropped += last[0].length; last.shift(); }
+    },
+    text() {
+      const end = Buffer.concat(last), over = Math.max(0, end.length - tail), gone = dropped + over;
+      return Buffer.concat(first).toString("utf8") + (gone ? `\n[Đã bỏ ${gone >= 2048 ? `${Math.round(gone / 1024)} KB` : `${gone} ký tự`} ở giữa]\n` : "") + end.subarray(over).toString("utf8");
+    },
+  };
+}
+
 // ---------------------------------------------------------------- hàng đợi chạy code
 /**
  * Hàng đợi có giới hạn: không báo lỗi ngay khi đủ chỗ. Một chỗ luôn dành cho lần chạy ngắn (script dài tới 15 phút không chiếm hết máy),

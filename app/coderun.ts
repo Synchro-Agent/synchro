@@ -15,6 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { PKG_HOSTS } from "./catalog";
 import { PREVIEW_MAX } from "./runpreview";
+import { clipOut, clipSink, tidyLog } from "./runtext";
 import { agent, wsConfigured } from "./workspace";
 
 export type RunFile = { path: string; data: Buffer };
@@ -24,7 +25,8 @@ export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: 
 // recalc: báo cáo của workspace/xlsx_recalc.py; không có nghĩa là lần chạy này không có sổ tính nào được tính lại.
 export type RecalcBook = { path: string; formulas: number; filled: number; errors: { sheet: string; cell: string; value: string; formula?: string }[]; sample: string[] };
 export type RecalcReport = { files?: RecalcBook[]; failed?: { path: string; reason: string }[]; error?: string };
-export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean; recalc?: RecalcReport };
+// skipped: tệp không gửi được (quá dung lượng, quá số tệp): "đường-dẫn: lý do".
+export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean; recalc?: RecalcReport; skipped?: string[] };
 export type Runner = "e2b" | "workspace" | "local";
 
 // timeout: mặc định mỗi lần chạy; maxTimeout: model xin thêm khi dựng video, chuyển tài liệu lớn (tham số timeout của run_code).
@@ -40,7 +42,7 @@ export function runner(): Runner | null {
 }
 
 export class RunError extends Error {}
-const cut = (t: string) => (t.length > RUN_LIMITS.out ? t.slice(0, RUN_LIMITS.out) + "\n[Đã cắt bớt]" : t);
+const cut = (t: string) => clipOut(tidyLog(t), RUN_LIMITS.out);
 const okRel = (p: string) => !!p && !path.isAbsolute(p) && !p.split(/[\\/]/).some((x) => x === ".." || x === "") && p.length < 300;
 
 export async function execRun(i: RunInput): Promise<RunOutput> {
@@ -96,7 +98,7 @@ async function runLocal(i: RunInput, timeout: number): Promise<RunOutput> {
     };
     const res = await spawnCapped("sandbox-exec", ["-p", profile, ...i.argv], { cwd: dir, env, stdin: i.stdin, timeout, signal: i.signal });
     const skipped: string[] = [], files = collect(dir, skipped);
-    return { ...res, stderr: res.stderr + (skipped.length ? `\n[Không gửi được: ${skipped.join("; ")}]` : ""), files };
+    return { ...res, stderr: res.stderr + (skipped.length ? `\n[Không gửi được: ${skipped.join("; ")}]` : ""), files, skipped };
   } finally {
     if (keep) rotateOutputs(dir); else fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -120,18 +122,17 @@ function rotateOutputs(dir: string) {
 function spawnCapped(cmd: string, args: string[], o: { cwd: string; env: Record<string, string>; stdin?: string; timeout: number; signal?: AbortSignal }) {
   return new Promise<{ exit: number; stdout: string; stderr: string; timedOut: boolean }>((resolve) => {
     const p = spawn(cmd, args, { cwd: o.cwd, env: o.env as NodeJS.ProcessEnv, stdio: ["pipe", "pipe", "pipe"], detached: true });
-    const out: Buffer[] = [], err: Buffer[] = [];
-    let n = 0, timedOut = false;
-    const take = (a: Buffer[]) => (c: Buffer) => { if (n < RUN_LIMITS.out * 4) { a.push(c); n += c.length; } };
-    p.stdout.on("data", take(out));
-    p.stderr.on("data", take(err));
+    const out = clipSink(), err = clipSink();
+    let timedOut = false;
+    p.stdout.on("data", (c: Buffer) => out.push(c));
+    p.stderr.on("data", (c: Buffer) => err.push(c));
     const kill = () => { try { process.kill(-p.pid!, "SIGKILL"); } catch {} };
     const t = setTimeout(() => { timedOut = true; kill(); }, o.timeout * 1000);
     o.signal?.addEventListener("abort", kill, { once: true });
     p.on("error", (e) => { clearTimeout(t); resolve({ exit: 127, stdout: "", stderr: String(e), timedOut }); });
     p.on("close", (code) => {
       clearTimeout(t); kill();
-      resolve({ exit: timedOut ? 124 : code ?? 1, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8") + (timedOut ? `\n[Đã dừng: chạy quá ${o.timeout} giây]` : ""), timedOut });
+      resolve({ exit: timedOut ? 124 : code ?? 1, stdout: out.text(), stderr: err.text() + (timedOut ? `\n[Đã dừng: chạy quá ${o.timeout} giây]` : ""), timedOut });
     });
     p.stdin.on("error", () => {});
     p.stdin.end(o.stdin ?? "");
@@ -148,7 +149,8 @@ function collect(dir: string, skipped: string[] = []): RunFile[] {
     for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const p = path.join(d, e.name);
       if (e.isDirectory()) walk(p, depth + 1);
-      else if (e.isFile() && out.length < RUN_LIMITS.files) {
+      else if (e.isFile() && out.length >= RUN_LIMITS.files) skipped.push(`${path.relative(base, p)}: quá ${RUN_LIMITS.files} tệp`);
+      else if (e.isFile()) {
         const size = fs.statSync(p).size;
         if (size > RUN_LIMITS.fileSize || total + size > RUN_LIMITS.total) { skipped.push(`${path.relative(base, p)}: ${Math.round(size / 1048576)} MB, quá giới hạn ${RUN_LIMITS.fileSize / 1048576} MB / tệp, ${RUN_LIMITS.total / 1048576} MB / lần chạy`); continue; }
         total += size;
@@ -163,12 +165,12 @@ function collect(dir: string, skipped: string[] = []): RunFile[] {
 // ---------------------------------------------------------------- container dùng một lần trên VPS
 async function runWorkspace(i: RunInput, timeout: number): Promise<RunOutput> {
   // Thêm 150 giây cho bước tính lại công thức (giới hạn riêng 120 giây ở dịch vụ workspace).
-  const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[]; recalc?: RecalcReport }>("/run", {
+  const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[]; recalc?: RecalcReport; skipped?: string[] }>("/run", {
     u: i.uid, argv: i.argv, stdin: i.stdin ?? null, net: i.net, web: !!i.web, keep: i.keep ?? null, timeout, recalc: !!i.recalc,
     files: i.files.map((f) => ({ path: f.path, b64: f.data.toString("base64") })),
   }, (timeout + 90 + (i.recalc ? 150 : 0)) * 1000, i.signal);
   return {
-    exit: r.code, stdout: r.out ?? "", stderr: r.err ?? "", timedOut: !!r.timedOut, ...(r.recalc ? { recalc: r.recalc } : {}),
+    exit: r.code, stdout: r.out ?? "", stderr: r.err ?? "", timedOut: !!r.timedOut, ...(r.recalc ? { recalc: r.recalc } : {}), ...(r.skipped?.length ? { skipped: r.skipped } : {}),
     files: (r.files ?? []).filter((f) => okRel(f.path)).map((f) => ({ path: f.path, data: Buffer.from(f.b64, "base64") })),
   };
 }
@@ -193,17 +195,19 @@ async function runE2b(i: RunInput, timeout: number): Promise<RunOutput> {
       if (typeof x.exitCode !== "number") throw e;
       r = { exitCode: x.exitCode, stdout: x.stdout ?? "", stderr: x.stderr ?? x.message ?? "" };
     }
-    const files: RunFile[] = [];
+    const files: RunFile[] = [], skipped: string[] = [];
     let total = 0;
     const list = await sbx.files.list(`${base}/outputs`, { depth: 3 }).catch(() => []);
     for (const e of list) {
-      if (e.type !== "file" || files.length >= RUN_LIMITS.files) continue;
+      if (e.type !== "file") continue;
+      const rel = e.path.slice(`${base}/outputs/`.length);
+      if (files.length >= RUN_LIMITS.files) { skipped.push(`${rel}: quá ${RUN_LIMITS.files} tệp`); continue; }
       const data = Buffer.from(await sbx.files.read(e.path, { format: "bytes" }));
-      if (data.length > RUN_LIMITS.fileSize || total + data.length > RUN_LIMITS.total) continue;
+      if (data.length > RUN_LIMITS.fileSize || total + data.length > RUN_LIMITS.total) { skipped.push(`${rel}: ${Math.round(data.length / 1048576)} MB, quá giới hạn`); continue; }
       total += data.length;
-      files.push({ path: e.path.slice(`${base}/outputs/`.length), data });
+      files.push({ path: rel, data });
     }
-    return { exit: r.exitCode, stdout: r.stdout, stderr: r.stderr, files, timedOut: r.exitCode === 124 };
+    return { exit: r.exitCode, stdout: r.stdout, stderr: r.stderr, files, timedOut: r.exitCode === 124, skipped };
   } finally {
     await sbx.kill().catch(() => {});
   }
@@ -214,10 +218,10 @@ export const LANGS = { python: { file: "main.py", argv: ["python3", "main.py"] }
 export type Lang = keyof typeof LANGS;
 
 // Công cụ có sẵn trong image workspace (workspace/Dockerfile): giữ hai nơi khớp nhau. Nơi chạy khác (E2B, máy giả lập) chỉ có phần chung.
-const WS_TOOLS = "Có sẵn lệnh: ffmpeg / ffprobe, ImageMagick (convert, identify), LibreOffice (soffice --headless), pandoc, Poppler (pdftoppm, pdftotext), qpdf, Ghostscript, Tesseract OCR (tiếng Việt, tiếng Anh), edge-tts / gTTS (giọng đọc), Graphviz (dot), SoX, rsvg-convert, Chromium headless (Node: require(\"puppeteer-core\") với executablePath /usr/bin/chromium; tự chạy được trong sandbox và tự đi qua proxy khi có mạng). Python: pandas, numpy, scipy, scikit-learn, statsmodels, sympy, networkx, matplotlib, seaborn, plotly (+ kaleido xuất ảnh), Pillow, opencv, imageio, moviepy, pydub, python-docx, python-pptx, openpyxl, xlsxwriter, reportlab, pypdf, pdfplumber, PyMuPDF, cairosvg, pytesseract, beautifulsoup4, lxml, requests, qrcode, pyarrow.";
+const WS_TOOLS = "Có sẵn lệnh: ffmpeg / ffprobe, ImageMagick (convert, identify), LibreOffice (soffice --headless), pandoc, Poppler (pdftoppm, pdftotext), qpdf, Ghostscript, Tesseract OCR (tiếng Việt, tiếng Anh), edge-tts / gTTS (giọng đọc qua mạng), espeak-ng (giọng máy, không cần mạng), Graphviz (dot), SoX, rsvg-convert, Chromium headless (Node: require(\"puppeteer-core\") với executablePath /usr/bin/chromium; tự chạy được trong sandbox và tự đi qua proxy khi có mạng). Python: pandas, numpy, scipy, scikit-learn, statsmodels, sympy, networkx, matplotlib, seaborn, plotly (+ kaleido xuất ảnh), Pillow, opencv, imageio, moviepy 1.x (from moviepy.editor import …), pydub, python-docx, python-pptx, openpyxl, xlsxwriter, reportlab, pypdf, pdfplumber, PyMuPDF, cairosvg, pytesseract, beautifulsoup4, lxml, requests, qrcode, pyarrow.";
 const BASE_TOOLS = "Python 3 có sẵn pandas, numpy, matplotlib, openpyxl, python-docx, python-pptx, reportlab; có Node.js và bash.";
 const NET_NOTE = (net: boolean, web: boolean) => net && web ? "Có internet: tải ảnh, phông chữ, dữ liệu, gọi API công khai, pip / npm install gói còn thiếu (địa chỉ nội bộ của máy chủ bị chặn)."
-  : net ? "Chỉ cài thêm gói được bằng pip / npm từ kho thư viện chính thức; mọi trang web khác bị chặn." : "Không có internet: không cài thêm gói được, không gọi được trang web nào; chỉ dùng công cụ có sẵn.";
+  : net ? "Chỉ cài thêm gói được bằng pip / npm từ kho thư viện chính thức và gọi được dịch vụ giọng đọc của edge-tts / gTTS; mọi trang web khác bị chặn." : "Không có internet: không cài thêm gói được, không gọi được trang web nào; chỉ dùng công cụ có sẵn.";
 
 export function runCodeTool(net: boolean, web = false) {
   return {
@@ -240,7 +244,7 @@ Dùng nó khi cần tính toán chính xác, phân tích dữ liệu, kiểm tra
 Thư mục làm việc giữ nguyên giữa các lần chạy trong đoạn chat này: chia việc lớn thành nhiều lần chạy (chuẩn bị tài nguyên → dựng → kiểm tra) thay vì một script khổng lồ. Hết mỗi lần chạy, outputs/ được dọn: tệp vừa tạo chuyển sang .last_outputs/ — lần kiểm tra sau đọc từ đó (ffprobe .last_outputs/video.mp4, soffice --convert-to pdf .last_outputs/bao-cao.xlsx…), không dựng lại; muốn người dùng nhận thêm tệp thì ghi lại vào outputs/. Chỉ lần chạy thành công (exit 0) mới gửi tệp: chạy lỗi hay quá giờ thì tệp không tới người dùng (vẫn nằm ở .last_outputs/, dùng được thì chép sang outputs/ ở lần sau). Tạo lại cùng đường dẫn trong outputs/ thì bản mới thay bản cũ của lượt này.
 Tự xem kết quả: tối đa ${PREVIEW_MAX} ảnh (PNG / JPEG / WebP) của mỗi lần chạy, ưu tiên outputs/_preview/, được ghép thành một tấm gửi lại cho bạn; thẻ <preview> trong kết quả ghi đúng những ảnh nào có trong tấm đó. Ảnh chỉ để bạn xem (khung hình trích từ video, trang PDF chụp lại) lưu vào outputs/_preview/ — không thành tệp của người dùng. Chỉ nói đã xem những gì <preview> liệt kê; kết quả không có ảnh kèm thì kiểm tra bằng số liệu (ffprobe, pdftotext, openpyxl) và nói rõ là chưa xem bằng mắt.
 Không tải tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài (host ảnh / tệp tạm, pastebin…) trừ khi người dùng yêu cầu rõ.
-Video, hoạt hình: dựng khung hình (Pillow, matplotlib, cairosvg, hoặc chụp trang HTML / canvas / SVG động bằng Chromium headless qua puppeteer-core) rồi ghép bằng ffmpeg (-c:v libx264 -pix_fmt yuv420p -movflags +faststart) vào outputs/…mp4; âm thanh bằng ffmpeg, SoX hoặc pydub. Kiểm tra bằng ffprobe (thời lượng, kích thước, số khung) và trích vài khung xem thử trước khi báo xong. Đặt timeout 300–${RUN_LIMITS.maxTimeout} cho lần dựng; quá giờ thì lần chạy bị dừng, không có tệp nào tới người dùng: video dài thì dựng từng đoạn vào thư mục làm việc qua nhiều lần chạy rồi ghép. Video có lời (giới thiệu, hướng dẫn, quảng cáo, kể chuyện): lồng tiếng bằng edge-tts (hoặc python3 -m edge_tts; --write-media giong.mp3 --write-subtitles giong.srt cho luôn phụ đề khớp từng câu) — giọng tiếng Việt tự nhiên vi-VN-HoaiMyNeural (nữ) / vi-VN-NamMinhNeural (nam), tiếng Anh en-US-AriaNeural / en-US-GuyNeural; cần quyền web, luôn thêm --proxy "$HTTPS_PROXY" khi biến này có; lỗi mạng thì dùng gTTS (lang="vi"). Đo thời lượng từng câu bằng ffprobe rồi canh cảnh theo giọng. Phụ đề: có tệp .srt (edge-tts hoặc thư viện srt) thì chuyển bằng python3 /opt/synchro/subfit.py giong.srt phu-de.ass 1920x1080 (đúng kích thước video, 1080x1920 với video dọc; tự chọn cỡ chữ, chia câu dài thành nhiều phụ đề tối đa 2 dòng, 42 ký tự mỗi dòng) rồi đốt bằng ffmpeg -vf "ass=phu-de.ass". Không đốt trực tiếp .srt với force_style FontSize lớn: ffmpeg tính cỡ chữ theo khung cao 288 điểm nên FontSize=22 ra ~82 px ở 1080p, che gần hết hình; nhạc nền nhẹ tự tổng hợp (numpy / SoX) đặt thấp hơn giọng ~18 dB. Hình ảnh: ảnh thật từ Wikimedia Commons hoặc khung hình dựng bằng HTML + Chromium, có chuyển cảnh mượt (xfade), không để khung tĩnh quá 4 giây.
+Video, hoạt hình: dựng khung hình (Pillow, matplotlib, cairosvg, hoặc chụp trang HTML / canvas / SVG động bằng Chromium headless qua puppeteer-core) rồi ghép bằng ffmpeg (-hide_banner -loglevel error -stats -c:v libx264 -crf 23 -preset veryfast -pix_fmt yuv420p -movflags +faststart -c:a aac -b:a 128k) vào outputs/…mp4; âm thanh bằng ffmpeg, SoX hoặc pydub. Luôn đặt -loglevel error -stats: log đầy đủ của ffmpeg dài hàng chục nghìn dòng che mất lỗi thật. Đĩa mỗi lần chạy khoảng 6 GB, thư mục làm việc giữ lại khoảng 3 GB một tài khoản, 60 giây khung PNG 1080p đã tốn 2–5 GB: dùng khung JPEG (-q:v 3) hoặc đẩy thẳng vào ffmpeg qua pipe (-f image2pipe), dựng xong đoạn nào xóa khung của đoạn đó. Mỗi tệp giao được tối đa ${RUN_LIMITS.fileSize / 1048576} MB, tổng ${RUN_LIMITS.total / 1048576} MB một lần chạy: 1080p -crf 23 thường 10–30 MB một phút, video dài thì tăng -crf (26–28) hoặc chia phần; tệp vượt giới hạn nằm trong thẻ <not_delivered> và người dùng không nhận được. Kiểm tra bằng ffprobe (thời lượng, kích thước, số khung) và trích vài khung xem thử trước khi báo xong. Đặt timeout 300–${RUN_LIMITS.maxTimeout} cho lần dựng; quá giờ thì lần chạy bị dừng, không có tệp nào tới người dùng: video dài thì dựng từng đoạn vào thư mục làm việc qua nhiều lần chạy rồi ghép. Video có lời (giới thiệu, hướng dẫn, quảng cáo, kể chuyện): lồng tiếng trước hết bằng edge-tts (edge-tts --proxy "$HTTPS_PROXY" --voice … -f loi.txt --write-media giong.mp3 --write-subtitles giong.srt, cho luôn phụ đề khớp từng câu; trong Python: edge_tts.Communicate(text, voice, proxy=os.environ.get("HTTPS_PROXY"))) — giọng tiếng Việt tự nhiên vi-VN-HoaiMyNeural (nữ) / vi-VN-NamMinhNeural (nam), tiếng Anh en-US-AriaNeural / en-US-GuyNeural. Chỉ cần bật truy cập mạng, không cần quyền mọi trang web; edge-tts không tự đọc biến proxy nên phải có --proxy khi có HTTPS_PROXY, thiếu là lỗi SkewAdjustmentError "No server date in headers". edge-tts vẫn lỗi thì dùng gTTS (lang="vi"; tự đi qua proxy, không có phụ đề theo câu). Cả hai đều cần mạng: không có mạng thì dùng espeak-ng (espeak-ng -v vi -w giong.wav -f loi.txt), giọng máy kém tự nhiên nên phải nói rõ với người dùng và đề nghị bật truy cập mạng để có giọng tự nhiên. Đo thời lượng từng câu bằng ffprobe rồi canh cảnh theo giọng. Phụ đề: có tệp .srt (edge-tts hoặc thư viện srt) thì chuyển bằng python3 /opt/synchro/subfit.py giong.srt phu-de.ass 1920x1080 (đúng kích thước video, 1080x1920 với video dọc; tự chọn cỡ chữ, chia câu dài thành nhiều phụ đề tối đa 2 dòng, 42 ký tự mỗi dòng) rồi đốt bằng ffmpeg -vf "ass=phu-de.ass". Không đốt trực tiếp .srt với force_style FontSize lớn: ffmpeg tính cỡ chữ theo khung cao 288 điểm nên FontSize=22 ra ~82 px ở 1080p, che gần hết hình; nhạc nền nhẹ tự tổng hợp (numpy / SoX) đặt thấp hơn giọng ~18 dB. Hình ảnh: ảnh thật từ Wikimedia Commons hoặc khung hình dựng bằng HTML + Chromium, có chuyển cảnh mượt (xfade), không để khung tĩnh quá 4 giây.
 Bảng tính đạt chuẩn người làm nghề: tiêu đề cột in đậm có nền, cố định hàng tiêu đề (freeze panes), độ rộng cột vừa nội dung, định dạng số đúng loại (tiền #,##0 "₫" — ký hiệu tiền phải nằm trong ngoặc kép; ngày dd/mm/yyyy, phần trăm 0.0%), dữ liệu dạng Excel Table có lọc, danh sách chọn (data validation) cho cột phân loại, tổng / tỉ lệ bằng công thức (SUM, SUMIFS, COUNTIFS, INDEX + MATCH, IFERROR…) — không ghi cứng số đã tính; không dùng hàm mới (XLOOKUP, FILTER, UNIQUE, SORT, LET, SEQUENCE…) vì LibreOffice ở đây không tính được và openpyxl ghi thiếu tiền tố _xlfn thì Excel báo #NAME?, biểu đồ có tiêu đề và nhãn, tên sheet tiếng Việt ngắn gọn, căn lề in vừa một trang ngang.
 Video đạt chuẩn: 1920×1080 (hoặc 1080×1920 cho video dọc), 30 khung/giây, có cảnh mở đầu và kết thúc, ảnh tĩnh có chuyển động nhẹ (zoom / pan) và chuyển cảnh xfade, chữ trong vùng an toàn cách mép ≥ 5%, một bộ font (Noto Sans) cho cả video, âm thanh chuẩn hóa ffmpeg loudnorm=I=-16; trích 4–6 khung hình vào outputs/_preview/ và nghe lại thời lượng bằng ffprobe trước khi giao.
 Tệp Word / Excel / PowerPoint: TRƯỚC KHI GIAO luôn tự kiểm tra như người làm nghề, không giao tệp chưa mở: lần chạy sau đọc .last_outputs/, soffice --headless --convert-to pdf (cả .xlsx) rồi pdftoppm -png -r 70 -f 1 -l 3 vào outputs/_preview/ để tự xem bố cục, chữ tiếng Việt, biểu đồ. Excel: sau mỗi lần chạy thành công Synchro tự tính lại công thức trong outputs/*.xlsx bằng LibreOffice, ghi giá trị vào chính tệp và báo trong thẻ <excel_recalc> (số công thức, ô lỗi, vài giá trị): đối chiếu các giá trị đó với số bạn tự tính bằng Python (in ra stdout), ô lỗi #REF!, #NAME?, #DIV/0! hay số 0 bất thường đều phải sửa. Thấy lỗi thì sửa rồi kiểm tra lại; chỉ báo đã kiểm tra khi đã thật sự làm.

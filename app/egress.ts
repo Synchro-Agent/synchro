@@ -17,7 +17,7 @@ const DROP_HOSTS = ["tmpfiles.org", "file.io", "transfer.sh", "0x0.st", "catbox.
 async function target(host: string, port: number, web: boolean) {
   const h = host.toLowerCase().replace(/\.$/, "");
   if (DROP_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is a file / data drop service`);
-  if (!web && !pkgHostAllowed(host)) throw new Error(`blocked: ${host} is not a package registry`);
+  if (!web && !pkgHostAllowed(host)) throw new Error(`blocked: ${host} is not an allowed package registry or voice service`);
   if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
   const ips = (await lookup(host, { all: true })).map((x) => x.address);
   if (!ips.length || ips.some(isPrivate)) throw new Error(`blocked: ${host} resolves to a private address`);

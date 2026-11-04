@@ -2,6 +2,7 @@
 // Mọi tool chạy trong phạm vi một người dùng (và dự án đang chat): không đọc được skill của người khác.
 import { findFile, LIMITS, readSkillFile, readSkillRaw, SkillError, type Skill } from "./skillstore";
 import { execRun } from "./coderun";
+import { clipOut, runBlocks } from "./runtext";
 import { activePatch, hashText, isMutating, looksLikeBug, markUsed, MAX_RETRIES, savePatch } from "./skillheal";
 import { rank } from "./skillroute";
 
@@ -90,14 +91,14 @@ const SCRIPT_TOOL = {
 export const skillTools = (_count: number, scripts = false) => [...BASE_TOOLS, SEARCH_TOOL, ...(scripts ? [SCRIPT_TOOL] : [])];
 
 const INTERP: Record<string, string> = { ".py": "python3", ".sh": "bash", ".bash": "bash", ".js": "node", ".mjs": "node", ".cjs": "node" };
-const cut = (t: string) => (t.length > LIMITS.scriptOut ? t.slice(0, LIMITS.scriptOut) + "\n[Đã cắt bớt]" : t);
+const cut = (t: string) => clipOut(t, LIMITS.scriptOut);
 
 // Chạy script trong sandbox dùng một lần (xem coderun.ts): chép file của skill vào, chạy, rồi xóa.
 // heal: nhờ model sửa script khi script hỏng vì lỗi của chính nó (xem skillheal.ts); không có thì chỉ chạy.
 export type RunCtx = { uid: string; net: boolean; heal?: (input: { skill: string; path: string; source: string; error: string; args: string[] }) => Promise<string | null> };
 type Ran = { exit: number; stdout: string; stderr: string };
 const resultOf = (s: Skill, p: string, r: Ran, note = "") => ({
-  content: `<script_result skill="${esc(s.name)}" path="${esc(p)}" exit_code="${r.exit}">\n<stdout>\n${cut(r.stdout)}\n</stdout>\n<stderr>\n${cut(r.stderr)}\n</stderr>\n</script_result>${note ? `\n${note}` : ""}`,
+  ...runBlocks({ open: `<script_result skill="${esc(s.name)}" path="${esc(p)}" exit_code="${r.exit}">`, close: "</script_result>", tags: "", stdout: cut(r.stdout), stderr: cut(r.stderr), after: note ? `\n${note}` : "" }),
   is_error: r.exit !== 0,
 });
 const firstLine = (e: string) => e.trim().split("\n").filter((l) => l.trim()).pop()?.trim().slice(0, 200) ?? "";
@@ -147,7 +148,8 @@ async function runScript(s: Skill, p0: string, args: string[], stdin: string | u
   }
 }
 
-export type ToolRun = { content: string; is_error: boolean; used: { kind: "skill" | "file" | "search" | "script" | "tool" | "code"; name: string; path?: string } };
+// brief: bản rút gọn tự viết khi kết quả quá dài phải lưu theo tham chiếu (runtext.ts).
+export type ToolRun = { content: string; is_error: boolean; brief?: string; used: { kind: "skill" | "file" | "search" | "script" | "tool" | "code"; name: string; path?: string } };
 
 // Tìm theo cùng cách chấm điểm với định tuyến (hiểu tiếng Việt, ưu tiên từ hiếm); bỏ các mục thư viện vì skill bên trong đã có trong danh sách.
 const search = (list: Skill[], q: string) => rank(q, list.filter((s) => s.user_id !== "studio").map((skill) => ({ skill })), 10).map((h) => h.skill);
