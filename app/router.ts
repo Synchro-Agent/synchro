@@ -284,7 +284,7 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)) out.delete("act");
   // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.
   if ((out.get("code") ?? 0) < 3 && (out.get("language") ?? 0) < 3 && wantsImageIns(ins)) out.set("act", Math.max(out.get("act") ?? 0, 5));
-  if (DRAW_CHART.test(ins) && !HOWTO.test(ins)) out.set("data", Math.max(out.get("data") ?? 0, 3));
+  if (DRAW_CHART.test(ins) && !imgQuestion(ins)) out.set("data", Math.max(out.get("data") ?? 0, 3));
   if (a.code) out.set("code", (out.get("code") ?? 0) + 5);
   if (a.trace) out.set("debug", (out.get("debug") ?? 0) + 6);
   if (MATH.test(ins)) out.set("reason", (out.get("reason") ?? 0) + 3);
@@ -451,18 +451,29 @@ const FRESH = W("giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời
 // ---- xin ảnh ----
 // Xin ảnh phải tới lượt có công cụ (generate_image): đường nhanh không có công cụ nào. Biểu đồ, sơ đồ vẫn là việc dựng bằng code. Hỏi cách làm, hỏi nghĩa từ thì không phải xin ảnh.
 const IMG_CHART = W("biểu đồ|đồ thị|sơ đồ|lưu đồ|mindmap|flowchart|chart|graph|diagram|bieu do|do thi|so do|luu do");
-const IMG_ASK = W("(?:vẽ|tạo|làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen))|thiết kế|dựng|sinh|generate|create|make|draw|design|paint|sketch|render)(?:(?![.?!\\n]).){0,40}?(?:ảnh(?! hưởng)|hình ảnh|hình minh h(?:ọa|oạ)|hình vẽ|hình nền|(?<!cạnh )tranh(?! luận| chấp| cử| thủ| giành| đấu)|logo|poster|banner|image|picture|photo|illustration|artwork|wallpaper|avatar|sticker)|vẽ(?! (?:ra|nên|vời))|draw(?! (?:a |the )?conclusions?)(?=\\s)|paint (?:a|an|me)");
-const IMG_ASK_FOLD = W("(?:tao|ve|lam|thiet ke|dung)(?: (?:giup|ho|cho|minh|toi|em|mot|1|cai|buc|tam|con))* (?:anh|hinh anh|hinh minh hoa|hinh ve|hinh nen|tranh|logo|poster|banner)|ve (?:mot|1|cho|giup|ho|con|cai|buc|tam)");
-// "Vẽ sơ đồ", "draw a chart" là việc dựng bằng code, có công cụ: không đi đường nhanh, không dùng generate_image.
+const IMG_ASK = W("(?:vẽ|tạo|làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen))|thiết kế|dựng|sinh|generate|create|make|draw|design|paint|sketch|render)(?:(?![.?!\\n]).){0,40}?(?:ảnh(?! hưởng)|hình ảnh|hình minh h(?:ọa|oạ)|hình vẽ|hình nền|(?<!cạnh )tranh(?! luận| chấp| cử| thủ| giành| đấu)|logo|poster|banner|image|picture|photo|illustration|artwork|wallpaper|avatar|sticker)");
+// Đầu câu nhờ: "vẽ con mèo", "giúp mình vẽ", "bạn có thể vẽ". Chữ "vẽ" trần chỉ là xin ảnh ở đây: "bài thơ về họa sĩ vẽ tranh", "lớp học vẽ" là chuyện khác.
+const IMG_LEAD = "(?:(?:hãy|giúp|giùm|hộ|cho|mình|tôi|tớ|em|anh|chị|bạn|làm ơn|muốn|cần|xin|nhờ|thử|đang|có thể|sẽ|bây giờ|giờ|rồi|vậy|thì|please|can you|could you|would you|i want to|i'd like to|i need to|let's|let us|help me|just|now)[\\s,]+)*";
+const IMG_LEAD_FOLD = "(?:(?:hay|giup|gium|ho|cho|minh|toi|to|em|anh|chi|ban|lam on|muon|can|xin|nho|thu|dang|co the|se|bay gio|gio|roi|vay|thi)[\\s,]+)*";
+const IMG_DRAW = new RegExp(`^${IMG_LEAD}(?:vẽ(?! (?:ra|nên|vời))|draw(?! (?:a |the )?conclusions?)(?=\\s)|paint (?:a|an|me)(?![\\p{L}\\p{N}]))`, "iu");
+const IMG_ASK_FOLD = new RegExp(`^${IMG_LEAD_FOLD}(?:(?:tao|ve|lam|thiet ke|dung)(?: (?:giup|ho|cho|minh|toi|em|mot|1|cai|buc|tam|con))* (?:anh|hinh anh|hinh minh hoa|hinh ve|hinh nen|tranh|logo|poster|banner)(?![\\p{L}\\p{N}])|ve (?:mot|1|cho|giup|ho|con|cai|buc|tam)(?![\\p{L}\\p{N}]))`, "iu");
+// Câu mở đầu bằng việc khác thì "vẽ", "tạo ảnh" trong đó chỉ là nội dung: "viết email mời học vẽ", "dịch câu: vẽ con mèo", "viết prompt để tạo ảnh".
+const IMG_OTHER = new RegExp(`^${IMG_LEAD}(?:viết|soạn|dịch|tóm tắt|tóm lược|giải thích|phân tích|kể|đọc|write|compose|translate|summari[sz]e|explain|analy[sz]e|tell)(?![\\p{L}\\p{N}])`, "iu");
+const IMG_OTHER_FOLD = new RegExp(`^${IMG_LEAD_FOLD}(?:viet|soan|dich|tom tat|giai thich|phan tich|ke|doc)(?![\\p{L}\\p{N}])`, "iu");
+// "vẽ biểu đồ", "vẽ sơ đồ" là việc dựng bằng code, có công cụ: không đi đường nhanh, không dùng generate_image.
 const DRAW_CHART = W("(?:vẽ|ve|draw|plot|tạo|tao|create|make)(?:(?![.?!\\n]).){0,30}?(?:biểu đồ|đồ thị|sơ đồ|lưu đồ|mindmap|flowchart|chart|graph|diagram|bieu do|do thi|so do|luu do)");
 // Danh từ tự nó đã là xin ảnh khi câu ngắn ("logo cho quán cà phê", "poster sự kiện").
 const IMG_NOUN = W("hình minh h(?:ọa|oạ)|ảnh minh h(?:ọa|oạ)|ảnh bìa|ảnh đại diện|ảnh quảng cáo|ảnh sản phẩm|logo|poster|illustration|wallpaper");
 const IMG_NOUN_FOLD = W("hinh minh hoa|anh minh hoa|anh bia|anh dai dien|anh quang cao|anh san pham");
+// Hỏi cách làm, hỏi nghĩa thì không phải xin ảnh. Không dùng HOWTO, QUESTION ở đây: chữ trần "cách", "ai", "gì", "mấy" có trong mô tả ảnh ("phong cách anime", "tranh AI", "mấy con mèo"), chỉ tính khi đúng là câu hỏi.
+const IMG_HOW = W("làm sao|làm thế nào|thế nào|như thế nào|là gì|là ai|là sao|nghĩa là|có nên|tại sao|vì sao|ở đâu|bao nhiêu|bao giờ|khi nào|lúc nào|(?<!phong )cách (?:nào|để|mà|tạo|vẽ|làm|thiết kế|dùng|sử dụng|sinh|dựng|viết|chỉnh|sửa)|(?:do|bởi|của) ai(?! đó)|gì\\s*\\??\\s*$|mấy (?:giờ|tuổi|ngày|tháng|năm)|how (?:to|do|does|did|can|should|much|many)|what|where|who|when|why|which|whose|should i");
+const IMG_HOW_FOLD = W("lam sao|lam the nao|the nao|la gi|la ai|la sao|nghia la|co nen|tai sao|vi sao|o dau|bao nhieu|bao gio|khi nao|luc nao|may gio|(?<!phong )cach (?:nao|de|ma|tao|ve|lam|thiet ke|dung|su dung|sinh|viet|chinh|sua)|(?:do|boi|cua) ai(?! do)");
+const imgQuestion = (ins: string) => IMG_HOW.test(ins) || /^ai (?:đã|là|vẽ|tạo|thiết kế|làm)(?![\p{L}\p{N}])/iu.test(ins) || (noMarks(ins) && IMG_HOW_FOLD.test(ins));
 const wantsImageIns = (ins: string) => {
-  if (!ins || IMG_CHART.test(ins) || HOWTO.test(ins) || QUESTION.test(ins)) return false;
+  if (!ins || IMG_CHART.test(ins) || imgQuestion(ins) || IMG_OTHER.test(ins)) return false;
   const bare = noMarks(ins);
-  if (bare && (HOWTO_FOLD.test(ins) || QUESTION_FOLD.test(ins))) return false;
-  return IMG_ASK.test(ins) || (bare && IMG_ASK_FOLD.test(ins)) || (ins.length <= 80 && (IMG_NOUN.test(ins) || (bare && IMG_NOUN_FOLD.test(ins))));
+  if (bare && IMG_OTHER_FOLD.test(ins)) return false;
+  return IMG_ASK.test(ins) || IMG_DRAW.test(ins) || (bare && IMG_ASK_FOLD.test(ins)) || (ins.length <= 80 && (IMG_NOUN.test(ins) || (bare && IMG_NOUN_FOLD.test(ins))));
 };
 /** Người dùng đang xin tạo ảnh (có dấu hay không dấu); dùng cho định tuyến, không phân loại nội dung dán vào. */
 export const wantsImage = (text: string) => { const w = splitAsk(text).ins.toLowerCase(); return wantsImageIns(stripHead(w) || w); };

@@ -475,6 +475,18 @@ try {
     }
     ok(["data", "code"].includes(R.taskOf(q("vẽ biểu đồ doanh thu"))), "vẽ biểu đồ: loại việc số liệu / code", R.taskOf(q("vẽ biểu đồ doanh thu")));
     for (const s of ["xin chào", "cảm ơn bạn", "thủ đô của Pháp là gì?", "logo là gì?", "poster nghĩa là gì", "Cách tạo ảnh bằng AI", "cạnh tranh là gì", "tạo lợi thế cạnh tranh là gì", "từ 'draw' nghĩa là gì"]) ok(!R.wantsImage(s), `"${s}": không phải xin ảnh`, s);
+    // Chữ trần "cách", "ai", "gì", "mấy" nằm trong mô tả ảnh: vẫn là xin ảnh.
+    for (const s of ["Tạo ảnh con mèo phong cách anime", "tao anh con meo phong cach anime", "ve tranh con meo phong cach anime", "Vẽ tranh AI con mèo", "vẽ mấy con mèo", "vẽ cho mình cái gì đó vui vui", "Vẽ con mèo cách điệu", "Giúp mình vẽ một con mèo", "Bạn có thể vẽ con mèo không", "Mình muốn tạo ảnh một chiếc xe", "ban ve cho minh con meo", "can you draw a cat", "Let's draw a cat"]) {
+      ok(R.wantsImage(s) && !R.needsNoTools(q(s)), `"${s}": xin ảnh, tới lượt có công cụ`, [R.wantsImage(s), R.taskOf(q(s))]);
+    }
+    for (const s of ["Cách vẽ con mèo", "có cách nào tạo ảnh không", "hướng dẫn cách tạo logo", "cach ve con meo", "Ai vẽ bức Mona Lisa", "Mona Lisa do ai vẽ", "nên vẽ gì", "vẽ như thế nào cho đẹp", "how to draw a cat", "who painted a picture of sunflowers"]) ok(!R.wantsImage(s), `"${s}": câu hỏi, không phải xin ảnh`, s);
+    // "vẽ" chỉ là nội dung của việc khác.
+    for (const [s, task] of [["Viết một bài thơ về người họa sĩ vẽ tranh biển", "write"], ["Viết email mời tham gia lớp học vẽ", "write"], ["viet bai tho ve con meo", "write"]]) {
+      ok(!R.wantsImage(s), `"${s}": không phải xin ảnh`, s);
+      ok(R.taskOf(q(s)) === task, `"${s}": việc viết, không phải thao tác nhiều bước`, R.taskOf(q(s)));
+    }
+    for (const s of ["Viết prompt để tạo ảnh con mèo", "noi ve con meo", "ke chuyen ve mot con meo", "tim hieu ve anh trang", "tôi thích lớp học vẽ"]) ok(!R.wantsImage(s), `"${s}": không phải xin ảnh`, s);
+    ok(["data", "code"].includes(R.taskOf(q("vẽ biểu đồ doanh thu phong cách tối giản"))), "vẽ biểu đồ có chữ phong cách: vẫn là việc số liệu / code", R.taskOf(q("vẽ biểu đồ doanh thu phong cách tối giản")));
     ok(R.needsNoTools(q("xin chào")) && R.needsNoTools(q("thủ đô của Pháp là gì?")), "câu thường vẫn đi đường nhanh, không chậm đi");
     const models = ["sub-claude/haiku", "sub-claude/sonnet", "sub-agy/gemini-3.8-flash", "sub-grok/grok-4.7"];
     ok(!!R.routeModel(q("tạo ảnh quả táo"), models)?.model, "Tự động chọn được model cho việc tạo ảnh", R.routeModel(q("tạo ảnh quả táo"), models));
