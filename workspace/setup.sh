@@ -24,8 +24,12 @@ if [ "$HASH" != "$CUR" ]; then
   docker image prune -f >/dev/null
 fi
 
-# 3. Dịch vụ systemd.
-cat > /etc/systemd/system/synchro-ws.service <<EOF
+# 3. Dịch vụ systemd. Chỉ khởi động lại khi code của dịch vụ hoặc tệp dịch vụ đổi: deploy nào cũng chạy tệp này, khởi động lại vô cớ làm rớt
+# terminal, màn hình trình duyệt và lần chạy code đang dở (dựng video dài). Khi phải khởi động lại, dịch vụ tự chờ lần chạy đang dở xong:
+# KillMode=mixed chỉ gửi SIGTERM cho tiến trình chính (không đụng lệnh docker con của nó), TimeoutStopSec lớn hơn WS_DRAIN_SEC (mặc định 300 giây).
+UNIT=/etc/systemd/system/synchro-ws.service
+STAMP=/etc/synchro-ws.hash
+NEWUNIT=$(cat <<EOF
 [Unit]
 Description=Synchro Code workspace agent
 After=docker.service network-online.target
@@ -37,16 +41,33 @@ WorkingDirectory=$APP
 ExecStart=/usr/bin/node $APP/workspace/agent.mjs
 Restart=always
 RestartSec=3
+KillMode=mixed
+TimeoutStopSec=330
 
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload
+)
+AGENT=$(cat "$APP"/workspace/*.mjs | sha256sum | cut -c1-16)
+CHANGED=""
+if [ "$(cat "$UNIT" 2>/dev/null || true)" != "$NEWUNIT" ]; then
+  printf '%s\n' "$NEWUNIT" > "$UNIT"
+  systemctl daemon-reload
+  CHANGED=1
+fi
 systemctl enable -q synchro-ws
-systemctl restart synchro-ws
+if [ "$(cat "$STAMP" 2>/dev/null || true)" != "$AGENT" ]; then CHANGED=1; fi
+if [ -n "$CHANGED" ]; then
+  echo "Code dịch vụ workspace đã đổi: khởi động lại (chờ lần chạy đang dở tối đa ~5 phút)…"
+  systemctl restart synchro-ws
+  echo "$AGENT" > "$STAMP"
+elif ! systemctl is-active -q synchro-ws; then
+  systemctl start synchro-ws
+fi
 
 # 4. nginx: chỉ mở ba đường WebSocket (terminal, màn hình trình duyệt, tiện ích Synchro trong Chrome của người dùng); API còn lại chỉ nghe ở 127.0.0.1.
-cat > /etc/nginx/snippets/synchro-ws.conf <<'EOF'
+SNIP=/etc/nginx/snippets/synchro-ws.conf
+NEWSNIP=$(cat <<'EOF'
 location ~ ^/ws-agent/(term|screen|ext)$ {
     proxy_pass http://127.0.0.1:3555;
     proxy_http_version 1.1;
@@ -57,9 +78,13 @@ location ~ ^/ws-agent/(term|screen|ext)$ {
     proxy_send_timeout 3600s;
 }
 EOF
+)
+RELOAD=""
+if [ "$(cat "$SNIP" 2>/dev/null || true)" != "$NEWSNIP" ]; then printf '%s\n' "$NEWSNIP" > "$SNIP"; RELOAD=1; fi
 SITE=/etc/nginx/sites-enabled/synchro
 if ! grep -q 'snippets/synchro-ws.conf' "$SITE"; then
   sed -i '0,/listen 443 ssl/s//include snippets\/synchro-ws.conf;\n    listen 443 ssl/' "$SITE"
+  RELOAD=1
 fi
-nginx -t -q && systemctl reload nginx
+if [ -n "$RELOAD" ]; then nginx -t -q && systemctl reload nginx; fi
 echo "Workspace sẵn sàng."
