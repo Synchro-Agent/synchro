@@ -8,7 +8,7 @@ import { formatArgs, redactLine } from "./opsredact";
 
 export const OPS_DIR = () => process.env.SYNCHRO_OPS_DIR || "/var/lib/synchro-ops";
 const DAY = 86_400_000, KEEP = 30 * DAY;
-export type OpsKind = "error" | "mail_ok" | "mail_fail" | "cli_auth" | "boot" | "parser";
+export type OpsKind = "error" | "mail_ok" | "mail_fail" | "cli_auth" | "boot" | "parser" | "csp";
 export type OpsRow = { id: number; at: number; first_at: number; kind: OpsKind; source: string; detail: string; n: number; user_id: string | null };
 
 let ready = false, writes = 0, windowAt = 0, inWindow = 0;
@@ -65,7 +65,7 @@ function diskOf(p: string) {
 const fileMB = (f: string) => { try { return Math.round(fs.statSync(f).size / 1048576); } catch { return 0; } };
 const sum = (sql: string, ...a: unknown[]) => { try { return (db().prepare(sql).get(...a) as { n: number | null }).n ?? 0; } catch { return 0; } };
 
-export type BackupStatus = { ok: boolean; at: number; lastOkAt?: number; snapshot?: string; sizeMB?: number; integrity?: string; tables?: number; users?: number; hasKey?: boolean; uploads?: number; missingUploads?: number; offsite?: boolean; offsiteOk?: boolean; error?: string };
+export type BackupStatus = { ok: boolean; at: number; lastOkAt?: number; snapshot?: string; sizeMB?: number; integrity?: string; tables?: number; users?: number; hasKey?: boolean; keyOk?: boolean | null; uploads?: number; missingUploads?: number; checked?: number; corrupt?: number; offsite?: boolean; offsiteOk?: boolean; error?: string };
 export type WatchdogState = { at: number; fails: number; status: string; lastRestartAt?: number; restarts24?: number };
 type WatchdogEvent = { at: number; event: string; detail?: string };
 
@@ -86,6 +86,8 @@ export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "m
   else if (Date.now() - (r.backup.lastOkAt ?? r.backup.at) > BACKUP_STALE_MS) out.push({ code: "backup_stale", level: "crit", at: r.backup.lastOkAt ?? r.backup.at });
   else if (r.backup.integrity !== "ok") out.push({ code: "backup_integrity", level: "crit", at: r.backup.at });
   if (r.backup?.missingUploads) out.push({ code: "backup_uploads", level: "warn", n: r.backup.missingUploads });
+  if (r.backup?.corrupt) out.push({ code: "backup_corrupt", level: "crit", n: r.backup.corrupt });
+  if (r.backup?.keyOk === false) out.push({ code: "backup_key", level: "crit" });
   if (!r.watchdog || Date.now() - r.watchdog.at > WATCHDOG_STALE_MS) out.push({ code: "watchdog_off", level: "warn", at: r.watchdog?.at });
   else if (r.watchdog.restarts24) out.push({ code: "watchdog_restarts", level: "warn", n: r.watchdog.restarts24 });
   const users = r.cli.reduce((a, c) => Math.max(a, c.users24), 0);
@@ -109,13 +111,14 @@ export function opsSnapshot() {
     FROM ops_events WHERE kind = 'cli_auth' AND at > ? GROUP BY source ORDER BY last DESC`).all(now - DAY, now - DAY, now - 7 * DAY) as { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[];
   const cliRecent = d.prepare(`SELECT o.at, o.source, o.n, u.email FROM ops_events o LEFT JOIN users u ON u.id = o.user_id WHERE o.kind = 'cli_auth' ORDER BY o.at DESC LIMIT 12`).all() as { at: number; source: string; n: number; email: string | null }[];
   const errors = d.prepare("SELECT id, at, first_at, source, detail, n FROM ops_events WHERE kind = 'error' ORDER BY at DESC LIMIT 40").all() as Omit<OpsRow, "kind" | "user_id">[];
+  const csp = d.prepare("SELECT at, source, detail, n FROM ops_events WHERE kind = 'csp' ORDER BY at DESC LIMIT 8").all() as Pick<OpsRow, "at" | "source" | "detail" | "n">[];
   const backup = readJson<BackupStatus>(path.join(ops, "backup-status.json"));
   const watchdog = readJson<WatchdogState>(path.join(ops, "watchdog-state.json"));
   let wdEvents: WatchdogEvent[] = [];
   try { wdEvents = fs.readFileSync(path.join(ops, "watchdog.jsonl"), "utf8").trim().split("\n").slice(-10).reverse().flatMap((l) => { try { return [JSON.parse(l) as WatchdogEvent]; } catch { return []; } }); } catch { /* chưa có */ }
   const runs24 = sum("SELECT COUNT(*) n FROM runs WHERE created_at > ?", now - DAY), runsFailed24 = sum("SELECT COUNT(*) n FROM runs WHERE status = 'error' AND created_at > ?", now - DAY);
   return {
-    now, disks: uniqueDisks, mail, cli: cliRows, cliRecent, errors, errors24: count("error", now - DAY), backup, watchdog, wdEvents, runs24, runsFailed24,
+    now, disks: uniqueDisks, mail, cli: cliRows, cliRecent, errors, errors24: count("error", now - DAY), csp, backup, watchdog, wdEvents, runs24, runsFailed24,
     boots24: count("boot", now - DAY), lastBootAt: lastAt("boot"),
     storage: {
       dbMB: fileMB(path.join(DATA_DIR, "synchro.db")) + fileMB(path.join(DATA_DIR, "synchro.db-wal")),
@@ -131,6 +134,8 @@ const ALERT_TEXT: Record<string, [string, string, string, string]> = {
   mail_failing: ["Gửi email đang lỗi", "Thư gần nhất gửi không được, nên email đặt lại mật khẩu và xác minh có thể không tới người dùng.", "Email sending is failing", "The latest emails could not be sent, so password reset and verification emails may not reach people."],
   backup_failed: ["Sao lưu lỗi", "Lần sao lưu gần nhất thất bại.", "Backup failed", "The last backup failed."],
   backup_stale: ["Sao lưu đã quá cũ", "Không có bản sao lưu mới trong hơn 36 giờ.", "Backups are out of date", "No new backup in over 36 hours."],
+  backup_corrupt: ["Bản sao lưu có tệp hỏng", "Một số tệp tải lên trong bản sao lưu mới nhất không khớp mã băm: nội dung đã hỏng.", "The backup contains damaged files", "Some uploaded files in the newest backup don't match their checksum: their content is damaged."],
+  backup_key: ["Bản sao lưu không giải mã được", "Khóa mã hóa trong bản sao lưu mới nhất không mở được dữ liệu đã mã hóa: khôi phục từ bản này sẽ mất token và đăng nhập đã lưu.", "The backup can't be decrypted", "The encryption key in the newest backup can't open the encrypted data: restoring from it would lose saved tokens and sign-ins."],
   backup_integrity: ["Bản sao lưu mới nhất không đạt kiểm tra", "Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.", "The newest backup failed its check", "The newest backup failed its integrity check."],
   cli_auth: ["Nhiều người bị từ chối đăng nhập gói AI", "Từ 3 người trở lên bị hãng từ chối đăng nhập trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.", "Several people were refused an AI plan sign-in", "Three or more people were refused sign-in by a vendor in the last 24 hours. A CLI or vendor may have changed something."],
 };

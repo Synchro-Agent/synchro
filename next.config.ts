@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{
       // HSTS: không kèm includeSubDomains / preload, vì tên miền con khác của synchro.net.nz chưa chắc đều có https. nosniff và chống nhúng không ảnh hưởng artifact
-      // (khung srcDoc, không tải trang của Synchro) hay WebContainers. CSP chỉ có frame-ancestors: CSP có script-src cần chạy thử report-only trước, vì khung
+      // (khung srcDoc, không tải trang của Synchro) hay WebContainers. CSP chặn thật chỉ có frame-ancestors: script-src đang chạy thử report-only, vì khung
       // srcDoc của artifact thừa hưởng CSP của trang mẹ và Monaco, Pyodide tải từ CDN.
       source: "/:path*", headers: [
         { key: "Strict-Transport-Security", value: "max-age=15552000" },
@@ -21,7 +21,11 @@ const nextConfig: NextConfig = {
       ],
     }, {
       // Chỉ cho trang, không cho /api/: header ở đây đè header của route, mà tệp người dùng (/api/outputs, /api/artimg) cần CSP sandbox riêng của nó.
-      source: "/((?!api/).*)", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }],
+      // Report-Only: chỉ báo về Cài đặt → Sức khỏe hệ thống (/api/csp-report), không chặn gì. 'unsafe-inline' vì Next chưa dùng nonce, nên việc bắt được là script nạp từ nguồn lạ. Báo cáo sạch một thời gian mới nên chuyển thành chặn thật.
+      source: "/((?!api/).*)", headers: [
+        { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        { key: "Content-Security-Policy-Report-Only", value: "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; object-src 'none'; base-uri 'self'; report-uri /api/csp-report" },
+      ],
     }, { source: "/:path*", headers: [
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },

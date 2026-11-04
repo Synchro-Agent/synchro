@@ -67,6 +67,14 @@ export function myFiles(uid: string): { files: MyFile[]; used: number; quota: nu
   return { files, used: uploadedBytes(uid), quota: QUOTA() };
 }
 
+/** Tệp gốc để chủ tải về. Chỉ tệp người này đang là chủ. */
+export function fileBin(uid: string, id: string): { path: string; name: string } | null {
+  if (!/^[a-f0-9]{40}$/.test(id)) return null;
+  const r = table().prepare("SELECT name FROM file_owners WHERE file_id = ? AND user_id = ?").get(id, uid) as { name: string | null } | undefined;
+  const p = path.join(DIR, id + ".bin");
+  return r && existsSync(p) ? { path: p, name: r.name ?? "" } : null;
+}
+
 /** Bỏ một tệp khỏi tài khoản: mất quyền đọc ngay; không còn ai là chủ thì xóa khỏi đĩa. Trả về false nếu không phải tệp của người này. */
 export async function releaseFile(uid: string, id: string) {
   if (!/^[a-f0-9]{40}$/.test(id)) return false;

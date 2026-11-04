@@ -36,6 +36,7 @@ export function UploadedFiles({ say, confirm }: { say: (m: string) => void; conf
         <div key={f.id} className="item-row sh-row">
           <I.Clip size={14} />
           <span className="sh-row-t">{f.name ? <b style={{ fontWeight: 500 }} data-notr>{f.name}</b> : <b style={{ fontWeight: 500 }}>Tệp không có tên</b>}<em data-notr>{fmt(f.size)} · {new Date(f.at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" })}</em></span>
+          <a className="icon-btn" href={`/api/files/mine?download=${f.id}`} download aria-label="Tải về" title="Tải về"><I.Download size={14} /></a>
           <button className="btn danger" style={{ height: 26 }} onClick={() => del(f)}>Xóa</button>
         </div>
       ))}

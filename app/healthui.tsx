@@ -16,6 +16,7 @@ type Health = {
   mail: { sent24: number; sent7: number; failed24: number; failed7: number; lastOkAt: number | null; lastFailAt: number | null; smtp: boolean; failures: { at: number; source: string; detail: string; n: number }[] };
   dns: { domain: string; spf: boolean; dkim: boolean; dmarc: boolean } | null;
   cli: { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[]; cliRecent: { at: number; source: string; n: number; email: string | null }[];
+  csp: { at: number; source: string; detail: string; n: number }[];
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];
 };
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
@@ -34,6 +35,8 @@ function problemText(p: Problem) {
     case "backup_failed": return L("Lần sao lưu gần nhất thất bại. Xem chi tiết ở mục Sao lưu.", "The last backup failed. See the Backups section.");
     case "backup_stale": return L("Không có bản sao lưu mới trong hơn 36 giờ.", "No new backup in over 36 hours.");
     case "backup_integrity": return L("Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.", "The newest backup failed its integrity check.");
+    case "backup_corrupt": return L(`${n} tệp tải lên trong bản sao lưu mới nhất không khớp mã băm: nội dung đã hỏng.`, `${n} uploaded files in the newest backup don't match their checksum: their content is damaged.`);
+    case "backup_key": return L("Khóa mã hóa trong bản sao lưu mới nhất không mở được dữ liệu đã mã hóa: khôi phục từ bản này sẽ mất token và đăng nhập đã lưu.", "The encryption key in the newest backup can't open the encrypted data: restoring from it would lose saved tokens and sign-ins.");
     case "backup_uploads": return L(`Bản sao lưu mới nhất thiếu ${n} tệp tải lên so với cơ sở dữ liệu.`, `The newest backup is missing ${n} uploaded files compared with the database.`);
     case "watchdog_off": return L("Watchdog không chạy: web chết sẽ không tự khởi động lại ngoài pm2. Chạy lại workspace/setup.sh trên máy chủ.", "The watchdog isn't running, so nothing but pm2 restarts a dead web app. Run workspace/setup.sh on the server again.");
     case "watchdog_restarts": return L(`Watchdog đã khởi động lại web ${n} lần trong 24 giờ qua.`, `The watchdog restarted the web app ${n} times in the last 24 hours.`);
@@ -147,6 +150,8 @@ export function HealthPanel() {
           <Kv k="Accounts and tables in the snapshot" v={`${b.users ?? "—"} / ${b.tables ?? "—"}`} />
           <Kv k="Encryption key included" v={b.hasKey ? "✓" : "✗"} bad={!b.hasKey} />
           <Kv k="Uploaded files (missing)" v={`${b.uploads ?? "—"} (${b.missingUploads ?? 0})`} bad={!!b.missingUploads} />
+          {!!b.checked && <Kv k="Uploaded files checked against their checksum (damaged)" v={`${b.checked} (${b.corrupt ?? 0})`} bad={!!b.corrupt} />}
+          {b.keyOk != null && <Kv k="Key opens the encrypted data in the snapshot" v={b.keyOk ? "✓" : "✗"} bad={!b.keyOk} />}
           {b.offsite && <Kv k="Off-site copy" v={b.offsiteOk ? "✓" : "✗"} bad={!b.offsiteOk} />}
         </div>
       )}
@@ -159,6 +164,12 @@ export function HealthPanel() {
         {h.lastBootAt && <Kv k="Web app last started" v={fmtDate(h.lastBootAt)} />}
       </div>
       {h.wdEvents.map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span data-notr>{L(...(WD[e.event] ?? [e.event, e.event]))}{e.detail ? <><br /><span className="muted">{e.detail}</span></> : null}</span><span /></div>)}
+
+      {h.csp.length > 0 && <>
+        <h3 className="sec">Script policy reports</h3>
+        <p className="d adm-privacy"><I.Lock size={14} />Trial run: nothing is blocked. Each line is a script source the browser would have refused under the planned policy. Anyone can send these reports, so treat them as a hint, not proof.</p>
+        {h.csp.map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere" }} data-notr><span className="adm-chip">{e.source}</span>{e.n > 1 && <span className="adm-chip">× {e.n}</span>} {e.detail}</span></div>)}
+      </>}
 
       <h3 className="sec">Recent errors</h3>
       {h.errors.length === 0 ? <div className="d" style={{ padding: "8px 0" }}>No server errors recorded.</div> : h.errors.map((e) => (
