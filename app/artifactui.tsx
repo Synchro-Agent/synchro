@@ -128,6 +128,9 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
   const ch = useMemo(() => Math.random().toString(36).slice(2) + Date.now().toString(36), [content, type]); // eslint-disable-line react-hooks/exhaustive-deps
   const deckKey = deck ? String(deck.fixed) : "";
   const isPublic = useContext(PublicFrames);
+  // Khung cô lập vẫn tự chuyển được sang trang khác (location.href, meta refresh): trên trang chia sẻ đó là trang lạ nằm ngay dưới tên miền Synchro, nên cùng một nội dung mà tải lần hai là dừng hiển thị.
+  const loaded = useRef<string | null>(null);
+  const [strayed, setStrayed] = useState("");
   const shown = useInlineImages(content, !isPublic && (type === "html" || type === "react" || type === "svg"));
   const doc = useMemo(() => (shown === null ? "" : buildDoc(type, shown, location.origin, ch, isDark(), deck, title, loc)), [type, shown, ch, deckKey, title, loc]); // eslint-disable-line react-hooks/exhaustive-deps
   const cb = useRef({ onError, onHeight, ai, onMsg, store });
@@ -161,7 +164,9 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
     return () => removeEventListener("message", h);
   }, [ch]);
   if (shown === null) return <div className={className} style={{ ...style, display: "grid", placeItems: "center" }} aria-busy="true"><span className="art-spin" /></div>;
+  if (strayed === ch) return <p className="sh-warn" role="alert">{tr("Phần này tự chuyển sang một trang khác nên Synchro đã dừng hiển thị.")}</p>;
   return <iframe ref={ref} key={ch} title={title} className={className} style={style} srcDoc={doc}
+    onLoad={isPublic ? () => { if (loaded.current === doc) setStrayed(ch); loaded.current = doc; } : undefined}
     sandbox={isPublic ? SANDBOX_PUBLIC : SANDBOX} allow={isPublic ? undefined : "clipboard-write"} referrerPolicy="no-referrer" />;
 }
 

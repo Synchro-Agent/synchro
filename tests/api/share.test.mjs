@@ -87,6 +87,7 @@ const reported = await (await anon("GET", `/share/${token}`, undefined, true)).t
 ok(!/allow-popups/.test(reported), "trang chia sẻ không cấp quyền mở cửa sổ mới trong mã dựng sẵn");
 const shareSrc = (await import("node:fs")).readFileSync("app/artifactui.tsx", "utf8");
 ok(/SANDBOX_PUBLIC = "allow-scripts allow-forms allow-downloads"/.test(shareSrc) && /PublicFrames\.Provider value=\{true\}/.test((await import("node:fs")).readFileSync("app/shareview.tsx", "utf8")), "khung trên trang chia sẻ không có allow-popups");
+ok(/onLoad=\{isPublic \? \(\) => \{ if \(loaded\.current === doc\) setStrayed\(ch\)/.test(shareSrc), "khung tự chuyển sang trang khác thì dừng hiển thị");
 ok((await owner("DELETE", `/api/share?token=${token}`)).j?.ok === true, "chủ dừng được liên kết");
 ok((await anon("GET", `/share/${token}`, undefined, true)).status === 404, "dừng rồi thì liên kết 404");
 await owner("DELETE", `/api/share?conv=${conv}2`);

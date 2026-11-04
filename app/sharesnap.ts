@@ -44,15 +44,22 @@ export function snapshotOf(title: unknown, input: unknown): ShareSnap {
  * Người xem liên kết chưa đăng nhập nên không tải ảnh qua /api/artimg được, khung lại chặn mọi ảnh ngoài bằng CSP: ảnh phải nằm sẵn trong bản chụp.
  * fetchData (máy chủ truyền vào): URL → data: đã thu nhỏ, null nếu không tải được. Ảnh làm bản chụp vượt room byte thì giữ URL và tính vào skipped.
  */
-export async function inlineSnapImages(snap: ShareSnap, fetchData: (url: string) => Promise<string | null>, room: number): Promise<{ snap: ShareSnap; inlined: number; skipped: number }> {
+export async function inlineSnapImages(snap: ShareSnap, fetchData: (url: string) => Promise<string | null>, room: number, o: { workers?: number; ms?: number } = {}): Promise<{ snap: ShareSnap; inlined: number; skipped: number }> {
   let left = room - new TextEncoder().encode(JSON.stringify(snap)).length, inlined = 0, skipped = 0;
-  const cache = new Map<string, string | null>();
-  for (const m of snap.msgs) for (const s of m.segs) {
-    if (s.k !== "art" || !(s.type === "html" || s.type === "react" || s.type === "svg")) continue;
+  const arts = snap.msgs.flatMap((m) => m.segs).filter((s): s is Extract<ShareSeg, { k: "art" }> => s.k === "art" && (s.type === "html" || s.type === "react" || s.type === "svg"));
+  // Tải song song có giới hạn và có hạn giờ: một máy chủ ảnh chết không được giữ nút chia sẻ hàng phút (tối đa 60 ảnh, mỗi ảnh chờ 15 giây).
+  const urls = [...new Set(arts.flatMap((s) => externalImageUrls(s.content)))], got = new Map<string, string | null>(), stop = Date.now() + (o.ms ?? 30_000);
+  let next = 0;
+  await Promise.all(Array.from({ length: o.workers ?? 6 }, async () => {
+    while (next < urls.length && Date.now() < stop) {
+      const u = urls[next++];
+      got.set(u, await Promise.race([fetchData(u).catch(() => null), new Promise<null>((ok) => setTimeout(() => ok(null), Math.max(0, stop - Date.now())))]));
+    }
+  }));
+  for (const s of arts) {
     const map = new Map<string, string>();
     for (const u of externalImageUrls(s.content)) {
-      if (!cache.has(u)) cache.set(u, await fetchData(u).catch(() => null));
-      const d = cache.get(u);
+      const d = got.get(u);
       if (!d || d.length > left) { skipped++; continue; }
       left -= d.length; inlined++; map.set(u, d);
     }

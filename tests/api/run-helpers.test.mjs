@@ -188,6 +188,23 @@ console.log("7. Mạng cho giọng đọc");
   ok(/RUN_PREVIEWS = 12/.test(agentSrc) && /PREVIEW_MAX = 12/.test(fs.readFileSync("app/runpreview.ts", "utf8")), "số ảnh tự xem khớp giữa workspace và quy tắc");
 }
 
+console.log("8. Ảnh trong bản chia sẻ");
+{
+  const { sharesnap: Z } = await loadTs(["sharesnap"]);
+  const snap = (urls) => ({ title: "t", msgs: [{ r: "a", segs: [{ k: "art", title: "a", type: "html", lang: null, content: urls.map((u) => `<img src="${u}">`).join("") }, { k: "art", title: "b", type: "html", lang: null, content: `<img src="${urls[0]}">` }] }] });
+  const u = (i) => `https://x.test/${i}.png`;
+  let calls = 0;
+  let r = await Z.inlineSnapImages(snap([u(1), u(2)]), async () => { calls++; return "data:image/png;base64,AAAA"; }, 100_000);
+  ok(calls === 2 && r.inlined === 3 && r.skipped === 0 && !JSON.stringify(r.snap).includes("x.test"), "ảnh được nhúng, ảnh trùng chỉ tải một lần", JSON.stringify([calls, r.inlined, r.skipped]));
+  r = await Z.inlineSnapImages(snap([u(1), u(2)]), async (x) => { if (x.includes("/1.")) throw new Error("hỏng"); return "data:image/png;base64,AAAA"; }, 100_000);
+  ok(r.skipped === 2 && r.inlined === 1, "ảnh tải lỗi được đếm là chưa đưa vào", JSON.stringify([r.inlined, r.skipped]));
+  r = await Z.inlineSnapImages(snap([u(1)]), async () => "data:image/png;base64," + "A".repeat(5000), 1000);
+  ok(r.skipped === 2 && r.inlined === 0, "vượt dung lượng bản chụp: giữ URL, đếm là chưa đưa vào", JSON.stringify([r.inlined, r.skipped]));
+  const t0 = Date.now();
+  r = await Z.inlineSnapImages(snap(Array.from({ length: 40 }, (_, i) => u(i))), () => new Promise(() => {}), 100_000, { ms: 150 });
+  ok(Date.now() - t0 < 2000 && r.inlined === 0 && r.skipped > 0, "máy chủ ảnh treo: nút chia sẻ không chờ quá hạn", Date.now() - t0);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

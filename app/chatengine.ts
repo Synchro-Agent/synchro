@@ -25,8 +25,7 @@ import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
-import { OUTPUT_QUOTA_MB, outputRoom } from "./outputs";
-import { removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { OUTPUT_QUOTA_MB, outputRoom, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
@@ -219,7 +218,7 @@ function deliver(x: Exec, r: RunOutput) {
 function noteSkipped(x: Exec, list: string[]) {
   for (const s of list) {
     const name = s.split(": ")[0].split("/").pop() || "tep", mb = /(\d+) MB/.exec(s)?.[1];
-    if (!x.outs.some((o) => o.skipped && o.name === name)) x.outs.push({ id: `skip-${x.outs.length}`, name, size: Number(mb ?? 0) * 1048576, mime: "", skipped: true });
+    if (!x.outs.some((o) => o.skipped && o.name === name)) x.outs.push({ id: `skip-${name}`, name, size: Number(mb ?? 0) * 1048576, mime: "", skipped: true });
   }
 }
 async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
