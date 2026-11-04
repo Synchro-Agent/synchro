@@ -109,6 +109,7 @@ export const VI2EN: Record<string, string> = {
   "Không có thay đổi chưa commit.": "No uncommitted changes.",
   "Nội dung commit": "Commit message",
   "Nhánh mới": "New branch",
+  "Workspace đang tắt. Thay đổi sẽ hiện khi nó chạy.": "The workspace is off. Changes show up when it runs.", "Chưa đọc được trạng thái git.": "Couldn't read the git status.",
   "Tạo PR": "Create PR", "Tạo nhánh": "Create branch", "Xem ảnh": "Image viewer", "Ảnh đang xem": "Image being viewed",
   "Đang viết câu trả lời": "Writing the reply", "Đang sửa lại bản sửa artifact cho khớp": "Reworking the artifact edit so it fits",
   "Danh sách việc": "Task list",

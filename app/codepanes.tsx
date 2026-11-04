@@ -712,6 +712,16 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
   const [busy, setBusy] = useState("");
   const [list, setList] = useState(false);
   const [ask, setAsk] = useState<"pr" | "branch" | null>(null);
+  // Phiên chưa dùng workspace thì không ai hỏi trạng thái git, phần Thay đổi từng kẹt ở "Đang tải…" mãi. Workspace đang chạy thì tự hỏi; đang tắt thì nói rõ, không bật máy chỉ để xem.
+  const [gitBad, setGitBad] = useState(false);
+  const noGit = sid !== null && !!status?.available && !!status.running && !git;
+  useEffect(() => {
+    if (!noGit || sid === null) return;
+    let dead = false;
+    setGitBad(false);
+    gitOp(sid, "status").then((g) => { if (!dead) onGit(g); }, () => { if (!dead) setGitBad(true); });
+    return () => { dead = true; };
+  }, [noGit, sid]); // eslint-disable-line react-hooks/exhaustive-deps
   const [closed, setClosed] = useState<string[]>([]);
   const toggle = (id: string) => setClosed((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const showFile = useCodeUi((s) => s.showFile);
@@ -766,7 +776,9 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
       <Sec id="chg" title="Thay đổi" open={!closed.includes("chg")} onToggle={toggle}
         right={ready && git?.git ? <button className="icon-btn sr-mini" onClick={() => run("status")} aria-label="Làm mới" title="Làm mới"><I.Retry size={13} /></button> : undefined}>
         {!ready ? <p className="sr-note">Chưa có workspace cho phiên này.</p>
-          : !git ? <p className="sr-note">Đang tải…</p>
+          : !git ? (!status?.running ? <p className="sr-note">Workspace đang tắt. Thay đổi sẽ hiện khi nó chạy.</p>
+            : gitBad ? <div className="sr-row"><span className="sr-dim">Chưa đọc được trạng thái git.</span><button className="ctxp-btn" disabled={!!busy} onClick={() => run("status")}>Thử lại</button></div>
+            : <p className="sr-note">Đang tải…</p>)
           : !git.git ? <div className="sr-row"><I.Branch size={16} /><span className="sr-dim">Chưa dùng git</span><button className="ctxp-btn" disabled={!!busy} onClick={() => run("init", {}, "Đã khởi tạo git")}>Khởi tạo git</button></div>
           : <>
             <div className="sr-row">

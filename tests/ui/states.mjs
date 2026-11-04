@@ -3,7 +3,7 @@
 // chữ không còn bọc từng từ sau khi xong, chỉ một từ điển ngôn ngữ, khôi phục sau khi sửa tin, bảng lệnh đúng vai trò.
 // BASE, MCP_URL, MOCK_URL, CDP_PORT đổi được để chạy song song trên máy chủ riêng.
 import { spawn } from "node:child_process";
-import { rmSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const B = process.env.BASE ?? "http://localhost:3200", MCP = process.env.MCP_URL ?? "http://127.0.0.1:4011", LLM = process.env.MOCK_URL ?? "http://127.0.0.1:4010", CDP = Number(process.env.CDP_PORT ?? 9361);
@@ -217,12 +217,73 @@ try {
   await key("Escape", "Escape", 27); await sleep(400);
 
   console.log("━━ CSS theo màn hình");
-  const hasRule = (c) => `[...document.styleSheets].some((s) => { try { return [...s.cssRules].some((r) => (r.selectorText ?? "").includes(${JSON.stringify(c)})); } catch { return false; } })`;
+  const hasRule = (c) => `[...document.styleSheets].some((s) => { try { return [...s.cssRules].some((r) => r.selectorText === ${JSON.stringify(c)}); } catch { return false; } })`;
   await home();
   ok(!(await ev(hasRule(".sp-crumb"))) && !(await ev(hasRule(".cv-hello"))), "trang chat không tải CSS của Speech và Code");
   await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Speech"))`);
   ok(await until(hasRule(".sp-crumb"), 15000), "mở Speech: CSS của Speech về cùng màn hình");
-  ok(await ev(`(() => { const c = document.querySelector(".sp-crumb"); return !!c && getComputedStyle(c).cursor === "pointer" && getComputedStyle(c).backgroundColor === "rgba(0, 0, 0, 0)"; })()`), "nút trong Speech có kiểu đúng, không nháy kiểu mặc định");
+  ok(await until(`(() => { const c = document.querySelector(".sp-crumb"); return !!c && getComputedStyle(c).cursor === "pointer" && getComputedStyle(c).backgroundColor === "rgba(0, 0, 0, 0)"; })()`, 5000), "nút trong Speech có kiểu đúng, không nháy kiểu mặc định");
+
+  // Enter thật của bàn phím (kèm ký tự): bấm được nút, gửi được biểu mẫu; key() ở trên chỉ tới onKeyDown.
+  const enter = async () => { await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" }); await P("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 }); };
+  console.log("━━ Dòng dự án ở thanh bên");
+  await home();
+  await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Dự án"))`); await sleep(1500);
+  if (!(await ev(`!!document.querySelector(".chat-wrap>.pj-tg")`))) {
+    await click(`document.querySelector(".pj-slot, .pj-new")`); await sleep(600);
+    await click(`document.querySelector("#sy-pj-name")`); await P("Input.insertText", { text: "Dự án thử bàn phím" }); await key("Enter", "Enter", 13);
+  }
+  ok(await until(`!!document.querySelector(".chat-wrap>.pj-tg") && !document.querySelector(".overlay")`, 8000), "nút thu gọn là nút riêng, không lồng trong nút của dòng");
+  ok(await ev(`(() => { const t = document.querySelector(".chat-wrap>.pj-tg"), i = t.parentElement.querySelector(".pj-ic"), a = t.getBoundingClientRect(), b = i.getBoundingClientRect(); return Math.abs(a.x + a.width / 2 - b.x - b.width / 2) < 4 && Math.abs(a.y + a.height / 2 - b.y - b.height / 2) < 4; })()`), "nút nằm đúng chỗ biểu tượng dự án");
+  await ev(`document.querySelector(".chat-wrap>.pj-tg").parentElement.querySelector(".pj-row").focus()`);
+  await key("Tab", "Tab", 9);
+  ok(await ev(`document.activeElement?.classList.contains("pj-tg")`), "Tab từ dòng dự án tới được nút thu gọn", await ev(`document.activeElement?.className`));
+  const tgWas = await ev(`document.activeElement.getAttribute("aria-expanded")`), tgView = await ev(`location.href`);
+  await enter();
+  ok(await until(`document.querySelector(".chat-wrap>.pj-tg").getAttribute("aria-expanded") !== ${JSON.stringify(tgWas)}`, 3000) && (await ev(`location.href`)) === tgView, "Enter: đổi trạng thái thu gọn, báo aria-expanded, không chuyển trang");
+  await enter();
+
+  console.log("━━ Hộp xem ảnh");
+  await home();
+  const png = `${tmpdir()}/synchro-ui/states-${CDP}.png`;
+  writeFileSync(png, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg==", "base64"));
+  const inp = await P("Runtime.evaluate", { expression: `document.querySelector("input[type=file][multiple]")` });
+  await P("DOM.setFileInputFiles", { files: [png], objectId: inp.result.objectId });
+  ok(await until(`!!document.querySelector(".attach img, .attach [class*=thumb]")`, 8000), "ảnh đã đính kèm ở ô soạn");
+  await click(`document.querySelector(".attach img, .attach [class*=thumb]")`);
+  ok(await until(`!!document.querySelector(".overlay.ft-lightbox [role=dialog][aria-modal=true]")`, 4000), "bấm ảnh: hộp xem ảnh có vai trò hộp thoại");
+  ok(await until(`getComputedStyle(document.querySelector(".ft-lightbox")).backgroundColor === "rgba(0, 0, 0, 0.72)" && getComputedStyle(document.querySelector(".ft-lightbox")).zIndex === "420"`, 2000), "giữ nền tối và lớp phủ trên cùng của hộp xem ảnh", await ev(`getComputedStyle(document.querySelector(".ft-lightbox")).backgroundColor`));
+  await key("Tab", "Tab", 9); await key("Tab", "Tab", 9);
+  ok(await ev(`!!document.activeElement?.closest(".ft-lightbox")`), "Tab không rời hộp xem ảnh");
+  await key("Escape", "Escape", 27);
+  ok(await until(`!document.querySelector(".ft-lightbox")`, 3000), "Esc đóng hộp xem ảnh");
+  ok(await ev(`!document.querySelector(".app")?.inert`), "đóng xong: phần nền dùng lại được");
+  rmSync(png, { force: true });
+
+  console.log("━━ Hộp hỏi ở Synchro Code");
+  await home();
+  // Không cần repo thật: trả trạng thái git giả ở trình duyệt để các nút Tạo PR, Nhánh mới hiện ra, và ghi lại lệnh gửi đi.
+  await ev(`(() => { const f = window.fetch; window.__git = []; window.__prompted = 0; window.prompt = () => { window.__prompted++; return null; }; window.fetch = (u, o) => { let b = null; try { b = u === "/api/ws" && o?.body ? JSON.parse(o.body) : null; } catch {} if (b?.op === "git") { window.__git.push(b); return Promise.resolve(new Response(JSON.stringify({ git: true, repo: "a/b", branch: "main", ahead: 0, files: [] }), { status: 200, headers: { "content-type": "application/json" } })); } return f(u, o); }; })()`);
+  await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Code"))`);
+  if (await until(`!!document.querySelector(".cv textarea, .cv-compose textarea, main textarea")`, 15000)) {
+    await sendMsg("Thử hộp hỏi");
+    await until(`!!document.querySelector(".cv-bar")`, 15000); await sleep(1500);
+    if (!(await ev(`!!document.querySelector("aside.sr")`))) await click(`document.querySelector(".cv-bar [aria-label='Ẩn/hiện bảng phiên']")`);
+  }
+  const srBtn = (t) => `[...document.querySelectorAll("aside.sr .ctxp-btn")].find((e) => e.textContent.trim() === ${JSON.stringify(t)})`;
+  if (await until(`!!${srBtn("Nhánh mới")}`, 45000)) {
+    await click(srBtn("Nhánh mới"));
+    ok(await until(`document.activeElement?.matches(".overlay .modal input")`, 4000), "Nhánh mới: hộp của Synchro, con trỏ ở ô nhập");
+    ok(await ev(`document.querySelector(".overlay .modal input").value.startsWith("synchro/") && window.__prompted === 0`), "có sẵn tên gợi ý, không dùng hộp của trình duyệt");
+    await key("Escape", "Escape", 27);
+    ok(await until(`!document.querySelector(".overlay .modal input")`, 3000) && !(await ev(`window.__git.some((b) => b.action === "branch")`)), "Esc: đóng hộp, không tạo nhánh");
+    await click(srBtn("Nhánh mới")); await until(`document.activeElement?.matches(".overlay .modal input")`, 4000);
+    await P("Input.insertText", { text: "synchro/thu" }); await enter();
+    ok(await until(`window.__git.some((b) => b.action === "branch" && b.name === "synchro/thu")`, 4000), "Enter: tạo nhánh đúng tên đã gõ");
+    await click(srBtn("Tạo PR")); await until(`document.activeElement?.matches(".overlay .modal input")`, 4000);
+    await P("Input.insertText", { text: "Tiêu đề thử" }); await enter();
+    ok(await until(`window.__git.some((b) => b.action === "pr" && b.title === "Tiêu đề thử")`, 4000), "Tạo PR: gửi đúng tiêu đề");
+  } else ok(false, "bảng phiên hiện nút Nhánh mới", await ev(`document.querySelector("aside.sr")?.innerText.slice(0, 300) ?? "không có bảng phiên"`));
 
   console.log("━━ Một từ điển ngôn ngữ");
   await P("Network.setCacheDisabled", { cacheDisabled: true });
