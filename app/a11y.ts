@@ -84,9 +84,11 @@ function menuKey(e: KeyboardEvent) {
     op?.focus({ preventScroll: true });
     return true;
   }
+  // Bảng thông tin dùng chung khung menu (Mức dùng): chỉ có Esc, mũi tên vẫn cuộn như thường.
+  if (box.getAttribute("role") !== "menu") return false;
   const typing = !!a && a.matches("input,textarea,select,[contenteditable=true]");
-  // Đang gõ ở ô ngoài menu (ô soạn tin…): mũi tên vẫn là của ô đó.
-  if (typing && !known) return false;
+  // Đang gõ (ô soạn tin, ô luật dự án trong menu…): mũi tên vẫn là của ô đó, trừ ô tìm ở đầu danh sách.
+  if (typing && !(known && a.matches(".cm-find input,.menu-scroll input"))) return false;
   if (e.key === "ArrowDown" || e.key === "ArrowUp" || (!typing && (e.key === "Home" || e.key === "End"))) {
     e.preventDefault();
     moveIn(box, e.key, known ? a : null);

@@ -184,6 +184,19 @@ try {
   }
   await P("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 
+  console.log("Tài khoản chưa có model");
+  const { identifier } = await P("Page.addScriptToEvaluateOnNewDocument", { source: `localStorage.removeItem("u:${uid}:model"); { const f = window.fetch; window.fetch = (u, i) => String(u).includes("/api/models") ? Promise.resolve(new Response(JSON.stringify({ providers: [], default: null, allowed: [], effort: {} }), { status: 200, headers: { "content-type": "application/json" } })) : f(u, i); }` });
+  await go(B);
+  await click(`document.querySelector(".rail-new")`).catch(() => {});
+  await until(`!!document.querySelector(".ob-card")`, 15000, "thẻ hướng dẫn kết nối gói");
+  ok(await ev(`document.querySelectorAll(".ob-card .btn").length === 4`), "có nút cho từng gói");
+  await click(`document.querySelector(${JSON.stringify(COMPOSER)})`);
+  await type("tin đầu tiên"); await key("Enter");
+  await until(`!!document.querySelector(".settings")`, 15000, "gửi khi chưa có model: mở Providers");
+  ok((await ev(`document.querySelector(${JSON.stringify(COMPOSER)}).value`)) === "tin đầu tiên", "tin đang gõ vẫn còn");
+  await key("Escape"); await sleep(300);
+  await P("Page.removeScriptToEvaluateOnNewDocument", { identifier });
+
   console.log("Phiên hết hạn");
   await go(B);
   await until(`!!document.querySelector(${JSON.stringify(COMPOSER)})`);

@@ -821,7 +821,7 @@ export default function Home() {
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [, setAcct] = usePref("acct", "");
   const [call, setCall] = usePref("call", "Lâm Tùng");
-  const [, setWork] = usePref("work", "Data science");
+  const [, setWork] = usePref("work", "");
   const [ins, setIns] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
   const [font] = usePref("font", "Anthropic Sans");

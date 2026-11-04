@@ -26,6 +26,7 @@ export const UX_VI2EN: Record<string, string> = {
   "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
   "Đang tải": "Loading", "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
   "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Hộp thư": "Couldn't load your Inbox",
+  "Hướng dẫn và khả năng": "Instructions and capabilities",
   // Terminal của Synchro Code, các thẻ làm việc
   "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "trang này": "this page", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",
   // Sửa tin đã gửi, ô soạn tin
