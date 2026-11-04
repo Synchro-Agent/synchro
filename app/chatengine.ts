@@ -23,8 +23,9 @@ import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
 import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
-import { CODE_RULES, execRun, LANGS, runCodeTool, runner, type Lang } from "./coderun";
-import { saveOutputs, type OutFile } from "./outputs";
+import { CODE_RULES, execRun, LANGS, runCodeTool, runner, type Lang, type RecalcReport, type RunOutput } from "./coderun";
+import { removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, subCli, subTurn } from "./ai/subs";
@@ -173,7 +174,7 @@ type Lib = { key: string; label: string };
 // task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
-type Exec = { effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; denied?: Map<string, string>; connCards?: Set<string> };
+type Exec = { effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; denied?: Map<string, string>; connCards?: Set<string> };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -185,16 +186,26 @@ function sweep() {
 }
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-// Ảnh trong outputs/ được gửi lại cho model xem (khung hình video, trang PDF, biểu đồ…): không xem được thì model từng tự đưa ảnh lên host
-// ảnh công khai để mở bằng trình duyệt. outputs/_preview/ chỉ để model xem, không thành tệp của người dùng. Thu nhỏ, đổi sang JPEG.
-const isPic = (p: string) => /\.(png|jpe?g|webp)$/i.test(p);
-async function previewOf(files: { path: string; data: Buffer }[]): Promise<string | undefined> {
-  const pic = [...files.filter((f) => f.path.startsWith("_preview/")), ...files].find((f) => isPic(f.path));
-  if (!pic) return undefined;
-  try {
-    const sharp = (await import("sharp")).default;
-    return (await sharp(pic.data).resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).flatten({ background: "#ffffff" }).jpeg({ quality: 80 }).toBuffer()).toString("base64");
-  } catch { return undefined; }
+// Ảnh trong outputs/ được gửi lại cho model xem (khung hình video, trang PDF, biểu đồ…; runpreview.ts): không xem được thì model từng tự đưa ảnh lên host
+// ảnh công khai để mở bằng trình duyệt. outputs/_preview/ chỉ để model xem, không thành tệp của người dùng.
+// Báo cáo tính lại công thức Excel của dịch vụ workspace (workspace/xlsx_recalc.py), để model đối chiếu với số tự tính.
+const recalcNote = (rc: RecalcReport | undefined) => {
+  if (!rc) return "";
+  const rows = [
+    ...(rc.error ? [`Không tính lại được: ${rc.error}`] : []),
+    ...(rc.files ?? []).map((b) => `${b.path}: đã tính lại ${b.filled}/${b.formulas} công thức bằng LibreOffice và ghi giá trị vào tệp.${b.sample.length ? ` Vài giá trị: ${b.sample.join(", ")}.` : ""}${b.errors.length ? ` Ô lỗi, phải sửa: ${b.errors.map((e) => `${e.sheet}!${e.cell} ${e.value}${e.formula ? ` (=${e.formula})` : ""}`).join("; ")}.` : ""}`),
+    ...(rc.failed ?? []).map((f) => `${f.path}: không tính lại được (${f.reason}); công thức trong tệp có thể đang trống hoặc bằng 0 đến khi mở bằng Excel.`),
+  ];
+  return rows.length ? `\n<excel_recalc>\n${rows.join("\n")}\n</excel_recalc>` : "";
+};
+// Chỉ lần chạy thành công mới thành tệp của người dùng: video dở của lần quá giờ không phát được, tệp của lần lỗi có thể sai. Sửa rồi chạy lại cùng đường dẫn
+// thì bản mới thay bản cũ của lượt này: từng hiện hai ba thẻ cùng tên, người dùng có thể tải nhầm bản hỏng. Tệp của các lượt trước giữ nguyên.
+function deliver(x: Exec, r: RunOutput) {
+  const kept = r.files.filter((f) => !f.path.startsWith("_preview/"));
+  if (r.exit !== 0 || r.timedOut) return { saved: [] as OutFile[], held: kept.map((f) => f.path) };
+  const saved = saveOutputs(x.uid, kept);
+  mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), kept.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
+  return { saved, held: [] as string[] };
 }
 async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
   const lang = (typeof input.language === "string" && input.language in LANGS ? input.language : "python") as Lang;
@@ -206,13 +217,12 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     // Thư mục làm việc giữ nguyên giữa các lần chạy trong cùng đoạn chat: bước sau dùng lại tệp bước trước đã tải / tạo.
     const keep = x.conv ? x.conv.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) : undefined;
     const timeout = typeof input.timeout === "number" ? input.timeout : undefined;
-    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal() });
-    const saved = saveOutputs(x.uid, r.files.filter((f) => !f.path.startsWith("_preview/")));
-    x.outs.push(...saved);
-    const image = await previewOf(r.files);
+    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
+    const { saved, held } = deliver(x, r);
+    const pv = await previewOf(r.files);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
-    const seen = image ? `\n<preview>Ảnh ${r.files.find((f) => f.path.startsWith("_preview/") && isPic(f.path))?.path ?? r.files.find((f) => isPic(f.path))?.path} đi kèm để bạn tự xem.</preview>` : "";
-    return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}${seen}\n</run_result>`, is_error: r.exit !== 0, used, ...(image ? { image } : {}) };
+    const hold = held.length ? `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>` : "";
+    return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}${hold}${recalcNote(r.recalc)}${previewNote(pv)}\n</run_result>`, is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
   }
@@ -238,6 +248,7 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Giữ riêng tư: không đưa tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài khi họ chưa yêu cầu rõ.
 - Thông tin dễ thay đổi (giá, tỉ giá, tin tức, lịch, phiên bản phần mềm, quy định mới): có công cụ tìm web thì tìm trước rồi mới trả lời, nói rõ dữ liệu tính đến lúc nào và ghi nguồn bằng liên kết markdown. Không tìm được thì nói rõ thông tin có thể đã cũ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 - Sức khỏe, pháp lý, tài chính: nêu mức độ khẩn trước (dấu hiệu nguy hiểm thì khuyên gọi cấp cứu hoặc đi viện ngay), nói rõ điều chưa chắc, và khi nào cần gặp chuyên gia.
+- Ảnh do AI vẽ: Synchro chưa có công cụ tạo ảnh. Người dùng xin ảnh chụp như thật hay tranh do AI vẽ thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi làm luôn phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc viết sẵn câu lệnh để họ dán vào công cụ tạo ảnh khác.
 </working_standards>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:

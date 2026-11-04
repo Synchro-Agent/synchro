@@ -7,7 +7,7 @@ FROM node:22-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      chromium fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu-core \
+      chromium fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu-core fonts-crosextra-carlito fonts-crosextra-caladea \
       python3 python3-pip python3-venv python-is-python3 \
       git curl wget ca-certificates socat procps less vim nano unzip zip file bc \
       ripgrep jq tree htop build-essential openssh-client \
@@ -39,9 +39,11 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium CHROME_PATH=/usr/bin/chromium PU
 RUN useradd -m -u 1500 -s /bin/bash user \
   && mkdir -p /home/user/work /home/user/.synchro /opt/synchro \
   && chown -R user:user /home/user
-COPY fsop.js browser.sh /opt/synchro/
+COPY fsop.js browser.sh subfit.py xlsx_recalc.py /opt/synchro/
 # Biến môi trường đặt ở /etc/profile.d để cả shell không tương tác (lệnh của agent, bash -lc) cũng nhận.
+# LibreOffice mặc định không tính lại tệp .xlsx của "ứng dụng quen" (xlsxwriter tự xưng Excel), công thức ra 0 mà tự kiểm tra vẫn đạt: buộc luôn tính lại khi mở.
 RUN chmod 755 /opt/synchro/browser.sh \
+  && python3 /opt/synchro/xlsx_recalc.py --write-profile /home/user/.config/libreoffice/4/user && chown -R user:user /home/user/.config \
   && printf '%s\n' \
      'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"' \
      'export NPM_CONFIG_PREFIX="$HOME/.npm-global"' \

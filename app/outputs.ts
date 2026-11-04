@@ -57,6 +57,13 @@ export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
   });
 }
 
+/** Xóa một tệp vừa tạo mà người dùng chưa nhận (bản mới của cùng đường dẫn trong cùng lượt thay thế). */
+export function removeOutput(uid: string, id: string) {
+  if (!/^[\w-]{8,40}$/.test(id)) return;
+  init().prepare("DELETE FROM outputs WHERE id = ? AND user_id = ?").run(id, uid);
+  fs.rmSync(path.join(ROOT, uid, id), { force: true });
+}
+
 /** Thông tin và đường dẫn tệp trên đĩa (không đọc nội dung): tải về theo từng đoạn cho video / tệp lớn. */
 export function outputFile(uid: string, id: string): (OutFile & { path: string }) | null {
   if (!/^[\w-]{8,40}$/.test(id)) return null;

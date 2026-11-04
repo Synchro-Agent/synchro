@@ -208,10 +208,12 @@ const chunks = (t, n = 12) => Array.from({ length: Math.ceil(t.length / n) }, (_
 async function mcp(url, call) {
   const rpc = async (method, params, id) => {
     const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
-    // Lời gọi lâu (chờ duyệt): cầu nối chuyển sang luồng SSE, như CLI thật phải đọc được cả hai kiểu.
-    if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return r.json();
-    const msgs = (await r.text()).split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6)));
-    return msgs.find((m) => m.id === id) ?? {};
+    // Công cụ chạy lâu: cầu nối trả qua luồng SSE; kết quả là sự kiện cuối có đúng id của yêu cầu (bỏ qua nhịp giữ kết nối, thông báo tiến độ).
+    if ((r.headers.get("content-type") ?? "").includes("text/event-stream")) {
+      const msgs = (await r.text()).split("\n\n").flatMap((b) => b.split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6))));
+      return msgs.find((m) => m.id === id) ?? {};
+    }
+    return r.json();
   };
   await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mock-cli", version: "1" } }, 1);
   await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });

@@ -16,6 +16,8 @@ import { CriticNote, CriticPill } from "./criticui";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
 import { buildPptx, PPTX_FRAME_JS, type DeckSlide } from "./deckpptx";
+import { fontEmbedCss } from "./artfonts";
+import { htmlToBlocks } from "./htmlblocks";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
@@ -44,7 +46,7 @@ if(d.t==="pptx")lib(0,function(ok){if(!ok)return post({t:"pptx",id:d.id,error:"K
 else if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
 else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
 var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWidth)):2;
-htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
+htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,fontEmbedCSS:d.fontCss||undefined,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
 else if(d.t==="pick"){pk=!!d.on;document.documentElement.style.cursor=pk?"crosshair":"";if(!pk&&hl)hl.style.display="none"}
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
 else if(d.t==="changed"){var ev={key:d.key,shared:true};subs.slice().forEach(function(f){try{f(ev)}catch(x){}});try{dispatchEvent(new CustomEvent("synchro:storage",{detail:ev}))}catch(x){}}
@@ -229,8 +231,6 @@ const cleanHtml = (el: Element, md = "") => {
 const DOC_CSS = `body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:11pt;line-height:1.55;color:#1f1f1f;max-width:720px;margin:0 auto;padding:24px}
 h1{font-size:22pt;margin:0 0 12pt}h2{font-size:16pt;margin:18pt 0 8pt}h3{font-size:13pt;margin:14pt 0 6pt}table{border-collapse:collapse;margin:8pt 0}td,th{border:1px solid #bbb;padding:5pt 8pt;text-align:left}th{background:#f2f2f2}
 code{font-family:Consolas,Menlo,monospace;font-size:10pt}pre{background:#f6f6f6;padding:10pt;border-radius:6px;white-space:pre-wrap}blockquote{border-left:3px solid #ccc;margin:8pt 0;padding-left:12pt;color:#555}img,svg{max-width:100%}`;
-// Word mở được tệp HTML có khai báo Office (.doc), giữ tiêu đề, bảng, danh sách.
-const wordDoc = (title: string, html: string) => `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${htmlEsc(title)}</title><style>${DOC_CSS}</style></head><body>${html}</body></html>`;
 // In qua khung ẩn cùng nguồn gốc: hộp thoại in của trình duyệt có "Lưu thành PDF".
 export function printHtml(title: string, html: string) {
   const f = document.createElement("iframe");
@@ -256,6 +256,22 @@ export async function svgToPng(svg: string): Promise<Blob> {
     c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
     return await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("PNG"))), "image/png"));
   } finally { URL.revokeObjectURL(url); }
+}
+const blobData = (b: Blob) => new Promise<string>((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result)); f.onerror = () => no(f.error); f.readAsDataURL(b); });
+// Tài liệu đã hiện → tệp Word thật (máy chủ dựng, app/mddocx.ts). Ảnh, sơ đồ đổi thành ảnh nhúng trước khi gửi; ảnh không lấy được thì giữ chú thích của ảnh.
+async function docxFile(el: Element, title: string, md: string): Promise<Blob> {
+  const blocks = htmlToBlocks(new DOMParser().parseFromString(cleanHtml(el, md), "text/html").body);
+  await Promise.all(blocks.map(async (b) => {
+    if (b.k !== "img") return;
+    try {
+      if (b.svg) { b.src = await blobData(await svgToPng(b.svg)); delete b.svg; }
+      else if (b.src && /^https?:/i.test(b.src)) { const r = await fetch(`/api/artimg?u=${encodeURIComponent(b.src)}`); b.src = r.ok ? await blobData(await r.blob()) : undefined; }
+      else if (b.src?.startsWith("blob:")) b.src = await blobData(await (await fetch(b.src)).blob());
+    } catch { b.src = undefined; delete b.svg; }
+  }));
+  const r = await fetch("/api/mddocx", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ blocks, title }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Lỗi ${r.status}`);
+  return r.blob();
 }
 const dataUrlBlob = (u: string) => { const [h, b] = u.split(","); const bin = atob(b); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: /data:([^;]+)/.exec(h)?.[1] ?? "image/png" }); };
 
@@ -507,7 +523,7 @@ Yêu cầu: ${req.trim()}`);
     setPicked(null); setReq("");
   };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
-  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture" }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
+  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture", fontCss: await fontEmbedCss(art.content) }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
   // PowerPoint: Synchro tự dựng ngay trong khung xem (deckpptx.ts), không nhờ model; chữ sửa được, hình giữ nguyên.
   const pptxFrame = () => withPreview(async () => {
     say(tr("Đang dựng tệp PowerPoint…"));
@@ -526,7 +542,7 @@ Yêu cầu: ${req.trim()}`);
   else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", art.content, location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
     { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: pngFrame }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
   else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(art.content), `${name}.png`); done(`${name}.png`); } });
-  else if (art.type === "markdown") items.push({ label: "Word (.doc)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(() => { const n = `${name}.doc`; saveBlob(new Blob(["\ufeff", wordDoc(art.title, cleanHtml(shown(".art-md"), art.content))], { type: "application/msword" }), n); done(n); }) },
+  else if (art.type === "markdown") items.push({ label: "Word (.docx)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(async () => { const n = `${name}.docx`; saveBlob(await docxFile(shown(".art-md"), art.title, art.content), n); done(n); }) },
     { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md"), art.content))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
   else if (art.type === "vbhc") items.push({ label: "Word (.docx)", sub: "Đúng thể thức Nghị định 30/2020", run: async () => {
     const n = `${name}.docx`;
