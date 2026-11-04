@@ -2877,7 +2877,7 @@ b,strong{font-weight:560}
 .cn-tag,.cn-beta{font-size:10.5px;font-weight:460;padding:1px 7px;border-radius:var(--r-pill);background:var(--hover);color:var(--text-2);flex:none}
 .cn-sub{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);min-width:0;white-space:nowrap;overflow:hidden}
 .cn-sub i{width:6px;height:6px;border-radius:50%;background:#22a35a;flex:none}
-.cn-sub.needs_auth i{background:#d99a1b}.cn-sub.error i{background:#c6422f}
+.cn-sub.needs_auth i{background:#d99a1b}.cn-sub.error i,.cn-sub.forbidden i{background:#c6422f}
 .cn-host{overflow:hidden;text-overflow:ellipsis}
 /* Dấu "·" cách đều hai bên (bằng gap của .cn-sub); trước đây khoảng trắng đầu bị flex nuốt, lệch 6px / 3px. */
 .cn-dot{font-weight:inherit;margin-right:6px}

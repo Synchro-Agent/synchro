@@ -322,7 +322,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
       {c.status !== "ok" && c.vendorBlocked && (
         <div className="cn-vendor">
           <p>{c.vendorBlocked.why}</p>
-          <p className="d">You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.</p>
+          <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
           <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds("token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds("client")}>Use my OAuth client</button></div>
         </div>
       )}
@@ -383,7 +383,7 @@ function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCred
                 {state === "vendor" && why === e.id && e.access && (
                   <div className="cn-vendor">
                     <p>{e.access.why}</p>
-                    <p className="d">You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.</p>
+                    <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
                     <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button></div>
                   </div>
                 )}
