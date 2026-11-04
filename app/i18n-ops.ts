@@ -56,6 +56,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "Máy chủ sắp hết dung lượng nên tạm thời chưa nhận tệp mới. Hãy thử lại sau.": "The server is nearly out of disk space, so it can't take new files right now. Try again later.",
 };
 export const OPS_EN2VI: Record<string, string> = {
+  "Download": "Tải về",
   "Download everything on the server": "Tải về mọi thứ trên máy chủ",
   "A JSON file with your profile, chats, projects, artifacts, brain notes, tasks and the list of your files, from any device. No passwords or tokens.": "Một tệp JSON gồm hồ sơ, đoạn chat, dự án, artifact, ghi chú bộ não, tác vụ và danh sách tệp của bạn, tải được từ mọi thiết bị. Không có mật khẩu hay token.",
   "Script policy reports": "Báo cáo chính sách script",
