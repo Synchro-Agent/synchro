@@ -1253,9 +1253,10 @@ export default function Home() {
   const threadRef = useRef<HTMLDivElement>(null);
   // Khoảng đệm cuối đoạn chat và nút "cuộn xuống" theo chiều cao thật của khối soạn tin (thẻ chế độ, tin chờ gửi xếp trên ô soạn):
   // tin cuối không bao giờ nằm dưới các thẻ đó.
-  const dockRef = useRef<HTMLDivElement>(null);
+  // Theo chính phần tử: khối soạn tin có thể gắn lại mà view, chat không đổi (phần tải sau, khung bắt lỗi), lúc đó bộ theo dõi cũ nằm trên phần tử đã mất.
+  const [dockEl, dockRef] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
-    const d = dockRef.current, host = d?.parentElement;
+    const d = dockEl, host = d?.parentElement;
     if (!d || !host) return;
     // Cột chat hẹp (khung artifact mở, màn hình nhỏ): data-narrow bỏ dòng ghi chú dưới ô soạn tin để nó không vỡ nhiều dòng.
     const ro = new ResizeObserver(() => {
@@ -1267,7 +1268,7 @@ export default function Home() {
     });
     ro.observe(d);
     return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
-  }, [view, chat?.id]);
+  }, [dockEl]);
   const stick = useRef(true);
   const [showDown, setShowDown] = useState(false);
   const onScroll = () => {
