@@ -214,7 +214,8 @@ async function speak(b: Record<string, unknown>) {
   const model = ["eleven_v4_turbo", "eleven_flash_v2_5", "eleven_turbo_v2_5"].map((id) => p.tts.find((m) => m.id === id)).find(Boolean) ?? p.tts[0];
   const voice = await pickVoice(text, str(b.voice, 40));
   const speed = num(b.speed, 0.7, 1.2, 1);
-  const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128&optimize_streaming_latency=2`, {
+  // Tham số chờ ngắn chỉ các model v2 nhận; model v4 trả lỗi 400 nên nút đọc to hỏng hẳn trên gói có model này.
+  const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128${/_v2/.test(model?.id ?? "") ? "&optimize_streaming_latency=2" : ""}`, {
     ...jsonBody({ text: text.slice(0, model?.max ?? 5000), model_id: model?.id, voice_settings: { stability: 0.5, similarity_boost: 0.75, speed } }), feat: "tts",
   });
   spent(r, text.length);
