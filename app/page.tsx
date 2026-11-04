@@ -2125,7 +2125,7 @@ export default function Home() {
           const row = (c: Chat) => (
             <div key={c.id} className="chat-wrap" {...bulkRow(sb, { k: "chat", c })}>
               {renaming === c.id ? (
-                <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
+                <input className="field" autoFocus aria-label="Đổi tên" defaultValue={c.title} style={{ margin: 0, height: 32 }}
                   onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
@@ -2153,7 +2153,7 @@ export default function Home() {
           const codeRow = (c: CodeItem) => (
             <div key={"code" + c.id} className="chat-wrap" {...bulkRow(sb, { k: "code", c })}>
               {codeRen === c.id ? (
-                <input className="field" autoFocus defaultValue={c.title} style={{ margin: 0, height: 32 }}
+                <input className="field" autoFocus aria-label="Đổi tên" defaultValue={c.title} style={{ margin: 0, height: 32 }}
                   onBlur={(e) => { codePatch(c.id, { title: e.target.value || c.title }); setCodeRen(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (

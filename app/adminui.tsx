@@ -498,7 +498,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
             <p className="d" style={{ margin: "0 0 12px" }}>The account, its sign-in methods and all of its sessions will be permanently removed. This can&apos;t be undone.</p>
             <p className="d" style={{ margin: "0 0 6px" }}>Type the user&apos;s email to confirm:</p>
             <div className="mono" style={{ fontSize: 12, marginBottom: 8 }} data-notr>{del?.email}</div>
-            <input className="field" autoFocus value={delTxt} onChange={(e) => setDelTxt(e.target.value)} placeholder="Email" />
+            <input className="field" autoFocus aria-label="Email" value={delTxt} onChange={(e) => setDelTxt(e.target.value)} placeholder="Email" />
             <div className="modal-foot">
               <button className="btn" onClick={() => setDel(null)}>Cancel</button>
               <button className="btn danger" disabled={busy || delTxt.trim().toLowerCase() !== del?.email.toLowerCase()} style={delTxt.trim().toLowerCase() !== del?.email.toLowerCase() ? { opacity: 0.4 } : undefined} onClick={() => { const u = del!; setDel(null); setOpen(null); act(() => call("DELETE", `/api/admin/users/${u.id}`, { confirm: delTxt }), "Account deleted"); }}>Delete account</button>

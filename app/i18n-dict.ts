@@ -397,7 +397,7 @@ Object.assign(VI2EN, {
   "Tìm skill hoặc thư viện": "Search skills or libraries", "Không có skill hoặc thư viện nào khớp": "No skill or library matches",
 });
 
-Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy thử lại hoặc chọn model khác; nội dung lỗi nằm ở phần chi tiết.": "The model reported an error, so this turn didn't finish. Try again or pick another model; the error is in the details." });
+Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy thử lại hoặc chọn model khác; nội dung lỗi nằm ở phần chi tiết.": "The model reported an error, so this turn didn't finish. Try again or pick another model; the error is in the details.", "Thu phóng ảnh": "Zoom image", "Luật riêng": "Custom rules" });
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],

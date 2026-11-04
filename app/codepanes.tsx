@@ -557,7 +557,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
             <div className="bp-dialog" role="alertdialog" aria-label="Hộp thoại của trang">
               <span className="bp-dialog-h">{hostOf(url)} cho biết</span>
               <p data-notr>{dialog.message}</p>
-              {dialog.type === "prompt" && <input className="field" autoFocus value={promptText} onChange={(e) => setPromptText(e.target.value)} />}
+              {dialog.type === "prompt" && <input className="field" autoFocus aria-label={dialog.message} value={promptText} onChange={(e) => setPromptText(e.target.value)} />}
               <div className="bp-dialog-a">
                 {dialog.type !== "alert" && <button className="btn sm" onClick={() => { send({ t: "dialog", accept: false }); setDialog(null); }}>Hủy</button>}
                 <button className="btn sm dark" autoFocus={dialog.type !== "prompt"} onClick={() => { send({ t: "dialog", accept: true, text: promptText }); setDialog(null); }}>OK</button>

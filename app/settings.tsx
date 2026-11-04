@@ -608,7 +608,7 @@ function CodeTab() {
       <H>Defaults</H>
       <Row t="Default mode" d="Mode used when you open Synchro Code. Plan only outlines steps, Code writes full files, Debug traces errors to the root cause." top><Seg value={modeLabel(mode)} onChange={(l) => setMode(MODES.find((m) => m.short === l)?.k ?? "code")} options={MODES.map((m) => m.short)} /></Row>
       <Row t="Tech stack rules" d="Added to every Code request so answers follow your stack."><Select value={presetLabel(rules.preset)} width={260} onChange={(l) => setRules({ ...rules, preset: presetKey(l) })} options={[...PRESETS.map((p) => p.label), "Custom rules", "No rules"]} /></Row>
-      {rules.preset === "custom" && <textarea className="textarea" style={{ marginTop: 4 }} placeholder="e.g. Use Go 1.22, no global state, return errors explicitly" value={rules.custom} onChange={(e) => setRules({ ...rules, custom: e.target.value })} />}
+      {rules.preset === "custom" && <textarea className="textarea" aria-label="Tech stack rules" style={{ marginTop: 4 }} placeholder="e.g. Use Go 1.22, no global state, return errors explicitly" value={rules.custom} onChange={(e) => setRules({ ...rules, custom: e.target.value })} />}
       <H>Sessions</H>
       {cp ? <>
         <Row t="Classify session states" d="After every turn, a fast model marks the session in the sidebar as needs you, ready for review, or done. Counts toward your usage." top><Toggle on={cp.classify} set={(v) => save({ classify: v })} /></Row>
@@ -626,7 +626,7 @@ function CodeTab() {
         <Row t="Allowed and blocked sites" d={<>{`${cp.sites.length} allowed · ${cp.blocked.length} blocked`}</>}><button className="btn" onClick={() => setSitesOpen(!sitesOpen)}>{sitesOpen ? "Done" : "Manage"}</button></Row>
         {sitesOpen && <SitesEditor cp={cp} save={save} />}
         <H>Pull requests</H>
-        <Row t="Branch prefix" d="Added to the branches Synchro creates, for example synchro/fix-login." top><input className="field" style={{ width: 180, margin: 0 }} defaultValue={cp.branchPrefix} key={cp.branchPrefix} placeholder="synchro" onBlur={(e) => e.target.value !== cp.branchPrefix && save({ branchPrefix: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></Row>
+        <Row t="Branch prefix" d="Added to the branches Synchro creates, for example synchro/fix-login." top><input className="field" aria-label="Branch prefix" style={{ width: 180, margin: 0 }} defaultValue={cp.branchPrefix} key={cp.branchPrefix} placeholder="synchro" onBlur={(e) => e.target.value !== cp.branchPrefix && save({ branchPrefix: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></Row>
         <Row t="Create pull requests automatically" d="When you push from a Code session, Synchro opens a pull request without asking. Pushing from the default branch first moves the work to a new branch with your prefix."><Toggle on={cp.autoPr} set={(v) => save({ autoPr: v })} /></Row>
         <Row t="Auto-fix pull requests" d={<>Synchro watches the pull requests it opened. When CI fails or someone leaves a comment, it works on the fix in the same session, pushes to the branch, and replies on the pull request.{!cp.allowBypass && <span className="cap-note warn">Turn on Allow auto mode above: fixes run while you're away, with nobody to approve them.</span>}</>}><Toggle on={cp.autoFix} set={(v) => save({ autoFix: v })} /></Row>
         <Row t="Archive after merge or close" d="When a pull request is merged or closed, archive its session. After a merge Synchro also deletes the branch on GitHub and the session's workspace folder, unless something there isn't pushed yet."><Toggle on={cp.autoArchivePr} set={(v) => save({ autoArchivePr: v })} /></Row>
@@ -644,7 +644,7 @@ function CodeTab() {
         ))}
       </div>
       <Row t="Editor theme" d="Theme for the code editor panel. Auto follows the interface theme."><Seg value={edTheme} onChange={setEdTheme} options={["Auto", "Light", "Dark"]} /></Row>
-      <Row t="Code font" d="Monospace font for code blocks and the editor. Must be installed on your device."><input className="field" style={{ width: 200, margin: 0 }} placeholder="e.g. JetBrains Mono" value={cf} onChange={(e) => setCf(e.target.value)} /></Row>
+      <Row t="Code font" d="Monospace font for code blocks and the editor. Must be installed on your device."><input className="field" aria-label="Code font" style={{ width: 200, margin: 0 }} placeholder="e.g. JetBrains Mono" value={cf} onChange={(e) => setCf(e.target.value)} /></Row>
       <Row t="Code font size" d="Applies to code blocks and the editor."><Seg value={size} onChange={setSize} options={["12", "13", "14", "16"]} /></Row>
       <H>Run code</H>
       <Row t="HTML and JavaScript" d="Runs in a sandboxed preview frame next to the chat." top><Badge ok>Ready</Badge></Row>

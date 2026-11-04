@@ -1021,7 +1021,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               ))}
               <hr />
               <div className="cv-custom">
-                <textarea rows={3} value={rules.custom} placeholder="Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…" onChange={(e) => setRules({ preset: "custom", custom: e.target.value })} />
+                <textarea rows={3} aria-label="Luật riêng" value={rules.custom} placeholder="Tự viết luật riêng, ví dụ: luôn dùng pnpm, comment bằng tiếng Việt…" onChange={(e) => setRules({ preset: "custom", custom: e.target.value })} />
                 <div className="cv-custom-r">
                   <button className="btn" onClick={() => { setRules({ preset: "none", custom: "" }); setMenu(""); }}>Bỏ luật</button>
                   <button className="btn dark" onClick={() => { setRules({ ...rules, preset: "custom" }); setMenu(""); say("Đã lưu luật tùy chỉnh"); }}>Lưu</button>
@@ -1057,7 +1057,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                       {n.atts.length > 0 && <div className="cv-atts end">{n.atts.map((a, k) => <button key={k} className={`cv-att ${a.k}`} onClick={() => setViewer(a)}>{a.k === "error" ? <I.M icon="Alert" size={14} /> : <I.M icon="Code" size={14} />}{a.name}</button>)}</div>}
                       {editing?.id === n.id ? (
                         <div className="cv-edit">
-                          <textarea autoFocus value={editing.text} rows={Math.min(6, editing.text.split("\n").length + 1)} onChange={(e) => setEditing({ id: n.id, text: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) branch(n, editing.text); if (e.key === "Escape") setEditing(null); }} />
+                          <textarea autoFocus aria-label="Sửa tin nhắn" value={editing.text} rows={Math.min(6, editing.text.split("\n").length + 1)} onChange={(e) => setEditing({ id: n.id, text: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) branch(n, editing.text); if (e.key === "Escape") setEditing(null); }} />
                           <div className="cv-edit-r"><span>Gửi lại sẽ tạo nhánh mới, bản cũ vẫn được giữ.</span><button className="btn" onClick={() => setEditing(null)}>Hủy</button><button className="btn dark" onClick={() => branch(n, editing.text)}>Gửi nhánh mới</button></div>
                         </div>
                       ) : (
@@ -1106,7 +1106,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               <div className="cv-mention">
                 {docMode ? (
                   <div className="cv-doc"><div className="cv-mh">Thêm tài liệu từ link</div>
-                    <input autoFocus placeholder="https://docs.example.com/api" onKeyDown={(e) => { if (e.key === "Enter") addDoc((e.target as HTMLInputElement).value); if (e.key === "Escape") { setDocMode(false); setMention(null); ta.current?.focus(); } }} />
+                    <input autoFocus aria-label="Thêm tài liệu từ link" placeholder="https://docs.example.com/api" onKeyDown={(e) => { if (e.key === "Enter") addDoc((e.target as HTMLInputElement).value); if (e.key === "Escape") { setDocMode(false); setMention(null); ta.current?.focus(); } }} />
                     <small>Nhấn Enter để thêm · Esc để hủy</small></div>
                 ) : mentionItems.length === 0 ? <div className="cv-none">Chưa có tệp nào. Dùng + để tải tệp, thư mục hoặc .zip.</div> : (
                   ["Codebase", "File", "Hàm", "Folder", "Docs"].map((g) => grp(g).length > 0 && (
@@ -1125,7 +1125,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               {errOpen && (
                 <div className="cv-errbox">
                   <div className="cv-mh"><I.Alert size={14} />Dán log lỗi / stack trace</div>
-                  <textarea autoFocus rows={6} value={errText} onChange={(e) => setErrText(e.target.value)} placeholder={"TypeError: Cannot read properties of undefined\n    at login (src/lib/auth.ts:12:18)"} />
+                  <textarea autoFocus aria-label="Dán log lỗi / stack trace" rows={6} value={errText} onChange={(e) => setErrText(e.target.value)} placeholder={"TypeError: Cannot read properties of undefined\n    at login (src/lib/auth.ts:12:18)"} />
                   <div className="cv-custom-r"><button className="btn" onClick={() => { setErrText(""); setErrOpen(false); }}>Hủy</button><button className="btn dark" onClick={addErr} disabled={!errText.trim()}>Đính kèm</button></div>
                 </div>
               )}

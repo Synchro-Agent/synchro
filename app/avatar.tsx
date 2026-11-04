@@ -147,7 +147,7 @@ function Cropper({ src, onBack, onClose, onSave }: { src: { url: string; w: numb
         <img src={src.url} alt="" draggable={false} style={{ width: src.w * sc, height: src.h * sc, transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }} />
         <div className="crop-mask" style={{ width: D, height: D }} />
       </div>
-      <div className="crop-zoom"><I.Image size={14} /><input type="range" min={1} max={4} step={0.01} value={zoom} onChange={(e) => setZ(+e.target.value)} /><I.Image size={20} /></div>
+      <div className="crop-zoom"><I.Image size={14} /><input type="range" aria-label="Thu phóng ảnh" min={1} max={4} step={0.01} value={zoom} onChange={(e) => setZ(+e.target.value)} /><I.Image size={20} /></div>
       <div className="crop-foot"><button className="btn" onClick={onBack}>Chọn ảnh khác</button><button className="btn dark" onClick={save}>Lưu</button></div>
     </div>
   );

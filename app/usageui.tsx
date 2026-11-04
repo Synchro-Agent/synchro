@@ -507,11 +507,11 @@ async function adm(method: string, body?: unknown): Promise<AdminData> {
 }
 
 // Ô nhập hạn mức USD; để trống = không giới hạn.
-function Money({ value, onSave, placeholder = "No limit" }: { value: number | null | undefined; onSave: (v: number | null) => void; placeholder?: string }) {
+function Money({ value, onSave, placeholder = "No limit", label }: { value: number | null | undefined; onSave: (v: number | null) => void; placeholder?: string; label: string }) {
   const [v, setV] = useState(value === null || value === undefined ? "" : String(value));
   useEffect(() => { setV(value === null || value === undefined ? "" : String(value)); }, [value]);
   const save = () => { const n = v.trim() === "" ? null : Number(v.replace(",", ".")); if (n === null || (isFinite(n) && n >= 0)) { if (n !== (value ?? null)) onSave(n); } else setV(value == null ? "" : String(value)); };
-  return <span className="us-money"><i>$</i><input inputMode="decimal" value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></span>;
+  return <span className="us-money"><i>$</i><input inputMode="decimal" aria-label={label} value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></span>;
 }
 
 export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement }) {
@@ -529,8 +529,8 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
   return (
     <div className="adm-card">
       <div className="adm-card-h"><b>Default limits</b><span className="d">API cost each person can use. Leave empty for no limit. When a limit is reached, chats pause until it resets.</span></div>
-      <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with a person&apos;s first message.</div></div><Money value={c.session} onSave={(v) => patch({ config: { session: v } }, "Session limit saved")} /></div>
-      <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money value={c.weekly} onSave={(v) => patch({ config: { weekly: v } }, "Weekly limit saved")} /></div>
+      <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with a person&apos;s first message.</div></div><Money label="Per session (5 hours)" value={c.session} onSave={(v) => patch({ config: { session: v } }, "Session limit saved")} /></div>
+      <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money label="Per week" value={c.weekly} onSave={(v) => patch({ config: { weekly: v } }, "Weekly limit saved")} /></div>
       <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} label="Apply to administrators" set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
@@ -543,8 +543,8 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
             <div key={u.id} className="us-p">
               <div className="us-p-t"><b data-notr>{u.name || u.email}</b><span data-notr>{u.email}{u.admin ? " · admin" : ""}</span></div>
               <div className="us-p-m"><span>{money(u.month.cost)}</span><small>30 days</small></div>
-              <div className="us-p-l"><small>Session {u.effective.session === null ? "∞" : `${Math.round(s.pct)}%`}</small><Money value={"session" in u.override ? u.override.session : undefined} placeholder={u.effective.session === null ? "Default: none" : `Default: $${u.effective.session}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, session: v } }, "Limit saved")} /></div>
-              <div className="us-p-l"><small>Week {u.effective.weekly === null ? "∞" : `${Math.round(w.pct)}%`}</small><Money value={"weekly" in u.override ? u.override.weekly : undefined} placeholder={u.effective.weekly === null ? "Default: none" : `Default: $${u.effective.weekly}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, weekly: v } }, "Limit saved")} /></div>
+              <div className="us-p-l"><small>Session {u.effective.session === null ? "∞" : `${Math.round(s.pct)}%`}</small><Money label="Session" value={"session" in u.override ? u.override.session : undefined} placeholder={u.effective.session === null ? "Default: none" : `Default: $${u.effective.session}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, session: v } }, "Limit saved")} /></div>
+              <div className="us-p-l"><small>Week {u.effective.weekly === null ? "∞" : `${Math.round(w.pct)}%`}</small><Money label="Week" value={"weekly" in u.override ? u.override.weekly : undefined} placeholder={u.effective.weekly === null ? "Default: none" : `Default: $${u.effective.weekly}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, weekly: v } }, "Limit saved")} /></div>
               {Object.keys(u.override).length > 0 && <button className="icon-btn" aria-label="Use default limits" data-tip="Use default limits" onClick={() => patch({ user: u.id, override: null }, "Using default limits")}><I.Retry size={14} /></button>}
             </div>
           );
@@ -559,7 +559,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
           {pgPr.items.map((p) => (
             <div key={p.model} className="us-pr">
               <span data-notr>{modelName(p.model)} <i className={`us-src ${p.src}`}>{p.src === "official" ? "Official" : p.src === "custom" ? "Custom" : "Estimate"}</i></span>
-              {(["in", "out", "cache"] as const).map((k) => <Money key={k} value={p[k]} placeholder="" onSave={(v) => v !== null && patch({ config: { prices: { [p.model]: { in: p.in, out: p.out, cache: p.cache, [k]: v } } } }, "Price saved")} />)}
+              {(["in", "out", "cache"] as const).map((k) => <Money key={k} label={{ in: "Input", out: "Output", cache: "Cache read" }[k]} value={p[k]} placeholder="" onSave={(v) => v !== null && patch({ config: { prices: { [p.model]: { in: p.in, out: p.out, cache: p.cache, [k]: v } } } }, "Price saved")} />)}
               {p.src === "custom" ? <button className="icon-btn" aria-label="Reset price" data-tip="Reset price" onClick={() => patch({ config: { prices: { [p.model]: null } } }, "Price reset")}><I.Retry size={14} /></button> : <span />}
             </div>
           ))}

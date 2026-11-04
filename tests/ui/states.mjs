@@ -197,6 +197,25 @@ try {
   await api("DELETE", `/api/connectors/${nt.j.connector.id}`);
   await ev(`localStorage.removeItem("u:${uid}:model"); 1`);
 
+  console.log("━━ Ô nhập, nút đều có tên cho trình đọc màn hình");
+  // Chữ giữ chỗ cũng được tính là tên (trình duyệt dùng nó khi không có gì khác); ô không có cả chữ giữ chỗ thì trình đọc màn hình chỉ đọc "ô nhập".
+  const NO_NAME = `[...document.querySelectorAll("input:not([type=hidden]),select,textarea,button,a[href],[role=button],[role=switch]")].filter((el) => {
+    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+    if (!r.width || !r.height || s.visibility === "hidden" || el.closest("[inert],[aria-hidden=true],.xterm,.monaco-editor")) return false;
+    if (el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder") || el.closest("label")?.textContent.trim() || (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]'))) return false;
+    const lb = el.getAttribute("aria-labelledby"); if (lb && document.getElementById(lb)?.textContent.trim()) return false;
+    return /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || !(el.textContent.trim() || el.querySelector("img[alt]:not([alt=''])"));
+  }).map((el) => el.tagName + "." + el.className).slice(0, 8).join(" | ")`;
+  await home();
+  await key(",", "Comma", 188, 4 | 8); await until(`!!document.querySelector(".sy-settings")`, 6000);
+  const tabs = await ev(`document.querySelectorAll(".s-item").length`);
+  for (let i = 0; i < tabs; i++) {
+    await click(`document.querySelectorAll(".s-item")[${i}]`); await sleep(1200);
+    const bad = await ev(NO_NAME);
+    ok(!bad, `Cài đặt, mục ${await ev(`document.querySelectorAll(".s-item")[${i}].textContent`)}`, bad);
+  }
+  await key("Escape", "Escape", 27); await sleep(400);
+
   console.log("━━ Một từ điển ngôn ngữ");
   await P("Network.setCacheDisabled", { cacheDisabled: true });
   const js = [];
