@@ -2,6 +2,7 @@
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
 import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "./catalog";
+import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
 type State = { providers: ProviderInfo[]; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
@@ -32,7 +33,8 @@ export function refreshModels() {
 
 export function useModels() {
   return useSyncExternalStore(
-    (f) => { subs.add(f); if (!state.loaded) refreshModels(); return () => subs.delete(f); },
+    // Chưa biết tài khoản (trang vừa mở): chờ, page.tsx hỏi ngay khi đăng nhập xong. Hỏi sớm vừa trùng vừa nhận 401 ở màn hình đăng nhập.
+    (f) => { subs.add(f); if (!state.loaded && userScope() !== "anon") refreshModels(); return () => subs.delete(f); },
     () => state,
     () => state,
   );

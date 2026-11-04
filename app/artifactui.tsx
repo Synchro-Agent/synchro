@@ -666,7 +666,9 @@ function Thumb({ a }: { a: Summary }) {
 export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { tab: number; q: string; ai: boolean; say: (m: string) => void; onOpenChat: (conv: string) => boolean; refreshKey?: number }) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [open, setOpen] = useState<{ id: string; versions: ArtVersion[]; index: number; conv: string } | null>(null);
-  const load = useCallback(() => { fetch("/api/artifacts").then((r) => r.json()).then((j) => setList(j.artifacts ?? [])).catch(() => setList([])); }, []);
+  const [loadErr, setLoadErr] = useState(false);
+  // Lỗi tải khác với "chưa có artifact nào": báo rõ kèm nút thử lại.
+  const load = useCallback(() => { setLoadErr(false); fetch("/api/artifacts").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setList(j.artifacts ?? [])).catch(() => setLoadErr(true)); }, []);
   useEffect(load, [load, refreshKey]);
   const show = async (id: string) => {
     const j = await fetch(`/api/artifacts/${id}`).then((r) => r.json()).catch(() => null);
@@ -691,7 +693,8 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
   const when = (t: number) => new Date(t).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", getLang() === "en" ? { day: "numeric", month: "short", year: "numeric" } : { day: "2-digit", month: "2-digit", year: "numeric" });
   return (
     <>
-      {list === null ? <div className="art-grid">{[0, 1, 2].map((i) => <div key={i} className="art-tile sk" />)}</div>
+      {loadErr && list === null ? <div className="err-box" role="alert"><b>{tr("Chưa tải được danh sách artifact")}</b><button className="btn" onClick={load}>{tr("Thử lại")}</button></div>
+        : list === null ? <div className="art-grid">{[0, 1, 2].map((i) => <div key={i} className="art-tile sk" />)}</div>
         : shown.length === 0 ? (
           <div className="empty"><I.Shapes size={64} /><b>{tab === 2 ? tr("Chưa có artifact nào được chia sẻ với bạn") : q ? tr("Không tìm thấy artifact nào") : tr("Các artifact của bạn nằm ở đây")}</b><span>{tab === 2 ? tr("Khi ai đó chia sẻ artifact với bạn, nó sẽ hiện ở đây.") : tr("Bắt đầu từ một mẫu ở trên, hoặc yêu cầu Synchro tạo thứ gì đó trong bất kỳ đoạn chat nào.")}</span></div>
         ) : (

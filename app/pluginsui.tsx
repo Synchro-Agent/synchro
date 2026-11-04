@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
+import { HUB_DISCOVER, PLUGINS_CHANGED, useStudios } from "./studios";
+export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
 import { getLang, tr, untranslated } from "./i18n";
 import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio } from "./plugins";
 import { PLUGIN_CATS, type DirPlugin } from "./plugindir";
@@ -21,10 +23,7 @@ async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   if (!r.ok) throw new Error(j.error || (r.status === 413 ? tooLarge() : `Error ${r.status}`));
   return j as T;
 }
-// Báo cho thanh nhập và trang Artifacts biết plugin vừa đổi (studio có thêm skill).
-export const PLUGINS_CHANGED = "synchro:plugins";
 const fire = () => window.dispatchEvent(new Event(PLUGINS_CHANGED));
-export const HUB_DISCOVER = "synchro:hub-discover";
 
 const STUDIO: Record<Studio, string> = { design: "Design", slides: "Slides", docs: "Docs" };
 const RISK: Record<Risk, [string, string]> = { none: ["No scripts", "ok"], low: ["Scripts, sandboxed", "low"], medium: ["Review scripts", "mid"], high: ["High risk", "high"] };
@@ -259,7 +258,8 @@ export function SkillHub() {
     return () => { on = false; };
   }, [open, d]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<string | null>(null);
-  const [q, setQ] = useState("");
+  // Mở từ bảng lệnh ⌘K: lọc sẵn theo skill vừa chọn.
+  const [q, setQ] = useState(() => { try { const h = sessionStorage.getItem("hub-q"); if (h) sessionStorage.removeItem("hub-q"); return h ?? ""; } catch { return ""; } });
   const addRef = useRef<HTMLDivElement>(null);
   const qlib = q.trim().toLowerCase();
   const libs = (d?.plugins ?? []).filter((p) => !qlib || `${p.name} ${p.description}`.toLowerCase().includes(qlib)).sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "org" ? -1 : 1));
@@ -452,23 +452,3 @@ export function CustomizePage({ tab, setTab, connectors, feats }: { tab: CzTab; 
   );
 }
 
-// Plugin đang gắn với các studio (để trang Artifacts và thanh chế độ hiện số skill).
-export function useStudios() {
-  const [m, setM] = useState<Partial<Record<Studio, { name: string; skills: number }>>>({});
-  useEffect(() => {
-    const load = () => fetch("/api/plugins?view=meta").then((r) => (r.ok ? r.json() : null)).then((j: { plugins?: { studio: Studio | null; enabled: boolean; mine: { enabled: boolean }; name: string; skillCount: number }[]; studios?: Data["studios"] } | null) => {
-      if (!j) return;
-      // Máy chủ đếm sẵn (gồm skill Synchro tự nhận diện thuộc mục — từ Kho kỹ năng và plugin khác); máy chủ cũ thì tự đếm plugin studio.
-      if (j.studios) { setM(j.studios); return; }
-      const o: Partial<Record<Studio, { name: string; skills: number }>> = {};
-      for (const p of j.plugins ?? []) if (p.studio && p.enabled && p.mine.enabled) { const c = o[p.studio]; o[p.studio] = { name: c ? `${c.name}, ${p.name}` : p.name, skills: (c?.skills ?? 0) + p.skillCount }; }
-      setM(o);
-    }).catch(() => {});
-    load();
-    // Skill thêm / sửa / xóa trong Kho kỹ năng có thể vào hoặc ra khỏi một mục (Synchro tự nhận diện): đếm lại.
-    const evs = [PLUGINS_CHANGED, SKILLS_CHANGED, SKILL_STUDIOS];
-    for (const e of evs) window.addEventListener(e, load);
-    return () => { for (const e of evs) window.removeEventListener(e, load); };
-  }, []);
-  return m;
-}

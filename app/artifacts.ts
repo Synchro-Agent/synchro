@@ -107,3 +107,6 @@ Khi số liệu hay quy trình dễ hiểu hơn bằng hình, hãy vẽ ngay tro
 - Hình tương tác nhỏ (máy tính, thanh trượt mô phỏng, bảng lọc…): khối \`\`\`widget chứa một đoạn HTML hoàn chỉnh (CSS + JS bên trong), chiều cao dưới 600px, không gọi mạng.
 Chỉ vẽ khi thực sự giúp ích; luôn kèm một câu tóm tắt điều biểu đồ cho thấy.
 </inline_visuals>`;
+
+// Loại artifact xuất bản được thành ứng dụng.
+export const PUBLISHABLE = new Set(["html", "react", "svg"]);

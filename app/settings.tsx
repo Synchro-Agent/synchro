@@ -8,21 +8,24 @@ import { usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { Mark } from "./brand";
-import { MODES, PRESETS } from "./codeview";
+import { MODES, PRESETS } from "./codeconst";
 import { ProvidersPanel } from "./providersui";
-import { ConnectorsPanel } from "./connectorsui";
+import { lazyView } from "./lazy";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
-import { OCCUPATIONS, type AuthUser } from "./auth";
+import type { AuthUser } from "./auth";
+import { OCCUPATIONS } from "./names";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
-import { ExtSettings } from "./browserhub";
 import { UsageSettings } from "./usageui";
-import { BrainSettings } from "./brainui";
-import { SkillHub } from "./pluginsui";
+// Tab nặng trong Cài đặt: mở tab nào tải tab đó.
+const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
+const ExtSettings = lazyView(() => import("./browserhub").then((m) => m.ExtSettings), null);
+const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSettings));
+const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub));
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
 import { locale } from "./i18n";
-import { saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
+import { deleteServerSession, listServerSessions, saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
 function useAway(close: () => void) {
@@ -110,6 +113,8 @@ function Toasts({ msg }: { msg: string }) {
   return msg && typeof document !== "undefined" ? createPortal(<div className="toast" role="status"><I.Clock size={14} />{msg}</div>, document.body) : null;
 }
 
+// Giá trị lưu vẫn là tên phông ("Anthropic Sans", globals.css chọn phông theo tên này), giao diện chỉ gọi là Mặc định.
+const fontName = (f: string) => (f === "Anthropic Sans" ? "Default" : f);
 function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => void }) {
   const app = useApp();
   const [font, setFont] = usePref("font", "Anthropic Sans");
@@ -142,7 +147,7 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
       <Row t="Theme" top>
         <div className="group" role="group" aria-label="Theme">{themes.map(([k, ic, n]) => <button key={k} title={n} aria-label={n} aria-pressed={theme === k} className={theme === k ? "on" : ""} onClick={() => setTheme(k)} style={{ padding: "0 9px" }}>{ic}</button>)}</div>
       </Row>
-      <Row t="Chat font"><Select value={font} onChange={setFont} options={["Anthropic Sans", "System", "Serif"]} /></Row>
+      <Row t="Chat font"><Select value={fontName(font)} onChange={(v) => setFont(v === "Default" ? "Anthropic Sans" : v)} options={["Default", "System", "Serif"]} /></Row>
       <Row t="Transcript text size" d="Size of the conversation transcript text."><Seg value={size} onChange={setSize} options={["Small", "Medium", "Large"]} /></Row>
       <Row t="Motion" d="Reduce animation in streaming responses and other interface elements."><Seg value={motion} onChange={setMotion} options={["System", "Reduced"]} /></Row>
       <Row t="Transcript width" d="Maximum width of the conversation and the message box, in chat and in Synchro Code."><Seg value={TW_LABEL[tw]} onChange={(l) => setTw((Object.keys(TW_LABEL) as (keyof typeof TW_LABEL)[]).find((k) => TW_LABEL[k] === l) ?? "medium")} options={Object.values(TW_LABEL)} /></Row>
@@ -168,7 +173,7 @@ function Account() {
   const me = app.me;
   const [name, setName] = usePref("name", "Lâm Tùng");
   const [call, setCall] = usePref("call", "Lâm Tùng");
-  const [work, setWork] = usePref("work", "Data science");
+  const [work, setWork] = usePref("work", "");
   // Hướng dẫn cho Synchro lưu trên máy chủ (theo tài khoản, mọi thiết bị) và được gửi kèm mọi lượt chat, Synchro Code, giọng nói.
   const [, setSaved0] = usePref("ins", "");
   const server = me?.profile.instructions ?? "";
@@ -228,7 +233,7 @@ function Account() {
       <Row t="Full name"><input className="field" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
       <Row t="What should Synchro call you?"><input className="field" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
       <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
-      <Row t="What best describes your work?"><Select width={200} value={work} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
+      <Row t="What best describes your work?"><Select width={200} value={work || "Choose"} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
       <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
@@ -262,9 +267,6 @@ function Account() {
       <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
       <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>
       <Row t="Account ID"><span className="mono" data-notr>{me?.id}</span></Row>
-      <H>Trusted devices</H>
-      <p className="d" style={{ marginTop: -6 }}>Devices that can control your local machine through remote sessions.</p>
-      <p className="d" style={{ margin: "16px 0 0" }}>No trusted devices.</p>
       <H>Active sessions</H>
       <table className="tbl">
         <thead><tr><th>Device</th><th>Location</th><th>Created</th><th>Updated</th><th /></tr></thead>
@@ -308,7 +310,7 @@ function Account() {
 
 function Privacy({ go }: { go: (t: string) => void }) {
   const app = useApp();
-  const [panel, setPanel] = useState<"" | "shared" | "artifacts" | "files" | "feedback">("");
+  const [panel, setPanel] = useState<"" | "shared" | "files" | "feedback">("");
   const shared = app.chats.filter((c) => c.shared);
   const files = app.chats.flatMap((c) => c.msgs.flatMap((m) => (m.files ?? []).map((f) => ({ f, c: c.title }))));
   const fb = app.chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
@@ -317,19 +319,17 @@ function Privacy({ go }: { go: (t: string) => void }) {
     <>
       <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
       <H>Your data</H>
-      <Row t="Export data" top><button className="btn" onClick={app.exportData}>Export data</button></Row>
+      <Row t="Export data" d="Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them." top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
-      <Row t="Shared artifacts"><button className="btn" onClick={() => setPanel("artifacts")}>Manage</button></Row>
       <Row t="Uploaded files"><button className="btn" onClick={() => setPanel("files")}>Manage</button></Row>
       <Row t="Your feedback"><button className="btn" onClick={() => setPanel("feedback")}>Manage</button></Row>
       <Row t="Memory preferences"><button className="btn" onClick={() => go("Brain")}>Manage ↗</button></Row>
       <Fade show={!!panel}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPanel("")}>
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
+            <button className="icon-btn" aria-label="Đóng" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{title}</h2>
             {panel === "shared" && (shared.length ? shared.map((c) => <div key={c.id} className="item-row"><span style={{ flex: 1 }}>{c.title}</span><button className="btn danger" style={{ height: 26 }} onClick={() => app.unshare(c.id)}>Stop sharing</button></div>) : <div className="empty">No shared chats.</div>)}
-            {panel === "artifacts" && <div className="empty">No shared artifacts.</div>}
             {panel === "files" && (files.length ? files.map((x, i) => <div key={i} className="item-row"><I.Clip size={14} /><span style={{ flex: 1 }}>{x.f}</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">No uploaded files.</div>)}
             {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}
           </div>
@@ -571,6 +571,7 @@ function Focus() {
 function CodeTab() {
   const app = useApp();
   const cp = useCodePrefs();
+  const { runner } = useCaps();
   const save = async (p: Partial<CodePrefs>) => { const e = await saveCodePrefs(p); if (e) app.say(e); };
   const [tview, setTview] = usePref<keyof typeof VIEW_L>("codeView", "normal");
   const [sitesOpen, setSitesOpen] = useState(false);
@@ -629,7 +630,7 @@ function CodeTab() {
       </> : <Row t="Loading…" top />}
       <H>Safety and context</H>
       <Row t="Secret redaction" d="API keys, tokens and passwords are masked before anything is sent, then restored in the code you get back." top><Badge ok>Always on</Badge></Row>
-      <Row t="Context window" d="Attached files and conversation history count toward this limit. Large files are trimmed to the most relevant parts."><Badge>128k tokens</Badge></Row>
+      <Row t="Context window" d="Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts." />
       <H>Code appearance</H>
       <div style={{ display: "flex", gap: 12 }}>
         {[["Light", "#fff", "#222"], ["Dark", "#1b1b1b", "#ddd"]].map(([n, bg, fg]) => (
@@ -646,9 +647,13 @@ function CodeTab() {
       <Row t="HTML and JavaScript" d="Runs in a sandboxed preview frame next to the chat." top><Badge ok>Ready</Badge></Row>
       <Row t="Python" d="Runs in your browser with Pyodide. No server needed."><Badge ok>Ready</Badge></Row>
       <Row t="Node.js" d="Runs in a WebContainer inside your browser. Needs HTTPS for cross-origin isolation."><Badge ok={iso}>{iso ? "Ready" : "Needs HTTPS"}</Badge></Row>
-      <Row t="Cloud sandbox" d="Optional server runtime (E2B) for heavier jobs. Enabled when the server has an E2B key."><Badge>Optional</Badge></Row>
+      {runner && <Row t="Server runtime" d={RUNNER[runner] ?? "Code runs on the Synchro server."}><Badge ok>Ready</Badge></Row>}
       <H>Data</H>
-      <Row t="Code sessions" d={`${list.length} session${list.length === 1 ? "" : "s"} stored in this browser.`} top><button className="btn" disabled={!list.length} style={!list.length ? { opacity: 0.4 } : undefined} onClick={() => app.confirm("Clear all Code sessions?", "Every Synchro Code conversation saved in this browser will be deleted. This can't be undone.", "Clear all", () => { ls.keys().filter((k) => k.startsWith("codeS:")).forEach((k) => ls.remove(k)); setList([]); app.goCode(); app.say("Code sessions cleared"); })}>Clear all</button></Row>
+      <Row t="Code sessions" d={cp?.sync ? `${list.length} session${list.length === 1 ? "" : "s"} in this browser, kept in sync with the Synchro server.` : `${list.length} session${list.length === 1 ? "" : "s"} stored in this browser.`} top><button className="btn" disabled={!list.length} style={!list.length ? { opacity: 0.4 } : undefined} onClick={() => app.confirm("Clear all Code sessions?", cp?.sync ? "Every Synchro Code conversation will be deleted from this browser and from the Synchro server, including on your other devices. This can't be undone." : "Every Synchro Code conversation saved in this browser will be deleted. This can't be undone.", "Clear all", async () => {
+        // Đồng bộ đang bật: xóa cả bản trên máy chủ, kể cả phiên chỉ có ở thiết bị khác; chỉ xóa ở trình duyệt thì lần đồng bộ sau chúng quay lại.
+        if (cp?.sync) { const j = await listServerSessions(0); await Promise.all([...new Set([...list.map((x) => x.id), ...(j?.sessions ?? []).filter((x) => !x.deleted).map((x) => x.id)])].map((id) => deleteServerSession(id))); }
+        ls.keys().filter((k) => k.startsWith("codeS:")).forEach((k) => ls.remove(k)); setList([]); app.goCode(); app.say("Code sessions cleared");
+      })}>Clear all</button></Row>
     </>
   );
 }

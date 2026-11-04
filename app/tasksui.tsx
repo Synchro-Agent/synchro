@@ -5,6 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { INBOX_CHANGED, useInboxCount } from "./inboxcount";
+export { INBOX_CHANGED, useInboxCount };
 import { Markdown } from "./md";
 import { artifactsAsCode, hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, modelName, useModels } from "./models";
@@ -24,7 +26,6 @@ type Item = { run: string; task: string; title: string; at: number; read: boolea
 type Proposal = { id: string; task: string | null; taskTitle: string | null; run: string | null; kind: "skill" | "action" | "site" | "tool"; title: string; summary: string; payload: Record<string, unknown>; status: "pending" | "running" | "done" | "failed" | "rejected"; result: string | null; at: number; decidedAt: number | null };
 type Plan = { title: string; prompt: string; schedule: Schedule; browser: BrowserPref; engine: Engine; approvals: string[]; needs: string[] };
 type RunEv = { seq: number; at: number; kind: string; text: string };
-export const INBOX_CHANGED = "synchro:inbox";
 
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
   const r = await fetch(url, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -68,29 +69,6 @@ const KIND_ICON = { skill: <I.Sparkle size={16} />, action: <I.Rocket size={16} 
 const KIND_LABEL = { skill: "Tạo skill", action: "Việc cần làm", site: "Cho phép trang web", tool: "Dùng công cụ" };
 const APPROVE = { skill: "Tạo skill", action: "Cho phép làm", site: "Cho phép trang này", tool: "Cho phép chạy" };
 
-/** Số mục cần xem (kết quả chưa đọc + đề xuất chờ duyệt) trên thanh bên, kiểm tra mỗi phút và khi quay lại tab;
- *  có kết quả hay đề xuất mới khi tab đang ẩn thì báo bằng thông báo trình duyệt nếu được phép. */
-export function useInboxCount(on: boolean) {
-  const [n, setN] = useState(0);
-  const seen = useRef<Set<string> | null>(null);
-  const load = useCallback(() => {
-    if (!on) return;
-    api<{ items: Item[]; unread: number; pending?: number }>("GET", "/api/inbox").then((j) => {
-      setN(j.unread + (j.pending ?? 0));
-      const done = j.items.filter((x) => x.status !== "running" && x.status !== "waiting" && !x.read);
-      if (seen.current) for (const x of done) if (!seen.current.has(x.run) && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) new Notification(`Synchro · ${x.title}`, { body: x.proposals ? tr("Việc tự động đã chạy xong và có đề xuất chờ bạn duyệt.") : tr("Việc tự động đã chạy xong. Mở Hộp thư để xem kết quả.") });
-      seen.current = new Set(done.map((x) => x.run));
-    }).catch(() => {});
-  }, [on]);
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 60_000);
-    const f = () => { if (!document.hidden) load(); };
-    document.addEventListener("visibilitychange", f); window.addEventListener(INBOX_CHANGED, load);
-    return () => { clearInterval(t); document.removeEventListener("visibilitychange", f); window.removeEventListener(INBOX_CHANGED, load); };
-  }, [load]);
-  return n;
-}
 const changed = () => window.dispatchEvent(new Event(INBOX_CHANGED));
 
 // ---------------------------------------------------------------- tạo / sửa việc tự động
@@ -303,8 +281,10 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ task?: Task; plan?: Plan } | "new" | null>(null);
+  const [loadErr, setLoadErr] = useState("");
   const load = useCallback(() => {
-    api<{ items: Item[] }>("GET", "/api/inbox").then((j) => setItems(j.items)).catch((e) => say(e.message));
+    setLoadErr("");
+    api<{ items: Item[] }>("GET", "/api/inbox").then((j) => setItems(j.items)).catch((e) => setLoadErr(e.message));
     api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch(() => {});
     api<{ proposals: Proposal[] }>("GET", "/api/inbox/proposals?all=1").then((j) => setProps(j.proposals)).catch(() => {});
   }, [say]);
@@ -377,7 +357,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         {tab === "jobs" && <BulkButton b={bkJ} />}
       </div>
 
-      {tab === "results" && (items === null ? <div className="empty"><span className="art-spin" /></div> : !shown.length ? (
+      {tab === "results" && (items === null ? (loadErr ? <div className="err-box" role="alert"><b>{tr("Chưa tải được Hộp thư")}</b><span>{tr(loadErr)}</span><button className="btn" onClick={load}>{tr("Thử lại")}</button></div> : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
         <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy và gửi kết quả vào đây.")}</span></div>
       ) : (
         <div className="tk-feed">{groups.map(([d, list]) => (

@@ -50,6 +50,6 @@ export async function setCaps(patch: Partial<Caps>): Promise<string | null> {
 
 export function useCaps(): CapsState {
   const s = useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => (loadedFor === userScope() && state ? state : cached()), () => FALLBACK);
-  useEffect(() => { loadCaps(); }, []);
+  useEffect(() => { if (userScope() !== "anon") loadCaps(); }, []);
   return s;
 }

@@ -7,6 +7,7 @@ export const UX_VI2EN: Record<string, string> = {
   "Không tìm thấy trang này": "We can't find that page",
   "Địa chỉ có thể đã gõ sai, hoặc trang đã được chuyển đi nơi khác.": "The address may be mistyped, or the page has moved.",
   "Về trang chủ": "Back to home", "Không tìm thấy trang – Synchro": "Page not found – Synchro",
+  "Chính sách quyền riêng tư – Synchro": "Privacy policy – Synchro", "Điều khoản sử dụng – Synchro": "Terms of use – Synchro",
   "Phần này gặp lỗi khi hiển thị": "This part hit a display error",
   "Các phần khác của Synchro vẫn dùng được bình thường.": "The rest of Synchro still works normally.",
   "Thử lại": "Try again",
@@ -23,7 +24,10 @@ export const UX_VI2EN: Record<string, string> = {
   "Kết nối gói AI của bạn để bắt đầu": "Connect your AI plan to get started",
   "Synchro chạy bằng gói bạn đang trả tiền. Đăng nhập một gói là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on the plan you already pay for. Sign in to one and you can chat right away. What you've typed below stays here.",
   "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
-  "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
+  "Đang tải": "Loading", "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
+  "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Hộp thư": "Couldn't load your Inbox",
+  // Terminal của Synchro Code, các thẻ làm việc
+  "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "trang này": "this page", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",
   // Sửa tin đã gửi, ô soạn tin
   "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
   "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
@@ -35,4 +39,16 @@ export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Khóa API đã hết số dư, cần nạp thêm ở trang của nhà cung cấp \(402\): (.*)$/, (m) => `The API key is out of credit. Top up on the provider's site (402): ${m[1]}`],
   [/^Không tìm thấy model hoặc địa chỉ API \(404\): (.*)$/, (m) => `Model or API address not found (404): ${m[1]}`],
   [/^Nhà cung cấp đang giới hạn lượt gọi hoặc hết hạn mức \(429\): (.*)$/, (m) => `The provider is rate limiting calls or the quota is used up (429): ${m[1]}`],
+];
+// Chữ tiếng Anh của Cài đặt (phần gốc viết bằng tiếng Anh, giao diện tiếng Việt dịch sang).
+export const UX_EN2VI: Record<string, string> = {
+  "Choose": "Chọn", "Default": "Mặc định", "Server runtime": "Máy chủ chạy code",
+  "Code runs on the Synchro server.": "Code chạy trên máy chủ Synchro.",
+  "Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts.": "Tệp đính kèm và lịch sử hội thoại tính vào giới hạn của model bạn chọn. Tệp lớn được rút gọn còn phần liên quan nhất.",
+  "Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them.": "Tải về đoạn chat, dự án và hồ sơ lưu trong trình duyệt này. Ghi chú của bộ não tải ở Cài đặt → Bộ não; artifact và phiên Code tải ngay nơi bạn dùng chúng.",
+  "Every Synchro Code conversation will be deleted from this browser and from the Synchro server, including on your other devices. This can't be undone.": "Mọi cuộc trò chuyện Synchro Code sẽ bị xóa khỏi trình duyệt này và máy chủ Synchro, kể cả trên các thiết bị khác của bạn. Không hoàn tác được.",
+  "Turned on": "Đang bật", "List every skill directly": "Liệt kê trực tiếp mọi skill", "Custom connectors": "Connector tùy chỉnh", "Tools that delete data": "Công cụ xóa dữ liệu", "All directory connectors": "Mọi connector trong danh mục", "New sign-ups": "Đăng ký mới", "Apply to administrators": "Áp dụng cho quản trị viên", "Theme": "Giao diện",
+};
+export const UX_RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^(\d+) sessions? in this browser, kept in sync with the Synchro server\.$/, (m) => `${m[1]} phiên trong trình duyệt này, đồng bộ với máy chủ Synchro.`],
 ];

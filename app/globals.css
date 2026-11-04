@@ -5125,3 +5125,8 @@ main#main:focus{outline:0}
 .auth-lang button.on{background:var(--text);color:var(--bg)}
 .auth-notice{max-width:380px;margin:0 0 4px;padding:10px 14px;border-radius:14px;background:color-mix(in srgb,#d64545 9%,var(--card));font-size:13.5px;line-height:1.45;text-align:center;color:var(--text)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Đang tải một mục (tải chậm) */
+.view-load{flex:1;min-height:120px;display:grid;place-items:center;color:var(--text-3)}
+/* Thanh dưới ô soạn của Code: nhãn không xuống dòng ("Tự / động"); đang mở khung bên cạnh trên màn hình không rộng thì chỉ còn biểu tượng (nhãn vẫn có ở aria-label) */
+.cv-under .cv-modebtn,.cv-under .cv-gh{white-space:nowrap;flex:none}
+@media (max-width:1560px) and (min-width:761px){.cv:has(.cv-side:not(.hide)) .cv-under .cv-modebtn{font-size:0;gap:2px;padding:0 6px}}

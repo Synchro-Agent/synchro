@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { UsageIcon } from "./usageui";
-import { SettingsBody } from "./settings";
+import { lazyView } from "./lazy";
+const SettingsBody = lazyView(() => import("./settings").then((m) => m.SettingsBody));
 import { usePref, useApp } from "./store";
 import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";

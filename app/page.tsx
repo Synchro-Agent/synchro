@@ -15,31 +15,26 @@ import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
 import { BrandLogo } from "./brands";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
-import { HalftoneBg } from "./halftone";
-import { CodeView, type CodeMeta } from "./codeview";
+import { lazyView } from "./lazy";
+import type { CodeMeta } from "./codeview";
 import { answerAsk, deleteServerSession, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
-import { VoiceMode } from "./voicemode";
-import { SpeechView, TOOL_ICON } from "./speech/view";
+import { TOOL_ICON } from "./speech/toolicons";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { elSpeed, speakAI, type Speaking } from "./speak";
 import { applyEvent, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
-import { AuthComponent, type AuthUser, type Providers } from "./auth";
+import type { AuthUser, Providers } from "./auth";
 import { Markdown } from "./md";
-import { CommandPalette, type PaletteCmd, type PaletteGo } from "./palette";
-import { SaveSkillChip } from "./saveskill";
+import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
-import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
-import { Studio } from "./studio";
 import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
-import { BrainWorkspace, useBrainSync } from "./brainui";
-import { BrowserHub } from "./browserhub";
+import { useBrainSync } from "./brainsync";
 
 // Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
 const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
@@ -61,28 +56,53 @@ import { AUTO, fitModel, modelName, modelsSettled, refreshModels, useModels } fr
 import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";
-import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
-import { InboxPage, useInboxCount } from "./tasksui";
+import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { shortName } from "./names";
-import { ApprovalCard } from "./connectorsui";
 import { loadCaps, useCaps } from "./capsclient";
-import { artifactsAsCode, hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
+import { artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, mixExtra } from "./history";
 import { ContextMixer } from "./mixer";
 import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
-import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
+import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
-import { CustomizePage, HUB_DISCOVER, useStudios, type CzTab } from "./pluginsui";
-import { CONNECTORS_BROWSE, ConnLogo, ConnectorsPanel, type Conn } from "./connectorsui";
+import { cachedJson, HUB_DISCOVER, useStudios } from "./studios";
+import type { CzTab } from "./pluginsui";
+import { CONNECTORS_BROWSE, ConnLogo } from "./connlogo";
+import type { Conn } from "./connectorsui";
 import type { DirEntry } from "./connectordir";
 // Dữ liệu connector cho menu + ở ô chat (connector đã nối, danh mục để thêm).
 type CxData = { connectors: Conn[]; directory: DirEntry[] };
-import { IntroFilm, wantsIntro } from "./introfilm";
+import { wantsIntro } from "./introflag";
 type Say = (m: string) => void;
+
+// Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
+const CodeView = lazyView(() => import("./codeview").then((m) => m.CodeView));
+const SpeechView = lazyView(() => import("./speech/view").then((m) => m.SpeechView));
+const BrainWorkspace = lazyView(() => import("./brainui").then((m) => m.BrainWorkspace));
+const InboxPage = lazyView(() => import("./tasksui").then((m) => m.InboxPage));
+const CustomizePage = lazyView(() => import("./pluginsui").then((m) => m.CustomizePage));
+const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
+const ProjectsPage = lazyView(() => import("./projects").then((m) => m.ProjectsPage));
+const ProjectPage = lazyView(() => import("./projects").then((m) => m.ProjectPage));
+const Studio = lazyView(() => import("./studio").then((m) => m.Studio), null);
+const AppsGallery = lazyView(() => import("./appsui").then((m) => m.AppsGallery));
+const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), null);
+const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
+const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
+const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel));
+const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
+const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
+const SaveSkillChip = lazyView(() => import("./saveskill").then((m) => m.SaveSkillChip), null);
+const VoiceMode = lazyView(() => import("./voicemode").then((m) => m.VoiceMode), null);
+const CommandPalette = lazyView(() => import("./palette").then((m) => m.CommandPalette), null);
+const AuthComponent = lazyView(() => import("./auth").then((m) => m.AuthComponent), null);
+const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm), null);
+const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
+const PRELOAD: Partial<Record<View, () => void>> = { code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
 
@@ -377,8 +397,8 @@ function Composer(p: {
   const [skq, setSkq] = useState("");
   const [cx, setCx] = useState<CxData | null>(null);
   const loadSkl = () => Promise.all([
-    fetch("/api/skills").then((r) => r.json()).then((j) => (j.skills ?? []) as { name: string; enabled: boolean }[]).catch(() => []),
-    fetch("/api/plugins?view=lite").then((r) => r.json()).then((j) => (j.plugins ?? []) as { slug: string; name: string; enabled: boolean; mine: { enabled: boolean }; catalogId: string | null }[]).catch(() => []),
+    cachedJson<{ skills?: { name: string; enabled: boolean }[] }>("/api/skills").then((j) => j.skills ?? []),
+    cachedJson<{ plugins?: { slug: string; name: string; enabled: boolean; mine: { enabled: boolean }; catalogId: string | null }[] }>("/api/plugins?view=lite").then((j) => j.plugins ?? []),
   ]).then(([s, l]) => { setSkq(""); setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: !!x.catalogId?.startsWith("cd:") })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]); });
   const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [], directory: [] }));
   const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "add" || k === "access") void loadCx(); };
@@ -1012,7 +1032,9 @@ export default function Home() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Phiên hết hạn khi app đang mở: phủ màn hình đăng nhập lên trên, bên dưới giữ nguyên (đoạn chat đang mở, phần đang gõ, lượt đang chạy); đăng nhập lại là dùng tiếp.
   const [expired, setExpired] = useState(false);
-  useEffect(() => watchSession(() => setExpired(true)), []);
+  const signedIn = useRef(false);
+  signedIn.current = !!me;
+  useEffect(() => watchSession(() => { if (signedIn.current) setExpired(true); }), []);
   useEffect(() => { try { if (me) localStorage.setItem("signedIn", "1"); else if (me === null) localStorage.removeItem("signedIn"); } catch {} }, [me]);
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
@@ -1052,7 +1074,7 @@ export default function Home() {
   useEffect(() => { setActiveModel(model); }, [model]);
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
-  useEffect(() => { if (me) loadCaps(true); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (me) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
   useEffect(() => {
     if (me && view === "code" && !me.perms.features.code) setView("new");
@@ -1123,7 +1145,7 @@ export default function Home() {
   const [brw, setBrw] = useState<{ available: boolean; reason?: string; control?: boolean; ext?: { allowed: boolean; paired: boolean }; target?: "synchro" | "user" } | null>(null);
   // Synchro vừa bắt đầu làm ở trình duyệt nào (của Synchro / Chrome của bạn): khung trình duyệt chuyển sang đó.
   const [brwPrefer, setBrwPrefer] = useState<{ v: "synchro" | "user"; n: number } | null>(null);
-  useEffect(() => { fetch("/api/browser").then((r) => (r.ok ? r.json() : null)).then((j) => j && setBrw(j)).catch(() => {}); }, []);
+  useEffect(() => { if (me) fetch("/api/browser").then((r) => (r.ok ? r.json() : null)).then((j) => j && setBrw(j)).catch(() => {}); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const openBrowser = (ev: RunEv, chatId: number) => {
     if (ev.kind !== "ui" || !ev.text.startsWith("browser")) return;
     setBrwPrefer((p) => ({ v: ev.text === "browser:user" ? "user" : "synchro", n: (p?.n ?? 0) + 1 }));
@@ -1264,7 +1286,7 @@ export default function Home() {
   const [artQ, setArtQ] = useState("");
   const [czTab, setCzTab] = useState<CzTab>("hub");
   // Plugin gắn với các nút studio (Thiết kế / Trình bày / Tài liệu): tên và số skill để hiện trên nút.
-  const studios = useStudios();
+  const studios = useStudios(!!me);
   const openPlugins = () => { setCzTab("hub"); setView("customize"); };
   const chatsRef = useRef<Chat[]>([]);
   chatsRef.current = chats;
@@ -1659,7 +1681,7 @@ export default function Home() {
   // Mục trên thanh điều hướng: gọi như một hàm trả về JSX (không phải component định nghĩa lại mỗi lần vẽ), nên bấm vào không dựng lại
   // cả mục; biểu tượng cố định, không đổi hình khi rê / bấm. tip: tên đầy đủ khi nhãn ngắn hơn tên trang.
   const nav = ({ v, icon, label, badge, onPick, tip }: { v: View; icon: React.ReactNode; label: string; badge?: number; onPick?: () => void; tip?: string }) => (
-    <button key={v} data-nav={v} data-tip={tip} aria-current={view === v || (v === "projects" && view === "project") ? "page" : undefined} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
+    <button key={v} data-nav={v} data-tip={tip} onPointerEnter={() => PRELOAD[v]?.()} onFocus={() => PRELOAD[v]?.()} aria-current={view === v || (v === "projects" && view === "project") ? "page" : undefined} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
       <span className="rail-ic">{icon}</span><span className="rail-l">{label}</span>{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}
     </button>
   );
@@ -1690,7 +1712,7 @@ export default function Home() {
     chat: (id) => { setCur(id); setView("chat"); },
     artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
-    skillHub: goCustom,
+    skillHub: (name) => { try { if (name) sessionStorage.setItem("hub-q", name); } catch {} goCustom(); },
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -1965,11 +1987,11 @@ export default function Home() {
                     <span>{x.name}</span>
                   </button>
                   <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={sideProj === x.id} onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
-                  <ProjMenu p={x} open={sideProj === x.id} pin style={{ top: 34, right: 0, width: 240 }}
+                  {sideProj === x.id && <ProjMenu p={x} open pin style={{ top: 34, right: 0, width: 240 }}
                     onPin={() => { patchProj(x.id, { pinned: false }); setSideProj(null); }}
                     onEdit={() => { setSideProj(null); setEditProj(x.id); }}
                     onArchive={() => { patchProj(x.id, { archived: true }); setSideProj(null); if (view === "project" && curProj === x.id) setView("projects"); say("Đã lưu trữ dự án"); }}
-                    onDelete={() => { setSideProj(null); setDelProj(x.id); }} />
+                    onDelete={() => { setSideProj(null); setDelProj(x.id); }} />}
                 </div>
                 <div className={`fold ${open && kids.length ? "open" : ""}`}><div className="pj-kids">{kids.map(row)}</div></div>
               </div>

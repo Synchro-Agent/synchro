@@ -6,6 +6,7 @@ import { getLang, tr } from "./i18n";
 import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
 import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";
+import { PUBLISHABLE } from "./artifacts";
 
 export type AppInfo = { id: string; title: string; type: "html" | "react" | "svg"; visibility: "private" | "org"; conv: string; ident: string; created_at: number; updated_at: number; opens: number; mine: boolean; ownerName: string };
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
@@ -14,7 +15,7 @@ const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> 
   if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`);
   return j as T;
 };
-export const PUBLISHABLE = new Set(["html", "react", "svg"]);
+export { PUBLISHABLE };
 const appUrl = (id: string) => `${location.origin}/apps/${id}`;
 
 // ---------------------------------------------------------------- nút Xuất bản trên khung artifact

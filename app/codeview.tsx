@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MODES, PRESETS } from "./codeconst";
+export { MODES, PRESETS };
 import * as I from "./icons";
 import { Menu, Thinking } from "./ui";
 import { SideToggle } from "./brand";
@@ -46,12 +48,6 @@ type Ctx = { id: number; name: string; text: string; size: number; kind: "file" 
 type Say = (m: string) => void;
 
 const MAX_TOK = 128_000;
-export const MODES = [
-  { k: "auto", label: "Tự động", short: "Auto", desc: "Tự lập kế hoạch, viết code hay gỡ lỗi theo từng việc, và chuyển qua lại khi đang làm." },
-  { k: "plan", label: "Architect / Plan", short: "Plan", desc: "Chỉ phân tích cấu trúc và lập kế hoạch, không viết code dài." },
-  { k: "code", label: "Write / Code", short: "Code", desc: "Tập trung sinh code hoàn chỉnh, sẵn sàng chạy ngay." },
-  { k: "debug", label: "Debug", short: "Debug", desc: "Đọc lỗi, truy nguyên nhân gốc và đề xuất cách sửa." },
-] as const;
 const GUIDE_TABS = [
   { k: "start", l: "Bắt đầu", i: <I.Help size={16} /> },
   { k: "modes", l: "Chế độ", i: <I.Layers size={16} /> },
@@ -93,13 +89,6 @@ const RULES_SYS = [
   "Các giá trị dạng <REDACTED_KEY_N> là bí mật đã được che; giữ nguyên chúng trong code, không đoán giá trị.",
 ].join("\n");
 const STRICT_SYS = "CHỈ trả về code block, không giải thích, không lời dẫn.";
-export const PRESETS = [
-  { k: "next", label: "Next.js + Tailwind + TypeScript", rule: "Dùng Next.js App Router, Tailwind CSS và TypeScript strict. Ưu tiên Server Components, đặt tên file kebab-case." },
-  { k: "vite", label: "React + Vite + TypeScript", rule: "Dùng React 19 function components + hooks, Vite, TypeScript strict, CSS Modules." },
-  { k: "fastapi", label: "Python + FastAPI", rule: "Dùng Python 3.12, FastAPI, Pydantic v2, type hints đầy đủ, async/await." },
-  { k: "express", label: "Node.js + Express", rule: "Dùng Node.js 20, Express, ES modules, xử lý lỗi bằng middleware tập trung." },
-  { k: "go", label: "Go (net/http)", rule: "Dùng Go 1.22, net/http chuẩn, trả lỗi tường minh, không dùng global state." },
-] as const;
 const SUGGEST = [
   { t: "Sửa lỗi đăng nhập", d: "Viết hàm login có xử lý lỗi", q: "Viết hàm login bằng TypeScript gọi /api/login" },
   { t: "Dựng trang demo HTML", d: "Có nút bấm, chạy thử được ngay", q: "Tạo demo html có nút bấm để chạy thử" },
@@ -1132,7 +1121,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               </div>
             )}
             <QueueChips items={cq} onCancel={(qid) => setCq((q) => q.filter((x) => x.id !== qid))} />
-            <div className="composer cv-composer" data-drag={dragOn ? "1" : undefined}>
+            <div className="composer cv-composer" data-drag={dragOn ? "1" : undefined} onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button,a,input,textarea,select,label,[role=button],.menu,.attach,.cv-errbox,.cv-mention")) return; e.preventDefault(); ta.current?.focus(); }}>
               {errOpen && (
                 <div className="cv-errbox">
                   <div className="cv-mh"><I.Alert size={14} />Dán log lỗi / stack trace</div>

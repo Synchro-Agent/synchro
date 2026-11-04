@@ -10,6 +10,8 @@ import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
 import { Loader, Mark } from "./brand";
 import { usePref } from "./store";
+import { OCCUPATIONS } from "./names";
+export { OCCUPATIONS };
 import { LANG_NAMES, type Lang } from "./i18n";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
@@ -86,7 +88,6 @@ export type AuthUser = { id: string; email: string; name: string; avatar: string
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;
 // Cùng danh sách với Cài đặt → Tài khoản để hai nơi hiển thị khớp nhau.
-export const OCCUPATIONS = ["Student", "Engineering", "Design", "Product management", "Data science", "Marketing", "Sales", "Finance", "Operations", "Human resources", "Legal", "Other"];
 
 type Kind = "login" | "signup" | "profile";
 type Stage = "form" | "loading" | "success" | "error";
