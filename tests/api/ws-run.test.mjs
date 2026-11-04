@@ -112,5 +112,14 @@ ok(recalcRuns().length === 1 && recalcRuns()[0].cmd.join(" ") === "python3 /opt/
 ok(typeof r.j.recalc?.error === "string", "bước tính lại lỗi (image cũ chưa có công cụ): báo về, không làm hỏng lần chạy", JSON.stringify(r.j).slice(0, 300));
 ok(r.j.code === 0 && names(r).join() === "s/a.xlsx", "tệp vẫn được gửi về", JSON.stringify(names(r)));
 
+console.log("4. Log dài và tệp không gửi được");
+r = await call(bash(`for i in $(seq 1 6000); do echo "status line $i ------------------------------------------------------------------"; done; echo "RuntimeError: moov atom not found" >&2; for i in $(seq 1 6000); do echo "frame $i ------------------------------------------------------------------" >&2; done; echo "loi that o cuoi" >&2`));
+ok(r.j.out.startsWith("status line 1 ") && /status line 6000 /.test(r.j.out) && /Đã bỏ \d+ KB ở giữa/.test(r.j.out), "stdout dài: giữ đầu và cuối", r.j.out.length);
+ok(r.j.err.includes("loi that o cuoi") && r.j.err.length < 45_000, "stderr dài: lỗi cuối còn nguyên", r.j.err.length);
+r = await call(bash("for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do echo x > outputs/t$i.txt; done"));
+ok(r.j.files.length === 20 && r.j.skipped?.length === 2 && r.j.skipped.every((s) => /quá 20 tệp/.test(s)), "quá số tệp: báo riêng từng tệp bị bỏ", JSON.stringify(r.j.skipped));
+r = await call(bash("mkdir -p outputs/_preview; for i in 1 2 3 4 5 6 7 8 9 10 11 12; do echo x > outputs/_preview/f$i.png; done"));
+ok(names(r).length === 12 && !r.j.skipped, "đủ 12 ảnh tự xem như quy tắc nói với model", JSON.stringify(r.j.skipped));
+
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
