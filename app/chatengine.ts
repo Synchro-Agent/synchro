@@ -4,7 +4,7 @@ import { healScript } from "./skillheal";
 import { can, canModel, limit, permsOf, type UserRow } from "./authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
-import { ConnectorSession, connectorsPrompt, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
+import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
@@ -1078,7 +1078,12 @@ function withRecall(messages: unknown, recall: string): unknown {
 function fastTurn(body: Record<string, any>, user: UserRow, cli: NonNullable<ReturnType<typeof subCli>>, conv?: string): boolean { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (process.env.SYNCHRO_FAST_CHAT === "0" || body.noFast || !body.skills || body.feature === "code" || body.feature === "artifact" || body.project || body.studio || taskOf(body)) return false;
   if ((body.system && body.system !== DEFAULT_SYSTEM) || (Array.isArray(body.pinned) && body.pinned.length) || (Array.isArray(body.pickedSkills) && body.pickedSkills.length)) return false;
-  return needsNoTools(routeInput(body)) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? "")) && sessionPlain(user.id, conv, cli);
+  return needsNoTools(routeInput(body)) && !mentionsConnector(user.id, body.messages) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? "")) && sessionPlain(user.id, conv, cli);
+}
+// Câu ngắn nhắc tên connector của chính người dùng ("Notion của mình có gì mới?") là việc cần connector, dù trông như câu hỏi nhỏ: đường nhanh không có công cụ, cũng không có nút kết nối lại khi connector mất đăng nhập.
+function mentionsConnector(uid: string, messages: unknown) {
+  const text = fold(lastUserText(messages));
+  return !!text && listConnectors(uid).some((c) => { const n = fold(c.name); return n.length >= 3 && text.includes(n); });
 }
 const DEFAULT_SYSTEM = "Bạn là một trợ lý AI hữu ích.";
 /** Giữ chữ đầu của đường nhanh tới khi chắc đó không phải NEED_TOOLS (dấu hiệu này không được hiện cho người dùng). */
