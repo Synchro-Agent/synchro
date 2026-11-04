@@ -282,6 +282,9 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   if (bare && ![...out.values()].some((n) => n >= 2)) for (const [t, re, w] of FOLDED) if (re.test(ins) && !((t === "build" || t === "act") && HOWTO_FOLD.test(ins))) out.set(t, Math.max(out.get(t) ?? 0, w));
   // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
   if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)) out.delete("act");
+  // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.
+  if ((out.get("code") ?? 0) < 3 && (out.get("language") ?? 0) < 3 && wantsImageIns(ins)) out.set("act", Math.max(out.get("act") ?? 0, 5));
+  if (DRAW_CHART.test(ins) && !HOWTO.test(ins)) out.set("data", Math.max(out.get("data") ?? 0, 3));
   if (a.code) out.set("code", (out.get("code") ?? 0) + 5);
   if (a.trace) out.set("debug", (out.get("debug") ?? 0) + 6);
   if (MATH.test(ins)) out.set("reason", (out.get("reason") ?? 0) + 3);
@@ -445,6 +448,24 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
 }
 // Câu cần dữ liệu mới hoặc địa chỉ web: để lượt đầy đủ có công cụ trả lời.
 const FRESH = W("giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời tiết|hiện nay|hiện tại|bây giờ|năm nay|kết quả|lịch|latest|news|today|price|weather|current|score");
+// ---- xin ảnh ----
+// Xin ảnh phải tới lượt có công cụ (generate_image): đường nhanh không có công cụ nào. Biểu đồ, sơ đồ vẫn là việc dựng bằng code. Hỏi cách làm, hỏi nghĩa từ thì không phải xin ảnh.
+const IMG_CHART = W("biểu đồ|đồ thị|sơ đồ|lưu đồ|mindmap|flowchart|chart|graph|diagram|bieu do|do thi|so do|luu do");
+const IMG_ASK = W("(?:vẽ|tạo|làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen))|thiết kế|dựng|sinh|generate|create|make|draw|design|paint|sketch|render)(?:(?![.?!\\n]).){0,40}?(?:ảnh(?! hưởng)|hình ảnh|hình minh h(?:ọa|oạ)|hình vẽ|hình nền|(?<!cạnh )tranh(?! luận| chấp| cử| thủ| giành| đấu)|logo|poster|banner|image|picture|photo|illustration|artwork|wallpaper|avatar|sticker)|vẽ(?! (?:ra|nên|vời))|draw(?! (?:a |the )?conclusions?)(?=\\s)|paint (?:a|an|me)");
+const IMG_ASK_FOLD = W("(?:tao|ve|lam|thiet ke|dung)(?: (?:giup|ho|cho|minh|toi|em|mot|1|cai|buc|tam|con))* (?:anh|hinh anh|hinh minh hoa|hinh ve|hinh nen|tranh|logo|poster|banner)|ve (?:mot|1|cho|giup|ho|con|cai|buc|tam)");
+// "Vẽ sơ đồ", "draw a chart" là việc dựng bằng code, có công cụ: không đi đường nhanh, không dùng generate_image.
+const DRAW_CHART = W("(?:vẽ|ve|draw|plot|tạo|tao|create|make)(?:(?![.?!\\n]).){0,30}?(?:biểu đồ|đồ thị|sơ đồ|lưu đồ|mindmap|flowchart|chart|graph|diagram|bieu do|do thi|so do|luu do)");
+// Danh từ tự nó đã là xin ảnh khi câu ngắn ("logo cho quán cà phê", "poster sự kiện").
+const IMG_NOUN = W("hình minh h(?:ọa|oạ)|ảnh minh h(?:ọa|oạ)|ảnh bìa|ảnh đại diện|ảnh quảng cáo|ảnh sản phẩm|logo|poster|illustration|wallpaper");
+const IMG_NOUN_FOLD = W("hinh minh hoa|anh minh hoa|anh bia|anh dai dien|anh quang cao|anh san pham");
+const wantsImageIns = (ins: string) => {
+  if (!ins || IMG_CHART.test(ins) || HOWTO.test(ins) || QUESTION.test(ins)) return false;
+  const bare = noMarks(ins);
+  if (bare && (HOWTO_FOLD.test(ins) || QUESTION_FOLD.test(ins))) return false;
+  return IMG_ASK.test(ins) || (bare && IMG_ASK_FOLD.test(ins)) || (ins.length <= 80 && (IMG_NOUN.test(ins) || (bare && IMG_NOUN_FOLD.test(ins))));
+};
+/** Người dùng đang xin tạo ảnh (có dấu hay không dấu); dùng cho định tuyến, không phân loại nội dung dán vào. */
+export const wantsImage = (text: string) => { const w = splitAsk(text).ins.toLowerCase(); return wantsImageIns(stripHead(w) || w); };
 /**
  * Câu rõ ràng không cần công cụ: trò chuyện thật, hoặc câu hỏi kiến thức / ngôn ngữ ngắn, dễ, không có tệp, không cần dữ liệu mới, không phải sức khỏe, pháp lý, tài chính.
  * Những câu này đi đường nhanh: hướng dẫn hệ thống rất ngắn, không cầu nối MCP, không mục lục skill (chatengine.ts). Đoán sai không mất gì: model báo cần công cụ thì chạy lại lượt đầy đủ.
@@ -453,7 +474,7 @@ export function needsNoTools(q: RouteInput): boolean {
   // Dấu "#…", "[…:…]" là lệnh hoặc nhãn người dùng gõ có chủ đích: để lượt đầy đủ xử lý.
   if (q.attachments || q.images || q.files || q.docChars || q.studio || /(?:^|\s)#\w|\[\w+:/.test(q.text)) return false;
   const r = readOf(q), a = splitAsk(q.text);
-  if (r.follow || r.retry || r.stakes || a.code || a.trace) return false;
+  if (r.follow || r.retry || r.stakes || a.code || a.trace || wantsImage(q.text)) return false;
   if (r.task === "chat") return true;
   const ins = a.ins.toLowerCase();
   return ["qa", "language", "translate"].includes(r.task) && r.score <= 0 && !!ins && ins.length <= 200 && a.content < 500 && !/https?:|www\./.test(q.text) && !FRESH.test(ins);
