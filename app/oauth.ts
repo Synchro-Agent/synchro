@@ -1,7 +1,7 @@
 // Đăng nhập bằng Google / GitHub / Apple (OAuth 2.0 authorization code, chỉ chạy ở server).
 // Mỗi nhà cung cấp chỉ bật khi biến môi trường tương ứng đã được đặt trong .env.production.
 import crypto from "node:crypto";
-import { appUrl, AuthError, cookie, readCookie, type OAuthProfile } from "./authstore";
+import { appUrl, AuthError, cookie, db, readCookie, type OAuthProfile } from "./authstore";
 import { GH_API, GH_WEB } from "./github";
 
 export const PROVIDERS = ["google", "github", "apple"] as const;
@@ -16,6 +16,17 @@ export function configured(p: Provider) {
   return !!(env("APPLE_CLIENT_ID") && env("APPLE_TEAM_ID") && env("APPLE_KEY_ID") && env("APPLE_PRIVATE_KEY"));
 }
 export const providerStatus = () => Object.fromEntries(PROVIDERS.map((p) => [p, configured(p)])) as Record<Provider, boolean>;
+
+/** Lỗi đăng nhập gần nhất của từng nhà cung cấp, nếu chưa có lần đăng nhập thành công nào sau đó (nhãn "Sẵn sàng" chỉ biết biến môi trường đã đặt). */
+export function providerFailures() {
+  const out: Partial<Record<Provider, { at: number; detail: string }>> = {};
+  for (const p of PROVIDERS) {
+    const f = db().prepare("SELECT at, detail FROM audit WHERE action = 'oauth_failed' AND detail LIKE ? ORDER BY id DESC LIMIT 1").get(`${p}:%`) as { at: number; detail: string } | undefined;
+    const ok = db().prepare("SELECT at FROM audit WHERE action = 'login' AND detail = ? ORDER BY id DESC LIMIT 1").get(p) as { at: number } | undefined;
+    if (f && (!ok || ok.at < f.at)) out[p] = { at: f.at, detail: f.detail.slice(p.length + 2) };
+  }
+  return out;
+}
 
 export const redirectUri = (req: Request, p: Provider) => `${appUrl(req)}/api/auth/oauth/${p}/callback`;
 const rand = () => crypto.randomBytes(24).toString("base64url");

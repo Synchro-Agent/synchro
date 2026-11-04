@@ -2180,7 +2180,21 @@ addNew(VI2EN, { "Đang tắt": "Turned off", "Việc tự động không dùng �
 // Xuất skill / thư viện thành .zip (app/skillexport.ts).
 Object.assign(VI2EN, { "Đã xuất": "Exported", "Không xuất được skill này.": "Could not export this skill.", "Không có skill này.": "This skill does not exist.", "Không tìm thấy thư viện.": "Library not found." });
 // Bảo mật, quyền riêng tư, xóa dữ liệu
+Object.assign(EN2VI, {
+  "Password saved. Other devices were signed out.": "Đã lưu mật khẩu. Các thiết bị khác đã được đăng xuất.",
+  "Password saved. Other devices were signed out and the Synchro extension must be paired again.": "Đã lưu mật khẩu. Các thiết bị khác đã được đăng xuất và cần ghép nối lại tiện ích Synchro.",
+  "Create reset link": "Tạo đường dẫn đặt lại", "Reset link created": "Đã tạo đường dẫn đặt lại", "Password reset link": "Đường dẫn đặt lại mật khẩu", "Copy link": "Sao chép đường dẫn", "Link copied": "Đã sao chép đường dẫn", "Couldn't copy the link": "Không sao chép được đường dẫn",
+  "Send this link to them privately. It works once, expires in 24 hours, and signs them out everywhere. It is shown only now.": "Hãy gửi đường dẫn này cho họ qua kênh riêng. Đường dẫn dùng được một lần, hết hạn sau 24 giờ và đăng xuất họ khỏi mọi thiết bị. Đường dẫn chỉ hiện lúc này.",
+  "Sign-in failing": "Đăng nhập đang lỗi", "Last sign-in failed": "Lần đăng nhập gần nhất lỗi",
+  "Connected GitHub": "Đã kết nối GitHub", "Failed provider sign-in": "Đăng nhập qua nhà cung cấp lỗi", "Reset password with a link": "Đặt lại mật khẩu bằng đường dẫn", "Created password reset link": "Đã tạo đường dẫn đặt lại mật khẩu",
+  "Saved API key": "Đã lưu khóa API", "Removed API key": "Đã gỡ khóa API", "Changed API credit": "Đã đổi hạn mức API", "Changed default model": "Đã đổi model mặc định", "Changed main models": "Đã đổi các model chính",
+});
 Object.assign(VI2EN, {
+  "Mở Cài đặt": "Open Settings", "Đã xác minh email của bạn": "Your email is verified",
+  "Đặt lại mật khẩu": "Reset your password", "Mật khẩu mới": "New password", "Nhập lại mật khẩu mới": "Confirm new password", "Lưu mật khẩu mới": "Save new password", "Đang lưu…": "Saving…",
+  "Hai mật khẩu chưa khớp.": "The passwords don't match.", "Mật khẩu đã được đặt lại. Mọi thiết bị đã được đăng xuất.": "Your password was reset and every device was signed out.", "Đăng nhập": "Sign in",
+  "Đường dẫn này thiếu mã đặt lại. Hãy mở đúng đường dẫn quản trị viên đã gửi.": "This link has no reset code. Open the exact link your administrator sent.",
+  "Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy nhờ quản trị viên tạo đường dẫn mới.": "This password reset link is invalid or has expired. Ask your administrator for a new one.",
   "Ai có đường dẫn": "Anyone with the link", "Mọi người có tài khoản Synchro và có đường dẫn đều mở được": "Anyone with a Synchro account and the link can open it", "Ứng dụng dùng chung": "Shared app",
   "Codex định chạy lệnh trực tiếp trên máy chủ nên Synchro đã dừng lượt này để bảo vệ dữ liệu. Hãy nhắn lại, hoặc dùng model khác.": "Codex tried to run a command directly on the server, so Synchro stopped this turn to protect your data. Send your message again or use another model.",
   "Máy chủ sắp hết dung lượng đĩa nên tạm không nhận việc mới. Hãy thử lại sau.": "The server is almost out of disk space and is not taking new work for now. Try again later.",
@@ -2188,6 +2202,7 @@ Object.assign(VI2EN, {
   "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.": "The server is running a lot of code right now. Try again in a few seconds.",
 });
 RULES_EN.push(
+  [/^(Mật khẩu cũ đã được gỡ vì email chưa từng được xác minh, nên có thể do người khác đặt\. Nếu vẫn muốn đăng nhập bằng email, hãy đặt mật khẩu mới trong Cài đặt → Tài khoản\. )?Các thiết bị khác đã được đăng xuất, tiện ích Chrome đã ghép nối được gỡ(, connector đã được tắt \(bật lại trong Cài đặt nếu đúng là của bạn\))?\. Hãy kiểm tra hướng dẫn tùy chỉnh trong Cài đặt\.$/, (m) => `${m[1] ? "Your old password was removed because this email had never been verified, so someone else could have set it. To keep signing in with email, set a new password in Settings → Account. " : ""}Other devices were signed out and the paired Chrome extension was removed${m[2] ? ", and connectors were turned off (turn them back on in Settings if they are yours)" : ""}. Please review your custom instructions in Settings.`],
   [/^Bạn đã dùng hết (\d+) MB dung lượng tệp tải lên\.$/, (m) => `You have used all ${m[1]} MB of your upload storage.`],
   [/^Workspace đã vượt xa hạn mức (\d+) MB nên không bật được\. Hãy liên hệ quản trị viên để dọn bớt\.$/, (m) => `This workspace is far over its ${m[1]} MB limit and cannot start. Ask an administrator to clear some space.`],
 );

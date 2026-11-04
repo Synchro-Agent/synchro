@@ -200,7 +200,7 @@ function Account() {
     if (!pw || !me) return;
     if (pw.next !== pw.again) { app.say("Passwords do not match!"); return; }
     setBusy(true);
-    try { const r = await api<{ user: AuthUser }>("POST", "/api/auth/password", { current: pw.cur, password: pw.next }); app.setMe(r.user); setPw(null); app.say("Password saved"); }
+    try { const r = await api<{ user: AuthUser; signedOut?: number; devices?: number }>("POST", "/api/auth/password", { current: pw.cur, password: pw.next }); app.setMe(r.user); setPw(null); app.say(r.devices ? "Password saved. Other devices were signed out and the Synchro extension must be paired again." : r.signedOut ? "Password saved. Other devices were signed out." : "Password saved"); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   const deleteAccount = async () => {

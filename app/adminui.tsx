@@ -21,6 +21,7 @@ import { Pager } from "./pager";
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
 type Data = {
+  providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number };
   users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[];
 };
@@ -52,9 +53,14 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   admin_delete: ["Deleted account", "adm"], admin_revoke_session: ["Ended user session", "adm"], admin_signup_open: ["Opened sign-ups", "adm"],
   admin_signup_closed: ["Closed sign-ups", "adm"], admin_set_password: ["Set user password", "adm"], admin_set_perms: ["Changed user access", "adm"], admin_default_perms: ["Changed default access", "adm"], profile_updated: ["Updated profile", ""], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
 };
+Object.assign(ACTIONS, {
+  github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], admin_reset_link: ["Created password reset link", "adm"],
+  admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
+});
+export const ACTION_LABELS = ACTIONS;
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,
-  "Sign-ins": (a) => ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link"].includes(a),
+  "Sign-ins": (a) => ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset"].includes(a),
   "Admin actions": (a) => a.startsWith("admin_"),
 };
 const ENV: Record<keyof Providers, string> = { google: "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", github: "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET", apple: "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY" };
@@ -225,6 +231,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   const [lPage, setLPage] = useState(1);
   const [lq, setLq] = useState("");
   const [pw, setPw] = useState({ next: "", again: "", signOut: true });
+  const [resetFor, setResetFor] = useState<null | { email: string; url: string }>(null);
 
   const [api, setApi] = useState<ApiState | null>(null);
   const load = useCallback(() => call<Data>("GET", "/api/admin").then((x) => { setD(x); setErr(""); setMore(x.audit.length >= 100); }).catch((e) => setErr(e.message)), []);
@@ -298,8 +305,8 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
       <div className="row"><div><div className="t">Email and password</div><div className="d">Passwords are hashed with scrypt. Accounts lock for 15 minutes after repeated failed attempts.</div></div><span className="s-badge ok">On</span></div>
       {(["google", "github", "apple"] as const).map((p) => (
         <div key={p} className="row">
-          <div><div className="t">{METHOD[p]}</div><div className="d">{d.providers[p] ? "Ready. Users can sign in with this provider." : <>Not set up. Add <span className="mono" data-notr>{ENV[p]}</span> to the server environment.</>}</div></div>
-          <span className={`s-badge ${d.providers[p] ? "ok" : ""}`}>{d.providers[p] ? "Ready" : "Not set up"}</span>
+          <div><div className="t">{METHOD[p]}</div><div className="d">{d.providers[p] ? (d.providerFailures?.[p] ? <>Last sign-in failed {ago(d.providerFailures[p]!.at)}: <span data-notr>{d.providerFailures[p]!.detail}</span></> : "Ready. Users can sign in with this provider.") : <>Not set up. Add <span className="mono" data-notr>{ENV[p]}</span> to the server environment.</>}</div></div>
+          <span className={`s-badge ${d.providers[p] && !d.providerFailures?.[p] ? "ok" : ""}`}>{d.providers[p] ? (d.providerFailures?.[p] ? "Sign-in failing" : "Ready") : "Not set up"}</span>
         </div>
       ))}
 
@@ -398,6 +405,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
                     {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>Owner accounts can&apos;t be suspended or deleted from here.</p> : (
                       <div className="adm-actions">
                         <button className="btn" disabled={busy} onClick={() => { setPwFor(u); setPw({ next: "", again: "", signOut: true }); }}>Set new password</button>
+                        <button className="btn" disabled={busy} onClick={() => act(() => call<{ resetUrl: string }>("PATCH", `/api/admin/users/${u.id}`, { action: "reset_link" }).then((r) => setResetFor({ email: u.email, url: r.resetUrl })), "Reset link created")}>Create reset link</button>
                         <button className="btn" disabled={busy || !u.sessions} onClick={() => app.confirm("Sign this user out everywhere?", "Every active session for this account will end immediately.", "Sign out", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "signout" }), "User signed out everywhere"))}>Sign out everywhere</button>
                         {u.status === "active"
                           ? <button className="btn" disabled={busy} onClick={() => app.confirm("Suspend this account?", "They will be signed out everywhere and can't sign in until you restore the account.", "Suspend", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "suspend" }), "Account suspended"))}>Suspend</button>
@@ -449,6 +457,20 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
             <div className="modal-foot">
               <button className="btn" onClick={() => setPwFor(null)}>Cancel</button>
               <button className="btn dark" disabled={busy || pw.next.length < 8 || pw.next !== pw.again} style={pw.next.length < 8 || pw.next !== pw.again ? { opacity: 0.4 } : undefined} onClick={() => { const u = pwFor!; setPwFor(null); act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_password", password: pw.next, signOut: pw.signOut }), "Password updated"); }}>Save password</button>
+            </div>
+          </div>
+        </div>
+      </Fade>
+      <Fade show={!!resetFor}>
+        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setResetFor(null)}>
+          <div className="modal sm" style={{ width: 460 }}>
+            <h2 style={{ fontSize: 16 }}>Password reset link</h2>
+            <p className="mono" style={{ margin: "0 0 6px", fontSize: 12 }} data-notr>{resetFor?.email}</p>
+            <p className="d" style={{ margin: "0 0 12px" }}>Send this link to them privately. It works once, expires in 24 hours, and signs them out everywhere. It is shown only now.</p>
+            <input className="field mono" readOnly aria-label="Password reset link" value={resetFor?.url ?? ""} onFocus={(e) => e.target.select()} data-notr />
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setResetFor(null)}>Close</button>
+              <button className="btn dark" onClick={() => { navigator.clipboard?.writeText(resetFor?.url ?? "").then(() => app.say("Link copied"), () => app.say("Couldn't copy the link")); }}>Copy link</button>
             </div>
           </div>
         </div>

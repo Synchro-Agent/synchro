@@ -47,7 +47,7 @@ async function purgeEngine(uid: string) {
 
 export async function purgeUser(uid: string) {
   // uid rỗng hay lạ thì path.join(ROOT, uid) có thể trỏ vào thư mục chung của mọi người.
-  if (!/^[\w-]{8,64}$/.test(uid)) throw new Error(`purgeUser: mã tài khoản không hợp lệ: ${uid}`);
+  if (!/^[\w-]{8,64}$/.test(uid)) throw new Error("purgeUser: invalid uid");
   const step = async (name: string, f: () => unknown) => { try { await f(); } catch (e) { console.error(`[purge] ${name}`, e); } };
   // Lượt đang chạy phải dừng trước, nếu không nó ghi tiếp sau khi đã xóa. Một bước lỗi không được làm sót các bước sau.
   await step("runs", () => cancelUserRuns(uid));

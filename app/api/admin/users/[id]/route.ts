@@ -14,13 +14,13 @@ export const GET = handle(async (req, { params }: Ctx) => {
   return Response.json({ sessions: sessionsOf(u.id).map((s) => publicSession(s)), identities });
 });
 
-// { action: "suspend" | "restore" | "signout" | "set_password" (password, signOut) | "set_perms" (perms | null) }
+// { action: "suspend" | "restore" | "signout" | "set_password" (password, signOut) | "set_perms" (perms | null) | "reset_link" (→ resetUrl) }
 export const PATCH = handle(async (req, { params }: Ctx) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
   const body = await req.json();
-  await adminAct(req, user, (await params).id, body.action, body);
-  return Response.json({ ok: true });
+  const r = await adminAct(req, user, (await params).id, body.action, body);
+  return Response.json({ ok: true, ...(r ?? {}) });
 });
 
 // { confirm: "<email người dùng>" } để tránh xóa nhầm
