@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dựng bản production trên máy chủ rồi thay bản đang chạy (chạy bằng root): bash scripts/server-build.sh [thư mục app] [tên pm2] [pip]
+# Dựng bản production trên máy chủ rồi thay bản đang chạy (chạy bằng root): bash scripts/server-build.sh [thư mục app] [tên pm2] [pip] [cổng]
 #   bash /var/www/synchro/scripts/server-build.sh /var/www/synchro synchro pip
 # Không làm gián đoạn web:
 # - Dựng ở thư mục riêng không có data/ (dữ liệu lúc chạy: ~3.000 thư viện skill, hàng trăm nghìn tệp): build ngay trong thư mục app thì
@@ -8,9 +8,15 @@
 #   đang dùng, web trả 502 trong lúc cài.
 # - Bản build và thư viện mới chỉ thay bản cũ khi đã xong hết (đổi tên thư mục trên cùng ổ đĩa, rồi khởi động lại); lỗi ở bất kỳ bước nào
 #   thì web vẫn chạy bản cũ.
+# - Sau khi khởi động lại: gọi /api/health tối đa ~90 giây; không đạt thì tự trả bản trước về chỗ cũ, khởi động lại và báo lỗi (deploy dừng ở đây).
+# - Bản trước được giữ tới lần deploy sau, bên cạnh thư mục app (.synchro-prev-<tên>): rsync --delete của deploy không đụng tới.
+# - Tab đang mở từ bản cũ vẫn tải được chunk cũ: static của các bản trong ~1 ngày qua (ít nhất bản liền trước) được chép vào bản mới
+#   (.synchro-statics-<tên>; Next đọc danh sách .next/static lúc khởi động nên chép trước khi khởi động lại).
 set -euo pipefail
-APP="${1:-/var/www/synchro}"; PM2="${2:-synchro}"; PIP="${3:-}"
-B=$(mktemp -d "$(dirname "$APP")/.build-$(basename "$APP").XXXXXX")
+APP="${1:-/var/www/synchro}"; PM2="${2:-synchro}"; PIP="${3:-}"; PORT="${4:-}"
+SIDE="$(dirname "$APP")"; NAME="$(basename "$APP")"
+PREV="$SIDE/.synchro-prev-$NAME"; STATICS="$SIDE/.synchro-statics-$NAME"
+B=$(mktemp -d "$SIDE/.build-$NAME.XXXXXX")
 trap 'rm -rf "$B"' EXIT
 chown -R synchro:synchro "$APP"
 [ -n "$PIP" ] && su - synchro -c "cd $APP && .mkvenv/bin/pip install -q -r requirements.txt"
@@ -27,12 +33,74 @@ else
 fi
 chown -R synchro:synchro "$B"
 su - synchro -c "cd $B && NODE_OPTIONS=--max-old-space-size=3072 npx next build"
-rm -rf "$B/.next/cache" "$B/.next/server/route-cache" "$APP/.next-old" "$APP/node_modules-old"
-# Tráo: cùng ổ đĩa nên đổi tên gần như tức thì.
-[ -d "$APP/.next" ] && mv "$APP/.next" "$APP/.next-old"
+rm -rf "$B/.next/cache" "$B/.next/server/route-cache"
+NEWID=$(cat "$B/.next/BUILD_ID")
+
+# Chunk của các bản trước cho tab đang mở. Lưu static "thuần" của từng bản (trước khi trộn), nếu không chunk cũ được mang theo mãi.
+mkdir -p "$STATICS"
+OLDID=$(cat "$APP/.next/BUILD_ID" 2>/dev/null || true)
+if [ -n "$OLDID" ] && [ ! -d "$STATICS/$OLDID" ] && [ -d "$APP/.next/static" ]; then cp -a "$APP/.next/static" "$STATICS/$OLDID"; fi
+# Tính "một ngày" từ lúc bản đó bị thay, không phải lúc được dựng: bản chạy cả tuần vừa bị thay thì tab đang mở vẫn cần chunk của nó.
+[ -n "$OLDID" ] && [ -d "$STATICS/$OLDID" ] && touch "$STATICS/$OLDID"
+rm -rf "$STATICS/$NEWID"
+cp -a "$B/.next/static" "$STATICS/$NEWID"
+find "$STATICS" -mindepth 1 -maxdepth 1 -type d -mmin +1440 ! -name "$OLDID" ! -name "$NEWID" -exec rm -rf {} +
+for d in "$STATICS"/*/; do
+  [ "$(basename "$d")" = "$NEWID" ] || rsync -a --ignore-existing "$d" "$B/.next/static/"
+done
+
+# Cổng để gọi kiểm tra sức khỏe: tham số thứ 4, nếu không thì đọc từ pm2 (-p <cổng> hoặc PORT).
+if [ -z "$PORT" ]; then
+  PORT=$(su - synchro -c "pm2 jlist" 2>/dev/null | PM2_NAME="$PM2" node -e '
+    let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      try {
+        const e = JSON.parse(s.slice(s.indexOf("["))).find((x) => x.name === process.env.PM2_NAME)?.pm2_env ?? {};
+        const a = [].concat(e.args ?? []).map(String), i = a.indexOf("-p");
+        process.stdout.write(String(i >= 0 ? a[i + 1] : e.PORT ?? e.env?.PORT ?? ""));
+      } catch {}
+    });' || true)
+fi
+[ -z "$PORT" ] && [ "$PM2" = "synchro" ] && PORT=3001
+
+restart() { su - synchro -c "pm2 restart $PM2 --update-env" || su - synchro -c "cd $APP && pm2 start npm --name $PM2 -- start -- -p ${PORT:-3001} && pm2 save"; }
+# Đạt khi: /api/health báo đúng bản $1 (không phải tiến trình cũ còn sót), ghi được cơ sở dữ liệu và trang chủ không lỗi.
+# Không xét mã 503 của /api/health: đĩa gần đầy hay dịch vụ workspace tắt không phải lỗi của bản mới, trả bản cũ về cũng không hết.
+healthy() {
+  [ -n "$PORT" ] || return 0
+  for _ in $(seq 1 45); do
+    H=$(curl -sS --max-time 5 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true)
+    case "$H" in *"\"build\":\"$1\""*"\"db\":true"*) curl -fsS --max-time 15 -o /dev/null "http://127.0.0.1:$PORT/" && return 0 ;; esac
+    sleep 2
+  done
+  return 1
+}
+# Sau khi trả bản trước: chỉ cần trang chủ lên (bản trước của lần deploy đầu tiên chưa có /api/health).
+up() {
+  [ -n "$PORT" ] || return 0
+  for _ in $(seq 1 45); do curl -fsS --max-time 15 -o /dev/null "http://127.0.0.1:$PORT/" && return 0; sleep 2; done
+  return 1
+}
+
+# Tráo: cùng ổ đĩa nên đổi tên gần như tức thì. Bản đang chạy chuyển sang .synchro-prev để trả lại được.
+rm -rf "$PREV"; mkdir -p "$PREV"
+[ -d "$APP/.next" ] && mv "$APP/.next" "$PREV/next"
 mv "$B/.next" "$APP/.next"
-if [ -n "$NEWMOD" ]; then [ -d "$APP/node_modules" ] && mv "$APP/node_modules" "$APP/node_modules-old"; mv "$B/node_modules" "$APP/node_modules"; fi
+if [ -n "$NEWMOD" ]; then [ -d "$APP/node_modules" ] && mv "$APP/node_modules" "$PREV/node_modules"; mv "$B/node_modules" "$APP/node_modules"; fi
 chown -R synchro:synchro "$APP/.next" "$APP/node_modules"
-su - synchro -c "pm2 restart $PM2 --update-env" || su - synchro -c "cd $APP && pm2 start npm --name $PM2 -- start -- -p 3001 && pm2 save"
-rm -rf "$APP/.next-old" "$APP/node_modules-old"
-echo "build ok: $(cat "$APP/.next/BUILD_ID")"
+restart || true
+if [ -z "$PORT" ]; then echo "CẢNH BÁO: không biết cổng của $PM2 nên bỏ qua kiểm tra sức khỏe (truyền cổng ở tham số thứ 4)." >&2; fi
+if ! healthy "$NEWID"; then
+  echo "BẢN MỚI KHÔNG ĐẠT kiểm tra sức khỏe: trả lại bản trước." >&2
+  su - synchro -c "pm2 logs $PM2 --nostream --lines 40" >&2 || true
+  [ -d "$PREV/next" ] || { echo "Không có bản trước để trả lại." >&2; exit 1; }
+  rm -rf "$SIDE/.synchro-failed-$NAME"; mkdir -p "$SIDE/.synchro-failed-$NAME"
+  mv "$APP/.next" "$SIDE/.synchro-failed-$NAME/next"
+  mv "$PREV/next" "$APP/.next"
+  if [ -d "$PREV/node_modules" ]; then mv "$APP/node_modules" "$SIDE/.synchro-failed-$NAME/node_modules"; mv "$PREV/node_modules" "$APP/node_modules"; fi
+  restart || true
+  if up; then echo "Đã trả lại bản $OLDID, web đang chạy bình thường. Bản lỗi giữ ở $SIDE/.synchro-failed-$NAME để xem." >&2
+  else echo "ĐÃ TRẢ LẠI BẢN $OLDID NHƯNG VẪN KHÔNG ĐẠT: cần xử lý tay ngay (xem docs/van-hanh.md)." >&2; fi
+  exit 1
+fi
+rm -rf "$SIDE/.synchro-failed-$NAME"
+echo "build ok: $NEWID (bản trước giữ ở $PREV)"

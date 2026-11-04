@@ -132,6 +132,10 @@ export function cancelRun(id: string, uid: string): boolean {
   l.ctl.abort();
   return true;
 }
+/** Xóa tài khoản: dừng mọi lượt đang chạy của người này. */
+export function cancelUserRuns(uid: string) {
+  for (const l of live.values()) if (l.uid === uid) l.ctl.abort();
+}
 /** Ghi một bước của lượt đang chạy (lưu để mở lại trang vẫn thấy đủ) và gửi cho người đang theo dõi. Trả về số thứ tự bước. */
 export function progress(kind: RunEvent["kind"], text: string): number {
   const s = scope.getStore();

@@ -49,8 +49,15 @@ const tag = Date.now().toString(36);
 
 console.log("1. Bình luận và @nhắc tên");
 let r = await b("GET", `/api/apps/${app}/people?q=${encodeURIComponent("người c")}`);
+ok(r.s === 200 && !r.j.people.some((p) => p.id === ids.c), "người chưa từng mở ứng dụng không được gợi ý: không dò được danh sách thành viên", JSON.stringify(r.j));
+for (const q of ["a", "e", "n", "@", "collab", "synchro.test"]) ok(!(await b("GET", `/api/apps/${app}/people?q=${encodeURIComponent(q)}`)).j.people.some((p) => p.id === ids.c), `dò theo “${q}” không ra người lạ`);
+r = await b("POST", `/api/apps/${app}/comments`, { body: `nhắc người lạ ${tag}-la`, mentions: [ids.c] });
+ok(r.s === 200 && !r.j.comment.mentions.length, "nhắc người chưa tham gia: bị bỏ, không gửi được thông báo cho người lạ", JSON.stringify(r.j));
+await c("GET", `/api/apps/${app}?open=1`);
+r = await b("GET", `/api/apps/${app}/people?q=${encodeURIComponent("người c")}`);
 const pc = r.j?.people?.find((p) => p.id === ids.c);
-ok(r.s === 200 && pc && pc.name, "gõ @ tìm được đồng nghiệp theo tên (có dấu)", JSON.stringify(r.j));
+ok(r.s === 200 && pc && pc.name, "đã mở ứng dụng: gõ @ tìm được theo tên (có dấu)", JSON.stringify(r.j));
+ok(r.j.people.every((p) => !("email" in p)), "gợi ý không kèm email", JSON.stringify(r.j));
 ok(!(await b("GET", `/api/apps/${app}/people?q=collab-b`)).j.people.some((p) => p.id === ids.b), "không tự gợi ý chính mình");
 r = await b("POST", `/api/apps/${app}/comments`, { body: `@${pc.name} xem giúp cột hạn chót ${tag}`, mentions: [ids.c] });
 ok(r.s === 200 && r.j.comment.mentions.some((m) => m.id === ids.c) && r.j.comment.user.id === ids.b, "thêm bình luận có nhắc tên", JSON.stringify(r.j));

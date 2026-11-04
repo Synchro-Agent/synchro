@@ -70,6 +70,16 @@ const authFile = path.join(dir, "auth.json");
     const st = C.stallTurn(dir, tid, prompt);
     if (st.stall) { C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: C.STALL_TEXT } }); C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: 10 } }); return; }
     prompt = st.prompt;
+    // Như codex thật khi còn công cụ shell (read-only vẫn đọc được cả đĩa): báo mục lệnh rồi mới chạy. [mock:shell] kiểm tra Synchro dừng lượt ngay
+    // lúc đó: tiến trình còn sống sau 800 ms thì để lại dấu vết (coi như kết quả lệnh đã về tới model).
+    if (prompt.includes("[mock:shell]")) {
+      C.out({ type: "item.started", item: { id: "item_s", type: "command_execution", command: "cat ../../logins/codex/*/auth.json", status: "in_progress" } });
+      await C.sleep(800);
+      fs.writeFileSync(path.join(dir, "shell-ran"), "1");
+      C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: "đã đọc auth.json của người khác" } });
+      C.out({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } });
+      return;
+    }
     await C.sleep(150);
     C.out({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "**Chào hỏi**" } });
     const eff = (a.find((x) => x.startsWith("model_reasoning_effort=")) ?? "").split("=")[1];

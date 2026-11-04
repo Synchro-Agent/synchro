@@ -335,6 +335,8 @@ export function removeConnector(uid: string, id: string) {
   t.prepare("DELETE FROM connector_grants WHERE connector_id = ?").run(id);
 }
 
+/** Tài khoản chưa xác minh vừa được chủ thật của email nhận lại: connector có thể do người đăng ký trước gắn vào (gửi dữ liệu chat tới máy chủ của họ). */
+export const disableUserConnectors = (uid: string) => table().prepare("UPDATE connectors SET enabled = 0 WHERE user_id = ?").run(uid).changes;
 export const removeUserConnectors = (uid: string) => {
   const t = table();
   for (const x of ["connectors", "connector_auth", "connector_grants"]) t.prepare(`DELETE FROM ${x} WHERE user_id = ?`).run(uid);

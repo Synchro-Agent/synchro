@@ -34,9 +34,12 @@ ok(r.s === 401 || r.s === 403, "chưa đăng nhập thì không xuất bản đ�
 
 console.log("2. Quyền xem");
 r = await b("GET", "/api/apps");
-ok(r.j.apps.some((x) => x.id === id && !x.mine && x.ownerName), "tài khoản khác thấy ứng dụng của cả tổ chức (kèm tên chủ)", JSON.stringify(r.j).slice(0, 200));
+ok(!r.j.apps.some((x) => x.id === id), "người chưa mở không thấy ứng dụng dùng chung trong danh sách (đăng ký đang mở, người lạ không dò được)", JSON.stringify(r.j).slice(0, 200));
 r = await b("GET", `/api/apps/${id}?open=1`);
-ok(r.s === 200 && r.j.app.content.includes("v2") && r.j.app.title === "Bảng tin nhóm v2", "mở ứng dụng nhận đúng phiên bản mới nhất");
+ok(r.s === 200 && r.j.app.content.includes("v2") && r.j.app.title === "Bảng tin nhóm v2", "có đường dẫn: mở ứng dụng nhận đúng phiên bản mới nhất");
+r = await b("GET", "/api/apps");
+const seen = r.j.apps.find((x) => x.id === id);
+ok(seen && !seen.mine && seen.ownerName && !seen.ownerName.includes("@"), "đã mở: ứng dụng hiện trong danh sách, kèm tên chủ, không lộ email", JSON.stringify(seen));
 r = await a("POST", "/api/apps", { conv: "c2", ident: "rieng", title: "Ứng dụng riêng", type: "html", content: HTML, visibility: "private" });
 const pid = r.j.id;
 ok((await b("GET", `/api/apps/${pid}`)).s === 404 && !(await b("GET", "/api/apps")).j.apps.some((x) => x.id === pid), "ứng dụng riêng: người khác không thấy, không mở được");

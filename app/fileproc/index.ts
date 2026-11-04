@@ -5,6 +5,7 @@ import { type ContentBlock, FileError, LARGE_TOKENS, MAX_FILE_BYTES, estTokens }
 import { detectKind } from "./detect";
 import { pickExtractor } from "./extractors";
 import { chunkForRag, rank } from "./rag";
+import { checkQuota, claimFile, mayUse } from "./owners";
 
 const DIR = path.join(process.cwd(), ".cache", "files");
 
@@ -16,14 +17,17 @@ const safeId = (id: string) => /^[a-f0-9]{40}$/.test(id);
 // Hàm duy nhất: process_file(file) -> ContentBlock[]
 // File gốc lưu ở .cache/files/<id>.bin, kết quả trích lưu ở <id>.json để khỏi trích lại.
 // raw (Synchro Code): nhận mọi loại tệp; tệp không trích được nội dung vẫn được lưu kèm một dòng ghi chú cho model.
-export async function processFile(buf: Buffer, name: string, o: { raw?: boolean } = {}): Promise<Stored> {
+export async function processFile(buf: Buffer, name: string, uid: string, o: { raw?: boolean } = {}): Promise<Stored> {
   if (buf.length === 0 && !o.raw) throw new FileError(`"${name}" là tệp rỗng.`);
   if (buf.length > MAX_FILE_BYTES) throw new FileError(`"${name}" vượt quá giới hạn ${MAX_FILE_BYTES / 1024 / 1024}MB.`);
+  checkQuota(uid, buf.length);
   const id = createHash("sha1").update(buf).digest("hex");
   await mkdir(DIR, { recursive: true });
   try {
     const hit = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")) as Stored;
     if (hit.raw && !o.raw) throw new FileError(hit.err ?? `Không trích được nội dung từ "${name}".`);
+    // Có đúng nội dung tệp trong tay nên được là chủ, không lộ gì thêm.
+    claimFile(uid, id, buf.length);
     return { ...hit, name };
   } catch (e) { if (e instanceof FileError) throw e; /* chưa có cache */ }
   let kind = "binary", blocks: ContentBlock[] = [];
@@ -38,28 +42,30 @@ export async function processFile(buf: Buffer, name: string, o: { raw?: boolean 
     const rec: Stored = { id, name, kind, tokens: 0, large: false, raw: true, err, blocks: [{ type: "text", text: `(Tệp "${name}", ${buf.length.toLocaleString("vi-VN")} byte: không đọc được nội dung dạng chữ. ${err})` }] };
     await writeFile(path.join(DIR, id + ".bin"), buf);
     await writeFile(path.join(DIR, id + ".json"), JSON.stringify(rec));
+    claimFile(uid, id, buf.length);
     return rec;
   }
   const tokens = estTokens(blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join(""));
   const rec: Stored = { id, name, kind, tokens, large: tokens > LARGE_TOKENS, blocks };
   await writeFile(path.join(DIR, id + ".bin"), buf);
   await writeFile(path.join(DIR, id + ".json"), JSON.stringify(rec));
+  claimFile(uid, id, buf.length);
   return rec;
 }
 
 const esc = (s: string) => s.replace(/<\/file>/gi, "<\\/file>");
 
 /** Tệp gốc đã lưu (Synchro Code chép nguyên tệp vào workspace; Synchro tải tệp đính kèm lên trang web bằng browser_upload). */
-export async function storedFile(id: string): Promise<{ rec: Stored; buf: Buffer } | null> {
-  if (!safeId(id)) return null;
+export async function storedFile(id: string, uid: string): Promise<{ rec: Stored; buf: Buffer } | null> {
+  if (!safeId(id) || !mayUse(uid, id)) return null;
   try { return { rec: JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")), buf: await readFile(path.join(DIR, id + ".bin")) }; } catch { return null; }
 }
 
 // Ghép các file thành block cho messages[].content. Nội dung trích ra là DỮ LIỆU, bọc trong <file name="...">.
-export async function buildContext(ids: string[], names: Record<string, string>, query: string): Promise<ContentBlock[]> {
+export async function buildContext(ids: string[], names: Record<string, string>, query: string, uid: string): Promise<ContentBlock[]> {
   const out: ContentBlock[] = [];
   for (const id of ids) {
-    if (!safeId(id)) continue;
+    if (!safeId(id) || !mayUse(uid, id)) continue;
     let rec: Stored;
     try { rec = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")); } catch { continue; }
     const name = names[id] ?? rec.name;
@@ -87,7 +93,7 @@ export async function buildContext(ids: string[], names: Record<string, string>,
  * dạng (tối đa ~20 MB); cũ hơn thì giữ phần chữ (ảnh thành dòng ghi chú) để ngữ cảnh không phình mãi.
  */
 type Ref = { type?: string; id?: unknown; name?: unknown };
-export async function expandFileRefs(messages: unknown, query: string): Promise<unknown> {
+export async function expandFileRefs(messages: unknown, query: string, uid: string): Promise<unknown> {
   if (!Array.isArray(messages)) return messages;
   const at = messages.flatMap((m, i) => (m?.role === "user" && Array.isArray(m.content) && (m.content as Ref[]).some((b) => b?.type === "file_ref") ? [i] : []));
   if (!at.length) return messages;
@@ -100,7 +106,7 @@ export async function expandFileRefs(messages: unknown, query: string): Promise<
     for (const b of m.content) {
       if (b?.type !== "file_ref") { blocks.push(b); continue; }
       const id = typeof b.id === "string" ? b.id : "", name = String(b.name ?? "tệp").slice(0, 200);
-      const got = id ? await buildContext([id], { [id]: name }, query) : [];
+      const got = id ? await buildContext([id], { [id]: name }, query, uid) : [];
       if (!got.length) { blocks.push({ type: "text", text: `[Tệp đã gửi ở lượt trước: ${name} (không còn trên máy chủ)]` }); continue; }
       for (const x of got) {
         const heavy = x.type === "image" || x.type === "document" ? x.data.length : 0;

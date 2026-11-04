@@ -1,5 +1,6 @@
 import GlassFX from "./glass";
 import { I18n } from "./i18n";
+import { ChunkGuard } from "./chunkguard";
 import type { Metadata, Viewport } from "next";
 // Unbounded của bộ nhận diện (tự lưu trên máy chủ, đủ dấu tiếng Việt): chỉ cho logo và tiêu đề; chữ thường vẫn là Anthropic Sans.
 import "@fontsource-variable/unbounded/wght.css";
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body>{children}<GlassFX /><I18n /></body>
+      <body>{children}<GlassFX /><I18n /><ChunkGuard /></body>
     </html>
   );
 }

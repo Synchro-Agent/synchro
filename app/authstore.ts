@@ -307,7 +307,8 @@ export const sessionsOf = (userId: string) => db().prepare("SELECT * FROM sessio
 
 // ---- đăng ký / đăng nhập bằng email ----
 export function lookup(req: Request, email: string) {
-  limit("check:" + clientIp(req), 60, 10 * MIN);
+  // Chưa có email xác minh nên màn hình đăng nhập phải biết email đã có tài khoản chưa (đăng ký cũng báo trùng): chỉ giới hạn được tốc độ dò.
+  limit("check:" + clientIp(req), 30, 10 * MIN);
   const em = normEmail(email);
   const u = findByEmail(em);
   return { exists: !!u, hasPassword: !!u?.password_hash, methods: u ? methodsOf(u).filter((m) => m !== "password") : [], reserved: !u && ADMIN_EMAILS.has(em) };
@@ -317,7 +318,9 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   const ip = clientIp(req);
   const email = normEmail(email0);
   limit("login-ip:" + ip, 30, 15 * MIN);
-  limit("login-em:" + email, 10, 15 * MIN);
+  // Theo email + IP: người lạ thử sai liên tục không khóa được chủ tài khoản (ở IP khác); mức theo email lớn hơn nhiều để chặn dò từ nhiều IP.
+  limit(`login-em:${email}:${ip}`, 10, 15 * MIN);
+  limit("login-em:" + email, 100, 15 * MIN);
   const u = findByEmail(email);
   const ok = typeof pw === "string" && pw.length <= PW_MAX && (await verifyPassword(pw, u?.password_hash ?? null));
   if (!u || !ok) { audit("login_failed", { target: u, targetEmail: email, ip }); throw new AuthError("Email hoặc mật khẩu không đúng.", 401); }
@@ -359,6 +362,7 @@ export async function signup(req: Request, email0: unknown, pw0: unknown, profil
 export type OAuthProfile = { provider: string; subject: string; email: string | null; emailVerified: boolean; name: string; avatar: string | null };
 export function oauthLogin(req: Request, p: OAuthProfile) {
   const ip = clientIp(req);
+  let claimed: "" | "password" | "nopassword" = "";
   const ident = db().prepare("SELECT user_id FROM identities WHERE provider = ? AND subject = ?").get(p.provider, p.subject) as { user_id: string } | undefined;
   let u = ident ? getUser(ident.user_id) : undefined;
   if (!u) {
@@ -367,8 +371,9 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
     u = findByEmail(email);
     if (u) {
       // Email của tài khoản cũ chưa từng được xác minh → mật khẩu có thể do người khác đặt trước.
-      // Nhà cung cấp vừa xác minh chủ thật của email nên xóa mật khẩu và mọi phiên cũ.
+      // Nhà cung cấp vừa xác minh chủ thật của email nên xóa mật khẩu và mọi phiên cũ; route báo cho người dùng biết (claimed), gỡ thiết bị đã ghép, tắt connector.
       if (!u.email_verified) {
+        claimed = u.password_hash ? "password" : "nopassword";
         db().prepare("UPDATE users SET email_verified = 1, password_hash = NULL WHERE id = ?").run(u.id);
         db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
       }
@@ -387,16 +392,47 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
   const fromGithub = !!u.avatar?.includes("avatars.githubusercontent.com");
   if (p.avatar && (u.avatar === null || (p.provider === "google" && fromGithub))) db().prepare("UPDATE users SET avatar = ? WHERE id = ?").run(p.avatar, u.id);
   audit("login", { actor: u, ip, detail: p.provider });
-  return { user: u, cookie: createSession(u, req, p.provider) };
+  return { user: u, claimed, cookie: createSession(u, req, p.provider) };
 }
 
 // ---- tài khoản của chính mình ----
-export async function changePassword(req: Request, u: UserRow, cur: unknown, next: unknown) {
+/** Đổi mật khẩu thường là vì nghi bị lộ: đăng xuất mọi phiên khác, kẻ đang giữ phiên cũ không dùng tiếp được (phiên trượt tới 30 ngày). */
+export async function changePassword(req: Request, u: UserRow, cur: unknown, next: unknown, keepSession: string) {
   limit("pw:" + u.id, 10, 15 * MIN);
   if (u.password_hash && !(typeof cur === "string" && (await verifyPassword(cur, u.password_hash)))) throw new AuthError("Mật khẩu hiện tại không đúng.", 401);
   const pw = checkPassword(next, u.email);
   db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), u.id);
-  audit("password_changed", { actor: u, ip: clientIp(req) });
+  const signedOut = db().prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?").run(u.id, keepSession).changes;
+  audit("password_changed", { actor: u, ip: clientIp(req), detail: signedOut ? String(signedOut) : undefined });
+  return { signedOut };
+}
+
+// ---- đặt lại mật khẩu bằng đường dẫn do quản trị viên tạo ----
+// Chưa có dịch vụ gửi email nên người dùng quên mật khẩu nhờ quản trị viên gửi đường dẫn này qua kênh riêng. Mã nằm sau dấu # của đường dẫn: không vào nhật ký máy chủ.
+export function createResetLink(req: Request, admin: UserRow, t: UserRow) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(t.id);
+  db().prepare("INSERT INTO password_resets (token_hash, user_id, expires_at, created_by) VALUES (?, ?, ?, ?)").run(sha256(token), t.id, Date.now() + DAY, admin.id);
+  audit("admin_reset_link", { actor: admin, target: t, ip: clientIp(req) });
+  return `${appUrl(req)}/reset#${token}`;
+}
+export async function redeemResetLink(req: Request, token: unknown, next: unknown) {
+  const ip = clientIp(req);
+  limit("reset:" + ip, 10, 15 * MIN);
+  const bad = () => new AuthError("Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy nhờ quản trị viên tạo đường dẫn mới.", 400);
+  if (typeof token !== "string" || token.length > 100) throw bad();
+  const r = db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null } | undefined;
+  const u = r && !r.used_at && r.expires_at > Date.now() ? getUser(r.user_id) : undefined;
+  if (!u || u.status !== "active") throw bad();
+  const pw = checkPassword(next, u.email);
+  const hash = await hashPassword(pw);
+  db().transaction(() => {
+    db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, u.id);
+    db().prepare("UPDATE password_resets SET used_at = ? WHERE token_hash = ?").run(Date.now(), sha256(token));
+    db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
+  })();
+  audit("password_reset", { actor: u, target: u, ip });
+  return u;
 }
 
 export async function deleteOwnAccount(req: Request, u: UserRow, pw: unknown) {
@@ -418,6 +454,8 @@ export function adminStats() {
     suspended: n("SELECT COUNT(*) n FROM users WHERE status = 'suspended'"),
     sessions: n("SELECT COUNT(*) n FROM sessions WHERE expires_at > ?", now),
     failed24: n("SELECT COUNT(*) n FROM audit WHERE action = 'login_failed' AND at > ?", now - DAY),
+    // Bảng runs do runs.ts tạo khi có lượt đầu tiên.
+    ...(() => { try { return { runs24: n("SELECT COUNT(*) n FROM runs WHERE created_at > ?", now - DAY), runsFailed24: n("SELECT COUNT(*) n FROM runs WHERE status = 'error' AND created_at > ?", now - DAY) }; } catch { return { runs24: 0, runsFailed24: 0 }; } })(),
   };
 }
 
@@ -438,9 +476,10 @@ function target(admin: UserRow, id: string) {
   return t;
 }
 
-export async function adminAct(req: Request, admin: UserRow, id: string, action: unknown, body: Record<string, unknown> = {}) {
+export async function adminAct(req: Request, admin: UserRow, id: string, action: unknown, body: Record<string, unknown> = {}): Promise<{ resetUrl?: string } | void> {
   const t = target(admin, id);
   const ip = clientIp(req);
+  if (action === "reset_link") return { resetUrl: createResetLink(req, admin, t) };
   if (action === "set_password") {
     // Quản trị đặt mật khẩu mới cho người khác, không cần mật khẩu cũ. Mặc định đăng xuất mọi phiên của họ.
     const pw = checkPassword(body.password, t.email);

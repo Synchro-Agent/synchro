@@ -390,7 +390,7 @@ export const EN2VI: Record<string, string> = {
   "Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.": "Giới thiệu về bạn và dặn Synchro cách làm việc với bạn. Synchro coi đây là những gì nó vốn đã biết về bạn, cùng với tên gọi ở trên và những điều nó nhớ từ các cuộc trò chuyện, trong mọi đoạn chat, trong Synchro Code và khi trò chuyện bằng giọng nói, với mọi model, trên mọi thiết bị.",
   "e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point.": "Ví dụ: Mình là học sinh lớp 12 đang ôn thi THPT và IELTS. Luôn trả lời bằng tiếng Việt, giải thích từng bước, ngắn gọn và đi thẳng vào ý chính.",
   "> Fix the auth bug in signup flow": "> Sửa lỗi đăng nhập ở bước đăng ký",
-  "Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.": "Synchro chạy trên máy chủ riêng của chủ sở hữu. Đoạn chat của bạn lưu trong trình duyệt này; tệp, skill, connector và ứng dụng của bạn lưu trên máy chủ Synchro đó, phiên Synchro Code cũng vậy khi bật đồng bộ (Cài đặt → Synchro Code). Nội dung gửi cho model đi thẳng tới nhà cung cấp (Anthropic, OpenAI, Google) qua khóa API của máy chủ.",
+  "Synchro runs on its owner’s own server. Your chat list stays in this browser, but the server also keeps what it needs to answer and run your tools: recent replies (7 days), the sessions of the AI plans you signed in to, memory and brain notes, uploaded files, skills, connectors, apps and your Synchro Code workspace. What you send to a model goes to that provider (Anthropic, OpenAI, Google or xAI), normally through the plan you signed in with.": "Synchro chạy trên máy chủ riêng của chủ sở hữu. Danh sách đoạn chat nằm trong trình duyệt này, nhưng máy chủ cũng giữ những gì cần để trả lời và chạy công cụ: các lượt trả lời gần đây (7 ngày), phiên của các gói AI bạn đã đăng nhập, bộ nhớ và ghi chú bộ não, tệp tải lên, skill, connector, ứng dụng và workspace Synchro Code. Nội dung gửi cho model đi tới nhà cung cấp đó (Anthropic, OpenAI, Google hoặc xAI), thường qua gói bạn đã đăng nhập.",
   "Rate limit reported by the provider for your API key. When it runs out, replies wait until it resets.": "Hạn mức do nhà cung cấp báo cho khóa API của bạn. Hết hạn mức thì câu trả lời chờ tới khi được đặt lại.",
   "Optional spending caps for yourself. Leave empty for no limit. When a cap is reached, chats pause until it resets.": "Giới hạn chi tiêu tự đặt (không bắt buộc). Để trống là không giới hạn. Chạm giới hạn thì chat tạm dừng tới khi được đặt lại.",
   "Starts with your first message.": "Bắt đầu từ tin nhắn đầu tiên.",
@@ -621,7 +621,7 @@ export const EN2VI: Record<string, string> = {
   "Occupation": "Công việc",
   // Quyền truy cập
   "Access": "Quyền truy cập",
-  "Choose which models and features people can use. Administrators always have full access. Conversations, projects and files stay on each person's own device: administrators can't see them.": "Chọn model và tính năng mà mọi người được dùng. Quản trị viên luôn có toàn quyền. Đoạn chat, dự án và tệp nằm trên thiết bị của từng người: quản trị viên không xem được.",
+  "Choose which models and features people can use. Administrators always have full access. This page has no view of anyone's conversations or files, though chat data needed to answer, uploads and memory are stored on this server.": "Chọn model và tính năng mà mọi người được dùng. Quản trị viên luôn có toàn quyền. Trang này không có màn hình xem đoạn chat hay tệp của ai, nhưng dữ liệu chat cần để trả lời, tệp tải lên và bộ nhớ được lưu trên máy chủ này.",
   "Default for everyone": "Mặc định cho mọi người",
   "Applies to every account without custom access.": "Áp dụng cho mọi tài khoản không có quyền riêng.",
   "Models": "Model",
@@ -2179,6 +2179,70 @@ addNew(VI2EN, { "Đang tắt": "Turned off", "Việc tự động không dùng �
 
 // Xuất skill / thư viện thành .zip (app/skillexport.ts).
 Object.assign(VI2EN, { "Đã xuất": "Exported", "Không xuất được skill này.": "Could not export this skill.", "Không có skill này.": "This skill does not exist.", "Không tìm thấy thư viện.": "Library not found." });
+// Bảo mật, quyền riêng tư, xóa dữ liệu
+Object.assign(EN2VI, {
+  "Privacy policy": "Chính sách quyền riêng tư",
+  "Password saved. Other devices were signed out.": "Đã lưu mật khẩu. Các thiết bị khác đã được đăng xuất.",
+  "Password saved. Other devices were signed out and the Synchro extension must be paired again.": "Đã lưu mật khẩu. Các thiết bị khác đã được đăng xuất và cần ghép nối lại tiện ích Synchro.",
+  "Create reset link": "Tạo đường dẫn đặt lại", "Reset link created": "Đã tạo đường dẫn đặt lại", "Password reset link": "Đường dẫn đặt lại mật khẩu", "Copy link": "Sao chép đường dẫn", "Link copied": "Đã sao chép đường dẫn", "Couldn't copy the link": "Không sao chép được đường dẫn",
+  "Send this link to them privately. It works once, expires in 24 hours, and signs them out everywhere. It is shown only now.": "Hãy gửi đường dẫn này cho họ qua kênh riêng. Đường dẫn dùng được một lần, hết hạn sau 24 giờ và đăng xuất họ khỏi mọi thiết bị. Đường dẫn chỉ hiện lúc này.",
+  "Replies started (24h)": "Lượt trả lời (24 giờ)", "Replies failed (24h)": "Lượt trả lời lỗi (24 giờ)",
+  "Sign-in failing": "Đăng nhập đang lỗi", "Last sign-in failed": "Lần đăng nhập gần nhất lỗi",
+  "Connected GitHub": "Đã kết nối GitHub", "Failed provider sign-in": "Đăng nhập qua nhà cung cấp lỗi", "Reset password with a link": "Đặt lại mật khẩu bằng đường dẫn", "Created password reset link": "Đã tạo đường dẫn đặt lại mật khẩu",
+  "Saved API key": "Đã lưu khóa API", "Removed API key": "Đã gỡ khóa API", "Changed API credit": "Đã đổi hạn mức API", "Changed default model": "Đã đổi model mặc định", "Changed main models": "Đã đổi các model chính",
+});
+Object.assign(VI2EN, {
+  "Trang này mô tả những dữ liệu Synchro (synchro.net.nz) lưu khi bạn dùng dịch vụ, lưu ở đâu, trong bao lâu, gửi cho ai và cách bạn kiểm soát chúng.": "This page describes the data Synchro (synchro.net.nz) stores when you use the service, where it is kept, for how long, who it is sent to and how you control it.",
+  "Dữ liệu lưu trên máy chủ của Synchro": "Data stored on Synchro's server",
+  "email, tên, ảnh đại diện, hồ sơ bạn điền (họ tên, ngày sinh, nghề nghiệp), hướng dẫn tùy chỉnh. Mật khẩu chỉ được lưu dưới dạng băm (scrypt), không ai đọc được mật khẩu gốc. Giữ tới khi bạn xóa tài khoản.": "email, name, avatar, the profile you fill in (full name, date of birth, occupation) and custom instructions. Passwords are stored only as a hash (scrypt), so nobody can read the original. Kept until you delete your account.",
+  "Đăng nhập bằng Google, GitHub hoặc Apple:": "Sign in with Google, GitHub or Apple:",
+  "chúng tôi chỉ nhận email đã xác minh, tên và ảnh đại diện công khai. Không truy cập Gmail, Drive hay dữ liệu nào khác, trừ khi bạn tự kết nối GitHub cho Synchro Code.": "we only receive your verified email, name and public avatar. We don't access Gmail, Drive or anything else, unless you connect GitHub for Synchro Code yourself.",
+  "thời điểm đăng nhập, địa chỉ IP và loại trình duyệt, để bạn xem và đăng xuất các thiết bị trong Cài đặt → Tài khoản. Hết hạn sau 30 ngày không dùng.": "sign-in time, IP address and browser type, so you can review and sign out devices in Settings → Account. They expire after 30 days without use.",
+  "Lượt trả lời đang chạy và vừa xong:": "Running and recent replies:",
+  "tin nhắn, câu trả lời, các bước công cụ, để câu trả lời vẫn chạy khi bạn đóng trang. Tự xóa sau 7 ngày.": "messages, replies and tool steps, so a reply keeps running when you close the page. Deleted automatically after 7 days.",
+  "Phiên của ứng dụng AI bạn đã đăng nhập:": "Sessions of the AI apps you signed in to:",
+  "Claude Code, Codex, Antigravity, Grok chạy trên máy chủ bằng chính gói của bạn. Thông tin đăng nhập của các gói này (được mã hóa hoặc nằm trong thư mục riêng của tài khoản) và lịch sử phiên do chúng ghi được giữ tới khi bạn đăng xuất gói hoặc xóa tài khoản.": "Claude Code, Codex, Antigravity and Grok run on the server with your own plan. Their sign-in credentials (encrypted or in your account's own folder) and the session history they write are kept until you sign out of the plan or delete your account.",
+  "Bộ não và bộ nhớ:": "Brain and memory:",
+  "ghi chú được chắt lọc từ đoạn chat, ký ức, lịch sử hướng dẫn. Giữ tới khi bạn xóa hoặc tắt trong Cài đặt → Bộ não.": "notes distilled from your chats, memories and instruction history. Kept until you delete or turn them off in Settings → Brain.",
+  "Tệp tải lên:": "Uploaded files:",
+  "tệp gốc và phần chữ trích ra. Chỉ tài khoản đã tải tệp lên đọc được. Giữ tới khi bạn xóa tài khoản; tệp nhiều người cùng tải lên được xóa khi người cuối cùng rời đi.": "the original file and its extracted text. Only accounts that uploaded the file can read it. Kept until you delete your account; a file several people uploaded is deleted when the last of them leaves.",
+  "Sản phẩm và tệp tạo ra:": "Outputs and generated files:",
+  "tệp do model tạo (giữ 30 ngày), giọng nói đã tạo, artifact, ứng dụng đã xuất bản và dữ liệu của chúng, kết quả công cụ (giữ 30 ngày).": "files made by models (kept 30 days), generated speech, artifacts, published apps and their data, and tool results (kept 30 days).",
+  "Skill, plugin, connector, tác vụ tự động và thông báo:": "Skills, plugins, connectors, automated tasks and notices:",
+  "của riêng tài khoản bạn. Token kết nối được mã hóa trước khi lưu.": "belonging to your account. Connection tokens are encrypted before they are stored.",
+  "Synchro Code:": "Synchro Code:",
+  "phiên làm việc khi bật đồng bộ và tệp trong workspace (container riêng của bạn). Thư mục làm việc của code chạy trong chat tự xóa sau 24 giờ không dùng.": "sessions while syncing is on and the files in your workspace (your own container). Folders used by code run in chat are deleted after 24 hours without use.",
+  "Mức dùng:": "Usage:", "số token, model, thời điểm từng lượt, để tính hạn mức.": "tokens, model and time of each turn, used to calculate limits.",
+  "đăng ký, đăng nhập, thao tác quản trị, kèm email và IP, để phát hiện truy cập trái phép. Giữ 50.000 sự kiện gần nhất.": "sign-ups, sign-ins and admin actions with email and IP, used to detect unauthorized access. The latest 50,000 events are kept.",
+  "Dữ liệu lưu trong trình duyệt của bạn": "Data stored in your browser",
+  "Danh sách đoạn chat, dự án và tùy chọn giao diện nằm trong trình duyệt này. Xóa dữ liệu trang web là mất chúng, trừ phần đã có trên máy chủ nêu ở trên.": "Your chat list, projects and interface preferences live in this browser. Clearing site data removes them, except the parts on the server listed above.",
+  "Dữ liệu được gửi cho ai": "Who data is sent to",
+  "Nhà cung cấp mô hình AI bạn chọn": "The AI model provider you choose",
+  "(Anthropic, OpenAI, Google, xAI): tin nhắn, tệp đính kèm, kết quả công cụ của lượt đó, thường qua gói đăng ký bạn đã đăng nhập. Cách họ dùng dữ liệu theo chính sách của họ và gói của bạn.": "(Anthropic, OpenAI, Google, xAI): the messages, attachments and tool results of that turn, normally through the plan you signed in with. How they use the data depends on their policy and your plan.",
+  "ElevenLabs:": "ElevenLabs:", "văn bản và âm thanh khi bạn dùng tính năng giọng nói.": "text and audio when you use voice features.",
+  "Connector, GitHub, trang web:": "Connectors, GitHub, websites:",
+  "chỉ khi bạn kết nối hoặc yêu cầu; nội dung cần cho thao tác đó được gửi tới dịch vụ tương ứng.": "only when you connect or ask for them; the content needed for that action is sent to that service.",
+  "Ai xem được": "Who can see it",
+  "Trong giao diện, quản trị viên thấy email, tên, phiên đăng nhập, mức dùng và nhật ký bảo mật, không có màn hình đọc đoạn chat của người khác. Người vận hành máy chủ về mặt kỹ thuật có thể truy cập dữ liệu lưu trên máy chủ. Ứng dụng bạn chia sẻ bằng đường dẫn: mọi người có tài khoản Synchro và có đường dẫn đều mở được, kèm dữ liệu chung và bình luận của ứng dụng đó.": "In the interface, administrators see email, name, sessions, usage and the security log, with no screen for reading other people's chats. Whoever operates the server can technically access data stored on it. Apps you share by link can be opened by anyone with a Synchro account and the link, along with that app's shared data and comments.",
+  "Không dùng cookie quảng cáo hay theo dõi. Cookie chỉ dùng để giữ phiên đăng nhập và hoàn tất đăng nhập.": "We don't use advertising or tracking cookies. Cookies are only used to keep you signed in and to complete sign-in.",
+  "Xóa dữ liệu": "Deleting your data",
+  "Bạn có thể xóa tài khoản bất cứ lúc nào trong Cài đặt → Tài khoản → Xóa tài khoản. Synchro xóa mọi dữ liệu nêu trên của bạn, đăng xuất các gói AI và xóa workspace. Nhật ký bảo mật giữ lại sự kiện nhưng bỏ email và IP, trừ dòng ghi nhận việc xóa tài khoản. Dữ liệu còn trong bản sao lưu của máy chủ (nếu có) mất đi theo vòng xoay, tối đa khoảng 5 tuần. Dữ liệu đã gửi cho nhà cung cấp AI hoặc dịch vụ bạn kết nối do họ giữ theo chính sách của họ.": "You can delete your account at any time in Settings → Account → Delete account. Synchro deletes all the data listed above, signs out of your AI plans and deletes your workspace. The security log keeps the events without email or IP, except the entry recording the deletion. Data in server backups (if any) is gone as they rotate, within about 5 weeks. Data already sent to AI providers or services you connected is kept under their own policies.",
+  "Mở Cài đặt": "Open Settings", "Đã xác minh email của bạn": "Your email is verified",
+  "Đặt lại mật khẩu": "Reset your password", "Mật khẩu mới": "New password", "Nhập lại mật khẩu mới": "Confirm new password", "Lưu mật khẩu mới": "Save new password", "Đang lưu…": "Saving…",
+  "Hai mật khẩu chưa khớp.": "The passwords don't match.", "Mật khẩu đã được đặt lại. Mọi thiết bị đã được đăng xuất.": "Your password was reset and every device was signed out.", "Đăng nhập": "Sign in",
+  "Đường dẫn này thiếu mã đặt lại. Hãy mở đúng đường dẫn quản trị viên đã gửi.": "This link has no reset code. Open the exact link your administrator sent.",
+  "Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy nhờ quản trị viên tạo đường dẫn mới.": "This password reset link is invalid or has expired. Ask your administrator for a new one.",
+  "Ai có đường dẫn": "Anyone with the link", "Mọi người có tài khoản Synchro và có đường dẫn đều mở được": "Anyone with a Synchro account and the link can open it", "Ứng dụng dùng chung": "Shared app",
+  "Codex định chạy lệnh trực tiếp trên máy chủ nên Synchro đã dừng lượt này để bảo vệ dữ liệu. Hãy nhắn lại, hoặc dùng model khác.": "Codex tried to run a command directly on the server, so Synchro stopped this turn to protect your data. Send your message again or use another model.",
+  "Máy chủ sắp hết dung lượng đĩa nên tạm không nhận việc mới. Hãy thử lại sau.": "The server is almost out of disk space and is not taking new work for now. Try again later.",
+  "Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.": "The server is updating the workspace. Try again in a few minutes.",
+  "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.": "The server is running a lot of code right now. Try again in a few seconds.",
+});
+RULES_EN.push(
+  [/^(Mật khẩu cũ đã được gỡ vì email chưa từng được xác minh, nên có thể do người khác đặt\. Nếu vẫn muốn đăng nhập bằng email, hãy đặt mật khẩu mới trong Cài đặt → Tài khoản\. )?Các thiết bị khác đã được đăng xuất, tiện ích Chrome đã ghép nối được gỡ(, connector đã được tắt \(bật lại trong Cài đặt nếu đúng là của bạn\))?\. Hãy kiểm tra hướng dẫn tùy chỉnh trong Cài đặt\.$/, (m) => `${m[1] ? "Your old password was removed because this email had never been verified, so someone else could have set it. To keep signing in with email, set a new password in Settings → Account. " : ""}Other devices were signed out and the paired Chrome extension was removed${m[2] ? ", and connectors were turned off (turn them back on in Settings if they are yours)" : ""}. Please review your custom instructions in Settings.`],
+  [/^Bạn đã dùng hết (\d+) MB dung lượng tệp tải lên\.$/, (m) => `You have used all ${m[1]} MB of your upload storage.`],
+  [/^Workspace đã vượt xa hạn mức (\d+) MB nên không bật được\. Hãy liên hệ quản trị viên để dọn bớt\.$/, (m) => `This workspace is far over its ${m[1]} MB limit and cannot start. Ask an administrator to clear some space.`],
+);
 
 // Giao diện "Instrument": đầu trang, tab, nút mới.
 Object.assign(EN2VI, { "Libraries and skills Synchro uses when it works for you: add one from a repository link, upload one, or browse the license-checked directory.": "Thư viện và skill Synchro dùng khi làm việc cho bạn: thêm từ link repo, tải lên, hoặc khám phá danh mục đã kiểm tra giấy phép." });

@@ -109,11 +109,42 @@ try {
     const cmd = R.command("/x/claude", ["-p"], { HOME: "/e", PATH: "/usr/bin:/bin", CLAUDE_CODE_OAUTH_TOKEN: "tok" }, false, "/e/work/u1");
     const cmdPty = R.command("/x/agy", [], { HOME: "/e/logins/agy/u1", PATH: "/usr/bin" }, true, "/e/logins/agy/u1");
     delete process.env.SYNCHRO_ENGINE_USER;
-    ok(cmd.file === "sudo" && cmd.cwd === "/" && cmd.argv.slice(0, 8).join(" ") === "-n -u synchro-cli -- env -i -C /e/work/u1" && cmd.argv.includes("CLAUDE_CODE_OAUTH_TOKEN=tok") && cmd.argv.slice(-2).join(" ") === "/x/claude -p" && Object.keys(cmd.env).join() === "PATH",
+    ok(cmd.file === "sudo" && cmd.cwd === "/" && cmd.argv.slice(0, 8).join(" ") === "-n -u synchro-cli -- env -i -C /e/work/u1" && cmd.argv.slice(-2).join(" ") === "/x/claude -p" && Object.keys(cmd.env).join() === "PATH",
       "user riêng: sudo -n -u … -- env -i -C <thư mục làm việc> …, tiến trình sudo chạy từ /, chỉ truyền PATH cho sudo", JSON.stringify(cmd));
     ok(cmdPty.argv.includes("-C") && cmdPty.argv.includes(process.platform === "darwin" ? "/usr/bin/python3" : "script"), "user riêng + pty: bọc terminal giả bên trong sudo", JSON.stringify(cmdPty));
     const plain = R.command("/x/claude", ["-p"], { PATH: "/usr/bin" }, false, "/e/work/u1");
     ok(plain.file === "/x/claude" && plain.cwd === "/e/work/u1", "không có user riêng: chạy thẳng trong thư mục làm việc");
+    // Token không nằm trên dòng lệnh (ps của mọi user đều thấy): đi qua dòng đầu của stdin, prompt theo sau vẫn tới CLI nguyên vẹn.
+    ok(!cmd.argv.join(" ").includes("tok ") && !cmd.argv.some((a) => a.includes("=tok")) && cmd.stdinHead === "tok\n", "user riêng: token Claude không nằm trên dòng lệnh", JSON.stringify(cmd));
+    {
+      const fake = path.join(tmp, "fakebin");
+      fs.mkdirSync(fake, { recursive: true });
+      // sudo giả: bỏ "-n -u <user> --", chạy phần còn lại như sudo thật.
+      fs.writeFileSync(path.join(fake, "sudo"), '#!/bin/sh\nshift 4\nexec "$@"\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(fake, "env"), '#!/bin/sh\nexec /usr/bin/env "$@"\n', { mode: 0o755 });
+      process.env.SYNCHRO_ENGINE_USER = "synchro-cli";
+      const wd = path.join(tmp, "wd"); fs.mkdirSync(wd, { recursive: true });
+      const r = await R.runCli("/bin/sh", ["-c", 'cat; printf "|%s|" "$CLAUDE_CODE_OAUTH_TOKEN"; pwd'], { env: { CLAUDE_CODE_OAUTH_TOKEN: "bi-mat", PATH: `${fake}:/usr/bin:/bin` }, cwd: wd, stdin: "nội dung prompt\n" }).catch((e) => ({ stdout: String(e) }));
+      delete process.env.SYNCHRO_ENGINE_USER;
+      ok(/^nội dung prompt\n\|bi-mat\|/.test(r.stdout) && r.stdout.includes("wd"), "CLI nhận đúng token và prompt qua stdin", JSON.stringify(r));
+    }
+    // Cô lập theo tài khoản (SYNCHRO_ENGINE_BWRAP=1): chỉ thấy thư mục của chính mình, /proc riêng; lệnh không gắn tài khoản (cài CLI) không qua hộp.
+    {
+      const lg = path.join(HOME, "logins"), wk = path.join(HOME, "work");
+      const env = { CODEX_HOME: path.join(lg, "codex", "u1"), HOME, PATH: "/usr/bin" }, cwd = path.join(wk, "u1");
+      ok(R.isolate("/x/codex", ["exec"], env, cwd).file === "/x/codex", "mặc định không bật hộp (cần gói bubblewrap trên máy chủ)");
+      process.env.SYNCHRO_ENGINE_BWRAP = "1";
+      const b = R.isolate("/x/codex", ["exec"], env, cwd), j = b.argv.join(" ");
+      const noScope = R.isolate("/bin/sh", ["-c", "x"], { HOME, PATH: "/usr/bin" }, HOME);
+      const root = R.isolate("/x/codex", ["app-server"], env, wk).argv.join(" ");
+      const agy = R.isolate("/x/agy", [], { HOME: path.join(lg, "agy", "u1") }, path.join(wk, "u1"));
+      delete process.env.SYNCHRO_ENGINE_BWRAP;
+      ok(b.file === "bwrap" && j.indexOf(`--tmpfs ${lg}`) >= 0 && j.indexOf(`--tmpfs ${lg}`) < j.indexOf(`--bind ${env.CODEX_HOME} ${env.CODEX_HOME}`) && j.includes(`--bind ${cwd} ${cwd}`) && j.includes(`--chdir ${cwd}`) && j.endsWith("-- /x/codex exec"), "hộp: ẩn logins/ và work/ rồi chỉ gắn lại thư mục của tài khoản", j);
+      ok(j.includes("--unshare-pid") && j.includes("--proc /proc"), "hộp: /proc riêng, không đọc được biến môi trường của lượt khác", j);
+      ok(!j.includes(`--bind ${wk} `) && !root.includes(`--bind ${wk} `), "thư mục làm việc gốc không được gắn nguyên (lộ thư mục của người khác)", root);
+      ok(b.env.HOME === env.CODEX_HOME && agy.env.HOME === path.join(lg, "agy", "u1"), "HOME là thư mục của tài khoản (nhà engine chỉ đọc trong hộp)", JSON.stringify(b.env));
+      ok(noScope.file === "/bin/sh", "lệnh không gắn tài khoản (cài CLI, dọn thư mục) không đi qua hộp");
+    }
   }
 
   // Cài CLI giả lập như dev:mock (chép vào <home>/.local/bin, kèm địa chỉ máy chủ giả lập).
@@ -210,6 +241,20 @@ try {
     const ac = new AbortController(); setTimeout(() => ac.abort(), 300);
     const ab = await E.collect(S.engineFor("claude").runTurn({ prompt: "[mock:auth401]", env: A.engineEnv("claude", U2), signal: ac.signal }));
     ok(ab.error?.code === "aborted" || ab.error?.code === "auth", "bấm Dừng giữa lượt → dừng tiến trình", JSON.stringify(ab.error));
+  }
+
+  // Codex: "chỉ đọc" vẫn đọc được cả đĩa, và mọi thư mục đăng nhập cùng một user hệ thống.
+  {
+    const dir = A.engineEnv("codex", U).CODEX_HOME, mark = path.join(dir, "shell-ran");
+    const t0 = Date.now();
+    const r = await E.collect(S.engineFor("codex").runTurn({ prompt: "[mock:shell] đọc ../../logins/*", env: A.engineEnv("codex", U) }));
+    ok(/định chạy lệnh/.test(r.error?.message ?? "") && !r.text && Date.now() - t0 < 5000, "codex: model định chạy lệnh trên máy chủ → dừng lượt, không có câu trả lời", JSON.stringify(r));
+    await sleep(1200);
+    ok(!fs.existsSync(mark), "codex: tiến trình bị dừng trước khi kết quả lệnh kịp về", "tiến trình mock vẫn chạy tiếp");
+    const L = CE.CODEX_LOCAL;
+    ok(L.test("command_execution") && L.test("file_change") && !L.test("mcp_tool_call") && !L.test("agent_message") && !L.test("web_search") && !L.test("reasoning"), "chỉ chặn công cụ chạy trên máy chủ, không chặn công cụ Synchro / tìm web / câu trả lời");
+    const src = fs.readFileSync("app/ai/cli_engines.ts", "utf8");
+    ok(src.includes('"features.shell_tool=false"') && src.includes('"features.unified_exec=false"') && src.includes('"tools.view_image=false"'), "codex: gọi CLI với công cụ shell và xem tệp đã tắt");
   }
 
   // ------------------------------------------------------------------

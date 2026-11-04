@@ -131,8 +131,10 @@ try {
   await other("POST", "/api/auth/login", { email: "apps-b@synchro.test", password: "Member-pass-123" });
   const got = await other("POST", "/api/apps/data", { ref: { app: href.split("/").pop() }, op: "get", key: "notes", shared: true });
   ok(/Họp nhóm lúc 9 giờ/.test(got?.result?.value ?? ""), "tài khoản khác đọc được ghi chú vừa đăng trong ứng dụng", JSON.stringify(got));
+  ok(!(await other("GET", "/api/apps"))?.apps?.some((a) => a.id === href.split("/").pop()), "chưa mở đường dẫn: ứng dụng không hiện trong danh sách của người khác");
+  await other("GET", `/api/apps/${href.split("/").pop()}?open=1`);
   const apps = await other("GET", "/api/apps");
-  ok(apps?.apps?.some((a) => a.id === href.split("/").pop()), "ứng dụng hiện trong danh sách Ứng dụng của tài khoản khác");
+  ok(apps?.apps?.some((a) => a.id === href.split("/").pop()), "đã mở bằng đường dẫn: ứng dụng hiện trong danh sách Ứng dụng của tài khoản khác");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 const fails = results.filter((r) => !r[0]).length;
 console.log(`${results.length - fails}/${results.length} đạt`);

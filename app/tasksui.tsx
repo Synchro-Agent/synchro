@@ -257,6 +257,7 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
   const [events, setEvents] = useState<RunEv[] | null>(null);
   const [props, setProps] = useState<Proposal[]>([]);
   const [log, setLog] = useState(false);
+  const { openSettings } = useApp();
   const real = x.kind !== "notice" && x.status !== "waiting";
   useEffect(() => {
     if (!real) return;
@@ -286,6 +287,7 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
         {steps.length > 0 && <button className="btn ghost" onClick={() => setLog(!log)}><I.List size={14} />{log ? tr("Ẩn nhật ký") : `${tr("Nhật ký")} (${steps.length})`}</button>}
         {x.model && <span className="tk-model" data-notr>{modelName(x.model)}</span>}
       </div>}
+      {x.kind === "notice" && x.link?.startsWith("settings:") && <div className="tk-acts"><button className="btn" onClick={() => openSettings?.(x.link!.slice(9))}><I.Cog size={14} />{tr("Mở Cài đặt")}</button></div>}
       {x.kind === "notice" && x.link?.startsWith("app:") && <div className="tk-acts"><a className="btn" href={`/apps/${encodeURIComponent(x.link.slice(4))}#comments`} target="_blank" rel="noopener"><I.Chat2 size={14} />{tr("Mở bình luận")}</a></div>}
     </div>
   );

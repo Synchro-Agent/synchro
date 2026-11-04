@@ -200,7 +200,7 @@ function Account() {
     if (!pw || !me) return;
     if (pw.next !== pw.again) { app.say("Passwords do not match!"); return; }
     setBusy(true);
-    try { const r = await api<{ user: AuthUser }>("POST", "/api/auth/password", { current: pw.cur, password: pw.next }); app.setMe(r.user); setPw(null); app.say("Password saved"); }
+    try { const r = await api<{ user: AuthUser; signedOut?: number; devices?: number }>("POST", "/api/auth/password", { current: pw.cur, password: pw.next }); app.setMe(r.user); setPw(null); app.say(r.devices ? "Password saved. Other devices were signed out and the Synchro extension must be paired again." : r.signedOut ? "Password saved. Other devices were signed out." : "Password saved"); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   const deleteAccount = async () => {
@@ -312,7 +312,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
   const title = { shared: "Shared chats", artifacts: "Shared artifacts", files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
     <>
-      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
+      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chat list stays in this browser, but the server also keeps what it needs to answer and run your tools: recent replies (7 days), the sessions of the AI plans you signed in to, memory and brain notes, uploaded files, skills, connectors, apps and your Synchro Code workspace. What you send to a model goes to that provider (Anthropic, OpenAI, Google or xAI), normally through the plan you signed in with. <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: "underline" }}>Privacy policy</a></p>
       <H>Your data</H>
       <Row t="Export data" top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
