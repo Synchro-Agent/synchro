@@ -33,7 +33,8 @@ import { steerRun } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
 import { Studio } from "./studio";
-import { Confirm, LangModal, ProjectModal, Settings, ShareModal, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
+import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
+import { ShareModal } from "./shareui";
 import { BrainWorkspace, useBrainSync } from "./brainui";
 import { BrowserHub } from "./browserhub";
 
@@ -1622,7 +1623,6 @@ export default function Home() {
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
-    unshare: (id: number) => { setChats((cs) => cs.map((c) => (c.id === id ? { ...c, shared: false } : c))); say("Đã dừng chia sẻ"); },
     wipe: (what: "all" | "chats") => { if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); setChats([]); setProjects([]); setBanner(true); goNew(); },
     me: me ?? null, setMe, logout,
   };
@@ -1993,7 +1993,7 @@ export default function Home() {
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "share" && chat)}><ShareModal title={chat?.title ?? ""} onClose={() => setModal(null)} say={say} onCopy={() => chat && setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, shared: true } : c)))} /></Fade>
+      <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>

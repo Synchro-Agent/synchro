@@ -338,7 +338,7 @@ function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersio
 
 // ---------------------------------------------------------------- văn bản hành chính (NĐ 30/2020)
 // Bản xem trước khổ A4 đúng thể thức; khung không chạy script. Nội dung lỗi (JSON sai, thiếu trường) thì báo để model sửa.
-function VbhcView({ content, title, onError }: { content: string; title: string; onError?: (m: string) => void }) {
+export function VbhcView({ content, title, onError }: { content: string; title: string; onError?: (m: string) => void }) {
   const r = useMemo(() => parseVbhc(content), [content]);
   const box = useRef<HTMLDivElement>(null);
   // Trang A4 rộng 210 mm (~794 px): khung xem hẹp hơn thì thu nhỏ trang cho vừa (bản in vẫn đúng khổ).

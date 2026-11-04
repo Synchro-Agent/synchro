@@ -14,7 +14,7 @@ export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; labe
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;
 // pins: tài liệu ghim (chữ đã đọc từ tệp, luôn có trong ngữ cảnh của đoạn chat). critic: kết quả hội đồng phản biện theo từng phiên bản artifact.
 // named: người dùng tự đổi tên (không tự đặt tên nữa); titled: số tin của người dùng lúc Synchro tự đặt tên gần nhất.
-export type Chat = { id: number; title: string; named?: boolean; titled?: number; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; shared?: boolean; studio?: "design" | "slides" | "docs";
+export type Chat = { id: number; title: string; named?: boolean; titled?: number; msgs: Msg[]; pinned?: boolean; project?: number; inc?: boolean; studio?: "design" | "slides" | "docs";
   mixer?: { artifacts?: boolean; tools?: boolean; recent?: number }; compact?: { upto: number; text: string; at: number }; pins?: { name: string; text: string }[];
   critic?: Record<string, CriticEntry>;
   // browser: Synchro đã thao tác trình duyệt trong đoạn chat này (hiện nút mở lại khung trình duyệt cạnh đoạn chat).
@@ -73,7 +73,6 @@ export type AppApi = {
   ask: (text: string) => void;
   confirm: (title: string, text: string, ok: string, fn: () => void) => void;
   chats: Chat[];
-  unshare: (id: number) => void;
   exportData: () => void;
   wipe: (what: "all" | "chats") => void;
   close: () => void;
@@ -82,7 +81,7 @@ export type AppApi = {
   logout: () => void;
 };
 export const AppCtx = createContext<AppApi>({
-  say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, chats: [], unshare: () => {}, exportData: () => {}, wipe: () => {}, close: () => {},
+  say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, chats: [], exportData: () => {}, wipe: () => {}, close: () => {},
   me: null, setMe: () => {}, logout: () => {},
 });
 export const useApp = () => useContext(AppCtx);

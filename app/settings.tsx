@@ -22,6 +22,7 @@ import { SkillHub } from "./pluginsui";
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
 import { locale } from "./i18n";
+import { SharedChats } from "./shareui";
 import { saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
@@ -306,13 +307,12 @@ function Account() {
 function Privacy({ go }: { go: (t: string) => void }) {
   const app = useApp();
   const [panel, setPanel] = useState<"" | "shared" | "artifacts" | "files" | "feedback">("");
-  const shared = app.chats.filter((c) => c.shared);
   const files = app.chats.flatMap((c) => c.msgs.flatMap((m) => (m.files ?? []).map((f) => ({ f, c: c.title }))));
   const fb = app.chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
   const title = { shared: "Shared chats", artifacts: "Shared artifacts", files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
     <>
-      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats are kept in this browser; your files, skills, connectors and apps are kept on that Synchro server, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
+      <p className="d" style={{ margin: "0 0 12px" }}>Synchro runs on its owner’s own server. Your chats and projects are kept in this browser and synced to your account on that Synchro server (incognito chats never leave the browser); your files, skills, connectors and apps are kept on that server too, and so are your Synchro Code sessions while syncing is on (Settings → Synchro Code). What you send to a model goes straight to that provider (Anthropic, OpenAI, Google) through the server’s API key.</p>
       <H>Your data</H>
       <Row t="Export data" top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
@@ -325,7 +325,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{title}</h2>
-            {panel === "shared" && (shared.length ? shared.map((c) => <div key={c.id} className="item-row"><span style={{ flex: 1 }}>{c.title}</span><button className="btn danger" style={{ height: 26 }} onClick={() => app.unshare(c.id)}>Stop sharing</button></div>) : <div className="empty">No shared chats.</div>)}
+            {panel === "shared" && <SharedChats say={app.say} confirm={app.confirm} />}
             {panel === "artifacts" && <div className="empty">No shared artifacts.</div>}
             {panel === "files" && (files.length ? files.map((x, i) => <div key={i} className="item-row"><I.Clip size={14} /><span style={{ flex: 1 }}>{x.f}</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">No uploaded files.</div>)}
             {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}

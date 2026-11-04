@@ -90,34 +90,6 @@ export function ProjectModal({ onClose, onCreate, init, title = "Tạo dự án"
 }
 
 
-export function ShareModal({ title, onClose, say, onCopy }: { title: string; onClose: () => void; say: (m: string) => void; onCopy?: () => void }) {
-  const [mode, setMode] = useState<"priv" | "pub">("priv");
-  const link = `${typeof location !== "undefined" ? location.origin : ""}/share/${Math.abs(title.length * 7919 + 104729).toString(16)}-c0de-4a1b`;
-  return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal sy-modal">
-        <div className="sy-mh"><h2>Chia sẻ đoạn chat</h2><button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
-        <div className="sy-mb sy-share">
-          <p className="sy-sub" data-notr>{title}</p>
-          {(["priv", "pub"] as const).map((m) => (
-            <button key={m} className={`sy-opt ${mode === m ? "on" : ""}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
-              <span className="sy-opt-ic">{m === "priv" ? <I.Lock size={16} /> : <I.Globe size={16} />}</span>
-              <span><b>{m === "priv" ? "Riêng tư" : "Công khai"}</b><em>{m === "priv" ? "Chỉ bạn mới có quyền truy cập" : "Bất kỳ ai có liên kết đều có thể xem"}</em></span>
-              <span className="sy-radio" aria-hidden />
-            </button>
-          ))}
-        </div>
-        <div className="sy-mf">
-          <div>
-            <button className="btn" onClick={onClose}>Hủy</button>
-            <button className="btn dark" disabled={mode === "priv"} onClick={() => { navigator.clipboard?.writeText(link); onCopy?.(); say("Đã sao chép liên kết"); onClose(); }}>Sao chép liên kết</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function UpgradeModal({ onClose, say }: { onClose: () => void; say: (m: string) => void }) {
   const plans = [
     ["Free", "$0", "Trò chuyện trên web, iOS, Android và máy tính", "Gói hiện tại"],
