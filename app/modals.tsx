@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { searchSettings } from "./settingsindex";
 import * as I from "./icons";
 import { UsageIcon } from "./usageui";
 import { lazyView } from "./lazy";
@@ -181,6 +182,24 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
 export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
   const [tab, setTab] = useState(initial);
   const [q, setQ] = useState("");
+  // Dòng cài đặt vừa chọn từ kết quả tìm: cuộn tới và làm nổi lên một lúc (các tab tải dần nên chờ dòng xuất hiện).
+  const [spot, setSpot] = useState<{ tab: string; name: string } | null>(null);
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!spot) return;
+    let n = 0, t = 0;
+    const want = new Set([spot.name, tr(spot.name)].map((x) => x.trim()));
+    const look = () => {
+      const el = [...(body.current?.querySelectorAll<HTMLElement>(".row .t, h3, .adm-card-h b, .adm-perm-row .t") ?? [])].find((x) => want.has((x.textContent ?? "").trim()));
+      if (!el) { if (n++ < 30) t = window.setTimeout(look, 100); return; }
+      const row = el.closest<HTMLElement>(".row, .adm-perm-row, .adm-card") ?? el;
+      row.scrollIntoView({ block: "center" });
+      row.classList.add("s-flash");
+      t = window.setTimeout(() => row.classList.remove("s-flash"), 1800);
+    };
+    look();
+    return () => clearTimeout(t);
+  }, [spot]);
   const me = useApp().me;
   const admin = me?.isAdmin;
   const feat = me?.perms.features;
@@ -196,6 +215,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   ];
   // Tìm theo cả tên gốc (tiếng Anh) lẫn tên đang hiện ở giao diện tiếng Việt.
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => [n, tr(n, "vi")].some((x) => x.toLowerCase().includes(q.trim().toLowerCase())));
+  const hits = searchSettings(q, [...items, ...custom].map(([n]) => n), (x) => [x, tr(x, "vi"), tr(x, "en")]);
   const item = (n: string, ic: React.ReactNode) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} aria-current={tab === n ? "page" : undefined} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>;
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -203,12 +223,16 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
         <div className="s-nav">
           <div className="sy-snav-h"><b>Settings</b></div>
           <div className="s-search"><I.Search size={15} /><input placeholder="Search" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          {hits.length > 0 && <>
+            <div className="s-group">Matching settings</div>
+            {hits.map((h) => <button key={`${h.tab}:${h.name}`} className="s-item s-hit" onClick={() => { setTab(h.tab); setSpot({ ...h }); }}><span className="s-lbl">{h.name}<small>{h.tab}</small></span></button>)}
+          </>}
           <div className="s-group">Settings</div>
           {f(items).map(([n, ic]) => item(n, ic))}
           <div className="s-group">Customize</div>
           {f(custom).map(([n, ic]) => item(n, ic))}
         </div>
-        <div className="s-body" key={tab}>
+        <div className="s-body" key={tab} ref={body}>
           <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
           <Boundary resetKey={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
         </div>

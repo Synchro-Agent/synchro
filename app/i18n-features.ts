@@ -20,6 +20,7 @@ export const FX_VI2EN: Record<string, string> = {
 };
 export const FX_EN2VI: Record<string, string> = {
   "Retry": "Thử lại",
+  "Matching settings": "Cài đặt khớp",
   "AI voice credit per day": "Credit giọng AI mỗi ngày",
   "The ElevenLabs key is shared, so these caps stop one account from using all of it. Past a cap, people get the browser's voice until the next day (UTC). Used today:": "Khóa ElevenLabs dùng chung nên các mức này ngăn một tài khoản dùng hết. Quá mức, người dùng nghe giọng của trình duyệt tới ngày hôm sau (giờ UTC). Đã dùng hôm nay:",
   "Verified account": "Tài khoản đã xác minh",
