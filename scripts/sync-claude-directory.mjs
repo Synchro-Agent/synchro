@@ -79,7 +79,7 @@ const plugins = list.map((p) => {
 // Giấy phép đóng (thư mục ghi rõ: Proprietary, BUSL, PolyForm, SSAL, Commons Clause…): không sao chép (closed). Thư viện mở thay thế chọn tay
 // trong catalog/alternatives.json: thư viện mở của chính danh mục (alt) và repo mở trên GitHub khi danh mục không có (thêm vào danh mục với
 // id "gh/…", cùng mục ngành nghề). Không ghi giấy phép: đọc tệp LICENSE trong repo lúc cài (plugins.ts) như mọi repo khác.
-const OPEN = /^\(?\s*(MIT|MIT-0|Apache|BSD|0BSD|ISC|MPL|CC-BY|CC0|Unlicense|Zlib|WTFPL|PSF|Python|EPL|BSL-1\.0|LGPL|GPL|AGPL|Artistic|Unicode|BlueOak)/i;
+const OPEN = /^\(?\s*(MIT|MIT-0|Apache|BSD|0BSD|ISC|MPL|CC-BY|CC0|Unlicense\b|Zlib|WTFPL|PSF|Python|EPL|BSL-1\.0|LGPL|GPL|AGPL|Artistic|Unicode|BlueOak)/i;
 const isOpen = (l) => !l || l.split(/\s+(?:OR|AND|WITH)\s+/i).some((x) => OPEN.test(x.trim()));
 const ALT = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "catalog", "alternatives.json"), "utf8"));
 // Thư viện thư mục không ghi giấy phép nhưng lúc cài đọc ra giấy phép đóng (quản trị viên lấy từ GET /api/plugins/catalog?blocked=1, lưu thành catalog/license-blocked.json).

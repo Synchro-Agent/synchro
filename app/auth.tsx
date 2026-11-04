@@ -574,6 +574,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                             </BlurFade>
                         </motion.div>}
                     </AnimatePresence>
+                    {authStep === "email" && mode === "auth" && <p className="auth-note">Synchro runs on an AI plan you already pay for: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.</p>}
                     {authStep === "email" && mode === "auth" && <p className="auth-note auth-legal"><span>By continuing, you agree to the</span> <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> <span>and</span> <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>}
                 </motion.form>
             </motion.fieldset>

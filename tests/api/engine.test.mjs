@@ -464,6 +464,17 @@ try {
       fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M }));
       ok(g.at(-1).kind === "error" && /Không nối được công cụ/.test(g.at(-1).message) && !g.some((e) => e.kind === "text"), "Grok: lắp cầu nối hỏng thì báo lỗi, không chạy lượt thiếu công cụ", JSON.stringify(g));
     }
+    // Tệp tạm của lượt bị giết: dọn tệp cũ, không đụng tệp mới hay tệp khác.
+    {
+      const dir = path.join(HOME, "work", "sweep-test"); fs.mkdirSync(path.join(dir, "att", "20200101"), { recursive: true }); fs.mkdirSync(path.join(dir, "att", "20990101"), { recursive: true });
+      const oldF = path.join(dir, ".synchro-grok-old.txt"), newF = path.join(dir, ".synchro-grok-new.txt"), keep = path.join(dir, "ghi-chu.txt");
+      for (const f of [oldF, newF, keep]) fs.writeFileSync(f, "x");
+      const past = new Date(Date.now() - 10 * 86400_000);
+      fs.utimesSync(oldF, past, past); fs.utimesSync(keep, past, past); fs.utimesSync(path.join(dir, "att", "20200101"), past, past);
+      await R.sweepEngineTemp();
+      ok(!fs.existsSync(oldF) && fs.existsSync(newF) && fs.existsSync(keep), "dọn .synchro-* cũ, giữ tệp mới và tệp khác");
+      ok(!fs.existsSync(path.join(dir, "att", "20200101")) && fs.existsSync(path.join(dir, "att", "20990101")), "dọn thư mục đính kèm quá 7 ngày, giữ thư mục mới");
+    }
     const me = { id: UG, email: "g@synchro.test", email_verified: 1, status: "active" };
     await A.status("grok", UG, { fresh: true });
     const slow = await SUBS.subTurn({ user: me, model: "sub-grok/grok-4.7", system: "", messages: [{ role: "user", content: "[mock:slowgrok] chào" }] });

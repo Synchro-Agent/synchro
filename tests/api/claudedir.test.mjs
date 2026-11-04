@@ -81,12 +81,20 @@ r = await ask(`Đọc #tool=load_skill #args=${JSON.stringify({ name: sk })}`);
 const t3 = JSON.stringify(r.j ?? {});
 ok(new RegExp(`<skill name=\\\\"[^"\\\\]*${sk.replace(/[-]/g, "\\-")}`).test(t3) && t3.length > 400, "load_skill đọc đủ nội dung skill", t3.slice(0, 400));
 
+console.log("4b. Bảng lệnh và menu + không tải cả danh mục: gõ tìm thì hỏi máy chủ");
+r = await api("GET", "/api/plugins?view=lite");
+ok(r.s === 200 && !r.j.plugins.some((p) => p.catalogId?.startsWith("cd:")), "bản lite không có thư viện của danh mục", JSON.stringify(r.j?.plugins?.slice(0, 3)));
+r = await api("GET", `/api/plugins?view=lite&q=${encodeURIComponent(full.name)}`);
+ok(r.s === 200 && r.j.plugins.some((p) => p.id === pid), "gõ tên thì tìm được thư viện đã cài từ danh mục", JSON.stringify(r.j).slice(0, 300));
+
 console.log("5. Giấy phép đóng: không cài, có thư viện mở thay thế");
 r = await api("GET", "/api/plugins/catalog?q=legalzoom");
 const cl = r.j.items.find((x) => x.closed);
 ok(cl && cl.alt.length >= 1 && cl.alt.every((a) => a.id.startsWith("cd:")), "thư viện đóng được đánh dấu, kèm thư viện mở thay thế", JSON.stringify(cl));
 r = await api("POST", "/api/plugins", { action: "install", catalogId: cl?.id, scope: "org" });
 ok(r.s === 403 && /Giấy phép đóng/.test(r.j?.error ?? "") && r.j.error.includes(cl?.alt?.[0]?.name ?? "§"), "không cài thư viện đóng, chỉ ra thư viện thay thế", JSON.stringify(r.j));
+r = await api("GET", "/api/plugins/catalog?q=DeSlop");
+ok(r.j.items.find((x) => x.license === "UNLICENSED")?.closed === true, "thư viện ghi UNLICENSED tính là giấy phép đóng", JSON.stringify(r.j.items).slice(0, 300));
 r = await api("GET", "/api/plugins/catalog?q=dbt-labs");
 ok(r.j.items.some((x) => x.github && x.altFor.includes("dbt-toolkit")), "repo mở từ GitHub thay cho thư viện đóng (dbt-labs thay dbt-toolkit)", JSON.stringify(r.j.items.map((x) => x.name)));
 

@@ -468,6 +468,8 @@ export class AntigravityEngine implements Engine {
     const body = req.prompt + files;
     const prompt = !tooLong(sys + body) ? sys + body
       : tooLong(sys) ? fitTail(sys + body, ARG_MAX_BYTES) : sys + fitTail(body, ARG_MAX_BYTES - Buffer.byteLength(sys, "utf8"));
+    // Bị lược bớt thì nói cho người dùng biết, đừng để họ tưởng model còn nhớ đủ.
+    if (prompt.length < sys.length + body.length) yield { kind: "status", text: "Đoạn chat quá dài cho Antigravity: model chỉ đọc phần gần nhất của lịch sử" };
     const args = ["--output-format", "json"];
     if (req.model) args.push("--model", req.model);
     const ce = cliEffort(req.effort);

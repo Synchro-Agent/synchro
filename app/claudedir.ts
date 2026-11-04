@@ -20,6 +20,8 @@ function load() {
   try { mt = fs.statSync(file).mtimeMs; } catch { return null; }
   if (c && c.file === file && c.at === mt) return c;
   const data = JSON.parse(fs.readFileSync(file, "utf8")) as File;
+  // "UNLICENSED" nghĩa là không cấp quyền sao chép: coi như giấy phép đóng ngay khi đọc danh mục (lần đồng bộ sau tệp danh mục cũng ghi đúng). Chỉ chặn cài mới, thư viện đã cài vẫn giữ.
+  for (const p of data.plugins) if (p.license === "UNLICENSED") p.closed = true;
   const byId = new Map(data.plugins.map((p) => [p.id, p]));
   const text = new Map(data.plugins.map((p) => [p.id, `${p.name} ${p.summary} ${p.author} ${p.skills.join(" ")}`.toLowerCase()]));
   return (G.__claudeDir = { at: mt, file, data, byId, text });

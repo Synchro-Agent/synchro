@@ -412,6 +412,19 @@ function Composer(p: {
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
+  // Thư viện từ danh mục Claude không tải sẵn: gõ tìm thì hỏi máy chủ.
+  const [skCat, setSkCat] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[]>([]);
+  useEffect(() => {
+    const k = skq.trim();
+    if (k.length < 2) { setSkCat([]); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      fetch(`/api/plugins?view=lite&q=${encodeURIComponent(k)}`).then((r) => (r.ok ? r.json() : { plugins: [] })).then((j: { plugins?: { slug: string; name: string; enabled: boolean; mine: { enabled: boolean } }[] }) => {
+        if (live) setSkCat((j.plugins ?? []).filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: true })));
+      }).catch(() => {});
+    }, 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [skq]);
   const [cx, setCx] = useState<CxData | null>(null);
   const loadSkl = () => Promise.all([
     cachedJson<{ skills?: { name: string; enabled: boolean }[] }>("/api/skills").then((j) => j.skills ?? []),
@@ -565,7 +578,7 @@ function Composer(p: {
                 {skl && skl.length > 8 && <div className="cm-find"><I.Search size={14} /><input autoFocus value={skq} onChange={(e) => setSkq(e.target.value)} placeholder="Tìm skill hoặc thư viện" aria-label="Tìm skill hoặc thư viện" /></div>}
                 <div className="cm-list">
                   {skl === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !skl.length ? <div className="cm-empty">Chưa có skill nào đang bật</div>
-                    : (() => { const q = skq.trim().toLowerCase(); const l = (q ? skl.filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
+                    : (() => { const q = skq.trim().toLowerCase(); const l = (q ? [...skl, ...skCat].filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
                       <button key={k.id} className="menu-item" role="menuitemcheckbox" aria-checked={on} onClick={() => { setPicks(on ? picks.filter((x) => x.id !== k.id) : [...picks, { id: k.id, label: k.label }]); setMenu(false); setSub(null); ta.current?.focus(); }}>
                         {k.lib ? <I.Plugins /> : <I.Scroll />}<span className="cv-ell" data-notr>{k.label}</span>{on && <span className="ck"><I.Check /></span>}
                       </button>); })}

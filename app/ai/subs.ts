@@ -692,7 +692,11 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   const col: Collect = { atts: [], nativePdf: cli === "claude" };
   const old = resume ? null : recentMedia(msgs.slice(0, -1));
   const history = resume ? "" : msgs.slice(0, -1).map((m) => `[${m.role === "assistant" ? "assistant" : "user"}]\n${textOf(m.content, m.role === "user" ? { ...col, keep: (b) => old!.has(b) } : undefined)}`).filter((x) => x.trim()).join("\n\n");
-  const prompt = (history ? `<conversation_history>\n${history}\n</conversation_history>\n\n` : "") + textOf(last.content, col);
+  // Mở phiên mới cho đoạn chat dài (đổi model, sửa tin cũ): trình duyệt chỉ gửi các tin gần nhất. Model phải biết còn phần trước đó để không khẳng định "chưa nói gì",
+  // người dùng cũng phải biết để nhắc lại điều quan trọng.
+  const older = !resume ? total - msgs.length : 0;
+  const prompt = (history ? `<conversation_history>\n${older > 0 ? `[Đoạn chat này còn ${older} tin cũ hơn không có ở đây. Đừng khẳng định về chúng; cần thì hỏi lại người dùng.]\n\n` : ""}${history}\n</conversation_history>\n\n` : "") + textOf(last.content, col);
+  if (older > 0) o.onStatus?.(`Đoạn chat dài: ${SUB[cli].name} chỉ đọc ${msgs.length} tin gần nhất, ${older} tin cũ hơn không có trong lượt này. Điều quan trọng ở đó nên nhắc lại`);
   const run = resolvePlanModel(cli, o.user.id, splitKey(o.model).id, o.effort);
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);

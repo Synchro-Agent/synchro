@@ -1112,6 +1112,11 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
     res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
   }
   const j = await (await withSwitch(res, body, c.user, tried)).json().catch(() => ({}));
+  // Hết hạn mức ở mọi gói đã kết nối: nói thẳng là hết cả và lúc sớm nhất có lại (thẻ lỗi hiện giờ theo múi giờ của người dùng), đừng để người dùng tưởng đổi gói khác là được.
+  if (res.status === 429 && (j.planLimit || j.quota)) {
+    const now = await usableModels(c.user).catch(() => null);
+    if (now && !now.usable.length && now.plansOut.count > 1) { j.error = "Các gói đã kết nối đều đã hết hạn mức."; if (now.plansOut.resets) j.resetsAt = now.plansOut.resets; delete j.switchTo; }
+  }
   return Response.json({ ...j, model: j.model ?? used, ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
 }
 // Lỗi của gói mà còn model của gói khác dùng được: gợi ý sẵn để người dùng đổi bằng một lần bấm (máy chủ thật không có khóa API để đề nghị thay).
