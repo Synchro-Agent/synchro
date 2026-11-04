@@ -66,6 +66,11 @@ try {
     const cl = logOf(C, "codex")[0];
     ok(c.ok && c.cli === "codex", "chỉ có ChatGPT gói trả phí: dùng ChatGPT", c);
     ok(cl.args.includes("features.shell_tool=false") && cl.args.includes("features.unified_exec=false") && cl.args.includes("tools.view_image=false") && !cl.args.some((x) => x.includes("mcp_servers")), "Codex: cùng cờ tắt shell với lượt chat, không cầu nối", cl.args);
+    ok(!cl.args.includes("features.image_generation=false"), "lượt tạo ảnh của Codex vẫn có image_gen", cl.args);
+    // Lượt chat của Codex không được dùng image_gen dựng sẵn: ảnh đó không tới được người dùng.
+    const { "ai/cli_engines": E } = await loadTs(["ai/cli_engines"]);
+    let said = ""; for await (const e of new E.CodexEngine().runTurn({ prompt: "[mock:codexnative] vẽ con mèo", env: A.engineEnv("codex", C), workdir: path.join(HOME, "work", C) })) if (e.kind === "final") said = e.text;
+    ok(said === "NATIVE_OFF" && !walk(path.join(loginDir("codex", C), "generated_images")).length, "lượt chat của Codex tắt image_gen dựng sẵn", said);
   }
 
   console.log("2. Gói lỗi thì thử gói kế, báo lỗi thật");
@@ -394,6 +399,21 @@ try {
     const G = "u_ref2"; signIn(G, ["grok"]);
     const g = await gen(G, { reference });
     ok(!g.ok && g.tried[0].kind === "noref" && /không nhận ảnh gốc/.test(g.text) && !logOf(G, "grok").length, "Grok không nhận ảnh gốc: nói rõ, không âm thầm tạo ảnh khác", g);
+  }
+
+  console.log("8b. Cầu nối chạy CLI nhiều lần trong một lượt chat");
+  {
+    const { mcpbridge: M } = await loadTs(["mcpbridge"]);
+    const b = M.openBridge({ uid: "u", tools: [], call: async () => ({ content: "", is_error: false }) });
+    let first = 0, second = 0;
+    b.onPark(() => { first++; });
+    b.park();
+    ok(first === 1, "generate_image, thẻ duyệt: nhả khóa của lần chạy đang chạy");
+    b.onPark(() => { second++; });
+    ok(second === 0, "lần chạy CLI sau trên cùng cầu nối giữ khóa, không bị nhả ngay trước khi lắp cầu nối", second);
+    b.park();
+    ok(second === 1 && first === 1, "lần chạy sau lại nhả được khi nó tới lượt chờ", [first, second]);
+    b.close();
   }
 
   console.log("9. Hạn mức theo tài khoản");

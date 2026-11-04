@@ -366,7 +366,7 @@ export const IMAGE_TOOL = {
       prompt: { type: "string", description: "Mô tả chi tiết bức ảnh: chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Chữ cần xuất hiện trong ảnh thì viết nguyên văn trong ngoặc kép." },
       aspect_ratio: { type: "string", enum: [...ASPECTS], description: "Tỉ lệ khung hình, mặc định 1:1." },
       count: { type: "integer", minimum: 1, maximum: 4, description: "Số ảnh, từ 1 đến 4, mặc định 1." },
-      reference: { type: "string", description: "Khi cần sửa hoặc dựa trên một ảnh có sẵn: \"last\" là ảnh người dùng gửi gần nhất, số n là ảnh thứ n của tin nhắn đó, hoặc tên tệp ảnh trong đoạn chat (kể cả ảnh Synchro đã tạo)." },
+      reference: { type: "string", description: "Chỉ khi cần sửa hoặc dựa trên một ảnh có sẵn, ảnh mới hoàn toàn thì bỏ tham số này: \"last\" là ảnh gần nhất của đoạn chat (ảnh vừa tạo hoặc ảnh người dùng vừa gửi), số n là ảnh thứ n của tin gần nhất người dùng gửi ảnh, hoặc tên tệp ảnh trong đoạn chat (kể cả ảnh Synchro đã tạo)." },
     },
     required: ["prompt"],
   },

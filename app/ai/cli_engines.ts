@@ -345,7 +345,9 @@ export class CodexEngine implements Engine {
     // Hộp cát "chỉ đọc" của Codex vẫn đọc được cả đĩa, mà mọi thư mục đăng nhập thuộc cùng một user hệ thống: lệnh shell trên máy chủ đọc được
     // đăng nhập của người khác. Tắt hẳn công cụ shell và xem tệp (việc thật đều chạy trong workspace qua công cụ của Synchro); bản Codex nào không
     // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
-    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE];
+    // Tắt cả image_gen dựng sẵn (gói trả phí mới có): ảnh nó tạo nằm trong thư mục trên máy chủ, không thành tệp của người dùng, câu "đã lưu" thì đã được bỏ đường dẫn nên trông như thành công mà
+    // không có ảnh. Lượt chat tạo ảnh bằng generate_image của Synchro; đường nhanh thì model báo cần công cụ. Lượt tạo ảnh của imagegen.ts không đi qua đây nên vẫn có image_gen.
+    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE, "-c", "features.image_generation=false"];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật. codex exec không có ai bấm duyệt
     // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
     // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho

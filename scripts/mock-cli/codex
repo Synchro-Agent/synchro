@@ -84,6 +84,13 @@ const authFile = path.join(dir, "auth.json");
       for (let i = 0; i < C.imageCount(prompt); i++) C.saveImage(path.join(dir, "generated_images", tid, `ig_${i}.png`), "png");
       say("Saved."); return end();
     }
+    // [mock:codexnative]: như gói trả phí, model thấy image_gen dựng sẵn nếu Synchro không tắt: ảnh nằm trong thư mục trên máy chủ, không thành tệp của người dùng.
+    if (prompt.includes("[mock:codexnative]")) {
+      const on = !a.includes("features.image_generation=false"), f = path.join(dir, "generated_images", tid, "ig_native.png");
+      if (on) C.saveImage(f, "png");
+      C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: on ? `Saved ${f}` : "NATIVE_OFF" } });
+      return C.out({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } });
+    }
     if (prompt.includes("[mock:quota]")) { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
     const turn = C.bumpSession(dir, tid);
     const st = C.stallTurn(dir, tid, prompt);

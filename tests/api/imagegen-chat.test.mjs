@@ -2,6 +2,7 @@
 // công cụ của khóa API, ảnh thành tệp của đúng tài khoản, nhật ký làm việc, Dừng, hạn mức dung lượng, ảnh Antigravity tự tạo, đường nhanh. Phần lõi: tests/api/imagegen.test.mjs.
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = process.env.SYNCHRO_MOCK_URL ?? "http://127.0.0.1:4010";
@@ -93,6 +94,11 @@ console.log("2. Mọi model đều gọi được");
   }
   const cfg = JSON.parse(fs.readFileSync(path.join(dirOf("agy", A.uid), ".gemini/config/mcp_config.json"), "utf8"));
   ok(!cfg.mcpServers?.synchro, "xong lượt: cấu hình chung của Antigravity không còn cầu nối", cfg);
+  ok(logOf(A, "agy").every((l) => l.webHook === false), "lượt tạo ảnh không có quyền tìm web của lượt chat", logOf(A, "agy").map((l) => l.webHook));
+  // Lượt chat Antigravity đang chờ ảnh còn chạy: hook được trả lại phòng khi CLI đọc lại.
+  { const before = logOf(A, "agy").length, r = await run(A, { model: "sub-agy/gemini-3.8-flash", web: true, messages: ask(`Tạo ảnh ${tool({ prompt: "ảnh có bật tìm web" })}`) });
+    ok(r.s === 200 && isImg(r.j.files?.[0]) && logOf(A, "agy").length === before + 1 && logOf(A, "agy").at(-1).webHook === false, "bật tìm web ở lượt chat: lượt tạo ảnh vẫn không có quyền đó", logOf(A, "agy").at(-1));
+    ok(fs.existsSync(path.join(dirOf("agy", A.uid), ".gemini/config/hooks.json")), "hook của lượt chat đang chạy được trả lại sau khi tạo ảnh"); }
 
   const models = (await A.api("GET", "/api/models")).j?.providers ?? [];
   const api = models.find((p) => p.source === "api" && p.kind === "deepseek")?.models?.[0]?.key ?? models.flatMap((p) => (p.source === "api" ? p.models : []))[0]?.key;
@@ -106,6 +112,12 @@ console.log("2. Mọi model đều gọi được");
 
 console.log("3. Hướng dẫn cho model");
 {
+  // Synchro Code không có generate_image: hướng dẫn không được nhắc tới.
+  const cm = await run(A, { model: "sub-agy/gemini-3.8-flash", feature: "code", messages: ask("#sysgrep=mcp_synchro_generate_image") });
+  ok(cm.text === "SYSGREP: no", "Synchro Code: hướng dẫn không bảo dùng generate_image", cm.text);
+  const nm = await run(A, { model: "sub-agy/gemini-3.8-flash", messages: ask("#sysgrep=mcp_synchro_generate_image") });
+  ok(nm.text === "SYSGREP: yes", "lượt chat thường: hướng dẫn có generate_image", nm.text);
+
   const r = await run(A, { model: "sub-claude/haiku", messages: ask("chào #mcp") });
   ok(/công cụ Synchro: \d+/.test(r.text), "lượt đầy đủ có công cụ", r.text);
   const h = (await (await fetch(`${M}/_debug/hist`)).json().catch(() => ({})));
@@ -179,6 +191,25 @@ console.log("7. Ảnh gốc");
   ok(again.s === 200 && isImg(again.j.files?.[0]) && logOf(U, "agy").at(-1)?.refOk, "sửa tiếp theo tên tệp ảnh đã tạo", again.j);
   const miss = await run(U, { model: "sub-claude/haiku", messages: ask(`Sửa ${tool({ prompt: "x", reference: "khong-co.png" })}`) });
   ok(miss.s === 200 && !miss.j.files?.length && /Không thấy ảnh/.test(miss.text), "không thấy ảnh gốc: báo, không tạo ảnh khác thay vào", miss.text);
+
+  // "last" ở lượt sau: ảnh vừa tạo, không phải ảnh gửi từ đầu đoạn chat, cũng không bắt gửi lại.
+  const V = await account("l"); await signIn(V, ["claude", "agy"]);
+  const t1 = await run(V, { model: "sub-claude/haiku", messages: ask(`Vẽ ${tool({ prompt: "con mèo" })}`) });
+  const madeHash = createHash("sha1").update(Buffer.from(await (await fetch(`${B}/api/outputs/${t1.j.files?.[0]?.id}`, { headers: { cookie: V.cookie() } })).arrayBuffer())).digest("hex");
+  const hist = (extra = []) => [...extra, { role: "user", content: "vẽ con mèo" }, { role: "assistant", content: "Đã vẽ.", trace: t1.j.trace }];
+  const t2 = await run(V, { model: "sub-claude/haiku", messages: [...hist(), { role: "user", content: `Cho nó đội mũ ${tool({ prompt: "đội mũ", reference: "last" })}` }] });
+  ok(t2.s === 200 && isImg(t2.j.files?.[0]) && logOf(V, "agy").at(-1)?.refHash === madeHash, "\"last\" ở lượt sau: dùng ảnh vừa tạo, không bắt gửi lại", { t: t2.text, lg: logOf(V, "agy").at(-1)?.refHash, madeHash });
+  const upload = { role: "user", content: [{ type: "text", text: "ảnh này" }, { type: "image", media_type: "image/png", data: png }] }, reply = { role: "assistant", content: "Đẹp." };
+  const t3 = await run(V, { model: "sub-claude/haiku", messages: [...hist([upload, reply]), { role: "user", content: `Cho nó đội mũ ${tool({ prompt: "đội mũ", reference: "last" })}` }] });
+  ok(t3.s === 200 && logOf(V, "agy").at(-1)?.refHash === madeHash, "có ảnh gửi từ trước: \"last\" vẫn là ảnh tạo sau đó", logOf(V, "agy").at(-1)?.refHash);
+  const upHash = createHash("sha1").update(Buffer.from(png, "base64")).digest("hex");
+  const t4 = await run(V, { model: "sub-claude/haiku", messages: [{ role: "user", content: "vẽ con mèo" }, { role: "assistant", content: "Đã vẽ.", trace: t1.j.trace }, { role: "user", content: [{ type: "text", text: `Đổi nền ảnh này ${tool({ prompt: "đổi nền", reference: "last" })}` }, { type: "image", media_type: "image/png", data: png }] }] });
+  ok(t4.s === 200 && logOf(V, "agy").at(-1)?.refHash === upHash, "ảnh người dùng gửi sau ảnh đã tạo: \"last\" là ảnh gửi", logOf(V, "agy").at(-1)?.refHash);
+  // reference rỗng: tạo ảnh mới, không dùng ảnh cũ, không báo lỗi.
+  const e1 = await run(V, { model: "sub-claude/haiku", messages: ask(`Vẽ ${tool({ prompt: "con chó", reference: "" })}`) });
+  ok(e1.s === 200 && isImg(e1.j.files?.[0]) && logOf(V, "agy").at(-1)?.ref === null, "reference rỗng, chưa có ảnh nào: vẫn tạo được", e1.text);
+  const e2 = await run(V, { model: "sub-claude/haiku", messages: [upload, reply, { role: "user", content: `Vẽ ${tool({ prompt: "con chó", reference: "" })}` }] });
+  ok(e2.s === 200 && logOf(V, "agy").at(-1)?.ref === null, "reference rỗng, có ảnh cũ: không âm thầm lấy ảnh cũ làm mẫu", logOf(V, "agy").at(-1)?.ref);
 }
 
 console.log("8. Antigravity tự tạo ảnh trong lượt chat");

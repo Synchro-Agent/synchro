@@ -37,7 +37,7 @@ const onboarded = () => { try { return JSON.parse(fs.readFileSync(onboardFile, "
 async function agyImage(prompt, conv) {
   const m = C.imageMode(home, "agy"), dir = path.join(cli, "brain", conv), n = C.imageCount(prompt);
   const ref = /image at (\S+) as the reference/.exec(prompt)?.[1];
-  C.imageLog(home, { args: a.filter((x) => x !== prompt), home, cwd: process.cwd(), bridge: !!readJson(mcpFile).mcpServers?.synchro, webHook: hookAllows("search_web"), prompt, ref: ref ?? null, refOk: !!ref && fs.existsSync(ref) });
+  C.imageLog(home, { args: a.filter((x) => x !== prompt), home, cwd: process.cwd(), bridge: !!readJson(mcpFile).mcpServers?.synchro, webHook: hookAllows("search_web"), prompt, ref: ref ?? null, refOk: !!ref && fs.existsSync(ref), refHash: ref && fs.existsSync(ref) ? C.crypto.createHash("sha1").update(fs.readFileSync(ref)).digest("hex") : null });
   // Phiên trên đĩa chứa nguyên văn câu lệnh, như CLI thật: Synchro phải xóa sau lượt.
   const sess = path.join(cli, "conversations", `${conv}.pb`);
   fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
@@ -105,6 +105,8 @@ async function agyImage(prompt, conv) {
       process.exit(1);
     }
     if (C.isImageTurn(prompt)) return agyImage(prompt, conv);
+    // #sysgrep=<chữ>: cho kiểm thử biết hướng dẫn hệ thống có nhắc tới chữ đó không (đã bỏ chính dấu này khỏi câu hỏi).
+    { const m = /#sysgrep=(\S+)/.exec(prompt); if (m) return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: `SYSGREP: ${prompt.split(m[0]).join("").includes(m[1]) ? "yes" : "no"}`, error: "", duration_seconds: 0.1, num_turns: 1, usage: usage0 })); }
     // [mock:keepsession]: lượt chat chạy lâu và có phiên trên đĩa ngay từ đầu, mã phiên chỉ báo khi xong: lượt tạo ảnh chạy song song không được xóa nhầm.
     if (prompt.includes("[mock:keepsession")) {
       const sess = path.join(cli, "conversations", `${conv}.pb`);

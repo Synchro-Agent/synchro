@@ -27,7 +27,7 @@ import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
-import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
@@ -296,12 +296,13 @@ Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ
 const BRIDGE_CLIS = new Set(["claude", "codex", "agy", "grok"]);
 // Antigravity (-p): công cụ dựng sẵn của nó cần duyệt nên bị tự chặn (lượt dừng sau câu dẫn) — nói trước để model dùng ngay công cụ của
 // Synchro thay vì thử công cụ của agy rồi mới được nhắc (tin đầu "tóm tắt video YouTube" từng dừng ở "Mình sẽ lấy phụ đề qua lệnh script").
-const AGY_NOTE = (web: boolean) => `
-Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""} Tạo ảnh chỉ bằng mcp_synchro_generate_image, không dùng image-generator của Antigravity: chỉ công cụ đó mới giao được ảnh tới người dùng.`;
+const AGY_NOTE = (web: boolean, image: boolean) => `
+Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}${image ? " Tạo ảnh chỉ bằng mcp_synchro_generate_image, không dùng image-generator của Antigravity: chỉ công cụ đó mới giao được ảnh tới người dùng." : ""}`;
 // Grok CLI: công cụ MCP nằm sau search_tool / use_tool, tên đầy đủ là synchro__<tên>; công cụ dựng sẵn (shell, đọc / sửa tệp) bị tắt.
 const GROK_NOTE = ", tên đầy đủ là synchro__<tên> (ví dụ synchro__load_skill): tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó. Công cụ dựng sẵn của Grok (shell, đọc / sửa tệp) đã tắt ở đây";
-const CLI_TOOLS_NOTE = (cli: string, web = false) => `<synchro_tools>
-Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, generate_image, read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : cli === "grok" ? GROK_NOTE : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng. Thư mục làm việc của CLI có thể chỉ cho đọc: đó không phải lý do để từ chối tạo tệp — tệp (Word, Excel, PowerPoint, PDF, ảnh, video…) tạo bằng run_code của Synchro, ghi vào outputs/. Máy chạy CLI (shell, công cụ dựng sẵn của bạn) không phải nơi làm việc: mọi lệnh và chương trình (ffmpeg, LibreOffice, Chromium…) chạy trong run_code.${cli === "agy" ? AGY_NOTE(web) : ""}
+// image: Synchro Code không có generate_image, đừng nhắc tới công cụ không tồn tại.
+const CLI_TOOLS_NOTE = (cli: string, web: boolean, image: boolean) => `<synchro_tools>
+Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_skill_script, run_code, ${image ? "generate_image, " : ""}read_ref, update_plan, browser_* và công cụ của connector) nằm trong máy chủ MCP "synchro"${cli === "claude" ? ", gọi bằng tên có tiền tố mcp__synchro__ (ví dụ mcp__synchro__load_skill)" : cli === "agy" ? ", gọi bằng tên có tiền tố mcp_synchro_ (ví dụ mcp_synchro_load_skill)" : cli === "grok" ? GROK_NOTE : ""}. Dùng chúng đúng như mô tả; không cần công cụ nào khác để làm việc với skill, tệp hay dữ liệu của người dùng. Thư mục làm việc của CLI có thể chỉ cho đọc: đó không phải lý do để từ chối tạo tệp — tệp (Word, Excel, PowerPoint, PDF, ảnh, video…) tạo bằng run_code của Synchro, ghi vào outputs/. Máy chạy CLI (shell, công cụ dựng sẵn của bạn) không phải nơi làm việc: mọi lệnh và chương trình (ffmpeg, LibreOffice, Chromium…) chạy trong run_code.${cli === "agy" ? AGY_NOTE(web, image) : ""}
 </synchro_tools>`;
 // Artifact model viết giữa lượt (trước khi gọi công cụ — vd. viết bộ slide rồi check_artifact): lời dẫn chỉ giữ 4000 ký tự, không dựng
 // artifact và không thuộc câu trả lời cuối, nên bộ slide từng hiện thành mã CSS thô rồi mất hẳn, check_artifact cũng không thấy.
@@ -447,29 +448,48 @@ function keepImages(uid: string, files: ImgFile[], outs: OutFile[]) {
   return { saved, left };
 }
 const IMG_REF_MAX = 20 * 1048576;
-/** Ảnh gốc của lời gọi generate_image: ảnh người dùng gửi trong tin gần nhất có ảnh, hoặc theo tên tệp trong đoạn chat (ảnh Synchro đã tạo ở lượt này hay lượt trước). */
-async function refImage(x: Exec, ref: string): Promise<ImgFile | string> {
-  const want = ref.trim(), msgs = (Array.isArray(x.msgs) ? x.msgs : []) as { role?: string; content?: unknown }[];
-  type B = { type?: string; data?: string; media_type?: string; name?: string; source?: { data?: string; media_type?: string } };
-  let latest: ImgFile[] = [];
-  for (const m of [...msgs].reverse()) {
-    if (m?.role !== "user" || !Array.isArray(m.content)) continue;
-    latest = (m.content as B[]).flatMap((b, i) => { const d = b?.type === "image" ? b.data ?? b.source?.data : undefined; return typeof d === "string" && d ? [{ name: b.name ?? `anh-${i + 1}`, mime: b.media_type ?? b.source?.media_type ?? "", data: Buffer.from(d, "base64") }] : []; });
-    if (latest.length) break;
+/** Tên ảnh cuối cùng generate_image đã giao trong một câu trả lời cũ, đọc từ dấu vết công cụ trình duyệt gửi kèm lịch sử (dòng trong <files> của kết quả công cụ). */
+function tracedImage(trace: unknown): string | null {
+  const ok = (Array.isArray(trace) ? trace : []) as { name?: string; status?: string; summary?: string }[];
+  for (const t of [...ok].reverse()) {
+    if (t?.name !== IMAGE_TOOL.name || t.status !== "ok") continue;
+    const names = [...String(t.summary ?? "").matchAll(/^(.+?) \([^()\n]*\) — đã gửi cho người dùng$/gm)];
+    if (names.length) return names[names.length - 1][1];
   }
-  const mine = () => x.outs.filter((o) => !o.skipped && o.mime.startsWith("image/"));
+  return null;
+}
+/** Ảnh gốc của lời gọi generate_image. "last": ảnh gần nhất của đoạn chat, là ảnh vừa tạo hay ảnh người dùng gửi, tùy cái nào sau ("cho nó đội mũ" là nói ảnh vừa tạo, không phải ảnh gửi từ đầu chat).
+ *  Số n: ảnh thứ n của tin gần nhất người dùng gửi ảnh. Khác: theo tên tệp trong đoạn chat (ảnh Synchro đã tạo ở lượt này hay lượt trước). */
+async function refImage(x: Exec, ref: string): Promise<ImgFile | string> {
+  const want = ref.trim(), msgs = (Array.isArray(x.msgs) ? x.msgs : []) as { role?: string; content?: unknown; trace?: unknown }[];
+  type B = { type?: string; data?: string; media_type?: string; name?: string; source?: { data?: string; media_type?: string } };
+  const made = x.outs.filter((o) => !o.skipped && o.mime.startsWith("image/")).at(-1);
+  let latest: ImgFile[] = [], newest: ImgFile | undefined, stop = false;
+  if (made) { const o = readOutput(x.uid, made.id); if (o) newest = { name: o.name, mime: o.mime, data: o.data }; }
+  for (const m of [...msgs].reverse()) {
+    if (m?.role === "assistant" && !newest && !stop) {
+      const name = tracedImage(m.trace), o = name ? outputByName(x.uid, name) : null;
+      if (o) newest = { name: o.name, mime: o.mime, data: o.data };
+      // Ảnh vừa tạo đã hết hạn, bị xóa: nói không thấy, đừng âm thầm lấy ảnh cũ hơn.
+      else if (name) stop = true;
+    }
+    if (m?.role !== "user" || !Array.isArray(m.content)) continue;
+    const imgs = (m.content as B[]).flatMap((b, i) => { const d = b?.type === "image" ? b.data ?? b.source?.data : undefined; return typeof d === "string" && d ? [{ name: b.name ?? `anh-${i + 1}`, mime: b.media_type ?? b.source?.media_type ?? "", data: Buffer.from(d, "base64") }] : []; });
+    if (!imgs.length) continue;
+    if (!newest && !stop) newest = imgs[imgs.length - 1];
+    latest = imgs;
+    break;
+  }
   let pick: ImgFile | undefined;
-  if (!want || /^(last|latest)$/i.test(want)) {
-    pick = latest[latest.length - 1];
-    if (!pick && mine().length) { const o = outputByName(x.uid, mine()[mine().length - 1].name); if (o) pick = { name: o.name, mime: o.mime, data: o.data }; }
-  } else if (/^\d+$/.test(want)) pick = latest[Number(want) - 1];
+  if (/^(last|latest)$/i.test(want)) pick = newest;
+  else if (/^\d+$/.test(want)) pick = latest[Number(want) - 1];
   else {
     const all = await chatFiles(msgs, x.uid, () => x.outs)().catch(() => []);
     const f = (s: string) => s.toLowerCase().normalize("NFC");
     const hit = all.filter((a) => a.mime.startsWith("image/")).find((a) => f(a.name) === f(want) || f(a.name).includes(f(want))) ?? outputByName(x.uid, want);
     if (hit) pick = { name: hit.name, mime: hit.mime, data: hit.data };
   }
-  if (!pick) return `Không thấy ảnh "${want || "last"}" trong đoạn chat${latest.length ? ` (tin gần nhất có ${latest.length} ảnh)` : ""}. Hãy nhờ người dùng gửi lại ảnh; đừng tạo ảnh mới như thể đã dựa trên ảnh đó.`;
+  if (!pick) return `Không thấy ảnh "${want}" trong đoạn chat${latest.length ? ` (tin gần nhất có ${latest.length} ảnh)` : ""}. Hãy nhờ người dùng gửi lại ảnh; đừng tạo ảnh mới như thể đã dựa trên ảnh đó.`;
   if (pick.data.length > IMG_REF_MAX) return `Ảnh gốc quá lớn (tối đa ${IMG_REF_MAX / 1048576} MB).`;
   if (!imageKind(pick.data)) return "Ảnh gốc phải là PNG, JPEG hoặc WebP.";
   return pick;
@@ -485,8 +505,10 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   if (outputsFull()) return fail("Máy chủ sắp hết dung lượng đĩa nên chưa tạo ảnh được. Hãy nói rõ với người dùng và đề nghị thử lại sau.");
   if (outputRoom(x.uid) < 2 * 1048576) return fail(`Tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo nên chưa lưu thêm được ảnh (tệp cũ tự xóa sau 30 ngày).`);
   let reference: ImgFile | undefined;
-  if (typeof c.input?.reference === "string" || typeof c.input?.reference === "number") {
-    const r = await refImage(x, String(c.input.reference));
+  // Model hay điền "" vào tham số không bắt buộc: đó là không có ảnh gốc, không phải "ảnh gần nhất".
+  const refIn = String(c.input?.reference ?? "").trim();
+  if (refIn) {
+    const r = await refImage(x, refIn);
     if (typeof r === "string") return fail(r);
     reference = r;
   }
@@ -1377,7 +1399,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         announceOffline(xx, messages);
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); } });
         xx.park = bridge.park;
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng

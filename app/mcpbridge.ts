@@ -24,14 +24,15 @@ export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["
   const token = crypto.randomBytes(24).toString("base64url");
   // Sống tới hết mức trần của lượt (lượt xong thì close() xóa ngay).
   const b: Bridge = { ...o, run: currentRun(), exp: now + MAX_TURN_MS + 5 * 60_000, busy: 0, last: now, live: new Map() };
-  let parked = false;
   const onParked: (() => void)[] = [];
   bridges.set(token, b);
   // alive: đang chạy công cụ thì là "bây giờ", không thì lúc công cụ gần nhất xong (để biết CLI còn làm việc).
   return {
     url: `${internalUrl()}/api/mcp/bridge/${token}`, close: () => { bridges.delete(token); }, alive: () => (b.busy ? Date.now() : b.last),
-    park: () => { parked = true; for (const f of onParked.splice(0)) f(); },
-    onPark: (f: () => void) => { if (parked) f(); else onParked.push(f); },
+    // Chỉ nhả lượt CLI đang chạy. Cầu nối sống cả lượt chat, có thể chạy CLI nhiều lần (nhắc làm tiếp, tin nhắn thêm): lần chạy sau cần giữ khóa tới khi nó đọc xong cấu hình,
+    // mà công cụ chỉ tới được đây sau khi CLI đã khởi động, tức là sau onPark của chính lần chạy đó.
+    park: () => { for (const f of onParked.splice(0)) f(); },
+    onPark: (f: () => void) => { onParked.push(f); },
   };
 }
 
