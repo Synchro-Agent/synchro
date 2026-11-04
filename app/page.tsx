@@ -102,6 +102,8 @@ const CommandPalette = lazyView(() => import("./palette").then((m) => m.CommandP
 const AuthComponent = lazyView(() => import("./auth").then((m) => m.AuthComponent), null);
 const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm), null);
 const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
+// Khách chưa đăng nhập lần nào: tải sẵn màn hình đăng nhập ngay từ đầu.
+if (typeof document !== "undefined" && !document.documentElement.dataset.sess) AuthComponent.preload();
 const PRELOAD: Partial<Record<View, () => void>> = { code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
@@ -1308,8 +1310,9 @@ export default function Home() {
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null;
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false;
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
-    let streamed = false, pend: string | null = null, raf = 0;
-    const flush = () => { raf = 0; if (pend === null || !mine()) return; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
+    // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
+    let streamed = false, pend: string | null = null, raf = 0, lastPaint = 0;
+    const flush = () => { raf = 0; if (pend === null || !mine()) return; const now = performance.now(); if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; } lastPaint = now; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
     const onDelta = (t: string) => { streamed = true; pend = t; if (!raf) raf = requestAnimationFrame(flush); };
     // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
     // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
