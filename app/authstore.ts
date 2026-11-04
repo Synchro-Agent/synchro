@@ -152,9 +152,11 @@ export function createUser(o: { email: string; name: string; passwordHash?: stri
   return getUser(id)!;
 }
 
+// Ảnh tự tải lên lưu dạng data URL (có thể hàng trăm KB): /api/auth/me và danh sách quản trị chỉ trả đường dẫn kèm mã phiên bản, trình duyệt nhớ lâu theo mã đó.
+const avatarUrl = (u: UserRow) => (u.avatar?.startsWith("data:") ? `/api/auth/avatar?u=${encodeURIComponent(u.id)}&v=${crypto.createHash("sha1").update(u.avatar).digest("base64url").slice(0, 12)}` : u.avatar || null);
 export function publicUser(u: UserRow) {
   return {
-    id: u.id, email: u.email, name: u.name, avatar: u.avatar || null, isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
+    id: u.id, email: u.email, name: u.name, avatar: avatarUrl(u), isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
     verifyPending: needsVerify(u), verifyLocked: verifyLocked(u),
     profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation, instructions: u.instructions ?? "" },
     needsProfile: !u.full_name || !u.birth_date,

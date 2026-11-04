@@ -339,7 +339,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       </div>
 
       <h3 className="sec">Usage limits</h3>
-      <p className="d adm-privacy"><UsageIcon size={14} />Synchro uses models through their APIs. Usage is the real API cost of each call, so you can cap how much each person spends.</p>
+      {api?.providers?.some((p) => p.configured && p.id !== "elevenlabs") && <p className="d adm-privacy"><UsageIcon size={14} />Spending limits apply only to turns that run on a shared API key. Turns on someone&apos;s own AI plan are limited by that plan.</p>}
       <UsageAdmin say={app.say} Toggle={Toggle} />
 
       <h3 className="sec">Access</h3>
