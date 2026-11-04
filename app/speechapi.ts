@@ -1,10 +1,11 @@
 // Speech (ElevenLabs) phía máy chủ: gọi API thật bằng khóa ở Cài đặt → Providers (khóa không bao giờ rời máy chủ),
 // đọc gói đăng ký để bật / tắt từng tính năng, và lưu sản phẩm (âm thanh, bản chép lời) riêng cho từng người.
 // Tính năng của gói cao hơn vẫn nằm trong mã; chỉ hiện khi gói quét được cho phép.
+import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { DATA_DIR, db, getSetting, setSetting, type UserRow } from "./authstore";
+import { audit, DATA_DIR, db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 import { elevenMissing, serviceKey } from "./providers";
 
 export class SpeechErr extends Error {
@@ -251,13 +252,72 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
     .finally(() => { st.busy = null; });
   return st.busy;
 }
-/** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại. */
-export function spent(r: Response) {
+/** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại; tính vào hạn mức trong ngày của người đang gọi. est: ước lượng khi hãng không báo. */
+export function spent(r: Response, est = 0) {
   const n = Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0);
   const p = G().plan;
   if (p && n > 0) p.credits.used += n;
+  const uid = spender.getStore();
+  if (uid) addSpend(uid, n > 0 ? n : est);
   return n;
 }
+
+// ---- hạn mức credit trong ngày ----
+// Khóa ElevenLabs là một khóa dùng chung của chủ máy chủ, trong khi đăng ký đang mở: không có hạn mức thì vài tài khoản rác có thể tiêu hết credit, giọng nói hỏng với mọi người.
+// Mỗi tài khoản có hạn mức theo ngày (tài khoản chưa xác minh email thấp hơn), cả máy chủ có hạn mức chung; quản trị viên không bị chặn nhưng vẫn được tính vào mức chung.
+// Hết hạn mức thì đọc to và trò chuyện giọng nói chuyển sang giọng của trình duyệt, không có đường cụt. Cuối mỗi ngày (UTC) đặt lại. Số đo theo header của hãng; thao tác hãng không báo dùng ước lượng BUDGET_EST.
+export type Budget = { user: number; unverified: number; global: number | null };
+const BUDGET_KEY = "speech_budget";
+const BUDGET_DEF: Budget = { user: 10_000, unverified: 1_000, global: null };
+const num0 = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
+export function speechBudget(): Budget {
+  let j: Partial<Budget> = {};
+  try { j = JSON.parse(getSetting(BUDGET_KEY, "{}")) as Partial<Budget>; } catch {}
+  return { user: num0(j.user, BUDGET_DEF.user), unverified: num0(j.unverified, BUDGET_DEF.unverified), global: j.global === null || j.global === undefined ? null : num0(j.global, 0) };
+}
+export function setSpeechBudget(b: Partial<Budget>) {
+  const cur = speechBudget();
+  setSetting(BUDGET_KEY, JSON.stringify({ user: num0(b.user, cur.user), unverified: num0(b.unverified, cur.unverified), global: b.global === undefined ? cur.global : b.global === null ? null : num0(b.global, cur.global ?? 0) }));
+}
+/** Mức chung của máy chủ mỗi ngày: quản trị viên đặt, không thì 1/5 credit của gói (gói chưa đọc được thì 20.000). */
+const globalLimit = () => speechBudget().global ?? Math.max(20_000, Math.floor((G().plan?.credits.limit ?? 0) / 5));
+const day = () => new Date().toISOString().slice(0, 10);
+let budgetReady = "";
+function budgetDb() {
+  const d = db(), today = day();
+  if (budgetReady !== today) {
+    d.exec("CREATE TABLE IF NOT EXISTS speech_budget (day TEXT NOT NULL, user_id TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, user_id))");
+    d.prepare("DELETE FROM speech_budget WHERE day < ?").run(new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10));
+    budgetReady = today;
+  }
+  return d;
+}
+const ALL_USERS = "*";
+export const spentToday = (uid = ALL_USERS) => (budgetDb().prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = ?").get(day(), uid) as { credits: number } | undefined)?.credits ?? 0;
+const ALERT_AT = 0.8;
+let alerted = "";
+export function addSpend(uid: string, n: number) {
+  if (!(n > 0)) return;
+  const d = budgetDb(), today = day(), st = d.prepare("INSERT INTO speech_budget (day, user_id, credits) VALUES (?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET credits = credits + excluded.credits");
+  st.run(today, uid, Math.ceil(n));
+  st.run(today, ALL_USERS, Math.ceil(n));
+  // Báo một lần mỗi ngày trong nhật ký quản trị khi mức chung sắp hết.
+  const lim = globalLimit(), now = spentToday();
+  if (lim > 0 && now >= lim * ALERT_AT && alerted !== today) {
+    alerted = today;
+    audit("speech_budget_alert", { detail: `${now} / ${lim}` });
+    console.warn(`[speech] đã dùng ${now} / ${lim} credit ElevenLabs hôm nay`);
+  }
+}
+/** Trước một thao tác tốn credit: báo lỗi có mã budget khi đã hết hạn mức (nơi gọi chuyển sang giọng của trình duyệt). */
+export function checkBudget(u: UserRow) {
+  if (isAdmin(u)) return;
+  const b = speechBudget(), mine = u.email_verified ? b.user : b.unverified;
+  if (spentToday() >= globalLimit()) throw new SpeechErr("Giọng AI đã hết hạn mức chung của hôm nay, ngày mai có lại. Đọc to và trò chuyện giọng nói vẫn dùng được bằng giọng của trình duyệt.", 429, "budget");
+  if (spentToday(u.id) >= mine) throw new SpeechErr("Bạn đã dùng hết hạn mức giọng AI của hôm nay, ngày mai có lại. Đọc to và trò chuyện giọng nói vẫn dùng được bằng giọng của trình duyệt.", 429, "budget");
+}
+/** Ai đang gọi: spent() tính credit vào đúng tài khoản mà không phải truyền qua từng công cụ. */
+export const spender = new AsyncLocalStorage<string>();
 export async function need(f: Feat) {
   const p = await plan();
   if (!p.connected) throw new SpeechErr(p.note ?? "Chưa gắn khóa ElevenLabs. Quản trị viên vào Cài đặt → Providers để thêm khóa.", 503, "no_key");

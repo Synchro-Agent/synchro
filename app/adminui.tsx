@@ -24,7 +24,7 @@ type Log = { id: number; at: number; action: string; actor_email: string | null;
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number }; providers: Providers; admins: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
@@ -55,6 +55,7 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   admin_signup_closed: ["Closed sign-ups", "adm"], admin_set_password: ["Set user password", "adm"], admin_set_perms: ["Changed user access", "adm"], admin_default_perms: ["Changed default access", "adm"], profile_updated: ["Updated profile", ""], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
 };
 Object.assign(ACTIONS, {
+  speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"],
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
 });
@@ -337,6 +338,16 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       {/* Hạn mức ở đây chỉ tính chi phí khóa API dùng chung; model chạy bằng gói của từng người theo hạn mức của gói (chatengine, /api/llm bỏ qua overLimit). */}
       <p className="d adm-privacy"><UsageIcon size={14} />{api?.catalog.some((p) => p.models.length) ? "These limits cover models reached through a shared API key, where usage is the real API cost of each call. Models a person signs in to with their own plan follow that plan's limits instead." : "No shared API key is linked, so these limits have no effect right now. Everyone uses their own AI plan, and that plan's limits apply."}</p>
       <UsageAdmin say={app.say} Toggle={Toggle} />
+
+      {d.settings.speechBudget && (
+        <div className="adm-card">
+          <div className="adm-card-h"><b>AI voice credit per day</b><span className="d">The ElevenLabs key is shared, so these caps stop one account from using all of it. Past a cap, people get the browser&apos;s voice until the next day (UTC). Used today: <span data-notr>{(d.settings.speechToday ?? 0).toLocaleString(locale())}</span>.</span></div>
+          {([["user", "Verified account", "Credit each account with a verified email can use."], ["unverified", "Unverified account", "Credit each account without a verified email can use."], ["global", "Whole server", "Leave empty to use one fifth of the plan's credit."]] as const).map(([k, t, hint]) => {
+            const cur = d.settings.speechBudget![k];
+            return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={t} defaultValue={cur ?? ""} onBlur={(e) => { const raw = e.target.value.trim(), n = raw === "" ? null : Number(raw); if ((n === null && k === "global") || (n !== null && Number.isFinite(n) && n >= 0)) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { speechBudget: { [k]: n } }), "AI voice credit saved"); } else e.target.value = String(cur ?? ""); }} /></div>;
+          })}
+        </div>
+      )}
 
       <h3 className="sec">Access</h3>
       <p className="d adm-privacy"><I.Lock size={14} />Choose which models and features people can use. Administrators always have full access. This page has no view of anyone&apos;s conversations or files, though chat data needed to answer, uploads and memory are stored on this server.</p>

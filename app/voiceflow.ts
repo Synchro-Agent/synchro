@@ -17,6 +17,28 @@ export function toSpeech(md: string) {
   return out.filter((x) => x.trim());
 }
 
+/**
+ * Chia văn bản dài thành các phần gửi lần lượt cho giọng AI (mỗi lần gọi có giới hạn ký tự, gói thấp nhất của ElevenLabs là 2.500).
+ * Ngắt ở cuối câu; câu dài quá thì ngắt ở khoảng trắng. Không mất chữ nào.
+ */
+export const SPEECH_PART = 2400;
+export function splitSpeech(text: string, max = SPEECH_PART): string[] {
+  const out: string[] = [];
+  let cur = "";
+  for (let s of text.match(/[^.!?。…\n]+[.!?。…\n]*\s*/g) ?? [text]) {
+    if (cur && (cur + s).length > max) { out.push(cur.trim()); cur = ""; }
+    while (s.length > max) {
+      const cut = s.lastIndexOf(" ", max);
+      const at = cut > max / 2 ? cut : max;
+      out.push(s.slice(0, at).trim());
+      s = s.slice(at);
+    }
+    cur += s;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out.filter(Boolean);
+}
+
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
 // Lời nhờ làm việc (cần công cụ, tạo sản phẩm, tra cứu): xác nhận ngay. Câu hỏi ngắn thì chỉ xác nhận khi trả lời lâu.
 const TASK = /\b(lam|tao|viet|soan|lap|tim|tra cuu|tra giup|phan tich|tom tat|so sanh|dich|tinh toan|thiet ke|kiem tra|liet ke|ke hoach|doc giup|gui|xuat|bao cao|make|create|write|draft|find|search|look up|analy[sz]e|summari[sz]e|compare|translate|calculate|build|design|plan|list|check|report)\b/;

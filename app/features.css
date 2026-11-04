@@ -41,3 +41,5 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .lnk-in{color:inherit;text-decoration:underline}
 .tk-more{display:flex;justify-content:center;margin:12px 0 4px}
 .tk-more .btn{gap:6px}
+/* Ô số trong Quản trị (credit giọng AI mỗi ngày) */
+.adm-num{width:112px;flex:none;margin:0;text-align:right}

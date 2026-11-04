@@ -21,7 +21,7 @@ import { answerAsk, deleteServerSession, listServerSessions, patchServerSession,
 import { TOOL_ICON } from "./speech/toolicons";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
-import { elSpeed, speakAI, type Speaking } from "./speak";
+import { aiVoiceNote, elSpeed, speakAI, type Speaking } from "./speak";
 import { toSpeech, VI } from "./voiceflow";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
@@ -490,7 +490,7 @@ function Composer(p: {
       if (s) { scribeRef.current = s; return; }
     } catch { setRec(false); return say("Không mở được micro: hãy cho phép Synchro dùng micro"); }
     const SR = (window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Rec }).webkitSpeechRecognition;
-    if (!SR) { setRec(false); return say("Trình duyệt này không hỗ trợ nhập bằng giọng nói"); }
+    if (!SR) { setRec(false); return say("Trình duyệt này chưa nhập được bằng giọng nói. Hãy dùng Chrome, Edge hoặc Safari, hoặc gõ tin nhắn"); }
     const r = new SR();
     // continuous: nghe tiếp qua các khoảng nghỉ, tới khi người dùng bấm dừng (hoặc trình duyệt tự kết thúc).
     r.lang = lang; r.interimResults = true; r.continuous = true;
@@ -1670,21 +1670,36 @@ export default function Home() {
     // Không đọc mã nguồn artifact, khối code và ký hiệu Markdown; câu trả lời chỉ có sản phẩm thì nói rõ thay vì im lặng.
     const parts = toSpeech(text), clean = parts.join(" ");
     if (!clean) { setSpeaking(null); return say("Câu trả lời này chỉ có sản phẩm, không có chữ để đọc"); }
+    const browserRead = (list: string[]) => {
+      const s = window.speechSynthesis;
+      if (!s) { setSpeaking(null); return say("Trình duyệt không hỗ trợ đọc to"); }
+      // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt. Đọc từng đoạn: trình duyệt hay dừng giữa chừng với đoạn dài.
+      const pref = VOICE_LANG[vlang] ?? "vi-VN", lang = VI.test(clean) ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref;
+      s.cancel();
+      list.forEach((c, i) => {
+        const u = new SpeechSynthesisUtterance(c);
+        u.lang = lang; u.rate = VOICE_RATE[vspeed] ?? 1;
+        if (i === list.length - 1) u.onend = () => setSpeaking((k) => (k === key ? null : k));
+        // Máy không có giọng cho ngôn ngữ này, giọng lỗi: dừng và báo một lần, không kẹt ở trạng thái đang đọc. Bị hủy do người dùng dừng thì thôi.
+        u.onerror = (e) => { if (e.error === "canceled" || e.error === "interrupted") return; s.cancel(); setSpeaking((k) => (k === key ? null : k)); say("Trình duyệt chưa đọc được đoạn này. Hãy kiểm tra giọng đọc của máy"); };
+        s.speak(u);
+      });
+    };
     const ai = await speakAI(clean, { voice: vvoice, speed: elSpeed(VOICE_RATE[vspeed] ?? 1) });
-    if (ai) { aiSpeak.current = ai; void ai.done.then(() => { if (aiSpeak.current === ai) aiSpeak.current = null; setSpeaking((k) => (k === key ? null : k)); }); return; }
-    const s = window.speechSynthesis;
-    if (!s) { setSpeaking(null); return say("Trình duyệt không hỗ trợ đọc to"); }
-    // Đọc bằng đúng ngôn ngữ của câu trả lời (có dấu tiếng Việt thì giọng Việt), không ép theo cài đặt. Đọc từng đoạn: trình duyệt hay dừng giữa chừng với đoạn dài.
-    const pref = VOICE_LANG[vlang] ?? "vi-VN", lang = VI.test(clean) ? "vi-VN" : pref.startsWith("vi") ? "en-US" : pref;
-    s.cancel();
-    parts.forEach((c, i) => {
-      const u = new SpeechSynthesisUtterance(c);
-      u.lang = lang; u.rate = VOICE_RATE[vspeed] ?? 1;
-      if (i === parts.length - 1) u.onend = () => setSpeaking((k) => (k === key ? null : k));
-      // Máy không có giọng cho ngôn ngữ này, giọng lỗi: dừng và báo một lần, không kẹt ở trạng thái đang đọc. Bị hủy do người dùng dừng thì thôi.
-      u.onerror = (e) => { if (e.error === "canceled" || e.error === "interrupted") return; s.cancel(); setSpeaking((k) => (k === key ? null : k)); say("Trình duyệt chưa đọc được đoạn này. Hãy kiểm tra giọng đọc của máy"); };
-      s.speak(u);
-    });
+    if (ai) {
+      aiSpeak.current = ai;
+      void ai.done.then((ok) => {
+        if (aiSpeak.current === ai) aiSpeak.current = null;
+        // Giọng AI dừng giữa chừng (hết hạn mức, hết credit, mất mạng): đọc nốt bằng giọng của trình duyệt, không dừng như đã đọc xong.
+        const rest = ok ? "" : ai.rest();
+        if (rest) { say(aiVoiceNote() || "Giọng AI dừng giữa chừng, Synchro đọc nốt bằng giọng của trình duyệt"); browserRead(toSpeech(rest)); return; }
+        setSpeaking((k) => (k === key ? null : k));
+      });
+      return;
+    }
+    const why = aiVoiceNote();
+    if (why) say(why);
+    browserRead(parts);
   };
   const like = (i: number, v: 1 | -1) => {
     if (!chat) return;

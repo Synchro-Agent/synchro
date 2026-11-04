@@ -137,7 +137,10 @@ export function VoiceMode({ onClose, onAsk, onTurn, busy, reply, rate, voice, sa
         voiceOut.current = v;
         const ok = await v.done;
         if (voiceOut.current === v) voiceOut.current = null;
-        if (ok && alive.current && gen.current === my) onEnd();
+        if (!alive.current || gen.current !== my) return;
+        if (ok) onEnd();
+        // Giọng AI dừng giữa chừng (hết hạn mức, mất mạng): đọc nốt bằng giọng của trình duyệt rồi nghe tiếp, không kẹt ở "Đang trả lời…".
+        else if (v.rest()) browserSpeak(toSpeech(v.rest()), l, onEnd);
       });
       return;
     }
