@@ -40,9 +40,15 @@ try {
   ok(fs.readdirSync("node_modules/.cache").filter((d) => d.startsWith("synchro-ts-")).length === cacheBefore, "không để lại bản dịch tạm");
   ok(!fs.existsSync(path.join(tmp, "data", "synchro.db")), "không mở cơ sở dữ liệu thật");
 
+  ok(/^real image\s+skip\s+skip\s+skip\s+skip/m.test(r.stdout), "mặc định không tạo ảnh thật (tốn hạn mức)", r.stdout);
+
   console.log("3. Bỏ bài chờ lâu, chọn CLI");
   const q = run(SCOPE, "--quick", "--only=grok");
   ok(q.status === 0 && /^long hold\s+skip/m.test(q.stdout) && /--quick/.test(q.stdout) && !/claude\s/.test(q.stdout.split("\n")[2] ?? ""), "--quick --only chỉ chạy đúng phần được chọn", q.stdout);
+
+  console.log("4. --image: mỗi CLI đã đăng nhập tạo một ảnh thật");
+  const im = run(SCOPE, "--quick", "--image", "--only=grok,codex");
+  ok(im.status === 0 && /^real image\s+pass\s+pass/m.test(im.stdout) && /image\/png/.test(im.stdout), "ảnh ra đúng tệp, bảng ghi loại ảnh và dung lượng", `${im.stdout}\n${im.stderr}`);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

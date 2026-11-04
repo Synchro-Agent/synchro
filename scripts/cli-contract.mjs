@@ -8,6 +8,8 @@
 // account-scope: id người dùng (tên thư mục trong <engine>/logins/<cli>/). Nên dùng tài khoản thử hoặc lúc tài khoản rảnh: agy và grok giữ cầu nối trong cấu hình chung của tài
 // khoản, khóa lượt nằm trong tiến trình của web nên script này không biết lượt đang chạy ở web, và ngược lại.
 // Tùy chọn: --only=claude,grok   --quick (bỏ hai bài chờ lâu)   --slow-min=6   --hold-min=10   --model=claude:haiku,grok:grok-3   --verbose
+//   --image: tạo một ảnh thật bằng mỗi CLI đã đăng nhập (agy, grok, codex; Claude Code không có công cụ tạo ảnh). Mặc định tắt vì tốn hạn mức ảnh của gói.
+//            Đây là cách kiểm chứng những điều còn chưa biết: Grok lưu ảnh ở đâu, Codex gói trả phí có ghi vào generated_images/<thread_id>/ không (app/ai/imagegen.ts).
 // Thời gian: CLI chạy song song, mỗi CLI tối đa khoảng 20 phút (hai bài chờ lâu). Mỗi CLI khoảng 8 lượt ngắn, thêm 3 lượt với Claude.
 //
 // Không đụng dữ liệu thật: DATA_DIR trỏ sang thư mục tạm, chỉ chép token đã mã hóa của đúng tài khoản này (và secret.key nếu có), xóa khi thoát. Cơ sở dữ liệu thật không được mở.
@@ -27,7 +29,7 @@ const argv = process.argv.slice(2);
 const opt = (k, d) => { const a = argv.find((x) => x === `--${k}` || x.startsWith(`--${k}=`)); return a === undefined ? d : a.includes("=") ? a.slice(a.indexOf("=") + 1) : true; };
 const scope = argv.find((x) => !x.startsWith("--"));
 if (!scope) { process.stderr.write("Usage: node scripts/cli-contract.mjs <account-scope> [--only=claude,grok] [--quick] [--slow-min=6] [--hold-min=10] [--model=claude:haiku] [--verbose]\n"); process.exit(2); }
-const QUICK = !!opt("quick", false), VERBOSE = !!opt("verbose", false);
+const QUICK = !!opt("quick", false), VERBOSE = !!opt("verbose", false), IMAGE = !!opt("image", false);
 const SLOW_MIN = Number(opt("slow-min", 6)), HOLD_MIN = Number(opt("hold-min", 10));
 const ONLY = opt("only", "") ? String(opt("only", "")).split(",") : null;
 const MODELS = Object.fromEntries(String(opt("model", "")).split(",").filter(Boolean).map((x) => x.split(":")));
@@ -154,7 +156,7 @@ async function turn(cli, o) {
 }
 
 // ---- các bài kiểm
-const CHECKS = ["tools listed", "nested args", "$ref args", "resume keeps context", "tools after resume", "names over 50 chars", "warm process", "long hold", "approval hold"];
+const CHECKS = ["tools listed", "nested args", "$ref args", "resume keeps context", "tools after resume", "names over 50 chars", "warm process", "long hold", "approval hold", "real image"];
 const CLIS = R.CLIS.filter((c) => !ONLY || ONLY.includes(c));
 const table = new Map(CLIS.map((c) => [c, new Map()]));
 const versions = new Map();
@@ -241,6 +243,15 @@ async function runCli(cli) {
       const pass = a.pool === "hit" && b.pool === "hit" && !a.error && !b.error && (MOCK || b.text.includes(word));
       put(cli, "warm process", pass ? "pass" : "fail", `first text cold=${cold.firstMs}ms warm=${a.firstMs}ms next=${b.firstMs}ms; pool=${a.pool}/${b.pool}${pass ? "" : `; ${why(a)}; ${why(b)}`}`);
       P.dropAll();
+    }
+    // 8. Tạo một ảnh thật qua đúng mã production: chạy trước hai bài chờ lâu; tốn hạn mức ảnh nên chỉ khi có --image.
+    if (!IMAGE) put(cli, "real image", "skip", "");
+    else if (cli === "claude") put(cli, "real image", "skip", "Claude Code has no image generator");
+    else {
+      const t0 = Date.now(), { "ai/imagegen": I, "ai/imagefiles": F } = await loadTs(["ai/imagegen", "ai/imagefiles"]);
+      const r = await I.runBackend(cli, { uid: scope, prompt: "a small red apple on a white table", signal: master.signal });
+      const f = r.files?.[0], kind = f && F.imageKind(f.data);
+      put(cli, "real image", kind ? "pass" : "fail", kind ? `${kind.mime} ${Math.round(f.data.length / 1024)} KB; ${Math.round((Date.now() - t0) / 1000)}s` : `${r.fail?.kind ?? "no file"}: ${r.fail?.detail ?? ""}; ${Math.round((Date.now() - t0) / 1000)}s`);
     }
     // 7. Hai bài chờ lâu: công cụ im lặng nhiều phút (có nhịp SSE của cầu nối như production) rồi trả mã; model phải đọc được đúng mã đó, CLI không được tự gọi lại.
     for (const [check, tool, min] of [["long hold", TOOL.slow, SLOW_MIN], ["approval hold", TOOL.hold, HOLD_MIN]]) {
