@@ -573,7 +573,7 @@ Yêu cầu: ${req.trim()}`);
         ) : deck ? (
           <DeckView key={reload} art={art} ai={ai} onError={setErr} onMsg={onMsg} ctl={(s) => { send.current = s; }} store={conv ? { art: { conv, ident: art.ident } } : undefined} loc={!!onAsk} />
         ) : art.type === "markdown" ? (
-          <div className={`art-md mdx${art.complete ? "" : " ai-streaming"}`}><Markdown text={art.content} say={say} /></div>
+          <div className={`art-md mdx${art.complete ? "" : " ai-streaming"}`}><Markdown text={art.content} say={say} streaming={!art.complete} /></div>
         ) : art.type === "mermaid" ? (
           <div className="art-md"><MermaidSvg code={art.content} onError={setErr} /></div>
         ) : art.type === "vbhc" ? (

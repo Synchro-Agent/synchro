@@ -186,7 +186,7 @@ export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { st
       {blocks.map((b, i) => b.k === "steer"
         ? <div key={i} className="ag-steer"><span>Bạn nhắn thêm</span><p data-notr>{b.text}</p></div>
         : b.k === "text"
-        ? <Markdown key={i} text={b.text} say={say} />
+        ? <Markdown key={i} text={b.text} say={say} streaming={live && i === blocks.length - 1} />
         : b.k === "think"
         ? <Think key={i} text={b.text} open={view === "verbose" || (view === "thinking" && live && i === blocks.length - 1)} />
         : b.k === "ask"

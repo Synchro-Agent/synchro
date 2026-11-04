@@ -2182,9 +2182,10 @@ export default function Home() {
                 <div className="chat-wrap" ref={sideProj === x.id ? sideRef : undefined}>
                   <button className={`chat-item pj-row ${view === "project" && curProj === x.id ? "active" : ""}`} onClick={() => { setCurProj(x.id); setView("project"); }}>
                     <span className="pj-ic"><I.Layers size={15} /></span>
-                    <span className="pj-tg" role="button" aria-label={open ? "Thu gọn" : "Mở rộng"} onClick={(e) => { e.stopPropagation(); setPjClosed({ ...pjClosed, [x.id]: open }); }}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></span>
                     <span>{x.name}</span>
                   </button>
+                  {/* Nút riêng đặt đè lên biểu tượng, không lồng trong nút của dòng: nút lồng nút thì bàn phím không tới được. */}
+                  <button className="pj-tg" aria-label={open ? "Thu gọn" : "Mở rộng"} aria-expanded={open} onClick={() => setPjClosed({ ...pjClosed, [x.id]: open })}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></button>
                   <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={sideProj === x.id} onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
                   {sideProj === x.id && <ProjMenu p={x} open pin style={{ top: 34, right: 0, width: 240 }}
                     onPin={() => { patchProj(x.id, { pinned: false }); setSideProj(null); }}

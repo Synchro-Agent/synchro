@@ -61,9 +61,12 @@ export function useFileMenu(say: (m: string) => void) {
         </div>
       )}
       {img && (
-        <div className="ft-lightbox" onMouseDown={(e) => e.target === e.currentTarget && setImg(null)}>
-          <img src={img} alt="" />
-          <button className="icon-btn" onClick={() => setImg(null)} aria-label="Đóng"><I.X size={16} /></button>
+        <div className="overlay ft-lightbox" onMouseDown={(e) => e.target === e.currentTarget && setImg(null)}>
+          {/* Cơ chế hộp thoại chung (a11y.ts) cần một phần tử mang vai trò dialog; display:contents để không đổi bố cục ảnh. */}
+          <div role="dialog" aria-modal="true" aria-label="Xem ảnh" style={{ display: "contents" }}>
+            <img src={img} alt="Ảnh đang xem" />
+            <button className="icon-btn" onClick={() => setImg(null)} aria-label="Đóng"><I.X size={16} /></button>
+          </div>
         </div>
       )}
       {view && (

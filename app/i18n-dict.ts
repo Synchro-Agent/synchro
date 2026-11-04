@@ -109,7 +109,8 @@ export const VI2EN: Record<string, string> = {
   "Không có thay đổi chưa commit.": "No uncommitted changes.",
   "Nội dung commit": "Commit message",
   "Nhánh mới": "New branch",
-  "Tạo PR": "Create PR",
+  "Tạo PR": "Create PR", "Tạo nhánh": "Create branch", "Xem ảnh": "Image viewer", "Ảnh đang xem": "Image being viewed",
+  "Đang viết câu trả lời": "Writing the reply", "Đang sửa lại bản sửa artifact cho khớp": "Reworking the artifact edit so it fits",
   "Danh sách việc": "Task list",
   "Đã xong mọi việc": "All tasks done",
   "Đang làm…": "Working…",
@@ -801,6 +802,7 @@ RULES_EN.push(
   [/^Thêm (\d+) tệp$/, (m) => `Add ${m[1]} file${m[1] === "1" ? "" : "s"}`],
   // Dòng tiến trình của chế độ Tự động: "Tự động chọn <model> · việc <loại việc> · nỗ lực <mức>".
   [/^Tự động chọn (.+) · việc (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · ${({ "trò chuyện": "chat", "hỏi đáp": "Q&A", "học ngôn ngữ": "language help", "dịch": "translation", "tóm tắt": "summary", "viết": "writing", "viết code": "coding", "gỡ lỗi": "debugging", "suy luận": "reasoning", "phân tích": "analysis", "tạo sản phẩm": "building", "thao tác nhiều bước": "multi-step action", "đọc ảnh": "image reading", "tài liệu dài": "long document", "số liệu": "data" } as Record<string, string>)[m[2]] ?? m[2]} · effort ${({ "thấp": "low", "trung bình": "medium", "cao": "high", "cao hơn": "extra high", "tối đa": "max" } as Record<string, string>)[m[3]] ?? m[3]}`],
+  [/^Đang chờ (\d+) giây rồi thử lại$/, (m) => `Waiting ${m[1]} ${m[1] === "1" ? "second" : "seconds"}, then retrying`],
   [/^Tự động chọn (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · effort ${m[2]}`],
   [/^(.+) đang bận, chuyển sang (.+)$/, (m) => `${m[1]} is busy, switching to ${m[2]}`],
   [/^(.+) (đã hết hạn mức|đang giới hạn tốc độ|cần đăng nhập lại|đang chạy lượt khác|không phản hồi|đang gặp lỗi), chuyển sang (.+)$/, (m) => `${m[1]} ${({ "đã hết hạn mức": "hit its limit", "đang giới hạn tốc độ": "is rate limiting", "cần đăng nhập lại": "needs you to sign in again", "đang chạy lượt khác": "is busy with another reply", "không phản hồi": "isn't responding", "đang gặp lỗi": "ran into an error" } as Record<string, string>)[m[2]]}, switching to ${m[3]}`],

@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import "@xterm/xterm/css/xterm.css";
 import * as I from "./icons";
 import { Mark } from "./brand";
+import { AskText } from "./modals";
 import { gitOp, isLocalUrl, useCodeUi, wsOp, type GitState, type PrInfo, type WsStatus } from "./wsclient";
 
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
@@ -710,6 +711,7 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState("");
   const [list, setList] = useState(false);
+  const [ask, setAsk] = useState<"pr" | "branch" | null>(null);
   const [closed, setClosed] = useState<string[]>([]);
   const toggle = (id: string) => setClosed((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const showFile = useCodeUi((s) => s.showFile);
@@ -737,6 +739,8 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
   const ready = sid !== null && !!status?.available;
   return (
     <aside className="sr">
+      {ask === "pr" && <AskText title="Tiêu đề pull request" ok="Tạo PR" onCancel={() => setAsk(null)} onOk={(t) => { setAsk(null); void run("pr", { title: t }); }} />}
+      {ask === "branch" && <AskText title="Tên nhánh mới" init={`synchro/${new Date().toISOString().slice(0, 10)}`} ok="Tạo nhánh" need onCancel={() => setAsk(null)} onOk={(b) => { setAsk(null); void run("branch", { name: b }, `Đã chuyển sang nhánh ${b}`); }} />}
       <Sec id="env" title="Môi trường" open={!closed.includes("env")} onToggle={toggle}>
         {!status ? <p className="sr-note">Đang kiểm tra…</p> : !status.available ? <p className="sr-note">{status.reason}</p> : <>
           <div className="sr-row" title={status.running ? `Đang chạy · tự tắt sau ${status.idleMin ?? 20} phút không dùng, file vẫn được giữ` : "Đang tắt · tự bật khi cần"}><I.Monitor size={16} /><span>Workspace Linux</span><i className={`sr-dot ${status.running ? "on" : ""}`} />
@@ -769,7 +773,7 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
               <button className="sr-sum" onClick={() => setList(!list)} disabled={!files.length} title={files.length ? "Xem các file thay đổi" : undefined}>
                 <I.File size={16} />{files.length ? <span className="ag-diff"><b>+{add}</b><i>−{del}</i></span> : <span className="sr-dim">Không có thay đổi</span>}
               </button>
-              {git.repo && <button className="ctxp-btn" disabled={!!busy} onClick={() => { const t = prompt(tr("Tiêu đề pull request"), ""); if (t !== null) run("pr", { title: t }); }}>Tạo PR</button>}
+              {git.repo && <button className="ctxp-btn" disabled={!!busy} onClick={() => setAsk("pr")}>Tạo PR</button>}
             </div>
             {list && files.length > 0 && (
               <div className="sr-files">
@@ -791,7 +795,7 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
               <div className="sr-acts">
                 <button className="ctxp-btn" disabled={!!busy} onClick={() => run("push", {}, "Đã push lên GitHub")}>{busy === "push" ? "Đang push…" : `Push${git.ahead ? ` (${git.ahead})` : ""}`}</button>
                 <button className="ctxp-btn" disabled={!!busy} onClick={() => run("pull", {}, "Đã cập nhật từ GitHub")}>Pull</button>
-                <button className="ctxp-btn" disabled={!!busy} onClick={() => { const b = prompt(tr("Tên nhánh mới"), `synchro/${new Date().toISOString().slice(0, 10)}`); if (b) run("branch", { name: b }, `Đã chuyển sang nhánh ${b}`); }}>Nhánh mới</button>
+                <button className="ctxp-btn" disabled={!!busy} onClick={() => setAsk("branch")}>Nhánh mới</button>
               </div>
             )}
           </>}

@@ -23,6 +23,23 @@ export function Confirm({ title, text, ok, onCancel, onOk }: { title: string; te
   );
 }
 
+// Hỏi một dòng chữ, thay cho hộp hỏi có sẵn của trình duyệt: hộp đó không theo giao diện, không dịch được nút và chặn cả trang. Gắn vào <body> vì nơi gọi có thể nằm trong khung cuộn.
+export function AskText({ title, init = "", ok, need, onCancel, onOk }: { title: string; init?: string; ok: string; need?: boolean; onCancel: () => void; onOk: (v: string) => void }) {
+  const [v, setV] = useState(init);
+  const go = () => { const t = v.trim(); if (t || !need) onOk(t); };
+  return createPortal(
+    <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <form className="modal sm" style={{ width: 420 }} onSubmit={(e) => { e.preventDefault(); go(); }}>
+        <h2 style={{ fontSize: 15, margin: "0 0 12px" }}>{title}</h2>
+        <input className="field" autoFocus value={v} aria-label={title} onChange={(e) => setV(e.target.value)} onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); onCancel(); } }} />
+        <div className="modal-foot" style={{ marginTop: 20 }}><button type="button" className="btn" onClick={onCancel}>Hủy</button><button className="btn dark" disabled={need && !v.trim()}>{ok}</button></div>
+      </form>
+    </div>,
+    document.body,
+  );
+}
+
 export function LangModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState("");
   const [lang, setLang] = usePref<Lang>("uilang", "vi");
