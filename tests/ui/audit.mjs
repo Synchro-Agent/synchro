@@ -333,8 +333,8 @@ for (const theme of THEMES) for (const size of SIZES) {
 
   // Các trang lẻ không cần đăng nhập, đủ trạng thái (từng chỉ soát /terms, /privacy nên icon lệch ở trang đặt lại mật khẩu lọt tới người dùng).
   await step0("dat-lai-mk-nhap-email", async () => { await P("Page.navigate", { url: B + "/reset" }); await sleep(1500); await shot("dat-lai-mk-nhap-email"); });
-  await step0("dat-lai-mk-het-han", async () => { await P("Page.navigate", { url: B + "/reset#khong-hop-le-000000000000" }); await sleep(1500); await P("Page.reload", {}); await sleep(1500); await shot("dat-lai-mk-het-han"); });
-  if (RESET_TOKEN) await step0("dat-lai-mk-nhap-moi", async () => { await P("Page.navigate", { url: B + "/reset#" + RESET_TOKEN }); await P("Page.reload", {}); await until(`!!document.querySelector("#rp-new")`, 8000, "ô mật khẩu"); await sleep(400); await shot("dat-lai-mk-nhap-moi"); });
+  await step0("dat-lai-mk-het-han", async () => { await P("Page.navigate", { url: "about:blank" }); await sleep(200); await P("Page.navigate", { url: B + "/reset#khong-hop-le-000000000000" }); await sleep(2000); await shot("dat-lai-mk-het-han"); });
+  if (RESET_TOKEN) await step0("dat-lai-mk-nhap-moi", async () => { await P("Page.navigate", { url: "about:blank" }); await sleep(200); await P("Page.navigate", { url: B + "/reset#" + RESET_TOKEN }); await until(`!!document.querySelector("#rp-new")`, 15000, "ô mật khẩu"); await sleep(400); await shot("dat-lai-mk-nhap-moi"); });
   await step0("xac-minh-email", async () => { await P("Page.navigate", { url: B + "/verify#khong-hop-le-000000000000" }); await sleep(1500); await shot("xac-minh-email"); });
   await step0("tai-ung-dung", async () => { await P("Page.navigate", { url: B + "/download" }); await sleep(1500); await shot("tai-ung-dung"); });
   if (SHARE_TOKEN) await step0("trang-chia-se", async () => { await P("Page.navigate", { url: B + "/share/" + SHARE_TOKEN }); await sleep(2000); await shot("trang-chia-se"); });

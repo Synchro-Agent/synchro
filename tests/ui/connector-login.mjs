@@ -152,13 +152,14 @@ try {
   const pageB = await open(`${B}/?settings=Connectors`, `window.__opens = []; window.__posts = 0; window.open = (u) => { window.__opens.push(String(u)); return window.__opens.length > 1 ? { closed: false } : null; };
     { const f = window.fetch, json = (x) => new Response(JSON.stringify(x), { status: 200, headers: { "content-type": "application/json" } }); let made = false;
       window.fetch = async (u, i) => { const p = String(u);
-        if (p.endsWith("/api/connectors") && i?.method === "POST") { window.__posts++; made = true; return json({ connector: ${JSON.stringify(FAKE)}, authorizeUrl: ${JSON.stringify(LOGIN)} }); }
+        if (p.endsWith("/api/connectors") && i?.method === "POST") { window.__posts++; made = true; return json({ connector: ${JSON.stringify(FAKE)}, connectors: [${JSON.stringify(FAKE)}], authorizeUrl: ${JSON.stringify(LOGIN)} }); }
         if (p.endsWith("/api/connectors") && made) { const j = await (await f(u, i)).json(); j.connectors.push(${JSON.stringify(FAKE)}); return json(j); }
         return f(u, i); }; }`);
   await pageB.until(`!!${BROWSE}`, 30000);
   await pageB.click(BROWSE);
   await pageB.until(`!!document.querySelector(".cn-browse")`);
-  const notion = byText(".cn-browse .cn-item", "Notion");
+  // Theo đúng tên hãng: mô tả của mục khác cũng có thể nhắc tới Notion.
+  const notion = `[...document.querySelectorAll(".cn-browse .cn-item")].find((i) => i.querySelector(".cn-item-m b")?.textContent.trim() === "Notion")`;
   await pageB.until(`!!${notion}?.querySelector(".cn-item-btn")`);
   await pageB.click(`${notion}.querySelector(".cn-item-btn")`);
   say(await pageB.until(`!!${notion}?.querySelector(".cn-pop button")`), "bị chặn: lời nhắc hiện ngay trên mục trong danh mục");

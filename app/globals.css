@@ -3435,7 +3435,7 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .us-legend em{font-style:normal;color:var(--text-3);font-variant-numeric:tabular-nums}
 .us-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
 .us-incl{color:var(--text-3)!important;font-weight:400!important;font-size:12.5px}
-@media(max-width:600px){.us-stats{grid-template-columns:repeat(2,1fr)}.us-vc-h{flex-wrap:wrap}.us-vc-t{flex-basis:calc(100% - 42px)}}
+@media(max-width:600px){.us-stats{grid-template-columns:repeat(2,1fr)}.us-vc-h{flex-wrap:wrap}.us-vc-t{flex-basis:calc(100% - 42px)}.us-row-t{flex-wrap:wrap;gap:2px 10px}.us-row-t b{flex-basis:100%}.us-row-t span{flex:1;min-width:0;justify-content:space-between;white-space:normal}}
 /* tên đoạn chat do Synchro tự đặt hiện dần khi vừa đổi */
 .chat-item .ct-t{animation:fadeIn .45s var(--ease) both}
 @media (prefers-reduced-motion:reduce){.chat-item .ct-t{animation:none}}

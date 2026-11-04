@@ -190,7 +190,7 @@ try {
   await api("POST", "/api/engines/claude/login/code", { code: lc });
   await home();
   const uid = (await api("GET", "/api/auth/me")).j.user?.id;
-  await ev(`localStorage.setItem("u:${uid}:model", JSON.stringify("sub-claude/sonnet")); 1`);
+  await ev(`localStorage.setItem("u:${uid}:model", "sub-claude/sonnet"); 1`);
   await home();
   await sendMsg('#tool=mock_notes__create_note #args={"title":"Duyệt từ thanh bên"}');
   ok(await until(`!!document.querySelector(".ag-ask")`, 30000), "lượt gọi công cụ ghi: có thẻ duyệt trong đoạn chat", await ev(`document.querySelector(".thread")?.textContent.slice(0, 200)`));
