@@ -9,7 +9,18 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: { "*": ["data/**", "data-mock/**", "workspace/**", ".mkvenv/**", "tests/**", ".next-mock/**", ".next-mockfast/**"] },
   // WebContainers cần trang cô lập (SharedArrayBuffer). credentialless vẫn cho phép tải CDN (Monaco, Pyodide).
   async headers() {
-    return [{ source: "/:path*", headers: [
+    return [{
+      // HSTS: không kèm includeSubDomains / preload, vì tên miền con khác của synchro.net.nz chưa chắc đều có https. nosniff và chống nhúng không ảnh hưởng artifact
+      // (khung srcDoc, không tải trang của Synchro) hay WebContainers. CSP chỉ có frame-ancestors: CSP có script-src cần chạy thử report-only trước, vì khung
+      // srcDoc của artifact thừa hưởng CSP của trang mẹ và Monaco, Pyodide tải từ CDN.
+      source: "/:path*", headers: [
+        { key: "Strict-Transport-Security", value: "max-age=15552000" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      ],
+    }, { source: "/:path*", headers: [
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
     ] }, {

@@ -8,6 +8,8 @@ const SECRET = process.env.WS_AGENT_SECRET ?? "";
 export const WORK = "/home/user/work";
 
 export const wsConfigured = () => !!AGENT && SECRET.length >= 32;
+/** Dịch vụ workspace còn trả lời không (cho /api/health). */
+export const agentAlive = () => fetch(`${AGENT}/health`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok, () => false);
 export const wsAllowed = (u: UserRow) => wsConfigured() && can(u, "code") && can(u, "sandbox");
 export function requireWs(u: UserRow) {
   if (!wsConfigured()) throw new AuthError("Máy chủ chưa bật workspace.", 501);

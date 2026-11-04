@@ -2185,6 +2185,7 @@ Object.assign(EN2VI, {
   "Password saved. Other devices were signed out and the Synchro extension must be paired again.": "Đã lưu mật khẩu. Các thiết bị khác đã được đăng xuất và cần ghép nối lại tiện ích Synchro.",
   "Create reset link": "Tạo đường dẫn đặt lại", "Reset link created": "Đã tạo đường dẫn đặt lại", "Password reset link": "Đường dẫn đặt lại mật khẩu", "Copy link": "Sao chép đường dẫn", "Link copied": "Đã sao chép đường dẫn", "Couldn't copy the link": "Không sao chép được đường dẫn",
   "Send this link to them privately. It works once, expires in 24 hours, and signs them out everywhere. It is shown only now.": "Hãy gửi đường dẫn này cho họ qua kênh riêng. Đường dẫn dùng được một lần, hết hạn sau 24 giờ và đăng xuất họ khỏi mọi thiết bị. Đường dẫn chỉ hiện lúc này.",
+  "Replies started (24h)": "Lượt trả lời (24 giờ)", "Replies failed (24h)": "Lượt trả lời lỗi (24 giờ)",
   "Sign-in failing": "Đăng nhập đang lỗi", "Last sign-in failed": "Lần đăng nhập gần nhất lỗi",
   "Connected GitHub": "Đã kết nối GitHub", "Failed provider sign-in": "Đăng nhập qua nhà cung cấp lỗi", "Reset password with a link": "Đặt lại mật khẩu bằng đường dẫn", "Created password reset link": "Đã tạo đường dẫn đặt lại mật khẩu",
   "Saved API key": "Đã lưu khóa API", "Removed API key": "Đã gỡ khóa API", "Changed API credit": "Đã đổi hạn mức API", "Changed default model": "Đã đổi model mặc định", "Changed main models": "Đã đổi các model chính",

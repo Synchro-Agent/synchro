@@ -22,7 +22,7 @@ type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLog
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
-  stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number };
+  stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
   users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
@@ -280,7 +280,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
   const lPages = Math.max(1, Math.ceil(logs.length / L_PER)), lp = Math.min(lPage, lPages);
   const pageUsers = users.slice((up - 1) * U_PER, up * U_PER), pageLogs = logs.slice((lp - 1) * L_PER, lp * L_PER);
   const loadMore = () => call<{ audit: Log[] }>("GET", `/api/admin?before=${d.audit[d.audit.length - 1].id}`).then((x) => { setD({ ...d, audit: [...d.audit, ...x.audit] }); setMore(x.audit.length >= 100); if (x.audit.length) setLPage(lp + 1); }).catch((e) => app.say(e.message));
-  const stats: [string, number, boolean?][] = [["Users", s.users], ["Active in last 7 days", s.active7], ["New in last 7 days", s.new7], ["Active sessions", s.sessions], ["Suspended", s.suspended, s.suspended > 0], ["Failed sign-ins (24h)", s.failed24, s.failed24 > 20]];
+  const stats: [string, number, boolean?][] = [["Users", s.users], ["Active in last 7 days", s.active7], ["New in last 7 days", s.new7], ["Active sessions", s.sessions], ["Suspended", s.suspended, s.suspended > 0], ["Failed sign-ins (24h)", s.failed24, s.failed24 > 20], ["Replies started (24h)", s.runs24 ?? 0], ["Replies failed (24h)", s.runsFailed24 ?? 0, (s.runsFailed24 ?? 0) * 5 > (s.runs24 ?? 0)]];
 
   return (
     <>

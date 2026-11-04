@@ -454,6 +454,8 @@ export function adminStats() {
     suspended: n("SELECT COUNT(*) n FROM users WHERE status = 'suspended'"),
     sessions: n("SELECT COUNT(*) n FROM sessions WHERE expires_at > ?", now),
     failed24: n("SELECT COUNT(*) n FROM audit WHERE action = 'login_failed' AND at > ?", now - DAY),
+    // Bảng runs do runs.ts tạo khi có lượt đầu tiên.
+    ...(() => { try { return { runs24: n("SELECT COUNT(*) n FROM runs WHERE created_at > ?", now - DAY), runsFailed24: n("SELECT COUNT(*) n FROM runs WHERE status = 'error' AND created_at > ?", now - DAY) }; } catch { return { runs24: 0, runsFailed24: 0 }; } })(),
   };
 }
 
