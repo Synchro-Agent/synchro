@@ -17,6 +17,8 @@ const HOME = path.join(tmp, "engine"), BIN = path.join(HOME, ".local", "bin");
 process.env.DATA_DIR = path.join(tmp, "data");
 process.env.SYNCHRO_ENGINE_HOME = HOME;
 process.env.DATA_KEY = "engine-test-key";
+// Bộ canh lượt treo: rút còn 4 giây để thử lượt treo; các lượt giả lập khác xong trong tích tắc.
+process.env.SYNCHRO_WATCH_SEC = "4";
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
@@ -51,15 +53,21 @@ try {
   {
     const cases = [
       ["Claude AI usage limit reached|1793020000", "quota"], ["5-hour limit reached ∙ resets 3pm", "quota"], ["You've hit your usage limit. Upgrade to Pro or try again in 2 hours.", "quota"],
-      ["RESOURCE_EXHAUSTED: You have exhausted your capacity on this model.", "quota"], ["Rate limit reached for requests", "quota"], ["Too Many Requests", "quota"],
+      ["RESOURCE_EXHAUSTED: You have exhausted your capacity on this model.", "quota"], ["Rate limit reached for requests", "rate"], ["Too Many Requests", "rate"],
+      // Giới hạn tốc độ ngắn không phải hết gói; chờ dài (tính bằng giờ) mới là hạn mức của gói.
+      ["Rate limit exceeded. Try again in 30 seconds.", "rate"], ["overloaded_error", "rate"], ["API Error: 529", "rate"], ["Rate limit exceeded: you've reached your SuperGrok usage limit. Try again in 2 hours.", "quota"], ["Too many requests, try again in 3 hours", "quota"], ["Retry-After: 20 too many requests", "rate"],
       ["Your credit balance is too low to access the Anthropic API.", "quota"], ["insufficient_quota", "quota"],
       ["Not logged in · Please run /login", "auth"], ["unexpected status 401 Unauthorized: Missing bearer", "auth"], ["authentication failed or timed out", "auth"],
       ["OAuth token has expired. Please obtain a new token.", "auth"], ["Invalid API key", "auth"], ["403 Forbidden", "auth"], ["Account on hold", "auth"],
       ["model not found", "other"], ["Internal server error", "other"], ["ECONNRESET", "other"], ["", "other"],
+      // Số 401, 403 nằm trong đầu ra của một trang hay công cụ không phải lỗi đăng nhập của hãng.
+      ["Tool browser_read failed: https://example.com returned 403 for this page", "other"], ["API Error: 401 authentication_error", "auth"], ["HTTP 403 forbidden from provider", "auth"],
     ];
     const bad = cases.filter(([m, k]) => X.classify(m) !== k);
     ok(!bad.length, `${cases.length} câu lỗi thật của các CLI phân loại đúng`, JSON.stringify(bad.map(([m, k]) => [m, k, X.classify(m)])));
-    ok(X.classify("xyz", 401) === "auth" && X.classify("xyz", 403) === "auth" && X.classify("xyz", 429) === "quota" && X.classify("xyz", 500) === "other", "theo mã HTTP: 401/403 → auth, 429 → quota");
+    ok(X.classify("xyz", 401) === "auth" && X.classify("xyz", 403) === "auth" && X.classify("xyz", 429) === "rate" && X.classify("usage limit reached", 429) === "quota" && X.classify("xyz", 500) === "other", "theo mã HTTP: 401/403 → auth, 429 không nói gì thêm → giới hạn tốc độ");
+    ok(X.retryAfterMs("try again in 2 hours 14 minutes") === 134 * 60_000 && X.retryAfterMs("retry after 30s") === 30_000 && X.retryAfterMs("Retry-After: 20") === 20_000 && X.retryAfterMs("resets 3pm") === null && X.retryAfterMs("xin chào") === null, "đọc được thời gian hãng bảo chờ");
+    ok(/quá dài/.test(X.friendlyError("Prompt is too long", "Claude")) && /Mất kết nối/.test(X.friendlyError("socket hang up", "Grok")) && X.friendlyError("lỗi lạ", "Grok") === null, "lỗi tiếng Anh thường gặp có câu ngắn kèm việc làm được");
     const leaked = [`sk-ant-oat01-${"a".repeat(40)}`, `sk-ant-api03-${"b".repeat(40)}`, `sk-proj-${"c".repeat(40)}`, `AIza${"d".repeat(35)}`, `ya29.${"e".repeat(40)}`, `eyJ${"f".repeat(20)}.${"g".repeat(20)}.${"h".repeat(20)}`];
     const red = X.redact(`lỗi: ${leaked.join(" | ")} Bearer ${"i".repeat(30)} CLAUDE_CODE_OAUTH_TOKEN=abc123secret`);
     ok(leaked.every((k) => !red.includes(k)) && !red.includes("i".repeat(30)) && !red.includes("abc123secret") && red.includes("[đã che]") && red.startsWith("lỗi:"), "redact che mọi loại khóa và token", red);
@@ -204,6 +212,13 @@ try {
     const two = await all(S.engineFor("claude").runTurn({ prompt: "[mock:twomsg] tìm giúp", env: A.engineEnv("claude", U) }));
     const said = two.filter((e) => e.kind === "text").map((e) => e.text).join("");
     ok(said === "Mình sẽ tìm trên web.\n\nTheo kết quả tìm web: xong.", "claude: hai tin trong một lượt cách nhau một dòng trống (không dính “web.Theo”)", JSON.stringify(said));
+    ok(two.some((e) => e.kind === "search" && e.query === "mock") && two.some((e) => e.kind === "sources" && e.items[0]?.url === "https://example.com/nguon" && e.items[0]?.title === "Nguồn giả"), "claude: tìm web hiện thành bước, có nguồn", JSON.stringify(two.filter((e) => e.kind === "search" || e.kind === "sources")));
+    const hi = await all(S.engineFor("claude").runTurn({ prompt: "chào", env: A.engineEnv("claude", U) }));
+    const firstAct = hi.findIndex((e) => e.kind === "activity"), firstSess = hi.findIndex((e) => e.kind === "session");
+    ok(firstSess >= 0 && firstAct > firstSess, "claude: init chỉ là khởi động, hoạt động thật tới sau đó", JSON.stringify(hi.map((e) => e.kind).slice(0, 6)));
+    const rt = await all(S.engineFor("claude").runTurn({ prompt: "[mock:retrying] chào", env: A.engineEnv("claude", U) }));
+    ok(rt.some((e) => e.kind === "status" && /đang thử lại .*\(lần 1\/10\)/.test(e.text)), "claude: api_retry thành dòng trạng thái", JSON.stringify(rt.map((e) => e.kind)));
+    ok(CE.webSources({ results: [{ content: [{ title: "A", url: "https://a.vn" }, { title: "B", url: "ftp://b" }] }] }).length === 1 && CE.webSources('Links: [{"title":"C \\"x\\"","url":"https://c.vn"}]')[0]?.title === 'C "x"', "đọc nguồn từ mọi dạng kết quả tìm web");
     const t0 = Date.now();
     const a401 = await E.collect(S.engineFor("claude").runTurn({ prompt: "[mock:auth401]", env: A.engineEnv("claude", U) }));
     ok(a401.error?.code === "auth" && Date.now() - t0 < 10_000, "claude: api_retry 401 → dừng ngay, báo đăng nhập lại", JSON.stringify(a401.error));
@@ -229,7 +244,7 @@ try {
     const noKey = await E.collect(API.engineWithFallback("codex").runTurn({ prompt: "[mock:quota] chào", env: A.engineEnv("codex", U) }));
     ok(noKey.error?.code === "quota", "hãng chưa có khóa API → giữ lỗi quota", JSON.stringify(noKey.error));
     const bad = await E.collect(new API.ApiEngine("anthropic").runTurn({ prompt: "#429 chào" }));
-    ok(bad.error?.code === "quota", "API trả 429 → lỗi quota", JSON.stringify(bad.error));
+    ok(bad.error?.code === "rate", "API trả 429 không kèm hết hạn mức → giới hạn tốc độ, không coi là hết gói", JSON.stringify(bad.error));
   }
 
   // ------------------------------------------------------------------
@@ -288,6 +303,36 @@ try {
     ok(t2.status === 200 && /lượt 2/.test(t2.json.text), "subTurn: câu tiếp theo nối đúng phiên CLI", JSON.stringify(t2));
     const t3 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "câu khác" }], conv });
     ok(t3.status === 200 && /lượt 1/.test(t3.json.text), "subTurn: lịch sử không khớp (sửa / tạo lại) → mở phiên mới", JSON.stringify(t3));
+    // Quá 60 tin: trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số tin thật.
+    const hist = (n) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `tin ${i}` }));
+    const lg = "conv-long";
+    const l1 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: hist(61).slice(-59), total: 61, conv: lg });
+    const l2 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [...hist(61).slice(-57), { role: "assistant", content: "đáp" }, { role: "user", content: "tiếp" }], total: 63, conv: lg });
+    ok(l1.status === 200 && l2.status === 200 && /lượt 2/.test(l2.json.text), "đoạn chat dài hơn 60 tin vẫn nối đúng phiên CLI", JSON.stringify([l1.json.text, l2.json.text]));
+    // Lỗi của từng model, giới hạn tốc độ, lượt treo, hết hạn mức giữa chừng.
+    const U3 = "user_C"; const me3 = { ...me, id: U3 };
+    await A.startLogin("claude", U3, "oauth");
+    await A.submitCode("claude", U3, "MOCK-CLAUDE-OK");
+    const rl = await SUBS.subTurn({ user: me3, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "[mock:ratelimit] chào" }] });
+    ok(rl.status === 429 && rl.json.rate === true && !rl.json.planLimit && rl.json.retryAfterMs === 1000 && !SUBS.planBlock("claude", U3), "giới hạn tốc độ: không báo hết gói, không khóa gói", JSON.stringify(rl));
+    const wo = await SUBS.subTurn({ user: me3, model: "sub-claude/opus", system: "", messages: [{ role: "user", content: "[mock:weekopus] chào" }] });
+    ok(wo.status === 429 && wo.json.quota === "model" && /Các model khác/.test(wo.json.error) && !SUBS.planBlock("claude", U3) && SUBS.modelBlock("claude", U3, "opus") > Date.now() + 86400_000 && !SUBS.modelBlock("claude", U3, "haiku"), "hết tuần của Opus: chỉ Opus nghỉ, Sonnet và Haiku vẫn dùng được", JSON.stringify(wo));
+    let cg = (await SUBS.mergedProviders(me3, await P.catalog())).find((p) => p.id === "anthropic");
+    ok(!cg.plan.blockedUntil && cg.models.find((m) => m.id === "opus")?.blockedUntil > Date.now() && !cg.models.find((m) => m.id === "haiku")?.blockedUntil, "bộ chọn model: đánh dấu đúng model hết hạn mức, gói không bị khóa", JSON.stringify(cg.models));
+    const mq = await SUBS.subTurn({ user: me3, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "[mock:midquota] chào" }] });
+    ok(mq.status === 429 && mq.json.text === "Phần đã viết trước khi hết hạn mức." && mq.json.quota === "model" && SUBS.modelBlock("claude", U3, "sonnet") > Date.now(), "hết hạn mức giữa chừng: giữ phần đã viết", JSON.stringify(mq));
+    const okAgain = await SUBS.subTurn({ user: me3, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "chào" }] });
+    ok(okAgain.status === 200 && !SUBS.modelBlock("claude", U3, "sonnet"), "lượt chạy được: bỏ ghi nhận hết hạn mức tạm của model đó", JSON.stringify(okAgain.status));
+    const t0h = Date.now();
+    const hang = await SUBS.subTurn({ user: me3, model: "sub-claude/haiku", system: "", messages: [{ role: "user", content: "[mock:hang] chào" }] });
+    ok(hang.status === 503 && hang.json.stalled && hang.json.noRetry && Date.now() - t0h < 12_000, "model treo sau khi CLI khởi động: bộ canh dừng lượt, không chờ 40 phút", JSON.stringify(hang));
+    // Báo động "cần đăng nhập lại": nhóm vẫn ở lại bộ chọn model; lượt chạy được thì tự hết.
+    A.markRelogin("claude", U3);
+    cg = (await SUBS.mergedProviders(me3, await P.catalog())).find((p) => p.id === "anthropic");
+    ok(cg?.source === "plan" && cg.plan.relogin === true && cg.models.length > 0, "gói cần đăng nhập lại: nhóm vẫn hiện kèm ghi chú, không biến mất", JSON.stringify(cg));
+    await SUBS.subTurn({ user: me3, model: "sub-claude/sonnet", system: "", messages: [{ role: "user", content: "chào" }] });
+    ok(!A.needsRelogin("claude", U3), "lượt chạy được: báo động nhầm tự hết");
+    ok(SUBS.linksIn("xem [Báo A](https://a.vn/x). và https://b.vn/y, <artifact id='k'>https://c.vn</artifact>").map((x) => x.url).join() === "https://a.vn/x,https://b.vn/y", "lấy nguồn từ link trong câu trả lời, bỏ phần artifact");
     const cl2 = await SUBS.subUsage(me, "claude");
     const oauthPlan = await SUBS.subUsage({ ...me, id: U2 }, "claude");
     ok(oauthPlan.plan === "Max" && cl2.plan === null, "tên gói: đăng nhập claude.ai cho biết gói (Max); token dài hạn thì không", JSON.stringify({ a: oauthPlan.plan, b: cl2.plan }));

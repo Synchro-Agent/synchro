@@ -77,7 +77,7 @@ export class FallbackEngine implements Engine {
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     let wrote = false;
     for await (const e of this.primary.runTurn(req)) {
-      if (e.kind === "error" && e.code === "quota" && !wrote) {
+      if (e.kind === "error" && (e.code === "quota" || e.code === "rate") && !wrote) {
         const b = await this.backup?.();
         if (b) {
           // Phiên của CLI không dùng được cho API: engine API nhận lịch sử qua req.history.

@@ -6,7 +6,8 @@
 // - mcp add --transport http <tên> <url> | remove <tên> | list: ghi [mcp_servers.<tên>] url = "…" trong $GROK_HOME/config.toml.
 // - --prompt-file <tệp> --output-format streaming-json [-m] [--effort] [--resume <id>] [--rules] [--tools] [--deny]…: mỗi dòng một sự kiện
 //   (text, thought, tool_call, tool_call_update, end, error). Công cụ MCP gọi qua use_tool với tên synchro__<tên>.
-// Trong prompt: [mock:quota] → hết hạn mức gói; [mock:noeffort] → model không nhận --effort; #grokargs → trả lại các cờ đã nhận
+// Trong prompt: [mock:quota] → hết hạn mức gói; [mock:noeffort] → model không nhận --effort; [mock:slowgrok] → mở đầu bằng 6 giây chỉ có thought;
+// [mock:holdgrok] → giữ lượt 8 giây (thử hàng đợi của tài khoản); #grokargs → trả lại các cờ đã nhận
 // (kiểm thử công cụ dựng sẵn đã tắt); #web → tìm web khi --tools có web_search; #media → mô tả tệp đính kèm @… nhận được.
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
@@ -88,6 +89,8 @@ const all = (n) => a.flatMap((x, i) => (x === n ? [a[i + 1]] : []));
     prompt = st.prompt;
     await C.sleep(120);
     C.out({ type: "thought", data: "Đang nghĩ…" });
+    if (prompt.includes("[mock:slowgrok]")) for (let i = 0; i < 6; i++) { await C.sleep(1000); C.out({ type: "thought", data: "Vẫn đang nghĩ…" }); }
+    if (prompt.includes("[mock:holdgrok]")) await C.sleep(8000);
     if (prompt.includes("#grokargs")) return end(`ARGS: tools=${tools.join("|") || "-"} deny=${deny.join("|") || "-"} web=${web ? "on" : "off"} model=${model} effort=${effort ?? "-"} rules=${rules ? "yes" : "no"} memory=${a.includes("--no-memory") ? "off" : "on"} approve=${a.includes("--always-approve") ? "yes" : "no"} resume=${resume ? "yes" : "no"} disallowed=${disallowed.join("|") || "-"} autoupdate=${a.includes("--no-auto-update") ? "off" : "on"}`);
     // Tệp đính kèm @đường_dẫn (tương đối với thư mục làm việc): đọc đúng các byte như Grok CLI đính kèm tệp.
     const refs = [...prompt.matchAll(/(?:^|\s)@([^\s]+\.(?:png|jpe?g|webp|gif|pdf))/gi)].map((m) => m[1]);
@@ -107,7 +110,7 @@ const all = (n) => a.flatMap((x, i) => (x === n ? [a[i + 1]] : []));
     } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
     if (web && prompt.includes("#web")) {
       C.out({ type: "tool_call", toolCallId: "call_web", title: "Web search", toolName: "web_search", kind: "search", status: "in_progress", rawInput: { query: prompt.slice(0, 60) } });
-      C.out({ type: "tool_call_update", toolCallId: "call_web", status: "completed" });
+      C.out({ type: "tool_call_update", toolCallId: "call_web", status: "completed", rawOutput: { results: [{ title: "Nguồn Grok", url: "https://example.com/grok" }] } });
       note += " [tìm web]";
     }
     const both = `${rules}\n\n${prompt}`;

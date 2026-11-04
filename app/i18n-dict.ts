@@ -698,7 +698,16 @@ Object.assign(EN2VI, {
 });
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
-  [/^(.+) không phản hồi sau 60 giây\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within 60 seconds. Try again or pick another model.`],
+  [/^(.+) không phản hồi sau (\d+) (giây|phút)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2]} ${m[3] === "giây" ? "seconds" : "minutes"}. Try again or pick another model.`],
+  [/^(.+) không có tiến triển trong (\d+) (giây|phút)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2]} ${m[3] === "giây" ? "seconds" : "minutes"}. Send "continue" or pick another model.`],
+  [/^(.+) đang giới hạn tốc độ hoặc quá tải\. Hãy thử lại sau (ít phút|\d+ giây|\d+ phút) hoặc chọn model khác\.$/, (m) => `${m[1]} is rate limiting or overloaded. Try again in ${m[2] === "ít phút" ? "a few minutes" : m[2].replace("giây", "seconds").replace("phút", "minutes")} or pick another model.`],
+  [/^Đang chờ lượt (.+) khác của tài khoản này xong$/, (m) => `Waiting for another ${m[1]} reply on this account to finish`],
+  [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one could not start. Try again when it finishes, or pick another model.`],
+  [/^Claude đang thử lại sau lỗi tạm thời(?: \(lần (\d+)(?:\/(\d+))?\))?$/, (m) => `Claude is retrying after a temporary error${m[1] ? ` (attempt ${m[1]}${m[2] ? ` of ${m[2]}` : ""})` : ""}`],
+  [/^(.+) đã hết hạn mức\. Các model khác của gói (.+) vẫn dùng được\.$/, (m) => `${m[1]} has hit its limit. Other ${m[2]} plan models still work.`],
+  [/^Gói (.+) hiện không có model này\. Hãy chọn model khác\.$/, (m) => `Your ${m[1]} plan doesn't include this model right now. Pick another model.`],
+  [/^Mất kết nối tới (.+)\. Hãy thử lại sau ít phút\.$/, (m) => `Lost the connection to ${m[1]}. Try again in a few minutes.`],
+  [/^(.+) đang gặp sự cố phía hãng\. Hãy thử lại sau ít phút hoặc chọn model khác\.$/, (m) => `${m[1]} is having a problem on its side. Try again in a few minutes or pick another model.`],
   [/^CLI không có hoạt động nào trong (\d+) phút \(có thể đã treo\) nên Synchro dừng lượt này\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `The CLI showed no activity for ${m[1]} minutes (it may have hung), so Synchro stopped this turn. Send "continue" to pick up where it left off.`],
   [/^Lượt này đã chạy ([\d.]+) giờ \(mức tối đa mỗi lượt\) nên đã dừng\. Nhắn "tiếp tục" để làm tiếp từ chỗ đang dở\.$/, (m) => `This turn ran for ${m[1]} hours (the per-turn maximum) and was stopped. Send "continue" to pick up where it left off.`],
   [/^Đã thêm (.+) vào thư viện cho mọi người$/, (m) => `Added ${m[1]} to the Library for everyone`],
@@ -887,6 +896,9 @@ Object.assign(VI2EN, {
   "Chưa có khóa cho nhà cung cấp này.": "There's no key for this provider yet.",
   "Máy chủ trả về dữ liệu không đọc được (có đúng địa chỉ API không?)": "The server returned data that couldn't be read (is the API address right?)",
   "Không tìm thấy model này. Hãy làm mới danh sách model.": "Model not found. Refresh the model list.",
+  "ChatGPT đang kết nối lại": "ChatGPT is reconnecting", "Antigravity đang viết, chữ sẽ hiện một lần khi xong": "Antigravity is writing; the text appears all at once when it's done",
+  "Đoạn chat đã quá dài với model này. Hãy nén đoạn chat, mở đoạn chat mới hoặc chọn model có ngữ cảnh lớn hơn.": "This chat is too long for this model. Compact it, start a new chat, or pick a model with a larger context.",
+  "Tin nhắn quá dài để gửi cho model này. Hãy rút gọn hoặc mở đoạn chat mới.": "This message is too long for this model. Shorten it or start a new chat.",
   "(Model không trả lời nội dung nào)": "(The model returned no content)", "Model không phản hồi sau 60 giây.": "The model didn't respond within 60 seconds.",
 });
 RULES_EN.push(

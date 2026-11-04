@@ -2,19 +2,19 @@
 // Engine không biết tài khoản là ai: biến môi trường đăng nhập (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME…) do cli_auth.engineEnv()
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
-import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage } from "./engine";
+import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
 import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-function start(cli: Cli, args: string[], req: TurnRequest, stdin: string): Proc | null {
+function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, timeoutMs?: number): Proc | null {
   const bin = find(cli);
   if (!bin) return null;
   // Không có workdir riêng thì chạy trong <home>/work (CLI chỉ ghi trong thư mục làm việc).
   const cwd = req.workdir ?? path.join(engineHome(), "work");
   makeDir(cwd);
-  return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive });
+  return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
 }
 // Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): vượt là "spawn E2BIG", lượt chết trước khi chạy. Đo bằng byte
 // (tiếng Việt có dấu 2–3 byte mỗi chữ), chừa chỗ: nội dung dài hơn ARG_MAX_BYTES thì đi qua tệp hoặc stdin.
@@ -66,6 +66,56 @@ async function* objects(p: Proc): AsyncIterable<Json> {
 }
 
 const err = (message: string, code: ErrorCode): Event => ({ kind: "error", message: redact(message), code });
+
+// ---------------------------------------------------------------- tìm web dựng sẵn của CLI
+/** Nguồn trong kết quả của công cụ tìm web (mỗi CLI một kiểu): mọi object có url http(s), kể cả chuỗi "Links: [{"title":…,"url":…}]" của Claude Code. */
+export function webSources(v: unknown, out = new Map<string, WebSource>(), depth = 0): WebSource[] {
+  if (depth > 8 || out.size >= 20) return [...out.values()];
+  if (typeof v === "string") {
+    for (const m of v.matchAll(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"url"\s*:\s*"(https?:[^"\s]+)"/g)) if (!out.has(m[2])) out.set(m[2], { title: m[1].replace(/\\(.)/g, "$1").slice(0, 200), url: m[2] });
+  } else if (Array.isArray(v)) for (const x of v) webSources(x, out, depth + 1);
+  else if (v && typeof v === "object") {
+    const o = v as Json;
+    if (typeof o.url === "string" && /^https?:\/\//.test(o.url) && !out.has(o.url)) out.set(o.url, { title: String(o.title ?? o.name ?? "").slice(0, 200), url: o.url });
+    for (const x of Object.values(o)) if (x && typeof x !== "number" && typeof x !== "boolean") webSources(x, out, depth + 1);
+  }
+  return [...out.values()];
+}
+const WEB_TOOL = /^(WebSearch|WebFetch|web_search|search_web|web_fetch)$/;
+
+// ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok)
+// Hai CLI này chỉ đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
+// phải: dừng được ngay khi bấm Dừng, có giới hạn, và báo cho người dùng biết đang chờ gì (một câu "chào" từng chờ trống 2 phút rồi báo lỗi sai).
+type Slot = { chain: Promise<void>; at: number };
+const LOCK_WAIT_MS = 5 * 60_000;
+async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnRequest, name: string): AsyncGenerator<Event, (() => void) | null, unknown> {
+  const held = locks.get(home);
+  // Lượt giữ khóa lâu hơn mức trần của một lượt thì không thể còn chạy: bỏ qua, không để mọi lượt sau kẹt mãi.
+  const prev = held && Date.now() - held.at < MAX_TURN_MS + 60_000 ? held.chain : Promise.resolve();
+  let release = () => {};
+  const mine = new Promise<void>((r) => { release = r; });
+  const slot: Slot = { chain: prev.then(() => mine), at: Date.now() };
+  locks.set(home, slot);
+  void slot.chain.then(() => { if (locks.get(home) === slot) locks.delete(home); });
+  if (!held) return release;
+  yield { kind: "status", text: `Đang chờ lượt ${name} khác của tài khoản này xong`, wait: true };
+  let stop = () => {};
+  const got = await Promise.race([
+    prev.then(() => "ok" as const),
+    new Promise<"aborted" | "late">((ok) => {
+      const t = setTimeout(() => ok("late"), req.lockMs ?? LOCK_WAIT_MS);
+      const f = () => ok("aborted");
+      if (req.signal?.aborted) f(); else req.signal?.addEventListener("abort", f, { once: true });
+      stop = () => { clearTimeout(t); req.signal?.removeEventListener("abort", f); };
+    }),
+  ]);
+  stop();
+  if (got === "ok") { yield { kind: "status", wait: false }; return release; }
+  // Bỏ chờ: nhả chỗ của mình; lượt xếp sau vẫn chờ đúng lượt đang chạy (chain vẫn gồm prev).
+  release();
+  yield got === "aborted" ? err("Đã dừng.", "aborted") : err(`Một lượt ${name} khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác.`, "busy");
+  return null;
+}
 const notInstalled = (cli: Cli): Event => err(`CLI ${cli} chưa được cài trên máy chủ.`, "other");
 
 export const timeoutText = (e: Pick<Exit, "idle">) => e.idle
@@ -145,12 +195,25 @@ export class ClaudeCodeEngine implements Engine {
     // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
     // không dính liền "…dựng deck.Đã đọc 4 skill…".
     let text = "", done = false, gap = false;
-    const limits = new Map<string, RateWindow>();
+    const limits = new Map<string, RateWindow>(), webIds = new Set<string>();
     // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
     const T0 = Date.now(), seen = new Map<string, number>();
     const mark = (o: Json) => { const k = [o.type, o.subtype, (o.event as Json | undefined)?.type].filter(Boolean).join(":"); if (!seen.has(k) && seen.size < 24) seen.set(k, Date.now() - T0); };
     for await (const o of objects(p)) {
       mark(o as Json);
+      // Model đã phản hồi: có sự kiện của API (kể cả đang nghĩ) hoặc tin của model. init và rate_limit_event không tính: CLI tự in khi khởi động.
+      if (o.type === "stream_event" || o.type === "assistant" || o.type === "user") yield { kind: "activity" };
+      if (o.type === "assistant") {
+        for (const b of (o.message?.content ?? []) as Json[]) {
+          if ((b.type === "tool_use" || b.type === "server_tool_use") && WEB_TOOL.test(String(b.name ?? ""))) {
+            if (typeof b.id === "string") webIds.add(b.id);
+            yield { kind: "search", query: typeof b.input?.query === "string" ? b.input.query : undefined, url: typeof b.input?.url === "string" ? b.input.url : undefined };
+          } else if (b.type === "web_search_tool_result") { const items = webSources(b.content); if (items.length) yield { kind: "sources", items }; }
+        }
+      } else if (o.type === "user" && webIds.size) {
+        const hits = ((o.message?.content ?? []) as Json[]).filter((b) => b?.type === "tool_result" && webIds.has(String(b.tool_use_id)));
+        if (hits.length) { const items = webSources([hits, o.tool_use_result]); if (items.length) yield { kind: "sources", items }; }
+      }
       if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) };
       else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
       else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
@@ -168,6 +231,8 @@ export class ClaudeCodeEngine implements Engine {
           yield err(`Claude từ chối đăng nhập (${st ?? "auth"}): ${m || "phiên đăng nhập không còn hợp lệ"}. Đăng nhập lại trong Cài đặt → Providers.`, "auth");
           break;
         }
+        // Còn lại CLI tự chờ rồi thử lại: cho người dùng biết (không phải treo); bộ canh tính lại từ lúc này.
+        yield { kind: "status", text: `Claude đang thử lại sau lỗi tạm thời${num(o.attempt) ? ` (lần ${o.attempt}${num(o.max_retries) ? `/${o.max_retries}` : ""})` : ""}` };
       } else if (o.type === "rate_limit_event") {
         for (const w of claudeLimits(o.rate_limit_info)) limits.set(w.window, w);
       } else if (o.type === "result") {
@@ -215,7 +280,15 @@ export class CodexEngine implements Engine {
     if (!p) { yield notInstalled("codex"); return; }
     const parts: string[] = [];
     let done = false, lastErr = "", tools = false;
+    const asked = new Set<string>();
     for await (const o of objects(p)) {
+      // Mục đầu tiên của lượt là lúc model thật sự làm việc; thread.started, turn.started chỉ là CLI khởi động.
+      if (/^item\./.test(String(o.type))) yield { kind: "activity" };
+      if (/^item\.(started|completed)$/.test(String(o.type)) && o.item?.type === "web_search") {
+        const q = typeof o.item.query === "string" && o.item.query ? o.item.query : typeof o.item.action?.query === "string" ? o.item.action.query : undefined;
+        const url = typeof o.item.action?.url === "string" ? o.item.action.url : undefined;
+        if ((q || url) && !asked.has(q ?? url!)) { asked.add(q ?? url!); yield { kind: "search", query: q, url }; if (url) yield { kind: "sources", items: [{ title: "", url }] }; }
+      }
       if (o.type === "thread.started" && typeof o.thread_id === "string") yield { kind: "session", id: o.thread_id };
       else if (o.type === "item.started" && /mcp_tool_call|web_search/.test(String(o.item?.type ?? ""))) tools = true;
       else if (o.type === "item.completed" && (o.item?.type === "agent_message" || o.item?.item_type === "assistant_message") && typeof o.item.text === "string") {
@@ -235,6 +308,7 @@ export class CodexEngine implements Engine {
         // Thường chỉ là "Reconnecting…" (chỉ dùng nếu lượt thất bại); riêng 401/403 thì thử lại vô ích: dừng ngay, báo đăng nhập lại.
         lastErr = o.message;
         if (/\b40[13]\b/.test(o.message) && classify(o.message) === "auth") { p.kill(); done = true; yield err(o.message, "auth"); break; }
+        if (/reconnecting|retrying/i.test(o.message)) yield { kind: "status", text: "ChatGPT đang kết nối lại" };
       }
     }
     const e = await p.done;
@@ -249,7 +323,7 @@ export class CodexEngine implements Engine {
 // hook PreToolUse (~/.gemini/config/hooks.json, theo tài liệu của agy) chỉ cho phép công cụ MCP — trong cấu hình chỉ có cầu nối của
 // Synchro: mcp_synchro_… khi công cụ được nạp sẵn (cầu nối đánh dấu antigravity/alwaysLoad), CallMcpTool khi agy 1.4.x để model tự tìm
 // công cụ rồi gọi qua tên chung. Công cụ dựng sẵn của agy (lệnh shell, ghi tệp trên máy chủ) vẫn bị từ chối như trước.
-const agyLocks = new Map<string, Promise<void>>();
+const agyLocks = new Map<string, Slot>();
 // Bật tìm web (Cài đặt / nút tìm web): cho phép thêm công cụ tìm web của chính agy (search_web — chỉ gọi dịch vụ tìm kiếm của Google,
 // không đụng tới máy chủ). Công cụ đọc tệp / chạy lệnh / đọc URL bất kỳ của agy vẫn bị chặn: chúng chạy trên máy chủ bằng user của
 // engine, đọc được thư mục đăng nhập của tài khoản khác và địa chỉ nội bộ.
@@ -263,7 +337,8 @@ async function agyDenied(req: TurnRequest, log: string): Promise<string[]> {
   return [...new Set([...out.matchAll(/"([A-Za-z_]+)"/g)].map((m) => m[1]))];
 }
 async function agyRun(args: string[], req: TurnRequest) {
-  const p = start("agy", args, { ...req, signal: undefined }, "");
+  // Lệnh ngắn (thêm / gỡ cầu nối): treo thì không được giữ khóa của tài khoản lâu hơn chừng này.
+  const p = start("agy", args, { ...req, signal: undefined }, "", 60_000);
   if (!p) return false;
   for await (const _ of p.lines) { /* bỏ qua */ }
   return (await p.done).code === 0;
@@ -279,24 +354,14 @@ export class AntigravityEngine implements Engine {
   readonly id = "agy";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (!req.mcp) { yield* this.turn(req); return; }
-    const home = String(req.env?.HOME ?? "");
-    const prev = agyLocks.get(home) ?? Promise.resolve();
-    let release = () => {};
-    const mine = new Promise<void>((r) => { release = r; });
-    const chain = prev.then(() => mine);
-    agyLocks.set(home, chain);
-    // Chờ lượt trước của cùng tài khoản tối đa 90 giây: lượt trước bị bỏ dở mà không nhả khóa thì mọi lượt Antigravity có công cụ
-    // sau đó từng chờ mãi (không tiến trình nào chạy, người dùng chỉ thấy vòng xoay). Quá hạn thì chạy tiếp.
-    let stale = false;
-    await Promise.race([prev, new Promise<void>((ok) => setTimeout(() => { stale = true; ok(); }, 90_000))]);
-    if (stale) console.error("[agy] lượt trước của tài khoản không nhả khóa sau 90 giây: chạy tiếp");
+    const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
+    if (!free) return;
     try {
       const ok = await agyBridge(req, req.mcp.url).catch(() => false);
       yield* this.turn(ok ? req : { ...req, mcp: undefined });
     } finally {
       await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
-      release();
-      if (agyLocks.get(home) === chain) agyLocks.delete(home);
+      free();
     }
   }
   private async *turn(req: TurnRequest): AsyncIterable<Event> {
@@ -318,6 +383,8 @@ export class AntigravityEngine implements Engine {
     args.push("-p", prompt);
     const p = start("agy", args, req, "");
     if (!p) { yield notInstalled("agy"); return; }
+    // Print mode không có sự kiện giữa chừng: nói trước để người dùng không tưởng là treo.
+    yield { kind: "status", text: "Antigravity đang viết, chữ sẽ hiện một lần khi xong" };
     // agy in một object JSON duy nhất khi xong lượt (có thể trải nhiều dòng).
     let out = "";
     for await (const l of p.lines) out += l + "\n";
@@ -325,12 +392,13 @@ export class AntigravityEngine implements Engine {
     let o: Json | null = null;
     const t = out.trim();
     try { o = JSON.parse(t.slice(t.indexOf("{"))) as Json; } catch {}
-    if (!o) { yield exitError("agy", p, e); return; }
+    // Lượt bị dừng hoặc CLI không in gì: nhật ký của lượt không còn ai đọc, xóa để khỏi đọng tệp trong thư mục làm việc.
+    if (!o) { if (log) await rmEngineFile(req, log).catch(() => {}); yield exitError("agy", p, e); return; }
     if (typeof o.conversation_id === "string" && o.conversation_id) yield { kind: "session", id: o.conversation_id };
     const u = (o.usage ?? {}) as Json;
     if (o.usage) yield { kind: "usage", usage: { input: num(u.input_tokens) ?? 0, output: (num(u.output_tokens) ?? 0) + (num(u.thinking_tokens) ?? 0), cacheRead: num(u.cache_read_tokens) } };
     if (o.status === "ERROR" || o.error || e.code !== 0) {
-      if (e.aborted || e.timedOut) { yield exitError("agy", p, e); return; }
+      if (e.aborted || e.timedOut) { if (log) await rmEngineFile(req, log).catch(() => {}); yield exitError("agy", p, e); return; }
       const m = [o.error, stripAnsi(p.stderr()).trim()].filter(Boolean).join("\n") || "Antigravity báo lỗi.";
       if (log) await agyDenied(req, log).catch(() => []);
       // Model không nhận mức effort (agy kiểm tra trước khi chạy, chưa tốn lượt nào): chạy lại ngay, để model dùng mức mặc định.
@@ -355,10 +423,10 @@ export class AntigravityEngine implements Engine {
 // - Grok chỉ đọc máy chủ MCP từ cấu hình (không có cờ cho từng lượt): mỗi lượt có công cụ thêm cầu nối bằng `grok mcp add` rồi gỡ khi xong,
 //   các lượt có công cụ của cùng một tài khoản chạy lần lượt (như Antigravity).
 // - Ảnh / PDF gửi kèm: đã lưu trong thư mục làm việc, prompt tham chiếu bằng @<đường dẫn> (cách đính kèm tệp của Grok CLI).
-const grokLocks = new Map<string, Promise<void>>();
+const grokLocks = new Map<string, Slot>();
 const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
 async function grokRun(args: string[], req: TurnRequest) {
-  const p = start("grok", args, { ...req, signal: undefined }, "");
+  const p = start("grok", args, { ...req, signal: undefined }, "", 60_000);
   if (!p) return false;
   for await (const _ of p.lines) { /* bỏ qua */ }
   return (await p.done).code === 0;
@@ -373,13 +441,8 @@ export class GrokEngine implements Engine {
   readonly id = "grok";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (!req.mcp) { yield* this.turn(req); return; }
-    const home = String(req.env?.HOME ?? "");
-    const prev = grokLocks.get(home) ?? Promise.resolve();
-    let release = () => {};
-    const mine = new Promise<void>((r) => { release = r; });
-    const chain = prev.then(() => mine);
-    grokLocks.set(home, chain);
-    await prev;
+    const free = yield* turnLock(grokLocks, String(req.env?.HOME ?? ""), req, "Grok");
+    if (!free) return;
     try {
       // Cầu nối của lượt trước (nếu lượt đó bị dừng giữa chừng) bị thay bằng cầu nối mới.
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
@@ -387,8 +450,7 @@ export class GrokEngine implements Engine {
       yield* this.turn(ok ? req : { ...req, mcp: undefined });
     } finally {
       await grokRun(["mcp", "remove", "synchro"], req).catch(() => false);
-      release();
-      if (grokLocks.get(home) === chain) grokLocks.delete(home);
+      free();
     }
   }
   private async *turn(req: TurnRequest, retried = false): AsyncIterable<Event> {
@@ -418,9 +480,19 @@ export class GrokEngine implements Engine {
     if (!p) { await rmEngineFile(req, file).catch(() => {}); yield notInstalled("grok"); return; }
     // Có dùng công cụ: phần chữ trước công cụ là lời dẫn (đã hiện trong nhật ký làm việc), câu trả lời là đoạn sau công cụ cuối cùng.
     let all = "", seg = "", tools = false, done = false, lastErr = "";
+    const webCalls = new Set<string>();
     for await (const o of objects(p)) {
+      // Grok không có sự kiện khởi động: mọi sự kiện (đang nghĩ, gọi công cụ…) đều là model đang làm việc. Trước đây chỉ chữ mới tính,
+      // lượt mở đầu bằng công cụ hay nghĩ lâu bị coi là treo ở giây thứ 60.
+      if (o.type !== "error") yield { kind: "activity" };
       if (o.type === "text" && typeof o.data === "string") { all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
-      else if (o.type === "tool_call") { tools = true; seg = ""; }
+      else if (o.type === "tool_call") {
+        tools = true; seg = "";
+        if (WEB_TOOL.test(String(o.toolName ?? "")) || o.kind === "search") {
+          if (typeof o.toolCallId === "string") webCalls.add(o.toolCallId);
+          yield { kind: "search", query: typeof o.rawInput?.query === "string" ? o.rawInput.query : undefined, url: typeof o.rawInput?.url === "string" ? o.rawInput.url : undefined };
+        }
+      } else if (o.type === "tool_call_update" && webCalls.has(String(o.toolCallId))) { const items = webSources(o.rawOutput); if (items.length) yield { kind: "sources", items }; }
       else if (o.type === "error") {
         lastErr = String(o.message ?? "Grok báo lỗi.");
         if (classify(lastErr) === "auth") { p.kill(); done = true; yield err(lastErr, "auth"); break; }

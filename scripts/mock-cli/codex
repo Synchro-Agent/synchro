@@ -86,7 +86,10 @@ const authFile = path.join(dir, "auth.json");
       C.out({ type: "item.completed", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name, status: r.error ? "failed" : "completed" } });
       note = ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
     } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
-    if (a.includes("tools.web_search=true")) note += " [tìm web]";
+    if (a.includes("tools.web_search=true")) {
+      note += " [tìm web]";
+      if (prompt.includes("#web")) { C.out({ type: "item.started", item: { id: "item_w", type: "web_search", query: "" } }); C.out({ type: "item.completed", item: { id: "item_w", type: "web_search", query: "mock", action: { type: "search", query: "mock" } } }); }
+    }
     // --image=<tệp> / -i <tệp>: đọc đúng tệp ảnh như codex thật (tệp không có thì báo lỗi).
     const imgs = a.flatMap((x, i) => (x.startsWith("--image=") ? [x.slice(8)] : x === "-i" || x === "--image" ? [a[i + 1]] : []));
     const missing = imgs.find((f) => !fs.existsSync(f));

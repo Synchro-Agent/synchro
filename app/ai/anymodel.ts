@@ -21,7 +21,8 @@ export async function usableModels(user: UserRow) {
     // Gói Google: hạn mức đang hết là của nhóm Gemini; model Claude / GPT qua Antigravity tính riêng nên vẫn dùng được.
     // Nhóm Claude / GPT của Antigravity có hạn mức riêng (agyOtherBlock): hết thì bỏ các model đó, nhóm Gemini vẫn dùng được.
     const other = plan?.cli === "agy" && agyOtherBlock(user.id) ? p.models.filter((m) => !isGeminiId(m.id)).map((m) => m.key) : [];
-    return [...other, ...(plan?.blockedUntil ? p.models.filter((m) => plan.cli !== "agy" || isGeminiId(m.id)).map((m) => m.key) : [])];
+    // Hạn mức riêng của một model (tuần · Opus): chỉ bỏ model đó.
+    return [...other, ...p.models.filter((m) => m.blockedUntil).map((m) => m.key), ...(plan?.blockedUntil ? p.models.filter((m) => plan.cli !== "agy" || isGeminiId(m.id)).map((m) => m.key) : [])];
   }));
   const usable = allowed.filter((k) => !blocked.has(k));
   // groups: model dùng được theo nhóm hãng, kèm tên hiện ở bộ chọn model (hộp chọn model của các việc phụ, ví dụ Quét skill rác).

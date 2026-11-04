@@ -2,7 +2,8 @@
 // Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → Providers (xem app/providers.ts),
 // mỗi model định danh bằng khóa "nhà cung cấp/mã model", ví dụ "anthropic/claude-opus-5-5".
 
-export type ModelInfo = { key: string; id: string; name: string };
+/** blockedUntil: riêng model này đang hết hạn mức tới lúc đó (các model khác của gói vẫn dùng được). */
+export type ModelInfo = { key: string; id: string; name: string; blockedUntil?: number };
 // Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem app/ai/subs.ts):
 // blockedUntil: gói đang hết hạn mức tới lúc nào; usingApiUntil: người dùng đã đồng ý dùng khóa API thay gói tới lúc nào.
 export type PlanInfo = { cli: "claude" | "codex" | "agy" | "grok"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean };
