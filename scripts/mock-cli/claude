@@ -39,30 +39,38 @@ const loginFile = path.join(dir, ".mock-login");
     process.exit(0);
   }
   if (a.includes("-p")) {
-    // --input-format stream-json: mỗi dòng là một tin nhắn người dùng (khối chữ, ảnh, PDF như Messages API).
-    const raw = await C.readStdin();
-    const media = [];
-    let prompt = raw;
-    if (C.flag(a, "--input-format") === "stream-json") {
-      prompt = "";
-      for (const l of raw.split("\n").filter((x) => x.trim())) {
-        const m = JSON.parse(l);
-        for (const b of m.message?.content ?? []) {
-          if (b.type === "text") prompt += b.text;
-          else if ((b.type === "image" || b.type === "document") && b.source?.type === "base64") media.push(`${C.mediaDesc(Buffer.from(b.source.data, "base64"), b.source.media_type)} (${b.type})`);
-        }
-      }
-    }
-    // Ghi chú nhớ lại từ bộ não Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ (không đọc lệnh thử trong đó).
-    prompt = prompt.replace(/<brain_recall>[\s\S]*?<\/brain_recall>/g, "").trim();
-    const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
+    // Thời gian khởi động giả lập (mock-cli.json: startMs), để kiểm thử thấy tiến trình khởi động sẵn nhanh hơn thật.
+    await C.sleep(C.cfg.startMs ?? 0);
     // --fork-session (phiên ấm của Synchro): nối từ phiên có sẵn nhưng dưới mã phiên mới, như CLI thật.
     const sid = a.includes("--fork-session") ? C.uuid() : C.flag(a, "--resume") || C.uuid();
     // Tên gọi tắt → model thật (như Claude Code báo trong system/init).
+    let inited = false;
     const ALIAS = { fable: "claude-fable-5-1", opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" };
+    const blocks = (m, media) => { let t = ""; for (const b of m.message?.content ?? []) { if (b.type === "text") t += b.text; else if ((b.type === "image" || b.type === "document") && b.source?.type === "base64") media.push(`${C.mediaDesc(Buffer.from(b.source.data, "base64"), b.source.media_type)} (${b.type})`); } return t; };
+    // --input-format stream-json: mỗi dòng là một tin nhắn người dùng (khối chữ, ảnh, PDF như Messages API), mỗi tin là một lượt; tiến trình sống tới khi stdin đóng, như CLI thật.
+    // Không có cờ đó: toàn bộ stdin là prompt của một lượt.
+    if (C.flag(a, "--input-format") === "stream-json") {
+      if (C.cfg.deafStream) return new Promise(() => {}); // CLI giả không xử lý stream-json: im lặng mãi (kiểm thử rơi về cách cũ).
+      if (C.cfg.dieStream) { console.error("unknown option '--input-format'"); process.exit(1); }
+      for await (const l of require("readline").createInterface({ input: process.stdin })) {
+        if (!l.trim()) continue;
+        const media = [];
+        await oneTurn(blocks(JSON.parse(l), media), media);
+      }
+      return;
+    }
+    await oneTurn(await C.readStdin(), []);
+    return;
+    async function oneTurn(raw, media) {
+    let prompt = raw;
+    // Ghi chú nhớ lại từ bộ não Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ (không đọc lệnh thử trong đó).
+    prompt = prompt.replace(/<brain_recall>[\s\S]*?<\/brain_recall>/g, "").trim();
+    const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
     // Lịch sử phiên trên đĩa như CLI thật (nguyên văn tin nhắn): kiểm thử xóa đoạn chat, đoạn chat ẩn danh.
     if (ok) { const pd = path.join(dir, "projects", "mock"); fs.mkdirSync(pd, { recursive: true }); fs.appendFileSync(path.join(pd, `${sid}.jsonl`), JSON.stringify({ prompt }) + "\n"); }
-    C.out({ type: "system", subtype: "init", session_id: sid, model: ALIAS[C.flag(a, "--model")] ?? C.flag(a, "--model") ?? "claude-sonnet-5-5", cwd: process.cwd(), tools: [] });
+    // initOnce: CLI chỉ in init ở lượt đầu của tiến trình (mã phiên của lượt sau đọc từ result).
+    if (!C.cfg.initOnce || !inited) C.out({ type: "system", subtype: "init", session_id: sid, model: ALIAS[C.flag(a, "--model")] ?? C.flag(a, "--model") ?? "claude-sonnet-5-5", cwd: process.cwd(), tools: [] });
+    inited = true;
     const result = (o) => C.out({ type: "result", session_id: sid, usage: { input_tokens: 0, output_tokens: 0 }, total_cost_usd: 0, ...o });
     if (!ok) { result({ subtype: "success", is_error: true, result: "Not logged in · Please run /login" }); process.exit(1); }
     if (prompt.includes("[mock:auth401]")) { C.out({ type: "system", subtype: "api_retry", attempt: 1, max_retries: 10, retry_delay_ms: 600, error_status: 401, error: "authentication_failed" }); await C.sleep(60_000); return; }
@@ -127,11 +135,11 @@ const loginFile = path.join(dir, ".mock-login");
     }
     const web = (C.flag(a, "--tools") ?? "").includes("WebSearch") ? " [tìm web]" : "";
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
-    const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${SYS ?? ""}\n${prompt}`) : /#toprule/.test(prompt) ? C.ruleEcho(SYS ?? "") : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(SYS ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));
+    const text = /#pid/.test(prompt) ? `PID ${process.pid} lượt ${turn} hệ thống ${(SYS ?? "").length} ký tự` : /\[\[CAN_CONG_CU\]\]/.test(SYS ?? "") && /needtools/.test(prompt) ? "[[CAN_CONG_CU]]" : /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${SYS ?? ""}\n${prompt}`) : /#toprule/.test(prompt) ? C.ruleEcho(SYS ?? "") : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(SYS ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));
     await delta(text);
     C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] }, session_id: sid });
     result({ subtype: "success", is_error: false, result: text, usage: { input_tokens: prompt.length, output_tokens: text.length, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
-    return;
+    }
   }
   console.error(`mock claude: không hỗ trợ "${a.join(" ")}"`);
   process.exit(2);

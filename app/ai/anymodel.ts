@@ -15,8 +15,11 @@ export async function usableModels(user: UserRow) {
   const shownApi = cat.map((p) => ({ ...p, models: p.models.filter((m) => main.includes(ALL) || main.includes(m.key)) })).filter((p) => p.models.length);
   const merged = await mergedProviders(user, shownApi).catch(() => shownApi);
   const allowed = merged.flatMap((p) => p.models.map((m) => m.key)).filter((k) => !!subCli(k) || canModel(user, k));
+  // plansOut: số gói đang hết hạn mức và lúc sớm nhất có gói hồi lại (để báo khi hết cả, không chỉ nêu gói thử sau cùng).
+  const plansOut = { count: 0, resets: null as number | null };
   const blocked = new Set(merged.flatMap((p) => {
     const plan = (p as { plan?: { cli?: string; blockedUntil?: number | null; relogin?: boolean } }).plan;
+    if (plan?.blockedUntil) { plansOut.count++; plansOut.resets = Math.min(plansOut.resets ?? plan.blockedUntil, plan.blockedUntil); }
     if (plan?.relogin) return p.models.map((m) => m.key);
     // Gói Google: hạn mức đang hết là của nhóm Gemini; model Claude / GPT qua Antigravity tính riêng nên vẫn dùng được.
     // Nhóm Claude / GPT của Antigravity có hạn mức riêng (agyOtherBlock): hết thì bỏ các model đó, nhóm Gemini vẫn dùng được.
@@ -27,7 +30,7 @@ export async function usableModels(user: UserRow) {
   const usable = allowed.filter((k) => !blocked.has(k));
   // groups: model dùng được theo nhóm hãng, kèm tên hiện ở bộ chọn model (hộp chọn model của các việc phụ, ví dụ Quét skill rác).
   const groups = merged.map((p) => ({ name: p.name, models: p.models.filter((m) => usable.includes(m.key)).map((m) => ({ key: m.key, name: m.name })) })).filter((g) => g.models.length);
-  return { allowed, usable, groups };
+  return { allowed, usable, groups, plansOut };
 }
 
 /** Model cho một việc phụ: theo độ khó của việc trong các model dùng được (việc phụ thường chọn được model nhanh, rẻ). */

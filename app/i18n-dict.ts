@@ -2553,3 +2553,35 @@ RULES_EN.unshift(
   [/^Đã kết nối (.+)$/, (m) => `Connected ${m[1]}`],
   [/^Kết nối tới (\S+) bị ngắt giữa chừng\.$/, (m) => `The connection to ${m[1]} dropped partway through.`],
 );
+// Lỗi và trạng thái của engine CLI: câu Việt do máy chủ viết (cli_engines.ts, subs.ts). Người dùng tiếng Anh từng đọc nguyên văn tiếng Việt khi hết đăng nhập.
+RULES_EN.unshift(
+  [/^Đoạn chat dài: (.+) đọc nguyên văn (\d+) tin gần nhất, (\d+) tin cũ hơn chỉ có phần trích ngắn hoặc không có\. Điều quan trọng ở đó nên nhắc lại$/, (m) => `Long chat: ${m[1]} reads the latest ${m[2]} messages in full, and the ${m[3]} older ones only as short excerpts, or not at all. Repeat anything important from them`],
+  [/^Antigravity vẫn đang viết, đã (\d+) giây$/, (m) => `Antigravity is still writing, ${m[1]} seconds so far`],
+  [/^\(PDF dạng ảnh (\d+) trang: chỉ có ảnh của (\d+) trang đầu\. Hãy nói rõ điều này với người dùng\.\)$/, (m) => `(Image-only PDF with ${m[1]} pages: only the first ${m[2]} pages are available as images. Tell the user this.)`],
+  [/^Không đọc được "(.+)": tệp PDF bị hỏng hoặc đang đặt mật khẩu\.$/, (m) => `Couldn't read "${m[1]}": the PDF is damaged or password protected.`],
+  [/^"(.+)" quá dài để gửi nguyên tệp nên model sẽ đọc phần chữ, không thấy hình và bố cục\.$/, (m) => `"${m[1]}" is too long to send as a whole file, so the model will read its text but won't see images or layout.`],
+  [/^Claude từ chối đăng nhập \((.+?)\): (.*)\. Đăng nhập lại trong Cài đặt → Providers\.$/, (m) => `Claude refused the sign-in (${m[1]}): ${m[2] === "phiên đăng nhập không còn hợp lệ" ? "the sign-in is no longer valid" : m[2]}. Sign in again in Settings → Providers.`],
+  [/^CLI (\S+) thoát với mã (\S+)\.$/, (m) => `The ${m[1]} CLI exited with code ${m[2]}.`],
+  [/^CLI (\S+) chưa được cài trên máy chủ\.$/, (m) => `The ${m[1]} CLI isn't installed on the server.`],
+  [/^Không nối được công cụ của Synchro với (.+) nên lượt này chưa chạy\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `Synchro's tools couldn't connect to ${m[1]}, so this reply didn't start. Try again or pick another model.`],
+  [/^Một đoạn chat (.+) khác đang chờ bạn duyệt\. Hãy trả lời ở đoạn chat đó, lượt này sẽ chạy ngay sau đó$/, (m) => `Another ${m[1]} chat is waiting for your approval. Answer it there and this reply will start right after`],
+  [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one couldn't start. Try again when it finishes or pick another model.`],
+  [/^(.+) phản hồi chậm hơn bình thường, Synchro vẫn đang chờ$/, (m) => `${m[1]} is responding slower than usual. Synchro is still waiting`],
+  [/^Không chuyển được hướng dẫn cho Claude Code: (.+)$/, (m) => `Couldn't pass the instructions to Claude Code: ${m[1]}`],
+  [/^Không chuyển được tệp đính kèm cho (.+?): (.+)$/, (m) => `Couldn't pass the attachment to ${m[1]}: ${m[2]}`],
+);
+Object.assign(VI2EN, {
+  "Đoạn chat quá dài cho Antigravity: model chỉ đọc phần gần nhất của lịch sử": "This chat is too long for Antigravity: the model only reads the most recent part of the history",
+  "Các gói đã kết nối đều đã hết hạn mức.": "All your connected plans have hit their limits.",
+  "Codex báo lỗi.": "Codex reported an error.",
+  "Antigravity báo lỗi.": "Antigravity reported an error.",
+  "Grok báo lỗi.": "Grok reported an error.",
+  "ChatGPT đang viết, chữ sẽ hiện khi xong từng đoạn": "ChatGPT is writing. Text appears as each part finishes",
+  "Antigravity đang viết, chữ sẽ hiện một lần khi xong (thường 5 đến 10 giây)": "Antigravity is writing. Text appears all at once when it finishes (usually 5 to 10 seconds)",
+});
+Object.assign(EN2VI, {
+  "No license stated": "Chưa ghi giấy phép",
+  "Synchro runs on an AI plan you already pay for: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.": "Synchro chạy bằng gói AI bạn đang trả tiền: Claude, ChatGPT, Gemini hoặc Grok. Bạn kết nối gói sau khi đăng ký.",
+  "Synchro tells you when it resets and offers another plan you have connected.": "Synchro báo lúc gói hồi lại và gợi ý gói khác bạn đã kết nối.",
+  "The model picker keeps one group per provider. A group shows your plan's models while you are signed in.": "Bộ chọn model có một nhóm cho mỗi hãng. Nhóm đó hiện các model của gói khi bạn đã đăng nhập.",
+});

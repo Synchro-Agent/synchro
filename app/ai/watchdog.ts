@@ -17,7 +17,8 @@ export function watchLimits(cli: string, effort?: string): WatchLimits {
   const force = Number(process.env.SYNCHRO_WATCH_SEC) * 1000;
   if (force > 0) return { first: force, idle: force };
   return {
-    first: cli === "agy" ? AGY_SILENT[e] * MIN : cli === "codex" ? CODEX_FIRST[e] * MIN : 90_000,
+    // Nỗ lực thấp thường có chữ trong vài giây: treo thì chuyển model sớm hơn.
+    first: cli === "agy" ? AGY_SILENT[e] * MIN : cli === "codex" ? CODEX_FIRST[e] * MIN : e === "low" || e === "minimal" ? 60_000 : 90_000,
     idle: IDLE[e] * MIN,
   };
 }

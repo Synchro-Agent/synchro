@@ -50,7 +50,7 @@ export function modelName(key: string) {
   return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/^grok-/, "Grok ").replace(/^deepseek-/, "DeepSeek ").replace(/-/g, " ");
 }
 
-// Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định hoặc model đầu tiên được phép.
+// Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định của quản trị viên, không có thì Tự động.
 export function fitModel(cur: string, s: State = state) {
   const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));
   const ok = (k: string | null): k is string => !!k && shown.includes(k) && allowsModel(s.allowed, k);
@@ -63,5 +63,6 @@ export function fitModel(cur: string, s: State = state) {
     if (eq) return eq;
   }
   if (ok(s.default)) return s.default;
-  return shown.find((k) => allowsModel(s.allowed, k)) ?? cur;
+  // Chưa chọn gì và quản trị viên không đặt mặc định: Tự động (model đầu danh sách từng là Fable, đắt nhất và có thể tính credits, lại không tự chuyển khi treo).
+  return shown.some((k) => allowsModel(s.allowed, k)) ? AUTO : cur;
 }

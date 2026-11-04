@@ -49,6 +49,7 @@ const all = (n) => a.flatMap((x, i) => (x === n ? [a[i + 1]] : []));
     if (a[1] === "add") {
       const rest = a.slice(2).filter((x, i, arr) => x !== "--transport" && arr[i - 1] !== "--transport" && x !== "--scope" && arr[i - 1] !== "--scope");
       const [name, url] = rest;
+      if (C.cfg.failMcpAdd) { console.error("mcp add failed"); process.exit(1); }
       if (!name || !url) { console.error("Usage: grok mcp add --transport http <name> <url>"); process.exit(2); }
       m[name] = url; writeMcp(m);
       return console.log(`Added MCP server '${name}' (http) to ${cfgFile}`);

@@ -12,6 +12,7 @@ import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
+import { warmSkillIndex } from "./skillroute";
 import { classify, dropPluginTags, dropTag, keepPluginTags, pluginKey, refine, tagRev, userStudioIds } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
@@ -179,6 +180,8 @@ export function licenseKind(text: string): { kind: LicenseKind; name: string } {
   if (/Mozilla Public License/i.test(t)) return { kind: "open", name: "MPL-2.0" };
   if (/Creative Commons|CC BY/i.test(t)) return { kind: "open", name: "CC" };
   if (/^\s*MIT\s*$/m.test(t)) return { kind: "open", name: "MIT" };
+  // "UNLICENSED" (cách npm ghi: không cấp quyền gì) khác hẳn "The Unlicense" (trả về công cộng): phân biệt chữ hoa.
+  if (/\bUNLICENSED\b/.test(t)) return { kind: "proprietary", name: "Độc quyền" };
   if (/All rights reserved|may not[\s\S]{0,80}(reproduce|distribute|copy)/i.test(t)) return { kind: "proprietary", name: "Độc quyền" };
   return { kind: "unknown", name: "Không rõ" };
 }
@@ -571,9 +574,11 @@ export function catalogInstalled(uid: string): { libraries: number; skills: numb
 
 /** Bản rút gọn (trang chủ, bảng lệnh, menu + ở ô chat): chỉ tên, trạng thái và số skill — không có danh sách skill (vài MB với cả danh mục). */
 export type PluginLite = Pick<PluginSummary, "id" | "scope" | "slug" | "catalogId" | "name" | "studio" | "enabled" | "mine"> & { skillCount: number };
-export function listPluginsLite(uid: string): PluginLite[] {
-  const c = snap(), prefs = prefsOf(uid);
-  return c.rows.filter((r) => r.owner === "org" || r.owner === uid).map((r) => ({ id: r.id, scope: r.owner === "org" ? "org" : "personal", slug: r.slug, catalogId: r.catalog_id, name: r.name,
+// Thư viện từ danh mục Claude có thể lên tới hơn 3.000 tên: không gửi hết (hơn 100 KB mỗi lần mở bảng lệnh), chỉ tìm khi người dùng gõ (q).
+export function listPluginsLite(uid: string, q?: string): PluginLite[] {
+  const c = snap(), prefs = prefsOf(uid), words = q ? q.toLowerCase().split(/\s+/).filter(Boolean) : null;
+  const keep = (r: Row) => (words ? isCatRow(r) && words.every((w) => r.name.toLowerCase().includes(w) || r.slug.toLowerCase().includes(w)) : !isCatRow(r));
+  return c.rows.filter((r) => (r.owner === "org" || r.owner === uid) && keep(r)).slice(0, words ? 60 : undefined).map((r) => ({ id: r.id, scope: r.owner === "org" ? "org" : "personal", slug: r.slug, catalogId: r.catalog_id, name: r.name,
     studio: (r.studio as Studio) ?? null, enabled: !!r.enabled, mine: mineOf(r, prefs.get(r.id)), skillCount: c.lite.get(r.id)?.length ?? 0 }));
 }
 
@@ -627,7 +632,8 @@ function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_p
 }
 function snap(): Cache {
   const t = tagRev(), c = CG.__plCache;
-  if (c && c.rev === (CG.__plRev ?? 0) && c.tags === t && Date.now() - c.at < 10 * 60_000) return c;
+  // touch() và tagRev() đã báo mọi thay đổi trong tiến trình này; hạn 6 giờ chỉ để phòng thay đổi từ script chạy ngoài. Hạn 10 phút cũ khiến cứ 10 phút một lượt chat phải chờ dựng lại.
+  if (c && c.rev === (CG.__plRev ?? 0) && c.tags === t && Date.now() - c.at < 6 * 3600_000) return c;
   if (c && CG.__plBulk && Date.now() - c.at < 60_000) return c;
   const d = init();
   const rows = d.prepare("SELECT * FROM plugins ORDER BY owner = 'org' DESC, name").all() as Row[];
@@ -652,6 +658,8 @@ function snap(): Cache {
   }
   const studio = new Map<string, Set<Studio>>();
   for (const r of d.prepare("SELECT key, studios FROM skill_studios WHERE key LIKE 'p:%' AND studios <> '[]'").all() as { key: string; studios: string }[]) studio.set(r.key, new Set(JSON.parse(r.studios) as Studio[]));
+  // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
+  void warmSkillIndex([...skills.values()].flat()).catch(() => {});
   return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, studio });
 }
 // Tên gốc của skill (bỏ tiền tố "thư-viện:" khi trùng tên) để tra nhãn mục.

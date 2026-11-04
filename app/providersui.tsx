@@ -176,7 +176,7 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
         </div>
       )}
       {st?.loggedIn && mine.length > 0 && !login && <div className="api-chips">{mine.map((m) => <span key={m.key} className="api-chip" data-notr>{m.name}</span>)}</div>}
-      {!login && <p className="pv-note pv-hint">Synchro never switches from your plan to an API key on its own. When your plan hits its limit, it asks you first.</p>}
+      {!login && hasApi && <p className="pv-note pv-hint">Synchro never switches from your plan to an API key on its own. When your plan hits its limit, it asks you first.</p>}
     </div>
   );
 }
@@ -266,8 +266,8 @@ export function ProvidersPanel() {
       <h3 className="sec">How it works</h3>
       <ol className="api-steps pv-how">
         <li><b>Pick a provider, then how to connect it</b><span>{admin ? "Sign in with your own plan, or link an API key that everyone on this Synchro can use." : "Sign in with your own plan. Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro."}</span></li>
-        <li><b>Chat with it</b><span>The model picker keeps one group per provider. A group shows your plan&apos;s models while you are signed in, otherwise the shared API models.</span></li>
-        <li><b>When your plan runs out</b><span>Synchro asks before switching to the shared API key. You switch back to your plan automatically when it resets.</span></li>
+        <li><b>Chat with it</b><span>{admin ? "The model picker keeps one group per provider. A group shows your plan's models while you are signed in, otherwise the shared API models." : "The model picker keeps one group per provider. A group shows your plan's models while you are signed in."}</span></li>
+        <li><b>When your plan runs out</b><span>{admin ? "Synchro asks before switching to the shared API key. You switch back to your plan automatically when it resets." : "Synchro tells you when it resets and offers another plan you have connected."}</span></li>
       </ol>
     </>
   );

@@ -53,6 +53,16 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
     return () => { live = false; };
   }, []);
 
+  // Thư viện từ danh mục Claude (hàng nghìn tên) không tải sẵn: gõ từ 2 chữ thì hỏi máy chủ, chậm lại một nhịp để gõ mượt.
+  const [catLibs, setCatLibs] = useState<Remote["libs"]>([]);
+  useEffect(() => {
+    const k = q.trim();
+    if (k.length < 2) { setCatLibs([]); return; }
+    let live = true;
+    const t = setTimeout(() => { get(`/api/plugins?view=lite&q=${encodeURIComponent(k)}`).then((j) => { if (live) setCatLibs(j.plugins ?? []); }); }, 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [q]);
+
   const rows = useMemo(() => {
     const out: Row[] = [];
     const words = fold(q).split(/\s+/).filter(Boolean);
@@ -68,7 +78,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
       for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng dùng chung" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
       for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: () => go.skillHub(s.name) });
-      for (const l of rem.libs) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skillCount} skill`, icon: <I.Plugins size={16} />, run: () => go.skillHub(l.name) });
+      for (const l of [...rem.libs, ...catLibs]) add({ key: "lib:" + l.name, group: "Skill và thư viện", label: l.name, sub: `${tr("Thư viện")} · ${l.skillCount} skill`, icon: <I.Plugins size={16} />, run: () => go.skillHub(l.name) });
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm trước tiên hiện 6 kết quả kèm dòng "Xem tất cả N kết quả", nhóm theo thứ tự cố định.
     if (!words.length) return [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, PER_GROUP)];
@@ -79,7 +89,7 @@ export function CommandPalette({ chats, cmds, go, onClose }: { chats: { id: numb
       if (l.length <= PER_GROUP || open.includes(g)) return l.slice(0, 500);
       return [...l.slice(0, PER_GROUP), { key: "more:" + g, group: g, label: `${tr("Xem tất cả")} ${l.length} ${tr("kết quả")}`, icon: <I.Search size={16} />, hay: "", more: true, run: () => setOpen((o) => [...o, g]) }];
     });
-  }, [q, chats, cmds, rem, go, open]);
+  }, [q, chats, cmds, rem, catLibs, go, open]);
 
   useEffect(() => { setSel(0); setOpen([]); }, [q]);
   useEffect(() => { list.current?.querySelector<HTMLElement>(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);

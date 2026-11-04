@@ -35,7 +35,7 @@ import { installTips } from "./tips";
 import { installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
-import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
@@ -414,6 +414,19 @@ function Composer(p: {
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
+  // Thư viện từ danh mục Claude không tải sẵn: gõ tìm thì hỏi máy chủ.
+  const [skCat, setSkCat] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[]>([]);
+  useEffect(() => {
+    const k = skq.trim();
+    if (k.length < 2) { setSkCat([]); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      fetch(`/api/plugins?view=lite&q=${encodeURIComponent(k)}`).then((r) => (r.ok ? r.json() : { plugins: [] })).then((j: { plugins?: { slug: string; name: string; enabled: boolean; mine: { enabled: boolean } }[] }) => {
+        if (live) setSkCat((j.plugins ?? []).filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: true })));
+      }).catch(() => {});
+    }, 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [skq]);
   const [cx, setCx] = useState<CxData | null>(null);
   const loadSkl = () => Promise.all([
     cachedJson<{ skills?: { name: string; enabled: boolean }[] }>("/api/skills").then((j) => j.skills ?? []),
@@ -567,7 +580,7 @@ function Composer(p: {
                 {skl && skl.length > 8 && <div className="cm-find"><I.Search size={14} /><input autoFocus value={skq} onChange={(e) => setSkq(e.target.value)} placeholder="Tìm skill hoặc thư viện" aria-label="Tìm skill hoặc thư viện" /></div>}
                 <div className="cm-list">
                   {skl === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !skl.length ? <div className="cm-empty">Chưa có skill nào đang bật</div>
-                    : (() => { const q = skq.trim().toLowerCase(); const l = (q ? skl.filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
+                    : (() => { const q = skq.trim().toLowerCase(); const l = (q ? [...skl, ...skCat].filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
                       <button key={k.id} className="menu-item" role="menuitemcheckbox" aria-checked={on} onClick={() => { setPicks(on ? picks.filter((x) => x.id !== k.id) : [...picks, { id: k.id, label: k.label }]); setMenu(false); setSub(null); ta.current?.focus(); }}>
                         {k.lib ? <I.Plugins /> : <I.Scroll />}<span className="cv-ell" data-notr>{k.label}</span>{on && <span className="ck"><I.Check /></span>}
                       </button>); })}
@@ -1405,7 +1418,7 @@ export default function Home() {
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
-          histTotal: hist?.length ?? 1, tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       webs = meta.webs ?? [];
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];

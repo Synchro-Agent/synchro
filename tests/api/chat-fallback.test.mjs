@@ -102,6 +102,7 @@ try {
   ok(r.s === 200 && r.j.model.startsWith("sub-codex/"), "Tự động bỏ qua gói đang hết", JSON.stringify(r.j.model));
   r = await post({ model: "auto", text: "chào [mock:quota]" });
   ok(r.s === 429 && r.j.error && !r.j.switchTo, "mọi gói đều hết: báo rõ, không có gì để gợi ý", JSON.stringify(r.j));
+  ok(r.j.error === "Các gói đã kết nối đều đã hết hạn mức." && r.j.resetsAt > Date.now(), "mọi gói đều hết: nói hết cả, kèm lúc sớm nhất có lại (không chỉ nêu gói thử sau cùng)", JSON.stringify(r.j));
 } catch (e) {
   ok(false, "lỗi bất ngờ", e.stack);
 } finally {

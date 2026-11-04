@@ -16,7 +16,9 @@ export const GET = handle(async (req: Request) => {
   // studios: thư viện của Tài liệu / Trình bày / Thiết kế ở trang Artifacts, gồm cả skill Synchro tự nhận diện thuộc mục đó.
   // ?view=lite: chỉ tên / trạng thái / số skill của từng thư viện (trang chủ, bảng lệnh, menu + ở ô chat).
   // ?view=meta: chỉ quyền và số skill của các studio (nút Thêm skill, trang Artifacts).
-  const view = new URL(req.url).searchParams.get("view");
+  // ?view=lite&q=…: tìm trong các thư viện đã cài từ danh mục (bản lite thường không gửi các thư viện này).
+  const view = new URL(req.url).searchParams.get("view"), find = new URL(req.url).searchParams.get("q")?.trim().slice(0, 80);
+  if (view === "lite" && find) return Response.json({ plugins: listPluginsLite(user.id, find) });
   if (view === "meta") return Response.json({ admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
   if (view === "lite") return Response.json({ plugins: listPluginsLite(user.id), admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });
   return Response.json({ plugins: listPlugins(user.id), catalogInstalled: catalogInstalled(user.id), directory: PLUGIN_DIR, admin: isAdmin(user), canInstall: can(user, "skills"), studios: can(user, "skills") ? studioSummary(user.id) : {} });

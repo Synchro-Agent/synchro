@@ -19,6 +19,7 @@ process.env.SYNCHRO_ENGINE_HOME = HOME;
 process.env.DATA_KEY = "engine-test-key";
 // Bộ canh lượt treo: rút còn 4 giây để thử lượt treo; các lượt giả lập khác xong trong tích tắc.
 process.env.SYNCHRO_WATCH_SEC = "4";
+process.env.SYNCHRO_AGY_TICK_MS = "60";
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
@@ -380,6 +381,11 @@ try {
     // Quá 60 tin: trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số tin thật.
     const hist = (n) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `tin ${i}` }));
     const lg = "conv-long";
+    {
+      const said = [];
+      await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: hist(61).slice(-59), total: 61, older: "user: phần trích", onStatus: (t) => said.push(t) });
+      ok(said.some((t) => /Đoạn chat dài: .* 59 tin gần nhất, 2 tin cũ hơn/.test(t)), "mở phiên mới mà thiếu tin cũ: báo cho người dùng", JSON.stringify(said));
+    }
     const l1 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: hist(61).slice(-59), total: 61, conv: lg });
     const l2 = await SUBS.subTurn({ user: me, model: "sub-claude/sonnet", system: "", messages: [...hist(61).slice(-57), { role: "assistant", content: "đáp" }, { role: "user", content: "tiếp" }], total: 63, conv: lg });
     ok(l1.status === 200 && l2.status === 200 && /lượt 2/.test(l2.json.text), "đoạn chat dài hơn 60 tin vẫn nối đúng phiên CLI", JSON.stringify([l1.json.text, l2.json.text]));
@@ -475,6 +481,40 @@ try {
     const waited = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp }));
     ok(waited.some((e) => e.kind === "status" && e.wait === false) && waited.some((e) => e.kind === "final"), "chờ xong thì lượt chạy bình thường", JSON.stringify(waited.map((e) => e.kind)));
     ok((await long).some((e) => e.kind === "final"), "lượt đang giữ cầu nối vẫn xong");
+    // Lượt giữ khóa đang chờ người dùng duyệt: lượt sau nói đúng lý do và không tính thời gian chờ.
+    {
+      const held = all(S.engineFor("grok").runTurn({ prompt: "[mock:holdgrok] duyệt", env, mcp, awaitingUser: () => true }));
+      await sleep(1200);
+      const ac2 = new AbortController(); setTimeout(() => ac2.abort(), 1500);
+      const w = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, signal: ac2.signal }));
+      ok(w.some((e) => e.kind === "status" && e.wait === true && /đang chờ bạn duyệt/.test(e.text ?? "")) && w.at(-1).code === "aborted", "chat khác đang giữ thẻ duyệt: báo cần trả lời ở chat đó", JSON.stringify(w));
+      const quick = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, lockMs: 300 }));
+      ok(quick.at(-1).code === "busy", "chế độ Tự động không chờ theo thẻ duyệt, vẫn chuyển model sớm", JSON.stringify(quick));
+      await held;
+    }
+    // Không lắp được cầu nối: báo lỗi để Tự động chuyển model, không chạy tiếp với prompt đang hứa công cụ.
+    {
+      fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M, failMcpAdd: true }));
+      const g = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp }));
+      fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M }));
+      ok(g.at(-1).kind === "error" && /Không nối được công cụ/.test(g.at(-1).message) && !g.some((e) => e.kind === "text"), "Grok: lắp cầu nối hỏng thì báo lỗi, không chạy lượt thiếu công cụ", JSON.stringify(g));
+    }
+    // Antigravity không có chữ dần: nói đã chờ bao lâu, và dòng này không làm bộ canh tính lại.
+    {
+      const ev = await all(S.engineFor("agy").runTurn({ prompt: "chào", env: A.engineEnv("agy", "user_A") }));
+      ok(ev.some((e) => e.kind === "status" && e.tick === true && /vẫn đang viết, đã \d+ giây/.test(e.text ?? "")), "agy: báo thời gian đã chờ", JSON.stringify(ev));
+    }
+    // Tệp tạm của lượt bị giết: dọn tệp cũ, không đụng tệp mới hay tệp khác.
+    {
+      const dir = path.join(HOME, "work", "sweep-test"); fs.mkdirSync(path.join(dir, "att", "20200101"), { recursive: true }); fs.mkdirSync(path.join(dir, "att", "20990101"), { recursive: true });
+      const oldF = path.join(dir, ".synchro-grok-old.txt"), newF = path.join(dir, ".synchro-grok-new.txt"), keep = path.join(dir, "ghi-chu.txt");
+      for (const f of [oldF, newF, keep]) fs.writeFileSync(f, "x");
+      const past = new Date(Date.now() - 10 * 86400_000);
+      fs.utimesSync(oldF, past, past); fs.utimesSync(keep, past, past); fs.utimesSync(path.join(dir, "att", "20200101"), past, past);
+      await R.sweepEngineTemp();
+      ok(!fs.existsSync(oldF) && fs.existsSync(newF) && fs.existsSync(keep), "dọn .synchro-* cũ, giữ tệp mới và tệp khác");
+      ok(!fs.existsSync(path.join(dir, "att", "20200101")) && fs.existsSync(path.join(dir, "att", "20990101")), "dọn thư mục đính kèm quá 7 ngày, giữ thư mục mới");
+    }
     const me = { id: UG, email: "g@synchro.test", email_verified: 1, status: "active" };
     await A.status("grok", UG, { fresh: true });
     const slow = await SUBS.subTurn({ user: me, model: "sub-grok/grok-4.7", system: "", messages: [{ role: "user", content: "[mock:slowgrok] chào" }] });

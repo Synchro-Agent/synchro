@@ -199,6 +199,37 @@ const CASES = [
   ["Should I take out a loan to invest in stocks?", "qa", "high", "medium"],
 ];
 
+// Vòng 2: câu ngắn không liên quan không theo việc trước; lời chào đầu câu không che câu hỏi; câu sức khỏe, khủng hoảng; việc connector, tệp, văn phòng.
+const BUILD = "Làm trang web bán giày", TRANS = "Dịch sang tiếng Anh: hôm nay trời đẹp";
+CASES.push(
+  ["thủ đô của Pháp là gì?", "qa", "low", undefined, { turns: 3, prevAsk: BUILD }],
+  ["mấy giờ rồi", "qa", "low", undefined, { turns: 3, prevAsk: BUILD }],
+  ["ok cảm ơn", "chat", "low", undefined, { turns: 3, prevAsk: BUILD }],
+  ["hay quá cảm ơn nhé", "chat", "low", undefined, { turns: 3, prevAsk: BUILD }],
+  ["ok cam on", "chat", "low", undefined, { turns: 3, prevAsk: BUILD }],
+  ["màu xanh nhé", "build", "high", "high", { turns: 3, prevAsk: BUILD }],
+  ["đổi font to hơn", "build", "high", "high", { turns: 3, prevAsk: BUILD }],
+  ["còn trang liên hệ thì sao", "build", "high", "high", { turns: 3, prevAsk: BUILD }],
+  ["cái đó là gì?", "build", "high", "high", { turns: 3, prevAsk: BUILD }],
+  ["tiếp tục đi", "build", "high", "high", { turns: 3, prevAsk: BUILD }],
+  ["Tôi bị đau ngực khó thở nên làm gì?", "qa", "high", "medium", { turns: 3, prevAsk: TRANS }],
+  ["Chào bạn, mình bị đau ngực khó thở phải làm sao?", "qa", "high", "medium"],
+  ["Dạ em muốn hỏi con em sốt 40 độ có sao không", "qa", "high", "medium"],
+  ["Dạ cho em hỏi thuế thu nhập cá nhân tính sao", "qa", "high", "medium"],
+  ["Hello, can I take ibuprofen with alcohol?", "qa", "high", "medium"],
+  ["Con tôi sốt 40 độ", "qa", "high", "medium"], ["Bị chó cắn", "qa", "high", "medium"], ["Mẹ tôi bị tai biến", "qa", "high", "medium"],
+  ["Tôi muốn chết, không muốn sống nữa", "qa", "high", "medium"], ["Tôi trầm cảm nặng", "qa", "high", "medium"], ["Có nên mua vàng", "qa", "high", "medium"],
+  ["Đau bụng dữ dội", "qa", "high", "medium"], ["Tôi đang có bầu", "qa", "high", "medium"], ["con toi sot 40 do", "qa", "high", "medium"], ["toi muon chet", "qa", "high", "medium"],
+  ["I want to kill myself", "qa", "high", "medium"], ["My child has a fever", "qa", "high", "medium"],
+  // "Dạ dày" không phải lời "dạ"; "sốt cà chua" không phải sốt.
+  ["Sốt cà chua làm thế nào?", "qa", "low"],
+  ["Đọc mail mới nhất trong Gmail giúp mình", "act", "high", "medium"], ["Xem lịch hôm nay", "act", "high", "medium"], ["Kiểm tra doanh thu trên Stripe", "act", "high", "medium"],
+  ["Tạo pull request cho repo này", "act", "high", "medium"], ["Chuyển file word sang pdf", "act", "high", "medium"], ["Tải video youtube này về", "act", "high", "medium"],
+  ["làm web bán hàng", "build", "high", "high"], ["Vẽ logo cho quán cà phê", "build", "high", "high"], ["Lập bảng lương tháng 10", "act", "high", "medium"],
+  ["Tạo bảng chấm công", "act", "high", "medium"], ["Làm file báo giá", "act", "high", "medium"], ["Make a PowerPoint about climate change", "build", "high", "high"], ["Làm infographic", "build", "high", "high"],
+  ["Tạo file word hợp đồng lao động", "act", "high", "medium"], ["doc mail moi nhat", "act", "high", "medium"], ["lap bang luong thang 10", "act", "high", "medium"], ["lam web ban hang", "build", "high", "high"],
+  ["Lịch sử Việt Nam có gì nổi bật?", "qa", "medium"], ["Check my email grammar please", ["language", "act"], "medium"],
+);
 console.log("1. Loại việc và mức nỗ lực trên bộ câu có nhãn");
 for (const [text, task, max, min, o] of CASES) {
   const r = q(text, o);
@@ -286,7 +317,28 @@ console.log("9. Việc nhẹ ưu tiên model hiện chữ dần; Gemini vẫn th
   ok(v.tier !== "fast" && v.effort === "medium" && !v.model.startsWith("sub-agy/"), `làm video: model vừa, hiện chữ dần → ${v.model} · ${v.effort}`, JSON.stringify(v));
   // Danh sách dự phòng có đủ các hãng khác để thử lần lượt.
   v = R.routeModel(q("Thủ đô của Úc là gì?"), PLAN);
-  ok(v.alt.length === PLAN.length - 1 && new Set(v.alt.slice(0, 3).map((k) => k.split("/")[0])).size >= 2 && !v.alt.includes(v.model), "dự phòng: đủ model còn lại, hãng khác đứng trước", JSON.stringify(v.alt));
+  ok(v.alt.length === PLAN.length - 2 && !v.alt.includes("sub-claude/fable") && new Set(v.alt.slice(0, 3).map((k) => k.split("/")[0])).size >= 2 && !v.alt.includes(v.model), "dự phòng: đủ model còn lại (trừ Fable tính credits), hãng khác đứng trước", JSON.stringify(v.alt));
+}
+
+console.log("10. Grok Build chỉ cho việc code; Fable (có thể tính credits) không tự chọn; câu không cần công cụ");
+{
+  const LIST = ["sub-claude/fable", "sub-claude/opus", "sub-claude/sonnet", "sub-claude/haiku", "sub-agy/gemini-3.8-flash", "sub-agy/gemini-3.1-pro", "sub-grok/grok-build-0.1", "sub-grok/grok-4.7"];
+  for (const text of ["Tôi bị đau ngực khó thở", "Thuế thu nhập cá nhân 2026", "Tạo bảng lương bằng Excel", "Chứng minh căn 2 là số vô tỉ"]) {
+    const x = R.routeModel(q(text), LIST);
+    ok(!/grok-build/.test(x.model) && !x.alt.some((k) => /grok-build/.test(k)), `“${text}” không chọn Grok Build → ${x.model}`, JSON.stringify(x));
+  }
+  ok(R.routeModel(q("Sửa lỗi React undefined khi map mảng", { turns: 1 }), ["sub-grok/grok-build-0.1"]).model === "sub-grok/grok-build-0.1", "chỉ còn Grok Build thì vẫn dùng");
+  let v = R.routeModel(q("sai rồi", { turns: 3, prevAsk: BUILD, prev: "sub-claude/opus" }), LIST);
+  ok(v.model === "sub-claude/opus" && v.effort === "extra" && !v.alt.includes("sub-claude/fable"), `“sai rồi” sau Opus: không tự sang Fable, làm lại mạnh hơn → ${v.model} · ${v.effort}`, JSON.stringify(v));
+  v = R.routeModel(q("sai rồi", { turns: 3, prevAsk: "Viết code Python đọc file CSV", prev: "sub-claude/sonnet" }), LIST);
+  ok(v.model !== "sub-claude/sonnet" && v.model !== "sub-claude/fable", `“sai rồi” sau Sonnet: đổi sang model khác đạt mức → ${v.model}`, JSON.stringify(v));
+  ok(R.routeModel(q("Xin chào"), ["sub-claude/fable"]).model === "sub-claude/fable", "chỉ có Fable thì vẫn dùng");
+  ok(R.routeModel(q("mấy giờ rồi", { turns: 3, prevAsk: BUILD, prev: "sub-claude/opus" }), LIST).model !== "sub-claude/opus", "câu mới sau việc lớn không giữ Opus");
+  // “thủ đô…” chen giữa: “giải thích thêm” nói về câu đó, không về trang web ở trước.
+  ok(!R.isAck("thủ đô của Pháp là gì?") && R.isAck("giải thích thêm") && !R.isAck("Tôi bị đau ngực"), "câu hỏi mới và câu sức khỏe là lời nhờ thật, không phải câu xác nhận");
+  for (const [text, want, o] of [["Xin chào", true], ["cảm ơn nhé", true, { turns: 3, prevAsk: BUILD }], ["Thủ đô của Úc là gì?", true], ["Từ 'serendipity' nghĩa là gì?", true],
+    ["Làm trang web", false], ["Tôi bị đau ngực", false], ["Giá vàng hôm nay", false], ["Đọc mail trong Gmail", false], ["https://example.com là gì", false], ["tiếp đi", false, { turns: 3, prevAsk: BUILD }], ["ok", false, { turns: 3, prevAsk: BUILD }], ["Ảnh này là gì?", false, { images: 1, attachments: 1 }], ["Tóm tắt tài liệu", false, { files: 1, docChars: 500 }], ["Viết code Python", false]])
+    ok(R.needsNoTools(q(text, o)) === want, `“${text}” ${want ? "đi đường nhanh" : "giữ lượt đầy đủ"}`);
 }
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);

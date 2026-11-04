@@ -95,6 +95,17 @@ export function removeSessionFiles(dir: string, id: string): Promise<void> {
   }));
 }
 
+/** Dọn tệp tạm của các lượt bị dừng đột ngột (máy chủ khởi động lại, CLI bị giết): prompt, hướng dẫn và nhật ký .synchro-* có cả lịch sử chat, tệp đính kèm trong att/.
+ *  Chạy bằng một lệnh find ở nền của user engine, không chặn Node dù có nhiều tài khoản. Tệp còn dùng không thể cũ hơn trần của một lượt. */
+export function sweepEngineTemp(): Promise<void> {
+  const work = path.join(engineHome(), "work"), u = engineUser();
+  const run = (args: string[]) => new Promise<void>((ok) => {
+    execFile(u ? "sudo" : "find", u ? ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "find", ...args] : args, { timeout: 120_000 }, (e) => { if (e && e.code !== 1) console.warn("[engines] dọn tệp tạm:", String(e.message).slice(0, 200)); ok(); });
+  });
+  return run([work, "-mindepth", "1", "-maxdepth", "2", "-type", "f", "-name", ".synchro-*", "-mmin", `+${Math.ceil(MAX_TURN_MS / 60_000) + 60}`, "-delete"])
+    .then(() => run([work, "-mindepth", "3", "-maxdepth", "3", "-type", "d", "-path", "*/att/*", "-mtime", "+7", "-exec", "rm", "-rf", "{}", "+"]));
+}
+
 /** Đường dẫn CLI nếu đã cài trong <home>/.local/bin (kể cả liên kết tới gói npm, miễn là vẫn nằm trong thư mục nhà engine). */
 export function find(cli: Cli): string | null {
   const p = path.join(binDir(), cli);

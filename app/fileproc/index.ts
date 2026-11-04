@@ -10,7 +10,7 @@ import { checkQuota, claimFile, mayUse } from "./owners";
 const DIR = path.join(process.cwd(), ".cache", "files");
 
 /** raw: tệp không đọc được nội dung (nhị phân lạ, hỏng) nhưng vẫn giữ tệp gốc cho Synchro Code; err là lý do để báo khi khung chat đòi đọc nội dung. */
-export type Stored = { id: string; name: string; kind: string; tokens: number; large: boolean; blocks: ContentBlock[]; raw?: boolean; err?: string };
+export type Stored = { id: string; name: string; kind: string; tokens: number; large: boolean; blocks: ContentBlock[]; raw?: boolean; err?: string; note?: string };
 
 const safeId = (id: string) => /^[a-f0-9]{40}$/.test(id);
 
@@ -46,7 +46,9 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
     return rec;
   }
   const tokens = estTokens(blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join(""));
-  const rec: Stored = { id, name, kind, tokens, large: tokens > LARGE_TOKENS, blocks };
+  // PDF không gửi nguyên được (quá dài): báo ngay lúc tải lên để người dùng biết model chỉ đọc phần chữ.
+  const note = kind === "application/pdf" && !blocks.some((b) => b.type === "document") ? `"${name}" quá dài để gửi nguyên tệp nên model sẽ đọc phần chữ, không thấy hình và bố cục.` : undefined;
+  const rec: Stored = { id, name, kind, tokens, large: tokens > LARGE_TOKENS, blocks, ...(note ? { note } : {}) };
   await writeFile(path.join(DIR, id + ".bin"), buf);
   await writeFile(path.join(DIR, id + ".json"), JSON.stringify(rec));
   claimFile(uid, id, buf.length, name);
