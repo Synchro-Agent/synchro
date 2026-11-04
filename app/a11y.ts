@@ -146,6 +146,21 @@ function setup(ov: HTMLElement) {
   });
 }
 
+// Phần nền của hộp thoại trên cùng: inert (chuột, bàn phím, trình đọc màn hình không vào được). Chừa thông báo nhanh và menu gắn vào <body> (mở từ trong hộp).
+let walled: HTMLElement[] = [];
+function wall() {
+  for (const e of walled) e.inert = false;
+  walled = [];
+  const m = topModal();
+  if (!m) return;
+  for (let n: HTMLElement = m.ov; n !== document.body && n.parentElement; n = n.parentElement) {
+    for (const s of Array.from(n.parentElement.children)) {
+      if (s === n || !(s instanceof HTMLElement) || s.inert || /^(SCRIPT|STYLE)$/.test(s.tagName) || s.matches(".toast,.menu,[role=menu],[role=status],[aria-live],.overlay")) continue;
+      s.inert = true; walled.push(s);
+    }
+  }
+}
+
 function syncModals() {
   const live = document.getElementsByClassName("overlay");
   if (live.length === modals.length && modals.every((m) => m.ov.isConnected)) return;
@@ -162,6 +177,7 @@ function syncModals() {
     modals.push({ ov, back: op ?? (a && a !== document.body ? a : null) });
     setup(ov);
   }
+  wall();
 }
 
 const topModal = () => {

@@ -56,7 +56,7 @@ for (const f of suites) {
   console.log(`\n━━ ${f}`);
   const r = spawnSync(process.execPath, [path.join(dir, f)], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", timeout: 15 * 60_000, env: { ...process.env, SYNCHRO_ADMIN_COOKIE: adminCookie } });
   process.stdout.write(r.stdout); process.stderr.write(r.stderr);
-  const m = /(\d+) đạt, (\d+) lỗi|(\d+)\/(\d+) đạt/.exec(r.stdout.split("\n").reverse().join("\n"));
+  const m = /(\d+) đạt, (\d+) (?:lỗi|hỏng)|(\d+)\/(\d+) đạt/.exec(r.stdout.split("\n").reverse().join("\n"));
   const pass = m ? Number(m[1] ?? m[3]) : 0, fail = m ? Number(m[2] ?? Number(m[4]) - Number(m[3])) : 1;
   rows.push({ f, pass, fail: r.status === 0 ? fail : Math.max(fail, 1), s: ((Date.now() - t) / 1000).toFixed(0) });
 }

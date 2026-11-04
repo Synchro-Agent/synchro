@@ -5112,7 +5112,7 @@ body{text-wrap-style:pretty}
 [role="dialog"][tabindex="-1"]:focus{outline:0}
 /* Khung soạn rất hẹp: ô nhập một dòng riêng, các nút ở dòng dưới */
 .dock[data-tight] .composer textarea{flex:1 0 100%!important;order:-1;min-width:0}
-.main.has-art .dock .composer{width:min(var(--thread-w,768px),calc(100% - 8px))}
+.main.has-art .dock .composer,.main.has-art .dock>.dock-mode,.main.has-art .dock>.wl-queue{width:min(var(--thread-w,768px),calc(100% - 8px))}
 /* Sửa, sao chép tin đã gửi */
 .u-actions{display:flex;gap:0;height:26px;margin:-2px 0 -14px;color:var(--text-3);opacity:0;transition:opacity .15s}
 .user-wrap:hover .u-actions,.u-actions:focus-within{opacity:1}

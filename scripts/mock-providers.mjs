@@ -187,7 +187,8 @@ function lastUserFull(msgs = []) {
 const stallNow = (q, msgs) => q.includes("[mock:stall]") && !JSON.stringify(msgs ?? []).includes("<synchro_continue>");
 // Tầng động Synchro ghép vào cuối tin nhắn mới nhất (artifact hiện tại, tài liệu tri thức…): không phải câu người dùng gõ.
 const DYN = /<(current_artifacts|tool_activity|context_mixer|skill_routing|brain_recall)>[\s\S]*?<\/\1>/g;
-const lastUserText = (msgs) => lastUserFull(msgs).replace(DYN, "").trim();
+// Khối <current_time> do Synchro thêm vào tin mới nhất: không phải lời người dùng (chữ "time" trong đó từng làm model giả chọn nhầm công cụ).
+const lastUserText = (msgs) => lastUserFull(msgs).replace(DYN, "").replace(/<current_time>[^<]*<\/current_time>/g, "").trim();
 // Tầng động của tin nhắn người dùng gần nhất có tầng động (bước tự vá chèn thêm một tin nhắn hệ thống phía sau).
 function dynOf(msgs = []) {
   for (const m of [...msgs].reverse()) {

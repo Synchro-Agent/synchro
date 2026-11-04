@@ -149,6 +149,7 @@ try {
   await key("Escape", "Escape", 27); await sleep(250);
 
   console.log("3. Đọc to bỏ mã nguồn artifact và ký hiệu Markdown (giọng của trình duyệt)");
+  await ev(`(() => { const f = window.fetch; window.fetch = (u, i) => (String(u).includes("/api/speech/speak") ? Promise.resolve(new Response("{}", { status: 503 })) : f(u, i)); })(); 1`);
   await ev(`window.__spoken = []; window.speechSynthesis.speak = (u) => { window.__spoken.push(u.text); setTimeout(() => u.onend?.(), 5); }; window.speechSynthesis.cancel = () => {}; 1`);
   await click(byText(".chat-item", "Báo cáo tháng 1"), "mở chat");
   await until(`!!document.querySelector('[aria-label="Đọc to"],[aria-label="Read aloud"]')`, 5000, "nút đọc to");

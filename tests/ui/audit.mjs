@@ -49,7 +49,7 @@ const CHECK = `(() => {
     if (r.left < -2 && r.right > 8 && !clipped(el) && !el.closest(".sidebar.closed") && getComputedStyle(el).position !== "sticky") { out.push("tràn khỏi mép trái " + Math.round(-r.left) + "px: " + name(el)); n++; continue; }
     const cs = getComputedStyle(el);
     const own = [...el.childNodes].some((c) => c.nodeType === 3 && c.nodeValue.trim());
-    if (own && /(hidden|clip)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 2 && cs.textOverflow !== "ellipsis" && !el.closest("pre,code,.art-code,textarea,.sr-only")) { out.push("chữ bị cắt (không có …): " + name(el) + " “" + el.textContent.trim().slice(0, 40) + "”"); n++; }
+    if (own && /(hidden|clip)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 2 && cs.textOverflow !== "ellipsis" && !el.closest("pre,code,.art-code,textarea,.sr-only,.skip-link")) { out.push("chữ bị cắt (không có …): " + name(el) + " “" + el.textContent.trim().slice(0, 40) + "”"); n++; }
   }
   // Chữ đè lên chữ: hai đoạn chữ (không lồng nhau) chồng lên nhau mà giữa chúng không có lớp che (nền đặc, kính mờ). Ví dụ thẻ chế độ
   // nằm trên danh sách việc của chat mà chữ phía sau vẫn sắc nét.
