@@ -775,7 +775,7 @@ export function OutputFiles({ files: all, onOpen, active }: { files: OutFile[]; 
         return (
           <div key={f.id} className="out-card out-missed" role="status">
             <span className="out-badge" style={{ background: k.color }}>{k.label}</span>
-            <span className="out-txt"><b data-notr>{f.name}</b><span>{tr("Chưa giao được: tệp vượt giới hạn dung lượng")}{f.size ? ` · ${fmtSize(f.size)}` : ""}</span></span>
+            <span className="out-txt"><b data-notr>{f.name}</b><span>{tr("Chưa giao được: vượt giới hạn dung lượng hoặc số tệp")}{f.size ? ` · ${fmtSize(f.size)}` : ""}</span></span>
           </div>
         );
       })}

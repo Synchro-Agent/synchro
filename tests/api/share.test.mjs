@@ -82,6 +82,9 @@ ok((await anon("POST", "/api/share/report", { token: "khong-ton-tai-khong-ton-ta
 ok((await anon("POST", "/api/share/report", { token, reason: "Trang giả mạo đăng nhập" })).j?.ok === true, "người xem chưa đăng nhập báo cáo được");
 ok((await anon("GET", "/api/share/report")).s === 401, "người lạ không xem được danh sách báo cáo");
 ok((await other("GET", "/api/share/report")).s === 403, "thành viên thường không xem được danh sách báo cáo");
+// Quản trị viên (cookie do bộ chạy kiểm thử cấp): thấy báo cáo, biết bản chia sẻ còn hiện hay đã gỡ.
+const reportsAsAdmin = async () => (await (await fetch(`${B}/api/share/report`, { headers: { cookie: process.env.SYNCHRO_ADMIN_COOKIE ?? "" } })).json()).reports?.filter((x) => x.token === token) ?? [];
+if (process.env.SYNCHRO_ADMIN_COOKIE) { const v = await reportsAsAdmin(); ok(v.length === 1 && v[0].live === 1 && v[0].reason === "Trang giả mạo đăng nhập" && "email" in v[0] && !("ip" in v[0]), "quản trị viên thấy báo cáo, không lộ IP người báo", JSON.stringify(v)); }
 ok((await other("DELETE", `/api/share/report?token=${token}`)).s === 403 && (await anon("GET", `/share/${token}`, undefined, true)).status === 200, "thành viên thường không gỡ được bản chia sẻ");
 const reported = await (await anon("GET", `/share/${token}`, undefined, true)).text();
 ok(!/allow-popups/.test(reported), "trang chia sẻ không cấp quyền mở cửa sổ mới trong mã dựng sẵn");
@@ -90,6 +93,7 @@ ok(/SANDBOX_PUBLIC = "allow-scripts allow-forms allow-downloads"/.test(shareSrc)
 ok(/onLoad=\{isPublic \? \(\) => \{ if \(loaded\.current === doc\) setStrayed\(ch\)/.test(shareSrc), "khung tự chuyển sang trang khác thì dừng hiển thị");
 ok((await owner("DELETE", `/api/share?token=${token}`)).j?.ok === true, "chủ dừng được liên kết");
 ok((await anon("GET", `/share/${token}`, undefined, true)).status === 404, "dừng rồi thì liên kết 404");
+if (process.env.SYNCHRO_ADMIN_COOKIE) ok((await reportsAsAdmin())[0]?.live === 0, "bản chia sẻ đã dừng: báo cáo ghi là không còn hiện");
 await owner("DELETE", `/api/share?conv=${conv}2`);
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

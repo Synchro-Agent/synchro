@@ -67,11 +67,12 @@ export function reportShare(token: string, reason: string, ip: string): boolean 
   const why = reason.replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 1000) || "(không ghi lý do)";
   t().prepare("INSERT INTO share_reports (token, title, owner, reason, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(token, r.title, r.user_id, why, ip, Date.now());
   const link = `${process.env.APP_URL || "https://synchro.net.nz"}/share/${token}`;
-  const text = `Liên kết: ${link}\nTiêu đề: ${r.title}\nLý do: ${why}\n\nGỡ bản chia sẻ: gọi DELETE /api/share/report?token=${token} bằng tài khoản quản trị viên.`;
+  const text = `Liên kết: ${link}\nTiêu đề: ${r.title}\nLý do: ${why}\n\nGỡ bản chia sẻ: Cài đặt → Quản trị viên → Reported shared links.`;
   const safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   for (const to of ADMIN_EMAILS) sendMail(to, { subject: "Synchro: có báo cáo về một bản chia sẻ", text, html: `<pre style="white-space:pre-wrap;font:14px sans-serif">${safe}</pre>` });
   return true;
 }
-export const shareReports = () => t().prepare("SELECT token, title, owner, reason, created_at AS at FROM share_reports ORDER BY id DESC LIMIT 200").all();
+// live: bản chia sẻ còn đó không (đã gỡ hay chủ đã dừng). email: chủ bản chia sẻ, người báo cáo không lộ.
+export const shareReports = () => t().prepare("SELECT r.id, r.token, r.title, u.email, r.reason, r.created_at AS at, EXISTS(SELECT 1 FROM shares s WHERE s.token = r.token) AS live FROM share_reports r LEFT JOIN users u ON u.id = r.owner ORDER BY r.id DESC LIMIT 200").all();
 /** Quản trị viên gỡ bản chia sẻ vi phạm; báo cáo giữ lại làm nhật ký. */
 export const takeDownShare = (token: string) => t().prepare("DELETE FROM shares WHERE token = ?").run(token).changes > 0;

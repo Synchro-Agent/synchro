@@ -211,6 +211,36 @@ function Seg({ value, options, onChange }: { value: string; options: string[]; o
 }
 
 // Chia trang: "1–10 / 50", nút trước / sau; more = còn dữ liệu cũ trên máy chủ (nút sau tải thêm).
+// Liên kết chia sẻ bị người xem báo cáo (giả mạo, lừa đảo): mở xem rồi gỡ ngay tại đây, không cần gọi API bằng tay.
+type ShareReport = { id: number; token: string; title: string; email: string | null; reason: string; at: number; live: number };
+function ShareReports() {
+  const app = useApp();
+  const [list, setList] = useState<ShareReport[] | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(() => call<{ reports: ShareReport[] }>("GET", "/api/share/report").then((x) => { setList(x.reports); setErr(""); }).catch((e) => setErr(e.message)), []);
+  useEffect(() => { load(); }, [load]);
+  const down = (r: ShareReport) => app.confirm("Take down this shared link?", "The snapshot is deleted and the link stops working for everyone. This can't be undone.", "Take down", () => {
+    call("DELETE", `/api/share/report?token=${encodeURIComponent(r.token)}`).then(() => { app.say("Shared link taken down"); load(); }, (e) => app.say(e.message));
+  });
+  return (
+    <>
+      <h3 className="sec">Reported shared links</h3>
+      {err ? <div className="row"><div className="d" role="alert">{err}</div><button className="btn" onClick={load}>Try again</button></div>
+        : !list ? null
+        : !list.length ? <div className="row"><div className="d">No reports.</div></div>
+        : list.slice(0, 50).map((r) => (
+          <div key={r.id} className="row">
+            <div style={{ minWidth: 0 }}>
+              <div className="t" data-notr>{r.title}</div>
+              <div className="d"><span data-notr>{r.reason}</span> · <span data-notr>{r.email ?? "—"}</span> · <span data-notr>{fmtDate(r.at)}</span></div>
+            </div>
+            {r.live ? <div style={{ display: "flex", gap: 8, flexShrink: 0 }}><a className="btn" href={`/share/${r.token}`} target="_blank" rel="noreferrer">Open</a><button className="btn danger" onClick={() => down(r)}>Take down</button></div> : <span className="d" style={{ flexShrink: 0 }}>Taken down</span>}
+          </div>
+        ))}
+    </>
+  );
+}
+
 export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   const app = useApp();
   const [d, setD] = useState<Data | null>(null);
@@ -422,6 +452,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       </div>
       <Pager page={up} pages={uPages} from={users.length ? (up - 1) * U_PER + 1 : 0} to={Math.min(up * U_PER, users.length)} total={users.length} onPage={(n) => { setUPage(n); setOpen(null); }} />
       <BulkBar b={bk} acts={userActs} noun="người dùng" />
+
+      <ShareReports />
 
       <h3 className="sec">Audit log</h3>
       <div className="adm-bar">
