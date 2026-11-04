@@ -14,7 +14,8 @@ const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.Reco
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
 export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
-export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart;
+// plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat.
+export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | { k: "plans"; text: string };
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -48,6 +49,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
       const i = parts.findIndex((p) => p.k === "ask" && p.id === a.id);
       if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" };
     } catch {}
+  } else if (ev.kind === "plans") {
+    if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", text: ev.text });
   } else if (ev.kind === "conn") {
     try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
@@ -101,16 +104,27 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
   );
 }
 
+/** Chưa tạo được ảnh vì gói: lý do cụ thể do model nói trong câu trả lời, thẻ này chỉ đưa tới đúng chỗ xử lý. */
+function PlansCard() {
+  return (
+    <div className="wl-plans" role="status">
+      <I.Alert size={14} /><span>{tr("Đăng nhập gói tạo được ảnh ở Providers")}</span>
+      <button className="btn" onClick={() => window.dispatchEvent(new Event("synchro:providers"))}>{tr("Mở Providers")}</button>
+    </div>
+  );
+}
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
 export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
+    : p.k === "plans" ? (live ? <PlansCard key={i} /> : null)
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 export function ConnCards({ parts }: { parts?: Part[] }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
+  const plans = (parts ?? []).some((p) => p.k === "plans");
   // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
   // Chỉ hỏi một lần lúc thẻ gắn: vừa kết nối lại xong ngay trên thẻ thì thẻ vẫn ở đó để báo "Đã kết nối lại".
   const [fine, setFine] = useState<string[]>([]);
@@ -124,7 +138,7 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
     return () => { on = false; };
   }, [sig]);
   const show = list.filter((c) => !fine.includes(c.id));
-  return show.length ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}</> : null;
+  return show.length || plans ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}{plans && <PlansCard />}</> : null;
 }
 
 /**

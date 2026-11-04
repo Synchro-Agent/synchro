@@ -702,6 +702,7 @@ Object.assign(EN2VI, {
   "Connect Claude, ChatGPT, Gemini, Grok and DeepSeek with your own plan or with an API key shared by everyone.": "Kết nối Claude, ChatGPT, Gemini, Grok và DeepSeek bằng gói của chính bạn hoặc bằng khóa API dùng chung cho mọi người.",
   "Sign in with your plan": "Đăng nhập gói của bạn", "Link an API key": "Liên kết khóa API",
   "Shared with everyone on this Synchro, billed to the key.": "Dùng chung cho mọi người trên Synchro này, tính tiền vào khóa.",
+  "Creates images in chat when you ask for a photo, illustration, logo or poster.": "Tạo ảnh ngay trong khung chat khi bạn xin ảnh chụp, hình minh họa, logo hay poster.", "May create images on paid plans. The Free plan can't.": "Có thể tạo ảnh ở gói trả phí. Gói Free thì không.", "May create images on paid plans, depending on your xAI account limits.": "Có thể tạo ảnh ở gói trả phí, tùy giới hạn của tài khoản xAI.",
   "Sign in again": "Cần đăng nhập lại", "Back to my plan": "Quay lại gói", "Use the shared API key": "Dùng khóa API dùng chung",
   "Synchro never switches from your plan to an API key on its own. When your plan hits its limit, it asks you first.": "Synchro không bao giờ tự chuyển từ gói sang khóa API. Khi gói chạm giới hạn, Synchro sẽ hỏi bạn trước.",
   "Other providers": "Nhà cung cấp khác", "API key only. Voice (ElevenLabs) works with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) chỉ dùng khóa API.",

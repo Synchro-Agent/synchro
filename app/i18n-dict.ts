@@ -202,7 +202,7 @@ export const VI2EN: Record<string, string> = {
   "Tài liệu": "Docs", "Của Synchro": "By Synchro", "Trang trình bày": "Slides", "Thiết kế": "Design",
   "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.": "Documents your team reads, comments on and edits live, while Synchro keeps them up to date.",
   "Bộ trang chiếu mà bạn có thể trình chiếu, đổi kiểu dáng bằng hệ thống thiết kế và tải về dạng PowerPoint hoặc PDF.": "Slide decks you can present, restyle with a design system and download as PowerPoint or PDF.",
-  "Màn hình, luồng và đồ họa dựng bằng mã, bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa. Chưa tạo được ảnh chụp hay tranh bằng AI.": "Screens, flows and graphics built with code, laid out as boards on a single canvas that you can edit yourself. AI-generated photos and paintings aren't available yet.",
+  "Màn hình, luồng và đồ họa dựng bằng mã, bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa. Ảnh chụp hay tranh được tạo bằng AI qua gói đã đăng nhập.": "Screens, flows and graphics built with code, laid out as artboards on one canvas you can edit yourself. Photos and paintings are made with AI through your signed-in plan.",
   "Các artifact của bạn nằm ở đây": "Your artifacts live here",
   "Bắt đầu từ một mẫu ở trên, hoặc yêu cầu Synchro tạo thứ gì đó trong bất kỳ đoạn chat nào.": "Start from a template above, or ask Synchro to create something in any chat.",
   "Synchro understands your codebase and helps you build, debug, and ship faster. Nâng cấp gói của bạn để bắt đầu.": "Synchro understands your codebase and helps you build, debug, and ship faster. Upgrade your plan to get started.",
@@ -253,7 +253,7 @@ export const VI2EN: Record<string, string> = {
   "Bạn đang làm việc gì?": "What are you working on?", "Bạn đang muốn đạt được điều gì?": "What are you trying to achieve?",
   "tài liệu": "document", "bản trình bày": "presentation", "thiết kế": "design",
   "Tôi tạo một bộ slide trong trình chỉnh sửa riêng. Mỗi slide là một tệp dữ liệu nhỏ, bạn có thể tự sửa tiêu đề hay chữ mà không cần nhờ tôi, và có thể tải về dạng PowerPoint hoặc PDF.": "I'm creating a slide deck in a dedicated editor. Each slide is a small data file, so you can edit titles and text yourself without asking me, and download it as PowerPoint or PDF.",
-  "Tôi tạo một thiết kế trực quan như màn hình ứng dụng, poster, landing page hay mockup, dựng bằng mã (chưa tạo được ảnh chụp hay tranh bằng AI). Nó hiện trên canvas để bạn xem, chỉnh và chia sẻ.": "I create a visual design such as an app screen, poster, landing page or mockup, built with code (AI-generated photos and paintings aren't available yet). It appears on a canvas for you to view, adjust and share.",
+  "Tôi tạo một thiết kế trực quan như màn hình ứng dụng, poster, landing page hay mockup, dựng bằng mã; ảnh chụp hay tranh trong thiết kế thì tạo bằng AI qua gói đã đăng nhập. Nó hiện trên canvas để bạn xem, chỉnh và chia sẻ.": "I create a visual design such as an app screen, poster, landing page or mockup, built with code; photos and paintings in the design are made with AI through your signed-in plan. It appears on a canvas for you to view, adjust and share.",
   "Tôi tạo một tài liệu soạn thảo bằng công cụ Docs, gồm tiêu đề và nội dung các phần. Tài liệu này có thể xuất ra Word, PDF hoặc Markdown.": "I'm creating a document with the Docs tool, made up of a title and section content. It can be exported to Word, PDF or Markdown.",
   "Kéo tệp hoặc ảnh vào đây": "Drag files or images here", "Tài liệu, hình ảnh, bảng tính và tệp mã": "Documents, images, spreadsheets and code files", "Chọn tệp": "Choose files", "Thả tệp vào đây": "Drop files here",
   "Tải ảnh đại diện": "Upload profile photo", "Kéo ảnh vào đây": "Drag an image here", "Chỉ hỗ trợ ảnh JPG hoặc PNG, tối đa 10MB": "JPG or PNG only, up to 10MB", "Chỉ hỗ trợ một ảnh JPG hoặc PNG.": "Only a single JPG or PNG image is supported.",
@@ -1685,7 +1685,7 @@ Object.assign(VI2EN, {
   "Chưa kết nối được tới Synchro": "Can't reach Synchro", "Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.": "Your chats and what you were typing are still here. Synchro is retrying.",
   "Câu trả lời cũ đã được thay bằng lượt mới.": "The earlier reply was replaced by this new turn.", "Khôi phục bản cũ": "Restore the earlier version",
 });
-Object.assign(VI2EN, { "Đang hiện": "Showing", "Gõ thêm để thu hẹp.": "Type more to narrow it down.", "Kết quả": "Results", "Dự án": "Projects" });
+Object.assign(VI2EN, { "CLI chưa được cài": "The CLI isn't installed", "Codex định chạy lệnh trên máy chủ nên đã bị dừng": "Codex tried to run a command on the server, so it was stopped", "Đã dừng tạo ảnh.": "Stopped creating the image.", "Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập": "Create photos, paintings, logos and posters with your signed-in plan", "Tạo ảnh": "Create image", "Tạo ảnh ": "Create an image of ", "Chưa tạo được ảnh": "The image wasn't created", "Đăng nhập gói tạo được ảnh ở Providers": "Sign in to a plan that can create images in Providers", "Đang hiện": "Showing", "Gõ thêm để thu hẹp.": "Type more to narrow it down.", "Kết quả": "Results", "Dự án": "Projects" });
 // Nhãn công cụ trong nhật ký làm việc (chatengine.ts: describe, browsertools.ts: describeBrowser), hiện ở worklog.tsx.
 Object.assign(VI2EN, {
   "Đang": "Running", "ghi chú": "notes",
@@ -1701,6 +1701,9 @@ RULES_EN.push(
   [/^Đang tìm “(.*)” trên trang$/, (m) => `Finding “${m[1]}” on the page`], [/^Đang bấm phần tử \[(.*)\]$/, (m) => `Clicking element [${m[1]}]`], [/^Đang bấm vị trí (.*)$/, (m) => `Clicking at ${m[1]}`], [/^Đang rê chuột lên phần tử \[(.*)\]$/, (m) => `Hovering over element [${m[1]}]`], [/^Đang rê chuột lên vị trí (.*)$/, (m) => `Hovering at ${m[1]}`],
   [/^Đang gõ “(.*)”$/, (m) => `Typing “${m[1]}”`], [/^Đang nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Đang chọn “(.*)”$/, (m) => `Selecting “${m[1]}”`], [/^Đang tải tệp (.*) lên trang$/, (m) => `Uploading ${m[1]} to the page`], [/^Đang đọc tệp (.*) vừa tải về$/, (m) => `Reading downloaded file ${m[1]}`],
   [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
+  [/^Đang tạo ảnh bằng (.+), đã (\d+) giây$/, (m) => `Creating the image with ${m[1]}, ${m[2]} seconds so far`], [/^Đang tạo ảnh bằng (.+)$/, (m) => `Creating the image with ${m[1]}`], [/^Đang tạo ảnh: (.*)$/, (m) => `Creating an image: ${m[1]}`],
+  [/^Chưa tạo được ảnh, không có ảnh nào được giao\. (.*)$/, () => "The image wasn't created, so nothing was delivered. See the details in the reply."],
+  [/^(Antigravity|Grok|ChatGPT): (.+)\. Đang thử (.+)$/, (m) => `${m[1]} couldn't make the image, trying ${m[3]}`],
   [/^Đang dùng công cụ (.+)$/, (m) => `Using tool ${m[1]}`], [/^Đang dùng ([^:]+): (.+)$/, (m) => `Using ${m[1]}: ${m[2]}`],
 );
 // Tình trạng hệ thống, cảnh báo cho quản trị viên (ops.ts), trang quyền riêng tư.

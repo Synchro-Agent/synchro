@@ -18,11 +18,12 @@ type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; 
 export type EngineStatus = { cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
 
 // cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API).
-const VENDORS: { id: string; cli: Cli | null; name: string; vendor: string; plan: string; via: string }[] = [
+// img: khả năng tạo ảnh của gói, chỉ nói điều đã kiểm chứng (ai/imagegen.ts): Antigravity đã chạy thật, Grok và ChatGPT chưa.
+const VENDORS: { id: string; cli: Cli | null; name: string; vendor: string; plan: string; via: string; img?: string }[] = [
   { id: "anthropic", cli: "claude", name: "Claude", vendor: "Anthropic", plan: "Claude Pro or Max plan", via: "Claude Code" },
-  { id: "openai", cli: "codex", name: "ChatGPT", vendor: "OpenAI", plan: "ChatGPT Plus, Pro or Business plan", via: "Codex CLI" },
-  { id: "google", cli: "agy", name: "Gemini", vendor: "Google", plan: "Google AI Pro or Ultra plan", via: "Antigravity CLI" },
-  { id: "xai", cli: "grok", name: "Grok", vendor: "xAI", plan: "SuperGrok or X Premium+ plan", via: "Grok CLI" },
+  { id: "openai", cli: "codex", name: "ChatGPT", vendor: "OpenAI", plan: "ChatGPT Plus, Pro or Business plan", via: "Codex CLI", img: "May create images on paid plans. The Free plan can't." },
+  { id: "google", cli: "agy", name: "Gemini", vendor: "Google", plan: "Google AI Pro or Ultra plan", via: "Antigravity CLI", img: "Creates images in chat when you ask for a photo, illustration, logo or poster." },
+  { id: "xai", cli: "grok", name: "Grok", vendor: "xAI", plan: "SuperGrok or X Premium+ plan", via: "Grok CLI", img: "May create images on paid plans, depending on your xAI account limits." },
   { id: "deepseek", cli: null, name: "DeepSeek", vendor: "DeepSeek", plan: "", via: "" },
 ];
 type Vendor = (typeof VENDORS)[number];
@@ -208,6 +209,7 @@ function VendorItem({ v, admin, api, apiState, setApi }: { v: Vendor; admin: boo
       {open && (
         <div className="pv-body">
           {!v.cli && <p className="pv-note">{`${v.name} has no plan sign-in for other apps, so it connects with an API key only.`}</p>}
+          {v.img && <p className="pv-note pv-hint">{v.img}</p>}
           <div className="pv-choose" role="radiogroup" aria-label={`How to use ${v.name}`}>
             {v.cli && (
               <button role="radio" aria-checked={mode === "plan"} className={`pv-opt ${mode === "plan" ? "on" : ""}`} onClick={() => setMode("plan")}>

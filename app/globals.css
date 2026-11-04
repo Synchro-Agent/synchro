@@ -3292,6 +3292,8 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .menu-item.sub{padding-left:38px;font-size:13px}
 
 /* ===== Nhật ký làm việc của lượt trả lời (lời dẫn, công cụ, danh sách việc, trạng thái) ===== */
+.wl-plans{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 0 10px;padding:9px 12px;border-radius:10px;background:var(--bg-2,rgba(127,127,127,.08));font-size:13px;line-height:1.45}
+.wl-plans>svg{flex:none;opacity:.7}.wl-plans>span{flex:1 1 180px;min-width:0}.wl-plans .btn{flex:none}
 .wl-say{margin:0 0 6px}
 .wl-say>*:last-child{margin-bottom:0}
 .wl-tools{margin:2px 0 10px}
