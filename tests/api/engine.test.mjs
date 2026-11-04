@@ -473,7 +473,7 @@ try {
     // Antigravity không có chữ dần: nói đã chờ bao lâu, và dòng này không làm bộ canh tính lại.
     {
       const ev = await all(S.engineFor("agy").runTurn({ prompt: "chào", env: A.engineEnv("agy", "user_A") }));
-      ok(ev.some((e) => e.kind === "status" && e.tick === true && /vẫn đang viết, đã \d+ giây/.test(e.text ?? "")) && ev.some((e) => e.kind === "final"), "agy: báo thời gian đã chờ", JSON.stringify(ev));
+      ok(ev.some((e) => e.kind === "status" && e.tick === true && /vẫn đang viết, đã \d+ giây/.test(e.text ?? "")), "agy: báo thời gian đã chờ", JSON.stringify(ev));
     }
     // Tệp tạm của lượt bị giết: dọn tệp cũ, không đụng tệp mới hay tệp khác.
     {

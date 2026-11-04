@@ -59,6 +59,16 @@ console.log("2d. Kho rất lớn: chấm nhanh nhờ chỉ mục ngược");
   ok(ms < 40, `18.000 skill: ${ms.toFixed(1)} ms mỗi lượt sau lần đầu`, ms);
   ok(SR.rank("skill-17", cands, 3)[0]?.skill.name === "skill-17", "gọi đúng tên skill vẫn tìm được", SR.rank("skill-17", cands, 3).map((h) => h.skill.name));
 }
+console.log("2e. Bộ câu có nhãn trên danh mục thật (tên skill và mô tả thư viện; mô tả từng skill chỉ có sau khi cài)");
+{
+  const dir = JSON.parse(fs.readFileSync("catalog/claude-directory.json", "utf8")).plugins;
+  const real = dir.flatMap((p) => p.skills.map((name) => ({ skill: sk(`${p.slug}:${name}`, `${name.replace(/-/g, " ")}. ${p.summary}`), weight: 0.6 })));
+  for (const [q, want] of [["Tối ưu SEO cho website", /seo/], ["Soạn hợp đồng thuê nhà", /legal|contract/], ["Tính thuế thu nhập cá nhân", /tax/], ["Làm slide thuyết trình về khí hậu", /slide|deck/], ["Tạo file Excel bảng lương", /excel/], ["Viết email xin nghỉ phép", /email/], ["Review pull request này", /pull-request|pr-review/], ["Tuyển dụng lập trình viên", /recruit|talent/], ["Lịch trình du lịch Đà Lạt 3 ngày", /itinerary|trip|travel/], ["Làm video giới thiệu sản phẩm", /video/]]) {
+    const names = SR.suggest(q, real).slice(0, 5).map((h) => h.skill.name.split(":").pop());
+    ok(names.some((n) => want.test(n)), `“${q}” → ${want}`, names);
+  }
+  for (const q of ["Lập danh sách khách mời", "Nhắc tôi họp lúc 3 giờ", "Xin chào bạn"]) ok(!SR.suggest(q, real).length, `“${q}”: không gợi ý skill nào`, SR.suggest(q, real).map((h) => h.skill.name));
+}
 console.log("3. Mục lục đủ mọi mục ngành nghề");
 const cats = PD.PLUGIN_CATS.map((c) => sk(`cat-${c.key}`, `${c.label}: 12 thư viện, 340 skill (Thư viện số một dài dài, Thư viện số hai dài dài, Thư viện số ba…)`, "studio"));
 const filler = Array.from({ length: 60 }, (_, i) => sk(`skill-${i}`, "Mô tả ".repeat(30)));

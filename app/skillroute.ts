@@ -256,7 +256,9 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
     };
     // Từ người dùng thật sự viết ("seo") nặng hơn từ khóa suy ra từ khái niệm; mỗi khái niệm chỉ tính từ khớp tốt nhất, để mô tả kể lể mọi từ của một khái niệm không vượt được skill đúng tên.
     for (const w of literal) { const v = value(w); score += weak.has(w) ? v : v * LITERAL; }
-    for (const g of extra) { let best = 0; for (const w of g) best = Math.max(best, value(w)); score += best; }
+    // Từ khóa đầu của khái niệm là nghĩa chính, các từ sau là nghĩa rộng dần (từ hiếm được IDF cao, từng đưa "regulation" vượt "contract" cho câu về hợp đồng).
+    // Tên có hai từ của cùng khái niệm ("data-analysis") đúng hơn tên có một từ hiếm: từ thứ hai tính thêm một nửa, từ thứ ba trở đi không tính.
+    for (const g of extra) { let a = 0, b = 0; g.forEach((w, i) => { const v = value(w) * (i < 3 ? 1 : 0.5); if (v > a) { b = a; a = v; } else if (v > b) b = v; }); score += a + b / 2; }
     // Chỉ trùng một âm tiết thì chưa nói lên gì: cần một từ thật, hoặc ít nhất hai âm tiết (mô tả skill bằng tiếng Việt).
     if (!strong && soft < 2) score = 0;
     if (score > 0) out.push({ ...c, score: score * (c.weight ?? 1) });
