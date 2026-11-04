@@ -10,6 +10,7 @@ import { detectIcon } from "./connicons";
 import crypto from "node:crypto";
 import { destructiveLike, guessedRead, McpClient, McpError, oldGuessedRead, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
+import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
 
@@ -472,7 +473,8 @@ export async function finishAuth(req: Request, q: URLSearchParams): Promise<{ ok
     if (r.status !== "ok") markStatus(r.id, "needs_auth", `Không lấy được mã truy cập: ${errText(e)}`);
     return { ok: false, id: r.id, message: `Không lấy được mã truy cập: ${errText(e)}` };
   }
-  try { await syncTools(r.id); }
+  // Cửa sổ đăng nhập đang chờ trang này: hãng treo thì báo trong vòng nửa phút (đăng nhập đã lưu, bấm thử lại là được).
+  try { await syncTools(r.id, AbortSignal.timeout(CONNECT_MS)); }
   catch (e) {
     if (!isAuthErr(e)) syncFailed(r.id, e);
     return { ok: false, id: r.id, message: `Đã đăng nhập nhưng chưa lấy được danh sách công cụ: ${errText(e)}` };
@@ -482,8 +484,8 @@ export async function finishAuth(req: Request, q: URLSearchParams): Promise<{ ok
 
 export async function refreshConnector(uid: string, id: string, pol: ConnPolicy = FULL_CONN) {
   followDirectory(rowOf(uid, id));
-  try { await syncTools(id); }
-  catch (e) { if (!isAuthErr(e)) syncFailed(id, e); throw new ConnectorError(errText(e), 502); }
+  try { await syncTools(id, AbortSignal.timeout(CONNECT_MS)); }
+  catch (e) { if (!isAuthErr(e)) syncFailed(id, e); throw new ConnectorError(errText(e), e instanceof TempFail ? 503 : 502); }
   return publicOf(rowById(id)!, pol);
 }
 
@@ -650,7 +652,7 @@ export class ConnectorSession {
     this.calls.set(ct.cid, n);
     let sent = false;
     try {
-      const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, args && typeof args === "object" ? args : {}, { signal, timeout }); }, this.cache, ct.tool.name);
+      const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, coerceArgs(ct.tool.inputSchema, args && typeof args === "object" ? args : {}), { signal, timeout }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
       const { images, all } = resultImages(res);
       return { content: text, is_error: isError, ...(images.length ? { image: images[0].data, mime: images[0].mime, images, imagesAll: all } : {}) };

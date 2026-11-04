@@ -29,7 +29,7 @@ const VAGUE_ALONE = new Set(["query", "find"]);
 // So cả từ, không so chuỗi con: get_credits (edit), get_asset (set), list_posts (post) là công cụ đọc.
 const WRITE_VERB = new Set(["create", "delete", "remove", "write", "insert", "replace", "edit", "execute", "drop", "cancel", "destroy", "purge", "upsert", "overwrite", "truncate", "alter", "grant", "revoke"]);
 // Vừa là động từ vừa là danh từ: get_post, list_run_logs, get_update là đọc; chỉ tính là ghi khi nối sau and / or / then (find_and_update, get_or_set).
-const WRITE_NOUN = new Set(["post", "run", "set", "update", "patch", "upload", "put", "publish", "send", "add"]);
+const WRITE_NOUN = new Set(["post", "run", "set", "update", "patch", "upload", "put", "publish", "send", "add", "save", "store", "move", "rename", "archive", "assign", "approve", "reject", "mark", "lock", "merge", "deploy", "trigger", "import", "apply", "commit", "push", "start", "stop"]);
 const LINK_WORD = new Set(["and", "or", "then"]);
 const RISKY_PARAM = /^(sql|sql_?query|query_?sql|statement|stmt|command|cmd|mutation|shell)$/i;
 const RISKY_TEXT = /(^|[.!?:;]\s+|\b(to|can|will|and|then|may|that|you)\s+)(run|runs|execute|executes)\b|\bexecut(e|es|ing)\b|\brunning\s+(a|an|any|the|arbitrary|raw|custom|sql)\b|\b(arbitrary|raw|any)\s+(sql|command|statement|quer)|\bsql\b|thực thi|chạy\s+(lệnh|câu|truy vấn|sql)/i;

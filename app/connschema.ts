@@ -53,6 +53,8 @@ export function resolveRefs(schema: unknown): unknown {
       if (k === "enum" || k === "const" || k === "default" || k === "examples" || k === "example" || k === "required") { out[k] = v; continue; }
       out[k] = walk(v, chain, depth + 1);
     }
+    // Mảng không khai báo items: hãng có thể từ chối cả yêu cầu vì một tham số; khai báo rỗng có nghĩa y hệt theo chuẩn.
+    if (isType(out.type, "array") && out.items === undefined && out.prefixItems === undefined) out.items = {};
     return out;
   };
   return walk(schema, [], 0);
@@ -90,6 +92,7 @@ function flatten(s: Obj, depth = 0): { props: Obj; required: string[]; ok: boole
 
 // Gemini: chỉ một tập khóa OpenAPI; kiểu dạng mảng ["string","null"] thành type + nullable; const thành enum; oneOf thành anyOf; allOf gộp lại; enum chỉ cho chuỗi;
 // format của chuỗi chỉ nhận enum / date-time; required chỉ được nhắc tham số có thật (không thì hãng từ chối cả yêu cầu).
+// Tham số object không khai báo thuộc tính và tham số không có kiểu: Gemini không nhận, nên gửi dạng chuỗi; coerceArgs đổi chuỗi JSON lại thành đối tượng trước khi gọi máy chủ.
 const GEMINI_KEYS = new Set(["type", "description", "properties", "required", "items", "enum", "format", "nullable", "anyOf", "minimum", "maximum", "minItems", "maxItems", "title", "minLength", "maxLength", "pattern", "default"]);
 function forGemini(v: unknown, depth = 0): unknown {
   if (Array.isArray(v)) return v.map((x) => forGemini(x, depth + 1));
@@ -102,11 +105,6 @@ function forGemini(v: unknown, depth = 0): unknown {
   }
   if (Array.isArray(s.oneOf) && !Array.isArray(s.anyOf)) s.anyOf = s.oneOf;
   if (s.const !== undefined && s.enum === undefined) s.enum = [s.const];
-  if (Array.isArray(s.type)) {
-    const real = (s.type as unknown[]).filter((t) => t !== "null");
-    if (real.length < s.type.length) s.nullable = true;
-    s.type = real[0] ?? "string";
-  }
   if (Array.isArray(s.anyOf)) {
     // anyOf [X, {type:"null"}]: dạng thường gặp của tham số tùy chọn, gọn lại thành X + nullable.
     const real = (s.anyOf as unknown[]).filter((x) => !(isObj(x) && x.type === "null"));
@@ -114,9 +112,27 @@ function forGemini(v: unknown, depth = 0): unknown {
     if (real.length === 1 && isObj(real[0])) { const { anyOf: _o, ...rest } = s; s = { ...real[0], ...rest }; }
     else s.anyOf = real;
   }
+  if (Array.isArray(s.type)) {
+    const real = (s.type as unknown[]).filter((t) => t !== "null");
+    if (real.length < s.type.length) s.nullable = true;
+    s.type = real[0] ?? "string";
+  }
   if (Array.isArray(s.enum)) {
     const names = s.enum.filter((x): x is string => typeof x === "string");
     if (names.length === s.enum.length && names.length) { s.enum = names; s.type ??= "string"; } else delete s.enum;
+  }
+  // Mảng theo vị trí (tuple): Gemini chỉ nhận một schema cho mọi phần tử.
+  if (s.type === "array") {
+    const first = Array.isArray(s.items) ? s.items[0] : s.items === undefined && Array.isArray(s.prefixItems) ? s.prefixItems[0] : s.items;
+    s.items = first ?? {};
+  }
+  if (depth > 0 && !Array.isArray(s.anyOf) && (s.type === undefined || s.type === "object")) {
+    const has = isObj(s.properties) && Object.keys(s.properties).length > 0;
+    if (has) s.type = "object";
+    else {
+      const { properties: _p, default: _d, ...rest } = s;
+      s = { ...rest, type: "string", ...(s.type === "object" ? { description: `${typeof s.description === "string" ? `${s.description} ` : ""}(đối tượng, viết thành chuỗi JSON)` } : {}) };
+    }
   }
   if (s.type === "string" && typeof s.format === "string" && s.format !== "date-time" && s.format !== "enum") delete s.format;
   const out: Obj = {};
@@ -150,3 +166,27 @@ export function normalizeSchema(schema: unknown, vendor: SchemaVendor = "other")
   const g = forGemini(top) as Obj;
   return { ...g, type: "object", properties: isObj(g.properties) ? g.properties : {} };
 }
+
+// Model hay gửi đối tượng / mảng dưới dạng chuỗi JSON (với Gemini thì chính Synchro yêu cầu vậy, xem forGemini): gửi nguyên cho máy chủ thì công cụ báo sai kiểu.
+// Chỉ đổi khi schema khai báo rõ là object hay array, không nhận chuỗi, và chuỗi đọc ra đúng loại đó; còn lại giữ nguyên, máy chủ tự kiểm tra.
+function coerce(v: unknown, s: unknown, depth: number): unknown {
+  if (!isObj(s) || depth > 30) return v;
+  const forms = [s, ...["anyOf", "oneOf", "allOf"].flatMap((k) => (Array.isArray(s[k]) ? (s[k] as unknown[]).filter(isObj) : []))];
+  if (typeof v === "string") {
+    if (forms.some((f) => isType(f.type, "string"))) return v;
+    const obj = forms.some((f) => isType(f.type, "object") || isObj(f.properties)), arr = forms.some((f) => isType(f.type, "array"));
+    if (!obj && !arr) return v;
+    let j: unknown;
+    try { j = JSON.parse(v); } catch { return v; }
+    if (Array.isArray(j) ? !arr : !isObj(j) || !obj) return v;
+    v = j;
+  }
+  if (Array.isArray(v)) { const items = forms.map((f) => f.items).find(isObj); return items ? v.map((x) => coerce(x, items, depth + 1)) : v; }
+  if (!isObj(v)) return v;
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => {
+    const prop = forms.map((f) => (isObj(f.properties) ? f.properties[k] : undefined)).find(isObj);
+    return [k, prop ? coerce(x, prop, depth + 1) : x];
+  }));
+}
+/** Tham số model đưa → tham số gửi cho máy chủ MCP, theo schema gốc của công cụ. */
+export const coerceArgs = (schema: unknown, args: Record<string, unknown>) => coerce(args, resolveRefs(schema ?? {}), 0) as Record<string, unknown>;

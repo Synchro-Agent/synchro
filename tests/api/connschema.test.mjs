@@ -60,5 +60,28 @@ ok(r.properties.h.properties?.i?.type === "string" && !r.properties.h.allOf, "al
 r = S.normalizeSchema({ oneOf: [{ type: "object", properties: { a: { type: "string" } } }] }, "gemini");
 ok(r.type === "object" && r.properties.a.type === "string" && !r.oneOf, "cấp cao nhất của Gemini cũng là object", J(r));
 
+console.log("4. Mảng thiếu items, tham số tự do trên Gemini");
+r = S.normalizeSchema({ type: "object", properties: { ids: { type: "array", description: "Danh sách" }, tags: { type: ["array", "null"] } } });
+ok(J(r.properties.ids.items) === "{}" && J(r.properties.tags.items) === "{}", "mảng thiếu items được khai báo items rỗng", J(r));
+r = S.normalizeSchema({ type: "object", properties: { meta: { type: "object", description: "Dữ liệu thêm", default: {}, additionalProperties: true }, any: {}, ids: { type: "array" }, pair: { type: "array", items: [{ type: "number" }, { type: "string" }] }, keep: { type: "object", properties: { a: { type: "string" } } }, opt: { anyOf: [{ type: "object" }, { type: "null" }] } } }, "gemini");
+ok(r.properties.meta.type === "string" && /chuỗi JSON/.test(r.properties.meta.description) && /Dữ liệu thêm/.test(r.properties.meta.description) && r.properties.meta.default === undefined, "object không khai báo thuộc tính: thành chuỗi JSON, giữ mô tả", J(r));
+ok(r.properties.any.type === "string" && r.properties.ids.items.type === "string", "tham số và phần tử không có kiểu: thành chuỗi", J(r));
+ok(r.properties.pair.items.type === "number" && !Array.isArray(r.properties.pair.items), "mảng theo vị trí: một schema cho mọi phần tử", J(r));
+ok(r.properties.keep.type === "object" && r.properties.keep.properties.a.type === "string", "object có thuộc tính giữ nguyên", J(r));
+ok(r.properties.opt.type === "string" && r.properties.opt.nullable === true && !r.properties.opt.anyOf, "anyOf object tự do + null: chuỗi, nullable", J(r));
+ok(S.normalizeSchema({ type: "object", properties: {} }, "gemini").type === "object", "cấp cao nhất không bị đổi thành chuỗi");
+
+console.log("5. Đổi chuỗi JSON lại thành đối tượng trước khi gọi máy chủ");
+const sc = { type: "object", properties: { meta: { type: "object" }, ids: { type: "array", items: { type: "object", properties: { x: { type: "object" } } } }, name: { type: "string" }, either: { anyOf: [{ type: "string" }, { type: "object" }] }, ref: { $ref: "#/$defs/R" }, n: { type: "object", properties: { inner: { type: "array" } } } }, $defs: { R: { type: "object", properties: { a: { type: "string" } } } } };
+let a = S.coerceArgs(sc, { meta: '{"a":1}', ids: '[{"x":"{\\"b\\":2}"}]', name: '{"giữ":"nguyên"}', either: '{"giữ":1}', ref: '{"a":"b"}', n: { inner: "[1,2]" }, khac: '{"la":1}' });
+ok(a.meta.a === 1, "object: chuỗi JSON thành đối tượng", J(a));
+ok(a.ids[0].x.b === 2, "lồng trong mảng cũng đổi", J(a));
+ok(a.name === '{"giữ":"nguyên"}' && a.either === '{"giữ":1}', "tham số nhận chuỗi: giữ nguyên", J(a));
+ok(a.ref.a === "b" && a.n.inner[1] === 2, "qua $ref và object lồng", J(a));
+ok(a.khac === '{"la":1}', "tham số không khai báo: giữ nguyên", J(a));
+a = S.coerceArgs(sc, { meta: "không phải JSON", ids: '{"sai":"loại"}' });
+ok(a.meta === "không phải JSON" && a.ids === '{"sai":"loại"}', "chuỗi hỏng hay sai loại: giữ nguyên để máy chủ báo", J(a));
+ok(J(S.coerceArgs(undefined, { a: 1 })) === '{"a":1}', "công cụ không có schema: giữ nguyên");
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 if (fail) process.exit(1);

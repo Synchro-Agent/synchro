@@ -716,9 +716,9 @@ function UserText({ text }: { text: string }) {
   );
 }
 
-// Phiên Synchro Code ở thanh bên (danh sách lưu ở trình duyệt, đồng bộ với máy chủ khi bật).
 // Đoạn chat đang chờ người dùng duyệt công cụ: phải thấy được từ ngoài đoạn chat đó (cột bên, thông báo), không thì lượt treo tới hết giờ mà không ai biết.
 const asksNow = (c: Chat) => { const m = c.msgs[c.msgs.length - 1]; return !!m && !m.done && !!m.parts?.some((p) => p.k === "ask" && p.state === "wait"); };
+// Phiên Synchro Code ở thanh bên (danh sách lưu ở trình duyệt, đồng bộ với máy chủ khi bật).
 type CodeItem = { id: number; title: string; pinned?: boolean; archived?: boolean; state?: SessionState; reason?: string | null; running?: boolean; upd?: number; pr?: { number: number; url: string | null; state: string } | null };
 // Trạng thái phiên: đang chạy, cần bạn (hỏi lại / chờ duyệt / gặp lỗi / bị dừng), chờ xem lại (có thay đổi chưa commit / chưa push / PR chờ duyệt), xong.
 function CodeBadge({ c }: { c: CodeItem }) {
