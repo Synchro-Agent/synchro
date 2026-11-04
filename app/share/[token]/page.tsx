@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   return { title: s ? `${s.snap.title} – Synchro` : "Synchro", robots: { index: false, follow: false }, referrer: "no-referrer", openGraph: null, twitter: null };
 }
 export default async function SharePage({ params }: P) {
-  const s = await shareForView((await params).token);
+  const token = (await params).token, s = await shareForView(token);
   if (!s) notFound();
-  return <ShareView snap={s.snap} at={s.at} />;
+  return <ShareView snap={s.snap} at={s.at} token={token} />;
 }

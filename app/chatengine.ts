@@ -25,8 +25,9 @@ import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
 import { suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
-import { CODE_RULES, execRun, LANGS, runCodeTool, runner, type Lang, type RecalcReport, type RunOutput } from "./coderun";
-import { outputsFull, removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
+import { plainSummary, runBlocks } from "./runtext";
+import { OUTPUT_QUOTA_MB, outputRoom, outputsFull, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
@@ -52,12 +53,12 @@ type Call = { id: string; name: string; input: Record<string, unknown> };
 // pause: công cụ phía máy chủ của hãng (tìm web) chưa chạy xong trong một lần gọi — gửi lại để model làm tiếp.
 type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean };
 // image: ảnh JPEG (base64) đi kèm kết quả công cụ, ví dụ ảnh chụp trình duyệt; mỗi hãng nhận theo cách riêng.
-// mime: loại ảnh khi không phải JPEG (ảnh do connector trả về).
-type Run = ToolRun & { image?: string; mime?: string };
+// mime: loại ảnh khi không phải JPEG (ảnh do connector trả về). more: các ảnh sau ảnh đầu của cùng kết quả.
+type Run = ToolRun & { image?: string; mime?: string; more?: { data: string; mime: string }[] };
 type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[] };
 // Ảnh chụp trình duyệt cho model dùng Chat Completions / Responses: tin nhắn công cụ chỉ nhận chữ, nên ảnh đi kèm một tin người dùng ngay sau.
 const SHOT = (id: string) => `Ảnh chụp màn hình trình duyệt (kết quả công cụ ${id}).`;
-const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:${r.mime ?? "image/jpeg"};base64,${r.image}` } }] }] : []);
+const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:${r.mime ?? "image/jpeg"};base64,${r.image}` } }, ...(r.more ?? []).map((m) => ({ type: "image_url", image_url: { url: `data:${m.mime};base64,${m.data}` } }))] }] : []);
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
 // Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
@@ -103,7 +104,7 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
     };
   },
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, is_error: res[i].is_error,
-    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: res[i].mime ?? "image/jpeg", data: res[i].image } }] : res[i].content })) }],
+    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: res[i].mime ?? "image/jpeg", data: res[i].image } }, ...(res[i].more ?? []).map((m) => ({ type: "image", source: { type: "base64", media_type: m.mime, data: m.data } }))] : res[i].content })) }],
 });
 
 const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
@@ -204,10 +205,23 @@ const recalcNote = (rc: RecalcReport | undefined) => {
 // thì bản mới thay bản cũ của lượt này: từng hiện hai ba thẻ cùng tên, người dùng có thể tải nhầm bản hỏng. Tệp của các lượt trước giữ nguyên.
 function deliver(x: Exec, r: RunOutput) {
   const kept = r.files.filter((f) => !f.path.startsWith("_preview/"));
-  if (r.exit !== 0 || r.timedOut || (kept.length && outputsFull())) return { saved: [] as OutFile[], held: kept.map((f) => f.path) };
-  const saved = saveOutputs(x.uid, kept);
-  mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), kept.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
-  return { saved, held: [] as string[] };
+  if (r.exit !== 0 || r.timedOut || (kept.length && outputsFull())) return { saved: [] as OutFile[], held: kept.map((f) => f.path), full: [] as string[] };
+  // Hạn mức dung lượng tệp đã tạo của tài khoản: tệp không còn chỗ thì báo như tệp quá cỡ, không xóa tệp cũ nào của người dùng.
+  let room = outputRoom(x.uid);
+  const fit = kept.filter((f) => { if (f.data.length > room) return false; room -= f.data.length; return true; });
+  const full = kept.filter((f) => !fit.includes(f)).map((f) => `${f.path}: ${Math.ceil(f.data.length / 1048576)} MB, tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo (tệp cũ tự xóa sau 30 ngày)`);
+  const saved = saveOutputs(x.uid, fit);
+  mergeOuts(x.outs, (x.outPaths ??= new Map<string, string>()), fit.map((f) => f.path), saved, (id) => removeOutput(x.uid, id));
+  // Chạy lại nhỏ hơn và giao được: bỏ thẻ "chưa giao được" của đúng tệp đó.
+  for (const f of saved) { const i = x.outs.findIndex((o) => o.skipped && o.name === f.name); if (i >= 0) x.outs.splice(i, 1); }
+  return { saved, held: [] as string[], full };
+}
+// Thẻ "chưa giao được" trong tin nhắn: người dùng không có thẻ tải về thì không biết là thiếu tệp nếu model không nói. skipped: "đường-dẫn: lý do".
+function noteSkipped(x: Exec, list: string[]) {
+  for (const s of list) {
+    const name = s.split(": ")[0].split("/").pop() || "tep", mb = /(\d+) MB/.exec(s)?.[1];
+    if (!x.outs.some((o) => o.skipped && o.name === name)) x.outs.push({ id: `skip-${name}`, name, size: Number(mb ?? 0) * 1048576, mime: "", skipped: true });
+  }
 }
 async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
   const lang = (typeof input.language === "string" && input.language in LANGS ? input.language : "python") as Lang;
@@ -220,11 +234,16 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     const keep = x.conv ? x.conv.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) : undefined;
     const timeout = typeof input.timeout === "number" ? input.timeout : undefined;
     const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
-    const { saved, held } = deliver(x, r);
+    const { saved, held, full } = deliver(x, r);
     const pv = await previewOf(r.files);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
     const hold = held.length ? (r.exit === 0 && !r.timedOut ? `\n<not_delivered>\nMáy chủ sắp hết dung lượng đĩa nên các tệp này CHƯA tới người dùng: ${held.join(", ")}. Hãy nói rõ điều này với người dùng và đề nghị thử lại sau; đừng nói là đã gửi tệp.\n</not_delivered>` : `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>`) : "";
-    return { content: `<run_result language="${lang}" exit_code="${r.exit}">\n<stdout>\n${r.stdout}\n</stdout>\n<stderr>\n${r.stderr}\n</stderr>${files}${hold}${recalcNote(r.recalc)}${previewNote(pv)}\n</run_result>`, is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
+    // Tệp vượt giới hạn dung lượng: chỉ thẻ này báo được, người dùng không có thẻ tệp nào để biết là thiếu. Tệp _preview/ chỉ để model xem, không cần báo.
+    const over = [...(r.skipped ?? []).filter((s) => !s.startsWith("_preview/")), ...full];
+    if (r.exit === 0 && !r.timedOut) noteSkipped(x, over);
+    const skip = over.length ? `\n<not_delivered>\nCác tệp này KHÔNG tới người dùng và không có thẻ tải về: ${over.join("; ")}. Giới hạn ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp, ${RUN_LIMITS.total / 1048576} MB mỗi lần chạy. Nén lại (video: -crf cao hơn, hạ bitrate âm thanh) hoặc chia nhỏ rồi chạy lại; không làm được thì phải nói rõ với người dùng là tệp chưa giao được (thẻ tệp hiện "chưa giao được").\n</not_delivered>` : "";
+    // Thẻ trạng thái đứng trước log: log dài cỡ nào model vẫn thấy đã giao tệp gì, ô Excel nào lỗi, đã xem ảnh nào.
+    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${files}${hold}${skip}${recalcNote(r.recalc)}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
   }
@@ -317,7 +336,7 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   await execute(cap, m, x, [c], usedAll, decisions).finally(() => x.calls?.delete(c.id));
   const follow = (m.find((v) => (v as { role?: string }).role === "user") as { content?: unknown } | undefined)?.content;
   const r = (res as Run | null) ?? { content: "Không có kết quả.", is_error: true };
-  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image, mime: (r as Run).mime } : {}) };
+  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image, mime: (r as Run).mime, more: (r as Run).more } : {}) };
 }
 // Thẻ duyệt công cụ connector trong lượt chạy qua CLI (cùng cơ chế với hỏi dùng trình duyệt): CLI giữ lời gọi công cụ trong lúc chờ.
 // Chờ tối đa 10 phút rồi coi như chưa được phép; bấm Dừng thì thôi chờ ngay.
@@ -390,25 +409,27 @@ function showReconnect(x: Exec, c: OfflineConn) {
 }
 // Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
 const MODEL_IMG = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const IMG_ONE = 6_500_000, IMG_TOTAL = 16_000_000;
 const IMG_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg" };
-function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; image?: string; mime?: string; images?: { data: string; mime: string }[]; imagesAll?: number }): Pick<Run, "content" | "image" | "mime"> {
+function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; image?: string; mime?: string; more?: { data: string; mime: string }[]; imagesAll?: number }): Pick<Run, "content" | "image" | "mime" | "more"> {
   if (!r.image) return { content: r.content };
-  const list = r.images ?? [{ data: r.image, mime: r.mime ?? "" }];
-  const saved = list.flatMap((im) => {
-    const data = Buffer.from(im.data, "base64");
-    return data.length && IMG_EXT[im.mime] ? saveOutputs(x.uid, [{ path: `${ct.tool.name.replace(/[^\w-]+/g, "_").slice(0, 60)}-${(x.outs.length + 1)}.${IMG_EXT[im.mime]}`, data }]).map((f) => { x.outs.push(f); return f; }) : [];
-  });
-  // Chỉ nói đúng điều đã làm: có mấy ảnh, lưu được mấy tệp, model có nhận kèm ảnh nào không.
-  const attach = MODEL_IMG.has(r.mime ?? "") && r.image.length <= 6_500_000;
-  const all = r.imagesAll ?? list.length;
-  const notes = [
-    saved.length ? `<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "",
-    all > 1 || !attach ? `Công cụ trả về ${all} ảnh: ${attach ? "ảnh đầu tiên kèm theo kết quả này" : "không ảnh nào kèm theo kết quả này"}; ${saved.length ? `${saved.length} ảnh đã lưu thành tệp như trên` : "không lưu được ảnh nào thành tệp"}${all > list.length ? `; ${all - list.length} ảnh sau không được lưu vì vượt giới hạn` : ""}.` : "",
-  ].filter(Boolean);
-  const content = r.content + (notes.length ? `\n${notes.join("\n")}` : "");
-  if (!attach) return { content };
+  const all = [{ data: r.image, mime: r.mime ?? "" }, ...(r.more ?? [])];
+  const names: string[] = [];
+  for (const i of all) {
+    const data = Buffer.from(i.data, "base64");
+    const saved = data.length && IMG_EXT[i.mime] ? saveOutputs(x.uid, [{ path: `${ct.tool.name.replace(/[^\w-]+/g, "_").slice(0, 60)}-${(x.outs.length + 1)}.${IMG_EXT[i.mime]}`, data }]) : [];
+    x.outs.push(...saved);
+    if (saved.length) names.push(`outputs/${saved[0].name} (${fmtSize(saved[0].size)}) — đã gửi cho người dùng`);
+  }
+  // Một kết quả không gửi quá IMG_TOTAL (mỗi ảnh tối đa IMG_ONE) cho model: giới hạn yêu cầu của các hãng. Ảnh còn lại vẫn thành tệp của người dùng và được nói rõ.
+  let room = IMG_TOTAL;
+  const send = all.filter((i) => { if (!MODEL_IMG.has(i.mime) || i.data.length > IMG_ONE || i.data.length > room) return false; room -= i.data.length; return true; });
+  const left = all.length - send.length;
+  const note = (names.length ? `\n<files>\n${names.join("\n")}\n</files>` : "") + (left ? `\n[${left}/${all.length} ảnh không kèm theo kết quả này vì quá lớn hoặc model không đọc được loại ảnh đó; đừng mô tả các ảnh đó như đã xem.]` : "") + ((r.imagesAll ?? all.length) > all.length ? `\n[Công cụ trả về ${r.imagesAll} ảnh; ${r.imagesAll! - all.length} ảnh sau không được lấy vì vượt giới hạn ${all.length} ảnh mỗi kết quả.]` : "");
+  if (!send.length) return { content: r.content + note };
   (x.heavy ??= []).push(c.id);
-  return { content, image: r.image, mime: r.mime };
+  const [first, ...more] = send;
+  return { content: r.content + note, image: first.data, mime: first.mime, ...(more.length ? { more } : {}) };
 }
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ, hoặc ngay khi model đang viết).
 function addFollowup(m: unknown[], text: string) {
@@ -592,7 +613,7 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   res.forEach((r, i) => {
     const c = calls[i];
     if (!isData(x, c)) return;
-    const big = maybeRef(x.uid, x.conv, c.name, r.content);
+    const big = maybeRef(x.uid, x.conv, c.name, r.content, r.brief);
     r.content = big.content;
     const summary = (big.ref ? big.content.replace(/^<ref[^>]*>\n/, "").split("\nDữ liệu đầy đủ đã lưu")[0] : r.content).slice(0, 700);
     x.trace.push({ id: c.id, name: c.name, label: label(x, c), input: JSON.stringify(c.input ?? {}).slice(0, 300), status: d[c.id] === "deny" ? "denied" : r.is_error ? "error" : "ok", summary, ...(big.ref ? { ref: big.ref } : {}) });
@@ -600,7 +621,7 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
   // Công cụ ghi của connector: kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
-  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: String(r.content ?? "").replace(/^<ref[^>]*>\s*/, "").replace(/\s+/g, " ").slice(0, 140), ...(x.sess?.get(calls[i].name) && !x.sess.isRead(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && !x.sess.isRead(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
   const more = takeInbox();
@@ -1008,14 +1029,16 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   if (list.length) {
     // Yêu cầu thuộc rõ một studio ("làm slide thuyết trình" → Trình bày): skill của studio đó được cộng thêm, skill của danh mục Claude
     // giảm bớt, để thư viện chọn lọc đứng trước hàng nghìn skill na ná của danh mục.
-    const want = ruleStudios("", lastUserText(messages)).scores;
+    // Chỉ chữ người dùng gõ: từ khóa nằm trong tệp đính kèm không được kéo theo skill và studio không liên quan.
+    const typed = typedText((Array.isArray(messages) ? (messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
+    const want = ruleStudios("", typed).scores;
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
-    const raw = suggest(lastUserText(messages), list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
+    const raw = suggest(typed, list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
     const votes = new Map<string, number>();
     for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
     // Skill ở nhiều thư viện (Synchro tự xếp một skill vào 2–3 mục) mà phiếu ngang nhau: nghiêng về mục chính câu yêu cầu nói tới
     // ("làm slide thuyết trình" → Trình bày). Điểm nhỏ, chỉ để phân định khi gần bằng nhau.
-    const intent = ruleStudios("", lastUserText(messages)).scores;
+    const intent = want;
     for (const k of STUDIOS) if (intent[k] > 0) votes.set(`studio-${k}`, (votes.get(`studio-${k}`) ?? 0) + intent[k] * 0.01);
     const pick = (n: string) => (libs[n] ?? []).slice().sort((a, b) => (votes.get(b.key) ?? 0) - (votes.get(a.key) ?? 0))[0];
     const hits = raw.map((h) => ({ ...h, lib: pick(h.skill.name) }));

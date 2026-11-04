@@ -116,9 +116,9 @@ export function SaveSkillModal({ rules, onClose, onDone }: { rules: string[]; on
   };
 
   return (
-    <div className="sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="sk-modal ss-modal" role="dialog" aria-label={tr("Lưu cách làm thành skill")}>
-        <div className="sk-mh"><b>{tr("Lưu cách làm thành skill")}</b><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} disabled={busy} onClick={onClose}>×</button></div>
+        <div className="sk-mh"><b>{tr("Lưu cách làm thành skill")}</b><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} disabled={busy} onClick={onClose} aria-label={tr("Đóng")}>×</button></div>
         <p className="d" style={{ margin: "0 0 12px" }}>{tr("Synchro sẽ tự đọc skill này khi yêu cầu có liên quan, ở mọi đoạn chat. Bạn tắt hoặc sửa nó trong Kho kỹ năng.")}</p>
         {rules.length > 1 && (
           <div className="ss-rules">

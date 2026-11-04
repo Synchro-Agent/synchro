@@ -12,15 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl wget ca-certificates socat procps less vim nano unzip zip file bc \
       ripgrep jq tree htop build-essential openssh-client \
       ffmpeg imagemagick librsvg2-bin poppler-utils qpdf ghostscript pandoc graphviz sox libsox-fmt-mp3 \
-      tesseract-ocr tesseract-ocr-vie libcairo2 libsndfile1 \
+      tesseract-ocr tesseract-ocr-vie libcairo2 libsndfile1 espeak-ng \
       libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui \
   && rm -rf /var/lib/apt/lists/*
 
 # Thư viện để code trong chat tạo tệp (Word, Excel, PowerPoint, PDF, biểu đồ, ảnh, âm thanh, video) và phân tích dữ liệu.
+# moviepy<2: bản 2 bỏ moviepy.editor, cách model quen viết. espeak-ng (ở trên) là giọng đọc duy nhất chạy được khi không có mạng.
 RUN pip install --break-system-packages --no-cache-dir \
       pandas numpy matplotlib openpyxl python-docx python-pptx reportlab \
       scipy scikit-learn statsmodels sympy networkx seaborn "plotly<6" "kaleido==0.2.1" pyarrow xlsxwriter tabulate \
-      pillow imageio moviepy opencv-python-headless pydub cairosvg qrcode \
+      pillow imageio "moviepy<2" opencv-python-headless pydub cairosvg qrcode \
       pypdf pdfplumber pymupdf pytesseract beautifulsoup4 lxml requests markdown jinja2 pyyaml \
       edge-tts gTTS srt
 

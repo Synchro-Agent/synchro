@@ -84,6 +84,48 @@ async function pptx() {
 <p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="5" name="g"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="3000000" y="1500000"/><a:ext cx="4000000" cy="3000000"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rId2"/></a:graphicData></a:graphic></p:graphicFrame></p:spTree></p:cSld></p:sld>`,
   });
 }
+// Định dạng có điều kiện kiểu xlsxwriter, biểu đồ có nhãn theo chuỗi và tiêu đề trục.
+const DEF = `${H}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>`;
+const stackChart = `${H}<c:chartSpace ${CHARTNS}><c:chart><c:plotArea><c:barChart><c:barDir val="col"/><c:grouping val="stacked"/>${[["A", [10, 20]], ["B", [30, 40]]].map(([n, vs], i) => `<c:ser><c:idx val="${i}"/><c:tx><c:v>${n}</c:v></c:tx><c:dLbls><c:showVal val="1"/></c:dLbls><c:cat><c:strLit><c:ptCount val="2"/><c:pt idx="0"><c:v>Q1</c:v></c:pt><c:pt idx="1"><c:v>Q2</c:v></c:pt></c:strLit></c:cat><c:val><c:numLit><c:ptCount val="2"/>${vs.map((v, k) => `<c:pt idx="${k}"><c:v>${v}</c:v></c:pt>`).join("")}</c:numLit></c:val></c:ser>`).join("")}</c:barChart><c:catAx><c:axPos val="b"/><c:title><c:tx><c:rich><a:p><a:r><a:t>Quý trong năm</a:t></a:r></a:p></c:rich></c:tx></c:title></c:catAx><c:valAx><c:axPos val="l"/><c:title><c:tx><c:rich><a:p><a:r><a:t>Triệu đồng</a:t></a:r></a:p></c:rich></c:tx></c:title></c:valAx></c:plotArea></c:chart></c:chartSpace>`;
+async function xlsxCF() {
+  const rows = [10, 50, 100, 200].map((v, i) => `<row r="${i + 1}"><c r="A${i + 1}"><v>${v}</v></c><c r="B${i + 1}"><v>${v}</v></c><c r="C${i + 1}"><v>${v}</v></c><c r="D${i + 1}"><v>${v}</v></c><c r="E${i + 1}"><v>${v}</v></c></row>`).join("");
+  const cf = `<conditionalFormatting sqref="A1:A4"><cfRule type="cellIs" dxfId="0" priority="1" operator="greaterThan"><formula>100</formula></cfRule></conditionalFormatting><conditionalFormatting sqref="B1:B4"><cfRule type="colorScale" priority="2"><colorScale><cfvo type="min"/><cfvo type="max"/><color rgb="FFFFFFFF"/><color rgb="FF00FF00"/></colorScale></cfRule></conditionalFormatting><conditionalFormatting sqref="C1:C4"><cfRule type="dataBar" priority="3"><dataBar><cfvo type="min"/><cfvo type="max"/><color rgb="FF638EC6"/></dataBar></cfRule></conditionalFormatting><conditionalFormatting sqref="D1:D4"><cfRule type="expression" dxfId="0" priority="4"><formula>$A1&gt;=100</formula></cfRule><cfRule type="expression" dxfId="0" priority="5"><formula>SUM($A$1:$A1)&gt;10</formula></cfRule></conditionalFormatting><conditionalFormatting sqref="E1:E4"><cfRule type="top10" dxfId="0" priority="6" rank="1"/></conditionalFormatting>`;
+  return zip({
+    "[Content_Types].xml": DEF, "_rels/.rels": rels([["rId1", "officeDocument", "xl/workbook.xml"]]),
+    "xl/workbook.xml": `${H}<workbook ${SM}><sheets><sheet name="CF" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": rels([["rId1", "worksheet", "worksheets/sheet1.xml"], ["rId2", "styles", "styles.xml"]]),
+    "xl/styles.xml": `${H}<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="1"><xf/></cellXfs><dxfs count="1"><dxf><font><b/><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFC7CE"/></patternFill></fill></dxf></dxfs></styleSheet>`,
+    "xl/worksheets/sheet1.xml": `${H}<worksheet ${SM}><sheetData>${rows}</sheetData>${cf}<drawing r:id="rId1"/></worksheet>`,
+    "xl/worksheets/_rels/sheet1.xml.rels": rels([["rId1", "drawing", "../drawings/drawing1.xml"]]),
+    "xl/drawings/drawing1.xml": `${H}<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><xdr:twoCellAnchor><xdr:from><xdr:col>6</xdr:col><xdr:row>0</xdr:row></xdr:from><xdr:to><xdr:col>14</xdr:col><xdr:row>20</xdr:row></xdr:to><xdr:graphicFrame><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="${REL}" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame></xdr:twoCellAnchor></xdr:wsDr>`,
+    "xl/drawings/_rels/drawing1.xml.rels": rels([["rId1", "chart", "../charts/chart1.xml"]]),
+    "xl/charts/chart1.xml": stackChart,
+  });
+}
+// Phụ lục xoay ngang của python-docx: mục sau không ghi lại đầu / chân trang; mục giữa có hai cột.
+async function docxSections() {
+  const para = (t, n) => Array.from({ length: n }, (_, i) => `<w:p><w:r><w:t>${t} ${i}</w:t></w:r></w:p>`).join("");
+  const refs = `<w:headerReference w:type="default" r:id="rId1"/><w:footerReference w:type="default" r:id="rId2"/>`;
+  return zip({
+    "[Content_Types].xml": DEF, "_rels/.rels": rels([["rId1", "officeDocument", "word/document.xml"]]),
+    "word/_rels/document.xml.rels": rels([["rId1", "header", "header1.xml"], ["rId2", "footer", "footer1.xml"]]),
+    "word/header1.xml": `${H}<w:hdr ${WN}><w:p><w:r><w:t>ĐẦU TRANG CHUNG</w:t></w:r></w:p></w:hdr>`,
+    "word/footer1.xml": `${H}<w:ftr ${WN}><w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>`,
+    "word/document.xml": `${H}<w:document ${WN}><w:body>${para("Mục một", 3)}<w:p><w:pPr><w:sectPr>${refs}<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/></w:sectPr></w:pPr></w:p>${para("Hai cột", 120)}<w:p><w:pPr><w:sectPr><w:type w:val="nextPage"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/><w:cols w:num="2" w:space="400"/></w:sectPr></w:pPr></w:p>${para("Phụ lục", 3)}<w:sectPr><w:type w:val="nextPage"/><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/></w:sectPr></w:body></w:document>`,
+  });
+}
+async function pptxShapes() {
+  const shape = (id, prst, x, y, extra = "") => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${prst}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="1000000" cy="800000"/></a:xfrm><a:prstGeom prst="${prst}"><a:avLst>${extra}</a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="2255AA"/></a:solidFill><a:ln w="19050"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></p:spPr></p:sp>`;
+  const names = ["cloud", "heart", "star8", "donut", "wedgeRectCallout", "wave", "flowChartDocument", "mathMultiply", "leftBrace", "can", "pie", "lightningBolt"];
+  return zip({
+    "[Content_Types].xml": DEF,
+    "ppt/presentation.xml": `${H}<p:presentation ${PN}><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>`,
+    "ppt/_rels/presentation.xml.rels": rels([["rId1", "slide", "slides/slide1.xml"]]),
+    "ppt/slides/_rels/slide1.xml.rels": rels([["rId2", "chart", "../charts/chart1.xml"]]),
+    "ppt/charts/chart1.xml": stackChart,
+    "ppt/slides/slide1.xml": `${H}<p:sld ${PN}><p:cSld><p:spTree>${names.map((n, i) => shape(i + 2, n, 100000 + (i % 4) * 1200000, 100000 + Math.floor(i / 4) * 1100000)).join("")}<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="50" name="g"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="5000000" y="100000"/><a:ext cx="4000000" cy="3000000"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rId2"/></a:graphicData></a:graphic></p:graphicFrame></p:spTree></p:cSld></p:sld>`,
+  });
+}
 function pdfBook(n) {
   // PDF tối thiểu: mỗi trang một đối tượng; pdf.js tự dựng lại bảng xref khi thiếu.
   const objs = ["<< /Type /Catalog /Pages 2 0 R >>", `<< /Type /Pages /Count ${n} /Kids [${Array.from({ length: n }, (_, i) => `${i + 3} 0 R`).join(" ")}] >>`];
@@ -127,6 +169,8 @@ async function open(name, buf, t) {
   let st = null; for (let i = 0; i < 300 && !st; i++) { await sleep(50); st = await ev("window.__st.find(function(x){return x.t==='done'||x.t==='error'})||null"); }
   return { st, ms: Date.now() - t0 };
 }
+// OV_SHOT=<thư mục>: lưu ảnh khung xem để tự nhìn bằng mắt.
+const shot = async (n) => { if (!process.env.OV_SHOT) return; const { data } = await P("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(path.join(process.env.OV_SHOT, n + ".png"), Buffer.from(data, "base64")); };
 try {
   console.log("1. Excel");
   let r = await open("bao-cao.xlsx", await xlsxBook());
@@ -157,6 +201,24 @@ try {
   const csv = await open("a.csv", Buffer.from("ten,so\nAo,1\n"));
   ok(csv.st?.t === "done" && /Ao/.test(await ev(`document.querySelector(".sheet").textContent`)), "CSV vẫn mở được");
 
+  console.log("1b. Excel: định dạng có điều kiện, nhãn biểu đồ");
+  r = await open("cf.xlsx", await xlsxCF());
+  ok(r.st?.t === "done", "mở được", JSON.stringify(r.st));
+  const cfv = await ev(`(()=>{const cell=(c,rr)=>{const t=document.querySelector(".sheet table");const i=c.charCodeAt(0)-64;return t.querySelectorAll("tr")[rr].children[i]};const s=(e)=>getComputedStyle(e);return {a3:s(cell("A",3)).backgroundColor,a4:s(cell("A",4)).backgroundColor,a4c:s(cell("A",4)).color,a4w:s(cell("A",4)).fontWeight,b1:s(cell("B",1)).backgroundColor,b4:s(cell("B",4)).backgroundColor,c1:s(cell("C",1)).backgroundImage,c4:s(cell("C",4)).backgroundImage,d2:s(cell("D",2)).backgroundColor,d3:s(cell("D",3)).backgroundColor,e4:s(cell("E",4)).backgroundColor,e3:s(cell("E",3)).backgroundColor,note:document.querySelector(".note")?.textContent||""}})()`);
+  ok(cfv.a4 === "rgb(255, 199, 206)" && cfv.a4c === "rgb(156, 0, 6)" && Number(cfv.a4w) >= 700 && cfv.a3 !== cfv.a4, "cellIs: chỉ ô vượt hạn mức tô đỏ, đậm", JSON.stringify(cfv));
+  ok(cfv.b1 === "rgb(255, 255, 255)" && cfv.b4 === "rgb(0, 255, 0)", "thang màu đúng hai đầu", JSON.stringify(cfv));
+  ok(/gradient/.test(cfv.c1) && /gradient/.test(cfv.c4) && /10(\.0)?%/.test(cfv.c1) && /90(\.0)?%/.test(cfv.c4), "thanh dữ liệu dài theo giá trị", JSON.stringify(cfv));
+  ok(cfv.d3 === "rgb(255, 199, 206)" && cfv.d2 !== cfv.d3, "công thức so sánh có ô tương đối tính theo từng dòng", JSON.stringify(cfv));
+  ok(cfv.e4 === "rgb(255, 199, 206)" && cfv.e3 !== cfv.e4, "top 1 chỉ tô giá trị lớn nhất", JSON.stringify(cfv));
+  ok(/^1 quy tắc định dạng có điều kiện chưa hiện được/.test(cfv.note), "quy tắc chưa vẽ được thì nói rõ, không im lặng", cfv.note);
+  await sleep(300);
+  const xc = await ev(`(()=>{const s=document.querySelector(".ch svg");return s?[...s.querySelectorAll("text")].map(t=>({t:t.textContent,tr:t.getAttribute("transform")||""})):null})()`);
+  ok(xc && xc.some((t) => t.t === "Quý trong năm") && xc.some((t) => t.t === "Triệu đồng" && /rotate/.test(t.tr)), "tiêu đề trục ngang, trục dọc", JSON.stringify(xc));
+  ok(xc && ["10", "20", "30", "40"].every((v) => xc.some((t) => t.t === v)), "nhãn ghi ở từng chuỗi: đủ nhãn của mọi đoạn trong cột chồng", JSON.stringify(xc));
+  const lastIsLabel = await ev(`(()=>{const k=[...document.querySelector(".ch svg").children];const li=k.map((e,i)=>e.textContent==="10"?i:-1).filter(i=>i>=0).pop();const lr=k.map((e,i)=>e.tagName==="rect"?i:-1).filter(i=>i>=0).pop();return li>lr})()`);
+  ok(lastIsLabel, "nhãn vẽ sau mọi cột nên không bị đoạn trên che");
+  await shot("cf");
+
   console.log("2. Word");
   r = await open("bao-cao.docx", await docx());
   ok(r.st?.t === "done" && r.st.pages >= 3, "chia trang: ngắt trang chủ động và tràn trang", JSON.stringify(r.st));
@@ -179,17 +241,38 @@ try {
   ok(narrow.n === wide && narrow.w <= 520 && narrow.sw <= 520 && !narrow.over, "khung hẹp: trang thu lại vừa khung, số trang không đổi", JSON.stringify(narrow));
   await P("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
 
+  console.log("2b. Word: nhiều mục");
+  r = await open("muc.docx", await docxSections());
+  const ds = await ev(`[...document.querySelectorAll(".dp")].map(p=>({w:parseFloat(p.style.width),hd:p.querySelector(".dph")?.textContent||"",ft:p.querySelector(".dpf")?.textContent||"",cols:p.querySelector(".dpb > div")?.style.columnCount||"",over:p.querySelector(".dpb").scrollHeight>p.querySelector(".dpb").clientHeight+1,txt:p.querySelector(".dpb").textContent.slice(0,12)}))`);
+  ok(ds.length >= 3 && ds.every((p) => p.hd === "ĐẦU TRANG CHUNG"), "mục sau không khai báo vẫn có đầu trang của mục trước", JSON.stringify(ds));
+  ok(ds.every((p, i) => p.ft === String(i + 1)), "chân trang và số trang đúng ở mọi mục", JSON.stringify(ds));
+  ok(ds[ds.length - 1].w > ds[0].w, "mục cuối xoay ngang", JSON.stringify(ds));
+  ok(ds.some((p) => p.cols === "2" && /^Hai cột/.test(p.txt)), "w:cols num=2 hiện hai cột", JSON.stringify(ds));
+  ok(ds.every((p) => !p.over), "không trang nào tràn", JSON.stringify(ds));
+  await shot("docx");
+
   console.log("3. PowerPoint");
   r = await open("deck.pptx", await pptx());
   ok(r.st?.t === "done" && r.st.pages === 1, "mở được", JSON.stringify(r.st));
   ok((await ev(`document.querySelectorAll(".ph").length`)) === 0, "không còn ô xám 'Biểu đồ / đối tượng'");
-  const cs = await ev(`(()=>{const s=document.querySelector(".sl svg");return s?{bars:s.querySelectorAll("rect").length,text:s.textContent}:null})()`);
+  const cs = await ev(`(()=>{const s=document.querySelector(".sl svg:not(.geo)");return s?{bars:s.querySelectorAll("rect").length,text:s.textContent}:null})()`);
   ok(cs && cs.bars >= 3 && /Doanh thu năm/.test(cs.text), "biểu đồ vẽ từ số lưu sẵn trong tệp", JSON.stringify(cs));
-  const geo = await ev(`(()=>{const g=document.querySelector(".geo");return g?{clip:getComputedStyle(g).clipPath,bg:getComputedStyle(g).backgroundColor,text:g.parentElement.textContent,tc:getComputedStyle(g.parentElement.querySelector("span")).color}:null})()`);
-  ok(geo && /^polygon/.test(geo.clip) && geo.bg === "rgb(200, 30, 30)" && geo.text === "Mũi tên", "chevron vẽ đúng hình, không phải hình chữ nhật", JSON.stringify(geo));
+  const geo = await ev(`(()=>{const g=document.querySelector(".geo");return g?{pts:g.querySelector("polygon")?.getAttribute("points").split(" ").length,fill:g.querySelector("polygon")?.getAttribute("fill"),text:g.parentElement.textContent,tc:getComputedStyle(g.parentElement.querySelector("span")).color}:null})()`);
+  ok(geo && geo.pts === 6 && /^#c81e1e$/i.test(geo.fill) && geo.text === "Mũi tên", "chevron vẽ đúng hình, không phải hình chữ nhật", JSON.stringify(geo));
   ok(geo?.tc === "rgb(255, 255, 255)", "chữ trong hình lấy màu từ kiểu hình (fontRef)", JSON.stringify(geo));
   ok((await ev(`getComputedStyle([...document.querySelectorAll(".sh p")].find(p=>p.textContent==="Tiêu đề căn giữa")).textAlign`)) === "center", "tiêu đề thừa kế căn giữa từ master");
   ok((await ev(`[...document.querySelectorAll(".sh")].some(d=>getComputedStyle(d).backgroundColor==="rgb(17, 34, 51)")`)), "hình không tô riêng lấy màu chủ đề từ kiểu hình (fillRef)");
+
+  console.log("3b. PowerPoint: thêm hình, nhãn cột chồng");
+  r = await open("hinh.pptx", await pptxShapes());
+  const sh = await ev(`[...document.querySelectorAll(".sl .sh")].slice(0,12).map(d=>{const g=d.querySelector("svg.geo");const p=g&&g.querySelector("polygon,polyline,path");return {pts:p?(p.getAttribute("points")||p.getAttribute("d")).split(" ").length:0,fill:p?p.getAttribute("fill"):"",stroke:p?p.getAttribute("stroke"):"",bg:getComputedStyle(d).backgroundColor,ov:getComputedStyle(d).overflow,tag:p?p.tagName:""}})`);
+  ok(sh.length === 12 && sh.every((s) => s.pts >= 4 && s.bg === "rgba(0, 0, 0, 0)"), "cloud, heart, star8, donut, khung thoại, wave… không còn là hình chữ nhật", JSON.stringify(sh));
+  ok(sh.filter((s) => s.tag !== "polyline").every((s) => /^#2255aa$/i.test(s.fill) && /^#ff0000$/i.test(s.stroke)), "hình có cả màu tô và viền", JSON.stringify(sh[0]));
+  ok(sh[4].ov === "visible", "mũi khung thoại thò ra ngoài khung hình vẫn hiện", JSON.stringify(sh[4]));
+  ok(sh[8].tag === "polyline" && sh[8].fill === "none", "ngoặc nhọn chỉ có nét, không tô", JSON.stringify(sh[8]));
+  const pc = await ev(`[...document.querySelector(".sl svg:not(.geo)").querySelectorAll("text")].map(t=>t.textContent)`);
+  ok(["10", "20", "30", "40"].every((v) => pc.includes(v)), "slide: cột chồng có nhãn từng đoạn", JSON.stringify(pc));
+  await shot("shapes");
 
   console.log("4. PDF");
   r = await open("dai.pdf", pdfBook(1005));

@@ -414,7 +414,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
             {modal === "domains" ? (
               <>
                 <h2>Package manager domains</h2>
-                <p className="d">With network egress on, code can reach these registries (and their subdomains). Turn on “Reach the whole public web” to let it reach any public website as well. Addresses inside the server and private networks are always blocked.</p>
+                <p className="d">With network egress on, code can reach these registries and voice-over services (and their subdomains). Voice-over text is sent to Microsoft (edge-tts) or Google (gTTS) to be read aloud. Turn on “Reach the whole public web” to let code reach any public website as well. Addresses inside the server and private networks are always blocked.</p>
                 <div className="cap-domains">{PKG_DOMAINS.map((g) => <div key={g.group}><b>{g.group}</b>{g.hosts.map((h) => <code key={h}>{h}</code>)}</div>)}</div>
               </>
             ) : (
@@ -422,7 +422,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
                 <h2>Security risks of network egress</h2>
                 <ul className="cap-risks">
                   <li>Packages from public registries can contain malicious code. It runs inside an isolated sandbox, separate from the server and from other accounts.</li>
-                  <li>Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries reachable, which limits but does not remove that risk.</li>
+                  <li>Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries and voice-over services reachable, which limits but does not remove that risk.</li>
                   <li>Review what Synchro runs, especially in chats that use files or connectors you don&apos;t fully trust. Turn this off when you don&apos;t need extra packages.</li>
                 </ul>
               </>

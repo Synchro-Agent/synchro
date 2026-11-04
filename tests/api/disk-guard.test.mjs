@@ -23,22 +23,13 @@ ok(code === 507, "tải tệp lên bị từ chối bằng 507", code);
 ok(O.outputsFull() && O.saveOutputs(uid, [file("a.txt", 10)]).length === 0, "tệp do code tạo không được lưu");
 process.env.SYNCHRO_MIN_FREE_MB = "1";
 
-console.log("2. Hạn mức tệp do code tạo");
+console.log("2. Hạn mức tệp do code tạo: chỉ từ chối tệp mới, không xóa tệp cũ");
 const a = O.saveOutputs(uid, [file("a.bin", 0.6 * MB)]);
-await new Promise((r) => setTimeout(r, 5));
-const b = O.saveOutputs(uid, [file("b.bin", 0.3 * MB)]);
-ok(O.outputFile(uid, a[0].id) && O.outputFile(uid, b[0].id), "chưa vượt: giữ cả hai");
-await new Promise((r) => setTimeout(r, 5));
-const c = O.saveOutputs(uid, [file("c.bin", 0.5 * MB)]);
-ok(!O.outputFile(uid, a[0].id), "vượt hạn mức: tệp cũ nhất bị bỏ");
-ok(!fs.existsSync(path.join(tmp, "outputs", uid, a[0].id)), "và khỏi đĩa");
-ok(O.outputFile(uid, b[0].id) && O.outputFile(uid, c[0].id), "tệp mới hơn còn nguyên");
-const big = O.saveOutputs(uid, [file("big.bin", 2 * MB)]);
-ok(O.outputFile(uid, big[0].id), "tệp vừa tạo không bao giờ bị bỏ, kể cả khi một mình nó vượt hạn mức");
-ok(!O.outputFile(uid, c[0].id), "tệp cũ hơn đã nhường chỗ");
-const other = O.saveOutputs("user-disk-2", [file("o.bin", 0.1 * MB)]);
-O.saveOutputs(uid, [file("big2.bin", 2 * MB)]);
-ok(O.outputFile("user-disk-2", other[0].id), "không đụng tệp của người khác");
+ok(O.outputRoom(uid) <= 0.41 * MB && O.outputRoom(uid) >= 0.39 * MB, "còn đúng phần dư", O.outputRoom(uid));
+const b = O.saveOutputs(uid, [file("b.bin", 0.6 * MB)]);
+ok(O.outputRoom(uid) === 0, "vượt hạn mức: hết chỗ", O.outputRoom(uid));
+ok(O.outputFile(uid, a[0].id) && O.outputFile(uid, b[0].id), "tệp cũ còn nguyên");
+ok(O.outputRoom("user-disk-2") === MB, "tài khoản khác không bị ảnh hưởng", O.outputRoom("user-disk-2"));
 
 console.log("3. Dọn tệp quá hạn");
 const old = O.saveOutputs("user-disk-3", [file("old.bin", 10)]);

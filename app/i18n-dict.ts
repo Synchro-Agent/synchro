@@ -50,6 +50,9 @@ export const VI2EN: Record<string, string> = {
   "Không sao chép được, hãy chép tay": "Couldn't copy. Please copy it by hand.",
   "Dừng chia sẻ?": "Stop sharing?",
   "Liên kết sẽ hết hiệu lực ngay và bản chụp trên máy chủ bị xóa.": "The link stops working right away and the snapshot on the server is deleted.",
+  "{n} quy tắc định dạng có điều kiện chưa hiện được trong bản xem trước; tệp vẫn đủ, mở bằng Excel để thấy.": "{n} conditional formatting rule(s) can't be shown in this preview. The file still has them; open it in Excel to see them.",
+  "Chưa giao được: vượt giới hạn dung lượng hoặc số tệp": "Not delivered: over the size or file count limit",
+  "Phần này tự chuyển sang một trang khác nên Synchro đã dừng hiển thị.": "This part tried to move to another page, so Synchro stopped showing it.",
   "Bản chia sẻ chỉ đọc": "Read-only shared copy",
   "Người dùng": "User",
   "Phiên bản cũ của": "Older version of",
@@ -2094,7 +2097,18 @@ addNew(VI2EN, UX_VI2EN);
 addNew(EN2VI, UX_EN2VI);
 addNew(VI2EN, FX_VI2EN);
 addNew(EN2VI, FX_EN2VI);
+// Artifact, chia sẻ, xuất tệp.
+addNew(VI2EN, {
+  "Mọi phiên bản của artifact này sẽ bị xóa, không hoàn tác được.": "Every version of this artifact will be deleted. This can't be undone.",
+  "Chưa xóa được artifact. Hãy thử lại.": "Couldn't delete the artifact. Please try again.",
+  "Xóa artifact": "Delete artifact",
+  "Phần này do người chia sẻ tạo, không phải trang của Synchro. Đừng nhập mật khẩu hay thông tin thanh toán vào đây.": "This part was made by the person who shared it and isn't a Synchro page. Don't enter passwords or payment details here.",
+  "Báo cáo nội dung này": "Report this content", "Nội dung này có vấn đề gì?": "What's wrong with this content?", "Gửi báo cáo": "Send report",
+  "Đã gửi báo cáo. Cảm ơn bạn.": "Report sent. Thank you.", "Chưa gửi được, hãy thử lại sau ít phút.": "Couldn't send it. Please try again in a few minutes.",
+  "Bản chia sẻ chỉ đọc": "Read-only shared copy", "Không tìm thấy bản chia sẻ này.": "This shared copy wasn't found.",
+});
 RULES_EN.push(...UX_RULES_EN);
+RULES_EN.push([/^(\d+) ảnh không đưa được vào bản chia sẻ nên người xem sẽ không thấy$/, (m) => `${m[1]} image(s) couldn't be included in the shared copy, so viewers won't see them`]);
 RULES_VI.push(...UX_RULES_VI);
 addNew(VI2EN, OPS_VI2EN);
 addNew(EN2VI, OPS_EN2VI);
@@ -2324,6 +2338,7 @@ Object.assign(VI2EN, {
   "Dữ liệu được gửi cho ai": "Who data is sent to",
   "Nhà cung cấp mô hình AI bạn chọn": "The AI model provider you choose",
   "(Anthropic, OpenAI, Google, xAI): tin nhắn, tệp đính kèm, kết quả công cụ của lượt đó, thường qua gói đăng ký bạn đã đăng nhập. Cách họ dùng dữ liệu theo chính sách của họ và gói của bạn.": "(Anthropic, OpenAI, Google, xAI): the messages, attachments and tool results of that turn, normally through the plan you signed in with. How they use the data depends on their policy and your plan.",
+  "Microsoft, Google (giọng đọc video):": "Microsoft, Google (video voice-over):", "lời đọc, khi bạn nhờ làm video có giọng và đã bật truy cập mạng cho code.": "the narration text, when you ask for a video with a voice and have network egress on for code.",
   "ElevenLabs:": "ElevenLabs:", "văn bản và âm thanh khi bạn dùng tính năng giọng nói.": "text and audio when you use voice features.",
   "Connector, GitHub, trang web:": "Connectors, GitHub, websites:",
   "chỉ khi bạn kết nối hoặc yêu cầu; nội dung cần cho thao tác đó được gửi tới dịch vụ tương ứng.": "only when you connect or ask for them; the content needed for that action is sent to that service.",
@@ -2506,9 +2521,12 @@ Object.assign(EN2VI, { "Paste a git repository link (GitHub, GitLab…)": "Dán 
 Object.assign(EN2VI, {
   "Reach the whole public web": "Truy cập mọi trang web công khai",
   "Code can also download images, fonts and data from any public website and call public APIs, not just package registries. Addresses inside the server and private networks stay blocked.": "Code tải được cả ảnh, phông chữ, dữ liệu từ mọi trang web công khai và gọi API công khai, không chỉ kho thư viện. Địa chỉ bên trong máy chủ và mạng riêng vẫn bị chặn.",
-  "With network egress on, code can reach these registries (and their subdomains). Turn on “Reach the whole public web” to let it reach any public website as well. Addresses inside the server and private networks are always blocked.": "Khi bật truy cập mạng, code tới được các kho thư viện này (và tên miền con của chúng). Bật “Truy cập mọi trang web công khai” để code tới được cả mọi trang web công khai. Địa chỉ bên trong máy chủ và mạng riêng luôn bị chặn.",
+  "With network egress on, code can reach these registries and voice-over services (and their subdomains). Voice-over text is sent to Microsoft (edge-tts) or Google (gTTS) to be read aloud. Turn on “Reach the whole public web” to let code reach any public website as well. Addresses inside the server and private networks are always blocked.": "Khi bật truy cập mạng, code tới được các kho thư viện và dịch vụ giọng đọc này (và tên miền con của chúng). Lời cần đọc được gửi tới Microsoft (edge-tts) hoặc Google (gTTS) để đọc thành tiếng. Bật “Truy cập mọi trang web công khai” để code tới được cả mọi trang web công khai. Địa chỉ bên trong máy chủ và mạng riêng luôn bị chặn.",
+  "Voice-over (edge-tts, gTTS)": "Giọng đọc (edge-tts, gTTS)",
+  "Reported shared links": "Liên kết chia sẻ bị báo cáo", "No reports.": "Chưa có báo cáo nào.", "Take down": "Gỡ", "Taken down": "Đã gỡ", "Shared link taken down": "Đã gỡ liên kết chia sẻ",
+  "Take down this shared link?": "Gỡ liên kết chia sẻ này?", "The snapshot is deleted and the link stops working for everyone. This can't be undone.": "Bản chụp bị xóa và liên kết hết hiệu lực với mọi người. Không hoàn tác được.",
   "Packages from public registries can contain malicious code. It runs inside an isolated sandbox, separate from the server and from other accounts.": "Gói từ kho công khai có thể chứa mã độc. Mã đó chỉ chạy trong sandbox cô lập, tách khỏi máy chủ và các tài khoản khác.",
-  "Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries reachable, which limits but does not remove that risk.": "Nội dung Synchro đọc (trang web, tệp, kết quả connector) có thể tìm cách lừa nó cài gói hoặc gửi dữ liệu ra ngoài. Tắt “Truy cập mọi trang web công khai” thì chỉ kho thư viện là truy cập được, nên rủi ro giảm bớt nhưng không mất hẳn.",
+  "Content Synchro reads (web pages, files, connector results) could try to trick it into installing a package or sending data out. Keeping “Reach the whole public web” off leaves only package registries and voice-over services reachable, which limits but does not remove that risk.": "Nội dung Synchro đọc (trang web, tệp, kết quả connector) có thể tìm cách lừa nó cài gói hoặc gửi dữ liệu ra ngoài. Tắt “Truy cập mọi trang web công khai” thì chỉ kho thư viện và dịch vụ giọng đọc là truy cập được, nên rủi ro giảm bớt nhưng không mất hẳn.",
 });
 
 // Connector: duyệt công cụ ngay trong chat qua CLI, kết nối lại trong khung chat, token tự nhập, hãng chưa duyệt Synchro, lỗi tạm thời.

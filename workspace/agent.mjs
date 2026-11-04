@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
-import { collectOutputs, createRunQueue, QueueFull, safeWrite } from "./safefs.mjs";
+import { clipSink, collectOutputs, createRunQueue, QueueFull, safeWrite } from "./safefs.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const PORT = Number(env("WS_AGENT_PORT", 3555));
@@ -37,6 +37,7 @@ const RUN_MAX = Number(env("WS_RUN_MAX", 3));
 // Dựng video / chuyển tài liệu bằng LibreOffice / Chromium cần nhiều bộ nhớ hơn một script phân tích dữ liệu.
 const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
 // Tệp code ghi vào outputs/ được gửi về: tối đa 20 tệp, mỗi tệp 100 MB, tổng 150 MB (đủ cho video MP4 vài phút).
+// RUN_PREVIEWS: giữ bằng PREVIEW_MAX trong app/runpreview.ts (quy tắc hứa với model tối đa bằng đó ảnh tự xem).
 const RUN_FILES = 20, RUN_PREVIEWS = 12, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
 // Hết chỗ chạy thì xếp hàng (có giới hạn) thay vì báo lỗi ngay: một chỗ luôn dành cho lần chạy ngắn, người đang chạy ít nhất được chọn trước.
 const RUN_QUEUE = Number(env("WS_RUN_QUEUE", 20)), RUN_QUEUE_USER = Number(env("WS_RUN_QUEUE_USER", 4)), RUN_WAIT_SEC = Number(env("WS_RUN_WAIT_SEC", 240));
@@ -51,7 +52,8 @@ const KEEP_MS = 24 * 3_600_000, KEEP_MB = 3000;
 // Giữ giống PKG_DOMAINS trong app/catalog.ts.
 const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "registry.npmjs.org", "npmjs.org", "npmjs.com", "registry.yarnpkg.com", "yarnpkg.com",
   "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org", "sum.golang.org", "conda.anaconda.org", "repo.anaconda.com",
-  "github.com", "codeload.github.com", "objects.githubusercontent.com", "deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com"];
+  "github.com", "codeload.github.com", "objects.githubusercontent.com", "deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com",
+  "speech.platform.bing.com", "translate.google.com"];
 const MAX_RUNNING = Number(env("WS_MAX_RUNNING", 4));
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
@@ -72,19 +74,20 @@ class E extends Error { constructor(status, m) { super(m); this.status = status;
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 // ------------------------------------------------------------------ tiện ích tiến trình / Docker
-function run(cmd, args, { input, timeout = 60_000, max = 2_000_000 } = {}) {
+// clip: lần chạy của người dùng giữ đầu và cuối log thay vì dừng gom ở max: lỗi thật của một lần dựng dài nằm ở cuối.
+function run(cmd, args, { input, timeout = 60_000, max = 2_000_000, clip = false } = {}) {
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
-    const out = [], err = [];
+    const out = [], err = [], so = clipSink(), se = clipSink();
     let n = 0, truncated = false, killed = false;
-    const take = (arr) => (c) => { if (n >= max) { truncated = true; return; } arr.push(c); n += c.length; };
-    p.stdout.on("data", take(out));
-    p.stderr.on("data", take(err));
+    const take = (arr, sink) => (c) => { if (clip) return sink.push(c); if (n >= max) { truncated = true; return; } arr.push(c); n += c.length; };
+    p.stdout.on("data", take(out, so));
+    p.stderr.on("data", take(err, se));
     const t = setTimeout(() => { killed = true; p.kill("SIGKILL"); }, timeout);
     p.on("error", (e) => { clearTimeout(t); resolve({ code: 127, out: "", err: String(e), truncated }); });
     p.on("close", (code) => {
       clearTimeout(t);
-      resolve({ code: killed ? 124 : code ?? 1, out: Buffer.concat(out).toString("utf8"), err: Buffer.concat(err).toString("utf8"), truncated });
+      resolve({ code: killed ? 124 : code ?? 1, out: clip ? so.text() : Buffer.concat(out).toString("utf8"), err: clip ? se.text() : Buffer.concat(err).toString("utf8"), truncated });
     });
     p.stdin.on("error", () => {});
     if (input != null) p.stdin.end(input); else p.stdin.end();
@@ -441,7 +444,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
       log("dừng lần chạy tốn đĩa", u, `${mb} MB`, `còn trống ${free} MB`);
       run("docker", ["rm", "-f", name], { timeout: 20_000 });
     }, 20_000);
-    const r = await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, max: 400_000 });
+    const r = await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
     clearInterval(watcher); watcher = null;
     // Đã dừng: không ai chờ kết quả; tệp dở nằm lại ở .last_outputs/ (khối finally).
     if (signal?.aborted) return { code: 130, out: r.out, err: r.err, timedOut: false, files: [] };
@@ -463,7 +466,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     const got = clean ? collectOutputs(`${dir}/outputs`, { files: RUN_FILES, previews: RUN_PREVIEWS, fileBytes: RUN_FILE_MB * 1048576, totalBytes: RUN_TOTAL_MB * 1048576 }) : { files: [], skipped: ["outputs: không dừng được container"] };
     const timedOut = r.code === 124;
     const note = (waited >= 2 ? `\n[Đã chờ ${waited} giây vì máy chủ đang bận]` : "") + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : r.code === 137 ? `\n[Hệ thống đã dừng tiến trình (mã 137), thường do vượt giới hạn bộ nhớ ${RUN_MEMORY}. Hãy giảm độ phân giải, xử lý từng phần, hoặc dùng ít tiến trình song song hơn]` : "") + overDisk + (got.skipped.length ? `\n[Không gửi được: ${got.skipped.join("; ")}]` : "");
-    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: got.files, ...(book ? { recalc: book } : {}) };
+    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: got.files, ...(book ? { recalc: book } : {}), ...(got.skipped.length ? { skipped: got.skipped } : {}) };
   } finally {
     if (watcher) clearInterval(watcher);
     freeSlot();
@@ -487,7 +490,7 @@ const DROP_HOSTS = ["tmpfiles.org", "file.io", "transfer.sh", "0x0.st", "catbox.
 async function pkgTarget(host, port, web = false) {
   const h = String(host).toLowerCase().replace(/\.$/, "");
   if (DROP_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is a file / data drop service`);
-  if (!web && !PKG_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is not a package registry (bật "Mọi trang web công khai" trong Cài đặt → Khả năng để code ra được trang này)`);
+  if (!web && !PKG_HOSTS.some((d) => h === d || h.endsWith("." + d))) throw new Error(`blocked: ${h} is not an allowed package registry or voice service (bật "Mọi trang web công khai" trong Cài đặt → Khả năng để code ra được trang này)`);
   if (port !== 443 && port !== 80) throw new Error(`blocked: port ${port}`);
   const ips = (await lookup(h, { all: true })).map((x) => x.address);
   if (!ips.length || ips.some(ipPrivate)) throw new Error(`blocked: ${h} resolves to a private address`);

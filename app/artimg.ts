@@ -49,3 +49,15 @@ export async function inlineImages(content: string): Promise<string> {
   const got = await Promise.all(urls.map(async (u) => [u, await fetchImage(u)] as const));
   return swapUrls(content, new Map(got.filter((g): g is readonly [string, Img] => !!g[1]).map(([u, i]) => [u, `data:${i.mime};base64,${i.data.toString("base64")}`])));
 }
+
+/** Ảnh cho bản chụp chia sẻ: dạng data: đã thu nhỏ (bản chụp có giới hạn dung lượng, ảnh Wikimedia gốc đã vài MB). SVG, GIF giữ nguyên để không mất nét, mất chuyển động. */
+export async function shareImageData(url: string): Promise<string | null> {
+  const img = await fetchImage(url);
+  if (!img) return null;
+  if (img.data.length > 120_000 && /^image\/(png|jpeg|webp|avif|bmp)$/.test(img.mime)) {
+    const sharp = await import("sharp").then((m) => m.default, () => null);
+    const small = await sharp?.(img.data).rotate().resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true }).webp({ quality: 78 }).toBuffer().catch(() => null);
+    if (small && small.length < img.data.length) return `data:image/webp;base64,${small.toString("base64")}`;
+  }
+  return `data:${img.mime};base64,${img.data.toString("base64")}`;
+}

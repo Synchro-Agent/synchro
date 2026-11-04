@@ -122,7 +122,7 @@ Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "c
 - Khi dừng vì vượt hạn mức hoặc đĩa sắp đầy, dịch vụ xóa thêm bộ nhớ đệm của workspace đó (`.cache`, `.npm/_cacache`, thư mục giữ lại giữa các lần chạy). Không đụng tệp của người dùng.
 - Đây là kiểm tra định kỳ, không phải hạn mức của hệ thống tệp: một lệnh `dd` nhanh vẫn ghi được vài GB trong một phút. Muốn chặn cứng cần đặt `/srv/synchro-ws` trên phân vùng riêng có project quota (XFS / ext4).
 - Tệp tải lên: 2 GB mỗi tài khoản (`SYNCHRO_UPLOAD_QUOTA_MB`), 300 tệp mỗi giờ; đĩa dưới 2 GB trống (`SYNCHRO_MIN_FREE_MB`) thì từ chối tệp mới. Người dùng tự xóa tệp ở Cài đặt → Quyền riêng tư.
-- Tệp do code tạo: 5 GB mỗi tài khoản (`SYNCHRO_OUTPUT_QUOTA_MB`), vượt thì xóa tệp cũ nhất; đĩa dưới mức trên thì không lưu tệp mới và báo cho model. Tệp quá 30 ngày được dọn mỗi ngày.
+- Tệp do code tạo: 5 GB mỗi tài khoản (`SYNCHRO_OUTPUT_QUOTA_MB`), vượt thì từ chối tệp mới và báo trong tin nhắn, không xóa tệp cũ; đĩa dưới mức trên thì không lưu tệp mới và báo cho model. Tệp quá 30 ngày được dọn mỗi ngày.
 
 ## Giới hạn và theo dõi khác
 

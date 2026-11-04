@@ -29,6 +29,7 @@ export default function Privacy() {
       <ul>
         <li><b>Nhà cung cấp mô hình AI bạn chọn</b> (Anthropic, OpenAI, Google, xAI): tin nhắn, tệp đính kèm, kết quả công cụ của lượt đó, thường qua gói đăng ký bạn đã đăng nhập. Cách họ dùng dữ liệu theo chính sách của họ và gói của bạn.</li>
         <li><b>ElevenLabs:</b> văn bản và âm thanh khi bạn dùng tính năng giọng nói.</li>
+        <li><b>Microsoft, Google (giọng đọc video):</b> lời đọc, khi bạn nhờ làm video có giọng và đã bật truy cập mạng cho code.</li>
         <li><b>Connector, GitHub, trang web:</b> chỉ khi bạn kết nối hoặc yêu cầu; nội dung cần cho thao tác đó được gửi tới dịch vụ tương ứng.</li>
       </ul>
       <h2>Ai xem được</h2>

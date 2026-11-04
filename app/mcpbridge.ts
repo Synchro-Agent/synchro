@@ -9,7 +9,7 @@ import { currentRun, inRun } from "./runs";
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code (JPEG) hay ảnh connector trả về (mime cho biết loại ảnh).
 // live: lời gọi đang chạy theo id JSON-RPC, để CLI hủy được (notifications/cancelled). cancel: tín hiệu CLI hủy lời gọi hay đã ngắt kết nối.
-type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>, cancel?: AbortSignal) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string }>; exp: number; busy: number; last: number; live: Map<string, AbortController> };
+type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>, cancel?: AbortSignal) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[] }>; exp: number; busy: number; last: number; live: Map<string, AbortController> };
 const g = globalThis as unknown as { __synchroBridges?: Map<string, Bridge> };
 const bridges = (g.__synchroBridges ??= new Map());
 
@@ -68,7 +68,7 @@ async function handle(b: Bridge, m: Rpc, gone?: AbortSignal): Promise<unknown | 
       try {
         b.busy++; b.last = Date.now();
         const r = await inRun(b.run, () => b.call(name, args, cancel)).finally(() => { b.busy--; b.last = Date.now(); b.live.delete(key); });
-        return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: r.mime ?? "image/jpeg" }] : [])], isError: r.is_error });
+        return ok(m.id, { content: [{ type: "text", text: r.content }, ...(r.image ? [{ type: "image", data: r.image, mimeType: r.mime ?? "image/jpeg" }] : []), ...(r.more ?? []).map((i) => ({ type: "image", data: i.data, mimeType: i.mime }))], isError: r.is_error });
       } catch (e) {
         return ok(m.id, { content: [{ type: "text", text: `Lỗi: ${(e as Error).message}` }], isError: true });
       }

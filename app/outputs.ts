@@ -7,11 +7,12 @@ import { diskLow } from "./diskfloor";
 import { randomToken } from "./mcpauth";
 import type { RunFile } from "./coderun";
 
-export type OutFile = { id: string; name: string; size: number; mime: string };
+// skipped: tệp code đã tạo nhưng không giao được (quá cỡ, hết hạn mức): chỉ là thẻ báo trong tin nhắn, không có trên đĩa.
+export type OutFile = { id: string; name: string; size: number; mime: string; skipped?: boolean };
 const TTL = 30 * 86_400_000;
 const ROOT = path.join(DATA_DIR, "outputs");
-// Mỗi lần chạy lưu tới 150 MB: không có trần thì một tài khoản lấp đầy đĩa trong vài trăm lần chạy.
-const QUOTA_MB = () => Number(process.env.SYNCHRO_OUTPUT_QUOTA_MB) || 5000;
+// Hạn mức tệp đã tạo của mỗi tài khoản: mỗi lần chạy tới 150 MB, giữ 30 ngày, không có hạn mức thì một người có thể làm đầy đĩa của mọi người.
+export const OUTPUT_QUOTA_MB = () => Number(process.env.SYNCHRO_OUTPUT_QUOTA_MB) || 5000;
 
 const MIME: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -63,21 +64,13 @@ export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
     d.prepare("INSERT INTO outputs (id, user_id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, uid, name, o.mime, o.size, Date.now());
     return o;
   });
-  trimOutputs(uid, new Set(saved.map((o) => o.id)));
   return saved;
 }
 
-/** Vượt hạn mức: bỏ tệp cũ nhất trước, không đụng tệp vừa tạo. */
-function trimOutputs(uid: string, keep: Set<string>) {
-  const d = init(), max = QUOTA_MB() * 1048576;
-  let used = (d.prepare("SELECT COALESCE(SUM(size), 0) AS n FROM outputs WHERE user_id = ?").get(uid) as { n: number }).n;
-  if (used <= max) return;
-  for (const o of d.prepare("SELECT id, size FROM outputs WHERE user_id = ? ORDER BY created_at, id").all(uid) as { id: string; size: number }[]) {
-    if (used <= max) break;
-    if (keep.has(o.id)) continue;
-    removeOutput(uid, o.id);
-    used -= o.size;
-  }
+/** Số byte còn được lưu của tài khoản. */
+export function outputRoom(uid: string): number {
+  const used = (init().prepare("SELECT COALESCE(SUM(size), 0) AS n FROM outputs WHERE user_id = ? AND created_at >= ?").get(uid, Date.now() - TTL) as { n: number }).n;
+  return Math.max(0, OUTPUT_QUOTA_MB() * 1048576 - used);
 }
 
 /** Xóa một tệp vừa tạo mà người dùng chưa nhận (bản mới của cùng đường dẫn trong cùng lượt thay thế). */

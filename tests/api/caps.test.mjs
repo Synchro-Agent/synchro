@@ -181,6 +181,21 @@ ok(!!tot, "lần chạy thành công: giao tệp", JSON.stringify(k.files));
 k = await runIn(keepConv, "import subprocess\nprint('co san pham:', open('.last_outputs/tot.csv').read())");
 ok(/co san pham: a,b/.test(k.text ?? "") && !(k.files ?? []).length, "lần kiểm tra đọc tệp lần trước mà không tạo thêm thẻ tệp, không phải dựng lại", (k.text ?? "").slice(0, 300));
 
+console.log("7b. Log dài và tệp không giao được");
+// Log dài hơn ngưỡng lưu theo tham chiếu: model vẫn thấy tệp đã giao và lỗi ở cuối.
+const longConv = "long-" + Date.now().toString(36);
+k = await runIn(longConv, "open('outputs/dai.txt','w').write('x')\nfor i in range(20000): print('frame', i)");
+ok(/\*\*dai\.txt\*\*/.test(k.text ?? "") && (k.files ?? []).some((f) => f.name === "dai.txt"), "log 20.000 dòng: model vẫn thấy thẻ <files>", (k.text ?? "").slice(0, 300));
+ok(k.trace?.some((t) => t.ref && /outputs\/dai\.txt/.test(t.summary ?? "")), "dấu vết của lượt giữ thẻ trạng thái, có mã ref", JSON.stringify(k.trace).slice(0, 400));
+k = await runIn(longConv, "import sys\nfor i in range(20000): print('frame', i, file=sys.stderr)\nraise RuntimeError('moov atom not found')");
+ok(/moov atom not found/.test(k.text ?? ""), "lỗi ở cuối log dài tới được model", (k.text ?? "").slice(0, 300));
+// Tệp thưa 101 MB: không tốn đĩa thật, vượt giới hạn 100 MB mỗi tệp.
+k = await runIn(longConv, "open('outputs/phim.mp4','wb').truncate(101*1024*1024)\nopen('outputs/nho.txt','w').write('x')\nprint('xong')");
+const miss = (k.files ?? []).find((f) => f.name === "phim.mp4");
+ok(miss?.skipped === true && (k.files ?? []).some((f) => f.name === "nho.txt" && !f.skipped), "tệp quá cỡ thành thẻ \"chưa giao được\", tệp khác vẫn giao", JSON.stringify(k.files));
+k = await admin("POST", "/api/llm", { system: "", conv: longConv, messages: [{ role: "user", content: `#tool=run_code #args=${JSON.stringify({ language: "python", code: "open('outputs/phim.mp4','wb').write(b'x')" })}` }], model: M, skills: true }).then((x) => x.j ?? {});
+ok((k.files ?? []).some((f) => f.name === "phim.mp4" && !f.skipped), "chạy lại nhỏ hơn: giao bình thường", JSON.stringify(k.files));
+
 console.log("8. Mạng");
 r = await chat(admin, "Thử truy cập mạng");
 ok(/pypi.org\S* → bị chặn/.test(r.j?.text ?? "") && /example.com\S* → bị chặn/.test(r.j.text), "tắt mạng: mọi địa chỉ bị chặn", (r.j?.text ?? "").slice(0, 400));

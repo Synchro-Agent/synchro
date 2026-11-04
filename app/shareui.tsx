@@ -29,7 +29,7 @@ export function ShareModal({ chat, onClose, say }: { chat: Chat; onClose: () => 
   const snapshot = async () => {
     setBusy(true); setErr("");
     try {
-      const msgs = chat.msgs.filter((m) => m.role === "user" || (m.done && m.text)).map((m) => ({ role: m.role, text: m.text, files: m.files?.map(() => 1), outs: m.outs?.map(() => 1) }));
+      const msgs = chat.msgs.filter((m) => m.role === "user" || (m.done && m.text)).map((m) => ({ role: m.role, text: m.text, files: m.files?.map(() => 1), outs: m.outs?.filter((f) => !f.skipped).map(() => 1) }));
       const j = await send("POST", "/api/share", { conv, title: chat.title, msgs });
       const fresh = !cur;
       setCur(j.share);

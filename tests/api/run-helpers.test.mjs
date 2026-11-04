@@ -142,6 +142,69 @@ ok(/libreoffice-calc-nogui/.test(docker) && /COPY[^\n]*subfit\.py[^\n]*xlsx_reca
 ok(/subfit\.py/.test(setup) && /xlsx_recalc\.py/.test(setup), "đổi công cụ đi kèm thì image được build lại");
 ok(/recalc: true/.test(engine) && /Synchro chưa có công cụ tạo ảnh/.test(engine), "run_code bật tính lại; model nói thật về việc tạo ảnh");
 
+console.log("6. Log dài không che lỗi và trạng thái");
+{
+  const { runtext: X } = await loadTs(["runtext"]);
+  const { clipSink: wsSink } = await import("../../workspace/safefs.mjs");
+  const log = "x".repeat(200_000) + "\nRuntimeError: hết bộ nhớ";
+  const c = X.clipOut(log, 60_000);
+  ok(c.length < 41_000 && c.endsWith("RuntimeError: hết bộ nhớ") && /Đã bỏ \d+ KB ở giữa/.test(c), "cắt giữ đầu và cuối, lỗi ở cuối còn nguyên", c.length);
+  ok(X.clipOut("ngắn", 60_000) === "ngắn", "log ngắn giữ nguyên");
+  ok(X.tidyLog("a\nframe=1\rframe=2\rframe=3\r\nb\r\n") === "a\nframe=3\nb\n", "thanh tiến trình chỉ còn trạng thái cuối", X.tidyLog("a\nframe=1\rframe=2\rframe=3\r\nb\r\n"));
+  for (const [name, mk] of [["app/runtext.ts", X.clipSink], ["workspace/safefs.mjs", wsSink]]) {
+    const s = mk();
+    for (let i = 0; i < 3000; i++) s.push(Buffer.from(`status line ${i} ${"-".repeat(120)}\n`));
+    s.push(Buffer.from("RuntimeError: moov atom not found\n"));
+    const t = s.text();
+    ok(t.startsWith("status line 0 ") && t.endsWith("moov atom not found\n") && /Đã bỏ \d+ KB ở giữa/.test(t) && t.length < 41_000, `${name}: 3000 dòng trạng thái rồi lỗi: model vẫn thấy lỗi`, t.length);
+    const short = mk(); short.push(Buffer.from("xin chào")); short.push(Buffer.from(" bạn"));
+    ok(short.text() === "xin chào bạn", `${name}: log ngắn không có dấu cắt`, short.text());
+    const big = mk(); big.push(Buffer.alloc(100_000, 97)); big.push(Buffer.from("END"));
+    ok(big.text().endsWith("END") && big.text().length < 41_000, `${name}: một khối rất lớn vẫn bị giới hạn`, big.text().length);
+  }
+  const tags = "\n<files>\noutputs/video.mp4 (20.0 MB) — đã gửi cho người dùng\n</files>\n<excel_recalc>\nx.xlsx\n</excel_recalc>\n<preview>Ảnh a.png đi kèm để bạn tự xem.</preview>";
+  const b = X.runBlocks({ open: '<run_result language="python" exit_code="0">', close: "</run_result>", tags, stdout: "bắt đầu\n" + "o".repeat(8000) + "\nxong", stderr: "e".repeat(8000) + "\nCẢNH BÁO cuối" });
+  ok(b.content.indexOf("<files>") < b.content.indexOf("<stdout>"), "thẻ trạng thái đứng trước log");
+  ok(["<files>", "<excel_recalc>", "<preview>", "bắt đầu", "xong", "CẢNH BÁO cuối"].every((k) => b.brief.includes(k)) && b.brief.length < 3500, "bản rút gọn giữ thẻ trạng thái, đầu và cuối stdout, cuối stderr", b.brief.length);
+  const R = fs.readFileSync("app/refs.ts", "utf8");
+  ok(/summarize\(content, ref, brief\)/.test(R) && /r\.brief/.test(engine), "kết quả dài dùng bản rút gọn thay vì 30 dòng đầu");
+  ok(X.plainSummary('<ref id="ref_1" chars="9">\n<run_result language="python" exit_code="0">\n<files>\noutputs/a.xlsx (1 KB) — đã gửi\n</files>') === "outputs/a.xlsx (1 KB) — đã gửi", "nhật ký làm việc không hiện thẻ nội bộ");
+}
+
+console.log("7. Mạng cho giọng đọc");
+{
+  const { catalog: K } = await loadTs(["catalog"]);
+  const agentSrc = fs.readFileSync("workspace/agent.mjs", "utf8");
+  const wsHosts = [...(/const PKG_HOSTS = \[([\s\S]*?)\];/.exec(agentSrc)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  ok(wsHosts.join() === K.PKG_HOSTS.join(), "danh sách tên miền ở workspace và app giống nhau", wsHosts.join());
+  ok(K.pkgHostAllowed("speech.platform.bing.com") && K.pkgHostAllowed("translate.google.com"), "edge-tts, gTTS ra được khi chỉ bật truy cập mạng");
+  ok(!K.pkgHostAllowed("bing.com") && !K.pkgHostAllowed("www.bing.com") && !K.pkgHostAllowed("google.com") && !K.pkgHostAllowed("mail.google.com"), "không mở rộng hơn đúng hai dịch vụ đó");
+  ok(/lồng tiếng trước hết bằng edge-tts/.test(rules) && /edge-tts --proxy "\$HTTPS_PROXY"/.test(rules) && /proxy=os\.environ\.get\("HTTPS_PROXY"\)/.test(rules) && !/cần quyền web/.test(rules), "quy tắc: edge-tts trước, đúng cờ proxy, không đòi quyền web");
+  ok(/-loglevel error -stats/.test(rules) && /-crf 23 -preset veryfast/.test(rules) && /image2pipe/.test(rules), "quy tắc: log gọn, đĩa và dung lượng");
+  ok(/espeak-ng/.test(docker) && /espeak-ng/.test(rules) && /"moviepy<2"/.test(docker), "image có giọng không cần mạng, ghim moviepy 1.x");
+  ok(/const typed = typedText\(/.test(engine) && /suggest\(typed,/.test(engine) && !/suggest\(lastUserText/.test(engine), "gợi ý skill chỉ đọc chữ người dùng gõ, không đọc tệp đính kèm");
+  ok(/fontEmbedCSS:fontCss/.test(fs.readFileSync("app/deckpptx.ts", "utf8")) && /sxPptx\(d\.id,d\.fontCss\)/.test(fs.readFileSync("app/artifactui.tsx", "utf8")), "xuất PowerPoint: ảnh nền dùng đúng phông web của slide");
+  ok(/Đồ họa, ảnh dựng bằng mã/.test(rules) && /không phải ảnh do AI vẽ/.test(rules), "quy tắc đồ họa: làm kỹ và nói đúng là dựng bằng mã");
+  ok(/RUN_PREVIEWS = 12/.test(agentSrc) && /PREVIEW_MAX = 12/.test(fs.readFileSync("app/runpreview.ts", "utf8")), "số ảnh tự xem khớp giữa workspace và quy tắc");
+}
+
+console.log("8. Ảnh trong bản chia sẻ");
+{
+  const { sharesnap: Z } = await loadTs(["sharesnap"]);
+  const snap = (urls) => ({ title: "t", msgs: [{ r: "a", segs: [{ k: "art", title: "a", type: "html", lang: null, content: urls.map((u) => `<img src="${u}">`).join("") }, { k: "art", title: "b", type: "html", lang: null, content: `<img src="${urls[0]}">` }] }] });
+  const u = (i) => `https://x.test/${i}.png`;
+  let calls = 0;
+  let r = await Z.inlineSnapImages(snap([u(1), u(2)]), async () => { calls++; return "data:image/png;base64,AAAA"; }, 100_000);
+  ok(calls === 2 && r.inlined === 3 && r.skipped === 0 && !JSON.stringify(r.snap).includes("x.test"), "ảnh được nhúng, ảnh trùng chỉ tải một lần", JSON.stringify([calls, r.inlined, r.skipped]));
+  r = await Z.inlineSnapImages(snap([u(1), u(2)]), async (x) => { if (x.includes("/1.")) throw new Error("hỏng"); return "data:image/png;base64,AAAA"; }, 100_000);
+  ok(r.skipped === 2 && r.inlined === 1, "ảnh tải lỗi được đếm là chưa đưa vào", JSON.stringify([r.inlined, r.skipped]));
+  r = await Z.inlineSnapImages(snap([u(1)]), async () => "data:image/png;base64," + "A".repeat(5000), 1000);
+  ok(r.skipped === 2 && r.inlined === 0, "vượt dung lượng bản chụp: giữ URL, đếm là chưa đưa vào", JSON.stringify([r.inlined, r.skipped]));
+  const t0 = Date.now();
+  r = await Z.inlineSnapImages(snap(Array.from({ length: 40 }, (_, i) => u(i))), () => new Promise(() => {}), 100_000, { ms: 150 });
+  ok(Date.now() - t0 < 2000 && r.inlined === 0 && r.skipped > 0, "máy chủ ảnh treo: nút chia sẻ không chờ quá hạn", Date.now() - t0);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

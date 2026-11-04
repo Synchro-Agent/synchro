@@ -632,9 +632,8 @@ export class ConnectorSession {
   }
   /** Công cụ chỉ đọc (khai báo hoặc đoán theo tên). */
   isRead(name: string) { const ct = this.by.get(name); return !!ct && readLike(ct.tool); }
-  // image, mime: ảnh công cụ trả về. reconnect: connector vừa mất đăng nhập, khung chat hiện nút kết nối lại.
-  // images: mọi ảnh công cụ trả về (tối đa MAX_IMAGES); image là ảnh đầu tiên, gửi kèm cho model. imagesAll: tổng số ảnh máy chủ gửi. timeout: hạn riêng của lời gọi.
-  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal, timeout?: number): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; images?: { data: string; mime: string }[]; imagesAll?: number; reconnect?: OfflineConn }> {
+  // image, mime: ảnh công cụ trả về; more: các ảnh sau ảnh đầu (tối đa MAX_IMAGES cả thảy); imagesAll: tổng số ảnh máy chủ gửi. reconnect: connector vừa mất đăng nhập, khung chat hiện nút kết nối lại. timeout: hạn riêng của lời gọi.
+  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal, timeout?: number): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[]; imagesAll?: number; reconnect?: OfflineConn }> {
     const ct = this.by.get(name);
     if (!ct) return { content: `Không có công cụ ${name}.`, is_error: true };
     const r = rowById(ct.cid);
@@ -655,7 +654,8 @@ export class ConnectorSession {
       const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, coerceArgs(ct.tool.inputSchema, args && typeof args === "object" ? args : {}), { signal, timeout }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
       const { images, all } = resultImages(res);
-      return { content: text, is_error: isError, ...(images.length ? { image: images[0].data, mime: images[0].mime, images, imagesAll: all } : {}) };
+      const [img, ...more] = images;
+      return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime, imagesAll: all } : {}), ...(more.length ? { more } : {}) };
     } catch (e) {
       if (e instanceof McpError && e.kind === "auth") return { content: needLogin, is_error: true, reconnect: off() };
       // Một công cụ bị 403: kiểm tra lại danh sách công cụ ở nền, cả danh sách cũng bị từ chối thì connector mới chuyển sang trạng thái bị từ chối.

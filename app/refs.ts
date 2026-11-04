@@ -57,10 +57,12 @@ function mainArray(v: unknown, path = "", depth = 0): { path: string; arr: unkno
 const tryJson = (s: string): unknown => { const t = s.trim(); if (!/^[[{]/.test(t)) return undefined; try { return JSON.parse(t); } catch { return undefined; } };
 
 /** Bản tóm tắt cấu trúc gửi cho model thay cho nguyên văn. */
-export function summarize(content: string, ref: string): string {
+export function summarize(content: string, ref: string, brief?: string): string {
   const j = tryJson(content);
   const head = `<ref id="${ref}" chars="${content.length}">`;
   const tail = `Dữ liệu đầy đủ đã lưu với mã ${ref}. Gọi read_ref để lấy đúng phần cần (path cho JSON, query để lọc, offset/limit để đọc tiếp); đừng đoán nội dung chưa đọc.\n</ref>`;
+  // Kết quả chạy code tự viết bản rút gọn (runtext.ts): 30 dòng đầu của log không cho biết tệp nào đã giao, lỗi gì ở cuối.
+  if (brief) return `${head}\n${brief}\n${tail}`;
   if (j !== undefined) {
     const main = mainArray(j);
     const sample = main?.arr.slice(0, 3).map((x) => JSON.stringify(x).slice(0, 600)).join("\n") ?? "";
@@ -73,10 +75,10 @@ export function summarize(content: string, ref: string): string {
 }
 
 /** Kết quả công cụ → nội dung gửi cho model: ngắn thì giữ nguyên, dài thì lưu và trả bản tóm tắt. */
-export function maybeRef(uid: string, conv: string | undefined, name: string, content: string): { content: string; ref?: string } {
+export function maybeRef(uid: string, conv: string | undefined, name: string, content: string, brief?: string): { content: string; ref?: string } {
   if (content.length <= REF_THRESHOLD) return { content };
   const ref = storeRef(uid, conv, name, content);
-  return { content: summarize(content, ref), ref };
+  return { content: summarize(content, ref, brief), ref };
 }
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();

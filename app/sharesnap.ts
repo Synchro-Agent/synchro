@@ -1,6 +1,7 @@
 // Bản chụp của đoạn chat được chia sẻ công khai (dùng chung cho máy chủ và trang xem). Chỉ giữ đúng những gì người đọc cần: vai, chữ, artifact
 // bản mới nhất. Mọi thứ khác của tin nhắn (dấu vết công cụ, tên tệp, skill, connector, model, thời gian, ghi chú hệ thống…) không đi qua hàm này,
 // và máy chủ luôn dựng lại bản chụp từ đầu nên trình duyệt có gửi thêm trường nào cũng bị bỏ.
+import { externalImageUrls, swapUrls } from "./artdoc";
 import { ART_TYPES, splitArtifacts, type ArtType } from "./artifacts";
 import { resolveArt, type ArtState } from "./vfs";
 
@@ -38,4 +39,32 @@ export function snapshotOf(title: unknown, input: unknown): ShareSnap {
   });
   const t = typeof title === "string" ? clean(title).replace(/\s+/g, " ").trim().slice(0, SHARE_LIMITS.title) : "";
   return { title: t || "Đoạn chat", msgs };
+}
+
+/**
+ * Người xem liên kết chưa đăng nhập nên không tải ảnh qua /api/artimg được, khung lại chặn mọi ảnh ngoài bằng CSP: ảnh phải nằm sẵn trong bản chụp.
+ * fetchData (máy chủ truyền vào): URL → data: đã thu nhỏ, null nếu không tải được. Ảnh làm bản chụp vượt room byte thì giữ URL và tính vào skipped.
+ */
+export async function inlineSnapImages(snap: ShareSnap, fetchData: (url: string) => Promise<string | null>, room: number, o: { workers?: number; ms?: number } = {}): Promise<{ snap: ShareSnap; inlined: number; skipped: number }> {
+  let left = room - new TextEncoder().encode(JSON.stringify(snap)).length, inlined = 0, skipped = 0;
+  const arts = snap.msgs.flatMap((m) => m.segs).filter((s): s is Extract<ShareSeg, { k: "art" }> => s.k === "art" && (s.type === "html" || s.type === "react" || s.type === "svg"));
+  // Tải song song có giới hạn và có hạn giờ: một máy chủ ảnh chết không được giữ nút chia sẻ hàng phút (tối đa 60 ảnh, mỗi ảnh chờ 15 giây).
+  const urls = [...new Set(arts.flatMap((s) => externalImageUrls(s.content)))], got = new Map<string, string | null>(), stop = Date.now() + (o.ms ?? 30_000);
+  let next = 0;
+  await Promise.all(Array.from({ length: o.workers ?? 6 }, async () => {
+    while (next < urls.length && Date.now() < stop) {
+      const u = urls[next++];
+      got.set(u, await Promise.race([fetchData(u).catch(() => null), new Promise<null>((ok) => setTimeout(() => ok(null), Math.max(0, stop - Date.now())))]));
+    }
+  }));
+  for (const s of arts) {
+    const map = new Map<string, string>();
+    for (const u of externalImageUrls(s.content)) {
+      const d = got.get(u);
+      if (!d || d.length > left) { skipped++; continue; }
+      left -= d.length; inlined++; map.set(u, d);
+    }
+    if (map.size) s.content = swapUrls(s.content, map);
+  }
+  return { snap, inlined, skipped };
 }
