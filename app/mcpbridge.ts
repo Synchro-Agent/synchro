@@ -64,7 +64,29 @@ async function handle(b: Bridge, m: Rpc): Promise<unknown | null> {
   return fail(m.id, -32601, `Không hỗ trợ ${m.method}`);
 }
 
-/** Route POST /api/mcp/bridge/<token>: một yêu cầu hoặc một lô yêu cầu JSON-RPC, trả JSON (không mở luồng SSE). */
+// Công cụ chạy lâu (dựng video tới 10 phút): CLI gọi cầu nối bằng HTTP, thư viện HTTP của nó có thể tự cắt khi quá lâu không có phản hồi (fetch của Node: 5 phút),
+// lúc đó model thấy lỗi dù công cụ vẫn chạy. Nên công cụ chưa xong sau after ms thì mở luồng SSE (Streamable HTTP cho phép với client nhận text/event-stream),
+// gửi nhịp giữ kết nối mỗi ping ms rồi kết quả cuối. Công cụ xong nhanh vẫn trả JSON như cũ. Đọc ở đây để kiểm thử rút ngắn được.
+export const BRIDGE_SSE = { after: 20_000, ping: 15_000 };
+const sseMsg = (x: unknown) => `event: message\ndata: ${JSON.stringify(x)}\n\n`;
+function sseReply(work: Promise<unknown[]>, tokens: unknown[], sid: string) {
+  const enc = new TextEncoder();
+  let timer: ReturnType<typeof setInterval> | undefined, n = 0, gone = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      // Dòng chú thích SSE bị client bỏ qua; client có gửi progressToken thì thêm thông báo tiến độ để nó đặt lại hạn chờ.
+      const beat = () => { n++; c.enqueue(enc.encode(": dang chay\n\n" + tokens.map((t) => sseMsg({ jsonrpc: "2.0", method: "notifications/progress", params: { progressToken: t, progress: n } })).join(""))); };
+      beat();
+      timer = setInterval(beat, BRIDGE_SSE.ping);
+      // CLI đã ngắt (cancel) thì thôi, ghi vào luồng đã đóng sẽ lỗi.
+      work.catch(() => [] as unknown[]).then((out) => { clearInterval(timer); if (gone) return; c.enqueue(enc.encode(out.map(sseMsg).join(""))); c.close(); });
+    },
+    cancel() { gone = true; clearInterval(timer); },
+  });
+  return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", "mcp-session-id": sid } });
+}
+
+/** Route POST /api/mcp/bridge/<token>: một yêu cầu hoặc một lô yêu cầu JSON-RPC, trả JSON; công cụ chạy lâu thì trả qua luồng SSE (xem BRIDGE_SSE). */
 export async function bridgeRoute(req: Request, token: string): Promise<Response> {
   // Chỉ CLI chạy trên chính máy chủ: nginx luôn gắn X-Real-IP cho yêu cầu từ ngoài vào (Next không tự gắn header này).
   if (req.headers.get("x-real-ip")) return new Response("Forbidden", { status: 403 });
@@ -75,8 +97,15 @@ export async function bridgeRoute(req: Request, token: string): Promise<Response
   const body = (await req.json().catch(() => null)) as Rpc | Rpc[] | null;
   if (!body) return Response.json(fail(null, -32700, "JSON không hợp lệ"), { status: 400 });
   const list = Array.isArray(body) ? body : [body];
-  const out = (await Promise.all(list.map((m) => handle(b, m)))).filter((x) => x !== null);
   const sid = req.headers.get("mcp-session-id") ?? crypto.randomBytes(8).toString("hex");
+  const work = Promise.all(list.map((m) => handle(b, m))).then((r) => r.filter((x) => x !== null));
+  if ((req.headers.get("accept") ?? "").includes("text/event-stream") && list.some((m) => m.method === "tools/call")) {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const first = await Promise.race([work.then(() => true), new Promise<false>((ok) => { t = setTimeout(() => ok(false), BRIDGE_SSE.after); })]);
+    clearTimeout(t);
+    if (!first) return sseReply(work, list.map((m) => (m.params?._meta as { progressToken?: unknown } | undefined)?.progressToken).filter((x) => x !== undefined), sid);
+  }
+  const out = await work;
   if (!out.length) return new Response(null, { status: 202, headers: { "mcp-session-id": sid } });
   return Response.json(Array.isArray(body) ? out : out[0], { headers: { "mcp-session-id": sid } });
 }
