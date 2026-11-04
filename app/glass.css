@@ -201,7 +201,6 @@ html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
 @keyframes gBubbleIn{from{transform:scale(.4) translateX(-14px)}}
 
 .mprov .sc .dot{width:6px;height:6px;border-radius:50%;background:var(--toggle-on)}
-.model-sub .mrow{min-height:50px}
 
 /* Pinned / collapsible sidebar sections */
 .chat-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}

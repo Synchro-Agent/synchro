@@ -40,7 +40,6 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .auth-legal a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 /* Hộp thoại nhận tiêu điểm khi không có ô nhập: không vẽ viền quanh cả hộp */
 .modal[tabindex="-1"]:focus{outline:none}
-.lnk-in{color:inherit;text-decoration:underline}
 .tk-more{display:flex;justify-content:center;margin:12px 0 4px}
 .tk-more .btn{gap:6px}
 /* Cài đặt: dòng khớp khi tìm, không có kết quả, dòng vừa được đưa tới */

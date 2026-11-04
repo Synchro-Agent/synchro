@@ -216,6 +216,14 @@ try {
   }
   await key("Escape", "Escape", 27); await sleep(400);
 
+  console.log("━━ CSS theo màn hình");
+  const hasRule = (c) => `[...document.styleSheets].some((s) => { try { return [...s.cssRules].some((r) => (r.selectorText ?? "").includes(${JSON.stringify(c)})); } catch { return false; } })`;
+  await home();
+  ok(!(await ev(hasRule(".sp-crumb"))) && !(await ev(hasRule(".cv-hello"))), "trang chat không tải CSS của Speech và Code");
+  await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Speech"))`);
+  ok(await until(hasRule(".sp-crumb"), 15000), "mở Speech: CSS của Speech về cùng màn hình");
+  ok(await ev(`(() => { const c = document.querySelector(".sp-crumb"); return !!c && getComputedStyle(c).cursor === "pointer" && getComputedStyle(c).backgroundColor === "rgba(0, 0, 0, 0)"; })()`), "nút trong Speech có kiểu đúng, không nháy kiểu mặc định");
+
   console.log("━━ Một từ điển ngôn ngữ");
   await P("Network.setCacheDisabled", { cacheDisabled: true });
   const js = [];

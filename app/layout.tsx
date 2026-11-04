@@ -5,6 +5,8 @@ import { langScript } from "./langdetect";
 import type { Metadata, Viewport } from "next";
 // Unbounded của bộ nhận diện (tự lưu trên máy chủ, đủ dấu tiếng Việt): chỉ cho logo và tiêu đề; chữ thường vẫn là Anthropic Sans.
 import "@fontsource-variable/unbounded/wght.css";
+// Thứ tự bốn tệp này là thứ tự ghi đè, đừng đổi. CSS riêng của Code, Speech, Bộ não, trang tải ứng dụng nằm ở tệp nạp cùng màn hình đó (codeview.css, speech/speech.css, brainview.css, download/download.css).
+// Tệp nạp chậm luôn đứng sau bốn tệp này, nên chỉ quy tắc không tranh chấp (cùng độ ưu tiên, cùng thuộc tính, cùng phần tử) với quy tắc chung đứng sau nó mới được chuyển; phần còn lại vẫn ở globals.css. tests/api/css-split.test.mjs giữ các lớp đã tách không bị dùng ở trang chat.
 import "./globals.css";
 import "./glass.css";
 import "./synchro-ds.css";
