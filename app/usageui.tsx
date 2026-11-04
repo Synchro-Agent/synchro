@@ -257,7 +257,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
       <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>
         <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" /></svg>
       </button>
-      <Menu open={open} className={`us-pop ${up ? "up" : "down"}`}>
+      <Menu open={open} role="dialog" className={`us-pop ${up ? "up" : "down"}`}>
         <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
           <>
@@ -513,7 +513,7 @@ function Money({ value, onSave, placeholder = "No limit" }: { value: number | nu
   return <span className="us-money"><i>$</i><input inputMode="decimal" value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></span>;
 }
 
-export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
+export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement }) {
   const [d, setD] = useState<AdminData | null>(null);
   const [showPrices, setShowPrices] = useState(false);
   const [pq, setPq] = useState("");
@@ -530,7 +530,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
       <div className="adm-card-h"><b>Default limits</b><span className="d">API cost each person can use. Leave empty for no limit. When a limit is reached, chats pause until it resets.</span></div>
       <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with a person&apos;s first message.</div></div><Money value={c.session} onSave={(v) => patch({ config: { session: v } }, "Session limit saved")} /></div>
       <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money value={c.weekly} onSave={(v) => patch({ config: { weekly: v } }, "Weekly limit saved")} /></div>
-      <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
+      <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} label="Apply to administrators" set={(v) => patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
       {d.users.length > 10 && <div className="s-search us-ppl-s"><I.Search size={14} /><input placeholder="Search by name or email" value={pq} onChange={(e) => setPq(e.target.value)} /></div>}

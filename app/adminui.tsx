@@ -59,7 +59,7 @@ const LOG_FILTER: Record<string, (a: string) => boolean> = {
 };
 const ENV: Record<keyof Providers, string> = { google: "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", github: "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET", apple: "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY" };
 
-type ToggleT = (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement;
+type ToggleT = (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement;
 
 // Chọn nhiều model theo từng nhà cung cấp; "*" = mọi model (kể cả model hãng ra sau này).
 function ModelChips({ catalog, value, onChange, allLabel, allHint, Toggle }: { catalog: ProviderInfo[]; value: string[]; onChange: (v: string[]) => void; allLabel: string; allHint: string; Toggle: ToggleT }) {
@@ -80,7 +80,7 @@ function ModelChips({ catalog, value, onChange, allLabel, allHint, Toggle }: { c
     <>
       <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>
         <div><div className="t">{allLabel}</div><div className="d">{allHint}</div></div>
-        <Toggle on={all} set={(v) => onChange(v ? [ALL] : [...keys])} />
+        <Toggle on={all} label={allLabel} set={(v) => onChange(v ? [ALL] : [...keys])} />
       </div>
       {keys.length > 12 && <div className="s-search adm-msearch"><I.Search size={14} /><input placeholder="Search models" value={q} onChange={(e) => setQ(e.target.value)} /></div>}
       {catalog.map((pv) => {
@@ -146,15 +146,15 @@ function ConnPolicyEditor({ value, onChange, Toggle }: { value: ConnPolicy; onCh
     <>
       <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>
         <div><div className="t">Custom connectors</div><div className="d">Add any remote MCP server by URL.</div></div>
-        <Toggle on={value.custom} set={(v) => onChange({ ...value, custom: v })} />
+        <Toggle on={value.custom} label="Custom connectors" set={(v) => onChange({ ...value, custom: v })} />
       </div>
       <div className="adm-perm-row">
         <div><div className="t">Tools that delete data</div><div className="d">Use tools the server marks as able to delete data. When off, those tools are blocked everywhere.</div></div>
-        <Toggle on={value.destructive} set={(v) => onChange({ ...value, destructive: v })} />
+        <Toggle on={value.destructive} label="Tools that delete data" set={(v) => onChange({ ...value, destructive: v })} />
       </div>
       <div className="adm-perm-row">
         <div><div className="t">All directory connectors</div><div className="d">Includes connectors added to the directory later.</div></div>
-        <Toggle on={all} set={(v) => onChange({ ...value, allowed: v ? [ALL] : [...ids] })} />
+        <Toggle on={all} label="All directory connectors" set={(v) => onChange({ ...value, allowed: v ? [ALL] : [...ids] })} />
       </div>
       <div className="adm-conn-chips">
         {DIRECTORY.map((d) => {
@@ -181,7 +181,7 @@ function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onCha
         {FEATURES.map((f) => (
           <div key={f.key} className="adm-perm-row">
             <div><div className="t">{f.label}</div><div className="d">{f.desc}</div></div>
-            <Toggle on={value.features[f.key]} set={(v) => onChange({ ...value, features: { ...value.features, [f.key]: v } })} />
+            <Toggle on={value.features[f.key]} label={f.label} set={(v) => onChange({ ...value, features: { ...value.features, [f.key]: v } })} />
           </div>
         ))}
       </div>
@@ -202,11 +202,11 @@ function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onCha
 }
 
 function Seg({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
-  return <div className="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} onClick={() => onChange(s)}>{s}</button>)}</div>;
+  return <div className="group" role="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} aria-pressed={value === s} onClick={() => onChange(s)}>{s}</button>)}</div>;
 }
 
 // Chia trang: "1–10 / 50", nút trước / sau; more = còn dữ liệu cũ trên máy chủ (nút sau tải thêm).
-export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boolean) => void }) => React.ReactElement }) {
+export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   const app = useApp();
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState("");
@@ -293,7 +293,7 @@ export function AdminPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boo
       <h3 className="sec">Sign-in</h3>
       <div className="row" style={{ borderTop: 0 }}>
         <div><div className="t">New sign-ups</div><div className="d">Allow new accounts to be created. People who already have an account can still sign in.</div></div>
-        <Toggle on={d.settings.signupOpen} set={(v) => act(() => call("PATCH", "/api/admin/settings", { signupOpen: v }), v ? "Sign-ups opened" : "Sign-ups closed")} />
+        <Toggle on={d.settings.signupOpen} label="New sign-ups" set={(v) => act(() => call("PATCH", "/api/admin/settings", { signupOpen: v }), v ? "Sign-ups opened" : "Sign-ups closed")} />
       </div>
       <div className="row"><div><div className="t">Email and password</div><div className="d">Passwords are hashed with scrypt. Accounts lock for 15 minutes after repeated failed attempts.</div></div><span className="s-badge ok">On</span></div>
       {(["google", "github", "apple"] as const).map((p) => (

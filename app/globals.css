@@ -316,7 +316,7 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 .btn.danger{background:#c6422f;color:#fff;border-color:transparent}.btn.danger:hover{background:#b23a29}
 .menu-item.del{color:#d8493a}.menu-item.del:hover{background:#c6422f;color:#fff}
 .chat-wrap{position:relative}.chat-wrap .dots{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:var(--r-pill);opacity:0;color:var(--text-2)}
-.chat-wrap:hover .dots{opacity:1}.chat-wrap:hover .chat-item{background:var(--hover)}
+.chat-wrap:hover .dots,.chat-wrap:focus-within .dots,.chat-wrap .dots:focus-visible,.chat-wrap .dots[aria-expanded="true"]{opacity:1}.chat-wrap:hover .chat-item{background:var(--hover)}
 .tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}.tbl th{text-align:left;font-weight:460;color:var(--text-3);padding:6px 8px 6px 0}.tbl td{padding:8px 8px 8px 0;border-top:.5px solid var(--border)}
 .link-row{display:flex!important;align-items:center;justify-content:space-between;font-size:14px;color:var(--text);padding:12px 0;text-align:left}
 .perks{list-style:none;padding:0;margin:18px 0 0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text-2)}.perks li{display:flex;gap:8px;align-items:center}
@@ -3026,8 +3026,10 @@ b,strong{font-weight:560}
 .flip{display:inline-flex;transform:scaleX(-1)}
 
 /* ---------------------------------------------------------------- Artifact: khung xem bên cạnh */
-.main{--art-w:clamp(380px,50%,900px)}
-.main.has-art{padding-right:var(--art-w)}
+/* Cột chat luôn còn ít nhất 420px khi đủ chỗ; khung xem co lại tới 340px rồi mới lấn cột chat. */
+.main{--art-w:max(340px,min(clamp(380px,50%,900px),calc(100% - 420px)))}
+/* Lề của từng phần, không phải padding của .main: % của padding tính theo cả cửa sổ nên cột chat từng hẹp hơn hẳn phần khung xem để lại. */
+.main.has-art>.thread,.main.has-art>.topbar{margin-right:var(--art-w)}
 .main.has-art .dock{right:var(--art-w)}
 html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)}
 .art-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
@@ -3074,7 +3076,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .art-err-inline{font-size:12.5px;color:var(--text-3);padding:12px}
 .art-foot{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:.5px solid var(--border)}
 @media (max-width:760px){
-  .main.has-art{padding-right:0}
+  .main.has-art>.thread,.main.has-art>.topbar{margin-right:0}
   .main.has-art .dock{right:0}
   .art-panel{position:fixed;inset:0;width:100%;z-index:60;border-left:0}
   .art-head{padding-left:10px;gap:6px}
@@ -3644,7 +3646,8 @@ html body .menu.pub-menu::before{background:var(--card)!important}
 .cr-acts .btn{height:28px;font-size:12.5px}
 .cr-pill{flex:none;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;margin-right:2px;border-radius:99px;border:0;font-family:inherit;font-size:12px;color:var(--text-2);background:var(--hover);white-space:nowrap}
 .cr-pill.run .art-spin{width:11px;height:11px}
-.cr-pill.ok{color:#30a46c;background:color-mix(in srgb,#30a46c 11%,transparent)}
+.cr-pill.ok{color:#1c7a4a;background:color-mix(in srgb,#30a46c 11%,transparent)}
+[data-theme="dark"] .cr-pill.ok{color:#4cc38a}
 .cr-pill.err{color:var(--text-2);cursor:pointer}
 .cr-pill.has{cursor:pointer;--cr:var(--accent);color:var(--cr);background:color-mix(in srgb,var(--cr) 12%,transparent)}
 .cr-pill.has.high{--cr:#e5484d}.cr-pill.has.medium{--cr:#c57a06}
@@ -5075,3 +5078,23 @@ body{text-wrap-style:pretty}
 .msg-err code{display:block;margin-top:4px;max-height:140px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
 .msg-err-a{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .msg-err-a .btn{display:inline-flex;align-items:center;gap:6px}
+
+/* Bấm chỗ trống trong khung soạn tin là bấm vào ô nhập */
+.composer{cursor:text}
+.composer button,.composer .menu{cursor:default}
+.composer button:not(:disabled){cursor:pointer}
+/* Hộp thoại nhận tiêu điểm khi không có ô nào để bấm: không vẽ viền */
+[role="dialog"][tabindex="-1"]:focus{outline:0}
+/* Khung soạn rất hẹp: ô nhập một dòng riêng, các nút ở dòng dưới */
+.dock[data-tight] .composer textarea{flex:1 0 100%!important;order:-1;min-width:0}
+.main.has-art .dock .composer{width:min(var(--thread-w,768px),calc(100% - 8px))}
+/* Sửa, sao chép tin đã gửi */
+.u-actions{display:flex;gap:0;height:26px;margin:-2px 0 -14px;color:var(--text-3);opacity:0;transition:opacity .15s}
+.user-wrap:hover .u-actions,.u-actions:focus-within{opacity:1}
+@media (hover:none){.u-actions{opacity:1}}
+.u-actions .icon-btn{width:26px;height:26px;border-radius:var(--r-pill);color:var(--text-3)}
+.u-actions .icon-btn:hover{color:var(--text)}
+.u-edit{width:min(560px,100vw - 96px);display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:var(--user-bubble);box-shadow:inset 0 0 0 1px var(--border-strong)}
+.u-edit textarea{width:100%;border:0;background:transparent;resize:vertical;font:inherit;font-size:16px;line-height:1.5;color:var(--text);outline:0}
+.u-edit-n{font-size:12.5px;color:var(--text-2)}
+.u-edit-a{display:flex;justify-content:flex-end;gap:6px}

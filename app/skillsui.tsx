@@ -195,7 +195,7 @@ export function ScoreBadge({ s }: { s?: SkillScore }) {
   );
 }
 
-export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void }> }) {
+export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ on: boolean; set: (v: boolean) => void; label?: string }> }) {
   const app = useApp();
   const [list, setList] = useState<Item[] | null>(null);
   const [loadErr, setLoadErr] = useState("");
@@ -298,7 +298,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
               <span data-notr>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>
-            {!bs.on && <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} set={(v) => toggle(s.name, v)} /></span>}
+            {!bs.on && <span onClick={(e) => e.stopPropagation()}><Toggle on={s.enabled} label={s.name} set={(v) => toggle(s.name, v)} /></span>}
           </div>
         ))}
       </div>

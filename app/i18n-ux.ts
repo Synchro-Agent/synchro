@@ -18,6 +18,10 @@ export const UX_VI2EN: Record<string, string> = {
   "Không thể kết nối tới model. Vui lòng thử lại.": "Couldn't connect to the model. Please try again.",
   "Câu trả lời chưa hoàn thành": "This reply didn't finish", "Chi tiết kỹ thuật": "Technical details", "Mở Providers": "Open Providers",
   "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.": "Couldn't read the attached file. Please send it again.",
+  // Sửa tin đã gửi, ô soạn tin
+  "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
+  "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
+  "Tin nhắn cho Synchro": "Message to Synchro",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Khóa API bị từ chối \((\d+)\): (.*)$/, (m) => `The API key was rejected (${m[1]}): ${m[2]}`],

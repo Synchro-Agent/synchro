@@ -10,6 +10,7 @@ import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR } from "./chaterror";
+import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
@@ -30,6 +31,7 @@ import { SaveSkillChip } from "./saveskill";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { installFloatFit } from "./floatfit";
+import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { ProjectsPage, ProjectPage, ProjMenu } from "./projects";
@@ -257,8 +259,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const eLabel = autoEff ? "Tự động" : levelName(eff);
   const none = loaded && !providers.length;
   return (
-    <div ref={mref} style={{ position: "relative" }}>
-      <button className="model-btn" data-tip="Chọn model" onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
+    <div ref={mref} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "ArrowLeft" && sub && (e.target as HTMLElement).closest(".model-sub")) setSub(null); }}>
+      <button className="model-btn" data-tip="Chọn model" aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
       <Menu open={mm} className="model-menu" style={{ position: "absolute", ...(shift ? { translate: `${shift}px 0` } : {}) }}>
         {none && (
           <div className="mempty">
@@ -276,12 +278,12 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {/* Danh sách chưa về (máy chủ vừa khởi động lại còn kiểm tra đăng nhập gói): báo đang tải thay vì để trống. */}
         {!loaded && <div className="mload" role="status"><span className="art-spin sm" /><span>Đang tải danh sách model…</span></div>}
         {providers.map((pv) => (
-          <button key={pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
+          <button key={pv.id} aria-haspopup="menu" aria-expanded={sub === pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
             {pv.name}<span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
           </button>
         ))}
         {!none && <hr />}
-        <button className={`menu-item mline ${sub === "effort" ? "is-sel" : ""}`} onClick={() => setSub("effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
+        <button aria-haspopup="menu" aria-expanded={sub === "effort"} className={`menu-item mline ${sub === "effort" ? "is-sel" : ""}`} onClick={() => setSub("effort")} onMouseEnter={() => setSub("effort")}>Mức độ nỗ lực<span className="sc">{eLabel}<I.ChevronR size={16} /></span></button>
         <Menu open={sub === "effort"} className="model-sub" style={{ ...subX, bottom: 0, width: 320 }}>
           <div className="msub-note">Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.</div>
           <button className="menu-item mline mauto" onClick={() => { setEffort("auto"); close(); }}>
@@ -347,6 +349,8 @@ function Composer(p: {
   projects?: { id: number; name: string }[]; project?: number; onProject?: (id: number | undefined) => void;
   /** Đang chạy mà gửi thêm: later = false ghép vào việc đang làm, true = gửi sau khi xong. */
   onSteer?: (text: string, later: boolean) => void;
+  /** Đổi giá trị (bấm Mới, mở đoạn chat, chọn chế độ…) thì đưa con trỏ vào ô nhập. */
+  focusKey?: string;
 }) {
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
@@ -385,6 +389,22 @@ function Composer(p: {
   useEffect(() => {
     if (p.prefill.n) { setV(p.prefill.t); ta.current?.focus(); }
   }, [p.prefill]);
+  // Bấm Mới, mở đoạn chat: gõ được ngay. Bấm Mới khi đang ở trang chủ thì ô nhập không gắn lại nên autoFocus không chạy, chữ gõ từng bị mất.
+  // Điện thoại không tự mở bàn phím ảo; đang có hộp thoại thì tiêu điểm thuộc về hộp.
+  useEffect(() => {
+    if (p.focusPlaceholder || matchMedia("(pointer: coarse)").matches) return;
+    const f = requestAnimationFrame(() => { if (!document.querySelector(".overlay")) ta.current?.focus({ preventScroll: true }); });
+    return () => cancelAnimationFrame(f);
+  }, [p.focusKey, p.focusPlaceholder]);
+  // Phần đang gõ nằm trong bản nháp của tab: trang lỗi, tải lại, đăng nhập lại khi phiên hết hạn đều không làm mất.
+  useEffect(() => { const d = takeDraft(); if (d) setV((o) => o || d); }, []);
+  useEffect(() => { saveDraft(v); }, [v]);
+  // Bấm vào chỗ trống trong khung soạn tin cũng là bấm vào ô nhập.
+  const boxDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button,a,input,textarea,select,label,[role=button],.menu,.attach")) return;
+    e.preventDefault();
+    ta.current?.focus();
+  };
   useEffect(() => {
     if (!ta.current) return;
     ta.current.style.height = "auto";
@@ -476,7 +496,7 @@ function Composer(p: {
   const plus = (
     <div ref={ref} style={{ position: "relative" }}>
       <input ref={fileIn} type="file" multiple hidden onChange={pick} />
-      <button className="icon-btn" onClick={() => setMenu(!menu)} aria-label="Thêm"><I.Plus /></button>
+      <button className="icon-btn" onClick={() => setMenu(!menu)} aria-label="Thêm" aria-haspopup="menu" aria-expanded={menu}><I.Plus /></button>
         <Menu open={!!(menu)} className="plus-menu" style={{ bottom: 40, left: 0, width: 264 }}>
           {perms?.features.files !== false && <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>}
           {perms?.features.files !== false && <button className="menu-item" onClick={shot}><I.Camera />Chụp ảnh màn hình</button>}
@@ -510,7 +530,7 @@ function Composer(p: {
                 <button className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("hub-tab", "discover"); } catch {} p.goCustom(); window.dispatchEvent(new Event(HUB_DISCOVER)); }}><I.Plus />Duyệt skill</button>
               </>)}
               {sub === "conn" && (<>
-                <button className="menu-item" onClick={() => openSub("add")}><I.Plus />Thêm connector<span className="sc"><I.ChevronR size={16} /></span></button>
+                <button className="menu-item" aria-haspopup="menu" onClick={() => openSub("add")}><I.Plus />Thêm connector<span className="sc"><I.ChevronR size={16} /></span></button>
                 <button className="menu-item" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}><I.Brief />Quản lý connectors</button>
                 <hr />
                 <div className="cm-list">
@@ -522,7 +542,7 @@ function Composer(p: {
                       </div>); })}
                 </div>
                 <hr />
-                <button className="menu-item" onClick={() => openSub("access")} disabled={!cx?.connectors.length}><I.Search />Quyền dùng công cụ<span className="sc"><I.ChevronR size={16} /></span></button>
+                <button className="menu-item" aria-haspopup="menu" onClick={() => openSub("access")} disabled={!cx?.connectors.length}><I.Search />Quyền dùng công cụ<span className="sc"><I.ChevronR size={16} /></span></button>
               </>)}
               {sub === "add" && (<>
                 <div className="cm-list">
@@ -569,10 +589,10 @@ function Composer(p: {
 
   if (dock)
     return (
-      <div className="composer" style={{ flexWrap: "wrap" }}>
+      <div className="composer" style={{ flexWrap: "wrap" }} onMouseDown={boxDown}>
         {chips && <div style={{ width: "100%" }}>{chips}</div>}
         {plus}
-        <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
+        <textarea ref={ta} rows={1} aria-label="Tin nhắn cho Synchro" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
         {p.extra}
         {micBtn}
         {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
@@ -580,9 +600,9 @@ function Composer(p: {
     );
 
   return (
-    <div className="composer">
+    <div className="composer" onMouseDown={boxDown}>
       {chips}
-      <textarea ref={ta} rows={1} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
+      <textarea ref={ta} rows={1} aria-label="Tin nhắn cho Synchro" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
       <div className="comp-row">
         {plus}
         <div className="model">
@@ -696,7 +716,7 @@ function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
 type RowCx = {
   chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
   openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
-  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: () => void; openProviders: () => void;
+  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: () => void; openProviders: () => void; edit: (i: number, text: string) => void;
 };
 // Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
 function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
@@ -711,9 +731,12 @@ function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => 
   );
 }
 // Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
-const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
-  m: Msg; i: number; last: boolean; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
+const MsgRow = memo(function MsgRow({ m, i, last, tail, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
+  m: Msg; i: number; last: boolean; tail: boolean; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
 }) {
+  // Đang sửa tin đã gửi: nội dung đang sửa; null là không sửa.
+  const [ed, setEd] = useState<string | null>(null);
+  const saveEd = () => { const t = ed?.trim(); if (!t) return; setEd(null); if (t !== m.text.trim()) cx.current!.edit(i, t); };
   const c = cx.current!;
   const { say, fm, arts } = c;
   const key = `${chatId}-${i}`;
@@ -724,7 +747,20 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
         {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => cx.current!.fm.show(f, m.fids?.[f])} onContextMenu={(e) => cx.current!.fm.open(e, f)} />)}</div>}
         {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
         {m.pick?.length ? <div className="u-picks">{m.pick.map((k) => <span key={k.id} className="skill-chip">{k.id.startsWith("lib-") ? <I.Plugins size={13} /> : <I.Scroll size={13} />}<span data-notr>{k.label}</span></span>)}</div> : null}
-        <div className="user-msg"><UserText text={m.text} /></div>
+        {ed === null ? <div className="user-msg"><UserText text={m.text} /></div> : (
+          <div className="u-edit">
+            <textarea autoFocus rows={Math.min(10, ed.split("\n").length + 1)} value={ed} aria-label={tr("Sửa tin nhắn")} onChange={(e) => setEd(e.target.value)} onFocus={(e) => e.target.setSelectionRange(e.target.value.length, e.target.value.length)}
+              onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); setEd(null); } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEd(); } }} />
+            {!tail && <div className="u-edit-n">{tr("Các tin phía sau sẽ được thay bằng câu trả lời mới.")}</div>}
+            <div className="u-edit-a"><button className="btn" onClick={() => setEd(null)}>{tr("Hủy")}</button><button className="btn dark" disabled={!ed.trim() || busy} onClick={saveEd}>{tr("Gửi lại")}</button></div>
+          </div>
+        )}
+        {ed === null && (
+          <div className="u-actions">
+            <button className="icon-btn" onClick={() => cx.current!.copy(key, m.text)} aria-label={tr("Sao chép")} data-tip={tr("Sao chép")}>{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>
+            {!busy && !m.steer && !PE_RE.test(m.text) && <button className="icon-btn" onClick={() => setEd(m.text)} aria-label={tr("Sửa tin nhắn")} data-tip={tr("Sửa tin nhắn")}><I.Pencil size={15} /></button>}
+          </div>
+        )}
       </div>
     ) : (
       <div>
@@ -802,6 +838,7 @@ export default function Home() {
   // Gợi ý khi rê chuột tự lật xuống dưới / canh theo mép khi sát mép màn hình hay mép khung (tips.ts).
   useEffect(() => installTips(), []);
   useEffect(() => installFloatFit(), []);
+  useEffect(() => installA11y(), []);
   useEffect(() => {
     setApprover((calls, conv) => new Promise((resolve) => setApproval({ chat: conv !== undefined && Number.isFinite(Number(conv)) ? Number(conv) : curRef.current, calls, resolve })));
     return () => setApprover(null);
@@ -1114,6 +1151,13 @@ export default function Home() {
   const brwShow = view === "chat" && !!chat && brwFor === chat.id && !artOpen && !fileOpen && brwOk;
   const panelOpen = artOpen || fileOpen || brwShow;
   useEffect(() => { if (!panelOpen) setArtFull(false); }, [panelOpen]);
+  // Laptop: khung xem mở cạnh chat thì ô soạn tin từng bị ép còn vài chục px. Tự thu bảng đoạn chat (thanh điều hướng vẫn còn) cho đủ chỗ, đóng khung thì mở lại.
+  const sideAuto = useRef(false);
+  useEffect(() => {
+    if (narrow()) return;
+    if (panelOpen && open && window.innerWidth < 1360) { sideAuto.current = true; setOpen(false); }
+    else if (!panelOpen && sideAuto.current) { sideAuto.current = false; setOpen(true); }
+  }, [panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const openArt = (s: { chat: number; ident: string; v: number; follow: boolean }) => { setFileSel(null); setArtSel(s); };
   const openFile = (f: OutFile) => { if (!chat) return; setArtSel(null); setFileSel({ chat: chat.id, file: f }); };
   // Mọi sản phẩm của đoạn chat (artifact bản mới nhất, tệp code đã tạo), để chuyển nhanh trong khung xem trước.
@@ -1139,6 +1183,8 @@ export default function Home() {
       host.style.setProperty("--dock-h", `${Math.round(d.getBoundingClientRect().height)}px`);
       const w = (d.querySelector(".composer") as HTMLElement | null)?.offsetWidth ?? d.clientWidth;
       if (w < 600) d.dataset.narrow = ""; else delete d.dataset.narrow;
+      // Hẹp hơn nữa: ô nhập chiếm một dòng riêng, các nút xuống dòng dưới; ô nhập không bao giờ bị ép còn vài ký tự.
+      if (w < 460) d.dataset.tight = ""; else delete d.dataset.tight;
     });
     ro.observe(d);
     return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
@@ -1536,7 +1582,9 @@ export default function Home() {
     say("Cảm ơn phản hồi của bạn");
   };
 
+  const [focusN, setFocusN] = useState(0);
   const goNew = () => {
+    setFocusN((n) => n + 1);
     stopSpeak(); setSpeaking(null);
     setChats((cs) => cs.filter((c) => !c.inc));
     setView("new"); setCur(null); setTplMode(null); setFiles([]); setPrefill({ t: "", n: 0 });
@@ -1602,7 +1650,7 @@ export default function Home() {
   // Mục trên thanh điều hướng: gọi như một hàm trả về JSX (không phải component định nghĩa lại mỗi lần vẽ), nên bấm vào không dựng lại
   // cả mục; biểu tượng cố định, không đổi hình khi rê / bấm. tip: tên đầy đủ khi nhãn ngắn hơn tên trang.
   const nav = ({ v, icon, label, badge, onPick, tip }: { v: View; icon: React.ReactNode; label: string; badge?: number; onPick?: () => void; tip?: string }) => (
-    <button key={v} data-nav={v} data-tip={tip} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
+    <button key={v} data-nav={v} data-tip={tip} aria-current={view === v || (v === "projects" && view === "project") ? "page" : undefined} className={`nav-item ${view === v || (v === "projects" && view === "project") ? "active" : ""}`} onClick={() => { setView(v); if (v === "projects") setCurProj(null); onPick?.(); }}>
       <span className="rail-ic">{icon}</span><span className="rail-l">{label}</span>{badge ? <span className="nav-badge" aria-label={`${badge} kết quả chưa đọc`}>{badge > 99 ? "99+" : badge}</span> : null}
     </button>
   );
@@ -1657,7 +1705,7 @@ export default function Home() {
     const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); followUp(next.chat, next.text); }, 250);
     return () => clearTimeout(t);
   }, [running, queued]); // eslint-disable-line react-hooks/exhaustive-deps
-  const composerProps = { onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, goConnectors: () => { setCzTab("connectors"); setView("customize"); }, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
+  const composerProps = { focusKey: `${view}:${cur}:${focusN}:${tplMode}`, onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, goConnectors: () => { setCzTab("connectors"); setView("customize"); }, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
     projects: projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })),
     project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
     onProject: (pid: number | undefined) => {
@@ -1764,7 +1812,7 @@ export default function Home() {
   };
 
   const rowCx = useRef<RowCx | null>(null);
-  if (chat) rowCx.current = { chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); } };
+  if (chat) rowCx.current = { chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
   // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
@@ -1798,7 +1846,7 @@ export default function Home() {
         <button className="rail-mark" onClick={() => setOpen(!open)} aria-label={open ? "Đóng bảng đoạn chat" : "Mở bảng đoạn chat"} aria-expanded={open} data-tip={open ? "Đóng bảng đoạn chat" : "Mở bảng đoạn chat"}>
           <span className="rm-logo"><Mark size={18} /></span><span className="rm-panel"><I.Panel size={16} /></span>
         </button>
-        <button className={`nav-item rail-new ${view === "new" ? "active" : ""}`} onClick={goNew} data-tip="⇧⌘O"><span className="rail-ic"><I.Plus /></span><span className="rail-l">Mới</span></button>
+        <button className={`nav-item rail-new ${view === "new" ? "active" : ""}`} aria-current={view === "new" ? "page" : undefined} onClick={goNew} data-tip="⇧⌘O"><span className="rail-ic"><I.Plus /></span><span className="rail-l">Mới</span></button>
         <div className="rail-nav">
           {me?.perms.features.projects !== false && nav({ v: "projects", icon: <I.Layers />, label: "Dự án" })}
           {caps.art !== false && nav({ v: "artifacts", icon: <I.Shapes />, label: "Artifacts" })}
@@ -1811,7 +1859,7 @@ export default function Home() {
         <div className="rail-foot">
           <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={17} /></button>
           <div ref={userRef} className="rail-user">
-            <button className="user" onClick={() => setUserMenu(!userMenu)} aria-label={name} title={name} data-notr><Avatar name={name} /></button>
+            <button className="user" onClick={() => setUserMenu(!userMenu)} aria-haspopup="menu" aria-expanded={userMenu} aria-label={name} title={name} data-notr><Avatar name={name} /></button>
             <Menu open={!!(userMenu)} style={{ bottom: 0, left: "calc(100% + 10px)", width: 300 }} className="usermenu">
               <div className="um-head"><Avatar name={name} /><span><b data-notr>{shortName(name)}</b><em data-notr>{me.email}</em></span></div>
               <hr />
@@ -1848,18 +1896,18 @@ export default function Home() {
                   onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
               ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
+                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{running.has(c.id) && <span className="ct-run" role="status" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
               )}
-              {!sb.on && <button className="dots" aria-label="Tùy chọn" onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
+              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
                 <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
                   {!pickProj ? (
                     <>
-                      <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}<span className="sc">P</span></button>
-                      <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên<span className="sc">R</span></button>
+                      <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
+                      <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên</button>
                       <button className="menu-item" onClick={() => (projects.length ? setPickProj(true) : (say("Hãy tạo dự án trước ở mục Dự án"), setChatMenu(null)))}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
                       {c.project !== undefined && <button className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: undefined } : x))); setChatMenu(null); say("Đã gỡ khỏi dự án"); }}><I.Layers />Gỡ khỏi dự án</button>}
                       <hr />
-                      <button className="menu-item del" onClick={() => { setDelId(c.id); setChatMenu(null); }}><I.Trash />Xóa<span className="sc">D</span></button>
+                      <button className="menu-item del" onClick={() => { setDelId(c.id); setChatMenu(null); }}><I.Trash />Xóa</button>
                     </>
                   ) : (
                     projects.map((pr) => (
@@ -1880,7 +1928,7 @@ export default function Home() {
                   {sb.on && <BulkCheck on={sb.has({ k: "code", c })} />}<span className="cv-ell">{c.title}</span><CodeBadge c={c} />
                 </button>
               )}
-              {!sb.on && <button className="dots" aria-label="Tùy chọn" onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>}
+              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={codeMenu === c.id} onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>}
               <Menu open={codeMenu === c.id} className="down" style={{ top: 34, right: 0, width: 220 }}>
                 <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                 <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
@@ -1904,7 +1952,7 @@ export default function Home() {
                     <span className="pj-tg" role="button" aria-label={open ? "Thu gọn" : "Mở rộng"} onClick={(e) => { e.stopPropagation(); setPjClosed({ ...pjClosed, [x.id]: open }); }}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></span>
                     <span>{x.name}</span>
                   </button>
-                  <button className="dots" aria-label="Tùy chọn" onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
+                  <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={sideProj === x.id} onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
                   <ProjMenu p={x} open={sideProj === x.id} pin style={{ top: 34, right: 0, width: 240 }}
                     onPin={() => { patchProj(x.id, { pinned: false }); setSideProj(null); }}
                     onEdit={() => { setSideProj(null); setEditProj(x.id); }}
@@ -1962,7 +2010,7 @@ export default function Home() {
             {!open && <SideToggle onClick={() => setOpen(true)} />}
             {view === "chat" && chat && (
               <div className="title-wrap" style={{ position: "relative" }}>
-                <button className="sel" style={{ fontSize: 14 }} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
+                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
                   <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
                     <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
@@ -1975,7 +2023,7 @@ export default function Home() {
           </div>
           {(view === "new" || view === "chat") && pill}
           <div className="right">
-            {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh"><I.Ghost /></button>}
+            {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { armDraft(); setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: đoạn chat sẽ không được lưu"); }} aria-label="Ẩn danh" aria-pressed={incog}><I.Ghost /></button>}
             {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
             {view === "chat" && chat && brwOk && <button className={`icon-btn brw-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} />{chat.browser && <span className="brw-dot" aria-hidden />}</button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
@@ -2017,7 +2065,7 @@ export default function Home() {
           <>
             <div className="thread" ref={threadRef} onScroll={onScroll}>
               <div className="thread-in">
-                {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
+                {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} tail={i >= chat.msgs.length - 2} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
                   fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
                 {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
                 {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}

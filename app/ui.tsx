@@ -3,13 +3,18 @@
 import { Loader } from "./brand";
 import { Component, useEffect, useRef, useState } from "react";
 import { armDraft } from "./draft";
+import { labelMenu, registerMenu } from "./a11y";
 import { tr } from "./i18n";
 
-export function Menu({ open, className = "", style, children }: { open: boolean; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
+// role: menu thật (mặc định); bảng thông tin dùng chung khung này thì đặt "dialog".
+export function Menu({ open, className = "", style, children, role = "menu" }: { open: boolean; className?: string; style?: React.CSSProperties; children: React.ReactNode; role?: string }) {
   const [mounted, setMounted] = useState(open);
   const [out, setOut] = useState(false);
   const last = useRef(children);
   if (open) last.current = children;
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (open && el.current) return registerMenu(el.current); }, [open]);
+  useEffect(() => { if (open && el.current && role === "menu") labelMenu(el.current); });
   useEffect(() => {
     if (open) { setMounted(true); setOut(false); return; }
     if (!mounted) return;
@@ -18,7 +23,7 @@ export function Menu({ open, className = "", style, children }: { open: boolean;
     return () => clearTimeout(t);
   }, [open, mounted]);
   if (!mounted && !open) return null;
-  return <div className={`menu ${className} ${out && !open ? "out" : ""}`} style={style}>{open ? children : last.current}</div>;
+  return <div ref={el} role={role} className={`menu ${className} ${out && !open ? "out" : ""}`} style={style}>{open ? children : last.current}</div>;
 }
 
 // text: bước đang làm của lượt chạy nền ("Đang đọc skill …"), hiện cạnh chấm động.

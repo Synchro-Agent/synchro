@@ -157,9 +157,9 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
         <p className="d" data-notr={untranslated(p.description) || undefined}>{p.description}</p>
         <div className="pl-rows">
           <div className="pl-row"><div><b>Turned on</b><span>{p.scope === "org" && !admin ? "Turn it off just for you." : "Off: no skill of this plugin is used anywhere."}</span></div>
-            <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} onClick={() => patch(p.scope === "org" && !admin ? { mine: { enabled: !p.mine.enabled } } : { enabled: !p.enabled })} /></div>
+            <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label="Turned on" onClick={() => patch(p.scope === "org" && !admin ? { mine: { enabled: !p.mine.enabled } } : { enabled: !p.enabled })} /></div>
           <div className="pl-row"><div><b>List every skill directly</b><span>Off: Synchro opens this library on its own when a request needs it. On: each skill is listed in every chat, which uses more context.</span></div>
-            <button className={`toggle ${p.mine.everywhere ? "on" : ""}`} role="switch" aria-checked={p.mine.everywhere} onClick={() => patch(p.scope === "org" ? { mine: { everywhere: !p.mine.everywhere } } : { everywhere: !p.everywhere })} /></div>
+            <button className={`toggle ${p.mine.everywhere ? "on" : ""}`} role="switch" aria-checked={p.mine.everywhere} aria-label="List every skill directly" onClick={() => patch(p.scope === "org" ? { mine: { everywhere: !p.mine.everywhere } } : { everywhere: !p.everywhere })} /></div>
           {manage && <div className="pl-row"><div><b>Studio button</b><span>Pressing this Artifacts button gives Synchro the whole library of this plugin.</span></div>
             <select className="pl-sel" value={p.studio ?? ""} onChange={(e) => patch({ studio: e.target.value || null })}><option value="">None</option><option value="design">Design</option><option value="slides">Slides</option><option value="docs">Docs</option></select></div>}
         </div>
@@ -220,7 +220,7 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PluginSummary; manage: boole
   );
 }
 
-const Toggle = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} />;
+const Toggle = ({ on, set, label }: { on: boolean; set: (v: boolean) => void; label?: string }) => <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} aria-label={label} />;
 
 
 // Kho kỹ năng: gộp Skills và Plugins. Thư viện (plugin, nhiều skill) và skill lẻ nằm chung một trang,

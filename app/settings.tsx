@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
@@ -35,8 +35,11 @@ function useAway(close: () => void) {
   return ref;
 }
 
-export function Toggle({ on, set, disabled }: { on: boolean; set: (v: boolean) => void; disabled?: boolean }) {
-  return <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} disabled={disabled} />;
+// Tên cho trình đọc màn hình: công tắc nằm trong một dòng cài đặt thì lấy tên dòng đó; ngoài dòng thì truyền label.
+const RowName = createContext<string | undefined>(undefined);
+export function Toggle({ on, set, disabled, label }: { on: boolean; set: (v: boolean) => void; disabled?: boolean; label?: string }) {
+  const row = useContext(RowName);
+  return <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} aria-label={label ?? row} disabled={disabled} />;
 }
 
 export function Select({ value, options, onChange, search, width = 160 }: { value: string; options: string[]; onChange: (v: string) => void; search?: boolean; width?: number }) {
@@ -46,7 +49,7 @@ export function Select({ value, options, onChange, search, width = 160 }: { valu
   const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="sel" onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
+      <button className="sel" aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
         <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
           <div className="menu-scroll">
           {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}
@@ -61,14 +64,14 @@ export function Select({ value, options, onChange, search, width = 160 }: { valu
 }
 
 function Seg({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
-  return <div className="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} onClick={() => onChange(s)}>{s}</button>)}</div>;
+  return <div className="group" role="group" aria-label={useContext(RowName)}>{options.map((s) => <button key={s} className={value === s ? "on" : ""} aria-pressed={value === s} onClick={() => onChange(s)}>{s}</button>)}</div>;
 }
 
 function Row({ t, d, children, top }: { t: React.ReactNode; d?: React.ReactNode; children?: React.ReactNode; top?: boolean }) {
   return (
     <div className="row" style={top ? { borderTop: 0 } : undefined}>
       <div><div className="t">{t}</div>{d && <div className="d">{d}</div>}</div>
-      {children}
+      <RowName.Provider value={typeof t === "string" ? t : undefined}>{children}</RowName.Provider>
     </div>
   );
 }
@@ -137,7 +140,7 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
     <>
       <H first>Appearance</H>
       <Row t="Theme" top>
-        <div className="group">{themes.map(([k, ic, n]) => <button key={k} title={n} className={theme === k ? "on" : ""} onClick={() => setTheme(k)} style={{ padding: "0 9px" }}>{ic}</button>)}</div>
+        <div className="group" role="group" aria-label="Theme">{themes.map(([k, ic, n]) => <button key={k} title={n} aria-label={n} aria-pressed={theme === k} className={theme === k ? "on" : ""} onClick={() => setTheme(k)} style={{ padding: "0 9px" }}>{ic}</button>)}</div>
       </Row>
       <Row t="Chat font"><Select value={font} onChange={setFont} options={["Anthropic Sans", "System", "Serif"]} /></Row>
       <Row t="Transcript text size" d="Size of the conversation transcript text."><Seg value={size} onChange={setSize} options={["Small", "Medium", "Large"]} /></Row>

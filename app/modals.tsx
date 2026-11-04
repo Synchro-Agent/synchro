@@ -223,13 +223,13 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
   ];
   // Tìm theo cả tên gốc (tiếng Anh) lẫn tên đang hiện ở giao diện tiếng Việt.
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => [n, tr(n, "vi")].some((x) => x.toLowerCase().includes(q.trim().toLowerCase())));
-  const item = (n: string, ic: React.ReactNode) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>;
+  const item = (n: string, ic: React.ReactNode) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} aria-current={tab === n ? "page" : undefined} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>;
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal settings sy-settings">
         <div className="s-nav">
           <div className="sy-snav-h"><b>Settings</b></div>
-          <div className="s-search"><I.Search size={15} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="s-search"><I.Search size={15} /><input placeholder="Search" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <div className="s-group">Settings</div>
           {f(items).map(([n, ic]) => item(n, ic))}
           <div className="s-group">Customize</div>
