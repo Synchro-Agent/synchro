@@ -174,8 +174,7 @@ async function freshAuth(id: string, force = false): Promise<Auth> {
     if (e instanceof TokenRejected) {
       // Hãng nói rõ đăng nhập không còn dùng được: phải đăng nhập lại.
       if (clientGone(e.oauth)) forgetClient(id, a);
-      const www = "";
-      const m = new McpError("Phiên đăng nhập của connector đã hết hạn. Hãy kết nối lại.", "auth", 401, www);
+      const m = new McpError("Phiên đăng nhập của connector đã hết hạn. Hãy kết nối lại.", "auth", 401);
       markStatus(id, "needs_auth", m.message);
       throw m;
     }
@@ -320,7 +319,7 @@ export async function connect(req: Request, uid: string, id: string, pol: ConnPo
   const fail = (e: unknown, status: number) => {
     // Hãng đang lỗi tạm thời: giữ nguyên trạng thái (đăng nhập vẫn còn), chỉ ghi lại lý do.
     if (e instanceof TempFail) syncFailed(id, e); else markStatus(id, "error", errText(e));
-    throw new ConnectorError(errText(e), e instanceof ConnectorError ? e.status : status);
+    throw new ConnectorError(errText(e), e instanceof ConnectorError ? e.status : e instanceof TempFail ? 503 : status);
   };
   // Đang chạy tốt mà đăng nhập lại: bỏ dở thì vẫn giữ kết nối cũ.
   const healthy = row.status === "ok";
