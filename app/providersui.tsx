@@ -183,7 +183,8 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
 // ---------------------------------------------------------------- mục của một hãng
 function VendorItem({ v, admin, api, apiState, setApi }: { v: Vendor; admin: boolean; api?: ApiProvider; apiState: ApiState | null; setApi: (s: ApiState) => void }) {
   const plan = usePlan(v.cli);
-  const [open, setOpen] = useState(false);
+  // Mở sẵn hãng người dùng vừa chọn ở thẻ làm quen của trang chủ.
+  const [open, setOpen] = useState(() => { try { if (sessionStorage.getItem("pv-open") !== v.id) return false; sessionStorage.removeItem("pv-open"); return true; } catch { return false; } });
   // Hãng chỉ có khóa API: mở ra là thấy luôn phần khóa API.
   const [mode, setMode] = useState<"plan" | "api" | null>(v.cli ? null : "api");
   const st = plan.st;

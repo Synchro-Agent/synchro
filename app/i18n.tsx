@@ -79,6 +79,7 @@ function walk(root: Node, lang: Lang) {
   el.querySelectorAll("[placeholder],[title],[aria-label],[data-tip]").forEach((x) => doAttrs(x, lang));
 }
 
+let titleSrc: string | null = null, titleTr = "";
 export function I18n() {
   const [lang] = usePref<Lang>("uilang", "vi");
   useEffect(() => {
@@ -88,6 +89,10 @@ export function I18n() {
     html.dataset.lang = lang;
     const run = () => walk(document.body, lang);
     run();
+    // Tiêu đề thẻ trình duyệt (trang pháp lý, 404): dịch từ bản gốc để đổi qua lại được.
+    if (titleSrc === null || (document.title !== titleTr && document.title !== titleSrc)) titleSrc = document.title;
+    titleTr = tr(titleSrc, lang);
+    if (document.title !== titleTr) document.title = titleTr;
     const mo = new MutationObserver((list) => {
       mo.disconnect();
       for (const r of list) {

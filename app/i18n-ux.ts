@@ -18,12 +18,19 @@ export const UX_VI2EN: Record<string, string> = {
   "Không thể kết nối tới model. Vui lòng thử lại.": "Couldn't connect to the model. Please try again.",
   "Câu trả lời chưa hoàn thành": "This reply didn't finish", "Chi tiết kỹ thuật": "Technical details", "Mở Providers": "Open Providers",
   "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.": "Couldn't read the attached file. Please send it again.",
+  // Phiên hết hạn, làm quen tài khoản mới, trợ năng
+  "Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.": "Your session has expired. Sign in again to continue. Your work is still here.",
+  "Kết nối gói AI của bạn để bắt đầu": "Connect your AI plan to get started",
+  "Synchro chạy bằng gói bạn đang trả tiền. Đăng nhập một gói là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on the plan you already pay for. Sign in to one and you can chat right away. What you've typed below stays here.",
+  "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
+  "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
   // Sửa tin đã gửi, ô soạn tin
   "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
   "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
   "Tin nhắn cho Synchro": "Message to Synchro",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Câu trả lời trong “(.+)” gặp lỗi$/, (m) => `The reply in “${m[1]}” hit an error`],
   [/^Khóa API bị từ chối \((\d+)\): (.*)$/, (m) => `The API key was rejected (${m[1]}): ${m[2]}`],
   [/^Khóa API đã hết số dư, cần nạp thêm ở trang của nhà cung cấp \(402\): (.*)$/, (m) => `The API key is out of credit. Top up on the provider's site (402): ${m[1]}`],
   [/^Không tìm thấy model hoặc địa chỉ API \(404\): (.*)$/, (m) => `Model or API address not found (404): ${m[1]}`],

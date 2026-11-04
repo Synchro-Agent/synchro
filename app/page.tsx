@@ -12,6 +12,7 @@ import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
+import { BrandLogo } from "./brands";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
 import { HalftoneBg } from "./halftone";
@@ -56,7 +57,8 @@ const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
-import { AUTO, fitModel, modelName, refreshModels, useModels } from "./models";
+import { AUTO, fitModel, modelName, modelsSettled, refreshModels, useModels } from "./models";
+import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";
 import { AppsGallery, PublishButton, PUBLISHABLE } from "./appsui";
@@ -359,7 +361,8 @@ function Composer(p: {
   const [menu, setMenu] = useState(false);
   // Tìm web và bộ nhớ: lưu theo người dùng, gửi kèm mỗi lượt chat.
   const [web, setWeb] = usePref("webSearch", true);
-  const perms = useApp().me?.perms;
+  const app = useApp(), mdl = useModels();
+  const perms = app.me?.perms;
   const [mem, setMem] = usePref("chatMemory", true);
   const [rec, setRec] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -421,6 +424,8 @@ function Composer(p: {
     // Đang chạy: không ngắt — Enter ghép tin vào việc đang làm, ⌘/Ctrl + Enter xếp hàng gửi sau khi xong.
     if (busy && p.onSteer && v.trim()) { p.onSteer(v.trim(), later); setV(""); return; }
     if (!canSend || busy) return;
+    // Chưa có model nào: đưa tới chỗ kết nối, tin đang gõ vẫn nằm nguyên trong ô (không gửi đi để nhận về một câu lỗi).
+    if (mdl.loaded && !mdl.providers.length) { say("Hãy kết nối một gói AI để gửi tin này"); app.openSettings?.("Providers"); return; }
     onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined);
     setV(""); setPicks([]);
   };
@@ -1003,8 +1008,12 @@ export default function Home() {
   };
   useEffect(() => {
     localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
-    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => { setProviders(j.providers); if (j.user) { enterAccount(j.user); syncProfile(j.user); } setMe(j.user); }).catch(() => setMe(null));
+    loadMe<{ user: AuthUser | null; providers: Providers }>().then((j) => { setProviders(j.providers); if (j.user) { enterAccount(j.user); syncProfile(j.user); } setMe(j.user); }).catch(() => setMe(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Phiên hết hạn khi app đang mở: phủ màn hình đăng nhập lên trên, bên dưới giữ nguyên (đoạn chat đang mở, phần đang gõ, lượt đang chạy); đăng nhập lại là dùng tiếp.
+  const [expired, setExpired] = useState(false);
+  useEffect(() => watchSession(() => setExpired(true)), []);
+  useEffect(() => { try { if (me) localStorage.setItem("signedIn", "1"); else if (me === null) localStorage.removeItem("signedIn"); } catch {} }, [me]);
   const [editProj, setEditProj] = useState<number | null>(null);
   const [sideProj, setSideProj] = useState<number | null>(null);
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1783,7 +1792,7 @@ export default function Home() {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chats.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "claude-data-export.json";
+    a.download = "synchro-data-export.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     say("Đã xuất dữ liệu");
@@ -1816,22 +1825,25 @@ export default function Home() {
   // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
-  if (me === undefined) return <div style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />;
+  // Chưa biết đã đăng nhập chưa: người đã đăng nhập lần trước thấy ngay khung app (html[data-sess], layout.tsx), người mới thấy nền trống rồi tới màn hình đăng nhập.
+  if (me === undefined) return <div className="boot" aria-busy="true"><div className="boot-rail" /><div className="boot-side" /><div className="boot-main"><div className="boot-greet" /><div className="boot-box" /></div></div>;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
-  const authEl = !me || needProfile || authLeaving || authHold ? (
-    <AuthComponent key="auth" brandName="Synchro" logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={me} leaving={authLeaving}
+  const authEl = !me || needProfile || authLeaving || authHold || expired ? (
+    <AuthComponent key="auth" brandName="Synchro" logo={<Lockup height={22} intro className="lk-hover" />} providers={providers} mode={needProfile ? "profile" : "auth"} user={expired ? null : me} leaving={authLeaving} notice={expired ? tr("Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.") : undefined}
       toFilm={intro} onReveal={() => setReveal("login")}
       onDone={(u, kind) => {
+        setExpired(false);
         enterAccount(u); syncProfile(u); setMe(u);
         if (u.needsProfile) return;
         if (wantsIntro(u, kind)) { setAuthHold(true); setIntro(true); } else setAuthLeaving(true);
-      }} onLeft={() => { setAuthLeaving(false); setReveal(""); }} onSignOut={logout} />
+      }} onLeft={() => { setAuthLeaving(false); setReveal(""); }} onSignOut={() => { setExpired(false); logout(); }} />
   ) : null;
   if (!me || needProfile) return <>{null}{authEl}</>;
 
   return (<>
     <AppCtx.Provider value={api}>
+    <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); const el = document.querySelector<HTMLElement>("#main textarea") ?? document.querySelector<HTMLElement>("#main"); el?.focus(); }}>Đến nội dung chính</a>
     <div className={`app ${view === "code" && codeEmpty ? "code-view" : ""}${reveal ? ` app-reveal reveal-${reveal}` : ""}`}>
       {view === "code" && codeEmpty && <div className="code-bg"><HalftoneBg /></div>}
       <div className={`shell-side ${open ? "" : "closed"}`} onClickCapture={(e) => {
@@ -2004,7 +2016,7 @@ export default function Home() {
       </div>
       {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
-      <main className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
+      <main id="main" tabIndex={-1} className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">
             {!open && <SideToggle onClick={() => setOpen(true)} />}
@@ -2034,7 +2046,16 @@ export default function Home() {
           <div className="hero" key={String(incog)}>
             <div className="hero-col">
             <div className="hero-date" data-notr>{new Date().toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "long", day: "numeric", month: "long" })}</div>
-            <div className="greeting">{incog && <I.Ghost size={26} />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></div>
+            <h1 className="greeting">{incog && <I.Ghost size={26} />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></h1>
+            {models.loaded && !models.providers.length && (!model || modelsSettled()) && (
+              <section className="ob-card" aria-labelledby="ob-t">
+                <b id="ob-t">Kết nối gói AI của bạn để bắt đầu</b>
+                <p>Synchro chạy bằng gói bạn đang trả tiền. Đăng nhập một gói là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.</p>
+                <div className="ob-row">
+                  {([["anthropic", "Claude"], ["openai", "ChatGPT"], ["google", "Gemini"], ["xai", "Grok"]] as const).map(([id, n]) => <button key={id} className="btn" data-notr onClick={() => { try { sessionStorage.setItem("pv-open", id); } catch {} setSettingsTab("Providers"); setModal("settings"); }}><BrandLogo id={id} size={16} />{n}</button>)}
+                </div>
+              </section>
+            )}
             <Composer {...composerProps} placeholder={tplMode ? TPLS.find((x) => x.k === tplMode)?.ph : undefined} />
             {!tplMode && !incog && caps.art !== false && (
               <div className="hero-quick" aria-label="Bắt đầu nhanh">
@@ -2063,6 +2084,7 @@ export default function Home() {
 
         {view === "chat" && chat && (
           <>
+            <h1 className="sr-only" data-notr>{chat.title}</h1>
             <div className="thread" ref={threadRef} onScroll={onScroll}>
               <div className="thread-in">
                 {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} tail={i >= chat.msgs.length - 2} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}

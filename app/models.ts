@@ -14,6 +14,9 @@ let inflight: Promise<void> | null = null;
 const RETRY_S = [2, 5, 10, 20];
 let tries = 0, again: ReturnType<typeof setTimeout> | null = null;
 
+/** Đã hỏi hết các lần mà vẫn chưa có hãng nào: danh sách trống là thật, không phải máy chủ vừa khởi động lại. */
+export const modelsSettled = () => tries >= RETRY_S.length;
+
 export function refreshModels() {
   inflight ??= fetch("/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
