@@ -54,6 +54,10 @@ try {
   console.log("━━ ảnh từ URL ngoài trong artifact");
   await P("Page.navigate", { url: B + "/" });
   if (!(await until(`!!document.querySelector("textarea")`))) throw new Error("trang chủ không tải được");
+  // Người mới bắt đầu ở Tự động (chạy qua CLI giả lập): ca này cần model của nhà cung cấp giả lập, nơi có câu trả lời "#artimg".
+  await ev(`(async () => { const me = await (await fetch("/api/auth/me")).json(), m = await (await fetch("/api/models")).json(), k = m.providers.flatMap((p) => p.models).find((x) => !x.key.startsWith("sub-"))?.key; if (k) localStorage.setItem("u:" + me.user.id + ":model", k); })()`);
+  await P("Page.reload");
+  if (!(await until(`!!document.querySelector("textarea")`))) throw new Error("trang chủ không tải được");
   await sleep(1200);
   const r = await ev(`(() => { const el = document.querySelector("textarea"); el.focus(); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
   for (const type of ["mousePressed", "mouseReleased"]) await P("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", clickCount: 1 });

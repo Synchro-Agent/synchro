@@ -63,7 +63,7 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .ops-log time{display:block;color:var(--text-2);margin-bottom:1px}
 .ops-log code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
 /* Hộp xem ảnh dùng cơ chế hộp thoại chung (.overlay); synchro-ds.css đổi nền của .overlay nên phải giữ lại nền tối ở đây */
-html body .overlay.ft-lightbox{background:rgba(0,0,0,.72)}
+html body .overlay.ft-lightbox:not(.auth-root *){background:rgba(0,0,0,.72)}
 /* Ô số trong Quản trị (credit giọng AI mỗi ngày) */
 .adm-num{width:112px;flex:none;margin:0;text-align:right}
 /* Trò chuyện bằng giọng nói: gõ câu hỏi khi trình duyệt không nghe được */

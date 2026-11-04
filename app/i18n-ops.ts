@@ -66,7 +66,6 @@ export const OPS_EN2VI: Record<string, string> = {
   "Limits come from each person's AI plan": "Giới hạn đến từ gói AI của từng người",
   "Everyone here runs models through the plan they signed in with, so each vendor's plan limits apply and Synchro has no cost to cap. Spending limits appear here if you add a shared API key in Settings → Providers. To stop someone using a model, change their access below.": "Mọi người ở đây chạy model bằng gói họ đã đăng nhập, nên áp dụng giới hạn gói của từng hãng và Synchro không có chi phí nào để đặt trần. Hạn mức chi tiêu sẽ hiện ở đây nếu bạn thêm khóa API chung trong Cài đặt → Providers. Muốn ngừng cho ai dùng một model, hãy đổi quyền của họ ở dưới.",
   "Spending limits apply only to turns that run on a shared API key. Turns on someone's own AI plan are limited by that plan.": "Hạn mức chi tiêu chỉ áp cho lượt chạy bằng khóa API chung. Lượt chạy bằng gói của từng người do chính gói đó giới hạn.",
-  "Connectors": "Connector",
   "Require a verified email": "Bắt buộc xác minh email",
   "New accounts that sign up with a password must confirm their email before using uploads, connectors, scheduled tasks, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren't affected.": "Tài khoản mới đăng ký bằng mật khẩu phải xác minh email trước khi dùng tệp tải lên, connector, tác vụ tự động, giọng nói và Synchro Code. Chat luôn dùng được. Tắt khi email đang lỗi. Tài khoản có từ trước cài đặt này không bị ảnh hưởng.",
   "Saved": "Đã lưu",
