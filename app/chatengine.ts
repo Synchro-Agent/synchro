@@ -4,7 +4,7 @@ import { healScript } from "./skillheal";
 import { can, canModel, limit, permsOf, type UserRow } from "./authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
-import { ConnectorSession, connectorsPrompt } from "./connectors";
+import { ConnectorSession, connectorsPrompt, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
@@ -36,7 +36,8 @@ import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
 import type { TaskCtx } from "./tasks";
-import { answer as answerAsk } from "./approvals";
+import { answer as answerAsk, newAskId, waitAnswer, type Ask } from "./approvals";
+import { callArgs, compactSchema, rankTools, resolveTool } from "./connproxy";
 import { getPrefs as codePrefs } from "./codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, browserTargetOf, chatFiles, describeBrowser, isBrowserTool, releaseBrowser, runBrowserTool, type BrowserCtx } from "./browsertools";
 
@@ -48,11 +49,12 @@ type Call = { id: string; name: string; input: Record<string, unknown> };
 // pause: công cụ phía máy chủ của hãng (tìm web) chưa chạy xong trong một lần gọi — gửi lại để model làm tiếp.
 type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean };
 // image: ảnh JPEG (base64) đi kèm kết quả công cụ, ví dụ ảnh chụp trình duyệt; mỗi hãng nhận theo cách riêng.
-type Run = ToolRun & { image?: string };
+// mime: loại ảnh khi không phải JPEG (ảnh do connector trả về).
+type Run = ToolRun & { image?: string; mime?: string };
 type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[] };
 // Ảnh chụp trình duyệt cho model dùng Chat Completions / Responses: tin nhắn công cụ chỉ nhận chữ, nên ảnh đi kèm một tin người dùng ngay sau.
 const SHOT = (id: string) => `Ảnh chụp màn hình trình duyệt (kết quả công cụ ${id}).`;
-const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${r.image}` } }] }] : []);
+const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:${r.mime ?? "image/jpeg"};base64,${r.image}` } }] }] : []);
 type Skl = Awaited<ReturnType<typeof enabledSkills>>;
 
 // Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
@@ -98,7 +100,7 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
     };
   },
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, is_error: res[i].is_error,
-    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: "image/jpeg", data: res[i].image } }] : res[i].content })) }],
+    content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: res[i].mime ?? "image/jpeg", data: res[i].image } }] : res[i].content })) }],
 });
 
 const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
@@ -171,7 +173,7 @@ type Lib = { key: string; label: string };
 // task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
-type Exec = { toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null };
+type Exec = { toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; denied?: Map<string, string>; connCards?: Set<string> };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -281,15 +283,80 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
   sayOut(x, liveNow());
   deltaStep();
   const c = unwrapConn(x, { id: `mcp_${randomToken(8)}`, name, input });
-  // Công cụ connector để chế độ "Hỏi trước mỗi lần": CLI không hỏi duyệt giữa chừng được, nên báo rõ thay vì tự chạy.
-  if (needsAsk(x, c) && !x.task) return { content: "Công cụ này đang để chế độ hỏi duyệt trước mỗi lần dùng; gói chạy qua CLI chưa hỏi duyệt được. Hãy cho người dùng biết: đổi quyền công cụ thành \"Luôn cho phép\" trong Connectors, hoặc dùng model khóa API cho việc này.", is_error: true };
+  // Công cụ connector cần hỏi: lời gọi của CLI chờ ở đây (thẻ duyệt trong khung chat), rồi trả kết quả cho model như mọi công cụ khác.
+  const decisions: Record<string, Decision> = needsAsk(x, c) && !x.task ? { [c.id]: await askConnector(x, c) } : {};
   let res: ToolRun | null = null;
   const m: unknown[] = [];
   const cap: Adapter = { step: async () => { throw new Error("không dùng"); }, results: (_calls, r) => { res = r[0]; return []; } };
-  await execute(cap, m, x, [c], usedAll, {});
+  await execute(cap, m, x, [c], usedAll, decisions);
   const follow = (m.find((v) => (v as { role?: string }).role === "user") as { content?: unknown } | undefined)?.content;
   const r = (res as Run | null) ?? { content: "Không có kết quả.", is_error: true };
-  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image } : {}) };
+  return { content: String(r.content) + (typeof follow === "string" ? `\n\n${follow}` : ""), is_error: r.is_error, ...((r as Run).image ? { image: (r as Run).image, mime: (r as Run).mime } : {}) };
+}
+// Thẻ duyệt công cụ connector trong lượt chạy qua CLI (cùng cơ chế với hỏi dùng trình duyệt): CLI giữ lời gọi công cụ trong lúc chờ.
+// Chờ tối đa 10 phút rồi coi như chưa được phép; bấm Dừng thì thôi chờ ngay.
+const ASK_WAIT = 10 * 60_000;
+const ASK_LATE = "__late__";
+const REFUSED = "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.";
+const askOf = (x: Exec, c: Call, id: string): Ask => {
+  const ct = x.sess!.get(c.name)!;
+  const a: Ask = {
+    id, kind: "connector", tool: ct.tool.name, key: `conn:${ct.fq}`, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, detail: "",
+    conn: { name: ct.cname, logo: ct.logo, color: ct.color, ...(ct.icon && ct.icon.length < 1500 ? { icon: ct.icon } : {}) },
+    about: (ct.tool.description ?? "").slice(0, 300), destructive: !ct.tool.annotations?.readOnlyHint && ct.tool.annotations?.destructiveHint === true,
+  };
+  // Sự kiện của lượt giữ tối đa 6000 ký tự: cắt ngang JSON thì thẻ không hiện được và lượt treo tới hết giờ.
+  const full = c.input && Object.keys(c.input).length ? JSON.stringify(c.input, null, 2) : "";
+  for (let n = full.length; ; n = Math.floor(n * 0.7)) {
+    a.detail = n >= full.length ? full : `${full.slice(0, n)}\n… (còn ${full.length - n} ký tự không hiện ở đây)`;
+    if (JSON.stringify(a).length <= 5900 || !n) return a;
+  }
+};
+async function askConnector(x: Exec, c: Call): Promise<Decision> {
+  // Nhiều lời gọi song song: hỏi lần lượt, để "Cho phép trong đoạn chat này" ở thẻ trước khỏi phải hỏi lại ở thẻ sau.
+  const prev = x.asking ?? Promise.resolve();
+  let release = () => {};
+  x.asking = new Promise<void>((ok) => { release = ok; });
+  await prev;
+  const deny = (why: string): Decision => { (x.denied ??= new Map()).set(c.id, why); return "deny"; };
+  try {
+    if (!needsAsk(x, c)) return "allow";
+    if (!currentRun()) return deny("Công cụ này cần người dùng duyệt nhưng lượt này không có khung chat để hỏi nên chưa chạy. Hãy báo người dùng nhắc lại yêu cầu trong khung chat để Synchro hỏi, hoặc đổi quyền công cụ thành \"Luôn cho phép\" trong Cài đặt → Connectors.");
+    const id = newAskId();
+    const wait = waitAnswer(x.uid, id, runSignal());
+    const late = setTimeout(() => answerAsk(x.uid, id, { ok: false, note: ASK_LATE }), ASK_WAIT);
+    progress("ask", JSON.stringify(askOf(x, c, id)));
+    progress("step", "Đang chờ bạn duyệt");
+    const a = await wait;
+    clearTimeout(late);
+    const timedOut = a.note === ASK_LATE;
+    progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always, chat: !!a.chat, ...(timedOut ? { gone: true } : {}) }));
+    if (timedOut) return deny("Người dùng chưa trả lời yêu cầu duyệt sau 10 phút nên công cụ chưa chạy. Hãy báo họ biết; nếu vẫn cần thì nhắc lại yêu cầu để Synchro hỏi lại.");
+    if (!a.ok) return deny(a.note && a.note !== "Người dùng đã dừng." ? `Người dùng từ chối công cụ này. Lời nhắn của họ: ${a.note}. Làm theo lời nhắn nếu được; đừng tìm cách khác để lách.` : REFUSED);
+    if (a.always) { x.sess!.allowAlways(c.name); return "always"; }
+    if (a.chat) { x.sess!.allowChat(c.name); return "chat"; }
+    return "allow";
+  } finally { release(); }
+}
+// Nút "Kết nối lại" trong khung chat: mỗi connector hiện một lần trong lượt.
+function showReconnect(x: Exec, c: OfflineConn) {
+  const seen = (x.connCards ??= new Set());
+  if (seen.has(c.id)) return;
+  seen.add(c.id);
+  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color }));
+}
+// Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
+const MODEL_IMG = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const IMG_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg" };
+function connectorImage(x: Exec, ct: ChatTool, c: Call, r: { content: string; image?: string; mime?: string }): Pick<Run, "content" | "image" | "mime"> {
+  if (!r.image) return { content: r.content };
+  const data = Buffer.from(r.image, "base64");
+  const saved = data.length && IMG_EXT[r.mime ?? ""] ? saveOutputs(x.uid, [{ path: `${ct.tool.name.replace(/[^\w-]+/g, "_").slice(0, 60)}-${(x.outs.length + 1)}.${IMG_EXT[r.mime!]}`, data }]) : [];
+  x.outs.push(...saved);
+  const note = saved.length ? `\n<files>\noutputs/${saved[0].name} (${fmtSize(saved[0].size)}) — đã gửi cho người dùng\n</files>` : "";
+  if (!MODEL_IMG.has(r.mime ?? "") || r.image.length > 6_500_000) return { content: r.content + note };
+  (x.heavy ??= []).push(c.id);
+  return { content: r.content + note, image: r.image, mime: r.mime };
 }
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ, hoặc ngay khi model đang viết).
 function addFollowup(m: unknown[], text: string) {
@@ -386,14 +453,25 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
     return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
   }
-  if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return { content: findConnTools(x.sess, String(c.input?.query ?? ""), String(c.input?.connector ?? "")), is_error: false, used: { kind: "search", name: c.name } };
-  if (c.name === CONN_CALL && x.sess && !x.sess.get(c.name)) return { content: `Không có công cụ connector "${String(c.input?.tool ?? "")}". Tìm đúng tên bằng ${CONN_FIND} rồi gọi lại.`, is_error: true, used: { kind: "search", name: c.name } };
+  if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return { content: findConnTools(x.sess, String(c.input?.query ?? ""), String(c.input?.connector ?? ""), String(c.input?.tool ?? "")), is_error: false, used: { kind: "search", name: c.name } };
+  if (c.name === CONN_CALL && x.sess && !x.sess.get(c.name)) {
+    const bad = resolveTool(x.sess.tools, String(c.input?.tool ?? "")) ? callArgs(c.input) : null;
+    return { content: bad && "error" in bad ? bad.error : `Không có công cụ connector "${String(c.input?.tool ?? "")}". Tìm đúng tên bằng ${CONN_FIND} rồi gọi lại.`, is_error: true, used: { kind: "search", name: c.name } };
+  }
+  if (c.name === RECONNECT_TOOL.name && x.sess && !x.sess.get(c.name)) {
+    const name = fold(String(c.input?.connector ?? "")).trim();
+    const hit = x.sess.offline.find((o) => o.why !== "vendor" && (fold(o.name) === name || fold(o.name).includes(name))) ?? (x.sess.offline.length === 1 && x.sess.offline[0].why !== "vendor" ? x.sess.offline[0] : null);
+    if (hit) showReconnect(x, hit);
+    return { content: hit ? `Đã hiện nút "Kết nối lại" cho ${hit.name} trong khung chat. Hãy nói người dùng bấm nút rồi nhắc lại yêu cầu.` : `Không có connector "${String(c.input?.connector ?? "")}" đang chờ kết nối lại.`, is_error: !hit, used: { kind: "search", name: c.name } };
+  }
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
   if (x.task && x.sess!.perm(c.name) === "ask") return { content: queueTool(x.uid, x.task, c, { connector: ct.cname, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name }), is_error: true, used };
-  if (d === "deny") return { content: "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.", is_error: true, used };
-  return { ...(await x.sess!.call(c.name, c.input)), used };
+  if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
+  const r = await x.sess!.call(c.name, c.input, runSignal());
+  if (r.reconnect) showReconnect(x, r.reconnect);
+  return { is_error: r.is_error, ...connectorImage(x, ct, c, r), used };
 }
 const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name) === "ask";
 
@@ -411,6 +489,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
   if (c.name === "brain_write") return `Đang ghi vào bộ não: ${String(c.input?.title ?? "").slice(0, 80)}`;
+  if (c.name === RECONNECT_TOOL.name && x.sess && !x.sess.get(c.name)) return "Đang hiện nút kết nối lại";
   if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return `Đang tìm công cụ connector: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {}, browserTargetOf(c.input, x.bctx));
   const ct = x.sess?.get(c.name);
@@ -430,6 +509,8 @@ function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   });
 }
 const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSignal()?.aborted;
+const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|authorization|cookie|credential/i;
+const argLine = (input: unknown) => { try { return JSON.stringify(input ?? {}, (k, v) => (k && SECRET_KEY.test(k) ? "***" : v)).slice(0, 200); } catch { return ""; } };
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
   const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
   let res: Run[];
@@ -450,7 +531,8 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   });
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
-  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: String(r.content ?? "").replace(/\s+/g, " ").slice(0, 140) })); });
+  // Công cụ ghi của connector: kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: String(r.content ?? "").replace(/^<ref[^>]*>\s*/, "").replace(/\s+/g, " ").slice(0, 140), ...(x.sess?.get(calls[i].name) && !x.sess.isRead(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
   const more = takeInbox();
@@ -578,37 +660,46 @@ function connProxy(s: ConnectorSession) {
 }
 // gemini: Gemini từ chối tham số kiểu object không khai báo thuộc tính, nên nhận tham số dạng chuỗi JSON.
 const connProxyTools = (gemini: boolean) => [
-  { name: CONN_FIND, description: "Tìm công cụ của các connector người dùng đã kết nối (danh mục tên ở phần connector trong hướng dẫn). Trả về tên đầy đủ, mô tả và tham số của các công cụ khớp nhất. Gọi trước connector_call khi chưa có định nghĩa của công cụ cần dùng.",
-    input_schema: { type: "object", properties: { query: { type: "string", description: "Việc cần làm hoặc tên công cụ, tiếng Anh cho khớp tên (vd. \"list deployments\", \"create page\")" }, connector: { type: "string", description: "Tên connector để chỉ tìm trong đó (vd. Vercel, Notion); bỏ trống để tìm tất cả" } }, required: ["query"] } },
+  { name: CONN_FIND, description: "Tìm công cụ của các connector người dùng đã kết nối (danh mục tên ở phần connector trong hướng dẫn). Trả về tên đầy đủ, mô tả và tham số của các công cụ khớp nhất. Gọi trước connector_call khi chưa có định nghĩa của công cụ cần dùng. Cần query, hoặc tool để xem đủ định nghĩa một công cụ.",
+    input_schema: { type: "object", properties: { query: { type: "string", description: "Việc cần làm hoặc tên công cụ, tiếng Anh cho khớp tên (vd. \"list deployments\", \"create page\")" }, connector: { type: "string", description: "Tên connector để chỉ tìm trong đó (vd. Vercel, Notion); bỏ trống để tìm tất cả" }, tool: { type: "string", description: "Tên đầy đủ của một công cụ để xem đủ định nghĩa (khi kết quả tìm báo là bản gọn)" } } } },
   { name: CONN_CALL, description: "Gọi một công cụ connector bằng tên đầy đủ (dạng connector__tên, lấy từ connector_tools) với tham số đúng định nghĩa của nó.",
     input_schema: { type: "object", properties: { tool: { type: "string", description: "Tên đầy đủ của công cụ, vd. vercel__list_deployments" },
       ...(gemini ? { input_json: { type: "string", description: "Tham số của công cụ, dạng một đối tượng JSON" } } : { input: { type: "object", description: "Tham số của công cụ theo định nghĩa connector_tools trả về", additionalProperties: true } }) }, required: ["tool"] } },
 ];
-const connTools = (s: ConnectorSession, gemini: boolean) => (connProxy(s) ? connProxyTools(gemini) : connectorToolDefs(s, gemini));
+const connTools = (s: ConnectorSession, gemini: boolean) => [...(connProxy(s) ? connProxyTools(gemini) : connectorToolDefs(s, gemini)), ...(s.offline.some((o) => o.why !== "vendor") ? [RECONNECT_TOOL] : [])];
+// Người dùng nhắc tới một connector đang mất kết nối: hiện nút kết nối lại ngay từ đầu lượt.
+function announceOffline(x: Exec, messages: unknown) {
+  const text = fold(lastUserText(messages));
+  if (!text || !x.sess) return;
+  for (const o of x.sess.offline) if (o.why !== "vendor" && text.includes(fold(o.name))) showReconnect(x, o);
+}
 function unwrapConn(x: Exec, c: Call): Call {
   if (c.name !== CONN_CALL || !x.sess) return c;
-  const tool = String(c.input?.tool ?? "");
-  if (!x.sess.get(tool)) return c;
-  let input: unknown = c.input?.input ?? c.input?.input_json;
-  if (typeof input === "string") try { input = JSON.parse(input); } catch { input = {}; }
-  return { id: c.id, name: tool, input: input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {} };
+  const ct = resolveTool(x.sess.tools, String(c.input?.tool ?? ""));
+  if (!ct) return c;
+  // Tham số hỏng thì giữ nguyên lời gọi connector_call: runCall báo lỗi cho model, không chạy công cụ với tham số rỗng.
+  const a = callArgs(c.input);
+  return "error" in a ? c : { id: c.id, name: ct.fq, input: a.args };
 }
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
-function findConnTools(s: ConnectorSession, query: string, connector: string) {
-  const words = fold(query).split(/[^a-z0-9]+/).filter((w) => w.length > 1);
-  const cf = fold(connector).trim();
+function findConnTools(s: ConnectorSession, query: string, connector: string, one = "") {
   const defs = connectorToolDefs(s, false);
-  const hits = s.tools.map((ct, i) => {
-    if (cf && !fold(ct.cname).includes(cf) && !ct.fq.startsWith(cf)) return null;
-    const name = fold(ct.tool.name.replace(/[_-]+/g, " ")), desc = fold(`${ct.tool.title ?? ""} ${ct.tool.description ?? ""}`);
-    let score = 0;
-    for (const w of words) score += name.includes(w) ? 3 : desc.includes(w) ? 1 : 0;
-    return { i, score };
-  }).filter((h): h is { i: number; score: number } => !!h && (h.score > 0 || !words.length)).sort((a, b) => b.score - a.score).slice(0, 8);
-  if (!hits.length) return `Không có công cụ connector nào khớp "${query}"${connector ? ` trong ${connector}` : ""}. Thử từ khóa khác (tiếng Anh, theo tên công cụ trong danh mục).`;
-  return hits.map(({ i }) => {
-    const d = defs[i];
-    return `## ${d.name}\n${d.description}\nTham số: ${JSON.stringify(d.input_schema).slice(0, 4000)}`;
+  const by = new Map(defs.map((d) => [d.name, d]));
+  // Xem đủ định nghĩa của đúng một công cụ (khi bản gọn đã bỏ bớt chi tiết).
+  if (one) {
+    const ct = resolveTool(s.tools, one);
+    const d = ct && by.get(ct.fq);
+    if (!d) return `Không có công cụ "${one}". Tìm đúng tên bằng ${CONN_FIND} với query.`;
+    const full = JSON.stringify(d.input_schema);
+    return `## ${d.name}\n${d.description}\nTham số: ${full.length <= 40_000 ? full : JSON.stringify(compactSchema(d.input_schema, 40_000).schema)}\n\nGọi bằng ${CONN_CALL} với tool là tên sau dấu ##.`;
+  }
+  if (!query.trim()) return `Hãy cho biết việc cần làm (query), hoặc tên công cụ (tool) để xem đủ định nghĩa.`;
+  const { hits, note } = rankTools(s.tools, query, connector);
+  if (!hits.length) return `${note}Không có công cụ connector nào khớp "${query}"${connector ? ` trong ${connector}` : ""}. Thử từ khóa khác (tiếng Anh, theo tên công cụ trong danh mục).`;
+  return note + hits.map((ct) => {
+    const d = by.get(ct.fq)!;
+    const { schema, trimmed } = compactSchema(d.input_schema);
+    return `## ${d.name}\n${d.description}\nTham số: ${JSON.stringify(schema)}${trimmed ? `\n(Bản gọn. Xem đủ: ${CONN_FIND} với tool="${d.name}".)` : ""}`;
   }).join("\n\n") + `\n\nGọi bằng ${CONN_CALL} với tool là tên sau dấu ##.`;
 }
 
@@ -1022,7 +1113,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const st = studio ? studioSkills(c.user.id, studio) : null;
         const ss = await skillSet(c.user, body, messages, studio, st);
         route = ss.route;
-        if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
+        if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
         // Công cụ và hướng dẫn trình duyệt luôn có khi tính năng bật (phần đầu prompt ổn định, đọc lại từ bộ đệm).
@@ -1034,6 +1125,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), PLAN_TOOL];
         const xx: Exec = { toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
+        announceOffline(xx, messages);
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input) => { bridged++; return bridgeCall(xx, name, input, usedAll); } });
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
@@ -1144,7 +1236,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
     const prep = prepareHistory(messages, [route, recallOf(body, c.user, convId)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
-    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length) sess = null; }
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
     // read_ref: đọc dữ liệu lớn đã lưu theo tham chiếu (ở lượt này hoặc các lượt trước, kể cả khi đổi model).
     const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));
@@ -1169,6 +1261,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
       const x: Exec = { list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      if (sess) announceOffline(x, messages);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)

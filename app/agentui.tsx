@@ -6,17 +6,20 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
 import { Loader } from "./brand";
+import { tr } from "./i18n";
+import { ConnLogo } from "./connectorsui";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
-export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site"; title: string; detail: string; host?: string; state: "wait" | "ok" | "always" | "no" | "gone" };
+// connector: công cụ connector (conn: hiện logo; about: mô tả công cụ; destructive: cảnh báo xóa dữ liệu); chat = cho phép trong đoạn chat này.
+export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; destructive?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" };
 // steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được); think: suy nghĩ của model.
 export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | ToolStep;
 /** Kiểu xem lượt của agent: bình thường (gọn), kèm suy nghĩ, chi tiết (mọi công cụ mở sẵn, kèm đầu vào / đầu ra). */
 export type TView = "normal" | "thinking" | "verbose";
 export const TVIEW_LABEL: Record<TView, string> = { normal: "Bình thường", thinking: "Suy nghĩ", verbose: "Chi tiết" };
-export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; note?: string }) => void;
+export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => void;
 type Say = (m: string) => void;
 
 const base = (p: string) => p.split("/").pop() || p;
@@ -126,31 +129,36 @@ function Think({ text, open: init }: { text: string; open: boolean }) {
 export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnAnswer }) {
   const [note, setNote] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const go = (ok: boolean, o?: { always?: boolean; note?: string }) => { if (!onAnswer || sending) return; setSending(true); onAnswer(a.id, ok, o); };
+  const go = (ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => { if (!onAnswer || sending) return; setSending(true); onAnswer(a.id, ok, o); };
+  const conn = a.kind === "connector" ? a.conn : undefined;
+  // Thẻ nằm trong .ai-msg (bộ dịch tự động bỏ qua nội dung câu trả lời) nên chữ giao diện dịch bằng tr().
   if (a.state !== "wait") return (
     <div className={`ag-asked ${a.state === "no" || a.state === "gone" ? "no" : ""}`}>
       {a.state === "no" || a.state === "gone" ? <I.X size={13} /> : <I.Check size={13} />}
-      <span>{a.state === "no" ? "Đã từ chối" : a.state === "gone" ? "Không còn chờ" : a.state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : "Luôn cho phép trong phiên") : "Đã cho phép"}: <b data-notr>{a.title}</b></span>
+      <span>{tr(a.state === "no" ? "Đã từ chối" : a.state === "gone" ? "Không còn chờ" : a.state === "chat" ? "Cho phép trong đoạn chat này" : a.state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : conn ? "Luôn cho phép" : "Luôn cho phép trong phiên") : "Đã cho phép")}: <b data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</b></span>
     </div>
   );
-  const always = a.kind === "site" ? `Luôn cho phép ${a.host ?? "trang này"}` : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này";
+  const always = a.kind === "site" ? `${tr("Luôn cho phép")} ${a.host ?? tr("trang này")}` : tr(a.kind === "connector" ? "Luôn cho phép" : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này");
   return (
     <div className="ag-ask" role="alertdialog" aria-label={a.title}>
-      <div className="ag-ask-h"><span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.M icon="Pencil" size={15} /> : <I.M icon="Terminal" size={15} />}</span>
-        <div><b>{a.kind === "site" ? "Cho Synchro dùng trình duyệt trên trang này?" : a.kind === "edit" ? "Cho Synchro sửa tệp này?" : "Cho Synchro chạy lệnh này?"}</b><span data-notr>{a.title}</span></div></div>
+      <div className="ag-ask-h">{conn ? <ConnLogo logo={conn.logo} color={conn.color} icon={conn.icon} name={conn.name} size={28} /> : <span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.M icon="Pencil" size={15} /> : <I.M icon="Terminal" size={15} />}</span>}
+        <div><b>{tr(a.kind === "connector" ? "Cho Synchro dùng công cụ này?" : a.kind === "site" ? "Cho Synchro dùng trình duyệt trên trang này?" : a.kind === "edit" ? "Cho Synchro sửa tệp này?" : "Cho Synchro chạy lệnh này?")}</b><span data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</span></div></div>
+      {a.about && <p className="ag-ask-about" data-notr>{a.about}</p>}
+      {a.destructive && <div className="ap-warn"><I.Alert size={14} /><span>{tr("Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.")}</span></div>}
       {a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
       {note !== null ? (
         <div className="ag-ask-note">
-          <input autoFocus value={note} placeholder="Bảo Synchro nên làm thế nào thay vào đó…" onChange={(e) => setNote(e.target.value)}
+          <input autoFocus value={note} placeholder={tr("Bảo Synchro nên làm thế nào thay vào đó…")} onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") go(false, { note }); if (e.key === "Escape") setNote(null); }} />
-          <button className="btn dark" disabled={sending} onClick={() => go(false, { note })}>Gửi</button>
+          <button className="btn dark" disabled={sending} onClick={() => go(false, { note })}>{tr("Gửi")}</button>
         </div>
       ) : (
         <div className="ag-ask-a">
-          <button className="btn dark" disabled={sending || !onAnswer} onClick={() => go(true)}>Cho phép</button>
+          <button className="btn dark" disabled={sending || !onAnswer} onClick={() => go(true)}>{tr(a.kind === "connector" ? "Cho phép một lần" : "Cho phép")}</button>
+          {a.kind === "connector" && <button className="btn" disabled={sending || !onAnswer} onClick={() => go(true, { chat: true })}>{tr("Cho phép trong đoạn chat này")}</button>}
           <button className="btn" disabled={sending || !onAnswer} onClick={() => go(true, { always: true })} data-notr={a.kind === "site" ? true : undefined}>{always}</button>
-          <button className="btn" disabled={sending || !onAnswer} onClick={() => go(false)}>Từ chối</button>
-          <button className="ag-ask-other" disabled={sending || !onAnswer} onClick={() => setNote("")}>Bảo làm khác…</button>
+          <button className="btn" disabled={sending || !onAnswer} onClick={() => go(false)}>{tr("Từ chối")}</button>
+          <button className="ag-ask-other" disabled={sending || !onAnswer} onClick={() => setNote("")}>{tr("Bảo làm khác…")}</button>
         </div>
       )}
     </div>

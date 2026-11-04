@@ -3,7 +3,8 @@
 //           metadata máy chủ đăng nhập, đăng ký động, trang đồng ý, PKCE S256, iss, refresh token xoay vòng. Công cụ: ghi chú.
 //  /modern  Giao thức 2026-07-28 (không phiên, _meta + header Mcp-Method / Mcp-Name / Mcp-Param-*), không cần đăng nhập.
 //  /sse     HTTP+SSE đời 2024-11-05 (GET mở luồng, sự kiện endpoint, POST tới /messages), không cần đăng nhập.
-// POST /__expire làm mọi access token hết hạn để thử luồng làm mới token.
+//  /apikey  Chỉ nhận token tự nhập (Authorization: Bearer mock-api-key), không có OAuth.
+// POST /__expire làm mọi access token hết hạn để thử luồng làm mới token. POST /__revoke thu hồi cả refresh token (phải đăng nhập lại).
 import http from "node:http";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -65,6 +66,7 @@ export function startMockMcp(port = 4011) {
     if (p === "/" && req.method === "GET") return html(res, `<!doctype html><html><head><title>Mock Notes</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="mask-icon" href="/mask.svg"></head><body>Mock Notes</body></html>`);
     if (p === "/favicon.svg") { res.writeHead(200, { "content-type": "image/svg+xml" }); return res.end(FAVICON); }
     // ---------------- OAuth ----------------
+    if (p === "/.well-known/oauth-protected-resource/apikey") return send(res, 404, { error: "no" });
     if (p === "/.well-known/oauth-protected-resource/mcp" || p === "/.well-known/oauth-protected-resource") return send(res, 200, { resource: `${BASE}/mcp`, authorization_servers: [BASE], scopes_supported: ["notes:read", "notes:write"], bearer_methods_supported: ["header"] });
     if (p === "/.well-known/oauth-authorization-server") return send(res, 200, { issuer: BASE, authorization_endpoint: `${BASE}/authorize`, token_endpoint: `${BASE}/token`, registration_endpoint: `${BASE}/register`, response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"], code_challenge_methods_supported: ["S256"], token_endpoint_auth_methods_supported: ["none"], scopes_supported: ["notes:read", "notes:write", "offline_access"], authorization_response_iss_parameter_supported: true });
     if (p === "/register" && req.method === "POST") {
@@ -124,6 +126,20 @@ export function startMockMcp(port = 4011) {
       return send(res, 400, { error: "unsupported_grant_type" });
     }
     if (p === "/__expire" && req.method === "POST") { for (const v of access.values()) v.exp = 0; return send(res, 200, { ok: true }); }
+    if (p === "/__revoke" && req.method === "POST") { access.clear(); refresh.clear(); return send(res, 200, { ok: true }); }
+
+    // ---------------- /apikey: máy chủ công ty chỉ nhận token, không có OAuth ----------------
+    if (p === "/apikey") {
+      if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+      if (req.headers.authorization !== "Bearer mock-api-key") return send(res, 401, { error: "invalid_token" });
+      const m = json(await body(req));
+      if (!m) return send(res, 400, err(null, -32700, "Parse error"));
+      if (m.id === undefined) { res.writeHead(202); return res.end(); }
+      if (m.method === "initialize") return send(res, 200, ok(m.id, { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "mock-apikey", title: "Mock API Key", version: "1.0.0" } }));
+      if (m.method === "tools/list") return send(res, 200, ok(m.id, { tools: SSE_TOOLS }));
+      if (m.method === "tools/call") return send(res, 200, ok(m.id, text(`Echo: ${m.params?.arguments?.text ?? ""}`)));
+      return send(res, 200, err(m.id, -32601, "Method not found"));
+    }
 
     // ---------------- /big: 300 công cụ (như Vercel / Higgsfield), không cần đăng nhập, không phiên ----------------
     if (p === "/big") {

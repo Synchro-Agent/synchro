@@ -5048,3 +5048,27 @@ body{text-wrap-style:pretty}
 :where(.ai-msg,.mdx) li.task{list-style:none;margin-left:-1.2em;display:flex;gap:8px;align-items:baseline}
 :where(.ai-msg,.mdx) li.task .tick{flex:none;width:13px;height:13px;border:1.5px solid var(--text-3);border-radius:3px;transform:translateY(2px)}
 :where(.ai-msg,.mdx) li.task .tick.on{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--bg)}
+
+/* Connector: hãng chưa duyệt Synchro, cửa sổ đăng nhập bị chặn, thẻ kết nối lại trong khung chat. */
+.cn-item{flex-wrap:wrap}
+.cn-item.wide{grid-column:1/-1}
+.cn-item-err{flex-basis:100%;margin:0!important;align-items:center}
+.cn-item-err span{flex:1;min-width:0}
+.cn-vendor-tag{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:12.5px;color:var(--text-2);padding:5px 8px;border-radius:var(--r-plate);border:.5px dashed var(--border-strong)}
+.cn-vendor-tag:hover{background:var(--hover)}
+.cn-vendor{flex-basis:100%;font-size:13px;line-height:1.5;color:var(--text-2);padding:0 14px 12px}
+.cn-item .cn-vendor{padding:0}
+.cn-vendor p{margin:0 0 6px}
+.cn-vendor-a{display:flex;flex-wrap:wrap;gap:14px;margin-top:2px}
+.cn-pop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;padding:8px 12px;margin:0 0 10px;border-radius:var(--r-plate);background:color-mix(in srgb,var(--text) 5%,transparent)}
+.cn-pop span{flex:1;min-width:160px}
+.cn-pop.in{margin:0 14px 12px}
+.cn-pop .btn{height:30px;font-size:12.5px}
+.cn-warnline{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:12px;line-height:1.45;color:var(--text-3);margin:0 14px 12px;word-break:break-word}
+.cn-warnline svg{flex:none;align-self:center}
+.cn-modes{margin:4px 0 12px;flex-wrap:wrap}
+.cn-tool-n .cn-tag{margin-left:6px}
+.ag-ask-about{margin:0;font-size:12.5px;line-height:1.5;color:var(--text-2);overflow-wrap:anywhere}
+.cn-rc .api-err{margin:0}
+.cn-rc .cn-pop{margin:0}
+.cm-rec{margin-left:auto;flex:none;white-space:nowrap;font-size:12.5px}

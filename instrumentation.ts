@@ -12,6 +12,10 @@ export async function register() {
       (await import("./app/tasks")).startScheduler(Number(process.env.SYNCHRO_TASK_TICK_MS) || 30_000);
       // Bộ não tổng hợp: chưng cất đoạn chat theo nhịp của bộ hẹn giờ.
       await import("./app/brain");
+      // Connector: kiểm tra lại ở nền theo nhịp của bộ hẹn giờ (công cụ mới, token bị thu hồi, giữ refresh token còn sống).
+      const { onTick } = await import("./app/tasks");
+      const { recheckConnectors } = await import("./app/connectors");
+      onTick("connectors", (now) => { void recheckConnectors(now).catch((e) => console.error("[connectors]", e)); });
       // Giữ kết nối GitHub luôn dùng được: làm mới token có hạn, dùng token định kỳ (mỗi 30 phút xem một lượt).
       const { keepLinksAlive } = await import("./app/github");
       const keep = () => keepLinksAlive().catch((e) => console.error("[github]", e));

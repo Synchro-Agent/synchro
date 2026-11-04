@@ -20,7 +20,7 @@ import { SpeechView, TOOL_ICON } from "./speech/view";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { elSpeed, speakAI, type Speaking } from "./speak";
-import { applyEvent, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
+import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import { AuthComponent, type AuthUser, type Providers } from "./auth";
 import { Markdown } from "./md";
@@ -72,7 +72,7 @@ import { FilePanel, ProductSwitcher, type Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
 import { CustomizePage, HUB_DISCOVER, useStudios, type CzTab } from "./pluginsui";
-import { CONNECTORS_BROWSE, ConnLogo, ConnectorsPanel, type Conn } from "./connectorsui";
+import { CONNECTORS_BROWSE, ConnLogo, ConnectorsPanel, ReconnectLink, type Conn } from "./connectorsui";
 import type { DirEntry } from "./connectordir";
 // Dữ liệu connector cho menu + ở ô chat (connector đã nối, danh mục để thêm).
 type CxData = { connectors: Conn[]; directory: DirEntry[] };
@@ -517,7 +517,9 @@ function Composer(p: {
                     : cx.connectors.map((c) => { const on = c.enabled && !c.adminBlocked && c.status === "ok"; return (
                       <div key={c.id} className="menu-item cm-conn">
                         <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} size={20} /><span className="cv-ell" data-notr>{c.name}</span>
-                        <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} ${c.name}`} disabled={c.adminBlocked || c.status !== "ok"} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
+                        {c.status !== "ok" && !c.adminBlocked
+                          ? <ReconnectLink c={c} say={say} onDone={loadCx} onManage={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }} />
+                          : <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} ${c.name}`} disabled={c.adminBlocked} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />}
                       </div>); })}
                 </div>
                 <hr />
@@ -880,7 +882,8 @@ export default function Home() {
   const say = useCallback((m: string) => {
     setToast(m);
     if (toastT.current) clearTimeout(toastT.current);
-    toastT.current = setTimeout(() => setToast(""), 2400);
+    // Câu dài (lời giải thích lỗi kết nối) cần nhiều thời gian đọc hơn.
+    toastT.current = setTimeout(() => setToast(""), Math.min(10_000, Math.max(2400, m.length * 55)));
   }, []);
   // Quay về từ trang đăng nhập connector (trình duyệt chặn cửa sổ bật lên): mở Cài đặt đúng tab và báo kết quả.
   useEffect(() => {
@@ -1886,7 +1889,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={(id, ok, o) => { answerAsk(id, ok, o).then((err) => err && say(err)); }} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
+                      <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={openPlugins} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done && i === chat.msgs.length - 1 ? <ConnCards parts={m.parts} /> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={(id, ok, o) => { answerAsk(id, ok, o).then((err) => err && say(err)); }} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (caps.art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={caps.inl} live={m.done && i === chat.msgs.length - 1 && !busy} /> : (() => {
                         const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
                         const total = arts.map.get(sg.art.ident)?.length ?? 1;
                         const v = pos?.v ?? 0;

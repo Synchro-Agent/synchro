@@ -19,6 +19,7 @@ const SUITES = [
   ["Chuyển cảnh đăng nhập → phim → trang chủ", "tests/ui/introfilm.mjs"],
   ["Màn Đăng nhập, Giới thiệu về bạn trên màn thấp", "tests/ui/authfit.mjs"],
   ["Danh sách model lỗi ở lần hỏi đầu", "tests/ui/models-retry.mjs"],
+  ["Đăng nhập connector quay về dù có COOP", "tests/ui/connector-login.mjs"],
   ["Ảnh từ URL ngoài trong artifact", "tests/ui/artimg.mjs"],
 ];
 const only = process.argv.slice(2);

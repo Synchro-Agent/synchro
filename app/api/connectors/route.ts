@@ -13,7 +13,7 @@ export const GET = route(async (req) => {
   return Response.json({ connectors: listConnectors(user.id, policy), directory: DIRECTORY, policy });
 });
 
-// Thêm connector: { dir } từ danh mục, hoặc { name, url, clientId?, clientSecret? } tùy chỉnh. Trả về authorizeUrl nếu cần đăng nhập.
+// Thêm connector: { dir } từ danh mục, hoặc { name, url, clientId?, clientSecret?, token?, header? } tùy chỉnh. Trả về authorizeUrl nếu cần đăng nhập.
 export const POST = route(async (req) => {
   sameOrigin(req);
   const user = connectorUser(req);

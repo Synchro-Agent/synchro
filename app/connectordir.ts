@@ -1,8 +1,11 @@
 // Danh mục connector có sẵn: máy chủ MCP từ xa chính thức của từng hãng (đã kiểm tra địa chỉ tháng 10/2026).
-// Chỉ gồm máy chủ đăng nhập tự động được (Client ID Metadata Document hoặc đăng ký động) hoặc không cần đăng nhập.
+// Phần lớn đăng nhập tự động được (Client ID Metadata Document hoặc đăng ký động) hoặc không cần đăng nhập; hãng chưa mở cho Synchro thì có cờ access (xem dưới).
 // Logo ở public/connectors (simple-icons, CC0); hãng không có logo thì hiện chữ cái đầu trên màu thương hiệu.
 export type DirCat = "productivity" | "design" | "dev" | "knowledge" | "payments" | "support";
-export type DirEntry = { id: string; name: string; url: string; cat: DirCat; desc: string; descVi: string; logo?: string; color?: string; noAuth?: boolean };
+// access: hãng chưa cho Synchro kết nối một chạm (đo trên máy chủ thật tháng 10/2026). Không được trông như connector bình thường: danh mục nói rõ hãng cần gì và
+// còn cách nào thử được (token tự nhập chưa kiểm chứng với từng hãng; OAuth Client ID riêng ở Cài đặt nâng cao). Hãng mở rồi thì chỉ cần bỏ cờ này, không phải sửa dữ liệu.
+export type DirAccess = { why: string; whyVi: string };
+export type DirEntry = { id: string; name: string; url: string; cat: DirCat; desc: string; descVi: string; logo?: string; color?: string; noAuth?: boolean; access?: DirAccess };
 
 export const DIR_CATS: [DirCat | "all", string][] = [["all", "All"], ["productivity", "Productivity"], ["design", "Design"], ["dev", "Development"], ["knowledge", "Knowledge"], ["payments", "Payments"], ["support", "Customer support"]];
 
@@ -15,8 +18,8 @@ export const DIRECTORY: DirEntry[] = [
   { id: "todoist", name: "Todoist", url: "https://ai.todoist.net/mcp", cat: "productivity", logo: "todoist", desc: "Add, organize and complete your tasks.", descVi: "Thêm, sắp xếp và hoàn thành công việc." },
   { id: "airtable", name: "Airtable", url: "https://mcp.airtable.com/mcp", cat: "productivity", logo: "airtable", desc: "Query and edit records in your bases.", descVi: "Truy vấn và chỉnh sửa bản ghi trong các base." },
   { id: "granola", name: "Granola", url: "https://mcp.granola.ai/mcp", cat: "productivity", color: "#2E6B3F", desc: "Search your meeting notes and transcripts.", descVi: "Tìm trong ghi chú và bản ghi lời cuộc họp." },
-  { id: "figma", name: "Figma", url: "https://mcp.figma.com/mcp", cat: "design", logo: "figma", desc: "Bring designs, components and variables into your chats.", descVi: "Đưa thiết kế, component và biến từ Figma vào cuộc trò chuyện." },
-  { id: "canva", name: "Canva", url: "https://mcp.canva.com/mcp", cat: "design", color: "#00C4CC", desc: "Search, create and edit Canva designs.", descVi: "Tìm, tạo và chỉnh sửa thiết kế Canva." },
+  { id: "figma", name: "Figma", url: "https://mcp.figma.com/mcp", cat: "design", logo: "figma", desc: "Bring designs, components and variables into your chats.", descVi: "Đưa thiết kế, component và biến từ Figma vào cuộc trò chuyện.", access: { why: "Figma only lets apps it has approved connect to its MCP server, and Synchro isn't approved yet (registration is refused).", whyVi: "Figma chỉ cho các ứng dụng đã được duyệt kết nối tới máy chủ MCP của họ, và Synchro chưa được duyệt (yêu cầu đăng ký bị từ chối)." } },
+  { id: "canva", name: "Canva", url: "https://mcp.canva.com/mcp", cat: "design", color: "#00C4CC", desc: "Search, create and edit Canva designs.", descVi: "Tìm, tạo và chỉnh sửa thiết kế Canva.", access: { why: "Canva has to accept Synchro's return address before sign-in can work. Today its sign-in page rejects it (Invalid redirect URI).", whyVi: "Canva phải chấp nhận địa chỉ quay về của Synchro thì mới đăng nhập được. Hiện trang đăng nhập của họ từ chối địa chỉ này (Invalid redirect URI)." } },
   { id: "miro", name: "Miro", url: "https://mcp.miro.com/", cat: "design", logo: "miro", desc: "Read and create content on Miro boards.", descVi: "Đọc và tạo nội dung trên bảng Miro." },
   { id: "sentry", name: "Sentry", url: "https://mcp.sentry.dev/mcp", cat: "dev", logo: "sentry", desc: "Investigate errors, issues and performance.", descVi: "Điều tra lỗi, issue và hiệu năng ứng dụng." },
   { id: "vercel", name: "Vercel", url: "https://mcp.vercel.com", cat: "dev", logo: "vercel", desc: "Check projects, deployments and build logs.", descVi: "Xem dự án, lượt triển khai và log build." },
@@ -28,6 +31,6 @@ export const DIRECTORY: DirEntry[] = [
   { id: "context7", name: "Context7", url: "https://mcp.context7.com/mcp", cat: "knowledge", color: "#10B981", noAuth: true, desc: "Up-to-date docs and code examples for libraries.", descVi: "Tài liệu và ví dụ code mới nhất của các thư viện." },
   { id: "stripe", name: "Stripe", url: "https://mcp.stripe.com", cat: "payments", logo: "stripe", desc: "Look up customers, payments, invoices and subscriptions.", descVi: "Tra cứu khách hàng, thanh toán, hóa đơn và gói thuê bao." },
   { id: "paypal", name: "PayPal", url: "https://mcp.paypal.com/mcp", cat: "payments", logo: "paypal", desc: "Manage invoices, orders and transactions.", descVi: "Quản lý hóa đơn, đơn hàng và giao dịch." },
-  { id: "square", name: "Square", url: "https://mcp.squareup.com/sse", cat: "payments", logo: "square", desc: "Work with payments, orders and your catalog.", descVi: "Làm việc với thanh toán, đơn hàng và danh mục sản phẩm." },
-  { id: "intercom", name: "Intercom", url: "https://mcp.intercom.com/mcp", cat: "support", logo: "intercom", desc: "Search conversations, tickets and customer data.", descVi: "Tìm cuộc hội thoại, ticket và dữ liệu khách hàng." },
+  { id: "square", name: "Square", url: "https://mcp.squareup.com/sse", cat: "payments", logo: "square", desc: "Work with payments, orders and your catalog.", descVi: "Làm việc với thanh toán, đơn hàng và danh mục sản phẩm.", access: { why: "Square only accepts sign-ins from web addresses on its allowlist, and Synchro isn't on it yet.", whyVi: "Square chỉ nhận đăng nhập từ các địa chỉ trong danh sách cho phép của họ, và Synchro chưa có trong danh sách đó." } },
+  { id: "intercom", name: "Intercom", url: "https://mcp.intercom.com/mcp", cat: "support", logo: "intercom", desc: "Search conversations, tickets and customer data.", descVi: "Tìm cuộc hội thoại, ticket và dữ liệu khách hàng.", access: { why: "Intercom only accepts sign-ins from web addresses on its allowlist, and Synchro isn't on it yet.", whyVi: "Intercom chỉ nhận đăng nhập từ các địa chỉ trong danh sách cho phép của họ, và Synchro chưa có trong danh sách đó." } },
 ];
