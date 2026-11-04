@@ -15,7 +15,7 @@ import type { Event } from "./engine";
 import { engineEnv, everLoggedIn, safeScope, scopeDir, status } from "./cli_auth";
 import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
-import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, type FileCtx } from "./imagefiles";
+import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, scrubServerPaths, type FileCtx } from "./imagefiles";
 import { codexRpc } from "./subs";
 
 export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const;
@@ -86,7 +86,9 @@ export function errKind(message: string): ImgKind {
   return k === "quota" || k === "rate" ? "quota" : k === "auth" ? "auth" : "other";
 }
 const exitFail = (e: Exit): Tried["fail"] | null => (e.aborted ? { kind: "aborted" } : e.timedOut ? { kind: "timeout" } : null);
-const clip = (s: string) => redact(stripAnsi(s)).replace(/\s+/g, " ").trim().slice(0, 240);
+// Chi tiết lỗi tới người dùng (nhật ký làm việc) và model: stderr của CLI có thể ghi đường dẫn thư mục đăng nhập trên máy chủ.
+const clip = (s: string) => scrubServerPaths(redact(stripAnsi(s))).replace(/\s+/g, " ").trim().slice(0, 240);
+const lastLines = (s: string) => stripAnsi(s).trim().split("\n").slice(-6).join("\n");
 
 // ---------------------------------------------------------------- từng gói
 type Run = { q: ImgReq; count: number; env: Record<string, string>; work: string; stamp: string; c: FileCtx; refPath?: string; refHash?: string; login: string };
@@ -96,8 +98,8 @@ const lastObject = (out: string): Record<string, unknown> | null => {
   for (const l of t.split("\n").reverse()) { try { const o = JSON.parse(l) as Record<string, unknown>; if (o && (o.event === "result" || o.conversation_id || o.status)) return o; } catch {} }
   return null;
 };
-/** Không thấy ảnh: phân biệt model không có công cụ / có tệp nhưng hỏng, quá cỡ / CLI nói xong mà không có tệp. */
-const none = (g: { bad: number; big: number }, said: string): Tried => ({ fail: g.bad ? { kind: "bad" } : g.big ? { kind: "big" } : NO_TOOL_TEXT.test(said) ? { kind: "notool" } : { kind: "nofile", detail: clip(said) } });
+/** Không thấy ảnh: phân biệt model không có công cụ / có tệp nhưng hỏng, quá cỡ / CLI báo thành công mà câu trả lời nói hết hạn mức (image-generator của agy là tiến trình con, lỗi của nó chỉ nằm trong chữ) / CLI nói xong mà không có tệp. */
+const none = (g: { bad: number; big: number }, said: string): Tried => ({ fail: g.bad ? { kind: "bad" } : g.big ? { kind: "big" } : NO_TOOL_TEXT.test(said) ? { kind: "notool" } : errKind(said) === "quota" ? { kind: "quota", detail: clip(said) } : { kind: "nofile", detail: clip(said) } });
 
 /** Chờ khóa của tài khoản, nói cho người dùng biết đang chờ gì. */
 async function locked<T>(r: Run, gen: AsyncGenerator<Event, T | null, unknown>): Promise<{ got?: T; fail?: Tried["fail"] }> {
@@ -197,7 +199,7 @@ async function grokTurn(r: Run, bin: string): Promise<Tried> {
     if (g.files.length) return { files: g.files };
     const m = [failed, lastErr, e.code ? stripAnsi(p.stderr()) : ""].filter(Boolean).join("\n");
     if (m) return { fail: { kind: errKind(m), detail: clip(m) } };
-    return called ? none(g, said) : { fail: { kind: "notool" } };
+    return called || errKind(said) === "quota" ? none(g, said) : { fail: { kind: "notool" } };
   } finally {
     // Chưa biết Grok lưu ảnh ở đâu nên quét lại, kể cả khi lượt bị dừng trước khi nói đường dẫn. Lượt chat của Grok không có image_gen nên ảnh mới trong thư mục này chỉ là của lượt này.
     const left = await listImageFiles(r.login, { ...r.c, signal: undefined }, { depth: 7, stamp: r.stamp }).catch(() => [] as string[]);
@@ -214,7 +216,7 @@ async function viaCodex(r: Run): Promise<Tried> {
   r.q.onBegin?.();
   const args = ["exec", ...CODEX_SAFE, ...(r.refPath ? [`--image=${r.refPath}`] : []), "-"];
   const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: imagePrompt("codex", { ...r.q, count: r.count }), signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
-  let said = "", thread = "", failed = "", shell = false, paths: string[] = [];
+  let said = "", thread = "", failed = "", lastErr = "", ended = false, shell = false, paths: string[] = [];
   const named: unknown[] = [];
   for await (const l of p.lines) {
     if (!l.trim().startsWith("{")) continue;
@@ -224,17 +226,22 @@ async function viaCodex(r: Run): Promise<Tried> {
     if (o.type === "thread.started" && typeof o.thread_id === "string") thread = o.thread_id;
     else if (o.type === "item.completed" && (o.item?.type === "agent_message" || o.item?.item_type === "assistant_message")) said += String(o.item?.text ?? "");
     else if (o.type === "item.completed") named.push(o.item);
+    else if (o.type === "turn.completed") ended = true;
     else if (o.type === "turn.failed") failed = String(o.error?.message ?? "Codex báo lỗi.");
+    // Thường chỉ là "Reconnecting…": chỉ tính khi lượt không xong (như CodexEngine).
+    else if (o.type === "error" && typeof o.message === "string") lastErr = o.message;
   }
   const e = await p.done;
   try {
     if (shell) return { fail: { kind: "other", detail: "Codex định chạy lệnh trên máy chủ nên đã bị dừng" } };
     const gone = exitFail(e);
     if (gone) return { fail: gone };
-    if (failed) return { fail: { kind: errKind(failed), detail: clip(failed) } };
     paths = [...(/^[\w-]{8,100}$/.test(thread) ? await listImageFiles(path.join(r.login, "generated_images", thread), r.c) : []), ...namedPaths([named, said])];
     const g = await gatherImages(paths.length ? paths : await listImageFiles(r.work, r.c, { stamp: r.stamp }), r.c, { max: r.count, skip: r.refHash });
-    return g.files.length ? { files: g.files } : none(g, said);
+    if (g.files.length) return { files: g.files };
+    // Hết hạn mức, hết đăng nhập có thể chỉ nằm trong sự kiện error hay stderr, không có turn.failed.
+    const m = [failed, ended && !e.code ? "" : lastErr, e.code ? lastLines(p.stderr()) : ""].filter(Boolean).join("\n") || (e.code ? `CLI thoát với mã ${e.code}.` : "");
+    return m ? { fail: { kind: errKind(m), detail: clip(m) } } : none(g, said);
   } finally {
     await removeNewFiles(paths, r.stamp, r.c).catch(() => {});
     if (thread) await removeSessionFiles(r.login, thread);
@@ -342,7 +349,7 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
   const kinds = new Set(tried.map((f) => f.kind));
   const refused = q.reference && tried.every((f) => f.kind === "noref");
   const next = refused ? "Hãy đăng nhập gói Google AI (Antigravity) ở Cài đặt → Providers để sửa ảnh có sẵn, hoặc tạo ảnh mới chỉ từ mô tả (bỏ tham số reference)."
-    : [...kinds].every((k) => k === "quota" || k === "free" || k === "notool" || k === "auth") ? "Hãy chờ gói hồi hạn mức, hoặc đăng nhập gói khác ở Cài đặt → Providers rồi thử lại."
+    : [...kinds].every((k) => k === "quota" || k === "free" || k === "notool" || k === "auth" || k === "noref") ? "Hãy chờ gói hồi hạn mức, hoặc đăng nhập gói khác ở Cài đặt → Providers rồi thử lại."
       : kinds.has("busy") ? "Hãy thử lại sau khi lượt kia xong." : "Hãy thử lại sau ít phút.";
   const providers = /Providers/.test(next);
   const kind = tried.find((f) => f.kind !== "noref")?.kind ?? "noref";

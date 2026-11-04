@@ -103,6 +103,44 @@ try {
     ok(!e.ok && /upstream connection reset/.test(e.text), "lỗi khác: giữ chi tiết để người dùng biết", e.text);
   }
 
+  console.log("2b. Lỗi không đi đúng đường vẫn báo đúng");
+  {
+    const C = "u_codexerr"; signIn(C, ["codex"]);
+    mode(C, "codex", { mode: "errorevent" });
+    const a = await gen(C);
+    ok(!a.ok && a.tried[0].kind === "auth" && a.providers && /đăng nhập lại/.test(a.text), "Codex: 401 chỉ trong sự kiện error: báo đăng nhập lại, có nút Providers", a);
+    mode(C, "codex", { mode: "stderr" });
+    const b = await gen(C);
+    ok(!b.ok && b.tried[0].kind === "quota" && b.providers && /hết hạn mức/.test(b.text), "Codex: hết hạn mức chỉ trong stderr: báo hết hạn mức, có nút Providers", b);
+    mode(C, "codex", { mode: "reconnect" });
+    const c = await gen(C);
+    ok(c.ok && !c.tried.length, "Codex: Reconnecting rồi vẫn xong: có ảnh, không coi là lỗi", c);
+    mode(C, "codex", { mode: "stderr", message: "stream closed" });
+    const d = await gen(C);
+    ok(!d.ok && d.tried[0].kind === "other" && /stream closed/.test(d.text), "Codex: lỗi khác trong stderr: giữ chi tiết, không nói là thiếu tệp", d);
+
+    const Q = "u_saidquota"; signIn(Q, ["agy"]);
+    mode(Q, "agy", { mode: "saidquota" });
+    const q = await gen(Q);
+    ok(!q.ok && q.tried[0].kind === "quota" && q.providers && /hết hạn mức/.test(q.text), "agy SUCCESS mà chữ nói hết hạn mức: báo hết hạn mức, không nói thiếu tệp", q);
+
+    const S = "u_scrub"; signIn(S, ["agy", "grok"]);
+    const secret = path.join(loginDir("agy", S), ".gemini", "config", "x");
+    mode(S, "agy", { mode: "fail", message: `open ${secret}: permission denied` });
+    const p = await gen(S);
+    ok(p.ok && p.told.length === 1 && !p.told[0].includes(HOME) && !p.told[0].includes("logins") && /permission denied/.test(p.told[0]), "stderr có đường dẫn đăng nhập: nhật ký làm việc không lộ", p.told);
+    mode(S, "grok", { mode: "fail" });
+    const p2 = await gen(S);
+    ok(!p2.ok && !p2.text.includes(HOME) && !p2.tried.some((t) => (t.detail ?? "").includes(HOME)), "câu báo lỗi gửi cho model cũng không lộ", p2.text);
+
+    // Ảnh gốc: Grok không nhận, ChatGPT Free không có công cụ: thử lại không bao giờ được.
+    const R0 = "u_refmix"; signIn(R0, ["grok", "codex"]);
+    mode(R0, "codex", { plan: "free" });
+    const req = (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "scripts/mock-cli/mock-cli-common.cjs"));
+    const m = await gen(R0, { reference: { name: "goc.png", mime: "image/png", data: req.tinyPng(8, 8) } });
+    ok(!m.ok && m.tried.map((x) => x.kind).join() === "noref,free" && m.providers && /Providers/.test(m.text) && !/thử lại sau ít phút/.test(m.text), "không gói nào làm được: chỉ tới Providers, không bảo thử lại sau", m.text);
+  }
+
   console.log("3. Chỉ nhận ảnh thật, có trần dung lượng");
   {
     const U = "u_magic"; signIn(U, ["agy"]);

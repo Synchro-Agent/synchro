@@ -48,7 +48,9 @@ async function agyImage(prompt, conv) {
   if (m.delayMs) await C.sleep(m.delayMs);
   if (m.mode === "crash") { C.saveImage(path.join(dir, "partial.jpg")); console.error("panic: runtime error"); process.exit(2); }
   if (m.mode === "quota") return fail("RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.");
-  if (m.mode === "fail") return fail("INTERNAL: upstream connection reset");
+  if (m.mode === "fail") return fail(m.message ?? "INTERNAL: upstream connection reset");
+  // Lỗi của image-generator (tiến trình con) không làm hỏng lượt: chỉ nằm trong câu trả lời.
+  if (m.mode === "saidquota") return done("I couldn't generate the image, the quota is exhausted.");
   if (m.mode === "none") return done("NO_IMAGE_TOOL");
   if (m.mode === "text") return done("Đã tạo xong ảnh quả táo đỏ, rất đẹp.");
   if (m.mode === "other") return done(`[ảnh](${m.otherPath})`);

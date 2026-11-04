@@ -77,6 +77,10 @@ const authFile = path.join(dir, "auth.json");
       if (m.mode === "quota") { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
       if (m.mode === "fail") { C.out({ type: "turn.failed", error: { message: "stream disconnected before completion" } }); process.exit(1); }
       if (m.mode === "none") { say("I'm sorry, no image generation tool is available in this environment."); return end(); }
+      // Lỗi không qua turn.failed: chỉ sự kiện error, hay chỉ stderr, CLI thoát mã khác 0.
+      if (m.mode === "errorevent") { C.out({ type: "error", message: m.message ?? "unexpected status 401 Unauthorized: token expired" }); process.exit(1); }
+      if (m.mode === "stderr") { console.error(m.message ?? "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes."); process.exit(1); }
+      if (m.mode === "reconnect") C.out({ type: "error", message: "Reconnecting... 1/5" });
       for (let i = 0; i < C.imageCount(prompt); i++) C.saveImage(path.join(dir, "generated_images", tid, `ig_${i}.png`), "png");
       say("Saved."); return end();
     }
