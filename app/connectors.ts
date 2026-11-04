@@ -8,7 +8,7 @@ import { DIRECTORY } from "./connectordir";
 import { allowsDir, FULL_CONN, type ConnPolicy } from "./catalog";
 import { detectIcon } from "./connicons";
 import crypto from "node:crypto";
-import { guessedRead, McpClient, McpError, readLike, resultImage, resultText, type Era, type McpTool } from "./mcp";
+import { destructiveLike, guessedRead, McpClient, McpError, oldGuessedRead, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
@@ -17,7 +17,8 @@ export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
 // Cài đặt riêng từng connector: dùng trong chat thường / dự án, quyền cho công cụ máy chủ mới thêm,
 // có cho dùng công cụ xóa dữ liệu không, số lần gọi tối đa trong một tin nhắn (0 = không giới hạn).
-export type ConnSettings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
+// permsV: đã xét lại quyền theo quy tắc đoán mới (migratePerms), không phải cài đặt người dùng thấy.
+export type ConnSettings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number; permsV?: number };
 export const DEFAULT_SETTINGS: ConnSettings = { chat: true, projects: true, newTools: "auto", destructive: true, maxCalls: 0 };
 export const MAX_CALLS = [0, 3, 5, 10, 20, 50];
 const GRANT_TTL = 7 * 24 * 3600_000;
@@ -25,6 +26,10 @@ const MAX_PER_USER = 30;
 const AUTH_TTL = 15 * 60_000;
 // Tối đa số công cụ lưu cho một connector: nhiều công cụ thì model đi qua connector_tools / connector_call nên không tốn token.
 const MAX_TOOLS = 1000;
+// Quyền của công cụ tạm thời vắng khỏi danh sách giữ 90 ngày: máy chủ trả sót một lần không được biến "Chặn" thành quyền mặc định khi công cụ quay lại.
+const GONE_KEEP = 90 * 24 * 3600_000, GONE_MAX = 2000;
+// Nút Kết nối có hạn chung: hãng treo thì báo trong vòng nửa phút, không quay hàng phút (proxy phía trước cũng có thể cắt trước đó).
+const CONNECT_MS = 28_000;
 
 // mode "token": token / API key người dùng tự nhập (key: tên header và giá trị, mã hóa cùng enc_auth, không bao giờ trả về trình duyệt).
 // scopeNeeded: một công cụ vừa báo thiếu quyền: connector vẫn chạy, chờ người dùng bấm "Cấp thêm quyền".
@@ -36,14 +41,14 @@ type Auth = {
 type Row = {
   id: string; user_id: string; name: string; url: string; dir: string | null; enabled: number; era: string | null; status: string; error: string | null;
   server_name: string | null; enc_auth: string; tools: string; perms: string; created_at: number; updated_at: number; checked_at: number | null;
-  icon: string | null; settings: string; last_error: string | null; tools_total: number | null;
+  icon: string | null; settings: string; last_error: string | null; tools_total: number | null; perms_gone: string | null; empty_seen: number | null;
 };
 // locked: công cụ đang bị khóa vì connector tắt công cụ xóa dữ liệu ("setting") hoặc quản trị viên không cho ("admin").
 // guessed: máy chủ không khai báo chỉ đọc hay không, Synchro đoán theo tên công cụ.
 export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 export type PublicConnector = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
-  status: "ok" | "needs_auth" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: PublicTool[]; checkedAt: number | null;
+  status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: PublicTool[]; checkedAt: number | null;
   settings: ConnSettings; adminBlocked: boolean;
   /** Lỗi tạm thời gần nhất khi kiểm tra lại (connector vẫn dùng được). */
   lastError: string | null;
@@ -73,6 +78,8 @@ function table() {
     if (!cols.has("settings")) d.exec("ALTER TABLE connectors ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'");
     if (!cols.has("last_error")) d.exec("ALTER TABLE connectors ADD COLUMN last_error TEXT");
     if (!cols.has("tools_total")) d.exec("ALTER TABLE connectors ADD COLUMN tools_total INTEGER");
+    if (!cols.has("perms_gone")) d.exec("ALTER TABLE connectors ADD COLUMN perms_gone TEXT");
+    if (!cols.has("empty_seen")) d.exec("ALTER TABLE connectors ADD COLUMN empty_seen INTEGER");
     ready = true;
   }
   return d;
@@ -94,7 +101,7 @@ const setLastError = (id: string, e: string | null) => { table().prepare("UPDATE
 export const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 400);
 // Công cụ chỉ đọc (hoặc máy chủ không khai báo mà tên rõ là đọc: get_, list_, search_…) mặc định được dùng luôn; công cụ có thể thay đổi dữ liệu mặc định phải hỏi trước (như Claude).
 const defaultPerm = (t: McpTool): Perm => (readLike(t) ? "allow" : "ask");
-const isDestructive = (t: McpTool) => !t.annotations?.readOnlyHint && t.annotations?.destructiveHint === true;
+const isDestructive = (t: McpTool) => destructiveLike(t);
 const settingsOf = (r: Row): ConnSettings => ({ ...DEFAULT_SETTINGS, ...json<Partial<ConnSettings>>(r.settings, {}) });
 // Công cụ bị khóa: connector tắt công cụ xóa dữ liệu, hoặc quản trị viên không cho dùng loại công cụ này.
 function lockOf(t: McpTool, st: ConnSettings, pol: ConnPolicy): PublicTool["locked"] {
@@ -185,7 +192,7 @@ async function freshAuth(id: string, force = false): Promise<Auth> {
 }
 
 const newClient = (r: Row, a: Auth) => new McpClient(r.url, a.tokens?.access_token, (r.era as Era) || undefined, a.mode === "token" ? a.key : undefined);
-const isAuthErr = (e: unknown): e is McpError => e instanceof McpError && (e.kind === "auth" || e.kind === "scope");
+const isAuthErr = (e: unknown): e is McpError => e instanceof McpError && (e.kind === "auth" || e.kind === "scope" || e.kind === "forbidden");
 // Chạy một thao tác với máy chủ MCP; gặp 401 thì làm mới token và thử lại một lần, vẫn lỗi thì đánh dấu "cần kết nối lại".
 // Thiếu quyền (insufficient_scope) chỉ là chuyện của một công cụ: connector vẫn chạy, ghi lại quyền cần xin để người dùng bấm "Cấp thêm quyền".
 // Lỗi mạng, lỗi tạm thời của hãng, lỗi của riêng công cụ không đổi trạng thái connector.
@@ -206,27 +213,47 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
       if (e instanceof McpError && e.kind === "rpc") { if (!cache) await c.close(); throw e; }
       cache?.delete(id);
       await c.close();
-      if (e instanceof McpError && e.kind === "auth" && attempt === 0 && a.tokens?.refresh_token && a.mode === "oauth") { a = await freshAuth(id, true); continue; }
+      if (e instanceof McpError && (e.kind === "auth" || e.kind === "forbidden") && attempt === 0 && a.tokens?.refresh_token && a.mode === "oauth") { a = await freshAuth(id, true); continue; }
       if (e instanceof McpError && e.kind === "auth") markStatus(id, "needs_auth", e.message);
+      // 403 khi gọi một công cụ có thể chỉ là không có quyền với dữ liệu đó; 403 cả ở danh sách công cụ (không có toolName) mới là connector bị từ chối.
+      if (e instanceof McpError && e.kind === "forbidden" && !toolName) markStatus(id, "forbidden", e.message);
       if (e instanceof McpError && e.kind === "scope") { const cur = getAuth(rowById(id) ?? r); saveAuth(id, { ...cur, scopeNeeded: { scope: parseWww(e.wwwAuth).scope ?? cur.scopeNeeded?.scope ?? "", tool: toolName } }); }
       throw e;
     }
   }
 }
 
-// Lấy lại danh sách công cụ; giữ quyền cũ, công cụ mới nhận quyền mặc định, công cụ đã bỏ thì xóa quyền.
-async function syncTools(id: string) {
-  const { tools, name, icons } = await withClient(id, async (c) => ({ tools: await c.listTools(), name: c.serverName, icons: c.serverIcons }));
+// Trước đây tên công cụ chỉ cần bắt đầu bằng động từ đọc là tự được "Luôn cho phép" (query chạy SQL bất kỳ cũng vậy). Lần lấy danh sách đầu tiên sau khi đổi quy tắc:
+// quyền "allow" do quy tắc cũ tự cấp mà quy tắc mới không còn coi là đọc thì chuyển về "ask". Người dùng tự chọn allow chỉ bị hỏi lại một lần, trên thẻ duyệt có sẵn nút Luôn cho phép.
+function migratePerms(old: Record<string, Perm>, tools: McpTool[]) {
+  const next = { ...old };
+  for (const t of tools) if (next[t.name] === "allow" && oldGuessedRead(t) && !readLike(t)) next[t.name] = "ask";
+  return next;
+}
+
+// Lấy lại danh sách công cụ; giữ quyền cũ, công cụ mới nhận quyền mặc định. Công cụ vắng mặt: quyền cất vào perms_gone (giữ GONE_KEEP), quay lại thì lấy lại đúng quyền.
+// Danh sách rỗng ngay sau khi đang có công cụ thường là sự cố của hãng: lần đầu chưa tin, giữ nguyên; hai lần liên tiếp mới coi là thật.
+async function syncTools(id: string, signal?: AbortSignal) {
+  const { tools, name, icons } = await withClient(id, async (c) => ({ tools: await c.listTools(signal), name: c.serverName, icons: c.serverIcons }));
   const r = rowById(id)!;
-  const old = json<Record<string, Perm>>(r.perms, {});
+  const now = Date.now();
+  if (!tools.length && json<McpTool[]>(r.tools, []).length && !r.empty_seen) {
+    table().prepare("UPDATE connectors SET status = 'ok', error = NULL, last_error = ?, empty_seen = ?, checked_at = ?, updated_at = ? WHERE id = ?").run("Máy chủ vừa trả về danh sách công cụ trống nên Synchro giữ danh sách cũ và sẽ kiểm tra lại.", now, now, now, id);
+    return;
+  }
   const st = settingsOf(r);
   const first = r.checked_at === null;
   const slim = tools.slice(0, MAX_TOOLS).map((t) => ({ name: t.name, title: t.title, description: (t.description ?? "").slice(0, 2000), inputSchema: t.inputSchema ?? { type: "object", properties: {} }, annotations: t.annotations }));
+  const stale = !first && !st.permsV;
+  const old = stale ? migratePerms(json<Record<string, Perm>>(r.perms, {}), slim) : json<Record<string, Perm>>(r.perms, {});
+  if (stale || first) table().prepare("UPDATE connectors SET settings = ? WHERE id = ?").run(JSON.stringify({ ...json<Partial<ConnSettings>>(r.settings, {}), permsV: 1 }), id);
+  const gone = json<Record<string, { perm: Perm; at: number }>>(r.perms_gone, {});
   // Công cụ máy chủ mới thêm (sau lần kết nối đầu) nhận quyền theo cài đặt "Công cụ mới" của connector.
   const fresh = (t: McpTool): Perm => (first || st.newTools === "auto" ? defaultPerm(t) : st.newTools);
-  const perms = Object.fromEntries(slim.map((t) => [t.name, old[t.name] ?? fresh(t)]));
-  table().prepare("UPDATE connectors SET tools = ?, perms = ?, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
-    .run(JSON.stringify(slim), JSON.stringify(perms), tools.length > slim.length ? tools.length : null, name ?? null, Date.now(), Date.now(), id);
+  const perms = Object.fromEntries(slim.map((t) => [t.name, old[t.name] ?? gone[t.name]?.perm ?? fresh(t)]));
+  const away = [...Object.entries(gone).filter(([k, v]) => !(k in perms) && now - v.at < GONE_KEEP), ...Object.entries(old).filter(([k]) => !(k in perms)).map(([k, perm]) => [k, { perm, at: now }] as const)].slice(-GONE_MAX);
+  table().prepare("UPDATE connectors SET tools = ?, perms = ?, perms_gone = ?, empty_seen = NULL, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
+    .run(JSON.stringify(slim), JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
   if (needsIcon(r)) await findIcon(id, icons);
 }
 
@@ -241,10 +268,10 @@ function syncFailed(id: string, e: unknown) {
 
 // Bắt đầu đăng nhập OAuth: tìm máy chủ đăng nhập, đăng ký Synchro, lưu PKCE + state, trả về địa chỉ để mở cửa sổ đăng nhập.
 // keep: connector đang chạy tốt, người dùng chủ động đăng nhập lại / cấp thêm quyền: bỏ dở cửa sổ đăng nhập không được làm mất kết nối đang có.
-async function startAuth(req: Request, id: string, www: string, keep = false): Promise<string> {
+async function startAuth(req: Request, id: string, www: string, keep = false, signal?: AbortSignal): Promise<string> {
   const r = rowById(id)!;
   const a = getAuth(r);
-  const d = await discover(r.url, www);
+  const d = await discover(r.url, www, signal);
   const base = appUrl(req);
   const redirect = `${base}/api/connectors/oauth/callback`;
   const cimd = base.startsWith("https://") ? `${base}/oauth/client-metadata.json` : null;
@@ -254,14 +281,14 @@ async function startAuth(req: Request, id: string, www: string, keep = false): P
   const saved = a.client && a.as?.issuer === d.as.issuer && a.redirect === redirect && (!a.preset?.clientId || a.client.client_id === a.preset.clientId) ? a.client : null;
   // Máy chủ đòi đăng nhập mà không khai báo OAuth, đoán đường dẫn cũng không ra: nhiều khả năng nó chỉ nhận token. Nói thẳng cách kết nối thay vì lỗi đăng ký khó hiểu.
   const noOauth = (e: unknown) => { if (d.guessed && !(e instanceof TempFail)) throw new ConnectorError(NO_OAUTH); throw e; };
-  let client = saved ?? await registerClient(d.as, redirect, cimd, a.preset).catch(noOauth);
+  let client = saved ?? await registerClient(d.as, redirect, cimd, a.preset, signal).catch(noOauth);
   // Dò trước trang đăng nhập: hãng từ chối thẳng client hay địa chỉ quay về thì báo ngay, không đưa người dùng tới trang lỗi của hãng.
   if (process.env.CONNECTOR_PREFLIGHT !== "0") {
-    const probe = (c: OAuthClient) => authorizeRejected(d.as, c, { redirectUri: redirect, resource: d.resource, scope });
+    const probe = (c: OAuthClient) => authorizeRejected(d.as, c, { redirectUri: redirect, resource: d.resource, scope, signal });
     let no = await probe(client);
     // Client cũ bị hãng xóa, hoặc client theo Client ID Metadata không được nhận: đăng ký động một lần (client người dùng tự nhập thì không tự đổi).
     if (no && !a.preset?.clientId && (saved || (client.client_id === cimd && d.as.registration_endpoint))) {
-      client = await registerClient(d.as, redirect, saved && client.client_id !== cimd ? cimd : null);
+      client = await registerClient(d.as, redirect, saved && client.client_id !== cimd ? cimd : null, undefined, signal);
       no = await probe(client);
     }
     if (no) throw new ConnectorError(`Trang đăng nhập của ${new URL(d.as.authorization_endpoint).hostname} từ chối Synchro (${no}). Hãng cần chấp nhận địa chỉ quay về của Synchro; nếu hãng cấp cho bạn OAuth Client ID hoặc token, hãy dùng chúng thay thế.`, 400);
@@ -299,22 +326,37 @@ function keyOf(o: { token?: unknown; header?: unknown }): NonNullable<Auth["key"
 }
 // Thông tin đăng nhập người dùng tự nhập cho một connector: token, hoặc OAuth Client ID.
 type Creds = { token?: unknown; header?: unknown; clientId?: unknown; clientSecret?: unknown };
-function applyCreds(id: string, o: Creds) {
+async function applyCreds(id: string, o: Creds, signal?: AbortSignal) {
   const r = rowById(id)!;
   const a = getAuth(r);
   const clientId = String(o.clientId ?? "").trim(), clientSecret = String(o.clientSecret ?? "").trim();
   if (clientId.length > 300 || clientSecret.length > 500) throw new ConnectorError("Client ID hoặc Client Secret quá dài.");
-  if (String(o.token ?? "").trim()) saveAuth(id, { mode: "token", key: keyOf(o) });
+  if (String(o.token ?? "").trim()) {
+    const key = keyOf(o);
+    // Thử token mới trước khi lưu: gõ nhầm thì token đang chạy tốt và trạng thái connector vẫn nguyên (máy chủ từ chối hay đang lỗi đều chưa kết luận được là token mới dùng được).
+    const c = new McpClient(r.url, undefined, (r.era as Era) || undefined, key);
+    try { await c.listTools(signal); }
+    catch (e) { throw new ConnectorError(errText(e), e instanceof TempFail ? 503 : 400); }
+    finally { await c.close(); }
+    saveAuth(id, { mode: "token", key });
+  }
   else if (clientId) { const { client: _c, tokens: _t, key: _k, ...rest } = a; saveAuth(id, { ...rest, mode: rest.mode === "token" ? "none" : rest.mode, preset: { clientId, clientSecret: clientSecret || undefined } }); }
 }
 
 // Kết nối (hoặc kết nối lại): thử lấy danh sách công cụ; máy chủ đòi đăng nhập thì trả về địa chỉ đăng nhập.
 // force: người dùng chủ động đăng nhập lại (đổi tài khoản, cấp thêm quyền): bỏ qua bước thử, đi thẳng tới trang đăng nhập.
-export async function connect(req: Request, uid: string, id: string, pol: ConnPolicy = FULL_CONN, o: { force?: boolean } & Creds = {}): Promise<{ connector: PublicConnector; authorizeUrl?: string }> {
+export function connect(req: Request, uid: string, id: string, pol: ConnPolicy = FULL_CONN, o: { force?: boolean } & Creds = {}): Promise<{ connector: PublicConnector; authorizeUrl?: string }> {
+  const stop = AbortSignal.timeout(CONNECT_MS);
+  // Các bước đều dừng theo stop; hạn ở đây là chốt cuối cho bước không nhận được stop (làm mới token). Chậm hơn một chút để lý do cụ thể của từng bước về trước.
+  let timer: ReturnType<typeof setTimeout>;
+  const late = new Promise<never>((_, no) => { timer = setTimeout(() => no(new ConnectorError("Kết nối mất quá lâu nên Synchro đã dừng. Hãy thử lại sau ít phút.", 503)), CONNECT_MS + 2000); });
+  return Promise.race([connectNow(req, uid, id, pol, o, stop), late]).finally(() => clearTimeout(timer));
+}
+async function connectNow(req: Request, uid: string, id: string, pol: ConnPolicy, o: { force?: boolean } & Creds, stop: AbortSignal): Promise<{ connector: PublicConnector; authorizeUrl?: string }> {
   const row = rowOf(uid, id);
   if (!allowsDir(pol, row.dir)) throw new ConnectorError(row.dir ? "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này." : "Quản trị viên chưa cho phép tài khoản của bạn dùng connector tùy chỉnh.", 403);
   followDirectory(row);
-  applyCreds(id, o);
+  await applyCreds(id, o, stop);
   const a = getAuth(rowById(id)!);
   const fail = (e: unknown, status: number) => {
     // Hãng đang lỗi tạm thời: giữ nguyên trạng thái (đăng nhập vẫn còn), chỉ ghi lại lý do.
@@ -324,21 +366,29 @@ export async function connect(req: Request, uid: string, id: string, pol: ConnPo
   // Đang chạy tốt mà đăng nhập lại: bỏ dở thì vẫn giữ kết nối cũ.
   const healthy = row.status === "ok";
   if ((a.mode === "oauth" && o.force) || (a.mode !== "token" && a.scopeNeeded)) {
-    try { return { authorizeUrl: await startAuth(req, id, "", healthy), connector: publicOf(rowById(id)!, pol) }; }
+    try { return { authorizeUrl: await startAuth(req, id, "", healthy, stop), connector: publicOf(rowById(id)!, pol) }; }
     catch (e) { if (healthy) throw new ConnectorError(errText(e), e instanceof ConnectorError ? e.status : 502); return fail(e, 400); }
   }
   try {
-    await syncTools(id);
+    await syncTools(id, stop);
     return { connector: publicOf(rowById(id)!, pol) };
   } catch (e) {
+    if (e instanceof McpError && e.kind === "forbidden") {
+      // Máy chủ từ chối (403): đã từng đăng nhập, hoặc máy chủ có khai báo cách đăng nhập, thì mở lại trang đăng nhập để đổi tài khoản / quyền; không thì không có gì để mở.
+      if ((a.mode === "oauth" && a.tokens) || /resource_metadata/i.test(e.wwwAuth)) {
+        try { return { authorizeUrl: await startAuth(req, id, e.wwwAuth, false, stop), connector: publicOf(rowById(id)!, pol) }; }
+        catch (e2) { markStatus(id, "forbidden", e.message); throw new ConnectorError(errText(e2), e2 instanceof ConnectorError ? e2.status : e2 instanceof TempFail ? 503 : 400); }
+      }
+      throw new ConnectorError(e.message, 400);
+    }
     if (isAuthErr(e)) {
       // Token người dùng tự nhập bị từ chối: không có trang đăng nhập nào để mở.
       if (a.mode === "token") { markStatus(id, "needs_auth", e.message); throw new ConnectorError(e.message, 400); }
-      try { return { authorizeUrl: await startAuth(req, id, e.wwwAuth), connector: publicOf(rowById(id)!, pol) }; }
+      try { return { authorizeUrl: await startAuth(req, id, e.wwwAuth, false, stop), connector: publicOf(rowById(id)!, pol) }; }
       catch (e2) { return fail(e2, 400); }
     }
     syncFailed(id, e);
-    throw new ConnectorError(errText(e), 502);
+    throw new ConnectorError(errText(e), e instanceof TempFail ? 503 : 502);
   }
 }
 
@@ -379,8 +429,10 @@ export async function addConnector(req: Request, uid: string, o: { name?: string
   // Logo máy chủ tự khai báo (lấy được khi kết nối xong) luôn được ưu tiên; logo trang chủ chỉ dùng khi máy chủ không khai báo.
   const site = needsIcon({ dir: entry?.id ?? null, icon: null }) ? detectIcon(url).catch(() => null) : Promise.resolve(null);
   const useSite = async () => { const img = await site; if (img) t.prepare("UPDATE connectors SET icon = ? WHERE id = ? AND icon IS NULL").run(img, id); };
-  try { const r = await connect(req, uid, id, pol); await useSite(); return { ...r, connector: publicOf(rowById(id)!, pol) }; }
-  catch (e) { await site; t.prepare("DELETE FROM connectors WHERE id = ?").run(id); throw e; }
+  // Logo chỉ là phần thêm: không để trang chủ chậm kéo dài nút Kết nối.
+  const brief = <T,>(p: Promise<T>) => Promise.race([p, new Promise<void>((ok) => setTimeout(ok, 2000))]);
+  try { const r = await connect(req, uid, id, pol); await brief(useSite()); return { ...r, connector: publicOf(rowById(id)!, pol) }; }
+  catch (e) { await brief(site); t.prepare("DELETE FROM connectors WHERE id = ?").run(id); throw e; }
 }
 
 // Máy chủ đăng nhập chuyển về đây: kiểm tra state + iss, đổi mã lấy token, rồi tải danh sách công cụ.
@@ -435,9 +487,11 @@ export async function refreshConnector(uid: string, id: string, pol: ConnPolicy 
   return publicOf(rowById(id)!, pol);
 }
 
-export function updateConnector(uid: string, id: string, o: { enabled?: unknown; name?: unknown; perms?: unknown; group?: unknown; settings?: unknown }, pol: ConnPolicy = FULL_CONN) {
+export function updateConnector(uid: string, id: string, o: { enabled?: unknown; name?: unknown; perms?: unknown; group?: unknown; settings?: unknown; dismissScope?: unknown }, pol: ConnPolicy = FULL_CONN) {
   const r = rowOf(uid, id);
   const t = table();
+  // Người dùng bỏ qua lời nhắc thiếu quyền (token tự nhập không có trang đăng nhập để cấp thêm; công cụ đó vẫn báo lỗi rõ khi gọi).
+  if (o.dismissScope === true) { const { scopeNeeded: _s, ...rest } = getAuth(r); saveAuth(id, rest); }
   if (typeof o.enabled === "boolean") t.prepare("UPDATE connectors SET enabled = ?, updated_at = ? WHERE id = ?").run(o.enabled ? 1 : 0, Date.now(), id);
   if (typeof o.name === "string") {
     const name = o.name.trim().replace(/\s+/g, " ");
@@ -485,7 +539,8 @@ export const removeUserConnectors = (uid: string) => {
 // ---- dùng trong chat ----
 export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; icon?: string; tool: McpTool };
 /** Connector đang bật mà chưa dùng được (cần đăng nhập lại, đang lỗi, hãng chưa duyệt): model được báo để nói với người dùng, khung chat có nút kết nối lại. */
-export type OfflineConn = { id: string; name: string; logo?: string; color?: string; why: "auth" | "error" | "vendor" };
+// name: có thể kèm địa chỉ khi hai connector trùng tên; base: tên gốc. auth: token tự nhập thì thẻ kết nối lại cho nhập token, không có trang đăng nhập để mở.
+export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; why: "auth" | "error" | "vendor"; auth?: Auth["mode"] };
 
 // Tên công cụ gửi cho model: "<connector>__<công cụ>", chỉ chữ, số, _ và -. Các hãng giới hạn tên công cụ 64 ký tự và CLI còn thêm tiền tố của nó trước tên
 // (mcp__synchro__ dài 14 ký tự trên Claude Code và Codex, mcp_synchro_ trên Antigravity), nên chỉ dùng 50 ký tự. Dài hơn thì cắt và thêm mã băm ngắn, ổn định giữa các lượt.
@@ -513,19 +568,29 @@ export class ConnectorSession {
   constructor(public uid: string, private ctx: { conv?: string; project?: boolean; pol: ConnPolicy }) {
     const rows = table().prepare("SELECT * FROM connectors WHERE user_id = ? AND enabled = 1 ORDER BY created_at").all(uid) as Row[];
     const used = new Set<string>();
+    // Hai connector trùng tên (hai tài khoản Notion, hai máy chủ nội bộ): kèm địa chỉ để thẻ duyệt và model phân biệt được đang đụng tới đâu.
+    const label = (r: Row) => {
+      const twins = rows.filter((x) => x.name.toLowerCase() === r.name.toLowerCase());
+      if (twins.length < 2) return r.name;
+      const where = (u: string) => { try { return new URL(u); } catch { return null; } };
+      const u = where(r.url);
+      if (!u) return r.name;
+      return `${r.name} (${twins.filter((x) => where(x.url)?.host === u.host).length > 1 ? `${u.host}${u.pathname.replace(/\/$/, "")}` : u.host})`;
+    };
     for (const r of rows) {
       const st = settingsOf(r);
       if (!allowsDir(ctx.pol, r.dir) || !(ctx.project ? st.projects : st.chat)) continue;
       const dir = DIRECTORY.find((x) => x.id === r.dir);
+      const cname = label(r);
       if (r.status !== "ok") {
         const a = getAuth(r);
-        this.offline.push({ id: r.id, name: r.name, logo: dir?.logo, color: dir?.color, why: vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" ? "auth" : "error" });
+        this.offline.push({ id: r.id, name: cname, base: r.name, logo: dir?.logo, color: dir?.color, why: vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" || r.status === "forbidden" ? "auth" : "error", auth: a.mode });
         continue;
       }
       const perms = json<Record<string, Perm>>(r.perms, {});
       for (const tool of json<McpTool[]>(r.tools, [])) {
         if ((perms[tool.name] ?? defaultPerm(tool)) === "block" || lockOf(tool, st, ctx.pol)) continue;
-        const ct = { fq: fqName(r.name, tool.name, used), cid: r.id, cname: r.name, logo: dir?.logo, color: dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, tool };
+        const ct = { fq: fqName(r.name, tool.name, used), cid: r.id, cname, logo: dir?.logo, color: dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, tool };
         this.tools.push(ct);
         this.by.set(ct.fq, ct);
       }
@@ -566,14 +631,18 @@ export class ConnectorSession {
   /** Công cụ chỉ đọc (khai báo hoặc đoán theo tên). */
   isRead(name: string) { const ct = this.by.get(name); return !!ct && readLike(ct.tool); }
   // image, mime: ảnh công cụ trả về. reconnect: connector vừa mất đăng nhập, khung chat hiện nút kết nối lại.
-  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; reconnect?: OfflineConn }> {
+  // images: mọi ảnh công cụ trả về (tối đa MAX_IMAGES); image là ảnh đầu tiên, gửi kèm cho model. imagesAll: tổng số ảnh máy chủ gửi. timeout: hạn riêng của lời gọi.
+  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal, timeout?: number): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; images?: { data: string; mime: string }[]; imagesAll?: number; reconnect?: OfflineConn }> {
     const ct = this.by.get(name);
     if (!ct) return { content: `Không có công cụ ${name}.`, is_error: true };
     const r = rowById(ct.cid);
-    const off = (): OfflineConn => ({ id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color, why: "auth" });
+    const off = (): OfflineConn => ({ id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color, why: "auth", auth: r ? getAuth(r).mode : undefined });
+    const refused = `${ct.cname} từ chối truy cập (lỗi 403), có thể tài khoản không có quyền với dữ liệu này hoặc quyền đã bị thu hồi. Hãy báo người dùng kiểm tra quyền của tài khoản, hoặc bấm "Kết nối lại" (ngay trong khung chat, hoặc Cài đặt → Connectors).`;
     const needLogin = `${ct.cname} cần đăng nhập lại nên chưa dùng được, không phải do người dùng chặn. Hãy báo người dùng bấm "Kết nối lại" (ngay trong khung chat, hoặc Cài đặt → Connectors) rồi nhắc lại yêu cầu.`;
     // Connector mất đăng nhập giữa lượt: nói đúng lý do, đừng để model nói là người dùng đã chặn.
-    if (r && r.status !== "ok") return { content: needLogin, is_error: true, reconnect: off() };
+    if (r && r.status !== "ok") return { content: r.status === "forbidden" ? refused : needLogin, is_error: true, reconnect: off() };
+    // CLI đã hủy lời gọi (hoặc bấm Dừng) ngay trước khi chạy: chưa gửi gì đi thì không được gửi nữa.
+    if (signal?.aborted) return { content: "Lời gọi đã bị hủy nên công cụ chưa chạy.", is_error: true };
     if (this.perm(name) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
     const max = r ? settingsOf(r).maxCalls : 0;
     const n = (this.calls.get(ct.cid) ?? 0) + 1;
@@ -581,12 +650,14 @@ export class ConnectorSession {
     this.calls.set(ct.cid, n);
     let sent = false;
     try {
-      const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, args && typeof args === "object" ? args : {}, { signal }); }, this.cache, ct.tool.name);
+      const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, args && typeof args === "object" ? args : {}, { signal, timeout }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
-      const img = resultImage(res);
-      return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime } : {}) };
+      const { images, all } = resultImages(res);
+      return { content: text, is_error: isError, ...(images.length ? { image: images[0].data, mime: images[0].mime, images, imagesAll: all } : {}) };
     } catch (e) {
       if (e instanceof McpError && e.kind === "auth") return { content: needLogin, is_error: true, reconnect: off() };
+      // Một công cụ bị 403: kiểm tra lại danh sách công cụ ở nền, cả danh sách cũng bị từ chối thì connector mới chuyển sang trạng thái bị từ chối.
+      if (e instanceof McpError && e.kind === "forbidden") { syncTools(ct.cid).catch(() => {}); return { content: refused, is_error: true, reconnect: off() }; }
       if (e instanceof McpError && e.kind === "scope") return { content: `${ct.cname} cần thêm quyền để dùng công cụ này; các công cụ khác vẫn dùng được. Hãy báo người dùng bấm "Cấp thêm quyền" (Cài đặt → Connectors).`, is_error: true };
       // Công cụ không còn trên máy chủ: làm mới danh sách để lượt sau đúng.
       if (e instanceof McpError && e.kind === "rpc" && (e.code === -32602 || e.code === -32601) && /unknown tool|tool not found|no such tool|not found/i.test(e.message)) syncTools(ct.cid).catch(() => {});
@@ -651,8 +722,9 @@ const g = globalThis as unknown as { __synchroConnTried?: Map<string, number>; _
 export async function recheckConnectors(now = Date.now()) {
   if (g.__synchroConnBusy) return 0;
   const tried = (g.__synchroConnTried ??= new Map());
-  const rows = (table().prepare("SELECT id FROM connectors WHERE enabled = 1 AND checked_at IS NOT NULL AND checked_at < ? ORDER BY checked_at LIMIT 40").all(now - RECHECK_AFTER) as { id: string }[])
-    .filter((r) => now - (tried.get(r.id) ?? 0) > RECHECK_RETRY).slice(0, RECHECK_BATCH);
+  for (const [k, t] of tried) if (now - t > RECHECK_RETRY) tried.delete(k);
+  // Bỏ các connector vừa thử ngay trong câu truy vấn: lọc sau LIMIT thì vài chục connector hỏng cũ nằm đầu danh sách làm connector tốt không bao giờ tới lượt.
+  const rows = table().prepare("SELECT id FROM connectors WHERE enabled = 1 AND checked_at IS NOT NULL AND checked_at < ? AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY checked_at LIMIT ?").all(now - RECHECK_AFTER, JSON.stringify([...tried.keys()]), RECHECK_BATCH) as { id: string }[];
   if (!rows.length) return 0;
   g.__synchroConnBusy = true;
   try {

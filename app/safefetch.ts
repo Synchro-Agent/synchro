@@ -6,8 +6,8 @@ import { isIP } from "node:net";
 
 export class FetchBlocked extends Error {}
 // Lỗi tạm thời ở phía máy chủ từ xa (mất mạng, quá giờ, 429 / 5xx): thử lại được, không có nghĩa là mất đăng nhập hay sai địa chỉ.
-// retryAfter: máy chủ bảo chờ bao lâu (mili giây, từ header Retry-After).
-export class TempFail extends Error { constructor(m: string, public status = 0, public retryAfter?: number) { super(m); } }
+// retryAfter: máy chủ bảo chờ bao lâu (mili giây, từ header Retry-After). timedOut: quá giờ chờ, khác với mất kết nối ngay (thử lại thường chỉ chờ thêm một lần nữa).
+export class TempFail extends Error { constructor(m: string, public status = 0, public retryAfter?: number, public timedOut = false) { super(m); } }
 export const retryAfterMs = (h: string | null | undefined) => {
   if (!h) return undefined;
   const n = Number(h);
@@ -82,7 +82,8 @@ export async function safeFetch(raw: string, init: RequestInit & { timeout?: num
     await checkUrl(url);
     const r = await fetch(url, { ...rest, ...(long ? { dispatcher: long } : {}), headers, method, body, signal, redirect: "manual" } as RequestInit).catch((e) => {
       if (signal.aborted && !(signal.reason as Error)?.name?.includes("Timeout") && !(signal.reason instanceof TempFail)) throw e;
-      throw new TempFail((e as Error).name === "TimeoutError" || signal.aborted ? "Máy chủ phản hồi quá lâu." : `Không kết nối được tới ${new URL(url).host}.`);
+      const late = (e as Error).name === "TimeoutError" || signal.aborted;
+      throw new TempFail(late ? "Máy chủ phản hồi quá lâu." : `Không kết nối được tới ${new URL(url).host}.`, 0, undefined, late);
     });
     if (noFollow || r.status < 300 || r.status >= 400 || !r.headers.get("location")) return r;
     const next = new URL(r.headers.get("location")!, url);

@@ -25,7 +25,7 @@ export type TurnRequest = {
   /** Lịch sử hội thoại cho engine không giữ phiên (khóa API); engine CLI dùng sessionId. */
   history?: { role: "user" | "assistant"; content: unknown }[];
   /** Cầu nối MCP của Synchro cho lượt này (công cụ skill, plugin, connector…); CLI gọi tới địa chỉ nội bộ này. */
-  mcp?: { url: string };
+  mcp?: { url: string; onPark?: (f: () => void) => void };
   /** Lúc gần nhất lượt còn hoạt động ngoài đầu ra của CLI (đang / vừa chạy công cụ qua cầu nối MCP): CLI in kết quả một lần lúc xong
    *  (Antigravity) không bị coi là treo khi đang làm việc bằng công cụ. */
   alive?: () => number;
