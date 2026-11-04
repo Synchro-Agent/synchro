@@ -95,6 +95,52 @@ export function removeSessionFiles(dir: string, id: string): Promise<void> {
   }));
 }
 
+// Antigravity, Grok chỉ báo mã phiên khi xong lượt: bấm Dừng, quá giờ hay CLI chết thì không có mã để xóa, câu lệnh và ảnh dở nằm lại trong thư mục đăng nhập mà không ai quét lại.
+// Lượt tạo ảnh chụp danh sách mã phiên trước khi chạy rồi xóa các mã mới xuất hiện. Cùng tài khoản có thể có lượt chat chạy song song, phiên đó dùng để nối tiếp đoạn chat nên không được
+// xóa: còn lượt nào đang chạy thì chờ nó xong, mã lượt khác báo về (sessionSeen) được giữ lại. Lượt chat bị giết trước khi báo mã thì không ai nối tiếp được, xóa cũng không mất gì.
+type Watch = { live: number; watching: number; seen: Set<string>; idle: (() => void)[] };
+const watches: Map<string, Watch> = ((globalThis as { __synchroSessionWatch?: Map<string, Watch> }).__synchroSessionWatch ??= new Map());
+const watchOf = (dir: string) => { let w = watches.get(dir); if (!w) watches.set(dir, (w = { live: 0, watching: 0, seen: new Set(), idle: [] })); return w; };
+/** Một tiến trình CLI chạy trên thư mục đăng nhập này cho tới khi xong. */
+export function cliRunning(dir: string, p: { done: Promise<unknown> }) {
+  const w = watchOf(dir);
+  w.live++;
+  void p.done.finally(() => { w.live--; if (!w.live) for (const f of w.idle.splice(0)) f(); });
+}
+/** Lượt khác báo mã phiên của nó: phiên đó không phải rác của lượt tạo ảnh. */
+export function sessionSeen(dir: string, id: string) { const w = watches.get(dir); if (w?.watching) w.seen.add(id); }
+const SESSION_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+// Tệp đăng nhập có thể mang mã cùng dạng: không bao giờ là phiên.
+const NOT_SESSION = /auth|token|credential|account/i;
+function sessionIds(dir: string): Promise<{ ids: Set<string>; ok: boolean }> {
+  const u = engineUser(), args = [dir, "-maxdepth", "10", "-name", "*-*-*-*-*"];
+  return new Promise((done) => execFile(u ? "sudo" : "find", u ? ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "find", ...args] : args, { timeout: 60_000, maxBuffer: 32 * 1048576 }, (e, out) => {
+    const ids = new Set<string>();
+    for (const l of String(out ?? "").split("\n")) if (l && !NOT_SESSION.test(path.relative(dir, l))) for (const m of path.basename(l).match(SESSION_ID) ?? []) ids.add(m);
+    done({ ids, ok: !e });
+  }));
+}
+/** Chụp mã phiên trước lượt; sweep(): xóa các mã mới, ngay nếu không còn lượt nào chạy, không thì khi lượt cuối xong (chạy nền, không bắt người dùng chờ). */
+export async function watchSessions(dir: string) {
+  const w = watchOf(dir);
+  w.watching++;
+  const before = await sessionIds(dir);
+  const close = () => { if (--w.watching <= 0) w.seen.clear(); };
+  return {
+    sweep: async () => {
+      // Không chụp được danh sách trước lượt thì không biết mã nào là mới: để sót còn hơn xóa nhầm phiên của đoạn chat.
+      if (!before.ok) { close(); return; }
+      const run = async (): Promise<void> => {
+        const now = await sessionIds(dir);
+        if (w.live) { w.idle.push(() => void run()); return; }
+        for (const id of now.ids) if (!before.ids.has(id) && !w.seen.has(id)) await removeSessionFiles(dir, id);
+        close();
+      };
+      if (w.live) w.idle.push(() => void run()); else await run();
+    },
+  };
+}
+
 /** Dọn tệp tạm của các lượt bị dừng đột ngột (máy chủ khởi động lại, CLI bị giết): prompt, hướng dẫn và nhật ký .synchro-* có cả lịch sử chat, tệp đính kèm trong att/.
  *  Chạy bằng một lệnh find ở nền của user engine, không chặn Node dù có nhiều tài khoản. Tệp còn dùng không thể cũ hơn trần của một lượt. */
 export function sweepEngineTemp(): Promise<void> {
@@ -103,7 +149,9 @@ export function sweepEngineTemp(): Promise<void> {
     execFile(u ? "sudo" : "find", u ? ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "find", ...args] : args, { timeout: 120_000 }, (e) => { if (e && e.code !== 1) console.warn("[engines] dọn tệp tạm:", String(e.message).slice(0, 200)); ok(); });
   });
   return run([work, "-mindepth", "1", "-maxdepth", "2", "-type", "f", "-name", ".synchro-*", "-mmin", `+${Math.ceil(MAX_TURN_MS / 60_000) + 60}`, "-delete"])
-    .then(() => run([work, "-mindepth", "3", "-maxdepth", "3", "-type", "d", "-path", "*/att/*", "-mtime", "+7", "-exec", "rm", "-rf", "{}", "+"]));
+    .then(() => run([work, "-mindepth", "3", "-maxdepth", "3", "-type", "d", "-path", "*/att/*", "-mtime", "+7", "-exec", "rm", "-rf", "{}", "+"]))
+    // Thư mục tạm của lượt tạo ảnh bị bỏ dở (ảnh gốc, câu lệnh của người dùng). Lượt tạo ảnh chỉ vài phút nên 2 giờ là chắc chắn đã xong.
+    .then(() => run([work, "-mindepth", "2", "-maxdepth", "2", "-type", "d", "-name", ".synchro-img-*", "-mmin", "+120", "-exec", "rm", "-rf", "{}", "+"]));
 }
 
 /** Đường dẫn CLI nếu đã cài trong <home>/.local/bin (kể cả liên kết tới gói npm, miễn là vẫn nằm trong thư mục nhà engine). */

@@ -99,6 +99,10 @@ node scripts/purge-orphans.mjs            # chỉ liệt kê
 node scripts/purge-orphans.mjs --apply    # xóa, bằng root
 ```
 
+## Nhật ký sudo không chứa lời nhắn
+
+Antigravity chỉ nhận prompt qua tham số `-p`, nên dòng lệnh `sudo -u synchro-cli … agy -p <prompt>` có nguyên lời nhắn của người dùng. `scripts/setup-engine-user.sh` đặt `Defaults:<user Synchro> !log_allowed` để sudo không chép lệnh được phép vào `auth.log` và journal (lệnh bị từ chối vẫn được ghi). Máy cài trước khi có dòng này phải chạy lại script một lần: script ghi đè đúng quy tắc sudo, không đụng tới dữ liệu. Kiểm tra: `sudo cat /etc/sudoers.d/synchro-cli` có dòng `Defaults:`.
+
 ## Cô lập CLI theo tài khoản
 
 Mọi thư mục đăng nhập CLI thuộc cùng user `synchro-cli`, nên một lệnh shell chạy trên máy chủ đọc được đăng nhập của người khác. Hiện có các lớp bảo vệ sau:

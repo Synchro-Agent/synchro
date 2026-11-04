@@ -6,6 +6,8 @@
 export type ModelInfo = { key: string; id: string; name: string; blockedUntil?: number };
 // Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem app/ai/subs.ts):
 // blockedUntil: gói đang hết hạn mức tới lúc nào; usingApiUntil: người dùng đã đồng ý dùng khóa API thay gói tới lúc nào.
+/** Gói tạo được ảnh bằng generate_image (ai/imagegen.ts): chip "Tạo ảnh" ở trang chủ, thẻ "chưa tạo được ảnh" trong khung chat. */
+export const IMAGE_PLANS = new Set<string>(["agy", "grok", "codex"]);
 export type PlanInfo = { cli: "claude" | "codex" | "agy" | "grok"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean; hasApi?: boolean };
 /** source: nhóm đang hiện model của gói ("plan") hay của khóa API dùng chung ("api"). */
 export type ProviderInfo = { id: string; name: string; kind: ProviderKind; models: ModelInfo[]; source?: "plan" | "api"; plan?: PlanInfo };

@@ -15,6 +15,7 @@ import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
 import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
+import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
 
 export const SUB_PREFIX = "sub-";
@@ -627,7 +628,8 @@ function saveAttachments(work: string, atts: Attachment[]) {
 /** total: số tin thật của đoạn chat (trình duyệt chỉ gửi 60 tin gần nhất, nối tiếp phiên phải so với số thật); lockMs: chờ lượt khác của tài khoản tối đa bao lâu;
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
-export type SubTurn = { ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+/** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
+export type SubTurn = { onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -753,6 +755,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
+  const natStamp = cli === "agy" && o.onNativeImages ? nativeStamp(work) : null;
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
   const eng = engineFor(cli);
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
@@ -792,6 +795,13 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   }
   } finally { clearInterval(watch); }
   tm.end = Date.now() - T0;
+  // Đọc trước khi trả về: đoạn chat ẩn danh xóa tệp phiên (cả thư mục hội thoại của agy) ngay sau lượt.
+  if (natStamp) {
+    const env = req.env ?? {};
+    const imgs = session && !o.signal?.aborted ? await agyNativeImages({ env, workdir: work, session, stamp: natStamp }).catch(() => [] as ImgFile[]) : [];
+    await removeFile(natStamp, { env, cwd: work }).catch(() => {});
+    if (imgs.length) o.onNativeImages!(imgs);
+  }
   // Hãng vừa báo cửa sổ hạn mức bị từ chối mà lượt lỗi: là hết hạn mức dù câu báo lỗi viết kiểu gì.
   if (err && rejected && (err.code === "other" || err.code === "rate" || !err.code)) err.code = "quota";
   // Phần đã viết trước khi lỗi không bị bỏ: bên gọi giữ lại cùng lời báo lỗi.

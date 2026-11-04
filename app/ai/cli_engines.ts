@@ -3,7 +3,7 @@
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
-import { type Cli, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
+import { type Cli, cliRunning, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 
@@ -15,7 +15,10 @@ function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, timeou
   // Không có workdir riêng thì chạy trong <home>/work (CLI chỉ ghi trong thư mục làm việc).
   const cwd = req.workdir ?? path.join(engineHome(), "work");
   makeDir(cwd);
-  return spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
+  const p = spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
+  // Hai CLI chỉ báo mã phiên cuối lượt: lượt tạo ảnh cần biết lượt nào còn chạy trước khi dọn phiên của nó (watchSessions).
+  if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(req.env.HOME, p);
+  return p;
 }
 // Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): vượt là "spawn E2BIG", lượt chết trước khi chạy. Đo bằng byte
 // (tiếng Việt có dấu 2–3 byte mỗi chữ), chừa chỗ: nội dung dài hơn ARG_MAX_BYTES thì đi qua tệp hoặc stdin.
@@ -331,6 +334,8 @@ export class ClaudeCodeEngine implements Engine {
 // ---------------------------------------------------------------- Codex
 // Loại mục trong luồng sự kiện của codex exec là công cụ chạy trên máy chủ (không qua Synchro): lệnh shell, sửa / đọc tệp.
 export const CODEX_LOCAL = /command|shell|exec|file_change|patch|read_file|list_dir|grep_files|view_image/i;
+/** Cờ tắt shell và xem tệp của Codex (lý do ở runTurn bên dưới); lượt tạo ảnh dùng đúng các cờ này. */
+export const CODEX_SAFE = ["--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', "-c", "features.shell_tool=false", "-c", "features.unified_exec=false", "-c", "tools.view_image=false"];
 export class CodexEngine implements Engine {
   readonly id = "codex";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
@@ -340,7 +345,9 @@ export class CodexEngine implements Engine {
     // Hộp cát "chỉ đọc" của Codex vẫn đọc được cả đĩa, mà mọi thư mục đăng nhập thuộc cùng một user hệ thống: lệnh shell trên máy chủ đọc được
     // đăng nhập của người khác. Tắt hẳn công cụ shell và xem tệp (việc thật đều chạy trong workspace qua công cụ của Synchro); bản Codex nào không
     // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
-    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', "-c", "features.shell_tool=false", "-c", "features.unified_exec=false", "-c", "tools.view_image=false"];
+    // Tắt cả image_gen dựng sẵn (gói trả phí mới có): ảnh nó tạo nằm trong thư mục trên máy chủ, không thành tệp của người dùng, câu "đã lưu" thì đã được bỏ đường dẫn nên trông như thành công mà
+    // không có ảnh. Lượt chat tạo ảnh bằng generate_image của Synchro; đường nhanh thì model báo cần công cụ. Lượt tạo ảnh của imagegen.ts không đi qua đây nên vẫn có image_gen.
+    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE, "-c", "features.image_generation=false"];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật. codex exec không có ai bấm duyệt
     // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
     // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho
@@ -423,7 +430,7 @@ const AGY_TICK_MS = Number(process.env.SYNCHRO_AGY_TICK_MS) || 15_000;
 // engine, đọc được thư mục đăng nhập của tài khoản khác và địa chỉ nội bộ.
 const AGY_HOOK = (web?: boolean) => JSON.stringify({ "synchro-bridge": { PreToolUse: [{ matcher: `mcp_synchro_.*|CallMcpTool${web ? "|search_web|web_search" : ""}`, hooks: [{ type: "command", command: "cat >/dev/null; printf '{\"decision\":\"allow\"}'", timeout: 10 }] }] } });
 /** Công cụ agy tự từ chối trong lượt (đọc nhật ký của lượt bằng chính user của engine, rồi xóa nhật ký). */
-async function agyDenied(req: TurnRequest, log: string): Promise<string[]> {
+export async function agyDenied(req: Pick<TurnRequest, "env" | "workdir">, log: string): Promise<string[]> {
   const sh = spawnCli("/bin/sh", ["-c", 'grep -o "soft-denying tool confirmation \\"[A-Za-z_]*\\"" "$1" 2>/dev/null; rm -f "$1"', "sh", log], { env: req.env, cwd: path.dirname(log) });
   let out = "";
   for await (const l of sh.lines) out += l + "\n";
@@ -437,12 +444,55 @@ async function agyRun(args: string[], req: TurnRequest) {
   for await (const _ of p.lines) { /* bỏ qua */ }
   return (await p.done).code === 0;
 }
+// Ghi hook bằng đúng user của engine (thư mục đăng nhập 0700 của user đó).
+const agyPutHook = (req: TurnRequest, text: string) => spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: text }).done.then((e) => e.code === 0);
 async function agyBridge(req: TurnRequest, url: string) {
   if (!(await agyRun(["mcp", "add", "synchro", url], req))) return false;
-  // Ghi hook bằng đúng user của engine (thư mục đăng nhập 0700 của user đó).
-  const sh = spawnCli("/bin/sh", ["-c", 'mkdir -p "$HOME/.gemini/config" && cat > "$HOME/.gemini/config/hooks.json.tmp" && mv "$HOME/.gemini/config/hooks.json.tmp" "$HOME/.gemini/config/hooks.json"'], { env: req.env, cwd: req.workdir, stdin: AGY_HOOK(req.web) });
-  return (await sh.done).code === 0;
+  return agyPutHook(req, AGY_HOOK(req.web));
 }
+/** Cầu nối còn trong cấu hình chung không. `agy mcp remove` trả mã lỗi cả khi vốn không có cầu nối nên phải đọc tệp; không đọc được thì coi như còn. grep: 1 không thấy, 2 không có tệp. */
+const agyHasBridge = (req: TurnRequest) => spawnCli("/bin/sh", ["-c", 'grep -q "\\"synchro\\"" "$HOME/.gemini/config/mcp_config.json" 2>/dev/null'], { env: req.env, cwd: req.workdir, stdin: "", timeoutMs: 20_000 }).done.then((e) => e.code !== 1 && e.code !== 2);
+/** Gỡ hook khỏi cấu hình chung; trả nội dung cũ ("" nếu không có), null nếu không gỡ được. */
+async function agyTakeHook(req: TurnRequest): Promise<string | null> {
+  const sh = spawnCli("/bin/sh", ["-c", 'f="$HOME/.gemini/config/hooks.json"; [ -e "$f" ] || exit 0; cat "$f" && rm -f "$f"'], { env: req.env, cwd: req.workdir, stdin: "", timeoutMs: 20_000 });
+  let out = "";
+  for await (const l of sh.lines) out += l + "\n";
+  return (await sh.done).code === 0 ? out : null;
+}
+
+// Cầu nối của các lượt Antigravity còn đang chạy, kể cả lượt đã nhả khóa (địa chỉ → HOME của tài khoản), để lượt tạo ảnh trả lại đúng thứ nó tạm gỡ.
+const agyLive = new Map<string, string>();
+/**
+ * Lượt tạo ảnh chạy agy với cùng HOME mà không được có quyền của lượt chat: agy chỉ đọc cầu nối và hook từ cấu hình chung, cầu nối của một lượt chat đang mở nằm sẵn ở đó (model có thể gọi lại
+ * chính generate_image hay công cụ của lượt kia, câu lệnh lại có thể do trang web độc viết ra), hook của lượt chat trước vẫn cho phép search_web dù lượt này tắt tìm web.
+ * Giữ khóa tài khoản rồi gỡ cả hai, giống trạng thái đã đo agy tạo được ảnh; không gỡ được thì không chạy. Lượt đang chạy đã đọc cấu hình nên không ảnh hưởng; xong thì trả lại phòng khi CLI đọc lại,
+ * không còn lượt chat nào thì thôi, lượt chat sau tự ghi lại đúng quyền của nó.
+ * Trả về hàm nhả; null khi không chờ được khóa hay không gỡ được (đã báo lỗi qua sự kiện).
+ */
+export async function* agyQuiet(req: TurnRequest): AsyncGenerator<Event, (() => Promise<void>) | null, unknown> {
+  const account = String(req.env?.HOME ?? "");
+  const free = yield* turnLock(agyLocks, account, req, "Antigravity");
+  if (!free) return null;
+  const home = ownerKey("agy", account), prev = configOwner.get(home);
+  configOwner.delete(home);
+  await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
+  const stuck = await agyHasBridge(req).catch(() => true);
+  const hooks = stuck ? null : await agyTakeHook(req).catch(() => null);
+  const back = async () => {
+    if (hooks && [...agyLive.values()].includes(account)) await agyPutHook(req, hooks).catch(() => false);
+    if (prev && agyLive.has(prev) && !configOwner.has(home) && await agyRun(["mcp", "add", "synchro", prev], req).catch(() => false)) configOwner.set(home, prev);
+    free();
+  };
+  if (hooks !== null) return back;
+  if (stuck) { if (prev) configOwner.set(home, prev); free(); } else await back();
+  yield err("Chưa tách được lượt tạo ảnh khỏi công cụ của lượt chat đang mở nên chưa chạy.", "busy");
+  return null;
+}
+
+// Lượt tạo ảnh của Grok tìm ảnh bằng cách quét tệp mới trong thư mục đăng nhập (chưa biết Grok lưu ở đâu): chạy song song thì lượt này lấy nhầm ảnh của lượt kia. Khóa riêng cho ảnh:
+// lượt chat của Grok không có image_gen nên không cần chờ nó.
+const grokImgLocks = new Map<string, Slot>();
+export const grokImageLock = (req: TurnRequest) => turnLock(grokImgLocks, String(req.env?.HOME ?? ""), req, "Grok");
 
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
@@ -452,6 +502,7 @@ export class AntigravityEngine implements Engine {
     if (!free) return;
     const home = ownerKey("agy", String(req.env?.HOME ?? "")), url = req.mcp.url;
     req.mcp.onPark?.(free);
+    agyLive.set(url, String(req.env?.HOME ?? ""));
     try {
       // Cầu nối của lượt trước (đang chờ duyệt, hoặc bị dừng giữa chừng) bị thay bằng cầu nối mới.
       await agyRun(["mcp", "remove", "synchro"], req).catch(() => false);
@@ -463,6 +514,7 @@ export class AntigravityEngine implements Engine {
       yield { kind: "status" };
       yield* this.turn(req);
     } finally {
+      agyLive.delete(url);
       if (configOwner.get(home) === url) { configOwner.delete(home); await agyRun(["mcp", "remove", "synchro"], req).catch(() => false); }
       free();
     }
@@ -513,7 +565,7 @@ export class AntigravityEngine implements Engine {
     try { o = JSON.parse(t.slice(t.indexOf("{"))) as Json; } catch {}
     // Lượt bị dừng hoặc CLI không in gì: nhật ký của lượt không còn ai đọc, xóa để khỏi đọng tệp trong thư mục làm việc.
     if (!o) { if (log) await rmEngineFile(req, log).catch(() => {}); yield exitError("agy", p, e); return; }
-    if (typeof o.conversation_id === "string" && o.conversation_id) yield { kind: "session", id: o.conversation_id };
+    if (typeof o.conversation_id === "string" && o.conversation_id) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.conversation_id); yield { kind: "session", id: o.conversation_id }; }
     const u = (o.usage ?? {}) as Json;
     if (o.usage) yield { kind: "usage", usage: { input: num(u.input_tokens) ?? 0, output: (num(u.output_tokens) ?? 0) + (num(u.thinking_tokens) ?? 0), cacheRead: num(u.cache_read_tokens) } };
     if (o.status === "ERROR" || o.error || e.code !== 0) {
@@ -543,7 +595,7 @@ export class AntigravityEngine implements Engine {
 //   các lượt có công cụ của cùng một tài khoản chạy lần lượt (như Antigravity).
 // - Ảnh / PDF gửi kèm: đã lưu trong thư mục làm việc, prompt tham chiếu bằng @<đường dẫn> (cách đính kèm tệp của Grok CLI).
 const grokLocks = new Map<string, Slot>();
-const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
+export const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
 async function grokRun(args: string[], req: TurnRequest) {
   const p = start("grok", args, { ...req, signal: undefined }, "", 60_000);
   if (!p) return false;
@@ -622,7 +674,7 @@ export class GrokEngine implements Engine {
         if (classify(lastErr) === "auth") { p.kill(); done = true; yield err(lastErr, "auth"); break; }
       } else if (o.type === "end") {
         done = true;
-        if (typeof o.sessionId === "string" && o.sessionId) yield { kind: "session", id: o.sessionId };
+        if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.sessionId); yield { kind: "session", id: o.sessionId }; }
         const u = (o.usage ?? {}) as Json;
         yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
         if (lastErr && !all) { yield err(lastErr, classify(lastErr)); break; }

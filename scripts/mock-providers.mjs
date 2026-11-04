@@ -335,7 +335,7 @@ function wantTool(q, list) {
   if (q.includes("#tool")) {
     const names = tools.map((t) => t.name);
     const m = /#tool=([\w.-]+)/.exec(q);
-    const name = m ? names.find((n) => n.includes(m[1])) : names.find((n) => !SKILL_TOOLS.includes(n)) ?? names[0];
+    const name = m ? names.find((n) => n.includes(m[1])) : names.find((n) => !SKILL_TOOLS.includes(n) && n !== "generate_image") ?? names[0];
     if (!name) return null;
     let args = name === "load_skill" ? { name: "mock-skill" } : {};
     const a = /#args=(\{.*\})/.exec(q);
@@ -346,7 +346,7 @@ function wantTool(q, list) {
   let best = null;
   for (const tool of tools) {
     // Công cụ bộ não (brain_*) chỉ chọn khi ép bằng #tool=, để không tranh với công cụ connector trong các bài kiểm thử khác.
-    if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_") || tool.name.startsWith("browser_")) continue;
+    if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_") || tool.name.startsWith("browser_") || tool.name === "generate_image") continue;
     const tn = norm(`${tool.name} ${tool.description ?? ""}`).replace(/[_-]/g, " ");
     let score = 0;
     for (const [re, keys] of INTENTS) if (re.test(t) && keys.some((k) => tn.includes(k))) score += 2;

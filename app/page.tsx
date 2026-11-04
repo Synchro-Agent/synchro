@@ -56,7 +56,7 @@ const roughTitle = (t: string) => {
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
-import { allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
+import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, useModels } from "./models";
 import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
@@ -197,8 +197,8 @@ const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; 
     sys: "Tôi tạo một tài liệu soạn thảo bằng công cụ Docs, gồm tiêu đề và nội dung các phần. Tài liệu này có thể xuất ra Word, PDF hoặc Markdown." },
   { k: "slides", name: "Trang trình bày", label: "Synchro Slides", ph: "Bộ trang chiếu này nên nói về chủ đề gì?", desc: "Bộ trang chiếu mà bạn có thể trình chiếu, đổi kiểu dáng bằng hệ thống thiết kế và tải về dạng PowerPoint hoặc PDF.",
     sys: "Tôi tạo một bộ slide trong trình chỉnh sửa riêng. Mỗi slide là một tệp dữ liệu nhỏ, bạn có thể tự sửa tiêu đề hay chữ mà không cần nhờ tôi, và có thể tải về dạng PowerPoint hoặc PDF." },
-  { k: "design", name: "Thiết kế", label: "Synchro Design", ph: "Bản thiết kế này nên thể hiện điều gì?", desc: "Màn hình, luồng và đồ họa dựng bằng mã, bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa. Chưa tạo được ảnh chụp hay tranh bằng AI.",
-    sys: "Tôi tạo một thiết kế trực quan như màn hình ứng dụng, poster, landing page hay mockup, dựng bằng mã (chưa tạo được ảnh chụp hay tranh bằng AI). Nó hiện trên canvas để bạn xem, chỉnh và chia sẻ." },
+  { k: "design", name: "Thiết kế", label: "Synchro Design", ph: "Bản thiết kế này nên thể hiện điều gì?", desc: "Màn hình, luồng và đồ họa dựng bằng mã, bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa. Ảnh chụp hay tranh được tạo bằng AI qua gói đã đăng nhập.",
+    sys: "Tôi tạo một thiết kế trực quan như màn hình ứng dụng, poster, landing page hay mockup, dựng bằng mã; ảnh chụp hay tranh trong thiết kế thì tạo bằng AI qua gói đã đăng nhập. Nó hiện trên canvas để bạn xem, chỉnh và chia sẻ." },
 ];
 
 // Thư viện mẫu khi đang ở chế độ studio: bấm để điền sẵn một yêu cầu đầy đủ vào ô nhập, sửa lại rồi gửi.
@@ -836,7 +836,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
       </div>
     ) : (
       <div style={est}>
-        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
@@ -1186,6 +1186,12 @@ export default function Home() {
     const forget = () => setProjects((ps) => ps.map((p) => (p.mem?.length ? { ...p, mem: [] } : p)));
     window.addEventListener("synchro:forget", forget);
     return () => window.removeEventListener("synchro:forget", forget);
+  }, []);
+  // Thẻ "chưa tạo được ảnh" trong nhật ký làm việc: mở thẳng Cài đặt → Providers.
+  useEffect(() => {
+    const open = () => { setSettingsTab("Providers"); setModal("settings"); };
+    window.addEventListener("synchro:providers", open);
+    return () => window.removeEventListener("synchro:providers", open);
   }, []);
   // Đoạn chat và dự án theo tài khoản: đồng bộ với máy chủ, chuyển dần từ trình duyệt (chatsync.ts).
   const chatSync = useChatSync({ uid: me?.id ?? null, loaded, chats, projects, running, setChats, setProjects });
@@ -2312,6 +2318,7 @@ export default function Home() {
               <div className="hero-quick" aria-label="Bắt đầu nhanh">
                 {TPLS.map((t) => { const Ic = t.k === "doc" ? I.Article : t.k === "slides" ? I.Slides : I.PenNib; return (
                   <button key={t.k} className="hero-chip" onClick={() => setTplMode(t.k)}><Ic size={16} /><span>{t.name}</span></button>); })}
+                {models.providers.some((p) => p.plan && IMAGE_PLANS.has(p.plan.cli)) && <button className="hero-chip" data-tip="Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập" onClick={() => setPrefill((p) => ({ t: getLang() === "en" ? "Create an image of " : "Tạo ảnh ", n: p.n + 1 }))}><I.Image size={16} /><span>Tạo ảnh</span></button>}
               </div>
             )}
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (

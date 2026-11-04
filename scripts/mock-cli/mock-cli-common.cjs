@@ -241,4 +241,22 @@ function mediaDesc(buf, hint = "") {
 }
 const mediaReply = (items) => `MEDIA: ${items.length ? items.join("; ") : "không có tệp nào"}`;
 
-module.exports = { stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+// ---------------------------------------------------------------- tạo ảnh (app/ai/imagegen.ts)
+// Lượt tạo ảnh ghi tệp ảnh thật, rất nhỏ, đúng chỗ CLI thật ghi. Chế độ lấy từ <thư mục đăng nhập>/mock-image.json ({ "mode": "…" }) hoặc mock-cli.json ({ "image": { "agy": "…" } }):
+// ok, quota (hết hạn mức), fail (lỗi khác), none (không có công cụ), text (nói xong mà không có tệp), bad (tệp không phải ảnh), big (quá cỡ), slow (chạy tới khi bị dừng), other (nói
+// đường dẫn otherPath của tài khoản khác), symlink (liên kết mềm tới otherPath). Mỗi lượt ghi cờ đã nhận vào mock-image-log.json để kiểm thử xem.
+const TINY_JPEG = Buffer.from("/9j/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCABgAGADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAQG/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AjAIGuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/9k=", "base64");
+function tinyPng(w = 96, h = 96) {
+  const zlib = require("zlib");
+  const chunk = (t, d) => { const len = Buffer.alloc(4); len.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(zlib.crc32(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const rows = Buffer.alloc((w * 3 + 1) * h, 90); for (let y = 0; y < h; y++) rows[y * (w * 3 + 1)] = 0;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+}
+const isImageTurn = (p) => p.includes("<image_description>");
+const imageCount = (p) => Number(/exactly (\d) separate/.exec(p)?.[1] ?? 1);
+const imageMode = (dir, cli) => { const j = readJson(path.join(dir, "mock-image.json"), {}); return { ...j, mode: j.mode ?? cfg.image?.[cli] ?? "ok" }; };
+function imageLog(dir, rec) { const f = path.join(dir, "mock-image-log.json"); writeJson(f, [...readJson(f, []), { at: Date.now(), ...rec }]); }
+function saveImage(file, kind = "jpg") { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, kind === "png" ? tinyPng() : kind === "bad" ? "<html>không phải ảnh</html>" : kind === "big" ? Buffer.concat([TINY_JPEG, Buffer.alloc(3 * 1048576, 7)]) : TINY_JPEG); }
+
+module.exports = { TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

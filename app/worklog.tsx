@@ -7,6 +7,8 @@ import { Loader } from "./brand";
 import { getLang, tr } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
+import { IMAGE_PLANS } from "./catalog";
+import { refreshModels, useModels } from "./models";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
@@ -14,7 +16,9 @@ const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.Reco
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
 export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
-export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart;
+// plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat. why: lý do, tried: gói đã thử.
+export type PlansPart = { k: "plans"; why: string; tried: string[] };
+export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -48,6 +52,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
       const i = parts.findIndex((p) => p.k === "ask" && p.id === a.id);
       if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" };
     } catch {}
+  } else if (ev.kind === "plans") {
+    try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}
   } else if (ev.kind === "conn") {
     try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
@@ -68,7 +74,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
         {running ? <span className="wl-spin" /> : bad ? <I.Alert size={13} /> : null}
         <span data-notr={items.length === 1 ? true : undefined}>{label}</span>
         {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
-        {bad === 1 && items.length === 1 && items[0].sum ? <small className="wl-fail" data-notr title={items[0].sum}>{items[0].sum}</small> : null}
+        {bad === 1 && items.length === 1 && items[0].sum ? <small className="wl-fail" data-notr title={tr(items[0].sum)}>{tr(items[0].sum)}</small> : null}
         <I.ChevronR size={13} />
       </button>
       {open && (
@@ -76,7 +82,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{toolLabel(x.label)}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{x.sum}</small>}</div>
+              <div><b data-notr>{toolLabel(x.label)}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
             </div>
           ))}
         </div>
@@ -101,16 +107,31 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
   );
 }
 
+/** Chưa tạo được ảnh vì gói: lý do cụ thể do model nói trong câu trả lời, thẻ này chỉ đưa tới đúng chỗ xử lý. Nói theo đúng lý do (đã đăng nhập mà hết hạn mức thì không bảo đăng nhập),
+ *  và tự ẩn khi đã có gói dùng được ngoài các gói vừa hỏng (tried không gồm gói cần đăng nhập lại): danh sách model làm mới khi đăng nhập ở Providers và khi thẻ hiện, gồm cả lúc mở lại đoạn chat. */
+function PlansCard({ why, tried }: { why: string; tried: string[] }) {
+  const models = useModels();
+  useEffect(() => { refreshModels(); }, []);
+  if (!models.loaded || models.providers.some((p) => p.plan && IMAGE_PLANS.has(p.plan.cli) && !p.plan.relogin && !tried.includes(p.plan.cli))) return null;
+  return (
+    <div className="wl-plans" role="status">
+      <I.Alert size={14} /><span>{tr(why === "noplan" ? "Đăng nhập gói tạo được ảnh ở Providers" : why === "auth" ? "Đăng nhập lại gói ở Providers để tạo ảnh" : "Các gói đã đăng nhập chưa tạo được ảnh lúc này. Có thể đăng nhập thêm gói khác ở Providers")}</span>
+      <button className="btn" onClick={() => window.dispatchEvent(new Event("synchro:providers"))}>{tr("Mở Providers")}</button>
+    </div>
+  );
+}
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
 export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
+    : p.k === "plans" ? (live ? <PlansCard key={i} why={p.why} tried={p.tried} /> : null)
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 export function ConnCards({ parts }: { parts?: Part[] }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
+  const plans = (parts ?? []).find((p): p is PlansPart => p.k === "plans");
   // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
   // Chỉ hỏi một lần lúc thẻ gắn: vừa kết nối lại xong ngay trên thẻ thì thẻ vẫn ở đó để báo "Đã kết nối lại".
   const [fine, setFine] = useState<string[]>([]);
@@ -124,7 +145,7 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
     return () => { on = false; };
   }, [sig]);
   const show = list.filter((c) => !fine.includes(c.id));
-  return show.length ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}</> : null;
+  return show.length || plans ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}{plans && <PlansCard why={plans.why} tried={plans.tried} />}</> : null;
 }
 
 /**

@@ -13,7 +13,7 @@ import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
 import { warmSkillIndex } from "./skillroute";
-import { classify, dropPluginTags, dropTag, keepPluginTags, pluginKey, refine, tagRev, userStudioIds } from "./skillstudio";
+import { classify, dropPluginTags, dropTag, keepPluginTags, pluginKey, refine, tagRev, userStudioIds, tagsTable } from "./skillstudio";
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
@@ -657,6 +657,7 @@ function snap(): Cache {
     skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name); }));
   }
   const studio = new Map<string, Set<Studio>>();
+  tagsTable();
   for (const r of d.prepare("SELECT key, studios FROM skill_studios WHERE key LIKE 'p:%' AND studios <> '[]'").all() as { key: string; studios: string }[]) studio.set(r.key, new Set(JSON.parse(r.studios) as Studio[]));
   // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
   void warmSkillIndex([...skills.values()].flat()).catch(() => {});

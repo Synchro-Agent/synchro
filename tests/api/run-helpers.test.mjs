@@ -140,7 +140,7 @@ ok(!/ảnh đầu tiên/.test(rules) && /PREVIEW_MAX/.test(rules), "nói đúng 
 ok(/fonts-crosextra-carlito/.test(docker) && /fonts-crosextra-caladea/.test(docker), "image có font thay thế Calibri, Cambria");
 ok(/libreoffice-calc-nogui/.test(docker) && /COPY[^\n]*subfit\.py[^\n]*xlsx_recalc\.py/.test(docker) && /xlsx_recalc\.py --write-profile/.test(docker), "image có LibreOffice, công cụ đi kèm, hồ sơ luôn tính lại");
 ok(/subfit\.py/.test(setup) && /xlsx_recalc\.py/.test(setup), "đổi công cụ đi kèm thì image được build lại");
-ok(/recalc: true/.test(engine) && /Synchro chưa có công cụ tạo ảnh/.test(engine), "run_code bật tính lại; model nói thật về việc tạo ảnh");
+ok(/recalc: true/.test(engine) && /dùng công cụ generate_image nếu có/.test(engine) && /không gọi sản phẩm thay thế là ảnh AI/.test(engine), "run_code bật tính lại; model nói thật về việc tạo ảnh");
 
 console.log("6. Log dài không che lỗi và trạng thái");
 {
@@ -184,7 +184,7 @@ console.log("7. Mạng cho giọng đọc");
   ok(/espeak-ng/.test(docker) && /espeak-ng/.test(rules) && /"moviepy<2"/.test(docker), "image có giọng không cần mạng, ghim moviepy 1.x");
   ok(/const typed = typedText\(/.test(engine) && /suggest\(typed,/.test(engine) && !/suggest\(lastUserText/.test(engine), "gợi ý skill chỉ đọc chữ người dùng gõ, không đọc tệp đính kèm");
   ok(/fontEmbedCSS:fontCss/.test(fs.readFileSync("app/deckpptx.ts", "utf8")) && /sxPptx\(d\.id,d\.fontCss\)/.test(fs.readFileSync("app/artifactui.tsx", "utf8")), "xuất PowerPoint: ảnh nền dùng đúng phông web của slide");
-  ok(/Đồ họa, ảnh dựng bằng mã/.test(rules) && /không phải ảnh do AI vẽ/.test(rules), "quy tắc đồ họa: làm kỹ và nói đúng là dựng bằng mã");
+  ok(/Đồ họa dựng bằng mã/.test(rules) && /dùng generate_image nếu có/.test(rules), "quy tắc đồ họa: làm kỹ, ảnh AI thì dùng generate_image");
   ok(/RUN_PREVIEWS = 12/.test(agentSrc) && /PREVIEW_MAX = 12/.test(fs.readFileSync("app/runpreview.ts", "utf8")), "số ảnh tự xem khớp giữa workspace và quy tắc");
 }
 
