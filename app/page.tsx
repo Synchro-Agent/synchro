@@ -30,7 +30,7 @@ import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
-import { installFloatFit } from "./floatfit";
+import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
@@ -68,7 +68,7 @@ import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, mixExtra } from "./history";
 import { ContextMixer } from "./mixer";
-import { ArtifactCard, ArtifactPanel, ArtifactsGallery, OutputFiles, saveArtifacts } from "./artifactui";
+import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
 import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
@@ -98,6 +98,8 @@ const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), nu
 const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
 const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel));
+const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel));
+const ArtifactsGallery = lazyView(() => import("./artifactui").then((m) => m.ArtifactsGallery));
 const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
 const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
 const ReconnectLink = lazyView(() => import("./connectorsui").then((m) => m.ReconnectLink), null);
@@ -109,7 +111,7 @@ const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm),
 const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
 // Khách chưa đăng nhập lần nào: tải sẵn màn hình đăng nhập ngay từ đầu.
 if (typeof document !== "undefined" && !document.documentElement.dataset.sess) AuthComponent.preload();
-const PRELOAD: Partial<Record<View, () => void>> = { code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
+const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
 
@@ -254,7 +256,8 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   };
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
-  useEffect(() => {
+  // Đo trước khi vẽ: mở bằng bàn phím, menu con từng hiện ở chỗ cũ rồi mới nhảy, phần dời vào màn hình tính theo chỗ cũ nên cách menu chính 80-200px.
+  useLayoutEffect(() => {
     if (!sub) return;
     const m = mref.current?.querySelector(".model-menu") as HTMLElement | null;
     if (!m) return;
@@ -264,7 +267,9 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
     let x = r.right + 8;
     if (x + w > vw - 8) { x = r.left - 8 - w; if (x < 8) x = Math.max(8, vw - 8 - w); }
     setSubLeft(x - r.left);
-  }, [sub, mm]);
+  }, [sub, mm]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Đổi chỗ mà không đổi cỡ thì bộ theo dõi kích thước không báo: tính lại phần dời ngay.
+  useLayoutEffect(() => { mref.current?.querySelectorAll<HTMLElement>(".model-sub").forEach(fitFloat); }, [sub, subLeft, subPos]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
   // Menu mở ra bị tràn khỏi màn hình (nút nằm giữa ô soạn tin trên điện thoại): dịch ngang cho vừa.
   const [shift, setShift] = useState(0);
@@ -1306,6 +1311,8 @@ export default function Home() {
     if (!b || b.msgs.length !== n || b.msgs.some((m, k) => m !== ms[k])) artBase.current = { msgs: ms.slice(0, n), scan: scanArts(ms.slice(0, n), 0, ART_EMPTY) };
     return scanArts(ms, n, artBase.current!.scan);
   }, [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Đoạn chat có artifact: tải sẵn khung xem để bấm thẻ là mở ngay.
+  useEffect(() => { if (arts.map.size) ArtifactPanel.preload(); }, [arts.map.size]);
   const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
   const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
   const artOpen = view === "chat" && !!artVersions?.length;
@@ -1903,6 +1910,7 @@ export default function Home() {
     artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
     skillHub: (q) => { if (q) { try { sessionStorage.setItem("hub-q", q); } catch {} } goCustom(); if (q) window.dispatchEvent(new CustomEvent(HUB_SEARCH, { detail: q })); },
+    project: (id) => { setCurProj(id); setView("project"); },
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -2392,7 +2400,7 @@ export default function Home() {
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
+      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>

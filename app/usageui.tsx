@@ -456,8 +456,9 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
 
       <h3 className="sec">{L("30 ngày qua", "Last 30 days")}</h3>
       {dErr && !d && <div className="err-box sm" role="alert"><b>{L("Chưa tải được số liệu mức dùng", "Couldn't load usage figures")}</b><button className="btn" onClick={() => void loadD()}>{L("Thử lại", "Try again")}</button></div>}
-      <div className="us-stats" style={{ "--n": Math.min(stats.length, 4) } as React.CSSProperties}>{stats.slice(0, 4).map(([v, t]) => <div key={t}><b>{v}</b><span>{t}</span></div>)}</div>
-      <DailyChart d={d} cost={apiNow} />
+      {/* Tải lỗi: không hiện số 0 dưới dòng báo lỗi, trông như chưa dùng gì. */}
+      {!(dErr && !d) && <div className="us-stats" style={{ "--n": Math.min(stats.length, 4) } as React.CSSProperties}>{stats.slice(0, 4).map(([v, t]) => <div key={t}><b>{v}</b><span>{t}</span></div>)}</div>}
+      {!(dErr && !d) && <DailyChart d={d} cost={apiNow} />}
 
       <h3 className="sec">{L("Theo model", "By model")}</h3>
       {!d ? null : !d.byPlan.length && !(apiNow && d.byModel.length) ? <p className="d">{L("Chưa có lượt dùng nào. Bắt đầu một đoạn chat là số liệu hiện ở đây.", "No usage yet. Start a chat and it shows up here.")}</p> : (
@@ -487,7 +488,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       <p className="d" style={{ marginTop: 16 }}>
         {planNow && L("Gói subscription tính theo hạn mức hãng báo về; hãng không báo số token của gói nên Synchro đếm theo lượt. ", "Plans follow the limits each provider reports; providers don't report plan tokens, so Synchro counts calls. ")}
         {apiNow && L("Khóa API tính theo giá niêm yết của từng hãng, gồm cả đọc và ghi cache; hóa đơn của hãng là số cuối cùng.", "API keys are billed at each provider's list price, including cache reads and writes; the provider's invoice is final.")}
-        {st?.admin && go && apiNow && <> {L("Quản trị viên đổi hạn mức và bảng giá ở", "Administrators can change limits and prices in")} <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")}>{L("Quản trị → Hạn mức sử dụng", "Administrator → Usage limits")}</a>.</>}</p>
+        {st?.admin && go && apiNow && <> {L("Quản trị viên đổi hạn mức và bảng giá ở", "Administrators can change limits and prices in")} <a className="lnk" role="button" tabIndex={0} onClick={() => go("Administrator")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go("Administrator"); } }}>{L("Quản trị → Hạn mức sử dụng", "Administrator → Usage limits")}</a>.</>}</p>
     </div>
   );
 }

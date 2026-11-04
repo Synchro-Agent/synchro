@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { UsageIcon } from "./usageui";
 import { lazyView } from "./lazy";
@@ -8,6 +8,7 @@ const SettingsBody = lazyView(() => import("./settings").then((m) => m.SettingsB
 import { usePref, useApp } from "./store";
 import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
+import { searchSettings } from "./settingsindex";
 import { Boundary } from "./ui";
 
 export function Confirm({ title, text, ok, onCancel, onOk }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void }) {
@@ -194,12 +195,27 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ...(feat?.skills !== false ? [["Skill Hub", <I.Plugins key="pl" />] as [string, React.ReactNode]] : []),
     ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
   ];
-  // Tìm theo cả tên gốc (tiếng Anh) lẫn tên đang hiện ở giao diện tiếng Việt.
-  const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => [n, tr(n, "vi")].some((x) => x.toLowerCase().includes(q.trim().toLowerCase())));
-  const item = (n: string, ic: React.ReactNode) => <button key={n} className={`s-item ${tab === n ? "on" : ""}`} aria-current={tab === n ? "page" : undefined} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>;
+  // Tìm theo tên mục và từng dòng cài đặt (settingsindex.ts), cả chữ gốc lẫn chữ đang hiện. Dòng khớp hiện ngay dưới mục, bấm là tới đúng chỗ.
+  const found = searchSettings(q, [...items, ...custom].map(([n]) => n), (s) => tr(s));
+  const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => found.some((x) => x.tab === n));
+  const [goRow, setGoRow] = useState<{ row: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!goRow) return;
+    // Phần thân có thể tải chậm: thử vài lần tới khi dòng hiện ra. Thẻ .t đã được dịch nên so với cả hai.
+    let n = 0;
+    const t = setInterval(() => {
+      const el = [...document.querySelectorAll<HTMLElement>(".s-body .row .t")].find((x) => [goRow.row, tr(goRow.row)].includes(x.textContent?.trim() ?? ""));
+      if (el) { const r = el.closest<HTMLElement>(".row")!; r.scrollIntoView({ block: "center" }); r.classList.remove("s-hit"); void r.offsetWidth; r.classList.add("s-hit"); (r.querySelector<HTMLElement>("input,button,select,a") ?? r).focus({ preventScroll: true }); }
+      if (el || ++n > 12) clearInterval(t);
+    }, 120);
+    return () => clearInterval(t);
+  }, [goRow]);
+  const item = (n: string, ic: React.ReactNode) => <Fragment key={n}><button className={`s-item ${tab === n ? "on" : ""}`} aria-current={tab === n ? "page" : undefined} onClick={() => setTab(n)} title={n}>{ic}<span className="s-lbl">{n}</span></button>
+    {found.find((x) => x.tab === n)?.rows.slice(0, 6).map((r) => <button key={r} className="s-found" onClick={() => { setTab(n); setGoRow({ row: r, n: Date.now() }); }}>{r}</button>)}</Fragment>;
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal settings sy-settings">
+      {/* Tên cố định: phần thân vẽ lại khi đổi mục nên tiêu đề bên trong không dùng làm tên hộp thoại được. */}
+      <div className="modal settings sy-settings" aria-label="Settings">
         <div className="s-nav">
           <div className="sy-snav-h"><b>Settings</b></div>
           <div className="s-search"><I.Search size={15} /><input placeholder="Search" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -207,6 +223,7 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
           {f(items).map(([n, ic]) => item(n, ic))}
           <div className="s-group">Customize</div>
           {f(custom).map(([n, ic]) => item(n, ic))}
+          {q.trim() && !found.length && <div className="s-none" role="status">No results</div>}
         </div>
         <div className="s-body" key={tab}>
           <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>

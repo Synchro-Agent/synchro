@@ -5,9 +5,12 @@ import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, c
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
 import { ChartView, parseChart } from "./charts";
-import { ArtifactFrame, MermaidSvg } from "./artifactui";
+import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
 
+// Khung artifact và sơ đồ chỉ cần khi câu trả lời có hình minh họa: không nằm trong phần tải đầu của trang chat.
+const ArtifactFrame = lazyView(() => import("./artifactui").then((m) => m.ArtifactFrame), null);
+const MermaidSvg = lazyView(() => import("./artifactui").then((m) => m.MermaidSvg), null);
 // Bọc từng chữ để hiện dần: chỉ ở các dòng cuối của câu trả lời đang viết. Tin đã xong là chữ thường: đoạn chat 120 tin từng giữ gần 20.000 thẻ <span> chỉ để phục vụ hiệu ứng đã chạy xong.
 const words = (p: string, w?: boolean) => (w ? p.split(/(\s+)/).map((x, k) => (/^\s*$/.test(x) ? x : <span key={k} className="w">{x}</span>)) : p);
 // Link Markdown [chữ](địa chỉ): http(s) mở tab mới. Đường dẫn tới tệp trong sandbox (sandbox:/…, outputs/… — thói quen của model quen

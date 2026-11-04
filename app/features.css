@@ -18,7 +18,9 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .sh-foot nav{display:flex;gap:14px}
 .sh-foot a{color:inherit}
 .sh-hint{display:block;font-size:13.5px;line-height:1.55;color:var(--text-2);margin:4px 0 12px}
-.sh-hint svg{vertical-align:-2px;margin-right:2px}
+/* Mặc định của app cho svg là display:block: biểu tượng khóa từng đứng riêng một dòng trên câu chữ. */
+.sh-hint svg{display:inline-block;vertical-align:-2px;margin-right:4px}
+.pal-cut{padding:6px 12px 10px;font-size:12.5px;color:var(--text-2)}
 .sh-link{display:flex;gap:8px;margin:10px 0 4px}
 .sh-link input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:13px}
 .sh-err{font-size:13px;color:var(--danger,#c0392b);margin:8px 0 0}
@@ -41,3 +43,10 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .lnk-in{color:inherit;text-decoration:underline}
 .tk-more{display:flex;justify-content:center;margin:12px 0 4px}
 .tk-more .btn{gap:6px}
+/* Cài đặt: dòng khớp khi tìm, không có kết quả, dòng vừa được đưa tới */
+.s-found{display:block;width:100%;margin:0 0 2px;padding:5px 10px 5px 37px;border-radius:8px;font-size:12.5px;line-height:1.35;text-align:left;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-found:hover{background:var(--hover);color:var(--text)}
+.s-none{padding:12px 10px;font-size:13px;color:var(--text-2)}
+.row.s-hit{animation:sHit 1.4s var(--ease) 1}
+@keyframes sHit{0%,60%{background:color-mix(in srgb,var(--accent,#888) 14%,transparent)}100%{background:transparent}}
+@media (max-width:760px){.s-found{padding-left:10px}}

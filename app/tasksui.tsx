@@ -398,7 +398,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               </div>
             ))}</div>
           </section>
-        ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun={tr("kết quả")} /></div>
+        ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun="kết quả" /></div>
       ))}
 
       {tab === "approve" && (props === null ? <div className="empty"><span className="art-spin" /></div> : !pending.length && !decided.length ? (
@@ -436,7 +436,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
               <button className="icon-btn" aria-label="Xóa việc tự động" data-tip="Xóa việc tự động" onClick={() => del(t)}><I.Trash size={15} /></button>
             </div>}
           </div>
-        ))}<PageBar pg={pgJ} /><BulkBar b={bkJ} acts={jobActs} noun={tr("việc")} /></div>
+        ))}<PageBar pg={pgJ} /><BulkBar b={bkJ} acts={jobActs} noun="việc" /></div>
       ))}
       {edit && <TaskEditor init={edit === "new" ? null : edit.task ?? null} plan={edit === "new" ? null : edit.plan ?? null} say={say} onClose={() => setEdit(null)}
         onSaved={(_t, ran) => { setEdit(null); load(); setTab(ran ? "results" : edit !== "new" && edit.task ? tab : "jobs"); }} />}

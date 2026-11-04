@@ -50,10 +50,11 @@ export function Select({ value, options, onChange, search, width = 160 }: { valu
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useAway(() => setOpen(false));
+  const rowName = useContext(RowName);
   const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="sel" aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
+      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${rowName}: ${value}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
         <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
           <div className="menu-scroll">
           {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}
@@ -107,7 +108,7 @@ function SitesEditor({ cp, save }: { cp: CodePrefs; save: (p: Partial<CodePrefs>
   );
   return <div className="sites-box">{list("sites", a, setA, "example.com")}{list("blocked", b, setB, "ads.example.com")}</div>;
 }
-const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={(e) => e.key === "Enter" && onClick?.()}>{children}</a>;
+const A = ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <a className="lnk" role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}>{children}</a>;
 
 // Gắn vào cuối <body>: hộp con mở trong Cài đặt (Duyệt connector…) từng che mất thông báo lỗi.
 function Toasts({ msg }: { msg: string }) {
@@ -231,13 +232,13 @@ function Account() {
     <>
       <H first>Profile</H>
       <Row t="Profile photo" d="PNG or JPG up to 10MB." top><AvatarButton name={name} /></Row>
-      <Row t="Full name"><input className="field" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
-      <Row t="What should Synchro call you?"><input className="field" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
-      <Row t="Date of birth"><input className="field" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
+      <Row t="Full name"><input className="field" aria-label="Full name" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
+      <Row t="What should Synchro call you?"><input className="field" aria-label="What should Synchro call you?" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
+      <Row t="Date of birth"><input className="field" aria-label="Date of birth" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work || "Choose"} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
-      <textarea className="textarea" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
+      <textarea className="textarea" aria-label="Instructions for Synchro" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
       <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString()} characters over the limit · ` : ""}{ins.length.toLocaleString()} / 20,000</span></div>
       {ins.trim() !== server.trim() && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -299,7 +300,7 @@ function Account() {
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Delete your account?</h2>
-            <p className="d" style={{ margin: "0 0 12px" }}>Your account, sign-in methods and sessions will be permanently removed, and chats stored in this browser will be erased. This can&apos;t be undone.</p>
+            <p className="d" style={{ margin: "0 0 12px" }}>Your account and everything stored with it on the server (chats, projects, files, Brain, connectors, sessions) are permanently deleted, and the copy in this browser is erased. This can&apos;t be undone.</p>
             {me?.hasPassword && <input className="field" type="password" autoFocus autoComplete="current-password" placeholder="Enter your password to confirm" value={del ?? ""} onChange={(e) => setDel(e.target.value)} />}
             <div className="modal-foot"><button className="btn" onClick={() => setDel(null)}>Cancel</button><button className="btn danger" disabled={busy || (!!me?.hasPassword && !del)} onClick={deleteAccount}>Delete account</button></div>
           </div>
@@ -321,8 +322,8 @@ function Privacy({ go }: { go: (t: string) => void }) {
       <H>Your data</H>
       <Row t="Export data" d="Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them." top><button className="btn" onClick={app.exportData}>Export data</button></Row>
       <Row t="Shared chats"><button className="btn" onClick={() => setPanel("shared")}>Manage</button></Row>
-      <Row t="Uploaded files"><button className="btn" onClick={() => setPanel("files")}>Manage</button></Row>
-      <Row t="Your feedback"><button className="btn" onClick={() => setPanel("feedback")}>Manage</button></Row>
+      <Row t="Uploaded files" d="Files attached to your chats. They are deleted with your account."><button className="btn" onClick={() => setPanel("files")}>View</button></Row>
+      <Row t="Your feedback" d="Replies you rated. Press the thumb again on a reply to take the rating back."><button className="btn" onClick={() => setPanel("feedback")}>View</button></Row>
       <Row t="Memory preferences"><button className="btn" onClick={() => go("Brain")}>Manage ↗</button></Row>
       <Row t="Privacy policy"><a className="btn" href="/privacy" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
       <Row t="Terms of Service"><a className="btn" href="/terms" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>

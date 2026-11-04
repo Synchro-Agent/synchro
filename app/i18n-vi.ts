@@ -931,3 +931,9 @@ RULES_VI.push(
 );
 if (!Object.prototype.hasOwnProperty.call(EN2VI, "artifact")) EN2VI["artifact"] = "artifact";
 for (const e of DIRECTORY) if (e.access) EN2VI[e.access.why] = e.access.whyVi;
+Object.assign(EN2VI, {
+  "Files attached to your chats. They are deleted with your account.": "Tệp đã đính kèm trong các đoạn chat. Chúng bị xóa cùng tài khoản.",
+  "Replies you rated. Press the thumb again on a reply to take the rating back.": "Các câu trả lời bạn đã chấm. Bấm lại nút ở câu trả lời đó để bỏ chấm.",
+  "View": "Xem", "No results": "Không có kết quả",
+  "Your account and everything stored with it on the server (chats, projects, files, Brain, connectors, sessions) are permanently deleted, and the copy in this browser is erased. This can't be undone.": "Tài khoản và mọi thứ lưu kèm trên máy chủ (đoạn chat, dự án, tệp, Bộ não, connector, phiên đăng nhập) bị xóa vĩnh viễn, bản trong trình duyệt này cũng bị xóa. Không hoàn tác được.",
+});

@@ -791,8 +791,8 @@ Object.assign(VI2EN, {
 RULES_EN.push(
   [/^Đã thêm vào "(.+)"$/, (m) => `Added to "${m[1]}"`],
   [/^Đoạn chat mới sẽ nằm trong "(.+)"$/, (m) => `The new chat will be in "${m[1]}"`],
-  [/^Đã thêm (\d+) tệp từ (.+)$/, (m) => `Added ${m[1]} files from ${m[2]}`],
-  [/^Thêm (\d+) tệp$/, (m) => `Add ${m[1]} files`],
+  [/^Đã thêm (\d+) tệp từ (.+)$/, (m) => `Added ${m[1]} file${m[1] === "1" ? "" : "s"} from ${m[2]}`],
+  [/^Thêm (\d+) tệp$/, (m) => `Add ${m[1]} file${m[1] === "1" ? "" : "s"}`],
   // Dòng tiến trình của chế độ Tự động: "Tự động chọn <model> · việc <loại việc> · nỗ lực <mức>".
   [/^Tự động chọn (.+) · việc (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · ${({ "trò chuyện": "chat", "hỏi đáp": "Q&A", "học ngôn ngữ": "language help", "dịch": "translation", "tóm tắt": "summary", "viết": "writing", "viết code": "coding", "gỡ lỗi": "debugging", "suy luận": "reasoning", "phân tích": "analysis", "tạo sản phẩm": "building", "thao tác nhiều bước": "multi-step action", "đọc ảnh": "image reading", "tài liệu dài": "long document", "số liệu": "data" } as Record<string, string>)[m[2]] ?? m[2]} · effort ${({ "thấp": "low", "trung bình": "medium", "cao": "high", "cao hơn": "extra high", "tối đa": "max" } as Record<string, string>)[m[3]] ?? m[3]}`],
   [/^Tự động chọn (.+) · nỗ lực (.+)$/, (m) => `Auto picked ${m[1]} · effort ${m[2]}`],
@@ -958,13 +958,13 @@ RULES_EN.push(
   [/^Đang chạy · tự tắt sau (\d+) phút không dùng, file vẫn được giữ$/, (m) => `Running · turns off after ${m[1]} idle minutes, files are kept`], [/^Đã chuyển sang nhánh (.+)$/, (m) => `Switched to branch ${m[1]}`],
   [/^Chạy bằng (.+)$/, (m) => `Run with ${m[1]}`], [/^🛡️ Đã bảo vệ (\d+) thông tin nhạy cảm tại trình duyệt$/, (m) => `🛡️ Protected ${m[1]} secrets in your browser`],
   [/^🛡️ Đã bảo vệ (\d+) thông tin nhạy cảm trong (.+)$/, (m) => `🛡️ Protected ${m[1]} secrets in ${m[2]}`], [/^· bỏ qua (\d+) mục rác$/, (m) => `· skipped ${m[1]} junk items`],
-  [/^Đã thêm (\d+) tệp vào ngữ cảnh(.*)$/, (m) => `Added ${m[1]} files to the context${m[2].replace(/· bỏ qua (\d+) mục rác/, "· skipped $1 junk items")}`],
+  [/^Đã thêm (\d+) tệp vào ngữ cảnh(.*)$/, (m) => `Added ${m[1]} file${m[1] === "1" ? "" : "s"} to the context${m[2].replace(/· bỏ qua (\d+) mục rác/, "· skipped $1 junk items")}`],
   [/^(.+) \| Đã dán: (\d+) dòng$/, (m) => `${m[1]} | Pasted: ${m[2]} lines`], [/^Trích dẫn: dòng (.+)$/, (m) => `Quote: line ${m[1]}`],
   [/^(\d+) kết quả chưa đọc$/, (m) => `${m[1]} unread results`], [/^Bạn đã dùng Synchro một lúc rồi — nghỉ giải lao (.+) nhé$/, (m) => `You've been using Synchro for a while — take a ${m[1]} break`],
   [/^Đã chuyển thành (.+)$/, (m) => `Converted to ${enOf(m[1])}`], [/^Chào buổi sáng(.*)$/, (m) => `Good morning${m[1]}`], [/^Chào buổi trưa(.*)$/, (m) => `Good afternoon${m[1]}`], [/^Chiều tốt lành(.*)$/, (m) => `Good afternoon${m[1]}`],
   [/^(\d+) skill sẽ bị gỡ(.*)\. Bạn có thể cài lại từ danh mục\.$/, (m) => `${m[1]} skills will be removed${m[2]}. You can reinstall them from the catalog.`],
   [/^Không trích được chữ từ "(.+)" — AI sẽ chưa đọc được tệp này$/, (m) => `Couldn't extract text from "${m[1]}" — the AI can't read this file yet`],
-  [/^Đã xóa (.+)$/, (m) => `Deleted ${m[1]}`], [/^(\d+) tệp$/, (m) => `${m[1]} files`], [/^đã dùng (\d+) lần$/, (m) => `used ${m[1]} times`], [/^Đã cập nhật (.+) lên v(\d+)$/, (m) => `Updated ${m[1]} to v${m[2]}`],
+  [/^Đã xóa (.+)$/, (m) => `Deleted ${m[1]}`], [/^(\d+) tệp$/, (m) => `${m[1]} file${m[1] === "1" ? "" : "s"}`], [/^đã dùng (\d+) lần$/, (m) => `used ${m[1]} times`], [/^Đã cập nhật (.+) lên v(\d+)$/, (m) => `Updated ${m[1]} to v${m[2]}`],
   [/^(.+) · bấm để chọn tệp khác$/, (m) => `${m[1]} · click to pick another file`], [/^Người nói (.+)$/, (m) => `Speaker ${m[1]}`], [/^Người (\d+)$/, (m) => `Speaker ${m[1]}`],
   [/^(\d+) ngôn ngữ · tối đa ([\d.,]+) ký tự(.*)$/, (m) => `${m[1]} languages · up to ${m[2].replace(/\./g, ",")} characters${m[3]}`],
   [/^Đã dùng (.+) \/ (.+) credit(.*) · bấm để quét lại gói$/, (m) => `Used ${m[1]} / ${m[2]} credits${m[3].replace(/· hồi lại ngày (.+)/, "· resets $1")} · click to rescan the plan`],
@@ -1531,6 +1531,8 @@ Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở 
   };
   const nn = (n: string, w: string) => (N[w] ? N[w][n === "1" ? 0 : 1] : w);
   const W = Object.keys(N).sort((a, b) => b.length - a.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  // Đứng trước luật chung "Đã xóa …" để danh từ được dịch, không còn "Deleted 1 mục".
+  RULES_EN.unshift([new RegExp(`^Đã xóa (\\d+) (${W})$`), (m) => `Deleted ${m[1]} ${nn(m[1], m[2])}`]);
   RULES_EN.push(
     [new RegExp(`^Đã chọn (\\d+) (${W})$`), (m) => `${m[1]} ${nn(m[1], m[2])} selected`],
     [new RegExp(`^Chọn (${W})$`), (m) => `Select ${N[m[1]][1]}`],
@@ -1626,3 +1628,20 @@ Object.assign(VI2EN, {
   "Chưa kết nối được tới Synchro": "Can't reach Synchro", "Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.": "Your chats and what you were typing are still here. Synchro is retrying.",
   "Câu trả lời cũ đã được thay bằng lượt mới.": "The earlier reply was replaced by this new turn.", "Khôi phục bản cũ": "Restore the earlier version",
 });
+Object.assign(VI2EN, { "Đang hiện": "Showing", "Gõ thêm để thu hẹp.": "Type more to narrow it down.", "Kết quả": "Results", "Dự án": "Projects" });
+// Nhãn công cụ trong nhật ký làm việc (chatengine.ts: describe, browsertools.ts: describeBrowser), hiện ở worklog.tsx.
+Object.assign(VI2EN, {
+  "Đang đọc lại artifact": "Re-reading the artifact", "Đang kiểm tra hiển thị artifact": "Checking how the artifact renders", "Đang tìm skill phù hợp": "Looking for a matching skill", "Đang tìm trên web": "Searching the web",
+  "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang chụp màn hình trang": "Taking a screenshot", "Đang cuộn trang": "Scrolling the page", "Đang kéo thả trên trang": "Dragging on the page",
+  "Đang xem các tệp đã tải về": "Listing downloaded files", "Đang mở tab mới": "Opening a new tab", "Đang chuyển tab": "Switching tabs", "Đang đóng tab": "Closing a tab", "Đang xem các tab": "Listing tabs", "Đang trả lời hộp thoại của trang": "Answering a page dialog", "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
+});
+RULES_EN.push(
+  [/^Đang mở thư viện (.+)$/, (m) => `Opening the ${m[1]} library`], [/^Đang đọc tài liệu của skill (.*)$/, (m) => `Reading the docs of skill ${m[1]}`], [/^Đang đọc skill (.+)$/, (m) => `Reading skill ${m[1]}`],
+  [/^Đang chạy script của skill (.*)$/, (m) => `Running a script of skill ${m[1]}`], [/^Đang chạy code (.+)$/, (m) => `Running ${m[1]} code`], [/^Đang tìm trên web: (.*)$/, (m) => `Searching the web: ${m[1]}`],
+  [/^Đang đọc trang web: (.+)$/, (m) => `Reading the page: ${m[1]}`], [/^Đang đọc trang (.+)$/, (m) => `Reading the page ${m[1]}`], [/^Đang nhớ lại: (.*)$/, (m) => `Recalling: ${m[1]}`],
+  [/^Đang đọc ghi chú (.*) trong bộ não$/, (m) => `Reading note ${m[1]} in the Brain`], [/^Đang ghi vào bộ não: (.*)$/, (m) => `Writing to the Brain: ${m[1]}`], [/^Đang tìm công cụ connector: (.*)$/, (m) => `Looking for a connector tool: ${m[1]}`],
+  [/^Đang tìm “(.*)” trên trang$/, (m) => `Finding “${m[1]}” on the page`], [/^Đang bấm phần tử \[(.*)\]$/, (m) => `Clicking element [${m[1]}]`], [/^Đang bấm vị trí (.*)$/, (m) => `Clicking at ${m[1]}`], [/^Đang rê chuột lên phần tử \[(.*)\]$/, (m) => `Hovering over element [${m[1]}]`], [/^Đang rê chuột lên vị trí (.*)$/, (m) => `Hovering at ${m[1]}`],
+  [/^Đang gõ “(.*)”$/, (m) => `Typing “${m[1]}”`], [/^Đang nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Đang chọn “(.*)”$/, (m) => `Selecting “${m[1]}”`], [/^Đang tải tệp (.*) lên trang$/, (m) => `Uploading ${m[1]} to the page`], [/^Đang đọc tệp (.*) vừa tải về$/, (m) => `Reading downloaded file ${m[1]}`],
+  [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
+  [/^Đang dùng công cụ (.+)$/, (m) => `Using tool ${m[1]}`], [/^Đang dùng ([^:]+): (.+)$/, (m) => `Using ${m[1]}: ${m[2]}`],
+);

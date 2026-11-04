@@ -54,11 +54,13 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   return { parts, plan, seq: ev.seq };
 }
 
+// Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.
+const toolLabel = (l: string) => { const t = tr(`Đang ${l}`); return t !== `Đang ${l}` ? t : l.charAt(0).toUpperCase() + l.slice(1); };
 function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
   const [open, setOpen] = useState(false);
   const running = live && items.some((x) => x.ok === undefined);
   const bad = items.filter((x) => x.ok === false).length;
-  const label = items.length === 1 ? items[0].label : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
+  const label = items.length === 1 ? toolLabel(items[0].label) : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
   return (
     <div className={`wl-tools ${open ? "open" : ""}`}>
       <button className="wl-tools-h" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -72,7 +74,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{x.label}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{x.sum}</small>}</div>
+              <div><b data-notr>{toolLabel(x.label)}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{x.sum}</small>}</div>
             </div>
           ))}
         </div>
@@ -169,9 +171,9 @@ export function WorkStatus({ label, since, steps }: { label?: string; since: num
   return (
     <div className="wl-status">
       {/* Trình đọc màn hình chỉ đọc khi việc đang làm đổi, không đọc đồng hồ đếm từng giây. */}
-      <span className="sr-only" role="status" aria-live="polite">{label || tr("Đang suy nghĩ…")}</span>
+      <span className="sr-only" role="status" aria-live="polite">{tr(label || "Đang suy nghĩ…")}</span>
       <Loader size={14} />
-      <span className="wl-st-t" key={label} aria-hidden="true">{label || tr("Đang suy nghĩ…")}</span>
+      <span className="wl-st-t" key={label} aria-hidden="true">{tr(label || "Đang suy nghĩ…")}</span>
       <span className="wl-st-m" aria-hidden="true">{dur(now - since)}{steps > 0 ? ` · ${steps} ${getLang() === "en" ? (steps === 1 ? "step" : "steps") : "bước"}` : ""}</span>
     </div>
   );

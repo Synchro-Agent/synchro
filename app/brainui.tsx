@@ -993,7 +993,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
               <div className="bw-grp-h"><button aria-expanded={!fold0.tags} onClick={() => setFold0({ ...fold0, tags: !fold0.tags })}><I.ChevronR size={11} /><span>{L("Thẻ", "Tags")}</span></button><em>{tags.length}</em></div>
               {!fold0.tags && <div className="bw-tags">{tags.slice(0, 40).map((t) => <button key={t.tag} className="bn-tag" onClick={() => { setQ(`tag:${t.tag}`); setFindOpen(true); search.current?.focus(); }} data-notr>#{t.tag}<em>{t.count}</em></button>)}</div>}
             </section>}
-            <BulkBar b={bkN} acts={noteActs} noun={L("ghi chú", "notes")} compact />
+            <BulkBar b={bkN} acts={noteActs} noun="ghi chú" compact />
             {g.stats.chats === 0 && <p className="bw-hint">{L("Bộ não tự lớn lên sau mỗi đoạn chat: chủ đề, tên riêng và chân dung của bạn sẽ hiện ở đây.", "The brain grows after every chat: your topics, entities and portrait show up here.")}</p>}
           </>
         )}
@@ -1040,7 +1040,7 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
         <span><b>{s.topics}</b>{L("chủ đề", "topics")}</span><span><b>{s.entities}</b>{L("tên riêng", "entities")}</span>
         {s.pending > 0 && <span className="wait"><b>{s.pending}</b>{L("đang học", "learning")}</span>}
       </div>}
-      {g ? <div className="bn-mini" role="button" tabIndex={0} aria-label={L("Mở bộ não", "Open the brain")} onKeyDown={(e) => e.key === "Enter" && openBrain()}>
+      {g ? <div className="bn-mini" role="button" tabIndex={0} aria-label={L("Mở bộ não", "Open the brain")} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openBrain(); } }}>
         <BrainGraph data={g} gs={gs} mini height={220} onOpen={(t) => openBrain(t)} onBg={() => openBrain()} />
       </div> : <div className="us-empty"><span className="art-spin sm" /></div>}
       <div className="bn-acts" style={{ margin: "12px 0 18px" }}>
