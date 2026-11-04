@@ -428,6 +428,8 @@ async function distillOne(row: { user_id: string; conv: string; feature: string;
   const transcript = snap.map((m) => `[${m.r === "u" ? "Người dùng" : "Trợ lý"}]\n${m.t}`).join("\n\n").slice(-24_000);
   const { text } = await quickCall(user, DISTILL(sens, topics, entities), `Đoạn chat cần chưng cất:\n\n${transcript}`, { maxTokens: 1400 });
   const j = jsonOf(text) as Distilled;
+  // Người dùng xóa đoạn chat trong lúc đang chưng cất: không tạo lại ghi chú từ nội dung đã xóa.
+  if (chatGone(uid, row.conv)) return;
   const cur = byConv(uid, row.conv);
   const p: Props = { ...(cur ? parse(cur).props : { date: row.updated_at, tags: [row.feature] }) };
   p.gist = typeof j.gist === "string" ? j.gist.replace(/[[\]]/g, "").trim().slice(0, 600) : p.gist;
@@ -702,6 +704,7 @@ export async function garden(uid: string, o: { now?: boolean } = {}) {
     setState(uid, { profile_dirty: 0 });
   }
   autoLink(uid);
+  sweepDaily(uid);
   refreshIndex(uid);
   const s2 = state(uid);
   if (s2.dirty > 0 && (o.now || s2.dirty >= 3 || now - s2.hub_at > 6 * 3600_000)) await step("tổng hợp", () => consolidate(uid));
@@ -938,14 +941,32 @@ export function setTask(user: UserRow, title: string, task: string, done: boolea
 }
 
 // ---------------------------------------------------------------- ghi chú hằng ngày
+const dropNote = (id: string) => { t().prepare("DELETE FROM brain_links WHERE src = ?").run(id); t().prepare("DELETE FROM brain_notes WHERE id = ?").run(id); };
+/** Nhật ký còn nhắc đoạn chat không còn nữa (xóa từ bản trước khi nhật ký chưa tự dọn): viết lại, hoặc xóa khi cả ngày không còn gì. */
+function sweepDaily(uid: string) {
+  const notes = allNotes(uid), live = new Set(notes.filter((n) => n.kind === "chat" || n.kind === "code").map((n) => fold(n.title)));
+  for (const n of notes) {
+    if (n.kind !== "daily" || !n.props.date) continue;
+    const part = n.body.split("## Đoạn chat\n")[1]?.split("\n## ")[0] ?? "";
+    if (linksIn(part).some((x) => !live.has(fold(x)))) refreshDaily(uid, n.props.date);
+  }
+}
 function refreshDaily(uid: string, ms: number) {
   const key = dayKey(ms), title = dailyTitle(ms);
   const chats = allNotes(uid).filter((n) => (n.kind === "chat" || n.kind === "code") && n.props.distilledAt && n.props.date && dayKey(n.props.date) === key);
-  if (!chats.length) return;
-  const topics = [...new Set(chats.flatMap((n) => n.props.topics ?? []))];
-  const tasks = chats.flatMap((n) => openTasks(n).map((x) => `- [ ] ${x} (từ ${L(n.title)})`));
   const cur = getNote(uid, title);
   const d = new Date(ms);
+  // Ngày không còn đoạn chat nào: không để lại tên và tóm tắt của đoạn chat đã xóa. Ghi chú này người dùng không tự xóa được,
+  // nên xóa luôn; chỉ giữ khi họ đã viết gì đó vào hoặc ghim nó (giữ phần của họ, bỏ phần Synchro viết).
+  if (!chats.length) {
+    if (cur?.kind !== "daily") return;
+    if (!cur.props.userNote?.trim() && !cur.props.pinned) { dropNote(cur.id); return; }
+    const kept = `Những gì bạn đã cùng Synchro làm ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}. Thuộc ${L(HUB)}.\n${userPart(cur.props)}`;
+    if (cur.body !== kept) put(uid, { id: cur.id, kind: "daily", title, body: kept, props: cur.props });
+    return;
+  }
+  const topics = [...new Set(chats.flatMap((n) => n.props.topics ?? []))];
+  const tasks = chats.flatMap((n) => openTasks(n).map((x) => `- [ ] ${x} (từ ${L(n.title)})`));
   const body = `Những gì bạn đã cùng Synchro làm ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}. Thuộc ${L(HUB)}.\n\n## Đoạn chat\n${chats.map((n) => `- ${L(n.title)}: ${n.props.gist ?? ""}`).join("\n")}\n${topics.length ? `\n## Chủ đề đã chạm tới\n${topics.map(L).join(" · ")}\n` : ""}${tasks.length ? `\n## Còn dang dở\n${tasks.join("\n")}\n` : ""}${userPart(cur?.props ?? {})}`;
   if (!cur || cur.body !== body) put(uid, { id: cur?.id, kind: "daily", title, body, props: { ...(cur?.props ?? {}), day: key, date: ms, tags: ["nhat-ky"], auto: true } });
 }
@@ -1070,9 +1091,12 @@ export function saveNote(user: UserRow, title: string, patch: { body?: string; u
 export function deleteNote(user: UserRow, title: string) {
   const n = findNote(user.id, title);
   if (!n || SYSTEM_NOTES.includes(n.kind)) return false;
-  t().prepare("DELETE FROM brain_links WHERE src = ?").run(n.id);
-  t().prepare("DELETE FROM brain_notes WHERE id = ?").run(n.id);
+  dropNote(n.id);
   if (n.conv) t().prepare("DELETE FROM brain_queue WHERE user_id = ? AND conv = ?").run(user.id, n.conv);
+  // Mục lục, trung tâm và nhật ký chép lại dòng đầu của ghi chú: gỡ ngay, không chờ lần chăm sóc sau.
+  if (n.props.date && (n.kind === "chat" || n.kind === "code")) refreshDaily(user.id, n.props.date);
+  refreshIndex(user.id);
+  refreshHub(user.id);
   return true;
 }
 /**
@@ -1086,9 +1110,8 @@ export function forgetConv(uid: string, conv: string) {
   const row = byConv(uid, conv);
   if (!row) return false;
   const gone = parse(row), key = fold(gone.title);
-  d.prepare("DELETE FROM brain_links WHERE src = ?").run(gone.id);
-  d.prepare("DELETE FROM brain_notes WHERE id = ?").run(gone.id);
-  const notes = allNotes(uid);
+  dropNote(gone.id);
+  const notes = allNotes(uid), dropped: string[] = [];
   const talks = (n: Note, title: string) => [...(n.props.topics ?? []), ...(n.props.entities ?? [])].some((x) => fold(x) === fold(title));
   for (const n of notes) {
     if (n.kind === "chat" || n.kind === "code") {
@@ -1096,8 +1119,8 @@ export function forgetConv(uid: string, conv: string) {
     } else if (WIKI.includes(n.kind) && (n.props.facts?.some((f) => f.src && fold(f.src) === key) || n.props.related?.some((x) => fold(x) === key))) {
       const facts = (n.props.facts ?? []).filter((f) => !f.src || fold(f.src) !== key), lost = facts.length !== (n.props.facts ?? []).length;
       if (!facts.length && !n.props.userNote?.trim() && !n.props.pinned && !notes.some((o) => (o.kind === "chat" || o.kind === "code") && talks(o, n.title))) {
-        d.prepare("DELETE FROM brain_links WHERE src = ?").run(n.id);
-        d.prepare("DELETE FROM brain_notes WHERE id = ?").run(n.id);
+        dropNote(n.id);
+        dropped.push(n.title);
         continue;
       }
       rebuild(uid, n, { ...n.props, facts, related: n.props.related?.filter((x) => fold(x) !== key), ...(lost ? { summary: undefined, stale: true } : {}) });
@@ -1107,10 +1130,20 @@ export function forgetConv(uid: string, conv: string) {
       if (u) { put(uid, { id: n.id, kind: "about", title: ABOUT, body: aboutBody(u, ap), props: ap }); setState(uid, { profile_dirty: state(uid).profile_dirty + 1 }); }
     }
   }
-  d.prepare("DELETE FROM brain_log WHERE user_id = ? AND instr(text, ?) > 0").run(uid, L(gone.title));
+  for (const x of [gone.title, ...dropped]) d.prepare("DELETE FROM brain_log WHERE user_id = ? AND instr(text, ?) > 0").run(uid, L(x));
   refreshLog(uid);
   if (gone.props.date) refreshDaily(uid, gone.props.date);
-  setState(uid, { dirty: state(uid).dirty + 1 });
+  sweepDaily(uid);
+  // Bản đồ chép dòng tóm lược của chủ đề, nên viết lại ngay theo các chủ đề còn lại.
+  const left = allNotes(uid);
+  for (const m of left) if (m.kind === "map") put(uid, { id: m.id, kind: "map", title: m.title, body: mapBody(m.props, left.filter((x) => x.kind === "topic" && x.props.up && fold(x.props.up) === fold(m.title))), props: m.props });
+  // Phần tổng quan của trung tâm do model viết từ các đoạn chat: nhắc thẳng tên đoạn chat thì bỏ ngay,
+  // còn lại thì tổng hợp lại ở nhịp kế tiếp (garden_at = 0 để không phải chờ mốc 30 phút).
+  const hub = getNote(uid, HUB), hk = hub ? fold(`${hub.props.overview ?? ""} ${(hub.props.focus ?? []).join(" ")}`) : "";
+  refreshHub(uid, key && hk.includes(key) ? { overview: undefined, focus: [] } : {});
+  refreshIndex(uid);
+  const st = state(uid);
+  setState(uid, gone.props.gist ? { dirty: Math.max(3, st.dirty + 1), garden_at: 0 } : { dirty: st.dirty + 1 });
   return true;
 }
 /**
