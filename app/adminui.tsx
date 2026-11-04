@@ -57,7 +57,6 @@ Object.assign(ACTIONS, {
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], admin_reset_link: ["Created password reset link", "adm"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
 });
-export const ACTION_LABELS = ACTIONS;
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,
   "Sign-ins": (a) => ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset"].includes(a),
