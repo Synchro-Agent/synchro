@@ -109,6 +109,23 @@ export function cleanEnv(extra: Record<string, string | undefined> = {}): Record
   return out;
 }
 
+// ---------------------------------------------------------------- cô lập theo tài khoản (tùy chọn)
+// SYNCHRO_ENGINE_BWRAP=1 (cần gói bubblewrap, xem docs/van-hanh.md): mỗi tiến trình CLI của một tài khoản chỉ thấy thư mục đăng nhập và thư mục làm việc
+// của chính tài khoản đó, /proc riêng (không đọc được biến môi trường của lượt khác), phần còn lại của đĩa chỉ đọc. Mọi thư mục đăng nhập thuộc cùng một
+// user hệ thống nên quyền tệp không ngăn được chuyện này. Lệnh không gắn với tài khoản nào (cài CLI, dọn thư mục) không đi qua đây vì cần ghi trong nhà engine.
+const inside = (root: string, p: string) => path.resolve(p).startsWith(path.resolve(root) + path.sep);
+export function isolate(file: string, argv: string[], env: Record<string, string>, cwd: string): { file: string; argv: string[]; env: Record<string, string> } {
+  const logins = path.join(engineHome(), "logins"), work = path.join(engineHome(), "work");
+  const scope = [env.CLAUDE_CONFIG_DIR, env.CODEX_HOME, env.HOME].filter((d): d is string => !!d && inside(logins, d));
+  if (process.env.SYNCHRO_ENGINE_BWRAP !== "1" || !scope.length) return { file, argv, env };
+  const app = process.cwd();
+  const binds = [...new Set([...scope, ...(inside(work, cwd) ? [cwd] : [])])].flatMap((d) => ["--bind", d, d]);
+  return { file: "bwrap", argv: ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--unshare-pid", "--unshare-ipc", "--new-session", "--die-with-parent",
+    ...(inside(app, engineHome()) ? [] : ["--tmpfs", app]), "--tmpfs", logins, "--tmpfs", work, ...binds, "--chdir", cwd, "--", file, ...argv],
+    // HOME mặc định là nhà engine (chỉ đọc trong hộp): CLI ghi tệp phụ vào thư mục của tài khoản.
+    env: { ...env, HOME: inside(logins, env.HOME ?? "") ? env.HOME : scope[0] } };
+}
+
 // ---------------------------------------------------------------- chạy tiến trình
 export type RunOpts = {
   env?: Record<string, string | undefined>;
@@ -167,7 +184,8 @@ const PY_PTY = [
  * Khi chạy bằng user riêng, thư mục làm việc (0700, của user đó) Synchro không vào được: tiến trình sudo chạy từ "/",
  * rồi `env -C` mới chuyển vào thư mục dưới quyền user của engine.
  */
-export function command(bin: string, args: string[], env: Record<string, string>, pty: boolean, cwd: string): { file: string; argv: string[]; env: Record<string, string>; cwd: string } {
+const SECRET_ENV = ["CLAUDE_CODE_OAUTH_TOKEN"];
+export function command(bin: string, args: string[], env: Record<string, string>, pty: boolean, cwd: string): { file: string; argv: string[]; env: Record<string, string>; cwd: string; stdinHead?: string } {
   let file = bin, argv = args;
   if (pty) {
     // Terminal rộng để link đăng nhập không bị xuống dòng. util-linux: script -qfec "<lệnh>" /dev/null;
@@ -176,9 +194,15 @@ export function command(bin: string, args: string[], env: Record<string, string>
     if (process.platform === "darwin") { file = "/usr/bin/python3"; argv = ["-c", PY_PTY, "/bin/sh", "-c", wide]; }
     else { file = "script"; argv = ["-qfec", wide, "/dev/null"]; }
   }
+  const box = isolate(file, argv, env, cwd);
   const user = process.env.SYNCHRO_ENGINE_USER;
-  if (user) return { file: "sudo", argv: ["-n", "-u", user, "--", "env", "-i", "-C", cwd, ...Object.entries(env).map(([k, v]) => `${k}=${v}`), file, ...argv], env: { PATH: env.PATH ?? basePath() }, cwd: "/" };
-  return { file, argv, env, cwd };
+  if (user) {
+    // Tham số dòng lệnh thì ai trên máy cũng xem được bằng ps: token đi qua dòng đầu của stdin, `read` đọc từng byte nên phần còn lại (prompt) vẫn tới CLI.
+    const plain = Object.entries(box.env).filter(([k]) => !SECRET_ENV.includes(k)), secret = SECRET_ENV.filter((k) => box.env[k]);
+    const pre = secret.length ? ["/bin/sh", "-c", secret.map((k) => `IFS= read -r ${k} && export ${k}`).join(" && ") + ' && exec "$@"', "sh"] : [];
+    return { file: "sudo", argv: ["-n", "-u", user, "--", "env", "-i", "-C", cwd, ...plain.map(([k, v]) => `${k}=${v}`), ...pre, box.file, ...box.argv], env: { PATH: env.PATH ?? basePath() }, cwd: "/", stdinHead: secret.map((k) => box.env[k] + "\n").join("") };
+  }
+  return { file: box.file, argv: box.argv, env: box.env, cwd };
 }
 
 export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
@@ -217,6 +241,8 @@ export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
     ok({ code, signal, timedOut, aborted, ...(idle ? { idle } : {}) });
   }));
   child.on("error", (e) => { err += String(e.message); });
+  child.stdin!.on("error", () => {});
+  if (c.stdinHead) child.stdin!.write(c.stdinHead);
   if (o.stdin !== undefined) { child.stdin!.end(o.stdin); }
   const rl = readline.createInterface({ input: child.stdout! });
   const lines = (async function* () { for await (const l of rl) yield o.pty ? stripAnsi(l) : l; })();

@@ -190,32 +190,42 @@ export class ClaudeCodeEngine implements Engine {
 }
 
 // ---------------------------------------------------------------- Codex
+// Loại mục trong luồng sự kiện của codex exec là công cụ chạy trên máy chủ (không qua Synchro): lệnh shell, sửa / đọc tệp.
+export const CODEX_LOCAL = /command|shell|exec|file_change|patch|read_file|list_dir|grep_files|view_image/i;
 export class CodexEngine implements Engine {
   readonly id = "codex";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     // Codex không có tham số system riêng: đặt system lên đầu prompt ở lượt mở hội thoại (lượt resume đã có trong lịch sử).
     const prompt = req.system && !req.sessionId ? `${req.system}\n\n---\n\n${req.prompt}` : req.prompt;
-    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"'];
+    // Hộp cát "chỉ đọc" của Codex vẫn đọc được cả đĩa, mà mọi thư mục đăng nhập thuộc cùng một user hệ thống: lệnh shell trên máy chủ đọc được
+    // đăng nhập của người khác. Tắt hẳn công cụ shell và xem tệp (việc thật đều chạy trong workspace qua công cụ của Synchro); bản Codex nào không
+    // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
+    const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', "-c", "features.shell_tool=false", "-c", "features.unified_exec=false", "-c", "tools.view_image=false"];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật. codex exec không có ai bấm duyệt
     // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
     // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho
-    // lệnh dựng sẵn của Codex trên máy chủ: việc thật đều chạy trong workspace qua công cụ của Synchro.
+    // lệnh dựng sẵn của Codex trên máy chủ.
     if (req.mcp) args.push("-c", `mcp_servers.synchro.url=${JSON.stringify(req.mcp.url)}`, "-c", "mcp_servers.synchro.startup_timeout_sec=20", "-c", "mcp_servers.synchro.tool_timeout_sec=1800", "-c", 'mcp_servers.synchro.default_tools_approval_mode="approve"');
     if (req.web) args.push("-c", "tools.web_search=true");
     if (req.model) args.push("-m", req.model);
     // Mức đã được subs.resolvePlanModel chọn theo đúng các mức model này hỗ trợ (low…max, ultra).
     const ce = cliEffort(req.effort);
     if (ce) args.push("-c", `model_reasoning_effort="${ce}"`);
-    // Ảnh gửi kèm (cả khi nối tiếp phiên): --image=<tệp>; PDF gốc nằm trong thư mục làm việc, chữ trích ra đã có trong prompt.
-    const atts = req.attachments ?? [];
-    for (const f of imagePaths(atts)) args.push(`--image=${f}`);
+    // Ảnh gửi kèm (cả khi nối tiếp phiên): --image=<tệp>; PDF: chữ trích ra đã có trong prompt, trang scan đi cùng ảnh (Codex không còn công cụ mở tệp).
+    for (const f of imagePaths(req.attachments ?? [])) args.push(`--image=${f}`);
     args.push("-");
-    const pdfs = atts.filter((a) => a.kind === "pdf");
-    const p = start("codex", args, req, prompt + (pdfs.length ? fileList(pdfs, "Ảnh đính kèm đã được gửi kèm tin nhắn; PDF gốc ở đường dẫn dưới đây nếu cần đọc thêm.") : ""));
+    const p = start("codex", args, req, prompt);
     if (!p) { yield notInstalled("codex"); return; }
     const parts: string[] = [];
     let done = false, lastErr = "", tools = false;
     for await (const o of objects(p)) {
+      if (/^item\./.test(String(o.type)) && CODEX_LOCAL.test(String(o.item?.type ?? o.item?.item_type ?? ""))) {
+        // Không ghi nội dung lệnh vào nhật ký: có thể chứa dữ liệu của người dùng.
+        console.error(`[codex] chặn công cụ trên máy chủ: ${String(o.item?.type ?? o.item?.item_type).slice(0, 40)}`);
+        p.kill(); done = true;
+        yield err("Codex định chạy lệnh trực tiếp trên máy chủ nên Synchro đã dừng lượt này để bảo vệ dữ liệu. Hãy nhắn lại, hoặc dùng model khác.", "other");
+        break;
+      }
       if (o.type === "thread.started" && typeof o.thread_id === "string") yield { kind: "session", id: o.thread_id };
       else if (o.type === "item.started" && /mcp_tool_call|web_search/.test(String(o.item?.type ?? ""))) tools = true;
       else if (o.type === "item.completed" && (o.item?.type === "agent_message" || o.item?.item_type === "assistant_message") && typeof o.item.text === "string") {
