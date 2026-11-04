@@ -8,11 +8,11 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 // Importing animation components from framer-motion
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
-import { Loader, Mark } from "./brand";
+import { Mark } from "./brand";
 import { usePref } from "./store";
 import { OCCUPATIONS } from "./names";
 export { OCCUPATIONS };
-import { LANG_NAMES, type Lang } from "./i18n";
+import { getLang, LANG_NAMES, type Lang } from "./i18n";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
 
@@ -84,7 +84,7 @@ const DefaultLogo = () => ( <div className="bg-primary text-primary-foreground r
 
 // --- TYPES + API ---
 export type AuthProfile = { fullName: string | null; nickname: string | null; birthDate: string | null; occupation: string | null; instructions?: string };
-export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean; perms: Perms };
+export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean; perms: Perms; verifyPending?: boolean; verifyLocked?: boolean };
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;
 // Cùng danh sách với Cài đặt → Tài khoản để hai nơi hiển thị khớp nhau.
@@ -262,7 +262,6 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [authStep, setAuthStep] = useState(mode === "profile" ? "profile" : "email");
-  const [checking, setChecking] = useState(false);
   const [stage, setStage] = useState<Stage>("form");
   const [kind, setKind] = useState<Kind>("login");
   const [errorMsg, setErrorMsg] = useState("");
@@ -296,8 +295,10 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     setStage("loading");
     const t0 = Date.now();
     try {
-      const { user: u } = await post<{ user: AuthUser }>(url, body);
+      const { user: u, pending } = await post<{ user: AuthUser; pending?: boolean }>(url, body);
       await wait(minMs - (Date.now() - t0));
+      // Email này không tạo mới được: không nói lý do (ai cũng gõ được email của người khác), thư hướng dẫn đã gửi tới chính hộp thư đó.
+      if (pending) { busy.current = false; setAuthStep("pending"); setPassword(""); setConfirmPassword(""); setStage("form"); return; }
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
       if (u.needsProfile) { busy.current = false; onDone?.(u, k); return; }
       setDoneUser(u);
@@ -316,7 +317,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     setProfileErr("");
     const profile = { fullName: name, nickname: nickname.trim() || lastWord(name), birthDate: iso, occupation };
     if (mode === "profile") await run("profile", "/api/auth/profile", profile, 900);
-    else await run("signup", "/api/auth/signup", { email, password, profile }, STATUS.signup.length * 1150);
+    else await run("signup", "/api/auth/signup", { email, password, profile, lang: getLang() }, STATUS.signup.length * 1150);
   };
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
@@ -336,19 +337,11 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
   const handleProgressStep = async () => {
     if (authStep === "email") {
-      if (checking) return;
       // Enter với email sai: nói rõ ngay tại ô nhập, không im lặng.
       if (!isEmailValid) { if (email.trim()) setEmailErr("Enter a valid email address."); return; }
-      setChecking(true);
-      try {
-        const r = await post<{ exists: boolean; hasPassword: boolean; methods: (keyof Providers)[]; reserved: boolean }>("/api/auth/check", { email });
-        if (r.reserved) { fail("This email is reserved for the administrator. Sign in with Google, or create the admin account on the server."); return; }
-        if (!r.exists && !signupOpen) { fail("New sign-ups are closed. Ask your administrator for an account."); return; }
-        if (r.exists && !r.hasPassword) { fail(`This account signs in with ${r.methods.map((m) => PROVIDER_NAMES[m] ?? m).join(", ")}. Use that button above.`); return; }
-        setIsLogin(r.exists);
-        setAuthStep("password");
-      } catch (e) { fail((e as Error).message); }
-      finally { setChecking(false); }
+      // Không hỏi máy chủ email có tài khoản chưa (lộ thông tin): luôn hiện ô mật khẩu, người mới bấm "Tạo tài khoản".
+      setIsLogin(true);
+      setAuthStep("password");
     } else if (authStep === "password") {
       if (isPasswordValid && !isLogin) setAuthStep("confirmPassword");
     }
@@ -368,6 +361,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     if (authStep === "profile") setAuthStep("confirmPassword");
     else if (authStep === "confirmPassword") { setAuthStep("password"); setConfirmPassword(""); }
     else if (authStep === "password") { setAuthStep("email"); setPassword(""); }
+    else if (authStep === "pending") { setAuthStep("email"); setIsLogin(true); }
   };
 
   // Trang cha đổi mode: vào bước hồ sơ (đã đăng nhập nhưng thiếu hồ sơ) hoặc quay về từ đầu (đăng xuất).
@@ -406,7 +400,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
   const titles: Record<string, [string, string]> = {
     email: ["Get started", "Continue with"],
-    password: [isLogin ? "Welcome back" : "Create your password", isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."],
+    password: [isLogin ? "Enter your password" : "Create your password", isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."],
+    pending: ["Check your email", "We sent the next step to this address. If you already have an account, sign in or reset your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };
@@ -498,7 +493,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
                                         <input type="email" autoComplete="email" readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
-                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground">{checking ? <Loader size={16} /> : <ArrowRight className="w-5 h-5" />}</GlassButton></div>
+                                        <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                     </div></div>
                                     {emailErr && authStep === "email" && <p id="auth-email-err" className="auth-field-err" role="alert">{emailErr}</p>}
                                 </div>
@@ -520,10 +515,17 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     </div>
                                     <BlurFade delay={OUT + STEP * 3}><button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button></BlurFade>
                                     {isLogin && <BlurFade delay={OUT + STEP * 3}><a className="auth-forgot" href="/reset" onClick={() => { try { sessionStorage.setItem("forgot-email", email); } catch {} }}>Forgot your password?</a></BlurFade>}
+                                    <BlurFade delay={OUT + STEP * 3}>{isLogin
+                                      ? signupOpen && <button type="button" className="auth-forgot" onClick={() => { setIsLogin(false); setPassword(""); }}>New to Synchro? Create an account</button>
+                                      : <button type="button" className="auth-forgot" onClick={() => { setIsLogin(true); setPassword(""); }}>Already have an account? Sign in</button>}</BlurFade>
                                 </BlurFade>}
                             </AnimatePresence>
                         </motion.div>}
                     </AnimatePresence>
+                    {authStep === "pending" && <BlurFade delay={OUT + STEP * 2} className="w-full">
+                        <p className="auth-signed-as" data-notr><b>{email}</b></p>
+                        <button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button>
+                    </BlurFade>}
                     <AnimatePresence>
                         {authStep === "confirmPassword" && <BlurFade key="confirm-password-field" delay={OUT + STEP * 2} className="w-full">
                             <div className="relative w-full">

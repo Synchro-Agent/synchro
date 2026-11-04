@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { openSecret, sealSecret } from "../providers";
 import { DATA_DIR } from "../authstore";
+import { opsEvent } from "../ops";
 import { type Cli, engineHome, find, makeDir, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
 import { redact } from "./errors";
 
@@ -139,7 +140,7 @@ export function grokModels(out: string): { loggedIn: boolean; plan: string | nul
 }
 
 /** Hãng từ chối đăng nhập trong lượt chat (401/403): đánh dấu cần đăng nhập lại cho tới khi đăng nhập xong hoặc đăng xuất. */
-export const markRelogin = (cli: Cli, scope: string) => { g.relogin.add(key(cli, scope)); forget(cli, scope); };
+export const markRelogin = (cli: Cli, scope: string) => { g.relogin.add(key(cli, scope)); forget(cli, scope); opsEvent("cli_auth", cli, "", scope); };
 export const needsRelogin = (cli: Cli, scope: string) => g.relogin.has(key(cli, scope));
 /** Một lượt chat vừa chạy được: hãng đã nhận đăng nhập, báo động trước đó (nếu có) không còn đúng. */
 export const clearRelogin = (cli: Cli, scope: string) => { g.relogin.delete(key(cli, scope)); };

@@ -18,6 +18,7 @@ import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
 // Tab nặng trong Cài đặt: mở tab nào tải tab đó.
+const HealthPanel = lazyView(() => import("./healthui").then((m) => m.HealthPanel));
 const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
 const ExtSettings = lazyView(() => import("./browserhub").then((m) => m.ExtSettings), null);
 const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSettings));
@@ -664,6 +665,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
     case "Administrator": return <AdminPanel Toggle={Toggle} />;
+    case "Health": return <HealthPanel />;
     case "Providers": case "API": return <ProvidersPanel />;
     case "Connectors": return <ConnectorsPanel />;
     case "Skill Hub": case "Skills": case "Plugins": return <SkillHub />;

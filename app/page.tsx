@@ -26,6 +26,7 @@ import { toSpeech, VI } from "./voiceflow";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
+import { VerifyBanner } from "./verifybanner";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
@@ -2123,6 +2124,7 @@ export default function Home() {
       {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
       <main id="main" tabIndex={-1} className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
+        <VerifyBanner me={me ?? null} onChange={setMe} />
         {syncSt.risk && <div className="sync-warn" role="alert"><I.InfoCircle size={16} /><span>{tr("Trình duyệt đã hết chỗ và máy chủ chưa nhận được bản mới nhất của")} {syncSt.pending + syncSt.tooBig} {tr("mục. Đừng đóng trang trước khi xuất dữ liệu.")}</span><button className="btn" onClick={exportData}>{tr("Xuất dữ liệu")}</button></div>}
         {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">

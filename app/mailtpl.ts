@@ -66,3 +66,55 @@ export function changedMail(o: { base: string; name?: string | null; when: strin
       : `${title}\n\nThe password for your Synchro account was changed at ${o.when}.\n\nIf this wasn't you, reset your password now: ${url}\n\nSynchro`,
   };
 }
+
+/** Xác minh email khi đăng ký. days: thời hạn của đường dẫn. */
+export function verifyMail(o: { base: string; name?: string | null; url: string; days: number; lang: MailLang }): Mail {
+  const vi = o.lang === "vi", name = o.name?.trim() ? esc(o.name.trim()) : "";
+  const title = vi ? "Xác minh email của bạn" : "Verify your email";
+  const lead = vi ? `Chào${name ? ` ${name}` : " bạn"}, có người vừa tạo tài khoản Synchro bằng địa chỉ này. Nếu là bạn, hãy xác minh để dùng tệp đính kèm, connector, tác vụ tự động và Synchro Code.` : `Hi${name ? ` ${name}` : ""}, someone just created a Synchro account with this address. If it was you, verify it to use file attachments, connectors, scheduled tasks and Synchro Code.`;
+  const after = vi ? `Đường dẫn có hiệu lực trong <b style="color:${INK};font-weight:600">${o.days} ngày</b>.` : `This link works for <b style="color:${INK};font-weight:600">${o.days} days</b>.`;
+  const note = vi ? "Không phải bạn đăng ký? Mở đường dẫn rồi chọn \"Không phải tôi\" để xóa tài khoản đó, hoặc bỏ qua email này." : "Didn't sign up? Open the link and choose \"This wasn't me\" to remove that account, or ignore this email.";
+  const label = vi ? "Xác minh email" : "Verify email";
+  const fallback = vi ? "Nút không bấm được? Dán đường dẫn này vào trình duyệt:" : "Button not working? Paste this link into your browser:";
+  return {
+    subject: vi ? "Xác minh email cho tài khoản Synchro" : "Verify your email for Synchro",
+    html: frame(o.base, o.lang, { pre: vi ? "Một bước nữa để dùng đủ tính năng của Synchro." : "One more step to use all of Synchro.", title, lead, cta: { label, url: o.url }, after, note, fallback: { label: fallback, url: o.url } }),
+    text: vi
+      ? `${title}\n\nCó người vừa tạo tài khoản Synchro bằng địa chỉ này. Nếu là bạn, mở đường dẫn này để xác minh (hiệu lực ${o.days} ngày):\n${o.url}\n\nKhông phải bạn đăng ký? Mở đường dẫn rồi chọn "Không phải tôi" để xóa tài khoản đó, hoặc bỏ qua email này.\n\nSynchro`
+      : `${title}\n\nSomeone just created a Synchro account with this address. If it was you, open this link to verify it (works for ${o.days} days):\n${o.url}\n\nDidn't sign up? Open the link and choose "This wasn't me" to remove that account, or ignore this email.\n\nSynchro`,
+  };
+}
+
+/** Có người đăng ký bằng email đã có tài khoản: chủ email được báo và có đường lấy lại. Trang đăng ký không nói gì về chuyện này. */
+export function signupTakenMail(o: { base: string; url: string; lang: MailLang }): Mail {
+  const vi = o.lang === "vi";
+  const title = vi ? "Email này đã có tài khoản Synchro" : "This email already has a Synchro account";
+  const lead = vi ? "Có người (có thể là bạn) vừa thử tạo tài khoản Synchro mới bằng địa chỉ này. Không có tài khoản mới nào được tạo." : "Someone (maybe you) just tried to create a new Synchro account with this address. No new account was created.";
+  const after = vi ? "Nếu là bạn, hãy đăng nhập, hoặc đặt lại mật khẩu nếu đã quên. Bạn dùng Google, GitHub hay Apple thì đăng nhập bằng nút đó." : "If it was you, sign in, or reset your password if you've forgotten it. If you use Google, GitHub or Apple, sign in with that button.";
+  const note = vi ? "Không phải bạn và chưa từng đăng ký Synchro? Đặt lại mật khẩu sẽ giành lại tài khoản: phiên của người khác bị đăng xuất và phần họ đã cài đặt bị xóa." : "Not you, and you never signed up for Synchro? Resetting the password takes the account back: other sessions are signed out and anything they set up is removed.";
+  const label = vi ? "Đặt lại mật khẩu" : "Reset password";
+  return {
+    subject: title,
+    html: frame(o.base, o.lang, { pre: lead, title, lead, after, note, cta: { label, url: o.url } }),
+    text: `${title}\n\n${lead}\n\n${after}\n\n${label}: ${o.url}\n\n${note}\n\nSynchro`,
+  };
+}
+
+/** Thư thử do quản trị viên gửi từ trang sức khỏe. */
+export function testMail(o: { base: string; lang: MailLang; when: string }): Mail {
+  const vi = o.lang === "vi";
+  const title = vi ? "Thư thử của Synchro" : "Synchro test email";
+  const lead = vi ? `Thư này được gửi thử từ Cài đặt → Sức khỏe hệ thống lúc <b style="color:${INK};font-weight:600">${esc(o.when)}</b>. Bạn đọc được dòng này nghĩa là email của Synchro tới được hộp thư này.` : `This test was sent from Settings → System health at <b style="color:${INK};font-weight:600">${esc(o.when)}</b>. If you can read this, Synchro's email reaches this inbox.`;
+  const note = vi ? "Hãy xem thư này nằm ở hộp thư chính hay Spam, và kiểm tra chữ ký DKIM trong phần xem thư gốc." : "Check whether this landed in your main inbox or Spam, and look for the DKIM signature in the original message view.";
+  return { subject: title, html: frame(o.base, o.lang, { pre: title, title, lead, note }), text: `${title}\n\n${vi ? "Gửi thử lúc" : "Sent at"} ${o.when}.\n\nSynchro` };
+}
+
+/** Cảnh báo vận hành gửi cho quản trị viên. */
+export function opsAlertMail(o: { base: string; title: string; text: string }): Mail {
+  const url = `${o.base}/`;
+  return {
+    subject: `[Synchro] ${o.title}`,
+    html: frame(o.base, "vi", { pre: o.title, title: o.title, lead: esc(o.text), cta: { label: "Mở Synchro", url }, note: "Xem chi tiết ở Cài đặt → Sức khỏe hệ thống. Mỗi loại cảnh báo gửi tối đa một lần mỗi ngày." }),
+    text: `${o.title}\n\n${o.text}\n\nXem chi tiết ở Cài đặt → Sức khỏe hệ thống: ${url}\n\nSynchro`,
+  };
+}

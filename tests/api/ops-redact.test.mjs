@@ -1,0 +1,20 @@
+// Làm sạch dòng lỗi trước khi lưu cho quản trị viên xem. Không cần máy chủ.
+import { loadTs } from "../lib/ts.mjs";
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
+const { opsredact: R } = await loadTs(["opsredact"]);
+const r = R.redactLine;
+ok(r("gửi tới nguyen.van@gmail.com lỗi") === "gửi tới ***@gmail.com lỗi", "email chỉ còn tên miền", r("gửi tới nguyen.van@gmail.com lỗi"));
+ok(!r("Authorization: Bearer abc.def.ghi").includes("abc"), "bỏ token sau Authorization");
+ok(!r('{"token":"secret-value-1"}').includes("secret-value-1"), "bỏ token trong JSON");
+ok(!r("key sk-ant-api03-AAAAbbbbCCCC").includes("AAAAbbbb"), "bỏ khóa dạng sk-");
+ok(!r("jwt eyJhbGciOiJSUzI1NiIs.eyJzdWIiOiIxMjM0NTY3.abc").includes("eyJ"), "bỏ JWT");
+ok(r("GET https://x.test/cb?code=abcd&state=1 lỗi").includes("https://x.test/cb?…") && !r("GET https://x.test/cb?code=abcd").includes("abcd"), "bỏ chuỗi truy vấn của URL");
+ok(!r("file a94a8fe5ccb19ba61c4c0873d391e987982fbbd3").includes("a94a8fe5"), "bỏ mã băm dài");
+ok(!r("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----").includes("abc"), "bỏ khóa riêng");
+ok(r("a\n  b\tc") === "a b c", "gộp thành một dòng");
+ok(r("x".repeat(2000)).length <= 400, "giới hạn độ dài");
+const e = new Error("hỏng rồi");
+ok(R.formatArgs(["[runs]", e]).startsWith("[runs] Error: hỏng rồi"), "định dạng lỗi", R.formatArgs(["[runs]", e]));
+console.log(`\n${fail ? "✗" : "✓"} ${pass} đạt, ${fail} lỗi`);
+process.exit(fail ? 1 : 0);

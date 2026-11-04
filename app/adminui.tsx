@@ -23,7 +23,7 @@ type Log = { id: number; at: number; action: string; actor_email: string | null;
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms }; providers: Providers; admins: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean }; providers: Providers; admins: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
@@ -55,11 +55,13 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
 };
 Object.assign(ACTIONS, {
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
+  mail_failed: ["Email could not be delivered", "bad"], admin_mail_test: ["Sent a test email", "adm"], signup_email_taken: ["Sign-up attempt with an existing email", "bad"], email_verify_sent: ["Sent a verification email", ""], email_verified: ["Verified email", "ok"], email_denied: ["Email owner removed an unverified account", "bad"], account_claimed: ["Email owner took back an unverified account", "bad"], admin_verify_gate: ["Changed email verification rule", "adm"], admin_mark_verified: ["Marked email as verified", "adm"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,
-  "Sign-ins": (a) => ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset"].includes(a),
+  "Sign-ins": (a) => ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset", "email_verified", "email_verify_sent", "signup_email_taken", "email_denied", "account_claimed"].includes(a),
+  Email: (a) => a.startsWith("mail_") || a === "admin_mail_test" || a === "password_reset_request" || a.startsWith("email_"),
   "Admin actions": (a) => a.startsWith("admin_"),
 };
 const ENV: Record<keyof Providers, string> = { google: "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", github: "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET", apple: "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY" };
@@ -301,6 +303,10 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         <div><div className="t">New sign-ups</div><div className="d">Allow new accounts to be created. People who already have an account can still sign in.</div></div>
         <Toggle on={d.settings.signupOpen} label="New sign-ups" set={(v) => act(() => call("PATCH", "/api/admin/settings", { signupOpen: v }), v ? "Sign-ups opened" : "Sign-ups closed")} />
       </div>
+      <div className="row">
+        <div><div className="t">Require a verified email</div><div className="d">New accounts that sign up with a password must confirm their email before using uploads, connectors, scheduled tasks, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren&apos;t affected.</div></div>
+        <Toggle on={d.settings.verifyGate !== false} label="Require a verified email" set={(v) => act(() => call("PATCH", "/api/admin/settings", { verifyGate: v }), "Saved")} />
+      </div>
       <div className="row"><div><div className="t">Email and password</div><div className="d">Passwords are hashed with scrypt. Accounts lock for 15 minutes after repeated failed attempts.</div></div><span className="s-badge ok">On</span></div>
       {(["google", "github", "apple"] as const).map((p) => (
         <div key={p} className="row">
@@ -403,6 +409,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                     )}
                     {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>Owner accounts can&apos;t be suspended or deleted from here.</p> : (
                       <div className="adm-actions">
+                        {!u.verified && <button className="btn" disabled={busy} onClick={() => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "mark_verified" }), "Email marked as verified")}>Mark email as verified</button>}
                         <button className="btn" disabled={busy} onClick={() => { setPwFor(u); setPw({ next: "", again: "", signOut: true }); }}>Set new password</button>
                         <button className="btn" disabled={busy} onClick={() => act(() => call<{ resetUrl: string }>("PATCH", `/api/admin/users/${u.id}`, { action: "reset_link" }).then((r) => setResetFor({ email: u.email, url: r.resetUrl })), "Reset link created")}>Create reset link</button>
                         <button className="btn" disabled={busy || !u.sessions} onClick={() => app.confirm("Sign this user out everywhere?", "Every active session for this account will end immediately.", "Sign out", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "signout" }), "User signed out everywhere"))}>Sign out everywhere</button>
@@ -426,7 +433,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <h3 className="sec">Audit log</h3>
       <div className="adm-bar">
         <div className="s-search"><I.Search size={14} /><input placeholder="Search by email or IP" value={lq} onChange={(e) => { setLq(e.target.value); setLPage(1); }} /></div>
-        <Seg value={logF} onChange={(v) => { setLogF(v); setLPage(1); }} options={["All", "Sign-ins", "Admin actions"]} />
+        <Seg value={logF} onChange={(v) => { setLogF(v); setLPage(1); }} options={["All", "Sign-ins", "Email", "Admin actions"]} />
       </div>
       {pageLogs.map((l) => {
         const [label, kind] = ACTIONS[l.action] ?? [l.action, ""];

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
-import { can, current, isAdmin, limit, sameOrigin, type UserRow } from "../../../authstore";
+import { can, current, isAdmin, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
 import {
   SpeechErr, audioOf, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
   scribeToken, sideRead, sideWrite, spent, updateItem, voiceOut, type Feat, type Plan,
@@ -731,7 +731,7 @@ async function run(req: Request, ctx: Ctx, method: "GET" | "POST" | "DELETE") {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   if (method !== "GET") { try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); } }
-  if (!can(c.user, "speech")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Speech." }, { status: 403 });
+  if (!can(c.user, "speech")) return Response.json({ error: verifyLocked(c.user) ? VERIFY_FIRST : "Quản trị viên chưa cho phép tài khoản của bạn dùng Speech." }, { status: 403 });
   const { op } = await ctx.params;
   try {
     if (method === "GET") return await GETop(req, c.user, op.join("/"));
