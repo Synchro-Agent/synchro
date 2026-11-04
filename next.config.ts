@@ -17,9 +17,11 @@ const nextConfig: NextConfig = {
         { key: "Strict-Transport-Security", value: "max-age=15552000" },
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "X-Frame-Options", value: "SAMEORIGIN" },
-        { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       ],
+    }, {
+      // Chỉ cho trang, không cho /api/: header ở đây đè header của route, mà tệp người dùng (/api/outputs, /api/artimg) cần CSP sandbox riêng của nó.
+      source: "/((?!api/).*)", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }],
     }, { source: "/:path*", headers: [
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },

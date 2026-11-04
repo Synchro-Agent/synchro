@@ -519,7 +519,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                         </div></div>
                                     </div>
                                     <BlurFade delay={OUT + STEP * 3}><button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button></BlurFade>
-                                    {isLogin && <BlurFade delay={OUT + STEP * 3}><p className="auth-note">Forgot your password? Ask your administrator to set a new one.</p></BlurFade>}
+                                    {isLogin && <BlurFade delay={OUT + STEP * 3}><a className="auth-forgot" href="/reset" onClick={() => { try { sessionStorage.setItem("forgot-email", email); } catch {} }}>Forgot your password?</a></BlurFade>}
                                 </BlurFade>}
                             </AnimatePresence>
                         </motion.div>}

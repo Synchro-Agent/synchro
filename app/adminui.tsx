@@ -54,7 +54,7 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   admin_signup_closed: ["Closed sign-ups", "adm"], admin_set_password: ["Set user password", "adm"], admin_set_perms: ["Changed user access", "adm"], admin_default_perms: ["Changed default access", "adm"], profile_updated: ["Updated profile", ""], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
 };
 Object.assign(ACTIONS, {
-  github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], admin_reset_link: ["Created password reset link", "adm"],
+  github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {

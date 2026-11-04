@@ -135,11 +135,11 @@ try {
   ok(/authorize/.test(r.j?.authorizeUrl ?? "") && r.j.connector.status === "ok", "Đăng nhập lại khi đang tốt: ra trang đăng nhập, giữ kết nối cũ", JSON.stringify(r.j).slice(0, 200));
 
   console.log("Token / API key");
-  r = await api("POST", "/api/connectors", { name: "Công ty", url: `${MCP}/apikey` });
+  r = await api("POST", "/api/connectors", { name: "Công ty", url: `${MCP.replace("127.0.0.1", "localhost")}/apikey` });
   ok(r.s >= 400 && /token hoặc API key/.test(r.j?.error ?? ""), "máy chủ chỉ nhận token: chỉ đúng cách kết nối", JSON.stringify(r.j));
-  r = await api("POST", "/api/connectors", { name: "Công ty", url: `${MCP}/apikey`, token: "sai" });
+  r = await api("POST", "/api/connectors", { name: "Công ty", url: `${MCP.replace("127.0.0.1", "localhost")}/apikey`, token: "sai" });
   ok(r.s === 400 && /từ chối token/.test(r.j?.error ?? ""), "token sai bị từ chối, không lưu", JSON.stringify(r.j));
-  r = await api("POST", "/api/connectors", { name: "Công ty", url: `${MCP}/apikey`, token: "mock-api-key" });
+  r = await api("POST", "/api/connectors", { name: "Công ty", url: `${MCP.replace("127.0.0.1", "localhost")}/apikey`, token: "mock-api-key" });
   const keyId = r.j?.connector?.id;
   ok(r.s === 200 && r.j.connector.status === "ok" && r.j.connector.auth === "token" && !r.j.authorizeUrl, "token đúng: kết nối ngay", JSON.stringify(r.j).slice(0, 300));
   ok(!JSON.stringify(r.j).includes("mock-api-key") && !JSON.stringify((await api("GET", "/api/connectors")).j).includes("mock-api-key"), "token không trả về trình duyệt");

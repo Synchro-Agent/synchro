@@ -1,5 +1,7 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
+import { sendMail } from "./mailer";
+import { changedMail, resetMail, type MailLang } from "./mailtpl";
 import Database from "better-sqlite3";
 import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
 import crypto from "node:crypto";
@@ -404,11 +406,42 @@ export async function changePassword(req: Request, u: UserRow, cur: unknown, nex
   db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), u.id);
   const signedOut = db().prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?").run(u.id, keepSession).changes;
   audit("password_changed", { actor: u, ip: clientIp(req), detail: signedOut ? String(signedOut) : undefined });
+  notifyChanged(req, u);
   return { signedOut };
 }
 
-// ---- đặt lại mật khẩu bằng đường dẫn do quản trị viên tạo ----
-// Chưa có dịch vụ gửi email nên người dùng quên mật khẩu nhờ quản trị viên gửi đường dẫn này qua kênh riêng. Mã nằm sau dấu # của đường dẫn: không vào nhật ký máy chủ.
+// ---- quên mật khẩu: đường dẫn gửi qua email, hoặc do quản trị viên tạo khi người dùng mất cả hộp thư ----
+// Mã nằm sau dấu # của đường dẫn: không vào nhật ký máy chủ.
+const RESET_MIN = 60;
+const mailLang = (req: Request, lang?: unknown): MailLang => (lang === "vi" || lang === "en" ? lang : /^vi\b/i.test(req.headers.get("accept-language") ?? "") ? "vi" : "en");
+/** Không ném lỗi và không báo gì khác nhau khi email không có tài khoản: chỉ giới hạn theo IP là báo thật (ai cũng có thể chạm). */
+export function requestPasswordReset(req: Request, email0: unknown, lang?: unknown) {
+  const ip = clientIp(req);
+  limit("forgot:" + ip, 10, 15 * MIN);
+  let email = "";
+  try { email = normEmail(email0); } catch { return; }
+  const u = findByEmail(email);
+  if (!u || u.status !== "active") return;
+  // Mỗi tài khoản tối đa 3 thư mỗi giờ: không để biến Synchro thành công cụ gửi thư rác tới hộp thư của người khác.
+  try { limit("forgot-mail:" + u.id, 3, 60 * MIN); } catch { return; }
+  const token = crypto.randomBytes(32).toString("base64url");
+  db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(u.id);
+  db().prepare("INSERT INTO password_resets (token_hash, user_id, expires_at, created_by) VALUES (?, ?, ?, ?)").run(sha256(token), u.id, Date.now() + RESET_MIN * MIN, u.id);
+  audit("password_reset_request", { target: u, ip });
+  const base = appUrl(req);
+  sendMail(u.email, resetMail({ base, name: u.name, url: `${base}/reset#${token}`, minutes: RESET_MIN, lang: mailLang(req, lang) }));
+}
+const notifyChanged = (req: Request, u: UserRow, lang?: unknown) => {
+  const l = mailLang(req, lang);
+  sendMail(u.email, changedMail({ base: appUrl(req), name: u.name, lang: l, when: `${new Date().toLocaleString(l === "vi" ? "vi-VN" : "en-GB", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })} (GMT+7)` }));
+};
+/** Đường dẫn còn dùng được không: trang đặt lại báo hết hạn ngay, trước khi người dùng gõ mật khẩu. */
+export function checkResetLink(req: Request, token: unknown) {
+  limit("reset:" + clientIp(req), 30, 15 * MIN);
+  const r = typeof token === "string" && token.length <= 100 ? db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null } | undefined : undefined;
+  if (!r || r.used_at || r.expires_at <= Date.now() || getUser(r.user_id)?.status !== "active") throw new AuthError(BAD_RESET, 400);
+}
+const BAD_RESET = "Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy yêu cầu đường dẫn mới.";
 export function createResetLink(req: Request, admin: UserRow, t: UserRow) {
   const token = crypto.randomBytes(32).toString("base64url");
   db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(t.id);
@@ -416,10 +449,10 @@ export function createResetLink(req: Request, admin: UserRow, t: UserRow) {
   audit("admin_reset_link", { actor: admin, target: t, ip: clientIp(req) });
   return `${appUrl(req)}/reset#${token}`;
 }
-export async function redeemResetLink(req: Request, token: unknown, next: unknown) {
+export async function redeemResetLink(req: Request, token: unknown, next: unknown, lang?: unknown) {
   const ip = clientIp(req);
   limit("reset:" + ip, 10, 15 * MIN);
-  const bad = () => new AuthError("Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy nhờ quản trị viên tạo đường dẫn mới.", 400);
+  const bad = () => new AuthError(BAD_RESET, 400);
   if (typeof token !== "string" || token.length > 100) throw bad();
   const r = db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null } | undefined;
   const u = r && !r.used_at && r.expires_at > Date.now() ? getUser(r.user_id) : undefined;
@@ -432,6 +465,7 @@ export async function redeemResetLink(req: Request, token: unknown, next: unknow
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
   })();
   audit("password_reset", { actor: u, target: u, ip });
+  notifyChanged(req, u, lang);
   return u;
 }
 

@@ -63,6 +63,8 @@ export function startMockMcp(port = 4011) {
     const u = new URL(req.url, BASE);
     const p = u.pathname;
 
+    // Gọi bằng tên localhost: như máy chủ riêng không có OAuth (127.0.0.1 cùng cổng mới có), để thử máy chủ chỉ nhận token.
+    if ((req.headers.host ?? "").startsWith("localhost") && /^\/(\.well-known|register|authorize|token)/.test(p)) return send(res, 404, { error: "not found" });
     if (p === "/" && req.method === "GET") return html(res, `<!doctype html><html><head><title>Mock Notes</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="mask-icon" href="/mask.svg"></head><body>Mock Notes</body></html>`);
     if (p === "/favicon.svg") { res.writeHead(200, { "content-type": "image/svg+xml" }); return res.end(FAVICON); }
     // ---------------- OAuth ----------------
