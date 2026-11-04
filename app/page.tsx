@@ -1263,7 +1263,7 @@ export default function Home() {
       const w = (d.querySelector(".composer") as HTMLElement | null)?.offsetWidth ?? d.clientWidth;
       if (w < 600) d.dataset.narrow = ""; else delete d.dataset.narrow;
       // Hẹp hơn nữa: ô nhập chiếm một dòng riêng, các nút xuống dòng dưới; ô nhập không bao giờ bị ép còn vài ký tự.
-      if (w < 460) d.dataset.tight = ""; else delete d.dataset.tight;
+      if (w < 520) d.dataset.tight = ""; else delete d.dataset.tight;
     });
     ro.observe(d);
     return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
