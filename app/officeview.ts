@@ -158,7 +158,7 @@ return kids(q("cellXfs"),"s","xf").map(function(x){var a=[fonts[+x.getAttribute(
 // Đồng thời tìm ô công thức không có giá trị tính sẵn: SheetJS đọc <v></v> của openpyxl thành 0, không phân biệt được với số 0 thật.
 function xlCellStyles(x,maxRow){var m={},nov={},re=/<c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g,g;while((g=re.exec(x))){var r=/\br="([A-Z]+)(\d+)"/.exec(g[1]);if(!r)continue;if(+r[2]>maxRow)break;var s=/\bs="(\d+)"/.exec(g[1]);if(s)m[r[1]+r[2]]=+s[1];var b=g[2];if(b&&/<f[\s>/]/.test(b)&&!/<v[^>]*>[^<]/.test(b))nov[r[1]+r[2]]=1}return {s:m,nov:nov}}
 // Định dạng số có ký tự không phải ASCII mà không để trong ngoặc kép (vd. #,##0 ₫ của tệp cũ): SSF hiện nguyên số thô, Excel vẫn hiện đúng.
-function fixZ(z){var out="",q=false,run="";for(var i=0;i<z.length;i++){var ch=z[i];if(ch==='"')q=!q;if(!q&&ch.charCodeAt(0)>127&&z[i-1]!=="\\"){run+=ch;continue}if(run){out+='"'+run+'"';run=""}out+=ch}return run?out+'"'+run+'"':out}
+function fixZ(z){var out="",q=false,br=false,run="";for(var i=0;i<z.length;i++){var ch=z[i];if(ch==='"')q=!q;if(!q&&ch==="[")br=true;if(!q&&ch==="]")br=false;if(!q&&!br&&ch.charCodeAt(0)>127&&z[i-1]!=="\\"){run+=ch;continue}if(run){out+='"'+run+'"';run=""}out+=ch}return run?out+'"'+run+'"':out}
 function cellText(c){if(!c)return "";if(c.t==="n"&&c.z&&/[^\x00-\x7f]/.test(c.z)&&typeof c.v==="number"){try{return XLSX.SSF.format(fixZ(c.z),c.v)}catch(e){}}if(c.w!=null)return c.w;if(c.v==null)return "";if(c.v instanceof Date)return c.v.toLocaleDateString();return String(c.v)}
 function sheets(wb,zip){Z=zip;var v=document.getElementById("v");v.innerHTML="";v.className="xl";var meta=(wb.Workbook&&wb.Workbook.Sheets)||[],list=[];wb.SheetNames.forEach(function(n,i){if(!(meta[i]&&meta[i].Hidden))list.push({name:n,i:i})});if(!list.length)list=wb.SheetNames.map(function(n,i){return {name:n,i:i}});
 var tabs=el("div","tabs"),notes=el("div"),box=el("div","sheet"),cur=-1,S={theme:{},xf:[],paths:{},fullCalc:false};
@@ -262,7 +262,7 @@ if(n.tagName==="TABLE"){var rows=[].filter.call(n.children,function(x){return x.
 if(pg.B.children.length<=1)return;var prev=n.previousElementSibling;n.remove();newPage();if(prev&&prev.dataset&&prev.dataset.keep==="1"&&prev.parentNode&&prev.parentNode.children.length>1){pg.B.appendChild(prev)}pg.B.appendChild(n)},
 brk:function(){if(!pg)newPage();else newPage()},
 sect:function(s){sIdx++;var nx=paraSects[sIdx]||bodySect;pendingSect=nx}};
-var pendingSect=null,orig=sink.add;sink.add=function(n){if(pendingSect){sect=sectInfo(pendingSect);pendingSect=null;newPage()}orig(n)};
+var pendingSect=null,orig=sink.add;sink.add=function(n){if(pendingSect){var ty=val(wk(pendingSect,"type"));sect=sectInfo(pendingSect);pendingSect=null;if(ty!=="continuous")newPage()}orig(n)};
 newPage();blocks(body,deck,rel,null,sink);
 var n=pages.length;pages.forEach(function(p,i){[].forEach.call(p.P.querySelectorAll(".fpg"),function(x){x.textContent=String(i+1)});[].forEach.call(p.P.querySelectorAll(".fnp"),function(x){x.textContent=String(n)})});
 if(total>MAX)deck.parentNode.insertBefore(el("div","note",L("Tài liệu dài: đang hiện {n} khối đầu. Tải tệp về để xem đủ.",MAX)),deck);

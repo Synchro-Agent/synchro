@@ -75,7 +75,7 @@ export function FilePanel({ file, onClose, expanded, setExpanded, say, switcher 
     const h = (e: KeyboardEvent) => { if (e.key === "Escape" && expanded) setExpanded(false); };
     addEventListener("keydown", h); return () => removeEventListener("keydown", h);
   }, [expanded, setExpanded]);
-  const unit = office === "pptx" ? "slide" : office === "pdf" ? "trang" : office === "xlsx" || office === "csv" ? "trang tính" : "";
+  const unit = office === "pptx" ? "slide" : office === "pdf" || office === "docx" ? "trang" : office === "xlsx" || office === "csv" ? "trang tính" : "";
   return (
     <aside className={`art-panel fp ${expanded ? "full" : ""}`} aria-label={file.name}>
       <header className="art-head">
