@@ -60,6 +60,7 @@ export const FX_EN2VI: Record<string, string> = {
   "Could not install from its source.": "Không cài được từ nguồn của nó.",
   "Not available right now: it could not be installed from its source.": "Hiện chưa dùng được: không cài được từ nguồn của nó.",
   "Similar open libraries:": "Thư viện mở tương tự:",
+  "Synchro runs on your own paid AI plan: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.": "Synchro chạy bằng gói AI trả phí của chính bạn: Claude, ChatGPT, Gemini hoặc Grok. Bạn kết nối gói sau khi đăng ký.",
   "See other libraries in": "Xem thư viện khác trong mục",
   "Could not install": "Không cài được",
   "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan.": "Kết nối Claude, ChatGPT, Gemini và Grok bằng gói của chính bạn. Hiện chưa liên kết khóa API dùng chung, nên mỗi người đăng nhập bằng gói của mình.",

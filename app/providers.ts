@@ -184,6 +184,9 @@ export async function catalog(): Promise<ProviderInfo[]> {
   return out.filter((p) => p.models.length);
 }
 
+/** Máy chủ có model chat qua khóa API dùng chung không. Không gọi mạng: trang đăng nhập hỏi mỗi lần tải. */
+export const hasSharedChat = () => !!envProvider() || rows().some((r) => r.kind !== "elevenlabs" && stored(r).length > 0);
+
 export type Target = { provider: string; kind: ProviderKind; base: string; key: string; model: string };
 // Từ khóa model ("openai/gpt-5.1") → địa chỉ, khóa và mã model để gọi.
 export async function resolveModel(key: string): Promise<Target | null> {

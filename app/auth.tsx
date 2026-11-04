@@ -254,6 +254,13 @@ function LangSwitch() {
   );
 }
 
+// Máy chủ không có khóa API dùng chung: nói trước khi đăng ký rằng cần gói AI của chính mình, không để người mới đăng ký xong mới biết. Không hỏi được thì thôi.
+function PlanNote() {
+  const [need, setNeed] = useState(false);
+  useEffect(() => { let dead = false; void fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)).then((j) => { if (!dead) setNeed(!!j?.plansOnly); }).catch(() => {}); return () => { dead = true; }; }, []);
+  return need ? <p className="auth-note">Synchro runs on your own paid AI plan: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.</p> : null;
+}
+
 export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, signupOpen = true }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
@@ -574,6 +581,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                             </BlurFade>
                         </motion.div>}
                     </AnimatePresence>
+                    {authStep === "email" && mode === "auth" && <PlanNote />}
                     {authStep === "email" && mode === "auth" && <p className="auth-note auth-legal"><span>By continuing, you agree to the</span> <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> <span>and</span> <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>}
                 </motion.form>
             </motion.fieldset>
