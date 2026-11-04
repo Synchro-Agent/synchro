@@ -6,14 +6,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
+import { apiFetch, statusText } from "./apierr";
 import { PLUGIN_CATS } from "./plugindir";
 import { Pager } from "./pager";
 
 type Item = { id: string; name: string; summary: string; author: string; cats: string[]; license: string; skillCount: number; skills: string[]; homepage: string; verified: string | null; installed: string | null;
-  closed: boolean; closedWhy: string | null; github: boolean; altFor: string[]; alt: { id: string; name: string; installed: string | null }[] };
+  closed: boolean; closedWhy: string | null; failed: boolean; failedWhy: string | null; github: boolean; altFor: string[]; altAuto: boolean; alt: { id: string; name: string; installed: string | null }[] };
 type Fail = { id: string; name: string; reason: string; kind: "license" | "missing" | "other" };
 type Job = { cat: string | null; paused?: number | null; started: number; finished: number | null; stopped: boolean; total: number; done: number; installed: number; skills: number; failed: Fail[]; current: string[]; running: boolean };
-type Data = { totals: { plugins: number; skills: number; installed: number; closed: number }; cats: Record<string, { plugins: number; skills: number; installed: number; closed: number }>; items: Item[]; total: number; page: number; pages: number; admin: boolean; canInstall: boolean; job: Job | null };
+type Data = { totals: { plugins: number; skills: number; installed: number; closed: number; failed: number }; cats: Record<string, { plugins: number; skills: number; installed: number; closed: number; failed: number }>; items: Item[]; total: number; page: number; pages: number; admin: boolean; canInstall: boolean; job: Job | null };
 
 const PER = 24;
 const n = (x: number) => x.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN");
@@ -23,7 +24,7 @@ const CAT = new Map(PLUGIN_CATS.map((c) => [c.key, c]));
 export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (pluginId: string) => void; onChanged: () => void }) {
   const app = useApp();
   const [cat, setCat] = useState<string | null>(null);
-  const [only, setOnly] = useState<"" | "missing" | "installed">("");
+  const [only, setOnly] = useState<"" | "missing" | "installed" | "unavailable">("");
   const [page, setPage] = useState(0);
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState("");
@@ -37,9 +38,9 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
     const id = ++seq.current;
     const u = new URLSearchParams({ page: String(page), size: String(PER), q: qq, ...(cat ? { cat } : {}), ...(only ? { only } : {}) });
     try {
-      const r = await fetch(`/api/plugins/catalog?${u}`);
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+      const r = await apiFetch(`/api/plugins/catalog?${u}`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || statusText(r.status));
       if (id === seq.current) { setD(j); setErr(""); }
     } catch (e) { if (id === seq.current) setErr((e as Error).message); }
   }, [page, qq, cat, only]);
@@ -56,27 +57,29 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
     return () => clearInterval(t);
   }, [running, load, onChanged]);
 
-  const install = async (x: Item) => {
+  const install = async (x: Pick<Item, "id">) => {
     setBusy(x.id);
     try {
-      const r = await fetch("/api/plugins", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", catalogId: x.id, scope: d?.admin ? "org" : "personal" }) });
+      const r = await apiFetch("/api/plugins", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", catalogId: x.id, scope: d?.admin ? "org" : "personal" }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+      if (!r.ok) throw new Error(j.error || statusText(r.status));
       app.say(`${j.plugin.name} ${tr("is installed and ready to use")}`);
       onChanged(); await load();
-    } catch (e) { app.say((e as Error).message); }
+    } catch (e) { app.say((e as Error).message); await load(); }
     setBusy(null);
   };
-  const job = async (action: "install-all" | "stop", c?: string | null) => {
+  const job = async (action: "install-all" | "stop", c?: string | null, retry = false) => {
     try {
-      const r = await fetch("/api/plugins/catalog", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, cat: c ?? null }) });
+      const r = await apiFetch("/api/plugins/catalog", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, cat: c ?? null, retry }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+      if (!r.ok) throw new Error(j.error || statusText(r.status));
       await load();
     } catch (e) { app.say((e as Error).message); }
   };
-  const missing = (c: string) => (d?.cats[c]?.plugins ?? 0) - (d?.cats[c]?.installed ?? 0) - (d?.cats[c]?.closed ?? 0);
-  const missingAll = d ? d.totals.plugins - d.totals.installed - d.totals.closed : 0;
+  // Còn phải cài: trừ thư viện giấy phép đóng và thư viện đã cài lỗi từ nguồn của nó (nút Cài tất cả không còn hiện mãi vì chúng).
+  const missing = (c: string) => (d?.cats[c]?.plugins ?? 0) - (d?.cats[c]?.installed ?? 0) - (d?.cats[c]?.closed ?? 0) - (d?.cats[c]?.failed ?? 0);
+  const missingAll = d ? d.totals.plugins - d.totals.installed - d.totals.closed - d.totals.failed : 0;
+  const altNames = (x: Item) => x.alt.map((a, i) => <span key={a.id}>{i > 0 && ", "}{a.installed ? <button className="cd-link" data-notr onClick={() => onOpen(a.installed!)}>{a.name}</button> : d?.canInstall ? <button className="cd-link" data-notr disabled={!!busy || running} aria-label={`${tr("Install")} ${a.name}`} onClick={() => install(a)}>{busy === a.id ? <span className="art-spin sm" /> : null}{a.name}</button> : <span data-notr>{a.name}</span>}</span>);
   const askAll = (c: string | null) => {
     const left = c ? missing(c) : missingAll;
     const label = c ? tr(CAT.get(c)?.label ?? c) : tr("the whole directory");
@@ -97,9 +100,10 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
   return (
     <section className="cd">
       <div className="pl-sec">Claude skill directory <i>{n(d.totals.plugins)}</i><span className="pl-sec-d"><span>{n(d.totals.skills)} skill ·</span> <span>{n(d.totals.installed)} {tr("installed")}</span></span>
-        {d.admin && missingAll > 0 && <span className="pl-sec-r"><button className="btn dark sm" disabled={running} onClick={() => askAll(null)}><I.Download size={14} />Install all</button></span>}
+        {d.admin && (missingAll > 0 || d.totals.failed > 0) && <span className="pl-sec-r">{d.totals.failed > 0 && <button className="btn sm" disabled={running} onClick={() => job("install-all", null, true)}><I.Retry size={14} />{tr("Retry failed libraries")} ({n(d.totals.failed)})</button>}{missingAll > 0 && <button className="btn dark sm" disabled={running} onClick={() => askAll(null)}><I.Download size={14} />Install all</button>}</span>}
       </div>
       <p className="d cd-lead">Every library with skills from Claude&apos;s public directory, sorted into the same categories as Claude. Each library is pinned to the commit Anthropic reviewed.</p>
+      <p className="d cd-lead">Synchro reads each library&apos;s license when installing. A closed license is not installed, and open libraries are offered instead. A library that states no license is installed and marked as unknown on its page, so check it before commercial use.</p>
       {j && (
         <div className={`cd-job${j.running ? " on" : ""}`}>
           <div className="cd-job-h">
@@ -130,7 +134,7 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
         {all.length > FEW && <button className="cd-cat more" aria-expanded={allCats} onClick={() => setAllCats(!allCats)}>{allCats ? <><I.Minus size={15} /><span>Fewer categories</span></> : <><I.Plus size={15} /><span>More categories</span><em data-notr>{all.length - FEW}</em></>}</button>}
       </div>
       <div className="cd-tools">
-        <div className="pl-seg"><button className={!only ? "on" : ""} onClick={() => setOnly("")}>All</button><button className={only === "missing" ? "on" : ""} onClick={() => setOnly("missing")}>Not installed</button><button className={only === "installed" ? "on" : ""} onClick={() => setOnly("installed")}>Installed</button></div>
+        <div className="pl-seg"><button className={!only ? "on" : ""} onClick={() => setOnly("")}>All</button><button className={only === "missing" ? "on" : ""} onClick={() => setOnly("missing")}>Not installed</button>{d.totals.closed + d.totals.failed > 0 && <button className={only === "unavailable" ? "on" : ""} onClick={() => setOnly("unavailable")}>Unavailable</button>}<button className={only === "installed" ? "on" : ""} onClick={() => setOnly("installed")}>Installed</button></div>
         <span className="cd-count" data-notr>{n(d.total)}</span>
         <span style={{ flex: 1 }} />
         {d.admin && cat && missing(cat) > 0 && <button className="btn sm" disabled={running} onClick={() => askAll(cat)}><I.Download size={14} /><span>{tr("Install all in")} {tr(CAT.get(cat)?.label ?? cat)}</span></button>}
@@ -143,13 +147,15 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
               <div className="pl-dcard-t">
                 <b data-notr>{x.name}</b>
                 <span data-notr>{x.summary || x.skills.join(", ")}</span>
-                {x.closed && <div className="cd-alt" title={x.closedWhy ?? undefined}><I.Lock size={12} /><span>{tr("Closed license, not installed.")}{x.alt.length ? <> {tr("Open alternatives:")} <span data-notr>{x.alt.map((a) => a.name).join(", ")}</span></> : <> {tr("No open alternative yet.")}</>}</span></div>}
+                {x.failed && <div className="cd-alt" title={x.failedWhy ?? undefined}><I.Alert size={12} /><span>{d.admin ? tr("Could not install from its source.") : tr("Not available right now: it could not be installed from its source.")}{x.alt.length ? <> {x.altAuto ? tr("Similar open libraries:") : tr("Open alternatives:")} {altNames(x)}</> : null}</span></div>}
+                {x.closed && <div className="cd-alt" title={x.closedWhy ?? undefined}><I.Lock size={12} /><span>{tr("Closed license, not installed.")}{x.alt.length ? <> {x.altAuto ? tr("Similar open libraries:") : tr("Open alternatives:")} {altNames(x)}</> : <> {tr("No open alternative yet.")}</>}</span></div>}
                 {x.github && x.altFor.length > 0 && <div className="cd-alt"><I.GitHub size={12} /><span>{tr("Open alternative to")} <span data-notr>{x.altFor.join(", ")}</span></span></div>}
                 {/* Thư mục của Claude không ghi giấy phép cho mọi thư viện (vd. của Anthropic): khi đó không đoán, giấy phép thật được đọc từ repo lúc cài. */}
                 <em><span><span data-notr>{x.author}</span> ·</span> <span>{x.github ? "GitHub" : `${x.skillCount} skill`}</span>{x.license ? <> <span>· <span data-notr>{x.license}</span></span></> : null}{x.verified === "anthropic" ? <> <span>· Anthropic</span></> : x.verified === "partner" ? <> <span>· {tr("Partner")}</span></> : null}</em>
               </div>
               {x.closed ? <span className="pl-plus done" aria-label="Closed license" data-tip="Closed license"><I.Lock size={14} /></span>
                 : x.installed ? <button className="pl-plus done" aria-label="Installed" data-tip="Installed" onClick={() => onOpen(x.installed!)}><I.Check size={15} /></button>
+                : x.failed ? (d.admin ? <button className="pl-plus" aria-label={`${tr("Retry")} ${x.name}`} data-tip="Retry" disabled={!!busy || running} onClick={() => install(x)}>{busy === x.id ? <span className="art-spin sm" /> : <I.Retry size={15} />}</button> : <span className="pl-plus done" aria-label="Could not install" data-tip="Could not install"><I.Alert size={14} /></span>)
                 : d.canInstall ? <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy || running} onClick={() => install(x)}>{busy === x.id ? <span className="art-spin sm" /> : <I.Plus size={15} />}</button> : null}
             </div>
           ))}

@@ -11,7 +11,7 @@ export type DirEntry = { id: string; slug: string; name: string; summary: string
   closed?: boolean; alt?: string[]; github?: boolean; altFor?: string[] };
 type File = { synced: string; plugins: DirEntry[] };
 
-const G = globalThis as unknown as { __claudeDir?: { at: number; file: string; data: File; byId: Map<string, DirEntry>; text: Map<string, string> } };
+const G = globalThis as unknown as { __claudeDir?: { at: number; file: string; data: File; byId: Map<string, DirEntry>; text: Map<string, string>; tok?: Map<string, Set<string>>; df?: Map<string, number>; near?: Map<string, string[]> } };
 const fileOf = () => process.env.CLAUDE_DIR_FILE || path.join(process.cwd(), "catalog", "claude-directory.json");
 function load() {
   const file = fileOf();
@@ -20,6 +20,8 @@ function load() {
   try { mt = fs.statSync(file).mtimeMs; } catch { return null; }
   if (c && c.file === file && c.at === mt) return c;
   const data = JSON.parse(fs.readFileSync(file, "utf8")) as File;
+  // "UNLICENSED" (cách ghi của npm) nghĩa là tác giả không cấp giấy phép nào, không phải The Unlicense: danh mục cũ tính nhầm là mở.
+  for (const p of data.plugins) if (!p.closed && /^\s*UNLICENSED\s*$/i.test(p.license)) p.closed = true;
   const byId = new Map(data.plugins.map((p) => [p.id, p]));
   const text = new Map(data.plugins.map((p) => [p.id, `${p.name} ${p.summary} ${p.author} ${p.skills.join(" ")}`.toLowerCase()]));
   return (G.__claudeDir = { at: mt, file, data, byId, text });
@@ -32,7 +34,7 @@ export const dirEntry = (catalogId: string) => (catalogId.startsWith(CD) ? load(
 export const dirSynced = () => load()?.data.synced ?? null;
 export const dirById = (id: string) => load()?.byId.get(id) ?? null;
 /** Lý do không cài thư viện giấy phép đóng, kèm thư viện mở thay thế. */
-export const closedReason = (e: DirEntry) => `Giấy phép đóng (${e.license}): tác giả không cho sao chép nên Synchro không cài. ${e.alt?.length ? `Thay bằng thư viện mở: ${e.alt.map((a) => dirById(a)?.name ?? a).join(", ")}.` : "Chưa có thư viện mở làm được việc tương đương."}`;
+export const closedReason = (e: DirEntry) => `Giấy phép đóng (${e.license}): tác giả không cho sao chép nên Synchro không cài. ${altsOf(e).length ? `Thay bằng thư viện mở: ${altsOf(e).map((a) => dirById(a)?.name ?? a).join(", ")}.` : "Chưa có thư viện mở làm được việc tương đương."}`;
 /** Mục ngành nghề của một thư viện đã cài (theo catalogId). */
 export const dirCats = (catalogId: string | null) => (catalogId ? dirEntry(catalogId)?.cats ?? [] : []);
 
@@ -43,6 +45,46 @@ export function dirDef(e: DirEntry): PluginDef {
   };
 }
 
+// ---------------------------------------------------------------- thư viện mở thay thế tự tìm
+// Giấy phép khai rõ là mở (danh mục không ghi giấy phép thì chưa biết, không dùng để gợi ý thay thế: gợi ý phải chắc cài được).
+const OPEN_LICENSE = /^\(?\s*(MIT|MIT-0|Apache|BSD|0BSD|ISC|MPL|CC-BY|CC0|Unlicense\b|Zlib|WTFPL|PSF|Python|EPL|BSL-1\.0|LGPL|GPL|AGPL|Artistic|Unicode|BlueOak)/i;
+export const openLicense = (l: string) => !!l && !/^\s*UNLICENSED\s*$/i.test(l) && l.split(/\s+(?:OR|AND|WITH)\s+/i).some((x) => OPEN_LICENSE.test(x.trim()));
+const NOISE = new Set("the and for with your you from that this skill skills plugin plugins agent agents claude code tool tools using use into via of to in on a an by or is are as at it mcp server official".split(" "));
+const toks = (e: DirEntry) => new Set(`${e.name} ${e.summary} ${e.skills.join(" ")}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !NOISE.has(w)));
+/**
+ * Thư viện mở làm việc gần giống nhất với một thư viện không cài được: cùng mục ngành nghề, trùng nhiều từ hiếm trong tên, mô tả và tên skill.
+ * Chỉ dùng thư viện khai giấy phép mở. Điểm dưới ngưỡng thì thôi: thà nói chưa có còn hơn gợi ý cho có.
+ */
+export function similarOpen(e: DirEntry, k = 3): string[] {
+  const c = load();
+  if (!c) return [];
+  if (!c.tok) {
+    c.tok = new Map(c.data.plugins.map((p) => [p.id, toks(p)]));
+    c.df = new Map();
+    for (const t of c.tok.values()) for (const w of t) c.df.set(w, (c.df.get(w) ?? 0) + 1);
+    c.near = new Map();
+  }
+  const memo = c.near!.get(e.id);
+  if (memo) return memo.slice(0, k);
+  const mine = c.tok.get(e.id) ?? toks(e), N = c.data.plugins.length, cats = new Set(e.cats);
+  const idf = (w: string) => Math.log(1 + N / (1 + (c.df!.get(w) ?? 0)));
+  const self = [...mine].reduce((a, w) => a + idf(w), 0) || 1;
+  const hits = c.data.plugins
+    .filter((p) => p.id !== e.id && !p.closed && openLicense(p.license) && p.cats.some((x) => cats.has(x)))
+    .map((p) => {
+      const t = c.tok!.get(p.id)!;
+      let s = 0, n = 0;
+      for (const w of mine) if (t.has(w)) { s += idf(w); n++; }
+      return { id: p.id, s: s / self, n };
+    })
+    .filter((x) => x.s >= 0.2 && x.n >= 3)
+    .sort((a, b) => b.s - a.s).slice(0, 6).map((x) => x.id);
+  c.near!.set(e.id, hits);
+  return hits.slice(0, k);
+}
+/** Thư viện mở thay thế: chọn tay trong danh mục nếu có, không thì tự tìm. */
+export const altsOf = (e: DirEntry, k = 3) => (e.alt?.length ? e.alt : similarOpen(e, k));
+
 /** Số thư viện và số skill mỗi mục (đếm cả mục phụ, như Claude). */
 export function dirCounts() {
   const out: Record<string, { plugins: number; skills: number; closed: number }> = {};
@@ -51,13 +93,13 @@ export function dirCounts() {
 }
 
 /** Một trang của danh mục: lọc theo mục và từ khóa (tên, mô tả, tác giả, tên skill). */
-export function dirPage(o: { cat?: string; q?: string; page?: number; size?: number; status?: (id: string) => string | undefined; only?: "installed" | "missing" }) {
+export function dirPage(o: { cat?: string; q?: string; page?: number; size?: number; status?: (id: string) => string | undefined; avail?: (id: string) => boolean; only?: "installed" | "missing" | "unavailable" }) {
   const c = load();
   if (!c) return { items: [], total: 0, page: 0, pages: 0 };
   const words = (o.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
   const size = Math.min(Math.max(o.size ?? 24, 1), 100);
   const all = c.data.plugins.filter((p) => (!o.cat || p.cats.includes(o.cat)) && words.every((w) => c.text.get(p.id)!.includes(w))
-    && (!o.only || (o.only === "installed") === !!o.status?.(CD + p.id)));
+    && (!o.only || (o.only === "installed" ? !!o.status?.(CD + p.id) : !o.status?.(CD + p.id) && (o.avail?.(CD + p.id) ?? true) === (o.only === "missing"))));
   const pages = Math.ceil(all.length / size), page = Math.min(Math.max(o.page ?? 0, 0), Math.max(pages - 1, 0));
   return { items: all.slice(page * size, page * size + size), total: all.length, page, pages };
 }

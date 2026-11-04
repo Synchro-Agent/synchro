@@ -4,7 +4,7 @@
 // Thư viện không cài được (giấy phép đóng, repo đã xóa…) ghi lại lý do, không chặn phần còn lại.
 import { db } from "./authstore";
 import { installPlugin, isNetErr, PluginError, setBulk } from "./plugins";
-import { CD, closedReason, dirDef, dirEntries, dirEntry, dirSynced, type DirEntry } from "./claudedir";
+import { altsOf, CD, closedReason, dirDef, dirEntries, dirEntry, dirSynced, type DirEntry } from "./claudedir";
 
 export type JobFail = { id: string; name: string; reason: string; kind: "license" | "missing" | "network" | "other" };
 export type Job = { by: string; auto?: boolean; pass?: number; paused?: number | null; cat: string | null; started: number; finished: number | null; stopped: boolean; total: number; done: number; installed: number; skills: number; failed: JobFail[]; current: string[] };
@@ -15,7 +15,8 @@ function init() {
   if (!ready) {
     d.exec(`CREATE TABLE IF NOT EXISTS plugin_jobs (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS plugin_catalog_removed (catalog_id TEXT PRIMARY KEY, at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS plugin_catalog_blocked (catalog_id TEXT PRIMARY KEY, name TEXT NOT NULL, reason TEXT NOT NULL, commit_sha TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`);
+      CREATE TABLE IF NOT EXISTS plugin_catalog_blocked (catalog_id TEXT PRIMARY KEY, name TEXT NOT NULL, reason TEXT NOT NULL, commit_sha TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS plugin_catalog_failed (catalog_id TEXT PRIMARY KEY, name TEXT NOT NULL, reason TEXT NOT NULL, kind TEXT NOT NULL, commit_sha TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`);
     ready = true;
   }
   return d;
@@ -50,8 +51,33 @@ export function markBlocked(catalogId: string, name: string, reason: string) {
   const e = dirEntry(catalogId);
   if (e) init().prepare("INSERT OR REPLACE INTO plugin_catalog_blocked (catalog_id, name, reason, commit_sha, at) VALUES (?, ?, ?, ?, ?)").run(catalogId, name, reason.slice(0, 400), e.commit || "", Date.now());
 }
-/** Lỗi khi cài một thư viện của danh mục là lỗi giấy phép thì nhớ lại. */
-export function noteInstallError(catalogId: string | undefined, name: string, msg: string) { if (catalogId?.startsWith(CD) && kindOf(msg) === "license") markBlocked(catalogId, name, msg); }
+// Thư viện cài lỗi vì lý do khác giấy phép (repo đã xóa, không có skill nào…), không phải lỗi mạng tạm thời: nhớ lại để nó không còn trông như cài được
+// với mọi người, và không bị đếm là còn phải cài. Danh mục đổi commit thì xét lại; quản trị viên thử lại được; cài được thì xóa bản ghi.
+export function failedLibs(): Map<string, { reason: string; name: string; kind: string }> {
+  const d = init();
+  if (!backfilledFail) {
+    backfilledFail = true;
+    for (const f of getJob()?.failed ?? []) if (f.kind !== "license" && f.kind !== "network") markFailed(CD + f.id, f.name, f.reason);
+  }
+  const cur = d.prepare("SELECT catalog_id, name, reason, kind, commit_sha FROM plugin_catalog_failed").all() as { catalog_id: string; name: string; reason: string; kind: string; commit_sha: string }[];
+  return new Map(cur.filter((r) => { const e = dirEntry(r.catalog_id); return !!e && (e.commit || "") === r.commit_sha; }).map((r) => [r.catalog_id, { reason: r.reason, name: r.name, kind: r.kind }]));
+}
+let backfilledFail = false;
+export function markFailed(catalogId: string, name: string, reason: string) {
+  const e = dirEntry(catalogId), kind = kindOf(reason);
+  if (e) init().prepare("INSERT OR REPLACE INTO plugin_catalog_failed (catalog_id, name, reason, kind, commit_sha, at) VALUES (?, ?, ?, ?, ?, ?)").run(catalogId, name, reason.slice(0, 400), kind, e.commit || "", Date.now());
+}
+export function clearFailed(catalogId?: string) {
+  if (catalogId) init().prepare("DELETE FROM plugin_catalog_failed WHERE catalog_id = ?").run(catalogId);
+  else init().exec("DELETE FROM plugin_catalog_failed");
+}
+/** Lỗi khi cài một thư viện của danh mục: lỗi giấy phép và lỗi của chính thư viện thì nhớ lại; lỗi mạng tạm thời thì không. */
+export function noteInstallError(catalogId: string | undefined, name: string, msg: string) {
+  if (!catalogId?.startsWith(CD)) return;
+  const k = kindOf(msg);
+  if (k === "license") markBlocked(catalogId, name, msg);
+  else if (k !== "network") markFailed(catalogId, name, msg);
+}
 const kindOf = (m: string): JobFail["kind"] => (isNetErr(m) ? "network" : /độc quyền|giấy phép/i.test(m) ? "license" : /Không tìm thấy|Không tải được|404/i.test(m) ? "missing" : "other");
 
 // Tên thư viện (slug) đã có trong thư viện chung nhưng là thư viện khác (vd. plugin dựng sẵn "taste"): đổi tên, không ghi đè.
@@ -67,21 +93,24 @@ export function freeSlug(e: DirEntry, owner = "org") {
 // Thư viện cần cài: chưa có trong thư viện chung, thuộc mục (nếu chọn mục), cộng thư viện mở thay cho thư viện đóng của mục.
 // auto (cài mặc định khi máy chủ khởi động): bỏ qua thư viện quản trị viên đã tự gỡ.
 function pending(cat: string | null, auto: boolean, skip = new Set<string>()) {
+  const failed = failedLibs();
   const have = orgInstalled(), all = dirEntries();
   const removed = auto ? new Set((init().prepare("SELECT catalog_id FROM plugin_catalog_removed").all() as { catalog_id: string }[]).map((r) => r.catalog_id)) : new Set<string>();
   const inCat = all.filter((e) => !cat || e.cats.includes(cat));
   const ids = new Set(inCat.map((e) => e.id));
-  for (const e of inCat) for (const a of e.alt ?? []) ids.add(a);
   const blocked = blockedLibs();
-  return all.filter((e) => ids.has(e.id) && !have.has(CD + e.id) && !removed.has(CD + e.id) && !skip.has(e.id) && !blocked.has(CD + e.id));
+  for (const e of inCat) for (const a of e.closed || blocked.has(CD + e.id) || failed.has(CD + e.id) ? altsOf(e) : []) ids.add(a);
+  return all.filter((e) => ids.has(e.id) && !have.has(CD + e.id) && !removed.has(CD + e.id) && !skip.has(e.id) && !blocked.has(CD + e.id) && !failed.has(CD + e.id));
 }
 /** Quản trị viên gỡ một thư viện của danh mục: lần cài mặc định sau (danh mục cập nhật) không tự cài lại. */
 export function markRemoved(catalogId: string | null) { if (catalogId?.startsWith(CD)) init().prepare("INSERT OR REPLACE INTO plugin_catalog_removed (catalog_id, at) VALUES (?, ?)").run(catalogId, Date.now()); }
 export function clearRemoved(catalogId: string) { init().prepare("DELETE FROM plugin_catalog_removed WHERE catalog_id = ?").run(catalogId); }
 
-export function startJob(by: string, cat: string | null, auto = false, pass = 0): Job {
+export function startJob(by: string, cat: string | null, auto = false, pass = 0, retry = false): Job {
   const cur = getJob();
   if (jobRunning() && cur) return cur;
+  // Quản trị viên bấm thử lại: quên các lỗi đã nhớ (của mục đang chọn) để chúng vào hàng cài như thư viện mới.
+  if (retry) for (const id of failedLibs().keys()) if (!cat || dirEntry(id)?.cats.includes(cat)) clearFailed(id);
   const list = pending(cat, auto);
   if (!auto) for (const e of list) clearRemoved(CD + e.id);
   const job: Job = { by, auto, pass, paused: null, cat, started: Date.now(), finished: null, stopped: false, total: list.length, done: 0, installed: 0, skills: 0, failed: [], current: [] };
@@ -139,6 +168,7 @@ async function run(job: Job) {
         const p = await installPlugin("org", { ...dirDef(e), slug });
         job.installed++; job.skills += p.skills.length;
         netRun = 0;
+        clearFailed(CD + e.id);
       } catch (err) {
         const reason = (err as Error).message || String(err);
         const kind = kindOf(reason);
@@ -152,7 +182,7 @@ async function run(job: Job) {
             await new Promise((ok) => setTimeout(ok, wait));
             job.paused = null;
           }
-        } else { job.failed.push({ id: e.id, name: e.name, reason: reason.slice(0, 400), kind }); if (kind === "license" && !e.closed) markBlocked(CD + e.id, e.name, reason); }
+        } else { job.failed.push({ id: e.id, name: e.name, reason: reason.slice(0, 400), kind }); if (kind === "license" && !e.closed) markBlocked(CD + e.id, e.name, reason); else if (kind !== "license" && kind !== "network") markFailed(CD + e.id, e.name, reason); }
       }
       job.current = job.current.filter((n) => n !== e!.name);
       job.done++;

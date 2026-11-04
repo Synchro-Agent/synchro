@@ -7,6 +7,7 @@ export const FX_VI2EN: Record<string, string> = {
   "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây.": "Synchro is restarting to update. Try again in a few seconds.",
   "Máy chủ phản hồi quá lâu. Thử lại sau ít phút.": "The server took too long to respond. Try again in a few minutes.",
   "Lỗi máy chủ. Vui lòng thử lại.": "Server error. Please try again.",
+  "Thư viện này chưa cài được từ nguồn của nó. Quản trị viên thử lại được ở Skill Hub.": "This library couldn't be installed from its source. An administrator can retry it in Skill Hub.",
   "Không hỏi được máy chủ Synchro. Thử lại sau ít phút.": "Couldn't reach the Synchro server. Try again in a few minutes.",
   "Trình duyệt đang mất mạng. Có mạng lại thì bấm Kết nối lại.": "Your browser is offline. Press Reconnect once you're back online.",
   "Workspace chưa dùng được.": "The workspace isn't available.",
@@ -14,6 +15,14 @@ export const FX_VI2EN: Record<string, string> = {
   "Workspace vẫn chạy nhưng terminal chưa nối được. Bấm Kết nối lại, nếu vẫn lỗi thì báo quản trị viên.": "The workspace is running but the terminal couldn't connect. Press Reconnect, and tell your administrator if it keeps failing.",
 };
 export const FX_EN2VI: Record<string, string> = {
+  "Retry": "Thử lại",
+  "Retry failed libraries": "Thử lại các thư viện lỗi",
+  "Synchro reads each library's license when installing. A closed license is not installed, and open libraries are offered instead. A library that states no license is installed and marked as unknown on its page, so check it before commercial use.": "Synchro đọc giấy phép của từng thư viện lúc cài. Thư viện giấy phép đóng không được cài và Synchro gợi ý thư viện mở thay thế. Thư viện không ghi giấy phép vẫn được cài và ghi là chưa rõ giấy phép ở trang của nó, nên hãy kiểm tra trước khi dùng cho việc thương mại.",
+  "Unavailable": "Không cài được",
+  "Could not install from its source.": "Không cài được từ nguồn của nó.",
+  "Not available right now: it could not be installed from its source.": "Hiện chưa dùng được: không cài được từ nguồn của nó.",
+  "Similar open libraries:": "Thư viện mở tương tự:",
+  "Could not install": "Không cài được",
   "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan.": "Kết nối Claude, ChatGPT, Gemini và Grok bằng gói của chính bạn. Hiện chưa liên kết khóa API dùng chung, nên mỗi người đăng nhập bằng gói của mình.",
   "The model picker keeps one group per provider and shows your plan's models while you are signed in.": "Bộ chọn model có một nhóm cho mỗi hãng và hiện model của gói khi bạn đã đăng nhập.",
   "Synchro shows when the plan resets. Until then you can keep going with another provider's plan if you signed in to one.": "Synchro cho biết khi nào gói hồi lại. Trong lúc chờ, bạn dùng tiếp bằng gói của hãng khác nếu đã đăng nhập.",
