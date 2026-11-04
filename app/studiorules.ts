@@ -102,10 +102,10 @@ const STRICT: Record<StudioKind, Strict> = {
       [re("docs|doc|document|documents"), made(WRITE, "docs?|documents?|documentation")],
       [re("writing|writer|write|prose|editorial|humanizer|deslop|editor"), re("prose|article|articles|essay|essays|blog|editorial|ai writing|human written|copy edit|manuscript|long form|nonfiction|fiction|narrative|tone of voice")],
     ],
-    head: re("microsoft word|google docs|whitepapers?|technical documentation|cover letters?|press releases?|meeting minutes|copyediting|copy editing|proofreading|proofread"),
+    head: re("copyedit|microsoft word|google docs|whitepapers?|technical documentation|cover letters?|press releases?|meeting minutes|copyediting|copy editing|proofreading|proofread"),
     made: [
       made(WRITE, "memos?|proposals?|whitepapers?|white papers?|essays?|articles?|blog posts?|blogs?|newsletters?|press releases?|resumes?|cvs?|cover letters?|meeting notes|meeting minutes|handbooks?|user manuals?|user guides?|prds?|rfcs?|specifications?|tech(?:nical)? specs?|documentation|readmes?|thesis|manuscripts?|ebooks?|word documents?|case stud(?:y|ies)|research papers?|grant applications?|(?:weekly|monthly|quarterly|annual|executive|client|investor|board|written|polished|professional|formatted)(?: [a-z]+)? reports?"),
-      first(WRITE, "reports?|documents?|docs|drafts?|contracts?|agreements?|minutes|decision records?|(?:content|product|project|executive) briefs?"),
+      first(WRITE, "reports?|documents?|docs|drafts?|contracts?|agreements?|deeds?|petitions?|letters?|minutes|decision records?|(?:content|product|project|executive) briefs?"),
       made(WRITE, "agreements?|board minutes|meeting minutes|minutes"),
       made(WRITE, "(?:feature |product |technical |design |full |approved )?specs?(?: documents?)?"),
       re("into (?:a |an )?(?:full |approved |feature |product |technical )*specs?"),
