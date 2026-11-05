@@ -341,5 +341,51 @@ console.log("10. Grok Build chỉ cho việc code; Fable (có thể tính credit
     ok(R.needsNoTools(q(text, o)) === want, `“${text}” ${want ? "đi đường nhanh" : "giữ lượt đầy đủ"}`);
 }
 
+console.log("11. Hội thoại nhiều lượt: trả lời câu hỏi lại, lời chê, câu khủng hoảng (bộ câu có nhãn)");
+{
+  const list = ["sub-claude/haiku", "sub-claude/sonnet", "sub-claude/opus", "sub-agy/gemini-4-argon", "sub-codex/gpt-5.5"];
+  const build = "Làm trang web bán giày";
+  const after = (text, o = {}) => q(text, { turns: 3, prevAsk: build, prev: "sub-claude/opus", ...o });
+  for (const t of ["Hiện đại, tối giản", "Bán hàng online", "Học sinh cấp 3", "10 slide", "Phương án 2", "hien dai toi gian"]) {
+    const r = R.routeModel(after(t), list);
+    ok(r.task === "build" && r.model === "sub-claude/opus" && !R.needsNoTools(after(t)), `trả lời câu hỏi lại “${t}” giữ việc tạo sản phẩm, giữ model, không đi đường nhanh`, JSON.stringify(r));
+  }
+  // Thẻ hỏi lại: chắc chắn là câu trả lời, dù có từ khóa của việc khác.
+  ok(R.taskOf(after("Email và số điện thoại", { answeredAsk: true })) === "build", "câu trả lời thẻ hỏi lại có từ “email” vẫn theo việc tạo sản phẩm");
+  ok(R.taskOf(after("Email và số điện thoại")) !== "build", "không phải thẻ hỏi lại, có từ khóa riêng thì là việc riêng");
+  for (const t of ["mấy giờ rồi", "thủ đô của Pháp là gì?", "ok cảm ơn", "cảm ơn nhiều nhé", "Hà Nội có mấy quận?", "Viết email xin nghỉ phép"])
+    ok(R.taskOf(after(t)) !== "build", `“${t}” không kéo theo việc tạo sản phẩm`, R.taskOf(after(t)));
+  ok(R.taskOf(q("Hiện đại, tối giản", { turns: 3, prevAsk: "Thủ đô của Pháp là gì?" })) !== "build", "việc trước là hỏi đáp: câu ngắn không thành việc nặng");
+  for (const t of ["fix đi", "lỗi rồi", "không chạy được", "nút bấm không chạy", "trang bị trắng", "xấu quá", "trông rẻ tiền lắm", "xấu quá làm lại đi", "loi roi", "khong chay duoc"]) {
+    const r = R.routeModel(after(t), list), d = R.difficulty(after(t));
+    ok(r.task === "build" && d.score >= 6 && !R.needsNoTools(after(t)) && r.effort !== "low", `lời chê “${t}” giữ việc tạo sản phẩm, nâng độ khó`, JSON.stringify([r, d]));
+    ok(!/agy/.test(r.model), `lời chê “${t}” không chuyển sang CLI không hiện chữ dần`, r.model);
+  }
+  ok(!R.taskOf(q("nợ xấu là gì", { turns: 3, prevAsk: build })).includes("build"), "“nợ xấu là gì” không phải lời chê");
+  // Không gói nào khác đạt: làm lại đúng model đó thay vì sang Antigravity.
+  ok(R.routeModel(after("chưa ổn, font xấu"), ["sub-claude/opus", "sub-agy/gemini-4-argon", "sub-claude/haiku"]).model === "sub-claude/opus", "chê bản dựng: Opus làm lại, không sang Gemini Argon");
+  ok(R.routeModel(q("Làm trang web bán giày"), ["sub-agy/gemini-4-argon", "sub-claude/opus"]).model === "sub-claude/opus", "việc nhiều công cụ: gói khác đạt mức thì không tự chọn Antigravity");
+  ok(R.routeModel(q("Làm trang web bán giày"), ["sub-agy/gemini-4-argon", "sub-claude/haiku"]).model === "sub-agy/gemini-4-argon", "chỉ Antigravity đạt mức thì vẫn dùng");
+  ok(R.routeModel(q("Làm trang web bán giày", { prev: "sub-agy/gemini-4-argon" }), ["sub-agy/gemini-4-argon", "sub-claude/opus"]).alt.includes("sub-agy/gemini-4-argon"), "Antigravity vẫn là dự phòng");
+  const keepAgy = R.routeModel(q("tiếp đi", { turns: 3, prevAsk: build, prev: "sub-agy/gemini-4-argon" }), ["sub-agy/gemini-4-argon", "sub-claude/opus"]);
+  ok(keepAgy.model === "sub-agy/gemini-4-argon", "đang làm trên Antigravity thì câu nối tiếp giữ phiên", keepAgy.model);
+  for (const t of ["tôi không còn lý do gì để sống", "sống làm gì nữa", "em muốn biến mất", "em thấy cuộc sống vô nghĩa, chẳng ai cần em", "em bị xâm hại", "em bị bạn trai đánh phải làm sao", "bị bỏng nặng", "trẻ sơ sinh bỏ bú", "i don't want to live anymore", "how many sleeping pills is too many", "song lam gi nua", "em muon bien mat"]) {
+    const x = q(t);
+    ok(!R.needsNoTools(x) && R.difficulty(x).score >= 2, `câu khủng hoảng, khẩn cấp “${t}”: không đi đường nhanh, không dùng mức thấp nhất`, JSON.stringify(R.difficulty(x)));
+    ok(!R.routeModel(x, list).model.includes("haiku"), `“${t}” không giao cho Haiku`, R.routeModel(x, list).model);
+  }
+  for (const t of ["bỏng ngô làm thế nào", "đánh giá phim này", "bị đánh giá thấp thì sao", "trang trí nhà đẹp"]) ok(!R.needsNoTools(q(t)) || R.difficulty(q(t)).score < 2, `“${t}” không bị coi là khủng hoảng`);
+  for (const t of ["Đề xuất chiến dịch quảng cáo cho quán trà sữa", "Lập chiến dịch marketing cho quán", "hệ miễn dịch là gì", "mậu dịch quốc tế là gì", "đại dịch covid kéo dài bao lâu"]) ok(R.taskOf(q(t)) !== "translate", `“${t}” không phải việc dịch`, R.taskOf(q(t)));
+  for (const t of ["Dịch câu này sang tiếng Anh", "dịch giúp mình đoạn này", "dịch email"]) ok(R.taskOf(q(t)) === "translate", `“${t}” vẫn là việc dịch`, R.taskOf(q(t)));
+  for (const [t, want] of [["Slide giới thiệu công ty", "build"], ["App quản lý chi tiêu", "build"], ["Lập ngân sách đám cưới 200 triệu", "analyze"], ["Lập thực đơn giảm cân 7 ngày", "analyze"], ["Quy trình tuyển dụng nhân viên bán hàng", "analyze"], ["Nội dung fanpage 1 tháng cho shop quần áo", "write"], ["kế hoạch marketing quý 4", "analyze"], ["Thông cáo báo chí ra mắt sản phẩm", "write"], ["tìm giúp mình khách sạn Đà Nẵng dưới 1 triệu", "act"], ["mở youtube tìm nhạc lofi", "act"]]) {
+    ok(R.taskOf(q(t)) === want && !R.needsNoTools(q(t)), `việc không có động từ “${t}” → ${want}, không đi đường nhanh`, R.taskOf(q(t)));
+  }
+  for (const t of ["App là gì?", "quy trình tuyển dụng là gì"]) ok(R.taskOf(q(t)) === "qa", `hỏi về danh từ “${t}” vẫn là hỏi đáp`, R.taskOf(q(t)));
+  for (const t of ["web bị lỗi 500", "app của mình bị crash khi mở", "sửa lỗi này: TypeError undefined", "lỗi này là sao: Cannot read properties of undefined"]) {
+    ok(R.taskOf(q(t)) === "debug" && !R.needsNoTools(q(t)), `báo lỗi ngắn “${t}” là gỡ lỗi`, R.taskOf(q(t)));
+  }
+  ok(R.taskOf(q("TypeError là gì?")) !== "debug", "hỏi khái niệm “TypeError là gì?” không phải gỡ lỗi", R.taskOf(q("TypeError là gì?")));
+  ok(R.taskOf(q("sửa lỗi chính tả trên trang web này")) === "language", "“sửa lỗi chính tả” vẫn là việc ngôn ngữ", R.taskOf(q("sửa lỗi chính tả trên trang web này")));
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

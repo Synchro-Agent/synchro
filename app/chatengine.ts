@@ -289,6 +289,7 @@ const NEED_TOOLS = "[[CAN_CONG_CU]]";
 const FAST_RULES = `<quick_reply>
 Đây là câu trò chuyện hoặc câu hỏi ngắn: trả lời ngay, tự nhiên, ngắn gọn, bằng đúng ngôn ngữ người dùng đang viết. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, tạo ảnh bằng AI, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
+An toàn đứng trước sự ngắn gọn. Tin nhắn có thể nói tới tự làm hại, tuyệt vọng, bị bạo hành hay xâm hại (kể cả nói gián tiếp), hoặc tình huống y tế khẩn: không trả lời cho qua. Đáp với sự quan tâm thật, không phán xét, không nêu cách làm hại; nói rõ mức độ khẩn, hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy, cấp cứu hoặc đường dây khẩn cấp nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em). Câu hỏi sức khỏe, pháp lý, tài chính: nêu điều chưa chắc và khi nào cần gặp chuyên gia.
 </quick_reply>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
@@ -1389,8 +1390,11 @@ function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-l
     prevAsk ??= t;
     if (!isAck(t)) { prevAsk = t; break; }
   }
+  // Tin ngay trước là thẻ hỏi lại: thẻ một câu chỉ gửi đúng chữ của lựa chọn ("Phương án 2"), nên phải nhìn tin của model mới biết đó là câu trả lời.
+  const lastAi = [...msgs].reverse().find((m) => m?.role === "assistant");
+  const aiText = typeof lastAi?.content === "string" ? lastAi.content : Array.isArray(lastAi?.content) ? (lastAi!.content as { text?: string }[]).map((x) => x?.text ?? "").join("\n") : "";
   return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, files, docChars,
-    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk };
+    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk, answeredAsk: /```ask\b/.test(aiText) };
 }
 
 /** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
