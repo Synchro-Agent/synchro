@@ -31,6 +31,7 @@ import { plainSummary, runBlocks } from "./runtext";
 import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
+import { designTurn, historyTexts } from "./designkit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME } from "./ai/imagegen";
@@ -1201,6 +1202,14 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
 }
 
 type Who = { user: UserRow };
+// Quy tắc thiết kế theo việc đang làm (designkit.ts): đi cạnh tin nhắn mới nhất như skill_routing, không vào hướng dẫn hệ thống. Không có với Synchro Code, lệnh nội bộ, artifact có AI.
+function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean } | null, studio: string | null, conv?: string): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!caps || !body.skills || body.feature === "code" || body.feature === "artifact") return "";
+  const typed = typedText((Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
+  const d = designTurn({ typed, studio, art: caps.art, code: caps.code, ack: isAck(typed), seed: conv, prior: historyTexts(body.messages, body.artBase) });
+  if (d) console.log(`[design] ${d.format} ${d.domain} ${d.own ? "own-brand" : d.preset}${d.compact ? " follow-up" : ""} ${d.bytes}B`);
+  return d?.block ?? "";
+}
 // Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
 // Những gì Synchro biết về người dùng (tên, phần tự giới thiệu / hướng dẫn ở Cài đặt → Tài khoản, bộ nhớ khi bật): mọi lượt người dùng
 // trò chuyện (chat, Synchro Code), kể cả ẩn danh (khi đó không kèm bộ nhớ); không áp dụng cho lời gọi nội bộ (đặt tên, rút bộ nhớ…)
@@ -1454,7 +1463,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
-      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, nowBlock(body)].filter(Boolean).join("\n\n"));
+      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
@@ -1594,7 +1603,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const prep = prepareHistory(messages, [route, recallOf(body, c.user, convId), nowBlock(body)], mix);
+    const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
