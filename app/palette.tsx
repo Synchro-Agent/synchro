@@ -73,7 +73,7 @@ export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: 
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts"), get("/api/apps"), cachedJson<any>("/api/skills"), cachedJson<any>("/api/plugins?view=lite")]).then(([a, ap, sk, pl]) => {
+    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<any>("/api/skills"), cachedJson<any>("/api/plugins?view=lite")]).then(([a, ap, sk, pl]) => {
       if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [] });
     });
     return () => { live = false; };

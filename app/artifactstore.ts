@@ -25,14 +25,15 @@ function init() {
 type Raw = Omit<ArtRow, "versions"> & { versions: string };
 const parse = (r: Raw): ArtRow => ({ ...r, versions: JSON.parse(r.versions) as ArtVersion[] });
 
+// Chỉ lấy phiên bản mới nhất ngay trong SQL: giải mã mọi phiên bản bằng JS (tới 50 bản, 400 KB mỗi bản) từng chặn luồng chính mỗi lần mở danh sách.
 export function listArtifacts(uid: string): ArtSummary[] {
-  const rows = init().prepare("SELECT * FROM artifacts WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(uid, ART_LIMITS.perUser) as (Raw & { user_id?: string })[];
-  return rows.map((r) => {
-    const a = parse(r);
-    const last = a.versions[a.versions.length - 1]?.content ?? "";
-    return { id: a.id, conv: a.conv, ident: a.ident, title: a.title, type: a.type, lang: a.lang, created_at: a.created_at, updated_at: a.updated_at, count: a.versions.length, preview: last.slice(0, 6000), full: last.length <= 6000 };
-  });
+  const rows = init().prepare(`SELECT id, conv, ident, title, type, lang, created_at, updated_at, json_array_length(versions) AS count,
+    substr(json_extract(versions, '$[#-1].content'), 1, 6000) AS preview, length(json_extract(versions, '$[#-1].content')) AS size
+    FROM artifacts WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?`).all(uid, ART_LIMITS.perUser) as (Omit<ArtSummary, "full"> & { size: number | null; preview: string | null })[];
+  return rows.map(({ size, ...r }) => ({ ...r, preview: r.preview ?? "", full: (size ?? 0) <= 6000 }));
 }
+/** Chỉ tên, cho bảng lệnh (Ctrl+K): mở bảng từng tải về gần 1 MB bản xem trước trong khi nó chỉ tìm theo tên. */
+export const artifactTitles = (uid: string) => init().prepare("SELECT conv, title, type FROM artifacts WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(uid, ART_LIMITS.perUser) as { conv: string; title: string; type: string }[];
 
 export function getArtifact(uid: string, id: string): ArtRow | null {
   const r = init().prepare("SELECT * FROM artifacts WHERE id = ? AND user_id = ?").get(id, uid) as Raw | undefined;

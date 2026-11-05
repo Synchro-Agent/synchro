@@ -17,7 +17,7 @@ import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "./mcp";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
-import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, type RouteInput } from "./router";
+import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { rank } from "./skillroute";
@@ -40,7 +40,7 @@ import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/im
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
-import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule } from "./brain";
+import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
@@ -1237,7 +1237,13 @@ function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean
 const useProfile = (body: Record<string, any>) => !!body.skills && body.feature !== "artifact"; // eslint-disable-line @typescript-eslint/no-explicit-any
 const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
 // Bộ não tổng hợp: kéo vài ghi chú liên quan nhất tới câu hỏi vào tầng động (chat lẫn Synchro Code; không trong đoạn chat ẩn danh / khi tắt Bộ nhớ).
-const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => (useProfile(body) && body.memory !== false && !body.incognito ? brainRecall(u.id, lastUserText(body.messages), conv) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
+// Câu chào, cảm ơn không có gì để nhớ lại. Đo riêng để biết phần chuẩn bị của lượt nằm ở đâu.
+const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!useProfile(body) || body.memory === false || body.incognito || routeTask(routeInput(body)) === "chat") return "";
+  const t0 = Date.now(), out = brainRecall(u.id, lastUserText(body.messages), conv);
+  if (Date.now() - t0 > 20) console.log(`[timing] chat recall=${Date.now() - t0}ms`);
+  return out;
+};
 /** Model tự tra, đọc theo liên kết và ghi vào bộ não (công cụ brain_*), cùng điều kiện với phần ghi chú liên quan. */
 const brainOn = (body: Record<string, any>, u: UserRow) => useProfile(body) && body.memory !== false && !body.incognito && brainReady(u.id); // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Gói subscription: ghi chú liên quan ghép vào cuối tin nhắn mới nhất (CLI chỉ nhận lời nhắc hệ thống ở lượt đầu của phiên). */
@@ -1287,6 +1293,7 @@ export async function prewarmChat(user: UserRow) {
   if (now - (prewarmed.get(user.id) ?? 0) < 60_000) return;
   if (prewarmed.size > 2000) prewarmed.clear();
   prewarmed.set(user.id, now);
+  try { warmRecall(user.id); } catch {}
   const { usable } = await usableModels(user);
   const body = { skills: true, feature: "chat" };
   const pc = capsState(user).caps;

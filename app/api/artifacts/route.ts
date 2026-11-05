@@ -1,10 +1,13 @@
 import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../artifactstore";
+import { artifactTitles, listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../artifactstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = handle(async (req: Request) => Response.json({ artifacts: listArtifacts(requireUser(req).user.id) }));
+export const GET = handle(async (req: Request) => {
+  const uid = requireUser(req).user.id;
+  return Response.json({ artifacts: new URL(req.url).searchParams.get("view") === "titles" ? artifactTitles(uid) : listArtifacts(uid) });
+});
 
 // Lưu artifact của một câu trả lời: { conv, items: [{ ident, title, type, lang?, content }] } → { ids }.
 export const POST = handle(async (req: Request) => {

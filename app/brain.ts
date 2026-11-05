@@ -827,11 +827,76 @@ export function brainCore(uid: string): string {
   if (!hub?.props.overview && !hub?.props.focus?.length) return "";
   return `${hub.props.overview ? `Tổng quan bạn đã đúc kết về họ: ${hub.props.overview}` : ""}${hub.props.focus?.length ? `\nHọ đang theo đuổi: ${hub.props.focus.join("; ")}.` : ""}`.trim();
 }
+// Chỉ mục gọi lại theo từng người, giữ trong bộ nhớ. Mỗi tin nhắn từng đọc, giải mã và tách từ lại toàn bộ ghi chú (đo: 171 ms với 3.000 ghi chú, 530 ms với 5.000), đồng bộ trên luồng chính nên luồng chữ của
+// mọi người dừng theo. Giờ chỉ tách từ ghi chú đã đổi; so khớp vài từ của câu hỏi trên bảng tần suất có sẵn không đáng kể. Nhiều ghi chú mà chưa có chỉ mục thì dựng ở nền từng ít một.
+type RecallDoc = { at: number; tf: Map<string, number>; len: number; conv: string | null; ok: boolean };
+type RecallIx = { stamp: string; docs: Map<string, RecallDoc>; used: number; building?: boolean };
+const RECALL_USERS = 40, RECALL_SYNC_MAX = 400, RECALL_CHUNK = 200;
+const rg = globalThis as unknown as { __brainRecall?: Map<string, RecallIx> };
+const recallIxs = (rg.__brainRecall ??= new Map());
+const recallStamp = (uid: string) => { const r = t().prepare("SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM brain_notes WHERE user_id = ?").get(uid) as { n: number; m: number | null }; return `${r.n}:${r.m ?? 0}`; };
+const recallDoc = (r: Row): RecallDoc => {
+  const n = parse(r), tf = new Map<string, number>();
+  const ws = [...words(n.title), ...words(n.title), ...words(n.body), ...(n.props.aliases ?? []).flatMap(words)];
+  for (const w of ws) tf.set(w, (tf.get(w) ?? 0) + 1);
+  return { at: n.updatedAt, tf, len: ws.length, conv: n.conv, ok: (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && (n.kind !== "chat" && n.kind !== "code" || !!n.props.gist) };
+};
+/** Đưa chỉ mục về đúng dữ liệu hiện tại. Trả false khi còn quá nhiều ghi chú phải tách từ: việc đó tiếp tục ở nền, lượt này không gọi lại. */
+function refreshRecall(uid: string, ix: RecallIx): boolean {
+  const stamp = recallStamp(uid);
+  if (ix.stamp === stamp) return true;
+  if (ix.building) return false;
+  const rows = t().prepare("SELECT id, updated_at AS at FROM brain_notes WHERE user_id = ?").all(uid) as { id: string; at: number }[];
+  const seen = new Set(rows.map((r) => r.id));
+  for (const id of ix.docs.keys()) if (!seen.has(id)) ix.docs.delete(id);
+  const stale = rows.filter((r) => ix.docs.get(r.id)?.at !== r.at).map((r) => r.id);
+  const load = (ids: string[]) => {
+    if (!ids.length) return;
+    const list = t().prepare(`SELECT * FROM brain_notes WHERE user_id = ? AND id IN (${ids.map(() => "?").join(",")})`).all(uid, ...ids) as Row[];
+    for (const r of list) ix.docs.set(r.id, recallDoc(r));
+  };
+  if (stale.length <= RECALL_SYNC_MAX) { load(stale); ix.stamp = stamp; return true; }
+  ix.building = true;
+  void (async () => {
+    try {
+      for (let i = 0; i < stale.length; i += RECALL_CHUNK) { load(stale.slice(i, i + RECALL_CHUNK)); await new Promise((ok) => setImmediate(ok)); }
+      ix.stamp = stamp;
+    } catch (e) { console.warn(`[brain] chỉ mục gọi lại: ${(e as Error).message}`); } finally { ix.building = false; }
+  })();
+  return false;
+}
+function recallIx(uid: string): RecallIx {
+  let ix = recallIxs.get(uid);
+  if (!ix) {
+    ix = { stamp: "", docs: new Map(), used: 0 };
+    recallIxs.set(uid, ix);
+    if (recallIxs.size > RECALL_USERS) { const old = [...recallIxs].filter(([, v]) => !v.building).sort((a, b) => a[1].used - b[1].used)[0]; if (old) recallIxs.delete(old[0]); }
+  }
+  ix.used = Date.now();
+  return ix;
+}
+/** Mở trang: dựng sẵn chỉ mục ở nền để câu đầu không phải chờ. */
+export function warmRecall(uid: string) { if (learning(uid)) refreshRecall(uid, recallIx(uid)); }
+function recallHits(uid: string, query: string, k: number, min: number, conv?: string): Note[] {
+  const ix = recallIx(uid);
+  if (!refreshRecall(uid, ix)) return [];
+  const q = [...new Set(words(query))];
+  const docs = [...ix.docs].filter(([, d]) => d.ok && d.conv !== conv);
+  if (!q.length || !docs.length) return [];
+  const avg = docs.reduce((a, [, d]) => a + d.len, 0) / docs.length || 1;
+  const df = q.map((w) => docs.reduce((n, [, d]) => n + (d.tf.has(w) ? 1 : 0), 0));
+  const top = docs.map(([id, d]) => {
+    let s = 0;
+    q.forEach((w, i) => { const f = d.tf.get(w); if (f) s += Math.log(1 + (docs.length - df[i] + 0.5) / (df[i] + 0.5)) * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg)); });
+    return { id, s };
+  }).filter((x) => x.s >= min).sort((a, b) => b.s - a.s).slice(0, k);
+  const get = t().prepare("SELECT * FROM brain_notes WHERE id = ? AND user_id = ?");
+  return top.map((x) => get.get(x.id, uid) as Row | undefined).filter((r): r is Row => !!r).map(parse);
+}
 /** Vài trang trong bộ não liên quan nhất tới câu hỏi (tầng động, cuối prompt). */
 export function brainRecall(uid: string, query: string, conv?: string): string {
   if (!query.trim() || !learning(uid)) return "";
-  const notes = allNotes(uid).filter((n) => (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && n.conv !== conv && (n.kind !== "chat" && n.kind !== "code" || n.props.gist));
-  const hits = rankNotes(notes, query, 4, 1.6);
+  const hits = recallHits(uid, query, 4, 1.6, conv);
   if (!hits.length) return "";
   const line = (n: Note) => WIKI.includes(n.kind)
     ? `- [[${n.title}]] (${n.kind === "topic" ? "chủ đề" : "tên riêng"}): ${(n.props.summary || n.props.desc || "").slice(0, 300)}${n.props.facts?.length ? ` Đã biết: ${n.props.facts.slice(-4).map((f) => f.t).join("; ").slice(0, 400)}.` : ""}`
