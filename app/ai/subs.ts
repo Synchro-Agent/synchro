@@ -541,6 +541,7 @@ export async function removeConvSessions(uid: string, conv: string) {
   d.prepare("DELETE FROM engine_sessions WHERE user_id = ? AND conv = ?").run(uid, conv);
   d.prepare("DELETE FROM engine_session_log WHERE user_id = ? AND conv = ?").run(uid, conv);
   for (const r of rows) await removeSessionFiles(scopeDir(r.cli, uid), r.session_id);
+  removeConvAttachments(uid, conv);
 }
 /** Đoạn chat này chưa có phiên của CLI, hoặc phiên chưa từng gọi công cụ: đi đường nhanh được. Lịch sử có khối gọi công cụ mà lượt lại không khai báo công cụ thì API có thể từ chối. */
 export function sessionPlain(uid: string, conv: string | undefined, cli: Cli): boolean {
@@ -613,9 +614,11 @@ function recentMedia(msgs: Msg[], max = 8): Set<Blk> {
  * Ghi tệp đính kèm vào thư mục làm việc của engine (att/<ngày>/<lượt>/) cho CLI nhận tệp theo đường dẫn (Codex --image, Antigravity mở bằng
  * công cụ xem tệp); thư mục quá 7 ngày được dọn.
  */
-function saveAttachments(work: string, atts: Attachment[]) {
+// Tên thư mục mang dấu của đoạn chat để xóa đoạn chat thì xóa được tệp đính kèm của nó; thư mục cũ không có dấu vẫn được dọn theo tuổi như trước.
+const attTag = (conv?: string) => (conv ? `${crypto.createHash("sha1").update(conv).digest("hex").slice(0, 12)}-` : "");
+function saveAttachments(work: string, atts: Attachment[], conv?: string) {
   const root = path.join(work, "att"), day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const dir = path.join(root, day, crypto.randomBytes(6).toString("hex"));
+  const dir = path.join(root, day, attTag(conv) + crypto.randomBytes(6).toString("hex"));
   for (const a of atts) {
     a.path = path.join(dir, a.name);
     writeEngineFile(a.path, Buffer.from(a.data, "base64"));
@@ -623,6 +626,11 @@ function saveAttachments(work: string, atts: Attachment[]) {
   }
   const old = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10).replace(/-/g, "");
   for (const d of listEngineDir(root)) if (/^\d{8}$/.test(d) && d < old) { try { removeDir(path.join(root, d)); } catch {} }
+  return dir;
+}
+function removeConvAttachments(uid: string, conv: string) {
+  const root = path.join(engineHome(), "work", safeScope(uid), "att"), tag = attTag(conv);
+  for (const d of listEngineDir(root)) for (const f of listEngineDir(path.join(root, d))) if (f.startsWith(tag)) { try { removeDir(path.join(root, d, f)); } catch {} }
 }
 
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
@@ -630,7 +638,7 @@ function saveAttachments(work: string, atts: Attachment[]) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -684,9 +692,13 @@ export function linksIn(text: string): WebSource[] {
 export async function subTurn(o: SubTurn): Promise<SubResult> {
   // Lượt không thuộc đoạn chat nào (đặt tên, chưng cất…) cũng không có gì nối tiếp: để lại lịch sử phiên thì không có đường nào xóa được khi người dùng xóa đoạn chat.
   if (o.conv && !o.ephemeral) return runTurn(o);
-  const cli = subCli(o.model), seen = new Set<string>();
-  try { return await runTurn({ ...o, conv: undefined, onSession: (id) => seen.add(id) }); }
-  finally { if (cli) for (const id of seen) void removeSessionFiles(scopeDir(cli, o.user.id), id); }
+  const cli = subCli(o.model), seen = new Set<string>(), dirs: string[] = [];
+  try { return await runTurn({ ...o, conv: undefined, onSession: (id) => seen.add(id), onAttDir: (d) => dirs.push(d) }); }
+  finally {
+    if (cli) for (const id of seen) void removeSessionFiles(scopeDir(cli, o.user.id), id);
+    // Tệp đính kèm của đoạn chat ẩn danh không được nằm lại máy chủ chờ dọn theo tuổi (7 ngày).
+    for (const d of dirs) { try { removeDir(d); } catch {} }
+  }
 }
 async function runTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
@@ -723,7 +735,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);
   if (col.atts.length && cli !== "claude") {
-    try { saveAttachments(work, col.atts); }
+    try { const dir = saveAttachments(work, col.atts, o.conv); o.onAttDir?.(dir); }
     catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
   }
   // Bộ canh lượt treo (watchdog.ts): model không có hoạt động thật quá lâu (treo mạng, phiên kẹt) thì dừng và báo 503 để chế độ Tự động chuyển

@@ -414,6 +414,7 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
   [/^(.+) đang giới hạn tốc độ hoặc quá tải\. Hãy thử lại sau (.+) hoặc chọn model khác\.$/, (m) => `${m[1]} is rate limiting or overloaded. Try again in ${m[2].replace("ít phút", "a few minutes").replace("giây", "seconds").replace("phút", "minutes")} or pick another model.`],
   [/^Đang chờ lượt (.+) khác của tài khoản này xong$/, (m) => `Waiting for another ${m[1]} reply on this account to finish`],
+  [/^Đang chờ lượt (.+) khác của tài khoản này xong, đã (\d+) giây$/, (m) => `Waiting for another ${m[1]} reply on this account to finish, ${m[2]} seconds so far`],
   [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one could not start. Try again when it finishes, or pick another model.`],
   [/^Claude đang thử lại sau lỗi tạm thời(?: \(lần (\d+)(?:\/(\d+))?\))?$/, (m) => `Claude is retrying after a temporary error${m[1] ? ` (attempt ${m[1]}${m[2] ? ` of ${m[2]}` : ""})` : ""}`],
   [/^(.+) đã hết hạn mức\. Các model khác của gói (.+) vẫn dùng được\.$/, (m) => `${m[1]} has hit its limit. Other ${m[2]} plan models still work.`],

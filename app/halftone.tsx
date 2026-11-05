@@ -106,17 +106,23 @@ export function HalftoneBg() {
     const ro = new ResizeObserver(size); ro.observe(canvas); size();
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const t0 = performance.now();
-    let raf = 0;
+    let raf = 0, drew = 0, seen = performance.now();
+    // Nền trang trí, toàn cửa sổ ở DPR tới 2: 24 hình mỗi giây là đủ mượt, và không ai thao tác vài giây thì dừng hẳn. Vẽ 60 hình mỗi giây mãi mãi giữ GPU của laptop luôn bận.
     const draw = (now: number) => {
       raf = 0;
-      gl.uniform4f(uScene, w, h, ((now - t0) / 1000) * 1.43, 4);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      if (!still && !document.hidden) raf = requestAnimationFrame(draw);
+      if (now - drew >= 40 || still) {
+        drew = now;
+        gl.uniform4f(uScene, w, h, ((now - t0) / 1000) * 1.43, 4);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      if (!still && !document.hidden && now - seen < 8000) raf = requestAnimationFrame(draw);
     };
-    const vis = () => { if (!document.hidden && !raf) raf = requestAnimationFrame(draw); };
+    const vis = () => { seen = performance.now(); if (!document.hidden && !raf && !still) raf = requestAnimationFrame(draw); };
     document.addEventListener("visibilitychange", vis);
+    const input = ["pointermove", "keydown", "pointerdown", "wheel"] as const;
+    for (const e of input) window.addEventListener(e, vis, { passive: true });
     raf = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); document.removeEventListener("visibilitychange", vis); gl.getExtension("WEBGL_lose_context")?.loseContext(); canvas.remove(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); document.removeEventListener("visibilitychange", vis); for (const e of input) window.removeEventListener(e, vis); gl.getExtension("WEBGL_lose_context")?.loseContext(); canvas.remove(); };
   }, []);
   return <div ref={ref} aria-hidden="true" style={{ position: "absolute", inset: 0 }} />;
 }

@@ -1421,7 +1421,14 @@ export default function Home() {
     stick.current = !far;
     setShowDown(far);
   };
-  const toBottom = () => { threadRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); };
+  // Xa hơn vài màn hình thì nhảy tới gần cuối rồi mới trượt nốt: trượt suốt đoạn chat dài từng mất gần 1,5 giây, hàng ẩn dựng lại khi lướt qua.
+  const toBottom = () => {
+    const el = threadRef.current;
+    if (!el) return;
+    const left = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (left > el.clientHeight * 3) el.scrollTop = el.scrollHeight - el.clientHeight * 2;
+    el.scrollTo({ top: 1e9, behavior: "smooth" });
+  };
   // Mở một đoạn chat: đứng ngay ở tin cuối, không trôi từ đầu xuống (trôi mượt chỉ dành cho nút "cuộn xuống").
   useLayoutEffect(() => {
     const el = threadRef.current;
