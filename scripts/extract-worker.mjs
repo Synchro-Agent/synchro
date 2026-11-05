@@ -15,6 +15,8 @@ const XLSX_MAX_ROWS = 200;
 const TEXT_MAX = 16_000_000;
 
 function decodeText(buf) {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder("utf-16le").decode(buf);
+  if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder("utf-16be").decode(buf);
   try { return new TextDecoder("utf-8", { fatal: true }).decode(buf).replace(/^﻿/, ""); } catch { /* không phải UTF-8 */ }
   const enc = (jschardet.detect(buf.toString("binary")).encoding || "windows-1252").toLowerCase();
   try { return new TextDecoder(enc).decode(buf); } catch { return new TextDecoder("windows-1252").decode(buf); }
@@ -166,12 +168,35 @@ async function pptx(buf) {
   const txt = async (f) => [...(await z.file(f).async("string")).matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)]
     .map((p) => [...p[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => t[1]).join("")).filter(Boolean)
     .map((s) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")).join("\n");
+  // Biểu đồ thật không có <a:t> nên số liệu từng mất hẳn: slide hai biểu đồ chỉ còn tiêu đề, model tưởng slide không có số. Đọc giá trị đã lưu trong tệp biểu đồ của slide đó.
+  const xmlDec = (s) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+  const points = (x) => [...x.matchAll(/<c:pt\b[^>]*idx="(\d+)"[^>]*>\s*(?:<c:formatCode>[^<]*<\/c:formatCode>\s*)?<c:v>([^<]*)<\/c:v>/g)].map((m) => [Number(m[1]), xmlDec(m[2])]);
+  const chartText = async (slide) => {
+    const rels = z.file(slide.replace("slides/", "slides/_rels/") + ".rels");
+    if (!rels) return "";
+    const parts = [...(await rels.async("string")).matchAll(/Target="\.\.\/charts\/(chart[^"\/]*\.xml)"/g)].map((m) => `ppt/charts/${m[1]}`);
+    const out = [];
+    for (const p of [...new Set(parts)]) {
+      if (!z.file(p)) continue;
+      const x = await z.file(p).async("string");
+      const title = [...(/<c:title>([\s\S]*?)<\/c:title>/.exec(x)?.[1] ?? "").matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => xmlDec(m[1])).join("");
+      const lines = [];
+      for (const s of x.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)) {
+        const name = points(/<c:tx>([\s\S]*?)<\/c:tx>/.exec(s[1])?.[1] ?? "")[0]?.[1] ?? "";
+        const cat = new Map(points(/<c:(?:cat|xVal)>([\s\S]*?)<\/c:(?:cat|xVal)>/.exec(s[1])?.[1] ?? ""));
+        const vals = points(/<c:(?:val|yVal)>([\s\S]*?)<\/c:(?:val|yVal)>/.exec(s[1])?.[1] ?? "");
+        if (vals.length) lines.push(`- ${name || "Chuỗi"}: ${vals.slice(0, 200).map(([i, v]) => (cat.has(i) ? `${cat.get(i)}=${v}` : v)).join(", ")}`);
+      }
+      if (lines.length) out.push(`[Biểu đồ${title ? `: ${title}` : ""}]\n${lines.join("\n")}`);
+    }
+    return out.join("\n");
+  };
   const slides = Object.keys(z.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => num(a) - num(b));
   const out = [];
   for (const f of slides) {
     const n = num(f), notesF = `ppt/notesSlides/notesSlide${n}.xml`;
-    const notes = z.file(notesF) ? await txt(notesF) : "";
-    out.push(`## Slide ${n}\n${await txt(f)}${notes ? `\n\n[Ghi chú] ${notes}` : ""}`);
+    const notes = z.file(notesF) ? await txt(notesF) : "", charts = await chartText(f);
+    out.push(`## Slide ${n}\n${await txt(f)}${charts ? `\n\n${charts}` : ""}${notes ? `\n\n[Ghi chú] ${notes}` : ""}`);
   }
   return out.join("\n\n");
 }

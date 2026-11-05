@@ -165,7 +165,7 @@ const SIG: Partial<Record<Task, Sig[]>> = {
     // Đổi định dạng, tải về, tạo tệp văn phòng: phải chạy công cụ mới ra tệp.
     [W("(?:chuyển|đổi|convert|export|xuất)(?:(?![.?!\\n]).){0,40}?(?:sang|thành|ra|to|as|into) (?:pdf|word|docx?|excel|xlsx?|pptx?|powerpoint|csv|png|jpe?g|mp3|mp4)"), 5],
     [W("tải(?:(?![.?!\\n]).){1,40}?(?:về|xuống)|download (?:this|the|a|my|file|video)"), 5],
-    [W("(?:tạo|lập|làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen|bài tập|bài kiểm tra))|soạn|xuất|dựng|create|make|generate|prepare)(?:(?![.?!\\n]).){0,30}?(?:(?:file|tệp) \\p{L}+|bảng (?:lương|chấm công|báo giá|kê|tính|theo dõi)|báo giá|excel|xlsx|docx|word document|spreadsheet|pdf)"), 5],
+    [W("(?:tạo|lập|làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen|bài tập|bài kiểm tra))|soạn|xuất|dựng|create|make|generate|prepare)(?:(?![.?!\\n]).){0,30}?(?:(?:file|tệp) \\p{L}+|bảng (?:lương|chấm công|báo giá|kê|tính|theo dõi|dự toán)|báo giá|dự toán|sổ (?:theo dõi|thu chi|quỹ)|tracker|excel|xlsx|docx|word document|spreadsheet|pdf)"), 5],
   ],
   write: [
     [W("viết|soạn|biên tập|viết lại|diễn đạt lại|paraphrase|rewrite|write|draft|compose|email|e-mail|thư (?:xin|mời|cảm ơn|cám ơn|gửi|tay|tình|ngỏ|giới thiệu|chúc|xin lỗi)|bức thư|lá thư|letter|bài (?:đăng|viết|luận|văn|báo|blog|phát biểu|diễn văn|thơ)|caption|status|tweet|thơ|bài thơ|poem|truyện|story|kịch bản|lời (?:bài hát|chúc|mời|cảm ơn|tựa)|slogan|cv|resume|cover letter|đơn (?:xin|đề nghị)|essay|article|blog post|tiểu luận|luận văn|báo cáo|report|thesis|speech|bài phát biểu"), 3],

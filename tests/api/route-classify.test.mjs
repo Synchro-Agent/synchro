@@ -337,7 +337,7 @@ console.log("10. Grok Build chỉ cho việc code; Fable (có thể tính credit
   // “thủ đô…” chen giữa: “giải thích thêm” nói về câu đó, không về trang web ở trước.
   ok(!R.isAck("thủ đô của Pháp là gì?") && R.isAck("giải thích thêm") && !R.isAck("Tôi bị đau ngực"), "câu hỏi mới và câu sức khỏe là lời nhờ thật, không phải câu xác nhận");
   for (const [text, want, o] of [["Xin chào", true], ["cảm ơn nhé", true, { turns: 3, prevAsk: BUILD }], ["Thủ đô của Úc là gì?", true], ["Từ 'serendipity' nghĩa là gì?", true],
-    ["Làm trang web", false], ["Tôi bị đau ngực", false], ["Giá vàng hôm nay", false], ["Đọc mail trong Gmail", false], ["https://example.com là gì", false], ["tiếp đi", false, { turns: 3, prevAsk: BUILD }], ["ok", false, { turns: 3, prevAsk: BUILD }], ["Ảnh này là gì?", false, { images: 1, attachments: 1 }], ["Tóm tắt tài liệu", false, { files: 1, docChars: 500 }], ["Viết code Python", false]])
+    ["Làm trang web", false], ["Làm cho tôi một bản dự toán chi phí đám cưới", false], ["Create a sales tracker", false], ["Lập sổ thu chi tháng này", false], ["Tôi bị đau ngực", false], ["Giá vàng hôm nay", false], ["Đọc mail trong Gmail", false], ["https://example.com là gì", false], ["tiếp đi", false, { turns: 3, prevAsk: BUILD }], ["ok", false, { turns: 3, prevAsk: BUILD }], ["Ảnh này là gì?", false, { images: 1, attachments: 1 }], ["Tóm tắt tài liệu", false, { files: 1, docChars: 500 }], ["Viết code Python", false]])
     ok(R.needsNoTools(q(text, o)) === want, `“${text}” ${want ? "đi đường nhanh" : "giữ lượt đầy đủ"}`);
 }
 

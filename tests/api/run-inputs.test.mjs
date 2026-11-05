@@ -82,6 +82,14 @@ fs.writeFileSync(f, JSON.stringify({ ...old, v: undefined, blocks: [{ type: "tex
 const ctx = await FP.buildContext([rec.id], { [rec.id]: "Doanh số.xlsx" }, "", uid);
 ok(ctx.some((b) => b.type === "text" && /Tiền: min=0/.test(b.text)) && !ctx.some((b) => /bản cũ sai/.test(b.text ?? "")), "buildContext đọc lại bản mới", ctx.map((b) => (b.text ?? "").slice(0, 80)));
 
+console.log("7b. Tệp UTF-16 không bị coi là nhị phân");
+const u16 = await FP.processFile(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("Tên\tTiền\nAn\t1000\n", "utf16le")]), "utf16.csv", uid);
+written.push(u16.id);
+ok(u16.kind === "csv" && /\| An \| 1000 \|/.test(u16.blocks[0].text), "tải lên được, đọc đúng", u16.blocks[0]);
+const u16t = await FP.processFile(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("xin chào tiếng Việt", "utf16le")]), "u.txt", uid);
+written.push(u16t.id);
+ok(u16t.kind === "text" && /xin chào tiếng Việt/.test(u16t.blocks[0].text), "tệp chữ UTF-16 cũng đọc đúng", u16t.blocks[0]);
+
 console.log("8. Ảnh đã tạo trong artifact");
 const url = AD.genImageUrl(o1.id);
 ok(AD.genImageId(url) === o1.id && !AD.genImageId("https://example.com/x.png") && !AD.genImageId("https://image.synchro.invalid/../x.png"), "nhận đúng địa chỉ ảnh đã tạo");

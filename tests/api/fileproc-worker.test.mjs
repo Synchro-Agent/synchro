@@ -97,5 +97,22 @@ ok(t.includes("13/10/2026 12:00") && t.includes("14/10/2026") && t.includes("| 0
 const tz = spawnSync(process.execPath, [worker, "xlsx", "t.xlsx"], { input: bookOf({ T: XLSX.utils.aoa_to_sheet([["Ngày", "x"], [dt(46308), 1]]) }), env: { ...process.env, TZ: "Asia/Ho_Chi_Minh" } });
 ok(tz.stdout.toString().includes("13/10/2026"), "không lệch ngày theo múi giờ máy chủ", tz.stdout.toString().slice(0, 200));
 
+console.log("4b. Số liệu biểu đồ trong PowerPoint");
+const chartXml = `<c:chartSpace xmlns:c="c" xmlns:a="a"><c:chart><c:title><c:tx><c:rich><a:p><a:r><a:t>Doanh thu &amp; lãi</a:t></a:r></a:p></c:rich></c:tx></c:title><c:plotArea><c:barChart>
+<c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Năm 2026</c:v></c:pt></c:strCache></c:strRef></c:tx><c:cat><c:strRef><c:strCache><c:ptCount val="2"/><c:pt idx="0"><c:v>Q1</c:v></c:pt><c:pt idx="1"><c:v>Q2</c:v></c:pt></c:strCache></c:strRef></c:cat><c:val><c:numRef><c:numCache><c:formatCode>General</c:formatCode><c:pt idx="0"><c:v>120</c:v></c:pt><c:pt idx="1"><c:v>340</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>
+</c:barChart></c:plotArea></c:chart></c:chartSpace>`;
+const deck = await zipOf({ "ppt/presentation.xml": "<x/>", "ppt/slides/slide1.xml": "<p:sld><a:p><a:r><a:t>Số liệu</a:t></a:r></a:p></p:sld>", "ppt/slides/_rels/slide1.xml.rels": '<Relationships><Relationship Id="rId2" Type="chart" Target="../charts/chart7.xml"/></Relationships>', "ppt/charts/chart7.xml": chartXml, "ppt/slides/slide2.xml": "<p:sld><a:p><a:r><a:t>Không biểu đồ</a:t></a:r></a:p></p:sld>" });
+t = parse("pptx", deck, "d.pptx").j?.text ?? "";
+ok(t.includes("[Biểu đồ: Doanh thu & lãi]") && t.includes("- Năm 2026: Q1=120, Q2=340"), "tên biểu đồ, chuỗi, nhãn và số đều tới model", t);
+ok(/## Slide 2\nKhông biểu đồ/.test(t) && t.indexOf("Biểu đồ:") < t.indexOf("## Slide 2"), "số liệu nằm đúng slide", t);
+
+console.log("5. CSV UTF-16 (Excel, lưu Unicode Text)");
+const u16 = "Tên\tTiền\nAn\t1000\nBình\t2000\n";
+r = parse("csv", Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(u16, "utf16le")]), "u.csv");
+ok(r.j?.text?.includes("| Bình | 2000 |") && r.j.text.includes("| Tên | Tiền |"), "UTF-16 LE, cách nhau bằng tab: đọc đúng cột", JSON.stringify(r).slice(0, 300));
+const be = Buffer.from(u16, "utf16le").swap16();
+r = parse("csv", Buffer.concat([Buffer.from([0xfe, 0xff]), be]), "b.csv");
+ok(r.j?.text?.includes("| Bình | 2000 |"), "UTF-16 BE đọc đúng", JSON.stringify(r).slice(0, 300));
+
 console.log(`\n${fail ? "✗" : "✓"} ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

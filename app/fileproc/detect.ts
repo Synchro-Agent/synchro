@@ -38,6 +38,8 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
     return z.has("word/document.xml") ? "docx" : z.has("xl/workbook.xml") ? "xlsx" : z.has("ppt/presentation.xml") ? "pptx" : "zip";
   }
   if (startsWith(0xd0, 0xcf, 0x11, 0xe0)) throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
+  // Excel "Unicode Text" lưu UTF-16 có dấu BOM: đầy byte 0 nhưng là chữ thật, phải xét trước khi kết luận tệp nhị phân.
+  if ((h[0] === 0xff && h[1] === 0xfe) || (h[0] === 0xfe && h[1] === 0xff)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
   const head = buf.subarray(0, 8192);
   let ctl = 0; for (const c of head) if (c < 9 || (c > 13 && c < 32)) ctl++;
   if (head.includes(0) || ctl / Math.max(head.length, 1) > 0.05) throw new FileError(`"${name}" là tệp nhị phân (${(name.split(".").pop() || "không rõ").toUpperCase()}) mà Synchro chưa đọc được.`);
