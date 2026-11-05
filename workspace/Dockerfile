@@ -7,7 +7,7 @@ FROM node:22-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      chromium fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu-core fonts-crosextra-carlito fonts-crosextra-caladea \
+      chromium fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu-core fonts-crosextra-carlito fonts-crosextra-caladea \
       python3 python3-pip python3-venv python-is-python3 \
       git curl wget ca-certificates socat procps less vim nano unzip zip file bc \
       ripgrep jq tree htop build-essential openssh-client \
@@ -24,6 +24,26 @@ RUN pip install --break-system-packages --no-cache-dir \
       pillow imageio "moviepy<2" opencv-python-headless pydub cairosvg qrcode \
       pypdf pdfplumber pymupdf pytesseract beautifulsoup4 lxml requests markdown jinja2 pyyaml \
       edge-tts gTTS srt
+
+# Phông có đủ dấu tiếng Việt mà bộ thiết kế dùng (app/designpresets.ts, app/designkit.ts): đồ họa, PDF dựng trong sandbox hiện đúng như khung artifact.
+# Debian không có đủ các phông này nên lấy từ kho google/fonts, ghim commit và mã băm: tệp đổi hay tải hỏng thì dựng image báo lỗi, không ra image thiếu phông âm thầm.
+RUN set -e; mkdir -p /usr/share/fonts/truetype/synchro; cd /usr/share/fonts/truetype/synchro; \
+    printf '%s\n' \
+      'cd1ef6e9d7db28ad5cdb88a65ccbe693870e60d340b791f349d248342b4fe4c3 ofl/bevietnampro/BeVietnamPro-Regular.ttf BeVietnamPro-Regular.ttf' \
+      'b60832bfa0fcd015158112c64d7e3fdad3b0c6287d1823f85a3103636e845268 ofl/bevietnampro/BeVietnamPro-Medium.ttf BeVietnamPro-Medium.ttf' \
+      'bd8e27eb02720b9d91e59e4f10a90878643219f25ce6a8d9a4f06a8a88d3bb71 ofl/bevietnampro/BeVietnamPro-SemiBold.ttf BeVietnamPro-SemiBold.ttf' \
+      '7f738fe5c43c8872807b20e2d30d42163618de8a4daf7f48a939adac32c16847 ofl/bevietnampro/BeVietnamPro-Bold.ttf BeVietnamPro-Bold.ttf' \
+      '29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031 ofl/inter/Inter%5Bopsz,wght%5D.ttf Inter.ttf' \
+      '89b3fb38aa0d275d7a731d0d817a4f1622b316b4d7fbdedcf02ee9099ff68bc8 ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf PlusJakartaSans.ttf' \
+      'c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6 ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf PlayfairDisplay.ttf' \
+      'acad6de1fc93436f5c0f1f4137751ef04f1aea3063e7036535970ffcfbd79f72 ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf SpaceGrotesk.ttf' \
+      '48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf JetBrainsMono.ttf' \
+    | while read -r sum src out; do \
+        curl -fsSLg --retry 5 --retry-all-errors --connect-timeout 20 -o "$out" "https://raw.githubusercontent.com/google/fonts/bbda7253fc363238b05d97515ca71f8ae49c4fa9/$src"; \
+        echo "$sum  $out" | sha256sum -c --quiet -; \
+      done; \
+    fc-cache -f; \
+    for f in 'Be Vietnam Pro' 'Inter' 'Plus Jakarta Sans' 'Playfair Display' 'Space Grotesk' 'JetBrains Mono'; do fc-list : family | grep -qF "$f" || { echo "thiếu phông $f"; exit 1; }; done
 
 # Điều khiển Chromium có sẵn từ Node (chụp trang HTML / canvas thành khung hình, xuất PDF): require("puppeteer-core").
 RUN npm install -g --no-fund --no-audit puppeteer-core@23.11.1 && npm cache clean --force
