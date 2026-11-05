@@ -3,7 +3,8 @@
 // (Google chia theo unicode-range); lỗi hay quá giờ thì trả chuỗi rỗng, ảnh vẫn xuất được bằng font dự phòng như trước.
 const SHEET = /https:\/\/fonts\.googleapis\.com\/[^"'\s)<>]+/g;
 const FACE = /@font-face\s*\{[^}]*\}/g;
-const MAX_SHEETS = 6, MAX_FONTS = 30;
+// Mỗi trọng lượng tiếng Việt cần 3 mặt (vietnamese, latin-ext, latin): bộ thiết kế nặng nhất (Plus Jakarta + Inter + JetBrains) là 33 mặt. Trần thấp hơn cắt đúng các mặt cuối theo tên họ, tức Plus Jakarta Sans 800 của tiêu đề và KPI.
+const MAX_SHEETS = 6, MAX_FONTS = 48;
 
 function inRange(face: string, chars: Set<number>) {
   const m = /unicode-range:\s*([^;}]+)/i.exec(face);
