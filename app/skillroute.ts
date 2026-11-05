@@ -49,9 +49,16 @@ const CONCEPTS: [string[], string[], true?][] = [
   [["bang tinh", "excel", "du lieu", "bieu do", "chart", "phan tich", "so lieu"],
     ["data", "chart", "charts", "spreadsheet", "analysis", "visualization"]],
   // Các lĩnh vực của danh mục (PLUGIN_CATS): người không làm kỹ thuật hỏi bằng tiếng Việt vẫn tới đúng mục.
-  [["thue", "ke toan", "kiem toan", "hoa don", "bao cao tai chinh", "quyet toan", "tax", "accounting", "bookkeeping", "invoice"],
-    ["tax", "taxes", "accounting", "bookkeeping", "invoice", "invoices", "audit", "finance", "financial"]],
-  [["tai chinh", "ngan sach", "dong tien", "dau tu", "co phieu", "chung khoan", "dinh gia", "finance", "budget", "investment", "stock"],
+  // Hóa đơn là một việc riêng: gộp với thuế thì "Làm hóa đơn" ra toàn skill về thuế dù có invoice-generator.
+  [["hoa don", "invoice", "phieu thu", "bao gia hoa don"],
+    ["invoice", "invoices", "invoicing", "billing"]],
+  [["thue", "ke toan", "kiem toan", "bao cao tai chinh", "quyet toan", "tax", "accounting", "bookkeeping"],
+    ["tax", "taxes", "accounting", "bookkeeping", "audit", "finance", "financial"]],
+  [["ngan sach", "lap ngan sach", "budget"],
+    ["budget", "budgeting", "expenses", "forecast", "finance"]],
+  [["dam cuoi", "tiec cuoi", "wedding"],
+    ["wedding", "event", "events", "planner", "planning"]],
+  [["tai chinh", "dong tien", "dau tu", "co phieu", "chung khoan", "dinh gia", "finance", "budget", "investment", "stock"],
     ["finance", "financial", "budget", "budgeting", "cash", "investment", "investing", "stocks", "valuation", "portfolio"]],
   [["chi tieu ca nhan", "tiet kiem", "quan ly tien", "tra no", "personal finance"],
     ["personal", "savings", "budget", "budgeting", "debt", "expenses"]],
@@ -64,7 +71,7 @@ const CONCEPTS: [string[], string[], true?][] = [
   [["ho tro khach hang", "tong dai", "khieu nai", "customer support", "helpdesk"],
     ["support", "customer", "helpdesk", "tickets", "ticket"]],
   [["tuyen dung", "phong van", "nhan su", "cham cong", "luong thuong", "onboarding", "hr", "recruiting", "hiring"],
-    ["hr", "recruiting", "hiring", "interview", "candidate", "candidates", "onboarding", "employee", "talent"]],
+    ["recruiting", "hr", "hiring", "interview", "candidate", "candidates", "onboarding", "employee", "talent"]],
   [["xin viec", "ho so xin viec", "cv", "resume", "nghe nghiep", "thang tien", "career"],
     ["career", "resume", "cv", "job", "jobs", "interview", "cover"]],
   [["phap ly", "hop dong", "dieu khoan", "luat", "kien tung", "tuan thu", "legal", "contract", "compliance", "lawsuit"],
@@ -85,7 +92,7 @@ const CONCEPTS: [string[], string[], true?][] = [
     ["education", "learning", "study", "students", "teacher", "teachers", "tutor", "tutoring", "lesson", "quiz", "flashcards", "course"]],
   [["sach", "tom tat sach", "viet sach", "tieu thuyet", "truyen", "book", "novel"],
     ["book", "books", "novel", "fiction", "story", "reading", "author"]],
-  [["su kien", "hoi nghi", "to chuc tiec", "hoi thao", "event", "conference", "wedding", "dam cuoi"],
+  [["su kien", "hoi nghi", "to chuc tiec", "hoi thao", "event", "conference"],
     ["event", "events", "conference", "planning", "wedding", "calendar", "schedule"]],
   [["gia dinh", "nuoi con", "con cai", "hon nhan", "quan he", "family", "parenting", "relationship"],
     ["family", "parenting", "kids", "children", "relationship", "relationships"]],
@@ -135,6 +142,13 @@ const STOP = new Set("the and for with use used using when this that user users 
 // Âm tiết tiếng Việt sau khi bỏ dấu trùng tên hiếm trong kho ("cà" thành "ca" khớp admisibilidad-ca), mà IDF lại cho từ hiếm điểm cao nhất.
 // Từ dưới 3 chữ không dùng để chấm điểm, trừ các viết tắt quen thuộc.
 const SHORT_OK = new Set("ui ux qa ai hr cv pr ml db js ts go r c".split(" "));
+// Âm tiết tiếng Việt hay gặp khi gõ không dấu. Câu không có dấu nào mà phần lớn là các âm tiết này thì là tiếng Việt: "hang", "ban", "lieu" chỉ là âm tiết, trùng tên skill
+// tiếng Anh (go-debugging, board-minutes vì chữ "hang") là tình cờ, không được tính như từ người dùng thật sự viết.
+const VI_BARE = new Set("toi minh ban lam giup cho cua cac nhung mot nay khong duoc voi nao roi nhe hay can muon tao viet dang khi neu vao len sau truoc trong ngoai nhieu rat thi cung nhu phan tich lieu hang khach cam kiem tra bao mat cao ngan sach dam cuoi ke hoach tieu thi truong noi dung quan cong viec tuyen nhan vien san pham gia tien tai chinh thue hop dong hoa don thong tin giao dien trang web ung dung hoc sinh sinh giao duc suc khoe benh thuoc dich sang tieng anh sua loi code chay nhanh cham dep xau mau chu hinh anh ve video nhac thu dien moi xin nghi phep gui nhan doc xem tim kiem so sanh danh gia nghien cuu tom tat quy trinh quang cao lich hen doanh nghiep cong ty thang nam tuan ngay".split(" "));
+const looksVi = (q: string) => {
+  const ws = fold(q).split(/[^a-z0-9]+/).filter(Boolean);
+  return ws.length >= 2 && ws.filter((w) => VI_BARE.has(w)).length / ws.length >= 0.5;
+};
 const VI_STOP = new Set("toi minh ban lam giup cho cua cac nhung mot nay khong duoc voi nao roi nhe hay can muon tao viet dang khi neu vao len sau truoc trong ngoai nhieu rat thi cung nhu".split(" "));
 const tokens = (s: string) => fold(s).split(/[^a-z0-9]+/).filter((w) => (w.length > 2 || SHORT_OK.has(w)) && !STOP.has(w));
 const HAS_VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
@@ -168,25 +182,30 @@ export type Hit = Candidate & { score: number };
 // Từ khóa mở rộng của yêu cầu: chính các từ người dùng viết, cộng từ khóa tiếng Anh của mọi khái niệm khớp.
 // weak: từ chỉ tính nhẹ: âm tiết tiếng Việt của câu hỏi (mô tả skill phần lớn bằng tiếng Anh, khớp được là do trùng chữ; chỉ có ích khi mô tả cũng
 // bằng tiếng Việt) và từ khóa của khái niệm về hình thức khi câu đã nói rõ lĩnh vực. literal: từ người dùng thật sự viết; groups: từ khóa của từng khái niệm.
-export function expand(q: string): { terms: Set<string>; weak: Set<string>; concepts: number; literal: Set<string>; groups: string[][] } {
+export function expand(q: string): { terms: Set<string>; weak: Set<string>; concepts: number; literal: Set<string>; groups: string[][]; named: Set<string> } {
   const t = fold(q);
   const terms = new Set<string>(), weak = new Set<string>(), literal = new Set<string>();
-  const vi = HAS_VI.test(q);
+  const vi = HAS_VI.test(q), bareVi = !vi && looksVi(q);
   for (const w of q.split(/[^\p{L}\p{N}]+/u)) for (const x of tokens(w)) {
-    if (VI_STOP.has(x) && (vi || HAS_VI.test(w))) continue;
+    if (VI_STOP.has(x) && (vi || bareVi || HAS_VI.test(w))) continue;
     terms.add(x); literal.add(x);
-    if (HAS_VI.test(w) || (vi && x.length < 5)) weak.add(x);
+    if (HAS_VI.test(w) || ((vi || bareVi) && (x.length < 5 || VI_BARE.has(x)))) weak.add(x);
   }
   let concepts = 0;
   const hit = CONCEPTS.filter(([trig]) => trig.some((p) => triggered(q, t, vi, p)));
   const special = hit.some(([, , generic]) => !generic);
   const groups: string[][] = [];
+  // Câu tiếng Việt gọi đúng tên khái niệm ("bảo mật", "hóa đơn"): từ khóa đầu của nó chính là chữ người dùng viết, chỉ khác tiếng; tính gần bằng từ viết trực tiếp, không thì chữ "website" trần thắng "security".
+  const named = new Set<string>();
+  for (const [trig, kw, generic] of hit) {
+    if (!generic && kw[0] && !literal.has(kw[0]) && trig.some((p) => p.includes(" ") && triggered(q, t, vi, p))) named.add(kw[0]);
+  }
   for (const [, kw, generic] of hit) {
     concepts++;
     groups.push(kw);
     for (const k of kw) { if (generic && special && !terms.has(k)) weak.add(k); else weak.delete(k); terms.add(k); }
   }
-  return { terms, weak, concepts, literal, groups };
+  return { terms, weak, concepts, literal, groups, named };
 }
 
 // Chấm điểm theo IDF: từ hiếm trong cả kho (như "animation") nặng hơn từ phổ biến (như "design"); khớp tên skill nhân ba.
@@ -226,10 +245,10 @@ export async function warmSkillIndex(skills: Skill[]) {
     await new Promise((ok) => setImmediate(ok));
   }
 }
-const LITERAL = 3;
+const LITERAL = 3, NAMED = 3;
 export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
   if (!q.trim() || !cands.length) return [];
-  const { terms, weak, literal, groups } = expand(q);
+  const { terms, weak, literal, groups, named } = expand(q);
   const t = fold(q);
   // So với lần chấm lớn nhất, không so với lần này: chấm riêng một thư viện nhỏ (vài trăm skill) mà xóa chỉ mục thì lượt sau phải dựng lại cả 18.000 skill, ~200 ms.
   const ix0 = ixOf();
@@ -264,7 +283,7 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
     for (const w of literal) { const v = value(w); score += weak.has(w) ? v : v * LITERAL; }
     // Từ khóa đầu của khái niệm là nghĩa chính, các từ sau là nghĩa rộng dần (từ hiếm được IDF cao, từng đưa "regulation" vượt "contract" cho câu về hợp đồng).
     // Tên có hai từ của cùng khái niệm ("data-analysis") đúng hơn tên có một từ hiếm: từ thứ hai tính thêm một nửa, từ thứ ba trở đi không tính.
-    for (const g of extra) { let a = 0, b = 0; g.forEach((w, i) => { const v = value(w) * (i < 3 ? 1 : 0.5); if (v > a) { b = a; a = v; } else if (v > b) b = v; }); score += a + b / 2; }
+    for (const g of extra) { let a = 0, b = 0; g.forEach((w, i) => { const v = value(w) * (named.has(w) ? NAMED : i < 3 ? 1 : 0.5); if (v > a) { b = a; a = v; } else if (v > b) b = v; }); score += a + b / 2; }
     // Chỉ trùng một âm tiết thì chưa nói lên gì: cần một từ thật, hoặc ít nhất hai âm tiết (mô tả skill bằng tiếng Việt).
     if (!strong && soft < 2) score = 0;
     if (score > 0) out.push({ ...c, score: score * (c.weight ?? 1) });
