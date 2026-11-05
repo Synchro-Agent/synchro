@@ -1060,7 +1060,8 @@ export default function Home() {
     // Lần đầu lùi lại sau khi trang đã vẽ (lấy cả danh sách, có thể hơn 100 KB). Tab ẩn không hỏi; ngoài mục Code hỏi thưa, về lại tab thì hỏi ngay.
     let at = 0;
     const run = () => { at = Date.now(); void tick(); };
-    const first = setTimeout(run, viewRef.current === "code" ? 0 : 3000);
+    // Máy chưa có danh sách nào (thiết bị mới): lấy ngay, cùng lúc đoạn chat về, để mục Code không chen vào đẩy danh sách xuống sau 3 giây.
+    const first = setTimeout(run, viewRef.current === "code" || !codeListRef.current.length ? 0 : 3000);
     const t = setInterval(() => { if (!document.hidden && (viewRef.current === "code" || Date.now() - at >= 60_000)) run(); }, 15_000);
     window.addEventListener("focus", run);
     return () => { stop = true; clearTimeout(first); clearInterval(t); window.removeEventListener("focus", run); };

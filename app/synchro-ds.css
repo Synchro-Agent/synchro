@@ -706,7 +706,10 @@ html body .sy-sbody-h .close:hover{background:var(--ds-hover);color:var(--ds-ink
 html body .sy-settings .s-body h3{display:block;margin:28px 0 10px!important;font-size:13px!important;font-weight:560!important;letter-spacing:0;color:var(--ds-ink)!important}
 html body .sy-settings .s-body h3::after{display:none!important}
 html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)!important;font-weight:460}
-html body .sy-settings .sy-sbody-h+h3,html body .sy-settings .sy-sbody-h+*>h3:first-child{margin-top:20px!important}
+/* Mọi mục bắt đầu cùng một độ cao dưới đường kẻ: chuyển mục không làm nội dung nhảy. */
+html body .sy-settings .sy-sbody-h+*{margin-top:20px!important}
+html body .sy-settings .sy-sbody-h+*>h3:first-child{margin-top:0!important}
+html[data-theme=dark] body .modal.settings{box-shadow:0 0 0 1px rgba(238,236,229,.11),0 4px 14px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3)}
 html body .sy-settings :is(.adm-head .d,.us-page>.d,.bn>p.d,.s-body>p.d){font-size:13.5px;line-height:20px;color:var(--ds-muted);max-width:68ch}
 html body .sy-settings .adm-head{margin:18px 0 6px!important}
 /* Hàng cài đặt: các hàng liền nhau thành một tấm bo 16px, ngăn bằng kẻ mảnh; chữ bên trái, điều khiển bên phải, canh giữa theo chiều dọc. */

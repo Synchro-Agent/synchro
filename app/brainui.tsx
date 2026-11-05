@@ -176,11 +176,11 @@ export function BrainGraph({ data, gs, onOpen, focus, height = 420, active, cuto
     if (!el || !ps.length) return;
     const xs = ps.map((p) => p.x), ys = ps.map((p) => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-    const k = Math.min(1.8, Math.max(0.2, Math.min(el.clientWidth / (maxX - minX + 140), el.clientHeight / (maxY - minY + 110))));
+    const k = Math.min(1.8, Math.max(mini ? 0.04 : 0.2, Math.min(el.clientWidth / (maxX - minX + 140), el.clientHeight / (maxY - minY + 110))));
     const g = { k, x: -((minX + maxX) / 2) * k, y: -((minY + maxY) / 2) * k };
     if (animate) goal.current = g; else view.current = g;
     dirty.current = true;
-  }, [nodes]);
+  }, [nodes, mini]);
 
   // Một nhịp mô phỏng: đẩy nhau (lưới không gian cho đồ thị lớn), lò xo liên kết, hút về tâm, tránh chồng.
   const step = useCallback(() => {

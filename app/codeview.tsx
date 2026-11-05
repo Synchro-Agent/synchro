@@ -999,7 +999,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
           {/* Bấm ra ngoài nút ⋮ và menu của nó (kể cả các nút khác trên thanh) thì menu đóng. */}
           <div style={{ position: "relative" }} ref={TOP_MENUS.includes(menu) ? awayTop : undefined}>
             <button className={`icon-btn cv-tb ${menu === "more" || menu === "rules" ? "on" : ""}`} onClick={() => setMenu(menu === "more" ? "" : "more")} aria-label="Thêm" data-tip="Thêm"><I.Dots /></button>
-            <Menu open={menu === "more"} style={{ top: 38, right: 0, width: 250 }}>
+            <Menu open={menu === "more"} className="cv-more" style={{ top: 38, right: 0, width: 250 }}>
               <button className="menu-item" onClick={() => { setMenu(""); newSession(); }}><I.Plus />Phiên mới</button>
               <button className="menu-item" onClick={() => setMenu("rules")}><I.Sliders />Luật dự án<span className="cv-mi-r cv-ell">{ruleLabel}</span></button>
               <button className="menu-item" onClick={() => { setMenu(""); exportMd(); }}><I.Download />Xuất cuộc trò chuyện (.md)</button>

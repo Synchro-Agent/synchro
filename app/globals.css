@@ -2653,7 +2653,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .pl-sum b{color:var(--text);font-weight:540}
 .pl-sum a{color:var(--link);text-decoration:none;font-family:var(--font-mono);font-size:11.5px}
 .pl-list{flex:1;min-height:0;overflow:auto;border:.5px solid var(--border);border-radius:var(--r-card);margin:6px 0 4px}
-.pl-sk{display:flex;align-items:flex-start;gap:10px;padding:10px 12px}
+.pl-sk{display:flex;align-items:flex-start;gap:10px;padding:10px 16px}
 .pl-sk+.pl-sk{border-top:.5px solid var(--border)}
 .pl-sk.off{opacity:.55}
 .pl-sk input{margin-top:3px;accent-color:var(--accent)}
@@ -2679,6 +2679,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .pl-src a{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);text-decoration:none;font-family:var(--font-mono)}
 .pl-src a em{font-style:normal;color:var(--text-3)}
 .pl-src a:hover{color:var(--link)}
+.pl-src .d{flex-basis:100%;font-size:12px;line-height:18px;color:var(--text-3)}
 .pl-acts{gap:8px;flex-wrap:wrap}
 .pl-acts .btn{display:inline-flex;align-items:center;gap:6px}
 html body .modal.pl-modal{background:var(--card)}
@@ -4037,7 +4038,7 @@ body{text-wrap-style:pretty}
 /* Khung soạn rất hẹp: ô nhập một dòng riêng, các nút ở dòng dưới */
 .dock[data-tight] .composer{flex-wrap:wrap}
 .dock[data-tight] .composer textarea{flex:1 0 100%!important;order:-1;min-width:0}
-.main.has-art .dock .composer,.main.has-art .dock>.dock-mode,.main.has-art .dock>.wl-queue{width:min(var(--thread-w,768px),calc(100% - 8px))}
+.main.has-art .dock .composer,.main.has-art .dock>.dock-mode,.main.has-art .dock>.wl-queue,.main.has-art .dock>.dock-note{width:min(var(--thread-w,768px),100%)}
 /* Sửa, sao chép tin đã gửi */
 .u-actions{display:flex;gap:0;height:26px;margin:-2px 0 -14px;color:var(--text-3);opacity:0;transition:opacity .15s}
 .user-wrap:hover .u-actions,.u-actions:focus-within{opacity:1}
