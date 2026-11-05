@@ -403,7 +403,7 @@ export function modelBlock(cli: Cli, uid: string, id: string): number | null {
   return until || null;
 }
 /** Hãng báo hết hạn mức: ghi nhận phạm vi đúng và trả về "plan" (cả gói) hoặc "model" (riêng model này). */
-function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" | "model" {
+export function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" | "model" {
   const now = Date.now(), wins = g.limits.get(`${cli}:${uid}`)?.windows ?? [];
   if (planBlock(cli, uid)) return "plan";
   if (modelBlock(cli, uid, id)) return "model";
@@ -411,7 +411,8 @@ function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" |
   const epoch = /\|(\d{10})\b/.exec(message), wait = retryAfterMs(message);
   const until = epoch ? Number(epoch[1]) * 1000 : wait ? now + wait : now + 30 * 60_000;
   // Chỉ gói Claude có hạn mức riêng theo model; Codex, Grok tính chung cả gói. Câu báo nói rõ phiên / tuần chung thì cũng là cả gói.
-  if (cli !== "claude" || /session|5[- ]hour|five[ _-]hour/i.test(message)) { g.quota.set(`${cli}:${uid}`, until); return "plan"; }
+  // "weekly limit" trần là hạn tuần chung của gói; "Opus weekly limit" thì chỉ model đó.
+  if (cli !== "claude" || /session|5[- ]hour|five[ _-]hour/i.test(message) || (/week|seven[ _-]day/i.test(message) && !/opus|sonnet|haiku|fable/i.test(message))) { g.quota.set(`${cli}:${uid}`, until); return "plan"; }
   const unnamed = wins.filter((w) => exhausted(w, now) && !CLAUDE_PLAN_WINDOW.test(w.window) && !CLAUDE_MODEL_WINDOW.test(w.window)).map((w) => w.resetsAt!);
   g.quota.set(`${cli}:${uid}:${id}`, unnamed.length ? Math.max(...unnamed) : until);
   return "model";
@@ -730,7 +731,8 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const wd = new AbortController();
   const lim = watchLimits(cli, run.effort ?? o.effort);
   // Lịch sử rất dài, nhiều tệp: model đọc lâu hơn hẳn mới bắt đầu trả lời.
-  if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") > 400_000) lim.first *= 3;
+  // Tính cả ảnh, PDF gửi nguyên dạng: bản scan lớn tới sự kiện đầu rất chậm, từng bị coi là treo và chuyển sang CLI không đọc được PDF gốc.
+  if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") + col.atts.reduce((n, a) => n + a.data.length, 0) > 400_000) lim.first *= 3;
   const ws: WatchState = { start: T0, last: 0, alive: 0, waiting: false };
   let stalled: "first" | "idle" | null = null, slowTold = false;
   const watch = setInterval(() => {

@@ -662,7 +662,8 @@ export class GrokEngine implements Engine {
       // lượt mở đầu bằng công cụ hay nghĩ lâu bị coi là treo ở giây thứ 60.
       // Trừ available_commands: CLI in ra lúc khởi động rồi có thể thử lại mãi khi hãng trả 429 (gói free), lượt im lặng hàng phút mà Tự động không chuyển model.
       if (o.type !== "error" && o.type !== "available_commands") yield { kind: "activity" };
-      if (o.type === "text" && typeof o.data === "string") { all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
+      // Có chữ mới sau lỗi: CLI đã tự vượt qua lỗi đó, không tính nữa.
+      if (o.type === "text" && typeof o.data === "string") { lastErr = ""; all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
       else if (o.type === "tool_call") {
         tools = true; seg = "";
         if (WEB_TOOL.test(String(o.toolName ?? "")) || o.kind === "search") {
@@ -678,7 +679,8 @@ export class GrokEngine implements Engine {
         if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.sessionId); yield { kind: "session", id: o.sessionId }; }
         const u = (o.usage ?? {}) as Json;
         yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
-        if (lastErr && !all) { yield err(lastErr, classify(lastErr)); break; }
+        // Lỗi là điều cuối cùng CLI nói, kể cả khi đã có chữ: câu trả lời bị cắt ngang, không được hiện như đã xong và không được tính là lượt tốt (Tự động còn chuyển model được).
+        if (lastErr) { yield err(lastErr, classify(lastErr)); break; }
         yield { kind: "final", text: tools && seg.trim() ? seg : all, via: "grok" };
       }
     }

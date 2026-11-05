@@ -174,12 +174,11 @@ async function agyImage(prompt, conv) {
         const limit = { limitMs: C.cfg.toolLimitMs };
         const callOnce = (c) => C.mcp(srv.serverUrl, c, limit).catch((e) => ({ error: { message: String(e) } }));
         const textOf = (r) => (r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n"));
-        let r = await callOnce(ask), out = textOf(r), waits = 0;
+        // Được nhắc lấy kết quả còn thiếu: job_id nằm trong lời nhắc, model gọi wait_for_result thay vì công cụ ban đầu.
+        const nudgeJob = prompt.includes("Còn công cụ chưa lấy kết quả") ? /job_id (job_\w+)/.exec(prompt.split("Còn công cụ chưa lấy kết quả").pop()) : null;
+        let r = await callOnce(nudgeJob ? { name: "wait_for_result", args: { job_id: nudgeJob[1] } } : ask), out = textOf(r), waits = 0;
         for (let m; !prompt.includes("[mock:nowait]") && (m = /job_id: (job_\w+)/.exec(out)) && waits < 50; waits++) out = textOf(r = await callOnce({ name: "wait_for_result", args: { job_id: m[1] } }));
         if (waits) note += ` [đã chờ ${waits} lần]`;
-        // Được nhắc lấy kết quả còn thiếu: job_id nằm trong lời nhắc.
-        const nudgeJob = /job_id (job_\w+)/.exec(prompt.split("Còn công cụ chưa lấy kết quả").pop() ?? "");
-        if (nudgeJob && prompt.includes("Còn công cụ chưa lấy kết quả")) out = textOf(await callOnce({ name: "wait_for_result", args: { job_id: nudgeJob[1] } }));
         note += ` [đã dùng ${ask.name}${direct ? "" : " qua CallMcpTool"}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
       }
     }

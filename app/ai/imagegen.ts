@@ -78,11 +78,11 @@ When the file is saved, reply with only its absolute path. If you have no image 
 
 // ---------------------------------------------------------------- lỗi
 // "HTTP 403" của Grok là chạm giới hạn chi tiêu, không phải hết đăng nhập: xét hạn mức trước classify (classify coi 403 đầu dòng là lỗi đăng nhập).
-const QUOTA_TEXT = /spending[- ]limit|personal-team-blocked|out of credits?|insufficient (?:credit|fund|balance)|billing|resource[ _-]?exhausted|quota/i;
+const QUOTA_TEXT = /out of credits?|insufficient (?:credit|fund|balance)|billing|resource[ _-]?exhausted|quota/i;
 const NO_TOOL_TEXT = /NO_IMAGE_TOOL|no image generation tool|(?:don'?t|do not) have (?:an? )?image|image generation (?:tool )?(?:is )?not available/i;
 export function errKind(message: string): ImgKind {
   if (QUOTA_TEXT.test(message)) return "quota";
-  const k = classify(message);
+  const k = classify(message); // classify đã xét giới hạn chi tiêu (PLAN_SPENT) trước mã 403.
   return k === "quota" || k === "rate" ? "quota" : k === "auth" ? "auth" : "other";
 }
 const exitFail = (e: Exit): Tried["fail"] | null => (e.aborted ? { kind: "aborted" } : e.timedOut ? { kind: "timeout" } : null);

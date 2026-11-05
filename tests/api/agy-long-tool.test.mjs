@@ -73,7 +73,7 @@ console.log("3. Model bỏ lửng, kết thúc lượt khi job chưa xong");
   const pend = held.pendingJobs();
   ok(pend.length === 1 && pend[0].name === "chay_lau", "cầu nối biết còn việc chưa lấy kết quả, lượt chat nhắc model", pend);
   const nudge = `Còn công cụ chưa lấy kết quả (${pend.map((x) => `${x.name}: job_id ${x.id}`).join("; ")})`;
-  const r2 = await runTurn(`${r.final}\n#tool=chay_khac [mock:nowait]\n${nudge}`, held);
+  const r2 = await runTurn(`${r.final}\n#tool=chay_lau\n${nudge}`, held);
   ok(/kết quả muộn/.test(r2.final) && !held.pendingJobs().length, "lần chạy CLI sau trên cùng cầu nối lấy được kết quả", r2);
   held.close();
 }
