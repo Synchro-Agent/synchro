@@ -6,7 +6,7 @@ import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
-const { designkit: K, designpresets: DP, artkit: A, artdoc: D, router: R } = await loadTs(["designkit", "designpresets", "artkit", "artdoc", "router"]);
+const { designkit: K, designpresets: DP, artkit: A, artdoc: D, router: R, artfonts: F, deckpptx: X } = await loadTs(["designkit", "designpresets", "artkit", "artdoc", "router", "artfonts", "deckpptx"]);
 const { designTurn, DESIGN_BUDGET, designBytes, priorDesign, formatOf, domainOf } = K, { PRESETS, FONT_SPEC } = DP;
 const full = { art: true, code: true };
 const turn = (typed, o = {}) => designTurn({ typed, ...full, seed: "c1", ...o });
@@ -28,6 +28,18 @@ process.env.SYNCHRO_DESIGNKIT = "0"; ok(turn("Làm bộ slide doanh thu") === nu
 const paste = "Viết lại đoạn sau: " + "x".repeat(400) + " làm slide báo cáo tài chính";
 ok(turn(paste) === null, "từ khóa trong văn bản dán vào không kích hoạt");
 
+// Một từ nhiều nghĩa đi cùng "giúp, cần, sửa" từng làm trò chuyện thường tốn thêm 5,5 KB mỗi lượt.
+for (const q of ["Giúp mình đề xuất món ăn tối nay", "Viết email gửi sếp nói báo cáo sẽ trễ", "Mình cần lời khuyên về hồ sơ du học", "Giúp mình tóm tắt tài liệu này", "Sửa lỗi trên trang web của tôi: nút đăng nhập không bấm được", "Sửa bug dashboard React này", "Cần đổi file pdf sang word", "Viết script python xuất báo cáo pdf", "Tôi đã làm slide hôm qua", "làm slide thế nào cho đẹp", "How do I make a slide deck?", "slide là gì", "Viết báo cáo có khó không?", "make sure the report is ready", "write a 500 word essay", "Convert this PDF to Word", "Giúp mình báo cáo tiến độ với sếp"])
+  ok(turn(q) === null, `trò chuyện, không có khối: "${q}"`, JSON.stringify(turn(q)?.format));
+// Từ hỏi và "quyết định" nằm trong chủ đề của sản phẩm thì vẫn là làm sản phẩm.
+for (const [q, f] of [["Làm slide giải thích vì sao khách hàng rời bỏ", "slide"], ["Viết báo cáo phân tích tại sao doanh thu giảm", "doc"], ["Soạn tài liệu hướng dẫn cách dùng phần mềm", "doc"], ["Làm infographic: AI là gì", "graphic"], ["Làm infographic: AI là gì?", "graphic"], ["Create a slide deck explaining why churn increased", "slide"], ["Make a poster about how to recycle", "graphic"], ["Soạn báo cáo để ban giám đốc ra quyết định đầu tư", "doc"], ["Sếp gấp nên tôi cần làm báo cáo tài chính", "doc"], ["Giúp mình viết đề xuất dự án", "doc"], ["Cần một bản báo cáo thị trường", "doc"], ["Mình cần bộ slide về AI", "slide"], ["Chuyển báo cáo này thành slide", "slide"], ["Tóm tắt tài liệu này thành bộ slide", "slide"], ["make me a beautiful pitch deck", "slide"], ["Thiết kế cho công ty tôi một poster", "graphic"], ["Can you write a report on churn?", "doc"], ["Làm báo cáo từ bộ slide này", "doc"]])
+  ok(turn(q)?.format === f && !turn(q)?.compact, `làm sản phẩm: "${q}" → ${f}`, turn(q)?.format);
+for (const q of ["Làm slide giới thiệu công ty", "Tạo poster sự kiện", "Viết báo cáo thị trường"]) ok(turn(q.normalize("NFD"))?.format === turn(q)?.format && turn(q) !== null, `chuỗi tổ hợp (NFD, dán từ macOS) như chuỗi thường: "${q}"`);
+ok(turn("Soạn quyết định bổ nhiệm", { studio: "docs" }) === null && turn("Công văn gửi UBND", { studio: "docs" }) === null, "trong studio Tài liệu, văn bản hành chính vẫn không áp khối");
+// Bỏ dấu không làm lẫn từ: "nên tôi" và "nền tối" đều thành "nen toi".
+ok(turn("Sếp gấp nên tôi cần làm báo cáo tài chính").preset !== "midnight-tech" && turn("Khách hỏi nên tôi muốn làm slide doanh thu").preset !== "midnight-tech" && turn("Làm báo cáo tài chính nền tối").preset === "midnight-tech" && turn("lam slide nen toi").preset === "midnight-tech", "\"nên tôi\" không phải \"nền tối\"; gõ không dấu vẫn nhận");
+for (const s of ["c1", "c2", "c3", "c4"]) ok(turn("Sếp gấp nên tôi cần làm báo cáo tài chính", { seed: s }).preset !== "midnight-tech", `báo cáo tài chính không ra nền đen (đoạn chat ${s})`);
+
 console.log("2. Trần 6 KB, đo bằng byte");
 let biggest = 0;
 for (const typed of ["làm slide", "viết báo cáo", "tạo file excel", "làm poster"]) for (const dom of ["", " tài chính", " sự kiện", " tạp chí", " công nghệ", " marketing", " sản phẩm", " giao dịch"]) for (const caps of [{ art: true, code: true }, { art: true, code: false }, { art: false, code: true }]) for (const s of ["a", "b", "c", "d", "e", "f"]) {
@@ -43,7 +55,7 @@ ok(!turn("tạo file excel", full).block.includes("Bộ CSS sẵn") && turn("t�
 ok(!turn("làm poster", { art: false }).block.includes("Bộ CSS sẵn"), "không có artifact: không nhắc bộ CSS");
 
 console.log("3. Đều số đo, không tính từ");
-for (const s of ["12·14·16·21·28·38·56", "-0.02", "8·16·24·32·48·64", "60-30-10", "tabular-nums", "text-wrap:balance", "R ngoài = R trong + padding", "4.5:1"]) ok(slide.block.includes(s), `có số đo: ${s}`);
+for (const s of ["-0.02", "8·16·24·32·48·64", "60-30-10", "tabular-nums", "text-wrap:balance", "R ngoài = R trong + padding", "4.5:1"]) ok(slide.block.includes(s), `có số đo: ${s}`);
 ok(/tiêu đề kết luận/.test(slide.block) && /không viết "Doanh thu quý 3"/.test(slide.block), "tiêu đề 3 tầng, nêu phát hiện");
 ok(/chỉ chuỗi mà tiêu đề nhắc tới dùng màu nhấn/.test(slide.block), "biểu đồ: một chuỗi nhấn");
 const doc = turn("viết báo cáo thị trường").block;
@@ -57,6 +69,18 @@ const g = turn("làm poster").block;
 ok(/không chữ chuyển màu/.test(g), "không chữ chuyển màu ở nội dung phải đọc");
 ok(/SVG tự viết thoải mái/.test(g), "không cấm model viết SVG");
 ok(!/Sonnet|Haiku|Gemini|GPT/i.test([slide.block, doc, sheet, g].join("")), "không nêu tên model để định tuyến");
+
+// Mỗi định dạng một thang, đúng các cỡ của bộ CSS: trước đây slide nhận cả "chỉ dùng 12·14·16…" lẫn "thân 18-22" cùng lúc.
+const scaleOf = (sel) => { const m = new RegExp(`${sel}\\{([^}]*)\\}`).exec(A.KIT_CSS)?.[1] ?? ""; return [...new Set([...m.matchAll(/--sx-fs-[a-z0-9]+:([\d.]+)/g)].map((x) => +x[1]))].sort((a, b) => a - b); };
+for (const [name, block, sel] of [["slide", slide.block, "\\.sx-slide,:where\\(section\\.slide,\\[data-slide\\]\\)"], ["poster", g, "\\.sx-poster"]]) {
+  const sizes = scaleOf(sel);
+  ok(sizes.length >= 7 && sizes.every((n) => new RegExp(`(?<![\\d.])${n}(?![\\d])`).test(block.split("\n").filter((l) => /Thang/.test(l)).join(" "))), `${name}: thang trong khối đúng các cỡ của bộ CSS (${sizes.join(" ")})`, block.slice(0, 300));
+}
+ok(!/chỉ dùng thang 12/.test(slide.block) && !/18-22/.test(slide.block) && !/dưới 18/.test(slide.block), "slide không còn hai bộ số trái nhau");
+ok(/thang 12·14·16·21·28·38/.test(doc), "tài liệu: thang của trang đọc");
+ok(/Thang: trang web 12·14·16·21·28·38·56; poster/.test(g), "đồ họa: thang riêng cho trang web và poster");
+const lhOf = (c) => /var\(--sx-lh,([\d.]+)\)|line-height:([\d.]+)/.exec(new RegExp(`\\.${c}\\{[^}]*\\}`).exec(A.KIT_CSS)?.[0] ?? "");
+for (const c of ["sx-display", "sx-title", "sx-kpi"]) { const m = lhOf(c); ok(+(m?.[1] ?? m?.[2] ?? 0) >= 1.15, `${c}: bước dòng đúng quy tắc, không dưới 1.15`, m?.[0]); }
 
 console.log("4. Phong cách có sẵn");
 ok(PRESETS.length === 8 && new Set(PRESETS.map((p) => p.id)).size === 8, "8 phong cách, mã không trùng");
@@ -73,6 +97,15 @@ for (const p of PRESETS) for (const [name, c] of [["sáng", p], ["tối", p.dark
   if (cr(c.bg, c.accent) < 4.5) bad.push(`${p.id} ${name}: .sx-solid ${cr(c.bg, c.accent).toFixed(2)}`);
 }
 ok(!bad.length, "mọi cặp chữ / nền đạt WCAG 4.5:1, cả sáng và tối", bad.join(" | "));
+// Phong cách vốn tối (không có bảng sáng): in trang đọc trên giấy trắng phải có màu nhấn riêng.
+const badPrint = [];
+for (const p of PRESETS.filter((x) => cr(x.bg, "#FFFFFF") > 8)) {
+  if (!p.print) { badPrint.push(`${p.id}: không có bảng in`); continue; }
+  for (const k of ["accent", "accent2", "pos", "neg"]) for (const on of ["#FFFFFF", "#F5F5F4"]) if (cr(p.print[k], on) < 4.5) badPrint.push(`${p.id} ${k} trên ${on}: ${cr(p.print[k], on).toFixed(2)}`);
+  ok(A.KIT_CSS.includes(`[data-sx-preset=${p.id}]{--sx-accent:${p.print.accent}`), `${p.id}: bộ CSS có bảng in`);
+}
+ok(!badPrint.length, "in trên giấy trắng: màu nhấn của phong cách tối đạt 4.5:1", badPrint.join(" | "));
+ok(!PRESETS.some((p) => [p.bg, p.ink, p.accent].filter((c) => ["#F5F5F7", "#1D1D1F", "#0066CC"].includes(c)).length >= 2), "soft-bento không giữ bộ màu của bảng gốc mang tên hãng");
 const seen = new Set(["a", "b", "c", "d", "e", "f", "g", "h"].map((s) => designTurn({ typed: "làm bộ slide giới thiệu", ...full, seed: s }).preset));
 ok(seen.size >= 2, `cùng yêu cầu, đoạn chat khác nhau không cùng một kiểu (${[...seen].join(", ")})`);
 ok(designTurn({ typed: "làm bộ slide giới thiệu", ...full, seed: "x" }).preset === designTurn({ typed: "bộ slide khác hẳn", ...full, seed: "x", studio: "slides" }).preset, "cùng đoạn chat giữ một kiểu");
@@ -88,6 +121,28 @@ ok(edit?.compact && edit.bytes < 600 && edit.block.includes("exec-navy"), `sửa
 ok(turn("Làm bộ slide khác về nhân sự", { prior: [deckMsg] })?.compact === false, "sản phẩm mới trong đoạn chat cũ: khối đầy đủ");
 ok(turn("Thêm một slide mới về nhân sự", { prior: [deckMsg] })?.compact === true, "thêm slide vào bộ cũ là sửa tiếp");
 ok(turn("Cảm ơn bạn nhé", { prior: [deckMsg], ack: true }) === null && turn("slide 2 nói gì vậy?", { prior: [deckMsg] }) === null, "hỏi lại về sản phẩm: không có khối");
+// Lần sửa thứ hai trở đi: ARTIFACT_RULES bắt sửa bằng mode="patch", tin gần nhất không có kiểu, không có <section>.
+const patchMsg = `Đã sửa.\n<artifact identifier="d" mode="patch">\n<<<<<<< SEARCH\nA\n=======\nB\n>>>>>>> REPLACE\n</artifact>`;
+const markMsg = `Bản cũ: <artifact identifier="d" title="D" version="2" />`;
+ok(priorDesign([deckMsg, patchMsg])?.preset === "exec-navy" && priorDesign([deckMsg, patchMsg, patchMsg])?.format === "slide", "bản sửa không che bản đầy đủ phía trước");
+ok(priorDesign([deckMsg, markMsg])?.format === "slide", "thẻ đánh dấu phiên bản tự đóng cũng vậy");
+ok(priorDesign([deckMsg, `<artifact identifier="d" mode="patch">\n<<<<<<< SEARCH\ndata-sx-preset="exec-navy"\n=======\ndata-sx-preset="swiss-grid"\n>>>>>>> REPLACE\n</artifact>`])?.preset === "swiss-grid", "bản sửa đổi phong cách: lấy phong cách mới");
+ok(priorDesign([deckMsg, `<artifact identifier="other" type="text/html">x</artifact>`, `<artifact identifier="d" mode="patch">a</artifact>`])?.format === "slide", "bản sửa trỏ đúng artifact của nó, không lấy artifact khác mới hơn");
+ok(priorDesign(K.historyTexts([{ role: "assistant", content: patchMsg }], [{ ident: "d", type: "html", content: `<html data-sx-preset="exec-navy"><section class="slide">A</section></html>` }]))?.preset === "exec-navy", "bản đầy đủ chỉ còn trong artBase");
+ok(priorDesign([`<artifact identifier="c" type="application/vnd.ant.code">x</artifact>`]) === null, "artifact mã: không phải sản phẩm thiết kế");
+const edit2 = turn("Sửa slide 3 cho đậm hơn", { prior: [deckMsg, patchMsg] });
+ok(edit2?.compact && edit2.preset === "exec-navy", "lần sửa thứ hai vẫn khối gọn, giữ phong cách", `${edit2?.bytes} ${edit2?.preset}`);
+for (const o of [{ studio: "slides" }, {}]) { const e = turn("đổi màu tiêu đề", { prior: [deckMsg, patchMsg], ...o }); ok(e?.compact && e.preset === "exec-navy", `"đổi màu tiêu đề" sau bản sửa ${o.studio ? "trong studio" : "ngoài studio"}: khối gọn`, e?.bytes); }
+ok(turn("viết tiếp đi", { prior: [deckMsg], studio: "slides" })?.compact === true, "trong studio đã có sản phẩm: câu không nêu định dạng là nói về sản phẩm đó");
+ok(turn("một chủ đề khác về nhân sự", { prior: [deckMsg], studio: "slides" })?.compact === false, "trong studio, nói rõ cái khác: khối đầy đủ");
+// Sản phẩm mới cùng định dạng: khối gọn bảo model "chỉ đổi đúng chỗ" sẽ làm đè lên sản phẩm cũ, gọi bằng khóa API không còn số đo nào.
+const pageMsg = `<artifact identifier="p" type="text/html"><html data-sx-preset="soft-bento"><body>x</body></html></artifact>`;
+const reportMsg = `<artifact identifier="r" type="text/markdown"># x</artifact>`;
+for (const [q, prior] of [["Làm bộ slide về chủ đề marketing Q4 cho công ty B", deckMsg], ["Làm poster sự kiện âm nhạc cuối năm", pageMsg], ["Viết báo cáo tài chính năm nay", reportMsg], ["Make a deck about hiring", deckMsg], ["Làm poster về việc thay đổi khí hậu", pageMsg]])
+  ok(turn(q, { prior: [prior] })?.compact === false, `sản phẩm mới: "${q}" có đủ số đo`, turn(q, { prior: [prior] })?.bytes);
+for (const [q, prior] of [["Làm slide 3 đậm hơn", deckMsg], ["Làm báo cáo này gọn hơn", reportMsg], ["make this deck shorter", deckMsg], ["Làm lại slide 2", deckMsg], ["Cập nhật báo cáo", reportMsg], ["Làm bộ slide đẹp hơn", deckMsg]])
+  ok(turn(q, { prior: [prior] })?.compact === true, `sửa tiếp: "${q}"`, turn(q, { prior: [prior] })?.bytes);
+ok(turn("Sửa lỗi Python này", { prior: [deckMsg] }) === null, "việc lập trình trong đoạn chat có slide: không có khối");
 ok(K.historyTexts([{ role: "assistant", content: deckMsg }, { role: "user", content: "x" }]).length === 1 && K.historyTexts([], [{ ident: "a", type: "html", content: "<p>" }]).length === 1, "lấy lịch sử cả từ tin nhắn lẫn artBase");
 
 console.log("6. Bộ CSS trong khung artifact");
@@ -114,6 +169,27 @@ const kitPage = `<html data-sx-preset="editorial-serif"><head><style>.sx-title{c
 const built = D.buildDocCore("html", kitPage, "https://o", "c", false, "");
 ok(built.indexOf("data-sx-kit") > 0 && built.indexOf("data-sx-kit") < built.indexOf(".sx-title{color:red}"), "bộ CSS đứng trước CSS của model nên model sửa được");
 ok(built.indexOf("Content-Security-Policy") < built.indexOf("fonts.googleapis.com/css2"), "CSP đặt trước khi nạp phông");
+ok(!/<head>[^]*?<link rel="stylesheet" href="https:\/\/fonts\.googleapis/.test(built.replace(/<noscript>.*?<\/noscript>/g, "")), "phông không chặn lần vẽ đầu: không có <link> phông trong <head>");
+const bodyOnly = `<section class="slide sx-slide"><header class="sx-stack"><p class="sx-title">a</p></header></section>`;
+const bo = D.buildDocCore("html", bodyOnly, "https://o", "c", false, "");
+ok(bo.startsWith("<!doctype html><html><head>") && bo.indexOf("Content-Security-Policy") < bo.indexOf("</head>") && bo.indexOf("data-sx-kit") < bo.indexOf("</head>") && bo.includes(`<header class="sx-stack"><p`), "trang chỉ có phần thân, có <header>: không bị chèn vào thẻ header");
+ok(D.htmlExport(bodyOnly).startsWith("<!doctype") && D.deckExport(bodyOnly).startsWith("<!doctype"), "tệp tải về cũng vậy");
+ok(D.withHead(`<html><head lang="vi"><title>t</title></head></html>`, "X").includes(`<head lang="vi">X<title>`), "<head> có thuộc tính vẫn nhận ra");
+const svgKit = `<svg xmlns="http://www.w3.org/2000/svg" data-sx-preset="exec-navy"><rect fill="var(--sx-accent)"/></svg>`, svgPlain = `<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#000"/></svg>`;
+const svgDoc = D.buildDocCore("svg", svgKit, "https://o", "c", false, "");
+ok(svgDoc.includes("data-sx-kit") && svgDoc.indexOf("data-sx-kit") < svgDoc.indexOf("place-items:center"), "SVG dùng biến: khung có bộ CSS, nền của khung SVG vẫn thắng");
+ok(!D.buildDocCore("svg", svgPlain, "https://o", "c", false, "").includes("data-sx-kit") && D.svgExport(svgPlain) === svgPlain, "SVG cũ: không đổi một byte, khung và tệp tải về");
+ok(/<!\[CDATA\[[^]*--sx-accent:#0052CC[^]*\]\]>/.test(D.svgExport(svgKit)), "tệp SVG tải về mang bộ CSS theo, đúng XML");
+{
+  const face = (fam, w, sub) => `/* ${sub} */\n@font-face {\n  font-family: '${fam}';\n  font-weight: ${w};\n  src: url(https://fonts.gstatic.com/s/${fam.replace(/ /g, "")}/${w}-${sub}.woff2) format('woff2');\n  unicode-range: U+0-FFFF;\n}`;
+  const css = [["Inter", [400, 500, 600, 700, 800]], ["JetBrains Mono", [500, 600]], ["Plus Jakarta Sans", [500, 600, 700, 800]]].flatMap(([f, ws]) => ws.flatMap((w) => ["vietnamese", "latin-ext", "latin"].map((s) => face(f, w, s)))).join("\n");
+  const got = await F.fontEmbedCss(`<!-- https://fonts.googleapis.com/css2?family=Inter --> chữ`, async (u) => (String(u).includes("googleapis") ? { ok: true, text: async () => css } : { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }));
+  ok((got.match(/@font-face/g) ?? []).length === 33 && /Plus Jakarta Sans[^}]*font-weight: 800/.test(got), "xuất PNG giữ đủ 33 mặt phông, gồm Plus Jakarta Sans 800 của tiêu đề", (got.match(/@font-face/g) ?? []).length);
+}
+{
+  const o = X.boxOptions({ x: 64, y: 100, w: 800, h: 264, al: "left", lh: 88, one: false, runs: [] }, 1280, 720);
+  ok(o.lineSpacing === 66 && !("lineSpacingMultiple" in o), "PowerPoint: bước dòng bằng điểm (88px ở khổ 1280 là 66pt), không ghi bội số của line-height", JSON.stringify(o));
+}
 ok(/font-src https:\/\/fonts\.gstatic\.com/.test(built) && /style-src 'unsafe-inline' https:\/\/fonts\.googleapis\.com/.test(built), "CSP của khung cho phép đúng hai địa chỉ phông");
 const url = A.kitFontUrl(kitPage);
 ok(url.includes("Playfair+Display") && url.includes("Be+Vietnam+Pro") && url.includes("JetBrains+Mono") && !url.includes("Inter"), "chỉ tải phông của phong cách trang dùng", url);
