@@ -387,5 +387,10 @@ console.log("11. Hội thoại nhiều lượt: trả lời câu hỏi lại, l�
   ok(R.taskOf(q("TypeError là gì?")) !== "debug", "hỏi khái niệm “TypeError là gì?” không phải gỡ lỗi", R.taskOf(q("TypeError là gì?")));
   ok(R.taskOf(q("sửa lỗi chính tả trên trang web này")) === "language", "“sửa lỗi chính tả” vẫn là việc ngôn ngữ", R.taskOf(q("sửa lỗi chính tả trên trang web này")));
 }
+console.log("12. Viết ngắn và phép tính nhỏ đi đường nhanh; tài liệu nghiêm túc giữ lượt đầy đủ");
+for (const [t, want, o] of [["Viết email xin nghỉ phép", true], ["viet email xin nghi phep", true], ["Viết một bài thơ về mùa thu", true], ["viết caption cho ảnh du lịch", true], ["1+1 bằng mấy?", true], ["1+1 bang may", true],
+  ["Viết báo cáo tài chính quý 3", false], ["viết CV xin việc", false], ["Viết bài luận 2000 từ về môi trường", false], ["viết hợp đồng thuê nhà", false], ["Viết đơn gửi lên file word", false], ["viết email trả lời khách theo https://a.vn", false], ["viet bao cao thang", false],
+  ["ngắn hơn đi", true, { turns: 3, prevAsk: "Viết email xin nghỉ phép" }], ["ngắn hơn đi", false, { turns: 3, prevAsk: "Làm trang web bán giày" }], ["tiếp đi", false, { turns: 3, prevAsk: "Làm trang web bán giày" }]])
+  ok(R.needsNoTools(q(t, o)) === want, `“${t}” ${want ? "đi đường nhanh" : "giữ lượt đầy đủ"}`, JSON.stringify([R.taskOf(q(t, o)), R.difficulty(q(t, o))]));
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

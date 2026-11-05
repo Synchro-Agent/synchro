@@ -287,7 +287,7 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 // Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại lượt đầy đủ.
 const NEED_TOOLS = "[[CAN_CONG_CU]]";
 const FAST_RULES = `<quick_reply>
-Đây là câu trò chuyện hoặc câu hỏi ngắn: trả lời ngay, tự nhiên, ngắn gọn, bằng đúng ngôn ngữ người dùng đang viết. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
+Đây là câu trò chuyện, câu hỏi ngắn hoặc việc viết ngắn: trả lời ngay, tự nhiên, bằng đúng ngôn ngữ người dùng đang viết. Câu hỏi thì ngắn gọn; nhờ viết (email, thư, thơ, caption…) thì viết đủ, chỉn chu, đưa bài viết ra ngay, không kể lại yêu cầu. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, tạo ảnh bằng AI, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
 An toàn đứng trước sự ngắn gọn. Tin nhắn có thể nói tới tự làm hại, tuyệt vọng, bị bạo hành hay xâm hại (kể cả nói gián tiếp), hoặc tình huống y tế khẩn: không trả lời cho qua. Đáp với sự quan tâm thật, không phán xét, không nêu cách làm hại; nói rõ mức độ khẩn, hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy, cấp cứu hoặc đường dây khẩn cấp nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em). Câu hỏi sức khỏe, pháp lý, tài chính: nêu điều chưa chắc và khi nào cần gặp chuyên gia.
 </quick_reply>`;
@@ -1282,13 +1282,18 @@ export async function prewarmChat(user: UserRow) {
   if (prewarmed.size > 2000) prewarmed.clear();
   prewarmed.set(user.id, now);
   const { usable } = await usableModels(user);
-  const q: RouteInput = { text: "xin chào", attachments: 0, turns: 1, studio: false };
-  const r = routeModel(q, usable);
-  if (!r || subCli(r.model) !== "claude") return;
   const body = { skills: true, feature: "chat" };
   const pc = capsState(user).caps;
   if (!pc) return;
-  prewarmClaude({ user, model: r.model, effort: r.effort, system: [`${topRule(user.id)}\n\n${DEFAULT_SYSTEM}`, FAST_RULES, contextOf(body, user)].filter(Boolean).join("\n\n") });
+  const system = [`${topRule(user.id)}\n\n${DEFAULT_SYSTEM}`, FAST_RULES, contextOf(body, user)].filter(Boolean).join("\n\n");
+  // Hai kiểu câu mở đầu hay gặp nhất: câu chào, câu hỏi (nỗ lực thấp) và nhờ viết ngắn (nỗ lực vừa). Tiến trình gắn chặt với model và nỗ lực nên mỗi kiểu một tiến trình; cùng model và mức thì chỉ một.
+  const seen = new Set<string>();
+  for (const text of ["xin chào", "viết email xin nghỉ phép"]) {
+    const r = routeModel({ text, attachments: 0, turns: 1, studio: false }, usable);
+    if (!r || subCli(r.model) !== "claude" || seen.has(`${r.model}|${r.effort}`)) continue;
+    seen.add(`${r.model}|${r.effort}`);
+    prewarmClaude({ user, model: r.model, effort: r.effort, system });
+  }
 }
 const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).

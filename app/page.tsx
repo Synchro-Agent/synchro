@@ -84,6 +84,7 @@ import type { DirEntry } from "./connectordir";
 type CxData = { connectors: Conn[]; directory: DirEntry[] };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
+import { startWarmPing } from "./warmping";
 type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
@@ -932,6 +933,7 @@ export default function Home() {
   // Màn hình hẹp (điện thoại): thanh bên là ngăn kéo trượt đè lên nội dung, mặc định đóng, chọn mục xong tự đóng.
   const narrow = () => typeof window !== "undefined" && window.matchMedia(NARROW).matches;
   useEffect(() => { if (narrow()) setOpen(false); }, []);
+  useEffect(() => startWarmPing(), []);
   const [chats, setChats] = useState<Chat[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [cur, setCur] = useState<number | null>(null);

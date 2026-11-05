@@ -492,7 +492,9 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   return { model: pick.p.key, tier: pick.p.tier, vendor: pick.p.vendor, task, effort: effortFor(score, task, think), why: [`việc ${LABEL[task]}`, ...why], alt };
 }
 // Câu cần dữ liệu mới hoặc địa chỉ web: để lượt đầy đủ có công cụ trả lời.
-const FRESH = W("giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời tiết|hiện nay|hiện tại|bây giờ|năm nay|kết quả|lịch|latest|news|today|price|weather|current|score");
+const FRESH = W("(?<!đánh )giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời tiết|hiện nay|hiện tại|bây giờ|năm nay|kết quả|(?<!du )lịch(?! sử)|latest|news|today|price|weather|current|score");
+const LONG_WORK = W("thông cáo|fanpage|mô tả công việc|press release|job description|bản đề xuất|cv|resume|cover letter|sơ yếu lý lịch|báo cáo|report|hợp đồng|đề xuất|proposal|kế hoạch|kịch bản|sách|ebook|tệp|file|word|pdf|excel|docx|artifact|tiểu luận|luận văn|thuyết trình|landing|seo");
+const LONG_WORK_FOLD = W("thong cao|fanpage|mo ta cong viec|so yeu ly lich|bao cao|hop dong|de xuat|ke hoach|kich ban|sach|tep|tieu luan|luan van|thuyet trinh");
 const LOOKUP = W("^(?:(?:hãy|giúp|giùm|hộ|cho|mình|tôi|em|làm ơn|please|can you|could you)[\\s,]+)*(?:tìm|tra|tra cứu|mở|search|look up|find|open|google)");
 const LOOKUP_FOLD = W("^(?:(?:hay|giup|gium|ho|cho|minh|toi|em|lam on)[\\s,]+)*(?:tim|tra|tra cuu|mo)");
 // ---- xin ảnh ----
@@ -532,12 +534,16 @@ export function needsNoTools(q: RouteInput): boolean {
   // Dấu "#…", "[…:…]" là lệnh hoặc nhãn người dùng gõ có chủ đích: để lượt đầy đủ xử lý.
   if (q.attachments || q.images || q.files || q.docChars || q.studio || /(?:^|\s)#\w|\[\w+:/.test(q.text)) return false;
   const r = readOf(q), a = splitAsk(q.text);
-  if (r.follow || r.retry || r.stakes || a.code || a.trace || wantsImage(q.text)) return false;
+  if (r.retry || r.stakes || a.code || a.trace || wantsImage(q.text)) return false;
   // Nhờ tìm, mở, tra: cần công cụ web, đừng để model nỗ lực thấp tự quyết.
   if (LOOKUP.test(stripHead(a.ins.toLowerCase())) || (noMarks(a.ins) && LOOKUP_FOLD.test(stripHead(a.ins.toLowerCase())))) return false;
-  if (r.task === "chat") return true;
+  if (r.task === "chat" && !r.follow) return true;
   const ins = a.ins.toLowerCase();
-  return ["qa", "language", "translate"].includes(r.task) && r.score <= 0 && !!ins && ins.length <= 200 && a.content < 500 && !/https?:|www\./.test(q.text) && !FRESH.test(ins);
+  if (!ins || ins.length > 200 || a.content >= 500 || /https?:|www\./.test(q.text) || FRESH.test(ins)) return false;
+  if (["qa", "language", "translate"].includes(r.task)) return r.score <= 0;
+  // Viết ngắn (email, thư, thơ, caption) và phép tính nhỏ cũng không cần công cụ: đó là phần lớn câu mỗi ngày, trước đây mỗi câu là một lần khởi động CLI, cầu nối MCP và cả bộ hướng dẫn.
+  // Tài liệu nghiêm túc và thứ có skill riêng thì giữ lượt đầy đủ; đoán sai thì model báo cần công cụ và Synchro chạy lại lượt đầy đủ.
+  return (r.task === "write" || r.task === "reason") && r.score <= 1 && !LONG_WORK.test(ins) && !(noMarks(ins) && LONG_WORK_FOLD.test(ins));
 }
 /** Mức nỗ lực tự động cho một yêu cầu khi người dùng để effort "Tự động" (model chọn tay hay chế độ Tự động đều dùng). */
 export const autoEffort = (q: RouteInput): AutoEffort => { const r = readOf(q); return effortFor(r.score, r.task, r.think); };
