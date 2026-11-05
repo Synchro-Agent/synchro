@@ -11,30 +11,70 @@ export const DESIGN_BUDGET = 6144;
 export const STUDIO_FORMAT: Record<string, DesignFormat> = { slides: "slide", docs: "doc", design: "graphic" };
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
-const noMarks = (s: string) => fold(s) === s.toLowerCase();
 
 // ---------------------------------------------------------------- nhận diện
-// Tệp đầu vào không phải đầu ra: "làm slide từ file excel này" là slide.
-const INPUT_FILE = /\b(?:tu|trong|theo|dua tren|doc|tom tat|from|based on|using)\s+(?:cai\s+|the\s+|this\s+|my\s+)?(?:file\s+|tep\s+|bang\s+)?(?:excel|xlsx|bang tinh|spreadsheet|pdf|word|docx|powerpoint|pptx)\b/g;
-const FORMATS: [DesignFormat, RegExp][] = [
-  ["slide", /\b(?:slides?|pitch ?deck|deck|thuyet trinh|trinh chieu|ban trinh bay|powerpoint|pptx|keynote|presentation)\b/],
-  ["sheet", /\b(?:excel|xlsx|bang tinh|spreadsheet|google sheets?|financial model|mo hinh tai chinh)\b/],
-  ["graphic", /\b(?:poster|banner|infographic|flyer|to roi|to gap|brochure|the mang xa hoi|anh bia|thumbnail|landing page|trang dich|thiep|dashboard|trang web|website|giao dien)\b/],
-  ["doc", /\b(?:bao cao|de xuat|ke hoach (?:kinh doanh|marketing|du an|trien khai|chien luoc|tai chinh|san xuat|truyen thong|nhan su)|business plan|tai lieu|de an|ho so|word|docx|pdf|proposal|report|white ?paper|memo|one.?pager|mot trang|so tay|handbook)\b/],
-];
-// Văn bản hành chính có kiểu artifact riêng (vbhc), Synchro tự dàn trang đúng thể thức: quy tắc này không áp dụng.
-const VBHC = /\b(?:cong van|quyet dinh|to trinh|bien ban|giay moi|chi thi)\b/;
+// So khớp giữ dấu: chữ có dấu khớp đúng dấu đó hoặc không dấu. "nền tối" nhận "nen toi", "nền toi", không nhận "nên tôi"; "vẽ" không nhận "về", "làm" không nhận "lắm", "đề án" không nhận "để ăn".
+const accented = (src: string) => src.normalize("NFC").replace(/\p{L}/gu, (c) => { const f = fold(c); return f === c.toLowerCase() ? c : `[${c}${f}]`; });
+const WB = "(?<![\\p{L}\\p{N}])", WE = "(?![\\p{L}\\p{N}])";
+const word = (src: string) => new RegExp(`${WB}(?:${accented(src)})${WE}`, "u");
+const clean = (s: string) => s.normalize("NFC").toLowerCase(); // NFC: chuỗi dán từ macOS, bảng mã tổ hợp
+
+// Danh từ chỉ sản phẩm. Từ nhiều nghĩa (đề xuất, báo cáo, hồ sơ, tài liệu) chỉ tính khi là tân ngữ của động từ làm ra (xem OBJ): "giúp mình đề xuất món ăn", "lời khuyên về hồ sơ du học" là trò chuyện.
+const N_SLIDE = "slide ?decks?|slides?|pitch ?decks?|decks?|thuyết trình|trình chiếu|bản trình bày|bài trình bày|powerpoint|pptx|keynote|presentation";
+const N_SHEET = "excel|xlsx|bảng tính|spreadsheet|google sheets?|financial model|mô hình tài chính";
+const N_GRAPHIC = "poster|banner|infographic|flyer|tờ rơi|tờ gấp|brochure|thẻ mạng xã hội|ảnh bìa|thumbnail|landing page|trang đích|thiệp|dashboard|trang web|website|giao diện";
+const N_DOC = "báo cáo|đề xuất|kế hoạch (?:kinh doanh|marketing|dự án|triển khai|chiến lược|tài chính|sản xuất|truyền thông|nhân sự)|business plan|tài liệu|đề án|hồ sơ|word(?: document| doc| file)?(?! [a-z])|docx|pdf|proposal|reports?|white ?paper|memo|one.?pager|một trang|sổ tay|handbook";
+// Văn bản hành chính có kiểu artifact riêng (vbhc), Synchro tự dàn trang đúng thể thức: quy tắc này không áp dụng. "ra quyết định" trong câu thường không tính: phải là tân ngữ hoặc đứng đầu câu.
+const N_VBHC = "công văn|quyết định|tờ trình|biên bản|giấy mời|chỉ thị";
+const NOUNS = `(?:(?<slide>${N_SLIDE})|(?<sheet>${N_SHEET})|(?<graphic>${N_GRAPHIC})|(?<vbhc>${N_VBHC})|(?<doc>${N_DOC}))${WE}(?! (?:formula|macro|công thức|hàm))`;
+// Giữa động từ và danh từ chỉ cho lượng từ, người được làm giúp, tính từ tiếng Anh: "viết email gửi sếp nói báo cáo sẽ trễ" có sản phẩm là email, "sửa lỗi trên trang web" là sửa lỗi.
+const FILL = "(?:(?:giúp|hộ|dùm|giùm|cho|tôi|mình|em|anh|chị|bạn|tớ|ra|một|1|vài|mấy|hai|ba|2|3|4|5|6|bộ|cái|chiếc|tấm|tờ|bản|bài|tập|file|tệp|trang|mẫu|mới|nhanh|a|an|the|me|us|my|our|this|new|another|one|some) ){0,5}";
+const ADJ = "(?:(?!about|to|for|on|in|of|with|from|and|sure|learn|know|understand|use|fix|email|e-mail|letter|message|code|script|function|bug|error|ve|cho|cua|gui|thu|tin|ham|loi)[a-z-]+ ){0,2}?";
+const CHO = "(?:cho (?:\\S+ ){1,4}?(?=một |1 |bộ |a |an ))?";
+const obj = (verb: string, nouns = NOUNS) => new RegExp(`${WB}(?:${accented(verb)}) ${accented(`${CHO}${FILL}`)}${ADJ}${accented(nouns)}`, "u");
+const NOT_NOW = "(?<!(?:đã|không|chưa|đừng|sản|nhập|đề|don't|didn't) )";
+const MAKE = obj(`${NOT_NOW}(?:làm|tạo|viết|soạn|thiết kế|dựng|vẽ|xuất|lập|chuẩn bị|trình bày|make|create|build|design|draft|write|generate|prepare|produce|export)`);
+// Không có "đổi", "convert": "đổi file pdf sang word" là đổi định dạng tệp, không cần quy tắc thiết kế.
+const EDIT_OBJ = obj("sửa|chỉnh|chỉnh sửa|cập nhật|thêm|bỏ|xóa|xoá|thay|làm lại|viết lại|làm tiếp|viết tiếp|rút gọn|rút ngắn|change|fix|edit|add|remove|replace|update|redo|revise|tweak|shorten");
+// Cần, muốn, giúp chỉ tính với từ chỉ sản phẩm rõ nghĩa ("cần bộ slide"), từ nhiều nghĩa phải có lượng từ ("cần một bản báo cáo").
+const WANT = "cần|muốn|giúp|need|want|would like|help";
+const WANT_OBJ = obj(`(?:${WANT})(?: (?:tôi|mình|em|có|to|me))?`, `(?:(?<slide>${N_SLIDE})|(?<sheet>${N_SHEET})|(?<graphic>${N_GRAPHIC}))${WE}(?! (?:formula|macro|công thức|hàm))`);
+const WANT_DOC = new RegExp(`${WB}(?:${accented(WANT)})(?: (?:${accented("tôi|mình|em")}))? (?:${accented("một|1|cái|bản|a|an")}) ${accented(FILL)}${accented(`(?<doc>${N_DOC})`)}${WE}`, "u");
+// "Chuyển báo cáo này thành slide", "turn this report into a poster": sản phẩm là phần sau. Đích là tệp thuần (word, pdf, excel) thì không tính.
+const CONVERT = new RegExp(`${WB}(?:${accented("đổi|chuyển|biến|tóm tắt|convert|turn|transform|summari[sz]e")}) .{0,80}? (?:${accented("thành|sang|into|to")}) ${accented(FILL)}${accented(`(?:(?<slide>${N_SLIDE})|(?<graphic>${N_GRAPHIC}))`)}${WE}`, "u");
+// Không động từ: "bộ slide về thị trường", "một tấm poster sự kiện". Không tính "slide 2 nói gì", "poster này đẹp".
+const BARE = new RegExp(`^(?:(?:${accented("bộ|một|1|a|an|tấm|cái")}) )*${accented(`(?:(?<slide>slides?|slide ?decks?|pitch ?decks?)|(?<graphic>poster|banner|infographic)|(?<vbhc>${N_VBHC}))`)}${WE}(?! (?:\\d|${accented("số|này|đó|kia|nào|là|nói|có|thì|của|this|that")}${WE}))`, "u");
+export type DesignJob = { format: DesignFormat | "vbhc"; kind: "make" | "edit" | "convert"; at: number; end: number };
+function jobOf(t: string): DesignJob | null {
+  const found: DesignJob[] = [];
+  for (const [re, kind] of [[CONVERT, "convert"], [EDIT_OBJ, "edit"], [MAKE, "make"], [WANT_OBJ, "make"], [WANT_DOC, "make"], [BARE, "make"]] as const) {
+    const m = re.exec(t); if (!m) continue;
+    const format = (Object.entries(m.groups ?? {}).find(([, v]) => v)?.[0] ?? "doc") as DesignJob["format"];
+    found.push({ format, kind, at: m.index, end: m.index + m[0].length });
+  }
+  return found.sort((a, b) => a.at - b.at)[0] ?? null;
+}
 const ASK = /\b(?:la gi|nghia la|tai sao|vi sao|lam sao|lam the nao|the nao|cach (?:lam|tao|viet|dung|ve|thiet ke|xuat)|khac gi|co nen|bao nhieu|what is|what are|how (?:do|to|can)|why|difference between|should i)\b/;
 const POLITE = /\b(?:giup|duoc khong|duoc ko|can you|could you|please)\b/;
 const OTHER_JOB = /^\s*(?:hay\s+)?(?:dich|tom tat|giai thich|translate|summari[sz]e|explain)\b/;
-const MAKE_VI = /(?<!\p{L})(?:làm|tạo|viết|soạn|thiết kế|dựng|vẽ|xuất|lập|chuẩn bị|sửa|chỉnh|đổi|cập nhật|thêm|trình bày|cần|muốn|giúp)(?!\p{L})/u;
-const MAKE_EN = /\b(?:make|create|build|design|draft|write|generate|prepare|produce|export|update|redo|convert)\b/;
-const MAKE_FOLD = /\b(?:lam|tao|viet|soan|thiet ke|dung|ve|xuat|lap|chuan bi|sua|chinh|doi|cap nhat|them|can|muon|giup)\b/;
-const EDIT_VI = /(?<!\p{L})(?:sửa|chỉnh|đổi|thêm|bỏ|xóa|thay|cập nhật|làm lại|ngắn lại|to hơn|nhỏ hơn|đậm hơn)(?!\p{L})/u;
-const EDIT_EN = /\b(?:change|fix|edit|add|remove|replace|update|redo|make it)\b/;
-const EDIT_FOLD = /\b(?:sua|chinh|doi|them|bo|xoa|thay|cap nhat|lam lai)\b/;
-// "Làm bộ slide khác về…" là sản phẩm mới dù đoạn chat đã có slide: phải có đủ số đo, gọi model bằng khóa API không còn khối của lượt trước trong lịch sử.
-const NEW_ONE = /\b(?:moi|khac|new|another|separate)\b/;
+// Hỏi về việc làm, không phải nhờ làm: từ hỏi đứng trước trong cùng vế ("cách làm slide"), đứng ngay sau ("làm slide thế nào"), hay câu kết bằng dấu hỏi.
+// Từ hỏi sau sản phẩm là chủ đề của sản phẩm: "Làm slide giải thích vì sao khách hàng rời bỏ", "Make a poster about how to recycle", "Làm infographic: AI là gì?".
+const ASK_AFTER = /^(?:\s+(?:cho dep|dep|hay|tot|nhanh))*\s*(?:(?:nhu )?the nao|ra sao|lam sao|la gi|co nen|co can|co kho|co de|khac gi|bao nhieu)\b/;
+const TOPIC_AFTER = /^\s*(?::|(?:ve|gioi thieu|giai thich|phan tich|huong dan|about|on|explaining|showing|for|cho|de)\b)/;
+function isQuestion(t: string, job: DesignJob | null) {
+  const f = fold(t);
+  if (!job) return ASK.test(f) || (/\?\s*$/.test(t) && !POLITE.test(f));
+  const before = fold(t.slice(0, job.at)).split(/[,.;:]|\bnen\b/).pop() ?? "", after = fold(t.slice(job.end));
+  if (ASK.test(before) || ASK_AFTER.test(after)) return true;
+  return /\?\s*$/.test(t) && !POLITE.test(f) && !TOPIC_AFTER.test(after);
+}
+const CODE = word("code|script|python|javascript|typescript|sql|regex|bug|function|hàm|lập trình");
+const wantsEdit = word("sửa|chỉnh|đổi|thêm|bỏ|xóa|xoá|thay|cập nhật|làm lại|viết lại|làm tiếp|viết tiếp|rút gọn|rút ngắn|ngắn lại|gọn lại|(?:to|nhỏ|lớn|đậm|nhạt|sáng|tối|ngắn|dài|gọn|đẹp|rõ) hơn|change|fix|edit|add|remove|replace|update|redo|revise|tweak|shorten|make (?:it|this)|bolder|shorter|longer|bigger|smaller|darker|lighter");
+// Động từ "làm" mà nói về chính sản phẩm đã có: "Làm slide 3 đậm hơn", "Làm báo cáo này gọn hơn", "make this deck shorter". Phần sau "về, about" là chủ đề của sản phẩm mới, không tính.
+const REFERS_BACK = new RegExp(`${WB}${accented(`(?:(?:slide|trang|mục|phần|bảng|biểu đồ|hình|page|section|chart) (?:số )?\\d+|(?:${N_SLIDE}|${N_GRAPHIC}|${N_DOC}) (?:này|đó|kia|trên|vừa (?:rồi|làm|tạo)|hiện tại|cũ)|(?:this|that|current|existing) (?:${N_SLIDE}|${N_GRAPHIC}|${N_DOC})|(?:to|nhỏ|lớn|đậm|nhạt|sáng|tối|ngắn|dài|gọn|đẹp|rõ) hơn|ngắn lại|gọn lại|bolder|shorter|longer|bigger|smaller|darker|lighter)`)}${WE}`, "u");
+const TOPIC = word("về|giới thiệu|about");
+const refersBack = (t: string) => REFERS_BACK.test(t.split(TOPIC)[0]);
+const NEW_ONE = word("mới|khác|new|another|separate");
 
 const DOMAINS: [DesignDomain, RegExp][] = [
   ["data", /\b(?:giao dich|trading|chung khoan|quant|bang so lieu|thong ke|analytics|dashboard|bang dieu khien)\b/],
@@ -58,8 +98,8 @@ const PICK: Record<DesignDomain, Record<DesignFormat, string[]>> = {
 };
 // Người dùng nói rõ phong cách.
 const STYLE_WORDS: [RegExp, string][] = [
-  [/\b(?:tap chi|editorial|sang trong co dien)\b/, "editorial-serif"], [/\b(?:brutalis\w*|tho moc)\b/, "neo-brutalist"], [/\b(?:kinh mo|glass\w*|cuc quang|aurora)\b/, "aurora-glass"],
-  [/\bbento\b/, "soft-bento"], [/\b(?:terminal|bang so day)\b/, "data-terminal"], [/\bswiss\b|\bthuy si\b/, "swiss-grid"], [/\b(?:nen toi|dark mode|dark theme|giao dien toi)\b/, "midnight-tech"],
+  [word("tạp chí|editorial|sang trọng cổ điển"), "editorial-serif"], [word("brutalis\\w*|thô mộc"), "neo-brutalist"], [word("kính mờ|glass\\w*|cực quang|aurora"), "aurora-glass"],
+  [word("bento"), "soft-bento"], [word("terminal|bảng số dày"), "data-terminal"], [word("swiss|thụy sĩ|thuỵ sĩ"), "swiss-grid"], [word("nền tối|dark mode|dark theme|giao diện tối"), "midnight-tech"],
 ];
 // Họ đã có bản sắc riêng: giữ số đo, không áp bảng màu có sẵn.
 const OWN_BRAND = /\b(?:thuong hieu (?:cua|ben)|brand (?:color|guide|book)|mau chu dao|mau cua (?:cong ty|hang)|logo cua|theo mau|template cua|bang mau cua|mau (?:xanh|do|vang|cam|tim|hong) (?:chu dao|lam chu|la chinh))\b/;
@@ -72,15 +112,13 @@ export const domainOf = (typed: string): DesignDomain => {
   const t = fold(typed);
   return DOMAINS.find(([, re]) => re.test(t))?.[0] ?? "general";
 };
+/** Định dạng người dùng nhờ làm ra, không phải từ nào đó trong câu: "làm slide từ file excel này" là slide. */
 export function formatOf(typed: string): DesignFormat | null {
-  const t = fold(typed).replace(INPUT_FILE, " ");
-  return FORMATS.find(([, re]) => re.test(t))?.[0] ?? null;
+  const j = jobOf(clean(typed));
+  return j && j.format !== "vbhc" ? j.format : null;
 }
-const isQuestion = (head: string) => { const t = fold(head); return ASK.test(t) || (/\?\s*$/.test(head) && !POLITE.test(t)); };
-const wantsMake = (head: string) => MAKE_VI.test(head.toLowerCase()) || MAKE_EN.test(head.toLowerCase()) || (noMarks(head) && MAKE_FOLD.test(fold(head))) || /^\s*(?:bo |mot |1 |a )?(?:slides?|poster|banner|infographic)\b/.test(fold(head));
-const wantsEdit = (head: string) => EDIT_VI.test(head.toLowerCase()) || EDIT_EN.test(head.toLowerCase()) || (noMarks(head) && EDIT_FOLD.test(fold(head)));
 export function presetFor(format: DesignFormat, domain: DesignDomain, typed: string, seed = ""): string {
-  const t = fold(typed);
+  const t = clean(typed);
   const asked = PRESETS.find((p) => t.includes(p.id))?.id ?? STYLE_WORDS.find(([re]) => re.test(t))?.[1];
   if (asked) return asked;
   const list = PICK[domain][format];
@@ -88,7 +126,7 @@ export function presetFor(format: DesignFormat, domain: DesignDomain, typed: str
 }
 
 // ---------------------------------------------------------------- quy tắc
-const CORE = `Chữ: chỉ dùng thang 12·14·16·21·28·38·56 (tỉ lệ 1.333), mỗi trang tối đa 4 cỡ. Giãn chữ: cỡ từ 38 trở lên -0.02 đến -0.03em (siết hơn thì dấu tiếng Việt dính nhau), 21-28 -0.01em, chữ thường 0, nhãn in hoa nhỏ +0.08em. Dòng: tiêu đề 1.2 (không dưới 1.15, dấu chồng như ấ ệ chạm dòng trên), thân 1.5-1.6.
+const CORE = `Chữ: chỉ dùng thang của định dạng ở trên, mỗi trang tối đa 4 cỡ. Giãn chữ: cỡ từ 38 trở lên -0.02 đến -0.03em (siết hơn thì dấu tiếng Việt dính nhau), 21-28 -0.01em, chữ thường 0, nhãn in hoa nhỏ +0.08em. Dòng: tiêu đề 1.2, phông có chân 1.25 (thấp hơn thì dấu chồng như ấ ệ chạm dòng trên), thân 1.5-1.6.
 Khoảng cách: chỉ 8·16·24·32·48·64; trong nhóm nhỏ hơn giữa các nhóm; lề ngoài lớn hơn mọi khoảng trong.
 Màu 60-30-10: 60% nền, 30% bề mặt và chữ, 10% nhấn; một màu nhấn, tối đa một màu phụ. Thẻ, nhãn, hộp ghi chú: pha 6-12% màu nhấn vào nền (color-mix), không tô màu bão hòa thuần. Chữ thường đạt tương phản 4.5:1, chữ từ 24px 3:1.
 Bo góc đồng tâm: R ngoài = R trong + padding; thẻ lồng thẻ không cùng một bán kính.
@@ -98,10 +136,10 @@ Biểu đồ: mỗi hình một ý. Bỏ lưới dọc, khung, 3D, chú giải k
 Nội dung: số liệu không có trong yêu cầu thì ghi rõ là ví dụ, không viết như thật.`;
 
 const FORMAT_RULES: Record<DesignFormat, string> = {
-  slide: `Slide 16:9, một trang text/html, mỗi slide một <section class="slide">. Cỡ ở 1280×720: nhãn 14, tiêu đề 38-44, kicker và thân 18-22, nguồn 12-14, KPI 56-96. Khung xem trước nhỏ hơn 1280 nên không dùng px cứng: dùng lớp sx-…, calc(N*var(--sx-u)) hoặc vw.
+  slide: `Slide 16:9, một trang text/html, mỗi slide một <section class="slide">. Thang ở 1280×720: nhãn, nguồn 14; bảng, chú thích 16; thân, kicker 20; phụ đề 26; tiêu đề 44; bìa 56 hoặc 80; KPI 96. Khung xem trước nhỏ hơn 1280 nên không dùng px cứng: dùng lớp sx-… hoặc calc(N*var(--sx-u)).
 Mỗi slide 3 tầng: nhãn (chủ đề ngắn) → tiêu đề kết luận (một câu nêu phát hiện, có số: "Tự động hóa kho đưa biên ròng tăng 14,2%", không viết "Doanh thu quý 3"; tối đa 14 từ, 2 dòng) → kicker (phạm vi, nguồn, tùy chọn).
-Một slide một ý, tối đa 40 từ ngoài bảng. Chữ dài thì chia slide, không thu nhỏ chữ dưới 18. Bố cục đổi nhịp: không dùng một lưới quá 2 slide liền, bìa và slide phân đoạn khác hẳn slide nội dung. Chân slide tối đa một dòng nguồn.`,
-  doc: `Tài liệu: thân 16px màn hình, 11pt in; tiêu đề 28/21/16; mở đầu bằng tóm tắt kết luận 2-3 câu trước phần diễn giải; mục lớn có tiêu đề nêu điều rút ra, không chỉ tên mục. Bảng: chỉ kẻ ngang mảnh, không kẻ dọc, số căn phải, hàng tổng đậm.
+Một slide một ý, tối đa 40 từ ngoài bảng. Chữ dài thì chia slide, thân không dưới 20. Bố cục đổi nhịp: không dùng một lưới quá 2 slide liền, bìa và slide phân đoạn khác hẳn slide nội dung. Chân slide tối đa một dòng nguồn.`,
+  doc: `Tài liệu: thang 12·14·16·21·28·38; thân 16px màn hình, 11pt in; tiêu đề 28/21/16; mở đầu bằng tóm tắt kết luận 2-3 câu trước phần diễn giải; mục lớn có tiêu đề nêu điều rút ra, không chỉ tên mục. Bảng: chỉ kẻ ngang mảnh, không kẻ dọc, số căn phải, hàng tổng đậm.
 In: khổ A4 lề 20mm; break-after:avoid cho tiêu đề; break-inside:avoid cho thẻ, hình, bảng ngắn; bảng dài dài hơn một trang thì cho ngắt và lặp thead; orphans:3; widows:3; bỏ bóng, kính mờ, nền trang tối khi in.
 Dạng: mặc định artifact Markdown (đề mục, bảng, danh sách là đủ); cần bố cục, biểu đồ, một trang A4 thì text/html. Văn bản hành chính của cơ quan dùng kiểu vbhc, không áp dụng khối này.`,
   sheet: `Excel: mọi tổng, tỉ lệ, chênh lệch là công thức sống (=SUM(D4:D11), =(D11-C11)/C11), không ghi số Python tính sẵn; giả định ở ô riêng, công thức trỏ tới ô đó.
@@ -112,13 +150,13 @@ Thanh trong ô bằng định dạng có điều kiện thật (Excel tự cập
 from openpyxl.formatting.rule import DataBarRule, ColorScaleRule
 ws.conditional_formatting.add("E4:E11", DataBarRule(start_type="num", start_value=0, end_type="max", color="FF5B9BD5", showValue=True))
 Bản đồ nhiệt: ColorScaleRule(start_type="min", start_color="FFFFFFFF", end_type="max", end_color="FF5B9BD5"). Biểu đồ: một chuỗi nhấn, các chuỗi khác xám.`,
-  graphic: `Đồ họa (poster, banner, infographic, trang đích): dựng theo 4 lớp: nền → hình và đường lưới → ảnh → chữ. Một ý chính; tiêu đề lớn gấp 3-4 lần chữ thường, đọc được trong 3 giây; tối đa 3 cỡ chữ; lề từ 5% cạnh ngắn; chữ không đè vùng ảnh nhiều chi tiết, cần thì phủ một lớp nền.
+  graphic: `Đồ họa (poster, banner, infographic, trang đích): dựng theo 4 lớp: nền → hình và đường lưới → ảnh → chữ. Thang: trang web 12·14·16·21·28·38·56; poster (rộng 1080) 20·24·30·40·64·96·152·200. Một ý chính; tiêu đề lớn gấp 3-4 lần chữ thường, đọc được trong 3 giây; tối đa 3 cỡ chữ, không tính nhãn và nguồn; lề từ 5% cạnh ngắn; chữ không đè vùng ảnh nhiều chi tiết, cần thì phủ một lớp nền.
 Cần chữ chính xác thì dựng bằng text/html hoặc SVG; xin ảnh chụp, tranh thì dùng generate_image. Icon trong React dùng lucide-react; SVG tự viết thoải mái cho biểu đồ, hình học, sơ đồ khi có viewBox rõ và màu lấy từ biến.
 Hiệu ứng có chủ đích, tối đa 2 loại mỗi trang: kính mờ chỉ khi có nền sâu phía sau; không chữ chuyển màu ở nội dung phải đọc (không đo được tương phản, xuất PowerPoint mất màu).`,
 };
 
-const KIT = (preset: string) => `Bộ CSS sẵn trong khung artifact: không cần nạp, phông đủ dấu tiếng Việt tự tải, tải về vẫn kèm. Đặt <html data-sx-preset="${preset || "swiss-grid"}"> (React: trên div ngoài cùng); thêm data-sx-theme="auto" nếu trang đọc nên theo chế độ tối của máy (slide, poster giữ cố định). Trong run_code không có bộ này: dùng các số ở trên.
-Khung: <section class="slide sx-slide"> .sx-page (A4, tự có luật in) .sx-poster (3:4). Chữ: .sx-eyebrow .sx-title .sx-display .sx-kicker .sx-h2 .sx-h3 .sx-text .sx-small .sx-source .sx-kpi .sx-num .sx-muted .sx-accent .sx-up .sx-down. Bố cục: .sx-stack .sx-row .sx-between .sx-grow .sx-end .sx-gap-{8,16,24,32,48,64} .sx-p-{…}. Lưới: .sx-grid-hero (1 lớn trái, 2 nhỏ phải) .sx-grid-4060 .sx-grid-6040 .sx-grid-bento4 (7:5 rồi 5:7) .sx-grid-dash (4 KPI, phần tử thứ 5 tràn hàng) .sx-grid-3. Bề mặt: .sx-card .sx-inner (ảnh, hộp trong thẻ, bo đồng tâm) .sx-tint .sx-solid .sx-badge .sx-callout .sx-rule. Bảng: .sx-table, ô số .n, hàng tổng .sx-total, thanh trong ô <td class="sx-bar n" style="--sx-v:72%">. Hiệu ứng: .sx-shadow .sx-rim .sx-glass .sx-aurora .sx-noise. Chuyển động: .sx-rise .sx-fade .sx-pop (style="--sx-i:0,1,2…" để lệch nhịp 70ms), .sx-draw cho path có pathLength="1"; đã tôn trọng prefers-reduced-motion, hỏng hay khi in vẫn hiện đủ: đừng tự đặt opacity:0 chờ JS.
+const KIT = (preset: string) => `Bộ CSS sẵn trong khung artifact: không cần nạp, phông đủ dấu tiếng Việt tự tải, tải về vẫn kèm. Đặt <html data-sx-preset="${preset || "swiss-grid"}"> (React: trên div ngoài cùng; SVG: trên thẻ svg); thêm data-sx-theme="auto" nếu trang đọc nên theo chế độ tối của máy (slide, poster giữ cố định). Trong run_code không có bộ này: dùng các số ở trên.
+Khung: <section class="slide sx-slide"> (luôn 16:9, tự co vừa cửa sổ) .sx-page (A4, tự có luật in) .sx-poster (3:4, tự co vừa cửa sổ). Chữ: .sx-eyebrow .sx-title .sx-display .sx-kicker .sx-h2 .sx-h3 .sx-text .sx-small .sx-source .sx-kpi .sx-num .sx-muted .sx-accent .sx-up .sx-down. Bố cục: .sx-stack .sx-row .sx-between .sx-grow .sx-end .sx-gap-{8,16,24,32,48,64} .sx-p-{…}. Lưới: .sx-grid-hero (1 lớn trái, 2 nhỏ phải) .sx-grid-4060 .sx-grid-6040 .sx-grid-bento4 (7:5 rồi 5:7) .sx-grid-dash (4 KPI, phần tử thứ 5 tràn hàng) .sx-grid-3. Bề mặt: .sx-card .sx-inner (ảnh, hộp trong thẻ, bo đồng tâm) .sx-tint .sx-solid .sx-badge .sx-callout .sx-rule. Bảng: .sx-table, ô số .n, hàng tổng .sx-total, thanh trong ô <td class="sx-bar n" style="--sx-v:72%">. Hiệu ứng: .sx-shadow .sx-rim .sx-glass .sx-aurora .sx-noise. Chuyển động: .sx-rise .sx-fade .sx-pop (style="--sx-i:0,1,2…" để lệch nhịp 70ms), .sx-draw cho path có pathLength="1"; đã tôn trọng prefers-reduced-motion, hỏng hay khi in vẫn hiện đủ: đừng tự đặt opacity:0 chờ JS.
 Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-accent2 --sx-line --sx-neutral --sx-pos --sx-neg --sx-head --sx-body --sx-mono; cỡ tự tính: calc(N*var(--sx-u)). CSS của bạn viết sau sẽ thắng nếu cần chỉnh.`;
 
 const FILE_RULES: Partial<Record<DesignFormat, string>> = {
@@ -153,20 +191,33 @@ export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }
   return `${out}\n${close}`;
 }
 const compactBlock = (format: DesignFormat, preset: string) => `<design_kit format="${format}" mode="follow-up"${preset ? ` preset="${preset}"` : ""}>
-Đang sửa tiếp sản phẩm đã có: giữ nguyên phong cách, phông, thang chữ và lưới 8pt của bản hiện tại (lớp sx-… nếu bản hiện tại đang dùng vẫn có sẵn); chỉ đổi đúng chỗ được yêu cầu. Tiêu đề vẫn nêu kết luận, tương phản đạt 4.5:1, chữ không tràn.
+Đang sửa tiếp sản phẩm đã có (câu này không nói về sản phẩm thì bỏ qua khối): giữ nguyên phong cách, phông, thang chữ và lưới 8pt của bản hiện tại (lớp sx-… nếu bản hiện tại đang dùng vẫn có sẵn); chỉ đổi đúng chỗ được yêu cầu. Tiêu đề vẫn nêu kết luận, tương phản đạt 4.5:1, chữ không tràn.
 </design_kit>`;
 
-/** Thiết kế đã dùng trong đoạn chat: artifact gần nhất trong lịch sử (hoặc bản còn giữ trong artBase). */
+const attrOf = (tag: string, name: string) => new RegExp(`\\b${name}=["']([^"']*)`).exec(tag)?.[1] ?? "";
+/**
+ * Thiết kế đã dùng trong đoạn chat: artifact đầy đủ gần nhất trong lịch sử (hoặc bản còn giữ trong artBase).
+ * Bản sửa (mode="patch", ARTIFACT_RULES bắt sửa theo cách này) và thẻ đánh dấu phiên bản cũ tự đóng không có kiểu, không có thân: đi tiếp về bản đầy đủ của cùng artifact.
+ * Bản sửa đổi data-sx-preset thì phong cách hiện tại là của bản sửa (khối thay thế đứng sau khối tìm).
+ */
 export function priorDesign(texts: string[]): { format: DesignFormat; preset: string } | null {
+  let ident = "", newer = "";
   for (let i = texts.length - 1; i >= 0; i--) {
     const t = texts[i];
     if (!t || !/<artifact\b/.test(t)) continue;
-    const preset = /data-sx-preset=["']?([\w-]+)/.exec(t)?.[1] ?? "";
-    if (/<section\b[^>]*class=["'][^"']*\bslide\b/.test(t)) return { format: "slide", preset };
-    if (/type=["'](?:text\/markdown|markdown)/.test(t)) return { format: "doc", preset };
-    if (/sx-page/.test(t)) return { format: "doc", preset };
-    if (/type=["'](?:text\/html|html|react|svg|application\/vnd\.(?:ant\.)?react|image\/svg)/.test(t)) return { format: "graphic", preset };
-    return null;
+    for (const part of t.split(/(?=<artifact\b)/).filter((x) => x.startsWith("<artifact")).reverse()) {
+      const open = /^<artifact\b[^>]*>/.exec(part)?.[0] ?? "";
+      const id = attrOf(open, "identifier");
+      if (ident && id && id !== ident) continue;
+      if (/\/>$/.test(open)) { ident ||= id; continue; }
+      const sets = [...part.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => m[1]);
+      if (attrOf(open, "mode").toLowerCase() === "patch") { ident ||= id; newer ||= sets[sets.length - 1] ?? ""; continue; }
+      const preset = newer || sets[0] || "", type = attrOf(open, "type");
+      if (/<section\b[^>]*(?:class(?:Name)?=["'][^"']*\bslide\b|data-slide)/.test(part)) return { format: "slide", preset };
+      if (/^(?:text\/markdown|markdown)/.test(type) || /sx-page/.test(part)) return { format: "doc", preset };
+      if (/^(?:text\/html|html|react|svg|application\/vnd\.(?:ant\.)?react|image\/svg)/.test(type)) return { format: "graphic", preset };
+      return null;
+    }
   }
   return null;
 }
@@ -178,19 +229,24 @@ export function designTurn(i: { typed: string; studio?: string | null; art: bool
   const typed = i.typed.trim();
   const inStudio = i.studio ? STUDIO_FORMAT[i.studio] : undefined;
   // Câu lệnh nằm ở đầu tin nhắn; phần sau có thể là văn bản dán vào, từ khóa trong đó không tính.
-  const head = typed.slice(0, 300);
-  if (!head || i.ack || isQuestion(head) || OTHER_JOB.test(fold(head))) return null;
+  const head = typed.slice(0, 300), t = clean(head);
+  if (!head || i.ack) return null;
+  const job = jobOf(t);
+  if (job?.format === "vbhc" || isQuestion(t, job) || (OTHER_JOB.test(fold(head)) && job?.kind !== "convert")) return null;
+  // Việc lập trình nhắc tới sản phẩm ("viết script python xuất báo cáo pdf"): không phải làm sản phẩm.
+  if (job && CODE.test(t.slice(0, job.at))) return null;
   const prior = priorDesign(i.prior ?? []);
-  const said = formatOf(head);
   const follow = (f: DesignFormat, preset: string) => { const block = compactBlock(f, preset); return { format: f, domain: "general" as const, preset, own: false, block, compact: true, bytes: designBytes(block) }; };
-  if (!said) {
-    if (prior && wantsEdit(head)) return follow(prior.format, prior.preset);
+  if (!job) {
+    if (prior && wantsEdit.test(t) && !CODE.test(t)) return follow(prior.format, prior.preset);
     if (!inStudio) return null;
-  } else if (!inStudio && !wantsMake(head)) return null;
-  const format = said ?? inStudio!;
-  if (format === "doc" && VBHC.test(fold(head))) return null;
+    // Trong studio, đã có sản phẩm cùng loại: câu không nêu định dạng là nói về sản phẩm đó.
+    if (prior?.format === inStudio && !NEW_ONE.test(t)) return follow(prior.format, prior.preset);
+  }
+  const format = (job?.format ?? inStudio) as DesignFormat;
   if (format === "sheet" && !i.code) return null; // không có run_code thì không làm được tệp Excel, quy tắc openpyxl vô nghĩa
-  if (prior && prior.format === format && (wantsEdit(head) || !NEW_ONE.test(fold(head)))) return follow(format, prior.preset);
+  // Sửa tiếp chỉ khi câu nói về sản phẩm đã có. "Làm bộ slide về marketing Q4" trong đoạn chat đã có slide là sản phẩm mới: phải có đủ số đo, gọi model bằng khóa API không còn khối của lượt trước trong lịch sử, và khối rút gọn sẽ bảo model chỉ sửa đúng chỗ trên bản cũ.
+  if (prior && prior.format === format && (job?.kind === "edit" || refersBack(t))) return follow(format, prior.preset);
   const domain = domainOf(head);
   const own = OWN_BRAND.test(fold(head));
   const preset = presetFor(format, domain, head, i.seed);
@@ -201,7 +257,7 @@ export function designTurn(i: { typed: string; studio?: string | null; art: bool
 /** Văn bản của các artifact trước trong đoạn chat, để biết lượt này là làm mới hay sửa tiếp. */
 export function historyTexts(messages: unknown, base?: unknown): string[] {
   const out: string[] = [];
-  if (Array.isArray(base)) for (const b of base as { ident?: unknown; type?: unknown; content?: unknown }[]) if (typeof b?.content === "string") out.push(`<artifact type="${String(b.type ?? "")}">${b.content.slice(0, 20_000)}`);
+  if (Array.isArray(base)) for (const b of base as { ident?: unknown; type?: unknown; content?: unknown }[]) if (typeof b?.content === "string") out.push(`<artifact identifier="${String(b.ident ?? "")}" type="${String(b.type ?? "")}">${b.content.slice(0, 20_000)}`);
   if (Array.isArray(messages)) for (const m of (messages as { role?: string; content?: unknown }[]).slice(-12)) {
     if (m?.role !== "assistant" && m?.role !== "ai") continue;
     if (typeof m.content === "string") out.push(m.content);
