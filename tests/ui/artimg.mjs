@@ -3,8 +3,9 @@
 // cho ảnh nhúng (CSP img-src data: blob:) nên mọi ảnh "biến mất". Giờ khung tải ảnh qua /api/artimg rồi nhúng thành data: trước khi dựng.
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 
-const B = "http://localhost:3200";
+const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/artimg/";
 rmSync(SCR, { recursive: true, force: true }); mkdirSync(SCR, { recursive: true });
 const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-artimg";
@@ -68,6 +69,25 @@ try {
   for (let t = Date.now(); Date.now() - t < 30000 && !(got = await inFrame(`({ w: document.getElementById("logo").naturalWidth, src: document.getElementById("logo").getAttribute("src").slice(0, 22), bg: getComputedStyle(document.getElementById("nen")).backgroundImage.slice(0, 26) })`))?.w;) await sleep(400);
   ok(got?.w > 0 && got.src.startsWith("data:image/png"), "ảnh <img> từ URL ngoài hiện trong khung (đã nhúng thành data:)", JSON.stringify(got));
   ok(/^url\("data:image\/png/.test(got?.bg ?? ""), "ảnh nền CSS url(...) cũng được nhúng", JSON.stringify(got));
+
+  console.log("━━ ảnh generate_image đã tạo trong artifact");
+  // Dựng sẵn một tệp đã tạo của tài khoản này, như generate_image để lại.
+  const R = createRequire(process.cwd() + "/package.json"), db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db");
+  const me = await ev(`fetch("/api/auth/me").then((r) => r.json())`), gid = "artgen" + Date.now().toString(36);
+  db.pragma("busy_timeout = 5000");
+  db.prepare("INSERT INTO outputs (id, user_id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(gid, me.user.id, "anh-tao.png", "image/png", 0, Date.now());
+  db.close();
+  const icon = await fetch(B + "/icon-192.png").then((x) => x.arrayBuffer());
+  mkdirSync(process.cwd() + "/data-mock/outputs/" + me.user.id, { recursive: true });
+  writeFileSync(process.cwd() + "/data-mock/outputs/" + me.user.id + "/" + gid, Buffer.from(icon));
+  const box = await ev(`(() => { const el = document.querySelector("textarea"); el.focus(); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
+  for (const type of ["mousePressed", "mouseReleased"]) await P("Input.dispatchMouseEvent", { type, x: box[0], y: box[1], button: "left", clickCount: 1 });
+  await P("Input.insertText", { text: "Làm trang có ảnh #artgen=" + gid });
+  await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
+  await P("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  let made;
+  for (let t = Date.now(); Date.now() - t < 30000 && !made; await sleep(300)) for (const s of frames) { made = await ev(`document.getElementById("tao") ? ({ w: document.getElementById("tao").naturalWidth, src: document.getElementById("tao").getAttribute("src").slice(0, 22) }) : undefined`, s).catch(() => undefined); if (made?.w > 0) break; else made = undefined; }
+  ok(made?.w > 0 && made.src.startsWith("data:image/png"), "ảnh đã tạo hiện trong khung (đã nhúng thành data:)", JSON.stringify(made));
   const { data } = await P("Page.captureScreenshot", { format: "png" });
   writeFileSync(SCR + "artimg.png", Buffer.from(data, "base64"));
 } finally {
