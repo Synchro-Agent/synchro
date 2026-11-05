@@ -22,6 +22,7 @@ const tr = (s, lang) => {
   return s;
 };
 ok(tr("Cập nhật lần cuối:", "en") === "Last updated:", "trang điều khoản: “Cập nhật lần cuối:”", tr("Cập nhật lần cuối:", "en"));
+ok(tr("Cập nhật 9 giờ trước", "en") === "Updated 9h ago" && tr("Cập nhật vừa xong", "en") === "Updated just now" && tr("Cập nhật", "en") === "Update", "nhãn thời gian “Updated”, nút vẫn là “Update”", tr("Cập nhật 9 giờ trước", "en"));
 ok(tr("Giọng trong tài khoản ElevenLabs và thư viện cộng đồng. Đã dùng 3/10 chỗ lưu giọng.", "en") === "Voices in your ElevenLabs account and the community library. 3/10 voice slots used.", "Speech → Giọng nói: câu ghép có số", tr("Giọng trong tài khoản ElevenLabs và thư viện cộng đồng. Đã dùng 3/10 chỗ lưu giọng.", "en"));
 ok(tr("Gói Claude của bạn đã hết hạn mức.", "en") === "Your Claude plan has hit its limit.", "thông báo máy chủ có tên gói", tr("Gói Claude của bạn đã hết hạn mức.", "en"));
 ok(tr("Signed in with your ChatGPT account · 4 models", "vi") === "Đã đăng nhập bằng tài khoản ChatGPT · 4 model", "Providers: “Signed in with your … · n models”", tr("Signed in with your ChatGPT account · 4 models", "vi"));

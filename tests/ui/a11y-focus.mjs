@@ -61,6 +61,14 @@ try {
   console.log("4. Nhóm thẻ báo trạng thái");
   await nav("inbox"); await until(`!!document.querySelector(".tk-tabs [role=tab]")`, 8000);
   ok(await ev(`document.querySelectorAll(".tk-tabs [role=tab][aria-selected=true]").length === 1`), "Hộp thư có đúng một thẻ đang chọn");
+  console.log("5. Tiếng Anh");
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("p:uilang", '"en"'); } catch {}` });
+  await P("Page.navigate", { url: B + "/terms" });
+  ok(await until(`document.title.includes("Terms")`, 15000), "tiêu đề /terms theo tiếng Anh", await ev(`document.title`));
+  await P("Page.navigate", { url: B + "/" });
+  await until(`!!document.querySelector("[data-nav=artifacts]")`); await sleep(800);
+  await nav("artifacts");
+  ok(await until(`!!document.querySelector(".st-tag") && [...document.querySelectorAll(".st-tag")].filter((e) => e.textContent.trim()).every((e) => /^\\d[\\d.,]* skills?$/.test(e.textContent.trim()) && !/^(\\d*[02-9]|\\d+\\d) skill$/.test(e.textContent.trim()))`, 15000), "số nhiều trên thẻ Artifacts", await ev(`[...document.querySelectorAll(".st-tag")].map((e) => e.textContent)`));
 } finally { chrome.kill(); }
 console.log(`\n${pass} đúng, ${fail} sai`);
 process.exit(fail ? 1 : 0);

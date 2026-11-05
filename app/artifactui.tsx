@@ -2,7 +2,6 @@
 // Giao diện Artifact: thẻ trong tin nhắn, khung xem bên cạnh cuộc trò chuyện (xem trước / mã / phiên bản),
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { rowKeys } from "./a11y";
 import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { Markdown } from "./md";
