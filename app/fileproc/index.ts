@@ -10,7 +10,22 @@ import { checkQuota, claimFile, mayUse } from "./owners";
 const DIR = path.join(process.cwd(), ".cache", "files");
 
 /** raw: tệp không đọc được nội dung (nhị phân lạ, hỏng) nhưng vẫn giữ tệp gốc cho Synchro Code; err là lý do để báo khi khung chat đòi đọc nội dung. */
-export type Stored = { id: string; name: string; kind: string; tokens: number; large: boolean; blocks: ContentBlock[]; raw?: boolean; err?: string; note?: string };
+export type Stored = { id: string; name: string; kind: string; tokens: number; large: boolean; blocks: ContentBlock[]; raw?: boolean; err?: string; note?: string; v?: number };
+// Bản cách đọc: kết quả trích được lưu mãi theo nội dung tệp, nên sửa bộ đọc bảng tính thì tệp đã tải lên vẫn mang bản cũ sai (mất cột, ngày thành số). Tăng số này là các tệp đó được đọc lại khi dùng tới.
+const EXTRACT_V = 2;
+const stale = (r: Stored) => !r.raw && (r.kind === "xlsx" || r.kind === "csv" || r.kind === "pptx") && r.v !== EXTRACT_V;
+const tokensOf = (blocks: ContentBlock[]) => estTokens(blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join(""));
+/** Đọc lại tệp đã lưu bằng bộ đọc hiện tại; đọc lại lỗi thì giữ bản cũ, không làm mất tệp của người dùng. */
+async function refresh(rec: Stored, uid: string): Promise<Stored> {
+  try {
+    const buf = await readFile(path.join(DIR, rec.id + ".bin"));
+    const blocks = await pickExtractor(rec.kind, rec.name).run(buf, { name: rec.name, kind: rec.kind, uid });
+    const tokens = tokensOf(blocks);
+    const next: Stored = { ...rec, blocks, tokens, large: tokens > LARGE_TOKENS, v: EXTRACT_V };
+    await writeFile(path.join(DIR, rec.id + ".json"), JSON.stringify(next));
+    return next;
+  } catch { return rec; }
+}
 
 const safeId = (id: string) => /^[a-f0-9]{40}$/.test(id);
 
@@ -24,7 +39,8 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
   const id = createHash("sha1").update(buf).digest("hex");
   await mkdir(DIR, { recursive: true });
   try {
-    const hit = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")) as Stored;
+    let hit = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")) as Stored;
+    if (stale(hit)) hit = await refresh(hit, uid);
     if (hit.raw && !o.raw) throw new FileError(hit.err ?? `Không trích được nội dung từ "${name}".`);
     // Có đúng nội dung tệp trong tay nên được là chủ, không lộ gì thêm.
     claimFile(uid, id, buf.length, name);
@@ -45,10 +61,10 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
     claimFile(uid, id, buf.length, name);
     return rec;
   }
-  const tokens = estTokens(blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join(""));
+  const tokens = tokensOf(blocks);
   // PDF không gửi nguyên được (quá dài): báo ngay lúc tải lên để người dùng biết model chỉ đọc phần chữ.
   const note = kind === "application/pdf" && !blocks.some((b) => b.type === "document") ? `"${name}" quá dài để gửi nguyên tệp nên model sẽ đọc phần chữ, không thấy hình và bố cục.` : undefined;
-  const rec: Stored = { id, name, kind, tokens, large: tokens > LARGE_TOKENS, blocks, ...(note ? { note } : {}) };
+  const rec: Stored = { id, name, kind, tokens, large: tokens > LARGE_TOKENS, blocks, v: EXTRACT_V, ...(note ? { note } : {}) };
   await writeFile(path.join(DIR, id + ".bin"), buf);
   await writeFile(path.join(DIR, id + ".json"), JSON.stringify(rec));
   claimFile(uid, id, buf.length, name);
@@ -70,6 +86,7 @@ export async function buildContext(ids: string[], names: Record<string, string>,
     if (!safeId(id) || !mayUse(uid, id)) continue;
     let rec: Stored;
     try { rec = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")); } catch { continue; }
+    if (stale(rec)) rec = await refresh(rec, uid);
     const name = names[id] ?? rec.name;
     const label = `[File: ${name}]`;
     if (rec.large) {
