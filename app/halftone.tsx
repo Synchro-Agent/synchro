@@ -60,8 +60,9 @@ void main() {
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 // Hai bảng màu: theme tối và theme sáng.
 const THEMES = {
-  dark: { colors: ["#111210", "#2A2B26", "#5C5D56", "#B9B8AF"], contrast: 0.9, grain: 0.05, brightness: 0 },
-  light: { colors: ["#EEECE5", "#DCD9CF", "#B5B3AA", "#85867E"], contrast: 0.95, grain: 0.03, brightness: 0.01 },
+  // Chấm chỉ là nền: mép màn hình từng gần trắng, chói hơn mọi trang khác và át cả thanh bên, ô soạn. Giữ chấm sáng nhất ở tông xám vừa đủ thấy.
+  dark: { colors: ["#111210", "#1B1C19", "#2B2C27", "#47483F"], contrast: 0.9, grain: 0.05, brightness: 0 },
+  light: { colors: ["#EEECE5", "#E7E5DD", "#DAD8CE", "#C4C2B8"], contrast: 0.95, grain: 0.03, brightness: 0.01 },
 };
 
 export function HalftoneBg() {

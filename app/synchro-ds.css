@@ -41,7 +41,7 @@
   --ds-plate:#1A1B18; --ds-plate-a:rgba(28,29,26,.74); --ds-sunken:#141513;
   --ds-hover:rgba(238,236,229,.06); --ds-press:rgba(238,236,229,.11);
   --ds-line:#2A2B26; --ds-line-2:#363731;
-  --ds-ink:#EEECE5; --ds-ink-2:#CFCEC6; --ds-muted:#9C9D95; --ds-faint:#80817A;
+  --ds-ink:#EEECE5; --ds-ink-2:#CFCEC6; --ds-muted:#9C9D95; --ds-faint:#8E8F88;
   --ds-inv:#EEECE5; --ds-inv-fg:#111210;
   --ds-ok:#6FBF8E; --ds-warn:#E0A256; --ds-bad:#F08472;
   --ds-lift:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.7);
@@ -73,6 +73,12 @@ html body .toggle:not(.auth-root *){width:38px;height:22px;border-radius:var(--r
 html body .toggle:not(.auth-root *)::after{top:3px;left:3px;width:16px;height:16px;background:var(--ds-plate);box-shadow:0 1px 2px rgba(17,18,16,.25);transition:transform var(--ds-mid) var(--ds-ease),background-color var(--ds-mid)}
 html body .toggle.on:not(.auth-root *){background:var(--ds-inv);box-shadow:inset 0 0 0 1px var(--ds-inv)}
 html body .toggle.on:not(.auth-root *)::after{transform:translateX(16px);background:var(--ds-inv-fg);box-shadow:none}
+/* Tắt ở nền tối: nút từng cùng tông với rãnh nên công tắc như biến mất, phân biệt bật/tắt chỉ còn nhờ độ sáng. */
+html[data-theme=dark] body .toggle:not(.on):not(.auth-root *)::after{background:var(--ds-muted)}
+/* Cỡ nhỏ trong bảng dày (bàn trộn ngữ cảnh): .toggle.sm cũ yếu hơn quy tắc trên nên không có tác dụng. */
+html body .toggle.sm:not(.auth-root *){width:32px;height:18px}
+html body .toggle.sm:not(.auth-root *)::after{top:3px;left:3px;width:12px;height:12px}
+html body .toggle.sm.on:not(.auth-root *)::after{transform:translateX(14px)}
 html body .toggle:not(.auth-root *):disabled{opacity:.45}
 /* Bộ chọn đoạn (Cài đặt, Kho kỹ năng…): rãnh trũng, mục chọn là tấm mực. */
 html body :is(.group,.pl-seg):not(.auth-root *){display:inline-flex;align-items:center;gap:2px;height:var(--ds-h);padding:3px;border-radius:var(--ds-r);background:var(--ds-sunken)!important;border:0!important;box-shadow:inset 0 0 0 1px var(--ds-line)}
@@ -835,7 +841,7 @@ html body .menu.pl-menu .pl-mi em{white-space:normal;line-height:16px}
 html body .app.code-view .rail::before{content:"";position:absolute;inset:6px;z-index:-1;border-radius:var(--r-pill);pointer-events:none;
   background:rgba(255,255,255,.5);-webkit-backdrop-filter:blur(26px) saturate(var(--gl-sat)) brightness(var(--gl-bright));backdrop-filter:blur(26px) saturate(var(--gl-sat)) brightness(var(--gl-bright));
   box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.55)),inset -1px -1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.35))}
-html[data-theme=dark] body .app.code-view .rail::before{background:rgba(28,29,26,.55)}
+html[data-theme=dark] body .app.code-view .rail::before{background:rgba(20,21,18,.9)}
 html body .app.code-view .rail::after{content:"";position:absolute;inset:6px;z-index:-1;border-radius:var(--r-pill);pointer-events:none;padding:.75px;opacity:.55;
   background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}

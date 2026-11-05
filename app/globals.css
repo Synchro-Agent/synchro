@@ -730,7 +730,9 @@ html[data-chat-font="System"] .ai-msg{font-family:system-ui,-apple-system,sans-s
 .code-view .dock::before{display:none}
 .code-view .dock{padding:0 24px 20px}
 .code-view .dock .composer{width:min(1040px,100%);margin:0 auto}
-html[data-theme="light"] body .code-view .sidebar{--gl-fill:rgba(255,255,255,.6)}
+html[data-theme="light"] body .code-view .sidebar{--gl-fill:rgba(255,255,255,.72)}
+/* Thanh bên ở Code cùng tông với các trang khác: nền chấm không được làm xám mặt kính, chữ nhãn mục mới đủ tương phản. */
+html[data-theme="dark"] body .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
 
 /* ===== Synchro Code view ===== */
 .cv{flex:1;min-height:0;display:flex;position:relative;z-index:1}
@@ -2397,7 +2399,7 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 /* Cột chat luôn còn ít nhất 420px khi đủ chỗ; khung xem co lại tới 340px rồi mới lấn cột chat. */
 .main{--art-w:max(340px,min(clamp(380px,50%,900px),calc(100% - 420px)))}
 /* Lề của từng phần, không phải padding của .main: % của padding tính theo cả cửa sổ nên cột chat từng hẹp hơn hẳn phần khung xem để lại. */
-.main.has-art>.thread,.main.has-art>.topbar{margin-right:var(--art-w)}
+.main.has-art>.thread,.main.has-art>.topbar,.main.has-art>.verify-banner{margin-right:var(--art-w)}
 .main.has-art .dock{right:var(--art-w)}
 html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)}
 .art-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
@@ -2444,7 +2446,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .art-err-inline{font-size:12.5px;color:var(--text-3);padding:12px}
 .art-foot{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:.5px solid var(--border)}
 @media (max-width:760px){
-  .main.has-art>.thread,.main.has-art>.topbar{margin-right:0}
+  .main.has-art>.thread,.main.has-art>.topbar,.main.has-art>.verify-banner{margin-right:0}
   .main.has-art .dock{right:0}
   .art-panel{position:fixed;inset:0;width:100%;z-index:60;border-left:0}
   .art-head{padding-left:10px;gap:6px}
@@ -3204,11 +3206,11 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .cx-tier-h{display:flex;flex-direction:column;gap:1px;margin-bottom:6px}
 .cx-tier-h b{font-size:12.5px;color:var(--text);white-space:nowrap}
 .cx-tier-h span{font-size:11.5px;line-height:1.4;color:var(--text-3)}
-.cx-row{display:grid;grid-template-columns:minmax(0,1fr) 36px;grid-template-areas:"t s" "b s";column-gap:10px;row-gap:4px;align-items:center;padding:4px 0}
-.cx-row:not(:has(.toggle)){grid-template-columns:minmax(0,1fr)}
+/* Cột công tắc giữ chỗ ở mọi dòng để cột số thẳng hàng; công tắc nằm ngang dòng nhãn, sát mép phải cùng đường kẻ. */
+.cx-row{display:grid;grid-template-columns:minmax(0,1fr) 32px;grid-template-areas:"t s" "b .";column-gap:10px;row-gap:4px;align-items:center;padding:4px 0}
 .cx-row-t{grid-area:t;display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text-2)}
 .cx-row-t em{font-style:normal;color:var(--text-3);font-variant-numeric:tabular-nums}
-.cx-bar{grid-area:b;height:4px;border-radius:2px;background:var(--hover);overflow:hidden}
+.cx-bar{grid-area:b;height:4px;border-radius:2px;background:color-mix(in srgb,var(--text) 12%,transparent);overflow:hidden}
 .cx-bar i{display:block;height:100%;border-radius:2px;background:var(--accent);transition:width .25s var(--ease)}
 .cx-row .toggle{grid-area:s}
 .cx-row.off .cx-row-t{color:var(--text-3)}
