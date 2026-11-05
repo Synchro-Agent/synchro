@@ -5,6 +5,7 @@
 //   chụp từng slide / trang ở máy tính và điện thoại, đo lỗi hiển thị (chữ đè chữ, tràn khung, chữ bị cắt, ảnh không tải được, chữ quá nhỏ,
 //   trang tràn ngang, lỗi script) rồi trả ảnh ghép + danh sách lỗi để model tự sửa trước khi báo xong.
 import { buildDocCore, isDeck } from "./artdoc";
+import { DESIGN_PROBE } from "./artprobe";
 import { getArtifactByIdent } from "./artifactstore";
 import { inlineImages } from "./artimg";
 import { splitArtifacts, type ArtType } from "./artifacts";
@@ -25,7 +26,7 @@ export const READ_ARTIFACT_TOOL = {
 
 export const CHECK_ARTIFACT_TOOL = {
   name: "check_artifact",
-  description: "Kiểm tra hiển thị thật của artifact (trang web, bản trình bày, ứng dụng React, SVG): Synchro dựng artifact trong Chromium đúng như khung xem trước, chụp từng slide / trang (máy tính và điện thoại) và đo lỗi: chữ đè chữ, phần tử tràn khỏi slide hoặc màn hình, chữ bị cắt, ảnh không tải được, chữ quá nhỏ, trang tràn ngang, lỗi JavaScript. Trả về ảnh ghép các slide / trang và danh sách lỗi theo vị trí. Gọi sau khi viết xong hoặc sửa artifact, sửa hết lỗi rồi kiểm tra lại trước khi báo xong.",
+  description: "Kiểm tra hiển thị thật của artifact (trang web, bản trình bày, ứng dụng React, SVG): Synchro dựng artifact trong Chromium đúng như khung xem trước, chụp từng slide / trang (máy tính và điện thoại) và đo lỗi: chữ đè chữ, phần tử tràn khỏi slide, thẻ hoặc màn hình, chữ bị cắt, ảnh không tải được, chữ quá nhỏ, tiêu đề rớt một chữ, tương phản thấp (WCAG), trang tràn ngang, lỗi JavaScript. Trả về ảnh ghép các slide / trang và danh sách lỗi theo vị trí. Gọi sau khi viết xong hoặc sửa artifact, sửa hết lỗi rồi kiểm tra lại trước khi báo xong.",
   input_schema: {
     type: "object",
     properties: {
@@ -37,7 +38,7 @@ export const CHECK_ARTIFACT_TOOL = {
 
 export const ARTCHECK_RULES = (check: boolean) => `<self_check>
 Bạn chịu trách nhiệm về chất lượng sản phẩm mình giao, như một người làm nghề cẩn thận:
-${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 3 vòng) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
+${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản thấp, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 3 vòng) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
     : "- Sau khi viết hoặc sửa artifact: đọc lại bằng read_artifact và tự rà bố cục (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng) trước khi báo xong."}
 - Bố cục bền: dùng flex / grid và khoảng cách đều, không đặt chữ bằng position:absolute chồng lên nhau; slide 16:9 chừa lề, chữ dài thì giảm chữ hoặc chia slide thay vì để tràn; ảnh có kích thước và object-fit rõ ràng.
 - Người dùng báo sản phẩm có lỗi: không đổ cho công cụ hay nói "không làm được". Đọc lại bằng read_artifact${check ? ", tái hiện bằng check_artifact" : ""}, tìm nguyên nhân, sửa, kiểm tra lại, rồi báo ngắn gọn đã sửa gì và đã kiểm tra thế nào.
@@ -117,6 +118,7 @@ const PROBE = String.raw`(root, deck) => {
   for (const { el, r } of boxes) { const fs = parseFloat(getComputedStyle(el).fontSize); if (fs < (deck ? 12 : 10) && r.width > 8) add("chữ quá nhỏ", Math.round(fs) + "px: “" + say(el) + "”"); }
   if (deck && !boxes.length && !root.querySelector("img,svg,canvas,video")) add("slide trống", "không có chữ hay hình");
   if (!deck && document.documentElement.scrollWidth > innerWidth + 2) add("trang tràn ngang", "rộng " + document.documentElement.scrollWidth + "px trên màn " + innerWidth + "px");
+  (${DESIGN_PROBE})(root, deck, boxes, add, say);
   return out;
 }`;
 
@@ -207,7 +209,7 @@ export async function checkArtifact(uid: string, a: ArtVersion | null, input: Re
   if (!rep) return { content: `Chưa kiểm tra được hiển thị (trình kiểm tra lỗi): ${(r.stderr || r.stdout).slice(-600)}`, is_error: true };
   const j = JSON.parse(rep.data.toString("utf8")) as { slides: number; views: string[]; issues: { where: string; kind: string; detail: string }[]; errors: string[] };
   const head = deck ? `Bản trình bày "${a.title}" (phiên bản ${a.v}): ${j.slides} slide, dựng ở 1280×720${slide ? `, chụp to slide ${slide}` : ""}.` : `"${a.title}" (phiên bản ${a.v}) dựng ở ${j.views.join(" và ")}.`;
-  const issues = j.issues.length ? `\nLỗi hiển thị cần sửa (${j.issues.length}):\n${j.issues.map((x) => `- ${x.where}: ${x.kind} — ${x.detail}`).join("\n")}` : "\nKhông đo thấy lỗi bố cục (chữ đè, tràn, cắt, ảnh hỏng, chữ quá nhỏ).";
+  const issues = j.issues.length ? `\nLỗi hiển thị cần sửa (${j.issues.length}):\n${j.issues.map((x) => `- ${x.where}: ${x.kind} — ${x.detail}`).join("\n")}` : "\nKhông đo thấy lỗi (chữ đè, tràn, cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản).";
   const errs = j.errors.length ? `\nLỗi khi chạy trang:\n${j.errors.map((e) => `- ${e}`).join("\n")}` : "";
   const tail = "\nẢnh ghép đi kèm: tự xem thêm bố cục, căn lề, khoảng cách, độ tương phản và chỗ nào trông chưa chỉn chu.";
   return { content: head + issues + errs + tail, is_error: false, ...(sheet ? { image: sheet.data.toString("base64") } : {}) };
