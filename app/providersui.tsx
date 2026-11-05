@@ -105,7 +105,7 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
   const [fresh, setFresh] = useState(false);
   const refresh = async () => {
     setFresh(true); setErr("");
-    try { const s = await call<EngineStatus>("POST", `${base}/refresh`); setSt(s); await refreshModels(); app.say(s.loggedIn ? `Checked ${v.name} again${s.plan ? `: ${s.plan}` : ""}` : `Sign in to ${v.name} again`); }
+    try { const s = await call<EngineStatus>("POST", `${base}/refresh`); setSt(s); await refreshModels(); app.say(!s.loggedIn ? `Sign in to ${v.name} again` : s.plan ? `Checked ${v.name} again: ${s.plan}` : `Checked ${v.name} again`); }
     catch (e) { setErr((e as Error).message); }
     finally { setFresh(false); }
   };
