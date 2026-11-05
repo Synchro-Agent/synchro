@@ -1,0 +1,88 @@
+// Tệp của đoạn chat trong thư mục chạy code: bản gốc người dùng gửi và ảnh đã tạo nằm ở inputs/<tên>. Không cần máy chủ; phần chạy thật dùng sandbox cục bộ của macOS.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createRequire } from "node:module";
+import { loadTs } from "../lib/ts.mjs";
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); };
+const XLSX = createRequire(path.join(process.cwd(), "package.json"))("xlsx");
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-inputs-"));
+process.env.DATA_DIR = path.join(tmp, "data");
+process.env.DATA_KEY = "inputs-key";
+process.env.CODE_RUN = "local";
+fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
+const { runinputs: RI, fileproc: FP, coderun: CR, authstore: AS, outputs: OUT } = await loadTs(["runinputs", "fileproc", "coderun", "authstore", "outputs"]);
+const U = AS.createUser({ email: "a@inputs.test", name: "A", verified: true });
+const uid = U.id;
+const written = [];
+const CACHE = path.join(process.cwd(), ".cache", "files");
+
+console.log("1. Tên tệp");
+ok(RI.inputName("Báo cáo tháng 10.xlsx") === "Báo cáo tháng 10.xlsx", "giữ tiếng Việt và dấu cách");
+ok(!RI.inputName("../../etc/passwd").includes("/"), "không có dấu gạch chéo", RI.inputName("../../etc/passwd"));
+ok(!RI.inputName("..").startsWith(".") && RI.inputName("..").length > 0, "tên chỉ có dấu chấm thành tên hợp lệ", RI.inputName(".."));
+ok(RI.inputName("x".repeat(400) + ".xlsx").endsWith(".xlsx") && RI.inputName("x".repeat(400) + ".xlsx").length <= 180, "cắt tên dài vẫn giữ đuôi");
+
+console.log("2. Tệp người dùng gửi tới được inputs/");
+const rows = [["Ngày", "Tiền"]]; for (let i = 0; i < 1000; i++) rows.push([`d${i}`, i]);
+const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "S");
+const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+const rec = await FP.processFile(buf, "Doanh số.xlsx", uid);
+written.push(rec.id);
+const blocks = await FP.buildContext([rec.id], { [rec.id]: "Doanh số.xlsx" }, "", uid);
+const msgs = [{ role: "user", content: [...blocks, { type: "text", text: "Thêm cột tổng" }] }];
+let r = await RI.runInputs(uid, msgs, [], new Set());
+ok(r.names.join() === "Doanh số.xlsx" && r.files[0].path === "inputs/Doanh số.xlsx" && r.files[0].data.equals(buf), "đúng bản gốc, đủ byte", r.names);
+ok(/đã cắt, chỉ hiện 200\/1000/.test(rec.blocks[0].text) && /inputs\//.test(rec.blocks[0].text), "phần chữ trích báo rõ có bản gốc đủ dòng");
+const other = AS.createUser({ email: "b@inputs.test", name: "B", verified: true });
+r = await RI.runInputs(other.id, msgs, [], new Set());
+ok(!r.files.length, "tài khoản khác không lấy được tệp qua id trong tin nhắn", r.names);
+
+console.log("3. Chép mỗi tệp một lần trong lượt; không giữ thư mục thì chép mỗi lần");
+const sent = new Set();
+r = await RI.runInputs(uid, msgs, [], sent);
+ok(r.files.length === 1, "lần đầu chép");
+r = await RI.runInputs(uid, msgs, [], sent);
+ok(!r.files.length && !r.names.length, "lần sau trong lượt không chép lại", r.names);
+r = await RI.runInputs(uid, msgs, []);
+ok(r.files.length === 1, "không có sent: chép lại");
+
+console.log("4. Ảnh đã tạo: trong lượt và từ lượt trước");
+const png = Buffer.from("89504e470d0a1a0a", "hex");
+const [o1] = OUT.saveOutputs(uid, [{ path: "anh-moi.png", data: png }]);
+r = await RI.runInputs(uid, [], [o1.id], new Set());
+ok(r.names.join() === "anh-moi.png" && r.files[0].data.equals(png), "ảnh vừa tạo trong lượt vào inputs/", r.names);
+const traced = [{ role: "assistant", content: "x", trace: [{ name: "generate_image", status: "ok", summary: "Đã tạo 1 ảnh.\n<files>\nanh-moi.png (8 B) — đã gửi cho người dùng\n</files>" }, { name: "run_code", status: "ok", summary: '<run_result>\n<files>\noutputs/khong-con.xlsx (1 KB) — đã gửi cho người dùng\n</files>' }, { name: "generate_image", status: "error", summary: "sai.png (1 B) — đã gửi cho người dùng" }] }];
+ok(RI.tracedOutputs(traced).join() === "khong-con.xlsx,anh-moi.png", "đọc tên từ dấu vết, bỏ công cụ lỗi", RI.tracedOutputs(traced));
+r = await RI.runInputs(uid, traced, [], new Set());
+ok(r.names.join() === "anh-moi.png", "ảnh lượt trước vào inputs/, tệp đã hết hạn thì bỏ qua", r.names);
+
+console.log("5. Quá dung lượng");
+const big = Buffer.alloc(RI.INPUTS_MAX + 1, 1);
+const [o2] = OUT.saveOutputs(uid, [{ path: "lon.bin", data: big }]);
+r = await RI.runInputs(uid, [], [o2.id, o1.id], new Set());
+ok(r.over.join() === "lon.bin" && r.names.join() === "anh-moi.png", "tệp quá lớn được báo, tệp khác vẫn chép", r);
+
+console.log("6. Chạy thật");
+if (process.platform === "darwin") {
+  const inp = await RI.runInputs(uid, msgs, [], new Set());
+  const keep = `inputs-test-${Date.now()}`;
+  const run = await CR.execRun({ uid, keep, net: false, argv: ["node", "main.js"], files: [{ path: "main.js", data: Buffer.from('const fs=require("fs");const b=fs.readFileSync("inputs/Doanh số.xlsx");console.log(fs.readdirSync("inputs").join(),b.length);') }, ...inp.files] });
+  ok(run.exit === 0 && run.stdout.includes(`Doanh số.xlsx ${buf.length}`), "code đọc được tệp ở inputs/, đúng số byte", run.stdout + run.stderr);
+  const again = await CR.execRun({ uid, keep, net: false, argv: ["node", "main.js"], files: [{ path: "main.js", data: Buffer.from('console.log(require("fs").readdirSync("inputs").join())') }] });
+  ok(again.stdout.includes("Doanh số.xlsx"), "lần chạy sau trong cùng đoạn chat vẫn thấy tệp", again.stdout + again.stderr);
+  ok(!again.files.some((f) => f.path.includes("Doanh")), "tệp đầu vào không tự thành tệp giao cho người dùng", again.files.map((f) => f.path));
+  fs.rmSync(path.join(os.tmpdir(), "synchro-keep", uid.replace(/[^\w-]/g, "_")), { recursive: true, force: true });
+}
+
+console.log("7. Tệp đã tải lên bằng bộ đọc cũ được đọc lại khi dùng tới");
+const f = path.join(CACHE, rec.id + ".json"), old = JSON.parse(fs.readFileSync(f, "utf8"));
+fs.writeFileSync(f, JSON.stringify({ ...old, v: undefined, blocks: [{ type: "text", text: "## Sheet: S (bản cũ sai)" }] }));
+const ctx = await FP.buildContext([rec.id], { [rec.id]: "Doanh số.xlsx" }, "", uid);
+ok(ctx.some((b) => b.type === "text" && /Tiền: min=0/.test(b.text)) && !ctx.some((b) => /bản cũ sai/.test(b.text ?? "")), "buildContext đọc lại bản mới", ctx.map((b) => (b.text ?? "").slice(0, 80)));
+
+for (const id of written) for (const x of [".bin", ".json"]) fs.rmSync(path.join(CACHE, id + x), { force: true });
+fs.rmSync(tmp, { recursive: true, force: true });
+console.log(`\n${fail ? "✗" : "✓"} ${pass} đạt, ${fail} lỗi`);
+process.exit(fail ? 1 : 0);

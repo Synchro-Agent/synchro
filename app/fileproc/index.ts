@@ -99,8 +99,9 @@ export async function buildContext(ids: string[], names: Record<string, string>,
     }
     for (const b of rec.blocks) {
       if (b.type === "text") out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}">\n${esc(b.text)}\n</file>` });
-      else if (b.type === "image") { out.push({ type: "text", text: label }); out.push(b); }
-      else out.push({ type: "text", text: label }, { ...b, name });
+      // Thẻ <file> rỗng mang id: model nhìn ảnh đã thu nhỏ, còn run_code và browser_upload lấy đúng bản gốc (chatFiles).
+      else if (b.type === "image") { out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}"></file>` }); out.push(b); }
+      else out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}"></file>` }, { ...b, name });
     }
   }
   return out;
