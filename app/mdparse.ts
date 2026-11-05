@@ -42,6 +42,13 @@ const lastChar = (s: string, i: number) => { if (i <= 0) return " "; const c = s
 const nextChar = (s: string, i: number) => (i >= s.length ? " " : String.fromCodePoint(s.codePointAt(i)!));
 const delimText = (t: Delim) => t.ch.repeat(t.n);
 
+// Còn dấu * mở chưa có dấu đóng ở phía trước không ("**abc**1" thì ** sau là dấu đóng, "*x* 2*3" thì không).
+function starOpen(ts: Tok[]): boolean {
+  let c = 0;
+  for (const t of ts) if (isDelim(t) && t.ch === "*") { if (t.close && c > 0) c = Math.max(0, c - t.n); else if (t.open) c += t.n; }
+  return c > 0;
+}
+
 function flat(ts: Tok[]): Inl[] {
   const out: Inl[] = [];
   for (const t of ts) {
@@ -244,7 +251,7 @@ export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean 
       // "**Lưu ý:**tiếp" và "**"trích"**x": CommonMark không đóng được, model viết thế khá nhiều, bản cũ vẫn in đậm đúng.
       if (c === "*" && n >= 2) { left = !wsA; right = !wsB; }
       // Phép nhân, lũy thừa viết thẳng ("2*3*4", "a**2 + b**2") không phải dấu nhấn.
-      const arith = c === "*" && WORD.test(before) && DIGIT.test(after) && !ts.some((t) => isDelim(t) && t.ch === "*" && t.open);
+      const arith = c === "*" && WORD.test(before) && DIGIT.test(after) && !starOpen(ts);
       if (arith || (c === "~" && n !== 2)) { buf += s.slice(i, i + n); i += n; continue; }
       const open = c === "_" ? left && (!right || pB) : left, close = c === "_" ? right && (!left || pA) : right;
       flush();

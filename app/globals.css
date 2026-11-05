@@ -234,8 +234,8 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 .thread-in>:not(:nth-last-child(-n+3)){content-visibility:auto;contain-intrinsic-size:auto 160px;overflow-clip-margin:24px}
 /* content-visibility cắt mọi thứ tràn khỏi dòng: dòng đang mở menu hay đang sửa tin thì vẽ bình thường */
 .thread-in>:has(.menu,[aria-expanded="true"],.u-edit){content-visibility:visible}
-.user-msg{align-self:flex-end;background:var(--user-bubble);border-radius:14px;padding:8px 14px;font-size:16px;max-width:80%;white-space:pre-wrap;animation:rise .35s var(--ease) both}
-.ai-msg{font-family:var(--font-sans);font-size:17px;line-height:1.6;white-space:pre-wrap}
+.user-msg{align-self:flex-end;background:var(--user-bubble);border-radius:14px;padding:8px 14px;font-size:16px;max-width:80%;white-space:pre-wrap;overflow-wrap:anywhere;animation:rise .35s var(--ease) both}
+.ai-msg{font-family:var(--font-sans);font-size:17px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
 /* Hiệu ứng hiện chữ chỉ cho câu trả lời đang viết, và chỉ ở khối cuối: mở lại đoạn chat cũ không chạy hàng chục nghìn hiệu ứng làm mờ. */
 .ai-streaming :is(p,li,h1,h2,h3,h4,td,th,blockquote):last-child .w{animation:wIn .6s cubic-bezier(.2,.6,.2,1) both}
 @keyframes wIn{from{opacity:0}to{opacity:1}}

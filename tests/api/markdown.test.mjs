@@ -61,6 +61,8 @@ console.log("3. Nhấn chữ");
   eq(inl("~~bỏ~~"), [{ t: "del", c: ["bỏ"] }], "~~x~~");
   eq(inl("snake_case_name và tiếng_việt_có_dấu"), ["snake_case_name và tiếng_việt_có_dấu"], "gạch dưới giữa từ không nhấn, kể cả chữ có dấu");
   eq(inl("2*3*4 và a**2 + b**2 và 5 * 3 * 2"), ["2*3*4 và a**2 + b**2 và 5 * 3 * 2"], "phép tính không thành nhấn chữ");
+  eq(inl("*a* 2*3*4"), [{ t: "em", c: ["a"] }, " 2*3*4"], "phép nhân sau chữ nghiêng đã đóng vẫn giữ nguyên");
+  eq(inl("**Giá**100"), [{ t: "strong", c: ["Giá"] }, "100"], "đóng đậm ngay trước số");
   eq(inl("khoảng ~5 phút đến ~10 phút"), ["khoảng ~5 phút đến ~10 phút"], "dấu ~ đơn giữ nguyên");
   eq(inl("**Lưu ý:**tiếp"), [{ t: "strong", c: ["Lưu ý:"] }, "tiếp"], "**Lưu ý:**tiếp vẫn đậm như bản cũ");
   eq(inl("\\*không nhấn\\*"), ["*không nhấn*"], "ký tự thoát");
