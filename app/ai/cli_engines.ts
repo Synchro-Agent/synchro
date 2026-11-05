@@ -660,7 +660,8 @@ export class GrokEngine implements Engine {
     for await (const o of objects(p)) {
       // Grok không có sự kiện khởi động: mọi sự kiện (đang nghĩ, gọi công cụ…) đều là model đang làm việc. Trước đây chỉ chữ mới tính,
       // lượt mở đầu bằng công cụ hay nghĩ lâu bị coi là treo ở giây thứ 60.
-      if (o.type !== "error") yield { kind: "activity" };
+      // Trừ available_commands: CLI in ra lúc khởi động rồi có thể thử lại mãi khi hãng trả 429 (gói free), lượt im lặng hàng phút mà Tự động không chuyển model.
+      if (o.type !== "error" && o.type !== "available_commands") yield { kind: "activity" };
       if (o.type === "text" && typeof o.data === "string") { all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
       else if (o.type === "tool_call") {
         tools = true; seg = "";
