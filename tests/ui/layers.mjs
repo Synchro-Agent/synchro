@@ -76,7 +76,8 @@ try {
   ok(await ev(`!document.querySelector(".art-modal")`), "Esc đóng khung xem");
   // Xóa một artifact: hỏi lại trước, Enter trên nút xóa không mở khung xem.
   const tiles0 = await ev(`document.querySelectorAll(".art-tile").length`);
-  await ev(`document.querySelector(".art-tile .icon-btn").focus(), 1`);
+  // Đóng khung xem trả tiêu điểm về chỗ cũ sau hiệu ứng đóng; máy bận thì việc đó tới muộn và cướp lại tiêu điểm, Enter rơi vào nút khác. Đặt lại tới khi đứng yên.
+  { const t = Date.now(); let still = 0; while (Date.now() - t < 5000 && still < 4) { const on = await ev(`document.activeElement === document.querySelector(".art-tile .icon-btn")`); if (on) still++; else { still = 0; await ev(`document.querySelector(".art-tile .icon-btn").focus(), 1`); } await sleep(100); } }
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await P("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   // Khung hỏi lại tải dần trên máy bận: chờ tới khi hiện, rồi xét không có khung xem artifact.
