@@ -78,5 +78,65 @@ ok(parks === 1, "lần chạy CLI sau trên cùng cầu nối không bị nhả 
 b2.park();
 ok(parks === 2, "lần chạy sau dừng chờ duyệt: nhả khóa", parks);
 b2.close();
+
+// Antigravity cắt mỗi lần chờ công cụ ở khoảng 190 giây: cầu nối của nó trả job_id trước hạn, công cụ chạy tiếp, wait_for_result lấy kết quả. CLI khác không đổi.
+{
+  const tl = [{ name: "lau", description: "", input_schema: {} }, { name: "nhanh", description: "", input_schema: {} }, { name: "hong", description: "", input_schema: {} }];
+  let ran = 0, cancelled = false;
+  const b3 = M.openBridge({ uid: "u", tools: tl, hold: 100, call: async (name, _i, cancel) => {
+    cancel.addEventListener("abort", () => { cancelled = true; });
+    if (name === "nhanh") return { content: "xong nhanh", is_error: false };
+    if (name === "hong") { await sleep(150); throw new Error("nổ"); }
+    await sleep(350); ran++;
+    return { content: "xong lau", is_error: false, image: "QUJD", mime: "image/png" };
+  } });
+  const t3 = b3.url.split("/").pop();
+  const post3 = async (body, signal) => { const res = await M.bridgeRoute(new Request("http://x/", { method: "POST", signal, headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }), t3); return res.status === 202 ? null : res.json(); };
+  const callOf = (name, args = {}, id = 31) => ({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
+  const list = await post3({ jsonrpc: "2.0", id: 30, method: "tools/list" });
+  ok(list.result.tools.some((x) => x.name === "wait_for_result"), "cầu nối có hạn chờ: có công cụ wait_for_result");
+  let j = await post3(callOf("nhanh"));
+  ok(j.result.content[0].text === "xong nhanh" && !b3.pendingJobs().length, "công cụ xong trước hạn: trả kết quả như thường, không có job");
+  const t0 = Date.now();
+  j = await post3(callOf("lau"));
+  const said = j.result.content[0].text, job = /job_id: (job_\w+)/.exec(said)?.[1];
+  ok(!!job && j.result.isError === false && Date.now() - t0 < 300 && /wait_for_result/.test(said), "quá hạn: trả job_id, không phải lỗi, nói rõ phải làm gì", said);
+  ok(b3.pendingJobs().length === 1 && b3.pendingJobs()[0].name === "lau", "việc đang chờ được ghi nhận để nhắc nếu model bỏ lửng", JSON.stringify(b3.pendingJobs()));
+  ok(b3.alive() >= t0 + 50 && !ran, "công cụ vẫn chạy ở nền", ran);
+  j = await post3(callOf("wait_for_result", { job_id: job }));
+  const again = /job_id: (job_\w+)/.exec(j.result.content[0].text)?.[1];
+  ok(again === job && !ran, "chờ thêm mà chưa xong: lại báo đang chạy, cùng job_id", j.result.content[0].text);
+  await sleep(300);
+  ok(ran === 1, "việc chạy xong giữa hai lần gọi", ran);
+  j = await post3(callOf("wait_for_result", { job_id: job }));
+  ok(j.result.content[0].text === "xong lau" && j.result.content[1]?.type === "image" && j.result.isError === false, "lấy đúng kết quả thật, kể cả ảnh", JSON.stringify(j));
+  ok(!cancelled, "việc không bị hủy qua các lần chờ", cancelled);
+  ok(!b3.pendingJobs().length, "lấy xong thì hết việc đang chờ");
+  j = await post3(callOf("wait_for_result", { job_id: job }));
+  ok(j.result.isError === true && /gọi lại/.test(j.result.content[0].text), "job_id đã lấy hoặc không có: báo rõ", j.result.content[0].text);
+  j = await post3(callOf("hong"));
+  const jobH = /job_id: (job_\w+)/.exec(j.result.content[0].text)?.[1];
+  await sleep(100);
+  j = await post3(callOf("wait_for_result", { job_id: jobH }));
+  ok(j.result.isError === true && /nổ/.test(j.result.content[0].text), "công cụ lỗi sau hạn: kết quả lỗi tới đúng lần chờ", JSON.stringify(j));
+  // Người chờ đi mất (CLI cắt lần chờ) không làm việc dừng; đóng cầu nối (hết lượt, Dừng) thì việc nhận tín hiệu hủy.
+  j = await post3(callOf("lau"));
+  const jobC = /job_id: (job_\w+)/.exec(j.result.content[0].text)?.[1];
+  const hang3 = new AbortController();
+  const w3 = post3(callOf("wait_for_result", { job_id: jobC }, 40), hang3.signal);
+  await sleep(20); hang3.abort();
+  j = await w3;
+  ok(/job_id/.test(j.result.content[0].text) && !cancelled && b3.pendingJobs().length === 1, "CLI ngắt lần chờ: việc chạy tiếp, job còn đó", JSON.stringify(j));
+  b3.close();
+  ok(cancelled && !b3.pendingJobs().length, "đóng cầu nối: việc chưa lấy kết quả bị hủy", cancelled);
+  // CLI khác: không có hold nên không có công cụ chờ, không có job.
+  const b4 = M.openBridge({ uid: "u", tools: tl, call: async (name) => { if (name === "lau") await sleep(150); return { content: `xong ${name}`, is_error: false }; } });
+  const t4 = b4.url.split("/").pop();
+  const post4 = async (body) => (await M.bridgeRoute(new Request("http://x/", { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }), t4)).json();
+  ok(!(await post4({ jsonrpc: "2.0", id: 1, method: "tools/list" })).result.tools.some((x) => x.name === "wait_for_result"), "CLI khác: không có wait_for_result");
+  ok((await post4(callOf("lau"))).result.content[0].text === "xong lau", "CLI khác: chờ tới khi xong như cũ");
+  ok(!!(await post4(callOf("wait_for_result"))).error, "CLI khác: gọi wait_for_result là công cụ không có");
+  b4.close();
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

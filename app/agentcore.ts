@@ -7,7 +7,7 @@ import { compatBody, compatImages, compatRetry, effortParams, respInput, respPar
 import { noteResponse } from "./usage";
 import type { Effort, ProviderKind } from "./catalog";
 import type { UserRow } from "./authstore";
-import { openBridge } from "./mcpbridge";
+import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { subCli, subTurn } from "./ai/subs";
 import { BROWSER_TOOLS, isBrowserTool, runBrowserTool, type BrowserCtx } from "./browsertools";
 import type { Gate } from "./agentgate";
@@ -435,7 +435,7 @@ export const agentTools = (skillCount: number, scripts: boolean) => [...AGENT_TO
 // nhật ký, danh sách việc, terminal, trình duyệt, khung Changes và tin nhắn thêm giống hệt nhau.
 const PLAN_NOTE = (cli: string) => `<synchro_tools>
 Các công cụ nói ở trên (bash, read_file, write_file, edit_file, list_files, grep, browser_*, open_pane, update_plan và công cụ skill) nằm trong máy chủ MCP "synchro"${cli === "claude" ? " (tên đầy đủ có tiền tố mcp__synchro__, ví dụ mcp__synchro__bash)" : cli === "agy" ? " (tên đầy đủ có tiền tố mcp_synchro_, ví dụ mcp_synchro_bash)" : cli === "grok" ? " (tên đầy đủ là synchro__<tên>, ví dụ synchro__bash: tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó)" : ""}. Đó là workspace thật của người dùng: mọi việc đọc, sửa tệp, chạy lệnh, mở trình duyệt đều làm qua các công cụ này.
-Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.${cli === "agy" ? "\nCông cụ dựng sẵn của Antigravity (run_command, write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent, search_web) bị chặn ở đây: gọi chúng thì lượt dừng ngay. Chỉ dùng công cụ mcp_synchro_… (lệnh: mcp_synchro_bash; trang web: mcp_synchro_browser_navigate rồi mcp_synchro_browser_read)." : ""}
+Máy bạn đang chạy chỉ là chỗ trung gian (không có mã nguồn, không ghi được): không dùng công cụ sẵn có của bạn để đọc hay sửa tệp.${cli === "agy" ? "\nCông cụ dựng sẵn của Antigravity (run_command, write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent, search_web) bị chặn ở đây: gọi chúng thì lượt dừng ngay. Chỉ dùng công cụ mcp_synchro_… (lệnh: mcp_synchro_bash; trang web: mcp_synchro_browser_navigate rồi mcp_synchro_browser_read)." + AGY_WAIT_NOTE : ""}
 </synchro_tools>`;
 export async function runPlanAgent(o: {
   user: UserRow; model: string; effort?: string; conv: string; system: string; messages: { role: string; content: unknown }[];
@@ -448,7 +448,7 @@ export async function runPlanAgent(o: {
   // Lời dẫn trước mỗi nhóm công cụ: hiện thành một đoạn chữ riêng như vòng lặp khóa API.
   const flush = () => { const t = pending.trim(); pending = ""; if (t) o.emit({ t: "text", text: t }); };
   const bridge = openBridge({
-    uid: o.u, tools: o.tools,
+    uid: o.u, tools: o.tools, ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}),
     call: async (name, input) => {
       if (o.signal.aborted) return { content: "Người dùng đã dừng.", is_error: true };
       flush();
@@ -489,6 +489,7 @@ export async function runPlanAgent(o: {
       let next: string;
       if (more.length) { for (const t of more) o.emit({ t: "steer", text: t }); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
       else if (jj.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(jj.denied); }
+      else if (bridge.pendingJobs().length) next = `Còn công cụ chưa lấy kết quả (${bridge.pendingJobs().map((p) => `${p.name}: job_id ${p.id}`).join("; ")}). Gọi wait_for_result với từng job_id tới khi có kết quả thật rồi mới trả lời tiếp; đừng báo thất bại khi chưa có kết quả.`;
       else if (!n && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
       else break;
       if (!pending.trim()) pending = said;
