@@ -174,7 +174,7 @@ export async function runSkillTool(list: Skill[], tool: string, input: Record<st
     if (!s) {
       const names = list.length > SEARCH_THRESHOLD ? "(dùng search_skills để tìm)" : list.map((x) => x.name).join(", ");
       // Codex có sẵn skill imagegen của riêng nó và hay mở trước khi tạo ảnh: chỉ đường sang công cụ của Synchro, không tính là lỗi trước mặt người dùng.
-      if (/^(image_?gen|imagine|generate[_-]image)$/i.test(String(name))) return { content: "Không cần skill để tạo ảnh: gọi thẳng công cụ generate_image.", used };
+      if (/^(image_?gen|imagine|generate[_-]image)$/i.test(String(name))) return { content: "Không cần skill để tạo ảnh: gọi thẳng công cụ generate_image.", is_error: false, used };
       return { content: `Skill "${name}" không tồn tại hoặc đang tắt. Skill đang bật: ${names || "(không có)"}`, is_error: true, used };
     }
     if (tool === "load_skill") {
