@@ -991,3 +991,5 @@ Object.assign(EN2VI, { "Changed email verification rule": "Đã đổi quy tắc
 Object.assign(EN2VI, { "550 5.1.1 mailbox does not exist": "550 5.1.1 hộp thư không tồn tại" });
 RULES_VI.push([/^(.*)\(object, written as a JSON string\)$/, (m) => `${m[1]}(đối tượng, viết thành chuỗi JSON)`]);
 Object.assign(EN2VI, { "Forgot your current password?": "Quên mật khẩu hiện tại?", "Sending…": "Đang gửi…", "We sent a reset link to": "Đã gửi đường dẫn đặt lại tới", ". It works for 60 minutes. Check Spam if you don't see it.": ". Đường dẫn có hiệu lực 60 phút. Không thấy thư thì xem cả mục Spam." });
+Object.assign(EN2VI, { "Refresh plan and models": "Làm mới gói và danh sách model" });
+RULES_VI.push([/^Checked (.+) again: (.+)$/, (m) => `Đã kiểm tra lại ${m[1]}: ${m[2]}`], [/^Checked (.+) again$/, (m) => `Đã kiểm tra lại ${m[1]}`], [/^Sign in to (.+) again$/, (m) => `Hãy đăng nhập lại ${m[1]}`]);

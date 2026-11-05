@@ -15,7 +15,7 @@ import { locale } from "./i18n";
 
 type Cli = "claude" | "codex" | "agy" | "grok";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
-export type EngineStatus = { cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
+export type EngineStatus = { plan?: string | null; cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
 
 // cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API).
 // img: khả năng tạo ảnh của gói, chỉ nói điều đã kiểm chứng (ai/imagegen.ts): Antigravity đã chạy thật, Grok và ChatGPT chưa.
@@ -101,6 +101,14 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
       await load(true);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(""); }
   };
+  // Đổi gói ở trang của hãng: Synchro đọc lại gói và danh sách model, không phải đăng xuất rồi đăng nhập lại.
+  const [fresh, setFresh] = useState(false);
+  const refresh = async () => {
+    setFresh(true); setErr("");
+    try { const s = await call<EngineStatus>("POST", `${base}/refresh`); setSt(s); await refreshModels(); app.say(s.loggedIn ? `Checked ${v.name} again${s.plan ? `: ${s.plan}` : ""}` : `Sign in to ${v.name} again`); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setFresh(false); }
+  };
   const logout = () => app.confirm(`Sign out of ${v.name}?`, `Synchro removes this sign-in from the server. ${v.name} models from your plan disappear from the model picker until you sign in again.`, "Sign out", async () => {
     setBusy("out");
     try { setSt(await call<EngineStatus>("POST", `${base}/logout`)); await refreshModels(); app.say(`Signed out of ${v.name}`); }
@@ -121,12 +129,13 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
     <div className="pv-pane">
       <div className="pv-pane-h">
         <div className="api-meta">
-          <div className="api-sub">{st?.loggedIn ? `Signed in with your ${METHOD[st.method ?? ""] ?? "account"}${mine.length ? ` · ${mine.length} models` : ""}` : `${v.plan} · ${v.via}`}</div>
+          <div className="api-sub">{st?.loggedIn ? `Signed in with your ${METHOD[st.method ?? ""] ?? "account"}${st.plan ? ` · ${st.plan[0].toUpperCase()}${st.plan.slice(1)}` : ""}${mine.length ? ` · ${mine.length} models` : ""}` : `${v.plan} · ${v.via}`}</div>
         </div>
         <span className={`api-badge ${st?.loggedIn && !st.relogin ? "ok" : st?.relogin ? "bad" : ""}`}><i />{state}</span>
         <div className="api-btns">
           {st && !st.installed && admin && <button className="btn dark" onClick={install} disabled={!!busy}>{busy === "install" ? <><span className="api-spin" />Installing…</> : "Install"}</button>}
           {st?.installed && (!st.loggedIn || st.relogin) && !login && <button className="btn dark" onClick={() => start()} disabled={!!busy}>{busy === "start" ? <><span className="api-spin" />Starting…</> : "Sign in"}</button>}
+          {st?.loggedIn && !login && <button className="icon-btn" aria-label="Refresh plan and models" data-tip="Refresh plan and models" disabled={fresh} onClick={refresh}>{fresh ? <span className="api-spin" /> : <I.Retry size={16} />}</button>}
           {st?.loggedIn && !login && <button className="btn" onClick={logout} disabled={!!busy}>{busy === "out" ? <span className="api-spin" /> : "Sign out"}</button>}
         </div>
       </div>

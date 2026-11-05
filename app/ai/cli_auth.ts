@@ -83,6 +83,13 @@ export function engineEnv(cli: Cli, scope: string): Record<string, string> {
 
 /** Ký ức riêng CLI tự ghi cho tài khoản (Claude Code: projects/<thư mục làm việc>/memory; Antigravity: .gemini/GEMINI.md).
  *  Xóa cùng bộ não để không model nào còn nhớ gì về người dùng; phiên đăng nhập và lịch sử từng đoạn chat giữ nguyên. */
+/** Bỏ danh sách model và gói CLI tự nhớ trên đĩa, để lần đọc sau hỏi lại hãng. Chỉ xóa tệp đệm đã biết, không đụng tệp đăng nhập. */
+export async function refreshVendorCache(cli: Cli, scope: string) {
+  const dir = scopeDir(cli, scope), files = cli === "codex" ? ["models_cache.json"] : cli === "grok" ? [".grok/models_cache.json", ".grok/settings_cache.json"] : [];
+  forget(cli, scope);
+  if (files.length) await runCli("/bin/rm", ["-f", ...files.map((f) => path.join(dir, f))], { env: engineEnv(cli, scope), cwd: dir, timeoutMs: 10_000 }).catch(() => {});
+}
+
 export async function forgetCliMemory(scope: string) {
   const root = path.join(engineHome(), "logins"), s = safeScope(scope);
   // Thư mục của CLI thuộc user riêng của engine (Synchro không ghi được): xóa bằng chính user đó, như lúc chạy CLI.
