@@ -865,6 +865,7 @@ Object.assign(VI2EN, {
   "Tải ứng dụng – Synchro": "Download apps – Synchro", "Synchro cho macOS, Windows, iPhone và Android.": "Synchro for macOS, Windows, iPhone and Android.",
   // Khối code, kiểm tra gói, regex, cron
   "đang kiểm tra": "checking", "đã xác minh": "verified", "đã lỗi thời": "deprecated", "không tồn tại — có thể AI bịa ra": "doesn't exist — the AI may have made it up", "không kiểm tra được": "couldn't check",
+  "Mở ảnh ở tab mới": "Open image in a new tab",
   "📊 Vẽ sơ đồ": "📊 Draw diagram", "Đặt lại": "Reset", "Không vẽ được:": "Couldn't draw:", "Lần chạy kế:": "Next run:", "Thử regex": "Try regex", "Chuỗi mẫu để kiểm tra…": "Sample text to test…", "Regex không hợp lệ": "Invalid regex",
   "kết quả": "matches", "Có thể tối ưu thêm": "Can be optimized", "So sánh với phiên bản trước": "Compare with previous version", "Chưa có phiên bản trước để so sánh": "No previous version to compare",
   "Chạy thử": "Run", "Mở trong khung soạn thảo": "Open in editor", "Sao chép đường dẫn": "Copy path", "Đã sao chép đường dẫn:": "Copied path:", "⚡ Đã tự ghép với tệp gốc · 0 token": "⚡ Merged into the original file · 0 tokens",
