@@ -1091,7 +1091,7 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 [data-theme="dark"] .auth-bg .b2{background:radial-gradient(closest-side,rgba(238,236,229,.07),rgba(238,236,229,0))}
 [data-theme="dark"] .auth-bg .b3{background:radial-gradient(closest-side,rgba(238,236,229,.04),rgba(238,236,229,0))}
 .auth-bg::before,.auth-bg::after{content:"";position:absolute;opacity:.7}
-.auth-bg::before{left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,var(--auth-border) 0 18%,transparent 34% 66%,var(--auth-border) 82% 100%)}
+.auth-bg::before{left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,var(--auth-border) 0 14%,transparent 26% 74%,var(--auth-border) 86% 100%)}
 .auth-bg::after{top:0;bottom:0;left:50%;width:1px;background:linear-gradient(180deg,var(--auth-border) 0 10%,transparent 22% 78%,var(--auth-border) 90% 100%)}
 @keyframes ab1{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(6vmax,-4vmax,0)}}
 @keyframes ab2{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-6vmax,5vmax,0)}}
@@ -4116,3 +4116,4 @@ main#main:focus{outline:0}
 /* Đăng nhập: ba nút hãng cùng bề ngang với ô email và đường kẻ "hoặc". */
 .auth-socials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:300px}
 .auth-socials .glass-button-wrap,.auth-socials .glass-button{width:100%}
+.auth-socials svg{flex:none;width:18px;height:18px}

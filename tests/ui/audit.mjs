@@ -270,6 +270,30 @@ const CHECK = `(() => {
       if (gone || box.r - box.l >= 0.4 * (r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight))) continue;
       { n++; out.push("chữ đứng lẻ ở dòng cuối “" + w + "”: “" + el.textContent.trim().replace(/\\s+/g, " ").slice(0, 50) + "” (" + name(el) + ")"); }
     } }
+  // Biểu tượng một mình trong ô vuông nhỏ có khung (thẻ artifact từng lệch lên góc trái): phải nằm giữa ô.
+  for (const b of document.querySelectorAll("span,i,div,button")) {
+    if (b.children.length !== 1 || b.firstElementChild.tagName !== "svg" || b.textContent.trim() || !vis(b)) continue;
+    const q = b.getBoundingClientRect(); if (q.width < 18 || q.width > 48 || q.height < 18 || q.height > 48 || Math.abs(q.width - q.height) > 2) continue;
+    const c = getComputedStyle(b); if (c.boxShadow === "none" && c.backgroundColor === "rgba(0, 0, 0, 0)" && c.borderTopWidth === "0px") continue;
+    const k = b.firstElementChild.getBoundingClientRect(); if (!k.width) continue;
+    const dx = k.left + k.width / 2 - (q.left + q.width / 2), dy = k.top + k.height / 2 - (q.top + q.height / 2);
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) out.push("biểu tượng lệch khỏi tâm ô " + Math.round(dx) + "," + Math.round(dy) + "px: " + name(b));
+  }
+  // Câu trả lời không lộ ký hiệu Markdown; chuỗi dài không dấu cách không tràn khỏi tin nhắn.
+  for (const m of document.querySelectorAll(".ai-msg,.user-msg")) {
+    if (m.scrollWidth > m.clientWidth + 1) out.push("chữ tràn khỏi tin nhắn: " + name(m) + " " + m.scrollWidth + ">" + m.clientWidth);
+    if (!m.matches(".ai-msg")) continue;
+    for (const p of m.querySelectorAll("p,li,td,th,h1,h2,h3,h4")) { if (p.closest("pre,code,.katex")) continue; const c = p.cloneNode(true); c.querySelectorAll("code,pre,.katex").forEach((x) => x.remove()); const raw = /\\*\\*\\S|~~\\S|<br\\s*\\/?>|\\]\\(https?:/.exec(c.textContent); if (raw) { out.push("ký hiệu Markdown lộ trong câu trả lời “" + raw[0] + "”: " + c.textContent.slice(0, 50)); break; } }
+  }
+  // Nhóm đang thu gọn không được lòi gì ra (phân trang từng nằm trơ dưới mục Code đã lưu trữ).
+  for (const f of document.querySelectorAll(".fold:not(.open)")) if (f.getBoundingClientRect().height > 1 && !f.closest(".closing")) { const a = f.getAnimations?.({ subtree: false }) ?? []; if (!a.length) out.push("nhóm thu gọn vẫn cao " + Math.round(f.getBoundingClientRect().height) + "px: " + name(f)); }
+  // Ảnh thu nhỏ chỉ để nhìn: không có điểm dừng Tab bên trong. Nút không lồng trong nút.
+  for (const t of document.querySelectorAll(".art-thumb")) if (!t.inert) out.push("ảnh thu nhỏ không inert: " + name(t));
+  for (const b of document.querySelectorAll("[role=button] button,[role=button] a[href],button button,button a[href],a[href] button")) { if (vis(b)) { out.push("nút lồng trong nút: " + name(b) + " trong " + name(b.parentElement.closest("[role=button],button,a[href]"))); break; } }
+  // Nhóm thẻ: thẻ đang chọn phải báo cho trình đọc màn hình, không chỉ đổi màu.
+  for (const g of document.querySelectorAll(".ds-seg,.pl-seg")) { const on = g.querySelector(":scope>button.on"); if (on && vis(on) && !on.matches("[aria-selected=true],[aria-pressed=true],[aria-current],[aria-checked=true]")) out.push("nút đang chọn không báo trạng thái: " + on.textContent.trim().slice(0, 20) + " trong " + name(g)); }
+  // Tab không được rơi vào một phần tử khuất dưới lớp phủ của khung artifact: dải báo, nút trong .main phải nằm ngoài khung đang mở.
+  { const art = document.querySelector(".main.has-art .art-panel, .main.has-art .art-pane"); const vb = document.querySelector(".verify-banner"); if (art && vb && vb.getBoundingClientRect().right > art.getBoundingClientRect().left + 1) out.push("dải xác minh nằm dưới khung artifact"); }
   return out;
 })()`;
 

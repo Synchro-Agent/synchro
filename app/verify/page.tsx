@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Lockup } from "../brand";
 import { tr } from "../i18n";
+import { LangSwitch } from "../langswitch";
 import { AlertCircle, Check, Mail } from "lucide-react";
 
 const post = async (body: unknown) => {
@@ -31,6 +32,7 @@ export default function VerifyEmail() {
   };
   return (
     <main className="rp">
+      <LangSwitch />
       <div className="rp-card">
         <Link href="/" className="rp-brand" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></Link>
         {stage === "loading" && <div className="rp-wait" role="status" aria-label={tr("Đang tải")}><span className="art-spin sm" /></div>}
