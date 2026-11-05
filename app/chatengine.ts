@@ -34,7 +34,8 @@ import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME } from "./ai/imagegen";
+import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME, requestSlug } from "./ai/imagegen";
+import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
@@ -529,13 +530,23 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
     return fail(r.text);
   }
-  const { saved, left } = keepImages(x.uid, r.files, x.outs);
+  // Tên theo lời người dùng; nhiều ảnh trong một lượt (thiết kế nhiều ảnh) không được trùng tên: inputs/ và tham chiếu đều đi theo tên.
+  const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
+  const taken = new Set(x.outs.map((o) => o.name));
+  const named = !asked ? r.files : r.files.map((f, i) => {
+    const ext = /\.[^.]+$/.exec(f.name)?.[0] ?? "";
+    let n = r.files.length > 1 ? i + 1 : 1, name = `${asked}${n > 1 || r.files.length > 1 ? `-${n}` : ""}${ext}`;
+    while (taken.has(name)) name = `${asked}-${++n}${ext}`;
+    taken.add(name);
+    return { ...f, name };
+  });
+  const { saved, left } = keepImages(x.uid, named, x.outs);
   (x.madeImgs ??= []).push(...saved.map((f) => f.id));
   if (!saved.length) return fail(`${IMG_NAME[r.cli]} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
   const lines = saved.map((f) => `${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`);
-  const send = imagesForModel(r.files.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
+  const send = imagesForModel(named.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
   const notes = [...r.notes, ...(left.length ? [`${left.length} ảnh không lưu được vì hết dung lượng: ${left.map((f) => f.name).join(", ")}.`] : []), ...(send.length < saved.length ? [`${saved.length - send.length} ảnh quá lớn nên không kèm ở đây để bạn xem (tối đa ${IMAGE_MAX_MB()} MB mỗi ảnh vẫn giao được cho người dùng); đừng mô tả các ảnh đó như đã xem.`] : [])];
-  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): đừng chèn đường dẫn hay liên kết.`;
+  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): trong câu trả lời đừng chèn đường dẫn hay liên kết.\nĐưa ảnh vào sản phẩm khi người dùng cần: artifact HTML, React, SVG, slide dùng đúng địa chỉ ${saved.map((f) => genImageUrl(f.id)).join(", ")} trong src hay url(...), Synchro tự nhúng ảnh; run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc inputs/${saved.map((f) => f.name).join(", inputs/")}.`;
   if (!send.length) return { content, is_error: false, used };
   (x.heavy ??= []).push(c.id);
   const [first, ...more] = send;
@@ -968,9 +979,9 @@ async function healPatch(ad: Adapter, m: unknown[], history: { role: string; con
 
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
 const STUDIO_TASK: Record<Studio, string> = {
-  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG); ảnh chụp hay tranh đặt trong thiết kế thì tạo bằng generate_image.",
-  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF); khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
-  docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code.",
+  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG); ảnh chụp hay tranh đặt trong thiết kế thì tạo bằng generate_image rồi dùng đúng địa chỉ công cụ đó trả về trong src hay url(...), không để ảnh giữ chỗ.",
+  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF), ảnh minh họa tạo bằng generate_image rồi dùng đúng địa chỉ công cụ đó trả về; khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code, ảnh đã tạo nằm ở inputs/.",
+  docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code. Markdown không hiện ảnh: tài liệu cần ảnh do AI tạo thì làm Word / PDF bằng run_code (ảnh đã tạo nằm ở inputs/) hoặc artifact HTML.",
 };
 // Thư viện lớn hơn số này thì available_skills chỉ có skill chọn lọc đầu thư viện (studioListed), skill hợp yêu cầu của từng lượt đi ở skill_routing (studioPicks), phần còn lại tìm bằng search_skills.
 const STUDIO_DIRECT = 20;

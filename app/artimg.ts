@@ -1,6 +1,7 @@
 // Ảnh từ URL ngoài cho artifact (chỉ chạy ở máy chủ): tải qua safeFetch (chặn địa chỉ nội bộ, kiểm tra mỗi lần chuyển hướng), chỉ nhận
 // tệp ảnh tới 6 MB, nhớ tạm 100 ảnh gần nhất. Dùng cho /api/artimg (khung xem trước) và máy kiểm tra hiển thị (artcheck.ts).
-import { externalImageUrls, swapUrls } from "./artdoc";
+import { externalImageUrls, genImageId, swapUrls } from "./artdoc";
+import { readOutput } from "./outputs";
 import { safeFetch } from "./safefetch";
 
 export type Img = { mime: string; data: Buffer };
@@ -30,7 +31,21 @@ async function load(url: string): Promise<Img | null> {
   return { mime, data: Buffer.concat(parts) };
 }
 
-export function fetchImage(url: string): Promise<Img | null> {
+// Ảnh đã tạo của đúng tài khoản, không qua bộ nhớ tạm chung. Ảnh AI gốc vài MB thu về cỡ màn hình: dữ liệu này nhúng vào khung xem trước.
+async function ownImage(uid: string, id: string): Promise<Img | null> {
+  const o = readOutput(uid, id);
+  if (!o || !/^image\/(png|jpeg|webp|gif)$/.test(o.mime)) return null;
+  if (o.data.length > 1.5 * 1048576 && o.mime !== "image/gif") {
+    const sharp = await import("sharp").then((m) => m.default, () => null);
+    const small = await sharp?.(o.data).rotate().resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true }).webp({ quality: 86 }).toBuffer().catch(() => null);
+    if (small && small.length < o.data.length) return { mime: "image/webp", data: small };
+  }
+  return { mime: o.mime, data: o.data };
+}
+
+export function fetchImage(url: string, uid?: string): Promise<Img | null> {
+  const gen = genImageId(url);
+  if (gen) return uid ? ownImage(uid, gen).catch(() => null) : Promise.resolve(null);
   let p = cache.get(url);
   if (!p) {
     p = load(url).catch(() => null);
@@ -43,16 +58,16 @@ export function fetchImage(url: string): Promise<Img | null> {
 }
 
 /** Nhúng mọi ảnh từ URL ngoài trong nội dung artifact thành data: (ảnh tải không được thì giữ nguyên URL). */
-export async function inlineImages(content: string): Promise<string> {
+export async function inlineImages(content: string, uid?: string): Promise<string> {
   const urls = externalImageUrls(content);
   if (!urls.length) return content;
-  const got = await Promise.all(urls.map(async (u) => [u, await fetchImage(u)] as const));
+  const got = await Promise.all(urls.map(async (u) => [u, await fetchImage(u, uid)] as const));
   return swapUrls(content, new Map(got.filter((g): g is readonly [string, Img] => !!g[1]).map(([u, i]) => [u, `data:${i.mime};base64,${i.data.toString("base64")}`])));
 }
 
 /** Ảnh cho bản chụp chia sẻ: dạng data: đã thu nhỏ (bản chụp có giới hạn dung lượng, ảnh Wikimedia gốc đã vài MB). SVG, GIF giữ nguyên để không mất nét, mất chuyển động. */
-export async function shareImageData(url: string): Promise<string | null> {
-  const img = await fetchImage(url);
+export async function shareImageData(url: string, uid?: string): Promise<string | null> {
+  const img = await fetchImage(url, uid);
   if (!img) return null;
   if (img.data.length > 120_000 && /^image\/(png|jpeg|webp|avif|bmp)$/.test(img.mime)) {
     const sharp = await import("sharp").then((m) => m.default, () => null);

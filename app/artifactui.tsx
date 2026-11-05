@@ -24,7 +24,7 @@ import { htmlToBlocks } from "./htmlblocks";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, H2I, htmlExport, isDeck, libUrls, svgExport, swapUrls } from "./artdoc";
+import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, svgExport, swapUrls } from "./artdoc";
 import { withKitFontLink } from "./artkit";
 export { deckExport, H2I, isDeck, libUrls };
 
@@ -96,6 +96,12 @@ const dataUrl = (u: string) => {
     p.then((d) => { if (!d) imgCache.delete(u); });
   }
   return p;
+};
+// Tệp xuất ra khỏi Synchro: địa chỉ ảnh đã tạo chỉ có nghĩa bên trong tài khoản, phải nhúng ảnh vào tệp. Ảnh ngoài vẫn giữ URL như trước.
+const embedGenerated = async (s: string) => {
+  const urls = externalImageUrls(s).filter((u) => genImageId(u));
+  const got = await Promise.all(urls.map(async (u) => [u, await dataUrl(u)] as const));
+  return swapUrls(s, new Map(got.filter((g): g is readonly [string, string] => !!g[1])));
 };
 function useInlineImages(content: string, on: boolean): string | null {
   const urls = useMemo(() => (on ? externalImageUrls(content) : []), [content, on]);
@@ -459,9 +465,9 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const copy = () => { navigator.clipboard?.writeText(art.content); setCopied(true); say(tr("Đã sao chép nội dung artifact")); setTimeout(() => setCopied(false), 1500); };
   const name = baseName(art);
   const done = (n: string) => say(`${tr("Đã tải")} ${n}`);
-  const source = () => {
-    const n = artFileName(art);
-    saveBlob(new Blob([art.type === "html" ? htmlExport(art.content) : art.type === "svg" ? svgExport(art.content) : art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
+  const source = async () => {
+    const n = artFileName(art), content = await embedGenerated(art.content);
+    saveBlob(new Blob([art.type === "html" ? htmlExport(content) : art.type === "svg" ? svgExport(content) : content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
   };
   // Xuất cần phần xem trước đang hiện (tài liệu đã dựng, khung đã chạy): chuyển sang Xem trước rồi chờ một chút.
   const withPreview = (fn: () => void | Promise<void>, wait = 400) => new Promise<void>((ok, no) => {
@@ -521,11 +527,11 @@ Yêu cầu: ${req.trim()}`);
   if (deck) {
     items.push({ label: "PDF", sub: "Mỗi slide một trang (chọn Lưu thành PDF)", run: pdfFrame });
     items.push({ label: "PowerPoint (.pptx)", sub: "Chữ sửa được, hình giữ nguyên", run: pptxFrame });
-    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: () => { const n = artFileName(art); saveBlob(new Blob([deckExport(art.content)], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
+    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: async () => { const n = artFileName(art); saveBlob(new Blob([deckExport(await embedGenerated(art.content))], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
   } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: "Ảnh toàn trang", run: pngFrame });
-  else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", art.content, location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
+  else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: async () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", await embedGenerated(art.content), location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
     { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: pngFrame }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
-  else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(art.content), `${name}.png`); done(`${name}.png`); } });
+  else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(await embedGenerated(art.content)), `${name}.png`); done(`${name}.png`); } });
   else if (art.type === "markdown") items.push({ label: "Word (.docx)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(async () => { const n = `${name}.docx`; saveBlob(await docxFile(shown(".art-md"), art.title, art.content), n); done(n); }) },
     { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md"), art.content))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
   else if (art.type === "vbhc") items.push({ label: "Word (.docx)", sub: "Đúng thể thức Nghị định 30/2020", run: async () => {

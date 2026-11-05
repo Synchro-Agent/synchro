@@ -31,8 +31,8 @@ export const shareOfConv = (uid: string, conv: string): ShareInfo | null => { co
 // Người xem bản chia sẻ chưa đăng nhập nên không đi qua /api/artimg được, và khung artifact chỉ cho ảnh nhúng (CSP chặn đường gửi dữ liệu ra ngoài):
 // nhúng ảnh ngoài vào bản chụp ngay ở máy chủ. Người xem cũng không phải gọi tới trang ảnh của bên thứ ba, ảnh gốc bị xóa thì bản chia sẻ vẫn còn.
 const IMG_ONE = 2.8 * 1048576; // data: của ảnh sau khi thu nhỏ, khoảng 2 MB ảnh gốc: SVG, GIF không thu nhỏ được không được chiếm hết phần ảnh của bản chụp.
-async function withImages(snap: ShareSnap, ms?: number): Promise<ShareSnap> {
-  const r = await inlineSnapImages(snap, (u) => shareImageData(u).then((d) => (d && d.length > IMG_ONE ? null : d)), SHARE_LIMITS.withImages, { ms });
+async function withImages(snap: ShareSnap, ms?: number, uid?: string): Promise<ShareSnap> {
+  const r = await inlineSnapImages(snap, (u) => shareImageData(u, uid).then((d) => (d && d.length > IMG_ONE ? null : d)), SHARE_LIMITS.withImages, { ms });
   return { ...r.snap, imgs: { missing: r.skipped } };
 }
 
@@ -55,7 +55,7 @@ export async function putShare(uid: string, convIn: unknown, title: unknown, msg
   const conv = okConv(convIn), snap = snapshotOf(title, msgs);
   // Kiểm tra trước khi tải ảnh: giới hạn chữ giữ nguyên, ảnh nhúng có trần riêng.
   if (Buffer.byteLength(JSON.stringify(snap)) > SHARE_LIMITS.bytes) throw new AuthError("Đoạn chat quá lớn để chia sẻ.", 413);
-  const full = await withImages(snap);
+  const full = await withImages(snap, undefined, uid);
   return { ...storeShare(uid, conv, full), missingImages: full.imgs?.missing ?? 0 };
 }
 

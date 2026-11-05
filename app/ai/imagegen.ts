@@ -276,10 +276,21 @@ export async function runBackend(cli: ImgCli, q: ImgReq): Promise<Tried> {
     try { removeDir(work); } catch (e) { console.error("[imagegen] không xóa được thư mục tạm", String((e as Error).message).slice(0, 200)); }
   }
 }
+const slugOf = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 /** Tên tệp dễ đọc từ mô tả ảnh: "Quả táo đỏ" → qua-tao-do.jpg. */
 export function imageName(prompt: string, i: number, n: number, ext: string) {
-  const slug = prompt.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "") || "anh";
+  const slug = slugOf(prompt).slice(0, 40).replace(/-+$/, "") || "anh";
   return `${slug}${n > 1 ? `-${i + 1}` : ""}.${ext}`;
+}
+const IMG_ASK_WORDS = /^(?:(?:hãy|làm ơn|giúp|giùm|hộ|bạn|mình|tôi|em|cho|vẽ|tạo|làm|sinh|thiết kế|một|1|tấm|bức|cái|ảnh|hình ảnh|hình|tranh|về|please|can|could|you|draw|create|make|generate|design|paint|me|us|a|an|the|image|picture|photo|illustration|of)\s+)+/i;
+/** Tên ảnh theo lời người dùng: model thường viết prompt bằng tiếng Anh, người Việt xin "con mèo đội mũ" mà nhận a-fluffy-orange-cat-wearing-a-tiny-top-hat.png.
+ *  Lời nhờ không còn gì để đặt tên ("làm tiếp đi"), hoặc không viết bằng chữ Latin: giữ tên theo mô tả ảnh. */
+export function requestSlug(request: string): string {
+  const line = request.replace(/<([a-z_]+)\b[^>]*>[\s\S]*?<\/\1>/g, " ").split(/[\n.!?]/).map((l) => l.trim()).find(Boolean) ?? "";
+  const slug = slugOf(line.replace(/\s#\S.*$/, "").replace(IMG_ASK_WORDS, ""));
+  if (slug.length < 4 || slug.split("-").length < 2) return "";
+  if (slug.length <= 40) return slug;
+  return slug.slice(0, 41).replace(/-[^-]*$/, "");
 }
 
 // ---------------------------------------------------------------- chọn gói, báo lỗi thật
@@ -379,6 +390,7 @@ export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
 Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.
 Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference.
-Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
+Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: trong câu trả lời đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
+Ảnh dùng được trong sản phẩm: kết quả công cụ ghi địa chỉ để đặt vào artifact (src, url(...)) và đường dẫn inputs/ để run_code đọc (Word, PowerPoint, PDF, video). Thiết kế, slide hay video cần ảnh thì tạo ảnh trước rồi đưa đúng ảnh đó vào, không dùng ảnh giữ chỗ.
 Công cụ báo lỗi thì không có ảnh nào: nói đúng lý do và việc người dùng nên làm, đừng gọi sản phẩm thay thế là ảnh AI. Có thể đề nghị dựng đồ họa bằng code hoặc viết sẵn câu lệnh để họ dùng ở công cụ khác.
 </image_generation>`;

@@ -110,6 +110,10 @@ const IMG_EXT = /\.(?:png|jpe?g|gif|webp|avif|svg|bmp|ico)(?:[?#][^"'`\s)]*)?$/i
 const FONT = /\.(?:woff2?|ttf|otf|eot)(?:[?#]|$)|^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//i;
 // Kho ảnh hay dùng mà đường dẫn không có đuôi tệp (Unsplash, Pexels, Picsum…).
 const IMG_HOST = /^https?:\/\/(?:images\.unsplash\.com|plus\.unsplash\.com|upload\.wikimedia\.org|images\.pexels\.com|picsum\.photos|i\.imgur\.com|cdn\.pixabay\.com|[\w-]+\.googleusercontent\.com|avatars\.githubusercontent\.com)\//i;
+// Ảnh generate_image trong artifact: địa chỉ giả (tên miền .invalid không bao giờ có thật) đi chung đường với ảnh ngoài ở mọi nơi: khung xem trước, máy kiểm tra hiển thị, bản chia sẻ.
+// Chỉ máy chủ đổi được địa chỉ này thành ảnh, và chỉ với đúng chủ tài khoản (artimg.ts); artifact không giữ đường dẫn hay dữ liệu riêng nào.
+export const genImageUrl = (id: string) => `https://image.synchro.invalid/${id}.png`;
+export const genImageId = (u: string) => /^https:\/\/image\.synchro\.invalid\/([\w-]{8,40})\.png$/.exec(u)?.[1] ?? null;
 export function externalImageUrls(content: string, max = 60): string[] {
   const out = new Set<string>();
   const add = (u: string) => { u = u.replace(/&amp;/g, "&"); if (/^https?:\/\//i.test(u) && !FONT.test(u) && u.length < 2000 && out.size < max) out.add(u); };

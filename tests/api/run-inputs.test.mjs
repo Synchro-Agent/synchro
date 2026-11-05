@@ -12,7 +12,7 @@ process.env.DATA_DIR = path.join(tmp, "data");
 process.env.DATA_KEY = "inputs-key";
 process.env.CODE_RUN = "local";
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
-const { runinputs: RI, fileproc: FP, coderun: CR, authstore: AS, outputs: OUT } = await loadTs(["runinputs", "fileproc", "coderun", "authstore", "outputs"]);
+const { runinputs: RI, fileproc: FP, coderun: CR, authstore: AS, outputs: OUT, artimg: AI, artdoc: AD, "ai/imagegen": IG } = await loadTs(["runinputs", "fileproc", "coderun", "authstore", "outputs", "artimg", "artdoc", "ai/imagegen"]);
 const U = AS.createUser({ email: "a@inputs.test", name: "A", verified: true });
 const uid = U.id;
 const written = [];
@@ -81,6 +81,29 @@ const f = path.join(CACHE, rec.id + ".json"), old = JSON.parse(fs.readFileSync(f
 fs.writeFileSync(f, JSON.stringify({ ...old, v: undefined, blocks: [{ type: "text", text: "## Sheet: S (bản cũ sai)" }] }));
 const ctx = await FP.buildContext([rec.id], { [rec.id]: "Doanh số.xlsx" }, "", uid);
 ok(ctx.some((b) => b.type === "text" && /Tiền: min=0/.test(b.text)) && !ctx.some((b) => /bản cũ sai/.test(b.text ?? "")), "buildContext đọc lại bản mới", ctx.map((b) => (b.text ?? "").slice(0, 80)));
+
+console.log("8. Ảnh đã tạo trong artifact");
+const url = AD.genImageUrl(o1.id);
+ok(AD.genImageId(url) === o1.id && !AD.genImageId("https://example.com/x.png") && !AD.genImageId("https://image.synchro.invalid/../x.png"), "nhận đúng địa chỉ ảnh đã tạo");
+ok(AD.externalImageUrls(`<img src="${url}"><div style="background:url(${url})">`).join() === url, "đi chung đường với ảnh ngoài trong HTML");
+ok(AD.externalImageUrls(`const hero = "${url}";`).join() === url, "chuỗi trong mã React cũng nhận ra");
+const img = await AI.fetchImage(url, uid);
+ok(img?.mime === "image/png" && img.data.equals(png), "chủ tài khoản đọc được ảnh", img?.mime);
+ok(!(await AI.fetchImage(url, other.id)), "tài khoản khác không đọc được ảnh dù biết địa chỉ");
+ok(!(await AI.fetchImage(url)), "không đăng nhập thì không đọc được");
+const inl = await AI.inlineImages(`<img src="${url}">`, uid);
+ok(inl.startsWith('<img src="data:image/png;base64,') && !inl.includes("invalid"), "máy kiểm tra hiển thị thấy ảnh thật", inl.slice(0, 80));
+const shared = await AI.shareImageData(url, uid);
+ok(shared?.startsWith("data:image/png"), "bản chia sẻ nhúng được ảnh");
+
+console.log("9. Tên ảnh theo lời người dùng");
+ok(IG.requestSlug("Vẽ cho tôi một con mèo đội mũ") === "con-meo-doi-mu", "bỏ phần xin, giữ nội dung", IG.requestSlug("Vẽ cho tôi một con mèo đội mũ"));
+ok(IG.requestSlug("Tạo ảnh quả táo đỏ trên bàn #tool=generate_image") === "qua-tao-do-tren-ban", "bỏ thẻ #", IG.requestSlug("Tạo ảnh quả táo đỏ trên bàn #tool=generate_image"));
+ok(IG.requestSlug("Draw me a cat in a hat") === "cat-in-a-hat", "tiếng Anh", IG.requestSlug("Draw me a cat in a hat"));
+ok(IG.requestSlug("làm đi") === "" && IG.requestSlug("Tạo ảnh") === "" && IG.requestSlug("画一只猫") === "", "lời nhờ không đặt tên được thì dùng mô tả ảnh");
+ok(IG.requestSlug("<current_time>10:00</current_time>\nVẽ một ngôi nhà gỗ") === "ngoi-nha-go", "không lấy nhầm khối hệ thống", IG.requestSlug("<current_time>10:00</current_time>\nVẽ một ngôi nhà gỗ"));
+const longName = IG.requestSlug("Vẽ một bức tranh phong cảnh núi non hùng vĩ với dòng sông uốn lượn qua thung lũng xanh");
+ok(longName.length <= 40 && !longName.endsWith("-") && longName.startsWith("phong-canh"), "tên dài cắt ở ranh giới từ", longName);
 
 for (const id of written) for (const x of [".bin", ".json"]) fs.rmSync(path.join(CACHE, id + x), { force: true });
 fs.rmSync(tmp, { recursive: true, force: true });
