@@ -322,7 +322,7 @@ type Snap = { r: "u" | "a"; t: string }[];
 const plain = (c: unknown): string => {
   const s = typeof c === "string" ? c : Array.isArray(c) ? (c as { type?: string; text?: string; name?: string }[]).map((b) => (b.type === "text" ? b.text ?? "" : b.type === "document" ? `[tệp ${b.name ?? ""}]` : b.type === "image" ? "[ảnh]" : "")).join("\n") : "";
   return splitArtifacts(s).map((sg) => (sg.kind === "text" ? sg.text : `[sản phẩm "${sg.art.title}"]`)).join("")
-    .replace(/```[\s\S]*?(```|$)/g, "[khối code]").replace(/<(?:brain_recall|skill_routing|dynamic_context)>[\s\S]*?<\/(?:brain_recall|skill_routing|dynamic_context)>/g, "").replace(/#(?:tool|args)=\S+/g, "").trim();
+    .replace(/```[\s\S]*?(```|$)/g, "[khối code]").replace(/<(?:brain_recall|skill_routing|dynamic_context)>[\s\S]*?<\/(?:brain_recall|skill_routing|dynamic_context)>/g, "").replace(/<design_kit\b[\s\S]*?<\/design_kit>/g, "").replace(/#(?:tool|args)=\S+/g, "").trim();
 };
 const learning = (uid: string) => memCfg(uid).gen;
 

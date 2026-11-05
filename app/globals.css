@@ -1004,6 +1004,8 @@ html body .cv-card,html[data-theme=dark] body .cv-card{background:var(--gl-fill)
 .ask-f{display:flex;align-items:center;gap:8px}
 .ask-f .btn{display:inline-flex;align-items:center;gap:6px}
 .md-tbl table{border-collapse:collapse;font-size:13.5px;min-width:50%}
+/* Chữ số thẳng cột trong mọi bảng; tiêu đề chia dòng đều, không để một chữ đứng lẻ. Chỉ đổi chỗ xuống dòng và độ rộng chữ số, không đổi bố cục. */
+table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .md-tbl th,.md-tbl td{border:.5px solid var(--border-strong);padding:6px 12px;text-align:left}
 .md-tbl th{background:var(--hover);font-weight:560}
 .upl-bar .upl-meta{margin-left:auto}

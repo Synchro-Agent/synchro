@@ -24,7 +24,8 @@ import { htmlToBlocks } from "./htmlblocks";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, H2I, isDeck, libUrls, swapUrls } from "./artdoc";
+import { buildDocCore, deckExport, externalImageUrls, H2I, htmlExport, isDeck, libUrls, svgExport, swapUrls } from "./artdoc";
+import { withKitFontLink } from "./artkit";
 export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
@@ -46,9 +47,7 @@ ${PPTX_FRAME_JS}
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
 if(d.t==="pptx")lib(0,function(ok){if(!ok)return post({t:"pptx",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxPptx(d.id,d.fontCss)});
 else if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
-else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});var el=(window.__sxCur&&window.__sxCur())||document.body;var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
-var pr=window.__sxCur&&window.__sxCur()?Math.max(2,1920/(el.scrollWidth||innerWidth)):2;
-htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,fontEmbedCSS:d.fontCss||undefined,backgroundColor:bg,width:el.scrollWidth||innerWidth,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){post({t:"png",id:d.id,data:u})},function(x){post({t:"png",id:d.id,error:String(x&&x.message||x)})})});
+else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxCapture(d.id,d.fontCss)});
 else if(d.t==="pick"){pk=!!d.on;document.documentElement.style.cursor=pk?"crosshair":"";if(!pk&&hl)hl.style.display="none"}
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
 else if(d.t==="changed"){var ev={key:d.key,shared:true};subs.slice().forEach(function(f){try{f(ev)}catch(x){}});try{dispatchEvent(new CustomEvent("synchro:storage",{detail:ev}))}catch(x){}}
@@ -462,7 +461,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const done = (n: string) => say(`${tr("Đã tải")} ${n}`);
   const source = () => {
     const n = artFileName(art);
-    saveBlob(new Blob([art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
+    saveBlob(new Blob([art.type === "html" ? htmlExport(art.content) : art.type === "svg" ? svgExport(art.content) : art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
   };
   // Xuất cần phần xem trước đang hiện (tài liệu đã dựng, khung đã chạy): chuyển sang Xem trước rồi chờ một chút.
   const withPreview = (fn: () => void | Promise<void>, wait = 400) => new Promise<void>((ok, no) => {
@@ -507,12 +506,12 @@ Yêu cầu: ${req.trim()}`);
     setPicked(null); setReq("");
   };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
-  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture", fontCss: await fontEmbedCss(art.content) }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
+  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture", fontCss: await fontEmbedCss(withKitFontLink(art.content)) }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
   // PowerPoint: Synchro tự dựng ngay trong khung xem (deckpptx.ts), không nhờ model; chữ sửa được, hình giữ nguyên.
   const pptxFrame = () => withPreview(async () => {
     say(tr("Đang dựng tệp PowerPoint…"));
     // Phông web cho ảnh nền của slide (chữ trong hình, SVG): khung không tự tải được, như khi xuất PNG.
-    const d = await frameCall({ t: "pptx", fontCss: await fontEmbedCss(art.content) }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
+    const d = await frameCall({ t: "pptx", fontCss: await fontEmbedCss(withKitFontLink(art.content)) }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
     setPptxStep("");
     const n = `${name}.pptx`;
     saveBlob(await buildPptx(d.slides as DeckSlide[], Number(d.w), Number(d.h), art.title), n); done(n);
