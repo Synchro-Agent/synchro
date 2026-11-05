@@ -120,9 +120,9 @@ const sleep = (ms, sig) => new Promise((ok) => { const t = setTimeout(ok, ms); s
 const SYS = "You are being run by an automated test. Follow each instruction exactly and keep every reply as short as possible. Use tools only when told to.";
 const COMMON = "The tool may be listed with a prefix, or be reachable through a tool-search or call-tool helper.";
 
-function openTools(tools, handler) {
+function openTools(tools, handler, hold) {
   const calls = [];
-  const br = B.openBridge({ uid: scope, tools, call: async (name, input) => { calls.push({ name, input, at: Date.now() }); return { content: await handler(name, input), is_error: false }; } });
+  const br = B.openBridge({ uid: scope, tools, ...(hold ? { hold } : {}), call: async (name, input) => { calls.push({ name, input, at: Date.now() }); return { content: await handler(name, input), is_error: false }; } });
   const info = { listed: 0, calls };
   rec.set(br.url.split("/").pop(), info);
   return { ...br, info };
@@ -137,13 +137,15 @@ async function turn(cli, o) {
   try {
     const events = S.engineFor(cli).runTurn({
       prompt: o.prompt, system: SYS, model: o.model, effort: "low", sessionId: o.sessionId, workdir: o.workdir, env: o.env, signal: ac.signal,
-      mcp: o.bridge ? { url: o.bridge.url } : undefined, alive: o.bridge?.alive, pool: !!o.pool,
+      mcp: o.bridge ? { url: o.bridge.url } : undefined, alive: o.bridge?.alive, pool: !!o.pool, web: !!o.web,
     });
     let finalText = null;
     for await (const e of events) {
       if (e.kind === "text") { r.text += e.text; r.firstMs ??= Date.now() - t0; }
       else if (e.kind === "session") r.session = e.id;
       else if (e.kind === "pool") r.pool = e.state;
+      else if (e.kind === "search") r.searches = (r.searches ?? 0) + 1;
+      else if (e.kind === "sources") r.sources = (r.sources ?? 0) + e.items.length;
       else if (e.kind === "final") { finalText = e.text; if (e.denied?.length) r.denied = e.denied; }
       else if (e.kind === "error") r.error = { message: clean(e.message), code: e.code };
     }
@@ -156,7 +158,7 @@ async function turn(cli, o) {
 }
 
 // ---- các bài kiểm
-const CHECKS = ["tools listed", "nested args", "$ref args", "resume keeps context", "tools after resume", "names over 50 chars", "warm process", "long hold", "approval hold", "real image"];
+const CHECKS = ["tools listed", "nested args", "$ref args", "resume keeps context", "tools after resume", "names over 50 chars", "warm process", "web search", "long hold", "approval hold", "real image"];
 const CLIS = R.CLIS.filter((c) => !ONLY || ONLY.includes(c));
 const table = new Map(CLIS.map((c) => [c, new Map()]));
 const versions = new Map();
@@ -253,13 +255,25 @@ async function runCli(cli) {
       const f = r.files?.[0], kind = f && F.imageKind(f.data);
       put(cli, "real image", kind ? "pass" : "fail", kind ? `${kind.mime} ${Math.round(f.data.length / 1024)} KB; ${Math.round((Date.now() - t0) / 1000)}s` : `${r.fail?.kind ?? "no file"}: ${r.fail?.detail ?? ""}; ${Math.round((Date.now() - t0) / 1000)}s`);
     }
+    // 6b. Tìm web bằng công cụ dựng sẵn của CLI: phải có nguồn để hiện cho người dùng, không chỉ là câu trả lời.
+    if (master.signal.aborted) throw new Stop("interrupted");
+    {
+      const r = await turn(cli, { ...base, web: true, prompt: `Use your web search tool to find the official home page of the Rust programming language, then reply with its URL and nothing else.${MOCK ? " #web [mock:twomsg]" : ""}` });
+      fatal(cli, r);
+      // Claude Code, Grok báo cả lượt tìm và nguồn. Codex chỉ báo lượt tìm, nguồn nằm trong câu trả lời. Antigravity in một object khi xong nên chỉ xem được câu trả lời.
+      const url = MOCK || /rust-lang\.org/.test(r.text);
+      const pass = cli === "agy" ? url : cli === "codex" ? !!r.searches && url : !!r.searches && !!r.sources;
+      put(cli, "web search", pass ? "pass" : "fail", `${r.searches ?? 0} searches, ${r.sources ?? 0} sources${r.error ? `; ${r.error.message}` : ""}`);
+    }
     // 7. Hai bài chờ lâu: công cụ im lặng nhiều phút (có nhịp SSE của cầu nối như production) rồi trả mã; model phải đọc được đúng mã đó, CLI không được tự gọi lại.
     for (const [check, tool, min] of [["long hold", TOOL.slow, SLOW_MIN], ["approval hold", TOOL.hold, HOLD_MIN]]) {
       if (QUICK) { put(cli, check, "skip", "--quick"); continue; }
       if (master.signal.aborted) throw new Stop("interrupted");
       const token = `TOKEN${crypto.randomBytes(4).toString("hex")}`;
-      const b = openTools(toolsBase, async () => { await sleep(min * 60_000, master.signal); return `Result token: ${token}`; });
-      const r = await turn(cli, { ...base, bridge: b, timeoutMs: (min + 6) * 60_000, prompt: `${say(tool.name, { label: "go" })} It takes several minutes, so wait for it. Then reply with the token it returns and nothing else.` });
+      // Antigravity tự cắt lần chờ ở khoảng 190 giây: như production, cầu nối trả job_id và model gọi wait_for_result (B.AGY_WAIT_NOTE).
+      const agy = cli === "agy";
+      const b = openTools(toolsBase, async () => { await sleep(min * 60_000, master.signal); return `Result token: ${token}`; }, agy ? B.BRIDGE_HOLD.agy : undefined);
+      const r = await turn(cli, { ...base, bridge: b, timeoutMs: (min + 6) * 60_000, prompt: `${say(tool.name, { label: "go" })} It takes several minutes, so wait for it.${agy ? ` ${B.AGY_WAIT_NOTE.trim()}` : ""} Then reply with the token it returns and nothing else.` });
       fatal(cli, r);
       const got = r.text.includes(token), n = b.info.calls.length;
       put(cli, check, got && n === 1 ? "pass" : "fail", `${min} min; ${got ? "" : "token not in reply; "}${n > 1 ? "CLI called the tool again; " : ""}${why(r, n)}`);
