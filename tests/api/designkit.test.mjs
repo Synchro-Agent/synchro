@@ -61,7 +61,7 @@ ok(!/Sonnet|Haiku|Gemini|GPT/i.test([slide.block, doc, sheet, g].join("")), "kh�
 console.log("4. Phong cách có sẵn");
 ok(PRESETS.length === 8 && new Set(PRESETS.map((p) => p.id)).size === 8, "8 phong cách, mã không trùng");
 const BRANDS = /apple|linear|mckinsey|kinfolk|stripe|notion|google|microsoft/i;
-ok(!PRESETS.some((p) => BRANDS.test(p.id + p.label)), "không mượn tên công ty", PRESETS.map((p) => p.id).join());
+ok(!PRESETS.some((p) => BRANDS.test(p.id + p.looks)), "không mượn tên công ty", PRESETS.map((p) => p.id).join());
 ok(!BRANDS.test(slide.block.replace(/Google Fonts/g, "")), "khối gửi model không nhắc thương hiệu");
 ok(PRESETS.every((p) => FONT_SPEC[p.head] && FONT_SPEC[p.body] && FONT_SPEC[p.mono]), "phông nào cũng có trong FONT_SPEC");
 const lum = (h) => { const v = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
@@ -140,6 +140,8 @@ else {
     return { s: r.status, j };
   };
   if (!cookie) await api("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
+  // Việc phụ không được đè lên "lời gọi gần nhất" của máy giả lập: chạy bằng khóa API giả lập, như mixer.test.
+  for (const cli of ["claude", "codex", "agy"]) await api("POST", `/api/engines/${cli}/logout`);
   await api("PATCH", "/api/caps", { art: true, code: true });
   const M = "anthropic/claude-sonnet-5-5";
   const send = async (content, extra = {}) => {

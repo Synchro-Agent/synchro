@@ -774,7 +774,8 @@ const PREFER = {
   slides: ["slides", "theme-factory", "design-system", "frontend-design"],
   docs: ["internal-comms", "writing-guidelines", "theme-factory", "brand"],
 };
-const DECK = `<!doctype html>
+// MOCK_DECK_FILE: dùng tệp HTML này làm bộ slide (thử xuất PowerPoint với bản trình bày bất kỳ, vd. bản dùng bộ CSS thiết kế).
+const DECK = process.env.MOCK_DECK_FILE ? process.getBuiltinModule("fs").readFileSync(process.env.MOCK_DECK_FILE, "utf8") : `<!doctype html>
 <html lang="vi"><head><meta charset="utf-8"><title>Synchro 2026</title>
 <style>
   *{box-sizing:border-box}html,body{margin:0;background:#0f172a;font-family:system-ui,sans-serif;color:#f8fafc}

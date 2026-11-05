@@ -110,8 +110,8 @@ Hàng tổng: đậm, Border(top=Side(style="thin"), bottom=Side(style="double")
 Định dạng số: #,##0 · tiền #,##0 "₫" · âm trong ngoặc #,##0;(#,##0);"-" · tỉ lệ 0.0% · ngày dd/mm/yyyy · bội 0.0"x".
 Thanh trong ô bằng định dạng có điều kiện thật (Excel tự cập nhật theo số), không vẽ bằng ký tự hay ảnh:
 from openpyxl.formatting.rule import DataBarRule, ColorScaleRule
-ws.conditional_formatting.add("E4:E11", DataBarRule(start_type="num", start_value=0, end_type="max", color="5B9BD5", showValue=True))
-Bản đồ nhiệt: ColorScaleRule(start_type="min", start_color="FFFFFF", end_type="max", end_color="5B9BD5"). Biểu đồ: một chuỗi nhấn, các chuỗi khác xám.`,
+ws.conditional_formatting.add("E4:E11", DataBarRule(start_type="num", start_value=0, end_type="max", color="FF5B9BD5", showValue=True))
+Bản đồ nhiệt: ColorScaleRule(start_type="min", start_color="FFFFFFFF", end_type="max", end_color="FF5B9BD5"). Biểu đồ: một chuỗi nhấn, các chuỗi khác xám.`,
   graphic: `Đồ họa (poster, banner, infographic, trang đích): dựng theo 4 lớp: nền → hình và đường lưới → ảnh → chữ. Một ý chính; tiêu đề lớn gấp 3-4 lần chữ thường, đọc được trong 3 giây; tối đa 3 cỡ chữ; lề từ 5% cạnh ngắn; chữ không đè vùng ảnh nhiều chi tiết, cần thì phủ một lớp nền.
 Cần chữ chính xác thì dựng bằng text/html hoặc SVG; xin ảnh chụp, tranh thì dùng generate_image. Icon trong React dùng lucide-react; SVG tự viết thoải mái cho biểu đồ, hình học, sơ đồ khi có viewBox rõ và màu lấy từ biến.
 Hiệu ứng có chủ đích, tối đa 2 loại mỗi trang: kính mờ chỉ khi có nền sâu phía sau; không chữ chuyển màu ở nội dung phải đọc (không đo được tương phản, xuất PowerPoint mất màu).`,
@@ -132,7 +132,7 @@ const WS_FONTS = `Phông có sẵn trong sandbox: Be Vietnam Pro, Inter, Plus Ja
 function presetLine(id: string, own: boolean) {
   if (own) return `Người dùng đã có bản sắc riêng (thương hiệu, bảng màu, mẫu): theo đúng bản sắc đó, chỉ giữ các số đo; không áp preset màu.`;
   const p = presetOf(id)!;
-  return `Phong cách gợi ý: ${p.id} (${p.label}; phông ${p.head}${p.body !== p.head ? ` + ${p.body}` : ""}; nền ${p.bg}, chữ ${p.ink}, nhấn ${p.accent}). Người dùng hoặc nội dung nói khác thì theo họ. Preset khác: ${PRESETS.filter((x) => x.id !== id).map((x) => x.id).join(", ")}. Không bắt chước thương hiệu có thật.`;
+  return `Phong cách gợi ý: ${p.id} (${p.looks}; phông ${p.head}${p.body !== p.head ? ` + ${p.body}` : ""}; nền ${p.bg}, chữ ${p.ink}, nhấn ${p.accent}). Người dùng hoặc nội dung nói khác thì theo họ. Preset khác: ${PRESETS.filter((x) => x.id !== id).map((x) => x.id).join(", ")}. Không bắt chước thương hiệu có thật.`;
 }
 
 export type DesignPick = { format: DesignFormat; domain: DesignDomain; preset: string; own: boolean };
