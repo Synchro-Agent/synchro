@@ -64,6 +64,11 @@ const [o2] = OUT.saveOutputs(uid, [{ path: "lon.bin", data: big }]);
 r = await RI.runInputs(uid, [], [o2.id, o1.id], new Set());
 ok(r.over.join() === "lon.bin" && r.names.join() === "anh-moi.png", "tệp quá lớn được báo, tệp khác vẫn chép", r);
 
+const [o3] = OUT.saveOutputs(uid, [{ path: "video-cu.mp4", data: Buffer.alloc(31 * 1048576, 2) }]);
+const tr3 = [{ role: "assistant", content: "x", trace: [{ name: "run_code", status: "ok", summary: `<files>\noutputs/${o3.name} (31 MB) — đã gửi cho người dùng\n</files>` }] }];
+r = await RI.runInputs(uid, tr3, [], new Set());
+ok(r.over.join() === "video-cu.mp4" && !r.files.length, "tệp lớn của lượt trước không chép lại mỗi lượt, có báo", r);
+
 console.log("6. Chạy thật");
 if (process.platform === "darwin") {
   const inp = await RI.runInputs(uid, msgs, [], new Set());

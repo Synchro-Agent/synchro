@@ -8,6 +8,8 @@ import { outputByName } from "./outputs";
 // Dịch vụ workspace nhận tối đa 160 MB JSON một lần chạy, base64 làm to thêm 1/3.
 export const INPUTS_MAX = 100 * 1048576;
 const TRACED_MAX = 30;
+// Tệp đã giao ở lượt trước chép lại mỗi lượt: video 100 MB của hôm trước không đáng đi lại mỗi câu hỏi; lần chạy cuối vẫn còn ở .last_outputs/.
+const TRACED_FILE_MAX = 30 * 1048576;
 
 /** Tên trong inputs/: giữ nguyên tiếng Việt và dấu cách để model gọi đúng tên người dùng thấy, chỉ bỏ thứ không đặt được trong đường dẫn. Giữ đuôi khi phải cắt. */
 export function inputName(name: string): string {
@@ -36,12 +38,15 @@ export function tracedOutputs(msgs: unknown): string[] {
 export async function runInputs(uid: string, msgs: unknown, made: string[], sent?: Set<string>): Promise<{ files: RunFile[]; names: string[]; over: string[] }> {
   const all: ChatFile[] = await chatFiles(msgs, uid, () => made.map((id) => ({ id })))().catch(() => []);
   const seen = new Set(all.map((f) => f.name));
+  const files: RunFile[] = [], names: string[] = [], over: string[] = [];
   for (const n of tracedOutputs(msgs)) {
     if (seen.has(n)) continue;
     const o = outputByName(uid, n);
-    if (o) { seen.add(n); all.push({ name: o.name, mime: o.mime, data: o.data }); }
+    if (!o) continue;
+    seen.add(n);
+    if (o.size > TRACED_FILE_MAX) { const key = `${inputName(n)}:${o.size}`; if (!sent?.has(key)) over.push(inputName(n)); sent?.add(key); continue; }
+    all.push({ name: o.name, mime: o.mime, data: o.data });
   }
-  const files: RunFile[] = [], names: string[] = [], over: string[] = [];
   let room = INPUTS_MAX;
   const used = new Set<string>();
   for (const f of all) {
