@@ -1,7 +1,7 @@
 // Dựng trang chạy artifact (html / react / svg, bản trình bày): dùng chung cho khung xem trước trong trình duyệt và cho máy chủ
 // (kiểm tra hiển thị artifact bằng Chromium trong workspace, artcheck.ts). Không phụ thuộc giao diện: cầu nối với khung cha truyền vào.
 import type { ArtType } from "./artifacts";
-import { kitHead, usesKit } from "./artkit";
+import { KIT_CSS, kitHead, usesKit } from "./artkit";
 import { instrumentHtml, LOC_ATTR } from "./srcloc";
 
 export const V = "/vendor/";
@@ -54,15 +54,19 @@ export const BASE_CSS = `<style>:root{color-scheme:light dark}html,body{margin:0
 
 // Chèn vào <head> của trang (hoặc bọc trang nếu model chỉ viết phần thân).
 // kit: bộ CSS (artkit.ts) đứng sau BASE_CSS để thắng phông mặc định, trước CSS của model để model vẫn sửa được.
+// Không để <head> khớp <header>: trang chỉ viết phần thân có <header> thì CSP, cầu nối, bộ CSS rơi vào trong thẻ đó, mất doctype và meta CSP mất tác dụng.
+const HEAD_TAG = /<head(?:\s[^>]*)?>/i, HTML_TAG = /<html(?:\s[^>]*)?>/i;
 export function withHead(content: string, head: string, kit = "") {
-  if (/<head[^>]*>/i.test(content)) return content.replace(/<head[^>]*>/i, (m) => m + head + kit);
-  if (/<html[^>]*>/i.test(content)) return content.replace(/<html[^>]*>/i, (m) => `${m}<head>${head}${kit}</head>`);
+  if (HEAD_TAG.test(content)) return content.replace(HEAD_TAG, (m) => m + head + kit);
+  if (HTML_TAG.test(content)) return content.replace(HTML_TAG, (m) => `${m}<head>${head}${kit}</head>`);
   return `<!doctype html><html><head>${head}${BASE_CSS}${kit}</head><body>${content}</body></html>`;
 }
 // Tệp HTML tải về của bản trình bày: mở bằng trình duyệt là trình chiếu được (phím mũi tên, bấm chuột), in ra mỗi slide một trang.
 export const deckExport = (content: string) => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`, kitHead(content));
 /** Tệp HTML tải về của trang thường: trang dùng bộ CSS phải kèm bộ CSS, không thì mở ra vỡ hết; trang khác giữ nguyên từng byte. */
 export const htmlExport = (content: string) => (usesKit(content) ? withHead(content, `<meta charset="utf-8">`, kitHead(content)) : content);
+/** Tệp SVG tải về đứng một mình: hình dùng biến --sx-… phải mang theo bộ CSS trong chính tệp (CDATA vì tệp là XML); hình khác giữ nguyên từng byte. */
+export const svgExport = (content: string) => (usesKit(content) ? content.replace(/<svg\b[^>]*>/i, (m) => `${m}<style><![CDATA[${KIT_CSS}]]></style>`) : content);
 
 // loc: đánh dấu dòng mã nguồn lên từng phần tử (Alt+Click → đúng dòng), chỉ ở khung xem trước, không có trong bản tải về.
 // bridge: cầu nối với khung cha (postMessage) của khung xem trước; máy chủ kiểm tra hiển thị thì truyền phần báo lỗi riêng.
@@ -74,7 +78,8 @@ export function buildDocCore(type: ArtType, content: string, origin: string, ch:
   if (type === "html") return withHead(content, head, kit);
   const titled = title ? `${head}<title>${htmlEsc(title)}</title>` : head;
   if (type === "svg") {
-    return `<!doctype html><html><head>${titled}<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${dark ? "#1b1b1b" : "#fff"}}svg{max-width:100%;max-height:100vh;height:auto}</style></head><body>${content}</body></html>`;
+    // kit đứng trước để nền của khung SVG vẫn thắng nền của bộ CSS; hình không dùng thì kit rỗng.
+    return `<!doctype html><html><head>${titled}${kit}<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${dark ? "#1b1b1b" : "#fff"}}svg{max-width:100%;max-height:100vh;height:auto}</style></head><body>${content}</body></html>`;
   }
   // React: tải thư viện theo thứ tự, dịch JSX/TSX bằng Babel trong khung, import được react, recharts, lucide-react; có Tailwind.
   const libs = LIBS.map(([f, cdn, sri]) => [`${origin}${V}${f}`, `https://cdn.jsdelivr.net/npm/${cdn}`, sri]);

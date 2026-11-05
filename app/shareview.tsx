@@ -11,7 +11,8 @@ import type { ShareSeg, ShareSnap } from "./sharesnap";
 
 const noop = () => {};
 function ArtSeg({ s }: { s: Extract<ShareSeg, { k: "art" }> }) {
-  const [h, setH] = useState(420);
+  // Poster 3:4 co vừa chiều cao khung (artkit.ts) nên khung thấp sẽ cho poster bé: mở khung đủ cao ngay từ đầu.
+  const [h, setH] = useState(/\bsx-poster\b/.test(s.content) ? 900 : 420);
   const body = s.type === "html" || s.type === "react" || s.type === "svg"
     ? <ArtifactFrame type={s.type} content={s.content} ai={false} title={s.title} onHeight={(v) => setH(Math.min(1400, Math.max(160, v)))} style={{ height: h }} className="sh-frame" />
     : s.type === "markdown" ? <div className="sh-doc"><Markdown text={s.content} say={noop} /></div>

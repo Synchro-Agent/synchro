@@ -4,10 +4,12 @@
 export type PresetColors = { bg: string; surface: string; raised: string; ink: string; muted: string; accent: string; accent2: string; line: string; neutral: string; pos: string; neg: string };
 export type Preset = PresetColors & {
   id: string;
+  print?: Partial<PresetColors>; // phong cách vốn tối: trang đọc in trên giấy trắng thì màu nhấn sáng không đọc được (artkit.ts, luật in)
   looks: string; // tả cho model, không phải chữ giao diện
   dark?: PresetColors; // bảng tối khi trang đặt data-sx-theme="auto"; phong cách vốn tối thì không cần
   bw: number; r: number; ri: number; // viền, bo ngoài, bo trong (px ở thang 1280)
   shadow: string; blur: number;
+  lh?: number; // bước dòng tiêu đề lớn nếu khác 1.2: đo mực trong Chrome, dấu chồng (Ấ, Ệ) của Playfair chỉ hết chạm dòng trên từ 1.25 (tests/ui/design-kit.mjs)
   head: string; body: string; mono: string; // tên phông, phải có trong FONT_SPEC
 };
 
@@ -30,15 +32,16 @@ export const PRESETS: Preset[] = [
     bw: 1, r: 0, ri: 0, shadow: "none", blur: 0, head: "Inter", body: "Inter", mono: "JetBrains Mono" },
   { id: "midnight-tech", looks: "Công nghệ nền tối: đen sâu, viền mảnh sáng, nhấn chàm",
     bg: "#08090E", surface: "#12141C", raised: "#1B1E29", ink: "#F8FAFC", muted: "#A3AEBF", accent: "#818CF8", accent2: "#38BDF8", line: "#262A36", neutral: "#475569", pos: POS_D, neg: NEG_D,
+    print: { accent: "#4338CA", accent2: "#0369A1", pos: POS, neg: NEG },
     bw: 1, r: 16, ri: 8, shadow: "0 20px 40px -15px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.12)", blur: 16, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
   { id: "soft-bento", looks: "Ô bento mềm: nền xám rất nhạt, thẻ trắng bo lớn, nhấn xanh dương",
-    bg: "#F5F5F7", surface: "#FFFFFF", raised: "#FAFAFC", ink: "#1D1D1F", muted: "#5F5F66", accent: "#0066CC", accent2: "#0F7B4F", line: "#E4E4E9", neutral: "#B6B6BE", pos: POS, neg: NEG,
-    dark: { bg: "#111113", surface: "#1C1C1F", raised: "#26262A", ink: "#F5F5F7", muted: "#A8A8B0", accent: "#4DA3FF", accent2: "#34D399", line: "#34343A", neutral: "#5A5A62", pos: POS_D, neg: NEG_D },
+    bg: "#F3F5F9", surface: "#FFFFFF", raised: "#F9FAFD", ink: "#1B1F2A", muted: "#5A5F6E", accent: "#1F5FD0", accent2: "#0F7B4F", line: "#E4E4E9", neutral: "#B6B6BE", pos: POS, neg: NEG,
+    dark: { bg: "#10121A", surface: "#1A1D27", raised: "#242733", ink: "#F2F4F9", muted: "#A6AAB8", accent: "#6BA3F5", accent2: "#34D399", line: "#34343A", neutral: "#5A5A62", pos: POS_D, neg: NEG_D },
     bw: 1, r: 24, ri: 12, shadow: "0 4px 12px rgba(0,0,0,.03),0 16px 32px -8px rgba(0,0,0,.05)", blur: 20, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
   { id: "editorial-serif", looks: "Tạp chí: giấy ấm, chữ than, tiêu đề có chân, nhấn nâu đồng",
     bg: "#FAF7F2", surface: "#FFFFFF", raised: "#F3EFE6", ink: "#1C1917", muted: "#6B645E", accent: "#9A3412", accent2: "#44403C", line: "#E7E5E4", neutral: "#BDB6AD", pos: POS, neg: NEG,
     dark: { bg: "#17140F", surface: "#211D17", raised: "#2B261F", ink: "#F5F0E8", muted: "#B5AC9F", accent: "#F0936A", accent2: "#D6CFC4", line: "#3A342B", neutral: "#6B6358", pos: POS_D, neg: NEG_D },
-    bw: 1, r: 2, ri: 0, shadow: "0 2px 8px rgba(28,25,23,.04)", blur: 0, head: "Playfair Display", body: "Be Vietnam Pro", mono: "JetBrains Mono" },
+    bw: 1, r: 2, ri: 0, shadow: "0 2px 8px rgba(28,25,23,.04)", blur: 0, lh: 1.25, head: "Playfair Display", body: "Be Vietnam Pro", mono: "JetBrains Mono" },
   { id: "exec-navy", looks: "Điều hành: nền trắng, chữ navy, nhấn xanh coban, gọn và nhiều số",
     bg: "#FFFFFF", surface: "#F8FAFC", raised: "#F1F5F9", ink: "#0A192F", muted: "#475569", accent: "#0052CC", accent2: "#0369A1", line: "#E2E8F0", neutral: "#CBD5E1", pos: POS, neg: NEG,
     dark: { bg: "#0B1220", surface: "#131C2E", raised: "#1B263B", ink: "#F1F5F9", muted: "#A6B3C6", accent: "#6EA8FE", accent2: "#38BDF8", line: "#2A3650", neutral: "#475569", pos: POS_D, neg: NEG_D },
@@ -53,6 +56,7 @@ export const PRESETS: Preset[] = [
     bw: 1, r: 20, ri: 12, shadow: "0 12px 32px -4px rgba(79,70,229,.1),inset 0 1px 0 rgba(255,255,255,.9)", blur: 24, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
   { id: "data-terminal", looks: "Bảng số dày: nền than, chữ sáng, số đơn cách, nhấn xanh lục",
     bg: "#0B0E14", surface: "#111622", raised: "#1A2130", ink: "#E2E8F0", muted: "#9AA8BC", accent: "#34D399", accent2: "#F59E0B", line: "#1E293B", neutral: "#475569", pos: POS_D, neg: NEG_D,
+    print: { accent: "#047857", accent2: "#B45309", pos: POS, neg: NEG },
     bw: 1, r: 4, ri: 2, shadow: "none", blur: 0, head: "Inter", body: "Inter", mono: "JetBrains Mono" },
 ];
 export const DEFAULT_PRESET = "swiss-grid";
