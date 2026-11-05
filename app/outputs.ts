@@ -8,7 +8,8 @@ import { randomToken } from "./mcpauth";
 import type { RunFile } from "./coderun";
 
 // skipped: tệp code đã tạo nhưng không giao được (quá cỡ, hết hạn mức): chỉ là thẻ báo trong tin nhắn, không có trên đĩa.
-export type OutFile = { id: string; name: string; size: number; mime: string; skipped?: boolean };
+// w, h: cỡ ảnh, để khung trong tin nhắn giữ đúng tỉ lệ trước khi ảnh tải xong. Tin nhắn cũ không có.
+export type OutFile = { id: string; name: string; size: number; mime: string; skipped?: boolean; w?: number; h?: number };
 const TTL = 30 * 86_400_000;
 const ROOT = path.join(DATA_DIR, "outputs");
 // Hạn mức tệp đã tạo của mỗi tài khoản: mỗi lần chạy tới 150 MB, giữ 30 ngày, không có hạn mức thì một người có thể làm đầy đĩa của mọi người.
@@ -52,6 +53,30 @@ function sweep() {
 
 const safeName = (p: string) => (path.basename(p).replace(/[\u0000-\u001f\\/:*?"<>|]/g, "_").slice(0, 120) || "tep");
 
+/** Cỡ ảnh đọc từ phần đầu tệp (PNG, JPEG, WebP), không giải mã ảnh; không đọc được thì bỏ qua. */
+export function imageSize(b: Buffer): { w: number; h: number } | null {
+  try {
+    if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+    if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+      for (let i = 2; i + 9 < b.length;) {
+        if (b[i] !== 0xff) { i++; continue; }
+        const m = b[i + 1];
+        // SOF0..SOF15, trừ DHT (C4), JPG (C8), DAC (CC).
+        if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) };
+        i += 2 + b.readUInt16BE(i + 2);
+      }
+      return null;
+    }
+    if (b.length > 30 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP") {
+      const k = b.toString("latin1", 12, 16);
+      if (k === "VP8X") return { w: 1 + b.readUIntLE(24, 3), h: 1 + b.readUIntLE(27, 3) };
+      if (k === "VP8L") { const v = b.readUInt32LE(21); return { w: 1 + (v & 0x3fff), h: 1 + ((v >> 14) & 0x3fff) }; }
+      if (k === "VP8 ") return { w: b.readUInt16LE(26) & 0x3fff, h: b.readUInt16LE(28) & 0x3fff };
+    }
+  } catch { /* tệp cụt */ }
+  return null;
+}
+
 export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
   const d = init();
   if (!files.length || outputsFull()) return [];
@@ -62,7 +87,8 @@ export function saveOutputs(uid: string, files: RunFile[]): OutFile[] {
     fs.writeFileSync(path.join(ROOT, uid, id), f.data, { mode: 0o600 });
     const o = { id, name, size: f.data.length, mime: mimeOf(name) };
     d.prepare("INSERT INTO outputs (id, user_id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, uid, name, o.mime, o.size, Date.now());
-    return o;
+    const dim = o.mime.startsWith("image/") ? imageSize(f.data) : null;
+    return dim && dim.w > 0 && dim.h > 0 ? { ...o, ...dim } : o;
   });
   return saved;
 }

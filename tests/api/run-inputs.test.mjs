@@ -105,6 +105,17 @@ ok(IG.requestSlug("<current_time>10:00</current_time>\nVẽ một ngôi nhà g�
 const longName = IG.requestSlug("Vẽ một bức tranh phong cảnh núi non hùng vĩ với dòng sông uốn lượn qua thung lũng xanh");
 ok(longName.length <= 40 && !longName.endsWith("-") && longName.startsWith("phong-canh"), "tên dài cắt ở ranh giới từ", longName);
 
+console.log("10. Cỡ ảnh để giữ chỗ trong tin nhắn");
+const sharp = createRequire(path.join(process.cwd(), "package.json"))("sharp");
+const blank = sharp({ create: { width: 640, height: 360, channels: 3, background: "#123456" } });
+for (const k of ["png", "jpeg", "webp"]) ok(JSON.stringify(OUT.imageSize(await blank.clone()[k]().toBuffer())) === '{"w":640,"h":360}', `đọc được cỡ ${k}`, OUT.imageSize(await blank.clone()[k]().toBuffer()));
+const lossless = await blank.clone().webp({ lossless: true }).toBuffer();
+ok(JSON.stringify(OUT.imageSize(lossless)) === '{"w":640,"h":360}', "đọc được cỡ WebP không nén mất", OUT.imageSize(lossless));
+ok(OUT.imageSize(Buffer.from("không phải ảnh")) === null && OUT.imageSize(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0xff])) === null, "tệp hỏng không ném lỗi");
+const [sized] = OUT.saveOutputs(uid, [{ path: "co.png", data: await blank.clone().png().toBuffer() }]);
+ok(sized.w === 640 && sized.h === 360, "thẻ tệp mang theo cỡ ảnh", sized);
+ok(!OUT.saveOutputs(uid, [{ path: "a.txt", data: Buffer.from("x") }])[0].w, "tệp khác không có cỡ");
+
 for (const id of written) for (const x of [".bin", ".json"]) fs.rmSync(path.join(CACHE, id + x), { force: true });
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fail ? "✗" : "✓"} ${pass} đạt, ${fail} lỗi`);

@@ -162,6 +162,7 @@ export const VI2EN: Record<string, string> = {
   "Đang mở trang…": "Opening page…",
   "Đang chụp màn hình…": "Taking a screenshot…",
   "Chọn tệp và chuyển thành markdown": "Choose a file and convert to markdown",
+  "Không tải được ảnh. Tệp có thể đã hết hạn (tự xóa sau 30 ngày).": "Couldn't load the image. The file may have expired (files are removed after 30 days).",
   "Xem trước": "Preview", "Tải về": "Download", "Sao chép nội dung": "Copy content", "Lỗi": "Error",
   "Tệp này không có nội dung văn bản để sao chép": "This file has no text content to copy", "Đã sao chép nội dung": "Content copied",
   "Không có bản xem trước cho loại tệp này. Dùng “Tải về” để mở tệp gốc, hoặc “Tải lên và chuyển thành markdown” để đọc nội dung.": "No preview for this file type. Use “Download” to open the original, or “Upload and convert to markdown” to read it.",
