@@ -22,7 +22,7 @@ const { parseFindings, mergeFindings, fixPatch, important, numbered } = await lo
 console.log("1. Đọc kết quả của model");
 let f = parseFindings('Đây là kết quả:\n```json\n{"findings":[{"line_start":3,"line_end":99,"severity":"low","title":"Gợi ý","detail":"d","suggested_fix":"x"},{"line_start":1,"line_end":1,"severity":"high","title":"Lỗi nặng","detail":"d","suggested_fix":"y"},{"line_start":50,"title":"ngoài tệp"},{"line_start":2,"severity":"bad"}]}\n```', 10);
 ok(f.length === 2 && f[0].severity === "high" && f[1].line_end === 10, "đọc JSON trong khối ```json, bỏ mục sai, nặng nhất trước, giới hạn dòng trong tệp", JSON.stringify(f));
-ok(parseFindings('[{"line_start":2,"title":"A"}]', 5)[0]?.severity === "medium" && parseFindings("không phải JSON", 5).length === 0, "nhận cả dạng mảng; mức độ lạ → Nên sửa; chữ thường → không có lỗi");
+ok(parseFindings('[{"line_start":2,"title":"A"}]', 5)[0]?.severity === "medium" && parseFindings("không phải JSON", 5) === null && parseFindings('{"findings":[{"line_start":1', 5) === null && parseFindings('{"ok":true}', 5) === null && parseFindings('{"findings":[]}', 5)?.length === 0, "câu trả lời không đọc được là null, khác với không có lỗi nào; nhận cả dạng mảng; mức độ lạ → Nên sửa; chữ thường → không có lỗi");
 const m = mergeFindings([
   { by: "openai/gpt-6-sol", findings: [{ line_start: 4, line_end: 5, severity: "medium", title: "A", detail: "", suggested_fix: "" }, { line_start: 9, line_end: 9, severity: "low", title: "B", detail: "", suggested_fix: "b" }] },
   { by: "google/gemini-3.8-flash", findings: [{ line_start: 5, line_end: 5, severity: "high", title: "A nặng", detail: "", suggested_fix: "fix" }] },

@@ -54,7 +54,9 @@ export const POST = handle(async (req: Request) => {
   const ask = `Sản phẩm: “${String(b.title ?? "").slice(0, 200)}” (${kind}${b.lang ? `, ${String(b.lang).slice(0, 30)}` : ""}).${typeof b.question === "string" && b.question.trim() ? `\nYêu cầu gốc của người dùng: ${b.question.trim().slice(0, 1500)}` : ""}\n\n<code>\n${numbered(content)}\n</code>`;
   const runs = await Promise.allSettled(picks.map(async (key) => {
     const text = await oneShot(user, key, deck ? CRITIC.replace("</critic_review>", `${DECK_NOTE}\n</critic_review>`) : CRITIC, [{ role: "user", content: ask }], { maxTokens: 1800 });
-    return { by: key, findings: parseFindings(text, lines) };
+    const findings = parseFindings(text, lines);
+    if (!findings) throw new Error("Model phản biện trả lời không đọc được");
+    return { by: key, findings };
   }));
   const ok = runs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   if (!ok.length) {

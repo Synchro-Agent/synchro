@@ -27,14 +27,16 @@ export const criticKey = (ident: string, content: string) => `${ident}:${hashOf(
 /** Nội dung kèm số dòng để model chỉ đúng dòng. */
 export const numbered = (content: string) => content.split("\n").map((l, i) => `${String(i + 1).padStart(4)} | ${l}`).join("\n");
 
-/** Đọc JSON model trả về (có thể nằm trong khối ```json), bỏ mục sai, giới hạn dòng trong tệp. */
-export function parseFindings(text: string, lines: number, max = 8): Finding[] {
+/** Đọc JSON model trả về (có thể nằm trong khối ```json), bỏ mục sai, giới hạn dòng trong tệp.
+ *  null: không đọc được câu trả lời, khác với [] là đọc được và không có lỗi nào: coi hai điều đó như nhau là hiện dấu "Ổn" xanh trên trang chưa ai đọc được kết quả phản biện. */
+export function parseFindings(text: string, lines: number, max = 8): Finding[] | null {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1];
   const first = text.search(/[[{]/), arr = text.trim().startsWith("[");
   const raw = fenced ?? (first < 0 ? "" : text.slice(first, (arr ? text.lastIndexOf("]") : text.lastIndexOf("}")) + 1));
   let j: unknown;
-  try { j = JSON.parse(raw); } catch { return []; }
-  const list = Array.isArray(j) ? j : Array.isArray((j as { findings?: unknown })?.findings) ? (j as { findings: unknown[] }).findings : [];
+  try { j = JSON.parse(raw); } catch { return null; }
+  const list = Array.isArray(j) ? j : Array.isArray((j as { findings?: unknown })?.findings) ? (j as { findings: unknown[] }).findings : null;
+  if (!list) return null;
   const out: Finding[] = [];
   for (const x of list as Record<string, unknown>[]) {
     const a = Math.round(Number(x?.line_start)), b = Math.round(Number(x?.line_end ?? x?.line_start));
