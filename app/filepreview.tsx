@@ -122,6 +122,7 @@ export function ProductSwitcher({ items, active }: { items: Product[]; active: s
       </button>
       <Menu open={open} className="prod-menu">
         <div className="art-dl-h">{tr("Sản phẩm trong đoạn chat")}</div>
+        <div className="menu-scroll gl-scroll">
         {[...items].reverse().map((p) => {
           const k = p.file ? fileKind(p.file.name) : null;
           return (
@@ -131,6 +132,7 @@ export function ProductSwitcher({ items, active }: { items: Product[]; active: s
             </button>
           );
         })}
+        </div>
       </Menu>
     </div>
   );

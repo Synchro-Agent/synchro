@@ -51,6 +51,9 @@ const SPACING = `(() => {
   const textBox = (el) => { const rg = document.createRange(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     while (tw.nextNode()) { const t = tw.currentNode; if (!t.nodeValue.trim()) continue; rg.selectNodeContents(t); for (const r of rg.getClientRects()) { if (!r.width) continue; x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom); } }
     return x1 > x0 ? { left: x0, top: y0, right: x1, bottom: y1 } : null; };
+  for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.model-sub,.usermenu")) {
+    if (getComputedStyle(m).display !== "none" && !m.classList.contains("fl-flat") && /(auto|scroll)/.test(getComputedStyle(m).overflowY) && getComputedStyle(m, "::before").content !== "none") out.push("khung kính tự cuộn, nền và viền sẽ trôi theo nội dung: " + (m.className || m.tagName));
+  }
   for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.model-sub,.usermenu,.cx-pop")) {
     if (getComputedStyle(m).display === "none") continue;
     const items = [...m.querySelectorAll(".menu-item")].filter((e) => e.closest(".menu,.model-menu,.model-sub,.usermenu,.cx-pop") === m && e.getBoundingClientRect().height);

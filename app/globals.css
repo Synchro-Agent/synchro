@@ -2114,7 +2114,12 @@ b,strong{font-weight:560}
 .adm-msearch{margin:4px 0 8px!important;height:30px}
 
 /* Bộ chọn model: danh sách dài cuộn được, trạng thái chưa có model */
-.msub-models{max-height:min(420px,60vh);overflow:auto}
+.msub-models{max-height:min(420px,60vh);display:flex;flex-direction:column;overflow:visible}
+.msub-models .msub-plan{flex:none}
+/* Khung kính không tự cuộn: nền và viền của nó là lớp phủ ::before / ::after, khung cuộn thì chúng trôi theo nội dung. Phần cuộn nằm bên trong. */
+.menu-scroll.msub-scroll,.menu-scroll.gl-scroll{flex:0 1 auto;min-height:0;max-height:none}
+html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat::before,html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat::after{display:none!important}
+html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--card)!important}
 .mname-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mempty{display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;max-width:260px}
 .mload{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;font-size:13px;color:var(--text-2)}
@@ -2802,7 +2807,7 @@ html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--ca
 .prod-n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:var(--hover);font-size:11px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
 .prod-sw{position:relative;flex:none}
 .prod-sw-b{width:auto!important;padding:0 7px;gap:5px;display:inline-flex;align-items:center;font-size:12px;color:var(--text-2)}
-.menu.prod-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:280px;max-height:60vh;overflow:auto;padding:4px;z-index:40}
+.menu.prod-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:280px;max-height:60vh;display:flex;flex-direction:column;overflow:visible;padding:4px;z-index:40}
 .prod-it.on{background:var(--hover)}
 .out-badge.sm{width:28px;height:28px;font-size:8px;border-radius:var(--r-pill)}
 .prod-ic{width:28px;height:28px;border-radius:25%;display:grid;place-items:center;background:var(--hover);color:var(--text-2);font-size:11px;flex:none}
@@ -3406,7 +3411,8 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 /* mức dùng theo hãng: gói subscription / khóa API (vòng tròn chế độ Tự động, Cài đặt → Usage) */
 :root{--vc-claude:#eb6834;--vc-gpt:#1baf7a;--vc-gemini:#2a78d6;--vc-grok:#c2185b;--vc-deepseek:#5c3c92;--vc-other:#8a8983}
 [data-theme="dark"]{--vc-claude:#d95926;--vc-gpt:#199e70;--vc-gemini:#3987e5;--vc-grok:#b8245f;--vc-deepseek:#7448b8;--vc-other:#8f8e88}
-.menu.us-pop{max-height:min(600px,calc(100dvh - 120px));overflow:auto}
+.menu.us-pop{max-height:min(600px,calc(100dvh - 120px));display:flex;flex-direction:column;overflow:visible;padding:0}
+.menu.us-pop>.gl-scroll{margin:0;padding:16px 18px 14px}
 .us-v+.us-v{border-top:.5px solid var(--border);margin-top:10px;padding-top:10px}
 .us-v-h{display:flex;align-items:center;gap:8px;min-width:0}
 .us-v-h>i{width:8px;height:8px;border-radius:50%;flex:none}

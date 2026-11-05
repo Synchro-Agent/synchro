@@ -141,6 +141,8 @@ const CHECK = `(() => {
   for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.usermenu,.model-sub,.modal,[role=dialog]")) {
     if (!vis(m) || getComputedStyle(m).pointerEvents === "none") continue;
     const q = m.getBoundingClientRect(); if (q.width < 40 || q.height < 30) continue;
+    // Khung kính tự cuộn: nền và viền (::before / ::after) trôi theo nội dung, viền cắt ngang dòng cuối. Phần cuộn phải nằm bên trong khung.
+    if (m.matches(".menu,.model-menu,.usermenu,.model-sub,.modal") && !m.classList.contains("fl-flat") && /(auto|scroll)/.test(getComputedStyle(m).overflowY) && getComputedStyle(m, "::before").content !== "none") out.push("khung kính tự cuộn, nền và viền sẽ trôi theo nội dung: " + name(m));
     // Tràn mép trên / dưới màn hình: mất viền, mất góc bo (menu con của menu + từng mở lên quá mép trên).
     if (q.top < -1 || q.bottom > H + 1) out.push("khung nổi tràn khỏi mép " + (q.top < -1 ? "trên " + Math.round(-q.top) : "dưới " + Math.round(q.bottom - H)) + "px: " + name(m));
     let hit = null, n = 0;

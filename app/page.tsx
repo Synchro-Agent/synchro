@@ -250,12 +250,19 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
   useEffect(() => { setActiveEffort(autoEff ? "auto" : eff); }, [eff, autoEff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
+  // Đo chiều cao thật của khung lúc nó gắn vào trang (MsubBody): ước lượng theo số dòng từng bỏ sót ghi chú gói, nên danh sách Gemini
+  // bị đặt ngang hàng rồi phải cuộn trong một khung thấp dù phía trên còn nhiều chỗ.
+  const subAnchor = useRef({ off: 0, below: 0, menuBottom: 0 });
   const hoverProv = (id: string, el: HTMLElement) => {
-    setSub(id);
     const r = el.getBoundingClientRect(), menu = (el.offsetParent as HTMLElement | null)?.getBoundingClientRect() ?? r;
-    const need = (providers.find((p) => p.id === id)?.models.length ?? 0) * el.offsetHeight + 12;
-    const below = window.innerHeight - r.top - 12;
-    setSubPos(need <= below ? { top: el.offsetTop - 6, maxHeight: Math.min(420, below) } : { bottom: 0, maxHeight: Math.min(420, Math.max(160, menu.bottom - 12)) });
+    subAnchor.current = { off: el.offsetTop, below: window.innerHeight - r.top - 12, menuBottom: menu.bottom };
+    setSub(id);
+  };
+  const placeSub = (scroller: HTMLElement) => {
+    const panel = scroller.closest<HTMLElement>(".msub-models"), a = subAnchor.current;
+    if (!panel) return;
+    const need = panel.offsetHeight - scroller.clientHeight + scroller.scrollHeight;
+    setSubPos(need <= a.below ? { top: a.off - 6, maxHeight: Math.min(420, a.below) } : { bottom: 0, maxHeight: Math.min(420, Math.max(160, a.menuBottom - 12)) });
   };
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
@@ -341,11 +348,13 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.plan && <PlanNote pv={pv} />}
+            <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
                 <span className="mname-t">{m.name}</span>{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
+            </MsubBody>
           </Menu>
         ))}
       </Menu>
@@ -363,6 +372,14 @@ const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
   ...(d.partialWork ? { work: true } : {}),
   ...(Array.isArray(d.tried) ? { tried: d.tried as string[] } : {}),
 });
+
+// Phần cuộn của danh sách model nằm trong khung kính chứ không phải chính khung kính: nền và viền kính là lớp ::before / ::after của khung,
+// khung tự cuộn thì chúng trôi theo nội dung (viền cắt ngang dòng cuối, các dòng lòi ra ngoài nền). Ghi chú gói đứng yên ở đầu khung.
+function MsubBody({ on, count, place, children }: { on: boolean; count: number; place: (scroller: HTMLElement) => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (on && ref.current) place(ref.current); }, [on, count]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <div ref={ref} className="menu-scroll msub-scroll">{children}</div>;
+}
 
 function PlanNote({ pv }: { pv: ProviderInfo }) {
   const p = pv.plan!;

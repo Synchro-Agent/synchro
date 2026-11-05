@@ -9,11 +9,17 @@ const M = 8;
 export function fit(el: HTMLElement) {
   if (!el.isConnected || el.classList.contains("out")) return;
   el.style.translate = "";
+  // Cửa sổ cao trở lại: bỏ giới hạn đã đặt ở lần đo trước.
+  if (el.classList.contains("fl-flat")) { el.classList.remove("fl-flat"); el.style.maxHeight = ""; el.style.overflowY = ""; }
   const r = el.getBoundingClientRect();
   if (!r.width || !r.height) return;
   const W = innerWidth, H = innerHeight;
   // Không giới hạn khung có menu con nằm ngoài nó (menu con sẽ bị cắt theo).
-  if (r.height > H - 2 * M && !el.querySelector(SEL)) { el.style.maxHeight = `${H - 2 * M}px`; el.style.overflowY = "auto"; }
+  // Khung có phần cuộn bên trong thì chỉ cần giới hạn chiều cao; khung còn lại tự cuộn nên bỏ lớp kính (fl-flat), không thì nền và viền trôi theo nội dung.
+  if (r.height > H - 2 * M && !el.querySelector(SEL)) {
+    el.style.maxHeight = `${H - 2 * M}px`;
+    if (!el.querySelector(":scope > .menu-scroll")) { el.style.overflowY = "auto"; el.classList.add("fl-flat"); }
+  }
   const b = el.getBoundingClientRect();
   let dx = 0, dy = 0;
   if (b.right > W - M) dx = W - M - b.right;

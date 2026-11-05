@@ -260,6 +260,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" /></svg>
       </button>
       <Menu open={open} role="dialog" className={`us-pop ${up ? "up" : "down"}`}>
+        <div className="menu-scroll gl-scroll">
         <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
           <>
@@ -284,6 +285,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         )}
         {extra}
         {onDetails && <button className="us-more" onClick={() => { setOpen(false); onDetails(); }}>{L("Xem chi tiết mức dùng", "View usage details")}<I.ChevronR size={13} /></button>}
+      </div>
       </Menu>
     </div>
   );
