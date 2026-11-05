@@ -84,3 +84,5 @@ html body .adm-perm-row .field.adm-num{width:112px;min-width:112px;flex:none;mar
 .pw-forgot{margin:-10px 0 14px;font-size:13px}
 .pw-forgot .lnk{background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .pw-forgot .lnk:disabled{opacity:.6;cursor:default}
+/* Mô tả trong Cài đặt không để một từ rớt lẻ xuống dòng cuối */
+html body .sy-settings .row .d,html body .sy-settings .adm-perm-row .d{text-wrap:pretty}

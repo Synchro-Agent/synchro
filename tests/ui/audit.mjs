@@ -197,7 +197,7 @@ const CHECK = `(() => {
     if (!vis(k) || k.closest("svg,table,pre,code,textarea,[aria-hidden=true],.sr-only,.ai-msg,.user-msg,.mdx,iframe")) continue;
     const own = [...k.childNodes].filter((n) => n.nodeType === 3 && n.nodeValue.trim()); if (!own.length || k.children.length) continue;
     const r = k.getBoundingClientRect(); if (r.bottom < 0 || r.top > H || !r.width || r.width > 150) continue;
-    const text = own.map((n) => n.nodeValue).join(" ").trim(), lh = parseFloat(getComputedStyle(k).lineHeight) || parseFloat(getComputedStyle(k).fontSize) * 1.3, lines = Math.round(r.height / lh);
+    const text = own.map((n) => n.nodeValue).join(" ").trim(), lh = parseFloat(getComputedStyle(k).lineHeight) || parseFloat(getComputedStyle(k).fontSize) * 1.3, lines = lh > 0 ? Math.round(r.height / lh) : 0;
     const box = k.closest(".row,.adm-perm-row,.adm-card,.modal,section")?.getBoundingClientRect();
     if (lines >= 4 && text.length / lines < 13 && box && box.width > r.width * 3) out.push("chữ bị ép hẹp " + Math.round(r.width) + "px, " + lines + " dòng: " + name(k) + " “" + text.slice(0, 30) + "”");
   }
@@ -353,6 +353,8 @@ for (const theme of THEMES) for (const size of SIZES) {
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
   await step0("trang-chu", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(1500); await shot("trang-chu"); });
   await step0("menu-model", async () => { await click(`document.querySelector(".model-btn")`, "model"); await sleep(500); await shot("menu-model"); await esc(); await sleep(300); });
+  // Người mới bắt đầu ở Tự động (CLI giả lập); ca artifact cần model của nhà cung cấp giả lập, nơi có sẵn artifact mẫu.
+  await step0("chon-model-thu", async () => { await ev(`(async () => { const me = await (await fetch("/api/auth/me")).json(), m = await (await fetch("/api/models")).json(), k = m.providers.flatMap((p) => p.models).find((x) => !x.key.startsWith("sub-"))?.key; if (k) localStorage.setItem("u:" + me.user.id + ":model", k); })()`); await P("Page.reload", {}); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(800); });
   await step0("chat-artifact", async () => { await ask("Làm trang web cho quán cà phê"); await shot("chat-artifact"); });
   await step0("artifact-ma", async () => { await click(byText(".art-tabs button", "Mã"), "code"); await sleep(800); await shot("artifact-ma"); await click(byText(".art-tabs button", "Xem trước"), "preview"); await sleep(500); });
   await step0("tai-ve", async () => { await click(`document.querySelector(".art-acts [aria-label='Tải về']")`, "dl"); await sleep(500); await shot("menu-tai-ve"); await esc(); await sleep(300); });
@@ -429,6 +431,9 @@ for (const theme of THEMES) for (const size of SIZES) {
   for (let i = 0; i < 25 && (await fetch("http://127.0.0.1:9339/json/version").then(() => true).catch(() => false)); i++) await sleep(200);
 }
 
-console.log(`\n━━ Vấn đề (${problems.length})`);
-for (const p of problems) console.log(" -", p);
+// Giao diện điện thoại đang tạm dừng theo quyết định của chủ dự án: vẫn soát và in ra để làm sau, nhưng không chặn deploy.
+const phone = problems.filter((p) => /^\w+-mobile\//.test(p)), desk = problems.filter((p) => !phone.includes(p));
+if (phone.length) { console.log(`\n── Điện thoại, chưa tính (${phone.length})`); for (const p of phone) console.log(" -", p); }
+console.log(`\n━━ Vấn đề (${desk.length})`);
+for (const p of desk) console.log(" -", p);
 console.log(`\nẢnh chụp: ${OUT}`);
