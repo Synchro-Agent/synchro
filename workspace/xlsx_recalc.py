@@ -21,6 +21,63 @@ F_TAG = re.compile(r'<f\b[^>]*/>|<f\b.*?</f>', re.S)
 V_TAG = re.compile(r'<v\b[^>]*/>|<v\b[^>]*>(.*?)</v>', re.S)
 
 
+# Hàm sau Excel 2007: trong tệp phải ghi kèm tiền tố _xlfn., thiếu thì Excel báo #NAME? dù LibreOffice vẫn tính được, nên bước tự kiểm tra không bắt được lỗi này.
+# openpyxl ghi nguyên văn model viết. Không có hàm mảng động (XLOOKUP, FILTER…): chúng còn cần cờ mảng, thêm tiền tố cũng chưa đúng; quy tắc của run_code đã cấm.
+LATER_FUNCS = """IFS SWITCH MAXIFS MINIFS TEXTJOIN CONCAT IFNA DAYS ISOWEEKNUM XOR NUMBERVALUE UNICHAR UNICODE FORMULATEXT ISFORMULA SHEET SHEETS ARABIC BASE DECIMAL
+CEILING.MATH FLOOR.MATH STDEV.S STDEV.P VAR.S VAR.P COVARIANCE.P COVARIANCE.S PERCENTILE.INC PERCENTILE.EXC PERCENTRANK.INC PERCENTRANK.EXC QUARTILE.INC QUARTILE.EXC
+RANK.EQ RANK.AVG MODE.SNGL MODE.MULT NORM.DIST NORM.INV NORM.S.DIST NORM.S.INV T.DIST T.DIST.2T T.DIST.RT T.INV T.INV.2T CONFIDENCE.NORM CONFIDENCE.T FORECAST.LINEAR
+NETWORKDAYS.INTL WORKDAY.INTL AGGREGATE PDURATION RRI GAMMA BITAND BITOR BITXOR""".split()
+LATER = re.compile(r'(?<![\w.])(' + "|".join(re.escape(n) for n in sorted(LATER_FUNCS, key=len, reverse=True)) + r')(?=\s*\()', re.I)
+# NETWORKDAYS.INTL, WORKDAY.INTL, AGGREGATE có từ Excel 2010 nhưng lưu không tiền tố.
+NO_PREFIX = {"NETWORKDAYS.INTL", "WORKDAY.INTL", "AGGREGATE"}
+
+
+def add_prefixes(f_xml):
+    """Thêm _xlfn. vào một thẻ <f>; bỏ qua chữ trong ngoặc kép. Trả về (thẻ mới, số chỗ đã thêm)."""
+    count = 0
+
+    def one(m):
+        nonlocal count
+        name = m.group(1).upper()
+        if name in NO_PREFIX:
+            return m.group(0)
+        count += 1
+        return "_xlfn." + name
+    # &quot; là ngoặc kép đã mã hóa trong XML, openpyxl có thể ghi dạng này.
+    parts = re.split(r'("(?:[^"]|"")*"|&quot;.*?&quot;)', f_xml)
+    return "".join(LATER.sub(one, p) if i % 2 == 0 else p for i, p in enumerate(parts)), count
+
+
+def prefix_book(path):
+    """Sửa tên hàm trong mọi sheet, tại chỗ; không có gì phải sửa thì không đụng tới tệp. Trả về số chỗ đã sửa."""
+    total = 0
+    names = {}
+    with zipfile.ZipFile(path) as z:
+        for _, part in sheet_paths(z):
+            xml = read_xml(z, part)
+
+            def fix(m):
+                nonlocal total
+                new, n = add_prefixes(m.group(0))
+                total += n
+                return new
+            new = F_TAG.sub(fix, xml)
+            if new != xml:
+                names[part] = new
+        if names:
+            fd, tmp = tempfile.mkstemp(prefix=".recalc-", dir=os.path.dirname(os.path.abspath(path)))
+            os.close(fd)
+            try:
+                with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as o:
+                    for info in z.infolist():
+                        o.writestr(info, names[info.filename].encode("utf-8") if info.filename in names else z.read(info.filename))
+                os.replace(tmp, path)
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+    return total
+
+
 def attr(tag, name):
     m = re.search(r'(?:^|\s)' + name + r'="([^"]*)"', tag)
     return m.group(1) if m else None
@@ -195,6 +252,8 @@ def main(argv):
         try:
             if not has_formula(path):
                 continue
+            # Trước khi tính lại: LibreOffice hỏng hay hết giờ thì tệp vẫn mở đúng trong Excel.
+            prefixed = prefix_book(path)
             if not soffice:
                 raise RuntimeError("không có LibreOffice ở nơi chạy này")
             left = deadline - time.time()
@@ -202,7 +261,7 @@ def main(argv):
                 raise RuntimeError("hết thời gian tính lại")
             with tempfile.TemporaryDirectory() as tmp:
                 rep = inject(path, recalc(path, soffice, tmp, left))
-            report["files"].append({"path": rel, **rep})
+            report["files"].append({"path": rel, **rep, **({"prefixed": prefixed} if prefixed else {})})
         except Exception as e:  # một tệp lỗi không được chặn các tệp còn lại
             msg = "quá thời gian tính lại" if isinstance(e, subprocess.TimeoutExpired) else str(e)
             report["failed"].append({"path": rel, "reason": msg[:200]})

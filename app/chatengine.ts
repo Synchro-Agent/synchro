@@ -203,7 +203,7 @@ const recalcNote = (rc: RecalcReport | undefined) => {
   if (!rc) return "";
   const rows = [
     ...(rc.error ? [`Không tính lại được: ${rc.error}`] : []),
-    ...(rc.files ?? []).map((b) => `${b.path}: đã tính lại ${b.filled}/${b.formulas} công thức bằng LibreOffice và ghi giá trị vào tệp.${b.sample.length ? ` Vài giá trị: ${b.sample.join(", ")}.` : ""}${b.errors.length ? ` Ô lỗi, phải sửa: ${b.errors.map((e) => `${e.sheet}!${e.cell} ${e.value}${e.formula ? ` (=${e.formula})` : ""}`).join("; ")}.` : ""}`),
+    ...(rc.files ?? []).map((b) => `${b.path}: đã tính lại ${b.filled}/${b.formulas} công thức bằng LibreOffice và ghi giá trị vào tệp.${b.prefixed ? ` Đã thêm tiền tố _xlfn. cho ${b.prefixed} hàm đời mới để Excel không báo #NAME?.` : ""}${b.sample.length ? ` Vài giá trị: ${b.sample.join(", ")}.` : ""}${b.errors.length ? ` Ô lỗi, phải sửa: ${b.errors.map((e) => `${e.sheet}!${e.cell} ${e.value}${e.formula ? ` (=${e.formula})` : ""}`).join("; ")}.` : ""}`),
     ...(rc.failed ?? []).map((f) => `${f.path}: không tính lại được (${f.reason}); công thức trong tệp có thể đang trống hoặc bằng 0 đến khi mở bằng Excel.`),
   ];
   return rows.length ? `\n<excel_recalc>\n${rows.join("\n")}\n</excel_recalc>` : "";

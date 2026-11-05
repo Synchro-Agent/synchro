@@ -82,6 +82,23 @@ book(sys.argv[2], '<c r="A1"><v>5</v></c><c r="C1" s="9" t="n"><f aca="false">A1
   ok(/<c r="B1"\/>/.test(sh) && /<c r="A1"><v>5<\/v><\/c>/.test(sh), "ô không công thức giữ nguyên", sh);
   ok(part("xl/charts/chart1.xml").includes("<chart-giu-nguyen/>"), "biểu đồ và phần khác của tệp giữ nguyên");
   ok(/fullCalcOnLoad="1"/.test(part("xl/workbook.xml")), "Excel vẫn tự tính lại khi mở");
+  // Hàm sau 2007: LibreOffice tính được nên không lộ lỗi, Excel thì báo #NAME? nếu thiếu tiền tố.
+  const dir3 = path.join(tmp, "x3", "outputs"), lo3 = path.join(tmp, "lo3.xlsx"), mk3 = path.join(tmp, "mk3.py");
+  fs.mkdirSync(dir3, { recursive: true });
+  fs.writeFileSync(mk3, fs.readFileSync(mk, "utf8").replace(/# Tệp gốc:[\s\S]*$/, String.raw`
+book(sys.argv[1] + "/moi.xlsx", '<c r="A1"><f>IFS(B1&gt;1,"IFS(x)",TRUE,MAXIFS(C:C,D:D,1))</f></c><c r="B1"><f>_xlfn.TEXTJOIN(",",TRUE,C1:C2)</f></c><c r="C1"><f>SUM(STDEV.S(D:D),sumifs(D:D,E:E,1))</f></c><c r="D1"><f>AGGREGATE(9,6,E:E)</f></c>')
+book(sys.argv[2], '<c r="A1"><f>1</f><v>1</v></c>')
+`));
+  spawnSync("python3", [mk3, dir3, lo3]);
+  const fake3 = fs.readFileSync(fake, "utf8").replaceAll("lo-result.xlsx", "lo3.xlsx"), fk3 = path.join(tmp, "soffice3");
+  fs.writeFileSync(fk3, fake3, { mode: 0o755 });
+  const r3 = JSON.parse(spawnSync("python3", ["workspace/xlsx_recalc.py", dir3], { encoding: "utf8", env: { ...process.env, SYNCHRO_SOFFICE: fk3 } }).stdout);
+  const sh3 = spawnSync("python3", [read, path.join(dir3, "moi.xlsx"), "xl/worksheets/sheet1.xml"], { encoding: "utf8" }).stdout;
+  ok(/<f>_xlfn\.IFS\(B1&gt;1,"IFS\(x\)",TRUE,_xlfn\.MAXIFS\(C:C,D:D,1\)\)<\/f>/.test(sh3), "thêm tiền tố cho hàm đời mới, không đụng chữ trong ngoặc kép", sh3);
+  ok(/<f>_xlfn\.TEXTJOIN\(/.test(sh3) && !/_xlfn\._xlfn/.test(sh3), "hàm đã có tiền tố giữ nguyên", sh3);
+  ok(/SUM\(_xlfn\.STDEV\.S\(D:D\),sumifs\(D:D,E:E,1\)\)/.test(sh3), "hàm cũ giữ nguyên, tên có dấu chấm đúng", sh3);
+  ok(/<f>AGGREGATE\(/.test(sh3), "hàm 2010 lưu không tiền tố giữ nguyên", sh3);
+  ok(r3.files?.[0]?.prefixed === 3, "báo số chỗ đã sửa", JSON.stringify(r3));
   // LibreOffice hỏng: tệp giữ nguyên, báo lý do cho model, không dừng các tệp khác.
   const before = fs.readFileSync(path.join(dir, "bao-cao.xlsx"));
   const bad = path.join(tmp, "soffice-bad");
