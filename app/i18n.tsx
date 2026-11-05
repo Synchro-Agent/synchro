@@ -54,8 +54,12 @@ export function tr(s: string, lang: Lang = cur): string {
     const parts = t.split(" · "), done = parts.map((x) => tr(x, lang));
     if (done.some((x, i) => x !== parts[i])) out = done.join(" · ");
   }
-  return out === undefined ? s : s.replace(t, () => out as string);
+  const r = out === undefined ? s : s.replace(t, () => out as string);
+  return lang === "en" ? plural(r) : r;
 }
+// Tiếng Anh cần số nhiều: "145 skill" → "145 skills". Các từ này giữ nguyên ở cả hai ngôn ngữ nên từ điển không thấy.
+const PLURAL = /(\d[\d.,]*\s+)(skill|artifact|credit)\b(?!s)/g;
+const plural = (s: string) => (/skill|artifact|credit/.test(s) ? s.replace(PLURAL, (m, n: string, w: string) => (n.trim() === "1" ? m : n + w + "s")) : s);
 
 /** Chuỗi không có bản dịch ở cả hai chiều: nội dung (tên người, mô tả từ nhà cung cấp…), đánh dấu data-notr để không lẫn với chữ giao diện. */
 export const untranslated = (s: string) => !!s.trim() && tr(s, "en") === s && tr(s, "vi") === s;
@@ -71,7 +75,9 @@ function doText(n: Text, lang: Lang) {
   const v = n.nodeValue ?? "";
   const prev = texts.get(n);
   const o = prev && prev.t === v ? prev.o : v;
-  const t = tr(o, lang);
+  let t = tr(o, lang);
+  // {n} skill trong JSX là hai nút chữ liền nhau: nhìn số ở nút trước.
+  if (lang === "en" && /^\s*(?:skill|artifact|credit)\b(?!s)/.test(t)) { const p = n.previousSibling; if (p?.nodeType === 3 && /\d\s*$/.test(p.nodeValue ?? "") && !/(?:^|\D)1\s*$/.test(p.nodeValue ?? "")) t = t.replace(/(skill|artifact|credit)/, "$1s"); }
   if (t !== v) n.nodeValue = t;
   texts.set(n, { o, t });
 }

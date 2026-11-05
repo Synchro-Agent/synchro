@@ -82,7 +82,10 @@ export default function ResetPassword() {
             </div>
             <p className="rp-hint" id="rp-rule">Ít nhất 8 ký tự.</p>
             <label className="rp-l" htmlFor="rp-again">Nhập lại mật khẩu mới</label>
-            <input id="rp-again" className="field" type={show ? "text" : "password"} autoComplete="new-password" value={again} onChange={(ev) => { setAgain(ev.target.value); setErr(""); }} />
+            <div className="rp-pw">
+              <input id="rp-again" className="field" type={show ? "text" : "password"} autoComplete="new-password" value={again} onChange={(ev) => { setAgain(ev.target.value); setErr(""); }} />
+              <button type="button" className="icon-btn" aria-label={tr(show ? "Ẩn mật khẩu" : "Hiện mật khẩu")} aria-pressed={show} onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+            </div>
             {e}
             <button className="btn dark rp-go" disabled={busy || !pw || !again}>{busy ? <span className="api-spin" /> : "Lưu mật khẩu mới"}</button>
           </form>

@@ -254,7 +254,7 @@ function Account() {
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
       <textarea className="textarea" aria-label="Instructions for Synchro" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
-      <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString()} characters over the limit · ` : ""}{ins.length.toLocaleString()} / 20,000</span></div>
+      <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString(locale())} characters over the limit · ` : ""}{ins.length.toLocaleString(locale())} / {(20000).toLocaleString(locale())}</span></div>
       {ins.trim() !== server.trim() && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button className="btn dark" disabled={insBusy || ins.length > 20000} onClick={saveIns}>Save changes</button>

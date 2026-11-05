@@ -2262,13 +2262,13 @@ export default function Home() {
               {codeRest.length > 0 && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setCodeOpen(!codeOpen)}><span>Code</span><span className={`sec-chev ${codeOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${codeOpen ? "open" : ""}`}><div className="chat-list">{pgCode.items.map(codeRow)}</div>{sidePager(pgCode)}</div>
+                  <div className={`fold ${codeOpen ? "open" : ""}`}><div><div className="chat-list">{pgCode.items.map(codeRow)}</div>{sidePager(pgCode)}</div></div>
                 </>
               )}
               {codeArch.length > 0 && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setArchOpen(!archOpen)}><span>Code đã lưu trữ · {codeArch.length}</span><span className={`sec-chev ${archOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div>
+                  <div className={`fold ${archOpen ? "open" : ""}`}><div><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div></div>
                 </>
               )}
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>

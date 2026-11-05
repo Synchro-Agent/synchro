@@ -6,8 +6,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
-const B = "http://localhost:3200";
-const OUT = (await import("node:os")).tmpdir() + "/synchro-ui/audit/";
+const B = process.env.BASE ?? "http://localhost:3200";
+const OUT = process.env.AUDIT_OUT ?? (await import("node:os")).tmpdir() + "/synchro-ui/audit/";
 mkdirSync(OUT, { recursive: true });
 const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-audit";
 const THEMES = process.argv[2] ? [process.argv[2]] : ["light", "dark"];

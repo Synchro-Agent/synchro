@@ -17,7 +17,7 @@
 [data-theme="dark"]{
   --gl-fill:rgba(28,29,26,.52);
   --gl-fill-small:rgba(238,236,229,.075);
-  --gl-fill-thick:rgba(22,23,20,.78);
+  --gl-fill-thick:rgba(22,23,20,.94); /* menu đè lên nội dung sáng: mỏng hơn thì thành xám giữa, chữ phụ khó đọc */
   --gl-hair:rgba(238,236,229,.07);
   --gl-shadow:0 14px 38px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
   --gl-shadow-small:0 4px 14px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);

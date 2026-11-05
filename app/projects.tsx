@@ -147,7 +147,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
           art={PRESETS[x.id % PRESETS.length]} seed={(x.id % 97) + 1} files={files} action="none" appear={false} width={132}
           onActivate={() => onOpen(x.id)} />
         {bk.on && <BulkCheck on={bk.has(x)} />}
-        <div className="pj-gname"><b>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>Cập nhật {ago(projUpd(x, chats))}</span></div>
+        <div className="pj-gname"><b>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>{`Cập nhật ${ago(projUpd(x, chats))}`}</span></div>
         <div onClick={(e) => e.stopPropagation()}>
           <ProjMenu p={x} open={menu === x.id} pin style={{ top: ctxPos?.y ?? 40, left: ctxPos?.x ?? 40, width: 236 }}
             onPin={() => { patch(x.id, { pinned: !x.pinned }); setMenu(null); say(x.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}
@@ -353,7 +353,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
         <div className="pj-hero-t">
           <h1>{proj.name}</h1>
           {proj.desc && <p>{proj.desc}</p>}
-          <div className="pj-facts"><span><I.Clock size={13} />Cập nhật {ago(projUpd(proj, chats))}</span><span>{mine.length} đoạn chat</span><span>{ctx.length} tệp ngữ cảnh</span><span>{mem.length} mục ghi nhớ</span></div>
+          <div className="pj-facts"><span><I.Clock size={13} />{`Cập nhật ${ago(projUpd(proj, chats))}`}</span><span>{mine.length} đoạn chat</span><span>{ctx.length} tệp ngữ cảnh</span><span>{mem.length} mục ghi nhớ</span></div>
         </div>
         <div className="ds-acts pj-tools">
           <button className={`icon-btn pj-pinbtn ${proj.pinned ? "on" : ""}`} data-tip={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} aria-label={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} onClick={() => { patch(proj.id, { pinned: !proj.pinned }); say(proj.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}>{proj.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}</button>

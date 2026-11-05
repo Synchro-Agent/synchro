@@ -466,10 +466,10 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                     {authStep === "email" && <motion.div key="email-content" exit={stepExit} className="w-full flex flex-col items-center gap-4">
                         <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="auth-title text-foreground">{titles.email[0]}</p></div></BlurFade>
                         <BlurFade delay={BASE + STEP}><p className="text-sm font-medium text-muted-foreground">{titles.email[1]}</p></BlurFade>
-                        <BlurFade delay={BASE + STEP * 2}><div className="flex items-center justify-center gap-3 w-full">
-                            <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>
-                            <GlassButton type="button" onClick={() => social("github")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><GitHubIcon /><span className="font-semibold text-foreground">GitHub</span></GlassButton>
-                            <GlassButton type="button" onClick={() => social("apple")} contentClassName="flex items-center justify-center gap-2 min-w-[112px]" size="sm"><AppleIcon /><span className="font-semibold text-foreground">Apple</span></GlassButton>
+                        <BlurFade delay={BASE + STEP * 2}><div className="auth-socials">
+                            <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-1.5" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>
+                            <GlassButton type="button" onClick={() => social("github")} contentClassName="flex items-center justify-center gap-1.5" size="sm"><GitHubIcon /><span className="font-semibold text-foreground">GitHub</span></GlassButton>
+                            <GlassButton type="button" onClick={() => social("apple")} contentClassName="flex items-center justify-center gap-1.5" size="sm"><AppleIcon /><span className="font-semibold text-foreground">Apple</span></GlassButton>
                         </div></BlurFade>
                         <BlurFade delay={BASE + STEP * 3} className="w-[300px]"><div className="flex items-center w-full gap-2 py-2"><hr className="w-full border-border"/><span className="text-xs font-semibold text-muted-foreground">OR</span><hr className="w-full border-border"/></div></BlurFade>
                     </motion.div>}
