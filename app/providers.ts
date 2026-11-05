@@ -9,7 +9,7 @@ import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type Provid
 
 type Builtin = { kind: ProviderKind; name: string; vendor: string; base: string; keyUrl: string; prefix: string };
 export const BUILTIN: Record<string, Builtin> = {
-  anthropic: { kind: "anthropic", name: "Claude", vendor: "Anthropic", base: "https://api.anthropic.com", keyUrl: "https://console.anthropic.com/settings/keys", prefix: "sk-ant-" },
+  anthropic: { kind: "anthropic", name: "Claude", vendor: "Anthropic", base: "https://api.anthropic.com", keyUrl: "https://platform.claude.com/settings/keys", prefix: "sk-ant-" },
   openai: { kind: "openai", name: "ChatGPT", vendor: "OpenAI", base: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys", prefix: "sk-" },
   google: { kind: "google", name: "Gemini", vendor: "Google", base: "https://generativelanguage.googleapis.com/v1beta/openai", keyUrl: "https://aistudio.google.com/apikey", prefix: "AIza" },
   xai: { kind: "xai", name: "Grok", vendor: "xAI", base: "https://api.x.ai/v1", keyUrl: "https://console.x.ai", prefix: "xai-" },
@@ -17,7 +17,7 @@ export const BUILTIN: Record<string, Builtin> = {
   elevenlabs: { kind: "elevenlabs", name: "ElevenLabs", vendor: "ElevenLabs", base: "https://api.elevenlabs.io", keyUrl: "https://elevenlabs.io/app/settings/api-keys", prefix: "sk_" },
 };
 
-type Row = { id: string; kind: ProviderKind; name: string; base_url: string | null; enc_key: string; key_hint: string; models: string; status: string; error: string | null; info: string | null; checked_at: number | null; created_at: number; updated_at: number };
+type Row = { id: string; kind: ProviderKind; name: string; base_url: string | null; workspace_id?: string | null; enc_key: string; key_hint: string; models: string; status: string; error: string | null; info: string | null; checked_at: number | null; created_at: number; updated_at: number };
 
 let ready = false;
 function table() {
@@ -26,6 +26,8 @@ function table() {
     d.exec(`CREATE TABLE IF NOT EXISTS api_providers (
       id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, base_url TEXT, enc_key TEXT NOT NULL, key_hint TEXT NOT NULL,
       models TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'ok', error TEXT, info TEXT, checked_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    // Khóa Anthropic không gắn với workspace: mỗi lời gọi phải nêu workspace, nên lưu kèm khóa (không phải bí mật).
+    if (!(d.prepare("PRAGMA table_info(api_providers)").all() as { name: string }[]).some((c) => c.name === "workspace_id")) d.exec("ALTER TABLE api_providers ADD COLUMN workspace_id TEXT");
     ready = true;
   }
   return d;
@@ -105,14 +107,30 @@ const LEGACY: Partial<Record<ProviderKind, RegExp>> = {
 };
 const isCurrent = (kind: ProviderKind, id: string) => !LEGACY[kind]?.test(id);
 
-export async function listModels(kind: ProviderKind, base: string, key: string): Promise<{ models: { id: string; name: string }[]; info?: string }> {
-  const r = await listAll(kind, base, key);
+// ---- khóa Anthropic không gắn với workspace (khóa cá nhân, khóa service account) ----
+const NOT_SCOPED = /not scoped to a workspace/i;
+const WORKSPACE_ID = /^wrkspc_[A-Za-z0-9_-]{4,64}$/;
+export const WORKSPACE_HEADER = "anthropic-workspace-id";
+export class WorkspaceNeeded extends Error {
+  constructor(public workspaces: { id: string; name: string }[]) {
+    super(workspaces.length ? "Khóa này dùng được cho nhiều workspace. Hãy chọn workspace để chạy và tính phí." : "Khóa này dùng được cho nhiều workspace nên cần biết chạy ở workspace nào. Hãy dán ID workspace ở mục Nâng cao, hoặc tạo khóa gắn với một workspace.");
+  }
+}
+/** Các workspace khóa này vào được. Trang này chỉ dành cho vai trò quản trị của tổ chức, nên không đọc được thì trả rỗng để người dùng tự dán ID. */
+async function anthropicWorkspaces(base: string, key: string): Promise<{ id: string; name: string }[]> {
+  const j = await getJson(`${base.replace(/\/+$/, "")}/v1/organizations/workspaces?include_default=true&limit=100`, { "x-api-key": key, "anthropic-version": "2023-06-01" }).catch(() => null) as { data?: { id: string; name?: string; archived_at?: string | null }[] } | null;
+  return (j?.data ?? []).filter((w) => WORKSPACE_ID.test(w.id) && !w.archived_at).map((w) => ({ id: w.id, name: w.name || w.id }));
+}
+const workspaceFailure = (e: unknown, ws: string) => /^Lỗi 404/.test((e as Error).message) && /workspace/i.test((e as Error).message) ? new Error(`Không tìm thấy workspace ${ws}, hoặc khóa này không có quyền vào workspace đó.`) : e;
+
+export async function listModels(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: { id: string; name: string }[]; info?: string }> {
+  const r = await listAll(kind, base, key, workspace);
   return { ...r, models: r.models.filter((m) => isCurrent(kind, m.id)) };
 }
-async function listAll(kind: ProviderKind, base: string, key: string): Promise<{ models: { id: string; name: string }[]; info?: string }> {
+async function listAll(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: { id: string; name: string }[]; info?: string }> {
   const b = base.replace(/\/+$/, "");
   if (kind === "anthropic") {
-    const j = await getJson(`${b}/v1/models?limit=1000`, { "x-api-key": key, "anthropic-version": "2023-06-01" });
+    const j = await getJson(`${b}/v1/models?limit=1000`, { "x-api-key": key, "anthropic-version": "2023-06-01", ...(workspace ? { [WORKSPACE_HEADER]: workspace } : {}) });
     return { models: (j.data ?? []).map((m: { id: string; display_name?: string }) => ({ id: m.id, name: m.display_name || m.id })) };
   }
   if (kind === "google") {
@@ -148,19 +166,19 @@ async function listAll(kind: ProviderKind, base: string, key: string): Promise<{
 }
 
 // ---- nhà cung cấp lấy từ biến môi trường (cấu hình cũ), dùng khi chưa nhập khóa đó trong Cài đặt ----
-type Virtual = { id: string; kind: ProviderKind; name: string; base: string; key: string };
+type Virtual = { id: string; kind: ProviderKind; name: string; base: string; key: string; workspace?: string };
 function envProvider(): Virtual | null {
   const p = process.env.LLM_PROVIDER ?? "anthropic", key = process.env.LLM_API_KEY ?? "";
   if (p === "mock") return { id: "mock", kind: "mock", name: "Synchro (thử nghiệm)", base: "", key: "" };
   if (!key) return null;
-  if (p === "anthropic") return { id: "anthropic", kind: "anthropic", name: "Claude", base: BUILTIN.anthropic.base, key };
+  if (p === "anthropic") return { id: "anthropic", kind: "anthropic", name: "Claude", base: BUILTIN.anthropic.base, key, workspace: process.env.ANTHROPIC_WORKSPACE_ID || undefined };
   return { id: "env", kind: "compatible", name: "Máy chủ (biến môi trường)", base: process.env.LLM_BASE_URL ?? BUILTIN.openai.base, key };
 }
 const envCache: { at: number; models: { id: string; name: string }[] } = { at: 0, models: [] };
 async function envModels(v: Virtual) {
   if (v.kind === "mock") return [{ id: "synchro-mock", name: "Synchro Mock" }];
   if (Date.now() - envCache.at < 6 * 3600_000 && envCache.models.length) return envCache.models;
-  try { envCache.models = (await listModels(v.kind, v.base, v.key)).models; envCache.at = Date.now(); } catch { envCache.at = Date.now(); }
+  try { envCache.models = (await listModels(v.kind, v.base, v.key, v.workspace)).models; envCache.at = Date.now(); } catch { envCache.at = Date.now(); }
   return envCache.models;
 }
 
@@ -187,17 +205,17 @@ export async function catalog(): Promise<ProviderInfo[]> {
 /** Máy chủ có model chat qua khóa API dùng chung không. Không gọi mạng: trang đăng nhập hỏi mỗi lần tải. */
 export const hasSharedChat = () => !!envProvider() || rows().some((r) => r.kind !== "elevenlabs" && stored(r).length > 0);
 
-export type Target = { provider: string; kind: ProviderKind; base: string; key: string; model: string };
+export type Target = { provider: string; kind: ProviderKind; base: string; key: string; model: string; workspace?: string };
 // Từ khóa model ("openai/gpt-5.1") → địa chỉ, khóa và mã model để gọi.
 export async function resolveModel(key: string): Promise<Target | null> {
   const { provider, id } = splitKey(key);
   if (!provider || !id) return null;
   const r = rowById(provider);
   if (r && r.kind !== "elevenlabs") {
-    try { return { provider, kind: r.kind, base: (r.base_url || BUILTIN[r.kind]?.base || "").replace(/\/+$/, ""), key: open(r.enc_key), model: id }; } catch { return null; }
+    try { return { provider, kind: r.kind, base: (r.base_url || BUILTIN[r.kind]?.base || "").replace(/\/+$/, ""), key: open(r.enc_key), model: id, ...(r.workspace_id ? { workspace: r.workspace_id } : {}) }; } catch { return null; }
   }
   const v = envProvider();
-  if (v && v.id === provider) return { provider, kind: v.kind, base: v.base.replace(/\/+$/, ""), key: v.key, model: id };
+  if (v && v.id === provider) return { provider, kind: v.kind, base: v.base.replace(/\/+$/, ""), key: v.key, model: id, ...(v.workspace ? { workspace: v.workspace } : {}) };
   return null;
 }
 // Khóa cho dịch vụ không phải chat (ElevenLabs).
@@ -210,7 +228,7 @@ export function serviceKey(id: "elevenlabs"): { key: string; base: string } | nu
 
 // ---- danh sách cho trang quản lý API (khóa chỉ hiện dạng che) ----
 export type AdminProvider = { id: string; kind: ProviderKind; name: string; vendor: string; builtin: boolean; configured: boolean; source: "db" | "env" | null;
-  baseUrl: string; defaultBase: string; keyHint: string | null; keyUrl: string | null; prefix: string | null; status: "ok" | "error" | null; error: string | null; info: string | null;
+  baseUrl: string; workspaceId: string; defaultBase: string; keyHint: string | null; keyUrl: string | null; prefix: string | null; status: "ok" | "error" | null; error: string | null; info: string | null;
   checkedAt: number | null; models: { key: string; name: string }[] };
 export async function adminList(): Promise<AdminProvider[]> {
   const list = rows();
@@ -220,16 +238,16 @@ export async function adminList(): Promise<AdminProvider[]> {
     // Khóa ở biến môi trường: LLM_API_KEY (Claude) hoặc ELEVENLABS_API_KEY.
     const envKey = r ? "" : v && v.id === id ? v.key : id === "elevenlabs" ? process.env.ELEVENLABS_API_KEY ?? "" : "";
     return { id, kind: b.kind, name: b.name, vendor: b.vendor, builtin: true, configured: !!r || !!envKey, source: r ? "db" : envKey ? "env" : null,
-      baseUrl: r?.base_url ?? "", defaultBase: b.base, keyHint: r ? r.key_hint : envKey ? hint(envKey) : null, keyUrl: b.keyUrl, prefix: b.prefix,
+      baseUrl: r?.base_url ?? "", workspaceId: r?.workspace_id ?? "", defaultBase: b.base, keyHint: r ? r.key_hint : envKey ? hint(envKey) : null, keyUrl: b.keyUrl, prefix: b.prefix,
       status: r ? (r.status as "ok" | "error") : envKey ? "ok" : null, error: r?.error ?? null, info: r?.info ?? null, checkedAt: r?.checked_at ?? null,
       models: r ? stored(r).map((m) => ({ key: modelKey(id, m.id), name: m.name })) : [] };
   });
   for (const r of list.filter((x) => !BUILTIN[x.id])) out.push({ id: r.id, kind: r.kind, name: r.name, vendor: "Tương thích OpenAI", builtin: false, configured: true, source: "db",
-    baseUrl: r.base_url ?? "", defaultBase: "", keyHint: r.key_hint, keyUrl: null, prefix: null, status: r.status as "ok" | "error", error: r.error, info: r.info, checkedAt: r.checked_at,
+    baseUrl: r.base_url ?? "", workspaceId: "", defaultBase: "", keyHint: r.key_hint, keyUrl: null, prefix: null, status: r.status as "ok" | "error", error: r.error, info: r.info, checkedAt: r.checked_at,
     models: stored(r).map((m) => ({ key: modelKey(r.id, m.id), name: m.name })) });
   if (v && (v.id === "env" || v.id === "mock") && !list.some((x) => x.id === v.id)) {
     const ms = await envModels(v);
-    out.push({ id: v.id, kind: v.kind, name: v.name, vendor: "Biến môi trường máy chủ", builtin: false, configured: true, source: "env", baseUrl: v.base, defaultBase: v.base, keyHint: v.key ? hint(v.key) : null,
+    out.push({ id: v.id, kind: v.kind, name: v.name, vendor: "Biến môi trường máy chủ", builtin: false, configured: true, source: "env", baseUrl: v.base, workspaceId: "", defaultBase: v.base, keyHint: v.key ? hint(v.key) : null,
       keyUrl: null, prefix: null, status: "ok", error: null, info: null, checkedAt: null, models: ms.map((m) => ({ key: modelKey(v.id, m.id), name: m.name })) });
   }
   // Khóa ở biến môi trường của Claude: hiện danh sách model thật để quản trị viên chọn.
@@ -242,7 +260,7 @@ const slug = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
 const okUrl = (u: string) => { try { const x = new URL(u); return x.protocol === "https:" || x.protocol === "http:"; } catch { return false; } };
 
 // Lưu (hoặc thay) khóa: luôn kiểm tra với API của hãng trước, khóa sai thì không lưu.
-export async function saveProvider(o: { id?: string; kind?: string; name?: string; key?: string; baseUrl?: string }) {
+export async function saveProvider(o: { id?: string; kind?: string; name?: string; key?: string; baseUrl?: string; workspaceId?: string }) {
   const builtin = o.id && BUILTIN[o.id] ? BUILTIN[o.id] : null;
   const old = o.id ? rowById(o.id) : undefined;
   if (o.id && !builtin && !old) throw new Error("Không tìm thấy nhà cung cấp này.");
@@ -255,16 +273,29 @@ export async function saveProvider(o: { id?: string; kind?: string; name?: strin
   const key = (o.key ?? "").trim() || (old ? open(old.enc_key) : "");
   if (!key) throw new Error("Hãy dán khóa API.");
   if (key.length > 500 || /\s/.test(key)) throw new Error("Khóa API không hợp lệ (có khoảng trắng hoặc quá dài).");
-  const { models, info } = await listModels(kind, baseUrl || builtin?.base || "", key);
+  // Đổi sang khóa mới mà không nêu workspace thì không giữ workspace của khóa cũ: khóa mới có thể đã gắn sẵn với workspace khác.
+  let workspace = kind !== "anthropic" ? "" : (typeof o.workspaceId === "string" ? o.workspaceId : o.key?.trim() ? "" : old?.workspace_id ?? "").trim();
+  if (workspace && !WORKSPACE_ID.test(workspace)) throw new Error("ID workspace có dạng wrkspc_…, lấy ở trang Workspaces của Claude Console.");
+  const root = baseUrl || builtin?.base || "";
+  const found = await listModels(kind, root, key, workspace).catch(async (e: Error) => {
+    if (workspace) throw workspaceFailure(e, workspace);
+    if (kind !== "anthropic" || !NOT_SCOPED.test(e.message)) throw e;
+    // Khóa không gắn với workspace: tổ chức chỉ có một workspace thì dùng luôn, không bắt người dùng đi tìm ID.
+    const list = await anthropicWorkspaces(root, key);
+    if (list.length !== 1) throw new WorkspaceNeeded(list);
+    workspace = list[0].id;
+    return listModels(kind, root, key, workspace);
+  });
+  const { models, info } = found;
   if (kind !== "elevenlabs" && !models.length) throw new Error("Khóa hợp lệ nhưng không thấy model chat nào được phép dùng.");
   const now = Date.now();
   const newId = () => { let s = "c-" + slug(name), i = 2; while (rowById(s) || BUILTIN[s]) s = `c-${slug(name)}-${i++}`; return s; };
   const id = old?.id ?? (builtin && o.id ? o.id : newId());
-  table().prepare(`INSERT INTO api_providers (id, kind, name, base_url, enc_key, key_hint, models, status, error, info, checked_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, base_url = excluded.base_url, enc_key = excluded.enc_key, key_hint = excluded.key_hint, models = excluded.models,
+  table().prepare(`INSERT INTO api_providers (id, kind, name, base_url, workspace_id, enc_key, key_hint, models, status, error, info, checked_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, base_url = excluded.base_url, workspace_id = excluded.workspace_id, enc_key = excluded.enc_key, key_hint = excluded.key_hint, models = excluded.models,
       status = 'ok', error = NULL, info = excluded.info, checked_at = excluded.checked_at, updated_at = excluded.updated_at`)
-    .run(id, kind, name, baseUrl || null, seal(key), hint(key), JSON.stringify(models), info ?? null, now, old?.created_at ?? now, now);
+    .run(id, kind, name, baseUrl || null, workspace || null, seal(key), hint(key), JSON.stringify(models), info ?? null, now, old?.created_at ?? now, now);
   return { id, models: models.length };
 }
 
@@ -273,7 +304,7 @@ export async function refreshProvider(id: string) {
   const r = rowById(id);
   if (!r) { if (envProvider()?.id === id) { envCache.at = 0; return { ok: true }; } throw new Error("Chưa có khóa cho nhà cung cấp này."); }
   try {
-    const { models, info } = await listModels(r.kind, r.base_url || BUILTIN[r.kind]?.base || "", open(r.enc_key));
+    const { models, info } = await listModels(r.kind, r.base_url || BUILTIN[r.kind]?.base || "", open(r.enc_key), r.workspace_id).catch((e) => { throw workspaceFailure(e, r.workspace_id ?? ""); });
     table().prepare("UPDATE api_providers SET models = ?, info = ?, status = 'ok', error = NULL, checked_at = ? WHERE id = ?").run(JSON.stringify(models), info ?? null, Date.now(), id);
     return { ok: true };
   } catch (e) {

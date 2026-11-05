@@ -134,7 +134,7 @@ export async function runAgentTurn(o: {
       const t = pick.target!;
       // Máy chủ chạy chế độ thử nghiệm (LLM_PROVIDER=mock): dùng kịch bản mô phỏng.
       const adapter = t.kind === "mock" ? mockAgent()
-        : t.kind === "anthropic" ? anthropicAgent({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: o.signal, effort: pick.effort as never })
+        : t.kind === "anthropic" ? anthropicAgent({ provider: t.provider, key: t.key, workspace: t.workspace, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: o.signal, effort: pick.effort as never })
         : (t.kind === "openai" ? responsesAgent : openaiAgent)({ provider: t.provider, key: t.key, base: t.base, model: t.model, system: sys, maxTokens: 8000, tools, signal: o.signal, kind: t.kind, effort: pick.effort as never });
       // Khối ảnh / PDF theo đúng định dạng của từng hãng (như khung chat).
       const conv = t.kind === "mock" ? msgs : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) }))

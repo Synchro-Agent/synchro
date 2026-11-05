@@ -535,7 +535,13 @@ Object.assign(VI2EN, {
   "Tin nhắn quá dài để gửi cho model này. Hãy rút gọn hoặc mở đoạn chat mới.": "This message is too long for this model. Shorten it or start a new chat.",
   "(Model không trả lời nội dung nào)": "(The model returned no content)", "Model không phản hồi sau 60 giây.": "The model didn't respond within 60 seconds.",
 });
+Object.assign(VI2EN, {
+  "Khóa này dùng được cho nhiều workspace. Hãy chọn workspace để chạy và tính phí.": "This key works across several workspaces. Choose the workspace to run and bill in.",
+  "Khóa này dùng được cho nhiều workspace nên cần biết chạy ở workspace nào. Hãy dán ID workspace ở mục Nâng cao, hoặc tạo khóa gắn với một workspace.": "This key works across several workspaces, so Synchro needs to know which one to use. Paste the workspace ID under Advanced, or create a key tied to one workspace.",
+  "ID workspace có dạng wrkspc_…, lấy ở trang Workspaces của Claude Console.": "A workspace ID looks like wrkspc_…. You'll find it on the Workspaces page in Claude Console.",
+});
 RULES_EN.push(
+  [/^Không tìm thấy workspace (\S+), hoặc khóa này không có quyền vào workspace đó\.$/, (m) => `Workspace ${m[1]} wasn't found, or this key doesn't have access to it.`],
   [/^Khóa không hợp lệ hoặc không có quyền \((\d+)\): ([\s\S]+)$/, (m) => `Invalid key or missing permission (${m[1]}): ${m[2]}`],
   [/^Khóa API bị từ chối \((\d+)\): ([\s\S]+)$/, (m) => `API key rejected (${m[1]}): ${m[2]}`],
   [/^Không tìm thấy model hoặc địa chỉ API \(404\): ([\s\S]+)$/, (m) => `Model or API address not found (404): ${m[1]}`],

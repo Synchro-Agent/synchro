@@ -110,7 +110,7 @@ async function anthropicStream(r: Response, onDelta: OnDelta, signal?: AbortSign
 export async function anthropicCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta, onBlock?: (b: ABlock) => void) {
   const r = await fetch(`${t.base}/v1/messages`, {
     method: "POST", signal,
-    headers: { "x-api-key": t.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "x-api-key": t.key, "anthropic-version": "2023-06-01", "content-type": "application/json", ...(t.workspace ? { "anthropic-workspace-id": t.workspace } : {}) },
     body: JSON.stringify({ model: t.model, ...body, ...(onDelta ? { stream: true } : {}) }),
   });
   if (!r.ok) await fail(r);

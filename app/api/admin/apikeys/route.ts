@@ -1,5 +1,5 @@
 import { audit, clientIp, handle, requireAdmin, sameOrigin } from "../../../authstore";
-import { adminList, catalog, defaultModel, mainModels, pickDefault, refreshProvider, removeProvider, saveProvider, setDefaultModel, setMainModels } from "../../../providers";
+import { adminList, catalog, defaultModel, mainModels, pickDefault, refreshProvider, removeProvider, saveProvider, setDefaultModel, setMainModels, WorkspaceNeeded } from "../../../providers";
 import { credits, setCredit } from "../../../usage";
 
 export const runtime = "nodejs";
@@ -34,10 +34,11 @@ export const POST = handle(async (req) => {
       setDefaultModel(typeof b.model === "string" ? b.model : "");
       audit("admin_default_model", { actor: user, ip: clientIp(req), detail: String(b.model ?? "") });
     } else {
-      const r = await saveProvider({ id: b.id, kind: b.kind, name: b.name, key: b.key, baseUrl: b.baseUrl });
+      const r = await saveProvider({ id: b.id, kind: b.kind, name: b.name, key: b.key, baseUrl: b.baseUrl, workspaceId: b.workspaceId });
       audit("admin_api_key", { actor: user, ip: clientIp(req), detail: r.id });
     }
   } catch (e) {
+    if (e instanceof WorkspaceNeeded) return Response.json({ error: e.message, needWorkspace: true, workspaces: e.workspaces }, { status: 400 });
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
   return Response.json(await state());

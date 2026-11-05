@@ -22,6 +22,7 @@ const SUITES = [
   ["Tải lại giữ đoạn chat, mất mạng lúc mở, thẻ kết nối lại, nhãn Cần bạn, một từ điển", "tests/ui/states.mjs"],
   ["Tải lại trang khi đang trả lời", "tests/ui/runs-reload.mjs"],
   ["Khung phủ nằm trên thanh bên", "tests/ui/layers.mjs"],
+  ["Khóa Anthropic không gắn với workspace", "tests/ui/wskey.mjs"],
   ["Chuyển cảnh đăng nhập → phim → trang chủ", "tests/ui/introfilm.mjs"],
   ["Màn Đăng nhập, Giới thiệu về bạn trên màn thấp", "tests/ui/authfit.mjs"],
   ["Danh sách model lỗi ở lần hỏi đầu", "tests/ui/models-retry.mjs"],

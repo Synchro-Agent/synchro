@@ -661,6 +661,20 @@ async function handler(req, res) {
     const err = (type, message) => ({ type: "error", error: { type, message } });
     if (!valid(req.headers["x-api-key"])) return send(res, 401, err("authentication_error", "invalid x-api-key"));
     if (!req.headers["anthropic-version"]) return send(res, 400, err("invalid_request_error", "anthropic-version: header is required"));
+    // Khóa không gắn với workspace như API thật: "org-one" có một workspace, "org-two" có hai, "org-member" không xem được danh sách.
+    const orgKey = /-org-(one|two|member)/.exec(req.headers["x-api-key"])?.[1];
+    if (orgKey && p === "/anthropic/v1/organizations/workspaces") {
+      if (orgKey === "member") return send(res, 403, err("permission_error", "This API key does not have permission to perform this action."));
+      const def = { id: "wrkspc_01Default0000", name: "Default", archived_at: null };
+      if (!/include_default=true/.test(req.url)) return send(res, 200, { data: orgKey === "one" ? [] : [{ id: "wrkspc_01Team000000", name: "Team", archived_at: null }], has_more: false });
+      return send(res, 200, { data: orgKey === "one" ? [def] : [def, { id: "wrkspc_01Team000000", name: "Team", archived_at: null }, { id: "wrkspc_01Old0000000", name: "Old", archived_at: "2026-01-01T00:00:00Z" }], has_more: false });
+    }
+    if (orgKey) {
+      const w = req.headers["anthropic-workspace-id"];
+      if (!w) return send(res, 400, err("invalid_request_error", "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace."));
+      if (!/^wrkspc_/.test(w)) return send(res, 400, err("invalid_request_error", "anthropic-workspace-id header must be a valid workspace ID."));
+      if (!/^wrkspc_01(Default|Team)/.test(w)) return send(res, 404, err("not_found_error", `Workspace \`${w}\` not found.`));
+    }
     if (p === "/anthropic/v1/models") return send(res, 200, { data: ANTHROPIC.map(([id, display_name]) => ({ type: "model", id, display_name })), has_more: false });
     if (p === "/anthropic/v1/messages") {
       if (!b.max_tokens) return send(res, 400, err("invalid_request_error", "max_tokens: Field required"));

@@ -208,13 +208,13 @@ function pruneImages(msgs: unknown[]) {
   }
 }
 
-export function anthropicAgent(o: { provider?: string; key: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal; effort?: Effort }): Adapter {
+export function anthropicAgent(o: { provider?: string; key: string; workspace?: string; base?: string; model: string; system: string; maxTokens: number; tools: unknown[]; signal: AbortSignal; effort?: Effort }): Adapter {
   return {
     step: async (msgs, last) => {
       pruneImages(msgs);
       const r = await fetch(`${o.base ?? "https://api.anthropic.com"}/v1/messages`, {
         method: "POST", signal: o.signal,
-        headers: { "x-api-key": o.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        headers: { "x-api-key": o.key, "anthropic-version": "2023-06-01", "content-type": "application/json", ...(o.workspace ? { "anthropic-workspace-id": o.workspace } : {}) },
         body: JSON.stringify({ model: o.model, max_tokens: Math.max(o.maxTokens, 16000), ...effortParams({ kind: "anthropic" }, o.effort), system: [{ type: "text", text: o.system, cache_control: { type: "ephemeral" } }], tools: o.tools, ...(last ? { tool_choice: { type: "none" } } : {}), messages: msgs }),
       });
       if (!r.ok) throw new ModelError(r.status, await r.text());

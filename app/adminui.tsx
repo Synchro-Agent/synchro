@@ -33,7 +33,7 @@ export async function call<T>(method: string, url: string, body?: unknown): Prom
   const r = await apiFetch(url, { method, cache: "no-store", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   // Không có lời nhắn JSON: proxy trả lỗi khi Synchro đang khởi động lại (cập nhật) hoặc phản hồi quá lâu.
-  if (!r.ok) throw new Error(j.error || (r.status >= 500 ? statusText(r.status) : "Lỗi máy chủ. Vui lòng thử lại."));
+  if (!r.ok) throw Object.assign(new Error(j.error || (r.status >= 500 ? statusText(r.status) : "Lỗi máy chủ. Vui lòng thử lại.")), { data: j });
   return j as T;
 }
 

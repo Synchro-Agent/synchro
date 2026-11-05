@@ -667,7 +667,7 @@ function CodeTab() {
       <H>Run code</H>
       <Row t="HTML and JavaScript" d="Runs in a sandboxed preview frame next to the chat." top><Badge ok>Ready</Badge></Row>
       <Row t="Python" d="Runs in your browser with Pyodide. No server needed."><Badge ok>Ready</Badge></Row>
-      <Row t="Node.js" d="Runs in a WebContainer inside your browser. Needs HTTPS for cross-origin isolation."><Badge ok={iso}>{iso ? "Ready" : "Needs HTTPS"}</Badge></Row>
+      <Row t="Node.js" d="Runs in a WebContainer in your browser. Needs HTTPS."><Badge ok={iso}>{iso ? "Ready" : "Needs HTTPS"}</Badge></Row>
       {runner && <Row t="Server runtime" d={RUNNER[runner] ?? "Code runs on the Synchro server."}><Badge ok>Ready</Badge></Row>}
       <H>Data</H>
       <Row t="Code sessions" d={cp?.sync ? `${list.length} session${list.length === 1 ? "" : "s"} in this browser, kept in sync with the Synchro server.` : `${list.length} session${list.length === 1 ? "" : "s"} stored in this browser.`} top><button className="btn" disabled={!list.length} style={!list.length ? { opacity: 0.4 } : undefined} onClick={() => app.confirm("Clear all Code sessions?", cp?.sync ? "Every Synchro Code conversation will be deleted from this browser and from the Synchro server, including on your other devices. This can't be undone." : "Every Synchro Code conversation saved in this browser will be deleted. This can't be undone.", "Clear all", async () => {

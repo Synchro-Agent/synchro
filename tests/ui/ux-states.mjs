@@ -169,7 +169,7 @@ try {
   await until(`!!document.querySelector(${JSON.stringify(COMPOSER)})`);
   // Chờ lần lưu định kỳ của trang mới mở xong, không thì nó ghi đè đoạn chat dựng sẵn.
   await sleep(1500);
-  await ev(`localStorage.setItem("u:${uid}:chats", JSON.stringify([{ id: 42, title: "Có artifact", msgs: [{ role: "user", text: "Làm trang", time: 1 }, { role: "ai", text: ${JSON.stringify(art)}.replace(/\\\\n/g, "\\n"), done: true, time: 2 }] }]))`);
+  await ev(`localStorage.setItem("u:${uid}:chats", JSON.stringify([{ id: ${Date.now()}, title: "Có artifact", msgs: [{ role: "user", text: "Làm trang", time: ${Date.now()} }, { role: "ai", text: ${JSON.stringify(art)}.replace(/\\\\n/g, "\\n"), done: true, time: ${Date.now() + 1} }] }]))`);
   // Chrome ẩn coi trang là "hidden" và không chạy ResizeObserver (khung soạn đo bề rộng bằng nó): đưa trang ra trước như người dùng đang xem.
   await P("Page.bringToFront");
   for (const [w, h] of [[1280, 800], [1100, 760], [1024, 720]]) {

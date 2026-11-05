@@ -414,7 +414,8 @@ for (const theme of THEMES) for (const size of SIZES) {
       const label = "cai-dat-" + String(t).toLowerCase().replace(/\s+/g, "-");
       await shot(label);
       // Phần dưới của từng mục cũng phải được soát: bộ soát chỉ đo những gì đang trong khung nhìn, nên ô số của Quản trị từng lọt vì nằm dưới màn hình đầu.
-      for (let k = 1; k <= 8; k++) {
+      // Điện thoại đang tạm dừng (chủ dự án chỉ xét máy tính): cuộn hết trên điện thoại làm cả bộ soát kéo dài hơn một tiếng.
+      for (let k = 1; k <= (mobile ? 0 : 8); k++) {
         const more = await ev(`(() => { const b = [...document.querySelectorAll(".modal.settings .s-body, .modal.settings .s-body *")].find((e) => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY)); if (!b || b.scrollTop + b.clientHeight >= b.scrollHeight - 4) return false; b.scrollTop += b.clientHeight * 0.85; return true; })()`);
         if (!more) break;
         await sleep(350); await shot(label + "-" + k);

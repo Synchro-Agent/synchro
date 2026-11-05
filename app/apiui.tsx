@@ -11,7 +11,7 @@ import { BrandLogo, hasLogo } from "./brands";
 
 export type ApiProvider = {
   id: string; kind: string; name: string; vendor: string; builtin: boolean; configured: boolean; source: "db" | "env" | null;
-  baseUrl: string; defaultBase: string; keyHint: string | null; keyUrl: string | null; prefix: string | null;
+  baseUrl: string; workspaceId: string; defaultBase: string; keyHint: string | null; keyUrl: string | null; prefix: string | null;
   status: "ok" | "error" | null; error: string | null; info: string | null; checkedAt: number | null; models: { key: string; name: string }[];
 };
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
@@ -24,15 +24,20 @@ function Mark({ p }: { p: ApiProvider }) {
   return <span className="api-mark" aria-hidden data-notr>{hasLogo(p.id) ? <BrandLogo id={p.id} size={20} /> : p.name.slice(0, 1).toUpperCase()}</span>;
 }
 
-function KeyForm({ p, busy, err, onCancel, onSave }: { p: ApiProvider; busy: boolean; err: string; onCancel: () => void; onSave: (v: { key: string; baseUrl: string }) => void }) {
+type WS = { need: boolean; list: { id: string; name: string }[] };
+function KeyForm({ p, busy, err, ws, onCancel, onSave }: { p: ApiProvider; busy: boolean; err: string; ws: WS; onCancel: () => void; onSave: (v: { key: string; baseUrl: string; workspaceId?: string }) => void }) {
   const [key, setKey] = useState("");
   const [show, setShow] = useState(false);
   const [base, setBase] = useState(p.baseUrl);
-  const [adv, setAdv] = useState(!!p.baseUrl);
+  const [wid, setWid] = useState(p.workspaceId ?? "");
+  const [adv, setAdv] = useState(!!p.baseUrl || !!p.workspaceId);
+  const anth = p.kind === "anthropic";
+  // Máy chủ báo khóa này cần chọn workspace: mở mục Nâng cao để ô đó hiện ra ngay cạnh thông báo.
+  useEffect(() => { if (ws.need) setAdv(true); }, [ws]);
   const editing = p.configured && p.source === "db";
-  const can = !busy && !!(key.trim() || (editing && base !== p.baseUrl));
+  const can = !busy && !!(key.trim() || (editing && (base !== p.baseUrl || wid.trim() !== (p.workspaceId ?? ""))));
   return (
-    <form className="api-form" onSubmit={(e) => { e.preventDefault(); if (can) onSave({ key, baseUrl: base }); }}>
+    <form className="api-form" onSubmit={(e) => { e.preventDefault(); if (can) onSave({ key, baseUrl: base, ...(anth ? { workspaceId: wid.trim() } : {}) }); }}>
       <label className="api-lbl" htmlFor={`api-key-${p.id}`}>API key{editing && <span className="d"> · leave empty to keep the current key</span>}</label>
       <div className="api-keyrow">
         <input id={`api-key-${p.id}`} className="field" type={show ? "text" : "password"} autoComplete="off" spellCheck={false}
@@ -46,6 +51,18 @@ function KeyForm({ p, busy, err, onCancel, onSave }: { p: ApiProvider; busy: boo
         <>
           <label className="api-lbl" htmlFor={`api-base-${p.id}`}>Base URL<span className="d"> · optional, for proxies or compatible gateways</span></label>
           <input id={`api-base-${p.id}`} className="field" data-notr placeholder={p.defaultBase || "https://api.example.com/v1"} value={base} onChange={(e) => setBase(e.target.value)} />
+          {anth && (
+            <>
+              <label className="api-lbl" htmlFor={`api-ws-${p.id}`}>Workspace<span className="d"> · only for keys not tied to one workspace</span></label>
+              {ws.list.length > 0
+                ? <select id={`api-ws-${p.id}`} className="field" value={wid} onChange={(e) => setWid(e.target.value)}>
+                    <option value="">Choose a workspace</option>
+                    {ws.list.map((w) => <option key={w.id} value={w.id} data-notr>{w.name}</option>)}
+                  </select>
+                : <input id={`api-ws-${p.id}`} className="field" data-notr spellCheck={false} autoComplete="off" placeholder="wrkspc_…" value={wid} onChange={(e) => setWid(e.target.value)} />}
+              {ws.need && !ws.list.length && <a className="api-get" href="https://platform.claude.com/settings/workspaces" target="_blank" rel="noreferrer">Find the ID in Claude Console<I.External size={12} /></a>}
+            </>
+          )}
         </>
       )}
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
@@ -106,14 +123,19 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [showModels, setShowModels] = useState(false);
-  const save = async (v: { key: string; baseUrl: string }) => {
+  const [ws, setWs] = useState<WS>({ need: false, list: [] });
+  const save = async (v: { key: string; baseUrl: string; workspaceId?: string }) => {
     setBusy(true); setErr("");
     try {
-      const s = await call<ApiState>("POST", "/api/admin/apikeys", { id: p.id, key: v.key, baseUrl: v.baseUrl, name: p.name });
-      onChange(s); setEdit(false); refreshModels();
+      const s = await call<ApiState>("POST", "/api/admin/apikeys", { id: p.id, key: v.key, baseUrl: v.baseUrl, name: p.name, ...(v.workspaceId !== undefined ? { workspaceId: v.workspaceId } : {}) });
+      onChange(s); setEdit(false); setWs({ need: false, list: [] }); refreshModels();
       const n = s.providers.find((x) => x.id === p.id)?.models.length ?? 0;
       app.say(p.id === "elevenlabs" ? `Connected ${p.name}` : `Connected ${p.name} · ${n} models`);
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      setErr((e as Error).message);
+      const d = (e as Error & { data?: { needWorkspace?: boolean; workspaces?: WS["list"] } }).data;
+      if (d?.needWorkspace) setWs({ need: true, list: d.workspaces ?? [] });
+    } finally { setBusy(false); }
   };
   const refresh = async () => {
     setBusy(true);
@@ -147,7 +169,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
         </div>
       </div>
       {p.status === "error" && p.error && !edit && <div className="api-err in"><I.Alert size={14} /><span>{p.error}</span></div>}
-      {edit && <KeyForm p={p} busy={busy} err={err} onCancel={() => setEdit(false)} onSave={save} />}
+      {edit && <KeyForm p={p} busy={busy} err={err} ws={ws} onCancel={() => setEdit(false)} onSave={save} />}
       {!edit && p.configured && p.id !== "elevenlabs" && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} />}
       {!edit && p.models.length > 0 && (
         <div className="api-models">
