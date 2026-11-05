@@ -169,7 +169,8 @@ async function grokTurn(r: Run, bin: string): Promise<Tried> {
   const file = path.join(r.work, ".prompt.txt");
   writeEngineFile(file, Buffer.from(imagePrompt("grok", { ...r.q, count: r.count }), "utf8"));
   const args = ["--prompt-file", file, "--output-format", "streaming-json", "--always-approve", "--no-memory", "--no-subagents", "--no-auto-update",
-    "--tools", "image_gen", "--disallowed-tools", "search_tool,use_tool", ...GROK_DENY.flatMap((t) => ["--deny", t]), "--deny", "WebSearch", "--disable-web-search"];
+    // Không chặn Edit, Write ở đây: Grok tính việc lưu ảnh là quyền edit, chặn thì image_gen luôn bị từ chối (đã đo trên CLI thật). --tools chỉ giữ image_gen nên model không có công cụ sửa tệp nào.
+    "--tools", "image_gen", "--disallowed-tools", "search_tool,use_tool", ...GROK_DENY.filter((t) => t !== "Edit" && t !== "Write").flatMap((t) => ["--deny", t]), "--deny", "WebSearch", "--disable-web-search"];
   const watch = await watchSessions(r.login);
   const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: "", signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
   cliRunning(r.login, p);
@@ -182,8 +183,9 @@ async function grokTurn(r: Run, bin: string): Promise<Tried> {
     if (o.type === "text" && typeof o.data === "string") said += o.data;
     else if (o.type === "tool_call") called = true;
     else if (o.type === "tool_call_update") {
-      if (o.status === "failed") failed = JSON.stringify(o.rawOutput ?? o.error ?? "");
-      else named.push(o.rawOutput);
+      // Kết quả có thể nằm ở rawOutput hoặc content, tùy phiên bản: đọc cả hai, kẻo lỗi thật của hãng thành chuỗi rỗng.
+      if (o.status === "failed") failed = JSON.stringify(o.rawOutput ?? o.error ?? o.content ?? "");
+      else named.push(o.rawOutput, o.content);
     } else if (o.type === "error") lastErr = String(o.message ?? "");
     else if (o.type === "end" && typeof o.sessionId === "string") sid = o.sessionId;
   }
@@ -201,7 +203,7 @@ async function grokTurn(r: Run, bin: string): Promise<Tried> {
     if (m) return { fail: { kind: errKind(m), detail: clip(m) } };
     return called || errKind(said) === "quota" ? none(g, said) : { fail: { kind: "notool" } };
   } finally {
-    // Chưa biết Grok lưu ảnh ở đâu nên quét lại, kể cả khi lượt bị dừng trước khi nói đường dẫn. Lượt chat của Grok không có image_gen nên ảnh mới trong thư mục này chỉ là của lượt này.
+    // Grok lưu ở .grok/sessions/<thư mục làm việc>/<phiên>/images/ (đã đo trên CLI thật, Grok 1.0.70). Vẫn quét lại, kể cả khi lượt bị dừng trước khi nói đường dẫn. Lượt chat của Grok không có image_gen nên ảnh mới trong thư mục này chỉ là của lượt này.
     const left = await listImageFiles(r.login, { ...r.c, signal: undefined }, { depth: 7, stamp: r.stamp }).catch(() => [] as string[]);
     await removeNewFiles([...paths, ...left], r.stamp, r.c).catch(() => {});
     if (sid) await removeSessionFiles(r.login, sid);

@@ -28,6 +28,8 @@ async function grokImage(prompt) {
   const m = C.imageMode(process.env.HOME || home, "grok"), sid = C.uuid(), n = C.imageCount(prompt);
   const tools = (C.flag(a, "--tools") ?? "").split(",").filter(Boolean), disallowed = (C.flag(a, "--disallowed-tools") ?? "").split(",").filter(Boolean);
   C.imageLog(process.env.HOME || home, { args: a, home: process.env.HOME, grokHome: home, cwd: process.cwd(), tools, disallowed, deny: all("--deny"), prompt });
+  // Như Grok thật: lưu ảnh tính là quyền edit, chặn Edit hoặc Write thì image_gen bị từ chối.
+  if (all("--deny").some((t) => t === "Edit" || t === "Write")) { C.out({ type: "tool_call_update", status: "failed", rawOutput: null, content: [{ type: "content", content: { type: "text", text: "Tool `image_gen` was not executed: Denied by permission policy: deny rule on edit" } }] }); C.out({ type: "end", stopReason: "end_turn", sessionId: sid }); return; }
   const sess = path.join(home, "sessions", `${sid}.json`);
   fs.mkdirSync(path.dirname(sess), { recursive: true }); fs.writeFileSync(sess, prompt);
   const end = (text = "") => { if (text) C.out({ type: "text", data: text }); C.out({ type: "end", stopReason: "end_turn", sessionId: sid, usage: { input_tokens: 1, output_tokens: 1 } }); };
