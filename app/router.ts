@@ -489,6 +489,8 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   // Dự phòng khi model đã chọn lỗi / hết hạn mức: model tốt kế tiếp, ưu tiên hãng khác.
   const alt = [...ok, ...pool.filter((x) => !ok.includes(x)).sort((a, b) => b.q - a.q)].filter((x) => x.p.key !== pick.p.key)
     .sort((a, b) => Number(a.p.vendor === pick.p.vendor) - Number(b.p.vendor === pick.p.vendor)).map((x) => x.p.key);
+  // Model đang tránh (o.avoid) vẫn là lựa chọn cuối cùng khi mọi model khác đều hỏng.
+  for (const x of all) if (x.p.key !== pick.p.key && !alt.includes(x.p.key)) alt.push(x.p.key);
   return { model: pick.p.key, tier: pick.p.tier, vendor: pick.p.vendor, task, effort: effortFor(score, task, think), why: [`việc ${LABEL[task]}`, ...why], alt };
 }
 // Câu cần dữ liệu mới hoặc địa chỉ web: để lượt đầy đủ có công cụ trả lời.

@@ -175,6 +175,15 @@ try {
     fs.writeFileSync(path.join(BIN, ".keep"), "");
     r = await post([u1, { role: "assistant", content: "x" }, u2, { role: "assistant", content: a3 }, u3], { conv: `${conv}-m` });
     ok(r.s === 200 && !/CAN_CONG_CU/.test(r.j.text) && /công cụ Synchro: \d+/.test(r.j.text), "model báo cần công cụ: chạy lại lượt đầy đủ, người dùng không thấy dấu hiệu", JSON.stringify(r.j).slice(0, 300));
+    // CLI vừa treo: nhớ theo tài khoản và theo CLI, xong tốt thì quên.
+    {
+      const models = ["sub-claude/haiku", "sub-grok/grok-4.7"];
+      CH.noteStall(user.id, "claude");
+      ok(CH.stalledModels(user.id, models).join() === "sub-claude/haiku", "CLI treo: model của CLI đó bị tránh", CH.stalledModels(user.id, models));
+      ok(!CH.stalledModels("nguoi-khac", models).length, "chỉ tính cho đúng tài khoản");
+      CH.clearStall(user.id, "claude");
+      ok(!CH.stalledModels(user.id, models).length, "xong tốt: bỏ tránh");
+    }
     // Nhờ viết ngắn: đường nhanh, tiến trình khởi động sẵn đúng model và nỗ lực; không đụng tới lượt có công cụ.
     {
       PO.dropAll();

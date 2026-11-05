@@ -1273,6 +1273,12 @@ function holdNeedTools(out?: (t: string) => void) {
     open = true; out?.(buf);
   };
 }
+// CLI vừa treo hoặc lỗi phía hãng với tài khoản này: chế độ Tự động tránh trong 5 phút (không gói nào khác thì vẫn dùng). Giữ trong bộ nhớ: khởi động lại thì thử lại từ đầu.
+const STALL_MS = 5 * 60_000;
+const stalls = new Map<string, number>();
+export const noteStall = (uid: string, cli: string) => { if (stalls.size > 5000) stalls.clear(); stalls.set(`${uid}:${cli}`, Date.now() + STALL_MS); };
+export const clearStall = (uid: string, cli: string) => { stalls.delete(`${uid}:${cli}`); };
+export const stalledModels = (uid: string, models: string[]) => models.filter((k) => { const cli = subCli(k); return !!cli && (stalls.get(`${uid}:${cli}`) ?? 0) > Date.now(); });
 const prewarmed = new Map<string, number>();
 /** Mở trang: khởi động sẵn tiến trình cho câu chào đầu tiên của người dùng, đúng model và hướng dẫn đường nhanh sẽ dùng. Mỗi người tối đa một lần mỗi phút; không tốn lượt nào của gói. */
 export async function prewarmChat(user: UserRow) {
@@ -1310,7 +1316,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   // Tên model như ở bộ chọn model ("Claude Sonnet 4.5"), không phải mã thô ("claude-sonnet-4-5-20250929").
   const shown = (k: string) => groups.flatMap((g) => g.models).find((m) => m.key === k)?.name ?? k.split("/").pop();
   const q = routeInput(body);
-  const r = routeModel(q, usable.length ? usable : allowed);
+  const r = routeModel(q, usable.length ? usable : allowed, { avoid: stalledModels(c.user.id, usable.length ? usable : allowed) });
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
@@ -1327,6 +1333,8 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   const out = new Set<string>();
   while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !runSignal()?.aborted && tried.length < 5) {
     const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
+    // Treo, lỗi phía hãng: nhớ vài phút. Mỗi tin nhắn tiếp theo từng chọn lại đúng model đang treo, chờ thêm 60-90 giây rồi mới chuyển.
+    if ((j0.stalled || res.status === 504 || res.status >= 500) && !j0.busy && !j0.usageLimit && subCli(used)) noteStall(c.user.id, subCli(used)!);
     if (j0.usageLimit || j0.partialWork) break;
     // Hết hạn mức riêng của một model thì các model khác cùng gói vẫn thử được; lỗi khác (đăng nhập, treo, hết cả gói) thì bỏ cả CLI đó trong lượt này.
     if (j0.quota !== "model" && subCli(used)) out.add(subCli(used)!);
@@ -1339,6 +1347,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
     used = next; tried.push(next);
     res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
   }
+  if (res.status === 200 && subCli(used)) clearStall(c.user.id, subCli(used)!);
   const j = await (await withSwitch(res, body, c.user, tried)).json().catch(() => ({}));
   // Hết hạn mức ở mọi gói đã kết nối: nói thẳng là hết cả và lúc sớm nhất có lại (thẻ lỗi hiện giờ theo múi giờ của người dùng), đừng để người dùng tưởng đổi gói khác là được.
   if (res.status === 429 && (j.planLimit || j.quota)) {
