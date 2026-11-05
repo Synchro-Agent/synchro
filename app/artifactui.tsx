@@ -24,7 +24,8 @@ import { htmlToBlocks } from "./htmlblocks";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, H2I, isDeck, libUrls, swapUrls } from "./artdoc";
+import { buildDocCore, deckExport, externalImageUrls, H2I, htmlExport, isDeck, libUrls, swapUrls } from "./artdoc";
+import { withKitFontLink } from "./artkit";
 export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
@@ -462,7 +463,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const done = (n: string) => say(`${tr("Đã tải")} ${n}`);
   const source = () => {
     const n = artFileName(art);
-    saveBlob(new Blob([art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
+    saveBlob(new Blob([art.type === "html" ? htmlExport(art.content) : art.content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
   };
   // Xuất cần phần xem trước đang hiện (tài liệu đã dựng, khung đã chạy): chuyển sang Xem trước rồi chờ một chút.
   const withPreview = (fn: () => void | Promise<void>, wait = 400) => new Promise<void>((ok, no) => {
@@ -507,12 +508,12 @@ Yêu cầu: ${req.trim()}`);
     setPicked(null); setReq("");
   };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
-  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture", fontCss: await fontEmbedCss(art.content) }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
+  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture", fontCss: await fontEmbedCss(withKitFontLink(art.content)) }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
   // PowerPoint: Synchro tự dựng ngay trong khung xem (deckpptx.ts), không nhờ model; chữ sửa được, hình giữ nguyên.
   const pptxFrame = () => withPreview(async () => {
     say(tr("Đang dựng tệp PowerPoint…"));
     // Phông web cho ảnh nền của slide (chữ trong hình, SVG): khung không tự tải được, như khi xuất PNG.
-    const d = await frameCall({ t: "pptx", fontCss: await fontEmbedCss(art.content) }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
+    const d = await frameCall({ t: "pptx", fontCss: await fontEmbedCss(withKitFontLink(art.content)) }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
     setPptxStep("");
     const n = `${name}.pptx`;
     saveBlob(await buildPptx(d.slides as DeckSlide[], Number(d.w), Number(d.h), art.title), n); done(n);

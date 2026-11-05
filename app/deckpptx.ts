@@ -24,7 +24,10 @@ var back=window.__sxIdx?window.__sxIdx():0,out=[],W=0,H=0;
 var fz=document.createElement("style");fz.setAttribute("data-sx-noprint","");
 fz.textContent="*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}";
 document.head.appendChild(fz);
-function col(c){var m=/rgba?\(([^)]+)\)/.exec(c||"");if(!m)return null;var p=m[1].split(/[\s,\/]+/).filter(Boolean).map(Number);var a=p.length>3?p[3]:1;
+var cv=null;
+// Trình duyệt trả màu oklch(), color-mix() dưới dạng color(srgb …) / oklch(…): đọc qua canvas về rgba, không thì chữ màu đó mất khỏi tệp PowerPoint.
+function norm(c){try{cv=cv||document.createElement("canvas").getContext("2d",{willReadFrequently:true});cv.clearRect(0,0,1,1);cv.fillStyle=c;cv.fillRect(0,0,1,1);var d=cv.getImageData(0,0,1,1).data;return"rgba("+d[0]+","+d[1]+","+d[2]+","+d[3]/255+")"}catch(e){return""}}
+function col(c){if(c&&/^(color|oklch|oklab|lab|lch|hwb|color-mix)\(/.test(c))c=norm(c);var m=/rgba?\(([^)]+)\)/.exec(c||"");if(!m)return null;var p=m[1].split(/[\s,\/]+/).filter(Boolean).map(Number);var a=p.length>3?p[3]:1;
 function h(v){v=Math.max(0,Math.min(255,Math.round(v)));return(v<16?"0":"")+v.toString(16)}return{hex:(h(p[0])+h(p[1])+h(p[2])).toUpperCase(),a:a}}
 function firstStop(bg){var m=/rgba?\([^)]+\)/.exec(bg||"");return m?col(m[0]):null}
 function blockOf(n,root){for(var e=n.parentElement;e&&e!==root;e=e.parentElement){var d=getComputedStyle(e).display;if(d!=="inline"&&d!=="contents")return e}return root}
