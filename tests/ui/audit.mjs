@@ -192,6 +192,15 @@ const CHECK = `(() => {
       else if (c.top < b.top - 1 || c.bottom > b.bottom + 1) out.push("nút trong ô nhập tràn khỏi ô: " + name(k));
     }
   }
+  // Chữ bị ép thành cột hẹp, mỗi dòng một hai từ, trong khi ô cha còn rộng: thường do phần tử bên cạnh chiếm hết chỗ (ô số ở Quản trị từng đẩy nhãn thành một cột).
+  for (const k of document.querySelectorAll("div,span,p,label,b,h3,h4")) {
+    if (!vis(k) || k.closest("svg,table,pre,code,textarea,[aria-hidden=true],.sr-only,.ai-msg,.user-msg,.mdx,iframe")) continue;
+    const own = [...k.childNodes].filter((n) => n.nodeType === 3 && n.nodeValue.trim()); if (!own.length || k.children.length) continue;
+    const r = k.getBoundingClientRect(); if (r.bottom < 0 || r.top > H || !r.width || r.width > 150) continue;
+    const text = own.map((n) => n.nodeValue).join(" ").trim(), lh = parseFloat(getComputedStyle(k).lineHeight) || parseFloat(getComputedStyle(k).fontSize) * 1.3, lines = Math.round(r.height / lh);
+    const box = k.closest(".row,.adm-perm-row,.adm-card,.modal,section")?.getBoundingClientRect();
+    if (lines >= 4 && text.length / lines < 13 && box && box.width > r.width * 3) out.push("chữ bị ép hẹp " + Math.round(r.width) + "px, " + lines + " dòng: " + name(k) + " “" + text.slice(0, 30) + "”");
+  }
   // Chữ gợi ý (placeholder) dài hơn ô nhập: bị cắt cụt, không có dấu … (ô hạn mức "Mặc định: không giới hạn" ở trang quản trị).
   { const cv = document.createElement("canvas").getContext("2d");
     for (const inp of document.querySelectorAll("input[placeholder], textarea[placeholder]")) {
@@ -400,7 +409,14 @@ for (const theme of THEMES) for (const size of SIZES) {
     for (let i = 0; i < n; i++) {
       await click(`document.querySelectorAll(".modal.settings .s-item")[${i}]`, "tab " + i); await sleep(1300);
       const t = await ev(`document.querySelectorAll(".modal.settings .s-item")[${i}].getAttribute("title")`);
-      await shot("cai-dat-" + String(t).toLowerCase().replace(/\s+/g, "-"));
+      const label = "cai-dat-" + String(t).toLowerCase().replace(/\s+/g, "-");
+      await shot(label);
+      // Phần dưới của từng mục cũng phải được soát: bộ soát chỉ đo những gì đang trong khung nhìn, nên ô số của Quản trị từng lọt vì nằm dưới màn hình đầu.
+      for (let k = 1; k <= 8; k++) {
+        const more = await ev(`(() => { const b = [...document.querySelectorAll(".modal.settings .s-body, .modal.settings .s-body *")].find((e) => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY)); if (!b || b.scrollTop + b.clientHeight >= b.scrollHeight - 4) return false; b.scrollTop += b.clientHeight * 0.85; return true; })()`);
+        if (!more) break;
+        await sleep(350); await shot(label + "-" + k);
+      }
     }
     await esc(); await sleep(400);
   });
