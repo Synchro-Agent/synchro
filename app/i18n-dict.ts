@@ -469,9 +469,9 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Đã dùng (\d+)% dung lượng dự án$/, (m) => `${m[1]}% of project capacity used`],
   [/^Đã chọn (\d+)$/, (m) => `${m[1]} selected`],
   [/^Xóa (\d+) mục đã chọn$/, (m) => `Delete ${m[1]} selected`],
-  [/^Cập nhật (.+)$/, (m) => "Updated " + m[1]],
   // Nhãn thời gian ("Cập nhật" đơn lẻ là động từ trên nút, ở đây là "đã cập nhật").
   [/^Cập nhật (vừa xong|\d+ (?:phút|giờ|ngày) trước)$/, (m) => `Updated ${m[1] === "vừa xong" ? "just now" : m[1].replace(/^(\d+) (phút|giờ|ngày) trước$/, (_, n, u) => `${n}${u === "phút" ? "m" : u === "giờ" ? "h" : "d"} ago`)}`],
+  [/^Cập nhật (.+)$/, (m) => "Updated " + m[1]],
   [/^(\d+) giờ trước$/, (m) => `${m[1]}h ago`],
   [/^(\d+) ngày trước$/, (m) => `${m[1]}d ago`],
   [/^Xem dự án đã lưu trữ \((\d+)\)$/, (m) => `View archived projects (${m[1]})`],
