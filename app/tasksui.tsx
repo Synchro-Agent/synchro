@@ -374,10 +374,10 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         </button>}
       </div>
       <div className="tk-tabs ds-bar">
-        <div className="ds-seg pl-seg">
-          <button className={tab === "results" ? "on" : ""} onClick={() => setTab("results")}>{tr("Kết quả")}{unread > 0 && <i className="tk-badge">{unread}</i>}</button>
-          <button className={tab === "approve" ? "on" : ""} onClick={() => setTab("approve")}>{tr("Cần duyệt")}{pending.length > 0 && <i className="tk-badge warn">{pending.length}</i>}</button>
-          <button className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}>{tr("Việc tự động")}{(tasks?.length ?? 0) > 0 && <i className="tk-count">{tasks!.length}</i>}</button>
+        <div className="ds-seg pl-seg" role="tablist">
+          <button role="tab" aria-selected={tab === "results"} className={tab === "results" ? "on" : ""} onClick={() => setTab("results")}>{tr("Kết quả")}{unread > 0 && <i className="tk-badge">{unread}</i>}</button>
+          <button role="tab" aria-selected={tab === "approve"} className={tab === "approve" ? "on" : ""} onClick={() => setTab("approve")}>{tr("Cần duyệt")}{pending.length > 0 && <i className="tk-badge warn">{pending.length}</i>}</button>
+          <button role="tab" aria-selected={tab === "jobs"} className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}>{tr("Việc tự động")}{(tasks?.length ?? 0) > 0 && <i className="tk-count">{tasks!.length}</i>}</button>
         </div>
         <span style={{ flex: 1 }} />
         {tab === "results" && (tasks?.length ?? 0) > 1 && <select className="field tk-filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Lọc theo việc"><option value="">{tr("Mọi việc")}</option>{tasks!.map((t) => <option key={t.id} value={t.id} data-notr>{t.title}</option>)}</select>}

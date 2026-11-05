@@ -109,7 +109,7 @@ export function I18n() {
     const html = document.documentElement;
     html.lang = lang;
     html.dataset.lang = lang;
-    let mo: MutationObserver | null = null, off = false;
+    let mo: MutationObserver | null = null, mt: MutationObserver | null = null, off = false;
     void loadDict(lang).then(() => {
       if (off) return;
       // Đổi ngôn ngữ: chỉ chuyển khi từ điển mới đã về, nơi dùng useLangReady vẽ lại bằng ngôn ngữ mới.
@@ -131,8 +131,17 @@ export function I18n() {
       });
       mo = o;
       o.observe(document.body, cfg);
+      // Next gắn tiêu đề trang (metadata) sau khi trang đã chạy, có khi sau cả đoạn trên: /terms từng giữ tiêu đề tiếng Việt ở giao diện tiếng Anh.
+      const ot = new MutationObserver(() => {
+        if (document.title === titleTr) return;
+        titleSrc = document.title;
+        titleTr = tr(titleSrc, lang);
+        if (document.title !== titleTr) document.title = titleTr;
+      });
+      mt = ot;
+      ot.observe(document.head, { subtree: true, childList: true, characterData: true });
     });
-    return () => { off = true; mo?.disconnect(); };
+    return () => { off = true; mo?.disconnect(); mt?.disconnect(); };
   }, [lang]);
   return null;
 }

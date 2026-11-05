@@ -382,7 +382,7 @@ export function SkillHub() {
     <>
       <div className="pl-top">
         <h1 className="pl-title">Skill Hub</h1>
-        <div className="pl-seg"><button className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
+        <div className="pl-seg" role="tablist"><button role="tab" aria-selected={view === "yours"} className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button role="tab" aria-selected={view === "discover"} className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
         <span style={{ flex: 1 }} />
         <span className="s-search pl-search"><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span>
         {(d.plugins.length > 0 || !!ownSkills) && <SkillScan />}

@@ -2472,7 +2472,10 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .art-tile-meta span{font-size:11.5px;color:var(--text-3)}
 .art-tile-meta .icon-btn{width:28px;height:28px;opacity:0;transition:opacity .15s}
 .art-tile:hover .art-tile-meta .icon-btn,.art-tile:focus-within .art-tile-meta .icon-btn{opacity:1}
-.art-tile-ic{color:var(--text-3);display:inline-flex}
+.art-tile-ic{color:var(--text-3);display:inline-flex;align-items:center;justify-content:center;flex:none}
+/* Thẻ artifact: nút tên là điểm dừng bàn phím (nút Xóa không được nằm lồng trong một nút khác), viền tiêu điểm vẽ quanh cả thẻ. */
+.art-tile-open{all:unset;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.art-tile:has(.art-tile-open:focus-visible){outline:2px solid var(--link);outline-offset:2px}
 @media (hover:none){.art-tile-meta .icon-btn{opacity:1}}
 .art-modal,.overlay.art-modal{position:fixed;inset:0;z-index:55;background:var(--overlay);display:grid;place-items:center;animation:fadeIn .2s}
 .art-modal .art-panel{position:relative;width:min(1080px,94vw);height:min(86vh,920px);border:.5px solid var(--border-strong);border-radius:var(--r-panel);overflow:hidden;box-shadow:var(--shadow)}

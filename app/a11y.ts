@@ -133,7 +133,10 @@ function menuKey(e: KeyboardEvent) {
 // ---------------------------------------------------------------- hộp thoại
 type Modal = { ov: HTMLElement; back: HTMLElement | null };
 const modals: Modal[] = [];
-const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),iframe,[tabindex]:not([tabindex="-1"])';
+// Bỏ phần tử tabindex="-1" (dòng kết quả của bảng lệnh…): Tab không dừng ở đó, đếm vào thì tưởng ô nhập không phải mục cuối và để tiêu điểm rơi ra body.
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),iframe,[tabindex]'.split(",").map((x) => x + ':not([tabindex="-1"])').join(",");
+// Phần tử ngoài hộp thoại được focus gần nhất. Hộp có autoFocus (bảng lệnh) đã lấy tiêu điểm trước khi syncModals chạy, lúc đó nhìn tiêu điểm hiện tại chỉ thấy ô nhập của chính hộp.
+let lastOutside: HTMLElement | null = null;
 const focusables = (r: HTMLElement) => [...r.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
 let uid = 0;
 
@@ -188,7 +191,7 @@ function syncModals() {
     // Hộp mở từ một mục menu: mục đó sắp biến mất, nhớ nút mở menu thay cho nó.
     const inMenu = a?.closest<HTMLElement>(".menu");
     const op = inMenu ? menus.find((m) => m.el.contains(inMenu))?.opener : null;
-    modals.push({ ov, back: op ?? (a && a !== document.body ? a : null) });
+    modals.push({ ov, back: op ?? (a && a !== document.body && !ov.contains(a) ? a : lastOutside) });
     setup(ov);
   }
   wall();
@@ -225,10 +228,13 @@ export function installA11y() {
     if (e.key === "Tab" && !e.defaultPrevented) trapTab(e);
   };
   const onPointer = () => { viaKey = false; };
+  const onFocus = (e: FocusEvent) => { const t = e.target; if (t instanceof HTMLElement && !t.closest(".overlay,.menu,[role=menu]")) lastOutside = t; };
+  document.addEventListener("focusin", onFocus, true);
+  lastOutside = active() && active() !== document.body ? active() : null;
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("pointerdown", onPointer, true);
   const mo = new MutationObserver(syncModals);
   mo.observe(document.body, { childList: true, subtree: true });
   syncModals();
-  return () => { installed = false; window.removeEventListener("keydown", onKey, true); window.removeEventListener("pointerdown", onPointer, true); mo.disconnect(); };
+  return () => { installed = false; document.removeEventListener("focusin", onFocus, true); window.removeEventListener("keydown", onKey, true); window.removeEventListener("pointerdown", onPointer, true); mo.disconnect(); };
 }

@@ -461,7 +461,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
             <AnimatePresence mode="wait">
             {stage === "form" ? (
             <motion.fieldset key="form" exit={{ opacity: 0, scale: 0.96, filter: "blur(10px)", transition: { duration: 0.35, ease: EASE } }} className="relative z-10 flex flex-col items-center gap-8 w-[280px] mx-auto p-4">
-                {notice && <p className="auth-notice" role="alert">{notice}</p>}
+                {notice && <p id="auth-notice" className="auth-notice" role="alert">{notice}</p>}
                 <AnimatePresence mode="wait" initial={true}>
                     {authStep === "email" && <motion.div key="email-content" exit={stepExit} className="w-full flex flex-col items-center gap-4">
                         <BlurFade delay={BASE} className="w-full"><div className="text-center"><p className="auth-title text-foreground">{titles.email[0]}</p></div></BlurFade>
@@ -491,7 +491,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <div className="glass-input-wrap w-full"><div className="glass-input">
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
-                                        <input type="email" autoComplete="email" autoFocus={!!again} readOnly={authStep !== "email"} placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
+                                        <input type="email" autoComplete="email" autoFocus={!!again} readOnly={authStep !== "email"} aria-label="Email" placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
                                         <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                     </div></div>
                                     {emailErr && authStep === "email" && <p id="auth-email-err" className="auth-field-err" role="alert">{emailErr}</p>}
@@ -508,7 +508,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                             <div className="relative z-10 flex-shrink-0 flex items-center justify-center w-10 pl-2">
                                                 {isPasswordValid ? <button type="button" aria-label="Toggle password visibility" onClick={() => setShowPassword(!showPassword)} className="text-foreground/80 hover:text-foreground transition-colors p-2 rounded-full">{showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button> : <Lock className="h-5 w-5 text-foreground/80 flex-shrink-0" />}
                                             </div>
-                                            <input ref={passwordInputRef} type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (isLogin) handleFinalSubmit(e as unknown as React.FormEvent); else handleProgressStep(); } }} className="relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none" />
+                                            <input ref={passwordInputRef} type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} aria-label="Password" placeholder="Password" aria-invalid={!!notice || undefined} aria-describedby={notice ? "auth-notice" : undefined} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (isLogin) handleFinalSubmit(e as unknown as React.FormEvent); else handleProgressStep(); } }} className="relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none" />
                                             <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isPasswordValid ? "w-10 pr-1" : "w-0" )}><GlassButton type={isLogin ? "submit" : "button"} onClick={isLogin ? undefined : handleProgressStep} size="icon" aria-label="Submit password" contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                         </div></div>
                                     </div>
@@ -536,7 +536,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <div className="relative z-10 flex-shrink-0 flex items-center justify-center w-10 pl-2">
                                         {isConfirmPasswordValid ? <button type="button" aria-label="Toggle confirm password visibility" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="text-foreground/80 hover:text-foreground transition-colors p-2 rounded-full">{showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button> : <Lock className="h-5 w-5 text-foreground/80 flex-shrink-0" />}
                                     </div>
-                                    <input ref={confirmPasswordInputRef} type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none" />
+                                    <input ref={confirmPasswordInputRef} type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" aria-label="Confirm Password" placeholder="Confirm Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none" />
                                     <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isConfirmPasswordValid ? "w-10 pr-1" : "w-0" )}><GlassButton type="submit" size="icon" aria-label="Continue" contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                 </div></div>
                             </div>
@@ -547,17 +547,17 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                         {authStep === "profile" && <motion.div key="profile-fields" exit={stepExit} className="w-full space-y-7 pt-1">
                             <BlurFade delay={OUT + STEP * 2} className="w-full">
                                 <GlassField icon={<User className="h-5 w-5" />} label="Full name" show={fullName.length > 0}>
-                                    <input ref={fullNameRef} autoComplete="name" placeholder="Full name" value={fullName} maxLength={80} onChange={(e) => { const v = e.target.value; setFullName(v); if (!nickTouched) setNickname(lastWord(v)); }} className={fieldInput} />
+                                    <input ref={fullNameRef} autoComplete="name" aria-label="Full name" placeholder="Full name" value={fullName} maxLength={80} onChange={(e) => { const v = e.target.value; setFullName(v); if (!nickTouched) setNickname(lastWord(v)); }} className={fieldInput} />
                                 </GlassField>
                             </BlurFade>
                             <BlurFade delay={OUT + STEP * 3} className="w-full">
                                 <GlassField icon={<Smile className="h-5 w-5" />} label="What should Synchro call you?" show={nickname.length > 0}>
-                                    <input autoComplete="nickname" placeholder="What should Synchro call you?" value={nickname} maxLength={40} onChange={(e) => { setNickname(e.target.value); setNickTouched(true); }} className={fieldInput} />
+                                    <input autoComplete="nickname" aria-label="What should Synchro call you?" placeholder="What should Synchro call you?" value={nickname} maxLength={40} onChange={(e) => { setNickname(e.target.value); setNickTouched(true); }} className={fieldInput} />
                                 </GlassField>
                             </BlurFade>
                             <BlurFade delay={OUT + STEP * 4} className="w-full">
                                 <GlassField icon={<CalendarDays className="h-5 w-5" />} label="Date of birth" show={dob.length > 0}>
-                                    <input inputMode="numeric" autoComplete="bday" placeholder="Date of birth (DD/MM/YYYY)" value={dob} onChange={(e) => setDob(maskDob(e.target.value))} className={fieldInput} />
+                                    <input inputMode="numeric" autoComplete="bday" aria-label="Date of birth (DD/MM/YYYY)" placeholder="Date of birth (DD/MM/YYYY)" value={dob} onChange={(e) => setDob(maskDob(e.target.value))} className={fieldInput} />
                                 </GlassField>
                             </BlurFade>
                             <BlurFade delay={OUT + STEP * 5} className="w-full">

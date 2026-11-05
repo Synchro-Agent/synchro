@@ -22,9 +22,10 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .sh-report{font-size:inherit;color:inherit;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
 .sh-report-form{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%}
 .sh-report-form .field{flex:1;min-width:200px;height:32px}
-.sh-hint{display:block;font-size:13.5px;line-height:1.55;color:var(--text-2);margin:4px 0 12px}
+/* flex: icon nằm cạnh chữ, dòng xuống vẫn thẳng hàng; từng là inline-block nhưng quy tắc svg chung thắng nên icon đứng một dòng riêng. */
+.sh-hint{display:flex;gap:6px;align-items:flex-start;font-size:13.5px;line-height:1.55;color:var(--text-2);margin:4px 0 12px}
 /* Mặc định của app cho svg là display:block: biểu tượng khóa từng đứng riêng một dòng trên câu chữ. */
-.sh-hint svg{display:inline-block;vertical-align:-2px;margin-right:4px}
+.sh-hint svg{flex:none;margin-top:3px}
 .pal-cut{padding:6px 12px 10px;font-size:12.5px;color:var(--text-2)}
 .sh-link{display:flex;gap:8px;margin:10px 0 4px}
 .sh-link input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:13px}

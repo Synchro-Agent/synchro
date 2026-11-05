@@ -1314,13 +1314,13 @@ export default function Home() {
       else if (!open && !document.hidden) say(`${tr("Đang chờ bạn duyệt")}: ${name}`);
     }
   }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tiêu đề thẻ trình duyệt theo màn hình đang xem: nhiều thẻ vẫn phân biệt được, trình đọc màn hình có tín hiệu đổi trang. Đoạn chat ẩn danh không lộ tên lên thẻ.
+  const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", inbox: "Hộp thư", brain: "Bộ não" };
+  const tabName = view === "chat" ? (chat && !chat.inc ? chat.title : "") : tr(VIEW_TITLE[view] ?? "");
   useEffect(() => {
     const n = needYou.size;
-    if (!n) return;
-    const was = document.title;
-    document.title = `(${n}) ${tr("Đang chờ bạn duyệt")} · Synchro`;
-    return () => { document.title = was; };
-  }, [needYou.size]);
+    document.title = `${n ? `(${n}) ` : ""}${tabName ? `${tabName} · ` : ""}Synchro`;
+  }, [needYou.size, tabName]);
   // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
   const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
   const [artFull, setArtFull] = useState(false);

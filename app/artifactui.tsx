@@ -651,8 +651,9 @@ function Thumb({ a }: { a: Summary }) {
     el.addEventListener("load", done, true);
     return () => { clearTimeout(t); el.removeEventListener("load", done, true); };
   }, [framed]);
+  // inert: ảnh thu nhỏ chỉ để nhìn. Từng là các điểm dừng Tab vô hình (nút sắp xếp bảng, nút trong khung HTML) nằm giữa thẻ và nút Xóa.
   return (
-    <div className={`art-thumb t-${a.type}${(vb || live) && !ok ? " wait" : ""}`} ref={ref}>
+    <div className={`art-thumb t-${a.type}${(vb || live) && !ok ? " wait" : ""}`} ref={ref} inert aria-hidden="true">
       {vb ? (vis && <div className="art-thumb-scale"><iframe className="art-thumb-frame" title={a.title} srcDoc={vbhcHtml(vb, a.title)} sandbox="" /></div>)
         : live ? (vis && content !== null && <div className="art-thumb-scale"><ArtifactFrame type={a.type} content={content} ai={false} title={a.title} className="art-thumb-frame" /></div>)
         : a.type === "markdown" ? <div className="art-thumb-doc mdx"><Markdown text={a.preview.split("\n").slice(0, 24).join("\n")} say={() => {}} /></div>
@@ -704,12 +705,12 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
           <div className="bk-head"><span className="bk-head-n">{shown.length} artifact</span><BulkButton b={bk} /></div>
           <div className="art-grid">
             {pg.items.map((a) => (
-              <div key={a.id} className="art-tile" role="button" tabIndex={0} onClick={() => show(a.id)} onKeyDown={rowKeys(() => show(a.id))} {...bulkRow(bk, a)}>
+              <div key={a.id} className="art-tile" onClick={() => show(a.id)} {...bulkRow(bk, a)}>
                 {bk.on && <BulkCheck on={bk.has(a)} />}
                 <Thumb a={a} />
                 <div className="art-tile-meta">
                   <span className="art-tile-ic"><ArtIcon type={a.type} size={15} /></span>
-                  <div><b data-notr>{a.title}</b><span>{tr(ART_LABEL[a.type])} · {when(a.updated_at)}{a.count > 1 ? ` · ${a.count} ${tr("phiên bản")}` : ""}</span></div>
+                  <div><b data-notr><button type="button" className="art-tile-open">{a.title}</button></b><span>{tr(ART_LABEL[a.type])} · {when(a.updated_at)}{a.count > 1 ? ` · ${a.count} ${tr("phiên bản")}` : ""}</span></div>
                   {!bk.on && <button className="icon-btn" aria-label={tr("Xóa artifact")} onClick={(e) => { e.stopPropagation(); del(a.id, a.title); }}><I.Trash size={14} /></button>}
                 </div>
               </div>
