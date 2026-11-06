@@ -146,3 +146,19 @@ Xóa đoạn chat xóa thêm lịch sử phiên của CLI trên đĩa (tìm theo
 ## Xác minh email
 
 Tài khoản đăng ký bằng mật khẩu sau khi có tính năng này nhận thư xác minh; chưa xác minh vẫn chat được, nhưng chưa dùng được tệp đính kèm, connector, tác vụ, giọng nói, Synchro Code (Cài đặt → Quản trị viên → "Require a verified email": tắt khi thư đang lỗi). Tài khoản cũ và tài khoản Google, GitHub, Apple không bị ảnh hưởng. Mốc phân biệt: `settings.verify_since`.
+
+## Đo thời gian chờ chữ đầu
+
+Mỗi lượt qua gói ghi một dòng `[timing]` vào nhật ký, không có nội dung người dùng:
+
+`[timing] claude haiku low resume=0 fast=1 pool=hit job=title wait=40 chunks=9 sysKB=2 promptKB=0 status=0 prep=1 event=300 active=310 text=800 end=1200`
+
+- `wait`: từ lúc lượt được tạo tới lúc gọi CLI (xếp hàng, chọn model, skill, gọi lại bộ não, cả lần thử đường nhanh trước đó). `wait + text` là thời gian người dùng chờ phía máy chủ.
+- `event`: dòng đầu CLI in ra (khởi động xong). `text`: chữ đầu. `text - event` là phần của model và hãng.
+- `chunks=1` với Codex hay Antigravity: chữ đầu chính là cả câu trả lời, nên `text` lúc đó là thời gian viết xong, không phải độ trễ chữ đầu.
+- `job`: việc phụ (`title`, `compact`, `memory`, `project-memory`, `brain`, `meta`, `critic-auto`, `critic`, `voice`, `automate`). Không có `job` là lượt của người dùng; đừng tính việc phụ vào tốc độ chat.
+- `pool`: `hit` có tiến trình đợi sẵn, `cold` phải khởi động. Không có `pool` là lượt đầy đủ có công cụ, chưa dùng được hồ.
+
+Tỉ lệ trúng hồ của lượt đường nhanh: `grep '\[timing\]' | grep 'fast=1' | grep -v 'job=' | grep -c 'pool=hit'` chia cho số dòng có `fast=1` không có `job=`.
+
+`SYNCHRO_CLAUDE_QUIET=1`: tắt lưu lượng phụ của Claude Code lúc khởi động. Mặc định tắt vì chưa đo. Muốn thử: bật trên một tài khoản thử, so `event` trước và sau, và kiểm tra tên model trong bộ chọn vẫn đúng.

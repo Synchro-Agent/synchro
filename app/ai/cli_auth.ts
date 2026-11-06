@@ -74,7 +74,8 @@ export function engineEnv(cli: Cli, scope: string): Record<string, string> {
   const dir = scopeDir(cli, scope);
   if (cli === "claude") {
     const t = readToken(scope);
-    return { CLAUDE_CONFIG_DIR: dir, ...(t ? { CLAUDE_CODE_OAUTH_TOKEN: t } : {}) };
+    // SYNCHRO_CLAUDE_QUIET=1: CLI không gọi các dịch vụ phụ (đo lường, tự cập nhật) lúc khởi động. Mặc định tắt: chưa đo trên CLI thật nên chưa biết có nhanh hơn không và tên model viết tắt có còn đúng không.
+    return { CLAUDE_CONFIG_DIR: dir, ...(t ? { CLAUDE_CODE_OAUTH_TOKEN: t } : {}), ...(process.env.SYNCHRO_CLAUDE_QUIET === "1" ? { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" } : {}) };
   }
   if (cli === "codex") return { CODEX_HOME: dir };
   if (cli === "grok") return { HOME: dir, GROK_HOME: path.join(dir, ".grok"), GROK_DISABLE_AUTOUPDATER: "1" };

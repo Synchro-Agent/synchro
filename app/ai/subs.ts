@@ -692,6 +692,7 @@ export function linksIn(text: string): WebSource[] {
 
 // Việc phụ chờ chỗ tối đa chừng này (bằng lời gọi chạy thẳng ở /api/llm): hơn nữa thì báo máy chủ bận, không giữ yêu cầu mãi.
 const SIDE_WAIT_MS = 120_000;
+const STREAMS = new Set<Cli>(["claude", "grok"]), WAIT_TELL_MS = 8000;
 // Việc nền của một tài khoản chạy tối đa chừng này cùng lúc: sau một câu trả lời có artifact từng là rút bộ nhớ, chưng cất, đặt tên và hai phản biện cùng lúc, tức 5 CLI ăn vào mức chung của tài khoản (6),
 // tin nhắn kế tiếp có thể phải xếp hàng sau chính những việc đó. Chúng không ai đứng chờ nên được chờ lâu hơn việc phụ thường.
 const BG_MAX = 2, BG_WAIT_MS = 5 * 60_000;
@@ -775,11 +776,16 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   // Tính cả ảnh, PDF gửi nguyên dạng: bản scan lớn tới sự kiện đầu rất chậm, từng bị coi là treo và chuyển sang CLI không đọc được PDF gốc.
   if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") + col.atts.reduce((n, a) => n + a.data.length, 0) > 400_000) lim.first *= 3;
   const ws: WatchState = { start: T0, last: 0, alive: 0, waiting: false };
-  let stalled: "first" | "idle" | null = null, slowTold = false;
+  let stalled: "first" | "idle" | null = null, slowTold = false, waitTold = "";
   const watch = setInterval(() => {
     const a = o.mcp?.alive?.() ?? 0;
     if (a > T0) ws.alive = a;
     // CLI hiện chữ dần mà sau 30 giây chưa có gì: nói cho người dùng biết đang xảy ra chuyện gì, đừng để họ nhìn vòng xoay tới lúc tự chuyển model.
+    // Claude, Grok hiện chữ dần nên phần lớn lượt có chữ trong vài giây. Quá 8 giây mà chưa có chữ: nói đúng đang tắc ở đâu, thay vì "Đang suy nghĩ…" cho cả lúc CLI còn đang khởi động. Codex, Antigravity đã có dòng riêng lúc bắt đầu.
+    if (STREAMS.has(cli) && !tm.text && !a && !ws.waiting && Date.now() - ws.start > WAIT_TELL_MS) {
+      const stage = !tm.event ? `Đang khởi động ${SUB[cli].name}` : ws.last ? `${SUB[cli].name} đang suy nghĩ, chưa viết chữ nào` : `${SUB[cli].name} đã nhận yêu cầu, đang chờ model phản hồi`;
+      if (stage !== waitTold) { waitTold = stage; o.onStatus?.(stage); }
+    }
     if (!slowTold && lim.first <= 120_000 && lim.first > 30_000 && !ws.waiting && !ws.last && !ws.alive && Date.now() - ws.start > 30_000) { slowTold = true; o.onStatus?.(`${SUB[cli].name} phản hồi chậm hơn bình thường, Synchro vẫn đang chờ`); }
     stalled = stallOf(ws, lim);
     if (stalled) { clearInterval(watch); wd.abort(); }
@@ -808,7 +814,8 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const addSources = (items: WebSource[]) => { const fresh = items.filter((x) => !seenSrc.has(x.url)); for (const x of fresh) seenSrc.add(x.url); if (fresh.length) o.onSources?.(fresh); };
   try {
   for await (const e of eng.runTurn(req)) {
-    tm.event ??= Date.now() - T0;
+    // event: dòng đầu CLI thật sự in ra. Dấu hiệu của chính Synchro (pool, status) không tính: lượt trong hồ từng ghi event=1 dù CLI còn đang khởi động.
+    if (e.kind !== "pool" && e.kind !== "status") tm.event ??= Date.now() - T0;
     if (e.kind === "text") { tm.text ??= Date.now() - T0; chunks++; ws.last = Date.now(); text += e.text; o.onDelta?.(e.text); }
     else if (e.kind === "activity") { tm.active ??= Date.now() - T0; ws.last = Date.now(); }
     else if (e.kind === "status") {

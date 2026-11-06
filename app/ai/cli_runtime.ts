@@ -168,7 +168,7 @@ export function find(cli: Cli): string | null {
 // MCP_TOOL_TIMEOUT: thời gian chờ một lời gọi công cụ qua cầu nối MCP của Claude Code (lệnh trong workspace chạy tới 10 phút).
 // GROK_HOME: thư mục cấu hình / đăng nhập của Grok CLI; GROK_DISABLE_AUTOUPDATER: Grok CLI không tự tải bản mới vào thư mục của từng tài khoản;
 // GROK_BIN_DIR: nơi script cài của xAI đặt lệnh grok (chỉ dùng khi cài).
-export const ENV_ALLOW = ["SYNCHRO_CLI_OWNER", "LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR"] as const;
+export const ENV_ALLOW = ["SYNCHRO_CLI_OWNER", "LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR"] as const;
 const basePath = () => [noBrowserDir(), binDir(), path.dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 
 /** Môi trường cho tiến trình CLI: chỉ các biến trong ENV_ALLOW; biến khác (kể cả truyền vào) bị bỏ. */

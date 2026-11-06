@@ -136,6 +136,19 @@ try {
     PO.dropAll();
   }
 
+  console.log("5. Chờ lâu mà chưa có chữ: nói đúng đang tắc ở đâu");
+  {
+    user = await fresh();
+    fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 9500 }));
+    const told = [];
+    const r = await SUBS.subTurn({ user, model: "sub-claude/haiku", system: "x", messages: [{ role: "user", content: "chào" }], effort: "low", onStatus: (t) => told.push(t) });
+    ok(r.status === 200 && told.includes("Đang khởi động Claude"), "CLI chưa khởi động xong: báo đang khởi động, không báo đang suy nghĩ", told.join(" | "));
+    fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
+    const told2 = [];
+    await SUBS.subTurn({ user, model: "sub-claude/haiku", system: "x", messages: [{ role: "user", content: "chào" }], effort: "low", onStatus: (t) => told2.push(t) });
+    ok(!told2.length, "có chữ ngay: không thêm dòng trạng thái nào", told2.join(" | "));
+  }
+
   console.log("\n" + (fail ? `${pass}/${pass + fail} đạt` : `${pass}/${pass} đạt`));
 } finally {
   console.log = log0;
