@@ -55,7 +55,11 @@ if [ "$fails" -lt "$FAILS_MAX" ]; then save failing; exit 0; fi
 touch "$RESTARTS"; awk -v c="$((now - 86400))" '$1 > c' "$RESTARTS" > "$RESTARTS.tmp" && mv "$RESTARTS.tmp" "$RESTARTS"
 last=$(tail -n 1 "$RESTARTS"); hour=$(awk -v c="$((now - 3600))" '$1 > c' "$RESTARTS" | wc -l | tr -d ' ')
 if [ "$hour" -ge "$PER_HOUR" ]; then
-  [ "$prev" = gave_up ] || event gave_up "$hour"
+  # Web đang chết thì trang Sức khỏe và thư của web đều không tới ai: lệnh báo động do chủ máy cấu hình ở /etc/synchro-ops.env (của root), chạy một lần mỗi lần chuyển sang trạng thái này.
+  if [ "$prev" != gave_up ]; then
+    event gave_up "$hour"
+    if [ -n "${WATCHDOG_ALERT_CMD:-}" ]; then sh -c "$WATCHDOG_ALERT_CMD" </dev/null >/dev/null 2>&1 || event alert_failed; fi
+  fi
   save gave_up; exit 0
 fi
 if [ -n "$last" ] && [ "$((now - last))" -lt "$GAP" ]; then save failing; exit 0; fi

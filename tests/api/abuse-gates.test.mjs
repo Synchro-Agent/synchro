@@ -14,7 +14,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-abuse-"));
 const mockDb = path.join(process.cwd(), "data-mock", "synchro.db");
 process.env.DATA_DIR = tmp;
 process.env.SYNCHRO_MIN_FREE_MB = "1";
-const { chatstore, artifactstore, authstore } = await loadTs(["chatstore", "artifactstore", "authstore"]);
+const { chatstore, artifactstore, authstore, runs } = await loadTs(["chatstore", "artifactstore", "authstore", "runs"]);
 const { pushItems, SYNC_LIMITS } = chatstore;
 authstore.db().pragma("foreign_keys = OFF"); // Thư mục tạm không có tài khoản nào.
 const item = (id, n, upd = Date.now(), extra = {}) => ({ kind: "chat", id, upd, data: JSON.stringify({ t: "x".repeat(n) }), ...extra });
@@ -39,6 +39,9 @@ ok(!!artifactstore.saveArtifact("u1", "c1", art), "đĩa còn chỗ: artifact l�
 code = 0;
 try { artifactstore.saveArtifact("u1", "c1", { ...art, content: "y".repeat(5000) }, { maxBytes: 1000 }); } catch (e) { code = e.status; }
 ok(code === 413, "artifact quá tổng dung lượng: báo 413", code);
+const locked = authstore.createUser({ email: "lock@synchro.test", name: "L", verified: false, passwordHash: "x" });
+const real = authstore.createUser({ email: "real@synchro.test", name: "R", verified: true, passwordHash: "x" });
+ok(runs.turnsLimit(locked) < runs.turnsLimit(real), "tài khoản chưa xác minh chạy được ít lượt cùng lúc hơn", `${runs.turnsLimit(locked)} / ${runs.turnsLimit(real)}`);
 fs.rmSync(tmp, { recursive: true, force: true });
 
 // ---- qua API ----

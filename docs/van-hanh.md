@@ -18,7 +18,7 @@ systemctl status synchro-watchdog.timer
 cat /var/lib/synchro-ops/watchdog-state.json; tail /var/lib/synchro-ops/watchdog.jsonl
 ```
 
-Cấu hình ở `/etc/synchro-ops.env` (chỉ root đọc): `APP`, `PM2`, `PORT`, `WEB_USER`, `DATA_DIR`, `SYNCHRO_ENGINE_HOME`, `SYNCHRO_BACKUP_HOOK`. Nên đặt `DATA_DIR` ở đây nếu khác `<app>/data`; thiếu thì `backup.sh` đọc từ `.env.production` (của web user) nhưng từ chối nếu thư mục không thuộc `WEB_USER` (mặc định `synchro`) hoặc nằm trong nơi sao lưu.
+Cấu hình ở `/etc/synchro-ops.env` (chỉ root đọc): `APP`, `PM2`, `PORT`, `WEB_USER`, `DATA_DIR`, `SYNCHRO_ENGINE_HOME`, `SYNCHRO_BACKUP_HOOK`, `WATCHDOG_ALERT_CMD` (lệnh chạy khi watchdog bỏ cuộc, ví dụ gửi thư bằng `mail` của máy, vì lúc đó web đã chết nên trang Sức khỏe không báo được). Nên đặt `DATA_DIR` ở đây nếu khác `<app>/data`; thiếu thì `backup.sh` đọc từ `.env.production` (của web user) nhưng từ chối nếu thư mục không thuộc `WEB_USER` (mặc định `synchro`) hoặc nằm trong nơi sao lưu.
 
 Giới hạn lượt model (đặt trong `.env.production`): `SYNCHRO_TURNS_PER_ACCOUNT` (mặc định 4, quản trị viên gấp 3), `SYNCHRO_TURN_QUEUE` (8), `SYNCHRO_TURNS_GLOBAL` (mặc định theo RAM: 70% RAM chia 400 MB mỗi CLI, chưa đo RSS thật), `SYNCHRO_MIN_FREE_RAM_MB` (300). Nới riêng một tài khoản bằng cài đặt `turns_limit:<id người dùng>`. Trang Sức khỏe hiện số lượt đang chạy, đang chờ, bị từ chối.
 

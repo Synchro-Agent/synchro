@@ -4,7 +4,7 @@
 // không đọc được kết quả và không nên làm hai lần (gửi thư, tạo hóa đơn: markEffect).
 import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, getSetting, getUser, isAdmin, type UserRow } from "./authstore";
+import { db, getSetting, getUser, isAdmin, verifyLocked, type UserRow } from "./authstore";
 import { noteRun, recordOps } from "./ops";
 import { accountLimit, acquire, noteRefused, queuedOf, queueLimit, type WaitWhy } from "./turngate";
 
@@ -255,8 +255,8 @@ const WAIT_NOTE: Record<WaitWhy, string> = {
   account: "Tài khoản của bạn đang chạy nhiều lượt cùng lúc. Lượt này đang xếp hàng và sẽ tự chạy khi có lượt xong.",
   server: "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ.",
 };
-/** Quản trị viên chỉnh riêng cho một tài khoản qua cài đặt turns_limit:<id> (không có giao diện, dùng khi cần nới cho một người). */
-export const turnsLimit = (user: UserRow) => Number(getSetting(`turns_limit:${user.id}`, "")) || accountLimit() * (isAdmin(user) ? 3 : 1);
+/** Quản trị viên chỉnh riêng cho một tài khoản qua cài đặt turns_limit:<id> (không có giao diện, dùng khi cần nới cho một người). Tài khoản chưa xác minh email: một nửa, để đăng ký hàng loạt tốn nhiều hơn. */
+export const turnsLimit = (user: UserRow) => Number(getSetting(`turns_limit:${user.id}`, "")) || (verifyLocked(user) ? Math.max(1, Math.ceil(accountLimit() / 2)) : accountLimit() * (isAdmin(user) ? 3 : 1));
 /** Tài khoản đã xếp đầy hàng chờ: /api/llm từ chối ngay. Lượt của việc tự động và lượt khôi phục sau khởi động lại không qua đây, chúng luôn được xếp hàng. */
 export function queueFull(uid: string) {
   const own = Number(getSetting(`turns_limit:${uid}`, ""));

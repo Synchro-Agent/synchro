@@ -1,4 +1,4 @@
-import { current, limit } from "../../authstore";
+import { current, limit, verifyLocked } from "../../authstore";
 import { overLimit, usageScope } from "../../usage";
 import { chatPost } from "../../chatengine";
 import { queueFull, startRun, turnsLimit } from "../../runs";
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   // Mỗi lượt là một CLI chạy trên máy chủ: chặn gửi dồn trước khi đọc nội dung.
-  try { limit("llm:" + c.user.id, 240, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
+  try { limit("llm:" + c.user.id, verifyLocked(c.user) ? 60 : 240, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
   const body = await req.json();
   // Thông tin việc tự động chỉ do bộ hẹn giờ của máy chủ đặt (tasks.ts), không nhận từ trình duyệt.
   if (body && typeof body === "object") delete body.task;
