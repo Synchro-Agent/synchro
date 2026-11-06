@@ -72,3 +72,16 @@ export const FX_EN2VI: Record<string, string> = {
   "These limits cover models reached through a shared API key, where usage is the real API cost of each call. Models a person signs in to with their own plan follow that plan's limits instead.": "Các hạn mức này áp dụng cho model chạy qua khóa API dùng chung, tính theo chi phí API thật của mỗi lần gọi. Model mà mỗi người đăng nhập bằng gói riêng thì theo hạn mức của gói đó.",
   "No shared API key is linked, so these limits have no effect right now. Everyone uses their own AI plan, and that plan's limits apply.": "Chưa liên kết khóa API dùng chung nên các hạn mức này hiện chưa có tác dụng. Mọi người dùng gói AI của chính mình và theo hạn mức của gói đó.",
 };
+// Synchro Code: lượt chạy nền, workspace không dùng được.
+Object.assign(FX_VI2EN, {
+  "Chưa làm gì trong repo của bạn.": "Nothing was changed in your repo.",
+  "Trả lời không cần workspace": "Answer without workspace",
+  "Trả lời không có workspace: chưa sửa tệp nào của bạn.": "Answered without a workspace: none of your files were changed.",
+  "Không kiểm tra được workspace.": "Couldn't check the workspace.",
+  "Workspace chưa sẵn sàng.": "The workspace isn't ready yet.",
+  "Máy chủ chưa bật workspace.": "The server doesn't have the workspace turned on.",
+  "Không kết nối được workspace.": "Couldn't connect to the workspace.",
+  "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.": "The server restarted or the connection was down too long, so this turn can't be followed any more. Work already done is still in the workspace.",
+  "Phiên này đang có một lượt chạy.": "This session already has a turn running.",
+  "Không có ai duyệt sau 30 phút nên lượt này đã dừng.": "Nobody approved within 30 minutes, so this turn stopped.",
+});

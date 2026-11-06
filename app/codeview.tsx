@@ -37,7 +37,7 @@ type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?:
 // steps/plan: lượt trả lời do agent (có workspace) làm: đoạn văn xen kẽ công cụ, và danh sách việc.
 /** files: tệp / thư mục gửi kèm (tên trong filestate; Synchro Code chép nguyên vào workspace .synchro/uploads). */
 type Sent = { name: string; folder?: boolean; count?: number; id?: string };
-type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; files?: Sent[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number }; auto?: boolean };
+type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; files?: Sent[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number }; auto?: boolean; wsWait?: string; noWs?: boolean };
 // Chế độ quyền của phiên: hỏi trước mọi thay đổi / tự sửa tệp (hỏi trước khi chạy lệnh) / tự động (không hỏi).
 const PERMS: { k: PermMode; label: string; short: string; desc: string }[] = [
   { k: "ask", label: "Hỏi trước", short: "Hỏi trước", desc: "Hỏi bạn trước mỗi lần sửa tệp hay chạy lệnh (lệnh chỉ đọc như xem, tìm, git status thì không hỏi)." },
@@ -559,8 +559,35 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     })();
   };
 
+  // Không bao giờ tự chuyển sang trả lời suông khi người dùng tưởng repo đang được sửa: chưa biết trạng thái thì hỏi trước,
+  // workspace không dùng được thì nói rõ trong luồng và để người dùng chọn. Phiên đã chọn "trả lời không cần workspace" thì không hỏi lại.
   const run = (id: number, hist: Node[], userText: string, userAtts: Att[], md: string) => {
-    if (status?.available) return runAgent(id, hist, userText, md);
+    const known = useCodeUi.getState().status;
+    if (known?.available) return runAgent(id, hist, userText, md);
+    const gen = ++genRef.current;
+    activeRef.current = id;
+    setBusy(true);
+    void wsStatus().catch(() => ({ available: false, reason: "Không kiểm tra được workspace." })).then((st) => {
+      if (gen !== genRef.current) return;
+      setStatus(st);
+      if (st.available) return runAgent(id, hist, userText, md);
+      if (hist.some((n) => n.noWs)) { patchNode(id, (n) => ({ ...n, noWs: true })); return runChat(id, hist, userText, userAtts, md); }
+      activeRef.current = null;
+      setBusy(false);
+      patchNode(id, (n) => ({ ...n, done: true, wsWait: st.reason || "Workspace chưa sẵn sàng." }));
+    });
+  };
+  const wsRetry = (n: Node) => {
+    if (busy) return;
+    patchNode(n.id, (x) => ({ ...x, done: false, wsWait: undefined }));
+    run(n.id, path, n.user, n.atts, n.mode);
+  };
+  const wsSkip = (n: Node) => {
+    if (busy) return;
+    patchNode(n.id, (x) => ({ ...x, done: false, wsWait: undefined, noWs: true }));
+    runChat(n.id, path, n.user, n.atts, n.mode);
+  };
+  const runChat = (id: number, hist: Node[], userText: string, userAtts: Att[], md: string) => {
     const gen = ++genRef.current;
     activeRef.current = id;
     setBusy(true);
@@ -571,7 +598,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       if (n.ai && n.id !== id) messages.push({ role: "assistant", content: n.ai + workLog(n.steps) });
     });
     const buildSystem = (snips: { file: string; name: string; code: string }[]) => [
-      "Bạn là Synchro Code, trợ lý lập trình.",
+      "Bạn là Synchro Code, trợ lý lập trình. Lượt này không có workspace: bạn không đọc hay sửa được tệp nào của người dùng, đừng nói như đã làm.",
       MODE_SYS[md],
       STYLE_SYS[styleNow],
       md === "auto" && `Gợi ý giai đoạn mở đầu cho yêu cầu này: ${guessMode(userText, userAtts)} (tự đổi nếu thấy cần).`,
@@ -1131,6 +1158,13 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                     <div className="cv-ai">
                       <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
                       <div className={`ai-msg${n.done ? "" : " ai-streaming"}`}>{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} streaming={!n.done} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      {n.noWs && <div className="cv-nows"><I.M icon="Alert" size={13} />Trả lời không có workspace: chưa sửa tệp nào của bạn.</div>}
+                      {n.wsWait && (
+                        <div className="cv-wswait" role="alert">
+                          <div className="cv-wswait-t"><I.M icon="Alert" size={15} /><span><b>Chưa làm gì trong repo của bạn.</b> {n.wsWait}</span></div>
+                          {n.id === lastId && <div className="cv-wswait-a"><button className="btn dark" disabled={busy} onClick={() => wsRetry(n)}>Thử lại</button><button className="btn" disabled={busy} onClick={() => wsSkip(n)}>Trả lời không cần workspace</button></div>}
+                        </div>
+                      )}
                       {n.stopped && <div className="cv-stopped"><I.Stop size={11} />Đã dừng · giữ lại phần đã viết</div>}
                       {n.done && n.ai && (
                         <div className="actions in">

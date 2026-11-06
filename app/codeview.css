@@ -47,6 +47,11 @@
 }
 [data-theme="dark"] .cv-mode.m-plan {color:#c1a6ff
 }
+.cv-nows {display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);margin:0 0 6px;font-family:var(--font-sans)}
+.cv-wswait {display:flex;flex-direction:column;gap:10px;margin-top:4px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-2,var(--hover));font-family:var(--font-sans);font-size:13.5px;line-height:1.45}
+.cv-wswait-t {display:flex;gap:8px;align-items:flex-start}
+.cv-wswait-t svg {flex:none;margin-top:2px}
+.cv-wswait-a {display:flex;gap:8px;flex-wrap:wrap}
 .cv-stopped {display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);margin-top:2px;font-family:var(--font-sans)
 }
 .cv-ai .actions {margin-bottom:2px
