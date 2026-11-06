@@ -1661,6 +1661,10 @@ Object.assign(VI2EN, {
   "Bạn có thể đóng cửa sổ này.": "You can close this window.", "Chưa kết nối được": "Couldn't connect", "Máy chủ im lặng quá lâu khi đang chạy công cụ.": "The server went silent for too long while running the tool.",
 });
 RULES_EN.unshift(
+  // Tóm tắt kết quả công cụ trong nhật ký bị cắt ở 140 ký tự nên chỉ khớp phần đầu.
+  [/^Không rõ kết quả khi gọi ([^:]+):[\s\S]*$/, (m) => `Result unknown for ${m[1]}. It may have finished there, so check before trying again.`],
+  [/^Tạm thời chưa gọi được ([^:]+):[\s\S]*$/, (m) => `Couldn't reach ${m[1]} right now. Try again in a few minutes.`],
+  [/^Chờ bạn trả lời tới (\S+)\. Quá giờ công cụ không chạy\. Nhắn trong khung chat cũng được: công cụ không chạy và Synchro đọc tin nhắn\.$/, (m) => `Waiting for your answer until ${m[1]}. After that the tool won't run. You can also reply in the chat box: the tool won't run and Synchro reads your message.`],
   [/^Trang đăng nhập của (\S+) từ chối OAuth client này \((.+)\)\. Hãy kiểm tra lại Client ID và địa chỉ quay về đã khai báo với nhà cung cấp: (\S+)$/, (m) => `The sign-in page at ${m[1]} refused this OAuth client (${m[2]}). Check the Client ID and the return address registered with the vendor: ${m[3]}`],
   [/^Không kết nối được tới (\S+)\. Hãy thử lại sau ít phút\.$/, (m) => `Couldn't reach ${m[1]}. Try again in a few minutes.`],
   [/^(.+) đang tạm thời không phản hồi(?: \(lỗi (\d+)\))?\. Đây là sự cố phía nhà cung cấp; hãy thử lại sau ít phút\.$/, (m) => `${m[1]} isn't responding right now${m[2] ? ` (error ${m[2]})` : ""}. This is a problem on the vendor's side; try again in a few minutes.`],

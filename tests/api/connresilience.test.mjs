@@ -1027,6 +1027,34 @@ try {
     ok(aborted, "đóng cầu nối: lời gọi đang chờ duyệt thôi chờ, duyệt muộn không chạy");
   }
 
+  console.log("45. Vẫn thử đăng nhập với hãng chưa mở");
+  {
+    const real = globalThis.fetch;
+    const hits = [];
+    // Không gọi ra hãng thật: mọi địa chỉ đều trả lời ngay, đăng ký bị từ chối như Figma.
+    globalThis.fetch = async (u, init) => { hits.push(String(u)); return new Response("{}", { status: /register/.test(String(u)) ? 403 : init?.method === "POST" ? 401 : 404 }); };
+    try {
+      const refused = await thrown(C.addConnector(req, uid, { dir: "figma" }, pol));
+      ok(/Figma/.test(refused) && !hits.length, "bình thường: chưa thử gì, báo lý do của hãng", `${refused} ${hits}`);
+      const msg = await thrown(C.addConnector(req, uid, { dir: "figma", tryAnyway: true }, pol));
+      ok(hits.length > 0 && !!msg, "bấm thử: có dò thật, không được thì báo lỗi", `${msg} ${hits}`);
+      ok(!C.listConnectors(uid).some((x) => x.dir === "figma"), "thử không được: không để lại hàng nào");
+    } finally { globalThis.fetch = real; }
+    wipe();
+  }
+
+  console.log("46. Công cụ ghi không rõ kết quả: không khuyên thử lại");
+  {
+    const { connector } = await add();
+    AS.db().prepare("UPDATE connectors SET perms = ? WHERE id = ?").run(JSON.stringify({ create_page: "allow" }), connector.id);
+    const s = session("mixed");
+    S.down = 1; S.downOnly = "tools/call";
+    const out = await s.call(s.tools.find((t) => t.tool.name === "create_page").fq, { title: "x" });
+    ok(out.is_error && /Không rõ kết quả/.test(out.content) && !/hãy thử lại sau ít phút/.test(out.content) && /đừng tự gọi lại/.test(out.content), "lời nhắn không mâu thuẫn", out.content);
+    await s.close();
+    wipe();
+  }
+
 } finally {
   server.closeAllConnections?.(); server.close(); other.close();
   fs.rmSync(tmp, { recursive: true, force: true });

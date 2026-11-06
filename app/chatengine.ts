@@ -398,7 +398,7 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const wait = waitAnswer(x.uid, id, stops.length > 1 ? AbortSignal.any(stops) : stops[0]);
     const late = setTimeout(() => answerAsk(x.uid, id, { ok: false, note: ASK_LATE }), Math.min(ASK_WAIT, room));
     const offMsg = onInbox(() => answerAsk(x.uid, id, { ok: false, note: ASK_TYPED }));
-    progress("ask", JSON.stringify(askOf(x, c, id)));
+    progress("ask", JSON.stringify({ ...askOf(x, c, id), until: Date.now() + Math.min(ASK_WAIT, room) }));
     progress("step", "Đang chờ bạn duyệt");
     // Antigravity, Grok: lượt đang chờ người dùng thì nhả chỗ để đoạn chat khác của tài khoản này không phải xếp hàng sau nó.
     x.park?.();

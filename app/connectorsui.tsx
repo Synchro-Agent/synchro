@@ -345,7 +345,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
   );
 }
 
-function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: ReadonlySet<string>; errs: Record<string, string>; login: Pick<ReturnType<typeof useLoginFlow>, "pending" | "blocked" | "reopen" | "stale">; onClose: () => void; onConnect: (e: DirEntry) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
+function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: ReadonlySet<string>; errs: Record<string, string>; login: Pick<ReturnType<typeof useLoginFlow>, "pending" | "blocked" | "reopen" | "stale">; onClose: () => void; onConnect: (e: DirEntry, tryAnyway?: boolean) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
   const pol = data.policy;
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<DirCat | "all">("all");
@@ -384,7 +384,7 @@ function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCred
                   <div className="cn-vendor">
                     <p>{e.access.why}</p>
                     <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
-                    <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button></div>
+                    <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button><button className="cn-link" disabled={busy.has(e.id)} onClick={() => onConnect(e, true)}>Try sign-in anyway</button></div>
                   </div>
                 )}
                 {err && <div className="api-err in cn-item-err" role="alert"><I.Alert size={14} /><span>{err}</span><button className="icon-btn" aria-label="Dismiss" onClick={() => onDismiss(e.id)}><I.X size={13} /></button></div>}
@@ -493,10 +493,10 @@ export function ConnectorsPanel() {
   }, { any: true, onList: (d) => setData(d) });
   const finished = (r: Res) => { apply(r); if (r.connector?.status === "ok") { app.say(`Connected ${r.connector.name}`); setOpen(r.connector.id); } };
 
-  const connectEntry = async (e: DirEntry) => {
+  const connectEntry = async (e: DirEntry, tryAnyway = false) => {
     mark(e.id, true);
     setErrs(({ [e.id]: _, ...rest }) => rest);
-    try { const r = await api("POST", "/api/connectors", { dir: e.id }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
+    try { const r = await api("POST", "/api/connectors", { dir: e.id, ...(tryAnyway ? { tryAnyway } : {}) }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
     catch (x) { setErrs((m) => ({ ...m, [e.id]: (x as Error).message })); load(); }
     finally { mark(e.id, false); }
   };

@@ -448,7 +448,7 @@ async function connectNow(req: Request, uid: string, id: string, pol: ConnPolicy
   }
 }
 
-export async function addConnector(req: Request, uid: string, o: { name?: string; url?: string; dir?: string; clientId?: string; clientSecret?: string; token?: string; header?: string }, pol: ConnPolicy = FULL_CONN) {
+export async function addConnector(req: Request, uid: string, o: { name?: string; url?: string; dir?: string; clientId?: string; clientSecret?: string; token?: string; header?: string; tryAnyway?: boolean }, pol: ConnPolicy = FULL_CONN) {
   let entry = o.dir ? DIRECTORY.find((x) => x.id === o.dir) : undefined;
   if (o.dir && !entry) throw new ConnectorError("Không tìm thấy connector này trong danh mục.");
   // Dán đúng địa chỉ của một connector có trong danh mục thì coi là connector đó (có logo, theo quyền của danh mục).
@@ -478,7 +478,8 @@ export async function addConnector(req: Request, uid: string, o: { name?: string
     return connect(req, uid, same.id, pol, o);
   }
   // Hãng chưa mở cho Synchro và người dùng chưa có token / client riêng: chưa thử làm gì, báo rõ thay vì mở cửa sổ đăng nhập rồi hỏng.
-  if (entry?.access && !hasToken && !clientId) throw new ConnectorError(`${entry.access.whyVi} Bạn có thể thử bằng token hoặc API key, hoặc OAuth Client ID riêng trong Cài đặt nâng cao.`, 400);
+  // tryAnyway: người dùng tự bấm thử (hãng có thể đã mở mà danh mục chưa cập nhật). Vẫn qua bước dò trang đăng nhập; không được thì báo lỗi và không để lại hàng nào.
+  if (entry?.access && !hasToken && !clientId && !o.tryAnyway) throw new ConnectorError(`${entry.access.whyVi} Bạn có thể thử bằng token hoặc API key, hoặc OAuth Client ID riêng trong Cài đặt nâng cao.`, 400);
   const n = (t.prepare("SELECT COUNT(*) n FROM connectors WHERE user_id = ?").get(uid) as { n: number }).n;
   if (n >= MAX_PER_USER) throw new ConnectorError(`Mỗi tài khoản có tối đa ${MAX_PER_USER} connector.`);
   const id = "cn_" + randomToken(9);
@@ -727,7 +728,7 @@ export class ConnectorSession {
       if (e instanceof McpError && e.kind === "rpc" && (e.code === -32602 || e.code === -32601) && /unknown tool|tool not found|no such tool|not found/i.test(e.message)) syncTools(ct.cid).catch(() => {});
       // Lỗi tạm thời (mạng, quá giờ, hãng đang lỗi): connector không bị tắt. Công cụ ghi có thể đã chạy xong dù không nhận được trả lời.
       const transient = e instanceof TempFail || (e instanceof McpError && e.kind === "protocol" && e.status < 400);
-      if (transient && sent && !readLike(ct.tool)) return { content: `Không rõ kết quả khi gọi ${ct.cname}: ${errText(e)} Công cụ này có thể đã chạy xong ở phía ${ct.cname}. Hãy kiểm tra trước khi thử lại, đừng tự gọi lại ngay.`, is_error: true };
+      if (transient && sent && !readLike(ct.tool)) return { content: `Không rõ kết quả khi gọi ${ct.cname}: ${errText(e).replace(/; hãy thử lại sau ít phút\.$/, ".")} Công cụ này có thể đã chạy xong ở phía ${ct.cname}. Hãy kiểm tra trước khi thử lại, đừng tự gọi lại ngay.`, is_error: true };
       if (transient) return { content: `Tạm thời chưa gọi được ${ct.cname}: ${errText(e)} Có thể thử lại một lần sau ít phút.`, is_error: true };
       return { content: `Không gọi được ${ct.cname}: ${errText(e)}`, is_error: true };
     }

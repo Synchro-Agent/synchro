@@ -14,7 +14,7 @@ import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
 // connector: công cụ connector (conn: hiện logo; about: mô tả công cụ; destructive: cảnh báo xóa dữ liệu); chat = cho phép trong đoạn chat này.
-export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; destructive?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" | "typed" };
+export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" | "typed" };
 // steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được); think: suy nghĩ của model.
 export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | ToolStep;
 /** Kiểu xem lượt của agent: bình thường (gọn), kèm suy nghĩ, chi tiết (mọi công cụ mở sẵn, kèm đầu vào / đầu ra). */
@@ -159,6 +159,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
       {a.about && <p className="ag-ask-about" data-notr>{a.about}</p>}
       {a.destructive && <div className="ap-warn"><I.Alert size={14} /><span>{tr("Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.")}</span></div>}
       {a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
+      {conn && a.until ? <p className="ag-ask-about">{tr(`Chờ bạn trả lời tới ${new Date(a.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "\u00a0")}. Quá giờ công cụ không chạy. Nhắn trong khung chat cũng được: công cụ không chạy và Synchro đọc tin nhắn.`)}</p> : null}
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{tr(err)}</span></div>}
       {note !== null ? (
         <div className="ag-ask-note">

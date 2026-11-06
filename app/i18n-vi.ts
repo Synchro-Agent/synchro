@@ -922,7 +922,7 @@ Object.assign(EN2VI, {
 Object.assign(EN2VI, {
   "Your browser blocked the sign-in window.": "Trình duyệt đã chặn cửa sổ đăng nhập.", "Open sign-in window": "Mở cửa sổ đăng nhập",
   "Checked just now": "Vừa kiểm tra", "Needs vendor approval": "Cần nhà cung cấp duyệt", "Waiting for you to sign in…": "Đang chờ bạn đăng nhập…", "Token rejected": "Token bị từ chối",
-  "Update token": "Nhập lại token", "Update OAuth client": "Đổi OAuth client", "Reconnect": "Kết nối lại", "Use a token instead": "Dùng token thay thế", "Use my OAuth client": "Dùng OAuth client của tôi",
+  "Update token": "Nhập lại token", "Update OAuth client": "Đổi OAuth client", "Try sign-in anyway": "Vẫn thử đăng nhập", "Reconnect": "Kết nối lại", "Use a token instead": "Dùng token thay thế", "Use my OAuth client": "Dùng OAuth client của tôi",
   "You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.": "Bạn có thể thử bằng token hoặc API key của mình, dù hãng này có thể không nhận. Nếu hãng đã cấp cho bạn một OAuth client, bạn có thể dùng client đó.",
   "A tool needs more access than this sign-in allows. Other tools keep working.": "Một công cụ cần nhiều quyền hơn lần đăng nhập này cho phép. Các công cụ khác vẫn chạy bình thường.",
   "Grant more access": "Cấp thêm quyền", "Last check failed. Tools keep working with the list from the last good check.": "Lần kiểm tra gần nhất không thành công. Công cụ vẫn chạy theo danh sách của lần kiểm tra tốt gần nhất.",
