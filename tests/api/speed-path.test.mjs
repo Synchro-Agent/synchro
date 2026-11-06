@@ -25,8 +25,8 @@ for (const f of ["claude", "mock-cli-common.cjs"]) fs.copyFileSync(path.join(SRC
 fs.chmodSync(path.join(BIN, "claude"), 0o755);
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
 
-const { memory: MEM, router: R, "ai/anymodel": AM, "ai/cli_pool": PO, chatengine: CH, authstore: AU, "ai/cli_auth": A, skillstudio: ST, turngate: TG, "ai/subs": SUBS } =
-  await loadTs(["memory", "router", "ai/anymodel", "ai/cli_pool", "chatengine", "authstore", "ai/cli_auth", "skillstudio", "turngate", "ai/subs"]);
+const { "api/memory/project/route": PM, "api/critic/route": CR, memory: MEM, router: R, "ai/anymodel": AM, "ai/cli_pool": PO, chatengine: CH, authstore: AU, "ai/cli_auth": A, skillstudio: ST, turngate: TG, "ai/subs": SUBS } =
+  await loadTs(["api/memory/project/route", "api/critic/route", "memory", "router", "ai/anymodel", "ai/cli_pool", "chatengine", "authstore", "ai/cli_auth", "skillstudio", "turngate", "ai/subs"]);
 
 // Giữ lại dòng [timing] để kiểm tra các trường mà người vận hành sẽ đọc trên máy chủ thật.
 const lines = [], log0 = console.log;
@@ -147,6 +147,34 @@ try {
     const told2 = [];
     await SUBS.subTurn({ user, model: "sub-claude/haiku", system: "x", messages: [{ role: "user", content: "chào" }], effort: "low", onStatus: (t) => told2.push(t) });
     ok(!told2.length, "có chữ ngay: không thêm dòng trạng thái nào", told2.join(" | "));
+  }
+
+  console.log("6. Phản biện và rút bộ nhớ dự án chạy thật qua route");
+  {
+    const LIST = ["sub-codex/gpt-6.1-astra", "sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "sub-agy/gemini-3.8-pro", "sub-agy/gemini-3.8-flash", "sub-claude/opus", "sub-claude/sonnet", "sub-claude/haiku"];
+    ok(R.pickCritics(LIST, "anthropic", "sub-claude/opus", true).join() === "sub-codex/gpt-6-luna", "tự chạy: một model rẻ nhất của hãng khác, không phải Sol", R.pickCritics(LIST, "anthropic", "sub-claude/opus", true));
+    ok(R.pickCritics(LIST, "anthropic", "sub-claude/opus").join() === "sub-codex/gpt-6.1-sol,sub-agy/gemini-3.8-pro", "người dùng bấm: vẫn đủ hội đồng hạng cân bằng", R.pickCritics(LIST, "anthropic", "sub-claude/opus"));
+    ok(R.pickCritics(["sub-claude/sonnet", "sub-claude/haiku"], "anthropic", "sub-claude/haiku", true).join() === "sub-claude/sonnet", "chỉ một gói: không tự chấm bằng đúng model vừa viết");
+    user = await fresh();
+    const cookie = AU.createSession(user, new Request("http://x/"), "test").split(";")[0];
+    const post = (mod, url, body) => mod.POST(new Request(`http://x${url}`, { method: "POST", headers: { cookie, origin: "http://x", host: "x", "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const art = `<artifact identifier="a" type="html" title="Trang dài">${"<p>nội dung rất dài</p>\n".repeat(800)}</artifact>`;
+    lines.length = 0;
+    let r = await post(PM, "/api/memory/project", { existing: ["đã biết"], messages: [{ role: "user", text: "Làm trang web bán hàng cho shop" }, { role: "assistant", text: art }] });
+    ok(r.status === 200 && Array.isArray((await r.json()).items), "rút bộ nhớ dự án: trả danh sách");
+    ok(/haiku low .*job=project-memory/.test(lastTurn()), "chạy bằng model rẻ nhất, nỗ lực thấp, không theo model đang chọn", lastTurn());
+    ok(Number(/promptKB=(\d+)/.exec(lastTurn())?.[1] ?? 99) < 2, "artifact trong hội thoại chỉ còn tên, lời nhắc không phình theo sản phẩm", lastTurn());
+    MEM.setMemCfg(user.id, { gen: false });
+    lines.length = 0;
+    r = await post(PM, "/api/memory/project", { messages: [{ role: "user", text: "ghi nhớ giúp mình" }] });
+    ok((await r.json()).items.length === 0 && !lastTurn(), "tắt Tạo bộ nhớ từ đoạn chat: không tốn lượt nào của gói", lastTurn());
+    const code = Array.from({ length: 20 }, (_, i) => `const a${i} = ${i};`).join("\n");
+    lines.length = 0;
+    r = await post(CR, "/api/critic", { title: "x", type: "code", content: code, model: "sub-claude/opus", auto: true });
+    ok(/haiku low .*job=critic-auto/.test(lastTurn()) && lines.filter((l) => /job=critic/.test(l)).length === 1, "phản biện tự chạy: một lượt, model rẻ nhất", lines.join(" | "));
+    lines.length = 0;
+    r = await post(CR, "/api/critic", { title: "x", type: "code", content: code, model: "sub-claude/opus" });
+    ok(/sonnet low .*job=critic/.test(lastTurn()), "người dùng bấm phản biện: hạng cân bằng", lines.join(" | "));
   }
 
   console.log("\n" + (fail ? `${pass}/${pass + fail} đạt` : `${pass}/${pass} đạt`));

@@ -587,6 +587,22 @@ export function sideModel(allowed: string[], o: { avoid?: string[] } = {}): stri
   const pool = clean.length ? clean : fits.length ? fits : allowed;
   return pool.map((k, i) => ({ k, i, c: profileOf(k).cost })).sort((a, b) => a.c - b.c || lag(a.k) - lag(b.k) || a.i - b.i)[0]?.k ?? null;
 }
+/**
+ * Model cho hội đồng phản biện: mỗi hãng một model, khác hãng với model vừa viết. Người dùng bấm "Phản biện": tối đa hai model, ưu tiên hạng cân bằng (đủ giỏi, rẻ hơn hạng mạnh nhất).
+ * Tự chạy sau mỗi artifact quan trọng mà không ai bấm: từng cũng là hai CLI hạng cân bằng, tức GPT-6.1 Sol đọc cả artifact (20-22 giây mỗi lần, tính vào hạn mức của gói). Giờ một model rẻ nhất.
+ */
+export function pickCritics(allowed: string[], exclude: string, avoid: string, auto = false): string[] {
+  const order: Tier[] = auto ? ["fast", "balanced", "strong"] : ["balanced", "strong", "fast"], max = auto ? 1 : 2;
+  const byProv = new Map<string, string[]>();
+  for (const k of allowed) { const p = vendorOf(k); byProv.set(p, [...(byProv.get(p) ?? []), k]); }
+  const best = (ks: string[]) => order.map((t) => ks.find((k) => tierOf(k) === t && k !== avoid)).find(Boolean) ?? ks.find((k) => k !== avoid) ?? ks[0];
+  const others = [...byProv.entries()].filter(([p]) => p !== exclude).map(([, ks]) => best(ks));
+  // Tự chạy: chọn đúng hãng có model rẻ nhất, không phải hãng đứng đầu danh sách.
+  if (others.length) return (auto ? [...others].sort((a, b) => order.indexOf(tierOf(a)) - order.indexOf(tierOf(b))) : others).slice(0, max);
+  // Chỉ có một hãng: dùng model khác model vừa viết nếu có.
+  const own = byProv.get(exclude) ?? [...byProv.values()][0] ?? [];
+  return own.length ? [best(own)] : [];
+}
 // Câu cần dữ liệu mới hoặc địa chỉ web: để lượt đầy đủ có công cụ trả lời.
 const FRESH = W("(?<!đánh )giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời tiết|hiện nay|hiện tại|bây giờ|năm nay|kết quả|(?<!du )lịch(?! sử)|latest|news|today|price|weather|current|score");
 const LONG_WORK = W("thông cáo|fanpage|mô tả công việc|press release|job description|bản đề xuất|cv|resume|cover letter|sơ yếu lý lịch|báo cáo|report|hợp đồng|đề xuất|proposal|kế hoạch|kịch bản|sách|ebook|tệp|file|word|pdf|excel|docx|artifact|tiểu luận|luận văn|thuyết trình|landing|seo");

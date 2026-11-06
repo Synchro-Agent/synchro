@@ -249,7 +249,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const eff = clampEffort(isEffort(effort) ? effort : "medium", cap, kind);
   const capped = cap !== "max";
   const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
-  useEffect(() => { setActiveEffort(autoEff ? "auto" : eff); warmChoice(); }, [eff, autoEff]);
+  useEffect(() => { setActiveEffort(autoEff ? "auto" : eff); }, [eff, autoEff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
   // Đo chiều cao thật của khung lúc nó gắn vào trang (MsubBody): ước lượng theo số dòng từng bỏ sót ghi chú gói, nên danh sách Gemini
   // bị đặt ngang hàng rồi phải cuộn trong một khung thấp dù phía trên còn nhiều chỗ.
@@ -1191,7 +1191,9 @@ export default function Home() {
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
   useEffect(() => { setActiveModel(model); }, [model]);
-  useEffect(() => { if (model) warmChoice(); }, [model]);
+  // Đổi model hoặc nỗ lực: khởi động sẵn đúng lựa chọn mới (chạy sau khi nỗ lực đã được hạ theo giới hạn).
+  const [effortPick] = usePref("effort", "auto");
+  useEffect(() => { if (me) warmChoice(); }, [model, effortPick, me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
   useEffect(() => { if (me) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps

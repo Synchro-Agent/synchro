@@ -1,5 +1,5 @@
 import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { tierOf, vendorOf, type Tier } from "../../router";
+import { pickCritics, vendorOf } from "../../router";
 import { mergeFindings, numbered, parseFindings, type Finding } from "../../critic";
 import { isDeck } from "../../artdoc";
 import { OneShotErr, oneShot, stalledModels, usableModels } from "../../ai/anymodel";
@@ -19,25 +19,7 @@ Trả về DUY NHẤT một JSON: {"findings":[{"line_start":số,"line_end":s�
 - Số dòng theo cột số bên trái; suggested_fix thay trọn các dòng đó, giữ thụt lề, không kèm số dòng, sửa tối thiểu.
 - Tối đa 6 mục, nặng nhất trước. Viết tiêu đề và giải thích bằng ngôn ngữ của người dùng (mặc định tiếng Việt).
 </critic_review>`;
-const MAX = 2;
-// Phản biện tự chạy sau mỗi artifact quan trọng mà không ai bấm: từng là hai CLI song song ở hạng cân bằng, tức GPT-6.1 Sol đọc cả artifact (20-22 giây mỗi lần, tính vào hạn mức của gói).
-// Tự chạy: một model rẻ nhất của hãng khác, xếp hàng như việc nền. Người dùng bấm "Phản biện" thì vẫn đủ hội đồng ở hạng cân bằng.
-const AUTO_ORDER: Tier[] = ["fast", "balanced", "strong"], ASKED_ORDER: Tier[] = ["balanced", "strong", "fast"];
 const LABEL: Record<string, string> = { code: "code", html: "trang web HTML", react: "ứng dụng React" };
-
-// Mỗi hãng một model: ưu tiên hạng cân bằng (đủ giỏi, rẻ hơn hạng mạnh nhất).
-function pickCritics(allowed: string[], exclude: string, avoid: string, auto = false): string[] {
-  const order = auto ? AUTO_ORDER : ASKED_ORDER, max = auto ? 1 : MAX;
-  const byProv = new Map<string, string[]>();
-  for (const k of allowed) { const p = vendorOf(k); byProv.set(p, [...(byProv.get(p) ?? []), k]); }
-  const best = (ks: string[]) => order.map((t) => ks.find((k) => tierOf(k) === t && k !== avoid)).find(Boolean) ?? ks.find((k) => k !== avoid) ?? ks[0];
-  const others = [...byProv.entries()].filter(([p]) => p !== exclude).map(([, ks]) => best(ks));
-  // Tự chạy: chọn đúng hãng có model rẻ nhất, không phải hãng đứng đầu danh sách.
-  if (others.length) return (auto ? [...others].sort((a, b) => order.indexOf(tierOf(a)) - order.indexOf(tierOf(b))) : others).slice(0, max);
-  // Chỉ có một hãng: dùng model khác model vừa viết nếu có.
-  const own = byProv.get(exclude) ?? [...byProv.values()][0] ?? [];
-  return own.length ? [best(own)] : [];
-}
 
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);
