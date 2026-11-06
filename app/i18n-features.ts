@@ -116,3 +116,8 @@ Object.assign(FX_EN2VI, {
   "Please confirm your email.": "Hãy xác minh email của bạn.",
   "No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.": "Chưa gửi thêm thư: trong giờ này bạn đã yêu cầu vài lần. Hãy dùng thư mới nhất, hoặc thử lại sau một giờ.",
 });
+Object.assign(FX_VI2EN, {
+  "Giọng này là giọng riêng của người khác.": "This is someone else's private voice.",
+  "Bạn chỉ xóa được giọng do chính mình tạo.": "You can only delete voices you created.",
+  "Mỗi tài khoản giữ tối đa 3 giọng riêng. Hãy xóa bớt một giọng rồi tạo lại.": "Each account can keep up to 3 private voices. Delete one, then try again.",
+});

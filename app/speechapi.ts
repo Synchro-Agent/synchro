@@ -268,7 +268,8 @@ export function spent(r: Response, est = 0) {
 // Hết hạn mức thì đọc to và trò chuyện giọng nói chuyển sang giọng của trình duyệt, không có đường cụt. Cuối mỗi ngày (UTC) đặt lại. Số đo theo header của hãng; thao tác hãng không báo dùng ước lượng BUDGET_EST.
 export type Budget = { user: number; unverified: number; global: number | null };
 const BUDGET_KEY = "speech_budget";
-const BUDGET_DEF: Budget = { user: 10_000, unverified: 1_000, global: null };
+// Mặc định thấp: tài khoản ElevenLabs là của chủ máy chủ, đăng ký mở nên vài người không được tiêu hết credit của cả tháng trong một ngày. Quản trị viên nâng được ở Cài đặt.
+const BUDGET_DEF: Budget = { user: 3_000, unverified: 500, global: null };
 const num0 = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
 export function speechBudget(): Budget {
   let j: Partial<Budget> = {};
@@ -279,8 +280,13 @@ export function setSpeechBudget(b: Partial<Budget>) {
   const cur = speechBudget();
   setSetting(BUDGET_KEY, JSON.stringify({ user: num0(b.user, cur.user), unverified: num0(b.unverified, cur.unverified), global: b.global === undefined ? cur.global : b.global === null ? null : num0(b.global, cur.global ?? 0) }));
 }
-/** Mức chung của máy chủ mỗi ngày: quản trị viên đặt, không thì 1/5 credit của gói (gói chưa đọc được thì 20.000). */
-const globalLimit = () => speechBudget().global ?? Math.max(20_000, Math.floor((G().plan?.credits.limit ?? 0) / 5));
+/** Mức chung của máy chủ mỗi ngày: quản trị viên đặt, không thì 1/10 credit của gói nhưng không quá 1/3 số còn lại (hết tháng vẫn còn giọng cho mọi người). Gói chưa đọc được thì 5.000. */
+const globalLimit = () => {
+  const set = speechBudget().global;
+  if (set !== null) return set;
+  const c = G().plan?.credits;
+  return c?.limit ? Math.floor(Math.min(c.limit / 10, Math.max(0, c.limit - c.used) / 3)) : 5_000;
+};
 const day = () => new Date().toISOString().slice(0, 10);
 let budgetReady = "";
 function budgetDb() {
@@ -318,6 +324,18 @@ export function checkBudget(u: UserRow) {
 }
 /** Ai đang gọi: spent() tính credit vào đúng tài khoản mà không phải truyền qua từng công cụ. */
 export const spender = new AsyncLocalStorage<string>();
+
+// Giọng nhân bản hay tự thiết kế nằm chung một tài khoản ElevenLabs của máy chủ: giọng của một người không được lộ cho người khác.
+// Giọng tạo trước khi có bảng này không có chủ: chỉ quản trị viên thấy. Không đụng tới giọng trên ElevenLabs.
+function ownersDb() { const d = db(); d.exec("CREATE TABLE IF NOT EXISTS speech_voice_owner (voice_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL)"); return d; }
+export const setVoiceOwner = (voice: string, uid: string) => { ownersDb().prepare("INSERT OR REPLACE INTO speech_voice_owner (voice_id, user_id, created_at) VALUES (?, ?, ?)").run(voice, uid, Date.now()); };
+export const voiceOwner = (voice: string) => (ownersDb().prepare("SELECT user_id FROM speech_voice_owner WHERE voice_id = ?").get(voice) as { user_id: string } | undefined)?.user_id ?? null;
+export const forgetVoiceOwner = (voice: string) => { ownersDb().prepare("DELETE FROM speech_voice_owner WHERE voice_id = ?").run(voice); };
+export const ownedVoices = (uid: string) => (ownersDb().prepare("SELECT COUNT(*) AS n FROM speech_voice_owner WHERE user_id = ?").get(uid) as { n: number }).n;
+/** Giọng riêng của người tạo, khác với giọng có sẵn và giọng lấy từ Thư viện. */
+export const isPrivateVoice = (v: { category: string; lib?: boolean }) => !v.lib && ["cloned", "generated", "professional"].includes(v.category);
+/** Mỗi thành viên giữ tối đa chừng này giọng riêng: số chỗ của tài khoản ElevenLabs có hạn và dùng chung. */
+export const MAX_OWN_VOICES = 3;
 export async function need(f: Feat) {
   const p = await plan();
   if (!p.connected) throw new SpeechErr(p.note ?? "Chưa gắn khóa ElevenLabs. Quản trị viên vào Cài đặt → Providers để thêm khóa.", 503, "no_key");

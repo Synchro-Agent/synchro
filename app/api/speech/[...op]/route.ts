@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { can, current, isAdmin, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, type Feat, type Plan,
+  scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceOwner, type Feat, type Plan,
 } from "../../../speechapi";
 import { quickCall } from "../../../ai/anymodel";
 
@@ -97,6 +97,21 @@ function dictsOf(b: Record<string, unknown>) {
 // Định dạng có vang / lệch kênh cần âm thanh stereo: PCM / μ-law không dùng được với hiệu ứng đó.
 const stereoOk = (fmt: string, fx?: Record<string, unknown>) => !fx || (!fx.environment_id && !fx.pan) || /^(mp3|opus|wav)/.test(fmt);
 
+// Giọng riêng chỉ chủ của nó và quản trị viên dùng được, dù biết mã giọng. Không đọc được danh sách giọng thì lời gọi ElevenLabs sau đó cũng sẽ báo lỗi.
+async function gateVoices(u: UserRow, ids: string[]) {
+  if (isAdmin(u) || !ids.length) return;
+  const list = await voices().catch(() => []);
+  for (const id of ids) {
+    const v = list.find((x) => x.id === id);
+    if (v && isPrivateVoice(v) && voiceOwner(id) !== u.id) throw new SpeechErr("Giọng này là giọng riêng của người khác.", 403);
+  }
+}
+const voiceIds = (b: Record<string, unknown>, form: FormData | null) => {
+  const lines = Array.isArray(b.lines) ? (b.lines as { voice?: unknown }[]).map((l) => l?.voice) : [];
+  return [b.voice, b.host, b.guest, ...lines, form?.get("voice")].filter((x): x is string => typeof x === "string" && !!x);
+};
+const claimVoice = (voice: string) => { const uid = spender.getStore(); if (uid) setVoiceOwner(voice, uid); };
+
 async function GETop(req: Request, u: UserRow, op: string) {
   const q = new URL(req.url).searchParams;
   if (op === "plan") return Response.json(await plan({ fresh: q.get("fresh") === "1" }));
@@ -109,10 +124,10 @@ async function GETop(req: Request, u: UserRow, op: string) {
         sort: str(q.get("sort"), 30) || "trending", page: num(q.get("page"), 0, 50, 0), free: p.tier === "free" });
       return Response.json(r);
     }
-    if (q.get("id")) { const v = await elJson<Parameters<typeof voiceOut>[0] & { fine_tuning?: unknown }>(`/v1/voices/${encodeURIComponent(q.get("id")!)}`); return Response.json({ voice: voiceOut(v), fineTuning: v.fine_tuning ?? null }); }
+    if (q.get("id")) { await gateVoices(u, [q.get("id")!]); const v = await elJson<Parameters<typeof voiceOut>[0] & { fine_tuning?: unknown }>(`/v1/voices/${encodeURIComponent(q.get("id")!)}`); return Response.json({ voice: voiceOut(v), fineTuning: v.fine_tuning ?? null }); }
     const p = await plan();
     // Gói Free: giọng lấy từ Thư viện không dùng được qua API nên không hiện.
-    const list = (await voices(q.get("fresh") === "1")).filter((v) => p.library || !v.lib);
+    const list = (await voices(q.get("fresh") === "1")).filter((v) => (p.library || !v.lib) && (isAdmin(u) || !isPrivateVoice(v) || voiceOwner(v.id) === u.id));
     const s = str(q.get("q"), 80).toLowerCase();
     return Response.json({ voices: s ? list.filter((v) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.use}`.toLowerCase().includes(s)) : list });
   }
@@ -138,6 +153,7 @@ async function GETop(req: Request, u: UserRow, op: string) {
   if (op === "pvc") {
     await need("pvc");
     const voice = str(q.get("voice"), 40);
+    await gateVoices(u, [voice]);
     const r = await el(`/v1/voices/pvc/${encodeURIComponent(voice)}/captcha`, { feat: "pvc" });
     const ct = r.headers.get("content-type") ?? "";
     if (/image/.test(ct)) return Response.json({ image: `data:${ct};base64,${Buffer.from(await r.arrayBuffer()).toString("base64")}` });
@@ -394,6 +410,7 @@ async function saveDesigned(b: Record<string, unknown>) {
   if (!id) throw new SpeechErr("Chọn bản nghe thử muốn lưu.");
   const v = await elJson<Parameters<typeof voiceOut>[0]>("/v1/text-to-voice", { ...jsonBody({ voice_name: name, voice_description: desc.length >= 20 ? desc : `${desc} (Synchro)`.padEnd(20, "."), generated_voice_id: id }), feat: "design" });
   forgetVoices();
+  claimVoice(v.voice_id);
   return ok({ voice: voiceOut(v) });
 }
 async function ivc(form: FormData) {
@@ -411,6 +428,7 @@ async function ivc(form: FormData) {
   if (desc) fd.set("description", desc);
   const j = await elJson<{ voice_id: string; requires_verification: boolean }>("/v1/voices/add", { method: "POST", body: fd, feat: "ivc", timeout: 180_000 });
   forgetVoices();
+  claimVoice(j.voice_id);
   return ok({ voiceId: j.voice_id, verify: j.requires_verification });
 }
 async function pvc(b: Record<string, unknown> | FormData, action: string) {
@@ -419,6 +437,7 @@ async function pvc(b: Record<string, unknown> | FormData, action: string) {
     const o = b as Record<string, unknown>;
     const j = await elJson<{ voice_id: string }>("/v1/voices/pvc", { ...jsonBody({ name: str(o.name, 60) || "Giọng chuyên sâu", language: str(o.lang, 8) || "vi", description: str(o.desc, 500) || null }), feat: "pvc" });
     forgetVoices();
+    claimVoice(j.voice_id);
     return ok({ voiceId: j.voice_id });
   }
   const form = b as FormData, voice = encodeURIComponent(str(form.get("voice"), 40));
@@ -694,6 +713,8 @@ async function POSTrun(req: Request, u: UserRow, op: string[]) {
   const isForm = (req.headers.get("content-type") ?? "").includes("multipart/form-data");
   const form = isForm ? await req.formData().catch(() => { throw new SpeechErr("Không đọc được tệp tải lên (tệp quá lớn hoặc bị ngắt giữa chừng)."); }) : null;
   const b = isForm ? {} : ((await req.json().catch(() => ({}))) as Record<string, unknown>);
+  await gateVoices(u, voiceIds(b, form));
+  if (/^(ivc|voices\/save|pvc\/create)$/.test(key) && !isAdmin(u) && ownedVoices(u.id) >= MAX_OWN_VOICES) throw new SpeechErr(`Mỗi tài khoản giữ tối đa ${MAX_OWN_VOICES} giọng riêng. Hãy xóa bớt một giọng rồi tạo lại.`, 403);
   if (key !== "speak" && key !== "live/token") { try { limit("speech:" + u.id, 120, 10 * 60_000); } catch { throw new SpeechErr("Bạn tạo quá nhiều trong thời gian ngắn. Thử lại sau ít phút.", 429); } }
   else { try { limit("speak:" + u.id, 400, 10 * 60_000); } catch { throw new SpeechErr("Đọc to quá nhiều lần trong thời gian ngắn.", 429); } }
   switch (key) {
@@ -751,9 +772,11 @@ async function run(req: Request, ctx: Ctx, method: "GET" | "POST" | "DELETE") {
     const q = new URL(req.url).searchParams;
     if (op[0] === "items") return Response.json({ ok: deleteItem(c.user, q.get("id") ?? "") });
     if (op[0] === "voices") {
-      // Giọng thuộc tài khoản ElevenLabs dùng chung: chỉ quản trị viên được xóa.
-      if (!isAdmin(c.user)) return Response.json({ error: "Chỉ quản trị viên được xóa giọng khỏi tài khoản ElevenLabs." }, { status: 403 });
-      await el(`/v1/voices/${encodeURIComponent(q.get("id") ?? "")}`, { method: "DELETE" });
+      // Giọng nằm trong tài khoản ElevenLabs dùng chung: người tạo xóa được giọng của mình, còn lại chỉ quản trị viên.
+      const vid = q.get("id") ?? "";
+      if (!isAdmin(c.user) && voiceOwner(vid) !== c.user.id) return Response.json({ error: "Bạn chỉ xóa được giọng do chính mình tạo." }, { status: 403 });
+      await el(`/v1/voices/${encodeURIComponent(vid)}`, { method: "DELETE" });
+      forgetVoiceOwner(vid);
       forgetVoices();
       return ok({ ok: true });
     }
