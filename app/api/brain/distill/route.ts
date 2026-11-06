@@ -14,5 +14,5 @@ export const POST = handle(async (req) => {
   // Nút Học lại ở Bộ não: gồm cả đoạn chat đã dừng thử vì lỗi.
   if ((await req.json().catch(() => ({})))?.retry === true) retryLearning(user.id);
   const done = await distillPending({ uid: user.id, now: true, max: 10 });
-  return Response.json({ done, ...brainGraph(user), cfg: memCfg(user.id) });
+  return Response.json({ done: Math.max(done, 0), busy: done < 0, ...brainGraph(user), cfg: memCfg(user.id) });
 });

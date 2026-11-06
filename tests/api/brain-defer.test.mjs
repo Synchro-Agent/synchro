@@ -8,7 +8,7 @@ let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-braindefer-"));
 const HOME = path.join(tmp, "engine"), BIN = path.join(HOME, ".local", "bin");
-Object.assign(process.env, { DATA_DIR: path.join(tmp, "data"), SYNCHRO_ENGINE_HOME: HOME, DATA_KEY: "brain-defer-key", SYNCHRO_MOCK_OFFLINE: "1", SYNCHRO_BRAIN_IDLE_MS: "1", SYNCHRO_BG_STRONG_PER_HOUR: "1" });
+Object.assign(process.env, { DATA_DIR: path.join(tmp, "data"), SYNCHRO_ENGINE_HOME: HOME, DATA_KEY: "brain-defer-key", SYNCHRO_MOCK_OFFLINE: "1", SYNCHRO_BRAIN_IDLE_MS: "1", SYNCHRO_BG_STRONG_PER_HOUR: "1", SYNCHRO_BRAIN_WAIT_MS: "100" });
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 fs.mkdirSync(BIN, { recursive: true });
@@ -17,7 +17,7 @@ fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http:/
 
 const lines = [], log0 = console.log;
 console.log = (...a) => { const s = a.join(" "); if (s.startsWith("[timing]")) lines.push(s); else if (!s.startsWith("[design]")) log0(...a); };
-const { authstore: AU, brain: BR, "ai/anymodel": AM, "ai/cli_auth": A, skillstudio: ST } = await loadTs(["authstore", "brain", "ai/anymodel", "ai/cli_auth", "skillstudio"]);
+const { authstore: AU, brain: BR, "ai/anymodel": AM, "ai/cli_auth": A, skillstudio: ST, turngate: TG } = await loadTs(["authstore", "brain", "ai/anymodel", "ai/cli_auth", "skillstudio", "turngate"]);
 ST.getTag("x");
 const mk = (e) => AU.createUser({ email: `${e}${Math.random().toString(36).slice(2, 7)}@synchro.test`, name: e, verified: true });
 const chat = (u, id) => BR.importChats(u, [{ id, title: id, msgs: [{ role: "user", text: `Lập kế hoạch ra mắt sản phẩm mới, đoạn chat ${id}` }, { role: "ai", text: "Đây là kế hoạch." }] }]);
@@ -52,6 +52,25 @@ try {
   ok(BR.brainGraph(G).stats.pending === 4, "không mất đoạn chat nào");
   await BR.distillPending({ uid: G.id, now: true });
   ok(BR.brainGraph(G).stats.failed === 0, "bấm chạy ngay vẫn chọn được hàng đã lùi, vẫn không tính lỗi", BR.brainGraph(G).stats);
+  // Một tài khoản đang kín chỗ việc nền không giữ vòng học chung của mọi người.
+  const full = await claude(), other = await claude(), ac = new AbortController();
+  const hold = Array.from({ length: 2 }, () => AM.quickCall(full, "Giữ chỗ.", "[mock:hang]", { job: "hold", bg: true, signal: ac.signal }).catch((e) => e));
+  for (let i = 0; i < 100 && TG.runningOf(full.id, "quick") < 2; i++) await new Promise((r) => setTimeout(r, 30));
+  chat(full, "f1");
+  await new Promise((r) => setTimeout(r, 30));
+  chat(other, "o1");
+  await new Promise((r) => setTimeout(r, 30));
+  lines.length = 0;
+  const t0 = Date.now();
+  await BR.distillPending();
+  ok(TG.runningOf(full.id, "quick") === 2 && lines.some((l) => /claude haiku low .*job=brain/.test(l)), `người kế tiếp được học ngay khi tài khoản trước còn bận (${Date.now() - t0} ms)`, lines);
+  const fs1 = BR.brainGraph(full).stats;
+  ok(fs1.pending === 1 && fs1.failed === 0 && !fs1.learnError, "tài khoản đang bận: chờ nhịp sau, không tính là một lần thất bại", fs1);
+  ac.abort();
+  await Promise.all(hold);
+  globalThis.__brainBusy = true;
+  ok(await BR.distillPending() === -1, "vòng học đang chạy: báo là chưa làm gì, không phải đã xong 0 việc");
+  globalThis.__brainBusy = false;
 } finally {
   console.log = log0;
   fs.rmSync(tmp, { recursive: true, force: true });
