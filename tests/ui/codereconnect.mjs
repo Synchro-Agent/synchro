@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
-const B = process.env.BASE ?? "http://localhost:3200", CDP = process.env.CDP_PORT ?? "9362";
+const B = process.env.BASE ?? "http://localhost:3200", CDP = process.env.CDP_PORT ?? "9367";
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
 mkdirSync(SCR, { recursive: true });
 const PROF = SCR + "chrome-prof-codereconnect-" + CDP;

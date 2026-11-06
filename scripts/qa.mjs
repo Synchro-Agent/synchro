@@ -31,6 +31,9 @@ const SUITES = [
   ["Ảnh từ URL ngoài trong artifact", "tests/ui/artimg.mjs"],
   ["Tạo ảnh: chip, trạng thái, thẻ ảnh, tải về", "tests/ui/imagegen.mjs"],
   ["Nút studio của plugin, số skill và danh sách ở trang Artifacts", "tests/ui/studio-select.mjs"],
+  ["Câu trả lời Markdown trên trang thật: danh sách, công thức, khối code, bảng", "tests/ui/markdown.mjs"],
+  ["Bảng trong câu trả lời đo bằng CSS thật: không vỡ chữ, cuộn ngang", "tests/ui/mdtable.mjs"],
+  ["Lượt Code mất mạng, gửi khi phiên đang chạy, lỗi lượt theo ngôn ngữ", "tests/ui/codereconnect.mjs"],
 ];
 const only = process.argv.slice(2);
 
