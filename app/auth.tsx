@@ -314,7 +314,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
       // Tài khoản mới: tải trước phim giới thiệu trong lúc hiện lời chào.
       if (wantsIntro(u, k)) preloadIntro();
       setTimeout(() => onDone?.(u, k), SUCCESS_HOLD);
-    } catch (e) { busy.current = false; fail((e as Error).message); }
+    } catch (e) { busy.current = false; setMfaCode(""); fail((e as Error).message); }
   };
 
   const submitProfile = async () => {
@@ -539,6 +539,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                     {authStep === "mfa" && <BlurFade delay={OUT + STEP * 2} className="w-full">
                         <div className="glass-input-wrap w-full"><div className="glass-input">
                             <span className="glass-input-text-area"></span>
+                            <div className="relative z-10 flex-shrink-0 flex items-center justify-center w-10 pl-2"><Lock className="w-5 h-5 text-foreground/80 flex-shrink-0" /></div>
                             <input autoFocus type="text" inputMode="text" autoComplete="one-time-code" aria-label="Verification code" placeholder="Verification code" aria-invalid={!!notice || undefined} aria-describedby={notice ? "auth-notice" : undefined} value={mfaCode} onChange={(e) => setMfaCode(e.target.value.slice(0, 20))} className="relative z-10 h-full w-0 flex-grow bg-transparent px-4 text-foreground placeholder:text-foreground/60 focus:outline-none" />
                             <div className={cn("relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", mfaCode.trim() ? "w-10 pr-1" : "w-0")}><GlassButton type="submit" size="icon" aria-label="Submit code" contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                         </div></div>

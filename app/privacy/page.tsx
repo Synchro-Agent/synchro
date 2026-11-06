@@ -12,6 +12,7 @@ export default function Privacy() {
       <ul>
         <li><b>Tài khoản:</b> email, tên, ảnh đại diện, hồ sơ bạn điền (họ tên, ngày sinh, nghề nghiệp), hướng dẫn tùy chỉnh. Mật khẩu chỉ được lưu dưới dạng băm (scrypt), không ai đọc được mật khẩu gốc. Giữ tới khi bạn xóa tài khoản.</li>
         <li><b>Đăng nhập bằng Google, GitHub hoặc Apple:</b> chúng tôi chỉ nhận email đã xác minh, tên và ảnh đại diện công khai. Không truy cập Gmail, Drive hay dữ liệu nào khác, trừ khi bạn tự kết nối GitHub cho Synchro Code.</li>
+        <li><b>Xác minh hai bước:</b> khóa của ứng dụng tạo mã (được mã hóa) và mã băm của các mã dự phòng, nếu bạn bật. Xóa khi bạn tắt hoặc xóa tài khoản.</li>
         <li><b>Phiên đăng nhập:</b> thời điểm đăng nhập, địa chỉ IP và loại trình duyệt, để bạn xem và đăng xuất các thiết bị trong Cài đặt → Tài khoản. Hết hạn sau 30 ngày không dùng.</li>
         <li><b>Lượt trả lời đang chạy và vừa xong:</b> tin nhắn, câu trả lời, các bước công cụ, để câu trả lời vẫn chạy khi bạn đóng trang. Tự xóa sau 7 ngày; lượt của đoạn chat ẩn danh xóa khoảng 10 phút sau khi xong.</li>
         <li><b>Phiên của ứng dụng AI bạn đã đăng nhập:</b> Claude Code, Codex, Antigravity, Grok chạy trên máy chủ bằng chính gói của bạn. Thông tin đăng nhập của các gói này (được mã hóa hoặc nằm trong thư mục riêng của tài khoản) giữ tới khi bạn đăng xuất gói hoặc xóa tài khoản. Lịch sử phiên do chúng ghi giữ tới khi bạn xóa đoạn chat đó, đăng xuất gói hoặc xóa tài khoản.</li>

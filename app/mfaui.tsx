@@ -2,7 +2,9 @@
 
 // Cài đặt → Tài khoản: bật, tắt xác minh hai bước (app/mfa.ts). Khóa hiện dạng chữ và liên kết otpauth: mọi ứng dụng tạo mã đều cho nhập tay, không cần thêm thư viện vẽ mã QR.
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { call as api } from "./adminui";
+import { Fade } from "./ui";
 
 type Stage = null | { step: "scan"; secret: string; uri: string } | { step: "codes"; codes: string[] } | { step: "off" };
 export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.ReactNode; children?: React.ReactNode }) => React.ReactNode; say: (s: string) => void }) {
@@ -22,7 +24,8 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
     <Row t="Two-step verification" d={on ? `On. ${left} recovery code${left === 1 ? "" : "s"} left.` : "Ask for a code from an authenticator app each time you sign in."}>
       {on === null ? null : <button className="btn" disabled={busy} onClick={on ? () => { setCode(""); setSt({ step: "off" }); } : start}>{on ? "Turn off" : "Turn on"}</button>}
     </Row>
-    {st && <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
+    {/* Hàng này nằm trong thẻ có overflow của Cài đặt: khung phải ra ngoài mới phủ đúng màn hình. */}
+    {typeof document !== "undefined" && createPortal(<Fade show={!!st}>{st ? <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
       <div className="modal sm" style={{ width: 420 }}>
         {st.step === "scan" && <>
           <h2 style={{ fontSize: 16 }}>Turn on two-step verification</h2>
@@ -45,6 +48,6 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
           <div className="modal-foot"><button className="btn" onClick={() => setSt(null)}>Cancel</button><button className="btn dark" disabled={!code.trim() || busy} onClick={off}>Turn off</button></div>
         </>}
       </div>
-    </div>}
+    </div> : null}</Fade>, document.body)}
   </>;
 }
