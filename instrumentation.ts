@@ -30,6 +30,9 @@ export async function register() {
         sweptAt = now;
         void Promise.all([import("./app/outputs"), import("./app/runs"), import("./app/refs")]).then(([o, r, f]) => { o.sweepOutputs(); r.sweepRuns(); f.sweepRefs(); }).catch((e) => console.error("[sweep]", e));
       });
+      // Giọng của tài khoản đã xóa mà lần xóa trên ElevenLabs bị lỗi: thử lại mỗi giờ.
+      let voicePurgeAt = 0;
+      onTick("voice-purge", (now) => { if (now - voicePurgeAt < 3_600_000) return; voicePurgeAt = now; void import("./app/speechapi").then((m) => m.retryVoicePurges()).catch((e) => console.error("[speech]", e)); });
       onTick("connectors", (now) => { void recheckConnectors(now).catch((e) => console.error("[connectors]", e)); });
       // Giữ kết nối GitHub luôn dùng được: làm mới token có hạn, dùng token định kỳ (mỗi 30 phút xem một lượt).
       const { keepLinksAlive } = await import("./app/github");

@@ -19,7 +19,7 @@ export type Plan = {
 export type Voice = {
   lib?: boolean;
   id: string; name: string; desc: string; lang: string; langCode: string; accent: string; gender: string; age: string; use: string; category: string;
-  preview: string | null; mine: boolean; owner?: string; free?: boolean; uses?: number; notice?: number | null; added?: boolean;
+  preview: string | null; mine: boolean; owner?: string; canDelete?: boolean; holder?: string; free?: boolean; uses?: number; notice?: number | null; added?: boolean;
 };
 export type Item = { id: string; kind: string; title: string; meta: Record<string, unknown>; mime: string | null; size: number; createdAt: number; url: string | null };
 export type Credits = Plan["credits"];

@@ -10,7 +10,7 @@ import { removeUserApps } from "./appstore";
 import { removeUserPlugins } from "./plugins";
 import { dropTag, userKey } from "./skillstudio";
 import { cancelUserRuns } from "./runs";
-import { removeUserSpeech } from "./speechapi";
+import { purgeUserVoices, removeUserSpeech } from "./speechapi";
 import { destroyWorkspace } from "./workspace";
 import { releaseUserFiles } from "./fileproc/owners";
 import { logout, safeScope } from "./ai/cli_auth";
@@ -61,6 +61,8 @@ export async function purgeUser(uid: string) {
   await step("apps", () => removeUserApps(uid));
   await step("plugins", () => removeUserPlugins(uid));
   await step("speech", () => removeUserSpeech(uid));
+  // Trước bước rows: bước đó xóa mất dòng chủ của giọng, không còn biết giọng nào là của người này.
+  await step("voices", () => purgeUserVoices(uid));
   await step("uploads", () => releaseUserFiles(uid));
   await step("engine", () => purgeEngine(uid));
   await step("workspace", () => destroyWorkspace(uid));

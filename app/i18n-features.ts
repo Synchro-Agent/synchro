@@ -117,7 +117,18 @@ Object.assign(FX_EN2VI, {
   "No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.": "Chưa gửi thêm thư: trong giờ này bạn đã yêu cầu vài lần. Hãy dùng thư mới nhất, hoặc thử lại sau một giờ.",
 });
 Object.assign(FX_VI2EN, {
-  "Giọng này là giọng riêng của người khác.": "This is someone else's private voice.",
+  "Giọng này chưa được gán cho tài khoản của bạn. Hãy chọn giọng khác, hoặc nhờ quản trị viên gán lại nếu đây là giọng bạn đã tạo.": "This voice isn't assigned to your account. Choose another voice, or ask an administrator to reassign it if you created it.",
+  "Chỉ quản trị viên mới gán được chủ của giọng.": "Only an administrator can assign a voice's owner.",
+  "Thiếu giọng hoặc người được gán.": "Choose a voice and who to assign it to.",
+  "Giọng này đang chờ xóa cùng tài khoản đã xóa.": "This voice is waiting to be deleted along with a deleted account.",
+  "Không tìm thấy tài khoản có email này.": "No account has this email.",
+  "Email của chủ giọng này. Nhập shared nếu mọi thành viên được dùng.": "Email of this voice's owner. Enter shared to let every member use it.",
+  "Đã gán chủ giọng": "Voice owner assigned",
+  "Gán chủ": "Assign owner",
+  "Chưa có chủ": "No owner",
+  "Dùng chung": "Shared",
+  "Không còn chủ": "Owner gone",
+  "Chủ giọng": "Voice owner",
   "Bạn chỉ xóa được giọng do chính mình tạo.": "You can only delete voices you created.",
   "Mỗi tài khoản giữ tối đa 3 giọng riêng. Hãy xóa bớt một giọng rồi tạo lại.": "Each account can keep up to 3 private voices. Delete one, then try again.",
 });

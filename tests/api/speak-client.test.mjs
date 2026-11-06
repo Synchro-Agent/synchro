@@ -80,5 +80,23 @@ ok((await S.speakAI("Câu ngắn.")) === null, "hết credit: lần này giọng
 reset();
 ok(!!(await S.speakAI("Câu ngắn.")), "hết credit: lần sau thử lại giọng AI");
 
+console.log("9. Giọng đã lưu không còn dùng được");
+{
+  reset();
+  const { speak: Sv } = await load();
+  const voicesSent = [];
+  const f0 = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const b = JSON.parse(init.body);
+    voicesSent.push(b.voice ?? null);
+    if (b.voice) return new Response(JSON.stringify({ error: "Giọng này chưa được gán cho tài khoản của bạn.", code: "voice" }), { status: 403, headers: { "content-type": "application/json" } });
+    return new Response(new Blob(["x"]), { status: 200, headers: { "content-type": "audio/wav" } });
+  };
+  const sp = await Sv.speakAI("Một câu ngắn.", { voice: "giong-da-luu" });
+  ok(!!sp && (await sp.done) === true, "vẫn đọc được bằng giọng AI mặc định");
+  ok(voicesSent[0] === "giong-da-luu" && voicesSent[1] === null, "thử giọng đã lưu rồi bỏ giọng đó", voicesSent);
+  ok(!Sv.aiVoiceOff(), "không tắt giọng AI cả phiên");
+  globalThis.fetch = f0;
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

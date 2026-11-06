@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { audit, DATA_DIR, db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
+import { audit, DATA_DIR, db, getSetting, getUser, isAdmin, setSetting, type UserRow } from "./authstore";
 import { elevenMissing, serviceKey } from "./providers";
 
 export class SpeechErr extends Error {
@@ -326,14 +326,105 @@ export function checkBudget(u: UserRow) {
 export const spender = new AsyncLocalStorage<string>();
 
 // Giọng nhân bản hay tự thiết kế nằm chung một tài khoản ElevenLabs của máy chủ: giọng của một người không được lộ cho người khác.
-// Giọng tạo trước khi có bảng này không có chủ: chỉ quản trị viên thấy. Không đụng tới giọng trên ElevenLabs.
-function ownersDb() { const d = db(); d.exec("CREATE TABLE IF NOT EXISTS speech_voice_owner (voice_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL)"); return d; }
-export const setVoiceOwner = (voice: string, uid: string) => { ownersDb().prepare("INSERT OR REPLACE INTO speech_voice_owner (voice_id, user_id, created_at) VALUES (?, ?, ?)").run(voice, uid, Date.now()); };
+// Giọng tạo trước khi có bảng này: suy chủ từ lịch sử (backfillVoiceOwners). Không suy được thì không ai biết người tạo là ai, nên giữ như trước khi có bảng: thành viên vẫn thấy,
+// không người tạo nào mất giọng của mình, cho tới khi quản trị viên gán chủ hoặc đánh dấu dùng chung. Nhưng không bao giờ được tự chọn làm giọng mặc định (defaultVoice).
+// user_id có thể là mã đặc biệt, không trùng tài khoản nào nên purgeRows không xóa mất:
+export const VOICE_SHARED = "*shared"; // quản trị viên đánh dấu cho mọi thành viên
+export const VOICE_PURGE = "*purge"; // chủ đã xóa tài khoản: chờ xóa trên ElevenLabs, lỗi thì lần sau thử lại
+export const VOICE_ORPHAN = "*orphan"; // chủ suy từ lịch sử đã xóa tài khoản: không chắc là giọng của họ nên không tự xóa, chỉ quản trị viên quyết
+let ownersReady = false;
+function ownersDb() {
+  const d = db();
+  d.exec("CREATE TABLE IF NOT EXISTS speech_voice_owner (voice_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL)");
+  // source = 'history': chủ suy từ lịch sử, không phải người được ghi nhận lúc tạo.
+  if (!ownersReady) { if (!(d.prepare("PRAGMA table_info(speech_voice_owner)").all() as { name: string }[]).some((c) => c.name === "source")) d.exec("ALTER TABLE speech_voice_owner ADD COLUMN source TEXT"); ownersReady = true; }
+  return d;
+}
+export const setVoiceOwner = (voice: string, uid: string, source: "history" | null = null) => { ownersDb().prepare("INSERT OR REPLACE INTO speech_voice_owner (voice_id, user_id, created_at, source) VALUES (?, ?, ?, ?)").run(voice, uid, Date.now(), source); };
 export const voiceOwner = (voice: string) => (ownersDb().prepare("SELECT user_id FROM speech_voice_owner WHERE voice_id = ?").get(voice) as { user_id: string } | undefined)?.user_id ?? null;
 export const forgetVoiceOwner = (voice: string) => { ownersDb().prepare("DELETE FROM speech_voice_owner WHERE voice_id = ?").run(voice); };
 export const ownedVoices = (uid: string) => (ownersDb().prepare("SELECT COUNT(*) AS n FROM speech_voice_owner WHERE user_id = ?").get(uid) as { n: number }).n;
 /** Giọng riêng của người tạo, khác với giọng có sẵn và giọng lấy từ Thư viện. */
 export const isPrivateVoice = (v: { category: string; lib?: boolean }) => !v.lib && ["cloned", "generated", "professional"].includes(v.category);
+/** Thành viên này được thấy và dùng giọng riêng này không. Quản trị viên kiểm tra riêng ở nơi gọi. */
+export const voiceOpenTo = (voice: string, uid: string) => { const o = voiceOwner(voice); return o === null || o === VOICE_SHARED || o === uid; };
+
+// Ngôn ngữ của văn bản theo chữ viết (đủ để chọn giọng; model đa ngôn ngữ tự đọc đúng mọi ngôn ngữ nó hỗ trợ).
+function textLang(t: string) {
+  if (/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(t)) return "vi";
+  if (/[\u3040-\u30ff]/.test(t)) return "ja";
+  if (/[\uac00-\ud7af]/.test(t)) return "ko";
+  if (/[\u4e00-\u9fff]/.test(t)) return "zh";
+  if (/[\u0e00-\u0e7f]/.test(t)) return "th";
+  if (/[\u0400-\u04ff]/.test(t)) return "ru";
+  return "en";
+}
+// Giọng có sẵn nghe tự nhiên ở nhiều ngôn ngữ (model đa ngôn ngữ), dùng khi tài khoản không có giọng riêng cho ngôn ngữ đó.
+const PREFER = ["Sarah", "Jessica", "Alice", "Matilda", "Laura", "George", "Brian"];
+/** Không chọn giọng: giọng riêng cùng ngôn ngữ với văn bản, rồi giọng có sẵn ưu tiên. Danh sách là của cả tài khoản ElevenLabs dùng chung, nên giọng riêng chỉ tính giọng của chính người này
+ *  (kể cả quản trị viên): đọc to không được phát ra bằng giọng nhân bản của người khác, và lượt đọc đã lưu không được ghi mã giọng đó. */
+export function defaultVoice(all: VoiceOut[], text: string, uid: string) {
+  const list = all.filter((v) => { if (!isPrivateVoice(v)) return true; const o = voiceOwner(v.id); return o === uid || o === VOICE_SHARED; });
+  const lang = textLang(text);
+  const byName = (n: string) => list.find((v) => v.category === "premade" && v.name.toLowerCase() === n.toLowerCase());
+  return list.find((v) => v.langCode.toLowerCase().startsWith(lang) && v.category !== "premade")?.id
+    ?? list.find((v) => v.langCode.toLowerCase().startsWith(lang))?.id
+    ?? PREFER.map(byName).find(Boolean)?.id ?? list.find((v) => v.category === "premade")?.id ?? list[0]?.id ?? PREMADE;
+}
+
+const voiceMeta = (meta: string) => {
+  try {
+    const m = JSON.parse(meta || "{}") as { voice?: unknown; lines?: { voice_id?: unknown }[] };
+    return [m.voice, ...(Array.isArray(m.lines) ? m.lines.map((l) => l?.voice_id) : [])].filter((x): x is string => typeof x === "string" && !!x);
+  } catch { return []; }
+};
+/** Giọng có từ trước khi có bảng chủ: người duy nhất từng dùng là chủ, để họ vẫn thấy giọng của mình và người khác thì không. Chạy đúng một lần: sau đó giọng chưa có chủ vẫn mở,
+ *  một người lạ dùng thử không được biến thành chủ. Quản trị viên không tính: họ thấy mọi giọng nên từng dùng không nói lên là của họ, và giọng họ làm cho mọi người phải giữ nguyên cho mọi người. */
+export function backfillVoiceOwners(list: VoiceOut[]) {
+  if (getSetting(VOICE_BACKFILL, "")) return 0;
+  const users = new Map<string, Set<string>>();
+  for (const r of items().prepare("SELECT user_id, meta FROM speech_items").iterate() as Iterable<{ user_id: string; meta: string }>) {
+    for (const v of voiceMeta(r.meta)) { const s = users.get(v) ?? new Set<string>(); s.add(r.user_id); users.set(v, s); }
+  }
+  let n = 0;
+  for (const v of list) {
+    if (!isPrivateVoice(v) || voiceOwner(v.id) !== null) continue;
+    const who = [...(users.get(v.id) ?? [])].map(getUser).filter((u): u is UserRow => !!u && !isAdmin(u));
+    if (who.length === 1) { setVoiceOwner(v.id, who[0].id, "history"); n++; }
+  }
+  setSetting(VOICE_BACKFILL, String(Date.now()));
+  if (n) console.log(`[speech] đã gán chủ cho ${n} giọng cũ theo lịch sử`);
+  return n;
+}
+const VOICE_BACKFILL = "speech_voice_backfill";
+
+// Route giữ danh sách giọng 10 phút: giọng vừa xóa ở nền thì không còn dòng chủ, nên danh sách cũ phải bỏ ngay, kẻo giọng đó hiện như chưa có chủ. Trên globalThis vì mỗi route có thể có bản mô-đun riêng.
+const genStore = globalThis as unknown as { __synchroVoiceGen?: number };
+export const voiceGen = () => genStore.__synchroVoiceGen ?? 0;
+/** Thử xóa các giọng đang chờ trên ElevenLabs. Lỗi thì giữ dòng và ghi nhật ký, bộ hẹn giờ thử lại; giọng đã không còn thì coi như xong. Trả về số giọng còn chờ. */
+export async function retryVoicePurges(timeout = 15_000) {
+  const rows = ownersDb().prepare("SELECT voice_id FROM speech_voice_owner WHERE user_id = ?").all(VOICE_PURGE) as { voice_id: string }[];
+  let left = 0;
+  for (const { voice_id: id } of rows) {
+    try {
+      const k = conn();
+      const r = await fetch(`${k.base}/v1/voices/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "xi-api-key": k.key }, signal: AbortSignal.timeout(timeout) });
+      const gone = r.ok || r.status === 404 || (r.status === 400 && /voice_does_not_exist|voice_not_found/.test(await r.text().catch(() => "")));
+      if (!gone) throw new Error(`ElevenLabs ${r.status}`);
+      forgetVoiceOwner(id);
+      genStore.__synchroVoiceGen = voiceGen() + 1;
+    } catch (e) { left++; console.error(`[speech] chưa xóa được giọng ${id} của tài khoản đã xóa, sẽ thử lại:`, (e as Error).message); }
+  }
+  return left;
+}
+/** Xóa tài khoản: giọng người này tạo được xóa khỏi tài khoản ElevenLabs dùng chung. Đổi chủ trước khi gọi mạng: purgeRows sẽ xóa dòng theo user_id, mà dòng này vừa là bản ghi để thử lại, vừa giữ giọng ẩn trong lúc chờ.
+ *  Giọng chỉ suy từ lịch sử có thể là của người khác nên không tự xóa: để quản trị viên quyết. Không còn liên kết tới tài khoản đã xóa ở cả hai trường hợp. */
+export async function purgeUserVoices(uid: string) {
+  const d = ownersDb();
+  d.prepare("UPDATE speech_voice_owner SET user_id = ? WHERE user_id = ? AND source = 'history'").run(VOICE_ORPHAN, uid);
+  d.prepare("UPDATE speech_voice_owner SET user_id = ? WHERE user_id = ?").run(VOICE_PURGE, uid);
+  return retryVoicePurges();
+}
 /** Mỗi thành viên giữ tối đa chừng này giọng riêng: số chỗ của tài khoản ElevenLabs có hạn và dùng chung. */
 export const MAX_OWN_VOICES = 3;
 export async function need(f: Feat) {

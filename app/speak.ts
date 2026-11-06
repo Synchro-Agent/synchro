@@ -23,6 +23,8 @@ async function openPart(text: string, o: Opts, signal: AbortSignal): Promise<Res
   const r = await fetch("/api/speech/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, voice: o.voice || undefined, speed: o.speed }), signal }).catch(() => null);
   if (r?.ok && r.body) return r;
   const j = (await r?.json().catch(() => ({}))) as { error?: string; code?: string } | undefined;
+  // Giọng đã lưu không còn dùng được: đọc bằng giọng mặc định thay vì tắt giọng AI cả phiên.
+  if (r?.status === 403 && j?.code === "voice" && o.voice && !signal.aborted) return openPart(text, { ...o, voice: undefined }, signal);
   offWhy = j?.error ?? "";
   // Hết hạn mức trong ngày: cả phiên dùng giọng trình duyệt, báo một lần.
   if (j?.code === "budget") { off = true; note = offWhy; return null; }

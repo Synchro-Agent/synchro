@@ -135,6 +135,7 @@ Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "c
 ## Giới hạn và theo dõi khác
 
 - Giọng nói (khóa ElevenLabs dùng chung): có trần credit mỗi ngày cho tài khoản đã xác minh, chưa xác minh và cả máy chủ, sửa ở Cài đặt → Quản trị (`speechBudget`), quản trị viên không tính. Hết trần thì dùng giọng của trình duyệt.
+- Chủ của giọng riêng (`speech_voice_owner`): giọng tạo trên Synchro tự có chủ; giọng cũ gán một lần theo lịch sử dùng, không suy được thì thành viên vẫn thấy cho tới khi quản trị viên bấm "Chưa có chủ" trên thẻ giọng để gán email hoặc nhập `shared`. Xóa tài khoản thì xóa giọng người đó tạo trên ElevenLabs; lỗi thì giữ dòng `*purge` và thử lại mỗi giờ, nhật ký có dòng `[speech] chưa xóa được giọng`. Giọng chỉ suy từ lịch sử không tự xóa: hiện "Không còn chủ", quản trị viên tự xem rồi xóa hoặc gán.
 - CSP script chạy thử (`Content-Security-Policy-Report-Only` trong `next.config.ts`): chỉ báo vào trang Sức khỏe hệ thống, chưa chặn. Báo cáo sạch một thời gian thì chuyển thành chặn thật.
 - Người dùng tải được mọi dữ liệu máy chủ giữ của họ ở Cài đặt → Quyền riêng tư (`/api/auth/account/export`).
 

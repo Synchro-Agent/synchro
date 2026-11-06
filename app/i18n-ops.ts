@@ -36,6 +36,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "Đã xác minh email": "Email verified",
   "Tài khoản của bạn đã dùng được đủ tính năng.": "Your account can now use every feature.",
   "Tài khoản lập bằng email của bạn đã bị xóa. Bạn không cần làm gì thêm.": "The account created with your email has been deleted. There's nothing more you need to do.",
+  "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.": "Your sign-in session has expired. Please sign in again.",
   "Đã gỡ cách đăng nhập cũ": "Old sign-in methods removed",
   "Email này chưa từng được xác minh nên xác minh hai bước và các cách đăng nhập khác trên tài khoản có thể do người khác đặt. Chúng đã được gỡ. Nếu đúng là của bạn, hãy bật lại trong Cài đặt → Tài khoản.": "This email had never been verified, so two-step verification and other sign-in methods on the account could have been set by someone else. They have been removed. If they were yours, turn them back on in Settings → Account.",
   "Hãy xác minh email hiện tại trước khi đổi. Nếu gõ nhầm địa chỉ lúc đăng ký, hãy đăng ký lại bằng địa chỉ đúng.": "Verify your current email before changing it. If you mistyped the address when signing up, sign up again with the right one.",

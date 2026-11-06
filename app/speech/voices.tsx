@@ -65,6 +65,11 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
       del("voices", v.id).then(() => reloadVoices(true)).then(() => say(`Đã xóa “${v.name}”`)).catch((e: Error) => say(e.message));
     });
   };
+  // Quản trị viên gán chủ cho giọng không rõ của ai (có từ trước khi Synchro ghi chủ), hoặc đánh dấu dùng chung.
+  const assign = (v: Voice) => {
+    const who = window.prompt(tr("Email của chủ giọng này. Nhập shared nếu mọi thành viên được dùng."), v.holder?.includes("@") ? v.holder : "")?.trim();
+    if (who) post("voices/owner", { id: v.id, owner: who }).then(() => reloadVoices(true)).then(() => say("Đã gán chủ giọng")).catch((e: Error) => say(e.message));
+  };
   const card = (v: Voice, extra?: React.ReactNode) => (
     <div key={v.id} className={`sp-vcard${bkV.on && !delOk(v) ? " bk-dim" : ""}`} {...(delOk(v) ? bulkRow(bkV, v) : {})}>
       <div className="sp-vcard-t">
@@ -82,8 +87,8 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
     return w.every((x) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.gender} ${v.age} ${v.use}`.toLowerCase().includes(x))
       && (!kind || (kind === "premade" ? v.category === "premade" : v.category !== "premade")) && (!gender || v.gender === GENDERS.find((g) => g[1] === gender)?.[0]);
   });
-  // Máy chủ chỉ cho thành viên thấy giọng riêng của chính họ, nên giọng riêng nào hiện ra cũng là của họ. Giọng Thư viện dùng chung: chỉ quản trị viên gỡ.
-  const delOk = (v: Voice) => v.category !== "premade" && (!!admin || !v.lib);
+  // Thành viên có thể thấy giọng cũ chưa rõ chủ: chỉ gỡ được giọng máy chủ ghi là của họ. Giọng Thư viện dùng chung: chỉ quản trị viên gỡ.
+  const delOk = (v: Voice) => v.category !== "premade" && (!!admin || (!!v.canDelete && !v.lib));
   const bkV = useBulk(shown.filter(delOk), (v) => v.id);
   const pgV = usePage(shown, 12, `${q}|${kind}|${gender}`);
   const voiceActs: BulkAct<Voice>[] = [
@@ -112,7 +117,8 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
               <div className="sp-vcard-a">
                 <button className="btn dark" onClick={() => { setVoice(v); go("tts", "single"); }}>Dùng giọng</button>
                 {can.remix && v.category !== "premade" && <button className="btn" onClick={() => { setVoice(v); go("create", "remix"); }}>Remix</button>}
-                {admin && v.category !== "premade" && <button className="icon-btn" aria-label={`Xóa ${v.name}`} onClick={() => remove(v)}><I.Trash size={15} /></button>}
+                {admin && v.holder && v.holder !== "purge" && <button className="btn" title={v.holder.includes("@") ? v.holder : undefined} aria-label="Chủ giọng" onClick={() => assign(v)}>{v.holder === "none" ? "Chưa có chủ" : v.holder === "shared" ? "Dùng chung" : v.holder === "orphan" ? "Không còn chủ" : "Gán chủ"}</button>}
+                {delOk(v) && <button className="icon-btn" aria-label={`Xóa ${v.name}`} onClick={() => remove(v)}><I.Trash size={15} /></button>}
               </div>
             )))}
             {(creatable.length > 0 || can.remix) && !bkV.on && <button className="sp-vcard sp-vnew" onClick={() => go("create")}><I.Plus size={20} /><b>Tạo giọng mới</b><span>Nhân bản giọng của bạn hoặc thiết kế từ mô tả</span></button>}

@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
-import { can, current, isAdmin, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
+import { audit, can, current, findByEmail, getUser, isAdmin, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceOwner, type Feat, type Plan,
+  scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../speechapi";
 import { quickCall } from "../../../ai/anymodel";
 
@@ -18,9 +18,12 @@ const num = (v: unknown, lo: number, hi: number, d: number) => { if (v === null 
 const bool = (v: unknown, d = false) => (v === undefined || v === null || v === "" ? d : v === true || v === "true" || v === "1" || v === 1);
 const credits = (p: Plan) => ({ used: p.credits.used, limit: p.credits.limit, resetAt: p.credits.resetAt });
 const ok = async (o: Record<string, unknown>) => Response.json({ ...o, credits: credits(await plan()) });
-const voiceCache = { at: 0, list: [] as Awaited<ReturnType<typeof myVoices>> };
+const voiceCache = { at: 0, gen: 0, list: [] as Awaited<ReturnType<typeof myVoices>> };
 async function voices(fresh = false) {
-  if (fresh || Date.now() - voiceCache.at > 10 * 60_000 || !voiceCache.list.length) { voiceCache.list = await myVoices(); voiceCache.at = Date.now(); }
+  if (fresh || voiceCache.gen !== voiceGen() || Date.now() - voiceCache.at > 10 * 60_000 || !voiceCache.list.length) {
+    voiceCache.list = await myVoices(); voiceCache.at = Date.now(); voiceCache.gen = voiceGen();
+    try { backfillVoiceOwners(voiceCache.list); } catch (e) { console.error("[speech] gán chủ giọng cũ", e); }
+  }
   return voiceCache.list;
 }
 const forgetVoices = () => { voiceCache.at = 0; };
@@ -29,28 +32,12 @@ async function usableVoices() {
   const [p, list] = await Promise.all([plan(), voices().catch(() => [] as Awaited<ReturnType<typeof voices>>)]);
   return p.library ? list : list.filter((v) => !v.lib);
 }
-// Ngôn ngữ của văn bản theo chữ viết (đủ để chọn giọng; model đa ngôn ngữ tự đọc đúng mọi ngôn ngữ nó hỗ trợ).
-function textLang(t: string) {
-  if (/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(t)) return "vi";
-  if (/[\u3040-\u30ff]/.test(t)) return "ja";
-  if (/[\uac00-\ud7af]/.test(t)) return "ko";
-  if (/[\u4e00-\u9fff]/.test(t)) return "zh";
-  if (/[\u0e00-\u0e7f]/.test(t)) return "th";
-  if (/[\u0400-\u04ff]/.test(t)) return "ru";
-  return "en";
-}
-// Giọng có sẵn nghe tự nhiên ở nhiều ngôn ngữ (model đa ngôn ngữ), dùng khi tài khoản không có giọng riêng cho ngôn ngữ đó.
-const PREFER = ["Sarah", "Jessica", "Alice", "Matilda", "Laura", "George", "Brian"];
-// Giọng đọc: giọng người dùng chọn nếu dùng được với gói; không thì giọng cùng ngôn ngữ với văn bản, rồi giọng có sẵn ưu tiên.
-async function pickVoice(text: string, want?: string) {
+// Giọng đọc: giọng người dùng chọn nếu dùng được với gói; không thì speechapi.defaultVoice.
+async function pickVoice(u: UserRow, text: string, want?: string) {
   const list = await usableVoices();
   const p = await plan();
   if (want && (p.library || list.some((v) => v.id === want) || !(await voices().catch(() => [])).some((v) => v.id === want && v.lib))) return want;
-  const lang = textLang(text);
-  const byName = (n: string) => list.find((v) => v.category === "premade" && v.name.toLowerCase() === n.toLowerCase());
-  return list.find((v) => v.langCode.toLowerCase().startsWith(lang) && v.category !== "premade")?.id
-    ?? list.find((v) => v.langCode.toLowerCase().startsWith(lang))?.id
-    ?? PREFER.map(byName).find(Boolean)?.id ?? list.find((v) => v.category === "premade")?.id ?? list[0]?.id ?? "JBFqnCBsd6RMkjVDRZzb";
+  return defaultVoice(list, text, u.id);
 }
 async function file(form: FormData, key: string, max = MAX_UP) {
   const f = form.get(key);
@@ -97,19 +84,37 @@ function dictsOf(b: Record<string, unknown>) {
 // Định dạng có vang / lệch kênh cần âm thanh stereo: PCM / μ-law không dùng được với hiệu ứng đó.
 const stereoOk = (fmt: string, fx?: Record<string, unknown>) => !fx || (!fx.environment_id && !fx.pan) || /^(mp3|opus|wav)/.test(fmt);
 
-// Giọng riêng chỉ chủ của nó và quản trị viên dùng được, dù biết mã giọng. Không đọc được danh sách giọng thì lời gọi ElevenLabs sau đó cũng sẽ báo lỗi.
+// Giọng riêng đã có chủ chỉ chủ của nó và quản trị viên dùng được, dù biết mã giọng. Không đọc được danh sách giọng thì lời gọi ElevenLabs sau đó cũng sẽ báo lỗi.
+// Câu báo không khẳng định giọng của ai: chủ suy từ lịch sử có thể sai, người tạo thật cần biết nhờ quản trị viên gán lại. Mã "voice": đọc to bỏ giọng đã lưu, đọc bằng giọng mặc định.
 async function gateVoices(u: UserRow, ids: string[]) {
   if (isAdmin(u) || !ids.length) return;
   const list = await voices().catch(() => []);
   for (const id of ids) {
     const v = list.find((x) => x.id === id);
-    if (v && isPrivateVoice(v) && voiceOwner(id) !== u.id) throw new SpeechErr("Giọng này là giọng riêng của người khác.", 403);
+    if (v && isPrivateVoice(v) && !voiceOpenTo(id, u.id)) throw new SpeechErr("Giọng này chưa được gán cho tài khoản của bạn. Hãy chọn giọng khác, hoặc nhờ quản trị viên gán lại nếu đây là giọng bạn đã tạo.", 403, "voice");
   }
 }
 const voiceIds = (b: Record<string, unknown>, form: FormData | null) => {
   const lines = Array.isArray(b.lines) ? (b.lines as { voice?: unknown }[]).map((l) => l?.voice) : [];
   return [b.voice, b.host, b.guest, ...lines, form?.get("voice")].filter((x): x is string => typeof x === "string" && !!x);
 };
+/** Quản trị viên xem chủ của giọng riêng: email, hoặc trạng thái. */
+const voiceHolder = (id: string) => {
+  const o = voiceOwner(id);
+  return o === null ? "none" : o === VOICE_SHARED ? "shared" : o === VOICE_ORPHAN ? "orphan" : o === VOICE_PURGE ? "purge" : getUser(o)?.email ?? "orphan";
+};
+/** Gán chủ cho giọng không rõ chủ hoặc gán sai, hoặc đánh dấu cho mọi thành viên. Giọng đang chờ xóa thì không: chủ của nó đã yêu cầu xóa khi xóa tài khoản. */
+function assignVoice(u: UserRow, b: Record<string, unknown>) {
+  if (!isAdmin(u)) throw new SpeechErr("Chỉ quản trị viên mới gán được chủ của giọng.", 403);
+  const id = str(b.id, 60), who = str(b.owner, 254).toLowerCase();
+  if (!id || !who) throw new SpeechErr("Thiếu giọng hoặc người được gán.");
+  if (voiceOwner(id) === VOICE_PURGE) throw new SpeechErr("Giọng này đang chờ xóa cùng tài khoản đã xóa.", 409);
+  const t = who === "shared" ? null : findByEmail(who);
+  if (who !== "shared" && !t) throw new SpeechErr("Không tìm thấy tài khoản có email này.", 404);
+  setVoiceOwner(id, t?.id ?? VOICE_SHARED);
+  audit("speech_voice_owner", { actor: u, target: t, detail: `${id}${t ? "" : " shared"}` });
+  return Response.json({ ok: true, holder: voiceHolder(id) });
+}
 const claimVoice = (voice: string) => { const uid = spender.getStore(); if (uid) setVoiceOwner(voice, uid); };
 
 async function GETop(req: Request, u: UserRow, op: string) {
@@ -127,7 +132,9 @@ async function GETop(req: Request, u: UserRow, op: string) {
     if (q.get("id")) { await gateVoices(u, [q.get("id")!]); const v = await elJson<Parameters<typeof voiceOut>[0] & { fine_tuning?: unknown }>(`/v1/voices/${encodeURIComponent(q.get("id")!)}`); return Response.json({ voice: voiceOut(v), fineTuning: v.fine_tuning ?? null }); }
     const p = await plan();
     // Gói Free: giọng lấy từ Thư viện không dùng được qua API nên không hiện.
-    const list = (await voices(q.get("fresh") === "1")).filter((v) => (p.library || !v.lib) && (isAdmin(u) || !isPrivateVoice(v) || voiceOwner(v.id) === u.id));
+    const admin = isAdmin(u);
+    const list = (await voices(q.get("fresh") === "1")).filter((v) => (p.library || !v.lib) && (admin || !isPrivateVoice(v) || voiceOpenTo(v.id, u.id)))
+      .map((v) => ({ ...v, canDelete: admin || voiceOwner(v.id) === u.id, ...(admin && isPrivateVoice(v) ? { holder: voiceHolder(v.id) } : {}) }));
     const s = str(q.get("q"), 80).toLowerCase();
     return Response.json({ voices: s ? list.filter((v) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.use}`.toLowerCase().includes(s)) : list });
   }
@@ -186,7 +193,7 @@ async function tts(u: UserRow, b: Record<string, unknown>) {
   const model = p.tts.find((m) => m.id === b.model) ?? p.tts.find((m) => m.id === "eleven_v4") ?? p.tts[0];
   if (!model) throw new SpeechErr("ElevenLabs chưa trả về model đọc văn bản nào cho khóa này.", 502);
   if (text.length > model.max) throw new SpeechErr(`Văn bản dài ${text.length.toLocaleString("vi-VN")} ký tự, quá giới hạn ${model.max.toLocaleString("vi-VN")} ký tự mỗi lần của ${model.name} trong gói này. Chia nhỏ văn bản hoặc chọn model khác.`);
-  const voice = await pickVoice(text, str(b.voice, 40));
+  const voice = await pickVoice(u, text, str(b.voice, 40));
   const fmt = await fmtFor(b.format);
   const q = new URLSearchParams({ output_format: fmt });
   const vs = settingsOf(b);
@@ -223,12 +230,12 @@ async function dialogue(u: UserRow, b: Record<string, unknown>) {
   return ok({ item });
 }
 // Đọc to trong khung chat và chế độ giọng nói: model nhanh nhất, phát dần khi âm thanh còn đang tạo, không lưu vào lịch sử.
-async function speak(b: Record<string, unknown>) {
+async function speak(u: UserRow, b: Record<string, unknown>) {
   const p = await need("tts");
   const text = str(b.text, 5000).replace(/```[\s\S]*?(```|$)/g, " ").replace(/[*_#>`|]/g, "").replace(/\s+/g, " ").trim();
   if (!text) throw new SpeechErr("Không có nội dung để đọc.");
   const model = ["eleven_v4_turbo", "eleven_flash_v2_5", "eleven_turbo_v2_5"].map((id) => p.tts.find((m) => m.id === id)).find(Boolean) ?? p.tts[0];
-  const voice = await pickVoice(text, str(b.voice, 40));
+  const voice = await pickVoice(u, text, str(b.voice, 40));
   const speed = num(b.speed, 0.7, 1.2, 1);
   // Tham số chờ ngắn chỉ các model v2 nhận; model v4 trả lỗi 400 nên nút đọc to hỏng hẳn trên gói có model này.
   const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128${/_v2/.test(model?.id ?? "") ? "&optimize_streaming_latency=2" : ""}`, {
@@ -720,7 +727,7 @@ async function POSTrun(req: Request, u: UserRow, op: string[]) {
   switch (key) {
     case "tts": return tts(u, b);
     case "dialogue": return dialogue(u, b);
-    case "speak": return speak(b);
+    case "speak": return speak(u, b);
     case "stt": return stt(u, form ?? new FormData());
     case "sfx": return sfx(u, b);
     case "music": return music(u, b);
@@ -731,6 +738,7 @@ async function POSTrun(req: Request, u: UserRow, op: string[]) {
     case "remix": return remix(b);
     case "voices/save": return saveDesigned(b);
     case "voices/add": return addLibrary(b);
+    case "voices/owner": return assignVoice(u, b);
     case "ivc": return ivc(form ?? new FormData());
     case "pvc/create": return pvc(b, "create");
     case "pvc/samples": case "pvc/verify": case "pvc/train": return pvc(form ?? new FormData(), op[1]);
