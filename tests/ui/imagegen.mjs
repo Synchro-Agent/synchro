@@ -184,6 +184,22 @@ try {
   ok(await ev(`document.documentElement.scrollWidth <= innerWidth + 1`), "điện thoại: không tràn ngang", await ev(`document.documentElement.scrollWidth`));
   ok(await ev(`(() => { const b = document.querySelector(".out-card").getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth + 1; })()`), "thẻ tệp nằm trọn trong màn hình");
   ok(await ev(`document.querySelector(".outs-imgs img").naturalWidth > 0`), "tải lại trang: ảnh vẫn hiện");
+  // Mạng chập chờn, máy chủ đang khởi động lại: không được báo hết hạn. Chặn đường tới ảnh giống lúc mất kết nối.
+  await P("Network.enable");
+  await P("Network.setCacheDisabled", { cacheDisabled: true });
+  await P("Network.setBlockedURLs", { urls: ["*/api/outputs/*"] });
+  await P("Page.reload");
+  await sleep(1000);
+  await P("Network.setBlockedURLs", { urls: [] });
+  ok(await until(`document.querySelector(".outs-imgs img")?.naturalWidth > 0`, 20000, "ảnh tự thử lại").catch(() => false), "lỗi thoáng qua: ảnh tự tải lại, không báo gì", await ev(`document.querySelector(".outs")?.innerHTML ?? ""`));
+  await P("Network.setBlockedURLs", { urls: ["*/api/outputs/*"] });
+  await P("Page.reload");
+  ok(await until(`!!document.querySelector(".out-img-gone")`, 30000, "thẻ thử lại").catch(() => false), "lỗi kéo dài: hiện lời báo", await ev(`document.querySelector(".outs")?.innerHTML ?? ""`));
+  ok(await ev(`!/hết hạn|expired/i.test(document.querySelector(".out-img-gone").innerText) && [...document.querySelectorAll(".out-img-gone button")].length === 2`), "không báo nhầm là hết hạn, có Thử lại và Mở", await ev(`document.querySelector(".out-img-gone").innerText`));
+  await shot("8b-retry");
+  await P("Network.setBlockedURLs", { urls: [] });
+  await ev(`document.querySelector(".out-img-gone button").click(), 1`);
+  ok(await until(`document.querySelector(".outs-imgs img")?.naturalWidth > 0`, 15000, "bấm thử lại").catch(() => false), "bấm Thử lại: ảnh hiện");
   // Tệp đã hết hạn: nói rõ, không để biểu tượng ảnh hỏng.
   const oid = await ev(`/outputs\\/([\\w-]+)/.exec(document.querySelector(".outs-imgs img").src)[1]`);
   rmSync(path.join(DATA, "outputs", uid, oid), { force: true });

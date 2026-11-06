@@ -5,7 +5,7 @@ import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const B = process.env.BASE ?? "http://localhost:3200", H = { "content-type": "application/json", origin: B };
-const PROF = tmpdir() + "/synchro-ui/chrome-prof-md", PORT = 9347;
+const PROF = tmpdir() + "/synchro-ui/chrome-prof-md", PORT = process.env.CDP_PORT ?? 9347;
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
