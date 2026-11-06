@@ -279,9 +279,12 @@ const POINTER_FOLD = W("do|ay|nay|tren|vua roi|luc nay|no");
 const ASK_MORE = W("(?:vậy )?còn(?: \\p{L}+){1,5} (?:thì )?sao|what about|how about");
 const ASK_MORE_FOLD = W("(?:vay )?con(?: \\p{L}+){1,5} (?:thi )?sao");
 // Chê kích thước, bố cục ("chữ to quá", "lề hẹp quá") và đòi so sánh ở cuối câu ("cho nó sang hơn", "giọng trang trọng hơn đi"): từng thành câu hỏi mới, model rẻ nhất, không công cụ, ngay giữa lúc đang dựng trang web.
-// Không gồm "mệt quá", "đói quá", "khá hơn rồi": đó không phải lời chỉnh sản phẩm, đừng kéo theo model mạnh.
-const TWEAK = "(?:to|nhỏ|bé|dài|ngắn|rộng|hẹp|cao|thấp|tối|sáng|nhạt|đậm|sát|thưa|dày|mỏng|lệch|chật|rối|trống)(?: \\p{L}+)? (?:quá|lắm)|\\p{L}+ hơn(?: (?:đi|nhé|nha|chút|một chút|tí|xíu|nữa))?$|too (?:big|small|long|short|wide|narrow|tall|dark|light|bright|busy|plain|tight|cramped)";
-const TWEAK_FOLD = "(?:to|nho|be|dai|ngan|rong|hep|cao|thap|toi|sang|nhat|dam|sat|thua|day|mong|lech|chat|roi|trong)(?: \\p{L}+)? (?:qua|lam)|\\p{L}+ hon(?: (?:di|nhe|nha|chut|mot chut|ti|xiu|nua))?$";
+// "hơn" phải gắn với một phần của sản phẩm hoặc là câu nhờ trần: "\p{L}+ hơn" từng biến "hôm nay em thấy đỡ hơn", "tối nay trời lạnh hơn" thành làm tiếp trang web bằng Opus, tốn hạn mức của gói. Không gồm "mệt quá", "đói quá".
+const MORE_TAIL = "(?: (?:đi|nhé|nha|chút|một chút|tí|xíu|nữa))?$";
+const TWEAK = `(?<!trời |giá |lương |tuổi )(?:to|nhỏ|bé|dài|ngắn|rộng|hẹp|cao|thấp|tối|sáng|nhạt|đậm|sát|thưa|dày|mỏng|lệch|chật|rối|trống)(?: \\p{L}+)? (?:quá|lắm)|(?:chữ|tiêu đề|màu|nền|nút|giọng|lề|khoảng cách|ảnh|hình|font|logo|bố cục|giao diện|slide|menu|khung|tone|tông|icon|banner|văn phong|(?:cho|làm(?: cho)?) (?:nó|trang|web|website|app|giao diện|bản này|cái này)|(?:viết|sửa|chỉnh)(?: lại)?)(?: \\p{L}+){0,3} hơn${MORE_TAIL}|^(?!(?:em|mình|tôi|tớ|anh|chị|con|bạn|thấy|cảm|trời|hôm|nay|đỡ|khỏe|khoẻ|khá|buồn|mệt|lạnh|nóng)(?!\\p{L}))\\p{L}+(?: \\p{L}+)? hơn (?:đi|nhé|nha)$|too (?:big|small|long|short|wide|narrow|tall|dark|light|bright|busy|plain|tight|cramped)`;
+// Không dấu dễ trùng hơn nhiều: "toi lam ke toan" (tôi làm), "toi qua" (tối qua), "sang nay lam" (sáng nay làm), "trong tuan qua". Bỏ các từ đó và chữ "lam", chỉ nhận khi đứng cuối câu.
+const TWEAK_FOLD = "(?:to|nho|be|dai|ngan|rong|hep|cao|thap|nhat|sat|lech)(?: \\p{L}+)? qua$|(?:chu|tieu de|mau|nut|giong|khoang cach|hinh|font|logo|bo cuc|giao dien|slide|menu|khung|tone|icon|banner|van phong|(?:cho|lam(?: cho)?) (?:no|trang|web|website|app|giao dien)|(?:viet|sua|chinh)(?: lai)?)(?: \\p{L}+){0,3} hon(?: (?:di|nhe|nha|chut|mot chut|ti|xiu|nua))?$|^(?!(?:em|minh|toi|to|anh|chi|con|ban|thay|cam|troi|hom|nay|do|khoe|kha|buon|met|lanh|nong)(?!\\p{L}))\\p{L}+(?: \\p{L}+)? hon (?:di|nhe|nha)$";
+const TWEAK_FOLD_RE = W(TWEAK_FOLD);
 const CONT = W(`${TWEAK}|tiếp|nữa|thêm|giải thích|cụ thể|chi tiết|ví dụ|đổi|sửa|bỏ|xóa|xoá|thay|chỉnh|giảm|tăng|rút gọn|ngắn hơn|dài hơn|to hơn|nhỏ hơn|đẹp hơn|rõ hơn|kỹ hơn|hay hơn|màu|font|continue|go on|keep going|more|change|add|remove|delete|replace|shorter|longer|bigger|smaller|update|instead|again|elaborate|expand|next|another|example`);
 const CONT_FOLD = W(`${TWEAK_FOLD}|tiep|nua|them|giai thich|cu the|chi tiet|vi du|doi|sua|xoa|thay|chinh|rut gon|ngan hon|dai hon|to hon|nho hon|dep hon|ro hon|mau`);
 function followsUp(t: string): boolean {
@@ -347,7 +350,8 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   if ((out.get("debug") ?? 0) && (out.get("code") ?? 0) < 3 && !a.trace && !(BUG_CTX.test(ins) && (out.get("language") ?? 0) < 3)) out.delete("debug");
   if (out.has("debug")) out.set("debug", out.get("debug")! + (out.get("code") ?? 0));
   // Câu chào, cảm ơn chỉ là trò chuyện khi câu ngắn và không nhờ việc gì khác.
-  if (out.has("chat") && (ins.length > 60 || [...out].some(([t, n]) => t !== "chat" && n >= 2))) out.delete("chat");
+  // "cho no sang hon": chữ "no" (nó) không phải lời từ chối bằng tiếng Anh.
+  if (out.has("chat") && (ins.length > 60 || [...out].some(([t, n]) => t !== "chat" && n >= 2) || (bare && TWEAK_FOLD_RE.test(ins)))) out.delete("chat");
   // Đoạn trong ngoặc kép + hỏi nghĩa / cách dùng / đúng sai → hỏi về từ ngữ ("What does 'take off' mean?").
   if (a.quotes && W("mean|meaning|nghĩa|difference|phân biệt|khác|say|nói|dùng|use|usage|correct|đúng|sai|wrong|word|từ|phrase|cụm|pronounce|phát âm|spell|natural|tự nhiên").test(ins))
     out.set("language", (out.get("language") ?? 0) + 3);

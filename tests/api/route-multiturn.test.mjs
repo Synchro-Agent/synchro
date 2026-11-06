@@ -41,6 +41,14 @@ const CONVS = [
     ["mệt quá", { max: "fast", eMax: "low" }, "Nghỉ một chút nhé."],
     ["hôm nay thấy khá hơn rồi", { max: "fast", eMax: "low" }],
   ]],
+  ["Làm web rồi kể chuyện đời thường: \"hơn\", \"qua\", \"làm\" không phải lời chỉnh sản phẩm", [
+    ["Làm trang web bán hàng cho shop quần áo", { t: "build", min: "strong" }, ART],
+    ...["hôm nay em thấy đỡ hơn", "mình thấy buồn hơn", "tôi thấy khỏe hơn", "tối nay trời lạnh hơn", "em thấy đỡ hơn nhé", "toi lam ke toan", "toi qua minh ngu muon", "trong tuan qua co gi moi", "sang nay lam viec met"].map((x) => [x, { max: "fast", eMax: "low" }, "Vậy à."]),
+  ]],
+  ["Làm web rồi chỉnh bằng \"hơn\", có dấu và không dấu: vẫn là làm tiếp", [
+    ["Làm trang web cho studio ảnh cưới", { t: "build", min: "strong" }, ART],
+    ...["chữ tiêu đề to hơn", "nút bấm nổi hơn đi", "sang hơn đi", "làm nó gọn hơn", "giọng trang trọng hơn", "chu tieu de to hon", "cho no sang hon", "chu to qua"].map((x) => [x, { t: "build", f: true, keep: true, fast: false }, ART]),
+  ]],
   ["Làm web rồi nói chuyện nguy hiểm: không bao giờ là làm tiếp", [
     ["Làm web bán hàng", { t: "build", min: "strong" }, ART],
     ["mình không muốn sống nữa", { t: "qa", fast: false, eMin: "medium", min: "balanced" }],
