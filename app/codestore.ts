@@ -2,7 +2,7 @@
 // và pull request Synchro theo dõi để tự sửa (CI lỗi, góp ý review) và tự lưu trữ phiên khi PR được gộp / đóng.
 import { db, getUser, needDisk } from "./authstore";
 import type { CodeStyle } from "./codestyle";
-import { mergeData, type CodeNode } from "./codemerge";
+import { fitSession, mergeData, type CodeNode } from "./codemerge";
 
 export type PermMode = "ask" | "edits" | "auto";
 export type CookieMode = "keep" | "until-stop" | "session";
@@ -132,26 +132,28 @@ export function getSession(uid: string, id: number) {
 
 type Node = CodeNode;
 export type TurnNode = CodeNode;
+/** Giới hạn một phiên trên máy chủ, cho cả bản trình duyệt gửi lên và bản lượt chạy nền tự lưu. */
+export const SESSION_MAX = 8_000_000;
 
 /** Lưu phiên (từ trình duyệt hay từ việc chạy nền). Trả về bản sau khi gộp (để thiết bị gửi lên biết có lượt mới từ nơi khác). */
-export function putSession(uid: string, id: number, o: { title?: string; data?: Record<string, unknown> | null; pinned?: boolean; archived?: boolean; base?: number; touch?: boolean }) {
+export function putSession(uid: string, id: number, o: { title?: string; data?: Record<string, unknown> | null; json?: string; pinned?: boolean; archived?: boolean; base?: number; touch?: boolean }) {
   const d = init();
   const now = Date.now();
   const cur = d.prepare("SELECT * FROM code_sessions WHERE user_id = ? AND id = ?").get(uid, id) as SRow | undefined;
   let data = o.data ?? null;
   let merged = false;
-  if (cur && data) {
+  // Bản trên máy chủ mới hơn bản thiết bị dựa vào: gộp để không mất lượt chạy nền hay lượt từ thiết bị khác. Không cần gộp thì đừng đọc lại cả phiên.
+  if (cur && data && (o.base ?? 0) < cur.updated_at) {
     let old: Record<string, unknown> | null = null;
     try { old = cur.data ? JSON.parse(cur.data) : null; } catch {}
-    // Bản trên máy chủ mới hơn bản thiết bị dựa vào: gộp để không mất lượt chạy nền hay lượt từ thiết bị khác.
-    if (old && (o.base ?? 0) < cur.updated_at) { data = mergeData(old, data, true); merged = true; }
+    if (old) { data = mergeData(old, data, true); merged = true; }
   }
   const title = (o.title ?? cur?.title ?? "Phiên code").replace(/\s+/g, " ").trim().slice(0, 120) || "Phiên code";
   const touched = o.touch === false ? cur?.touched_at ?? now : now;
   d.prepare(`INSERT INTO code_sessions (user_id, id, title, data, pinned, archived, created_at, updated_at, touched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, id) DO UPDATE SET title = excluded.title, data = COALESCE(excluded.data, code_sessions.data), pinned = excluded.pinned,
       archived = excluded.archived, deleted = 0, updated_at = excluded.updated_at, touched_at = excluded.touched_at`)
-    .run(uid, id, title, data ? JSON.stringify(data) : null, (o.pinned ?? !!cur?.pinned) ? 1 : 0, (o.archived ?? (o.touch === false ? !!cur?.archived : false)) ? 1 : 0, cur?.created_at ?? now, now, touched);
+    .run(uid, id, title, data ? (!merged && o.json) || JSON.stringify(data) : null, (o.pinned ?? !!cur?.pinned) ? 1 : 0, (o.archived ?? (o.touch === false ? !!cur?.archived : false)) ? 1 : 0, cur?.created_at ?? now, now, touched);
   return { updated: now, merged, data: merged ? data : undefined };
 }
 export function patchSession(uid: string, id: number, p: Partial<{ state: string | null; reason: string | null; suggest: string | null; running: boolean; archived: boolean; pinned: boolean; title: string }>) {
@@ -222,7 +224,11 @@ export function saveTurn(uid: string, sid: number, node: Node, title?: string) {
   const nodes = data.nodes ?? [];
   if (nodes.some((n) => n.id === node.id)) data.nodes = nodes.map((n) => (n.id === node.id ? { ...n, ...node } : n));
   else { data.nodes = [...nodes, node]; data.sel = { ...(data.sel ?? {}), [node.parent]: node.id }; }
-  putSession(uid, sid, { data, base: Infinity, title: s?.title || title });
+  // Không có trần thì phiên lớn dần tới hàng chục MB: mỗi lần lưu chặn cả máy chủ lâu hơn, và trình duyệt gửi lên bị từ chối (413) trong khi máy chủ vẫn tự ghi thêm.
+  const fit = fitSession(data, SESSION_MAX, node.id);
+  if (!fit) { console.warn(`[agent] phiên ${sid} quá lớn, không lưu thêm`); return; }
+  // Lưu nền không phải người dùng mở lại phiên: phiên vừa lưu trữ không được quay về danh sách đang dùng.
+  putSession(uid, sid, { data: fit.data, json: fit.json, base: Infinity, title: s?.title || title, archived: !!s?.archived, touch: !s?.archived });
 }
 
 // ------------------------------------------------------------------ pull request

@@ -14,7 +14,9 @@ const g = globalThis as unknown as { __synchroAgentRuns?: Map<string, AgentRun> 
 const runs = (g.__synchroAgentRuns ??= new Map());
 const keyOf = (uid: string, sid: string) => `${uid}:${sid}`;
 // Giữ lượt đã xong một giờ để trình duyệt quay lại còn thấy. Lượt quá dài và lượt chờ duyệt không ai trả lời thì tự dừng, không chiếm máy chủ mãi.
-const KEEP_MS = 3_600_000, MAX_RUN_MS = 2 * 3_600_000, ASK_WAIT_MS = 30 * 60_000, SAVE_MS = 10_000;
+const KEEP_MS = 3_600_000, MAX_RUN_MS = 2 * 3_600_000, ASK_WAIT_MS = Number(process.env.SYNCHRO_ASK_WAIT_MS) || 30 * 60_000, SAVE_MS = 10_000;
+/** Lần lưu tiếp cách lần trước bao lâu. Mỗi lần lưu đọc và ghi cả phiên, chặn tiến trình duy nhất của mọi người: giữ dưới khoảng 1% thời gian, phiên lớn thì lưu thưa đi (kết quả cuối lượt vẫn luôn được lưu). */
+export const saveGap = (costMs: number) => Math.min(300_000, costMs * 100);
 // Bộ đệm nhiều tối đa ~16 MB mỗi lượt: quá thì bỏ phần output chi tiết của công cụ, vẫn giữ tóm tắt.
 const MAX_BUF = 16_000_000, MAX_LIVE = 5;
 
@@ -44,14 +46,25 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
   // Tài khoản đã xóa: getPrefs trả mặc định (đồng bộ bật) và bảng phiên không có khóa ngoại tới users, nên nếu không chặn thì lượt ghi lại prompt và kết quả sau khi đã xóa.
   const sync = () => !run.purged && Number.isSafeInteger(numSid) && !!getUser(o.uid) && getPrefs(o.uid).sync;
   // Sự kiện nào cũng có thể làm đổi trạng thái lưu, nên chỉ ghi định kỳ; ghi lỗi không được làm hỏng lượt.
-  let dirty = false;
-  const save = () => { if (!dirty || !run.node || !sync()) return; dirty = false; try { saveTurn(o.uid, numSid, run.node, o.title); } catch (e) { console.warn("[agent] lưu lượt", (e as Error).message); } };
-  const saver = setInterval(save, SAVE_MS);
+  let dirty = false, nextSave = 0;
+  const save = (force = false) => {
+    if (!dirty || !run.node || !sync()) return;
+    const t0 = Date.now();
+    if (!force && t0 < nextSave) return;
+    dirty = false;
+    try { saveTurn(o.uid, numSid, run.node, o.title); } catch (e) { console.warn("[agent] lưu lượt", (e as Error).message); }
+    nextSave = Date.now() + saveGap(Date.now() - t0);
+  };
+  const saver = setInterval(() => save(), SAVE_MS);
   const hardStop = setTimeout(() => run.ac.abort(), MAX_RUN_MS);
   let askTimer: ReturnType<typeof setTimeout> | null = null;
+  // CLI gọi công cụ song song thì có thể có nhiều câu hỏi duyệt cùng lúc: trả lời một câu mà tắt hẹn giờ thì câu còn lại giữ lượt và chỗ chạy tới 2 giờ.
+  const openAsks = new Set<string>();
   const clearAsk = () => { if (askTimer) clearTimeout(askTimer); askTimer = null; };
+  const armAsk = () => { clearAsk(); askTimer = setTimeout(() => { emit({ t: "error", error: "Không có ai duyệt sau 30 phút nên lượt này đã dừng." }); run.ac.abort(); }, ASK_WAIT_MS); };
   const emit = (e: AgentEvent) => {
-    if (run.node) { const img = e.t === "result" ? { ...e, image: undefined } : e; run.node = foldAgentEvent(run.node, img); dirty = true; }
+    // Quá bộ đệm thì lượt trong bộ nhớ cũng bỏ đầu ra chi tiết, không lớn mãi theo số lần gọi công cụ.
+    if (run.node) { const img = e.t === "result" ? { ...e, image: undefined, ...(run.bytes > MAX_BUF ? { output: undefined } : {}) } : e; run.node = foldAgentEvent(run.node, img); dirty = true; }
     // Ảnh chụp màn hình chỉ tới người đang xem, không giữ trong bộ đệm (cũng không lưu ở phiên).
     let kept: AgentEvent = e.t === "result" && e.image ? { ...e, image: undefined } : e;
     const size = JSON.stringify(kept).length;
@@ -62,11 +75,15 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     for (const l of run.listeners) l.line({ s, e });
     if (e.t === "ask") {
       if (sync()) try { patchSession(o.uid, numSid, { state: "blocked", reason: `Chờ bạn duyệt: ${e.title}` }); } catch {}
-      clearAsk();
-      askTimer = setTimeout(() => { emit({ t: "error", error: "Không có ai duyệt sau 30 phút nên lượt này đã dừng." }); run.ac.abort(); }, ASK_WAIT_MS);
+      openAsks.add(e.id);
+      armAsk();
     } else if (e.t === "asked") {
-      clearAsk();
-      if (sync()) try { patchSession(o.uid, numSid, { state: null, reason: null }); } catch {}
+      openAsks.delete(e.id);
+      if (openAsks.size) armAsk();
+      else {
+        clearAsk();
+        if (sync()) try { patchSession(o.uid, numSid, { state: null, reason: null }); } catch {}
+      }
     }
   };
   if (sync()) { try { patchSession(o.uid, numSid, { running: true, state: null, reason: null }); if (run.node) { dirty = true; save(); } } catch {} }
@@ -74,7 +91,7 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     clearInterval(saver); clearTimeout(hardStop); clearAsk();
     run.ended = Date.now();
     if (run.node) { run.node = closeFolded({ ...run.node, done: true, ...(run.ac.signal.aborted ? { stopped: true } : {}) }); dirty = true; }
-    save();
+    save(true);
     // Bấm Dừng rồi gửi tiếp ngay: lượt mới đã chạy, lượt cũ thoát muộn không được báo phiên đã xong.
     if (sync() && runs.get(keyOf(o.uid, o.sid)) === run) try { patchSession(o.uid, numSid, { running: false }); } catch {}
     for (const l of run.listeners) l.end();

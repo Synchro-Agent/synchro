@@ -1,6 +1,6 @@
 import { AuthError, handle, requireUser, sameOrigin } from "../../../authstore";
 import { stopAgentRun } from "../../../agentruns";
-import { archiveIdle, deleteSession, getPrefs, getSession, listSessions, patchSession, putSession } from "../../../codestore";
+import { archiveIdle, deleteSession, getPrefs, getSession, listSessions, patchSession, putSession, SESSION_MAX } from "../../../codestore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export const PUT = handle(async (req) => {
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const id = idOf(b.id);
   const data = b.data && typeof b.data === "object" ? (b.data as Record<string, unknown>) : null;
-  if (data && JSON.stringify(data).length > 8_000_000) throw new AuthError("Phiên quá lớn để đồng bộ.", 413);
+  if (data && JSON.stringify(data).length > SESSION_MAX) throw new AuthError("Phiên quá lớn để đồng bộ.", 413);
   if (!getPrefs(user.id).sync) throw new AuthError("Đồng bộ phiên Code đang tắt.", 409);
   return Response.json(putSession(user.id, id, { title: typeof b.title === "string" ? b.title : undefined, data, pinned: typeof b.pinned === "boolean" ? b.pinned : undefined,
     archived: typeof b.archived === "boolean" ? b.archived : undefined, base: Number(b.base) || 0 }));

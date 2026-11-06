@@ -16,3 +16,34 @@ export function mergeData(a: Record<string, unknown> | null, b: Record<string, u
   return { ...a, ...b, ...newer, nodes: [...map.values()].sort((x, y) => x.id - y.id) };
 }
 
+/** Giữ phiên dưới max khi lưu từ máy chủ: bỏ chi tiết công cụ của lượt cũ trước (đầu ra, rồi diff và tham số, rồi cả nhật ký làm việc), lượt keep sau cùng; chữ trả lời của lượt cũ không đụng tới.
+ *  Không tự co được (toàn chữ trả lời) thì null, không ghi đè. Không sửa dữ liệu truyền vào: lượt keep còn đang chạy. */
+export function fitSession(data: Record<string, unknown>, max: number, keep?: number): { data: Record<string, unknown>; json: string } | null {
+  let json = JSON.stringify(data);
+  if (json.length <= max) return { data, json };
+  const nodes = [...((data.nodes as CodeNode[] | undefined) ?? [])].map((n) => ({ ...n }));
+  const order = [...nodes].sort((a, b) => (a.id === keep ? 1 : b.id === keep ? -1 : a.id - b.id));
+  const size = (v: unknown) => (v === undefined ? 0 : JSON.stringify(v).length);
+  let over = json.length - max;
+  for (const keys of [["output"], ["diff", "input"]]) {
+    for (const n of order) {
+      if (over <= 0) break;
+      n.steps = n.steps?.map((x) => {
+        const st = x as Record<string, unknown>;
+        if (over <= 0 || st.k !== "tool" || !keys.some((k) => st[k] !== undefined)) return x;
+        const out = { ...st };
+        for (const k of keys) { over -= size(out[k]); delete out[k]; }
+        return out;
+      });
+    }
+  }
+  for (const n of order) { if (over > 0 && n.id !== keep && n.steps) { over -= size(n.steps); delete n.steps; } }
+  const cur = over > 0 ? nodes.find((n) => n.id === keep) : undefined;
+  if (cur) {
+    over -= size(cur.steps); delete cur.steps;
+    if (typeof cur.ai === "string" && cur.ai.length > 200_000) { over -= cur.ai.length - 200_000; cur.ai = `…\n${cur.ai.slice(-200_000)}`; }
+  }
+  const out = { ...data, nodes };
+  json = JSON.stringify(out);
+  return json.length <= max ? { data: out, json } : null;
+}
