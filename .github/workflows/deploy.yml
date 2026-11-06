@@ -40,17 +40,36 @@ jobs:
           grep -q "Synchro với API giả lập" mock.log || { tail -60 mock.log; exit 1; }
           node tests/run-all.mjs 2>&1 | tee tests.log; exit ${PIPESTATUS[0]}
 
-      # Repo riêng tư: gửi kết quả kiểm tra lên VPS (/var/www/ci-status/<nhánh>.txt) để xem bằng SSH, kể cả khi lỗi.
-      - name: Gửi kết quả kiểm tra lên VPS
+      # Repo riêng tư: kết quả kiểm tra được xem bằng SSH trên VPS, kể cả khi lỗi. Job này đã chạy mã của gói npm (npm ci, dev:mock) nên không được chạm khóa SSH: chỉ gói kết quả, job report gửi đi.
+      - name: Gói kết quả kiểm tra
         if: always()
+        run: |
+          { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
+            [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
+            for f in tsc.log build.log tests.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result
+          path: ci.txt
+          retention-days: 1
+
+  # Máy chạy riêng, không checkout, không cài gói nào: gói npm bị chiếm ở job verify không đợi được khóa này.
+  report:
+    needs: verify
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-result
+      - name: Gửi kết quả kiểm tra lên VPS
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-          { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
-            [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
-            for f in tsc.log build.log tests.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
+          # VPS_KNOWN_HOSTS (dòng known_hosts của máy chủ): có thì dùng, khỏi tin máy trả lời ssh-keyscan lần đầu.
+          if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null; fi
           scp -i ~/.ssh/id_deploy ci.txt ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ci-status/${{ github.ref_name }}.txt || true
 
   deploy:
@@ -68,7 +87,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts; fi
 
       - name: Đẩy code lên VPS
         run: |
@@ -97,7 +116,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts; fi
 
       - name: Đẩy code lên staging
         run: |
