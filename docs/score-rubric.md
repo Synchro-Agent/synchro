@@ -4,6 +4,8 @@ Chấm như một chuyên gia của từng lĩnh vực: nhìn sản phẩm thậ
 Điểm một mục không cao hơn mặt yếu nhất của nó quá 1 điểm. Mỗi mặt cần bằng chứng thật (khung hình, tệp, số đo); chưa xem được thì ghi "chưa kiểm chứng", không suy đoán.
 9 nghĩa là chuyên gia khó tính chấp nhận giao cho khách mà không cần sửa. Giai đoạn tài khoản miễn phí chỉ nới nhẹ ở mặt phụ thuộc trực tiếp vào độ thông minh của model; tính năng, giao diện, độ ổn định giữ nguyên.
 
+Mọi đầu ra đều có thiết kế: Word, Excel, PDF, bảng trong câu trả lời, email hay trang tổng hợp đều bị chấm thẩm mỹ, không chỉ slide và video. Một mục luôn gồm nhiều mặt, và đầu ra cuối cùng phải đạt chất lượng ở mọi mặt đó.
+
 ## Sản phẩm thị giác
 - **Slide:** concept và câu chuyện, cấu trúc lập luận, bố cục và lưới, chữ, màu, hình ảnh và biểu đồ, hiệu ứng xuất hiện và chuyển trang, nhịp chuyển động, lỗi hiển thị (tràn, đè, rớt chữ), bản PowerPoint tải về giống bản xem, tốc độ.
 - **Poster, infographic, thiết kế:** ý tưởng, thứ bậc thị giác, chữ tiếng Việt, màu, khoảng trắng, độ tinh xảo của minh họa, tính nguyên bản, tiêu chuẩn in, lỗi hiển thị, xuất tệp, tốc độ.
@@ -12,8 +14,8 @@ Chấm như một chuyên gia của từng lĩnh vực: nhìn sản phẩm thậ
 - **Ảnh AI:** đúng yêu cầu, thẩm mỹ, chi tiết sai (tay, chữ, vật thể), tỉ lệ, độ phân giải, đặt tên tệp, tốc độ.
 
 ## Tài liệu và số liệu
-- **Word:** nội dung chuyên môn, cấu trúc, định dạng, tiêu đề và đánh số, bảng, chữ tiếng Việt, mở đúng trong Word thật, lỗi trình bày, tốc độ.
-- **Excel:** logic và công thức đúng, cấu trúc sheet, định dạng chuẩn nghề, biểu đồ, nhập liệu dễ, mở đúng trong Excel thật, phân tích tệp tải lên đúng số, tốc độ.
+- **Word:** nội dung chuyên môn, cấu trúc, thẩm mỹ trang (thứ bậc chữ, khoảng cách, màu nhấn, đầu trang và chân trang, nhịp trang), tiêu đề và đánh số, bảng đẹp, chữ tiếng Việt, mở đúng trong Word thật, lỗi trình bày, tốc độ.
+- **Excel:** logic và công thức đúng, cấu trúc sheet, thiết kế bảng (màu, độ rộng cột, căn lề, định dạng số, bố cục tổng hợp như một dashboard), biểu đồ đẹp và đúng loại, nhập liệu dễ, mở đúng trong Excel thật, phân tích tệp tải lên đúng số, tốc độ.
 - **Xuất và xem trước:** giống bản gốc, tệp lớn, tên tệp, phông chữ, tải về thành công.
 
 ## Trò chuyện
