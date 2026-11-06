@@ -172,7 +172,7 @@ export async function sessionMeta(user: UserRow, o: { d?: string; ask: string; r
   const prompt = `Phiên code cần đánh giá:\n\n[Người dùng nhờ]\n${o.ask.slice(0, 2500)}\n\n[Trợ lý trả lời cuối lượt]\n${(o.reply || "(không có)").slice(-3500)}\n\n${o.stopped ? "[Người dùng đã bấm Dừng giữa chừng]\n" : ""}${o.error ? `[Lỗi] ${o.error.slice(0, 300)}\n` : ""}${o.edited?.length ? `Tệp đã sửa trong lượt này: ${o.edited.slice(0, 20).join(", ")}${o.edited.length > 20 ? "…" : ""}\n` : ""}${changes}`;
   let r: SessionMetaOut = { state: null, reason: null, suggest: null };
   try {
-    const { text } = await quickCall(user, META, prompt, { maxTokens: 160 });
+    const { text } = await quickCall(user, META, prompt, { maxTokens: 160, job: "meta", bg: true });
     const j = JSON.parse(/\{[\s\S]*\}/.exec(text)?.[0] ?? "{}") as Record<string, unknown>;
     const st = j.state === "blocked" || j.state === "review" || j.state === "done" ? j.state : null;
     r = { state: st, reason: typeof j.reason === "string" ? j.reason.trim().slice(0, 80) || null : null, suggest: typeof j.suggest === "string" ? j.suggest.trim().replace(/^["“]|["”]$/g, "").slice(0, 160) || null : null };

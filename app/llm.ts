@@ -378,9 +378,6 @@ export function buildSystemPrompt(p: Project, userMessage: string): string {
 }
 
 // ------------------------------------------------------------ BỘ NHỚ
-const MEM_SYSTEM =
-  "Bạn trích xuất bộ nhớ dài hạn cho một dự án. Chỉ giữ thông tin bền vững và hữu ích cho các cuộc chat sau: sở thích, quyết định, ràng buộc, mục tiêu, bối cảnh của dự án. Bỏ qua chuyện vặt nhất thời. Không lặp lại những gì đã có trong bộ nhớ hiện tại. Mỗi mục là một câu ngắn. CHỈ trả về một mảng JSON các chuỗi, không thêm chữ nào khác. Nếu không có gì mới, trả về [].";
-
 // Khi chưa có model: lấy các câu người dùng nói về bản thân/mục tiêu/ưu tiên.
 const FACT = /\b(tôi (đang|muốn|cần|thích|ưu tiên|dùng|làm)|mình (đang|muốn|cần|thích)|luôn|đừng|không được|ưu tiên|dự án (này )?(là|dùng)|i('| a)?m (building|working|using)|i (want|need|prefer|like|use)|always|never|prefer)\b/i;
 function heuristicMemory(recent: LLMMsg[], existing: string[]): string[] {
@@ -399,15 +396,11 @@ function heuristicMemory(recent: LLMMsg[], existing: string[]): string[] {
 export async function extractMemory(p: Project, recent: LLMMsg[]): Promise<string[]> {
   const existing = (p.mem ?? []).map((m) => m.content);
   try {
-    // Đã tắt "Tạo bộ nhớ từ đoạn chat" thì không ghi nhớ gì và không tốn lượt của gói. Không hỏi được thì cũng thôi, lần sau làm tiếp.
-    const on = await fetch("/api/memory", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => j?.cfg?.gen === true, () => false);
-    if (!on) return [];
     if (!hasLLM) return heuristicMemory(recent, existing);
-    const transcript = recent.slice(-8).map((m) => `${m.role}: ${textOf(m.content)}`).join("\n");
-    const prompt = `Bộ nhớ hiện có:\n${JSON.stringify(existing)}\n\nHội thoại gần đây:\n${transcript}`;
-    const raw = (await callLLM(MEM_SYSTEM, [{ role: "user", content: prompt }], 600)).replace(/```(?:json)?/g, "").trim();
-    const arr = JSON.parse(raw);
-    return (Array.isArray(arr) ? arr : []).filter((x): x is string => typeof x === "string" && !!x.trim() && !existing.includes(x)).map((x) => x.trim());
+    // Máy chủ chạy bằng model rẻ nhất (không phải model đang chọn) và tự kiểm tra "Tạo bộ nhớ từ đoạn chat". Không hỏi được thì cũng thôi, lần sau làm tiếp.
+    const r = await fetch("/api/memory/project", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ existing, messages: recent.slice(-8).map((m) => ({ role: m.role, text: textOf(m.content) })) }) });
+    const arr = r.ok ? (await r.json()).items : [];
+    return (Array.isArray(arr) ? arr : []).filter((x): x is string => typeof x === "string" && !!x.trim() && !existing.includes(x));
   } catch (e) {
     console.warn("extractMemory lỗi:", e);
     return [];

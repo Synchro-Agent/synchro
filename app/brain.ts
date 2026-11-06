@@ -12,7 +12,7 @@
 import crypto from "node:crypto";
 import { db, forgetProfile, getUser, setInstructions, type UserRow } from "./authstore";
 import { forgetCliMemory } from "./ai/cli_auth";
-import { quickCall } from "./ai/anymodel";
+import { NO_CHEAP, quickCall } from "./ai/anymodel";
 import { clearMemory, listMemory, memCfg } from "./memory";
 import { splitArtifacts } from "./artifacts";
 import { chatGone } from "./chatstore";
@@ -429,7 +429,7 @@ async function distillOne(row: { user_id: string; conv: string; feature: string;
   const topics = notes.filter((n) => n.kind === "topic").map((n) => n.title).slice(-80);
   const entities = notes.filter((n) => n.kind === "entity").map((n) => n.title).slice(-80);
   const transcript = snap.map((m) => `[${m.r === "u" ? "Người dùng" : "Trợ lý"}]\n${m.t}`).join("\n\n").slice(-24_000);
-  const { text } = await quickCall(user, DISTILL(sens, topics, entities), `Đoạn chat cần chưng cất:\n\n${transcript}`, { maxTokens: 1400 });
+  const { text } = await quickCall(user, DISTILL(sens, topics, entities), `Đoạn chat cần chưng cất:\n\n${transcript}`, { maxTokens: 1400, job: "brain", bg: true });
   const j = jsonOf(text) as Distilled;
   // Người dùng xóa đoạn chat trong lúc đang chưng cất: không tạo lại ghi chú từ nội dung đã xóa.
   if (chatGone(uid, row.conv)) return;
@@ -481,7 +481,7 @@ async function compilePages(user: UserRow) {
   const pages = allNotes(uid).filter((n) => WIKI.includes(n.kind) && (n.props.stale || (n.props.summary === undefined && (n.props.facts?.length ?? 0) > 0))).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6);
   if (!pages.length) return 0;
   const data = pages.map((n) => ({ title: n.title, kind: n.kind === "topic" ? "chủ đề" : `tên riêng${n.props.etype ? ` (${n.props.etype})` : ""}`, summary: n.props.summary ?? n.props.desc ?? "", facts: (n.props.facts ?? []).map((f) => ({ t: f.t, src: f.src })) }));
-  const { text } = await quickCall(user, COMPILE, `Trang cần biên soạn:\n${JSON.stringify(data)}`, { maxTokens: 2400 });
+  const { text } = await quickCall(user, COMPILE, `Trang cần biên soạn:\n${JSON.stringify(data)}`, { maxTokens: 2400, job: "brain", bg: true });
   const j = jsonOf(text) as { pages?: { title?: unknown; summary?: unknown; facts?: unknown }[] };
   let n = 0;
   for (const pg of j.pages ?? []) {
@@ -535,7 +535,7 @@ async function mergeDupes(user: UserRow) {
   const left = allNotes(uid).filter((n) => WIKI.includes(n.kind));
   if (left.length >= 4) {
     const list = left.map((n) => `- ${n.title} (${n.kind === "topic" ? "chủ đề" : "tên riêng"})${n.props.aliases?.length ? ` · còn gọi: ${n.props.aliases.join(", ")}` : ""}`).join("\n");
-    const { text } = await quickCall(user, MERGE, `Các tên trong bộ não:\n${list}`, { maxTokens: 800 });
+    const { text } = await quickCall(user, MERGE, `Các tên trong bộ não:\n${list}`, { maxTokens: 800, job: "brain", bg: true });
     const j = jsonOf(text) as { groups?: { keep?: unknown; merge?: unknown }[] };
     for (const g of j.groups ?? []) {
       const keep = typeof g.keep === "string" ? findNote(uid, g.keep) : null;
@@ -583,7 +583,7 @@ async function buildMaps(user: UserRow) {
   const topics = allNotes(uid).filter((n) => n.kind === "topic");
   if (topics.length < 6) return 0;
   const list = topics.map((n) => `- ${n.title}: ${(n.props.summary || n.props.desc || "").slice(0, 140)}`).join("\n");
-  const { text } = await quickCall(user, MAPS, `Các chủ đề cần xếp bản đồ:\n${list}`, { maxTokens: 900 });
+  const { text } = await quickCall(user, MAPS, `Các chủ đề cần xếp bản đồ:\n${list}`, { maxTokens: 900, job: "brain", bg: true });
   const j = jsonOf(text) as { maps?: { name?: unknown; desc?: unknown; topics?: unknown }[] };
   const keep = new Set<string>(), up = new Map<string, string>();
   for (const m of j.maps ?? []) {
@@ -614,7 +614,7 @@ async function compileProfile(user: UserRow) {
   const uid = user.id, about = getNote(uid, ABOUT);
   if (!about?.props.profile?.length) return false;
   const data = { profile: about.props.profile.map((f) => ({ cat: f.cat, t: f.t, src: f.src })), memories: listMemory(uid).map((m) => m.content).slice(0, 40) };
-  const { text } = await quickCall(user, PROFILE, `Những điều đã biết về người dùng:\n${JSON.stringify(data)}`, { maxTokens: 1600 });
+  const { text } = await quickCall(user, PROFILE, `Những điều đã biết về người dùng:\n${JSON.stringify(data)}`, { maxTokens: 1600, job: "brain", bg: true });
   const j = jsonOf(text) as { portrait?: unknown; profile?: unknown };
   const old = new Map(about.props.profile.map((f) => [fold(f.t), f]));
   const prof = (Array.isArray(j.profile) ? j.profile : []).map((x) => x as { cat?: unknown; t?: unknown; src?: unknown })
@@ -671,7 +671,7 @@ async function autoInstructions(user: UserRow) {
     mem.length ? `Ký ức dài hạn:\n${mem.map((m) => `- ${m.content}`).join("\n")}` : "",
     hub?.props.focus?.length ? `Đang theo đuổi: ${hub.props.focus.join("; ")}` : "",
   ].filter(Boolean).join("\n\n");
-  const { text } = await quickCall(user, INSTRUCT, data, { maxTokens: 2000 });
+  const { text } = await quickCall(user, INSTRUCT, data, { maxTokens: 2000, job: "brain", bg: true });
   const out = text.replace(/^```(?:markdown|md)?\s*/i, "").replace(/```\s*$/, "").trim();
   // Chỉ nhận đúng một bản hướng dẫn: có mục "## …", không kèm code, không quá dài (model trả lời lạc đề thì bỏ qua, giữ bản cũ).
   if (out.length < 40 || out.length > 8000 || /^\s*\{/.test(out) || /```/.test(out) || !/^##\s+\S/m.test(out)) return false;
@@ -693,7 +693,7 @@ export async function garden(uid: string, o: { now?: boolean } = {}) {
   if (!user || !learning(uid)) return;
   ensureBase(user);
   const st = state(uid), now = Date.now();
-  const step = async (name: string, f: () => Promise<unknown>) => { try { await f(); } catch (e) { if (!/no json|503/.test(String((e as Error).message))) console.error(`[brain] ${name}`, (e as Error).message); } };
+  const step = async (name: string, f: () => Promise<unknown>) => { try { await f(); } catch (e) { if (!/no json|503|no cheap/.test(String((e as Error).message))) console.error(`[brain] ${name}`, (e as Error).message); } };
   autoLink(uid);
   await step("biên soạn", () => compilePages(user));
   const wiki = allNotes(uid).filter((n) => WIKI.includes(n.kind)).length;
@@ -737,7 +737,7 @@ async function consolidate(uid: string) {
     `Chủ đề: ${notes.filter((n) => n.kind === "topic").map((n) => n.title).join(", ") || "(chưa có)"}`,
     `Các đoạn chat gần đây (mới trước):\n${chats.map((n) => `- ${day(n.updatedAt)} ${n.title}: ${n.props.gist}${n.props.tasks?.length ? ` Dang dở: ${n.props.tasks.join("; ")}` : ""}`).join("\n") || "(chưa có)"}`,
   ].filter(Boolean).join("\n\n");
-  const { text } = await quickCall(user, CORE, data, { maxTokens: 700 });
+  const { text } = await quickCall(user, CORE, data, { maxTokens: 700, job: "brain", bg: true });
   const j = jsonOf(text) as { overview?: unknown; focus?: unknown };
   refreshHub(uid, { overview: typeof j.overview === "string" ? j.overview.replace(/[[\]]/g, "").trim().slice(0, 1500) : undefined, focus: strs(j.focus, 6) });
   setState(uid, { dirty: 0, hub_at: Date.now() });
@@ -769,6 +769,8 @@ export async function distillPending(o: { uid?: string; now?: boolean; max?: num
         setState(r.user_id, { learn_err: null, learn_err_at: 0 });
         done++;
       } catch (e) {
+        // Chỉ còn model mạnh: chưa làm, giữ nguyên trong hàng chờ, không tính là một lần thất bại và không báo lỗi cho người dùng.
+        if ((e as Error).message === NO_CHEAP) continue;
         // Model trả sai hoặc chưa dùng được (gói hết hạn, hết hạn mức): thử lại ở lượt sau. Quá số lần thì dừng thử nhưng không xóa, và báo cho người dùng.
         d.prepare("UPDATE brain_queue SET tries = tries + 1 WHERE user_id = ? AND conv = ?").run(r.user_id, r.conv);
         const why = String((e as Error).message).replace(/\s+/g, " ").slice(0, 200);

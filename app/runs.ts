@@ -52,7 +52,7 @@ export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
-type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; onMsg?: Set<() => void>; step?: AbortController;
+type Live = { at?: number; s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; onMsg?: Set<() => void>; step?: AbortController;
   tools?: number; toolsTaken?: number; toolWaiters?: (() => void)[] };
 const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
@@ -80,6 +80,8 @@ const scope = (gsc.__synchroRunScope ??= new AsyncLocalStorage<{ id: string }>()
 export const currentRun = () => scope.getStore()?.id ?? null;
 /** Chạy f trong ngữ cảnh của lượt id (cầu nối MCP nhận lời gọi công cụ ngoài lượt: progress, takeInbox vẫn ghi đúng lượt). */
 export const inRun = <T>(id: string | null, f: () => T): T => (id ? scope.run({ id }, f) : f());
+/** Lượt hiện tại đã chạy bao lâu kể từ lúc được tạo (null: không ở trong lượt bền, ví dụ việc phụ). */
+export const runAge = (): number | null => { const s = scope.getStore(), at = s && live.get(s.id)?.at; return at ? Date.now() - at : null; };
 /** Chữ đang viết của lượt (null nếu lượt không chạy trong tiến trình này). */
 export const liveText = (id: string) => { const l = live.get(id); return l ? { s: l.s, text: l.text } : null; };
 /** Lượt đang chạy của một đoạn chat (để người xem chung nhận chữ đang viết). */
@@ -278,7 +280,7 @@ export function queueFull(uid: string) {
 
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null) {
   const ctl = new AbortController();
-  live.set(id, { s: 0, text: "", ctl, conv, uid: user.id, inbox: [] });
+  live.set(id, { at: Date.now(), s: 0, text: "", ctl, conv, uid: user.id, inbox: [] });
   scope.run({ id }, () => {
     (async () => {
       const slot = await acquire({ uid: user.id, lane: "run", limit: turnsLimit(user), total: turnsTotal(user), signal: ctl.signal, maxWaitMs: QUEUE_WAIT_MS, onWait: (w) => progress("note", WAIT_NOTE[w]) });

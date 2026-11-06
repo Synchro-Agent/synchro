@@ -528,6 +528,16 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   for (const x of all) if (x.p.key !== pick.p.key && !alt.includes(x.p.key)) alt.push(x.p.key);
   return { model: pick.p.key, tier: pick.p.tier, vendor: pick.p.vendor, task, effort: effortFor(score, task, think), why: [`việc ${LABEL[task]}`, ...why], alt };
 }
+/**
+ * Model cho việc phụ (đặt tên, nén ngữ cảnh, rút bộ nhớ, chưng cất, phản biện tự động): rẻ nhất trong danh sách. Không ai đứng nhìn nên không tính chi phí chờ chữ như routeModel:
+ * routeModel xếp Sonnet (0,75) trước Luna của Codex (0,25 + 0,6 chờ) khi Haiku tạm hết hạn mức, tức việc nền chạy hạng cao hơn cần thiết. avoid: CLI đang treo, chỉ dùng khi không còn gì khác.
+ */
+export function sideModel(allowed: string[], o: { avoid?: string[] } = {}): string | null {
+  const fits = allowed.filter((k) => !CREDIT.test(k) && !CODE_ONLY.test(k));
+  const clean = fits.filter((k) => !o.avoid?.includes(k));
+  const pool = clean.length ? clean : fits.length ? fits : allowed;
+  return pool.map((k, i) => ({ k, i, c: profileOf(k).cost })).sort((a, b) => a.c - b.c || lag(a.k) - lag(b.k) || a.i - b.i)[0]?.k ?? null;
+}
 // Câu cần dữ liệu mới hoặc địa chỉ web: để lượt đầy đủ có công cụ trả lời.
 const FRESH = W("(?<!đánh )giá|tỷ giá|tỉ giá|tin tức|hôm nay|mới nhất|thời tiết|hiện nay|hiện tại|bây giờ|năm nay|kết quả|(?<!du )lịch(?! sử)|latest|news|today|price|weather|current|score");
 const LONG_WORK = W("thông cáo|fanpage|mô tả công việc|press release|job description|bản đề xuất|cv|resume|cover letter|sơ yếu lý lịch|báo cáo|report|hợp đồng|đề xuất|proposal|kế hoạch|kịch bản|sách|ebook|tệp|file|word|pdf|excel|docx|artifact|tiểu luận|luận văn|thuyết trình|landing|seo");

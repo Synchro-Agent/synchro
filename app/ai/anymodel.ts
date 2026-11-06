@@ -4,7 +4,7 @@
 import { canModel, type UserRow } from "../authstore";
 import { ALL } from "../catalog";
 import { catalog, mainModels, resolveModel } from "../providers";
-import { routeModel, type RouteInput } from "../router";
+import { routeModel, sideModel, tierOf, type RouteInput } from "../router";
 import { chatOnce, HttpErr } from "../llmcall";
 import { overLimit, withUsage } from "../usage";
 import { agyOtherBlock, isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
@@ -42,11 +42,21 @@ export async function pickModel(user: UserRow, q: RouteInput, o: { exclude?: (k:
 
 export class OneShotErr extends Error { constructor(m: string, public status: number) { super(m); } }
 
+// CLI vừa treo hoặc lỗi phía hãng với tài khoản này: chế độ Tự động và việc phụ tránh trong 5 phút (không gói nào khác thì vẫn dùng). Giữ trong bộ nhớ: khởi động lại thì thử lại từ đầu.
+// Toàn cục: mỗi route của Next được đóng gói riêng, việc phụ ở route đặt tên phải thấy CLI vừa treo ở lượt chat.
+const STALL_MS = 5 * 60_000;
+const stalls: Map<string, number> = ((globalThis as { __synchroStalls?: Map<string, number> }).__synchroStalls ??= new Map());
+export const noteStall = (uid: string, cli: string) => { if (stalls.size > 5000) stalls.clear(); stalls.set(`${uid}:${cli}`, Date.now() + STALL_MS); };
+export const clearStall = (uid: string, cli: string) => { stalls.delete(`${uid}:${cli}`); };
+export const stalledModels = (uid: string, models: string[]) => models.filter((k) => { const cli = subCli(k); return !!cli && (stalls.get(`${uid}:${cli}`) ?? 0) > Date.now(); });
+/** Việc nền bị bỏ qua vì chỉ còn model mạnh (hạn mức đắt của người dùng): không phải lỗi, lần sau làm lại. */
+export const NO_CHEAP = "no cheap model";
+
 /** Một lời gọi không công cụ bằng model key (gói hoặc khóa API). Hạn mức chi phí API chỉ áp cho model khóa API. */
-export async function oneShot(user: UserRow, key: string, system: string, messages: { role: "user" | "assistant"; content: string }[], o: { maxTokens?: number; signal?: AbortSignal; feature?: string } = {}): Promise<string> {
+export async function oneShot(user: UserRow, key: string, system: string, messages: { role: "user" | "assistant"; content: string }[], o: { maxTokens?: number; signal?: AbortSignal; feature?: string; job?: string; bg?: boolean } = {}): Promise<string> {
   if (subCli(key)) {
     // Gói: chạy CLI chính chủ một lượt (phiên mới, không gắn đoạn chat nào), mức nỗ lực thấp cho nhanh.
-    const r = await subTurn({ user, model: key, system, messages, effort: "low", signal: o.signal });
+    const r = await subTurn({ user, model: key, system, messages, effort: "low", signal: o.signal, job: o.job ?? o.feature ?? "side", bg: o.bg });
     const j = r.json as { text?: string; error?: string };
     if (r.status !== 200 || typeof j.text !== "string") throw new OneShotErr(j.error ?? "Gói subscription chưa trả lời được.", r.status === 200 ? 502 : r.status);
     return j.text;
@@ -63,10 +73,16 @@ export async function oneShot(user: UserRow, key: string, system: string, messag
   }
 }
 
-/** Việc phụ nhanh (tóm tắt, rút ý): chọn model nhanh nhất dùng được rồi gọi một lần. */
-export async function quickCall(user: UserRow, system: string, content: string, o: { maxTokens?: number; signal?: AbortSignal } = {}) {
-  const pick = await pickModel(user, { text: "tóm tắt", attachments: 0, turns: 1, studio: false });
-  if (!pick) throw new OneShotErr("Synchro chưa được kết nối với model nào (chưa đăng nhập gói hoặc chưa có khóa API).", 503);
-  const text = await oneShot(user, pick.model, system, [{ role: "user", content }], o);
-  return { text, model: pick.model };
+/**
+ * Việc phụ: model rẻ nhất dùng được, gọi một lần ở mức nỗ lực thấp. job: tên việc, ghi vào dòng [timing] để phân biệt với lượt chat.
+ * bg: việc người dùng không chờ (rút bộ nhớ, chưng cất, đánh giá phiên): xếp hàng sau các việc khác, và không chạy khi chỉ còn model mạnh.
+ */
+export async function quickCall(user: UserRow, system: string, content: string, o: { maxTokens?: number; signal?: AbortSignal; job?: string; bg?: boolean } = {}) {
+  const { allowed, usable } = await usableModels(user);
+  const list = usable.length ? usable : allowed;
+  const model = sideModel(list, { avoid: stalledModels(user.id, list) });
+  if (!model) throw new OneShotErr("Synchro chưa được kết nối với model nào (chưa đăng nhập gói hoặc chưa có khóa API).", 503);
+  if (o.bg && tierOf(model) === "strong") throw new OneShotErr(NO_CHEAP, 503);
+  const text = await oneShot(user, model, system, [{ role: "user", content }], o);
+  return { text, model };
 }

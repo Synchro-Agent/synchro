@@ -29,7 +29,7 @@ export const POST = handle(async (req: Request) => {
       .replace(/```[\s\S]*?(```|$)/g, "[khối code]").replace(/#(?:tool|args)=\S+/g, "").trim().slice(0, 1500)}`);
   if (!msgs.length || !msgs[0].trim()) return Response.json({ error: "Chưa có nội dung để đặt tên." }, { status: 400 });
   try {
-    const { text, model } = await quickCall(user, TITLE, `Đoạn chat cần đặt tên:\n\n${msgs.join("\n\n")}`, { maxTokens: 40 });
+    const { text, model } = await quickCall(user, TITLE, `Đoạn chat cần đặt tên:\n\n${msgs.join("\n\n")}`, { maxTokens: 40, job: "title" });
     const title = clean(text);
     const words = title.split(" ").length;
     if (!title || title.length > 80 || words > 12) return Response.json({ error: "Model không trả về tên hợp lệ." }, { status: 422 });

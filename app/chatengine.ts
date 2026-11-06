@@ -39,7 +39,7 @@ import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
-import { usableModels } from "./ai/anymodel";
+import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
@@ -1296,12 +1296,7 @@ function holdNeedTools(out?: (t: string) => void) {
     open = true; out?.(buf);
   };
 }
-// CLI vừa treo hoặc lỗi phía hãng với tài khoản này: chế độ Tự động tránh trong 5 phút (không gói nào khác thì vẫn dùng). Giữ trong bộ nhớ: khởi động lại thì thử lại từ đầu.
-const STALL_MS = 5 * 60_000;
-const stalls = new Map<string, number>();
-export const noteStall = (uid: string, cli: string) => { if (stalls.size > 5000) stalls.clear(); stalls.set(`${uid}:${cli}`, Date.now() + STALL_MS); };
-export const clearStall = (uid: string, cli: string) => { stalls.delete(`${uid}:${cli}`); };
-export const stalledModels = (uid: string, models: string[]) => models.filter((k) => { const cli = subCli(k); return !!cli && (stalls.get(`${uid}:${cli}`) ?? 0) > Date.now(); });
+export { clearStall, noteStall, stalledModels };
 const prewarmed = new Map<string, number>();
 /** Mở trang: khởi động sẵn tiến trình cho câu chào đầu tiên của người dùng, đúng model và hướng dẫn đường nhanh sẽ dùng. Mỗi người tối đa một lần mỗi phút; không tốn lượt nào của gói. */
 export async function prewarmChat(user: UserRow) {

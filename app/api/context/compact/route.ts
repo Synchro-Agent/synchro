@@ -25,7 +25,7 @@ export const POST = handle(async (req: Request) => {
   const flat = msgs.map((m) => `${m.role === "user" ? "Người dùng" : "Trợ lý"}: ${splitArtifacts(m.content).map((sg) => (sg.kind === "text" ? sg.text : `[artifact "${sg.art.title}"]`)).join("").slice(0, 4000)}`).join("\n\n").slice(-120_000);
   const prev = typeof b.summary === "string" && b.summary.trim() ? `Tóm tắt các lượt trước đó:\n${b.summary.slice(0, 8000)}\n\n` : "";
   try {
-    const { text, model } = await quickCall(user, COMPACT, `${prev}Cuộc trò chuyện cần tóm tắt:\n\n${flat}`, { maxTokens: 1200 });
+    const { text, model } = await quickCall(user, COMPACT, `${prev}Cuộc trò chuyện cần tóm tắt:\n\n${flat}`, { maxTokens: 1200, job: "compact" });
     return Response.json({ summary: text.trim().slice(0, 8000), model, chars: flat.length });
   } catch (e) {
     if (e instanceof OneShotErr) return Response.json({ error: e.message }, { status: e.status });

@@ -1629,14 +1629,14 @@ export default function Home() {
     for (const m of c.msgs) if (m.role === "ai" && m.text !== reply) for (const sg of splitArtifacts(m.text)) if (sg.kind === "art") st.set(sg.art.ident, resolveArt(st.get(sg.art.ident), sg.art));
     const full = splitArtifacts(reply).flatMap((sg): ArtBlock[] => { if (sg.kind !== "art") return []; const r = resolveArt(st.get(sg.art.ident), sg.art); st.set(sg.art.ident, r); return r.fix?.failed.length ? [] : [{ ident: r.ident, title: r.title, type: r.type, lang: r.lang, content: r.content, complete: r.complete }]; });
     if (full.length) saveArtifacts(String(id), full).then(() => setArtRefresh((n) => n + 1));
-    if (capsRef.current.crit) for (const a of full) if (important(a)) runCritic(id, a, gen, question);
+    if (capsRef.current.crit) for (const a of full) if (important(a)) runCritic(id, a, gen, question, true);
   };
-  const runCritic = (id: number, a: ArtBlock, gen = "", question = "") => {
+  const runCritic = (id: number, a: ArtBlock, gen = "", question = "", auto = false) => {
     const key = criticKey(a.ident, a.content);
     // Giữ kết quả của 30 phiên bản gần nhất trong đoạn chat.
     const put = (e: CriticEntry) => setChats((cs) => cs.map((c) => (c.id !== id ? c : { ...c, critic: Object.fromEntries([...Object.entries(c.critic ?? {}).filter(([k]) => k !== key).sort((x, y) => y[1].at - x[1].at).slice(0, 29), [key, e]]) })));
     put({ status: "run", findings: [], by: [], at: Date.now() });
-    fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500) }) })
+    fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500), auto }) })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
         put(r.ok ? { status: "done", findings: Array.isArray(j.findings) ? j.findings : [], by: Array.isArray(j.by) ? j.by : [], at: Date.now() } : { status: "error", findings: [], by: [], at: Date.now(), error: j.error || tr("Hội đồng phản biện chưa trả lời được.") });

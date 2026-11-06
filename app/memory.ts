@@ -85,7 +85,7 @@ export async function learnFromTurn(user: UserRow, question: string, answer: str
   const cfg = memCfg(user.id);
   if (!cfg.gen || question.trim().length < 8) return;
   const existing = listMemory(user.id).map((m) => `- ${m.content}`).join("\n") || "(trống)";
-  const text = await quickCall(user, EXTRACT(cfg.sens), `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}`, { maxTokens: 400 }).then((r) => r.text).catch(() => "");
+  const text = await quickCall(user, EXTRACT(cfg.sens), `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}`, { maxTokens: 400, job: "memory", bg: true }).then((r) => r.text).catch(() => "");
   const json = /\[[\s\S]*\]/.exec(text)?.[0];
   if (!json) return;
   try {

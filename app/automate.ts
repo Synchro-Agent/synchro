@@ -35,7 +35,7 @@ export async function planAutomation(user: UserRow, text: string, tz: string): P
   // Tài khoản chưa được dùng Synchro Code thì việc về mã nguồn vẫn chạy bằng chat (chạy code, connector GitHub nếu có).
   const codeOk = can(user, "code");
   try {
-    const { text: out, model } = await quickCall(user, PLAN, `Việc cần tự động hóa:\n${t}\n\nBây giờ: ${localTime(cleanSchedule({ tz }).tz, Date.now())} (${tz})`, { maxTokens: 2000 });
+    const { text: out, model } = await quickCall(user, PLAN, `Việc cần tự động hóa:\n${t}\n\nBây giờ: ${localTime(cleanSchedule({ tz }).tz, Date.now())} (${tz})`, { maxTokens: 2000, job: "automate" });
     const j = JSON.parse(/\{[\s\S]*\}/.exec(out)?.[0] ?? "{}") as Record<string, unknown>;
     const prompt = typeof j.prompt === "string" && j.prompt.trim() ? j.prompt.trim().slice(0, 8000) : base.prompt;
     return {

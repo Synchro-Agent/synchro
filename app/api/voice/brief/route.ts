@@ -27,7 +27,7 @@ export const POST = handle(async (req: Request) => {
   const flat = splitArtifacts(answer).map((sg) => (sg.kind === "text" ? sg.text : `[sản phẩm "${sg.art.title}"]`)).join("")
     .replace(/```[\s\S]*?(```|$)/g, "[khối code]").slice(0, 12_000);
   try {
-    const { text, model } = await quickCall(user, BRIEF, `Câu hỏi: ${question || "(không rõ)"}\n\nCâu trả lời đã viết:\n${flat}`, { maxTokens: 300 });
+    const { text, model } = await quickCall(user, BRIEF, `Câu hỏi: ${question || "(không rõ)"}\n\nCâu trả lời đã viết:\n${flat}`, { maxTokens: 300, job: "voice" });
     return Response.json({ brief: text.replace(/[#*_`>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 600), model });
   } catch (e) {
     if (e instanceof OneShotErr) return Response.json({ error: e.message }, { status: e.status });

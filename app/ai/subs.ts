@@ -6,7 +6,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { db, type UserRow } from "../authstore";
-import { quickLimit, turnsTotal } from "../runs";
+import { quickLimit, runAge, turnsTotal } from "../runs";
 import { acquire, holdsSlot, noteRefused, queuedOf, queueLimit, withSlot } from "../turngate";
 import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../catalog";
 import { canModel } from "../authstore";
@@ -640,7 +640,7 @@ function removeConvAttachments(uid: string, conv: string) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -692,6 +692,9 @@ export function linksIn(text: string): WebSource[] {
 
 // Việc phụ chờ chỗ tối đa chừng này (bằng lời gọi chạy thẳng ở /api/llm): hơn nữa thì báo máy chủ bận, không giữ yêu cầu mãi.
 const SIDE_WAIT_MS = 120_000;
+// Việc nền của một tài khoản chạy tối đa chừng này cùng lúc: sau một câu trả lời có artifact từng là rút bộ nhớ, chưng cất, đặt tên và hai phản biện cùng lúc, tức 5 CLI ăn vào mức chung của tài khoản (6),
+// tin nhắn kế tiếp có thể phải xếp hàng sau chính những việc đó. Chúng không ai đứng chờ nên được chờ lâu hơn việc phụ thường.
+const BG_MAX = 2, BG_WAIT_MS = 5 * 60_000;
 const BUSY = "Máy chủ đang bận. Hãy thử lại sau ít phút.";
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
@@ -700,7 +703,7 @@ export async function subTurn(o: SubTurn): Promise<SubResult> {
   if (holdsSlot()) return subTurnWatched(o);
   const uid = o.user.id;
   if (queuedOf(uid, "quick") >= queueLimit()) { noteRefused(); return { status: 503, json: { error: BUSY } }; }
-  const slot = await acquire({ uid, lane: "quick", limit: quickLimit(o.user), total: turnsTotal(o.user), signal: o.signal, maxWaitMs: SIDE_WAIT_MS });
+  const slot = await acquire({ uid, lane: "quick", limit: o.bg ? Math.min(BG_MAX, quickLimit(o.user)) : quickLimit(o.user), total: turnsTotal(o.user), signal: o.signal, maxWaitMs: o.bg ? BG_WAIT_MS : SIDE_WAIT_MS });
   if (slot === "cancelled") return { status: 200, json: { model: o.model, text: "", cancelled: true } };
   if (slot === "timeout") return { status: 503, json: { error: BUSY } };
   return withSlot(slot, () => subTurnWatched(o));
@@ -727,7 +730,9 @@ async function subTurnInner(o: SubTurn): Promise<SubResult> {
 async function runTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
   // Đo thời gian từng chặng của lượt (ghi vào nhật ký máy chủ, không ghi nội dung): kiểm tra đăng nhập → khởi động CLI → sự kiện đầu → chữ đầu → xong.
-  const T0 = Date.now(), tm: Record<string, number> = {};
+  // wait: từ lúc lượt được tạo tới đây (xếp hàng, chọn model, skill, gọi lại bộ não, cả lần thử đường nhanh trước đó): cộng với text là thời gian người dùng thật sự chờ phía máy chủ.
+  const T0 = Date.now(), tm: Record<string, number> = {}, wait = runAge();
+  let chunks = 0;
   // Trạng thái đăng nhập đã biết dùng ngay, kiểm tra lại ở nền (stale): trước đây quá 60 giây là lượt chat phải chờ chạy CLI kiểm tra
   // đăng nhập (vài giây đến hơn chục giây) trước khi gọi model. Phiên đăng nhập thật sự hết hạn thì lượt vẫn báo đăng nhập lại (lỗi auth).
   const s = await status(cli, o.user.id, { stale: true });
@@ -804,7 +809,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   try {
   for await (const e of eng.runTurn(req)) {
     tm.event ??= Date.now() - T0;
-    if (e.kind === "text") { tm.text ??= Date.now() - T0; ws.last = Date.now(); text += e.text; o.onDelta?.(e.text); }
+    if (e.kind === "text") { tm.text ??= Date.now() - T0; chunks++; ws.last = Date.now(); text += e.text; o.onDelta?.(e.text); }
     else if (e.kind === "activity") { tm.active ??= Date.now() - T0; ws.last = Date.now(); }
     else if (e.kind === "status") {
       if (e.wait !== undefined) ws.waiting = e.wait;
@@ -849,7 +854,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     // noRetry: thử lại nguyên lượt này chỉ khiến người dùng chờ thêm chừng ấy; chế độ Tự động chuyển model ngay.
     return { status: 503, json: { error: stalled === "first" ? `${SUB[cli].name} không phản hồi sau ${waitText(lim.first)}. Hãy thử lại hoặc chọn model khác.` : `${SUB[cli].name} không có tiến triển trong ${waitText(lim.idle)}. Hãy nhắn "tiếp tục" hoặc chọn model khác.`, stalled: true, noRetry: true, ...partial } };
   }
-  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0}${o.fast ? " fast=1" : ""}${poolState ? ` pool=${poolState}` : ""} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  console.log(`[timing] ${cli} ${run.model ?? "?"} ${run.effort ?? "-"} resume=${resume ? 1 : fork ? "fork" : 0}${o.fast ? " fast=1" : ""}${poolState ? ` pool=${poolState}` : ""}${o.job ? ` job=${o.job}` : ""}${wait === null ? "" : ` wait=${wait}`} chunks=${chunks} sysKB=${Math.round(Buffer.byteLength(o.system ?? "") / 1024)} promptKB=${Math.round(Buffer.byteLength(prompt) / 1024)} ${Object.entries(tm).map(([k, v]) => `${k}=${v}`).join(" ")}`);
   // Phiên ấm hỏng (bị xóa, hết hạn phía CLI): bỏ đi rồi chạy lại một lần bằng phiên mới.
   if (fork && wk && err && final === null && !text && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return runTurn(o); }
   if (err && final === null) {
