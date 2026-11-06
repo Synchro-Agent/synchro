@@ -1,4 +1,5 @@
 import { AuthError, handle, requireUser, sameOrigin } from "../../../authstore";
+import { stopAgentRun } from "../../../agentruns";
 import { archiveIdle, deleteSession, getPrefs, getSession, listSessions, patchSession, putSession } from "../../../codestore";
 
 export const runtime = "nodejs";
@@ -52,6 +53,9 @@ export const PATCH = handle(async (req) => {
 export const DELETE = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  deleteSession(user.id, idOf(new URL(req.url).searchParams.get("id")));
+  const id = idOf(new URL(req.url).searchParams.get("id"));
+  // Lượt không còn dừng theo kết nối: xóa phiên thì dừng luôn việc đang làm trong phiên đó.
+  stopAgentRun(user.id, String(id));
+  deleteSession(user.id, id);
   return Response.json({ ok: true });
 });

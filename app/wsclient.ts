@@ -43,11 +43,11 @@ export function ghConnect(): Promise<string | null> {
   });
 }
 
-// Chạy agent: đọc NDJSON từ /api/agent, mỗi dòng là một sự kiện.
-export async function streamAgent(body: Record<string, unknown>, on: (e: AgentEvent) => void, signal: AbortSignal) {
-  const r = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
-  if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status); }
-  const rd = r.body.getReader();
+// Dòng của lượt agent: sự kiện (kèm số thứ tự s), mở đầu { t: "run" }, kết thúc { t: "end" }.
+export type RunHead = { t: "run"; node: Record<string, unknown> | null; running: boolean; count: number; s?: undefined };
+export type AgentLine = (AgentEvent & { s?: number }) | RunHead | { t: "end"; s?: number; stopped?: boolean };
+async function readLines(r: Response, on: (e: AgentLine) => void) {
+  const rd = r.body!.getReader();
   const dec = new TextDecoder();
   let buf = "";
   for (;;) {
@@ -61,6 +61,50 @@ export async function streamAgent(body: Record<string, unknown>, on: (e: AgentEv
       if (line) { try { on(JSON.parse(line)); } catch {} }
     }
   }
+}
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((ok) => { const t = setTimeout(ok, ms); signal.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
+// Nối lại lượt đang chạy ở máy chủ, tự thử lại khi mất mạng. false: máy chủ không còn lượt này (vừa khởi động lại) hoặc nối không được quá lâu.
+async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSignal, st: { seq: number; ended: boolean }) {
+  for (let fails = 0; fails < 60 && !signal.aborted; ) {
+    try {
+      const r = await fetch(`/api/agent?sid=${encodeURIComponent(sid)}&after=${st.seq}`, { signal, cache: "no-store" });
+      if (r.status === 204 || r.status === 401) return false;
+      if (r.ok && r.body) { fails = 0; await readLines(r, on); if (st.ended) return true; } else fails++;
+    } catch { if (signal.aborted) return true; fails++; }
+    await sleep(3000, signal);
+  }
+  return signal.aborted;
+}
+const GONE = "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.";
+
+// Chạy agent: đọc NDJSON từ /api/agent. Lượt chạy ở máy chủ độc lập với kết nối: signal chỉ ngừng nghe, muốn dừng lượt thì gọi stopAgent.
+export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLine) => void, signal: AbortSignal) {
+  const st = { seq: 0, ended: false, started: false };
+  const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "run") st.started = true; if (e.t === "end") st.ended = true; on(e); };
+  try {
+    const r = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
+    if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status); }
+    await readLines(r, seen);
+  } catch (e) {
+    if (signal.aborted || e instanceof WsError || !st.started) throw e;
+  }
+  if (!st.ended && !signal.aborted && !(await follow(String(body.sid), seen, signal, st))) on({ t: "error", error: GONE });
+}
+/** Mở lại phiên: lượt của phiên còn ở máy chủ không. */
+export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null } | null> {
+  try { const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" }); return r.status === 200 ? await r.json() : null; } catch { return null; }
+}
+/** Nối vào lượt đang có của phiên từ đầu: nhận lại mọi sự kiện rồi theo dõi tiếp. */
+export async function attachAgent(sid: number | string, on: (e: AgentLine) => void, signal: AbortSignal) {
+  const st = { seq: 0, ended: false };
+  const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "end") st.ended = true; on(e); };
+  if (!(await follow(String(sid), seen, signal, st))) on({ t: "error", error: GONE });
+}
+/** Nút Dừng. */
+export const stopAgent = (sid: number | string) => fetch(`/api/agent?sid=${sid}`, { method: "DELETE" }).catch(() => {});
+/** Rời phiên khi lượt còn chạy: báo khi lượt xong để danh sách phiên thôi hiện đang chạy (cả khi tắt đồng bộ). */
+export function watchAgentEnd(sid: number | string, done: () => void) {
+  const t = setInterval(() => { void agentRunInfo(sid).then((j) => { if (!j?.running) { clearInterval(t); done(); } }); }, 5000);
 }
 
 // Trạng thái dùng chung giữa khung chat, các pane và session rail.

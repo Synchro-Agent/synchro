@@ -1,7 +1,8 @@
 import { current, limit, sameOrigin } from "../../authstore";
 import { agentInbox, ModelError, type AgentEvent } from "../../agentcore";
 import { effectivePerm, pickAgentModel, runAgentTurn, sessionMeta } from "../../agentturn";
-import { getPrefs, patchSession } from "../../codestore";
+import { getPrefs, patchSession, type TurnNode } from "../../codestore";
+import { activeRun, latestRun, liveCount, MAX_LIVE_RUNS, runStream, startAgentRun, stopAgentRun } from "../../agentruns";
 import { sdir, wsAllowed } from "../../workspace";
 import { withUsage } from "../../usage";
 import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
@@ -21,7 +22,8 @@ export async function POST(req: Request) {
   if (!wsAllowed(c.user)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng workspace (Cloud sandbox)." }, { status: 403 });
   try { limit("agent:" + c.user.id, 30, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
 
-  const { sid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted, perm, files } = await req.json();
+  const { sid: rawSid, system = "", messages = [], model: picked, project, skills: wantSkills, effort: wanted, perm, files, node: rawNode } = await req.json();
+  const sid = String(rawSid ?? "");
   // Tệp / thư mục / .zip gửi kèm tin nhắn mới nhất (đã tải lên /api/files?raw=1): chép nguyên vào workspace, ảnh / PDF / chữ gửi thẳng cho model.
   const ups: Upload[] = (Array.isArray(files) ? files : []).filter((f) => f && typeof f.id === "string" && typeof f.name === "string").slice(0, MAX_FILES_PER_MESSAGE)
     .map((f) => ({ id: f.id, name: String(f.name).slice(0, 200), folder: f.folder === true }));
@@ -31,46 +33,68 @@ export async function POST(req: Request) {
   if ("error" in pick) return Response.json({ error: pick.error, ...(pick.usageLimit ? { usageLimit: true } : {}) }, { status: pick.status });
   const p = effectivePerm(c.user.id, perm);
 
-  const enc = new TextEncoder();
-  const ac = new AbortController();
-  req.signal.addEventListener("abort", () => ac.abort());
-  const stream = new ReadableStream({
+  // Một phiên chỉ chạy một lượt; lượt giờ không dừng theo kết nối nên phải chặn lượt thứ hai, và chặn một tài khoản giữ quá nhiều lượt nền.
+  if (activeRun(c.user.id, sid)) return Response.json({ error: "Phiên này đang có một lượt chạy.", running: true }, { status: 409 });
+  if (liveCount(c.user.id) >= MAX_LIVE_RUNS) return Response.json({ error: `Bạn đang có ${MAX_LIVE_RUNS} phiên Code chạy cùng lúc. Hãy chờ một phiên xong hoặc bấm Dừng.` }, { status: 429 });
+  const node = cleanNode(rawNode);
+
+  const run = startAgentRun({ uid: c.user.id, sid, node, title: String(node?.user ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || undefined }, (emit0, signal) =>
     // Mọi lời gọi model của lượt này được tính vào mức dùng của tài khoản (Synchro Code).
-    start: (ctl) => withUsage(c.user.id, "code", async () => {
+    withUsage(c.user.id, "code", async () => {
       // Tệp agent đã sửa trong lượt (để đánh giá phiên cuối lượt, kể cả thư mục chưa phải repo git).
       const edited = new Set<string>();
-      const emit = (e: AgentEvent) => { if (e.t === "result" && e.ok && e.diff?.path) edited.add(e.diff.path); try { ctl.enqueue(enc.encode(JSON.stringify(e) + "\n")); } catch {} };
-      // Giữ kết nối qua proxy khi một lệnh chạy lâu (hay khi đang chờ người dùng duyệt).
-      const ping = setInterval(() => { try { ctl.enqueue(enc.encode("\n")); } catch {} }, 15_000);
+      const emit = (e: AgentEvent) => { if (e.t === "result" && e.ok && e.diff?.path) edited.add(e.diff.path); emit0(e); };
       // Hộp thư nhắn thêm của lượt này: tin tới sau bước cuối thì trả về trong "done" để trình duyệt gửi thành lượt mới.
       const ibox = `${c.user.id}:${sid}`;
       agentInbox.set(ibox, []);
       const ask = String(msgs.filter((m) => m.role === "user").at(-1)?.content ?? "");
       let text = "", d: string | undefined, error = "";
       try {
-        const out = await runAgentTurn({ user: c.user, sid, pick, system: String(system), messages: msgs, project, skills: !!wantSkills, emit, signal: ac.signal,
+        const out = await runAgentTurn({ user: c.user, sid, pick, system: String(system), messages: msgs, project, skills: !!wantSkills, emit, signal,
           inbox: () => agentInbox.get(ibox)?.splice(0) ?? [], perm: p, files: ups });
         text = out.text; d = out.d;
         const left = agentInbox.get(ibox)?.splice(0) ?? [];
         emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });
       } catch (e) {
         error = e instanceof ModelError ? `Model báo lỗi (${e.status}): ${e.message.slice(0, 300)}` : (e as Error).message || "Lỗi máy chủ";
-        if (!ac.signal.aborted) emit({ t: "error", error });
+        if (!signal.aborted) emit({ t: "error", error });
       } finally {
         agentInbox.delete(ibox);
       }
       // Xếp phiên (cần bạn / chờ xem lại / xong) và gợi ý câu nhắn tiếp: người dùng thấy ngay ở danh sách phiên và khung soạn tin.
       try {
-        const m = await sessionMeta(c.user, { d: d ?? sdir(sid), ask, reply: text, stopped: ac.signal.aborted, error, edited: [...edited] });
+        const m = await sessionMeta(c.user, { d: d ?? sdir(sid), ask, reply: text, stopped: signal.aborted, error, edited: [...edited] });
         if (m) {
           if (getPrefs(c.user.id).sync) patchSession(c.user.id, Number(sid), { state: m.state, reason: m.reason, suggest: m.suggest });
           emit({ t: "meta", state: m.state, reason: m.reason, suggest: m.suggest });
         }
       } catch (e) { console.warn("[agent] đánh giá phiên", (e as Error).message); }
-      clearInterval(ping);
-      try { ctl.close(); } catch {}
-    }),
-    cancel() { ac.abort(); },
-  });
-  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" } });
+    }));
+  return runStream(run, 0, req.signal);
+}
+
+// Nối lại lượt của phiên (rời trang, tải lại, mất mạng giữa chừng). ?after=: chỉ sự kiện sau mốc này. ?json=1: chỉ hỏi trạng thái. 204: không có lượt nào.
+export async function GET(req: Request) {
+  const c = current(req);
+  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  const u = new URL(req.url);
+  const run = latestRun(c.user.id, u.searchParams.get("sid") ?? "");
+  if (!run) return new Response(null, { status: 204 });
+  if (u.searchParams.get("json")) return Response.json({ running: !run.ended, node: run.node?.id ?? null, ended: run.ended || null });
+  return runStream(run, Number(u.searchParams.get("after")) || 0, req.signal);
+}
+
+// Nút Dừng: cách duy nhất dừng lượt đang chạy.
+export async function DELETE(req: Request) {
+  const c = current(req);
+  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
+  return Response.json({ ok: true, stopped: stopAgentRun(c.user.id, new URL(req.url).searchParams.get("sid") ?? "") });
+}
+
+// Lượt do trình duyệt gửi kèm để máy chủ tự lưu khi không còn ai xem. Dữ liệu của chính người dùng, như khi đồng bộ phiên; quá lớn thì thôi, không phải lỗi.
+function cleanNode(v: unknown): TurnNode | null {
+  const n = v as TurnNode | null;
+  if (!n || typeof n !== "object" || !Number.isSafeInteger(n.id) || !Number.isSafeInteger(n.parent) || JSON.stringify(n).length > 4_000_000) return null;
+  return { ...n, ai: "", done: false, steps: [] };
 }

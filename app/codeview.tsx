@@ -28,7 +28,8 @@ import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "./c
 import type { PermMode } from "./codestore";
 import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
-import { gitOp, streamAgent, useCodeUi, wsStatus, type PaneKind, type PlanItem } from "./wsclient";
+import { foldAgentEvent, closeFolded } from "./agentfold";
+import { agentRunInfo, attachAgent, gitOp, stopAgent, streamAgent, useCodeUi, watchAgentEnd, wsStatus, type AgentLine, type PaneKind, type PlanItem } from "./wsclient";
 import { QueueChips, type Queued } from "./worklog";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
@@ -213,6 +214,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const autoBrowserRef = useRef(autoBrowser); autoBrowserRef.current = autoBrowser;
   const [wsUsed, setWsUsed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Phiên có lượt agent đang chạy mà trang này đang theo dõi. onMeta giữ qua ref để còn báo sau khi rời trang.
+  const liveAgent = useRef<number | null>(null);
+  const onMetaRef = useRef(onMeta); onMetaRef.current = onMeta;
   // Khung chat nổi trên luồng tin nhắn: chừa đúng chiều cao của nó (thay đổi khi có danh sách việc, tệp đính kèm…).
   const colRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -278,19 +282,26 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   useEffect(() => {
     if (loadedSid.current === sid) return;
     loadedSid.current = sid;
-    stopGen();
+    if (liveAgent.current) leaveAgent(); else stopGen();
     setAtts([]); setFiles([]); setV(""); setPanel(null); setMountedP([]);
     if (sid === null) setPane(null);
     let s: Record<string, unknown> | null = null;
     try { s = sid === null ? null : JSON.parse(ls.get("codeS:" + sid) ?? "null"); } catch {}
+    // Lấy trước khi áp dữ liệu: applyData coi lượt dở là xong, nhưng cần biết lượt nào còn dở để nhận phần còn thiếu từ máy chủ.
+    const undone = new Set(((s?.nodes as Node[] | undefined) ?? []).filter((n) => !n.done).map((n) => n.id));
     applyData(s);
-    // Phiên chưa có ở thiết bị này (mở từ thiết bị khác, hay vừa tự sửa PR ở máy chủ): tải từ máy chủ.
+    // Phiên chưa có ở thiết bị này (mở từ thiết bị khác, hay vừa tự sửa PR ở máy chủ): tải từ máy chủ, rồi mới nối vào lượt đang chạy để không ghi đè.
     if (sid !== null && !s && codePrefsNow()?.sync !== false) getServerSession(sid).then((r) => {
-      if (!r?.data || loadedSid.current !== sid) return;
-      setSessionBase(sid, r.updated);
-      applyData(r.data);
-      if (r.suggest) setSuggest(r.suggest);
+      if (loadedSid.current !== sid) return;
+      if (r?.data) {
+        setSessionBase(sid, r.updated);
+        for (const n of (r.data.nodes as Node[] | undefined) ?? []) if (!n.done) undone.add(n.id);
+        applyData(r.data);
+        if (r.suggest) setSuggest(r.suggest);
+      }
+      void resumeAgent(sid, undone);
     });
+    else if (sid !== null) void resumeAgent(sid, undone);
     setLoaded(true);
   }, [sid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -421,6 +432,84 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     if (id !== null) setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, ai: closeFences(n.ai), done: true, stopped: (!!n.ai || !!n.steps?.length) && n.stopped !== false ? true : n.stopped, steps: n.steps?.map((x) => (x.k === "tool" && !x.done ? { ...x, done: true, ok: false, summary: x.summary ?? "Đã dừng" } : x)) } : n)));
   }, []);
 
+  // Rời phiên hay rời mục Code khi lượt còn chạy: chỉ ngừng nghe, lượt vẫn chạy ở máy chủ. Quay lại thì nối tiếp (resumeAgent).
+  const leaveAgent = () => {
+    const live = liveAgent.current;
+    liveAgent.current = null;
+    genRef.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    activeRef.current = null;
+    setBusy(false);
+    if (live) watchAgentEnd(live, () => onMetaRef.current?.(live, { running: false }));
+  };
+  useEffect(() => () => { if (liveAgent.current) leaveAgent(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nút Dừng: lượt agent phải được dừng ở máy chủ, không chỉ ngừng nghe.
+  const stopTurn = () => { const live = liveAgent.current; if (live) { void stopAgent(live); liveAgent.current = null; onMeta?.(live, { running: false }); } stopGen(); };
+
+  // Sự kiện của lượt agent. replay: số sự kiện đã xảy ra trước khi nối lại, không lặp lại các tác dụng phụ (mở pane, báo).
+  const onAgentLine = (id: number, s: number, gen: number, replay: () => number) => (e: AgentLine) => {
+    if (gen !== genRef.current || e.t === "run" || e.t === "end") return;
+    const old = !!e.s && e.s <= replay();
+    patchNode(id, (n) => foldAgentEvent(n, e));
+    if (e.t === "ask") {
+      onMeta?.(s, { running: true, state: "blocked", reason: `Chờ bạn duyệt: ${e.title}` });
+      if (!old) say("Synchro đang chờ bạn duyệt");
+    }
+    else if (e.t === "asked") onMeta?.(s, { running: true, state: null, reason: null });
+    else if (e.t === "perm") setPerm({ mode: permRef.current.mode, allow: e.allow });
+    else if (e.t === "meta") { if (e.suggest) setSuggest(e.suggest); onMeta?.(s, { state: e.state as SessionState, reason: e.reason, running: false }); }
+    else if (e.t === "ui") {
+      if (old || (e.open === "browser" && !autoBrowserRef.current)) return;
+      openPane(e.open);
+      if (e.open === "terminal") showTerm(e.tab ?? "log");
+      if (e.open === "files" && e.path) showFile(e.path);
+    } else if (e.t === "steer") setCq((q) => { const k = q.findIndex((x) => x.mode === "steer" && x.text === e.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
+    else if (e.t === "done") {
+      refreshUsage();
+      // Tin nhắn thêm tới sau bước cuối: gửi thành lượt mới ngay khi xong.
+      const left = e.steer ?? [];
+      setCq((q) => [...q.map((x) => (x.mode === "steer" ? { ...x, mode: "later" as const } : x)), ...left.filter((t) => !q.some((x) => x.text === t)).map((t, k) => ({ id: Date.now() + k, chat: 0, text: t, mode: "later" as const }))]);
+    }
+  };
+  const endAgent = (id: number, s: number, gen: number) => {
+    if (gen !== genRef.current) return;
+    liveAgent.current = null;
+    activeRef.current = null;
+    abortRef.current = null;
+    patchNode(id, (n) => closeFolded({ ...n, done: true }));
+    setBusy(false);
+    onMeta?.(s, { running: false });
+    refreshGit(s);
+    wsStatus().then(setStatus).catch(() => {});
+  };
+  // Mở phiên: lượt còn ở máy chủ (đang chạy, hoặc đã xong khi không có ai xem) thì nhận lại từ đầu và theo dõi tiếp.
+  const resumeAgent = async (s: number, undone: Set<number>) => {
+    const info = await agentRunInfo(s);
+    if (!info?.node || loadedSid.current !== s || activeRef.current !== null) return;
+    if (!info.running && !undone.has(info.node)) return;
+    const id = info.node, gen = ++genRef.current, ac = new AbortController();
+    abortRef.current = ac; activeRef.current = id; liveAgent.current = info.running ? s : null; agentSid.current = s;
+    setBusy(true); setWsUsed(true);
+    if (info.running) onMeta?.(s, { running: true });
+    let count = 0;
+    const each = onAgentLine(id, s, gen, () => count);
+    await attachAgent(s, (e) => {
+      if (e.t === "run") {
+        count = e.count;
+        if (gen !== genRef.current) return;
+        // Bắt đầu lại lượt này từ sự kiện đầu tiên; lượt chưa có ở thiết bị này thì thêm vào.
+        const head = (e.node ?? {}) as Partial<Node>;
+        setNodes((ns) => (ns.some((n) => n.id === id)
+          ? ns.map((n) => (n.id === id ? { ...n, ai: "", done: false, stopped: undefined, steps: [], plan: undefined, usage: undefined } : n))
+          : head.id === id ? [...ns, { atts: [], mode: "auto", time: Date.now(), user: "", parent: 0, ...head, id, ai: "", done: false, steps: [] }] : ns));
+        if (typeof head.parent === "number") setSel((x) => (x[head.parent as number] === id ? x : { ...x, [head.parent as number]: id }));
+      } else if (e.t === "end") { if (e.stopped && gen === genRef.current) patchNode(id, (n) => ({ ...n, stopped: true })); }
+      else each(e);
+    }, ac.signal);
+    endAgent(id, s, gen);
+  };
+
   // Có workspace: agent tự thao tác (lệnh, file, trình duyệt) và gửi từng bước về theo thời gian thực.
   const runAgent = (id: number, hist: Node[], userText: string, md: string) => {
     const gen = ++genRef.current;
@@ -448,10 +537,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     ].filter(Boolean).join("\n\n");
     const ac = new AbortController();
     abortRef.current = ac;
-    const addText = (n: Node, text: string): Node => ({ ...n, steps: [...(n.steps ?? []), { k: "text", text }], ai: n.ai ? `${n.ai}\n\n${text}` : text });
+    liveAgent.current = s;
     patchNode(id, (n) => ({ ...n, steps: [] }));
     onMeta?.(s, { running: true, state: null, reason: null });
-    const setAsk = (aid: string, st: "ok" | "always" | "no" | "gone") => patchNode(id, (n) => ({ ...n, steps: (n.steps ?? []).map((x) => (x.k === "ask" && x.id === aid ? { ...x, state: st } : x)) }));
     (async () => {
       try {
         const cur = hist[hist.length - 1];
@@ -459,52 +547,15 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
         const up = names.length ? await readyFiles(names) : { ok: [], errors: [] };
         // Nhớ mã tệp trên máy chủ: thẻ ảnh của tin này vẫn hiện ảnh sau khi tải lại trang.
         if (up.ok.length) patchNode(id, (n) => ({ ...n, files: n.files?.map((f) => ({ ...f, id: up.ok.find((o) => o.name === f.name)?.id ?? f.id })) }));
-        for (const err of up.errors) patchNode(id, (n) => addText(n, `⚠️ ${err}`));
+        for (const err of up.errors) patchNode(id, (n) => foldAgentEvent(n, { t: "text", text: `⚠️ ${err}` }));
         if (gen !== genRef.current) return;
-        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort(), files: up.ok, perm: permRef.current }, (e) => {
-          if (gen !== genRef.current) return;
-          if (e.t === "text") patchNode(id, (n) => addText(n, e.text));
-          else if (e.t === "think") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "think", text: e.text }] }));
-          else if (e.t === "ask") {
-            patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "ask", id: e.id, kind: e.kind, title: e.title, detail: e.detail, host: e.host, state: "wait" }] }));
-            onMeta?.(s, { running: true, state: "blocked", reason: `Chờ bạn duyệt: ${e.title}` });
-            say("Synchro đang chờ bạn duyệt");
-          }
-          else if (e.t === "asked") { setAsk(e.id, e.ok ? (e.always ? "always" : "ok") : "no"); onMeta?.(s, { running: true, state: null, reason: null }); }
-          else if (e.t === "perm") setPerm({ mode: permRef.current.mode, allow: e.allow });
-          else if (e.t === "meta") { if (e.suggest) setSuggest(e.suggest); onMeta?.(s, { state: e.state as SessionState, reason: e.reason, running: false }); }
-          else if (e.t === "tool") patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "tool", id: e.id, name: e.name, input: e.input }] }));
-          else if (e.t === "result") patchNode(id, (n) => ({ ...n, steps: (n.steps ?? []).map((x) => (x.k === "tool" && x.id === e.id ? { ...x, done: true, ok: e.ok, summary: e.summary, output: e.output, diff: e.diff, image: e.image } : x)) }));
-          else if (e.t === "plan") patchNode(id, (n) => ({ ...n, plan: e.items }));
-          else if (e.t === "usage") patchNode(id, (n) => ({ ...n, usage: { input: e.input, output: (n.usage?.output ?? 0) + e.output } }));
-          else if (e.t === "ui") {
-            if (e.open === "browser" && !autoBrowserRef.current) return;
-            openPane(e.open);
-            if (e.open === "terminal") showTerm(e.tab ?? "log");
-            if (e.open === "files" && e.path) showFile(e.path);
-          } else if (e.t === "steer") {
-            patchNode(id, (n) => ({ ...n, steps: [...(n.steps ?? []), { k: "steer", text: e.text }] }));
-            setCq((q) => { const k = q.findIndex((x) => x.mode === "steer" && x.text === e.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
-          } else if (e.t === "done") {
-            if (e.skills.length) patchNode(id, (n) => ({ ...n, skills: e.skills }));
-            refreshUsage();
-            // Tin nhắn thêm tới sau bước cuối: gửi thành lượt mới ngay khi xong.
-            const left = e.steer ?? [];
-            setCq((q) => [...q.map((x) => (x.mode === "steer" ? { ...x, mode: "later" as const } : x)), ...left.filter((t) => !q.some((x) => x.text === t)).map((t, k) => ({ id: Date.now() + k, chat: 0, text: t, mode: "later" as const }))]);
-          }
-          else if (e.t === "error") patchNode(id, (n) => addText(n, `⚠️ ${e.error}`));
-        }, ac.signal);
+        // Gửi kèm lượt để máy chủ tự lưu kết quả khi trình duyệt không còn ở đây.
+        const node = cur?.id === id ? { ...cur, ai: "", steps: undefined, done: false } : undefined;
+        await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort(), files: up.ok, perm: permRef.current, node }, onAgentLine(id, s, gen, () => 0), ac.signal);
       } catch (e) {
-        if (!ac.signal.aborted && gen === genRef.current) patchNode(id, (n) => addText(n, `⚠️ ${(e as Error).message || "Không kết nối được agent."}`));
+        if (!ac.signal.aborted && gen === genRef.current) patchNode(id, (n) => foldAgentEvent(n, { t: "text", text: `⚠️ ${(e as Error).message || "Không kết nối được agent."}` }));
       }
-      if (gen !== genRef.current) return;
-      activeRef.current = null;
-      abortRef.current = null;
-      patchNode(id, (n) => ({ ...n, done: true, steps: n.steps?.map((x) => (x.k === "tool" && !x.done ? { ...x, done: true } : x.k === "ask" && x.state === "wait" ? { ...x, state: "gone" as const } : x)) }));
-      setBusy(false);
-      onMeta?.(s, { running: false });
-      refreshGit(s);
-      wsStatus().then(setStatus).catch(() => {});
+      endAgent(id, s, gen);
     })();
   };
 
@@ -1170,7 +1221,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                   </Menu>
                 </div>
                 <div className="cv-sp" />
-                <button className="send" disabled={!busy && !v.trim() && !atts.length && !files.length} onClick={busy ? stopGen : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.M icon="Stop" /> : <I.M icon="Enter" />}</button>
+                <button className="send" disabled={!busy && !v.trim() && !atts.length && !files.length} onClick={busy ? stopTurn : () => send()} aria-label={busy ? "Dừng và giữ lại" : "Gửi"} title={busy ? "Dừng & giữ lại" : "Gửi"}>{busy ? <I.M icon="Stop" /> : <I.M icon="Enter" />}</button>
               </div>
               {dragOn && <div className="cv-drop">Thả tệp, thư mục hoặc .zip để gửi kèm tin nhắn</div>}
               {fm.node}
