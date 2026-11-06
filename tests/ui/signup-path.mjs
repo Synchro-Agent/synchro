@@ -76,6 +76,19 @@ try {
     await until(`/hết hiệu lực|expired/i.test(${text})`, 15000, page + " bad");
     ok(true, `${page}: mã sai thật (400) mới báo hết hiệu lực`);
   }
+
+  console.log("Cài đặt → Tài khoản: đổi email, cách đăng nhập");
+  const lr = await fetch(B + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: "admin@synchro.test", password: "synchro-mock-123" }) });
+  const ck = lr.headers.getSetCookie().find((c) => c.startsWith("synchro_session="))?.split(";")[0];
+  await P("Network.enable"); await P("Network.setCookie", { name: "synchro_session", value: ck.split("=")[1], url: B });
+  await P("Page.navigate", { url: B + "/?settings=Account" });
+  await until(`!!document.querySelector(".modal.settings")`, 30000, "settings");
+  await sleep(1200);
+  ok(await ev(`/Cách đăng nhập|Sign-in methods/.test(document.querySelector(".modal.settings").innerText)`), "có hàng Cách đăng nhập", await ev(`document.querySelector(".modal.settings").innerText.slice(0, 400)`));
+  ok(await ev(`!document.documentElement.scrollWidth || document.documentElement.scrollWidth <= innerWidth`), "không tràn ngang");
+  await ev(`[...document.querySelectorAll(".modal.settings *")].find((e) => e.children.length === 0 && /^(Cách đăng nhập|Sign-in methods)$/.test(e.textContent.trim()))?.scrollIntoView({ block: "center" }), 1`);
+  await sleep(300);
+  await shot("account");
 } catch (e) { fail++; console.log("  ✗", e.message); await shot("fail").catch(() => {}); }
 chrome.kill();
 console.log(`\n${pass} đạt, ${fail} lỗi`);

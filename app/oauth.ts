@@ -36,7 +36,8 @@ const stateCookie = (p: Provider) => `oauth_${p}`;
 const sameSite = (p: Provider) => (p === "apple" ? "None" : "Lax") as "None" | "Lax";
 
 // purpose "link": người đã đăng nhập kết nối GitHub (quyền repo) cho Synchro Code, không phải đăng nhập.
-export type Purpose = "login" | "link";
+// purpose "connect": người đã đăng nhập thêm một cách đăng nhập vào tài khoản của mình (Cài đặt → Tài khoản), kể cả khi email khác (Apple Ẩn email).
+export type Purpose = "login" | "link" | "connect";
 export function start(req: Request, p: Provider, purpose: Purpose = "login") {
   if (!configured(p)) throw new AuthError(`Đăng nhập bằng ${NAMES[p]} chưa được cấu hình trên máy chủ.`, 503);
   const state = rand(), verifier = rand() + rand(), nonce = rand();
@@ -61,7 +62,7 @@ export function start(req: Request, p: Provider, purpose: Purpose = "login") {
   }
   return { url, cookie: cookie(req, stateCookie(p), `${state}.${verifier}.${nonce}.${purpose}`, 600, { sameSite: sameSite(p), path: COOKIE_PATH }) };
 }
-export const purposeOf = (req: Request, p: Provider): Purpose => ((readCookie(req, stateCookie(p)) ?? "").split(".")[3] === "link" ? "link" : "login");
+export const purposeOf = (req: Request, p: Provider): Purpose => { const v = (readCookie(req, stateCookie(p)) ?? "").split(".")[3]; return v === "link" || v === "connect" ? v : "login"; };
 export const clearState = (req: Request, p: Provider) => cookie(req, stateCookie(p), "", 0, { sameSite: sameSite(p), path: COOKIE_PATH });
 
 const eq = (a: string, b: string) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));

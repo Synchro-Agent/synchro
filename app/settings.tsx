@@ -232,6 +232,11 @@ function Account() {
     try { await api("POST", "/api/auth/email", { email: mailForm.email.trim(), password: mailForm.pw, lang: getLang() }); setMailForm({ ...mailForm, busy: false, err: "", sent: true }); }
     catch (e) { setMailForm({ ...mailForm, busy: false, err: (e as Error).message }); }
   };
+  // Cách đăng nhập: thêm được kể cả khi email khác (Apple Ẩn email), gỡ được trừ cách cuối cùng.
+  const [providers, setProviders] = useState<Record<string, boolean>>({});
+  useEffect(() => { void fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => setProviders(j?.providers ?? {})).catch(() => {}); }, []);
+  const connect = (p: string) => api<{ url: string }>("POST", "/api/auth/identities", { provider: p }).then((r) => { window.location.href = r.url; }).catch((e) => app.say(e.message));
+  const disconnect = (p: string) => api<{ user: AuthUser }>("DELETE", "/api/auth/identities", { provider: p }).then((r) => app.setMe(r.user)).catch((e) => app.say(e.message));
   const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState<"" | "sent" | "limited">("");
   useEffect(() => { if (!pw) setResetSent(""); }, [pw]);
   const sendReset = async () => {
@@ -288,6 +293,10 @@ function Account() {
       )}
       <H>Account</H>
       <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span>{me?.hasPassword && !me?.isAdmin && <button className="btn" style={{ marginLeft: 10 }} onClick={() => setMailForm({ email: "", pw: "", err: "", busy: false, sent: false })}>Change</button>}</Row>
+      {Object.values(providers).some(Boolean) && <Row t="Sign-in methods" d="Add another way to sign in, even with a different email address."><span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>{Object.keys(providers).filter((p) => providers[p]).map((p) => {
+        const on = !!me?.methods.includes(p);
+        return <button key={p} className="btn" disabled={on && (me?.methods.length ?? 0) <= 1} title={on && (me?.methods.length ?? 0) <= 1 ? tr("Đây là cách đăng nhập duy nhất của tài khoản. Hãy đặt mật khẩu hoặc thêm cách khác trước.") : undefined} onClick={() => void (on ? disconnect(p) : connect(p))}><span data-notr>{METHOD[p] ?? p}</span>: {on ? "Disconnect" : "Connect"}</button>;
+      })}</span></Row>}
       <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."}><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
       <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
       <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>

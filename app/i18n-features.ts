@@ -147,3 +147,13 @@ Object.assign(FX_EN2VI, {
   "until you press the link. It works for 24 hours.": "cho tới khi bạn bấm đường dẫn. Đường dẫn có hiệu lực 24 giờ.",
 });
 Object.assign(FX_VI2EN, { "Bỏ khỏi mục này": "Remove from this section", "Thêm vào mục này": "Add to this section", "Có trong thư viện đã cài, chưa ở mục này": "In your installed libraries, not in this section" });
+Object.assign(FX_VI2EN, {
+  "Tài khoản này đã gắn với một tài khoản Synchro khác.": "That account is already linked to another Synchro account.",
+  "Đây là cách đăng nhập duy nhất của tài khoản. Hãy đặt mật khẩu hoặc thêm cách khác trước.": "This is your account's only sign-in method. Set a password or add another method first.",
+  "Tài khoản chưa gắn với cách đăng nhập này.": "This sign-in method isn't linked to your account.",
+});
+Object.assign(FX_EN2VI, {
+  "Sign-in methods": "Cách đăng nhập", "Connect": "Kết nối", "Disconnect": "Gỡ",
+  "Add another way to sign in, even with a different email address.": "Thêm cách đăng nhập khác, kể cả khi email khác.",
+  "Sign-in method added": "Đã thêm cách đăng nhập", "That account is already linked to another Synchro account": "Tài khoản đó đã gắn với một tài khoản Synchro khác", "Couldn't add the sign-in method": "Chưa thêm được cách đăng nhập",
+});

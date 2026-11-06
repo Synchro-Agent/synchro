@@ -1,5 +1,5 @@
 import { authErrorCode } from "../../../../../autherrors";
-import { appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
+import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
 import { afterClaim } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
 import { clearState, finish, isProvider, purposeOf } from "../../../../../oauth";
@@ -26,6 +26,13 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       h.set("Location", `${appUrl(req)}/api/github/done`);
       return new Response(null, { status: 303, headers: h });
     }
+    if (purpose === "connect") {
+      const c = current(req);
+      if (!c) throw new AuthError("Bạn cần đăng nhập trước khi thêm cách đăng nhập.", 401);
+      connectIdentity(req, c.user, r);
+      h.set("Location", `${appUrl(req)}/?settings=Account&msg=${encodeURIComponent("Sign-in method added")}`);
+      return new Response(null, { status: 303, headers: h });
+    }
     const { cookie, user, claimed, fresh } = oauthLogin(req, r);
     h.append("Set-Cookie", cookie);
     if (claimed) {
@@ -39,7 +46,7 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       try { limit("oauth-fail:" + clientIp(req), 20, 900_000); audit("oauth_failed", { ip: clientIp(req), detail: `${provider}: ${(e as Error).message}`.slice(0, 300) }); } catch { /* quá nhiều: bỏ qua, không ghi đầy nhật ký */ }
     }
     const text = e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.";
-    to = purpose === "link" ? `${appUrl(req)}/api/github/done?error=${encodeURIComponent(text)}` : `${to}?auth_error=${authErrorCode(text)}`;
+    to = purpose === "link" ? `${appUrl(req)}/api/github/done?error=${encodeURIComponent(text)}` : purpose === "connect" ? `${to}?settings=Account&msg=${encodeURIComponent(/khác\.$/.test(text) ? "That account is already linked to another Synchro account" : "Couldn't add the sign-in method")}` : `${to}?auth_error=${authErrorCode(text)}`;
   }
   h.set("Location", to);
   return new Response(null, { status: 303, headers: h });

@@ -472,6 +472,22 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
   return { user: u, claimed, fresh, cookie: createSession(u, req, p.provider) };
 }
 
+/** Thêm một cách đăng nhập vào tài khoản đang đăng nhập. Danh tính đã thuộc tài khoản khác thì từ chối: không gộp, không chuyển. */
+export function connectIdentity(req: Request, u: UserRow, p: OAuthProfile) {
+  const cur = db().prepare("SELECT user_id FROM identities WHERE provider = ? AND subject = ?").get(p.provider, p.subject) as { user_id: string } | undefined;
+  if (cur?.user_id === u.id) return;
+  if (cur) throw new AuthError("Tài khoản này đã gắn với một tài khoản Synchro khác.", 409);
+  db().prepare("INSERT INTO identities (provider, subject, user_id, email, created_at) VALUES (?, ?, ?, ?, ?)").run(p.provider, p.subject, u.id, p.email ? normEmail(p.email) : "", Date.now());
+  audit("oauth_link", { actor: u, ip: clientIp(req), detail: p.provider });
+}
+/** Gỡ một cách đăng nhập. Không gỡ được cách cuối cùng: tài khoản sẽ không vào lại được. */
+export function disconnectIdentity(req: Request, u: UserRow, provider: unknown) {
+  if (typeof provider !== "string") throw new AuthError("Thiếu cách đăng nhập.", 400);
+  if (methodsOf(u).length <= 1) throw new AuthError("Đây là cách đăng nhập duy nhất của tài khoản. Hãy đặt mật khẩu hoặc thêm cách khác trước.", 400);
+  if (!db().prepare("DELETE FROM identities WHERE user_id = ? AND provider = ?").run(u.id, provider).changes) throw new AuthError("Tài khoản chưa gắn với cách đăng nhập này.", 404);
+  audit("oauth_unlink", { actor: u, ip: clientIp(req), detail: provider });
+}
+
 // ---- tài khoản của chính mình ----
 /** Đổi mật khẩu thường là vì nghi bị lộ: đăng xuất mọi phiên khác, kẻ đang giữ phiên cũ không dùng tiếp được (phiên trượt tới 30 ngày). */
 export async function changePassword(req: Request, u: UserRow, cur: unknown, next: unknown, keepSession: string) {
