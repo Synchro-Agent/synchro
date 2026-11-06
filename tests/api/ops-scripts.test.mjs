@@ -58,6 +58,21 @@ ok(r.status === 0 && stLink?.hasKey === false && stLink?.keyOk === null, "secret
 // openrsync của macOS không chịu --link-dest có liên kết mềm trùng tên: bỏ bản này để các bước sau không vướng (rsync trên máy chủ thì được).
 fs.rmSync(path.join(dest, "daily", stLink?.snapshot ?? "x"), { recursive: true, force: true });
 fs.rmSync(keyPath); fs.writeFileSync(keyPath, keyBak);
+// Web user bị chiếm (node_modules là của nó): bước chụp SQLite để lại liên kết mềm tới tệp của root, rồi một tệp có liên kết cứng.
+{
+  const fake = path.join(tmp, "fake-node"), daily = path.join(dest, "daily");
+  fs.mkdirSync(fake, { recursive: true });
+  const before = fs.readdirSync(daily).sort().join();
+  fs.writeFileSync(path.join(fake, "node"), `#!/bin/sh\nln -s "${outside}" "$OUT"\n`, { mode: 0o755 });
+  r = backup({ PATH: `${fake}:${process.env.PATH}` });
+  const stBad = json(path.join(ops, "backup-status.json"));
+  ok(r.status === 1 && /không phải tệp thật/.test(r.stderr) && stBad?.ok === false && /không đáng tin/.test(stBad?.error ?? ""), "bản sao là liên kết mềm: dừng, báo lỗi trên trang sức khỏe", { status: r.status, err: r.stderr, stBad });
+  ok(fs.readdirSync(daily).sort().join() === before, "không có bản sao mới nào được công bố");
+  ok(fs.readFileSync(outside, "utf8") === "khong-duoc-doc" && !fs.readdirSync(data).some((f) => f.startsWith(".backup-work")), "tệp của root nguyên vẹn, không để lại thư mục tạm");
+  fs.writeFileSync(path.join(fake, "node"), `#!/bin/sh\nln "${outside}" "$OUT"\n`, { mode: 0o755 });
+  r = backup({ PATH: `${fake}:${process.env.PATH}` });
+  ok(r.status === 1 && /không phải tệp thật/.test(r.stderr) && fs.readdirSync(daily).sort().join() === before, "bản sao là liên kết cứng: cũng dừng", { status: r.status, err: r.stderr });
+}
 const src = fs.readFileSync(path.join(root, "scripts/backup.sh"), "utf8");
 ok(!/chown "\$WEB_USER"/.test(src) && !/^[^#]*> "\$WORK\//m.test(src.replace(/as_web sh -c .*/g, "")), "root không ghi, không đổi chủ gì trong thư mục của web user");
 ok(/\[ "\$\(owner_of "\$DATA"\)" = "\$WEB_USER" \]/.test(src) && !/WEB_USER="\$\(stat/.test(src), "web user không suy ra từ chủ thư mục, thư mục phải thuộc web user");

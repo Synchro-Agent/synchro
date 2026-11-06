@@ -99,8 +99,13 @@ STEP="không chụp được cơ sở dữ liệu"
   }).catch((e) => { console.error(e); process.exit(1); });')
 mv "$WORK/synchro.db" "$TMP/synchro.db"
 # Tệp do web user tạo, đã vào thư mục chỉ root đọc được nên kiểm tra rồi không còn bị tráo. Liên kết tới tệp khác hoặc không đúng chủ thì không tin.
-[ -f "$TMP/synchro.db" ] && [ ! -L "$TMP/synchro.db" ] && [ "$(links_of "$TMP/synchro.db")" = 1 ] && [ "$(owner_of "$TMP/synchro.db")" = "$WEB_USER" ]
-if [ "$(id -u)" = 0 ]; then chown root "$TMP/synchro.db"; fi
+# Viết rõ if: chuỗi && đứng riêng không làm set -e dừng script khi một vế sai, nên kiểm tra sẽ vô tác dụng.
+if ! { [ -f "$TMP/synchro.db" ] && [ ! -L "$TMP/synchro.db" ] && [ "$(links_of "$TMP/synchro.db")" = 1 ] && [ "$(owner_of "$TMP/synchro.db")" = "$WEB_USER" ]; }; then
+  STEP="bản sao cơ sở dữ liệu không đáng tin (liên kết hoặc sai chủ)"
+  echo "$TMP/synchro.db không phải tệp thật của $WEB_USER: không sao lưu." >&2
+  exit 1
+fi
+if [ "$(id -u)" = 0 ]; then chown -h root "$TMP/synchro.db"; fi
 
 # 2. Tệp dữ liệu. Skill riêng của người dùng nằm trong data/skills/<mã người dùng>, kho dựng sẵn ở data/skills/_plugins: chỉ bỏ kho dựng sẵn.
 STEP="không chép được tệp dữ liệu"
