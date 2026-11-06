@@ -257,6 +257,9 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   const [more, setMore] = useState(true);
   const [del, setDel] = useState<U | null>(null);
   const [delTxt, setDelTxt] = useState("");
+  const [mail, setMail] = useState<U | null>(null);
+  const [mailTxt, setMailTxt] = useState("");
+  const saveMail = () => { const u = mail, email = mailTxt.trim(); if (!u || !email || email === u.email) return; setMail(null); act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_email", email }), "Email changed"); };
   const [busy, setBusy] = useState(false);
   const [pwFor, setPwFor] = useState<U | null>(null);
   // Danh sách người dùng và nhật ký dài: chia trang thay vì cuộn mãi.
@@ -454,7 +457,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                     )}
                     {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>Owner accounts can&apos;t be suspended or deleted from here.</p> : (
                       <div className="adm-actions">
-                        <button className="btn" disabled={busy} onClick={() => { const email = window.prompt(tr("Email mới cho tài khoản này (chỉ đổi khi đã xác minh danh tính). Người dùng sẽ bị đăng xuất."), u.email)?.trim(); if (email && email !== u.email) act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_email", email }), "Email changed"); }}>Change email</button>
+                        <button className="btn" disabled={busy} onClick={() => { setMail(u); setMailTxt(u.email); }}>Change email</button>
                         {!u.verified && <button className="btn" disabled={busy} onClick={() => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "mark_verified" }), "Email marked as verified")}>Mark email as verified</button>}
                         <button className="btn" disabled={busy} onClick={() => { setPwFor(u); setPw({ next: "", again: "", signOut: true }); }}>Set new password</button>
                         <button className="btn" disabled={busy} onClick={() => act(() => call<{ resetUrl: string }>("PATCH", `/api/admin/users/${u.id}`, { action: "reset_link" }).then((r) => setResetFor({ email: u.email, url: r.resetUrl })), "Reset link created")}>Create reset link</button>
@@ -525,6 +528,19 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
             <div className="modal-foot">
               <button className="btn" onClick={() => setResetFor(null)}>Close</button>
               <button className="btn dark" onClick={() => { navigator.clipboard?.writeText(resetFor?.url ?? "").then(() => app.say("Link copied"), () => app.say("Couldn't copy the link")); }}>Copy link</button>
+            </div>
+          </div>
+        </div>
+      </Fade>
+      <Fade show={!!mail}>
+        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setMail(null)}>
+          <div className="modal sm" style={{ width: 420 }}>
+            <h2 style={{ fontSize: 16 }}>Change email</h2>
+            <p className="d">Only change it once you&apos;ve confirmed who they are. The new address counts as verified, their data stays, and they will be signed out.</p>
+            <input className="field" autoFocus aria-label="Email" value={mailTxt} onChange={(e) => setMailTxt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveMail(); }} placeholder="Email" />
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setMail(null)}>Cancel</button>
+              <button className="btn dark" disabled={busy || !mailTxt.trim() || mailTxt.trim() === mail?.email} onClick={saveMail}>Change email</button>
             </div>
           </div>
         </div>

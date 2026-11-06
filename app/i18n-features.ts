@@ -150,7 +150,6 @@ Object.assign(FX_VI2EN, {
   "Email của quản trị viên được đặt trong cấu hình máy chủ.": "An administrator's email is set in the server configuration.",
   "Tài khoản này chưa có mật khẩu. Hãy đặt mật khẩu trước rồi đổi email.": "This account has no password yet. Set one, then change your email.",
   "Đây đã là email của tài khoản.": "This is already your account's email.", "Email này đã có tài khoản.": "This email already has an account.",
-  "Email mới cho tài khoản này (chỉ đổi khi đã xác minh danh tính). Người dùng sẽ bị đăng xuất.": "New email for this account (only change it once you've confirmed who they are). They will be signed out.",
 });
 Object.assign(FX_EN2VI, {
   "Change email": "Đổi email", "New email": "Email mới", "Send link": "Gửi đường dẫn", "Email changed": "Đã đổi email",
