@@ -4,7 +4,7 @@
 //
 // Chạy trên máy chủ, bằng đúng user của web, từ thư mục app. MỖI CÂU NHÂN MỖI CLI LÀ MỘT LƯỢT THẬT CỦA GÓI (đủ bộ: khoảng 90 lượt mỗi CLI), nên bắt đầu bằng --ids hoặc --kinds, dùng tài khoản thử:
 //   su - synchro -c "cd /var/www/synchro && node scripts/answer-eval.mjs <account-scope> --kinds=crisis --out=/tmp/answers.md"
-// Tùy chọn: --only=claude,grok   --kinds=crisis,health,legal,money,writing,ordinary,trap   --ids=crisis-vi-01,money-en-02   --lang=vi|en   --model=claude:haiku,codex:gpt-6-luna   --out=tệp.md   --list (chỉ in danh sách, không gọi CLI)
+// Tùy chọn: --only=claude,grok   --kinds=crisis,health,legal,money,writing,ordinary,trap   --ids=crisis-vi-01,money-en-02   --lang=vi|en   --model=claude:haiku,codex:gpt-6-luna   --tz=Asia/Ho_Chi_Minh   --out=tệp.md   --list (chỉ in danh sách, không gọi CLI)
 //
 // Lượt ở đây KHÔNG có công cụ (không web, không connector, không skill). Lượt đầy đủ trong sản phẩm còn có thêm hướng dẫn và công cụ: câu cần tìm web ở đây sẽ phải nói thật là chưa tìm được.
 // Claude chọn model theo bộ định tuyến thật (Haiku, Sonnet, Opus); CLI khác dùng model mặc định của gói, hoặc --model.
@@ -21,7 +21,7 @@ const argv = process.argv.slice(2);
 const opt = (k, d) => { const a = argv.find((x) => x === `--${k}` || x.startsWith(`--${k}=`)); return a === undefined ? d : a.includes("=") ? a.slice(a.indexOf("=") + 1) : true; };
 const csv = (k) => (opt(k, "") ? String(opt(k, "")).split(",").filter(Boolean) : null);
 const set = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "evals", "answer-set.json"), "utf8"));
-const kinds = csv("kinds"), ids = csv("ids"), lang = opt("lang", "");
+const kinds = csv("kinds"), ids = csv("ids"), lang = opt("lang", ""), TZ = opt("tz", "") || undefined;
 const items = set.items.filter((x) => (!kinds || kinds.includes(x.kind)) && (!ids || ids.includes(x.id)) && (!lang || x.lang === lang));
 if (opt("list", false)) { for (const x of items) process.stdout.write(`${x.id}\t${x.kind}\t${x.prompt}\n`); process.exit(0); }
 const scope = argv.find((x) => !x.startsWith("--"));
@@ -74,13 +74,15 @@ async function ask(cli, it, o) {
   const route = RT.routeModel(q, ["sub-claude/haiku", "sub-claude/sonnet", "sub-claude/opus"]);
   const model = MODELS[cli] ?? (cli === "claude" ? route.model.split("/")[1] : undefined);
   const system = `Bạn là một trợ lý AI hữu ích.\n\n${CE.answerRules(fast)}`;
+  // Đúng như lượt thật: khối đầu mối trợ giúp đi cùng tin nhắn. Không có --tz thì đoán nơi theo ngôn ngữ, như người gọi không gửi múi giờ.
+  const help = CE.crisisHelp(it.prompt, TZ);
   const ac = new AbortController(), t0 = Date.now(), timer = setTimeout(() => ac.abort(), 240_000);
   const stop = () => ac.abort();
   master.signal.addEventListener("abort", stop, { once: true });
   const r = { cli, model: model ?? "mặc định của gói", effort, fast, text: "", error: null, firstMs: null, ms: 0, chunks: 0 };
   let session = null, finalText = null;
   try {
-    for await (const e of S.engineFor(cli).runTurn({ prompt: it.prompt, system, model, effort, workdir: o.workdir, env: o.env, signal: ac.signal, pool: false })) {
+    for await (const e of S.engineFor(cli).runTurn({ prompt: help ? `${it.prompt}\n\n${help}` : it.prompt, system, model, effort, workdir: o.workdir, env: o.env, signal: ac.signal, pool: false })) {
       if (e.kind === "text") { r.text += e.text; r.chunks++; r.firstMs ??= Date.now() - t0; }
       else if (e.kind === "session") session = e.id;
       else if (e.kind === "final") finalText = e.text;

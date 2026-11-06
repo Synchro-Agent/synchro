@@ -32,6 +32,7 @@ ok(/đừng nói đã tìm, đã tra, đã chạy hay đã kiểm tra/.test(fast
 ok(/đúng ngôn ngữ người dùng/.test(fast) && /tiếng Anh/.test(fast), "đường nhanh: đúng ngôn ngữ", fast);
 ok(/nói rõ đã thật sự kiểm tra gì/.test(full) && /chưa kiểm tra được/.test(full), "lượt đầy đủ: nói rõ đã kiểm tra gì, chưa kiểm tra gì", full);
 ok(/988/.test(full) && /1737/.test(full) && /Sức khỏe, pháp lý, tài chính/.test(full), "lượt đầy đủ: đầu mối khẩn cấp và câu hỏi rủi ro", full);
+for (const [t, n] of [[fast, "đường nhanh"], [full, "lượt đầy đủ"]]) ok(/không nêu 988/.test(t) && /múi giờ/.test(t), `${n}: chọn số theo nơi họ sống, người Việt không nhận số của Mỹ`, t);
 // Script chấm trên CLI thật tốn lượt của gói nên kiểm thử không chạy nó: chỉ kiểm tra cú pháp và các hàm nó gọi còn tồn tại.
 const script = new URL("../../scripts/answer-eval.mjs", import.meta.url).pathname;
 ok(spawnSync(process.execPath, ["--check", script]).status === 0, "scripts/answer-eval.mjs đúng cú pháp");

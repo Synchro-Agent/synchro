@@ -41,6 +41,7 @@ import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/im
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
+import { crisisHelp } from "./crisishelp";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
@@ -281,7 +282,7 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Giữ riêng tư: không đưa tệp, ảnh hay dữ liệu của người dùng lên dịch vụ bên ngoài khi họ chưa yêu cầu rõ.
 - Thông tin dễ thay đổi (giá, tỉ giá, tin tức, lịch, phiên bản phần mềm, quy định mới): có công cụ tìm web thì tìm trước rồi mới trả lời, nói rõ dữ liệu tính đến lúc nào và ghi nguồn bằng liên kết markdown. Không tìm được thì nói rõ thông tin có thể đã cũ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 - Sức khỏe, pháp lý, tài chính: nêu mức độ khẩn trước (dấu hiệu nguy hiểm thì khuyên gọi cấp cứu hoặc đi viện ngay), nói rõ điều chưa chắc, và khi nào cần gặp chuyên gia.
-- Người dùng nói muốn tự tử, tự làm hại mình hoặc tuyệt vọng: đáp lại với sự quan tâm thật, không phán xét, không liệt kê cách làm; hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy hoặc đường dây khẩn cấp ở nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em; Mỹ: 988; New Zealand: 111 cấp cứu, 1737 tư vấn), không rõ nơi nào thì hỏi. Trả lời bằng ngôn ngữ của họ.
+- Người dùng nói muốn tự tử, tự làm hại mình hoặc tuyệt vọng: đáp lại với sự quan tâm thật, không phán xét, không liệt kê cách làm; hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy hoặc đường dây khẩn cấp ở đúng nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em; Mỹ: 988; New Zealand: 111 cấp cứu, 1737 tư vấn). Biết nơi họ sống qua múi giờ ở <current_time> và ngôn ngữ: người viết tiếng Việt mà không có dấu hiệu ở nước khác thì nêu số Việt Nam, không nêu 988; không rõ nơi nào thì bảo gọi số cấp cứu địa phương, nhờ người ở gần và hỏi họ ở đâu, không tự nêu số mình không chắc. Trả lời bằng ngôn ngữ của họ.
 - Ảnh do AI tạo: dùng công cụ generate_image nếu có (xem <image_generation>). Không có công cụ đó, hoặc công cụ báo chưa tạo được, thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi đề xuất phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc câu lệnh để họ dán vào công cụ tạo ảnh khác.
 </working_standards>`;
 // Đường nhanh: câu rõ ràng không cần công cụ (router.needsNoTools) đi với hướng dẫn rất ngắn, không cầu nối MCP, không mục lục skill. Đo trên máy chủ thật: một câu chào qua
@@ -289,10 +290,11 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 const NEED_TOOLS = "[[CAN_CONG_CU]]";
 /** Đúng phần hướng dẫn chất lượng của lượt thật, cho scripts/answer-eval.mjs chấm câu trả lời trên CLI thật. */
 export const answerRules = (fast: boolean) => (fast ? FAST_RULES : QUALITY_RULES);
+export { crisisHelp };
 const FAST_RULES = `<quick_reply>
 Đây là câu trò chuyện, câu hỏi ngắn hoặc việc viết ngắn: trả lời ngay, tự nhiên, bằng đúng ngôn ngữ người dùng đang viết (hỏi tiếng Anh thì trả lời tiếng Anh, dù hướng dẫn này viết bằng tiếng Việt; gõ không dấu thì trả lời có dấu). Câu hỏi thì ngắn gọn; nhờ viết (email, thư, thơ, caption…) thì viết đủ, chỉn chu, đưa bài viết ra ngay, không kể lại yêu cầu. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Lượt này không có công cụ nên đừng nói đã tìm, đã tra, đã chạy hay đã kiểm tra. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, tạo ảnh bằng AI, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
-An toàn đứng trước sự ngắn gọn. Tin nhắn có thể nói tới tự làm hại, tuyệt vọng, bị bạo hành hay xâm hại (kể cả nói gián tiếp), hoặc tình huống y tế khẩn: không trả lời cho qua. Đáp với sự quan tâm thật, không phán xét, không nêu cách làm hại; nói rõ mức độ khẩn, hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy, cấp cứu hoặc đường dây khẩn cấp nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em; Mỹ: 988; New Zealand: 111 cấp cứu, 1737 tư vấn). Câu hỏi sức khỏe, pháp lý, tài chính: nêu điều chưa chắc và khi nào cần gặp chuyên gia.
+An toàn đứng trước sự ngắn gọn. Tin nhắn có thể nói tới tự làm hại, tuyệt vọng, bị bạo hành hay xâm hại (kể cả nói gián tiếp), hoặc tình huống y tế khẩn: không trả lời cho qua. Đáp với sự quan tâm thật, không phán xét, không nêu cách làm hại; nói rõ mức độ khẩn, hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy, cấp cứu hoặc đường dây khẩn cấp đúng nơi họ sống, biết qua múi giờ ở <current_time> và ngôn ngữ (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em; Mỹ: 988; New Zealand: 111 cấp cứu, 1737 tư vấn). Viết tiếng Việt mà không có dấu hiệu ở nước khác thì nêu số Việt Nam, không nêu 988; không rõ nơi nào thì bảo gọi số cấp cứu địa phương và hỏi họ ở đâu, không tự nêu số mình không chắc. Câu hỏi sức khỏe, pháp lý, tài chính: nêu điều chưa chắc và khi nào cần gặp chuyên gia.
 </quick_reply>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
@@ -1412,6 +1414,11 @@ function nowBlock(body: Record<string, any>): string { // eslint-disable-line @t
   try { return `<current_time>${at(tz || undefined)}${tz ? ` (${tz})` : ""}</current_time>`; }
   catch { return `<current_time>${at()}</current_time>`; }
 }
+// Đầu mối trợ giúp đúng nơi họ sống, đặt cạnh tin nhắn mới nhất như dòng giờ: chỉ có ở lượt cần, hướng dẫn hệ thống giữ nguyên để đọc từ bộ đệm.
+function crisisBlock(body: Record<string, any>): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!useProfile(body)) return "";
+  return crisisHelp(lastUserText(body.messages), typeof body.tz === "string" && body.tz.length <= 64 ? body.tz : undefined);
+}
 // Thông tin của yêu cầu mới nhất cho bộ định tuyến (router.inputOfChat).
 function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-line @typescript-eslint/no-explicit-any
   return inputOfChat(body.messages, { studio: !!studioOf(body.studio), prev: typeof body.prevModel === "string" ? body.prevModel : null });
@@ -1507,7 +1514,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
-      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body)].filter(Boolean).join("\n\n"));
+      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
@@ -1649,7 +1656,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body)], mix);
+    const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
