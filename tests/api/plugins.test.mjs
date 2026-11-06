@@ -103,7 +103,8 @@ ok(r.j.libs?.length === 1 && !r.j.libs[0].forced && r.j.libs[0].key === "studio-
 r = await plain("Làm slide thuyết trình về Synchro");
 ok(read(r).includes("slides") && r.j.libs?.[0]?.key === "studio-slides" && /Báo cáo quý III/.test(r.j.text), `slide: ${read(r).join(", ")} → bản trình chiếu`, JSON.stringify(r.j).slice(0, 300));
 r = await plain("Viết đề xuất dự án chăm sóc khách hàng");
-ok(r.j.libs?.[0]?.key === "studio-docs" && /type="text\/markdown"/.test(r.j.text), `đề xuất: ${read(r).join(", ")} (thư viện ${r.j.libs?.[0]?.label})`, JSON.stringify(r.j).slice(0, 300));
+// Thư viện cài từ danh mục có thể được chọn thay skill mẫu: điều cần giữ là yêu cầu viết tài liệu đi vào nhóm Tài liệu.
+ok(r.j.libs?.[0]?.label === "Tài liệu", `đề xuất: ${read(r).join(", ")} (thư viện ${r.j.libs?.[0]?.label})`, JSON.stringify(r.j).slice(0, 300));
 r = await plain("Thêm hiệu ứng chuyển động mượt cho menu");
 names = read(r);
 ok(names.length >= 1 && names.every((n) => ds.skills.some((s) => s.name === n)) && /cubic-bezier/.test(r.j.text), `không có từ "thiết kế" vẫn nhận ra: ${names.join(", ")}`, JSON.stringify(r.j).slice(0, 300));

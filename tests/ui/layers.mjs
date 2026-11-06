@@ -83,7 +83,7 @@ try {
   // Khung hỏi lại tải dần trên máy bận: chờ tới khi hiện, rồi xét không có khung xem artifact.
   { const t = Date.now(); while (Date.now() - t < 4000 && !(await ev(`!!document.querySelector(".overlay.cf-top")`))) await sleep(150); }
   ok(await ev(`!!document.querySelector(".overlay.cf-top") && !document.querySelector(".art-modal")`), "nút xóa hỏi lại, không mở artifact đằng sau",
-    await ev(`JSON.stringify({ confirm: !!document.querySelector(".overlay.cf-top"), modal: !!document.querySelector(".art-modal"), active: document.activeElement?.tagName + "." + document.activeElement?.className, label: document.activeElement?.getAttribute("aria-label"), tiles: document.querySelectorAll(".art-tile").length })`));
+    await ev(`JSON.stringify({ confirm: !!document.querySelector(".overlay.cf-top"), modal: !!document.querySelector(".art-modal"), active: document.activeElement?.tagName + "." + document.activeElement?.className, label: document.activeElement?.getAttribute("aria-label"), tiles: document.querySelectorAll(".art-tile").length, firstBtn: (() => { const b = document.querySelector(".art-tile .icon-btn"); if (!b) return null; const c = getComputedStyle(b); return { label: b.getAttribute("aria-label"), vis: c.visibility, disp: c.display, ptr: c.pointerEvents, inert: !!b.closest("[inert]"), tile: b.closest(".art-tile")?.innerText.slice(0, 40) }; })(), bk: !!document.querySelector("[data-bk]") })`));
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await sleep(400);
   ok(await ev(`!document.querySelector(".overlay.cf-top") && document.querySelectorAll(".art-tile").length === ${tiles0}`), "hủy thì artifact còn nguyên");

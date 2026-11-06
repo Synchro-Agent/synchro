@@ -436,7 +436,7 @@ Object.assign(EN2VI, {
   "API key": "Khóa API", "· leave empty to keep the current key": "· để trống nếu muốn giữ khóa hiện tại",
   "Paste your API key": "Dán khóa API của bạn", "Show key": "Hiện khóa", "Hide key": "Ẩn khóa", "Advanced": "Nâng cao", "Base URL": "Base URL",
   "· optional, for proxies or compatible gateways": "· không bắt buộc, dùng cho proxy hoặc cổng tương thích",
-  "Verify and save": "Kiểm tra và lưu", "· only for keys not tied to one workspace": "· chỉ dùng cho khóa không gắn với một workspace", "Choose a workspace": "Chọn workspace", "Find the ID in Claude Console": "Tìm ID trong Claude Console",
+  "Verify and save": "Kiểm tra và lưu", "Removed sign-in method": "Gỡ cách đăng nhập", "Requested email change": "Yêu cầu đổi email", "Changed email": "Đổi email", "Changed user email": "Đổi email người dùng", "Turned on two-step verification": "Bật xác minh hai bước", "Turned off two-step verification": "Tắt xác minh hai bước", "Assigned voice owner": "Gán chủ giọng", "· only for keys not tied to one workspace": "· chỉ dùng cho khóa không gắn với một workspace", "Choose a workspace": "Chọn workspace", "Find the ID in Claude Console": "Tìm ID trong Claude Console",
   "Add a key above, then send a test message to any model here.": "Thêm khóa ở trên, rồi gửi thử tin nhắn tới bất kỳ model nào tại đây.",
   "Model": "Model", "Message (optional)": "Tin nhắn (không bắt buộc)", "Sending…": "Đang gửi…", "Send test": "Gửi thử", "Works": "Hoạt động tốt",
   "Create a key": "Tạo khóa", "Sign in to the provider's console, add billing, and create an API key.": "Đăng nhập trang quản lý của nhà cung cấp, thêm phương thức thanh toán rồi tạo khóa API.",

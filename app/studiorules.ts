@@ -173,7 +173,7 @@ const STRICT: Record<StudioKind, Strict> = {
       [re("animation|animations|motion|icon|icons|graphic|graphics|svg|banner|banners"), re("animation|animations|animate|transition|transitions|easing|motion graphic|motion graphics|icon|icons|illustration|graphic|graphics|logo|visual|visuals|banner|banners|branded")],
       [re("gif|gifs"), re("gif|gifs")],
       // "poster-api", "logo-detection": chữ trùng trong tên, không phải làm đồ họa.
-      [re("logo|logos|poster|posters"), re("design|designs|designing|create|creates|creating|generate|generates|generating|make|makes|making|graphic|graphics|print|illustration")],
+      [re("logo|logos|poster|posters"), re("design|designs|designing|create|creates|creating|generate|generates|generating|make|makes|making|graphic|graphics|print|illustration|thiet ke|tao|ve|lam")],
     ],
     head: re("dark mode aesthetic|light mode aesthetic|design language|ui design|ux design|ui ux|interface design|visual design|graphic design|web design|frontend design|front end design|design systems?|design tokens|brand identity|visual identity|figma|color palettes?|colour palettes?|wireframes?|mockups?|motion graphics?|motion design|usability evaluation|taste audit|image generation|image editing|text to image|web animations?|algorithmic art|generative art|thiet ke giao dien|do hoa"),
     made: [made(DESIGN_V, "logos?|posters?|flyers?|banners?|mockups?|wireframes?|illustrations?|infographics?|thumbnails?|icons?|icon sets?|brand kits?|color palettes?|colour palettes?|landing pages?|websites?|web pages?|graphics?|ad creatives?|artwork|visual art|visuals"),

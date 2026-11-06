@@ -544,7 +544,9 @@ Object.assign(VI2EN, {
   "Khóa này dùng được cho nhiều workspace nên cần biết chạy ở workspace nào. Hãy dán ID workspace ở mục Nâng cao, hoặc tạo khóa gắn với một workspace.": "This key works across several workspaces, so Synchro needs to know which one to use. Paste the workspace ID under Advanced, or create a key tied to one workspace.",
   "ID workspace có dạng wrkspc_…, lấy ở trang Workspaces của Claude Console.": "A workspace ID looks like wrkspc_…. You'll find it on the Workspaces page in Claude Console.",
 });
+Object.assign(VI2EN, { "máy chủ đang bận": "the server is busy" });
 RULES_EN.push(
+  [/^([\s\S]+) Hãy thử lại sau ít phút\.$/, (m) => `${m[1]} Try again in a few minutes.`],
   [/^Không tìm thấy workspace (\S+), hoặc khóa này không có quyền vào workspace đó\.$/, (m) => `Workspace ${m[1]} wasn't found, or this key doesn't have access to it.`],
   [/^Khóa không hợp lệ hoặc không có quyền \((\d+)\): ([\s\S]+)$/, (m) => `Invalid key or missing permission (${m[1]}): ${m[2]}`],
   [/^Khóa API bị từ chối \((\d+)\): ([\s\S]+)$/, (m) => `API key rejected (${m[1]}): ${m[2]}`],

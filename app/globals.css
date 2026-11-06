@@ -2484,7 +2484,7 @@ html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)
 .art-tile-ic{color:var(--text-3);display:inline-flex;align-items:center;justify-content:center;flex:none}
 /* Thẻ artifact: nút tên là điểm dừng bàn phím (nút Xóa không được nằm lồng trong một nút khác), viền tiêu điểm vẽ quanh cả thẻ. */
 .art-tile-open{all:unset;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-.art-tile:has(.art-tile-open:focus-visible),.pl-row2:has(.art-tile-open:focus-visible){outline:2px solid var(--link);outline-offset:2px}
+.art-tile:has(.art-tile-open:focus-visible),.pl-row2:has(.art-tile-open:focus-visible),.out-card:has(.art-tile-open:focus-visible){outline:2px solid var(--link);outline-offset:2px}
 .pl-dcard-t>span{text-wrap:balance}
 @media (hover:none){.art-tile-meta .icon-btn{opacity:1}}
 .art-modal,.overlay.art-modal{position:fixed;inset:0;z-index:55;background:var(--overlay);display:grid;place-items:center;animation:fadeIn .2s}

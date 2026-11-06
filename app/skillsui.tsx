@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { apiFetch, statusText } from "./apierr";
-import { rowKeys } from "./a11y";
 import { SKILLS_CHANGED, SKILL_STUDIOS } from "./studios";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
@@ -292,11 +291,11 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       {list !== null && !list.length && !q && <div className="hub-empty"><I.Scroll size={18} /><span>Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.</span></div>}
       <div className="pl-rows2">
         {pgS.items.map((s) => (
-          <div key={s.name} role="button" tabIndex={0} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} onKeyDown={rowKeys(() => open(s.name))} {...bulkRow(bs, s)}>
+          <div key={s.name} className={`pl-row2 ${s.enabled ? "" : "off"}`} onClick={() => open(s.name)} {...bulkRow(bs, s)}>
             {bs.on && <BulkCheck on={bs.has(s)} />}
             <span className="pl-mark" style={{ width: 36, height: 36 }}><I.Scroll size={17} /></span>
             <div className="pl-row2-t">
-              <div className="pl-row2-h"><b data-notr>{s.name}</b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}{s.studio?.studios.map((k) => <span key={k} className="pl-b st" data-tip="In this section of Artifacts">{KIND_NAME[k]}</span>)}</div>
+              <div className="pl-row2-h"><b data-notr><button type="button" className="art-tile-open">{s.name}</button></b><span className="pl-b" data-notr>v{s.version}</span>{s.scripts > 0 && <span className="pl-b">Scripts</span>}{s.warnings.length > 0 && <span className="pl-b mid" title={s.warnings.join("\n")}>{s.warnings.length} warning{s.warnings.length > 1 ? "s" : ""}</span>}<ScoreBadge s={sc[s.name]} />{!s.enabled && <span className="pl-b">Off</span>}{s.studio?.studios.map((k) => <span key={k} className="pl-b st" data-tip="In this section of Artifacts">{KIND_NAME[k]}</span>)}</div>
               <span data-notr>{s.description}</span>
             </div>
             <span className="pl-date" data-notr>{meta(s).split(" · ").slice(1).join(" · ")}</span>

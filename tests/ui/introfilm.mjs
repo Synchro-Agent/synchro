@@ -58,8 +58,8 @@ async function signup(tag) {
   await sleep(600);
   await click(field("input[type=email]"), "email"); await type(email); await enter();
   // Màn hình không cho biết email đã có tài khoản hay chưa: luôn tới bước đăng nhập, người mới bấm tạo tài khoản.
-  await until(`[...document.querySelectorAll(".auth-forgot")].some((b) => /Create an account|Tạo tài khoản/i.test(b.textContent))`, 15000, "password step"); await sleep(500);
-  await click(`[...document.querySelectorAll(".auth-forgot")].find((b) => /Create an account|Tạo tài khoản/i.test(b.textContent))`, "create account");
+  await until(`[...document.querySelectorAll("button")].some((b) => /Create an account|Tạo tài khoản/i.test(b.textContent))`, 15000, "password step"); await sleep(500);
+  await click(`[...document.querySelectorAll("button")].find((b) => /Create an account|Tạo tài khoản/i.test(b.textContent))`, "create account");
   await until(`!!${field("input[autocomplete=new-password]")}`, 8000, "new password"); await sleep(300);
   await click(field("input[autocomplete=new-password]"), "password"); await type(password); await enter();
   await until(`!!document.querySelector("input[autocomplete=new-password]:not([readonly])") && [...document.querySelectorAll("input[autocomplete=new-password]")].length >= 1 && /confirm/i.test(document.querySelector("form")?.innerHTML ?? "") || document.querySelectorAll("input[autocomplete=new-password]").length === 2`, 15000, "confirm step"); await sleep(900);

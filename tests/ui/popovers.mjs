@@ -132,7 +132,9 @@ const runSize = async (size) => {
         return { dx: s.x + s.width / 2 - q.x - q.width / 2, dy: s.y + s.height / 2 - q.y - q.height / 2, bg }; })()`);
       if (!r) continue;
       checked++;
-      const off = Math.max(Math.abs(r.dx), Math.abs(r.dy)), clear = /rgba\(0, 0, 0, 0\)|transparent/.test(r.bg);
+      // Nút có thêm số % cạnh vòng: chiều ngang không còn đối xứng, chỉ xét chiều dọc.
+      const hasN = await ev(`!!document.querySelector(".main>.dock .us-ring .us-ring-n")`);
+      const off = Math.max(hasN ? 0 : Math.abs(r.dx), Math.abs(r.dy)), clear = /rgba\(0, 0, 0, 0\)|transparent/.test(r.bg);
       if (off > 0.5 || !clear) fails++;
       console.log(`  ${off <= 0.5 && clear ? "✓" : "✗"} ${label} vòng Mức dùng mức “${lv || "thường"}”${off > 0.5 ? ` lệch tâm ${r.dx.toFixed(1)}/${r.dy.toFixed(1)}px` : ""}${clear ? "" : ` có nền ${r.bg}`}`);
     }

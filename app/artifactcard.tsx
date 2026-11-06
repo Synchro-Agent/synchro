@@ -99,9 +99,9 @@ export function OutputFiles({ files: all, onOpen, active }: { files: OutFile[]; 
       {files.map((f) => {
         const k = fileKind(f.name);
         return (
-          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} role="button" tabIndex={0} onClick={() => onOpen?.(f)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen?.(f); } }} title={tr("Xem trước")}>
+          <div key={f.id} className={`out-card ${active === f.id ? "on" : ""}`} onClick={() => onOpen?.(f)} title={tr("Xem trước")}>
             <span className="out-badge" style={{ background: k.color }}>{k.label}</span>
-            <span className="out-txt"><b data-notr>{f.name}</b><span>{tr(KIND[k.ext] ?? "Tệp")} · {fmtSize(f.size)}</span></span>
+            <span className="out-txt"><b data-notr><button type="button" className="art-tile-open">{f.name}</button></b><span>{tr(KIND[k.ext] ?? "Tệp")} · {fmtSize(f.size)}</span></span>
             <a className="out-dl" href={`/api/outputs/${f.id}`} download={f.name} onClick={(e) => e.stopPropagation()} aria-label={tr("Tải về")} data-tip="Tải về"><I.Download size={15} /></a>
           </div>
         );

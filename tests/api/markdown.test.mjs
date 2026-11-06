@@ -285,5 +285,5 @@ console.log("14. Khối code xuống dòng hay cuộn ngang");
   ok(M.codeWraps("log", "Error: something failed " + "x".repeat(200)) && M.codeWraps("stdout", "done") && M.codeWraps("Text", "câu dài"), "nhật ký, đầu ra thường xuống dòng");
 }
 
-console.log(`\n${pass} đúng, ${fail} sai`);
+console.log(`\n${pass} đạt, ${fail} lỗi`);
 if (fail) process.exit(1);
