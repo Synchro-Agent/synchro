@@ -76,14 +76,14 @@ try {
   ok(await ev(`!document.querySelector(".art-modal")`), "Esc đóng khung xem");
   // Xóa một artifact: hỏi lại trước, Enter trên nút xóa không mở khung xem.
   const tiles0 = await ev(`document.querySelectorAll(".art-tile").length`);
-  // Đóng khung xem trả tiêu điểm về chỗ cũ sau hiệu ứng đóng; máy bận thì việc đó tới muộn và cướp lại tiêu điểm, Enter rơi vào nút khác. Đặt lại tới khi đứng yên.
-  { const t = Date.now(); let still = 0; while (Date.now() - t < 5000 && still < 4) { const on = await ev(`document.activeElement === document.querySelector(".art-tile .icon-btn")`); if (on) still++; else { still = 0; await ev(`document.querySelector(".art-tile .icon-btn").focus(), 1`); } await sleep(100); } }
+  // Nhắm đúng nút xóa ở hàng tên: ảnh thu nhỏ của tài liệu có bảng cũng chứa nút (Chép bảng) nhưng là phần trơ, không nhận tiêu điểm. Chỉ hỏng khi artifact đầu danh sách có bảng.
+  await ev(`document.querySelector(".art-tile-meta .icon-btn").focus(), 1`);
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await P("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   // Khung hỏi lại tải dần trên máy bận: chờ tới khi hiện, rồi xét không có khung xem artifact.
   { const t = Date.now(); while (Date.now() - t < 4000 && !(await ev(`!!document.querySelector(".overlay.cf-top")`))) await sleep(150); }
   ok(await ev(`!!document.querySelector(".overlay.cf-top") && !document.querySelector(".art-modal")`), "nút xóa hỏi lại, không mở artifact đằng sau",
-    await ev(`JSON.stringify({ confirm: !!document.querySelector(".overlay.cf-top"), modal: !!document.querySelector(".art-modal"), active: document.activeElement?.tagName + "." + document.activeElement?.className, label: document.activeElement?.getAttribute("aria-label"), tiles: document.querySelectorAll(".art-tile").length, firstBtn: (() => { const b = document.querySelector(".art-tile .icon-btn"); if (!b) return null; const c = getComputedStyle(b); return { label: b.getAttribute("aria-label"), vis: c.visibility, disp: c.display, ptr: c.pointerEvents, inert: !!b.closest("[inert]"), tile: b.closest(".art-tile")?.innerText.slice(0, 40) }; })(), bk: !!document.querySelector("[data-bk]") })`));
+    await ev(`JSON.stringify({ confirm: !!document.querySelector(".overlay.cf-top"), modal: !!document.querySelector(".art-modal"), active: document.activeElement?.tagName + "." + document.activeElement?.className, label: document.activeElement?.getAttribute("aria-label"), tiles: document.querySelectorAll(".art-tile").length, firstBtn: (() => { const b = document.querySelector(".art-tile-meta .icon-btn"); if (!b) return null; const c = getComputedStyle(b); return { label: b.getAttribute("aria-label"), vis: c.visibility, disp: c.display, ptr: c.pointerEvents, inert: !!b.closest("[inert]"), tile: b.closest(".art-tile")?.innerText.slice(0, 40) }; })(), bk: !!document.querySelector("[data-bk]") })`));
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await sleep(400);
   ok(await ev(`!document.querySelector(".overlay.cf-top") && document.querySelectorAll(".art-tile").length === ${tiles0}`), "hủy thì artifact còn nguyên");
