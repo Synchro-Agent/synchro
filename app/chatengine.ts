@@ -1304,6 +1304,9 @@ export { clearStall, noteStall, stalledModels };
 // Lựa chọn của người dùng ở bộ chọn: model, nỗ lực, nút Bộ nhớ. Từng chỉ khởi động sẵn theo Tự động và bộ nhớ bật, nên ai chọn tay Sonnet, đổi nỗ lực hay tắt Bộ nhớ thì tiến trình đợi sẵn không bao giờ khớp (khóa của hồ gồm cả model, nỗ lực, hướng dẫn).
 export type WarmPick = { model?: unknown; effort?: unknown; memory?: unknown };
 const prewarmed = new Map<string, { at: number; sig: string; pick: WarmPick }>();
+// Khởi động thật cách nhau ít nhất chừng này, dù lựa chọn có đổi: không có nó, đổi vòng 4 tổ hợp model, nỗ lực là mỗi lần một CLI mới, tiến trình cũ bị bỏ mà vẫn đang thoát nên không được tính vào mức của máy.
+const WARM_GAP_MS = Number(process.env.SYNCHRO_WARM_GAP_MS) || 15_000;
+const warmLater = new Set<string>();
 const QUICK_ASKS = ["xin chào", "viết email xin nghỉ phép"];
 /** Mở trang, quay lại tab, đổi model: khởi động sẵn tiến trình cho câu kế tiếp, đúng model, nỗ lực và hướng dẫn đường nhanh sẽ dùng. Mỗi lựa chọn tối đa một lần mỗi phút; không tốn lượt nào của gói. */
 export async function prewarmChat(user: UserRow, o: WarmPick & { force?: boolean } = {}) {
@@ -1313,6 +1316,12 @@ export async function prewarmChat(user: UserRow, o: WarmPick & { force?: boolean
   const pick: WarmPick = o.model === undefined && o.effort === undefined && o.memory === undefined ? had?.pick ?? {} : { model: o.model, effort: o.effort, memory: o.memory };
   const sig = JSON.stringify([pick.model, pick.effort, pick.memory]);
   if (!o.force && had?.sig === sig && now - had.at < 60_000) return;
+  if (!o.force && had && now - had.at < WARM_GAP_MS) {
+    // Vừa khởi động xong: ghi nhớ lựa chọn mới nhất, tới hẹn mới khởi động một lần cho nó, các lựa chọn ở giữa thì bỏ.
+    prewarmed.set(user.id, { ...had, pick });
+    if (!warmLater.has(user.id)) { warmLater.add(user.id); setTimeout(() => { warmLater.delete(user.id); void prewarmChat(user).catch(() => {}); }, had.at + WARM_GAP_MS - now).unref?.(); }
+    return;
+  }
   if (prewarmed.size > 2000) prewarmed.clear();
   prewarmed.set(user.id, { at: now, sig, pick });
   try { warmRecall(user.id); } catch {}

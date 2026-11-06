@@ -17,6 +17,7 @@ process.env.SYNCHRO_ENGINE_HOME = HOME;
 process.env.DATA_KEY = "speed-test-key";
 process.env.SYNCHRO_CLAUDE_POOL_MAX = "6";
 process.env.SYNCHRO_MOCK_OFFLINE = "1";
+process.env.SYNCHRO_WARM_GAP_MS = "700";
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 fs.mkdirSync(BIN, { recursive: true });
@@ -25,8 +26,8 @@ for (const f of ["claude", "mock-cli-common.cjs"]) fs.copyFileSync(path.join(SRC
 fs.chmodSync(path.join(BIN, "claude"), 0o755);
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
 
-const { "api/memory/project/route": PM, "api/critic/route": CR, memory: MEM, router: R, "ai/anymodel": AM, "ai/cli_pool": PO, chatengine: CH, authstore: AU, "ai/cli_auth": A, skillstudio: ST, turngate: TG, "ai/subs": SUBS } =
-  await loadTs(["api/memory/project/route", "api/critic/route", "memory", "router", "ai/anymodel", "ai/cli_pool", "chatengine", "authstore", "ai/cli_auth", "skillstudio", "turngate", "ai/subs"]);
+const { "api/warm/route": WR, "api/memory/project/route": PM, "api/critic/route": CR, memory: MEM, router: R, "ai/anymodel": AM, "ai/cli_pool": PO, chatengine: CH, authstore: AU, "ai/cli_auth": A, skillstudio: ST, turngate: TG, "ai/subs": SUBS } =
+  await loadTs(["api/warm/route", "api/memory/project/route", "api/critic/route", "memory", "router", "ai/anymodel", "ai/cli_pool", "chatengine", "authstore", "ai/cli_auth", "skillstudio", "turngate", "ai/subs"]);
 
 // Giữ lại dòng [timing] để kiểm tra các trường mà người vận hành sẽ đọc trên máy chủ thật.
 const lines = [], log0 = console.log;
@@ -165,6 +166,24 @@ try {
     const told2 = [];
     await SUBS.subTurn({ user, model: "sub-claude/haiku", system: "x", messages: [{ role: "user", content: "chào" }], effort: "low", onStatus: (t) => told2.push(t) });
     ok(!told2.length, "có chữ ngay: không thêm dòng trạng thái nào", told2.join(" | "));
+  }
+
+  console.log("5b. Đổi vòng lựa chọn không sinh CLI vô hạn");
+  {
+    const u1 = await fresh();
+    await sleep(800);
+    PO.dropAll();
+    await CH.prewarmChat(u1, { model: "sub-claude/sonnet", effort: "high" });
+    for (const [m, e] of [["sub-claude/opus", "high"], ["sub-claude/sonnet", "low"], ["sub-claude/opus", "low"], ["sub-claude/haiku", "low"]]) await CH.prewarmChat(u1, { model: m, effort: e });
+    await sleep(200);
+    ok(PO.poolSize() === 1, `5 lựa chọn liên tiếp: chỉ khởi động một tiến trình (${PO.poolSize()})`, PO.poolSize());
+    await sleep(1000);
+    ok(PO.poolSize() === 2, `tới hẹn: khởi động đúng một lần nữa cho lựa chọn cuối (${PO.poolSize()})`, PO.poolSize());
+    const ck = AU.createSession(u1, new Request("http://x/"), "test").split(";")[0];
+    const warm = () => WR.POST(new Request("http://x/api/warm", { method: "POST", headers: { cookie: ck, origin: "http://x", host: "x", "content-type": "application/json" }, body: JSON.stringify({ model: { a: 1 }, effort: "lạ", memory: "x" }) }));
+    const codes = [];
+    for (let i = 0; i < 31; i++) codes.push((await warm()).status);
+    ok(codes.slice(0, 30).every((c) => c === 204) && codes[30] === 429, "route: 30 lần một phút, quá nữa thì từ chối", codes.join());
   }
 
   console.log("6. Phản biện và rút bộ nhớ dự án chạy thật qua route");
