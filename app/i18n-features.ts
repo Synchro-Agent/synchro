@@ -84,6 +84,7 @@ Object.assign(FX_VI2EN, {
   "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.": "The server restarted or the connection was down too long, so this turn can't be followed any more. Work already done is still in the workspace.",
   "Phiên này đang có một lượt chạy.": "This session already has a turn running.",
   "Không có ai duyệt sau 30 phút nên lượt này đã dừng.": "Nobody approved within 30 minutes, so this turn stopped.",
+  "Chưa tải được ảnh. Có thể do mạng hoặc máy chủ đang khởi động lại.": "The image hasn't loaded yet. The connection may be down or the server may be restarting.",
 });
 Object.assign(FX_EN2VI, {
   "ChatGPT account, free or paid": "Tài khoản ChatGPT, miễn phí hay trả phí đều được",

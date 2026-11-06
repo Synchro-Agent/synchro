@@ -1,11 +1,12 @@
 "use client";
 // Phần artifact hiện ngay trong tin nhắn: thẻ artifact, tệp code đã tạo. Nằm riêng để trang chat tải đầu không phải kéo theo khung xem artifact và trang Artifacts (artifactui.tsx, tải khi mở).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
 import { isDeck } from "./artdoc";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
+import { imgVerdict } from "./outimg";
 import { ART_LABEL, type ArtBlock, type ArtType } from "./artifacts";
 
 // ---------------------------------------------------------------- biểu tượng theo loại
@@ -51,16 +52,29 @@ export async function saveArtifacts(conv: string, items: ArtBlock[]) {
 // Video MP4 / WebM phát ngay trong tin nhắn như ảnh (chỉ tải phần đầu để lấy khung đầu và thời lượng).
 // Ảnh trong tin nhắn: giữ chỗ đúng tỉ lệ (không xô đẩy tin nhắn lúc ảnh về) bằng nền trung tính theo giao diện. Nền trắng chỉ sau khi ảnh đã tải, để PNG trong suốt vẫn đọc được;
 // trước đó, trên giao diện tối, nền trắng hiện thành một khung trắng chói vài giây. Tệp hết hạn thì nói rõ, không để biểu tượng ảnh hỏng.
+// Thẻ <img> lỗi không cho biết vì sao: mạng chập chờn, máy chủ đang khởi động lại (502), hết phiên đăng nhập cũng rơi vào đây. Hỏi lại máy chủ, chỉ 404 mới nói hết hạn; còn lại tự thử lại rồi để nút Thử lại.
 const OUT_IMG_H = 360;
 function OutImage({ f, onOpen }: { f: OutFile; onOpen?: (f: OutFile) => void }) {
-  const [state, setState] = useState<"wait" | "ok" | "gone">("wait");
+  const [state, setState] = useState<"wait" | "ok" | "gone" | "fail">("wait");
+  const [tries, setTries] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null), alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; if (timer.current) clearTimeout(timer.current); }; }, []);
+  const again = () => { setState("wait"); setTries((t) => t + 1); };
+  const failed = () => {
+    void fetch(`/api/outputs/${f.id}?inline=1`, { method: "HEAD", cache: "no-store" }).then((r) => r.status, () => null).then((status) => {
+      if (!alive.current) return;
+      const v = imgVerdict(status, tries);
+      if (v === "retry") timer.current = setTimeout(again, 2000 * (tries + 1)); else setState(v);
+    });
+  };
   const ratio = f.w && f.h ? f.w / f.h : 0;
   const box = ratio ? { width: `min(100%, ${Math.round(Math.min(f.w!, OUT_IMG_H * ratio))}px)` } : undefined;
   if (state === "gone") return <div className="out-img-gone" role="status"><I.Image size={18} /><span>{tr("Không tải được ảnh. Tệp có thể đã hết hạn (tự xóa sau 30 ngày).")}</span></div>;
+  if (state === "fail") return <div className="out-img-gone" role="status"><I.Image size={18} /><span>{tr("Chưa tải được ảnh. Có thể do mạng hoặc máy chủ đang khởi động lại.")}</span><button className="btn sm" onClick={again}>{tr("Thử lại")}</button>{onOpen && <button className="btn sm" onClick={() => onOpen(f)}>{tr("Mở")}</button>}</div>;
   return (
     <button onClick={() => onOpen?.(f)} aria-label={f.name} style={box} className={state === "wait" ? "out-img-wait" : undefined}>
-      <img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" data-ready={state === "ok" ? "" : undefined} style={ratio ? { width: "100%", aspectRatio: `${f.w} / ${f.h}` } : undefined}
-        ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === "wait") setState("ok"); }} onLoad={() => setState("ok")} onError={() => setState("gone")} />
+      <img src={`/api/outputs/${f.id}?inline=1${tries ? `&r=${tries}` : ""}`} alt={f.name} loading="lazy" data-ready={state === "ok" ? "" : undefined} style={ratio ? { width: "100%", aspectRatio: `${f.w} / ${f.h}` } : undefined}
+        ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === "wait") setState("ok"); }} onLoad={() => setState("ok")} onError={failed} />
     </button>
   );
 }
