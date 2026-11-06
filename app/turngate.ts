@@ -6,7 +6,7 @@ import os from "node:os";
 export type Lane = "run" | "quick" | "code";
 export type WaitWhy = "account" | "server";
 export type Slot = () => void;
-type Waiter = { uid: string; lane: Lane; limit: number; total: number; go: (s: Slot) => void };
+type Waiter = { uid: string; lane: Lane; limit: number; total: number; bg?: boolean; go: (s: Slot) => void };
 type State = { busy: Map<string, number>; total: number; waiting: Waiter[]; timer: ReturnType<typeof setTimeout> | null; peak: number; waited: number; refused: number };
 
 // Dev-mock chạy nhiều bộ kiểm thử song song trên cùng tài khoản: nới như limit() ở authstore.
@@ -68,7 +68,8 @@ function pump() {
     let best: Waiter | null = null;
     for (const w of st.waiting) {
       if (count(key(w.lane, w.uid)) >= w.limit || userTotal(w.uid) >= w.total) continue;
-      if (!best || userTotal(w.uid) < userTotal(best.uid)) best = w;
+      // Cùng tài khoản: việc có người đang nhìn đi trước việc nền, dù việc nền chờ lâu hơn.
+      if (!best || userTotal(w.uid) < userTotal(best.uid) || (best.uid === w.uid && best.bg && !w.bg)) best = w;
     }
     if (!best) break;
     st.waiting.splice(st.waiting.indexOf(best), 1);
@@ -78,8 +79,8 @@ function pump() {
   if (!st.timer) { st.timer = setTimeout(() => { st.timer = null; pump(); }, 2000); st.timer.unref?.(); }
 }
 
-/** Số lượt đang chờ của tài khoản trên một làn. */
-export const queuedOf = (uid: string, lane: Lane = "run") => st.waiting.filter((w) => w.uid === uid && w.lane === lane).length;
+/** Số lượt đang chờ của tài khoản trên một làn. bg: chỉ đếm việc nền (true) hoặc chỉ việc có người chờ (false). */
+export const queuedOf = (uid: string, lane: Lane = "run", bg?: boolean) => st.waiting.filter((w) => w.uid === uid && w.lane === lane && (bg === undefined || !!w.bg === bg)).length;
 export const runningOf = (uid: string, lane: Lane = "run") => count(key(lane, uid));
 /** Ghi nhận một lần từ chối vì đầy (hiện ở trang Sức khỏe). */
 export const noteRefused = () => { st.refused++; };
@@ -95,20 +96,21 @@ export function withSlot<T>(slot: Slot, fn: () => Promise<T>): Promise<T> {
 }
 
 /** Xin chỗ chạy. Trả về hàm trả chỗ; "cancelled" khi người dùng dừng lúc đang chờ; "timeout" khi chờ quá maxWaitMs. total: mức chung mọi làn của tài khoản. */
-export function acquire(o: { uid: string; lane: Lane; limit?: number; total?: number; signal?: AbortSignal; maxWaitMs?: number; onWait?: (w: WaitWhy) => void }): Promise<Slot | "cancelled" | "timeout"> {
+export function acquire(o: { uid: string; lane: Lane; limit?: number; total?: number; signal?: AbortSignal; maxWaitMs?: number; bg?: boolean; onWait?: (w: WaitWhy) => void }): Promise<Slot | "cancelled" | "timeout"> {
   const limit = o.limit ?? accountLimit();
   const total = (o.total ?? accountTotal()) + (o.lane === "quick" ? QUICK_EXTRA : 0);
   if (o.signal?.aborted) return Promise.resolve("cancelled");
   yieldIdle();
   // Có người đang chờ cùng tài khoản thì không chen lên trước; hàng của tài khoản khác không làm chậm tài khoản này khi cả máy còn chỗ.
-  const ahead = st.waiting.some((w) => w.uid === o.uid && w.lane === o.lane);
+  // Việc nền đang chờ (giới hạn riêng, chặt hơn) không bắt việc có người nhìn phải xếp sau.
+  const ahead = st.waiting.some((w) => w.uid === o.uid && w.lane === o.lane && (o.bg || !w.bg));
   if (!ahead && count(key(o.lane, o.uid)) < limit && userTotal(o.uid) < total && st.total < globalLimit() && (st.total === 0 || memOk())) return Promise.resolve(take(o));
   st.waited++;
   return new Promise((done) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const leave = () => { const i = st.waiting.indexOf(w); if (i >= 0) st.waiting.splice(i, 1); if (timer) clearTimeout(timer); o.signal?.removeEventListener("abort", onAbort); };
     const onAbort = () => { leave(); done("cancelled"); };
-    const w: Waiter = { uid: o.uid, lane: o.lane, limit, total, go: (s) => { leave(); done(s); } };
+    const w: Waiter = { uid: o.uid, lane: o.lane, limit, total, bg: o.bg, go: (s) => { leave(); done(s); } };
     st.waiting.push(w);
     o.signal?.addEventListener("abort", onAbort, { once: true });
     if (o.maxWaitMs) { timer = setTimeout(() => { leave(); done("timeout"); }, o.maxWaitMs); timer.unref?.(); }

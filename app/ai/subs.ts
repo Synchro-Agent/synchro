@@ -640,7 +640,7 @@ function removeConvAttachments(uid: string, conv: string) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -696,15 +696,16 @@ const STREAMS = new Set<Cli>(["claude", "grok"]), WAIT_TELL_MS = 8000;
 // Việc nền của một tài khoản chạy tối đa chừng này cùng lúc: sau một câu trả lời có artifact từng là rút bộ nhớ, chưng cất, đặt tên và hai phản biện cùng lúc, tức 5 CLI ăn vào mức chung của tài khoản (6),
 // tin nhắn kế tiếp có thể phải xếp hàng sau chính những việc đó. Chúng không ai đứng chờ nên được chờ lâu hơn việc phụ thường.
 const BG_MAX = 2, BG_WAIT_MS = 5 * 60_000;
-const BUSY = "Máy chủ đang bận. Hãy thử lại sau ít phút.";
+export const BUSY = "Máy chủ đang bận. Hãy thử lại sau ít phút.";
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
   // Mỗi lượt là một CLI. Lượt chat, lượt Code đã giữ chỗ từ trước. Việc phụ (phản biện, quét skill, đặt tên, chưng cất) gọi thẳng tới đây từng không qua cổng nào:
   // 40 yêu cầu phản biện cùng lúc là tới 80 CLI, không tính vào mức của tài khoản hay của cả máy, đủ để hết RAM và sập trang của mọi người.
   if (holdsSlot()) return subTurnWatched(o);
   const uid = o.user.id;
-  if (queuedOf(uid, "quick") >= queueLimit()) { noteRefused(); return { status: 503, json: { error: BUSY } }; }
-  const slot = await acquire({ uid, lane: "quick", limit: o.bg ? Math.min(BG_MAX, quickLimit(o.user)) : quickLimit(o.user), total: turnsTotal(o.user), signal: o.signal, maxWaitMs: o.bg ? BG_WAIT_MS : SIDE_WAIT_MS });
+  // Việc nền đếm riêng: một câu trả lời có 10 artifact là 8 phản biện đang chờ, từng làm đầy hàng chung nên đặt tên, nén ngữ cảnh ngay sau đó bị báo máy chủ bận. Hàng việc nền đầy thì bỏ việc đó, người có mặt không phải trả giá.
+  if (o.bg ? queuedOf(uid, "quick", true) >= Math.ceil(queueLimit() / 2) : queuedOf(uid, "quick", false) >= queueLimit()) { if (!o.bg) noteRefused(); return { status: 503, json: { error: BUSY } }; }
+  const slot = await acquire({ uid, lane: "quick", bg: o.bg, limit: o.bg ? Math.min(BG_MAX, quickLimit(o.user)) : quickLimit(o.user), total: turnsTotal(o.user), signal: o.signal, maxWaitMs: o.bg ? o.maxWaitMs ?? BG_WAIT_MS : SIDE_WAIT_MS });
   if (slot === "cancelled") return { status: 200, json: { model: o.model, text: "", cancelled: true } };
   if (slot === "timeout") return { status: 503, json: { error: BUSY } };
   return withSlot(slot, () => subTurnWatched(o));

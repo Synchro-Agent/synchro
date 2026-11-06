@@ -86,6 +86,24 @@ try {
     ok(!!fg.text, "đặt tên (người dùng đang nhìn) không phải xếp sau việc nền");
     const done = await Promise.all(jobs);
     ok(done.every((x) => x.text), "cả 5 việc nền cuối cùng đều xong", JSON.stringify(done.map((x) => x.message ?? "ok")));
+    // Hàng việc nền đầy: việc nền thừa bỏ đi nhẹ nhàng, không tính là lỗi; việc có người nhìn vẫn chạy.
+    fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 900 }));
+    user = await fresh();
+    const flood = Array.from({ length: 10 }, (_, i) => AM.quickCall(user, "Phản biện.", `việc ${i}`, { job: "critic-auto", bg: true }).catch((e) => e));
+    await until(() => TG.runningOf(user.id, "quick") > 0);
+    await sleep(100);
+    ok(TG.queuedOf(user.id, "quick", true) === 4 && TG.queuedOf(user.id, "quick", false) === 0, `10 việc nền: 2 chạy, 4 chờ, phần còn lại bị bỏ (đang chờ ${TG.queuedOf(user.id, "quick", true)})`);
+    const title = await AM.quickCall(user, "Đặt tên.", "đặt tên ngay sau câu trả lời có nhiều artifact", { job: "title" }).catch((e) => e);
+    ok(!!title.text, "đặt tên ngay sau đó không bị báo máy chủ bận", title.message);
+    const flooded = await Promise.all(flood);
+    ok(flooded.filter((x) => x.message === AM.NO_CHEAP).length === 4 && flooded.filter((x) => x.text).length === 6, "việc bị bỏ báo là chưa tới lượt, không phải lỗi", JSON.stringify(flooded.map((x) => x.message ?? "ok")));
+    // Việc chờ lâu hơn hạn của nó: thôi chờ, cũng là chưa tới lượt.
+    user = await fresh();
+    const hold = Array.from({ length: 2 }, () => AM.quickCall(user, "Giữ chỗ.", "x", { job: "brain", bg: true }));
+    await until(() => TG.runningOf(user.id, "quick") === 2);
+    const short = await AM.quickCall(user, "Chờ ít.", "y", { job: "brain", bg: true, maxWaitMs: 50 }).catch((e) => e);
+    ok(short.message === AM.NO_CHEAP && TG.queuedOf(user.id, "quick") === 0, "hết hạn chờ ngắn: không giữ vòng học, rời hàng", short.message ?? "chạy được");
+    await Promise.all(hold);
     fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
   }
 
@@ -175,6 +193,17 @@ try {
     lines.length = 0;
     r = await post(CR, "/api/critic", { title: "x", type: "code", content: code, model: "sub-claude/opus" });
     ok(/sonnet low .*job=critic/.test(lastTurn()), "người dùng bấm phản biện: hạng cân bằng", lines.join(" | "));
+    // Hàng việc nền đang đầy: phản biện tự chạy bỏ qua lần này, không hiện lỗi; bấm tay thì không qua hàng đó.
+    fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 900 }));
+    const busy = Array.from({ length: 6 }, () => AM.quickCall(user, "Giữ chỗ.", "x", { job: "brain", bg: true }).catch((e) => e));
+    await until(() => TG.queuedOf(user.id, "quick", true) === 4);
+    r = await post(CR, "/api/critic", { title: "x", type: "code", content: code, model: "sub-claude/opus", auto: true });
+    const sk = await r.json();
+    ok(r.status === 200 && sk.skipped === true && sk.findings.length === 0, "hàng đầy: phản biện tự chạy bỏ qua, không báo lỗi", JSON.stringify(sk));
+    await Promise.all(busy);
+    fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
+    const pg = fs.readFileSync("app/page.tsx", "utf8");
+    ok(/x\.id !== id \|\| !t \? x : \{ \.\.\.x, titled: n/.test(pg), "đặt tên hỏng thì chưa đánh dấu là đã đặt, câu trả lời sau thử lại");
   }
 
   console.log("\n" + (fail ? `${pass}/${pass + fail} đạt` : `${pass}/${pass} đạt`));

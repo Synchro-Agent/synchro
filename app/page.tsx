@@ -1642,6 +1642,8 @@ export default function Home() {
     fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500), auto }) })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
+        // Máy chủ bỏ qua lần tự chạy này: không có kết quả nào để hiện, càng không phải dấu "Ổn".
+        if (r.ok && j.skipped) { setChats((cs) => cs.map((c) => (c.id !== id || !c.critic ? c : { ...c, critic: Object.fromEntries(Object.entries(c.critic).filter(([k]) => k !== key)) }))); return; }
         put(r.ok ? { status: "done", findings: Array.isArray(j.findings) ? j.findings : [], by: Array.isArray(j.by) ? j.by : [], at: Date.now() } : { status: "error", findings: [], by: [], at: Date.now(), error: j.error || tr("Hội đồng phản biện chưa trả lời được.") });
       })
       .catch(() => put({ status: "error", findings: [], by: [], at: Date.now(), error: tr("Không kết nối được tới máy chủ.") }));
@@ -1674,7 +1676,8 @@ export default function Home() {
       .then(async (r) => { const j = await r.json().catch(() => null); return r.ok && typeof j?.title === "string" ? (j.title as string) : ""; })
       .catch(() => "")
       .then((t) => {
-        setChats((cs) => cs.map((x) => (x.id === id ? { ...x, titled: n, ...(t && (force || !x.named) ? { title: t, named: undefined } : {}) } : x)));
+        // Đặt tên hỏng (máy chủ bận, model lỗi) thì chưa đánh dấu là đã đặt: câu trả lời sau thử lại, không để đoạn chat mãi không tên.
+        setChats((cs) => cs.map((x) => (x.id !== id || !t ? x : { ...x, titled: n, ...(force || !x.named ? { title: t, named: undefined } : {}) })));
         if (force && !t) say("Chưa đặt được tên tự động. Thử lại sau.");
       })
       .finally(() => titling.current.delete(id));

@@ -7,7 +7,7 @@ import { catalog, mainModels, resolveModel } from "../providers";
 import { billsCredit, hasCheapSide, routeModel, sideModel, tierOf, type RouteInput } from "../router";
 import { chatOnce, HttpErr } from "../llmcall";
 import { overLimit, withUsage } from "../usage";
-import { agyOtherBlock, isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
+import { agyOtherBlock, BUSY, isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
 
 /** allowed: mọi model bộ chọn model hiện cho người này; usable: bỏ gói đang hết hạn mức hoặc cần đăng nhập lại. */
 export async function usableModels(user: UserRow) {
@@ -63,10 +63,10 @@ const strongBudget = (uid: string) => {
 };
 
 /** Một lời gọi không công cụ bằng model key (gói hoặc khóa API). Hạn mức chi phí API chỉ áp cho model khóa API. */
-export async function oneShot(user: UserRow, key: string, system: string, messages: { role: "user" | "assistant"; content: string }[], o: { maxTokens?: number; signal?: AbortSignal; feature?: string; job?: string; bg?: boolean } = {}): Promise<string> {
+export async function oneShot(user: UserRow, key: string, system: string, messages: { role: "user" | "assistant"; content: string }[], o: { maxTokens?: number; signal?: AbortSignal; feature?: string; job?: string; bg?: boolean; maxWaitMs?: number } = {}): Promise<string> {
   if (subCli(key)) {
     // Gói: chạy CLI chính chủ một lượt (phiên mới, không gắn đoạn chat nào), mức nỗ lực thấp cho nhanh.
-    const r = await subTurn({ user, model: key, system, messages, effort: "low", signal: o.signal, job: o.job ?? o.feature ?? "side", bg: o.bg });
+    const r = await subTurn({ user, model: key, system, messages, effort: "low", signal: o.signal, job: o.job ?? o.feature ?? "side", bg: o.bg, maxWaitMs: o.maxWaitMs });
     const j = r.json as { text?: string; error?: string };
     if (r.status !== 200 || typeof j.text !== "string") throw new OneShotErr(j.error ?? "Gói subscription chưa trả lời được.", r.status === 200 ? 502 : r.status);
     return j.text;
@@ -87,12 +87,13 @@ export async function oneShot(user: UserRow, key: string, system: string, messag
  * Việc phụ: model rẻ nhất dùng được, gọi một lần ở mức nỗ lực thấp. job: tên việc, ghi vào dòng [timing] để phân biệt với lượt chat.
  * bg: việc người dùng không chờ (rút bộ nhớ, chưng cất, đánh giá phiên): xếp hàng sau các việc khác. Còn model rẻ mà đang tạm hết hạn mức thì để lần sau; tài khoản không có model rẻ nào thì chạy thưa hơn.
  */
-export async function quickCall(user: UserRow, system: string, content: string, o: { maxTokens?: number; signal?: AbortSignal; job?: string; bg?: boolean } = {}) {
+export async function quickCall(user: UserRow, system: string, content: string, o: { maxTokens?: number; signal?: AbortSignal; job?: string; bg?: boolean; maxWaitMs?: number } = {}) {
   const { allowed, usable } = await usableModels(user);
   const list = usable.length ? usable : allowed;
   const model = sideModel(list, { avoid: stalledModels(user.id, list) });
   if (!model) throw new OneShotErr("Synchro chưa được kết nối với model nào (chưa đăng nhập gói hoặc chưa có khóa API).", 503);
   if (o.bg && (billsCredit(model) || (tierOf(model) === "strong" && (hasCheapSide(allowed) || !strongBudget(user.id))))) throw new OneShotErr(NO_CHEAP, 503);
-  const text = await oneShot(user, model, system, [{ role: "user", content }], o);
+  // Hàng việc nền đầy hoặc chờ quá lâu cũng chỉ là "chưa tới lượt": không được tính là một lần học thất bại.
+  const text = await oneShot(user, model, system, [{ role: "user", content }], o).catch((e) => { throw o.bg && e instanceof OneShotErr && e.message === BUSY ? new OneShotErr(NO_CHEAP, 503) : e; });
   return { text, model };
 }

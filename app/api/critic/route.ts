@@ -3,6 +3,7 @@ import { pickCritics, vendorOf } from "../../router";
 import { mergeFindings, numbered, parseFindings, type Finding } from "../../critic";
 import { isDeck } from "../../artdoc";
 import { OneShotErr, oneShot, stalledModels, usableModels } from "../../ai/anymodel";
+import { BUSY } from "../../ai/subs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,8 @@ export const POST = handle(async (req: Request) => {
   const ok = runs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   if (!ok.length) {
     const e = (runs[0] as PromiseRejectedResult).reason;
+    // Tự chạy mà hàng việc nền đang đầy: không ai bấm nên không hiện lỗi, bỏ qua lần này, người dùng vẫn bấm Phản biện được.
+    if (auto && e instanceof OneShotErr && e.message === BUSY) return Response.json({ skipped: true, findings: [], by: [] });
     if (e instanceof OneShotErr) return Response.json({ error: e.message }, { status: e.status });
     return Response.json({ error: "Hội đồng phản biện chưa trả lời được. Hãy thử lại." }, { status: 502 });
   }
