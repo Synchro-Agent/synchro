@@ -224,6 +224,14 @@ function Account() {
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   // Quên mật khẩu hiện tại ngay trong hộp đổi mật khẩu: gửi thư đặt lại tới email của tài khoản, không phải đăng xuất rồi tìm lại trang đăng nhập.
+  // Đổi email: chỉ đổi thật sau khi bấm đường dẫn gửi tới địa chỉ mới.
+  const [mailForm, setMailForm] = useState<{ email: string; pw: string; err: string; busy: boolean; sent: boolean } | null>(null);
+  const sendMailChange = async () => {
+    if (!mailForm) return;
+    setMailForm({ ...mailForm, busy: true, err: "" });
+    try { await api("POST", "/api/auth/email", { email: mailForm.email.trim(), password: mailForm.pw, lang: getLang() }); setMailForm({ ...mailForm, busy: false, err: "", sent: true }); }
+    catch (e) { setMailForm({ ...mailForm, busy: false, err: (e as Error).message }); }
+  };
   const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState<"" | "sent" | "limited">("");
   useEffect(() => { if (!pw) setResetSent(""); }, [pw]);
   const sendReset = async () => {
@@ -279,7 +287,7 @@ function Account() {
         </div>
       )}
       <H>Account</H>
-      <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span></Row>
+      <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span>{me?.hasPassword && !me?.isAdmin && <button className="btn" style={{ marginLeft: 10 }} onClick={() => setMailForm({ email: "", pw: "", err: "", busy: false, sent: false })}>Change</button>}</Row>
       <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."}><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
       <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
       <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>
@@ -298,6 +306,23 @@ function Account() {
       </table>
       <PageBar pg={pgSes} />
       <Toasts msg={saved} />
+      <Fade show={!!mailForm}>
+        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setMailForm(null)}>
+          <div className="modal sm" style={{ width: 400 }}>
+            <button className="icon-btn" aria-label="Close" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setMailForm(null)}><I.X size={16} /></button>
+            <h2 style={{ fontSize: 16 }}>Change email</h2>
+            {mailForm?.sent ? <>
+              <p className="d" role="status">If that address can be used, we sent it a confirmation link. Your email stays <span data-notr>{me?.email}</span> until you press the link. It works for 24 hours.</p>
+              <div className="modal-foot"><button className="btn dark" onClick={() => setMailForm(null)}>Done</button></div>
+            </> : <>
+              <input className="field" type="email" autoComplete="email" aria-label="New email" placeholder="New email" value={mailForm?.email ?? ""} onChange={(e) => setMailForm((o) => o && { ...o, email: e.target.value, err: "" })} />
+              <input className="field" type="password" autoComplete="current-password" aria-label="Current password" placeholder="Current password" value={mailForm?.pw ?? ""} onChange={(e) => setMailForm((o) => o && { ...o, pw: e.target.value, err: "" })} />
+              {mailForm?.err && <p className="auth-field-err" role="alert">{tr(mailForm.err)}</p>}
+              <div className="modal-foot"><button className="btn" onClick={() => setMailForm(null)}>Cancel</button><button className="btn dark" disabled={mailForm?.busy || !mailForm?.email.trim() || !mailForm?.pw} onClick={() => void sendMailChange()}>{mailForm?.busy ? <span className="api-spin" /> : "Send link"}</button></div>
+            </>}
+          </div>
+        </div>
+      </Fade>
       <Fade show={!!pw}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
           <div className="modal sm" style={{ width: 400 }}>

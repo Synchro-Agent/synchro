@@ -131,3 +131,18 @@ Object.assign(FX_VI2EN, {
   "Chưa có bản tải về; hiện bạn dùng Synchro ngay trên trình duyệt. Khi ra mắt, ứng dụng luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.": "There's nothing to download yet; use Synchro in your browser for now. Once it's out, the app is always ready: open Synchro with a shortcut from anywhere, drag files from your computer into a chat, and skip the tab switching.",
 });
 Object.assign(FX_VI2EN, { "Chưa tải được danh sách.": "Couldn't load the list." });
+Object.assign(FX_VI2EN, {
+  "Xác nhận email mới": "Confirm your new email", "Đổi sang email này": "Switch to this email", "Đã đổi email": "Email changed",
+  "Tài khoản của bạn sẽ dùng": "Your account will use", "để đăng nhập và nhận thư. Mọi thiết bị sẽ được đăng xuất.": "to sign in and receive email. Every device will be signed out.",
+  "Hãy đăng nhập lại bằng email mới.": "Sign in again with your new email.",
+  "Đường dẫn đổi email không hợp lệ hoặc đã hết hạn. Hãy yêu cầu lại trong Cài đặt.": "This email change link is invalid or has expired. Request a new one in Settings.",
+  "Email của quản trị viên được đặt trong cấu hình máy chủ.": "An administrator's email is set in the server configuration.",
+  "Tài khoản này chưa có mật khẩu. Hãy đặt mật khẩu trước rồi đổi email.": "This account has no password yet. Set one, then change your email.",
+  "Đây đã là email của tài khoản.": "This is already your account's email.", "Email này đã có tài khoản.": "This email already has an account.",
+  "Email mới cho tài khoản này (chỉ đổi khi đã xác minh danh tính). Người dùng sẽ bị đăng xuất.": "New email for this account (only change it once you've confirmed who they are). They will be signed out.",
+});
+Object.assign(FX_EN2VI, {
+  "Change email": "Đổi email", "New email": "Email mới", "Send link": "Gửi đường dẫn", "Email changed": "Đã đổi email",
+  "If that address can be used, we sent it a confirmation link. Your email stays": "Nếu địa chỉ đó dùng được, Synchro đã gửi đường dẫn xác nhận tới đó. Email của bạn vẫn là",
+  "until you press the link. It works for 24 hours.": "cho tới khi bạn bấm đường dẫn. Đường dẫn có hiệu lực 24 giờ.",
+});

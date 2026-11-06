@@ -1,7 +1,7 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
 import { sendMail } from "./mailer";
-import { changedMail, resetMail, signupTakenMail, verifyMail, type MailLang } from "./mailtpl";
+import { emailChangeMail, emailChangeNoticeMail, changedMail, resetMail, signupTakenMail, verifyMail, type MailLang } from "./mailtpl";
 import Database from "better-sqlite3";
 import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
 import crypto from "node:crypto";
@@ -506,6 +506,50 @@ export function requestPasswordReset(req: Request, email0: unknown, lang?: unkno
   const base = appUrl(req);
   sendMail(u.email, resetMail({ base, name: u.name, url: `${base}/reset#${token}`, minutes: RESET_MIN, lang: mailLang(req, lang) }), "reset");
 }
+// ---- đổi email ----
+const EMAIL_CHANGE_HOURS = 24;
+const emailChanges = () => { const d = db(); d.exec("CREATE TABLE IF NOT EXISTS email_changes (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, new_email TEXT NOT NULL, expires_at INTEGER NOT NULL)"); return d; };
+const BAD_EMAIL_CHANGE = "Đường dẫn đổi email không hợp lệ hoặc đã hết hạn. Hãy yêu cầu lại trong Cài đặt.";
+/** Xin đổi email: cần mật khẩu, gửi đường dẫn xác nhận tới địa chỉ mới và báo cho địa chỉ cũ. Email đã có người dùng thì trả lời như thường, chỉ không gửi gì (không lộ email nào đã đăng ký). */
+export async function requestEmailChange(req: Request, u: UserRow, password: unknown, email0: unknown, lang?: unknown) {
+  limit("email-change:" + u.id, 5, 60 * MIN);
+  // Quản trị viên được nhận diện bằng email: đổi là mất quyền, phải đổi ở cấu hình máy chủ.
+  if (ADMIN_EMAILS.has(u.email.toLowerCase())) throw new AuthError("Email của quản trị viên được đặt trong cấu hình máy chủ.", 403);
+  if (!u.password_hash) throw new AuthError("Tài khoản này chưa có mật khẩu. Hãy đặt mật khẩu trước rồi đổi email.", 400);
+  if (!(typeof password === "string" && (await verifyPassword(password, u.password_hash)))) throw new AuthError("Mật khẩu hiện tại không đúng.", 401);
+  const email = normEmail(email0);
+  if (email === u.email.toLowerCase()) throw new AuthError("Đây đã là email của tài khoản.", 400);
+  if (ADMIN_EMAILS.has(email) || findByEmail(email)) return;
+  const token = crypto.randomBytes(32).toString("base64url"), base = appUrl(req), l = mailLang(req, lang);
+  const d = emailChanges();
+  d.prepare("DELETE FROM email_changes WHERE user_id = ?").run(u.id);
+  d.prepare("INSERT INTO email_changes (token_hash, user_id, new_email, expires_at) VALUES (?, ?, ?, ?)").run(sha256(token), u.id, email, Date.now() + EMAIL_CHANGE_HOURS * 60 * MIN);
+  audit("email_change_request", { actor: u, ip: clientIp(req) });
+  sendMail(email, emailChangeMail({ base, name: u.name, url: `${base}/verify?change=1#${token}`, hours: EMAIL_CHANGE_HOURS, lang: l }), "verify");
+  sendMail(u.email, emailChangeNoticeMail({ base, name: u.name, to: email, lang: l }), "verify");
+}
+function emailChangeRow(req: Request, token: unknown) {
+  limit("verify:" + clientIp(req), 30, 15 * MIN);
+  const r = typeof token === "string" && token.length <= 100 ? emailChanges().prepare("SELECT * FROM email_changes WHERE token_hash = ?").get(sha256(token)) as { user_id: string; new_email: string; expires_at: number } | undefined : undefined;
+  const u = r && r.expires_at > Date.now() ? getUser(r.user_id) : undefined;
+  if (!u || u.status !== "active") throw new AuthError(BAD_EMAIL_CHANGE, 400);
+  return { u, email: r!.new_email };
+}
+export const checkEmailChange = (req: Request, token: unknown) => ({ email: emailChangeRow(req, token).email });
+/** Bấm đường dẫn ở địa chỉ mới: có hộp thư nên email mới coi như đã xác minh. Đăng xuất mọi phiên, phòng người đổi không phải chủ tài khoản. */
+export function confirmEmailChange(req: Request, token: unknown) {
+  const { u, email } = emailChangeRow(req, token);
+  // Trong lúc chờ có thể đã có người đăng ký bằng địa chỉ này.
+  if (findByEmail(email)) throw new AuthError(BAD_EMAIL_CHANGE, 400);
+  const d = emailChanges();
+  d.prepare("UPDATE users SET email = ?, email_verified = 1 WHERE id = ?").run(email, u.id);
+  d.prepare("DELETE FROM email_changes WHERE user_id = ?").run(u.id);
+  d.prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
+  d.prepare("DELETE FROM password_resets WHERE user_id = ?").run(u.id);
+  d.prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
+  audit("email_changed", { actor: u, target: u, ip: clientIp(req), detail: email });
+  return email;
+}
 const notifyChanged = (req: Request, u: UserRow, lang?: unknown) => {
   const l = mailLang(req, lang);
   sendMail(u.email, changedMail({ base: appUrl(req), name: u.name, lang: l, when: `${new Date().toLocaleString(l === "vi" ? "vi-VN" : "en-GB", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })} (GMT+7)` }), "changed");
@@ -594,6 +638,16 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
   const t = target(admin, id);
   const ip = clientIp(req);
   if (action === "reset_link") return { resetUrl: createResetLink(req, admin, t) };
+  // Người dùng mất hộp thư cũ: quản trị viên đổi hộ sau khi đã xác minh danh tính ngoài hệ thống. Phiên cũ bị đăng xuất, email mới phải tự xác minh.
+  if (action === "set_email") {
+    const email = normEmail(body.email);
+    if (ADMIN_EMAILS.has(email) || findByEmail(email)) throw new AuthError("Email này đã có tài khoản.", 409);
+    db().prepare("UPDATE users SET email = ?, email_verified = 0 WHERE id = ?").run(email, t.id);
+    db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
+    db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(t.id);
+    audit("admin_set_email", { actor: admin, target: t, ip, detail: email });
+    return;
+  }
   if (action === "set_password") {
     // Quản trị đặt mật khẩu mới cho người khác, không cần mật khẩu cũ. Mặc định đăng xuất mọi phiên của họ.
     const pw = checkPassword(body.password, t.email);

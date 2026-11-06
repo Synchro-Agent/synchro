@@ -454,6 +454,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                     )}
                     {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>Owner accounts can&apos;t be suspended or deleted from here.</p> : (
                       <div className="adm-actions">
+                        <button className="btn" disabled={busy} onClick={() => { const email = window.prompt(tr("Email mới cho tài khoản này (chỉ đổi khi đã xác minh danh tính). Người dùng sẽ bị đăng xuất."), u.email)?.trim(); if (email && email !== u.email) act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_email", email }), "Email changed"); }}>Change email</button>
                         {!u.verified && <button className="btn" disabled={busy} onClick={() => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "mark_verified" }), "Email marked as verified")}>Mark email as verified</button>}
                         <button className="btn" disabled={busy} onClick={() => { setPwFor(u); setPw({ next: "", again: "", signOut: true }); }}>Set new password</button>
                         <button className="btn" disabled={busy} onClick={() => act(() => call<{ resetUrl: string }>("PATCH", `/api/admin/users/${u.id}`, { action: "reset_link" }).then((r) => setResetFor({ email: u.email, url: r.resetUrl })), "Reset link created")}>Create reset link</button>
