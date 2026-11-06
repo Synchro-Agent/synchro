@@ -259,7 +259,8 @@ const WAIT_NOTE: Record<WaitWhy, string> = {
 export const turnsLimit = (user: UserRow) => Number(getSetting(`turns_limit:${user.id}`, "")) || accountLimit() * (isAdmin(user) ? 3 : 1);
 /** Tài khoản đã xếp đầy hàng chờ: /api/llm từ chối ngay. Lượt của việc tự động và lượt khôi phục sau khởi động lại không qua đây, chúng luôn được xếp hàng. */
 export function queueFull(uid: string) {
-  if (queuedOf(uid) < queueLimit()) return false;
+  const own = Number(getSetting(`turns_limit:${uid}`, ""));
+  if (queuedOf(uid) < (own ? own * 2 : queueLimit())) return false;
   noteRefused();
   return true;
 }

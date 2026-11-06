@@ -8,6 +8,8 @@ const B = process.env.SYNCHRO_TEST_URL || "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 
+// Bộ hẹn giờ của cổng không giữ tiến trình: bài này tự giữ.
+setInterval(() => {}, 1000);
 process.env.SYNCHRO_TURNS_GLOBAL = "3";
 const { acquire, queuedOf, runningOf, gateStats } = (await loadTs(["turngate"])).turngate;
 
@@ -52,7 +54,8 @@ db.pragma("busy_timeout = 5000");
 db.prepare("INSERT INTO settings (key, value) VALUES (?, '2') ON CONFLICT(key) DO UPDATE SET value = '2'").run(`turns_limit:${uid}`);
 try {
   const ask = (i) => call("POST", "/api/llm", { async: true, skills: true, system: "", model: "anthropic/claude-haiku-5-5", messages: [{ role: "user", content: `#slow câu ${i}` }], conv: `gate-${Date.now()}-${i}` });
-  const rs = await Promise.all([0, 1, 2, 3].map(ask));
+  const rs = [];
+  for (const i of [0, 1, 2, 3]) rs.push(await ask(i));
   ok(rs.every((r) => r.s === 200 && /^run_/.test(r.j?.run ?? "")), "gửi quá giới hạn vẫn được nhận và trả mã lượt", JSON.stringify(rs.map((r) => r.s)));
   const runs = rs.map((r) => r.j.run);
   const look = async (id) => (await call("GET", `/api/runs/${id}?json=1`)).j?.run;
@@ -66,7 +69,10 @@ try {
   let st = null;
   for (let i = 0; i < 40 && st?.status !== "done"; i++) { st = await look(queued[0].id); await new Promise((r) => setTimeout(r, 100)); }
   ok(st?.status === "done" && st.result?.cancelled === true, "lượt đang chờ bị dừng kết thúc là đã dừng", JSON.stringify(st?.result));
-  // Hàng đầy thì từ chối: dev-mock nới hàng chờ 50 lần nên chỉ kiểm tra thông báo qua đơn vị ở trên; các lượt còn lại phải chạy xong.
+  // Giới hạn riêng 2 nên hàng chờ tối đa 4: 1 lượt đang chờ + 3 lượt nữa là đầy, lượt kế tiếp bị từ chối rõ ràng.
+  for (const i of [4, 5, 6]) { const r = await ask(i); if (r.j?.run) runs.push(r.j.run); }
+  const over = await ask(7);
+  ok(over.s === 429 && over.j?.turnQueue === true && /quá nhiều lượt/.test(over.j?.error ?? ""), "hàng đầy: từ chối với lời nhắn dễ hiểu", JSON.stringify(over));
   for (const id of runs) {
     let r = null;
     for (let i = 0; i < 300 && r?.status !== "done" && r?.status !== "error"; i++) { r = await look(id); if (r?.status === "running") await new Promise((ok2) => setTimeout(ok2, 200)); }
