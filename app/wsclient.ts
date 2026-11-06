@@ -44,7 +44,8 @@ export function ghConnect(): Promise<string | null> {
 }
 
 // Dòng của lượt agent: sự kiện (kèm số thứ tự s), mở đầu { t: "run" }, kết thúc { t: "end" }.
-export type RunHead = { t: "run"; node: Record<string, unknown> | null; running: boolean; count: number; s?: undefined };
+// fromStart: dòng này phát lại từ sự kiện đầu tiên. Nối lại sau khi mất mạng thì false: chỉ có sự kiện sau mốc đã nhận.
+export type RunHead = { t: "run"; node: Record<string, unknown> | null; running: boolean; count: number; s?: undefined; fromStart?: boolean };
 export type AgentLine = (AgentEvent & { s?: number }) | RunHead | { t: "end"; s?: number; stopped?: boolean };
 async function readLines(r: Response, on: (e: AgentLine) => void) {
   const rd = r.body!.getReader();
@@ -97,7 +98,7 @@ export async function agentRunInfo(sid: number | string): Promise<{ running: boo
 /** Nối vào lượt đang có của phiên từ đầu: nhận lại mọi sự kiện rồi theo dõi tiếp. */
 export async function attachAgent(sid: number | string, on: (e: AgentLine) => void, signal: AbortSignal) {
   const st = { seq: 0, ended: false };
-  const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "end") st.ended = true; on(e); };
+  const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "end") st.ended = true; on(e.t === "run" ? { ...e, fromStart: st.seq === 0 } : e); };
   if (!(await follow(String(sid), seen, signal, st))) on({ t: "error", error: GONE });
 }
 /** Nút Dừng. */

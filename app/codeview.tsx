@@ -513,6 +513,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const each = onAgentLine(id, s, gen, () => count);
     await attachAgent(s, (e) => {
       if (e.t === "run") {
+        // Mất mạng rồi nối lại: máy chủ chỉ gửi sự kiện sau mốc đã nhận, xóa ở đây là mất phần đã hiện và cả thẻ đang chờ duyệt (lượt treo tới hết 30 phút chờ).
+        if (!e.fromStart) return;
         count = e.count;
         if (gen !== genRef.current) return;
         // Bắt đầu lại lượt này từ sự kiện đầu tiên; lượt chưa có ở thiết bị này thì thêm vào.
