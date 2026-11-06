@@ -4,8 +4,9 @@
 // không đọc được kết quả và không nên làm hai lần (gửi thư, tạo hóa đơn: markEffect).
 import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, getUser, type UserRow } from "./authstore";
+import { db, getSetting, getUser, isAdmin, verifyLocked, type UserRow } from "./authstore";
 import { noteRun, recordOps } from "./ops";
+import { accountLimit, acquire, noteRefused, queuedOf, queueLimit, type WaitWhy } from "./turngate";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
 // plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
@@ -51,7 +52,7 @@ export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
-type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; step?: AbortController;
+type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; onMsg?: Set<() => void>; step?: AbortController;
   tools?: number; toolsTaken?: number; toolWaiters?: (() => void)[] };
 const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
@@ -187,9 +188,18 @@ export function pushInbox(id: string, uid: string, text: string): boolean {
   const l = live.get(id);
   if (!l || l.uid !== uid || l.ctl.signal.aborted) return false;
   l.inbox.push(text.slice(0, 20_000));
+  // Thẻ duyệt đang chờ: người dùng trả lời bằng lời thì thẻ phải thôi chờ, không thì tin nhắn nằm im tới khi có người bấm.
+  for (const f of l.onMsg ?? []) f();
   // Model đang viết: dừng bước đó để đọc tin mới ngay (vòng lặp ghép tin rồi gọi lại model); đang chạy công cụ thì ghép sau công cụ.
   l.step?.abort();
   return true;
+}
+/** Báo khi lượt hiện tại có tin nhắn thêm; trả về hàm hủy. */
+export function onInbox(f: () => void): () => void {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l) return () => {};
+  (l.onMsg ??= new Set()).add(f);
+  return () => { l.onMsg?.delete(f); };
 }
 /** Lượt hiện tại còn tin nhắn thêm chưa đọc. */
 export function inboxWaiting(): boolean {
@@ -239,17 +249,39 @@ function dropEphemeral(id: string, uid: string, conv: string | null) {
   if (conv) try { d.prepare("DELETE FROM tool_refs WHERE user_id = ? AND conv = ?").run(uid, conv); } catch { /* chưa có bảng */ }
 }
 
+// Chờ quá lâu nghĩa là các lượt trước đang kẹt: báo để người dùng quyết, không treo mãi.
+const QUEUE_WAIT_MS = 30 * 60_000;
+const WAIT_NOTE: Record<WaitWhy, string> = {
+  account: "Tài khoản của bạn đang chạy nhiều lượt cùng lúc. Lượt này đang xếp hàng và sẽ tự chạy khi có lượt xong.",
+  server: "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ.",
+};
+/** Quản trị viên chỉnh riêng cho một tài khoản qua cài đặt turns_limit:<id> (không có giao diện, dùng khi cần nới cho một người). Tài khoản chưa xác minh email: một nửa, để đăng ký hàng loạt tốn nhiều hơn. */
+export const turnsLimit = (user: UserRow) => Number(getSetting(`turns_limit:${user.id}`, "")) || (verifyLocked(user) ? Math.max(1, Math.ceil(accountLimit() / 2)) : accountLimit() * (isAdmin(user) ? 3 : 1));
+/** Tài khoản đã xếp đầy hàng chờ: /api/llm từ chối ngay. Lượt của việc tự động và lượt khôi phục sau khởi động lại không qua đây, chúng luôn được xếp hàng. */
+export function queueFull(uid: string) {
+  const own = Number(getSetting(`turns_limit:${uid}`, ""));
+  if (queuedOf(uid) < (own ? own * 2 : queueLimit())) return false;
+  noteRefused();
+  return true;
+}
+
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null) {
-  live.set(id, { s: 0, text: "", ctl: new AbortController(), conv, uid: user.id, inbox: [] });
+  const ctl = new AbortController();
+  live.set(id, { s: 0, text: "", ctl, conv, uid: user.id, inbox: [] });
   scope.run({ id }, () => {
     (async () => {
+      const slot = await acquire({ uid: user.id, lane: "run", limit: turnsLimit(user), signal: ctl.signal, maxWaitMs: QUEUE_WAIT_MS, onWait: (w) => progress("note", WAIT_NOTE[w]) });
+      if (slot === "cancelled") return { http: 200, json: { text: "", cancelled: true } };
+      if (slot === "timeout") return { http: 503, json: { error: "Lượt này đã xếp hàng quá lâu nên Synchro dừng lại. Hãy dừng bớt lượt đang chạy rồi gửi lại." } };
+      try {
       // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.
       if (!executors.has(kind) && kind === "chat") await import("./chatengine");
       // Việc tự động chạy bằng Synchro Code (tasks.ts): bộ chạy nằm ở taskagent.ts.
       if (!executors.has(kind) && kind === "agent") await import("./taskagent");
       const f = executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
-      return f(body, user);
+      return await f(body, user);
+      } finally { slot(); }
     })().then((r) => { noteRun(kind, body.model, r.http, r.json); finish(id, r.http, r.json); }, (e) => { recordOps("server", `run ${kind}: ${String((e as Error)?.message ?? e)}`); finish(id, 502, { error: String((e as Error)?.message ?? e) }); });
   });
 }

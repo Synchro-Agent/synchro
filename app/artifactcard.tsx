@@ -1,5 +1,6 @@
 "use client";
 // Phần artifact hiện ngay trong tin nhắn: thẻ artifact, tệp code đã tạo. Nằm riêng để trang chat tải đầu không phải kéo theo khung xem artifact và trang Artifacts (artifactui.tsx, tải khi mở).
+import { useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
 import { isDeck } from "./artdoc";
@@ -40,19 +41,37 @@ export function ArtifactCard({ art, version, total, active, onOpen, fix, onRedo 
 export async function saveArtifacts(conv: string, items: ArtBlock[]) {
   const list = items.filter((a) => a.complete).map((a) => ({ ident: a.ident, title: a.title, type: a.type, lang: a.lang, content: a.content }));
   if (!list.length) return;
-  await fetch("/api/artifacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conv, items: list }) }).catch(() => {});
+  await fetch("/api/artifacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conv, items: list }) })
+    // Hết dung lượng thì artifact vẫn ở trong đoạn chat nhưng không vào trang Artifacts: phải nói cho người dùng biết.
+    .then(async (r) => { if ((r.status === 413 || r.status === 507) && typeof window !== "undefined") { const j = await r.json().catch(() => null); if (j?.error) window.dispatchEvent(new CustomEvent("synchro:notice", { detail: j.error })); } }).catch(() => {});
 }
 
 // ---------------------------------------------------------------- tệp code đã tạo (run_code → outputs/)
 // Bấm thẻ để xem trước trong khung bên cạnh; nút mũi tên tải thẳng về máy.
 // Video MP4 / WebM phát ngay trong tin nhắn như ảnh (chỉ tải phần đầu để lấy khung đầu và thời lượng).
+// Ảnh trong tin nhắn: giữ chỗ đúng tỉ lệ (không xô đẩy tin nhắn lúc ảnh về) bằng nền trung tính theo giao diện. Nền trắng chỉ sau khi ảnh đã tải, để PNG trong suốt vẫn đọc được;
+// trước đó, trên giao diện tối, nền trắng hiện thành một khung trắng chói vài giây. Tệp hết hạn thì nói rõ, không để biểu tượng ảnh hỏng.
+const OUT_IMG_H = 360;
+function OutImage({ f, onOpen }: { f: OutFile; onOpen?: (f: OutFile) => void }) {
+  const [state, setState] = useState<"wait" | "ok" | "gone">("wait");
+  const ratio = f.w && f.h ? f.w / f.h : 0;
+  const box = ratio ? { width: `min(100%, ${Math.round(Math.min(f.w!, OUT_IMG_H * ratio))}px)` } : undefined;
+  if (state === "gone") return <div className="out-img-gone" role="status"><I.Image size={18} /><span>{tr("Không tải được ảnh. Tệp có thể đã hết hạn (tự xóa sau 30 ngày).")}</span></div>;
+  return (
+    <button onClick={() => onOpen?.(f)} aria-label={f.name} style={box} className={state === "wait" ? "out-img-wait" : undefined}>
+      <img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" data-ready={state === "ok" ? "" : undefined} style={ratio ? { width: "100%", aspectRatio: `${f.w} / ${f.h}` } : undefined}
+        ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === "wait") setState("ok"); }} onLoad={() => setState("ok")} onError={() => setState("gone")} />
+    </button>
+  );
+}
+
 export function OutputFiles({ files: all, onOpen, active }: { files: OutFile[]; onOpen?: (f: OutFile) => void; active?: string }) {
   const files = all.filter((f) => !f.skipped), missed = all.filter((f) => f.skipped);
   const imgs = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.mime));
   const vids = files.filter((f) => /^video\/(mp4|webm|quicktime)$/.test(f.mime));
   return (
     <div className="outs">
-      {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <button key={f.id} onClick={() => onOpen?.(f)} aria-label={f.name}><img src={`/api/outputs/${f.id}?inline=1`} alt={f.name} loading="lazy" /></button>)}</div>}
+      {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <OutImage key={f.id} f={f} onOpen={onOpen} />)}</div>}
       {vids.length > 0 && <div className="outs-imgs outs-vids">{vids.map((f) => <video key={f.id} controls playsInline preload="metadata" src={`/api/outputs/${f.id}?inline=1`} aria-label={f.name} />)}</div>}
       {missed.map((f) => {
         const k = fileKind(f.name);

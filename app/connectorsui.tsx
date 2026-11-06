@@ -21,7 +21,7 @@ type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
-  settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null;
+  settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null; tokenHeader?: string; ownClient?: boolean;
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
 type Data = { connectors: Conn[]; directory: DirEntry[]; policy: Policy };
@@ -312,6 +312,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
                 {c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onRefresh(); }}><I.Retry size={15} />Refresh tools</button>}
                 {c.auth === "oauth" && c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onReauth(); }}><I.Key size={15} />Reconnect account</button>}
                 {c.auth === "token" && <button role="menuitem" onClick={() => { setMenu(false); onCreds("token"); }}><I.Key size={15} />Update token</button>}
+                {c.ownClient && <button role="menuitem" onClick={() => { setMenu(false); onCreds("client"); }}><I.Key size={15} />Update OAuth client</button>}
                 <button role="menuitem" className="danger" onClick={() => { setMenu(false); onRemove(); }}><I.Trash size={15} />Disconnect</button>
               </div>
             )}
@@ -344,7 +345,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
   );
 }
 
-function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: ReadonlySet<string>; errs: Record<string, string>; login: Pick<ReturnType<typeof useLoginFlow>, "pending" | "blocked" | "reopen" | "stale">; onClose: () => void; onConnect: (e: DirEntry) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
+function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: ReadonlySet<string>; errs: Record<string, string>; login: Pick<ReturnType<typeof useLoginFlow>, "pending" | "blocked" | "reopen" | "stale">; onClose: () => void; onConnect: (e: DirEntry, tryAnyway?: boolean) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
   const pol = data.policy;
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<DirCat | "all">("all");
@@ -383,7 +384,7 @@ function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCred
                   <div className="cn-vendor">
                     <p>{e.access.why}</p>
                     <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
-                    <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button></div>
+                    <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button><button className="cn-link" disabled={busy.has(e.id)} onClick={() => onConnect(e, true)}>Try sign-in anyway</button></div>
                   </div>
                 )}
                 {err && <div className="api-err in cn-item-err" role="alert"><I.Alert size={14} /><span>{err}</span><button className="icon-btn" aria-label="Dismiss" onClick={() => onDismiss(e.id)}><I.X size={13} /></button></div>}
@@ -400,7 +401,7 @@ function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCred
 
 // Cách đăng nhập khi thêm connector: tự động (không cần đăng nhập, hoặc OAuth), token / API key tự nhập, hay OAuth client riêng.
 type CredMode = "auto" | "token" | "client";
-type CustomInit = { name?: string; url?: string; mode?: CredMode; id?: string; locked?: boolean };
+type CustomInit = { name?: string; url?: string; mode?: CredMode; id?: string; locked?: boolean; header?: string };
 type CustomValues = { name: string; url: string; clientId: string; clientSecret: string; token: string; header: string };
 function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => void; onAdd: (v: CustomValues, done: (err?: string) => void) => void }) {
   const [name, setName] = useState(init.name ?? "");
@@ -409,7 +410,8 @@ function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => voi
   const [cid, setCid] = useState("");
   const [sec, setSec] = useState("");
   const [token, setToken] = useState("");
-  const [header, setHeader] = useState("");
+  // Đổi token: hiện sẵn tên header đang dùng (không bí mật) để khỏi gửi nhầm chỗ.
+  const [header, setHeader] = useState(init.header ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const urlOk = /^https?:\/\/[^\s/]+/i.test(url.trim());
@@ -491,10 +493,10 @@ export function ConnectorsPanel() {
   }, { any: true, onList: (d) => setData(d) });
   const finished = (r: Res) => { apply(r); if (r.connector?.status === "ok") { app.say(`Connected ${r.connector.name}`); setOpen(r.connector.id); } };
 
-  const connectEntry = async (e: DirEntry) => {
+  const connectEntry = async (e: DirEntry, tryAnyway = false) => {
     mark(e.id, true);
     setErrs(({ [e.id]: _, ...rest }) => rest);
-    try { const r = await api("POST", "/api/connectors", { dir: e.id }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
+    try { const r = await api("POST", "/api/connectors", { dir: e.id, ...(tryAnyway ? { tryAnyway } : {}) }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
     catch (x) { setErrs((m) => ({ ...m, [e.id]: (x as Error).message })); load(); }
     finally { mark(e.id, false); }
   };
@@ -570,7 +572,7 @@ export function ConnectorsPanel() {
           {pgC.items.map((c) => (
             <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy.has(c.id)} waiting={login.pending === c.id} stale={login.stale} onDismissScope={() => patch(c, { dismissScope: true }, (x) => ({ ...x, needsScope: false }))} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
               onEnable={(v) => patch(c, { enabled: v }, (x) => ({ ...x, enabled: v }))}
-              onConnect={() => reconnect(c)} onReauth={() => reconnect(c, true)} onCreds={(mode) => setCustom({ name: c.name, url: c.url, mode, id: c.id, locked: true })} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
+              onConnect={() => reconnect(c)} onReauth={() => reconnect(c, true)} onCreds={(mode) => setCustom({ name: c.name, url: c.url, mode, id: c.id, locked: true, header: c.tokenHeader })} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
               onPerm={(t, p) => patch(c, { perms: { [t.name]: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) }))}
               onGroup={(k, p) => patch(c, { group: { kind: k, perm: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.readOnly === (k === "read") ? { ...y, perm: p } : y)) }))}
               onSettings={(st) => patch(c, { settings: st }, (x) => ({ ...x, settings: { ...x.settings, ...st } }))} bk={bk} />

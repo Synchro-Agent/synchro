@@ -148,6 +148,15 @@ try {
   ok(seen.some((t) => /^Đang tạo ảnh bằng Antigravity/.test(t)), "trạng thái: Đang tạo ảnh bằng Antigravity", JSON.stringify(seen));
   ok(seen.some((t) => /^Đang tạo ảnh bằng Antigravity, đã \d+ giây$/.test(t)), "trạng thái đếm giây", JSON.stringify(seen));
   ok(await ev(`document.querySelector(".outs-imgs img").naturalWidth === 96`), "ảnh hiện ngay trong tin nhắn, đúng ảnh thật");
+  // Khung chờ: giữ chỗ đúng tỉ lệ, nền theo giao diện (trên giao diện tối từng là khung trắng chói); nền trắng chỉ sau khi ảnh về, để PNG trong suốt đọc được.
+  ok(/^\d+ \/ \d+$/.test(await ev(`document.querySelector(".outs-imgs img").style.aspectRatio`)), "thẻ ảnh giữ chỗ đúng tỉ lệ trước khi tải", await ev(`document.querySelector(".outs-imgs img").style.aspectRatio`));
+  for (const theme of ["light", "dark"]) {
+    await ev(`document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)}); 1`);
+    const bg = await ev(`(() => { const a = document.querySelector(".outs-imgs img"), c = a.cloneNode(); c.removeAttribute("src"); c.removeAttribute("data-ready"); a.parentElement.append(c); const v = getComputedStyle(c).backgroundColor; c.remove(); return v; })()`);
+    ok(bg !== "rgb(255, 255, 255)", `nền chờ không phải trắng (${theme})`, bg);
+  }
+  await ev(`document.documentElement.setAttribute("data-theme", "light"); 1`);
+  ok(await ev(`document.querySelector(".outs-imgs img").hasAttribute("data-ready")`), "ảnh đã về: gỡ trạng thái chờ");
   await until(`!document.querySelector(".wl-status")`, 15000, "xong");
   await sleep(400);
   ok(await ev(`!!${byText(".out-card b", "qua-tao-do")}`), "thẻ tệp có tên dễ đọc", await ev(`document.querySelector(".outs")?.textContent`));
@@ -175,6 +184,14 @@ try {
   ok(await ev(`document.documentElement.scrollWidth <= innerWidth + 1`), "điện thoại: không tràn ngang", await ev(`document.documentElement.scrollWidth`));
   ok(await ev(`(() => { const b = document.querySelector(".out-card").getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth + 1; })()`), "thẻ tệp nằm trọn trong màn hình");
   ok(await ev(`document.querySelector(".outs-imgs img").naturalWidth > 0`), "tải lại trang: ảnh vẫn hiện");
+  // Tệp đã hết hạn: nói rõ, không để biểu tượng ảnh hỏng.
+  const oid = await ev(`/outputs\\/([\\w-]+)/.exec(document.querySelector(".outs-imgs img").src)[1]`);
+  rmSync(path.join(DATA, "outputs", uid, oid), { force: true });
+  await P("Network.enable");
+  await P("Network.setCacheDisabled", { cacheDisabled: true });
+  await P("Page.reload");
+  ok(await until(`!!document.querySelector(".out-img-gone")`, 30000, "thẻ hết hạn").catch(() => false), "ảnh hết hạn: hiện lời báo thay vì ảnh hỏng", await ev(`document.querySelector(".outs")?.innerHTML ?? ""`));
+  await shot("9-expired");
   await shot("4-phone");
   await P("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 } catch (e) {

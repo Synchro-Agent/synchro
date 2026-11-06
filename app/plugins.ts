@@ -362,6 +362,7 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
 // Skill của plugin không gắn studio: Synchro tự xếp vào Tài liệu / Trình bày / Thiết kế (skillstudio.ts) để chúng vào thư viện của mục đó
 // ở trang Artifacts. Plugin studio giữ đúng danh sách đã chọn, không tự thêm sang mục khác. by: tài khoản có model để xếp lại ở nền.
 // Thư viện của danh mục Claude (~18.000 skill) chỉ qua bộ luật chặt: nhờ model từng skill là đốt gói của người dùng.
+const REFINE_MAX = 5;
 function tagOne(id: string, by?: string) {
   const d = init();
   const pl = d.prepare("SELECT studio, catalog_id, auto_tag FROM plugins WHERE id = ?").get(id) as { studio: string | null; catalog_id: string | null; auto_tag: number } | undefined;
@@ -372,7 +373,10 @@ function tagOne(id: string, by?: string) {
   const rows = d.prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
   keepPluginTags(id, rows.map((r) => r.name));
   if (pl.studio) return;
-  for (const r of rows) { const key = pluginKey(id, r.name); if (classify(key, r) && by) refine(by, key, r); }
+  // Nhờ model từng skill là tốn lượt của gói người dùng và họ không hề biết: chỉ làm với thư viện nhỏ, thư viện lớn hay thư viện chung giữ kết quả bộ luật.
+  const ask = !!by && rows.length <= REFINE_MAX;
+  const unsure = rows.map((r) => ({ key: pluginKey(id, r.name), r })).filter((x) => classify(x.key, x.r, !ask));
+  if (ask) for (const x of unsure) refine(by!, x.key, x.r);
 }
 function tagPlugin(id: string, by?: string) { if (holdTags(() => tagOne(id, by))) bumpTags(); }
 /** Xếp mục cho mọi skill của plugin chưa xếp, một lần sau mỗi lần khởi động (kể cả sau deploy, không ai phải bấm gì). Chữ ký không đổi thì bỏ qua, nên các lần sau rất nhanh.
@@ -711,6 +715,19 @@ export const MINE_LABEL = "Kho kỹ năng của bạn";
 // tối đa AUTO_LIST mục, đủ số ở autoTotal. curated: skills.slice(0, curated) là skill người dùng tự cài và chọn lọc, phần sau là của danh mục.
 // plugins: tên các nguồn chọn lọc (không kể hàng nghìn thư viện của danh mục: catalogLibs là số thư viện đó).
 const AUTO_LIST = 30;
+// Bộ luật xếp nhầm thì mỗi người tự sửa được cho riêng mình: thêm hay bỏ từng skill ở từng mục, không đụng tới nhãn chung của thư viện dùng chung.
+let overReady = false;
+const overrideDb = () => { const d = init(); if (!overReady) { d.exec("CREATE TABLE IF NOT EXISTS skill_studio_user (user_id TEXT NOT NULL, studio TEXT NOT NULL, name TEXT NOT NULL, added INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, studio, name))"); overReady = true; } return d; };
+const overridesOf = (uid: string, studio: Studio) => {
+  const rows = overrideDb().prepare("SELECT name, added FROM skill_studio_user WHERE user_id = ? AND studio = ?").all(uid, studio) as { name: string; added: number }[];
+  return { add: rows.filter((r) => r.added).map((r) => r.name), drop: new Set(rows.filter((r) => !r.added).map((r) => r.name)) };
+};
+/** on: true thêm vào mục, false bỏ khỏi mục, null trả về như Synchro tự xếp. */
+export function setStudioOverride(uid: string, studio: Studio, name: string, on: boolean | null) {
+  const d = overrideDb();
+  if (on === null) d.prepare("DELETE FROM skill_studio_user WHERE user_id = ? AND studio = ? AND name = ?").run(uid, studio, name);
+  else d.prepare("INSERT OR REPLACE INTO skill_studio_user (user_id, studio, name, added, at) VALUES (?, ?, ?, ?, ?)").run(uid, studio, name, on ? 1 : 0, Date.now());
+}
 export function studioSkills(uid: string, studio: Studio, act = active(uid)): { skills: Skill[]; plugins: string[]; auto: { name: string; from: string }[]; autoTotal: number; curated: number; catalogLibs: number } {
   const tagged = snap().tagged[studio];
   const ps = act.filter((p) => p.studio === studio);
@@ -718,8 +735,10 @@ export function studioSkills(uid: string, studio: Studio, act = active(uid)): { 
   const others = act.flatMap((p) => { const skills = p.studio ? undefined : tagged.get(p.id); return skills ? [{ p, skills }] : []; });
   const skills: Skill[] = [], auto: { name: string; from: string }[] = [], seen = new Set<string>();
   let autoTotal = 0;
-  const add = (k: Skill, from?: string) => { if (seen.has(k.name)) return; seen.add(k.name); skills.push(k); if (from) { autoTotal++; if (auto.length < AUTO_LIST) auto.push({ name: k.name, from }); } };
+  const over = overridesOf(uid, studio);
+  const add = (k: Skill, from?: string) => { if (seen.has(k.name) || over.drop.has(k.name)) return; seen.add(k.name); skills.push(k); if (from) { autoTotal++; if (auto.length < AUTO_LIST) auto.push({ name: k.name, from }); } };
   for (const k of mine) add(k, MINE_LABEL);
+  if (over.add.length) { const want = new Set(over.add); for (const p of act) { if (!want.size) break; for (const k of skillsOfPlugin(p.id)) if (want.delete(k.name)) add(k, p.name); } }
   for (const p of ps) for (const k of skillsOfPlugin(p.id)) add(k);
   const own = others.filter((o) => !o.p.cat), cat = others.filter((o) => o.p.cat);
   for (const o of own) for (const k of o.skills) add(k, o.p.name);
@@ -739,8 +758,12 @@ const PAGE = 40;
 export function studioPage(uid: string, studio: Studio, q = "", offset = 0) {
   const words = fold(q).split(/\s+/).filter(Boolean);
   const all = studioSkills(uid, studio).skills;
-  const hit = words.length ? all.filter((k) => { const t = fold(`${k.name} ${k.description}`); return words.every((w) => t.includes(w)); }) : all;
-  return { total: all.length, matched: hit.length, offset, skills: hit.slice(offset, offset + PAGE).map((k) => ({ name: k.name, description: k.description.slice(0, 240) })) };
+  const match = (k: Skill) => { const t = fold(`${k.name} ${k.description}`); return words.every((w) => t.includes(w)); };
+  const hit = words.length ? all.filter(match) : all;
+  // Đang tìm: kèm vài skill đúng từ khóa của các thư viện đã cài mà chưa nằm trong mục này, để người dùng tự thêm vào.
+  const inShelf = new Set(all.map((k) => k.name)), more: { name: string; description: string }[] = [];
+  if (words.join("").length >= 2 && !offset) for (const p of active(uid)) { if (more.length >= 8) break; for (const k of skillsOfPlugin(p.id)) if (more.length < 8 && !inShelf.has(k.name) && match(k)) { inShelf.add(k.name); more.push({ name: k.name, description: k.description.slice(0, 240) }); } }
+  return { total: all.length, matched: hit.length, offset, skills: hit.slice(offset, offset + PAGE).map((k) => ({ name: k.name, description: k.description.slice(0, 240) })), more };
 }
 // Skill của plugin bật "dùng trong mọi cuộc trò chuyện".
 export function everywhereSkills(uid: string): Skill[] {
@@ -763,6 +786,7 @@ export async function removeUserPlugins(uid: string) {
   const ids = (init().prepare("SELECT id FROM plugins WHERE owner = ?").all(uid) as { id: string }[]).map((x) => x.id);
   for (const id of ids) await removePlugin(id);
   init().prepare("DELETE FROM plugin_prefs WHERE user_id = ?").run(uid);
+  overrideDb().prepare("DELETE FROM skill_studio_user WHERE user_id = ?").run(uid);
 }
 export { isText };
 

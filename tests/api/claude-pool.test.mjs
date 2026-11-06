@@ -167,7 +167,7 @@ try {
     let r = await post([u1]);
     ok(r.s === 200 && !/công cụ Synchro/.test(r.j.text) && /lượt 1/.test(r.j.text), "câu chào: không cầu nối MCP", JSON.stringify(r.j).slice(0, 300));
     ok(SUBS.sessionPlain(user.id, conv, "claude"), "phiên chưa gọi công cụ");
-    const u2 = { role: "user", content: "Viết bài thơ về mùa thu" };
+    const u2 = { role: "user", content: "Viết báo cáo về mùa thu" };
     r = await post([u1, { role: "assistant", content: r.j.text }, u2]);
     ok(r.s === 200 && /công cụ Synchro: \d+/.test(r.j.text) && /lượt 2/.test(r.j.text), "lượt sau: đủ công cụ, nối đúng phiên", JSON.stringify(r.j).slice(0, 300));
     const a3 = r.j.text;
@@ -175,6 +175,27 @@ try {
     fs.writeFileSync(path.join(BIN, ".keep"), "");
     r = await post([u1, { role: "assistant", content: "x" }, u2, { role: "assistant", content: a3 }, u3], { conv: `${conv}-m` });
     ok(r.s === 200 && !/CAN_CONG_CU/.test(r.j.text) && /công cụ Synchro: \d+/.test(r.j.text), "model báo cần công cụ: chạy lại lượt đầy đủ, người dùng không thấy dấu hiệu", JSON.stringify(r.j).slice(0, 300));
+    // CLI vừa treo: nhớ theo tài khoản và theo CLI, xong tốt thì quên.
+    {
+      const models = ["sub-claude/haiku", "sub-grok/grok-4.7"];
+      CH.noteStall(user.id, "claude");
+      ok(CH.stalledModels(user.id, models).join() === "sub-claude/haiku", "CLI treo: model của CLI đó bị tránh", CH.stalledModels(user.id, models));
+      ok(!CH.stalledModels("nguoi-khac", models).length, "chỉ tính cho đúng tài khoản");
+      CH.clearStall(user.id, "claude");
+      ok(!CH.stalledModels(user.id, models).length, "xong tốt: bỏ tránh");
+    }
+    // Nhờ viết ngắn: đường nhanh, tiến trình khởi động sẵn đúng model và nỗ lực; không đụng tới lượt có công cụ.
+    {
+      PO.dropAll();
+      const w = `${conv}-w`, ask = { role: "user", content: "Viết bài thơ về mùa thu" };
+      const res = await CH.chatPost({ skills: true, model: "sub-claude/haiku", effort: "medium", conv: w, messages: [ask] }, { user }, { feature: "chat" });
+      const j = await res.json();
+      ok(res.status === 200 && !/công cụ Synchro/.test(j.text), "nhờ viết ngắn: không cầu nối MCP", JSON.stringify(j).slice(0, 300));
+      ok(PO.poolSize() >= 1, "lượt nhờ viết chạy trong hồ tiến trình", PO.poolSize());
+      const res2 = await CH.chatPost({ skills: true, model: "sub-claude/haiku", effort: "medium", conv: w, messages: [ask, { role: "assistant", content: j.text }, { role: "user", content: "ngắn hơn đi" }] }, { user }, { feature: "chat" });
+      const j2 = await res2.json();
+      ok(res2.status === 200 && !/công cụ Synchro/.test(j2.text) && /lượt 2/.test(j2.text), "chỉnh tiếp bài viết: vẫn đường nhanh, nối đúng phiên", JSON.stringify(j2).slice(0, 300));
+    }
     r = await post([u1], { conv: `${conv}-p`, pickedSkills: ["abc"] });
     ok(r.s === 200, "có skill tự chọn: vẫn chạy", JSON.stringify(r.j).slice(0, 200));
     r = await post([{ role: "user", content: "#pid chào" }], { conv: `${conv}-s` });

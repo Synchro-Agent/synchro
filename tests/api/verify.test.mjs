@@ -80,8 +80,12 @@ try {
   ok(r.s === 200, "bấm xác minh", r);
   const after = await a("GET", "/api/auth/me");
   ok(after.j?.user?.verifyPending === false && after.j.user.perms.features.files === true, "đã xác minh: mở lại tính năng ngay trong phiên đang mở", after.j?.user);
+  r = await anon("POST", "/api/auth/verify", { token, action: "check" });
+  ok(r.s === 200 && r.j?.already === true, "mở lại thư đã bấm: báo đã xác minh, không báo hết hạn", r);
   r = await anon("POST", "/api/auth/verify", { token, action: "confirm" });
-  ok(r.s === 400, "đường dẫn chỉ dùng một lần", r);
+  ok(r.s === 200, "bấm lại không đổi gì và không lỗi", r);
+  r = await anon("POST", "/api/auth/verify", { token, action: "deny" });
+  ok(r.s === 400 && (await a("GET", "/api/auth/me")).j?.user, "thư cũ không xóa được tài khoản đã xác minh", r);
 
   console.log("4. Không phải tôi: chủ email xóa được tài khoản người khác lập");
   const victim = `victim-${tag}@synchro.test`, atk = client();
@@ -149,6 +153,40 @@ fs.writeFileSync(path.join(OPS, "backup-status.json"), JSON.stringify({ ok: true
 h = await admin("GET", "/api/admin/health");
 ok(h.j?.problems?.some((p) => p.code === "backup_stale"), "bản sao lưu quá 36 giờ: cảnh báo", h.j?.problems);
 fs.rmSync(OPS, { recursive: true, force: true });
+
+console.log("Đổi email: xác nhận ở địa chỉ mới, báo địa chỉ cũ");
+{
+  const oldE = `doi-email-${tag}@synchro.test`, newE = `email-moi-${tag}@synchro.test`, pass0 = "Doi-email-pass-123";
+  const c = client();
+  let x = await c("POST", "/api/auth/signup", { email: oldE, password: pass0, profile: prof });
+  ok(x.s === 200, "đăng ký", x.j);
+  await c("POST", "/api/auth/login", { email: oldE, password: pass0 });
+  x = await c("POST", "/api/auth/email", { email: newE, password: "sai-mat-khau" });
+  ok(x.s === 401 && !mails(newE).length, "sai mật khẩu: không gửi gì", x);
+  x = await c("POST", "/api/auth/email", { email: oldE, password: pass0 });
+  ok(x.s === 400, "email hiện tại: báo ngay", x);
+  x = await c("POST", "/api/auth/email", { email: "admin@synchro.test", password: pass0 });
+  ok(x.s === 200, "email đã có tài khoản: trả lời như thường, không lộ", x);
+  ok(!mails("admin@synchro.test").some((m) => /email mới|new email/i.test(m.subject)), "và không gửi gì cho địa chỉ đó");
+  x = await c("POST", "/api/auth/email", { email: newE, password: pass0, lang: "vi" });
+  ok(x.s === 200, "xin đổi email", x);
+  await sleep(400);
+  const m1 = mails(newE).at(-1), tok = tokenOf(m1, /verify\?change=1#([\w-]+)/);
+  ok(!!tok, "địa chỉ mới nhận đường dẫn xác nhận", m1?.text);
+  ok(mails(oldE).some((m) => /đổi email|change of email/i.test(m.subject) && m.text.includes(newE)), "địa chỉ cũ nhận thư báo");
+  ok((await c("GET", "/api/auth/me")).j?.user?.email === oldE, "chưa bấm thì email chưa đổi");
+  x = await anon("POST", "/api/auth/verify", { token: tok, action: "change-check" });
+  ok(x.s === 200 && x.j?.email === newE, "trang xác nhận biết email mới", x);
+  ok((await anon("POST", "/api/auth/verify", { token: "sai", action: "change-confirm" })).s === 400, "mã sai: 400");
+  x = await anon("POST", "/api/auth/verify", { token: tok, action: "change-confirm" });
+  ok(x.s === 200, "bấm xác nhận", x);
+  ok(!(await c("GET", "/api/auth/me")).j?.user, "mọi phiên cũ bị đăng xuất");
+  const c2 = client();
+  x = await c2("POST", "/api/auth/login", { email: newE, password: pass0 });
+  ok(x.s === 200 && x.j?.user?.email === newE && x.j.user.verifyPending === false, "đăng nhập bằng email mới, đã xác minh", x.j);
+  ok((await client()("POST", "/api/auth/login", { email: oldE, password: pass0 })).s === 401, "email cũ không còn đăng nhập được");
+  ok((await anon("POST", "/api/auth/verify", { token: tok, action: "change-confirm" })).s === 400, "đường dẫn chỉ dùng một lần");
+}
 
 for (const f of (() => { try { return fs.readdirSync(MAIL); } catch { return []; } })()) { try { if (JSON.parse(fs.readFileSync(path.join(MAIL, f), "utf8")).to?.includes(tag)) fs.rmSync(path.join(MAIL, f)); } catch {} }
 console.log(`\n${fail ? "✗" : "✓"} ${pass} đạt, ${fail} lỗi`);

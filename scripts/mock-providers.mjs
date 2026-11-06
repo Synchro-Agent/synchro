@@ -440,6 +440,8 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
     const app = `http://localhost:${process.env.PORT ?? 3200}`;
     return { text: `Trang có ảnh.\n<artifact identifier="anh-ngoai" type="text/html" title="Ảnh ngoài">\n<!doctype html><html><body style="margin:0"><img id="logo" src="${app}/icon-192.png" style="width:96px;height:96px"><div id="nen" style="width:96px;height:96px;background:url('${app}/icon-512.png') center/cover"></div></body></html>\n</artifact>`, q };
   }
+  // "#artgen=<id>": artifact dùng ảnh Synchro đã tạo (địa chỉ generate_image trả về) — khung xem trước phải nhúng được ảnh của đúng tài khoản.
+  { const g = /#artgen=([\w-]+)/.exec(q); if (g) return { text: `Trang có ảnh đã tạo.\n<artifact identifier="anh-tao" type="text/html" title="Ảnh đã tạo">\n<!doctype html><html><body style="margin:0"><img id="tao" src="https://image.synchro.invalid/${g[1]}.png" style="width:96px;height:96px"></body></html>\n</artifact>`, q }; }
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;

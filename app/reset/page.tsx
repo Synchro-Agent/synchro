@@ -8,12 +8,15 @@ import { getLang, tr } from "../i18n";
 import { LangSwitch } from "../langswitch";
 import { AlertCircle, Check, Eye, EyeOff, Mail } from "lucide-react";
 
+// Chỉ 400 mới nghĩa là đường dẫn hỏng. Mất mạng, 5xx, quá giới hạn thì đường dẫn vẫn tốt: không được báo hết hạn, không được bỏ mã khỏi địa chỉ.
+class PostError extends Error { constructor(m: string, public status: number) { super(m); } }
+const NET = "Chưa kết nối được máy chủ. Hãy kiểm tra mạng rồi thử lại.";
 const post = async (url: string, body: unknown) => {
-  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Lỗi ${r.status}`);
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => { throw new PostError(NET, 0); });
+  if (!r.ok) throw new PostError((await r.json().catch(() => ({}))).error || NET, r.status);
   return r.json();
 };
-type Stage = "loading" | "ask" | "sent" | "set" | "bad" | "done";
+type Stage = "loading" | "ask" | "sent" | "set" | "bad" | "retry" | "done";
 
 export default function ResetPassword() {
   const [stage, setStage] = useState<Stage>("loading");
@@ -24,14 +27,23 @@ export default function ResetPassword() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [support, setSupport] = useState("");
   useEffect(() => {
     const t = location.hash.slice(1);
     try { const e = sessionStorage.getItem("forgot-email"); if (e) { setEmail(e); sessionStorage.removeItem("forgot-email"); } } catch {}
+    void fetch("/api/auth/me").then((r) => r.json()).then((j) => setSupport(j?.support || "")).catch(() => {});
     if (!t) { setStage("ask"); return; }
     setToken(t);
-    // Kiểm tra trước: đường dẫn đã hết hạn thì nói ngay, không để người dùng gõ mật khẩu rồi mới biết.
-    post("/api/auth/reset", { token: t, check: true }).then(() => setStage("set"), () => { setStage("bad"); history.replaceState(null, "", "/reset"); });
-  }, []);
+    check(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Kiểm tra trước: đường dẫn đã hết hạn thì nói ngay, không để người dùng gõ mật khẩu rồi mới biết.
+  const check = (t: string) => {
+    setStage("loading"); setErr("");
+    post("/api/auth/reset", { token: t, check: true }).then(() => setStage("set"), (e: PostError) => {
+      if (e.status === 400) { setStage("bad"); history.replaceState(null, "", "/reset"); }
+      else { setErr(e.message); setStage("retry"); }
+    });
+  };
   const ask = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Email chưa đúng định dạng.");
     setBusy(true); setErr("");
@@ -68,7 +80,7 @@ export default function ResetPassword() {
           <div className="rp-ico"><Mail size={20} /></div>
           <h1>Hãy kiểm tra email</h1>
           <p className="rp-lead">Nếu <b data-notr>{email.trim()}</b> có tài khoản Synchro, Synchro đã gửi một đường dẫn đặt lại mật khẩu tới địa chỉ này. Thư thường tới trong vài phút, nhưng Synchro không kiểm soát được hộp thư của bạn. Đường dẫn có hiệu lực 60 phút.</p>
-          <p className="rp-hint">Chưa thấy email? Hãy xem mục Spam, hoặc <button className="lnk" onClick={again2}>gửi lại</button>. Tài khoản đăng nhập bằng Google, GitHub hoặc Apple có thể đăng nhập bằng các nút đó mà không cần mật khẩu. Vẫn không có thư sau 10 phút? Hãy nhờ quản trị viên tạo đường dẫn đặt lại.</p>
+          <p className="rp-hint">Chưa thấy email? Hãy xem mục Spam, hoặc <button className="lnk" onClick={again2}>gửi lại</button>. Tài khoản đăng nhập bằng Google, GitHub hoặc Apple có thể đăng nhập bằng các nút đó mà không cần mật khẩu. Vẫn không có thư sau 10 phút? {support ? <>Hãy viết cho <a href={`mailto:${support}`} data-notr>{support}</a>.</> : "Nếu tài khoản do tổ chức của bạn cấp, hãy nhờ quản trị viên tạo đường dẫn đặt lại."}</p>
           <Link className="rp-back" href="/">Quay lại đăng nhập</Link>
         </>}
         {stage === "set" && <>
@@ -82,10 +94,20 @@ export default function ResetPassword() {
             </div>
             <p className="rp-hint" id="rp-rule">Ít nhất 8 ký tự.</p>
             <label className="rp-l" htmlFor="rp-again">Nhập lại mật khẩu mới</label>
-            <input id="rp-again" className="field" type={show ? "text" : "password"} autoComplete="new-password" value={again} onChange={(ev) => { setAgain(ev.target.value); setErr(""); }} />
+            <div className="rp-pw">
+              <input id="rp-again" className="field" type={show ? "text" : "password"} autoComplete="new-password" value={again} onChange={(ev) => { setAgain(ev.target.value); setErr(""); }} />
+              <button type="button" className="icon-btn" aria-label={tr(show ? "Ẩn mật khẩu" : "Hiện mật khẩu")} aria-pressed={show} onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+            </div>
             {e}
             <button className="btn dark rp-go" disabled={busy || !pw || !again}>{busy ? <span className="api-spin" /> : "Lưu mật khẩu mới"}</button>
           </form>
+        </>}
+        {stage === "retry" && <>
+          <div className="rp-ico"><AlertCircle size={20} /></div>
+          <h1>Chưa kiểm tra được đường dẫn</h1>
+          <p className="rp-lead">Đường dẫn của bạn vẫn còn nguyên. {tr(err)}</p>
+          <button className="btn dark rp-go" onClick={() => check(token)}>Thử lại</button>
+          <Link className="rp-back" href="/">Quay lại đăng nhập</Link>
         </>}
         {stage === "bad" && <>
           <div className="rp-ico"><AlertCircle size={20} /></div>

@@ -14,6 +14,7 @@ import { MODES, PRESETS } from "./codeconst";
 import { ProvidersPanel } from "./providersui";
 import { lazyView } from "./lazy";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
+import { MfaRow } from "./mfaui";
 import type { AuthUser } from "./auth";
 import { OCCUPATIONS } from "./names";
 import { ls } from "./userscope";
@@ -224,12 +225,25 @@ function Account() {
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   // Quên mật khẩu hiện tại ngay trong hộp đổi mật khẩu: gửi thư đặt lại tới email của tài khoản, không phải đăng xuất rồi tìm lại trang đăng nhập.
-  const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState(false);
-  useEffect(() => { if (!pw) setResetSent(false); }, [pw]);
+  // Đổi email: chỉ đổi thật sau khi bấm đường dẫn gửi tới địa chỉ mới.
+  const [mailForm, setMailForm] = useState<{ email: string; pw: string; err: string; busy: boolean; sent: boolean } | null>(null);
+  const sendMailChange = async () => {
+    if (!mailForm) return;
+    setMailForm({ ...mailForm, busy: true, err: "" });
+    try { await api("POST", "/api/auth/email", { email: mailForm.email.trim(), password: mailForm.pw, lang: getLang() }); setMailForm({ ...mailForm, busy: false, err: "", sent: true }); }
+    catch (e) { setMailForm({ ...mailForm, busy: false, err: (e as Error).message }); }
+  };
+  // Cách đăng nhập: thêm được kể cả khi email khác (Apple Ẩn email), gỡ được trừ cách cuối cùng.
+  const [providers, setProviders] = useState<Record<string, boolean>>({});
+  useEffect(() => { void fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => setProviders(j?.providers ?? {})).catch(() => {}); }, []);
+  const connect = (p: string) => api<{ url: string }>("POST", "/api/auth/identities", { provider: p }).then((r) => { window.location.href = r.url; }).catch((e) => app.say(e.message));
+  const disconnect = (p: string) => api<{ user: AuthUser }>("DELETE", "/api/auth/identities", { provider: p }).then((r) => app.setMe(r.user)).catch((e) => app.say(e.message));
+  const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState<"" | "sent" | "limited">("");
+  useEffect(() => { if (!pw) setResetSent(""); }, [pw]);
   const sendReset = async () => {
     if (!me?.email || resetBusy) return;
     setResetBusy(true);
-    try { await api("POST", "/api/auth/forgot", { email: me.email, lang: getLang() }); setResetSent(true); }
+    try { const j = await api<{ limited?: boolean }>("POST", "/api/auth/forgot", { email: me.email, lang: getLang() }); setResetSent(j?.limited ? "limited" : "sent"); }
     catch (e) { app.say((e as Error).message); }
     finally { setResetBusy(false); }
   };
@@ -254,7 +268,7 @@ function Account() {
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
       <textarea className="textarea" aria-label="Instructions for Synchro" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
-      <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString()} characters over the limit · ` : ""}{ins.length.toLocaleString()} / 20,000</span></div>
+      <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString(locale())} characters over the limit · ` : ""}{ins.length.toLocaleString(locale())} / {(20000).toLocaleString(locale())}</span></div>
       {ins.trim() !== server.trim() && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button className="btn dark" disabled={insBusy || ins.length > 20000} onClick={saveIns}>Save changes</button>
@@ -279,8 +293,13 @@ function Account() {
         </div>
       )}
       <H>Account</H>
-      <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span></Row>
+      <Row t="Email" d={me?.methods.length ? <>Sign in with {me.methods.map((m) => <span key={m} className="adm-chip" style={{ marginLeft: 4 }}>{METHOD[m] ?? m}</span>)}</> : undefined} top><span data-notr>{me?.email}</span>{me?.hasPassword && !me?.isAdmin && <button className="btn" style={{ marginLeft: 10 }} onClick={() => setMailForm({ email: "", pw: "", err: "", busy: false, sent: false })}>Change</button>}</Row>
+      {Object.values(providers).some(Boolean) && <Row t="Sign-in methods" d="Add another way to sign in, even with a different email address."><span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>{Object.keys(providers).filter((p) => providers[p]).map((p) => {
+        const on = !!me?.methods.includes(p);
+        return <button key={p} className="btn" disabled={on && (me?.methods.length ?? 0) <= 1} title={on && (me?.methods.length ?? 0) <= 1 ? tr("Đây là cách đăng nhập duy nhất của tài khoản. Hãy đặt mật khẩu hoặc thêm cách khác trước.") : undefined} onClick={() => void (on ? disconnect(p) : connect(p))}>{`${on ? tr("Disconnect") : tr("Connect")} ${METHOD[p] ?? p}`}</button>;
+      })}</span></Row>}
       <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."}><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
+      <MfaRow Row={Row} say={app.say} />
       <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
       <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>
       <Row t="Account ID"><span className="mono" data-notr>{me?.id}</span></Row>
@@ -298,13 +317,32 @@ function Account() {
       </table>
       <PageBar pg={pgSes} />
       <Toasts msg={saved} />
+      <Fade show={!!mailForm}>
+        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setMailForm(null)}>
+          <div className="modal sm" style={{ width: 400 }}>
+            <button className="icon-btn" aria-label="Close" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setMailForm(null)}><I.X size={16} /></button>
+            <h2 style={{ fontSize: 16 }}>Change email</h2>
+            {mailForm?.sent ? <>
+              <p className="d" role="status">If that address can be used, we sent it a confirmation link. Your email stays <span data-notr>{me?.email}</span> until you press the link. It works for 24 hours.</p>
+              <div className="modal-foot"><button className="btn dark" onClick={() => setMailForm(null)}>Done</button></div>
+            </> : <>
+              <input className="field" type="email" autoComplete="email" aria-label="New email" placeholder="New email" value={mailForm?.email ?? ""} onChange={(e) => setMailForm((o) => o && { ...o, email: e.target.value, err: "" })} />
+              <input className="field" type="password" autoComplete="current-password" aria-label="Current password" placeholder="Current password" value={mailForm?.pw ?? ""} onChange={(e) => setMailForm((o) => o && { ...o, pw: e.target.value, err: "" })} />
+              {mailForm?.err && <p className="auth-field-err" role="alert">{tr(mailForm.err)}</p>}
+              <div className="modal-foot"><button className="btn" onClick={() => setMailForm(null)}>Cancel</button><button className="btn dark" disabled={mailForm?.busy || !mailForm?.email.trim() || !mailForm?.pw} onClick={() => void sendMailChange()}>{mailForm?.busy ? <span className="api-spin" /> : "Send link"}</button></div>
+            </>}
+          </div>
+        </div>
+      </Fade>
       <Fade show={!!pw}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
             {me?.hasPassword && <input className="field" type="password" autoComplete="current-password" placeholder="Current password" value={pw?.cur ?? ""} onChange={(e) => setPw((o) => o && { ...o, cur: e.target.value })} />}
-            {me?.hasPassword && (resetSent
+            {me?.hasPassword && (resetSent === "limited"
+              ? <p className="d pw-forgot" role="status">No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.</p>
+              : resetSent
               ? <p className="d pw-forgot" role="status">We sent a reset link to <span data-notr>{me.email}</span>. It works for 60 minutes. Check Spam if you don&apos;t see it.</p>
               : <p className="d pw-forgot"><button type="button" className="lnk" disabled={resetBusy} onClick={sendReset}>{resetBusy ? "Sending…" : "Forgot your current password?"}</button></p>)}
             <input className="field" type="password" autoComplete="new-password" placeholder="New password (at least 8 characters)" value={pw?.next ?? ""} onChange={(e) => setPw((o) => o && { ...o, next: e.target.value })} />
@@ -395,9 +433,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
   const t = (k: keyof Caps, disabled = false) => <Toggle on={v[k]} set={(x) => set(k, x)} disabled={disabled || !!locks[k]} />;
   return (
     <>
-      <H first>General</H>
-      <Row t="Switch models when a message is flagged" d="When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.">{t("sw")}</Row>
-      <H>Visuals</H>
+      <H first>Visuals</H>
       <Row t="Artifacts" d="Build code, documents, and designs in a dedicated window alongside your conversation." top>{t("art")}</Row>
       <Row t="AI-powered artifacts" d={<>Build apps and interactive documents that use Synchro inside the artifact.{!v.art && <span className="cap-note">Turn on Artifacts first.</span>}</>}>{t("ai", !v.art)}</Row>
       <Row t="Inline visualizations" d="Allow Synchro to create interactive visuals, charts, and diagrams within the conversation.">{t("inl")}</Row>

@@ -104,12 +104,12 @@ export function DownloadView() {
 
       <section className="dl-hero" id="desktop">
         <div className="dl-copy">
-          <span className="dl-tag">Bản xem trước</span>
+          <span className="dl-tag">Sắp ra mắt</span>
           <h1>Synchro trên máy tính của bạn</h1>
-          <p className="dl-lead">Luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.</p>
+          <p className="dl-lead">Chưa có bản tải về; hiện bạn dùng Synchro ngay trên trình duyệt. Khi ra mắt, ứng dụng luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.</p>
           <div className="dl-btns">
-            <button className="dl-main" onClick={() => get(main)}><Main size={19} />{`Tải cho ${NAME[main]}`}</button>
-            <button className="dl-alt" onClick={() => get(alt)}><Alt size={16} />{NAME[alt]}</button>
+            <button className="dl-main" onClick={() => get(main)}><Main size={19} />{URL[main] ? `Tải cho ${NAME[main]}` : `${NAME[main]}: sắp có`}</button>
+            <button className="dl-alt" onClick={() => get(alt)}><Alt size={16} />{URL[alt] ? NAME[alt] : `${NAME[alt]}: sắp có`}</button>
           </div>
           <p className="dl-req">macOS 13 trở lên (Apple Silicon và Intel) · Windows 10 trở lên (x64 và ARM64)</p>
         </div>
@@ -123,7 +123,7 @@ export function DownloadView() {
           <p className="dl-lead">Cuộc trò chuyện đi theo bạn. Bắt đầu trên máy tính, hỏi tiếp trên điện thoại, mọi thứ đều được đồng bộ.</p>
           <div className="dl-stores">
             {stores.map(([o, store, L]) => (
-              <button key={o} className="dl-store" onClick={() => get(o)}><L size={22} /><span><small>Tải về trên</small><b>{store}</b></span></button>
+              <button key={o} className="dl-store" onClick={() => get(o)}><L size={22} /><span><small>{URL[o] ? "Tải về trên" : "Sắp có trên"}</small><b>{store}</b></span></button>
             ))}
           </div>
           <p className="dl-req">iOS 17 trở lên · Android 10 trở lên</p>

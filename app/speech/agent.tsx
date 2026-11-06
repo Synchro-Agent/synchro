@@ -8,7 +8,7 @@ import { usePref } from "../store";
 import { startRealtime, type RtHandlers, type RtPhase } from "../realtime";
 import { startCascade } from "../voicecall";
 import { PearlOrb } from "../pearlorb";
-import { tr } from "../i18n";
+import { tr, locale } from "../i18n";
 import { AGENT_MODELS, AGENT_TEMPLATES } from "./data";
 import { LANGS, ago, api, del, fmtDur, post, useItems, usePlan, type Item, type Voice } from "./client";
 import { Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";
@@ -61,7 +61,7 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
     if (why) say(why);
     const ls = linesRef.current;
     if (ls.length) {
-      try { const j = await post<{ item: Item }>("live/save", { kind: "call", title: `${c.name} · ${new Date().toLocaleString("vi-VN")}`, lines: ls, seconds: secRef.current, lang: c.lang }); setHist((h) => [j.item, ...(h ?? [])]); } catch {}
+      try { const j = await post<{ item: Item }>("live/save", { kind: "call", title: `${c.name} · ${new Date().toLocaleString(locale())}`, lines: ls, seconds: secRef.current, lang: c.lang }); setHist((h) => [j.item, ...(h ?? [])]); } catch {}
     }
   };
   const start = async () => {

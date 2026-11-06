@@ -203,7 +203,7 @@ export async function checkArtifact(uid: string, a: ArtVersion | null, input: Re
   const deck = isDeck(a);
   const slide = Number(input.slide) > 0 ? Math.floor(Number(input.slide)) : 0;
   // Ảnh từ URL ngoài được nhúng như ở khung xem trước, để kết quả kiểm tra khớp với điều người dùng thấy.
-  const doc = buildDocCore(a.type, await inlineImages(a.content), origin, "check", false, CHECK_BRIDGE, deck ? { fixed: null } : undefined, a.title);
+  const doc = buildDocCore(a.type, await inlineImages(a.content, uid), origin, "check", false, CHECK_BRIDGE, deck ? { fixed: null } : undefined, a.title);
   let r;
   try {
     r = await execRun({ uid, net: true, web: true, timeout: 150, argv: ["node", "check.js"], files: [

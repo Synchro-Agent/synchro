@@ -46,6 +46,11 @@ const COLLECT = (lang) => `(() => {
     if (!p || p.closest(SKIP) || !bad(v) || !shown(p)) continue;
     out.add(v.trim().slice(0, 110) + (where ? "   ‹" + hint(p) + "›" : ""));
   }
+  // Nút trên khối code và bảng trong câu trả lời là chữ giao diện dù nằm trong .ai-msg (bộ dịch trang bỏ qua vùng này nên chúng phải tự dùng tr()).
+  for (const b of document.querySelectorAll(".ai-msg .cb-head button,.mdx .cb-head button,.ai-msg .md-tbl button,.mdx .md-tbl button,.ai-msg .md-th,.mdx .md-th")) {
+    if (!shown(b)) continue;
+    for (const v of [b.matches(".md-th") ? "" : b.textContent, b.title, b.getAttribute("aria-label")]) if (v && bad(v)) out.add("[md] " + v.trim().slice(0, 80));
+  }
   // Thuộc tính nhắc lại nội dung người dùng (aria-label = tên artifact…) thì bỏ qua.
   const content = new Set([...document.querySelectorAll("[data-notr]")].map((e) => e.textContent.trim()));
   for (const el of document.querySelectorAll("[placeholder],[title],[aria-label],[data-tip]")) {

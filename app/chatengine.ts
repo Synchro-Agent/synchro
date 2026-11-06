@@ -8,7 +8,7 @@ import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, typ
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
+import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
@@ -17,7 +17,7 @@ import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "./mcp";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
-import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, type RouteInput } from "./router";
+import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { rank } from "./skillroute";
@@ -34,12 +34,14 @@ import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME } from "./ai/imagegen";
+import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
+import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME, requestSlug } from "./ai/imagegen";
+import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
-import { openBridge } from "./mcpbridge";
+import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
-import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule } from "./brain";
+import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
@@ -47,6 +49,7 @@ import type { TaskCtx } from "./tasks";
 import { answer as answerAsk, newAskId, waitAnswer, type Ask } from "./approvals";
 import { callArgs, compactSchema, rankTools, resolveTool } from "./connproxy";
 import { getPrefs as codePrefs } from "./codestore";
+import { INPUTS_MAX, runInputs } from "./runinputs";
 import { BROWSER_RULES, BROWSER_TOOLS, browserTargetOf, chatFiles, describeBrowser, isBrowserTool, releaseBrowser, runBrowserTool, type BrowserCtx } from "./browsertools";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
@@ -182,7 +185,7 @@ type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-type Exec = { image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void };
+type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[] };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -201,7 +204,7 @@ const recalcNote = (rc: RecalcReport | undefined) => {
   if (!rc) return "";
   const rows = [
     ...(rc.error ? [`Không tính lại được: ${rc.error}`] : []),
-    ...(rc.files ?? []).map((b) => `${b.path}: đã tính lại ${b.filled}/${b.formulas} công thức bằng LibreOffice và ghi giá trị vào tệp.${b.sample.length ? ` Vài giá trị: ${b.sample.join(", ")}.` : ""}${b.errors.length ? ` Ô lỗi, phải sửa: ${b.errors.map((e) => `${e.sheet}!${e.cell} ${e.value}${e.formula ? ` (=${e.formula})` : ""}`).join("; ")}.` : ""}`),
+    ...(rc.files ?? []).map((b) => `${b.path}: đã tính lại ${b.filled}/${b.formulas} công thức bằng LibreOffice và ghi giá trị vào tệp.${b.prefixed ? ` Đã thêm tiền tố _xlfn. cho ${b.prefixed} hàm đời mới để Excel không báo #NAME?.` : ""}${b.sample.length ? ` Vài giá trị: ${b.sample.join(", ")}.` : ""}${b.errors.length ? ` Ô lỗi, phải sửa: ${b.errors.map((e) => `${e.sheet}!${e.cell} ${e.value}${e.formula ? ` (=${e.formula})` : ""}`).join("; ")}.` : ""}`),
     ...(rc.failed ?? []).map((f) => `${f.path}: không tính lại được (${f.reason}); công thức trong tệp có thể đang trống hoặc bằng 0 đến khi mở bằng Excel.`),
   ];
   return rows.length ? `\n<excel_recalc>\n${rows.join("\n")}\n</excel_recalc>` : "";
@@ -228,6 +231,7 @@ function noteSkipped(x: Exec, list: string[]) {
     if (!x.outs.some((o) => o.skipped && o.name === name)) x.outs.push({ id: `skip-${name}`, name, size: Number(mb ?? 0) * 1048576, mime: "", skipped: true });
   }
 }
+const inputsNote = (i: { names: string[]; over: string[] }) => (i.names.length || i.over.length ? `\n<inputs>\n${i.names.length ? `Bản gốc tệp của đoạn chat vừa chép vào inputs/: ${i.names.join(", ")}.` : ""}${i.over.length ? ` Quá lớn nên không chép được (tổng ${INPUTS_MAX / 1048576} MB một lần chạy): ${i.over.join(", ")}; phải nói rõ với người dùng nếu cần tới các tệp này.` : ""}\n</inputs>` : "");
 async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
   const lang = (typeof input.language === "string" && input.language in LANGS ? input.language : "python") as Lang;
   const used = { kind: "code" as const, name: lang };
@@ -238,7 +242,9 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     // Thư mục làm việc giữ nguyên giữa các lần chạy trong cùng đoạn chat: bước sau dùng lại tệp bước trước đã tải / tạo.
     const keep = x.conv ? x.conv.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) : undefined;
     const timeout = typeof input.timeout === "number" ? input.timeout : undefined;
-    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
+    // Tệp người dùng gửi và ảnh đã tạo nằm ở inputs/. Chỉ máy giữ thư mục giữa các lần chạy mới không phải chép lại trong lượt này (E2B mỗi lần một máy mới).
+    const inp = await runInputs(x.uid, x.msgs, x.madeImgs ?? [], keep && runner() !== "e2b" ? (x.inputsSent ??= new Set()) : undefined);
+    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }, ...inp.files], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
     const { saved, held, full } = deliver(x, r);
     const pv = await previewOf(r.files);
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
@@ -248,7 +254,7 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     if (r.exit === 0 && !r.timedOut) noteSkipped(x, over);
     const skip = over.length ? `\n<not_delivered>\nCác tệp này KHÔNG tới người dùng và không có thẻ tải về: ${over.join("; ")}. Giới hạn ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp, ${RUN_LIMITS.total / 1048576} MB mỗi lần chạy. Nén lại (video: -crf cao hơn, hạ bitrate âm thanh) hoặc chia nhỏ rồi chạy lại; không làm được thì phải nói rõ với người dùng là tệp chưa giao được (thẻ tệp hiện "chưa giao được").\n</not_delivered>` : "";
     // Thẻ trạng thái đứng trước log: log dài cỡ nào model vẫn thấy đã giao tệp gì, ô Excel nào lỗi, đã xem ảnh nào.
-    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${files}${hold}${skip}${recalcNote(r.recalc)}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
+    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${inputsNote(inp)}${files}${hold}${skip}${recalcNote(r.recalc)}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
   }
@@ -282,8 +288,9 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 // Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại lượt đầy đủ.
 const NEED_TOOLS = "[[CAN_CONG_CU]]";
 const FAST_RULES = `<quick_reply>
-Đây là câu trò chuyện hoặc câu hỏi ngắn: trả lời ngay, tự nhiên, ngắn gọn, bằng đúng ngôn ngữ người dùng đang viết. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
+Đây là câu trò chuyện, câu hỏi ngắn hoặc việc viết ngắn: trả lời ngay, tự nhiên, bằng đúng ngôn ngữ người dùng đang viết. Câu hỏi thì ngắn gọn; nhờ viết (email, thư, thơ, caption…) thì viết đủ, chỉn chu, đưa bài viết ra ngay, không kể lại yêu cầu. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, tạo ảnh bằng AI, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
+An toàn đứng trước sự ngắn gọn. Tin nhắn có thể nói tới tự làm hại, tuyệt vọng, bị bạo hành hay xâm hại (kể cả nói gián tiếp), hoặc tình huống y tế khẩn: không trả lời cho qua. Đáp với sự quan tâm thật, không phán xét, không nêu cách làm hại; nói rõ mức độ khẩn, hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy, cấp cứu hoặc đường dây khẩn cấp nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em). Câu hỏi sức khỏe, pháp lý, tài chính: nêu điều chưa chắc và khi nào cần gặp chuyên gia.
 </quick_reply>`;
 const NARRATE_RULES = `<working_out_loud>
 Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ của người dùng:
@@ -299,7 +306,7 @@ const BRIDGE_CLIS = new Set(["claude", "codex", "agy", "grok"]);
 // Antigravity (-p): công cụ dựng sẵn của nó cần duyệt nên bị tự chặn (lượt dừng sau câu dẫn) — nói trước để model dùng ngay công cụ của
 // Synchro thay vì thử công cụ của agy rồi mới được nhắc (tin đầu "tóm tắt video YouTube" từng dừng ở "Mình sẽ lấy phụ đề qua lệnh script").
 const AGY_NOTE = (web: boolean, image: boolean) => `
-Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}${image ? " Tạo ảnh chỉ bằng mcp_synchro_generate_image, không dùng image-generator của Antigravity: chỉ công cụ đó mới giao được ảnh tới người dùng." : ""}`;
+Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}${image ? " Tạo ảnh chỉ bằng mcp_synchro_generate_image, không dùng image-generator của Antigravity: chỉ công cụ đó mới giao được ảnh tới người dùng." : ""}${AGY_WAIT_NOTE}`;
 // Grok CLI: công cụ MCP nằm sau search_tool / use_tool, tên đầy đủ là synchro__<tên>; công cụ dựng sẵn (shell, đọc / sửa tệp) bị tắt.
 const GROK_NOTE = ", tên đầy đủ là synchro__<tên> (ví dụ synchro__load_skill): tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó. Công cụ dựng sẵn của Grok (shell, đọc / sửa tệp) đã tắt ở đây";
 // image: Synchro Code không có generate_image, đừng nhắc tới công cụ không tồn tại.
@@ -347,7 +354,9 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
 // Thẻ duyệt công cụ connector trong lượt chạy qua CLI (cùng cơ chế với hỏi dùng trình duyệt): CLI giữ lời gọi công cụ trong lúc chờ.
 // Chờ tối đa 10 phút rồi coi như chưa được phép; bấm Dừng thì thôi chờ ngay.
 const ASK_WAIT = 10 * 60_000;
-const ASK_LATE = "__late__";
+const ASK_LATE = "__late__", ASK_TYPED = "__typed__";
+// Người dùng nhắn thêm khi thẻ đang chờ: công cụ không chạy, model đọc tin nhắn (ghép ngay sau kết quả này) rồi quyết định lại.
+const TYPED = "Người dùng vừa nhắn thêm thay vì trả lời thẻ duyệt nên công cụ này chưa chạy. Đọc tin nhắn của họ ngay sau đây rồi làm theo; nếu vẫn cần công cụ thì gọi lại với tham số đúng theo tin nhắn đó.";
 // Sau khi được duyệt phải còn ít nhất chừng này để công cụ chạy.
 const TOOL_MIN = 60_000;
 const CALL_CANCELLED = "CLI đã hủy lời gọi này nên công cụ chưa chạy.";
@@ -377,6 +386,8 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const meta = x.calls?.get(c.id);
     if (meta?.cancel?.aborted) return deny(CALL_CANCELLED);
     if (!needsAsk(x, c)) return "allow";
+    // Tin nhắn thêm chưa tới model (vừa gửi, hay thẻ trước vừa khép vì nó): model chưa biết người dùng muốn gì thì chưa hỏi duyệt tiếp.
+    if (inboxWaiting()) return deny(TYPED);
     if (!currentRun()) return deny("Công cụ này cần người dùng duyệt nhưng lượt này không có khung chat để hỏi nên chưa chạy. Hãy báo người dùng nhắc lại yêu cầu trong khung chat để Synchro hỏi, hoặc đổi quyền công cụ thành \"Luôn cho phép\" trong Cài đặt → Connectors.");
     // Lời gọi của CLI gồm cả lúc chờ duyệt: chừa đủ thời gian để công cụ còn chạy được trước khi CLI tự cắt (nhiều thẻ song song thì thẻ sau còn ít thời gian hơn).
     const room = meta ? BRIDGE_CALL_MAX - (Date.now() - meta.at) - TOOL_MIN : ASK_WAIT;
@@ -386,7 +397,8 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const stops = [run, meta?.cancel].filter((v): v is AbortSignal => !!v);
     const wait = waitAnswer(x.uid, id, stops.length > 1 ? AbortSignal.any(stops) : stops[0]);
     const late = setTimeout(() => answerAsk(x.uid, id, { ok: false, note: ASK_LATE }), Math.min(ASK_WAIT, room));
-    progress("ask", JSON.stringify(askOf(x, c, id)));
+    const offMsg = onInbox(() => answerAsk(x.uid, id, { ok: false, note: ASK_TYPED }));
+    progress("ask", JSON.stringify({ ...askOf(x, c, id), until: Date.now() + Math.min(ASK_WAIT, room) }));
     progress("step", "Đang chờ bạn duyệt");
     // Antigravity, Grok: lượt đang chờ người dùng thì nhả chỗ để đoạn chat khác của tài khoản này không phải xếp hàng sau nó.
     x.park?.();
@@ -394,11 +406,13 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const a = await wait;
     x.awaiting = (x.awaiting ?? 1) - 1;
     clearTimeout(late);
+    offMsg();
     const dropped = !!meta?.cancel?.aborted;
-    const timedOut = a.note === ASK_LATE;
-    progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always, chat: !!a.chat, ...(timedOut || dropped ? { gone: true } : {}) }));
+    const timedOut = a.note === ASK_LATE, typed = a.note === ASK_TYPED;
+    progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always, chat: !!a.chat, ...(timedOut || dropped ? { gone: true } : {}), ...(typed ? { typed: true } : {}) }));
     // CLI đã hủy lời gọi trong lúc chờ: không chạy dù người dùng có bấm cho phép, kết quả không còn ai nhận.
     if (dropped) return deny(CALL_CANCELLED);
+    if (typed) return deny(TYPED);
     if (timedOut) return deny("Người dùng chưa trả lời yêu cầu duyệt sau 10 phút nên công cụ chưa chạy. Hãy báo họ biết; nếu vẫn cần thì nhắc lại yêu cầu để Synchro hỏi lại.");
     if (!a.ok) return deny(a.note && a.note !== "Người dùng đã dừng." ? `Người dùng từ chối công cụ này. Lời nhắn của họ: ${a.note}. Làm theo lời nhắn nếu được; đừng tìm cách khác để lách.` : REFUSED);
     if (a.always) { x.sess!.allowAlways(c.name); return "always"; }
@@ -525,12 +539,26 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
     return fail(r.text);
   }
-  const { saved, left } = keepImages(x.uid, r.files, x.outs);
+  // Tên theo lời người dùng; nhiều ảnh trong một lượt (thiết kế nhiều ảnh) không được trùng tên: inputs/ và tham chiếu đều đi theo tên.
+  const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
+  const taken = new Set(x.outs.map((o) => o.name));
+  const named = !asked ? r.files : r.files.map((f, i) => {
+    const ext = /\.[^.]+$/.exec(f.name)?.[0] ?? "";
+    let n = r.files.length > 1 ? i + 1 : 1, name = `${asked}${n > 1 || r.files.length > 1 ? `-${n}` : ""}${ext}`;
+    while (taken.has(name)) name = `${asked}-${++n}${ext}`;
+    taken.add(name);
+    return { ...f, name };
+  });
+  const { saved, left } = keepImages(x.uid, named, x.outs);
+  (x.madeImgs ??= []).push(...saved.map((f) => f.id));
   if (!saved.length) return fail(`${IMG_NAME[r.cli]} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
   const lines = saved.map((f) => `${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`);
-  const send = imagesForModel(r.files.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
-  const notes = [...r.notes, ...(left.length ? [`${left.length} ảnh không lưu được vì hết dung lượng: ${left.map((f) => f.name).join(", ")}.`] : []), ...(send.length < saved.length ? [`${saved.length - send.length} ảnh quá lớn nên không kèm ở đây để bạn xem (tối đa ${IMAGE_MAX_MB()} MB mỗi ảnh vẫn giao được cho người dùng); đừng mô tả các ảnh đó như đã xem.`] : [])];
-  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): đừng chèn đường dẫn hay liên kết.`;
+  const send = imagesForModel(named.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
+  // CLI không phải lúc nào cũng theo đúng tỉ lệ xin: nói cho model biết để không báo sai với người dùng, nhất là ảnh sẽ đặt vào khung có sẵn của thiết kế.
+  const [aw, ah] = (aspect ?? "").split(":").map(Number);
+  const offRatio = aw && ah ? saved.filter((f) => f.w && f.h && Math.abs(f.w / f.h - aw / ah) / (aw / ah) > 0.08) : [];
+  const notes = [...r.notes, ...(offRatio.length ? [`Xin tỉ lệ ${aspect} nhưng nhận được: ${offRatio.map((f) => `${f.name} ${f.w}×${f.h}`).join(", ")}. Nói rõ với người dùng nếu tỉ lệ quan trọng; đưa vào thiết kế thì cắt bằng object-fit, đừng kéo méo.`] : []), ...(left.length ? [`${left.length} ảnh không lưu được vì hết dung lượng: ${left.map((f) => f.name).join(", ")}.`] : []), ...(send.length < saved.length ? [`${saved.length - send.length} ảnh quá lớn nên không kèm ở đây để bạn xem (tối đa ${IMAGE_MAX_MB()} MB mỗi ảnh vẫn giao được cho người dùng); đừng mô tả các ảnh đó như đã xem.`] : [])];
+  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): trong câu trả lời đừng chèn đường dẫn hay liên kết.\nĐưa ảnh vào sản phẩm khi người dùng cần: artifact HTML, React, SVG, slide dùng đúng địa chỉ ${saved.map((f) => genImageUrl(f.id)).join(", ")} trong src hay url(...), Synchro tự nhúng ảnh; run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc inputs/${saved.map((f) => f.name).join(", inputs/")}.`;
   if (!send.length) return { content, is_error: false, used };
   (x.heavy ??= []).push(c.id);
   const [first, ...more] = send;
@@ -605,6 +633,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
   if (c.name === IMAGE_TOOL.name && x.image && !x.sess?.get(c.name)) return runImage(x, c);
+  if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
@@ -667,6 +696,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "search_skills") return "Đang tìm skill phù hợp";
   if (c.name === "run_skill_script") return `Đang chạy script của skill ${n}`;
   if (c.name === "run_code") return `Đang chạy code ${String(c.input?.language ?? "python")}`;
+  if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined) return `Đang đọc tệp dự án ${String(c.input?.file ?? "")}`.trim();
   if (c.name === IMAGE_TOOL.name && x.image) return `Đang tạo ảnh: ${String(c.input?.prompt ?? "").replace(/\s+/g, " ").slice(0, 100)}`;
   if (c.name === "web_search" && x.search) return `Đang tìm trên web: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
@@ -680,7 +710,7 @@ function describe(x: Exec, c: Call) {
 }
 // Công cụ lấy dữ liệu (connector, chạy code, script của skill): kết quả lớn lưu theo tham chiếu và có trong dấu vết của lượt.
 // Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
-const isData = (x: Exec, c: Call) => !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL.name;
+const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL.name;
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
@@ -695,12 +725,13 @@ const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSign
 const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|authorization|cookie|credential/i;
 const argLine = (input: unknown) => { try { return JSON.stringify(input ?? {}, (k, v) => (k && SECRET_KEY.test(k) ? "***" : v)).slice(0, 200); } catch { return ""; } };
 // Công cụ chỉ đọc, chạy lại lượt không gây hại gì. Còn lại (connector ghi, chạy code, thao tác trình duyệt, ghi bộ não) có thể đã làm thay đổi
-// gì đó: lỗi giữa chừng thì không tự chạy lại lượt, kể cả bằng model khác.
-const READ_TOOLS = new Set(["update_plan", "load_skill", "read_skill_file", "search_skills", "read_ref", "read_artifact", "check_artifact", "brain_search", "brain_read", "web_search", "connector_tools", "browser_navigate", "browser_read", "browser_text", "browser_find", "browser_screenshot", "browser_scroll", "browser_wait", "browser_tabs", "browser_console", "browser_downloads"]);
+// gì đó: lỗi giữa chừng thì không tự chạy lại lượt, kể cả bằng model khác. connector_call ở đây là lời gọi không tìm ra công cụ hay tham số hỏng (gọi được thì đã đổi thành tên công cụ thật): chưa chạy gì.
+const READ_TOOLS = new Set(["update_plan", "load_skill", "read_skill_file", "search_skills", "read_ref", "read_artifact", "check_artifact", "brain_search", "brain_read", "web_search", "connector_tools", "connector_reconnect", "connector_call", "browser_navigate", "browser_read", "browser_text", "browser_find", "browser_screenshot", "browser_scroll", "browser_wait", "browser_tabs", "browser_console", "browser_downloads"]);
 function noteEffects(x: Exec, calls: Call[], d: Record<string, Decision>) {
   for (const c of calls) {
     const ct = x.sess?.get(c.name);
-    if (d[c.id] === "deny" || (ct ? ct.tool.annotations?.readOnlyHint === true : READ_TOOLS.has(c.name))) continue;
+    // Công cụ đoán là đọc (get_, list_ không khai báo) cũng chạy không cần duyệt như công cụ đọc: đọc xong gặp lỗi CLI thì Auto vẫn đổi được model.
+    if (d[c.id] === "deny" || (ct ? x.sess!.isRead(c.name) : READ_TOOLS.has(c.name))) continue;
     (x.effects ??= []).push(c.name);
     // Connector ghi, thao tác trên trang thật: máy chủ khởi động lại giữa chừng cũng không được làm lại. Chạy code nằm trong hộp cát của đoạn chat, không tính ở đây.
     if (ct || isBrowserTool(c.name)) markEffect(label(x, c));
@@ -862,7 +893,7 @@ function unwrapConn(x: Exec, c: Call): Call {
   const ct = resolveTool(x.sess.tools, String(c.input?.tool ?? ""));
   if (!ct) return c;
   // Tham số hỏng thì giữ nguyên lời gọi connector_call: runCall báo lỗi cho model, không chạy công cụ với tham số rỗng.
-  const a = callArgs(c.input);
+  const a = callArgs(c.input, ct.tool.inputSchema);
   return "error" in a ? c : { id: c.id, name: ct.fq, input: a.args };
 }
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
@@ -963,9 +994,9 @@ async function healPatch(ad: Adapter, m: unknown[], history: { role: string; con
 
 // Chế độ studio: model là chuyên gia của lĩnh vực, tự chọn skill trong thư viện và làm luôn, không hỏi lại những gì tự quyết được.
 const STUDIO_TASK: Record<Studio, string> = {
-  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG); ảnh chụp hay tranh đặt trong thiết kế thì tạo bằng generate_image.",
-  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF); khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code.",
-  docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code.",
+  design: "Thiết kế (giao diện, trang web, ứng dụng, logo, banner, minh họa, chuyển động). Kết quả là artifact chạy được ngay (HTML, React hoặc SVG); ảnh chụp hay tranh đặt trong thiết kế thì tạo bằng generate_image rồi dùng đúng địa chỉ công cụ đó trả về trong src hay url(...), không để ảnh giữ chỗ.",
+  slides: "Trình bày (bản trình bày, pitch deck, slide báo cáo). Kết quả mặc định là artifact HTML, mỗi slide một <section class=\"slide\"> 16:9 (Synchro tự lo chuyển slide, trình chiếu, xuất PDF), ảnh minh họa tạo bằng generate_image rồi dùng đúng địa chỉ công cụ đó trả về; khi người dùng cần tệp PowerPoint thì tạo .pptx bằng run_code, ảnh đã tạo nằm ở inputs/.",
+  docs: "Tài liệu (báo cáo, đề xuất, kế hoạch, thư, quy trình). Kết quả mặc định là artifact Markdown trình bày đẹp; khi người dùng cần Word hoặc PDF thì tạo tệp bằng run_code. Markdown không hiện ảnh: tài liệu cần ảnh do AI tạo thì làm Word / PDF bằng run_code (ảnh đã tạo nằm ở inputs/) hoặc artifact HTML.",
 };
 // Thư viện lớn hơn số này thì available_skills chỉ có skill chọn lọc đầu thư viện (studioListed), skill hợp yêu cầu của từng lượt đi ở skill_routing (studioPicks), phần còn lại tìm bằng search_skills.
 const STUDIO_DIRECT = 20;
@@ -1217,7 +1248,13 @@ function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean
 const useProfile = (body: Record<string, any>) => !!body.skills && body.feature !== "artifact"; // eslint-disable-line @typescript-eslint/no-explicit-any
 const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
 // Bộ não tổng hợp: kéo vài ghi chú liên quan nhất tới câu hỏi vào tầng động (chat lẫn Synchro Code; không trong đoạn chat ẩn danh / khi tắt Bộ nhớ).
-const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => (useProfile(body) && body.memory !== false && !body.incognito ? brainRecall(u.id, lastUserText(body.messages), conv) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
+// Câu chào, cảm ơn không có gì để nhớ lại. Đo riêng để biết phần chuẩn bị của lượt nằm ở đâu.
+const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!useProfile(body) || body.memory === false || body.incognito || routeTask(routeInput(body)) === "chat") return "";
+  const t0 = Date.now(), out = brainRecall(u.id, lastUserText(body.messages), conv);
+  if (Date.now() - t0 > 20) console.log(`[timing] chat recall=${Date.now() - t0}ms`);
+  return out;
+};
 /** Model tự tra, đọc theo liên kết và ghi vào bộ não (công cụ brain_*), cùng điều kiện với phần ghi chú liên quan. */
 const brainOn = (body: Record<string, any>, u: UserRow) => useProfile(body) && body.memory !== false && !body.incognito && brainReady(u.id); // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Gói subscription: ghi chú liên quan ghép vào cuối tin nhắn mới nhất (CLI chỉ nhận lời nhắc hệ thống ở lượt đầu của phiên). */
@@ -1253,6 +1290,12 @@ function holdNeedTools(out?: (t: string) => void) {
     open = true; out?.(buf);
   };
 }
+// CLI vừa treo hoặc lỗi phía hãng với tài khoản này: chế độ Tự động tránh trong 5 phút (không gói nào khác thì vẫn dùng). Giữ trong bộ nhớ: khởi động lại thì thử lại từ đầu.
+const STALL_MS = 5 * 60_000;
+const stalls = new Map<string, number>();
+export const noteStall = (uid: string, cli: string) => { if (stalls.size > 5000) stalls.clear(); stalls.set(`${uid}:${cli}`, Date.now() + STALL_MS); };
+export const clearStall = (uid: string, cli: string) => { stalls.delete(`${uid}:${cli}`); };
+export const stalledModels = (uid: string, models: string[]) => models.filter((k) => { const cli = subCli(k); return !!cli && (stalls.get(`${uid}:${cli}`) ?? 0) > Date.now(); });
 const prewarmed = new Map<string, number>();
 /** Mở trang: khởi động sẵn tiến trình cho câu chào đầu tiên của người dùng, đúng model và hướng dẫn đường nhanh sẽ dùng. Mỗi người tối đa một lần mỗi phút; không tốn lượt nào của gói. */
 export async function prewarmChat(user: UserRow) {
@@ -1261,14 +1304,20 @@ export async function prewarmChat(user: UserRow) {
   if (now - (prewarmed.get(user.id) ?? 0) < 60_000) return;
   if (prewarmed.size > 2000) prewarmed.clear();
   prewarmed.set(user.id, now);
+  try { warmRecall(user.id); } catch {}
   const { usable } = await usableModels(user);
-  const q: RouteInput = { text: "xin chào", attachments: 0, turns: 1, studio: false };
-  const r = routeModel(q, usable);
-  if (!r || subCli(r.model) !== "claude") return;
   const body = { skills: true, feature: "chat" };
   const pc = capsState(user).caps;
   if (!pc) return;
-  prewarmClaude({ user, model: r.model, effort: r.effort, system: [`${topRule(user.id)}\n\n${DEFAULT_SYSTEM}`, FAST_RULES, contextOf(body, user)].filter(Boolean).join("\n\n") });
+  const system = [`${topRule(user.id)}\n\n${DEFAULT_SYSTEM}`, FAST_RULES, contextOf(body, user)].filter(Boolean).join("\n\n");
+  // Hai kiểu câu mở đầu hay gặp nhất: câu chào, câu hỏi (nỗ lực thấp) và nhờ viết ngắn (nỗ lực vừa). Tiến trình gắn chặt với model và nỗ lực nên mỗi kiểu một tiến trình; cùng model và mức thì chỉ một.
+  const seen = new Set<string>();
+  for (const text of ["xin chào", "viết email xin nghỉ phép"]) {
+    const r = routeModel({ text, attachments: 0, turns: 1, studio: false }, usable);
+    if (!r || subCli(r.model) !== "claude" || seen.has(`${r.model}|${r.effort}`)) continue;
+    seen.add(`${r.model}|${r.effort}`);
+    prewarmClaude({ user, model: r.model, effort: r.effort, system });
+  }
 }
 const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
@@ -1285,7 +1334,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   // Tên model như ở bộ chọn model ("Claude Sonnet 4.5"), không phải mã thô ("claude-sonnet-4-5-20250929").
   const shown = (k: string) => groups.flatMap((g) => g.models).find((m) => m.key === k)?.name ?? k.split("/").pop();
   const q = routeInput(body);
-  const r = routeModel(q, usable.length ? usable : allowed);
+  const r = routeModel(q, usable.length ? usable : allowed, { avoid: stalledModels(c.user.id, usable.length ? usable : allowed) });
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
@@ -1302,6 +1351,8 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   const out = new Set<string>();
   while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !runSignal()?.aborted && tried.length < 5) {
     const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
+    // Treo, lỗi phía hãng: nhớ vài phút. Mỗi tin nhắn tiếp theo từng chọn lại đúng model đang treo, chờ thêm 60-90 giây rồi mới chuyển.
+    if ((j0.stalled || res.status === 504 || res.status >= 500) && !j0.busy && !j0.usageLimit && subCli(used)) noteStall(c.user.id, subCli(used)!);
     if (j0.usageLimit || j0.partialWork) break;
     // Hết hạn mức riêng của một model thì các model khác cùng gói vẫn thử được; lỗi khác (đăng nhập, treo, hết cả gói) thì bỏ cả CLI đó trong lượt này.
     if (j0.quota !== "model" && subCli(used)) out.add(subCli(used)!);
@@ -1314,6 +1365,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
     used = next; tried.push(next);
     res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
   }
+  if (res.status === 200 && subCli(used)) clearStall(c.user.id, subCli(used)!);
   const j = await (await withSwitch(res, body, c.user, tried)).json().catch(() => ({}));
   // Hết hạn mức ở mọi gói đã kết nối: nói thẳng là hết cả và lúc sớm nhất có lại (thẻ lỗi hiện giờ theo múi giờ của người dùng), đừng để người dùng tưởng đổi gói khác là được.
   if (res.status === 429 && (j.planLimit || j.quota)) {
@@ -1370,8 +1422,11 @@ function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-l
     prevAsk ??= t;
     if (!isAck(t)) { prevAsk = t; break; }
   }
+  // Tin ngay trước là thẻ hỏi lại: thẻ một câu chỉ gửi đúng chữ của lựa chọn ("Phương án 2"), nên phải nhìn tin của model mới biết đó là câu trả lời.
+  const lastAi = [...msgs].reverse().find((m) => m?.role === "assistant");
+  const aiText = typeof lastAi?.content === "string" ? lastAi.content : Array.isArray(lastAi?.content) ? (lastAi!.content as { text?: string }[]).map((x) => x?.text ?? "").join("\n") : "";
   return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, files, docChars,
-    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk };
+    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk, answeredAsk: /```ask\b/.test(aiText) };
 }
 
 /** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
@@ -1422,7 +1477,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
     const cli = subCli(model)!;
     const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
-    let bridge: { url: string; close: () => void; alive: () => number; park: () => void; onPark: (f: () => void) => void } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "", route = "";
+    let bridge: { url: string; close: () => void; alive: () => number; park: () => void; onPark: (f: () => void) => void; pendingJobs: () => { id: string; name: string }[] } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "", route = "";
     const usedAll: ToolRun["used"][] = [];
     let bridged = 0;
     const webs = new Map<string, { title: string; url: string }>();
@@ -1449,13 +1504,14 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const arts = !!pc.art, check = arts && runner() === "workspace";
         // Tạo ảnh: lượt chat thường của mọi model, gói nào đăng nhập thì công cụ tự chọn (Synchro Code có cách làm việc riêng).
         const image = feature !== "code";
-        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [IMAGE_TOOL] : []), PLAN_TOOL];
-        const xx: Exec = { image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
+        const pdocs = feature !== "code" && !!project && projectDocsLong(c.user.id, project);
+        const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [IMAGE_TOOL] : []), PLAN_TOOL];
+        const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
-        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); } });
+        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
         xx.park = bridge.park;
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
@@ -1532,6 +1588,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         let next: string;
         if (more.length) { for (const t of more) progress("steer", t); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
         else if (j.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(j.denied); }
+        else if (bridge?.pendingJobs().length) next = `Còn công cụ chưa lấy kết quả (${bridge.pendingJobs().map((p) => `${p.name}: job_id ${p.id}`).join("; ")}). Gọi wait_for_result với từng job_id tới khi có kết quả thật rồi mới trả lời tiếp; đừng báo thất bại khi chưa có kết quả.`;
         else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
         else break;
         sayOut(x, said);
@@ -1590,7 +1647,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const studio = skills && can(c.user, "skills") ? studioOf(body.studio) : null;
   const st = studio ? studioSkills(c.user.id, studio) : null;
   const image = !!skills && t.kind !== "mock" && feature !== "code";
-  const capSys = cs ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net, cs.caps.web) : "", image ? IMAGE_RULES : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
+  const pdocs = !!skills && t.kind !== "mock" && feature !== "code" && !!project && projectDocsLong(c.user.id, project);
+  const capSys = cs ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net, cs.caps.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
   // Bàn trộn ngữ cảnh (trình duyệt gửi): tắt khối tầng động, chỉ gửi N tin gần nhất, tóm tắt các lượt cũ đã nén.
   const mixer = (body.mixer && typeof body.mixer === "object" ? body.mixer : {}) as { artifacts?: unknown; tools?: unknown; recent?: unknown };
   const base = cleanBase(body.artBase);
@@ -1625,11 +1683,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [IMAGE_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
+      const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [IMAGE_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       if (sess) announceOffline(x, messages);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)

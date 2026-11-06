@@ -205,9 +205,11 @@ const totalTurns = (dir) => Object.values(readJson(path.join(dir, "mock-sessions
 const chunks = (t, n = 12) => Array.from({ length: Math.ceil(t.length / n) }, (_, i) => t.slice(i * n, i * n + n));
 
 // Gọi cầu nối MCP của Synchro như CLI thật (Streamable HTTP, JSON-RPC): initialize → tools/list → (tools/call).
-async function mcp(url, call) {
+// limitMs: CLI tự cắt mỗi lần chờ công cụ sau chừng này (agy thật: khoảng 190 giây), model thấy lỗi dù công cụ vẫn chạy.
+async function mcp(url, call, o = {}) {
   const rpc = async (method, params, id) => {
-    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
+    const lim = method === "tools/call" && o.limitMs ? { signal: AbortSignal.timeout(o.limitMs) } : {};
+    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }), ...lim });
     // Công cụ chạy lâu: cầu nối trả qua luồng SSE; kết quả là sự kiện cuối có đúng id của yêu cầu (bỏ qua nhịp giữ kết nối, thông báo tiến độ).
     if ((r.headers.get("content-type") ?? "").includes("text/event-stream")) {
       const msgs = (await r.text()).split("\n\n").flatMap((b) => b.split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6))));

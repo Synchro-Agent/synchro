@@ -10,6 +10,7 @@ import { db, isAdmin, type UserRow } from "./authstore";
 import { OneShotErr, oneShot, pickModel, usableModels } from "./ai/anymodel";
 import { listSkills } from "./skillstore";
 import { pluginSkillsOf } from "./plugins";
+import { timeLimit } from "./safefetch";
 
 export type Verdict = "junk" | "useless" | "ok" | "unknown";
 // key: "u:<tên>" (skill của người dùng) hoặc "p:<id thư viện>:<tên>". where: tên thư viện ("" với skill của người dùng).
@@ -114,7 +115,7 @@ export function parseVerdicts(raw: string, n: number): Map<number, { verdict: (t
 const fatal = (e: unknown) => e instanceof OneShotErr && [400, 401, 402, 403, 429, 503].includes(e.status);
 async function judge(user: UserRow, job: Run, b: Src[]) {
   for (let t = 0; ; t++) {
-    const signal = AbortSignal.any([job.ctl.signal, AbortSignal.timeout(TIMEOUT)]);
+    const signal = timeLimit(TIMEOUT, job.ctl.signal);
     try {
       const raw = await oneShot(user, job.model, SYSTEM(job.lang), [{ role: "user", content: ask(b) }], { maxTokens: 3000, feature: "skill-scan", signal });
       const r = parseVerdicts(raw, b.length);

@@ -48,9 +48,9 @@ export function applyEvent(w: Work, ev: RunEv): Work {
     try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, conn: a.conn, about: a.about, destructive: a.destructive, state: "wait" }); } catch {}
   } else if (ev.kind === "asked") {
     try {
-      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean; chat?: boolean; gone?: boolean };
+      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean; chat?: boolean; gone?: boolean; typed?: boolean };
       const i = parts.findIndex((p) => p.k === "ask" && p.id === a.id);
-      if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" };
+      if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.typed ? "typed" : a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" };
     } catch {}
   } else if (ev.kind === "plans") {
     try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}

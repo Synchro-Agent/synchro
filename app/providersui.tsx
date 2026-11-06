@@ -18,12 +18,13 @@ type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; 
 export type EngineStatus = { plan?: string | null; cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
 
 // cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API).
-// img: khả năng tạo ảnh của gói, chỉ nói điều đã kiểm chứng (ai/imagegen.ts): Antigravity đã chạy thật, Grok và ChatGPT chưa.
+// plan: tài khoản cần có. Chỉ Claude Code đòi gói trả phí; ChatGPT, Gemini, Grok dùng được tài khoản miễn phí.
+// img: khả năng tạo ảnh, chỉ nói điều đã kiểm chứng trên tài khoản thật: ChatGPT Plus, Grok Pro và Antigravity miễn phí đều ra ảnh thật.
 const VENDORS: { id: string; cli: Cli | null; name: string; vendor: string; plan: string; via: string; img?: string }[] = [
   { id: "anthropic", cli: "claude", name: "Claude", vendor: "Anthropic", plan: "Claude Pro or Max plan", via: "Claude Code" },
-  { id: "openai", cli: "codex", name: "ChatGPT", vendor: "OpenAI", plan: "ChatGPT Plus, Pro or Business plan", via: "Codex CLI", img: "May create images on paid plans. The Free plan can't." },
-  { id: "google", cli: "agy", name: "Gemini", vendor: "Google", plan: "Google AI Pro or Ultra plan", via: "Antigravity CLI", img: "Creates images in chat when you ask for a photo, illustration, logo or poster." },
-  { id: "xai", cli: "grok", name: "Grok", vendor: "xAI", plan: "SuperGrok or X Premium+ plan", via: "Grok CLI", img: "May create images on paid plans, depending on your xAI account limits." },
+  { id: "openai", cli: "codex", name: "ChatGPT", vendor: "OpenAI", plan: "ChatGPT account, free or paid", via: "Codex CLI", img: "Creates images in chat. Tested on ChatGPT Plus; the Free plan has no image tool." },
+  { id: "google", cli: "agy", name: "Gemini", vendor: "Google", plan: "Google account, free or paid", via: "Antigravity CLI", img: "Creates images in chat when you ask for a photo, illustration, logo or poster. Tested on a free account." },
+  { id: "xai", cli: "grok", name: "Grok", vendor: "xAI", plan: "Grok account, free or paid", via: "Grok CLI", img: "Creates images in chat. Tested on Grok Pro; limits depend on your xAI account." },
   { id: "deepseek", cli: null, name: "DeepSeek", vendor: "DeepSeek", plan: "", via: "" },
 ];
 type Vendor = (typeof VENDORS)[number];
@@ -156,7 +157,7 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
           <ol className="pv-steps">
             <li>
               <b>{`Open the ${v.name} sign-in page`}</b>
-              <span>{v.cli === "codex" ? "Sign in to ChatGPT, then enter the one-time code below." : v.cli === "grok" ? "Sign in with the account that has your SuperGrok or X Premium+ plan, then confirm the code below." : `Sign in with the account that has your ${v.plan.replace(/ plan$/, "")}, then copy the code the page shows you.`}</span>
+              <span>{v.cli === "codex" ? "Sign in to ChatGPT, then enter the one-time code below." : v.cli === "grok" ? "Sign in to Grok, then confirm the code below." : v.cli === "agy" ? "Sign in with your Google account, then copy the code the page shows you." : `Sign in with the account that has your ${v.plan.replace(/ plan$/, "")}, then copy the code the page shows you.`}</span>
               {login.url && <a className="btn dark pv-open" href={login.url} target="_blank" rel="noreferrer noopener">Open sign-in page<I.External size={12} /></a>}
             </li>
             {login.userCode && (

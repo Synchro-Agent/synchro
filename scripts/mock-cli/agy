@@ -53,6 +53,7 @@ async function agyImage(prompt, conv) {
   if (m.mode === "saidquota") return done("I couldn't generate the image, the quota is exhausted.");
   if (m.mode === "none") return done("NO_IMAGE_TOOL");
   if (m.mode === "text") return done("Đã tạo xong ảnh quả táo đỏ, rất đẹp.");
+  if (m.mode === "refuse") return done("Sorry, I can't create an image of a real person because of our content policy.");
   if (m.mode === "other") return done(`[ảnh](${m.otherPath})`);
   fs.mkdirSync(dir, { recursive: true });
   if (m.mode === "symlink") { fs.symlinkSync(m.otherPath, path.join(dir, "leak.jpg")); return done("xong"); }
@@ -170,8 +171,15 @@ async function agyImage(prompt, conv) {
         await C.sleep(100);
         return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: "Mình sẽ xem cách dùng các công cụ trình duyệt trước.", error: "", duration_seconds: 0.3, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: 12 } }));
       } else {
-        const r = await C.mcp(srv.serverUrl, ask).catch((e) => ({ error: { message: String(e) } }));
-        const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n");
+        // toolLimitMs (mock-cli.json): cắt mỗi lần chờ công cụ như agy thật. Công cụ trả job_id thì model gọi wait_for_result tới khi có kết quả; [mock:nowait] thì model bỏ lửng, kết thúc lượt.
+        const limit = { limitMs: C.cfg.toolLimitMs };
+        const callOnce = (c) => C.mcp(srv.serverUrl, c, limit).catch((e) => ({ error: { message: String(e) } }));
+        const textOf = (r) => (r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n"));
+        // Được nhắc lấy kết quả còn thiếu: job_id nằm trong lời nhắc, model gọi wait_for_result thay vì công cụ ban đầu.
+        const nudgeJob = prompt.includes("Còn công cụ chưa lấy kết quả") ? /job_id (job_\w+)/.exec(prompt.split("Còn công cụ chưa lấy kết quả").pop()) : null;
+        let r = await callOnce(nudgeJob ? { name: "wait_for_result", args: { job_id: nudgeJob[1] } } : ask), out = textOf(r), waits = 0;
+        for (let m; !prompt.includes("[mock:nowait]") && (m = /job_id: (job_\w+)/.exec(out)) && waits < 50; waits++) out = textOf(r = await callOnce({ name: "wait_for_result", args: { job_id: m[1] } }));
+        if (waits) note += ` [đã chờ ${waits} lần]`;
         note += ` [đã dùng ${ask.name}${direct ? "" : " qua CallMcpTool"}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
       }
     }
@@ -188,6 +196,8 @@ async function agyImage(prompt, conv) {
     }
     const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(seen) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : ""));
     await C.sleep(200);
+    // #longtext: câu dài có đường dẫn máy chủ, để kiểm tra chữ hiện từng phần.
+    if (prompt.includes("#longtext")) { const tail = `${"Đây là một đoạn văn dài để thử chữ hiện từng phần trên giao diện. ".repeat(40)} Tệp ở ${process.cwd()}/anh.png. ${"Đoạn cuối của câu trả lời dài. ".repeat(10)}`; return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: tail, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 } })); }
     return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: text, error: "", duration_seconds: 0.4, num_turns: 1, usage: { input_tokens: prompt.length, output_tokens: text.length, thinking_tokens: 12, cache_read_tokens: 0, total_tokens: prompt.length + text.length + 12 } }));
   }
   if (a.length === 0) {

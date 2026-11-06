@@ -28,7 +28,7 @@ try {
   const all = r.stdout + r.stderr;
   ok(!r.signal, "không treo", r.signal);
 
-  for (const c of ["tools listed", "nested args", "$ref args", "resume keeps context", "tools after resume", "names over 50 chars", "long hold", "approval hold"]) {
+  for (const c of ["tools listed", "nested args", "$ref args", "resume keeps context", "tools after resume", "names over 50 chars", "web search", "long hold", "approval hold"]) {
     const v = c === "$ref args" ? (r.stdout.split("\n").find((l) => l.startsWith("$ref args")) ?? "").replace("$ref args", "").trim().split(/\s+/) : (r.stdout.split("\n").find((l) => l.startsWith(c)) ?? "").slice(c.length).trim().split(/\s+/);
     // Thứ tự cột: claude codex agy grok.
     ok(v[0] === "pass" && v[1] === "pass" && v[2] === "skip" && v[3] === "pass", `${c}: chạy được trên 3 CLI đã đăng nhập, agy chưa đăng nhập thì skip`, `${v.join(" ")}\n${r.stdout}`);

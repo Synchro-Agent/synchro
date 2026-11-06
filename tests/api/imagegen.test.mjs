@@ -97,12 +97,22 @@ try {
 
     const N = "u_none";
     const n = await gen(N);
-    ok(!n.ok && n.kind === "noplan" && n.providers && /Antigravity/.test(n.text) && /Grok và ChatGPT có thể/.test(n.text) && /Cài đặt → Providers/.test(n.text), "chưa đăng nhập gói nào: nói gói nào tạo được, chỉ tới Providers", n.text);
+    ok(!n.ok && n.kind === "noplan" && n.providers && /Antigravity/.test(n.text) && /ChatGPT Plus và Grok Pro/.test(n.text) && /Cài đặt → Providers/.test(n.text), "chưa đăng nhập gói nào: nói gói nào tạo được, chỉ tới Providers", n.text);
 
     const T = "u_text"; signIn(T, ["agy"]);
     mode(T, "agy", { mode: "text" });
     const t = await gen(T);
     ok(!t.ok && t.tried[0].kind === "nofile", "CLI nói đã tạo mà không có tệp: không báo có ảnh", t);
+    ok(t.tried[0].detail && t.text.includes(t.tried[0].detail), "câu trả lời của CLI đi kèm lý do, không bị bỏ", t.text);
+    ok(!/gói Free|hồi hạn mức/.test(t.text), "không khuyên chờ hạn mức khi không phải hết hạn mức", t.text);
+    const R = "u_refuse"; signIn(R, ["agy"]);
+    mode(R, "agy", { mode: "refuse" });
+    const rf = await gen(R);
+    ok(!rf.ok && rf.kind === "refused" && /content policy/.test(rf.text) && /đổi mô tả/.test(rf.text) && !/thử lại sau ít phút/.test(rf.text), "bị từ chối: kèm câu của CLI, khuyên đổi mô tả chứ không khuyên thử lại", rf.text);
+    const FO = "u_free_only"; signIn(FO, ["codex"]);
+    mode(FO, "codex", { plan: "free" });
+    const fo = await gen(FO);
+    ok(!fo.ok && !/hồi hạn mức/.test(fo.text) && /Cài đặt → Providers/.test(fo.text), "chỉ có gói Free: không bảo chờ hạn mức, chỉ đường sang gói khác", fo.text);
     mode(T, "agy", { mode: "fail" });
     const e = await gen(T);
     ok(!e.ok && /upstream connection reset/.test(e.text), "lỗi khác: giữ chi tiết để người dùng biết", e.text);

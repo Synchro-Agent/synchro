@@ -3,7 +3,7 @@
 //  - modern (2026-07-28): không có phiên, mỗi request mang phiên bản + khả năng trong _meta và header MCP-Protocol-Version / Mcp-Method / Mcp-Name.
 //  - legacy (2025-03-26 … 2025-11-25): Streamable HTTP, bắt tay initialize rồi gửi kèm Mcp-Session-Id.
 //  - sse (2024-11-05, đã ngừng khuyến nghị): mở luồng GET, nhận sự kiện "endpoint", gửi POST tới endpoint đó, kết quả về qua luồng.
-import { downText, retryAfterMs, safeFetch, TempFail } from "./safefetch";
+import { downText, retryAfterMs, safeFetch, TempFail, timeLimit } from "./safefetch";
 import type { ServerIcon } from "./connicons";
 
 export const MODERN = "2026-07-28";
@@ -155,11 +155,13 @@ export class McpClient {
   era?: Era;
   serverName?: string;
   serverIcons?: ServerIcon[];
+  /** Máy chủ báo danh sách công cụ vừa đổi (notifications/tools/list_changed trên luồng đang mở). */
+  onToolsChanged?: () => void;
   private version = LEGACY;
   private session?: string;
   private ready = false;
   private nextId = 1;
-  private sse?: { endpoint: string; ctl: AbortController; pending: Map<string | number, (m: Rpc) => void>; closed?: Error; last: number };
+  private sse?: { endpoint: string; ctl: AbortController; pending: Map<string | number, (m: Rpc | Error) => void>; closed?: Error; last: number };
   // Thế hệ đọc từ cơ sở dữ liệu có thể đã cũ (hãng nâng cấp máy chủ): gặp lỗi bắt tay thì dò lại một lần.
   private saved: boolean;
 
@@ -190,7 +192,7 @@ export class McpClient {
       const idle = o.idle ? new AbortController() : null;
       let timer: ReturnType<typeof setTimeout> | undefined;
       // Chỉ tính thời gian im lặng sau khi đã có header: máy chủ trả JSON thì chỉ có header lúc công cụ chạy xong.
-      const beat = () => { if (!idle) return; clearTimeout(timer); timer = setTimeout(() => idle.abort(new TempFail("Máy chủ im lặng quá lâu khi đang chạy công cụ.")), o.idle); };
+      const beat = () => { if (!idle) return; clearTimeout(timer); timer = setTimeout(() => idle.abort(new TempFail("Máy chủ im lặng quá lâu khi đang chạy công cụ.", 0, undefined, true)), o.idle); };
       try {
         const signal = idle ? (o.signal ? AbortSignal.any([o.signal, idle.signal]) : idle.signal) : o.signal;
         res = await safeFetch(url, { method: "POST", headers: this.headers(extra), body: JSON.stringify(msg), timeout: o.timeout, secret: this.secret, signal });
@@ -214,6 +216,7 @@ export class McpClient {
             try { m = JSON.parse(ev.data); } catch { continue; }
             if (m.id === msg.id && (m.result !== undefined || m.error)) return { status: res.status, reply: m, headers: res.headers };
             if (m.method && m.id !== undefined) this.answer(url, m, extra);
+            else if (m.method === "notifications/tools/list_changed") this.onToolsChanged?.();
           }
           return { status: res.status, headers: res.headers };
         }
@@ -224,7 +227,7 @@ export class McpClient {
       } catch (e) {
         // Mất mạng hay quá giờ giữa chừng; đọc luồng bị ngắt cũng là lỗi tạm thời.
         const stopped = !!o.signal?.aborted;
-        if (!stopped && !(e instanceof McpError) && !(e instanceof TempFail) && (idle?.signal.aborted || res)) e = (idle?.signal.reason as Error) ?? new TempFail(`Kết nối tới ${new URL(url).host} bị ngắt giữa chừng.`);
+        if (!stopped && !(e instanceof McpError) && !(e instanceof TempFail) && (idle?.signal.aborted || res)) e = (idle?.signal.reason as Error) ?? ((e as Error).name === "TimeoutError" ? new TempFail("Máy chủ phản hồi quá lâu.", 0, undefined, true) : new TempFail(`Kết nối tới ${new URL(url).host} bị ngắt giữa chừng.`));
         if (o.retry && i < RETRIES && e instanceof TempFail && !stopped && !(o.lateNoRetry && e.timedOut)) { await sleep(1000 * 3 ** i, o.signal); continue; }
         throw e;
       } finally { clearTimeout(timer); }
@@ -308,8 +311,9 @@ export class McpClient {
     if (res.status === 401 || res.status === 403) { await res.body?.cancel(); throw this.authError(res.status, res.headers.get("www-authenticate") ?? ""); }
     if (isDown(res.status)) { await res.body?.cancel(); throw new TempFail(this.downMsg(res.status), res.status); }
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) { await res.body?.cancel(); throw new McpError(`Máy chủ trả về lỗi ${res.status}.`, "protocol", res.status); }
-    const state = { endpoint: "", ctl, pending: new Map<string | number, (m: Rpc) => void>(), last: Date.now() } as NonNullable<McpClient["sse"]>;
+    const state = { endpoint: "", ctl, pending: new Map<string | number, (m: Rpc | Error) => void>(), last: Date.now() } as NonNullable<McpClient["sse"]>;
     this.sse = state;
+    let opened = false;
     const endpoint = new Promise<string>((ok, fail) => {
       const t = setTimeout(() => fail(new McpError("Máy chủ không gửi địa chỉ endpoint.", "protocol")), 15_000);
       (async () => {
@@ -319,18 +323,20 @@ export class McpClient {
               const u = new URL(ev.data.trim(), this.url);
               // Endpoint phải cùng nguồn với máy chủ, không cho chuyển dữ liệu sang nơi khác.
               if (u.origin !== new URL(this.url).origin) { fail(new McpError("Endpoint của máy chủ không cùng tên miền.", "protocol")); ctl.abort(); return; }
-              clearTimeout(t); ok(u.toString());
+              opened = true; clearTimeout(t); ok(u.toString());
               continue;
             }
             let m: Rpc;
             try { m = JSON.parse(ev.data); } catch { continue; }
             if (m.id !== undefined && (m.result !== undefined || m.error)) { state.pending.get(m.id)?.(m); state.pending.delete(m.id); }
+            else if (m.method === "notifications/tools/list_changed") this.onToolsChanged?.();
             else if (m.method && m.id !== undefined && state.endpoint) this.answer(state.endpoint, m, {});
           }
-        } catch (e) { if (!ctl.signal.aborted) state.closed = e as Error; }
-        state.closed ??= new McpError("Máy chủ đã đóng kết nối.", "protocol");
+        } catch (e) { if (!ctl.signal.aborted) state.closed = e instanceof McpError ? e : new TempFail(`Kết nối tới ${new URL(this.url).host} bị ngắt giữa chừng.`); }
+        // Đã bắt tay rồi mà luồng đứt là lỗi tạm thời, lời gọi đang chờ có thể đã chạy ở phía hãng (call() báo "không rõ kết quả" với công cụ ghi). Chưa có endpoint mới là máy chủ không nói đúng chuẩn.
+        state.closed ??= opened ? new TempFail(`Kết nối tới ${new URL(this.url).host} bị ngắt giữa chừng.`) : new McpError("Máy chủ đã đóng kết nối.", "protocol");
         clearTimeout(t); fail(state.closed);
-        for (const f of state.pending.values()) f({ jsonrpc: "2.0", error: { code: -32000, message: state.closed.message } });
+        for (const f of [...state.pending.values()]) f(state.closed);
         state.pending.clear();
       })();
     });
@@ -358,7 +364,7 @@ export class McpClient {
         const f = () => stop(o.signal!.reason ?? new DOMException("Đã dừng", "AbortError"));
         if (o.signal.aborted) f(); else { o.signal.addEventListener("abort", f, { once: true }); off = () => o.signal!.removeEventListener("abort", f); }
       }
-      s.pending.set(id, (m) => { end(); ok(m); });
+      s.pending.set(id, (m) => { if (m instanceof Error) stop(m); else { end(); ok(m); } });
     });
     reply.catch(() => {});
     let r: Response;
@@ -375,7 +381,7 @@ export class McpClient {
   // down: có bước gặp lỗi tạm thời (429, 5xx, mất mạng): máy chủ đang gặp sự cố chứ chưa thể kết luận "không phải MCP".
   // denied: có bước bị từ chối hẳn (403); bước khác vẫn có thể được (máy chủ chỉ chặn một kiểu gọi), không bước nào được thì mới báo đúng lý do này.
   private async detect(signal?: AbortSignal) {
-    const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(DETECT_MS)]) : AbortSignal.timeout(DETECT_MS);
+    const stop = timeLimit(DETECT_MS, signal);
     const probe: PostOpts = { timeout: PROBE_MS, retry: true, lateNoRetry: true, signal: stop };
     let down: TempFail | null = null, denied: McpError | null = null;
     const note = (e: unknown) => {
@@ -427,12 +433,13 @@ export class McpClient {
       return this.once(method, params, o, tool);
     }
   }
-  // Công cụ chỉ đọc, danh sách: gặp lỗi tạm thời thì thử lại một lần như đường Streamable HTTP.
+  // Công cụ chỉ đọc, danh sách: gặp lỗi tạm thời thì thử lại một lần như đường Streamable HTTP. Luồng vừa đứt thì mở lại trước khi gửi.
   private async sseSendRetry(method: string, params: Record<string, unknown>, o: PostOpts): Promise<Sent> {
     try { return await this.sseSend(method, params, o); }
     catch (e) {
-      if (!o.retry || !(e instanceof TempFail) || o.signal?.aborted) throw e;
+      if (!o.retry || !(e instanceof TempFail) || o.signal?.aborted || (o.lateNoRetry && e.timedOut)) throw e;
       await sleep(1000, o.signal);
+      if (this.sse?.closed) { this.ready = false; await this.sseOpen({ signal: o.signal }); }
       return this.sseSend(method, params, o);
     }
   }
@@ -444,7 +451,12 @@ export class McpClient {
       // Máy chủ báo phiên bản không hỗ trợ (đã lưu nhầm thế hệ): dò lại một lần.
       if (r.reply?.error?.code === -32022 && this.saved) { this.forget(); return this.once(method, params, o, tool); }
     } else if (this.era === "legacy") r = await this.legacy(method, params, o);
-    else { if (!this.ready) await this.sseOpen({ signal: o.signal }); r = await this.sseSendRetry(method, params, o); }
+    else {
+      // Luồng đã đứt từ lời gọi trước: lời gọi này chưa gửi đi nên mở lại được, kể cả với công cụ ghi.
+      if (this.sse?.closed) this.ready = false;
+      if (!this.ready) await this.sseOpen({ signal: o.signal });
+      r = await this.sseSendRetry(method, params, o);
+    }
     // Máy chủ đang lỗi (429, 5xx) mà chưa có kết quả: sự cố tạm thời phía nhà cung cấp.
     if (isDown(r.status) && !r.reply) throw new TempFail(this.downMsg(r.status), r.status, retryAfterMs(r.headers.get("retry-after")));
     if (!r.reply) throw new McpError(r.status >= 400 ? `Máy chủ MCP trả về lỗi ${r.status}.` : "Máy chủ MCP không trả lời.", "protocol", r.status);
@@ -475,7 +487,8 @@ export class McpClient {
 
   // Chỉ gọi lại khi máy chủ khai báo rõ là không làm thay đổi dữ liệu (chỉ đọc, hoặc idempotent): công cụ ghi gửi lại có thể làm hai lần, nên không dựa vào đoán theo tên.
   callTool(tool: McpTool, args: Record<string, unknown>, o: CallOpts = {}) {
-    return this.request("tools/call", { name: tool.name, arguments: args }, { timeout: o.timeout ?? TOOL_BUDGET, idle: o.idle ?? TOOL_IDLE, signal: o.signal, retry: tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true }, tool);
+    // Quá giờ thì không gọi lại: hạn đã là cả phần thời gian CLI còn chờ được, gọi lại sẽ vượt hạn đó và CLI tự cắt trước khi Synchro kịp trả lời.
+    return this.request("tools/call", { name: tool.name, arguments: args }, { timeout: o.timeout ?? TOOL_BUDGET, idle: o.idle ?? TOOL_IDLE, signal: o.signal, retry: tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true, lateNoRetry: true }, tool);
   }
 
   // Đóng phiên: xóa phiên đời cũ (nếu có), đóng luồng SSE.

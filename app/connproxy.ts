@@ -58,41 +58,54 @@ export function rankTools<T extends ToolLike>(tools: T[], query: string, connect
     if (full && words.length > 1) score += 8;
     return { t, i, score };
   }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score || a.t.tool.name.length - b.t.tool.name.length || a.i - b.i);
-  return { hits: scored.slice(0, top).map((x) => x.t), note, more: 0 };
+  // Cùng cách phân trang với query="*": không có offset thì model tưởng công cụ thứ 9 trở đi không tồn tại.
+  return { hits: scored.slice(offset, offset + top).map((x) => x.t), note, more: Math.max(0, scored.length - offset - top) };
 }
 
 // ---- schema gọn: giữ đúng JSON, required đứng đầu, đủ tên và kiểu mọi tham số ----
 type Obj = Record<string, unknown>;
-const ENUM_MAX = 20;
-function slimProp(v: unknown, depth: number, desc: boolean): unknown {
+const ENUM_MAX = 20, DESC_MAX = 200, DEPTH_MAX = 5, ANY_MAX = 6;
+// Khóa giữ nguyên ở mọi mức: quyết định giá trị có hợp lệ không, ngắn nên không đáng bỏ.
+const KEEP = ["type", "format", "const", "default", "minimum", "maximum", "pattern", "minLength", "maxLength", "minItems", "maxItems"];
+// Khóa không ảnh hưởng tới lời gọi: bỏ đi không tính là mất chi tiết.
+const HARMLESS = new Set(["title", "$comment", "$schema", "examples", "example", "deprecated", "readOnly", "writeOnly"]);
+// lost: có chi tiết không còn trong bản gọn. Báo thật để model biết phải xem đủ định nghĩa, không đoán rồi bị hãng từ chối hay ghi sai dạng.
+type Slim = { lost: boolean };
+function slimProp(v: unknown, depth: number, desc: boolean, n: Slim): unknown {
   if (!v || typeof v !== "object" || Array.isArray(v)) return v;
   const p = v as Obj, out: Obj = {};
-  for (const k of ["type", "format", "const", "default", "minimum", "maximum"]) if (p[k] !== undefined && typeof p[k] !== "object") out[k] = p[k];
+  for (const k of KEEP) if (p[k] !== undefined && typeof p[k] !== "object") out[k] = p[k];
   if (Array.isArray(p.type)) out.type = p.type;
-  if (desc && depth === 0 && typeof p.description === "string") out.description = p.description.slice(0, 200);
-  if (Array.isArray(p.enum)) { out.enum = p.enum.slice(0, ENUM_MAX); if (p.enum.length > ENUM_MAX) out.enum_total = p.enum.length; }
-  for (const k of ["anyOf", "oneOf", "allOf"]) if (Array.isArray(p[k])) out[k] = (p[k] as unknown[]).slice(0, 6).map((x) => slimProp(x, depth + 1, false));
-  if (p.items) out.items = slimProp(p.items, depth + 1, false);
+  if (desc && depth === 0 && typeof p.description === "string") { out.description = p.description.slice(0, DESC_MAX); if (p.description.length > DESC_MAX) n.lost = true; }
+  if (Array.isArray(p.enum)) { out.enum = p.enum.slice(0, ENUM_MAX); if (p.enum.length > ENUM_MAX) { out.enum_total = p.enum.length; n.lost = true; } }
+  for (const k of ["anyOf", "oneOf", "allOf"]) if (Array.isArray(p[k])) { out[k] = (p[k] as unknown[]).slice(0, ANY_MAX).map((x) => slimProp(x, depth + 1, false, n)); if ((p[k] as unknown[]).length > ANY_MAX) n.lost = true; }
+  if (p.items) out.items = slimProp(p.items, depth + 1, false, n);
+  if (p.additionalProperties !== undefined) out.additionalProperties = slimProp(p.additionalProperties, depth + 1, false, n);
   if (p.properties && typeof p.properties === "object") {
-    if (depth >= 3) out.properties = Object.fromEntries(Object.keys(p.properties).slice(0, 60).map((k) => [k, {}]));
-    else out.properties = orderProps(p, depth + 1, false);
+    if (depth >= DEPTH_MAX) { out.properties = Object.fromEntries(Object.keys(p.properties).slice(0, 60).map((k) => [k, {}])); n.lost = true; }
+    else out.properties = orderProps(p, depth + 1, false, n);
     if (Array.isArray(p.required)) out.required = p.required;
   }
+  for (const k of Object.keys(p)) if (!(k in out) && !HARMLESS.has(k)) n.lost = true;
   return out;
 }
-function orderProps(s: Obj, depth: number, desc: boolean) {
+function orderProps(s: Obj, depth: number, desc: boolean, n: Slim) {
   const props = (s.properties ?? {}) as Obj, req = Array.isArray(s.required) ? (s.required as string[]) : [];
   const keys = [...req.filter((k) => k in props), ...Object.keys(props).filter((k) => !req.includes(k))];
-  return Object.fromEntries(keys.map((k) => [k, slimProp(props[k], depth, desc)]));
+  return Object.fromEntries(keys.map((k) => [k, slimProp(props[k], depth, desc, n)]));
 }
-/** Schema gọn dưới max ký tự: không bao giờ cắt ngang JSON. trimmed: đã bỏ bớt chi tiết (mô tả, cấu trúc sâu). */
+/** Schema gọn dưới max ký tự: không bao giờ cắt ngang JSON. trimmed: đã bỏ bớt chi tiết (mô tả, cấu trúc sâu, ràng buộc lạ). */
 export function compactSchema(schema: unknown, max = 4000): { schema: Obj; trimmed: boolean } {
   const s = (schema && typeof schema === "object" ? schema : {}) as Obj;
   const req = Array.isArray(s.required) ? (s.required as string[]) : [];
-  const build = (desc: boolean): Obj => ({ type: "object", ...(req.length ? { required: req } : {}), properties: orderProps(s, 0, desc) });
-  const full = build(true);
-  if (JSON.stringify(full).length <= max) return { schema: full, trimmed: false };
-  const noDesc = build(false);
+  // additionalProperties ở cấp trên cùng (false, hay kiểu của khóa tự do) và $defs mà tham số trỏ tới.
+  const top: Slim = { lost: Object.keys(s).some((k) => !["type", "required", "properties", "additionalProperties", "description"].includes(k) && !HARMLESS.has(k)) };
+  const extra = s.additionalProperties !== undefined ? { additionalProperties: s.additionalProperties === true || s.additionalProperties === false ? s.additionalProperties : slimProp(s.additionalProperties, 1, false, top) } : {};
+  const build = (desc: boolean, n: Slim): Obj => ({ type: "object", ...(req.length ? { required: req } : {}), properties: orderProps(s, 0, desc, n), ...extra });
+  const n = { lost: top.lost };
+  const full = build(true, n);
+  if (JSON.stringify(full).length <= max) return { schema: full, trimmed: n.lost };
+  const noDesc = build(false, { lost: true });
   if (JSON.stringify(noDesc).length <= max) return { schema: noDesc, trimmed: true };
   // Vẫn quá dài: chỉ còn tên và kiểu mức đầu; required luôn còn đủ.
   const props = (s.properties ?? {}) as Obj;
@@ -110,14 +123,15 @@ export function compactSchema(schema: unknown, max = 4000): { schema: Obj; trimm
 }
 
 /** Tham số của connector_call: input (đối tượng), input_json (chuỗi JSON), hoặc model để thẳng ở cấp trên cùng. JSON hỏng thì báo lỗi, không chạy với tham số rỗng. */
-export function callArgs(input: Record<string, unknown> | undefined): { args: Record<string, unknown> } | { error: string } {
+export function callArgs(input: Record<string, unknown> | undefined, schema?: unknown): { args: Record<string, unknown> } | { error: string } {
   const c = input ?? {};
   let raw: unknown = c.input ?? c.input_json;
   if (raw === undefined || raw === null) {
     const { tool: _t, input: _i, input_json: _j, ...rest } = c;
-    // Model hay bọc tham số trong arguments / params / args: gửi nguyên thì công cụ nhận một tham số lạ. Chỉ gỡ khi đó là khóa duy nhất và đúng là một đối tượng.
+    // Model hay bọc tham số trong arguments / params / args / parameters: gửi nguyên thì công cụ nhận một tham số lạ. Chỉ gỡ khi đó là khóa duy nhất, đúng là một đối tượng, và công cụ không thật sự có tham số tên đó.
     const keys = Object.keys(rest), only = keys.length === 1 ? rest[keys[0]] : undefined;
-    if (only && typeof only === "object" && !Array.isArray(only) && ["arguments", "params", "args"].includes(keys[0])) return { args: only as Record<string, unknown> };
+    const real = !!(schema as { properties?: Obj } | undefined)?.properties && keys[0] in (schema as { properties: Obj }).properties;
+    if (only && typeof only === "object" && !Array.isArray(only) && !real && ["arguments", "params", "args", "parameters"].includes(keys[0])) return { args: only as Record<string, unknown> };
     return { args: rest };
   }
   if (typeof raw === "string") {
@@ -131,6 +145,9 @@ export function callArgs(input: Record<string, unknown> | undefined): { args: Re
 
 /** Tên công cụ model đưa → tên đầy đủ: chấp nhận thêm tiền tố của CLI, hoặc tên trần (không kèm connector) nếu chỉ một connector có công cụ đó. */
 export function resolveTool<T extends ToolLike>(tools: T[], name: string): T | null {
+  // Thử tên nguyên văn trước: connector tên "Synchro Docs" có tên đầy đủ bắt đầu bằng synchro_, bỏ tiền tố trước thì không bao giờ khớp.
+  const same = tools.find((t) => t.fq === name);
+  if (same) return same;
   const n = name.replace(/^(mcp_+)?synchro_+/, "");
   const exact = tools.find((t) => t.fq === n);
   if (exact) return exact;

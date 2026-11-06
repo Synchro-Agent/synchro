@@ -168,7 +168,7 @@ export function find(cli: Cli): string | null {
 // MCP_TOOL_TIMEOUT: thời gian chờ một lời gọi công cụ qua cầu nối MCP của Claude Code (lệnh trong workspace chạy tới 10 phút).
 // GROK_HOME: thư mục cấu hình / đăng nhập của Grok CLI; GROK_DISABLE_AUTOUPDATER: Grok CLI không tự tải bản mới vào thư mục của từng tài khoản;
 // GROK_BIN_DIR: nơi script cài của xAI đặt lệnh grok (chỉ dùng khi cài).
-export const ENV_ALLOW = ["LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR"] as const;
+export const ENV_ALLOW = ["SYNCHRO_CLI_OWNER", "LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR"] as const;
 const basePath = () => [noBrowserDir(), binDir(), path.dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 
 /** Môi trường cho tiến trình CLI: chỉ các biến trong ENV_ALLOW; biến khác (kể cả truyền vào) bị bỏ. */
@@ -278,10 +278,35 @@ export function command(bin: string, args: string[], env: Record<string, string>
   return { file: box.file, argv: box.argv, env: box.env, cwd };
 }
 
+// Mỗi tiến trình CLI mang mã tiến trình của máy chủ đã mở nó. Máy chủ tắt đột ngột giữa lượt thì CLI có thể còn chạy và tiêu hạn mức của gói bên cạnh lượt được chạy lại (instrumentation.ts).
+// Lúc khởi động: tiến trình nào có chủ không còn sống là mồ côi. Không đụng tới tiến trình của máy chủ cũ còn sống: lúc triển khai, hai máy chủ có thể chạy song song.
+const CLI_OWNER = "SYNCHRO_CLI_OWNER";
+const LIST_OWNERS = `for d in /proc/[0-9]*; do o=$(tr '\\0' '\\n' < "$d/environ" 2>/dev/null | sed -n 's/^${CLI_OWNER}=//p'); [ -n "$o" ] && echo "\${d#/proc/} $o"; done; true`;
+export function orphansOf(listing: string, alive: (pid: number) => boolean): number[] {
+  const out: number[] = [];
+  for (const l of listing.split("\n")) {
+    const m = /^(\d+) (\d+)$/.exec(l.trim());
+    if (m && !alive(Number(m[2]))) out.push(Number(m[1]));
+  }
+  return out;
+}
+const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
+/** Dừng các CLI mồ côi (chỉ Linux: đọc /proc bằng đúng user của engine). Trả về số tiến trình đã dừng. */
+export function sweepOrphanClis(): number {
+  if (process.platform !== "linux") return 0;
+  const user = engineUser();
+  const r = user ? spawnSync("sudo", ["-n", "-u", user, "--", "env", "-i", "PATH=/usr/bin:/bin", "sh", "-c", LIST_OWNERS], { encoding: "utf8", timeout: 20_000 }) : spawnSync("sh", ["-c", LIST_OWNERS], { encoding: "utf8", timeout: 20_000 });
+  const dead = orphansOf(r.stdout ?? "", pidAlive);
+  if (!dead.length) return 0;
+  if (user) spawnSync("sudo", ["-n", "-u", user, "--", "env", "-i", "PATH=/usr/bin:/bin", "kill", "-KILL", ...dead.map(String)], { stdio: "ignore" });
+  else for (const p of dead) { try { process.kill(p, "SIGKILL"); } catch {} }
+  return dead.length;
+}
+
 export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
   // Trong pty, chương trình terminal cần TERM để vẽ giao diện đăng nhập (chỉ thêm khi chạy pty).
   ensureNoBrowser();
-  const env = { ...cleanEnv(o.env), ...(o.pty ? { TERM: "xterm-256color" } : {}) };
+  const env = { ...cleanEnv(o.env), [CLI_OWNER]: String(process.pid), ...(o.pty ? { TERM: "xterm-256color" } : {}) };
   const c = command(bin, args, env, !!o.pty, o.cwd ?? engineHome());
   const child = spawn(c.file, c.argv, { cwd: c.cwd, env: c.env as NodeJS.ProcessEnv, detached: true, stdio: ["pipe", "pipe", "pipe"] });
   let err = "", timedOut = false, aborted = false, idle = false, killer: NodeJS.Timeout | null = null, lastOut = Date.now();

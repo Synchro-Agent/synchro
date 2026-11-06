@@ -115,7 +115,7 @@ export function normPerms(p: unknown, base: Perms = FULL_PERMS): Perms {
 }
 
 // ---------------------------------------------------------------- Cài đặt → Khả năng (lưu trên máy chủ theo tài khoản)
-// sw: đổi model khi tin nhắn bị gắn cờ · art: Artifacts · ai: artifact gọi được model · inl: biểu đồ / sơ đồ ngay trong chat
+// sw: không còn dùng (nút chưa từng có tác dụng nên đã gỡ), giữ khóa để dữ liệu cũ vẫn đọc được · art: Artifacts · ai: artifact gọi được model · inl: biểu đồ / sơ đồ ngay trong chat
 // code: chạy code và tạo tệp (Skills cần bật) · net: khi chạy code được tải gói từ các kho thư viện bên dưới
 // web: (cần net) code ra được mọi trang web công khai (tải ảnh, phông, dữ liệu, gọi API), không chỉ kho thư viện
 // crit: hội đồng phản biện tự đọc lại code, trang web, ứng dụng vừa viết.

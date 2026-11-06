@@ -63,7 +63,7 @@ export const FX_EN2VI: Record<string, string> = {
   "Not available right now: it could not be installed from its source.": "Hiện chưa dùng được: không cài được từ nguồn của nó.",
   "Similar open libraries:": "Thư viện mở tương tự:",
   "Set limits for later": "Đặt sẵn hạn mức cho sau này",
-  "Synchro runs on your own paid AI plan: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.": "Synchro chạy bằng gói AI trả phí của chính bạn: Claude, ChatGPT, Gemini hoặc Grok. Bạn kết nối gói sau khi đăng ký.",
+  "Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free plan; Claude needs Pro or Max. You connect it after signing up.": "Synchro chạy bằng tài khoản AI của chính bạn. ChatGPT, Gemini và Grok dùng được gói miễn phí; Claude cần gói Pro hoặc Max. Bạn kết nối sau khi đăng ký.",
   "See other libraries in": "Xem thư viện khác trong mục",
   "Could not install": "Không cài được",
   "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan.": "Kết nối Claude, ChatGPT, Gemini và Grok bằng gói của chính bạn. Hiện chưa liên kết khóa API dùng chung, nên mỗi người đăng nhập bằng gói của mình.",
@@ -72,3 +72,95 @@ export const FX_EN2VI: Record<string, string> = {
   "These limits cover models reached through a shared API key, where usage is the real API cost of each call. Models a person signs in to with their own plan follow that plan's limits instead.": "Các hạn mức này áp dụng cho model chạy qua khóa API dùng chung, tính theo chi phí API thật của mỗi lần gọi. Model mà mỗi người đăng nhập bằng gói riêng thì theo hạn mức của gói đó.",
   "No shared API key is linked, so these limits have no effect right now. Everyone uses their own AI plan, and that plan's limits apply.": "Chưa liên kết khóa API dùng chung nên các hạn mức này hiện chưa có tác dụng. Mọi người dùng gói AI của chính mình và theo hạn mức của gói đó.",
 };
+// Synchro Code: lượt chạy nền, workspace không dùng được.
+Object.assign(FX_VI2EN, {
+  "Chưa làm gì trong repo của bạn.": "Nothing was changed in your repo.",
+  "Trả lời không cần workspace": "Answer without workspace",
+  "Trả lời không có workspace: chưa sửa tệp nào của bạn.": "Answered without a workspace: none of your files were changed.",
+  "Không kiểm tra được workspace.": "Couldn't check the workspace.",
+  "Workspace chưa sẵn sàng.": "The workspace isn't ready yet.",
+  "Máy chủ chưa bật workspace.": "The server doesn't have the workspace turned on.",
+  "Không kết nối được workspace.": "Couldn't connect to the workspace.",
+  "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.": "The server restarted or the connection was down too long, so this turn can't be followed any more. Work already done is still in the workspace.",
+  "Phiên này đang có một lượt chạy.": "This session already has a turn running.",
+  "Không có ai duyệt sau 30 phút nên lượt này đã dừng.": "Nobody approved within 30 minutes, so this turn stopped.",
+});
+Object.assign(FX_EN2VI, {
+  "ChatGPT account, free or paid": "Tài khoản ChatGPT, miễn phí hay trả phí đều được",
+  "Google account, free or paid": "Tài khoản Google, miễn phí hay trả phí đều được",
+  "Grok account, free or paid": "Tài khoản Grok, miễn phí hay trả phí đều được",
+  "Creates images in chat. Tested on ChatGPT Plus; the Free plan has no image tool.": "Tạo ảnh ngay trong khung chat. Đã thử trên ChatGPT Plus; gói Free không có công cụ tạo ảnh.",
+  "Creates images in chat when you ask for a photo, illustration, logo or poster. Tested on a free account.": "Tạo ảnh ngay trong khung chat khi bạn xin ảnh chụp, hình minh họa, logo hay poster. Đã thử trên tài khoản miễn phí.",
+  "Creates images in chat. Tested on Grok Pro; limits depend on your xAI account.": "Tạo ảnh ngay trong khung chat. Đã thử trên Grok Pro; hạn mức tùy tài khoản xAI của bạn.",
+  "Sign in to Grok, then confirm the code below.": "Đăng nhập Grok, rồi xác nhận mã bên dưới.",
+  "Sign in with your Google account, then copy the code the page shows you.": "Đăng nhập bằng tài khoản Google, rồi chép mã trang đó hiện ra.",
+  "Sign in or create an account": "Đăng nhập hoặc đăng ký",
+  "Have an account? Enter your password. New here? Create one below.": "Đã có tài khoản? Nhập mật khẩu. Mới dùng? Tạo tài khoản bên dưới.",
+  "Create an account": "Tạo tài khoản",
+});
+Object.assign(FX_VI2EN, {
+  "Cách đăng nhập này chưa được cấu hình trên máy chủ.": "This sign-in method isn't set up on the server yet.",
+  "Phản hồi từ Apple không hợp lệ.": "Apple's response wasn't valid.",
+});
+// Đặt lại mật khẩu, xác minh email: lỗi mạng khác với đường dẫn hết hạn.
+Object.assign(FX_VI2EN, {
+  "Chưa kết nối được máy chủ. Hãy kiểm tra mạng rồi thử lại.": "Couldn't reach the server. Check your connection and try again.",
+  "Chưa kiểm tra được đường dẫn": "Couldn't check the link yet",
+  "Đường dẫn của bạn vẫn còn nguyên.": "Your link is still fine.",
+  "Email này đã được xác minh": "This email is already verified",
+  "Bạn không cần làm gì thêm. Tài khoản của bạn đã dùng được đủ tính năng.": "Nothing more to do. Your account can use every feature.",
+  "Hãy viết cho": "Write to",
+  "Nếu tài khoản do tổ chức của bạn cấp, hãy nhờ quản trị viên tạo đường dẫn đặt lại.": "If your organization gave you this account, ask your administrator for a reset link.",
+});
+Object.assign(FX_EN2VI, {
+  "Please confirm your email.": "Hãy xác minh email của bạn.",
+  "No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.": "Chưa gửi thêm thư: trong giờ này bạn đã yêu cầu vài lần. Hãy dùng thư mới nhất, hoặc thử lại sau một giờ.",
+});
+Object.assign(FX_VI2EN, {
+  "Giọng này là giọng riêng của người khác.": "This is someone else's private voice.",
+  "Bạn chỉ xóa được giọng do chính mình tạo.": "You can only delete voices you created.",
+  "Mỗi tài khoản giữ tối đa 3 giọng riêng. Hãy xóa bớt một giọng rồi tạo lại.": "Each account can keep up to 3 private voices. Delete one, then try again.",
+});
+Object.assign(FX_VI2EN, {
+  "Synchro tự ghi nhớ thông tin bền vững từ các đoạn chat trong dự án này. Bạn có thể xóa bất kỳ mục nào. Tắt bằng mục Tạo bộ nhớ từ đoạn chat trong Cài đặt.": "Synchro remembers lasting details from chats in this project. You can delete any item. Turn it off with Generate memory from chats in Settings.",
+  "Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat. Tắt bằng mục Tạo bộ nhớ từ đoạn chat trong Cài đặt.": "Project memory appears here after a few chats. Turn it off with Generate memory from chats in Settings.",
+});
+Object.assign(FX_VI2EN, {
+  "Phiên Code": "Code sessions", "Đã lưu trữ": "Archived", "Sắp ra mắt": "Coming soon", "Sắp có trên": "Coming to",
+  "macOS: sắp có": "macOS: coming soon", "Windows: sắp có": "Windows: coming soon",
+  "Chưa có bản tải về; hiện bạn dùng Synchro ngay trên trình duyệt. Khi ra mắt, ứng dụng luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.": "There's nothing to download yet; use Synchro in your browser for now. Once it's out, the app is always ready: open Synchro with a shortcut from anywhere, drag files from your computer into a chat, and skip the tab switching.",
+});
+Object.assign(FX_VI2EN, { "Chưa tải được danh sách.": "Couldn't load the list." });
+Object.assign(FX_VI2EN, {
+  "Xác nhận email mới": "Confirm your new email", "Đổi sang email này": "Switch to this email", "Đã đổi email": "Email changed",
+  "Tài khoản của bạn sẽ dùng": "Your account will use", "để đăng nhập và nhận thư. Mọi thiết bị sẽ được đăng xuất.": "to sign in and receive email. Every device will be signed out.",
+  "Hãy đăng nhập lại bằng email mới.": "Sign in again with your new email.",
+  "Đường dẫn đổi email không hợp lệ hoặc đã hết hạn. Hãy yêu cầu lại trong Cài đặt.": "This email change link is invalid or has expired. Request a new one in Settings.",
+  "Email của quản trị viên được đặt trong cấu hình máy chủ.": "An administrator's email is set in the server configuration.",
+  "Tài khoản này chưa có mật khẩu. Hãy đặt mật khẩu trước rồi đổi email.": "This account has no password yet. Set one, then change your email.",
+  "Đây đã là email của tài khoản.": "This is already your account's email.", "Email này đã có tài khoản.": "This email already has an account.",
+  "Email mới cho tài khoản này (chỉ đổi khi đã xác minh danh tính). Người dùng sẽ bị đăng xuất.": "New email for this account (only change it once you've confirmed who they are). They will be signed out.",
+});
+Object.assign(FX_EN2VI, {
+  "Change email": "Đổi email", "New email": "Email mới", "Send link": "Gửi đường dẫn", "Email changed": "Đã đổi email",
+  "If that address can be used, we sent it a confirmation link. Your email stays": "Nếu địa chỉ đó dùng được, Synchro đã gửi đường dẫn xác nhận tới đó. Email của bạn vẫn là",
+  "until you press the link. It works for 24 hours.": "cho tới khi bạn bấm đường dẫn. Đường dẫn có hiệu lực 24 giờ.",
+});
+Object.assign(FX_VI2EN, { "Bỏ khỏi mục này": "Remove from this section", "Thêm vào mục này": "Add to this section", "Có trong thư viện đã cài, chưa ở mục này": "In your installed libraries, not in this section" });
+Object.assign(FX_VI2EN, {
+  "Tài khoản này đã gắn với một tài khoản Synchro khác.": "That account is already linked to another Synchro account.",
+  "Đây là cách đăng nhập duy nhất của tài khoản. Hãy đặt mật khẩu hoặc thêm cách khác trước.": "This is your account's only sign-in method. Set a password or add another method first.",
+  "Tài khoản chưa gắn với cách đăng nhập này.": "This sign-in method isn't linked to your account.",
+});
+Object.assign(FX_EN2VI, {
+  "Sign-in methods": "Cách đăng nhập", "Connect": "Kết nối", "Disconnect": "Gỡ",
+  "Add another way to sign in, even with a different email address.": "Thêm cách đăng nhập khác, kể cả khi email khác.",
+  "Sign-in method added": "Đã thêm cách đăng nhập", "That account is already linked to another Synchro account": "Tài khoản đó đã gắn với một tài khoản Synchro khác", "Couldn't add the sign-in method": "Chưa thêm được cách đăng nhập",
+});
+Object.assign(FX_VI2EN, {
+  ". Tài khoản đăng nhập bằng Google, GitHub hoặc Apple có thể đăng nhập bằng các nút đó mà không cần mật khẩu. Vẫn không có thư sau 10 phút?": "Accounts that sign in with Google, GitHub or Apple can use those buttons without a password. Still no email after 10 minutes?",
+  "Bạn cần đăng nhập trước khi thêm cách đăng nhập.": "Sign in before adding a sign-in method.",
+  "Thiếu cách đăng nhập.": "No sign-in method was given.",
+  "Hoàn tác": "Undo",
+});
+Object.assign(FX_EN2VI, { "Change": "Đổi" });

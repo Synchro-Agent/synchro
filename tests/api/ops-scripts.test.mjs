@@ -44,6 +44,23 @@ ok(st?.offsite === false && Date.now() - st?.lastOkAt < 120_000 && !!st?.snapsho
 ok(fs.existsSync(path.join(dest, "daily", st?.snapshot ?? "x", "synchro.db")), "bản sao nằm đúng chỗ");
 ok(!fs.readdirSync(data).some((f) => f.startsWith(".backup-work")), "không để lại thư mục tạm trong dữ liệu", fs.readdirSync(data));
 ok(fs.existsSync(path.join(dest, "daily", st?.snapshot ?? "x", "data")) && !fs.readdirSync(path.join(dest, "daily", st?.snapshot ?? "x", "data")).some((f) => f.startsWith(".backup-work")), "thư mục tạm không vào bản sao");
+// Web user bị chiếm không được lợi dụng script chạy bằng root.
+const envFile = path.join(app, ".env.production"), hadEnv = fs.existsSync(envFile) ? fs.readFileSync(envFile, "utf8") : null;
+fs.writeFileSync(envFile, `DATA_DIR=${path.join(dest, "daily", st?.snapshot ?? "x")}\n`);
+r = backup();
+ok(r.status === 1 && /nằm trong/.test(r.stderr), "DATA_DIR trỏ vào nơi sao lưu: từ chối", r.stderr);
+if (hadEnv === null) fs.rmSync(envFile); else fs.writeFileSync(envFile, hadEnv);
+const keyPath = path.join(data, "secret.key"), keyBak = fs.readFileSync(keyPath), outside = path.join(tmp, "tep-cua-root");
+fs.writeFileSync(outside, "khong-duoc-doc"); fs.rmSync(keyPath); fs.symlinkSync(outside, keyPath);
+r = backup();
+const stLink = json(path.join(ops, "backup-status.json"));
+ok(r.status === 0 && stLink?.hasKey === false && stLink?.keyOk === null, "secret.key là liên kết mềm: không đọc tệp nó trỏ tới", stLink);
+// openrsync của macOS không chịu --link-dest có liên kết mềm trùng tên: bỏ bản này để các bước sau không vướng (rsync trên máy chủ thì được).
+fs.rmSync(path.join(dest, "daily", stLink?.snapshot ?? "x"), { recursive: true, force: true });
+fs.rmSync(keyPath); fs.writeFileSync(keyPath, keyBak);
+const src = fs.readFileSync(path.join(root, "scripts/backup.sh"), "utf8");
+ok(!/chown "\$WEB_USER"/.test(src) && !/^[^#]*> "\$WORK\//m.test(src.replace(/as_web sh -c .*/g, "")), "root không ghi, không đổi chủ gì trong thư mục của web user");
+ok(/\[ "\$\(owner_of "\$DATA"\)" = "\$WEB_USER" \]/.test(src) && !/WEB_USER="\$\(stat/.test(src), "web user không suy ra từ chủ thư mục, thư mục phải thuộc web user");
 db = new D(path.join(data, "synchro.db"));
 db.prepare("UPDATE connectors SET enc_auth = ?").run(seal("khoa-khac", "{}"));
 db.close();
@@ -99,7 +116,9 @@ await tick(); await tick(); await tick();
 ok(restarts() === 1, "chưa đủ 10 phút: không khởi động lại liên tục", restarts());
 mode = "dbdown"; await tick({ WATCHDOG_GAP_SEC: "0" });
 ok(restarts() === 2, "không ghi được cơ sở dữ liệu cũng tính là lỗi", [restarts(), state()]);
-for (let i = 0; i < 12; i++) await tick({ WATCHDOG_GAP_SEC: "0" });
+const alertFile = path.join(tmp, "alert.out");
+for (let i = 0; i < 12; i++) await tick({ WATCHDOG_GAP_SEC: "0", WATCHDOG_ALERT_CMD: `echo a >> ${alertFile}` });
+ok(fs.existsSync(alertFile) && fs.readFileSync(alertFile, "utf8").trim().split("\n").length === 1, "bỏ cuộc: chạy lệnh báo động đúng một lần, không phụ thuộc web", fs.existsSync(alertFile) ? fs.readFileSync(alertFile, "utf8") : "không có");
 ok(restarts() === 3 && state().status === "gave_up" && events().includes("gave_up"), "tối đa 3 lần mỗi giờ rồi dừng, ghi lại để người xử lý", [restarts(), state()]);
 mode = "ok"; await tick();
 ok(state()?.status === "ok", "web khỏe lại", state());

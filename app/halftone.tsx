@@ -60,8 +60,9 @@ void main() {
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 // Hai bảng màu: theme tối và theme sáng.
 const THEMES = {
-  dark: { colors: ["#111210", "#2A2B26", "#5C5D56", "#B9B8AF"], contrast: 0.9, grain: 0.05, brightness: 0 },
-  light: { colors: ["#EEECE5", "#DCD9CF", "#B5B3AA", "#85867E"], contrast: 0.95, grain: 0.03, brightness: 0.01 },
+  // Chấm chỉ là nền: mép màn hình từng gần trắng, chói hơn mọi trang khác và át cả thanh bên, ô soạn. Giữ chấm sáng nhất ở tông xám vừa đủ thấy.
+  dark: { colors: ["#111210", "#1B1C19", "#2B2C27", "#47483F"], contrast: 0.9, grain: 0.05, brightness: 0 },
+  light: { colors: ["#EEECE5", "#E7E5DD", "#DAD8CE", "#C4C2B8"], contrast: 0.95, grain: 0.03, brightness: 0.01 },
 };
 
 export function HalftoneBg() {
@@ -105,17 +106,23 @@ export function HalftoneBg() {
     const ro = new ResizeObserver(size); ro.observe(canvas); size();
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const t0 = performance.now();
-    let raf = 0;
+    let raf = 0, drew = 0, seen = performance.now();
+    // Nền trang trí, toàn cửa sổ ở DPR tới 2: 24 hình mỗi giây là đủ mượt, và không ai thao tác vài giây thì dừng hẳn. Vẽ 60 hình mỗi giây mãi mãi giữ GPU của laptop luôn bận.
     const draw = (now: number) => {
       raf = 0;
-      gl.uniform4f(uScene, w, h, ((now - t0) / 1000) * 1.43, 4);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      if (!still && !document.hidden) raf = requestAnimationFrame(draw);
+      if (now - drew >= 40 || still) {
+        drew = now;
+        gl.uniform4f(uScene, w, h, ((now - t0) / 1000) * 1.43, 4);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      if (!still && !document.hidden && now - seen < 8000) raf = requestAnimationFrame(draw);
     };
-    const vis = () => { if (!document.hidden && !raf) raf = requestAnimationFrame(draw); };
+    const vis = () => { seen = performance.now(); if (!document.hidden && !raf && !still) raf = requestAnimationFrame(draw); };
     document.addEventListener("visibilitychange", vis);
+    const input = ["pointermove", "keydown", "pointerdown", "wheel"] as const;
+    for (const e of input) window.addEventListener(e, vis, { passive: true });
     raf = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); document.removeEventListener("visibilitychange", vis); gl.getExtension("WEBGL_lose_context")?.loseContext(); canvas.remove(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); document.removeEventListener("visibilitychange", vis); for (const e of input) window.removeEventListener(e, vis); gl.getExtension("WEBGL_lose_context")?.loseContext(); canvas.remove(); };
   }, []);
   return <div ref={ref} aria-hidden="true" style={{ position: "absolute", inset: 0 }} />;
 }

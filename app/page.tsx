@@ -84,6 +84,7 @@ import type { DirEntry } from "./connectordir";
 type CxData = { connectors: Conn[]; directory: DirEntry[] };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
+import { startWarmPing } from "./warmping";
 type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
@@ -932,6 +933,7 @@ export default function Home() {
   // Màn hình hẹp (điện thoại): thanh bên là ngăn kéo trượt đè lên nội dung, mặc định đóng, chọn mục xong tự đóng.
   const narrow = () => typeof window !== "undefined" && window.matchMedia(NARROW).matches;
   useEffect(() => { if (narrow()) setOpen(false); }, []);
+  useEffect(() => startWarmPing(), []);
   const [chats, setChats] = useState<Chat[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [cur, setCur] = useState<number | null>(null);
@@ -1060,7 +1062,8 @@ export default function Home() {
     // Lần đầu lùi lại sau khi trang đã vẽ (lấy cả danh sách, có thể hơn 100 KB). Tab ẩn không hỏi; ngoài mục Code hỏi thưa, về lại tab thì hỏi ngay.
     let at = 0;
     const run = () => { at = Date.now(); void tick(); };
-    const first = setTimeout(run, viewRef.current === "code" ? 0 : 3000);
+    // Máy chưa có danh sách nào (thiết bị mới): lấy ngay, cùng lúc đoạn chat về, để mục Code không chen vào đẩy danh sách xuống sau 3 giây.
+    const first = setTimeout(run, viewRef.current === "code" || !codeListRef.current.length ? 0 : 3000);
     const t = setInterval(() => { if (!document.hidden && (viewRef.current === "code" || Date.now() - at >= 60_000)) run(); }, 15_000);
     window.addEventListener("focus", run);
     return () => { stop = true; clearTimeout(first); clearInterval(t); window.removeEventListener("focus", run); };
@@ -1314,13 +1317,13 @@ export default function Home() {
       else if (!open && !document.hidden) say(`${tr("Đang chờ bạn duyệt")}: ${name}`);
     }
   }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tiêu đề thẻ trình duyệt theo màn hình đang xem: nhiều thẻ vẫn phân biệt được, trình đọc màn hình có tín hiệu đổi trang. Đoạn chat ẩn danh không lộ tên lên thẻ.
+  const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", inbox: "Hộp thư", brain: "Bộ não" };
+  const tabName = view === "chat" ? (chat && !chat.inc ? chat.title : "") : tr(VIEW_TITLE[view] ?? "");
   useEffect(() => {
     const n = needYou.size;
-    if (!n) return;
-    const was = document.title;
-    document.title = `(${n}) ${tr("Đang chờ bạn duyệt")} · Synchro`;
-    return () => { document.title = was; };
-  }, [needYou.size]);
+    document.title = `${n ? `(${n}) ` : ""}${tabName ? `${tabName} · ` : ""}Synchro`;
+  }, [needYou.size, tabName]);
   // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
   const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
   const [artFull, setArtFull] = useState(false);
@@ -1418,7 +1421,14 @@ export default function Home() {
     stick.current = !far;
     setShowDown(far);
   };
-  const toBottom = () => { threadRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); };
+  // Xa hơn vài màn hình thì nhảy tới gần cuối rồi mới trượt nốt: trượt suốt đoạn chat dài từng mất gần 1,5 giây, hàng ẩn dựng lại khi lướt qua.
+  const toBottom = () => {
+    const el = threadRef.current;
+    if (!el) return;
+    const left = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (left > el.clientHeight * 3) el.scrollTop = el.scrollHeight - el.clientHeight * 2;
+    el.scrollTo({ top: 1e9, behavior: "smooth" });
+  };
   // Mở một đoạn chat: đứng ngay ở tin cuối, không trôi từ đầu xuống (trôi mượt chỉ dành cho nút "cuộn xuống").
   useLayoutEffect(() => {
     const el = threadRef.current;
@@ -1959,6 +1969,9 @@ export default function Home() {
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
     skillHub: (q) => { if (q) { try { sessionStorage.setItem("hub-q", q); } catch {} } goCustom(); if (q) window.dispatchEvent(new CustomEvent(HUB_SEARCH, { detail: q })); },
     project: (id) => { setCurProj(id); setView("project"); },
+    code: (id) => { setCodeCur(id); setView("code"); if (codeList.find((c) => c.id === id)?.archived) codePatch(id, { archived: false }); },
+    brain: (title) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title } })),
+    inbox: () => setView("inbox"),
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -2262,13 +2275,13 @@ export default function Home() {
               {codeRest.length > 0 && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setCodeOpen(!codeOpen)}><span>Code</span><span className={`sec-chev ${codeOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${codeOpen ? "open" : ""}`}><div className="chat-list">{pgCode.items.map(codeRow)}</div>{sidePager(pgCode)}</div>
+                  <div className={`fold ${codeOpen ? "open" : ""}`}><div><div className="chat-list">{pgCode.items.map(codeRow)}</div>{sidePager(pgCode)}</div></div>
                 </>
               )}
               {codeArch.length > 0 && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setArchOpen(!archOpen)}><span>Code đã lưu trữ · {codeArch.length}</span><span className={`sec-chev ${archOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${archOpen ? "open" : ""}`}><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div>
+                  <div className={`fold ${archOpen ? "open" : ""}`}><div><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div></div>
                 </>
               )}
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>
@@ -2452,7 +2465,7 @@ export default function Home() {
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
+      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>

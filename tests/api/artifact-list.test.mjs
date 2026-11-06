@@ -1,0 +1,26 @@
+// Danh sách artifact đọc phiên bản mới nhất ngay trong SQL; bảng lệnh chỉ lấy tên. Hàm thuần, không cần máy chủ.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { loadTs } from "../lib/ts.mjs";
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-artlist-"));
+process.env.DATA_DIR = tmp; process.env.DATA_KEY = "artlist-test";
+const { artifactstore: A } = await loadTs(["artifactstore"]);
+const save = (ident, content) => A.saveArtifact("u1", "conv1", { ident, title: `Tên ${ident}`, type: "text/html", content });
+save("a", "bản một");
+save("a", "bản hai");
+const dài = `${"😀 chữ dài ".repeat(1200)}hết`;
+save("b", dài);
+let list = A.listArtifacts("u1");
+const a = list.find((x) => x.ident === "a"), b = list.find((x) => x.ident === "b");
+ok(list.length === 2 && a.count === 2 && a.preview === "bản hai" && a.full === true, "phiên bản mới nhất, đếm đủ số bản", a);
+ok(b.count === 1 && b.full === false && b.preview.length >= 6000 && dài.startsWith(b.preview), "nội dung dài: xem trước 6.000 ký tự, không cắt hỏng emoji", { len: b.preview.length, full: b.full });
+ok(A.getArtifact("u1", a.id).versions.length === 2, "bản đầy đủ vẫn còn nguyên các phiên bản");
+const t = A.artifactTitles("u1");
+ok(t.length === 2 && t.every((x) => x.conv === "conv1" && /^Tên/.test(x.title) && x.type && !("preview" in x)), "bảng lệnh: chỉ tên, không có nội dung", t);
+ok(!A.listArtifacts("u2").length && !A.artifactTitles("u2").length, "người khác không thấy");
+fs.rmSync(tmp, { recursive: true, force: true });
+console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
+process.exit(fail ? 1 : 0);

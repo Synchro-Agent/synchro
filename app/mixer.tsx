@@ -4,7 +4,7 @@
 // Tắt / bật khối ở tầng cuối không làm đổi phần đầu nên không mất bộ đệm. Ngữ cảnh quá lớn thì nén lịch sử thành tóm tắt.
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { compactHistory, estimateContext, type CtxBlock } from "./llm";
 import { chatHistory, mixExtra } from "./history";
 import { fileContext } from "./filestate";
@@ -103,7 +103,7 @@ export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }
       </button>
       {open && (
         <div className="cx-pop" role="dialog" aria-label={tr("Bàn trộn ngữ cảnh")}>
-          <div className="cx-h"><b>{tr("Ngữ cảnh của lượt tiếp theo")}</b><span>{tr("Ước tính")} ≈ <b data-notr>{total.toLocaleString("vi-VN")}</b> token</span></div>
+          <div className="cx-h"><b>{tr("Ngữ cảnh của lượt tiếp theo")}</b><span>{tr("Ước tính")} ≈ <b data-notr>{total.toLocaleString(locale())}</b> token</span></div>
           {hot && <div className="cx-hot"><I.Alert size={14} /><span>{tr("Ngữ cảnh đã lớn: trả lời chậm hơn và tốn hơn. Nén lịch sử để gọn lại.")}</span></div>}
           {!est ? <div className="cx-load"><span className="art-spin sm" /></div> : TIER.map(([tier, name, hint]) => (
             <div key={tier} className="cx-tier">

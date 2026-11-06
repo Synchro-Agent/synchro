@@ -1,10 +1,13 @@
-import { handle, limit, publicUser, requireUser, type UserRow } from "../../../../authstore";
+import { db, handle, limit, publicUser, requireUser, type UserRow } from "../../../../authstore";
 import { listArtifacts, getArtifact } from "../../../../artifactstore";
 import { allNotes } from "../../../../brain";
 import { changesSince } from "../../../../chatstore";
+import { getSession, listSessions } from "../../../../codestore";
 import { listConnectors } from "../../../../connectors";
 import { myFiles } from "../../../../fileproc/owners";
+import { listMemory } from "../../../../memory";
 import { listShares } from "../../../../sharestore";
+import { listSkills } from "../../../../skillstore";
 import { listTasks } from "../../../../tasks";
 
 export const runtime = "nodejs";
@@ -12,6 +15,11 @@ export const dynamic = "force-dynamic";
 
 const enc = new TextEncoder();
 const tick = () => new Promise((ok) => setImmediate(ok));
+
+// Bảng có thể chưa tồn tại (tính năng người này chưa dùng lần nào): khi đó không có gì để xuất.
+const rows = (sql: string, ...args: unknown[]) => { try { return db().prepare(sql).all(...args); } catch { return []; } };
+// Những gì không nằm trong tệp: trang quyền riêng tư cũng ghi đúng danh sách này.
+const LEFT_OUT = ["Mật khẩu băm, khóa và token kết nối", "Nội dung tệp tải lên, tệp tạo ra và âm thanh (tệp này chỉ liệt kê; tải từng tệp ở Cài đặt → Quyền riêng tư)", "Tệp trong workspace Synchro Code", "Mức dùng chi tiết từng lượt, nhật ký bảo mật", "Lượt trả lời đang chạy hoặc vừa xong (đã nằm trong đoạn chat khi xong)"];
 
 // Tải về mọi thứ máy chủ giữ theo tài khoản, không phụ thuộc trình duyệt đang dùng (đổi máy, mất dữ liệu trình duyệt): một tệp JSON viết dần, đoạn chat đọc theo từng trang để
 // tài khoản lớn không làm đầy bộ nhớ hay chặn người khác. Không có khóa, token, mật khẩu băm. Tệp đã tải lên chỉ liệt kê (tải từng tệp ở Cài đặt → Quyền riêng tư).
@@ -43,7 +51,25 @@ async function* sections(u: UserRow): AsyncGenerator<string> {
     await tick();
   }
   yield "]";
+  yield ',\n"codeSessions": [';
+  first = true;
+  for (const s of listSessions(u.id)) {
+    const full = getSession(u.id, s.id);
+    if (!full) continue;
+    yield `${first ? "" : ",\n"}${JSON.stringify(full)}`;
+    first = false;
+    await tick();
+  }
+  yield "]";
+  const skills = await listSkills(u.id).catch(() => []);
   const plain: [string, () => unknown][] = [
+    ["memory", () => listMemory(u.id)], ["instructionsHistory", () => rows("SELECT at, source, text FROM instructions_history WHERE user_id = ? ORDER BY at", u.id)],
+    ["apps", () => rows("SELECT id, title, type, content, visibility, conv, ident, created_at, updated_at FROM apps WHERE owner = ?", u.id)],
+    ["appData", () => rows("SELECT ref, key, value, updated_at FROM app_data WHERE owner = ? OR ref LIKE ?", u.id, `art:${u.id}:%`)],
+    ["appComments", () => rows("SELECT app, body, created_at FROM app_comments WHERE user_id = ?", u.id)],
+    ["skills", () => skills], ["plugins", () => rows("SELECT id, slug, catalog_id, name, description, author, homepage, enabled, created_at, updated_at FROM plugins WHERE owner = ?", u.id)],
+    ["inbox", () => rows("SELECT task_id, title, at, kind, note, result FROM task_runs WHERE owner = ? ORDER BY at", u.id)],
+    ["generatedFiles", () => rows("SELECT * FROM outputs WHERE user_id = ?", u.id)], ["speechItems", () => rows("SELECT id, kind, title, mime, size, created_at FROM speech_items WHERE user_id = ?", u.id)],
     ["brainNotes", () => allNotes(u.id)], ["tasks", () => listTasks(u.id)], ["shares", () => listShares(u.id)],
     ["connectors", () => listConnectors(u.id).map((c) => ({ id: c.id, name: c.name, url: c.url }))], ["uploadedFiles", () => myFiles(u.id).files],
   ];
@@ -53,7 +79,7 @@ async function* sections(u: UserRow): AsyncGenerator<string> {
     yield `,\n${JSON.stringify(k)}: ${JSON.stringify(v)}`;
     await tick();
   }
-  yield "\n}\n";
+  yield `,\n"notIncluded": ${JSON.stringify(LEFT_OUT)}\n}\n`;
 }
 
 export const GET = handle(async (req) => {

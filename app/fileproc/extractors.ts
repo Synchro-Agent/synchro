@@ -18,6 +18,8 @@ const PDF_NATIVE_PAGES = Number(process.env.PDF_NATIVE_PAGES ?? 100);
 
 // Giải mã văn bản, tự phát hiện encoding (mặc định UTF-8).
 export function decodeText(buf: Buffer): string {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder("utf-16le").decode(buf);
+  if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder("utf-16be").decode(buf);
   const utf8 = new TextDecoder("utf-8", { fatal: true });
   try { return utf8.decode(buf).replace(/^\uFEFF/, ""); } catch { /* không phải UTF-8 */ }
   const enc = (jschardet.detect(buf.toString("binary")).encoding || "windows-1252").toLowerCase();

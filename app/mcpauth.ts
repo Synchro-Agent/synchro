@@ -3,7 +3,7 @@
 // đăng ký Synchro (Client ID Metadata Document → Client ID nhập tay → đăng ký động RFC 7591), PKCE S256,
 // tham số resource (RFC 8707), kiểm tra iss khi quay về (RFC 9207), đổi mã lấy token và làm mới token.
 import crypto from "node:crypto";
-import { allowPrivate, downText, retryAfterMs, safeFetch, TempFail } from "./safefetch";
+import { allowPrivate, downText, retryAfterMs, safeFetch, TempFail, timeLimit } from "./safefetch";
 
 export type AsMeta = {
   issuer: string; authorization_endpoint: string; token_endpoint: string; registration_endpoint?: string;
@@ -69,10 +69,19 @@ export const canonical = (u: string) => { const x = new URL(u); x.hash = ""; ret
 const sameIssuer = (a: string, b: string) => a.replace(/\/$/, "") === b.replace(/\/$/, "");
 
 // guessed: máy chủ không khai báo OAuth, đường dẫn đăng nhập chỉ là đoán theo mặc định của đặc tả cũ.
+// Hỏi máy chủ một lần không kèm đăng nhập để đọc resource_metadata trong header 401: máy chủ chỉ khai báo ở đó thì đoán đường dẫn sẽ ra trang đăng nhập sai. Không đọc được thì coi như không có.
+export async function metadataHint(mcpUrl: string, signal?: AbortSignal): Promise<string | undefined> {
+  try {
+    const r = await safeFetch(mcpUrl, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, timeout: 5_000, signal, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }) });
+    await r.body?.cancel();
+    return r.status === 401 || r.status === 403 ? parseWww(r.headers.get("www-authenticate") ?? "").resource_metadata : undefined;
+  } catch { return undefined; }
+}
+
 export type Discovery = { resource: string; as: AsMeta; scope?: string; guessed?: boolean };
 
 export async function discover(mcpUrl: string, www = "", signal?: AbortSignal): Promise<Discovery> {
-  const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(DISCOVER_MS)]) : AbortSignal.timeout(DISCOVER_MS);
+  const stop = timeLimit(DISCOVER_MS, signal);
   const u = new URL(mcpUrl);
   const w = parseWww(www);
   const path = u.pathname.replace(/\/$/, "");

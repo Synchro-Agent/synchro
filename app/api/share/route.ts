@@ -1,4 +1,4 @@
-import { AuthError, handle, limit, requireUser, sameOrigin } from "../../authstore";
+import { AuthError, handle, limit, needDisk, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../authstore";
 import { listShares, putShare, revokeConvShare, revokeShare, shareOfConv } from "../../sharestore";
 
 export const runtime = "nodejs";
@@ -14,6 +14,9 @@ export const GET = handle(async (req) => {
 export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireUser(req);
+  // Trang công khai nằm dưới tên miền của Synchro: tài khoản ảo chưa xác minh không được tạo trang lừa đảo ở đây.
+  if (verifyLocked(user)) throw new AuthError(VERIFY_FIRST, 403);
+  needDisk();
   const b = (await req.json().catch(() => null)) as { conv?: unknown; title?: unknown; msgs?: unknown } | null;
   if (!b) throw new AuthError("Yêu cầu không hợp lệ.", 400);
   // Mỗi lần có thể tải tới vài chục ảnh ngoài.

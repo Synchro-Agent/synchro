@@ -1,4 +1,5 @@
-import { appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
+import { authErrorCode } from "../../../../../autherrors";
+import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
 import { afterClaim } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
 import { clearState, finish, isProvider, purposeOf } from "../../../../../oauth";
@@ -25,8 +26,16 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       h.set("Location", `${appUrl(req)}/api/github/done`);
       return new Response(null, { status: 303, headers: h });
     }
-    const { cookie, user, claimed, fresh } = oauthLogin(req, r);
+    if (purpose === "connect") {
+      const c = current(req);
+      if (!c) throw new AuthError("Bạn cần đăng nhập trước khi thêm cách đăng nhập.", 401);
+      connectIdentity(req, c.user, r);
+      h.set("Location", `${appUrl(req)}/?settings=Account&msg=${encodeURIComponent("Sign-in method added")}`);
+      return new Response(null, { status: 303, headers: h });
+    }
+    const { cookie, user, claimed, fresh, mfa } = oauthLogin(req, r);
     h.append("Set-Cookie", cookie);
+    if (mfa) to = `${appUrl(req)}/?mfa=1`;
     if (claimed) {
       // Nhận lại tài khoản chưa xác minh: thứ người đăng ký trước có thể đã gắn vào phải tắt, và người dùng phải được báo (không âm thầm mất mật khẩu).
       await afterClaim(user.id, fresh, "oauth", claimed === "password");
@@ -37,8 +46,8 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
     if (purpose === "login" && isProvider(provider) && !/hủy đăng nhập|Phiên đăng nhập đã hết hạn/.test((e as Error).message)) {
       try { limit("oauth-fail:" + clientIp(req), 20, 900_000); audit("oauth_failed", { ip: clientIp(req), detail: `${provider}: ${(e as Error).message}`.slice(0, 300) }); } catch { /* quá nhiều: bỏ qua, không ghi đầy nhật ký */ }
     }
-    const msg = encodeURIComponent(e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.");
-    to = purpose === "link" ? `${appUrl(req)}/api/github/done?error=${msg}` : `${to}?auth_error=${msg}`;
+    const text = e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.";
+    to = purpose === "link" ? `${appUrl(req)}/api/github/done?error=${encodeURIComponent(text)}` : purpose === "connect" ? `${to}?settings=Account&msg=${encodeURIComponent(/khác\.$/.test(text) ? "That account is already linked to another Synchro account" : "Couldn't add the sign-in method")}` : `${to}?auth_error=${authErrorCode(text)}`;
   }
   h.set("Location", to);
   return new Response(null, { status: 303, headers: h });

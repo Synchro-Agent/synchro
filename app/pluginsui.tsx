@@ -2,7 +2,6 @@
 // Kho kỹ năng (gộp Skills và Plugins; ở thanh bên, Tùy chỉnh và Cài đặt) và trang Tùy chỉnh có hai mục Kho kỹ năng / Connectors.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
-import { rowKeys } from "./a11y";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
@@ -362,11 +361,11 @@ export function SkillHub() {
   const row = (p: PluginSummary) => {
     const manage = p.scope === "personal" || d.admin;
     return (
-      <div key={p.id} role="button" tabIndex={0} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} onKeyDown={rowKeys(() => setOpen(p.id))} {...bulkRow(bk, p)}>
+      <div key={p.id} className={`pl-row2 ${p.enabled && p.mine.enabled ? "" : "off"}`} onClick={() => setOpen(p.id)} {...bulkRow(bk, p)}>
         {bk.on && <BulkCheck on={bk.has(p)} />}
         <PlugMark id={p.catalogId} size={36} />
         <div className="pl-row2-t">
-          <div className="pl-row2-h"><b data-notr>{p.name}</b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
+          <div className="pl-row2-h"><b data-notr><button type="button" className="art-tile-open">{p.name}</button></b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
           <span>{p.author ? <>{tr("từ")} <span data-notr={untranslated(p.author) || undefined}>{tr(p.author)}</span> · </> : ""}<span data-notr={untranslated(p.description) || undefined}>{p.description}</span></span>
         </div>
         <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>
@@ -382,7 +381,7 @@ export function SkillHub() {
     <>
       <div className="pl-top">
         <h1 className="pl-title">Skill Hub</h1>
-        <div className="pl-seg"><button className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
+        <div className="pl-seg" role="tablist"><button role="tab" aria-selected={view === "yours"} className={view === "yours" ? "on" : ""} onClick={() => setTab("yours")}>Yours</button><button role="tab" aria-selected={view === "discover"} className={view === "discover" ? "on" : ""} onClick={() => setTab("discover")}>Discover</button></div>
         <span style={{ flex: 1 }} />
         <span className="s-search pl-search"><I.Search size={14} /><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></span>
         {(d.plugins.length > 0 || !!ownSkills) && <SkillScan />}

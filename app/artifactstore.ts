@@ -1,6 +1,6 @@
 // Artifact của từng tài khoản (chỉ chạy ở máy chủ): mỗi artifact (theo cuộc trò chuyện + identifier) giữ mọi phiên bản
 // model đã viết, để trang Artifacts liệt kê và mở lại được trên mọi thiết bị. Chỉ chủ tài khoản xem được.
-import { db } from "./authstore";
+import { AuthError, db, needDisk } from "./authstore";
 import { randomToken } from "./mcpauth";
 import { ART_TYPES, type ArtType } from "./artifacts";
 
@@ -8,7 +8,8 @@ export type ArtVersion = { content: string; at: number };
 export type ArtRow = { id: string; conv: string; ident: string; title: string; type: ArtType; lang: string | null; versions: ArtVersion[]; created_at: number; updated_at: number };
 // preview: phần đầu của bản mới nhất (cho danh sách nhẹ); full = false: bị cắt, ảnh thu nhỏ của trang web tự tải bản đầy đủ (?latest=1).
 export type ArtSummary = Omit<ArtRow, "versions"> & { count: number; preview: string; full: boolean };
-export const ART_LIMITS = { content: 400_000, versions: 50, perUser: 500 };
+// totalBytes / lockedBytes: tổng dung lượng một tài khoản (chưa xác minh email thì ít hơn): 500 artifact x 50 bản x 400 KB là tới 10 GB mỗi tài khoản.
+export const ART_LIMITS = { content: 400_000, versions: 50, perUser: 500, totalBytes: 500_000_000, lockedBytes: 100_000_000 };
 
 let ready = false;
 function init() {
@@ -25,14 +26,15 @@ function init() {
 type Raw = Omit<ArtRow, "versions"> & { versions: string };
 const parse = (r: Raw): ArtRow => ({ ...r, versions: JSON.parse(r.versions) as ArtVersion[] });
 
+// Chỉ lấy phiên bản mới nhất ngay trong SQL: giải mã mọi phiên bản bằng JS (tới 50 bản, 400 KB mỗi bản) từng chặn luồng chính mỗi lần mở danh sách.
 export function listArtifacts(uid: string): ArtSummary[] {
-  const rows = init().prepare("SELECT * FROM artifacts WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(uid, ART_LIMITS.perUser) as (Raw & { user_id?: string })[];
-  return rows.map((r) => {
-    const a = parse(r);
-    const last = a.versions[a.versions.length - 1]?.content ?? "";
-    return { id: a.id, conv: a.conv, ident: a.ident, title: a.title, type: a.type, lang: a.lang, created_at: a.created_at, updated_at: a.updated_at, count: a.versions.length, preview: last.slice(0, 6000), full: last.length <= 6000 };
-  });
+  const rows = init().prepare(`SELECT id, conv, ident, title, type, lang, created_at, updated_at, json_array_length(versions) AS count,
+    substr(json_extract(versions, '$[#-1].content'), 1, 6000) AS preview, length(json_extract(versions, '$[#-1].content')) AS size
+    FROM artifacts WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?`).all(uid, ART_LIMITS.perUser) as (Omit<ArtSummary, "full"> & { size: number | null; preview: string | null })[];
+  return rows.map(({ size, ...r }) => ({ ...r, preview: r.preview ?? "", full: (size ?? 0) <= 6000 }));
 }
+/** Chỉ tên, cho bảng lệnh (Ctrl+K): mở bảng từng tải về gần 1 MB bản xem trước trong khi nó chỉ tìm theo tên. */
+export const artifactTitles = (uid: string) => init().prepare("SELECT conv, title, type FROM artifacts WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(uid, ART_LIMITS.perUser) as { conv: string; title: string; type: string }[];
 
 export function getArtifact(uid: string, id: string): ArtRow | null {
   const r = init().prepare("SELECT * FROM artifacts WHERE id = ? AND user_id = ?").get(id, uid) as Raw | undefined;
@@ -60,10 +62,24 @@ export function validArt(x: unknown): ArtInput | null {
   return { ident: o.ident, title: o.title.trim(), type: o.type as ArtType, lang, content: o.content };
 }
 
+// Đọc tổng dung lượng phải giải nén cả cột: chỉ đo lại mỗi phút, giữa các lần cộng dồn phần vừa ghi (ghi đè bản cũ thì đếm dư một chút, không sao).
+const usedCache = new Map<string, { b: number; at: number }>();
+function artBytes(uid: string): { b: number; at: number } {
+  const c = usedCache.get(uid), now = Date.now();
+  if (c && now - c.at < 60_000) return c;
+  if (usedCache.size > 5000) usedCache.clear();
+  const n = { b: (init().prepare("SELECT COALESCE(SUM(length(CAST(versions AS BLOB))), 0) AS b FROM artifacts WHERE user_id = ?").get(uid) as { b: number }).b, at: now };
+  usedCache.set(uid, n);
+  return n;
+}
 // Thêm phiên bản mới (bỏ qua nếu giống hệt phiên bản cuối). Trả về id artifact.
-export function saveArtifact(uid: string, conv: string, a: ArtInput): string {
+export function saveArtifact(uid: string, conv: string, a: ArtInput, opts?: { maxBytes?: number }): string {
   const d = init();
   const now = Date.now();
+  needDisk();
+  const used = artBytes(uid);
+  if (used.b + a.content.length > (opts?.maxBytes ?? ART_LIMITS.totalBytes)) throw new AuthError("Artifact của bạn đã dùng hết dung lượng. Hãy xóa bớt ở trang Artifacts rồi thử lại.", 413);
+  used.b += a.content.length;
   const r = d.prepare("SELECT * FROM artifacts WHERE user_id = ? AND conv = ? AND ident = ?").get(uid, conv, a.ident) as Raw | undefined;
   if (r) {
     const cur = parse(r);

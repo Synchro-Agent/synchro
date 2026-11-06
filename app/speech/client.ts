@@ -17,6 +17,7 @@ export type Plan = {
   note: string | null; checkedAt: number;
 };
 export type Voice = {
+  lib?: boolean;
   id: string; name: string; desc: string; lang: string; langCode: string; accent: string; gender: string; age: string; use: string; category: string;
   preview: string | null; mine: boolean; owner?: string; free?: boolean; uses?: number; notice?: number | null; added?: boolean;
 };

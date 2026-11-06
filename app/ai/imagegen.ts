@@ -26,7 +26,7 @@ export const IMG_NAME: Record<ImgCli, string> = { agy: "Antigravity", grok: "Gro
 // Gói nhận được ảnh gốc: Antigravity đọc tệp trong thư mục làm việc, Codex có --image (chưa kiểm chứng cùng image_gen). image_gen của Grok chỉ có prompt, aspect_ratio.
 const TAKES_REF: Record<ImgCli, boolean> = { agy: true, grok: false, codex: true };
 
-export type ImgKind = "quota" | "auth" | "notool" | "nofile" | "bad" | "big" | "timeout" | "aborted" | "busy" | "noref" | "free" | "other";
+export type ImgKind = "quota" | "auth" | "notool" | "nofile" | "bad" | "big" | "timeout" | "aborted" | "busy" | "noref" | "free" | "refused" | "other";
 export type ImgReq = {
   uid: string; prompt: string; aspect?: string; count?: number;
   /** Ảnh người dùng muốn sửa hoặc lấy làm mẫu. */
@@ -78,11 +78,11 @@ When the file is saved, reply with only its absolute path. If you have no image 
 
 // ---------------------------------------------------------------- lỗi
 // "HTTP 403" của Grok là chạm giới hạn chi tiêu, không phải hết đăng nhập: xét hạn mức trước classify (classify coi 403 đầu dòng là lỗi đăng nhập).
-const QUOTA_TEXT = /spending[- ]limit|personal-team-blocked|out of credits?|insufficient (?:credit|fund|balance)|billing|resource[ _-]?exhausted|quota/i;
+const QUOTA_TEXT = /out of credits?|insufficient (?:credit|fund|balance)|billing|resource[ _-]?exhausted|quota/i;
 const NO_TOOL_TEXT = /NO_IMAGE_TOOL|no image generation tool|(?:don'?t|do not) have (?:an? )?image|image generation (?:tool )?(?:is )?not available/i;
 export function errKind(message: string): ImgKind {
   if (QUOTA_TEXT.test(message)) return "quota";
-  const k = classify(message);
+  const k = classify(message); // classify đã xét giới hạn chi tiêu (PLAN_SPENT) trước mã 403.
   return k === "quota" || k === "rate" ? "quota" : k === "auth" ? "auth" : "other";
 }
 const exitFail = (e: Exit): Tried["fail"] | null => (e.aborted ? { kind: "aborted" } : e.timedOut ? { kind: "timeout" } : null);
@@ -98,8 +98,10 @@ const lastObject = (out: string): Record<string, unknown> | null => {
   for (const l of t.split("\n").reverse()) { try { const o = JSON.parse(l) as Record<string, unknown>; if (o && (o.event === "result" || o.conversation_id || o.status)) return o; } catch {} }
   return null;
 };
+// Model nói không làm (người thật, nội dung bị cấm…): thử lại nguyên văn vô ích, người dùng cần đổi mô tả. Câu thật của từng CLI chưa đo đủ, không khớp thì vẫn đưa nguyên câu trả lời ra (nofile).
+const REFUSAL = /\b(can'?t|cannot|can not|won'?t|unable to|not able to)\b.{0,40}\b(create|generate|make|produce|draw|help)|\b(content|safety|usage) polic|\bpolicy\b|\brefus|\bviolat|không thể (tạo|vẽ|giúp|làm)|từ chối|chính sách|vi phạm/i;
 /** Không thấy ảnh: phân biệt model không có công cụ / có tệp nhưng hỏng, quá cỡ / CLI báo thành công mà câu trả lời nói hết hạn mức (image-generator của agy là tiến trình con, lỗi của nó chỉ nằm trong chữ) / CLI nói xong mà không có tệp. */
-const none = (g: { bad: number; big: number }, said: string): Tried => ({ fail: g.bad ? { kind: "bad" } : g.big ? { kind: "big" } : NO_TOOL_TEXT.test(said) ? { kind: "notool" } : errKind(said) === "quota" ? { kind: "quota", detail: clip(said) } : { kind: "nofile", detail: clip(said) } });
+const none = (g: { bad: number; big: number }, said: string): Tried => ({ fail: g.bad ? { kind: "bad" } : g.big ? { kind: "big" } : NO_TOOL_TEXT.test(said) ? { kind: "notool" } : errKind(said) === "quota" ? { kind: "quota", detail: clip(said) } : REFUSAL.test(said) ? { kind: "refused", detail: clip(said) } : { kind: "nofile", detail: clip(said) } });
 
 /** Chờ khóa của tài khoản, nói cho người dùng biết đang chờ gì. */
 async function locked<T>(r: Run, gen: AsyncGenerator<Event, T | null, unknown>): Promise<{ got?: T; fail?: Tried["fail"] }> {
@@ -276,10 +278,21 @@ export async function runBackend(cli: ImgCli, q: ImgReq): Promise<Tried> {
     try { removeDir(work); } catch (e) { console.error("[imagegen] không xóa được thư mục tạm", String((e as Error).message).slice(0, 200)); }
   }
 }
+const slugOf = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 /** Tên tệp dễ đọc từ mô tả ảnh: "Quả táo đỏ" → qua-tao-do.jpg. */
 export function imageName(prompt: string, i: number, n: number, ext: string) {
-  const slug = prompt.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "") || "anh";
+  const slug = slugOf(prompt).slice(0, 40).replace(/-+$/, "") || "anh";
   return `${slug}${n > 1 ? `-${i + 1}` : ""}.${ext}`;
+}
+const IMG_ASK_WORDS = /^(?:(?:hãy|làm ơn|giúp|giùm|hộ|bạn|mình|tôi|em|cho|vẽ|tạo|làm|sinh|thiết kế|một|1|tấm|bức|cái|ảnh|hình ảnh|hình|tranh|về|please|can|could|you|draw|create|make|generate|design|paint|me|us|a|an|the|image|picture|photo|illustration|of)\s+)+/i;
+/** Tên ảnh theo lời người dùng: model thường viết prompt bằng tiếng Anh, người Việt xin "con mèo đội mũ" mà nhận a-fluffy-orange-cat-wearing-a-tiny-top-hat.png.
+ *  Lời nhờ không còn gì để đặt tên ("làm tiếp đi"), hoặc không viết bằng chữ Latin: giữ tên theo mô tả ảnh. */
+export function requestSlug(request: string): string {
+  const line = request.replace(/<([a-z_]+)\b[^>]*>[\s\S]*?<\/\1>/g, " ").split(/[\n.!?]/).map((l) => l.trim()).find(Boolean) ?? "";
+  const slug = slugOf(line.replace(/\s#\S.*$/, "").replace(IMG_ASK_WORDS, ""));
+  if (slug.length < 4 || slug.split("-").length < 2) return "";
+  if (slug.length <= 40) return slug;
+  return slug.slice(0, 41).replace(/-[^-]*$/, "");
 }
 
 // ---------------------------------------------------------------- chọn gói, báo lỗi thật
@@ -306,7 +319,8 @@ const reason = (f: ImgFail) => {
     case "auth": return `${n}: phiên đăng nhập không còn hợp lệ, cần đăng nhập lại`;
     case "free": return `${n}: gói Free không có công cụ tạo ảnh`;
     case "notool": return `${n}: gói này không có công cụ tạo ảnh`;
-    case "nofile": return `${n}: CLI báo xong nhưng không có tệp ảnh nào`;
+    case "nofile": return `${n}: CLI báo xong nhưng không có tệp ảnh nào${f.detail ? `, câu trả lời của nó: "${f.detail}"` : ""}`;
+    case "refused": return `${n}: không tạo ảnh này${f.detail ? `, câu trả lời của nó: "${f.detail}"` : ""}`;
     case "bad": return `${n}: tệp CLI trả về không phải ảnh PNG, JPEG hay WebP`;
     case "big": return `${n}: ảnh vượt quá ${IMAGE_MAX_MB()} MB`;
     case "timeout": return `${n}: quá thời gian chờ mà chưa xong`;
@@ -315,7 +329,7 @@ const reason = (f: ImgFail) => {
     default: return `${n}: gặp lỗi${f.detail ? ` (${f.detail})` : ""}`;
   }
 };
-export const NO_PLAN_TEXT = "Chưa tạo được ảnh vì tài khoản chưa đăng nhập gói nào tạo được ảnh. Antigravity (gói Google AI) tạo được ảnh; Grok và ChatGPT có thể tạo được ở gói trả phí. Hãy đăng nhập một gói ở Cài đặt → Providers rồi thử lại.";
+export const NO_PLAN_TEXT = "Chưa tạo được ảnh vì tài khoản chưa đăng nhập gói nào tạo được ảnh. Antigravity (kể cả tài khoản Google miễn phí), ChatGPT Plus và Grok Pro đều đã ra ảnh thật. Hãy đăng nhập một trong các gói này ở Cài đặt → Providers rồi thử lại.";
 
 /** Thử lần lượt các gói đã đăng nhập của q.uid; không bao giờ báo có ảnh khi không có tệp thật. */
 export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
@@ -353,7 +367,10 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
   const kinds = new Set(tried.map((f) => f.kind));
   const refused = q.reference && tried.every((f) => f.kind === "noref");
   const next = refused ? "Hãy đăng nhập gói Google AI (Antigravity) ở Cài đặt → Providers để sửa ảnh có sẵn, hoặc tạo ảnh mới chỉ từ mô tả (bỏ tham số reference)."
-    : [...kinds].every((k) => k === "quota" || k === "free" || k === "notool" || k === "auth" || k === "noref") ? "Hãy chờ gói hồi hạn mức, hoặc đăng nhập gói khác ở Cài đặt → Providers rồi thử lại."
+    : kinds.has("refused") ? "Hãy đổi mô tả rồi thử lại, gửi lại nguyên văn nhiều khả năng vẫn bị từ chối."
+    // Chỉ nói chờ khi thật sự có gói hết hạn mức: gói Free hay gói không có công cụ thì chờ bao lâu cũng vậy.
+    : [...kinds].every((k) => k === "quota" || k === "free" || k === "notool" || k === "auth" || k === "noref") ? (kinds.has("quota") ? "Hãy chờ gói hồi hạn mức, hoặc đăng nhập gói khác ở Cài đặt → Providers rồi thử lại."
+      : "Hãy đăng nhập gói tạo được ảnh ở Cài đặt → Providers (Antigravity kể cả tài khoản miễn phí, ChatGPT Plus, Grok Pro) rồi thử lại.")
       : kinds.has("busy") ? "Hãy thử lại sau khi lượt kia xong." : "Hãy thử lại sau ít phút.";
   const providers = /Providers/.test(next);
   const kind = tried.find((f) => f.kind !== "noref")?.kind ?? "noref";
@@ -379,6 +396,7 @@ export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
 Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.
 Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference.
-Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
+Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: trong câu trả lời đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
+Ảnh dùng được trong sản phẩm: kết quả công cụ ghi địa chỉ để đặt vào artifact (src, url(...)) và đường dẫn inputs/ để run_code đọc (Word, PowerPoint, PDF, video). Thiết kế, slide hay video cần ảnh thì tạo ảnh trước rồi đưa đúng ảnh đó vào, không dùng ảnh giữ chỗ.
 Công cụ báo lỗi thì không có ảnh nào: nói đúng lý do và việc người dùng nên làm, đừng gọi sản phẩm thay thế là ảnh AI. Có thể đề nghị dựng đồ họa bằng code hoặc viết sẵn câu lệnh để họ dùng ở công cụ khác.
 </image_generation>`;

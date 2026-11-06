@@ -46,8 +46,10 @@ function useWidth() {
   const [w, setW] = useState(600);
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    const ro = new ResizeObserver(() => setW(el.clientWidth));
-    ro.observe(el); setW(el.clientWidth);
+    // clientWidth gồm cả đệm của khung: đo thẳng thì đường lưới chạy tới sát mép phải thẻ.
+    const inner = () => { const c = getComputedStyle(el); return el.clientWidth - (parseFloat(c.paddingLeft) || 0) - (parseFloat(c.paddingRight) || 0); };
+    const ro = new ResizeObserver(() => setW(inner()));
+    ro.observe(el); setW(inner());
     return () => ro.disconnect();
   }, []);
   return [ref, w] as const;

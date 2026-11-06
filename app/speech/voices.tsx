@@ -82,7 +82,8 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
     return w.every((x) => `${v.name} ${v.desc} ${v.lang} ${v.accent} ${v.gender} ${v.age} ${v.use}`.toLowerCase().includes(x))
       && (!kind || (kind === "premade" ? v.category === "premade" : v.category !== "premade")) && (!gender || v.gender === GENDERS.find((g) => g[1] === gender)?.[0]);
   });
-  const delOk = (v: Voice) => !!admin && v.category !== "premade";
+  // Máy chủ chỉ cho thành viên thấy giọng riêng của chính họ, nên giọng riêng nào hiện ra cũng là của họ. Giọng Thư viện dùng chung: chỉ quản trị viên gỡ.
+  const delOk = (v: Voice) => v.category !== "premade" && (!!admin || !v.lib);
   const bkV = useBulk(shown.filter(delOk), (v) => v.id);
   const pgV = usePage(shown, 12, `${q}|${kind}|${gender}`);
   const voiceActs: BulkAct<Voice>[] = [

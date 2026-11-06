@@ -5,6 +5,8 @@
 export type ErrKind = "quota" | "rate" | "auth" | "other";
 
 const QUOTA = /usage[ _-]?limit|quota|resource[ _-]?exhausted|(hit|reached) your ([\w-]+ ){0,3}limit|weekly limit|subscription_sharing_usage_limit|credit balance (is )?too low|insufficient[ _-]?(quota|balance)|out of credits?/i;
+// Giới hạn chi tiêu của gói (Grok trả HTTP 403 với chữ này): là hết hạn mức, không phải mất đăng nhập. Xét trước mã 401 / 403: từng khiến Grok biến khỏi Tự động và người dùng bị bảo đăng nhập lại.
+export const PLAN_SPENT = /spending[- ]limit|personal-team-blocked|out of extra usage/i;
 const RATE = /rate[ _-]?limit|too many requests|overloaded|\b429\b|\b529\b|at capacity|temporarily unavailable due to (load|capacity)/i;
 const LIMIT_HIT = /limit (reached|exceeded)|try again (at|after)/i;
 // Chờ ngắn hơn mốc này là giới hạn tốc độ; dài hơn là hạn mức của gói ("try again in 2 hours").
@@ -28,6 +30,7 @@ export function retryAfterMs(message: string): number | null {
 }
 
 export function classify(message: string, status?: number | null): ErrKind {
+  if (PLAN_SPENT.test(message)) return "quota";
   if (status === 401 || status === 403) return "auth";
   const wait = retryAfterMs(message);
   if (wait !== null && wait <= SHORT_WAIT && (QUOTA.test(message) || RATE.test(message) || LIMIT_HIT.test(message) || status === 429 || status === 529)) return "rate";

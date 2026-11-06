@@ -162,6 +162,7 @@ export const VI2EN: Record<string, string> = {
   "Đang mở trang…": "Opening page…",
   "Đang chụp màn hình…": "Taking a screenshot…",
   "Chọn tệp và chuyển thành markdown": "Choose a file and convert to markdown",
+  "Không tải được ảnh. Tệp có thể đã hết hạn (tự xóa sau 30 ngày).": "Couldn't load the image. The file may have expired (files are removed after 30 days).",
   "Xem trước": "Preview", "Tải về": "Download", "Sao chép nội dung": "Copy content", "Lỗi": "Error",
   "Tệp này không có nội dung văn bản để sao chép": "This file has no text content to copy", "Đã sao chép nội dung": "Content copied",
   "Không có bản xem trước cho loại tệp này. Dùng “Tải về” để mở tệp gốc, hoặc “Tải lên và chuyển thành markdown” để đọc nội dung.": "No preview for this file type. Use “Download” to open the original, or “Upload and convert to markdown” to read it.",
@@ -413,6 +414,7 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
   [/^(.+) đang giới hạn tốc độ hoặc quá tải\. Hãy thử lại sau (.+) hoặc chọn model khác\.$/, (m) => `${m[1]} is rate limiting or overloaded. Try again in ${m[2].replace("ít phút", "a few minutes").replace("giây", "seconds").replace("phút", "minutes")} or pick another model.`],
   [/^Đang chờ lượt (.+) khác của tài khoản này xong$/, (m) => `Waiting for another ${m[1]} reply on this account to finish`],
+  [/^Đang chờ lượt (.+) khác của tài khoản này xong, đã (\d+) giây$/, (m) => `Waiting for another ${m[1]} reply on this account to finish, ${m[2]} seconds so far`],
   [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one could not start. Try again when it finishes, or pick another model.`],
   [/^Claude đang thử lại sau lỗi tạm thời(?: \(lần (\d+)(?:\/(\d+))?\))?$/, (m) => `Claude is retrying after a temporary error${m[1] ? ` (attempt ${m[1]}${m[2] ? ` of ${m[2]}` : ""})` : ""}`],
   [/^(.+) đã hết hạn mức\. Các model khác của gói (.+) vẫn dùng được\.$/, (m) => `${m[1]} has hit its limit. Other ${m[2]} plan models still work.`],
@@ -468,6 +470,8 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Đã dùng (\d+)% dung lượng dự án$/, (m) => `${m[1]}% of project capacity used`],
   [/^Đã chọn (\d+)$/, (m) => `${m[1]} selected`],
   [/^Xóa (\d+) mục đã chọn$/, (m) => `Delete ${m[1]} selected`],
+  // Nhãn thời gian ("Cập nhật" đơn lẻ là động từ trên nút, ở đây là "đã cập nhật").
+  [/^Cập nhật (vừa xong|\d+ (?:phút|giờ|ngày) trước)$/, (m) => `Updated ${m[1] === "vừa xong" ? "just now" : m[1].replace(/^(\d+) (phút|giờ|ngày) trước$/, (_, n, u) => `${n}${u === "phút" ? "m" : u === "giờ" ? "h" : "d"} ago`)}`],
   [/^Cập nhật (.+)$/, (m) => "Updated " + m[1]],
   [/^(\d+) giờ trước$/, (m) => `${m[1]}h ago`],
   [/^(\d+) ngày trước$/, (m) => `${m[1]}d ago`],
@@ -864,6 +868,8 @@ Object.assign(VI2EN, {
   "Tải ứng dụng – Synchro": "Download apps – Synchro", "Synchro cho macOS, Windows, iPhone và Android.": "Synchro for macOS, Windows, iPhone and Android.",
   // Khối code, kiểm tra gói, regex, cron
   "đang kiểm tra": "checking", "đã xác minh": "verified", "đã lỗi thời": "deprecated", "không tồn tại — có thể AI bịa ra": "doesn't exist — the AI may have made it up", "không kiểm tra được": "couldn't check",
+  "Mở ảnh ở tab mới": "Open image in a new tab",
+  "Model phản biện trả lời không đọc được": "The reviewing model's reply could not be read",
   "📊 Vẽ sơ đồ": "📊 Draw diagram", "Đặt lại": "Reset", "Không vẽ được:": "Couldn't draw:", "Lần chạy kế:": "Next run:", "Thử regex": "Try regex", "Chuỗi mẫu để kiểm tra…": "Sample text to test…", "Regex không hợp lệ": "Invalid regex",
   "kết quả": "matches", "Có thể tối ưu thêm": "Can be optimized", "So sánh với phiên bản trước": "Compare with previous version", "Chưa có phiên bản trước để so sánh": "No previous version to compare",
   "Chạy thử": "Run", "Mở trong khung soạn thảo": "Open in editor", "Sao chép đường dẫn": "Copy path", "Đã sao chép đường dẫn:": "Copied path:", "⚡ Đã tự ghép với tệp gốc · 0 token": "⚡ Merged into the original file · 0 tokens",
@@ -1470,7 +1476,7 @@ Object.assign(VI2EN, {
   "Tệp tải lên:": "Uploaded files:",
   "tệp gốc và phần chữ trích ra. Chỉ tài khoản đã tải tệp lên đọc được. Giữ tới khi bạn xóa tệp ở Cài đặt → Quyền riêng tư, xóa đoạn chat duy nhất dùng tệp đó, hoặc xóa tài khoản; tệp nhiều người cùng tải lên được xóa khi người cuối cùng bỏ tệp.": "the original file and its extracted text. Only accounts that uploaded the file can read it. Kept until you delete it in Settings → Privacy, delete the only chat using it, or delete your account; a file several people uploaded is deleted when the last of them removes it.",
   "Sản phẩm và tệp tạo ra:": "Outputs and generated files:",
-  "tệp do model tạo (giữ 30 ngày hoặc tới khi xóa đoạn chat; mỗi tài khoản tối đa 5 GB, vượt thì mất tệp cũ nhất), giọng nói đã tạo, artifact, ứng dụng đã xuất bản và dữ liệu của chúng, kết quả công cụ (giữ 30 ngày hoặc tới khi xóa đoạn chat).": "files made by models (kept 30 days or until the chat is deleted; up to 5 GB per account, the oldest go first above that), generated speech, artifacts, published apps and their data, and tool results (kept 30 days or until the chat is deleted).",
+  "tệp do model tạo (giữ 30 ngày hoặc tới khi xóa đoạn chat; mỗi tài khoản tối đa 5 GB, đầy thì tệp mới không được lưu cho tới khi bạn xóa bớt hoặc tệp cũ hết hạn), giọng nói đã tạo, artifact, ứng dụng đã xuất bản và dữ liệu của chúng, kết quả công cụ (giữ 30 ngày hoặc tới khi xóa đoạn chat).": "files made by models (kept 30 days or until the chat is deleted; up to 5 GB per account, and when that is full new files are not saved until you delete some or old ones expire), generated speech, artifacts, published apps and their data, and tool results (kept 30 days or until the chat is deleted).",
   "Skill, plugin, connector, tác vụ tự động và thông báo:": "Skills, plugins, connectors, automated tasks and notices:",
   "của riêng tài khoản bạn. Token kết nối được mã hóa trước khi lưu.": "belonging to your account. Connection tokens are encrypted before they are stored.",
   "Synchro Code:": "Synchro Code:",
@@ -1651,10 +1657,16 @@ Object.assign(VI2EN, {
   "Máy chủ từ chối token hoặc API key này. Hãy kiểm tra lại rồi nhập lại.": "The server rejected this token or API key. Check it and enter it again.",
   "Tham số phải là một đối tượng JSON. Công cụ chưa chạy; hãy gửi lại.": "Arguments must be a JSON object. The tool didn't run; send them again.",
   "Máy chủ này đòi đăng nhập nhưng không hỗ trợ đăng nhập OAuth tự động. Hãy kết nối bằng token hoặc API key.": "This server requires sign-in but doesn't support automatic OAuth sign-in. Connect with a token or API key.",
-  "Đang hiện nút kết nối lại": "Showing the reconnect button", "Đang chờ bạn duyệt": "Waiting for your approval",
+  "Đang hiện nút kết nối lại": "Showing the reconnect button", "Bạn đã nhắn thêm nên công cụ chưa chạy": "You sent a message, so the tool didn't run", "Đang chờ bạn duyệt": "Waiting for your approval",
   "Bạn có thể đóng cửa sổ này.": "You can close this window.", "Chưa kết nối được": "Couldn't connect", "Máy chủ im lặng quá lâu khi đang chạy công cụ.": "The server went silent for too long while running the tool.",
 });
 RULES_EN.unshift(
+  // Tóm tắt kết quả công cụ trong nhật ký bị cắt ở 140 ký tự nên chỉ khớp phần đầu.
+  [/^Không rõ kết quả khi gọi ([^:]+):[\s\S]*$/, (m) => `Result unknown for ${m[1]}. It may have finished there, so check before trying again.`],
+  [/^Tạm thời chưa gọi được ([^:]+):[\s\S]*$/, (m) => `Couldn't reach ${m[1]} right now. Try again in a few minutes.`],
+  [/^Chờ bạn trả lời tới (\S+)\. Quá giờ công cụ không chạy\. Nhắn trong khung chat cũng được: công cụ không chạy và Synchro đọc tin nhắn\.$/, (m) => `Waiting for your answer until ${m[1]}. After that the tool won't run. You can also reply in the chat box: the tool won't run and Synchro reads your message.`],
+  [/^Trang đăng nhập của (\S+) từ chối OAuth client này \((.+)\)\. Hãy kiểm tra lại Client ID và địa chỉ quay về đã khai báo với nhà cung cấp: (\S+)$/, (m) => `The sign-in page at ${m[1]} refused this OAuth client (${m[2]}). Check the Client ID and the return address registered with the vendor: ${m[3]}`],
+  [/^Không kết nối được tới (\S+)\. Hãy thử lại sau ít phút\.$/, (m) => `Couldn't reach ${m[1]}. Try again in a few minutes.`],
   [/^(.+) đang tạm thời không phản hồi(?: \(lỗi (\d+)\))?\. Đây là sự cố phía nhà cung cấp; hãy thử lại sau ít phút\.$/, (m) => `${m[1]} isn't responding right now${m[2] ? ` (error ${m[2]})` : ""}. This is a problem on the vendor's side; try again in a few minutes.`],
   [/^Trang đăng nhập của (\S+) từ chối Synchro \((.+)\)\. Hãng cần chấp nhận địa chỉ quay về của Synchro; nếu hãng cấp cho bạn OAuth Client ID hoặc token, hãy dùng chúng thay thế\.$/, (m) => `${m[1]}'s sign-in page rejected Synchro (${m[2]}). The vendor has to accept Synchro's return address. If the vendor gave you an OAuth Client ID or token, use that instead.`],
   [/^(.+) Bạn có thể thử bằng token hoặc API key, hoặc OAuth Client ID riêng trong Cài đặt nâng cao\.$/, (m) => `${VI2EN[m[1]] ?? m[1]} You can try a token or API key, or your own OAuth Client ID in the advanced settings.`],
@@ -1726,7 +1738,7 @@ RULES_EN.push(
 );
 // Tình trạng hệ thống, cảnh báo cho quản trị viên (ops.ts), trang quyền riêng tư.
 Object.assign(VI2EN, {
-  "Nhật ký lỗi:": "Error log:", "thông báo lỗi kỹ thuật của trang và máy chủ, đã bỏ email và mã bí mật, không gắn với tài khoản, không chứa tin nhắn. Chỉ quản trị viên xem, giữ 500 dòng gần nhất, để sửa lỗi.": "technical error messages from the pages and the server, with emails and secrets removed, not tied to an account and without your messages. Only administrators can read it. The latest 500 lines are kept, to fix bugs.",
+  "Nhật ký lỗi:": "Error log:", "thông báo lỗi kỹ thuật của trang và máy chủ, đã bỏ email và mã bí mật, không chứa tin nhắn. Lỗi đăng nhập gói AI gắn với tài khoản để quản trị viên giúp đăng nhập lại; các lỗi khác không gắn với tài khoản. Chỉ quản trị viên xem, giữ tối đa 30 ngày và 20.000 dòng, để sửa lỗi.": "technical error messages from the pages and the server, with emails and secrets removed and without your messages. AI plan sign-in errors are tied to the account so administrators can help you sign in again; other errors are not tied to an account. Only administrators can read it. Kept for at most 30 days and 20,000 lines, to fix bugs.",
 });
 RULES_EN.push(
   [/^Bản sao lưu gần nhất đã (\d+) giờ\. Xem (.+)\.$/, (m) => `The latest backup is ${m[1]} hours old. See ${m[2]}.`], [/^Sau (\d+) giờ vẫn chưa ghi nhận bản sao lưu nào\. Kiểm tra cron của (.+)\.$/, (m) => `No backup recorded after ${m[1]} hours. Check the cron job for ${m[2]}.`],
@@ -1737,3 +1749,10 @@ Object.assign(VI2EN, { "Xóa giọng?": "Delete voice?", "Lưu trữ từ điể
 // Xác minh email, thư cảnh báo cho quản trị viên (thư ghi cả hai thứ tiếng), lỗi đọc tệp.
 Object.assign(VI2EN, { "Đã xóa tài khoản đó": "That account was removed", "Mở Synchro / Open Synchro": "Open Synchro", "Xem chi tiết ở Cài đặt → Sức khỏe hệ thống. Mỗi loại cảnh báo gửi tối đa một lần mỗi ngày. / See Settings → System health. Each kind of alert is sent at most once a day.": "See Settings → System health. Each kind of alert is sent at most once a day." });
 RULES_EN.push([/^Không xử lý được "(.+)"\. Hãy thử lại\.$/, (m) => `Couldn't process "${m[1]}". Please try again.`]);
+RULES_EN.push([/^Đang đọc tệp dự án ?(.*)$/, (m) => `Reading project file ${m[1]}`.trim()]);
+RULES_EN.push([/^Bạn đang có (\d+) phiên Code chạy cùng lúc\. Hãy chờ một phiên xong hoặc bấm Dừng\.$/, (m) => `You have ${m[1]} Code sessions running. Wait for one to finish or press Stop.`], [/^(.+): sắp có$/, (m) => `${m[1]}: coming soon`]);
+// Cổng lượt model: xếp hàng khi một tài khoản hoặc cả máy chủ chạy quá nhiều lượt.
+Object.assign(VI2EN, { "Tài khoản của bạn đang chạy nhiều lượt cùng lúc. Lượt này đang xếp hàng và sẽ tự chạy khi có lượt xong.": "Your account is running several turns at once. This one is queued and starts by itself when a turn finishes.", "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ.": "The server is busy. This turn is queued and starts by itself when there is room.", "Bạn đang có quá nhiều lượt chạy và chờ cùng lúc. Hãy chờ một lượt xong hoặc bấm Dừng rồi gửi lại.": "You have too many turns running and queued. Wait for one to finish, or press Stop, then send again.", "Lượt này đã xếp hàng quá lâu nên Synchro dừng lại. Hãy dừng bớt lượt đang chạy rồi gửi lại.": "This turn was queued for too long, so Synchro stopped it. Stop some running turns, then send again.", "Máy chủ đang bận. Hãy thử lại sau ít phút.": "The server is busy. Try again in a few minutes." });
+Object.assign(VI2EN, { "Máy chủ sắp hết dung lượng nên tạm thời chưa lưu được dữ liệu mới. Hãy thử lại sau.": "The server is almost out of disk space, so new data can't be saved for now. Please try again later.", "Artifact của bạn đã dùng hết dung lượng. Hãy xóa bớt ở trang Artifacts rồi thử lại.": "Your artifacts have used up their storage. Delete some on the Artifacts page and try again." });
+Object.assign(VI2EN, { "Xác minh hai bước đang bật.": "Two-step verification is already on.", "Hãy bắt đầu lại từ đầu.": "Please start over.", "Mã không đúng. Hãy nhập mã đang hiện trong ứng dụng.": "That code isn't right. Enter the code your app shows now." });
+Object.assign(VI2EN, { "Xác minh hai bước:": "Two-step verification:", "khóa của ứng dụng tạo mã (được mã hóa) và mã băm của các mã dự phòng, nếu bạn bật. Xóa khi bạn tắt hoặc xóa tài khoản.": "the authenticator key (encrypted) and hashes of your recovery codes, if you turn it on. Deleted when you turn it off or delete your account." });

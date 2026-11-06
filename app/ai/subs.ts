@@ -12,7 +12,7 @@ import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
 import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
-import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
+import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
@@ -403,7 +403,7 @@ export function modelBlock(cli: Cli, uid: string, id: string): number | null {
   return until || null;
 }
 /** Hãng báo hết hạn mức: ghi nhận phạm vi đúng và trả về "plan" (cả gói) hoặc "model" (riêng model này). */
-function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" | "model" {
+export function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" | "model" {
   const now = Date.now(), wins = g.limits.get(`${cli}:${uid}`)?.windows ?? [];
   if (planBlock(cli, uid)) return "plan";
   if (modelBlock(cli, uid, id)) return "model";
@@ -411,7 +411,8 @@ function noteQuota(cli: Cli, uid: string, id: string, message: string): "plan" |
   const epoch = /\|(\d{10})\b/.exec(message), wait = retryAfterMs(message);
   const until = epoch ? Number(epoch[1]) * 1000 : wait ? now + wait : now + 30 * 60_000;
   // Chỉ gói Claude có hạn mức riêng theo model; Codex, Grok tính chung cả gói. Câu báo nói rõ phiên / tuần chung thì cũng là cả gói.
-  if (cli !== "claude" || /session|5[- ]hour|five[ _-]hour/i.test(message)) { g.quota.set(`${cli}:${uid}`, until); return "plan"; }
+  // "weekly limit" trần là hạn tuần chung của gói; "Opus weekly limit" thì chỉ model đó.
+  if (cli !== "claude" || /session|5[- ]hour|five[ _-]hour/i.test(message) || (/week|seven[ _-]day/i.test(message) && !/opus|sonnet|haiku|fable/i.test(message))) { g.quota.set(`${cli}:${uid}`, until); return "plan"; }
   const unnamed = wins.filter((w) => exhausted(w, now) && !CLAUDE_PLAN_WINDOW.test(w.window) && !CLAUDE_MODEL_WINDOW.test(w.window)).map((w) => w.resetsAt!);
   g.quota.set(`${cli}:${uid}:${id}`, unnamed.length ? Math.max(...unnamed) : until);
   return "model";
@@ -540,6 +541,7 @@ export async function removeConvSessions(uid: string, conv: string) {
   d.prepare("DELETE FROM engine_sessions WHERE user_id = ? AND conv = ?").run(uid, conv);
   d.prepare("DELETE FROM engine_session_log WHERE user_id = ? AND conv = ?").run(uid, conv);
   for (const r of rows) await removeSessionFiles(scopeDir(r.cli, uid), r.session_id);
+  removeConvAttachments(uid, conv);
 }
 /** Đoạn chat này chưa có phiên của CLI, hoặc phiên chưa từng gọi công cụ: đi đường nhanh được. Lịch sử có khối gọi công cụ mà lượt lại không khai báo công cụ thì API có thể từ chối. */
 export function sessionPlain(uid: string, conv: string | undefined, cli: Cli): boolean {
@@ -612,9 +614,11 @@ function recentMedia(msgs: Msg[], max = 8): Set<Blk> {
  * Ghi tệp đính kèm vào thư mục làm việc của engine (att/<ngày>/<lượt>/) cho CLI nhận tệp theo đường dẫn (Codex --image, Antigravity mở bằng
  * công cụ xem tệp); thư mục quá 7 ngày được dọn.
  */
-function saveAttachments(work: string, atts: Attachment[]) {
+// Tên thư mục mang dấu của đoạn chat để xóa đoạn chat thì xóa được tệp đính kèm của nó; thư mục cũ không có dấu vẫn được dọn theo tuổi như trước.
+const attTag = (conv?: string) => (conv ? `${crypto.createHash("sha1").update(conv).digest("hex").slice(0, 12)}-` : "");
+function saveAttachments(work: string, atts: Attachment[], conv?: string) {
   const root = path.join(work, "att"), day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const dir = path.join(root, day, crypto.randomBytes(6).toString("hex"));
+  const dir = path.join(root, day, attTag(conv) + crypto.randomBytes(6).toString("hex"));
   for (const a of atts) {
     a.path = path.join(dir, a.name);
     writeEngineFile(a.path, Buffer.from(a.data, "base64"));
@@ -622,6 +626,11 @@ function saveAttachments(work: string, atts: Attachment[]) {
   }
   const old = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10).replace(/-/g, "");
   for (const d of listEngineDir(root)) if (/^\d{8}$/.test(d) && d < old) { try { removeDir(path.join(root, d)); } catch {} }
+  return dir;
+}
+function removeConvAttachments(uid: string, conv: string) {
+  const root = path.join(engineHome(), "work", safeScope(uid), "att"), tag = attTag(conv);
+  for (const d of listEngineDir(root)) for (const f of listEngineDir(path.join(root, d))) if (f.startsWith(tag)) { try { removeDir(path.join(root, d, f)); } catch {} }
 }
 
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
@@ -629,7 +638,7 @@ function saveAttachments(work: string, atts: Attachment[]) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -681,11 +690,23 @@ export function linksIn(text: string): WebSource[] {
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
+  // Antigravity, Grok chỉ báo mã phiên khi xong lượt: bấm Dừng, quá giờ hay CLI chết thì câu lệnh nằm lại trong thư mục đăng nhập mà xóa đoạn chat cũng không tìm thấy.
+  // Mã mới xuất hiện mà không lượt nào báo về thì không ai nối tiếp được: dọn ở nền sau lượt. Lượt xong bình thường đã báo mã (sessionSeen) nên được giữ.
+  const c0 = subCli(o.model);
+  if (c0 !== "agy" && c0 !== "grok") return subTurnInner(o);
+  const watch = await watchSessions(scopeDir(c0, o.user.id));
+  try { return await subTurnInner(o); } finally { void watch.sweep(); }
+}
+async function subTurnInner(o: SubTurn): Promise<SubResult> {
   // Lượt không thuộc đoạn chat nào (đặt tên, chưng cất…) cũng không có gì nối tiếp: để lại lịch sử phiên thì không có đường nào xóa được khi người dùng xóa đoạn chat.
   if (o.conv && !o.ephemeral) return runTurn(o);
-  const cli = subCli(o.model), seen = new Set<string>();
-  try { return await runTurn({ ...o, conv: undefined, onSession: (id) => seen.add(id) }); }
-  finally { if (cli) for (const id of seen) void removeSessionFiles(scopeDir(cli, o.user.id), id); }
+  const cli = subCli(o.model), seen = new Set<string>(), dirs: string[] = [];
+  try { return await runTurn({ ...o, conv: undefined, onSession: (id) => seen.add(id), onAttDir: (d) => dirs.push(d) }); }
+  finally {
+    if (cli) for (const id of seen) void removeSessionFiles(scopeDir(cli, o.user.id), id);
+    // Tệp đính kèm của đoạn chat ẩn danh không được nằm lại máy chủ chờ dọn theo tuổi (7 ngày).
+    for (const d of dirs) { try { removeDir(d); } catch {} }
+  }
 }
 async function runTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
@@ -722,7 +743,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
   makeDir(work);
   if (col.atts.length && cli !== "claude") {
-    try { saveAttachments(work, col.atts); }
+    try { const dir = saveAttachments(work, col.atts, o.conv); o.onAttDir?.(dir); }
     catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
   }
   // Bộ canh lượt treo (watchdog.ts): model không có hoạt động thật quá lâu (treo mạng, phiên kẹt) thì dừng và báo 503 để chế độ Tự động chuyển
@@ -730,7 +751,8 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const wd = new AbortController();
   const lim = watchLimits(cli, run.effort ?? o.effort);
   // Lịch sử rất dài, nhiều tệp: model đọc lâu hơn hẳn mới bắt đầu trả lời.
-  if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") > 400_000) lim.first *= 3;
+  // Tính cả ảnh, PDF gửi nguyên dạng: bản scan lớn tới sự kiện đầu rất chậm, từng bị coi là treo và chuyển sang CLI không đọc được PDF gốc.
+  if (Buffer.byteLength(prompt) + Buffer.byteLength(o.system ?? "") + col.atts.reduce((n, a) => n + a.data.length, 0) > 400_000) lim.first *= 3;
   const ws: WatchState = { start: T0, last: 0, alive: 0, waiting: false };
   let stalled: "first" | "idle" | null = null, slowTold = false;
   const watch = setInterval(() => {

@@ -267,5 +267,22 @@ console.log("6. Chỉ mục skill đã dựng sẵn không bị xóa khi chấm 
   SR.rank("zebra", kho.slice(0, 100).map((skill) => ({ skill })), 5);
   ok(globalThis.__skillIx === ix && ix.n === 5000, "chấm 100 skill ngay sau khi dựng: chỉ mục còn nguyên", JSON.stringify({ n: globalThis.__skillIx.n }));
 }
+// Bộ giữ riêng, không dùng để chỉnh luật: tên và mô tả tự đặt, theo đúng cách người ta viết skill.
+{
+  const heldOut = [
+    ["client-report", "Package synthesized findings into an executive-grade Word document (.docx) deliverable", ["docs"]],
+    ["board-update", "Turn quarterly numbers into a PDF report for the board", ["docs"]],
+    ["deck-of-cards", "Shuffle and deal a standard deck of cards for card game simulations", []],
+    ["slide-rule-calculator", "Compute logarithms the way a slide rule does", []],
+    ["poster-api", "Thin client for the Poster point of sale REST API", []],
+    ["logo-detection", "Detect brand logos in photos using a vision model", []],
+    ["investor-deck", "Build an investor deck from a one page summary", ["slides"]],
+    ["event-poster", "Design a printable poster for an event", ["design"]],
+  ];
+  for (const [n, d, want] of heldOut) {
+    const got = R.ruleStudios(n, d, "", true).studios;
+    ok(JSON.stringify(got) === JSON.stringify(want), `bộ giữ riêng: ${n}`, got);
+  }
+}
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

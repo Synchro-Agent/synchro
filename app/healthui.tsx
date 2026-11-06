@@ -12,6 +12,8 @@ type Disk = { key: string; path: string; freeMB: number; totalMB: number };
 type Health = {
   now: number; build: string; uptimeSec: number; agent: boolean | null; problems: Problem[]; engines: { engine: string; ok: number; fail: number; auth: number }[]; disks: Disk[]; boots24: number; lastBootAt: number | null;
   runs24: number; runsFailed24: number; errors24: number; errors: { id: number; at: number; first_at: number; source: string; detail: string; n: number }[];
+  clientErrors: { id: number; at: number; source: string; detail: string; n: number }[]; client24: number;
+  turns: { running: number; waiting: number; peak: number; waited: number; refused: number; limit: number; perAccount: number }; isolation: { bwrap: boolean; engineUser: boolean };
   storage: { dbMB: number; uploadsMB: number; outputsMB: number };
   mail: { sent24: number; sent7: number; failed24: number; failed7: number; lastOkAt: number | null; lastFailAt: number | null; smtp: boolean; failures: { at: number; source: string; detail: string; n: number }[] };
   dns: { domain: string; spf: boolean; dkim: boolean; dmarc: boolean } | null;
@@ -73,6 +75,10 @@ export function HealthPanel() {
     ["Free disk", Number.isFinite(low) ? gb(low) : "—", low < 5000], ["Database", gb(h.storage.dbMB)], ["Uploads", gb(h.storage.uploadsMB)], ["Generated files", gb(h.storage.outputsMB)],
     ["Server errors (24h)", h.errors24.toLocaleString(locale()), h.errors24 >= 200], ["Replies failed (24h)", `${h.runsFailed24.toLocaleString(locale())} / ${h.runs24.toLocaleString(locale())}`, h.runsFailed24 * 5 > h.runs24 && h.runsFailed24 > 2],
     ["Emails failed (24h)", h.mail.failed24.toLocaleString(locale()), h.mail.failed24 > 0], ["Web restarts (24h)", Math.max(0, h.boots24).toLocaleString(locale()), h.boots24 > 3],
+    ["Browser errors (24h)", h.client24.toLocaleString(locale())],
+    // Lượt model cùng lúc so với trần cả máy; có lượt phải chờ nghĩa là trần đang chạm thật.
+    ["Replies running now", `${h.turns.running} / ${h.turns.limit}`, h.turns.running >= h.turns.limit], ["Replies waiting now", h.turns.waiting.toLocaleString(locale()), h.turns.waiting > 0], ["Refused, queue full (since restart)", h.turns.refused.toLocaleString(locale()), h.turns.refused > 0],
+    ["CLI isolation", h.isolation.engineUser && h.isolation.bwrap ? L("User riêng, sandbox bật", "Separate user, sandbox on") : h.isolation.engineUser ? L("User riêng, sandbox tắt", "Separate user, sandbox off") : L("Tắt", "Off"), !(h.isolation.engineUser && h.isolation.bwrap)],
   ];
   const dnsRow = (k: string, ok: boolean) => <span key={k} className={`s-badge ${ok ? "ok" : ""}`} style={{ marginLeft: 6 }} data-notr>{k} {ok ? "✓" : "✗"}</span>;
 
@@ -177,10 +183,16 @@ export function HealthPanel() {
         {h.csp.map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere" }} data-notr><span className="adm-chip">{e.source}</span>{e.n > 1 && <span className="adm-chip">× {e.n}</span>} {e.detail}</span></div>)}
       </>}
 
-      <h3 className="sec">Recent errors</h3>
+      <h3 className="sec">Recent server errors</h3>
       {h.errors.length === 0 ? <div className="d" style={{ padding: "8px 0" }}>No server errors recorded.</div> : h.errors.map((e) => (
         <div key={e.id} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere" }}><span className="adm-chip" data-notr>{e.source}</span>{e.n > 1 && <span className="adm-chip" data-notr>× {e.n}</span>}<br /><span className="muted" data-notr>{e.detail}</span></span><span /></div>
       ))}
+
+      {h.clientErrors.length > 0 && <>
+        <h3 className="sec">Browser reports</h3>
+        <p className="d adm-privacy"><I.Lock size={14} />Sent by browsers, and anyone can send one, so these are a hint and do not count as server errors.</p>
+        {h.clientErrors.map((e) => <div key={e.id} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere" }} data-notr>{e.n > 1 && <span className="adm-chip">× {e.n}</span>} <span className="muted">{e.detail}</span></span><span /></div>)}
+      </>}
     </>
   );
 }

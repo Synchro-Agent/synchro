@@ -6,6 +6,7 @@ import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usa
 import { type Cli, cliRunning, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
+import { scrubServerPaths } from "./imagefiles";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -110,7 +111,8 @@ async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnReques
   if (!held) return release;
   yield { kind: "status", text: `Đang chờ lượt ${name} khác của tài khoản này xong`, wait: true };
   const limit = req.lockMs ?? LOCK_WAIT_MS;
-  let deadline = Date.now() + limit, told = false, wake = () => {};
+  const t0 = Date.now();
+  let deadline = t0 + limit, told = false, wake = () => {}, tickAt = t0;
   const st: { got: "ok" | "aborted" | "late" | null } = { got: null };
   void prev.then(() => { st.got ??= "ok"; wake(); });
   const onAbort = () => { st.got ??= "aborted"; wake(); };
@@ -121,6 +123,8 @@ async function* turnLock(locks: Map<string, Slot>, home: string, req: TurnReques
       deadline = Date.now() + limit;
       if (!told) { told = true; yield { kind: "status", text: `Một đoạn chat ${name} khác đang chờ bạn duyệt. Hãy trả lời ở đoạn chat đó, lượt này sẽ chạy ngay sau đó`, wait: true }; }
     } else if (Date.now() >= deadline) { st.got = "late"; break; }
+    // Nói đã chờ bao lâu: "đang chờ" trơ trơ vài phút trông như treo.
+    else if (!told && Date.now() - tickAt >= 15_000) { tickAt = Date.now(); yield { kind: "status", text: `Đang chờ lượt ${name} khác của tài khoản này xong, đã ${Math.round((Date.now() - t0) / 1000)} giây`, wait: true }; }
     await new Promise<void>((ok) => { const t = setTimeout(ok, Math.min(1000, Math.max(50, deadline - Date.now()))); wake = () => { clearTimeout(t); ok(); }; });
   }
   req.signal?.removeEventListener("abort", onAbort);
@@ -494,6 +498,25 @@ export async function* agyQuiet(req: TurnRequest): AsyncGenerator<Event, (() => 
 const grokImgLocks = new Map<string, Slot>();
 export const grokImageLock = (req: TurnRequest) => turnLock(grokImgLocks, String(req.env?.HOME ?? ""), req, "Grok");
 
+// Antigravity không có định dạng trả chữ dần (--output-format json in một object khi xong). Câu dài hiện từng phần thật nhanh (tối đa 2 giây) để đọc giống các model khác và Dừng còn ý nghĩa.
+// Làm sạch đường dẫn máy chủ trước khi cắt: đường dẫn bị cắt ngang hai đoạn thì làm sạch từng đoạn không bắt được. false: người dùng bấm Dừng giữa chừng.
+export const REVEAL = { min: 240, tick: 30, maxMs: 2000, perSec: 1500 };
+async function* revealText(raw: string, signal?: AbortSignal): AsyncGenerator<Event, boolean, unknown> {
+  const text = scrubServerPaths(raw);
+  if (text.length <= REVEAL.min) { yield { kind: "text", text }; return true; }
+  const steps = Math.max(2, Math.ceil(Math.min(REVEAL.maxMs, (text.length / REVEAL.perSec) * 1000) / REVEAL.tick));
+  const size = Math.ceil(text.length / steps);
+  for (let i = 0; i < text.length;) {
+    if (signal?.aborted) return false;
+    let j = Math.min(text.length, i + size);
+    // Không cắt giữa một ký tự ngoài BMP (emoji).
+    if (j < text.length && /[\uD800-\uDBFF]/.test(text[j - 1])) j++;
+    yield { kind: "text", text: text.slice(i, j) };
+    i = j;
+    if (i < text.length) await new Promise((ok) => setTimeout(ok, REVEAL.tick));
+  }
+  return true;
+}
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
@@ -581,7 +604,7 @@ export class AntigravityEngine implements Engine {
     // agy tự chặn công cụ (của nó hoặc của Synchro): lượt dừng sớm. Trả kèm danh sách để bên gọi nhắc model làm tiếp bằng công cụ được
     // phép (chat, Synchro Code); bên gọi hết lượt nhắc mới báo lỗi rõ ràng.
     const denied = log ? await agyDenied(req, log).catch(() => []) : [];
-    if (text) yield { kind: "text", text };
+    if (text && !(yield* revealText(text, req.signal))) { yield err("Đã dừng.", "aborted"); return; }
     yield { kind: "final", text, via: "agy", ...(denied.length ? { denied } : {}) };
   }
 }
@@ -662,7 +685,8 @@ export class GrokEngine implements Engine {
       // lượt mở đầu bằng công cụ hay nghĩ lâu bị coi là treo ở giây thứ 60.
       // Trừ available_commands: CLI in ra lúc khởi động rồi có thể thử lại mãi khi hãng trả 429 (gói free), lượt im lặng hàng phút mà Tự động không chuyển model.
       if (o.type !== "error" && o.type !== "available_commands") yield { kind: "activity" };
-      if (o.type === "text" && typeof o.data === "string") { all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
+      // Có chữ mới sau lỗi: CLI đã tự vượt qua lỗi đó, không tính nữa.
+      if (o.type === "text" && typeof o.data === "string") { lastErr = ""; all += o.data; seg += o.data; yield { kind: "text", text: o.data }; }
       else if (o.type === "tool_call") {
         tools = true; seg = "";
         if (WEB_TOOL.test(String(o.toolName ?? "")) || o.kind === "search") {
@@ -678,7 +702,8 @@ export class GrokEngine implements Engine {
         if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.sessionId); yield { kind: "session", id: o.sessionId }; }
         const u = (o.usage ?? {}) as Json;
         yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
-        if (lastErr && !all) { yield err(lastErr, classify(lastErr)); break; }
+        // Lỗi là điều cuối cùng CLI nói, kể cả khi đã có chữ: câu trả lời bị cắt ngang, không được hiện như đã xong và không được tính là lượt tốt (Tự động còn chuyển model được).
+        if (lastErr) { yield err(lastErr, classify(lastErr)); break; }
         yield { kind: "final", text: tools && seg.trim() ? seg : all, via: "grok" };
       }
     }

@@ -90,6 +90,9 @@ const pool = (() => {
   const frame = (now: number) => {
     raf = 0;
     if (!gl || !canvas || document.hidden) return;
+    // Quả cầu đang nghỉ (không nói, không nghe): 24 hình mỗi giây là đủ, đỡ giữ GPU bận mãi khi không có gì xảy ra.
+    const calm = [...orbs].every((o) => !o.visible || (o.act < 0.02 && Math.abs(o.vel) < 0.02 && o.target() < 0.02));
+    if (calm && last && now - last < 40) { raf = requestAnimationFrame(frame); return; }
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
     last = now;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);

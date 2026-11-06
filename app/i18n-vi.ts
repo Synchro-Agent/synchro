@@ -18,7 +18,7 @@ export const EN2VI: Record<string, string> = {
   "Brain": "Bộ não", "Long-term memory": "Ký ức dài hạn", "Lasting facts Synchro remembers about you (name, work, preferences). They feed the brain’s “About you” note and every chat.": "Những điều bền vững Synchro nhớ về bạn (tên, công việc, sở thích). Chúng nuôi ghi chú “Về bạn” của bộ não và mọi đoạn chat.",
   "Get started": "Bắt đầu",
   "Continue with": "Tiếp tục với",
-  "OR": "HOẶC",
+  "OR": "hoặc",
   "Email": "Email",
   "Password": "Mật khẩu",
   "Confirm Password": "Xác nhận mật khẩu",
@@ -62,7 +62,7 @@ export const EN2VI: Record<string, string> = {
   "Privacy Center": "Trung tâm quyền riêng tư", "and": "và", "Privacy Policy": "Chính sách quyền riêng tư", "for more details.": "để biết thêm chi tiết.",
   "How we protect your data": "Cách chúng tôi bảo vệ dữ liệu của bạn", "How we use your data": "Cách chúng tôi dùng dữ liệu của bạn", "Preferences": "Tùy chọn",
   "Location metadata": "Siêu dữ liệu vị trí", "Allow Synchro to use coarse location metadata (city/region) to improve product experiences.": "Cho phép Synchro dùng siêu dữ liệu vị trí tương đối (thành phố/khu vực) để cải thiện trải nghiệm sản phẩm.",
-  "Help improve our AI models": "Giúp cải thiện các mô hình AI của chúng tôi", "Allow the use of your chats and coding sessions to train and improve Anthropic AI models.": "Cho phép dùng đoạn chat và phiên lập trình của bạn để huấn luyện và cải thiện các mô hình AI của Anthropic.",
+  "Help improve our AI models": "Giúp cải thiện các model AI của chúng tôi", "Allow the use of your chats and coding sessions to train and improve Anthropic AI models.": "Cho phép dùng đoạn chat và phiên lập trình của bạn để huấn luyện và cải thiện các model AI của Anthropic.",
   "Your data": "Dữ liệu của bạn", "Export data": "Xuất dữ liệu", "Shared chats": "Đoạn chat đã chia sẻ", "Manage": "Quản lý", "Shared artifacts": "Artifact đã chia sẻ", "Uploaded files": "Tệp đã tải lên", "Your feedback": "Phản hồi của bạn", "Memory preferences": "Tùy chọn bộ nhớ", "Manage ↗": "Quản lý ↗",
   "No shared chats.": "Chưa có đoạn chat nào được chia sẻ.", "No shared artifacts.": "Chưa có artifact nào được chia sẻ.", "No uploaded files.": "Chưa có tệp nào được tải lên.", "You have not given any feedback yet.": "Bạn chưa gửi phản hồi nào.",
   "Free plan": "Gói Free", "Try Synchro": "Dùng thử Synchro", "Upgrade plan": "Nâng cấp gói",
@@ -71,8 +71,7 @@ export const EN2VI: Record<string, string> = {
   "Invoices": "Hóa đơn", "We have not sent you an invoice yet.": "Chúng tôi chưa gửi hóa đơn nào cho bạn.",
   "Tool access mode": "Chế độ truy cập công cụ", "Controls how connector tools are loaded in conversations.": "Điều khiển cách công cụ của trình kết nối được tải trong các cuộc trò chuyện.", "Tools already loaded": "Công cụ đã tải sẵn", "Load when needed": "Tải khi cần",
   "Connector search": "Tìm kiếm trình kết nối", "Let Synchro search the connector directory and surface ones relevant to your conversations.": "Cho phép Synchro tìm trong thư mục trình kết nối và đề xuất những mục phù hợp với cuộc trò chuyện.",
-  "Switch models when a message is flagged": "Chuyển mô hình khi tin nhắn bị gắn cờ", "When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.": "Khi hệ thống bảo vệ gắn cờ một tin nhắn, tự động chuyển sang mô hình khác để tiếp tục trò chuyện. Khi tắt, phiên sẽ tạm dừng.",
-  "Visuals": "Hình ảnh trực quan", "Build code, documents, and designs in a dedicated window alongside your conversation.": "Tạo code, tài liệu và thiết kế trong một cửa sổ riêng bên cạnh cuộc trò chuyện.",
+    "Visuals": "Hình ảnh trực quan", "Build code, documents, and designs in a dedicated window alongside your conversation.": "Tạo code, tài liệu và thiết kế trong một cửa sổ riêng bên cạnh cuộc trò chuyện.",
   "AI-powered artifacts": "Artifact tích hợp AI", "Build apps and interactive documents that use Synchro inside the artifact.": "Tạo ứng dụng và tài liệu tương tác dùng Synchro ngay bên trong artifact.",
   "Save": "Lưu", "Budget": "Ngân sách", "Delete skill": "Xóa skill", "More": "Thêm", "Toggle password visibility": "Hiện / ẩn mật khẩu", "No memories yet": "Chưa có ghi nhớ nào",
   "Synchro keeps these in mind in every chat.": "Synchro ghi nhớ những điều này và áp dụng trong mọi đoạn chat.",
@@ -132,7 +131,7 @@ export const EN2VI: Record<string, string> = {
   "Open Synchro Code": "Mở Synchro Code",
   "Defaults": "Mặc định",
   "Default mode": "Chế độ mặc định",
-  "Mode used when you open Synchro Code. Plan only outlines steps, Code writes full files, Debug traces errors to the root cause.": "Chế độ dùng khi bạn mở Synchro Code. Plan chỉ lập kế hoạch, Code viết tệp hoàn chỉnh, Debug truy lỗi tới nguyên nhân gốc.",
+  "Mode used when you open Synchro Code. Plan only outlines steps, Code writes full files, Debug traces errors to the root cause.": "Chế độ dùng khi bạn mở Synchro Code. Kế hoạch chỉ phác các bước, Code viết tệp hoàn chỉnh, Gỡ lỗi truy tới nguyên nhân gốc.",
   "Tech stack rules": "Luật công nghệ",
   "Added to every Code request so answers follow your stack.": "Được thêm vào mọi yêu cầu Code để câu trả lời đúng công nghệ của bạn.",
   "Custom rules": "Luật tùy chỉnh",
@@ -719,7 +718,7 @@ Object.assign(EN2VI, {
 RULES_VI.push(
   [/^Plan: (.+)$/, (m) => `Gói: ${viOf(m[1])}`],
   [/^API: (.+)$/, (m) => `API: ${viOf(m[1])}`],
-  [/^Use your own (.+)\. Only your account uses it\.$/, (m) => `Dùng ${viOf(m[1]).replace(/^Gói/, "gói")} của chính bạn. Chỉ tài khoản của bạn dùng.`],
+  [/^Use your own (.+)\. Only your account uses it\.$/, (m) => (/^Tài khoản/.test(viOf(m[1])) ? `Dùng ${viOf(m[1]).replace(/^Tài/, "tài")}. Chỉ tài khoản của bạn dùng.` : `Dùng ${viOf(m[1]).replace(/^Gói/, "gói")} của chính bạn. Chỉ tài khoản của bạn dùng.`)],
   [/^How to use (.+)$/, (m) => `Cách dùng ${m[1]}`],
   [/^Balance (.+?)( \(top up needed\))?$/, (m) => `Số dư ${m[1]}${m[2] ? " (cần nạp thêm)" : ""}`],
   [/^(.+) has no plan sign-in for other apps, so it connects with an API key only\.$/, (m) => `${m[1]} không cho ứng dụng khác đăng nhập bằng gói, nên chỉ kết nối bằng khóa API.`],
@@ -923,7 +922,7 @@ Object.assign(EN2VI, {
 Object.assign(EN2VI, {
   "Your browser blocked the sign-in window.": "Trình duyệt đã chặn cửa sổ đăng nhập.", "Open sign-in window": "Mở cửa sổ đăng nhập",
   "Checked just now": "Vừa kiểm tra", "Needs vendor approval": "Cần nhà cung cấp duyệt", "Waiting for you to sign in…": "Đang chờ bạn đăng nhập…", "Token rejected": "Token bị từ chối",
-  "Update token": "Nhập lại token", "Reconnect": "Kết nối lại", "Use a token instead": "Dùng token thay thế", "Use my OAuth client": "Dùng OAuth client của tôi",
+  "Update token": "Nhập lại token", "Update OAuth client": "Đổi OAuth client", "Try sign-in anyway": "Vẫn thử đăng nhập", "Reconnect": "Kết nối lại", "Use a token instead": "Dùng token thay thế", "Use my OAuth client": "Dùng OAuth client của tôi",
   "You can try your own token or API key, though this vendor may not accept one. If the vendor gave you an OAuth client, you can use that instead.": "Bạn có thể thử bằng token hoặc API key của mình, dù hãng này có thể không nhận. Nếu hãng đã cấp cho bạn một OAuth client, bạn có thể dùng client đó.",
   "A tool needs more access than this sign-in allows. Other tools keep working.": "Một công cụ cần nhiều quyền hơn lần đăng nhập này cho phép. Các công cụ khác vẫn chạy bình thường.",
   "Grant more access": "Cấp thêm quyền", "Last check failed. Tools keep working with the list from the last good check.": "Lần kiểm tra gần nhất không thành công. Công cụ vẫn chạy theo danh sách của lần kiểm tra tốt gần nhất.",
@@ -993,3 +992,7 @@ RULES_VI.push([/^(.*)\(object, written as a JSON string\)$/, (m) => `${m[1]}(đ�
 Object.assign(EN2VI, { "Forgot your current password?": "Quên mật khẩu hiện tại?", "Sending…": "Đang gửi…", "We sent a reset link to": "Đã gửi đường dẫn đặt lại tới", ". It works for 60 minutes. Check Spam if you don't see it.": ". Đường dẫn có hiệu lực 60 phút. Không thấy thư thì xem cả mục Spam." });
 Object.assign(EN2VI, { "Refresh plan and models": "Làm mới gói và danh sách model" });
 RULES_VI.push([/^Checked (.+) again: (.+)$/, (m) => `Đã kiểm tra lại ${m[1]}: ${m[2]}`], [/^Checked (.+) again$/, (m) => `Đã kiểm tra lại ${m[1]}`], [/^Sign in to (.+) again$/, (m) => `Hãy đăng nhập lại ${m[1]}`]);
+RULES_VI.push([/^(Connect|Disconnect) (.+)$/, (m) => `${m[1] === "Connect" ? "Kết nối" : "Gỡ"} ${m[2]}`]);
+// Xác minh hai bước.
+Object.assign(EN2VI, { "Two-step verification": "Xác minh hai bước", "Enter the 6-digit code from your authenticator app, or a recovery code.": "Nhập mã 6 số trong ứng dụng tạo mã, hoặc một mã dự phòng.", "Verification code": "Mã xác minh", "Submit code": "Gửi mã", "Two-step verification turned off": "Đã tắt xác minh hai bước", "Ask for a code from an authenticator app each time you sign in.": "Mỗi lần đăng nhập, hỏi thêm mã từ ứng dụng tạo mã.", "Turn off": "Tắt", "Turn on": "Bật", "Turn on two-step verification": "Bật xác minh hai bước", "Add this key to your authenticator app (Google Authenticator, Authy, 1Password…), then enter the code it shows.": "Thêm khóa này vào ứng dụng tạo mã (Google Authenticator, Authy, 1Password…), rồi nhập mã ứng dụng hiện ra.", "Open in authenticator app": "Mở trong ứng dụng tạo mã", "Save your recovery codes": "Lưu các mã dự phòng", "Each code works once if you lose your authenticator app. They are shown only now. Without them or the app, you can't sign in.": "Mỗi mã dùng được một lần khi bạn mất ứng dụng tạo mã. Các mã chỉ hiện lúc này. Không có chúng hoặc ứng dụng thì bạn không đăng nhập được.", "I saved them": "Tôi đã lưu", "Turn off two-step verification": "Tắt xác minh hai bước", "Enter a code from your authenticator app, or a recovery code.": "Nhập mã trong ứng dụng tạo mã, hoặc một mã dự phòng.", "Couldn't copy": "Không sao chép được" });
+RULES_VI.push([/^On\. (\d+) recovery codes? left\.$/, (m) => `Đang bật. Còn ${m[1]} mã dự phòng.`]);

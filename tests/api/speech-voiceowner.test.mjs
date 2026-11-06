@@ -1,0 +1,23 @@
+// Giọng riêng trong tài khoản ElevenLabs dùng chung có chủ, hạn mức mặc định không để vài người tiêu hết credit của tháng. Tự chạy được, không cần dev:mock.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { loadTs } from "../lib/ts.mjs";
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 400)); };
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-voice-"));
+process.env.DATA_KEY = "voice-key";
+const { speechapi: S } = await loadTs(["speechapi"]);
+console.log("1. Chủ của giọng");
+ok(S.voiceOwner("v1") === null, "giọng cũ chưa có chủ");
+S.setVoiceOwner("v1", "u1");
+ok(S.voiceOwner("v1") === "u1" && S.ownedVoices("u1") === 1 && S.ownedVoices("u2") === 0, "ghi đúng chủ, đếm đúng người");
+S.forgetVoiceOwner("v1");
+ok(S.voiceOwner("v1") === null && S.ownedVoices("u1") === 0, "xóa giọng thì xóa chủ");
+ok(S.isPrivateVoice({ category: "cloned" }) && S.isPrivateVoice({ category: "generated" }) && S.isPrivateVoice({ category: "professional" }), "nhân bản, tự thiết kế, chuyên sâu là giọng riêng");
+ok(!S.isPrivateVoice({ category: "premade" }) && !S.isPrivateVoice({ category: "professional", lib: true }), "giọng có sẵn và giọng Thư viện dùng chung");
+console.log("2. Hạn mức mặc định");
+const b = S.speechBudget();
+ok(b.user <= 3000 && b.unverified <= 500 && b.global === null, "mỗi người mỗi ngày thấp, mức chung tính theo gói", b);
+console.log(`\n${pass} đạt, ${fail} lỗi`);
+process.exit(fail ? 1 : 0);

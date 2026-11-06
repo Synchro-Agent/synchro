@@ -1,3 +1,4 @@
+import { authErrorCode } from "../../../../autherrors";
 import { appUrl, AuthError } from "../../../../authstore";
 import { isProvider, start } from "../../../../oauth";
 
@@ -14,6 +15,6 @@ export async function GET(req: Request, { params }: Ctx) {
     return new Response(null, { status: 302, headers: { Location: url, "Set-Cookie": cookie, "Cache-Control": "no-store" } });
   } catch (e) {
     const msg = e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.";
-    return new Response(null, { status: 302, headers: { Location: `${appUrl(req)}/?auth_error=${encodeURIComponent(msg)}` } });
+    return new Response(null, { status: 302, headers: { Location: `${appUrl(req)}/?auth_error=${authErrorCode(msg)}` } });
   }
 }

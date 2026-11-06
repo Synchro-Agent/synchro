@@ -15,7 +15,7 @@
 set -euo pipefail
 APP="${1:-/var/www/synchro}"; PM2="${2:-synchro}"; PIP="${3:-}"; PORT="${4:-}"
 SIDE="$(dirname "$APP")"; NAME="$(basename "$APP")"
-PREV="$SIDE/.synchro-prev-$NAME"; STATICS="$SIDE/.synchro-statics-$NAME"
+PREV="$SIDE/.synchro-prev-$NAME"; STATICS="$SIDE/.synchro-statics-$NAME"; GOOD="$SIDE/.synchro-good-$NAME"
 # Một lần deploy mỗi lúc; watchdog (scripts/watchdog.sh) thấy khóa này thì không khởi động lại web giữa chừng. Lần sau chờ lần trước xong, không cắt ngang lúc đang tráo bản.
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/synchro-deploy.lock
@@ -110,10 +110,14 @@ if ! healthy "$NEWID"; then
   mv "$APP/.next" "$SIDE/.synchro-failed-$NAME/next"
   mv "$PREV/next" "$APP/.next"
   if [ -d "$PREV/node_modules" ]; then mv "$APP/node_modules" "$SIDE/.synchro-failed-$NAME/node_modules"; mv "$PREV/node_modules" "$APP/node_modules"; fi
+  # rsync của CI đã đè public/ và db/ trước khi build: trả về bản của lần deploy tốt gần nhất, không thì bản cũ chạy với tệp tĩnh và dữ liệu mẫu của bản lỗi.
+  for d in public db; do if [ -d "$GOOD/$d" ] && [ -d "$APP/$d" ]; then rsync -a --delete "$GOOD/$d/" "$APP/$d/" || true; fi; done
   restart || true
   if up; then echo "Đã trả lại bản $OLDID, web đang chạy bình thường. Bản lỗi giữ ở $SIDE/.synchro-failed-$NAME để xem." >&2
   else echo "ĐÃ TRẢ LẠI BẢN $OLDID NHƯNG VẪN KHÔNG ĐẠT: cần xử lý tay ngay (xem docs/van-hanh.md)." >&2; fi
   exit 1
 fi
 rm -rf "$SIDE/.synchro-failed-$NAME"
+# Lỗi ở đây không được làm hỏng lần deploy đã đạt.
+for d in public db; do if [ -d "$APP/$d" ]; then mkdir -p "$GOOD/$d" && rsync -a --delete "$APP/$d/" "$GOOD/$d/" || true; fi; done
 echo "build ok: $NEWID (bản trước giữ ở $PREV)"

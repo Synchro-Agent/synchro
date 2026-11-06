@@ -5,10 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { db, DATA_DIR, ADMIN_EMAILS, getSetting, setSetting } from "./authstore";
 import { formatArgs, redactLine } from "./opsredact";
+import { gateStats } from "./turngate";
 
 export const OPS_DIR = () => process.env.SYNCHRO_OPS_DIR || "/var/lib/synchro-ops";
 const DAY = 86_400_000, KEEP = 30 * DAY;
-export type OpsKind = "error" | "mail_ok" | "mail_fail" | "cli_auth" | "boot" | "parser" | "csp";
+// client: lỗi trình duyệt báo về, ai cũng gửi được nên không chung sổ với lỗi máy chủ (hàng cũ ghi kind = 'error', source = 'browser' vẫn được xếp vào đây khi đọc).
+export type OpsKind = "error" | "client" | "mail_ok" | "mail_fail" | "cli_auth" | "boot" | "parser" | "csp";
 export type OpsRow = { id: number; at: number; first_at: number; kind: OpsKind; source: string; detail: string; n: number; user_id: string | null };
 
 let ready = false, writes = 0, windowAt = 0, inWindow = 0;
@@ -30,7 +32,8 @@ export function opsEvent(kind: OpsKind, source: string, detail = "", uid?: strin
   try {
     const now = Date.now();
     if (now - windowAt > 60_000) { windowAt = now; inWindow = 0; }
-    if (++inWindow > 120) return;
+    // Báo cáo từ trình duyệt có trần riêng ở route: không được ăn vào hạn mức ghi của lỗi máy chủ.
+    if (kind !== "client" && ++inWindow > 120) return;
     const d = t(), text = redactLine(detail), who = uid ?? null;
     const r = d.prepare("UPDATE ops_events SET at = ?, n = n + 1 WHERE id = (SELECT id FROM ops_events WHERE kind = ? AND source = ? AND detail = ? AND COALESCE(user_id, '') = ? AND at > ? ORDER BY id DESC LIMIT 1)").run(now, kind, source, text, who ?? "", now - 3_600_000);
     if (!r.changes) d.prepare("INSERT INTO ops_events (at, first_at, kind, source, detail, user_id) VALUES (?, ?, ?, ?, ?, ?)").run(now, now, kind, source, text, who);
@@ -112,7 +115,8 @@ export function opsSnapshot() {
   const cliRows = d.prepare(`SELECT source, COUNT(DISTINCT CASE WHEN at > ? THEN user_id END) users24, COUNT(DISTINCT user_id) users7, COALESCE(SUM(CASE WHEN at > ? THEN n ELSE 0 END), 0) n24, COALESCE(SUM(n), 0) n7, MAX(at) last
     FROM ops_events WHERE kind = 'cli_auth' AND at > ? GROUP BY source ORDER BY last DESC`).all(now - DAY, now - DAY, now - 7 * DAY) as { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[];
   const cliRecent = d.prepare(`SELECT o.at, o.source, o.n, u.email FROM ops_events o LEFT JOIN users u ON u.id = o.user_id WHERE o.kind = 'cli_auth' ORDER BY o.at DESC LIMIT 12`).all() as { at: number; source: string; n: number; email: string | null }[];
-  const errors = d.prepare("SELECT id, at, first_at, source, detail, n FROM ops_events WHERE kind = 'error' ORDER BY at DESC LIMIT 40").all() as Omit<OpsRow, "kind" | "user_id">[];
+  const errors = d.prepare("SELECT id, at, first_at, source, detail, n FROM ops_events WHERE kind = 'error' AND source != 'browser' ORDER BY at DESC LIMIT 40").all() as Omit<OpsRow, "kind" | "user_id">[];
+  const clientErrors = d.prepare("SELECT id, at, first_at, source, detail, n FROM ops_events WHERE kind = 'client' OR (kind = 'error' AND source = 'browser') ORDER BY at DESC LIMIT 12").all() as Omit<OpsRow, "kind" | "user_id">[];
   const csp = d.prepare("SELECT at, source, detail, n FROM ops_events WHERE kind = 'csp' ORDER BY at DESC LIMIT 8").all() as Pick<OpsRow, "at" | "source" | "detail" | "n">[];
   const backup = readJson<BackupStatus>(path.join(ops, "backup-status.json"));
   const watchdog = readJson<WatchdogState>(path.join(ops, "watchdog-state.json"));
@@ -121,7 +125,7 @@ export function opsSnapshot() {
   const runs24 = sum("SELECT COUNT(*) n FROM runs WHERE created_at > ?", now - DAY), runsFailed24 = sum("SELECT COUNT(*) n FROM runs WHERE status = 'error' AND created_at > ?", now - DAY);
   const hour = Math.floor(now / 3_600_000), engineRows = (from: number) => d.prepare("SELECT engine, SUM(ok) ok, SUM(fail) fail, SUM(auth) auth FROM ops_runs WHERE hour >= ? GROUP BY engine ORDER BY engine").all(from) as EngineRuns[];
   return {
-    engines: engineRows(hour - 24), engineHour: engineRows(hour - 1), now, disks: uniqueDisks, mail, cli: cliRows, cliRecent, errors, errors24: count("error", now - DAY), csp, backup, watchdog, wdEvents, runs24, runsFailed24,
+    engines: engineRows(hour - 24), engineHour: engineRows(hour - 1), now, disks: uniqueDisks, mail, cli: cliRows, cliRecent, errors, errors24: sum("SELECT COALESCE(SUM(n), 0) n FROM ops_events WHERE kind = 'error' AND source != 'browser' AND at > ?", now - DAY), clientErrors, client24: sum("SELECT COALESCE(SUM(n), 0) n FROM ops_events WHERE (kind = 'client' OR (kind = 'error' AND source = 'browser')) AND at > ?", now - DAY), turns: gateStats(), isolation: { bwrap: process.env.SYNCHRO_ENGINE_BWRAP === "1", engineUser: !!process.env.SYNCHRO_ENGINE_USER }, csp, backup, watchdog, wdEvents, runs24, runsFailed24,
     boots24: count("boot", now - DAY), lastBootAt: lastAt("boot"),
     storage: {
       dbMB: fileMB(path.join(DATA_DIR, "synchro.db")) + fileMB(path.join(DATA_DIR, "synchro.db-wal")),
@@ -166,8 +170,8 @@ export async function opsWatch() {
 }
 
 export type EngineRuns = { engine: string; ok: number; fail: number; auth: number };
-/** Lỗi từ trình duyệt và lượt chạy nền: cùng sổ với lỗi máy chủ, đã làm sạch ở opsEvent. */
-export const recordOps = (kind: "browser" | "server", msg: unknown) => opsEvent("error", kind, String(msg ?? ""));
+/** Lỗi từ trình duyệt (sổ riêng) và lượt chạy nền (sổ lỗi máy chủ), đã làm sạch ở opsEvent. */
+export const recordOps = (kind: "browser" | "server", msg: unknown) => opsEvent(kind === "browser" ? "client" : "error", kind, String(msg ?? ""));
 
 /** "sub-claude/sonnet" → "claude"; khóa API "openai/…" → "openai". */
 export const engineOf = (model: unknown) => { const m = typeof model === "string" ? model : ""; return (m.split("/")[0] || "unknown").replace(/^sub-/, "").slice(0, 24); };

@@ -103,6 +103,20 @@ try {
   ok(a?.kind === "connector" && /không hiện ở đây/.test(a.detail), "tham số rất dài: thẻ vẫn hiện được, ghi rõ phần không hiện", JSON.stringify(a).slice(0, 200));
   if (a) await api("POST", "/api/approve", { id: a.id, ok: false });
   await finished(run);
+  // Trả lời thẻ bằng lời: thẻ khép ngay, công cụ không chạy, model đọc được tin nhắn. Trên cả bốn CLI: tin nhắn đi theo kết quả công cụ qua cầu nối.
+  for (const [cli, model] of [["claude", "sub-claude/sonnet"], ["codex", "sub-codex/gpt-6.1-sol"], ["agy", "sub-agy/gemini-3.8-flash"], ["grok", "sub-grok/grok-4.7"]]) {
+    const title = `Bằng lời ${cli} ${Date.now()}`;
+    r = await start(model, `#tool=mock_notes__create_note #args=${JSON.stringify({ title })}`, `conn-typed-${cli}-${Date.now()}`);
+    run = r.j?.run;
+    a = await askOf(run);
+    const sent = await api("POST", `/api/runs/${run}`, { text: "đừng tạo nữa, đổi tiêu đề thành ABC" });
+    ok(sent.j?.queued === true, `${cli}: tin nhắn thêm được nhận khi thẻ đang chờ`, JSON.stringify(sent));
+    const fin = await finished(run);
+    ok(fin?.status === "done" && fin.events.some((e) => e.kind === "asked" && JSON.parse(e.text).typed === true), `${cli}: thẻ khép vì tin nhắn, lượt không phải chờ người bấm`, `${fin?.status} ${JSON.stringify(fin?.events?.filter((e) => e.kind === "asked"))}`);
+    ok(fin?.events.some((e) => e.kind === "steer" && /đổi tiêu đề thành ABC/.test(e.text)), `${cli}: tin nhắn hiện trong đoạn chat và tới model`, JSON.stringify(fin?.events?.map((e) => e.kind)));
+    ok(!/Đã tạo ghi chú/.test(textOf(fin)), `${cli}: công cụ không chạy`, textOf(fin));
+    ok((await api("POST", "/api/approve", { id: a?.id, ok: true })).s !== 200 || !/Đã tạo ghi chú/.test(textOf(await events(run))), `${cli}: bấm Cho phép muộn không chạy công cụ`);
+  }
   // Dừng khi đang chờ duyệt: thôi chờ ngay, câu hỏi không còn hiệu lực.
   r = await start("sub-claude/sonnet", `#tool=mock_notes__create_note #args={"title":"Dừng"}`, `conn-stop-${Date.now()}`);
   run = r.j?.run;

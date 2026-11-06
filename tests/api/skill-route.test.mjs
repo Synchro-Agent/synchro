@@ -67,6 +67,12 @@ console.log("2e. Bộ câu có nhãn trên danh mục thật (tên skill và mô
     const names = SR.suggest(q, real).slice(0, 5).map((h) => h.skill.name.split(":").pop());
     ok(names.some((n) => want.test(n)), `“${q}” → ${want}`, names);
   }
+  // Gõ không dấu: âm tiết trùng chữ tiếng Anh ("hang", "ban") không kéo skill lạ; khái niệm có tên riêng thắng khái niệm rộng.
+  const names = (q) => SR.suggest(q, real).slice(0, 5).map((h) => h.skill.name.split(":").pop());
+  for (const [q, bad] of [["phan tich du lieu ban hang", /debugging|board-minutes/], ["viet email cam on khach hang", /mapmap|maps/], ["Lập ngân sách đám cưới", /event-sourcing|twilio/], ["Làm hóa đơn cho khách hàng", /income-taxes|profit-loss|uk-accounting/]])
+    ok(!names(q).some((n) => bad.test(n)), `“${q}” không ra skill lạ`, names(q));
+  for (const [q, want] of [["viet email cam on khach hang", /email/], ["Làm hóa đơn cho khách hàng", /invoice/], ["lam hoa don cho khach hang", /invoice/], ["Lập ngân sách đám cưới", /wedding|budget/], ["Tuyển dụng lập trình viên", /recruit/]])
+    ok(names(q).some((n) => want.test(n)), `“${q}” → ${want}`, names(q));
   for (const q of ["Lập danh sách khách mời", "Nhắc tôi họp lúc 3 giờ", "Xin chào bạn"]) ok(!SR.suggest(q, real).length, `“${q}”: không gợi ý skill nào`, SR.suggest(q, real).map((h) => h.skill.name));
 }
 console.log("3. Mục lục đủ mọi mục ngành nghề");

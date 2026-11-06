@@ -2,13 +2,15 @@
 // hay hết bộ nhớ trình duyệt không làm mất gì. Mỗi mục lưu nguyên một chuỗi JSON của trình duyệt. Xung đột đơn giản: theo từng mục, mốc sửa mới nhất thắng.
 // Đoạn chat ẩn danh không bao giờ gửi lên đây (chatsync.ts). rev tăng dần theo từng tài khoản, để thiết bị chỉ lấy những gì đổi từ lần trước.
 // Xóa: giữ dòng đánh dấu đã xóa (không còn nội dung) để thiết bị khác cũng xóa và bản cũ không sống lại.
-import { db } from "./authstore";
+import { DATA_DIR, db } from "./authstore";
+import { diskLow } from "./diskfloor";
 
-export const SYNC_LIMITS = { item: 12_000_000, total: 1_000_000_000, items: 100_000, page: 4_000_000, batch: 40 };
+// lockedTotal: tài khoản chưa xác minh email. Đăng ký hàng loạt tài khoản ảo không được lấp đĩa bằng đoạn chat; đoạn chat thật hiếm khi tới mức này.
+export const SYNC_LIMITS = { item: 12_000_000, total: 1_000_000_000, lockedTotal: 100_000_000, items: 100_000, page: 4_000_000, batch: 40 };
 export type SyncKind = "chat" | "project";
 export type ItemRow = { kind: string; id: string; upd: number; rev: number; deleted: number; data: string | null; size: number };
 export type PushItem = { kind: SyncKind; id: string; upd: number; data?: string; deleted?: boolean };
-export type PushResult = { kind: string; id: string; ok: boolean; upd: number; rev: number; deleted?: boolean; error?: "too_big" | "quota" | "bad"; removed?: boolean };
+export type PushResult = { kind: string; id: string; ok: boolean; upd: number; rev: number; deleted?: boolean; error?: "too_big" | "quota" | "bad" | "disk"; removed?: boolean };
 
 let ready = false;
 function t() {
@@ -46,8 +48,8 @@ export function itemsByKey(uid: string, keys: string[]): ItemRow[] {
 const wipedAt = (uid: string) => (t().prepare("SELECT upd FROM user_items WHERE user_id = ? AND kind = 'wipe' AND id = ?").get(uid, WIPE_ID) as { upd: number } | undefined)?.upd ?? 0;
 
 /** Nhận một đợt từ thiết bị. Theo từng mục: mốc sửa mới hơn (hoặc bằng) mới được ghi; thua thì báo để thiết bị lấy bản trên máy chủ về. */
-export function pushItems(uid: string, input: PushItem[]): PushResult[] {
-  const d = t(), now = Date.now();
+export function pushItems(uid: string, input: PushItem[], opts?: { total?: number }): PushResult[] {
+  const d = t(), now = Date.now(), total = opts?.total ?? SYNC_LIMITS.total, low = diskLow(DATA_DIR);
   const get = d.prepare("SELECT upd, rev, deleted, size FROM user_items WHERE user_id = ? AND kind = ? AND id = ?");
   const put = d.prepare(`INSERT INTO user_items (user_id, kind, id, upd, rev, deleted, data, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, kind, id) DO UPDATE SET upd = excluded.upd, rev = excluded.rev, deleted = excluded.deleted, data = excluded.data, size = excluded.size`);
@@ -71,7 +73,9 @@ export function pushItems(uid: string, input: PushItem[]): PushResult[] {
       if (typeof x.data !== "string") return { ...base, ok: false, upd: 0, rev: 0, error: "bad" };
       const size = Buffer.byteLength(x.data);
       if (size > SYNC_LIMITS.item) return { ...base, ok: false, upd: 0, rev: 0, error: "too_big" };
-      if (used.b - (cur?.size ?? 0) + size > SYNC_LIMITS.total || (!cur && used.n >= SYNC_LIMITS.items)) return { ...base, ok: false, upd: 0, rev: 0, error: "quota" };
+      // Đĩa sắp đầy: không nhận phần tăng thêm; bản nhỏ đi và lệnh xóa vẫn qua vì chúng giải phóng chỗ. Trình duyệt giữ bản của nó và gửi lại sau.
+      if (low && size > (cur?.size ?? 0)) return { ...base, ok: false, upd: 0, rev: 0, error: "disk" };
+      if (used.b - (cur?.size ?? 0) + size > total || (!cur && used.n >= SYNC_LIMITS.items)) return { ...base, ok: false, upd: 0, rev: 0, error: "quota" };
       try { if (typeof JSON.parse(x.data) !== "object") throw 0; } catch { return { ...base, ok: false, upd: 0, rev: 0, error: "bad" }; }
       const rev = nextRev(uid);
       put.run(uid, x.kind, x.id, upd, rev, 0, x.data, size);

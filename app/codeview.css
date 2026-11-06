@@ -47,6 +47,11 @@
 }
 [data-theme="dark"] .cv-mode.m-plan {color:#c1a6ff
 }
+.cv-nows {display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);margin:0 0 6px;font-family:var(--font-sans)}
+.cv-wswait {display:flex;flex-direction:column;gap:10px;margin-top:4px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-2,var(--hover));font-family:var(--font-sans);font-size:13.5px;line-height:1.45}
+.cv-wswait-t {display:flex;gap:8px;align-items:flex-start}
+.cv-wswait-t svg {flex:none;margin-top:2px}
+.cv-wswait-a {display:flex;gap:8px;flex-wrap:wrap}
 .cv-stopped {display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);margin-top:2px;font-family:var(--font-sans)
 }
 .cv-ai .actions {margin-bottom:2px
@@ -339,6 +344,11 @@ body.cv-dragging iframe,body.cv-dragging .bp-view {pointer-events:none
 }
 .cv-cols>.sr {position:absolute;top:46px;right:8px;bottom:auto;width:296px;max-height:calc(100% - 56px);overflow:auto;z-index:22;padding:0 0 4px;background:transparent;border:0;box-shadow:none;animation:pop .16s var(--ease) both;transform-origin:top right
 }
+/* Thẻ nổi bên phải: menu Thêm mở đè lên từng để lòi các mẩu chữ; màn hình trống chừa chỗ để thẻ gợi ý không bị che. */
+.app:has(.menu.cv-more) .cv-cols>.sr {visibility:hidden
+}
+@media (min-width:1101px){.cv-cols:has(>.sr) .cv-empty {padding-right:304px
+}}
 .cv-cols>.sr section.sr-sec {box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px -14px rgba(0,0,0,.22)
 }
 .cv-col:has(>.cv-cols>.sr) {min-width:340px

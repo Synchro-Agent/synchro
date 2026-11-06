@@ -147,7 +147,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
           art={PRESETS[x.id % PRESETS.length]} seed={(x.id % 97) + 1} files={files} action="none" appear={false} width={132}
           onActivate={() => onOpen(x.id)} />
         {bk.on && <BulkCheck on={bk.has(x)} />}
-        <div className="pj-gname"><b>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>Cập nhật {ago(projUpd(x, chats))}</span></div>
+        <div className="pj-gname"><b>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>{`Cập nhật ${ago(projUpd(x, chats))}`}</span></div>
         <div onClick={(e) => e.stopPropagation()}>
           <ProjMenu p={x} open={menu === x.id} pin style={{ top: ctxPos?.y ?? 40, left: ctxPos?.x ?? 40, width: 236 }}
             onPin={() => { patch(x.id, { pinned: !x.pinned }); setMenu(null); say(x.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}
@@ -262,7 +262,7 @@ export function MemModal({ mem, onClose, onDelete }: { mem: { id: number; conten
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal pj-modal">
         <h2>Bộ nhớ dự án</h2>
-        <p className="pj-hint">Synchro tự ghi nhớ thông tin bền vững từ các đoạn chat trong dự án này. Bạn có thể xóa bất kỳ mục nào.</p>
+        <p className="pj-hint">Synchro tự ghi nhớ thông tin bền vững từ các đoạn chat trong dự án này. Bạn có thể xóa bất kỳ mục nào. Tắt bằng mục Tạo bộ nhớ từ đoạn chat trong Cài đặt.</p>
         {mem.length === 0 ? <p className="muted" style={{ margin: "18px 0" }}>Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p> : (
           <div className="pj-memlist">{mem.map((m) => <div key={m.id} className="pj-memitem"><span>{m.content}</span><button className="icon-btn" aria-label="Xóa" onClick={() => onDelete(m.id)}><I.Trash size={15} /></button></div>)}</div>
         )}
@@ -353,7 +353,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
         <div className="pj-hero-t">
           <h1>{proj.name}</h1>
           {proj.desc && <p>{proj.desc}</p>}
-          <div className="pj-facts"><span><I.Clock size={13} />Cập nhật {ago(projUpd(proj, chats))}</span><span>{mine.length} đoạn chat</span><span>{ctx.length} tệp ngữ cảnh</span><span>{mem.length} mục ghi nhớ</span></div>
+          <div className="pj-facts"><span><I.Clock size={13} />{`Cập nhật ${ago(projUpd(proj, chats))}`}</span><span>{mine.length} đoạn chat</span><span>{ctx.length} tệp ngữ cảnh</span><span>{mem.length} mục ghi nhớ</span></div>
         </div>
         <div className="ds-acts pj-tools">
           <button className={`icon-btn pj-pinbtn ${proj.pinned ? "on" : ""}`} data-tip={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} aria-label={proj.pinned ? "Bỏ ghim dự án" : "Ghim dự án"} onClick={() => { patch(proj.id, { pinned: !proj.pinned }); say(proj.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}>{proj.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}</button>
@@ -400,7 +400,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
           <BulkBar b={bkC} acts={chatActs} noun="đoạn chat" /></>
         ))}
         {tab === "ins" && <div className="pj-note"><p className={`pj-ins ${proj.ins ? "" : "muted"}`}>{proj.ins || "Thêm hướng dẫn để điều chỉnh câu trả lời của Synchro"}</p></div>}
-        {tab === "mem" && (mem.length === 0 ? <div className="pj-note"><p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat.</p></div> : <><div className="bk-head"><span className="bk-head-n">{mem.length} mục</span><BulkButton b={bkM} compact /></div><ul className="pj-mem pj-list">{pgMem.items.map((m) => <li key={m.id} {...bulkRow(bkM, m)}>{bkM.on && <BulkCheck on={bkM.has(m)} />}{m.content}</li>)}</ul><PageBar pg={pgMem} /><BulkBar b={bkM} acts={memActs} noun="mục" /></>)}
+        {tab === "mem" && (mem.length === 0 ? <div className="pj-note"><p className="muted">Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat. Tắt bằng mục Tạo bộ nhớ từ đoạn chat trong Cài đặt.</p></div> : <><div className="bk-head"><span className="bk-head-n">{mem.length} mục</span><BulkButton b={bkM} compact /></div><ul className="pj-mem pj-list">{pgMem.items.map((m) => <li key={m.id} {...bulkRow(bkM, m)}>{bkM.on && <BulkCheck on={bkM.has(m)} />}{m.content}</li>)}</ul><PageBar pg={pgMem} /><BulkBar b={bkM} acts={memActs} noun="mục" /></>)}
         {tab === "skills" && canSkills && <ProjectSkills pid={proj.id} say={say} />}
         {tab === "ctx" && (
           <section className="pj-ctx">
@@ -435,13 +435,13 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
                 {shownCtx.map((c) => {
                   const ext = (c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").slice(0, 4).toUpperCase()) || "FILE";
                   return (
-                    <div key={c.id} className={`pj-file ${sel.has(c.id) ? "is-sel" : ""} ${sel.size ? "selmode" : ""}`} onContextMenu={(e) => fm.open(e, c.name, c.text)} onClick={() => sel.size && toggle(c.id)}>
+                    <div key={c.id} className={`pj-file ${sel.has(c.id) ? "is-sel" : ""} ${sel.size ? "selmode" : ""}`} onContextMenu={(e) => fm.open(e, c.name, c.text)} onClick={() => (sel.size ? toggle(c.id) : fm.show(c.name, undefined, c.text))}>
                       <button className="pj-file-x" aria-label="Xóa" onClick={(e) => { e.stopPropagation(); delCtx([c.id]); }}><I.X size={12} /></button>
                       <b title={c.name}>{c.name}</b>
                       <span>{fmtSize(c.size ?? c.chars ?? 0)}</span>
                       {/* Tệp không trích được chữ (ảnh, PDF scan hỏng): vẫn giữ tệp, nhưng nói rõ để không tưởng model đã đọc. */}
                       {c.chars === 0 && !c.chunks?.length && <span className="pj-file-warn" data-tip="Không trích được chữ từ tệp này nên model không đọc được">Model chưa đọc được</span>}
-                      <div className="pj-file-f"><em>{ext}</em><button className={`pj-cb ${sel.has(c.id) ? "on" : ""}`} aria-label="Chọn" onClick={(e) => { e.stopPropagation(); toggle(c.id); }}>{sel.has(c.id) && <I.Check size={12} />}</button></div>
+                      <div className="pj-file-f"><em>{ext}</em><button className="pj-file-more" aria-label="Thêm" title="Thêm" onClick={(e) => { e.stopPropagation(); fm.open(e, c.name, c.text); }}><I.Dots size={14} /></button><button className={`pj-cb ${sel.has(c.id) ? "on" : ""}`} aria-label="Chọn" onClick={(e) => { e.stopPropagation(); toggle(c.id); }}>{sel.has(c.id) && <I.Check size={12} />}</button></div>
                     </div>
                   );
                 })}

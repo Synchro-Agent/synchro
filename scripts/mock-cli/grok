@@ -125,6 +125,9 @@ async function grokImage(prompt) {
     C.out({ type: "thought", data: "Đang nghĩ…" });
     if (prompt.includes("[mock:slowgrok]")) for (let i = 0; i < 6; i++) { await C.sleep(1000); C.out({ type: "thought", data: "Vẫn đang nghĩ…" }); }
     if (prompt.includes("[mock:holdgrok]")) await C.sleep(8000);
+    // [mock:midquota]: viết được một phần rồi hết hạn mức, CLI vẫn gửi end. [mock:midrecover]: lỗi thoáng qua rồi viết tiếp đủ câu.
+    if (prompt.includes("[mock:midquota]")) { C.out({ type: "text", data: "Phần đầu câu trả lời" }); C.out({ type: "error", message: "HTTP 403 personal-team-blocked:spending-limit" }); C.out({ type: "end", sessionId: "mock-mid", usage: {} }); return; }
+    if (prompt.includes("[mock:midrecover]")) { C.out({ type: "text", data: "Phần đầu" }); C.out({ type: "error", message: "stream reset, retrying" }); C.out({ type: "text", data: " và phần cuối" }); C.out({ type: "end", sessionId: "mock-mid", usage: {} }); return; }
     if (prompt.includes("#grokargs")) return end(`ARGS: tools=${tools.join("|") || "-"} deny=${deny.join("|") || "-"} web=${web ? "on" : "off"} model=${model} effort=${effort ?? "-"} rules=${rules ? "yes" : "no"} memory=${a.includes("--no-memory") ? "off" : "on"} approve=${a.includes("--always-approve") ? "yes" : "no"} resume=${resume ? "yes" : "no"} disallowed=${disallowed.join("|") || "-"} autoupdate=${a.includes("--no-auto-update") ? "off" : "on"}`);
     // Tệp đính kèm @đường_dẫn (tương đối với thư mục làm việc): đọc đúng các byte như Grok CLI đính kèm tệp.
     const refs = [...prompt.matchAll(/(?:^|\s)@([^\s]+\.(?:png|jpe?g|webp|gif|pdf))/gi)].map((m) => m[1]);

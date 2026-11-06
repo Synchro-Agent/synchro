@@ -86,6 +86,36 @@ export function verifyMail(o: { base: string; name?: string | null; url: string;
 }
 
 /** Có người đăng ký bằng email đã có tài khoản: chủ email được báo và có đường lấy lại. Trang đăng ký không nói gì về chuyện này. */
+/** Đổi email: đường dẫn xác nhận gửi tới địa chỉ mới. Email chỉ đổi khi người dùng bấm. */
+export function emailChangeMail(o: { base: string; name?: string | null; url: string; hours: number; lang: MailLang }): Mail {
+  const vi = o.lang === "vi", name = o.name?.trim() ? esc(o.name.trim()) : "";
+  const title = vi ? "Xác nhận email mới" : "Confirm your new email";
+  const lead = vi ? `Chào${name ? ` ${name}` : " bạn"}, tài khoản Synchro vừa yêu cầu đổi sang địa chỉ này. Bấm nút bên dưới để xác nhận.` : `Hi${name ? ` ${name}` : ""}, a Synchro account asked to switch to this address. Press the button below to confirm.`;
+  const after = vi ? `Đường dẫn có hiệu lực trong <b style="color:${INK};font-weight:600">${o.hours} giờ</b>.` : `This link works for <b style="color:${INK};font-weight:600">${o.hours} hours</b>.`;
+  const note = vi ? "Không phải bạn yêu cầu? Hãy bỏ qua email này, sẽ không có gì thay đổi." : "Didn't ask for this? Ignore this email and nothing changes.";
+  const label = vi ? "Xác nhận email mới" : "Confirm new email";
+  const fallback = vi ? "Nút không bấm được? Dán đường dẫn này vào trình duyệt:" : "Button not working? Paste this link into your browser:";
+  return {
+    subject: vi ? "Xác nhận email mới cho tài khoản Synchro" : "Confirm your new email for Synchro",
+    html: frame(o.base, o.lang, { pre: lead.slice(0, 80), title, lead, cta: { label, url: o.url }, after, note, fallback: { label: fallback, url: o.url } }),
+    text: `${title}\n\n${vi ? "Mở đường dẫn này để xác nhận" : "Open this link to confirm"} (${o.hours} ${vi ? "giờ" : "hours"}):\n${o.url}\n\n${note}`,
+  };
+}
+/** Báo cho địa chỉ cũ, để chủ thật biết nếu tài khoản bị người khác đổi email. */
+export function emailChangeNoticeMail(o: { base: string; name?: string | null; to: string; lang: MailLang }): Mail {
+  const vi = o.lang === "vi", name = o.name?.trim() ? esc(o.name.trim()) : "", url = `${o.base}/reset`;
+  const title = vi ? "Có yêu cầu đổi email tài khoản" : "A change of email was requested";
+  const lead = vi ? `Chào${name ? ` ${name}` : " bạn"}, tài khoản Synchro của bạn vừa yêu cầu đổi email sang <b style="color:${INK};font-weight:600">${esc(o.to)}</b>. Email chỉ đổi sau khi địa chỉ mới xác nhận.` : `Hi${name ? ` ${name}` : ""}, your Synchro account asked to change its email to <b style="color:${INK};font-weight:600">${esc(o.to)}</b>. It only changes once the new address confirms.`;
+  const note = vi ? "Không phải bạn? Hãy đặt lại mật khẩu ngay." : "Wasn't you? Reset your password right away.";
+  const label = vi ? "Đặt lại mật khẩu" : "Reset password";
+  const fallback = vi ? "Nút không bấm được? Dán đường dẫn này vào trình duyệt:" : "Button not working? Paste this link into your browser:";
+  return {
+    subject: vi ? "Có yêu cầu đổi email tài khoản Synchro" : "A change of email was requested on your Synchro account",
+    html: frame(o.base, o.lang, { pre: note, title, lead, cta: { label, url }, note, fallback: { label: fallback, url } }),
+    text: `${title}\n\n${vi ? `Email mới: ${o.to}` : `New email: ${o.to}`}\n\n${note}\n${url}`,
+  };
+}
+
 export function signupTakenMail(o: { base: string; url: string; lang: MailLang }): Mail {
   const vi = o.lang === "vi";
   const title = vi ? "Email này đã có tài khoản Synchro" : "This email already has a Synchro account";

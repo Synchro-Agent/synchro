@@ -42,7 +42,7 @@ export const hasLLM = !!LLM_ENDPOINT;
  */
 export type SkillUse = { kind: "skill" | "file" | "tool" | "code" | "script" | "search"; name: string; path?: string };
 // Tệp code của model tạo ra trong lượt chat (tải qua /api/outputs/<id>).
-export type OutFile = { id: string; name: string; size: number; mime: string; skipped?: boolean };
+export type OutFile = { id: string; name: string; size: number; mime: string; skipped?: boolean; w?: number; h?: number };
 
 // Công cụ connector cần người dùng duyệt trước khi chạy (máy chủ tạm dừng lượt chat và chờ quyết định).
 export type ApprovalCall = {
@@ -399,6 +399,9 @@ function heuristicMemory(recent: LLMMsg[], existing: string[]): string[] {
 export async function extractMemory(p: Project, recent: LLMMsg[]): Promise<string[]> {
   const existing = (p.mem ?? []).map((m) => m.content);
   try {
+    // Đã tắt "Tạo bộ nhớ từ đoạn chat" thì không ghi nhớ gì và không tốn lượt của gói. Không hỏi được thì cũng thôi, lần sau làm tiếp.
+    const on = await fetch("/api/memory", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => j?.cfg?.gen === true, () => false);
+    if (!on) return [];
     if (!hasLLM) return heuristicMemory(recent, existing);
     const transcript = recent.slice(-8).map((m) => `${m.role}: ${textOf(m.content)}`).join("\n");
     const prompt = `Bộ nhớ hiện có:\n${JSON.stringify(existing)}\n\nHội thoại gần đây:\n${transcript}`;

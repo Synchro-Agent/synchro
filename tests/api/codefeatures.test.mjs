@@ -134,7 +134,7 @@ ok(asks.length === 1, "tắt cho phép Tự động: máy chủ không chạy ch
 await prefs({ allowBypass: true });
 // Bấm Dừng khi đang chờ duyệt: lượt thôi chờ, câu hỏi không còn trả lời được.
 let pendingId = null;
-await turn(seq([{ tool: "write_file", args: { path: "h.txt", content: "h" } }]), S3, { perm: { mode: "ask", allow: [] }, onEvent: async (e, ac) => { if (e.t === "ask") { pendingId = e.id; ac.abort(); } } });
+await turn(seq([{ tool: "write_file", args: { path: "h.txt", content: "h" } }]), S3, { perm: { mode: "ask", allow: [] }, onEvent: async (e, ac) => { if (e.t === "ask") { pendingId = e.id; await api("DELETE", `/api/agent?sid=${S3}`); ac.abort(); } } });
 await sleep(400);
 ok(pendingId && (await approve(pendingId, true)).s === 409, "bấm Dừng khi đang chờ duyệt: câu hỏi hết hiệu lực", pendingId);
 

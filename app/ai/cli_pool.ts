@@ -165,7 +165,9 @@ export function takeProcess(spec: PoolSpec, resume?: string): Lease | null {
 export function prestart(spec: PoolSpec) {
   if (!poolOn() || lowMem()) return;
   const key = poolKey(spec);
-  if ([...g.entries].some((x) => x.key === key && !x.busy && usable(x) && x.session === null)) return;
+  // Đã có sẵn: người dùng còn ở trang thì giữ nó khỏi bị dọn vì rảnh (mở tab mười phút rồi mới gõ câu đầu không phải khởi động lại).
+  const have = [...g.entries].find((x) => x.key === key && !x.busy && usable(x) && x.session === null);
+  if (have) { have.used = Date.now(); return; }
   if (makeRoom(spec.account, false)) launch(spec);
 }
 /** Có lượt chạy kiểu khác nối tiếp phiên này (lượt có công cụ): tiến trình đang giữ phiên đó không còn biết hết hội thoại, không được dùng lại. */

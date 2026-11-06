@@ -1,6 +1,6 @@
 import { forgetConv } from "../../brain";
-import { AuthError, handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { changesSince, chatRefs, itemMentions, itemsByKey, pushItems, wipeItems, type ChatRefs, type PushItem } from "../../chatstore";
+import { AuthError, handle, limit, requireUser, sameOrigin, verifyLocked } from "../../authstore";
+import { changesSince, chatRefs, itemMentions, itemsByKey, pushItems, SYNC_LIMITS, wipeItems, type ChatRefs, type PushItem } from "../../chatstore";
 import { removeConvSessions } from "../../ai/subs";
 import { releaseFile } from "../../fileproc/owners";
 import { removeOutput } from "../../outputs";
@@ -56,7 +56,7 @@ export const PUT = handle(async (req) => {
   if (!Array.isArray(b.items)) throw new AuthError("Yêu cầu không hợp lệ.", 400);
   const dels = (b.items as PushItem[]).filter((x) => x?.deleted && x.kind === "chat" && typeof x.id === "string").map((x) => x.id);
   const refs = dels.length ? chatRefs(user.id, dels) : null;
-  const results = pushItems(user.id, b.items as PushItem[]);
+  const results = pushItems(user.id, b.items as PushItem[], verifyLocked(user) ? { total: SYNC_LIMITS.lockedTotal } : undefined);
   for (const r of results) if (r.ok && r.deleted && r.kind === "chat") purgeChat(user.id, r.id);
   // Đoạn chat thua xung đột vẫn còn nội dung nên itemMentions giữ lại tệp của nó.
   if (refs) clean(refs);

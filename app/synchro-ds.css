@@ -41,7 +41,7 @@
   --ds-plate:#1A1B18; --ds-plate-a:rgba(28,29,26,.74); --ds-sunken:#141513;
   --ds-hover:rgba(238,236,229,.06); --ds-press:rgba(238,236,229,.11);
   --ds-line:#2A2B26; --ds-line-2:#363731;
-  --ds-ink:#EEECE5; --ds-ink-2:#CFCEC6; --ds-muted:#9C9D95; --ds-faint:#80817A;
+  --ds-ink:#EEECE5; --ds-ink-2:#CFCEC6; --ds-muted:#9C9D95; --ds-faint:#8E8F88;
   --ds-inv:#EEECE5; --ds-inv-fg:#111210;
   --ds-ok:#6FBF8E; --ds-warn:#E0A256; --ds-bad:#F08472;
   --ds-lift:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.7);
@@ -73,6 +73,12 @@ html body .toggle:not(.auth-root *){width:38px;height:22px;border-radius:var(--r
 html body .toggle:not(.auth-root *)::after{top:3px;left:3px;width:16px;height:16px;background:var(--ds-plate);box-shadow:0 1px 2px rgba(17,18,16,.25);transition:transform var(--ds-mid) var(--ds-ease),background-color var(--ds-mid)}
 html body .toggle.on:not(.auth-root *){background:var(--ds-inv);box-shadow:inset 0 0 0 1px var(--ds-inv)}
 html body .toggle.on:not(.auth-root *)::after{transform:translateX(16px);background:var(--ds-inv-fg);box-shadow:none}
+/* Tắt ở nền tối: nút từng cùng tông với rãnh nên công tắc như biến mất, phân biệt bật/tắt chỉ còn nhờ độ sáng. */
+html[data-theme=dark] body .toggle:not(.on):not(.auth-root *)::after{background:var(--ds-muted)}
+/* Cỡ nhỏ trong bảng dày (bàn trộn ngữ cảnh): .toggle.sm cũ yếu hơn quy tắc trên nên không có tác dụng. */
+html body .toggle.sm:not(.auth-root *){width:32px;height:18px}
+html body .toggle.sm:not(.auth-root *)::after{top:3px;left:3px;width:12px;height:12px}
+html body .toggle.sm.on:not(.auth-root *)::after{transform:translateX(14px)}
 html body .toggle:not(.auth-root *):disabled{opacity:.45}
 /* Bộ chọn đoạn (Cài đặt, Kho kỹ năng…): rãnh trũng, mục chọn là tấm mực. */
 html body :is(.group,.pl-seg):not(.auth-root *){display:inline-flex;align-items:center;gap:2px;height:var(--ds-h);padding:3px;border-radius:var(--ds-r);background:var(--ds-sunken)!important;border:0!important;box-shadow:inset 0 0 0 1px var(--ds-line)}
@@ -153,7 +159,7 @@ html body .rail .rail-new:active .rail-ic{background:color-mix(in srgb,var(--ds-
 html body .rail .rail-new{margin-bottom:4px}
 html body .rail .rail-new .rail-ic svg{width:14px;height:14px}
 /* Số chưa đọc của Hộp thư: chấm số ở góc ô icon. */
-html body .rail .nav-badge{position:absolute;top:-1px;left:calc(50% + 7px);z-index:2;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:grid;place-items:center;
+html body .rail .nav-badge{position:absolute;top:-1px;left:auto;right:max(2px,calc(50% - 23px));z-index:2;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:grid;place-items:center;
   font-size:10px;font-weight:600;line-height:1;background:var(--ds-ink);color:var(--ds-inv-fg);box-shadow:0 0 0 2px var(--bg);margin:0}
 html body .rail .nav-item.active .nav-badge{background:var(--ds-inv-fg);color:var(--ds-inv);box-shadow:0 0 0 2px var(--ds-inv)}
 .rail-foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:8px}
@@ -184,7 +190,8 @@ html body .shell-side .side-brand{height:32px;padding:0;color:var(--logo-ink)}
 .side-search kbd{font:inherit;font-size:11px;font-weight:500;color:var(--ds-faint);height:20px;padding:0 6px;border-radius:var(--r-pill);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--ds-line)}
 html body .shell-side .section-label{height:30px;margin-top:10px;padding:0 10px 0 18px;font-size:12px;font-weight:500;color:var(--ds-faint);letter-spacing:.005em}
 html body .shell-side .sec-toggle{margin-top:10px}
-html body .shell-side .chat-scroll{padding:0 10px 12px}
+/* Mờ dần ở đáy: dòng hay nút phân trang không bị góc bo của khung cắt cụt. Đệm dư để cuộn hết thì mục cuối ra khỏi vùng mờ. */
+html body .shell-side .chat-scroll{padding:0 10px 28px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)}
 html body .shell-side .chat-scroll .section-label{padding:0 0 0 8px}
 html body .shell-side .chat-item{height:32px;line-height:32px;padding:0 10px;border-radius:var(--r-pill);font-size:13px;font-weight:430;color:var(--ds-ink-2)}
 html body .shell-side .chat-item.active{background:color-mix(in srgb,var(--ds-plate) 92%,transparent)!important;box-shadow:inset 0 0 0 1px var(--ds-line)!important;color:var(--ds-ink);font-weight:500}
@@ -273,7 +280,7 @@ html body .ds-page>.page-in{max-width:1080px;width:calc(100% - 64px)}
 .ds-head-t{min-width:0}
 html body .ds-head h1{margin:0;font:400 24px/30px var(--font-display);letter-spacing:-.045em;color:var(--ds-ink)}
 .ds-head p{margin:6px 0 0;font-size:13.5px;line-height:20px;color:var(--ds-muted);max-width:62ch}
-.ds-acts{display:flex;align-items:center;gap:8px;flex:none}
+.ds-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
 .ds-search{display:flex;align-items:center;gap:8px;height:var(--ds-h);width:240px;flex:none;padding:0 6px 0 13px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--ds-plate) 60%,transparent);
   box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-faint);transition:box-shadow var(--ds-fast),background-color var(--ds-fast)}
 .ds-search:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink);background:var(--ds-plate)}
@@ -315,7 +322,7 @@ section.st{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);marg
 .st-t{display:flex;flex-direction:column;gap:3px;min-width:0;padding-top:1px}
 .st-tt{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px}
 .st-tt b{font-size:14px;font-weight:560;line-height:20px}
-.st-t em{font-style:normal;font-size:12.5px;line-height:18px;color:var(--ds-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.st-t em{font-style:normal;font-size:12.5px;line-height:18px;color:var(--ds-muted);display:block}
 .st-tag{flex:none;display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;color:var(--ds-muted);box-shadow:inset 0 0 0 1px var(--ds-line-2);white-space:nowrap}
 .st-tag.on{background:var(--ds-inv);color:var(--ds-inv-fg);box-shadow:none}
 .st-prog{position:absolute;left:14px;right:14px;bottom:0;height:2px;border-radius:2px;background:var(--ds-line);overflow:hidden}
@@ -340,7 +347,11 @@ section.st{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);marg
 .st-shelf .d{margin:0}
 .st-shelf-q{flex:none;width:100%}
 .st-shelf-list{flex:1;min-height:160px;overflow:auto;display:flex;flex-direction:column;gap:2px}
-.st-shelf-row{display:flex;flex-direction:column;gap:2px;padding:8px 2px;border-top:1px solid var(--ds-line)}
+.st-shelf-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:8px 2px;border-top:1px solid var(--ds-line)}
+.st-shelf-row.off .st-shelf-t{opacity:.5}
+.st-shelf-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-shelf-row .lnk{flex:none;font-size:12px;white-space:nowrap}
+.st-shelf-sub{margin-top:8px;padding:6px 2px;font-size:12px;color:var(--ds-ink-3,var(--text-3))}
 .st-shelf-row:first-child{border-top:0}
 .st-shelf-row b{font-size:13.5px;font-weight:560;color:var(--ds-ink);overflow-wrap:anywhere}
 .st-shelf-row span{font-size:12.5px;line-height:18px;color:var(--ds-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -487,7 +498,9 @@ html body .ds-page .empty{border-radius:var(--r-card);border:1px dashed var(--ds
 
 /* ---------------------------------------------------------------- Dự án: mặt bàn đặt các thư mục kính (thư mục và hoạt hình giữ nguyên) */
 html body .sy-proj .pj-in{max-width:1080px;width:calc(100% - 64px);padding:0}
-html body .sy-proj .ds-acts .ds-search{width:240px}
+/* Ô tìm co trước, thanh thẻ không bị cắt khi cửa sổ hẹp. */
+html body .sy-proj .ds-acts .ds-search{width:240px;flex:0 1 240px;min-width:120px}
+html body .sy-proj .ds-bar>.ds-seg{flex:none}
 html body .ds-sort{padding:0 12px 0 13px;gap:7px;color:var(--ds-ink-2)}
 html body .ds-sort span{font-weight:460}
 .pj-desk{position:relative;min-height:320px;padding:28px 20px 32px;border-radius:var(--r-panel);background-color:color-mix(in srgb,var(--ds-plate) 72%,transparent);box-shadow:inset 0 0 0 1px var(--ds-line);
@@ -591,7 +604,7 @@ html body .pj-panel .pj-fsearch{height:var(--ds-h);border-radius:999px;border:1p
 }
 
 /* ---------------------------------------------------------------- Hộp thư */
-html body .tk-page>.page-in{max-width:920px}
+html body .tk-page>.page-in{max-width:1080px;width:calc(100% - 64px)}
 html body .tk-page .tk-comp{padding:16px 14px 12px 18px;border-radius:var(--r-panel);margin:0 0 14px}
 html body .tk-page .tk-comp textarea{font-size:15px;line-height:22px;padding:0;min-height:44px;color:var(--ds-ink)}
 html body .tk-page .tk-comp-bar{gap:8px}
@@ -631,7 +644,7 @@ html body .tk-page .apps-empty{border-radius:var(--r-card);border:1px dashed var
 .ds-tabs>button.on{color:var(--ds-ink);font-weight:560}
 .ds-tabs>button::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--ds-ink);transform:scaleX(0);transition:transform var(--ds-mid) var(--ds-ease)}
 .ds-tabs>button.on::after{transform:none}
-html body .cz-page>.page-in.cz{display:block;max-width:1000px}
+html body .cz-page>.page-in.cz{display:block;max-width:1080px;width:calc(100% - 64px)}
 html body .cz-page .adm-head{display:none!important}
 
 /* ---------------------------------------------------------------- Kho kỹ năng: thanh công cụ một hàng, cùng chiều cao 36px, canh hết bề ngang */
@@ -697,7 +710,10 @@ html body .sy-sbody-h .close:hover{background:var(--ds-hover);color:var(--ds-ink
 html body .sy-settings .s-body h3{display:block;margin:28px 0 10px!important;font-size:13px!important;font-weight:560!important;letter-spacing:0;color:var(--ds-ink)!important}
 html body .sy-settings .s-body h3::after{display:none!important}
 html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)!important;font-weight:460}
-html body .sy-settings .sy-sbody-h+h3,html body .sy-settings .sy-sbody-h+*>h3:first-child{margin-top:20px!important}
+/* Mọi mục bắt đầu cùng một độ cao dưới đường kẻ: chuyển mục không làm nội dung nhảy. */
+html body .sy-settings .sy-sbody-h+*{margin-top:20px!important}
+html body .sy-settings .sy-sbody-h+*>h3:first-child{margin-top:0!important}
+html[data-theme=dark] body .modal.settings{box-shadow:0 0 0 1px rgba(238,236,229,.11),0 4px 14px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3)}
 html body .sy-settings :is(.adm-head .d,.us-page>.d,.bn>p.d,.s-body>p.d){font-size:13.5px;line-height:20px;color:var(--ds-muted);max-width:68ch}
 html body .sy-settings .adm-head{margin:18px 0 6px!important}
 /* Hàng cài đặt: các hàng liền nhau thành một tấm bo 16px, ngăn bằng kẻ mảnh; chữ bên trái, điều khiển bên phải, canh giữa theo chiều dọc. */
@@ -835,7 +851,7 @@ html body .menu.pl-menu .pl-mi em{white-space:normal;line-height:16px}
 html body .app.code-view .rail::before{content:"";position:absolute;inset:6px;z-index:-1;border-radius:var(--r-pill);pointer-events:none;
   background:rgba(255,255,255,.5);-webkit-backdrop-filter:blur(26px) saturate(var(--gl-sat)) brightness(var(--gl-bright));backdrop-filter:blur(26px) saturate(var(--gl-sat)) brightness(var(--gl-bright));
   box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.55)),inset -1px -1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.35))}
-html[data-theme=dark] body .app.code-view .rail::before{background:rgba(28,29,26,.55)}
+html[data-theme=dark] body .app.code-view .rail::before{background:rgba(20,21,18,.9)}
 html body .app.code-view .rail::after{content:"";position:absolute;inset:6px;z-index:-1;border-radius:var(--r-pill);pointer-events:none;padding:.75px;opacity:.55;
   background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
