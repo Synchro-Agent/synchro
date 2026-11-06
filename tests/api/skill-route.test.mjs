@@ -80,6 +80,18 @@ const cats = PD.PLUGIN_CATS.map((c) => sk(`cat-${c.key}`, `${c.label}: 12 thư v
 const filler = Array.from({ length: 60 }, (_, i) => sk(`skill-${i}`, "Mô tả ".repeat(30)));
 const out = RT.skillsPrompt([...filler, ...cats]);
 ok(cats.every((c) => out.includes(`<name>${c.name}</name>`)), `đủ ${cats.length} mục ngành nghề dù có nhiều skill riêng`, cats.filter((c) => !out.includes(`<name>${c.name}</name>`)).map((c) => c.name).join());
+console.log("Đường nhanh biết người dùng có skill riêng");
+{
+  const brand = [sk("brand-voice-email", "Write emails and captions in our brand voice")];
+  const cap = [sk("instagram-caption", "Viết caption instagram theo giọng thương hiệu")];
+  ok(SR.ownSkillFits("viết email xin nghỉ phép", brand), "có skill email: “viết email xin nghỉ phép” không đi đường nhanh");
+  ok(SR.ownSkillFits("viet email xin nghi phep", brand), "gõ không dấu cũng nhận ra");
+  ok(SR.ownSkillFits("viết caption instagram", cap), "có skill caption: “viết caption instagram” không đi đường nhanh");
+  ok(!SR.ownSkillFits("xin chào", brand) && !SR.ownSkillFits("cảm ơn nhé", brand), "câu chào không kéo theo skill");
+  ok(!SR.ownSkillFits("1+1 bằng mấy?", brand) && !SR.ownSkillFits("Thủ đô của Úc là gì?", brand), "câu không liên quan vẫn đi đường nhanh");
+  ok(!SR.ownSkillFits("viết một bài thơ về mùa thu", [sk("recipe-box", "Cooking recipes and meal plans")]), "skill khác lĩnh vực không chặn đường nhanh");
+  ok(!SR.ownSkillFits("viết email xin nghỉ phép", []), "không có skill nào: giữ đường nhanh");
+}
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

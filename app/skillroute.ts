@@ -291,6 +291,9 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
   return out.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
+/** Người dùng có skill riêng hợp rõ với câu này (đường nhanh không có mục lục skill nên phải biết trước). */
+export const ownSkillFits = (q: string, skills: Skill[]) => suggest(q, skills.map((skill) => ({ skill })), 1).length > 0;
+
 // Gợi ý cho lượt chat: chỉ khi yêu cầu có dấu hiệu là một việc cần chuyên môn (khớp khái niệm hoặc gọi đúng tên skill),
 // và chỉ giữ những skill có điểm đủ gần skill tốt nhất. Câu chào hỏi, câu hỏi ngắn thì không gợi ý gì.
 export function suggest(q: string, cands: Candidate[], max = 4): Hit[] {

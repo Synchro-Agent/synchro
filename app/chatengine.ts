@@ -24,7 +24,7 @@ import { rank } from "./skillroute";
 import { ruleStudios } from "./studiorules";
 import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
-import { suggest, type Hit } from "./skillroute";
+import { ownSkillFits, suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
@@ -1268,10 +1268,16 @@ function withRecall(messages: unknown, recall: string): unknown {
   return out;
 }
 /** Lượt này đi đường nhanh được không: chat thường, không tệp, không skill tự chọn, không dự án hay hướng dẫn riêng, phiên của CLI chưa từng gọi công cụ, và câu hỏi rõ ràng không cần công cụ. */
-function fastTurn(body: Record<string, any>, user: UserRow, cli: NonNullable<ReturnType<typeof subCli>>, conv?: string): boolean { // eslint-disable-line @typescript-eslint/no-explicit-any
+async function fastTurn(body: Record<string, any>, user: UserRow, cli: NonNullable<ReturnType<typeof subCli>>, conv?: string): Promise<boolean> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (process.env.SYNCHRO_FAST_CHAT === "0" || body.noFast || !body.skills || body.feature === "code" || body.feature === "artifact" || body.project || body.studio || taskOf(body)) return false;
   if ((body.system && body.system !== DEFAULT_SYSTEM) || (Array.isArray(body.pinned) && body.pinned.length) || (Array.isArray(body.pickedSkills) && body.pickedSkills.length)) return false;
-  return needsNoTools(routeInput(body)) && !mentionsConnector(user.id, body.messages) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? "")) && sessionPlain(user.id, conv, cli);
+  return needsNoTools(routeInput(body)) && !mentionsConnector(user.id, body.messages) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? "")) && sessionPlain(user.id, conv, cli) && !(await hasOwnSkill(user, body.messages));
+}
+// Đường nhanh không có mục lục skill: người dùng cài skill giọng văn thương hiệu mà "viết email xin nghỉ phép" vẫn đi đường nhanh thì model không biết có skill đó, skill bị bỏ qua đúng ở việc nó được viết ra. Chỉ xét skill người dùng tự bật, không xét kho danh mục dùng chung (kho lớn thì câu nào cũng khớp).
+async function hasOwnSkill(user: UserRow, messages: unknown) {
+  if (!can(user, "skills") || !skillsOn(user)) return false;
+  const text = lastUserText(messages), own = [...await enabledSkills(user.id, null), ...everywhereSkills(user.id)];
+  return !!text && ownSkillFits(text, own);
 }
 // Câu ngắn nhắc tên connector của chính người dùng ("Notion của mình có gì mới?") là việc cần connector, dù trông như câu hỏi nhỏ: đường nhanh không có công cụ, cũng không có nút kết nối lại khi connector mất đăng nhập.
 function mentionsConnector(uid: string, messages: unknown) {
@@ -1471,7 +1477,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (feature === "artifact" && !am) return Response.json({ error: "Nội dung gửi tới model không hợp lệ." }, { status: 400 });
     // Hướng dẫn thuần văn bản theo Cài đặt → Khả năng (hỏi lại, artifact, hình minh họa trong chat).
     const pc = skills ? capsState(c.user).caps : null;
-    const fast = !!pc && !am && fastTurn(body, c.user, subCli(model)!, typeof conv === "string" && conv.length <= 64 ? conv : undefined);
+    const fast = !!pc && !am && await fastTurn(body, c.user, subCli(model)!, typeof conv === "string" && conv.length <= 64 ? conv : undefined);
     const planSys = fast ? FAST_RULES : pc ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", pc.art ? ARTIFACT_RULES(pc.ai) : "", pc.inl ? VIZ_RULES : ""].filter(Boolean).join("\n\n") : "";
     // Công cụ của Synchro cho gói (Claude Code, Codex, Antigravity): skill, thư viện plugin, connector, chạy code, dữ liệu đã lưu, danh sách việc —
     // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
