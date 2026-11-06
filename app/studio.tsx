@@ -38,14 +38,16 @@ function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
   const [matched, setMatched] = useState(0);
   const [busy, setBusy] = useState(true);
   const seq = useRef(0);
+  const [failed, setFailed] = useState(false);
   const load = (query: string, offset: number) => {
     const id = ++seq.current;
     setBusy(true);
-    fetch(`/api/plugins?view=studio&studio=${API_KEY[item.k]}&q=${encodeURIComponent(query)}&offset=${offset}`).then((r) => (r.ok ? r.json() : null)).then((j: { matched: number; skills: Row[] } | null) => {
+    setFailed(false);
+    fetch(`/api/plugins?view=studio&studio=${API_KEY[item.k]}&q=${encodeURIComponent(query)}&offset=${offset}`).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); }).then((j: { matched: number; skills: Row[] }) => {
       if (id !== seq.current) return;
-      setMatched(j?.matched ?? 0);
-      setRows((old) => (offset ? [...old, ...(j?.skills ?? [])] : j?.skills ?? []));
-    }).catch(() => {}).finally(() => { if (id === seq.current) setBusy(false); });
+      setMatched(j.matched ?? 0);
+      setRows((old) => (offset ? [...old, ...(j.skills ?? [])] : j.skills ?? []));
+    }).catch(() => { if (id === seq.current) { if (!offset) setRows([]); setFailed(true); } }).finally(() => { if (id === seq.current) setBusy(false); });
   };
   useEffect(() => { const t = setTimeout(() => load(q.trim(), 0), q ? 200 : 0); return () => clearTimeout(t); }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
@@ -58,7 +60,9 @@ function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
         <input className="field st-shelf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm skill" aria-label="Tìm skill" autoFocus />
         <div className="st-shelf-list">
           {rows.map((r) => <div key={r.name} className="st-shelf-row"><b data-notr>{r.name}</b><span data-notr>{r.description}</span></div>)}
-          {!busy && !rows.length && <div className="st-shelf-empty">Không có skill nào khớp</div>}
+          {/* Lỗi tải không được trông như mục này không có skill nào. */}
+          {!busy && failed && <div className="st-shelf-empty">Chưa tải được danh sách. <button className="lnk" onClick={() => load(q.trim(), rows.length)}>Thử lại</button></div>}
+          {!busy && !failed && !rows.length && <div className="st-shelf-empty">Không có skill nào khớp</div>}
           {rows.length < matched && <button className="btn st-shelf-more" disabled={busy} onClick={() => load(q.trim(), rows.length)}>{busy ? <span className="art-spin sm" /> : null}Xem thêm</button>}
         </div>
       </div>

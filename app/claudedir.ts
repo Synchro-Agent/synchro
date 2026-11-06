@@ -101,13 +101,35 @@ export function dirCounts() {
   return out;
 }
 
+// Danh mục viết bằng tiếng Anh: người Việt gõ việc cần làm ("hóa đơn") phải ra đúng thư viện. Cụm dài trước để "tai lieu" không bị tách.
+const VI_TERMS: [string, string[]][] = [
+  ["hoa don", ["invoice", "billing"]], ["hop dong", ["contract", "agreement"]], ["tai lieu", ["document", "doc"]], ["van ban", ["document", "text"]], ["bao cao", ["report"]],
+  ["trinh chieu", ["presentation", "slide"]], ["thuyet trinh", ["presentation", "slide"]], ["bang tinh", ["spreadsheet", "excel"]], ["thiet ke", ["design"]], ["hinh anh", ["image", "photo"]],
+  ["ke toan", ["accounting", "bookkeep"]], ["tai chinh", ["finance", "financial"]], ["ngan sach", ["budget"]], ["thue", ["tax"]], ["phap ly", ["legal", "law"]], ["luat", ["legal", "law"]],
+  ["nhan su", ["hr", "human resources"]], ["tuyen dung", ["recruit", "hiring"]], ["ban hang", ["sales"]], ["tiep thi", ["marketing"]], ["khach hang", ["customer"]], ["du lieu", ["data"]],
+  ["lap trinh", ["code", "coding", "programming"]], ["kiem thu", ["test"]], ["bao mat", ["security"]], ["dich thuat", ["translat"]], ["am thanh", ["audio"]], ["giong noi", ["voice", "speech"]],
+  ["hoc tap", ["learning", "study"]], ["giao duc", ["education"]], ["y te", ["health", "medical"]], ["nghien cuu", ["research"]], ["lich", ["calendar", "schedule"]], ["cuoc hop", ["meeting"]], ["bien ban", ["meeting minutes", "minutes"]],
+];
+const foldVi = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+/** Câu tìm thành các nhóm từ: mỗi nhóm khớp một trong các cách viết. Có dấu hay không đều như nhau. */
+export function searchTerms(q: string): string[][] {
+  let rest = foldVi(q.toLowerCase());
+  const out: string[][] = [];
+  for (const [vi, en] of VI_TERMS) {
+    const re = new RegExp(`(?:^|\\s)${vi}(?=\\s|$)`);
+    if (re.test(rest)) { rest = rest.replace(re, " "); out.push(en); }
+  }
+  for (const w of rest.split(/\s+/).filter(Boolean)) out.push([w]);
+  return out;
+}
+
 /** Một trang của danh mục: lọc theo mục và từ khóa (tên, mô tả, tác giả, tên skill). */
 export function dirPage(o: { cat?: string; q?: string; page?: number; size?: number; status?: (id: string) => string | undefined; avail?: (id: string) => boolean; only?: "installed" | "missing" | "unavailable" }) {
   const c = load();
   if (!c) return { items: [], total: 0, page: 0, pages: 0 };
-  const words = (o.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const words = searchTerms(o.q ?? "");
   const size = Math.min(Math.max(o.size ?? 24, 1), 100);
-  const all = c.data.plugins.filter((p) => (!o.cat || p.cats.includes(o.cat)) && words.every((w) => c.text.get(p.id)!.includes(w))
+  const all = c.data.plugins.filter((p) => (!o.cat || p.cats.includes(o.cat)) && words.every((g) => g.some((w) => c.text.get(p.id)!.includes(w)))
     && (!o.only || (o.only === "installed" ? !!o.status?.(CD + p.id) : !o.status?.(CD + p.id) && (o.avail?.(CD + p.id) ?? true) === (o.only === "missing"))));
   const pages = Math.ceil(all.length / size), page = Math.min(Math.max(o.page ?? 0, 0), Math.max(pages - 1, 0));
   return { items: all.slice(page * size, page * size + size), total: all.length, page, pages };

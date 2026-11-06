@@ -60,12 +60,14 @@ export function tagsOf(keys: string[]): Map<string, StudioTag> {
 }
 
 /** Xếp mục bằng bộ luật khi skill mới hoặc nội dung đã đổi (giữ nguyên lựa chọn của người dùng). Trả về true nếu cần nhờ model. */
-export function classify(key: string, s: { name: string; description: string; body: string }): boolean {
+export function classify(key: string, s: { name: string; description: string; body: string }, strict = false): boolean {
   const d = init();
-  const sig = sigOf(s.name, s.description, s.body);
+  const base = sigOf(s.name, s.description, s.body), sig = strict ? `${base}:${CATALOG_RULES}` : base;
   const cur = d.prepare("SELECT * FROM skill_studios WHERE key = ?").get(key) as Row | undefined;
-  if (cur && (cur.src === "manual" || cur.sig === sig)) return cur.src === "rules" && !cur.model_at;
-  const g = ruleStudios(s.name, s.description, s.body);
+  // Kết quả model đã xếp vẫn giữ khi chuyển sang bộ luật chặt, miễn nội dung skill không đổi.
+  if (cur && (cur.src === "manual" || cur.sig === sig || (cur.src !== "rules" && cur.sig === base))) return cur.src === "rules" && !cur.model_at;
+  // strict: không có model nào xếp lại phía sau (thư viện chung, thư viện lớn) thì dùng bộ luật chặt, bộ luật rộng xếp nhầm quá nhiều.
+  const g = ruleStudios(s.name, s.description, s.body, strict);
   d.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, model_at, at) VALUES (?, ?, 'rules', ?, ?, NULL, ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = 'rules', sig = excluded.sig, why = excluded.why, model_at = NULL, at = excluded.at")
     .run(key, JSON.stringify(g.studios), sig, g.why, Date.now());
   bump();
@@ -106,7 +108,7 @@ export function keepPluginTags(pluginId: string, names: string[]) {
 }
 
 // Đổi khi sửa bộ luật chặt (studiorules.ts): sau lần deploy kế, mọi skill của danh mục được xếp lại đúng một lần.
-const CATALOG_RULES = "c2";
+const CATALOG_RULES = "c3";
 /** Xếp một thư viện của danh mục Claude bằng bộ luật chặt, không nhờ model. Chỉ đọc tên và mô tả nên không cần nội dung skill.
  *  Giữ mục người dùng tự chọn và nhãn model đã xếp; chữ ký không đổi thì không làm lại. */
 export function classifyCatalog(pluginId: string, rows: { name: string; description: string }[]) {

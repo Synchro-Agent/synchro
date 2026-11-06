@@ -130,3 +130,4 @@ Object.assign(FX_VI2EN, {
   "macOS: sắp có": "macOS: coming soon", "Windows: sắp có": "Windows: coming soon",
   "Chưa có bản tải về; hiện bạn dùng Synchro ngay trên trình duyệt. Khi ra mắt, ứng dụng luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.": "There's nothing to download yet; use Synchro in your browser for now. Once it's out, the app is always ready: open Synchro with a shortcut from anywhere, drag files from your computer into a chat, and skip the tab switching.",
 });
+Object.assign(FX_VI2EN, { "Chưa tải được danh sách.": "Couldn't load the list." });

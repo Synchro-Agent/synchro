@@ -362,6 +362,7 @@ export async function installPlugin(owner: string, def: PluginDef, opts: { skip?
 // Skill của plugin không gắn studio: Synchro tự xếp vào Tài liệu / Trình bày / Thiết kế (skillstudio.ts) để chúng vào thư viện của mục đó
 // ở trang Artifacts. Plugin studio giữ đúng danh sách đã chọn, không tự thêm sang mục khác. by: tài khoản có model để xếp lại ở nền.
 // Thư viện của danh mục Claude (~18.000 skill) chỉ qua bộ luật chặt: nhờ model từng skill là đốt gói của người dùng.
+const REFINE_MAX = 5;
 function tagOne(id: string, by?: string) {
   const d = init();
   const pl = d.prepare("SELECT studio, catalog_id, auto_tag FROM plugins WHERE id = ?").get(id) as { studio: string | null; catalog_id: string | null; auto_tag: number } | undefined;
@@ -372,7 +373,10 @@ function tagOne(id: string, by?: string) {
   const rows = d.prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
   keepPluginTags(id, rows.map((r) => r.name));
   if (pl.studio) return;
-  for (const r of rows) { const key = pluginKey(id, r.name); if (classify(key, r) && by) refine(by, key, r); }
+  // Nhờ model từng skill là tốn lượt của gói người dùng và họ không hề biết: chỉ làm với thư viện nhỏ, thư viện lớn hay thư viện chung giữ kết quả bộ luật.
+  const ask = !!by && rows.length <= REFINE_MAX;
+  const unsure = rows.map((r) => ({ key: pluginKey(id, r.name), r })).filter((x) => classify(x.key, x.r, !ask));
+  if (ask) for (const x of unsure) refine(by!, x.key, x.r);
 }
 function tagPlugin(id: string, by?: string) { if (holdTags(() => tagOne(id, by))) bumpTags(); }
 /** Xếp mục cho mọi skill của plugin chưa xếp, một lần sau mỗi lần khởi động (kể cả sau deploy, không ai phải bấm gì). Chữ ký không đổi thì bỏ qua, nên các lần sau rất nhanh.
