@@ -1690,7 +1690,7 @@ RULES_EN.unshift(
   [/^Không nối được công cụ của Synchro với (.+) nên lượt này chưa chạy\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `Synchro's tools couldn't connect to ${m[1]}, so this reply didn't start. Try again or pick another model.`],
   [/^Một đoạn chat (.+) khác đang chờ bạn duyệt\. Hãy trả lời ở đoạn chat đó, lượt này sẽ chạy ngay sau đó$/, (m) => `Another ${m[1]} chat is waiting for your approval. Answer it there and this reply will start right after`],
   [/^Một lượt (.+) khác của tài khoản này đang chạy lâu nên lượt này chưa bắt đầu được\. Hãy thử lại sau khi lượt đó xong hoặc chọn model khác\.$/, (m) => `Another ${m[1]} reply on this account is taking a long time, so this one couldn't start. Try again when it finishes or pick another model.`],
-  [/^Đang khởi động (Claude|Grok)$/, (m) => `Starting ${m[1]}`],
+  [/^Đang khởi động (.+)$/, (m) => `Starting ${m[1]}`],
   [/^(Claude|Grok) đang suy nghĩ, chưa viết chữ nào$/, (m) => `${m[1]} is thinking and has not written anything yet`],
   [/^(Claude|Grok) đã nhận yêu cầu, đang chờ model phản hồi$/, (m) => `${m[1]} has the request and is waiting for the model to respond`],
   [/^(.+) phản hồi chậm hơn bình thường, Synchro vẫn đang chờ$/, (m) => `${m[1]} is responding slower than usual. Synchro is still waiting`],
