@@ -2147,7 +2147,11 @@ export default function Home() {
           {caps.art !== false && nav({ v: "artifacts", icon: <I.Shapes />, label: "Artifacts" })}
           {nav({ v: "inbox", icon: <I.Inbox />, label: "Hộp thư", badge: inboxN })}
           {nav({ v: "brain", icon: <I.Brain />, label: "Bộ não" })}
-          {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => setCodeCur(null) })}
+          {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => {
+            // Rời Code khi lượt đang chạy rồi quay lại thì về đúng phiên đó, không phải trang trống. Đang ở trong Code mà bấm lại thì mới là mở phiên mới.
+            const live = view !== "code" ? (codeList.find((c) => c.id === codeCur && c.running) ?? codeList.find((c) => c.running)) : undefined;
+            setCodeCur(live ? live.id : null);
+          } })}
           {me?.perms.features.speech !== false && (speechReady || me?.isAdmin) && nav({ v: "speech", icon: <I.Speech />, label: "Speech", onPick: () => setSpTool("home") })}
           {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: "Kỹ năng", tip: "Kho kỹ năng" })}
         </div>
