@@ -28,8 +28,8 @@ import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "./c
 import type { PermMode } from "./codestore";
 import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
-import { foldAgentEvent, closeFolded, interruptFolded } from "./agentfold";
-import { agentRunInfo, attachAgent, GONE, gitOp, stopAgent, streamAgent, useCodeUi, watchAgentEnd, wsStatus, type AgentLine, type PaneKind, type PlanItem } from "./wsclient";
+import { foldAgentEvent, closeFolded, interruptFolded, localizeNote } from "./agentfold";
+import { agentRunInfo, alreadyRunning, attachAgent, GONE, gitOp, stopAgent, streamAgent, useCodeUi, watchAgentEnd, wsStatus, type AgentLine, type PaneKind, type PlanItem } from "./wsclient";
 import { QueueChips, type Queued } from "./worklog";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
@@ -37,6 +37,8 @@ type Att = { k: "paste" | "error" | "quote"; name: string; text: string; pills?:
 // steps/plan: lượt trả lời do agent (có workspace) làm: đoạn văn xen kẽ công cụ, và danh sách việc.
 /** files: tệp / thư mục gửi kèm (tên trong filestate; Synchro Code chép nguyên vào workspace .synchro/uploads). */
 type Sent = { name: string; folder?: boolean; count?: number; id?: string };
+// Tin chờ gửi: tin bị từ chối vì phiên đang có lượt giữ cả phần đính kèm để gửi lại nguyên vẹn.
+type CodeQueued = Queued & { hid?: string; atts?: Att[]; files?: Sent[]; strict?: boolean };
 type Node = { id: number; parent: number; user: string; hid?: string; atts: Att[]; files?: Sent[]; ai: string; done: boolean; stopped?: boolean; mode: string; time: number; skills?: string[]; steps?: AStep[]; plan?: PlanItem[]; usage?: { input: number; output: number }; auto?: boolean; wsWait?: string; noWs?: boolean };
 // Chế độ quyền của phiên: hỏi trước mọi thay đổi / tự sửa tệp (hỏi trước khi chạy lệnh) / tự động (không hỏi).
 const PERMS: { k: PermMode; label: string; short: string; desc: string }[] = [
@@ -178,7 +180,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const titleRef = useRef(title); titleRef.current = title;
   const skipPush = useRef(false), pushed = useRef("");
   // Tin nhắn gửi trong lúc agent đang làm (ghép vào lượt / gửi sau) và phiên của lượt agent đang chạy.
-  const [cq, setCq] = useState<Queued[]>([]);
+  const [cq, setCq] = useState<CodeQueued[]>([]);
   const agentSid = useRef<number | string | null>(null);
   const [cf] = usePref("codeFont", "");
   const [csz] = usePref("codeSize", "13");
@@ -240,6 +242,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [pal, setPal] = useState<{ q: string; i: number } | null>(null);
   const [inl, setInl] = useState<{ x: number; y: number; text: string; v: string } | null>(null);
   const strictRef = useRef(false);
+  const joinTried = useRef(false);
   const ta = useRef<HTMLTextAreaElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -500,11 +503,12 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     }));
   };
   // Mở phiên: lượt còn ở máy chủ (đang chạy, hoặc đã xong khi không có ai xem) thì nhận lại từ đầu và theo dõi tiếp.
-  const resumeAgent = async (s: number, undone: Set<number>) => {
+  // force: vừa bị từ chối vì phiên đang có lượt, lượt đó có thể đã xong ngay sau đó: vẫn lấy kết quả về. Trả về đã nối được hay không.
+  const resumeAgent = async (s: number, undone: Set<number>, force = false): Promise<boolean> => {
     const info = await agentRunInfo(s);
-    if (info?.gone && undone.size) return interrupted(s, undone);
-    if (!info?.node || loadedSid.current !== s || activeRef.current !== null) return;
-    if (!info.running && !undone.has(info.node)) return;
+    if (info?.gone && undone.size) { await interrupted(s, undone); return false; }
+    if (!info?.node || loadedSid.current !== s || activeRef.current !== null) return false;
+    if (!info.running && !undone.has(info.node) && !force) return false;
     const id = info.node, gen = ++genRef.current, ac = new AbortController();
     abortRef.current = ac; activeRef.current = id; liveAgent.current = info.running ? s : null; agentSid.current = s;
     setBusy(true); setWsUsed(true);
@@ -527,6 +531,21 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       else each(e);
     }, ac.signal);
     endAgent(id, s, gen);
+    return true;
+  };
+  // Máy chủ từ chối vì phiên đang có lượt (mở ở tab hay thiết bị khác, hoặc chưa kịp biết lượt đang chạy): đó không phải lỗi. Giữ tin của người dùng trong hàng chờ, nối vào lượt đang chạy để thấy chữ và bấm được Dừng,
+  // lượt đó xong thì tin tự gửi. Không nối được (mất mạng) mà gửi lại vẫn bị từ chối thì mới báo lỗi, tránh lặp gửi mãi.
+  const joinRun = async (s: number, n: Node | undefined, id: number, text: string) => {
+    joinTried.current = true;
+    activeRef.current = null; abortRef.current = null; liveAgent.current = null;
+    setNodes((ns) => ns.filter((x) => x.id !== id));
+    const parent = n?.parent;
+    if (parent !== undefined) setSel((x) => { if (x[parent] !== id) return x; const r = { ...x }; delete r[parent]; return r; });
+    setCq((q) => [...q, { id: Date.now() + Math.random(), chat: 0, text, mode: "later", hid: n?.hid, atts: n?.atts, files: n?.files, strict: strictRef.current }]);
+    say("Phiên này đang chạy ở tab hoặc thiết bị khác. Tin của bạn sẽ tự gửi khi lượt đó xong.");
+    if (await resumeAgent(s, new Set(), true)) { joinTried.current = false; return; }
+    if (loadedSid.current !== s) return;
+    if (activeRef.current === null) { setBusy(false); onMeta?.(s, { running: false }); }
   };
 
   // Có workspace: agent tự thao tác (lệnh, file, trình duyệt) và gửi từng bước về theo thời gian thực.
@@ -571,7 +590,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
         // Gửi kèm lượt để máy chủ tự lưu kết quả khi trình duyệt không còn ở đây.
         const node = cur?.id === id ? { ...cur, ai: "", steps: undefined, done: false } : undefined;
         await streamAgent({ sid: String(s), system, messages, model, skills: true, effort: getActiveEffort(), files: up.ok, perm: permRef.current, node }, onAgentLine(id, s, gen, () => 0), ac.signal);
+        joinTried.current = false;
       } catch (e) {
+        if (alreadyRunning(e) && !joinTried.current && gen === genRef.current) { const cur = hist[hist.length - 1]; void joinRun(s, cur?.id === id ? cur : undefined, id, userText); return; }
         if (!ac.signal.aborted && gen === genRef.current) patchNode(id, (n) => foldAgentEvent(n, { t: "text", text: `⚠️ ${(e as Error).message || "Không kết nối được agent."}` }));
       }
       endAgent(id, s, gen);
@@ -661,7 +682,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     })();
   };
 
-  const send = (text = v, extra: Att[] = atts, hid?: string, strict = false) => {
+  const send = (text = v, extra: Att[] = atts, hid?: string, strict = false, given?: Sent[]) => {
     if (busy) return;
     // Tệp đính kèm chỉ đi cùng tin nhắn người dùng gõ (không đi cùng lệnh tự động như Auto-Fix, Inline Edit).
     const typed = extra === atts;
@@ -671,7 +692,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     const t = rt.text;
     extra = extra.map((a) => { const r = redact(a.text); cnt += r.count; return { ...a, text: r.text, pills: undefined }; });
     if (cnt) say(`🛡️ Đã bảo vệ ${cnt} thông tin nhạy cảm tại trình duyệt`);
-    const sent: Sent[] = typed ? files.map((name) => ({ name, folder: getStatus(name)?.folder || undefined, count: getStatus(name)?.count })) : [];
+    const sent: Sent[] = given ?? (typed ? files.map((name) => ({ name, folder: getStatus(name)?.folder || undefined, count: getStatus(name)?.count })) : []);
     if (!t && !extra.length && !sent.length) return;
     stick.current = true;
     setSuggest("");
@@ -680,7 +701,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     snapRef.current.set(n.id, ctxRef.current);
     setNodes((ns) => [...ns, n]);
     setSel((s) => ({ ...s, [parent]: n.id }));
-    setV(""); setAtts([]); if (sent.length) setFiles([]); setMention(null);
+    setV(""); setAtts([]); if (sent.length && !given) setFiles([]); setMention(null);
     run(n.id, [...path, n], n.user, n.atts, mode);
   };
 
@@ -841,7 +862,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     if (busy) return;
     const next = cq.find((x) => x.mode === "later");
     if (!next) return;
-    const t = setTimeout(() => { setCq((q) => q.filter((x) => x.id !== next.id)); send(next.text, []); }, 250);
+    const t = setTimeout(() => { setCq((q) => q.filter((x) => x.id !== next.id)); send(next.text, next.atts ?? [], next.hid, next.strict, next.files); }, 250);
     return () => clearTimeout(t);
   }, [busy, cq]); // eslint-disable-line react-hooks/exhaustive-deps
   const onKey = (e: React.KeyboardEvent) => {
@@ -1178,7 +1199,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                     </div>
                     <div className="cv-ai">
                       <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
-                      <div className={`ai-msg${n.done ? "" : " ai-streaming"}`}>{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={stripPhases(n.ai)} say={say} streaming={!n.done} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
+                      <div className={`ai-msg${n.done ? "" : " ai-streaming"}`}>{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={localizeNote(stripPhases(n.ai), tr)} say={say} streaming={!n.done} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.noWs && <div className="cv-nows"><I.M icon="Alert" size={13} />Trả lời không có workspace: chưa sửa tệp nào của bạn.</div>}
                       {n.wsWait && (
                         <div className="cv-wswait" role="alert">

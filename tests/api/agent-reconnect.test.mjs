@@ -1,4 +1,5 @@
 // Nối lại lượt Code sau khi mất mạng: chỉ dòng phát lại từ đầu mới được dựng lại lượt; các lần nối sau giữ phần đã hiện và thẻ đang chờ duyệt. Tự chạy được, fetch giả, không cần dev:mock.
+import { readFileSync } from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : JSON.stringify(x).slice(0, 500)); };
@@ -38,6 +39,29 @@ globalThis.setTimeout = (f, ms, ...a) => realSetTimeout(f, Math.min(ms, 5), ...a
 await W.attachAgent(9, (e) => { if (e.t === "run") seen.push(e.fromStart); }, new AbortController().signal);
 globalThis.setTimeout = realSetTimeout;
 ok(seen.length === 2 && seen.every(Boolean), "chưa có sự kiện nào thì nối lại vẫn phát từ đầu", seen);
+
+// Phiên đang có lượt: 409 kèm running được nhận ra để nối vào, các lỗi khác vẫn là lỗi.
+globalThis.fetch = async () => Response.json({ error: "Phiên này đang có một lượt chạy.", running: true }, { status: 409 });
+const err = await W.streamAgent({ sid: "9" }, () => {}, new AbortController().signal).then(() => null, (e) => e);
+ok(W.alreadyRunning(err), "409: nhận ra phiên đang có lượt", String(err));
+globalThis.fetch = async () => Response.json({ error: "Bạn gửi quá nhiều yêu cầu." }, { status: 429 });
+const err2 = await W.streamAgent({ sid: "9" }, () => {}, new AbortController().signal).then(() => null, (e) => e);
+ok(err2 && !W.alreadyRunning(err2) && err2.message === "Bạn gửi quá nhiều yêu cầu.", "429 vẫn là lỗi có lời báo", String(err2));
+ok(!W.alreadyRunning(new Error("x")) && !W.alreadyRunning(null), "lỗi mạng không phải đang có lượt");
+const view = readFileSync(new URL("../../app/codeview.tsx", import.meta.url), "utf8");
+const handler = /catch \(e\) \{\n\s*if \(alreadyRunning\(e\)[^\n]*\n/.exec(view)?.[0] ?? "";
+ok(/joinRun\(/.test(handler) && /return;/.test(handler), "codeview: 409 nối vào lượt và không chạy nhánh kết thúc lượt (endAgent báo running:false)", handler);
+
+// Lời báo của hệ thống theo ngôn ngữ giao diện, chữ của model giữ nguyên.
+const dict = readFileSync(new URL("../../app/i18n-features.ts", import.meta.url), "utf8") + readFileSync(new URL("../../app/i18n-dict.ts", import.meta.url), "utf8");
+const en = { [W.GONE]: "The server restarted", "Không có ai duyệt sau 30 phút nên lượt này đã dừng.": "Nobody approved" };
+const t = (s) => en[s] ?? s;
+const folded = F.foldAgentEvent({ ai: "", steps: [] }, { t: "error", error: W.GONE });
+ok(folded.steps[0].text === "⚠️ " + W.GONE && F.localizeNote(folded.steps[0].text, t) === "⚠️ The server restarted", "lỗi lượt lưu chữ gốc, hiện theo ngôn ngữ", folded.steps);
+ok(F.localizeNote("⚠️ Một câu model tự viết", t) === "⚠️ Một câu model tự viết" && F.localizeNote(W.GONE, t) === W.GONE, "chữ không phải lời báo thì giữ nguyên");
+for (const s of [W.GONE, "Phiên này đang có một lượt chạy.", "Không có ai duyệt sau 30 phút nên lượt này đã dừng.", "Không kết nối được agent.", "Lỗi máy chủ", "Tài khoản của bạn đang chạy nhiều lượt cùng lúc. Lượt này đang xếp hàng và sẽ tự chạy khi có lượt xong.", "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ."]) ok(dict.includes(`"${s}"`), "có bản tiếng Anh: " + s.slice(0, 40));
+const ui = readFileSync(new URL("../../app/agentui.tsx", import.meta.url), "utf8");
+ok(/localizeNote\(b\.text, tr\)/.test(ui) && /tr\(b\.text\)/.test(ui), "AgentSteps dịch lời báo và ghi chú xếp hàng lúc vẽ");
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

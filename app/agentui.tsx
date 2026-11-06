@@ -6,7 +6,8 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
 import { Loader } from "./brand";
-import { tr } from "./i18n";
+import { tr, useLangReady } from "./i18n";
+import { localizeNote } from "./agentfold";
 import { ConnLogo } from "./connlogo";
 import { ASK_GONE } from "./codesync";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
@@ -183,6 +184,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
 // Nội dung một lượt trả lời của agent: đoạn văn xen kẽ nhóm công cụ (danh sách việc hiện ở thẻ riêng).
 export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { steps: AStep[]; live: boolean; say: Say; view?: TView; onAnswer?: OnAnswer }) {
   const showFile = useCodeUi((s) => s.showFile);
+  useLangReady(); // lời báo của hệ thống dịch lúc vẽ: từ điển về sau thì vẽ lại
   const blocks = useMemo(() => {
     const out: ({ k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | { k: "tools"; ts: ToolStep[] })[] = [];
     for (const s of steps) {
@@ -201,9 +203,9 @@ export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { st
       {blocks.map((b, i) => b.k === "steer"
         ? <div key={i} className="ag-steer"><span>Bạn nhắn thêm</span><p data-notr>{b.text}</p></div>
         : b.k === "text"
-        ? <Markdown key={i} text={b.text} say={say} streaming={live && i === blocks.length - 1} />
+        ? <Markdown key={i} text={localizeNote(b.text, tr)} say={say} streaming={live && i === blocks.length - 1} />
         : b.k === "think"
-        ? <Think key={i} text={b.text} open={view === "verbose" || (view === "thinking" && live && i === blocks.length - 1)} />
+        ? <Think key={i} text={b.text.length < 200 ? tr(b.text) : b.text} open={view === "verbose" || (view === "thinking" && live && i === blocks.length - 1)} />
         : b.k === "ask"
         ? <AskCard key={b.id} a={b} onAnswer={live ? onAnswer : undefined} />
         : <ToolGroup key={i + view} ts={b.ts} live={live && (i === blocks.length - 1 || b.ts.some((t) => !t.done))} onFile={(p) => showFile(p)} verbose={view === "verbose"} />)}

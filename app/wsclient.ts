@@ -13,6 +13,8 @@ export type GhStatus = { configured: boolean; allowed: boolean; linked: boolean;
 export type GhRepo = { full: string; private: boolean; branch: string; desc: string | null; pushed: string; url: string; push: boolean };
 
 export class WsError extends Error { constructor(m: string, public status: number) { super(m); } }
+/** Máy chủ từ chối lượt mới vì phiên đã có lượt đang chạy: nối vào lượt đó, không phải lỗi. */
+export const alreadyRunning = (e: unknown) => e instanceof WsError && e.status === 409;
 async function json<T>(r: Response): Promise<T> {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status);

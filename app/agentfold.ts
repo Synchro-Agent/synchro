@@ -5,6 +5,10 @@ import type { AgentEvent } from "./agentcore";
 type Step = Record<string, unknown> & { k: string };
 export type FoldNode = { ai?: string; steps?: unknown[]; plan?: unknown; usage?: { input: number; output: number }; skills?: string[] };
 
+const WARN = "⚠️ ";
+// Lời báo của hệ thống nằm chung với chữ của model trong .ai-msg nên bộ dịch trang bỏ qua, phải tự dịch lúc hiện. Lưu bằng chữ gốc: tin cũ đổi ngôn ngữ vẫn đúng.
+export const localizeNote = (text: string, t: (s: string) => string) => (text.startsWith(WARN) ? WARN + t(text.slice(WARN.length)) : text);
+
 const addText = <T extends FoldNode>(n: T, text: string): T => ({ ...n, steps: [...(n.steps ?? []), { k: "text", text }], ai: n.ai ? `${n.ai}\n\n${text}` : text });
 
 export function foldAgentEvent<T extends FoldNode>(n: T, e: AgentEvent): T {
@@ -20,7 +24,7 @@ export function foldAgentEvent<T extends FoldNode>(n: T, e: AgentEvent): T {
     case "usage": return { ...n, usage: { input: e.input, output: (n.usage?.output ?? 0) + e.output } };
     case "steer": return { ...n, steps: [...steps, { k: "steer", text: e.text }] };
     case "done": return e.skills.length ? { ...n, skills: e.skills } : n;
-    case "error": return addText(n, `⚠️ ${e.error}`);
+    case "error": return addText(n, WARN + e.error);
     default: return n;
   }
 }
