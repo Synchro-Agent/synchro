@@ -55,10 +55,15 @@ try {
 
   console.log("2. Việc nền thật qua quickCall");
   ST.getTag("x");
-  const user = AU.createUser({ email: `speed${Date.now()}@synchro.test`, name: "Speed", verified: true });
-  await A.startLogin("claude", user.id, "oauth");
-  await A.submitCode("claude", user.id, "MOCK-CLAUDE-OK");
-  await A.status("claude", user.id, { fresh: true });
+  // CLI giả lập tăng dần mức dùng của gói theo số lượt rồi báo hết hạn mức: mỗi phần một tài khoản mới, không thì model biến mất giữa chừng.
+  const fresh = async () => {
+    const u = AU.createUser({ email: `speed${Date.now()}${Math.random().toString(36).slice(2, 7)}@synchro.test`, name: "Speed", verified: true });
+    await A.startLogin("claude", u.id, "oauth");
+    await A.submitCode("claude", u.id, "MOCK-CLAUDE-OK");
+    await A.status("claude", u.id, { fresh: true });
+    return u;
+  };
+  let user = await fresh();
   const q = await AM.quickCall(user, "Đặt tên.", "Đoạn chat cần đặt tên: x", { job: "title" });
   ok(q.model === "sub-claude/haiku", `chạy bằng model rẻ nhất của gói: ${q.model}`, q.model);
   ok(/\[timing\] claude haiku low .*job=title/.test(lastTurn()), "nỗ lực thấp, dòng [timing] ghi tên việc", lastTurn());
@@ -87,12 +92,13 @@ try {
   console.log("4. Tiến trình khởi động sẵn khớp đúng lượt thật");
   {
     const SYS = "Bạn là một trợ lý AI hữu ích.";
+    user = await fresh();
     const turn = async (text, o = {}) => {
       const res = await CH.chatPost({ system: SYS, skills: true, feature: "chat", model: "auto", effort: "auto", memory: true, conv: `w-${Math.random().toString(36).slice(2)}`, messages: [{ role: "user", content: text }], ...o }, { user }, { feature: "chat" });
       const j = await res.json();
       return { s: res.status, j, line: lastTurn() };
     };
-    const warmUp = async (o) => { PO.dropAll(); await CH.prewarmChat(user, { ...o, force: true }); await until(() => PO.poolSize() > 0); await sleep(400); };
+    const warmUp = async (o) => { user = await fresh(); PO.dropAll(); await CH.prewarmChat(user, { ...o, force: true }); await until(() => PO.poolSize() > 0); await sleep(400); };
     await warmUp({});
     let r = await turn("Xin chào");
     ok(r.s === 200 && /pool=hit/.test(r.line) && /haiku low/.test(r.line), "Tự động, câu chào: dùng đúng tiến trình đã khởi động sẵn", r.line);
@@ -108,15 +114,18 @@ try {
     await warmUp({ model: "auto", effort: "high" });
     r = await turn("Xin chào", { effort: "high" });
     ok(/pool=hit/.test(r.line) && / high /.test(r.line), "Tự động, chọn tay nỗ lực cao: đúng mức đó", r.line);
-    MEM.addMemory(user.id, ["Thích câu trả lời ngắn gọn, đi thẳng vào ý chính."], "manual");
     await warmUp({});
+    MEM.addMemory(user.id, ["Thích câu trả lời ngắn gọn, đi thẳng vào ý chính."], "manual");
+    await CH.rewarmAfterMemory(user);
+    await sleep(400);
     r = await turn("Xin chào", { memory: false });
     ok(/pool=cold/.test(r.line), "tắt Bộ nhớ mà hệ thống khởi động sẵn có bộ nhớ: không dùng nhầm tiến trình đó", r.line);
     await warmUp({ memory: false });
+    MEM.addMemory(user.id, ["Thích câu trả lời ngắn gọn, đi thẳng vào ý chính."], "manual");
     r = await turn("Xin chào", { memory: false });
     ok(/pool=hit/.test(r.line), "báo trước đang tắt Bộ nhớ: khởi động sẵn đúng hướng dẫn", r.line);
     // Bộ nhớ đổi sau một lượt thì hướng dẫn hệ thống đổi: tiến trình cũ không còn khớp, phải có tiến trình mới cho đoạn chat sau.
-    await warmUp({ memory: true });
+    await warmUp({});
     MEM.addMemory(user.id, ["Đang làm dự án thử nghiệm tốc độ."], "manual");
     await CH.rewarmAfterMemory(user);
     await sleep(600);
