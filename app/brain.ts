@@ -747,6 +747,8 @@ async function consolidate(uid: string) {
 const IDLE = Number(process.env.SYNCHRO_BRAIN_IDLE_MS) || 45_000;
 // Sau chừng này lần lỗi thì thôi tự thử (đỡ tốn lượt của gói) nhưng vẫn giữ đoạn chat trong hàng chờ, hiện ở Bộ não để người dùng bấm Học lại.
 const MAX_TRIES = 3;
+// Việc chưa chạy được lúc này (chỉ còn model mạnh, hàng việc nền đang đầy): lùi cả hàng của người đó chừng này. Giữ nguyên chỗ cũ thì ba đoạn chat cũ nhất chiếm hết LIMIT của mọi nhịp, không ai khác được học.
+const DEFER_MS = 10 * 60_000;
 const g = globalThis as unknown as { __brainBusy?: boolean };
 /**
  * Mỗi nhịp của bộ lập lịch: chưng cất các đoạn chat đã ngừng một lúc (mặc định 45 giây sau lượt cuối), rồi chăm sóc bộ não của
@@ -759,18 +761,26 @@ export async function distillPending(o: { uid?: string; now?: boolean; max?: num
   g.__brainBusy = true;
   let done = 0;
   try {
-    const d = t(), cut = o.now ? Date.now() + 1 : Date.now() - IDLE;
+    const d = t(), cut = o.now ? Number.MAX_SAFE_INTEGER : Date.now() - IDLE;
     const rows = (o.uid ? d.prepare(`SELECT * FROM brain_queue WHERE user_id = ? AND updated_at < ? AND tries < ${MAX_TRIES} ORDER BY updated_at LIMIT ?`).all(o.uid, cut, o.max ?? 20)
-      : d.prepare(`SELECT * FROM brain_queue WHERE updated_at < ? AND tries < ${MAX_TRIES} ORDER BY updated_at LIMIT ?`).all(cut, o.max ?? 3)) as { user_id: string; conv: string; feature: string; snapshot: string; updated_at: number; tries: number }[];
+      // Mỗi người một lượt trước rồi mới tới đoạn thứ hai: người nhập 50 đoạn chat cũ không chặn người khác.
+      : d.prepare(`SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at) AS turn FROM brain_queue WHERE updated_at < ? AND tries < ${MAX_TRIES}) ORDER BY turn, updated_at LIMIT ?`).all(cut, o.max ?? 3)) as { user_id: string; conv: string; feature: string; snapshot: string; updated_at: number; tries: number }[];
+    const later = new Set<string>();
     for (const r of rows) {
+      if (later.has(r.user_id)) continue;
       try {
         await distillOne(r);
         d.prepare("DELETE FROM brain_queue WHERE user_id = ? AND conv = ? AND updated_at = ?").run(r.user_id, r.conv, r.updated_at);
         setState(r.user_id, { learn_err: null, learn_err_at: 0 });
         done++;
       } catch (e) {
-        // Chỉ còn model mạnh: chưa làm, giữ nguyên trong hàng chờ, không tính là một lần thất bại và không báo lỗi cho người dùng.
-        if ((e as Error).message === NO_CHEAP) continue;
+        // Chưa làm được lúc này: không tính là một lần thất bại, không báo lỗi cho người dùng, nhường chỗ cho người khác ở các nhịp sau.
+        if ((e as Error).message === NO_CHEAP) {
+          later.add(r.user_id);
+          const at = Date.now() + DEFER_MS;
+          d.prepare(`UPDATE brain_queue SET updated_at = ? WHERE user_id = ? AND tries < ${MAX_TRIES} AND updated_at < ?`).run(at, r.user_id, at);
+          continue;
+        }
         // Model trả sai hoặc chưa dùng được (gói hết hạn, hết hạn mức): thử lại ở lượt sau. Quá số lần thì dừng thử nhưng không xóa, và báo cho người dùng.
         d.prepare("UPDATE brain_queue SET tries = tries + 1 WHERE user_id = ? AND conv = ?").run(r.user_id, r.conv);
         const why = String((e as Error).message).replace(/\s+/g, " ").slice(0, 200);
