@@ -47,7 +47,7 @@ try {
   await until(`!!document.querySelector("input[type=password]")`, 8000, "password step");
   await sleep(1500);
   const t = await ev(text);
-  ok(/Sign in or create an account|Đăng nhập hoặc tạo tài khoản/.test(t), "tiêu đề nói rõ cả hai đường", t);
+  ok(/Sign in or create an account|Đăng nhập hoặc đăng ký/.test(t), "tiêu đề nói rõ cả hai đường", t);
   ok(await ev(`(() => { const b = ${btn(/^(Create an account|Tạo tài khoản)$/)}; if (!b) return false; const r = b.getBoundingClientRect(); return r.width > 200 && r.height >= 32; })()`), "nút Tạo tài khoản là nút to, không phải chữ nhỏ");
   await shot("password");
   await click(`document.querySelector("input[type=password]")`, "pass");

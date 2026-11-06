@@ -94,7 +94,7 @@ Object.assign(FX_EN2VI, {
   "Creates images in chat. Tested on Grok Pro; limits depend on your xAI account.": "Tạo ảnh ngay trong khung chat. Đã thử trên Grok Pro; hạn mức tùy tài khoản xAI của bạn.",
   "Sign in to Grok, then confirm the code below.": "Đăng nhập Grok, rồi xác nhận mã bên dưới.",
   "Sign in with your Google account, then copy the code the page shows you.": "Đăng nhập bằng tài khoản Google, rồi chép mã trang đó hiện ra.",
-  "Sign in or create an account": "Đăng nhập hoặc tạo tài khoản",
+  "Sign in or create an account": "Đăng nhập hoặc đăng ký",
   "Have an account? Enter your password. New here? Create one below.": "Đã có tài khoản? Nhập mật khẩu. Mới dùng? Tạo tài khoản bên dưới.",
   "Create an account": "Tạo tài khoản",
 });

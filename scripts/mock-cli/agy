@@ -53,6 +53,7 @@ async function agyImage(prompt, conv) {
   if (m.mode === "saidquota") return done("I couldn't generate the image, the quota is exhausted.");
   if (m.mode === "none") return done("NO_IMAGE_TOOL");
   if (m.mode === "text") return done("Đã tạo xong ảnh quả táo đỏ, rất đẹp.");
+  if (m.mode === "refuse") return done("Sorry, I can't create an image of a real person because of our content policy.");
   if (m.mode === "other") return done(`[ảnh](${m.otherPath})`);
   fs.mkdirSync(dir, { recursive: true });
   if (m.mode === "symlink") { fs.symlinkSync(m.otherPath, path.join(dir, "leak.jpg")); return done("xong"); }
