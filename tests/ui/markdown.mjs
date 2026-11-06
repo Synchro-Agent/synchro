@@ -24,7 +24,12 @@ const TEXT = [
   "| Cột | Giá |", "|:---|--:|", "| *a*<br>b | 12.500 |", "| `c` | 9 |", "",
   "Công thức $E = mc^2$ và \\(a^2+b^2\\), giá $5 đến $10.", "", "$$", "\\sum_{i=1}^n i", "$$", "",
   "> Trích **dẫn**", "> - mục", "", "Câu có chú thích[^1].", "", "[^1]: Nguồn.", "",
-  "```js", "const a = \"**không đậm**\";", "```", "", "A".repeat(600), "", "Hết. " + "https://example.com/" + "b".repeat(400),
+  "```js", "const a = \"**không đậm**\";", "```", "",
+  "Kính gửi \\[Tên khách hàng\\], phép nhân 5*x; x*5.", "", "- đầu", "- cuối", "Câu sau danh sách.", "",
+  "```", "src/", "├── a/" + "x".repeat(300), "└── b", "```", "",
+  "| Trạng thái | Mô tả | Ghi chú |", "|---|---|---|", `| Hoàn thành | ${"Mô tả dài của bước này. ".repeat(12)} | ${"Ghi chú dài của bước này. ".repeat(12)} |`, "",
+  `| ${Array.from({ length: 8 }, (_, k) => `Cột${k}Tênrấtdàikhôngngắtđược`).join(" | ")} |`, `|${"---|".repeat(8)}`, `| ${Array.from({ length: 8 }, (_, k) => `giá_trị_dài_liền_nhau_${k}`).join(" | ")} |`, "",
+  "A".repeat(600), "", "Hết. " + "https://example.com/" + "b".repeat(400),
 ].join("\n");
 const sh = await fetch(B + "/api/share", { method: "POST", headers: { ...H, cookie }, body: JSON.stringify({ conv: `md-${Date.now()}`, title: "Markdown", msgs: [{ role: "user", text: "U".repeat(600) }, { role: "ai", text: TEXT }] }) }).then((r) => r.json());
 const token = sh?.share?.token;
@@ -84,6 +89,11 @@ try {
         fn: q(".md-fnref").length, fns: q(".md-fns").length,
         codes: code.map((c) => c.querySelector("pre").textContent),
         copy: code[0]?.querySelector("button")?.textContent, sortTip: q(".md-th")[0]?.title,
+        bracket: document.body.innerText.includes("Kính gửi [Tên khách hàng], phép nhân 5*x; x*5."),
+        after: q("p").some((e) => e.textContent === "Câu sau danh sách.") && !q("li").some((e) => e.textContent.includes("Câu sau danh sách")),
+        tree: (() => { const p = code[2]?.querySelector("pre"); return p ? { wrap: p.classList.contains("cb-wrap"), ws: getComputedStyle(p).whiteSpace, over: p.scrollWidth > p.clientWidth } : null; })(),
+        tbl: q(".md-tbl").map((t) => [t.scrollWidth, t.clientWidth]),
+        tight: (() => { const td = q(".md-tbl")[1]?.querySelector("td"); if (!td) return null; const r = document.createRange(), n = td.firstChild, i = n.nodeValue.indexOf("thành"); r.setStart(n, i); r.setEnd(n, i + 5); return new Set([...r.getClientRects()].map((c) => Math.round(c.top))).size; })(),
         scroll: [document.documentElement.scrollWidth, innerWidth],
         over: q(".user-msg, .ai-msg, .sh-msg, p").filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.className || e.tagName),
       };
@@ -100,7 +110,12 @@ try {
     ok(r.align.includes("right") && r.tdEm === 1, "căn cột, nhấn chữ trong ô", r.align);
     ok(r.katex === 3 && r.display === 1 && r.money, "công thức nội dòng, khối; giá tiền không thành công thức", [r.katex, r.display, r.money]);
     ok(r.quote === 2 && r.fn === 1 && r.fns === 1, "trích dẫn có danh sách; chú thích", [r.quote, r.fn, r.fns]);
-    ok(r.codes.length === 2 && r.codes[0].trim() === "npm i" && r.codes[1].includes("**không đậm**"), "khối code giữ nguyên", r.codes);
+    ok(r.codes.length === 3 && r.codes[0].trim() === "npm i" && r.codes[1].includes("**không đậm**"), "khối code giữ nguyên", r.codes);
+    ok(r.bracket, "ngoặc thoát và phép nhân viết thẳng giữ nguyên chữ");
+    ok(r.after, "câu sau danh sách là đoạn riêng");
+    ok(r.tree && !r.tree.wrap && r.tree.ws === "pre" && r.tree.over, "khối không nhãn giữ hàng, cuộn ngang", r.tree);
+    ok(r.tight === 1 && r.tbl[1][0] <= r.tbl[1][1] + 1, "bảng cột ngắn cột dài: chữ không vỡ giữa từ", [r.tight, r.tbl]);
+    ok(r.tbl[2]?.[0] > r.tbl[2]?.[1] + 50, "bảng rộng cuộn ngang được", r.tbl);
     ok(lang === "en" ? r.copy.includes("Copy") && r.sortTip === "Click to sort" : r.copy.includes("Sao chép") && r.sortTip === "Bấm để sắp xếp", "nút trên khối code và bảng theo ngôn ngữ", [r.copy, r.sortTip]);
     ok(r.scroll[0] <= r.scroll[1] && !r.over.length, "chuỗi dài không tràn", [r.scroll, r.over]);
   }

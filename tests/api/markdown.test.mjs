@@ -206,5 +206,84 @@ console.log("9. Câu đang viết dở (chảy chữ)");
   ok(J(end) === '["h","list","code","table","p"]' && prevSrc.length === 5, "kết quả cuối đúng cấu trúc", end);
 }
 
+console.log("10. Ngoặc thoát không phải công thức");
+{
+  const mathOf = (t) => inl(t).filter((x) => x.t === "math").map((x) => x.v);
+  eq(inl("Kính gửi \\[Tên khách hàng\\], cảm ơn \\[Công ty\\]"), ["Kính gửi [Tên khách hàng], cảm ơn [Công ty]"], "mẫu thư giữ nguyên chữ trong ngoặc");
+  eq(inl("regex: ^\\[a-z\\]+$"), ["regex: ^[a-z]+$"], "lớp ký tự của regex");
+  eq(inl("\\[^abc\\] và \\[0-9\\] và \\[A-Za-z\\]"), ["[^abc] và [0-9] và [A-Za-z]"], "regex phủ định, khoảng số, nhiều khoảng");
+  eq(inl("xem \\[1\\] và \\[2\\]"), ["xem [1] và [2]"], "trích dẫn thoát ngoặc");
+  eq(inl("(\\(ví dụ\\)) và \\(note\\)"), ["((ví dụ)) và (note)"], "chữ thường trong \\( \\)");
+  for (const [t, v] of [["\\(x\\)", "x"], ["\\(f(x)\\)", "f(x)"], ["\\(x, y\\)", "x, y"], ["\\(O(n)\\)", "O(n)"], ["\\(a^2+b^2\\)", "a^2+b^2"], ["\\[ E = mc^2 \\]", "E = mc^2"], ["\\[\\frac{a}{b}\\]", "\\frac{a}{b}"], ["\\[y = mx + b\\]", "y = mx + b"], ["\\[x_1\\]", "x_1"], ["\\[\\text{Tên khách}\\]", "\\text{Tên khách}"]]) eq(mathOf("a " + t + " b"), [v], "vẫn là công thức: " + t);
+  let b = blocks("\\[Tên khách hàng\\]\n\nsau");
+  ok(b[0].t === "p" && J(inl(b[0].s)) === '["[Tên khách hàng]"]', "đứng riêng một dòng vẫn là chữ", b);
+  b = blocks("\\[\nE = mc^2\n\\]");
+  ok(b[0].t === "math", "khối nhiều dòng vẫn là công thức", b);
+  b = blocks("\\[\nGhi chú của người viết\n\\]");
+  ok(b[0].t === "p", "khối nhiều dòng chỉ có chữ thì không", b);
+  eq(mathOf("$$Tên$$"), ["Tên"], "$$ vẫn giữ nghĩa công thức");
+}
+
+console.log("11. Mở khối code giữa dòng trong danh sách");
+{
+  let b = blocks("1. Run: ```bash\nnpm i\n```\n2. Next\n\nEnd paragraph");
+  ok(b.length === 2 && b[0].t === "list" && b[0].items.length === 2, "hai bước rồi một đoạn văn", b);
+  ok(b[0].items[0].c[0].s === "Run:" && b[0].items[0].c[1]?.t === "code" && b[0].items[0].c[1].lang === "bash" && b[0].items[0].c[1].code === "npm i" && b[0].items[0].c[1].closed, "code nằm trong bước, đóng đúng", b[0].items[0]);
+  ok(b[0].items[1].c[0].s === "Next" && b[1].t === "p" && b[1].s === "End paragraph", "phần sau không bị nuốt vào khối code", b);
+  b = blocks("- Mã: ```js\n  const a = 1;\n  ```\n- Tiếp");
+  ok(b.length === 1 && b[0].items.length === 2 && b[0].items[0].c[1]?.code === "const a = 1;", "dòng code thụt", b);
+  b = blocks("- A\n  Chạy: ```bash\n  ls\n  ```\n- B");
+  ok(b.length === 1 && b[0].items.length === 2 && b[0].items[0].c[1]?.t === "code" && b[0].items[0].c[1].code === "ls", "mở ở dòng tiếp theo của mục", b);
+  b = blocks("- A\nchạy: ```bash\nls\n```\n- B");
+  ok(b.length === 1 && b[0].items.length === 2 && b[0].items[0].c.some((x) => x.t === "code" && x.code === "ls"), "mở ở dòng tiếp không thụt", b);
+  b = blocks("- Bọc mã bằng ```\n- Hết");
+  ok(b.length === 1 && b[0].items.length === 2, "``` cuối câu không có khối nào theo sau thì không mở", b);
+  b = blocks("1. Run: ```bash\nnpm i");
+  ok(b[0].t === "list" && b[0].items[0].c[1]?.t === "code" && !b[0].items[0].c[1].closed && b[0].items[0].c[1].code === "npm i", "đang chảy chữ: khối code chưa đóng", b);
+  ok(blocks("Mã: ```python\nprint(1)\n```\nHết").map((x) => x.t).join() === "p,code,p", "giữa dòng ngoài danh sách vẫn đúng");
+}
+
+console.log("12. Câu sau danh sách");
+{
+  let b = blocks("- a\n- b\nTiếp theo là phần khác.");
+  ok(b.length === 2 && b[0].items.length === 2 && b[0].items[1].c[0].s === "b" && b[1].t === "p" && b[1].s === "Tiếp theo là phần khác.", "câu mới không dính vào gạch đầu dòng cuối", b);
+  b = blocks("1. một\n2. hai\nKết luận cuối bài.");
+  ok(b[1]?.t === "p" && b[1].s === "Kết luận cuối bài." && b[0].items.length === 2, "danh sách số cũng vậy", b);
+  b = blocks("- a\nTiếp của a\n- b");
+  ok(b.length === 1 && b[0].items.length === 2 && b[0].items[0].c[0].s === "a\nTiếp của a", "còn mục sau thì vẫn là dòng tiếp", b);
+  b = blocks("- một câu rất dài bị\nngắt dòng cứng ở giữa");
+  ok(b.length === 1 && b[0].items[0].c[0].s === "một câu rất dài bị\nngắt dòng cứng ở giữa", "chữ thường là văn ngắt dòng cứng", b);
+  b = blocks("- a\nCác việc khác:\n- b");
+  ok(b.length === 3 && b[1].t === "p" && b[2].t === "list", "câu dẫn kết thúc bằng hai chấm mở danh sách mới", b);
+  b = blocks("- a\n  - con\nCâu sau");
+  ok(b.length === 2 && b[1].s === "Câu sau", "sau danh sách con cũng vậy", b);
+  b = blocks("- a\nCâu một\nCâu hai");
+  ok(b.length === 2 && b[1].s === "Câu một\nCâu hai", "đoạn nhiều dòng sau danh sách đi cùng nhau", b);
+}
+
+console.log("13. Dấu sao trong công thức viết thẳng");
+{
+  eq(inl("5*x; x*5"), ["5*x; x*5"], "5*x; x*5 giữ dấu sao");
+  eq(inl("2*x + 3*y = z"), ["2*x + 3*y = z"], "biến và hệ số");
+  eq(inl("(a+b)*c*d"), ["(a+b)*c*d"], "sau ngoặc đóng");
+  eq(inl("a*b*c"), ["a*b*c"], "ba thừa số");
+  eq(inl("*nghiêng* và x*y"), [{ t: "em", c: ["nghiêng"] }, " và x*y"], "nhấn thật đi cùng phép nhân");
+  eq(inl("*x*y"), [{ t: "em", c: ["x"] }, "y"], "dấu mở ở đầu từ vẫn đóng được giữa từ");
+  eq(inl("Từ **đậm**tiếp"), ["Từ ", { t: "strong", c: ["đậm"] }, "tiếp"], "hai sao vẫn là đậm");
+  eq(inl("đang *viết", { open: true }), ["đang ", { t: "em", c: ["viết"] }], "đang chảy chữ vẫn nghiêng được");
+  eq(inl("x*y", { open: true }), ["x*y"], "đang chảy chữ không nghiêng phép nhân");
+}
+
+console.log("14. Khối code xuống dòng hay cuộn ngang");
+{
+  const tree = "src/\n├── app/\n│   └── page.tsx\n└── README.md";
+  ok(!M.codeWraps("", tree) && !M.codeWraps("", "a b c ".repeat(40)), "không nhãn: cuộn ngang, không xuống dòng");
+  ok(!M.codeWraps("text", tree), "cây thư mục dán nhãn text vẫn cuộn");
+  ok(!M.codeWraps("text", "+---+---+\n| a | b |\n+---+---+"), "bảng ASCII dán nhãn text vẫn cuộn");
+  ok(!M.codeWraps("output", "name     size\nfoo.ts   12"), "đầu ra căn cột vẫn cuộn");
+  ok(!M.codeWraps("js", "const a = 1;"), "mã có ngôn ngữ cuộn");
+  ok(M.codeWraps("log", "Error: something failed " + "x".repeat(200)) && M.codeWraps("stdout", "done") && M.codeWraps("Text", "câu dài"), "nhật ký, đầu ra thường xuống dòng");
+}
+
 console.log(`\n${pass} đúng, ${fail} sai`);
 if (fail) process.exit(1);

@@ -4,7 +4,7 @@ import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { locale, tr, useLangReady } from "./i18n";
-import { imageKind, inlineText, parseInline, parseMarkdown, type Align, type Block, type Inl, type Top } from "./mdparse";
+import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, type Align, type Block, type Inl, type Top } from "./mdparse";
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
@@ -110,7 +110,7 @@ function Code({ lang, code, say, dev, idx }: { lang: string; code: string; say: 
       {hidden && <div className="cb-note warn">{tr("Một số đoạn code đã được ẩn.")}<button onClick={() => dev?.onExpand?.(name, code)}>{tr("⚡ Bung đoạn code bị ẩn")}</button></div>}
       {rows && <div className="cb-note"><button className="ok" onClick={() => { setVerdict("ok"); dev?.onAccept?.(name, code); say(tr("Đã chấp nhận thay đổi") + " " + name); }}>{tr("✓ Chấp nhận")}</button><button onClick={() => { setVerdict("no"); setDiff(false); }}>{tr("✕ Từ chối")}</button></div>}
       {verdict && <div className="cb-note">{tr(verdict === "ok" ? "Đã chấp nhận thay đổi" : "Đã từ chối thay đổi")}</div>}
-      {rows ? <pre className="cb-diff">{rows.map((r, i) => <div key={i} className={r.t === "+" ? "ad" : r.t === "-" ? "dl" : ""}><span>{r.t === " " ? "" : r.t}</span>{r.s || " "}</div>)}</pre> : <pre className={!dev && /^(text|txt|plain|plaintext|output|log|stdout|stderr|)$/i.test(lang) ? "cb-wrap" : undefined}>{code}</pre>}
+      {rows ? <pre className="cb-diff">{rows.map((r, i) => <div key={i} className={r.t === "+" ? "ad" : r.t === "-" ? "dl" : ""}><span>{r.t === " " ? "" : r.t}</span>{r.s || " "}</div>)}</pre> : <pre className={!dev && codeWraps(lang, code) ? "cb-wrap" : undefined}>{code}</pre>}
       {dev && <Widgets lang={lang} code={code} />}
     </div>
   );

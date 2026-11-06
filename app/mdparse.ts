@@ -103,11 +103,22 @@ function closeOpen(ts: Tok[]) {
   }
 }
 
+// \[…\] và \(…\) cũng là cách Markdown thoát dấu ngoặc: mẫu thư "\[Tên khách hàng\]", regex "^\[a-z\]+$", trích dẫn "\[1\]" phải hiện nguyên chữ, không thành công thức giữa câu.
+// Có lệnh LaTeX, ^, {} hay phép toán (không kèm từ dài) là công thức. \[ thì chỉ vậy; \( nhận thêm ký hiệu ngắn "\(x\)", "\(f(x)\)", "\(x, y\)".
+function looksFormula(v: string, display: boolean): boolean {
+  const t = v.trim();
+  if (/\\[a-zA-Z]/.test(t)) return true;
+  if (!t || /^[\^+*?|]/.test(t) || /^(?:[a-zA-Z0-9]-[a-zA-Z0-9])+$/.test(t)) return false; // "^a-z", "0-9": lớp ký tự của regex
+  const prose = /\p{L}{4,}/u.test(t);
+  if (/[\^{}]/.test(t) || (!prose && /[=+<>*/]/.test(t)) || /^\p{L}_\w+$/u.test(t)) return true;
+  return !display && !prose && !/\p{L}{3}/u.test(t) && /^[a-zA-Z0-9α-ωΑ-Ω\s,.()'|!-]+$/.test(t);
+}
+
 function mathAt(s: string, i: number): { v: string; end: number; display?: boolean } | null {
   if (s[i] === "\\") {
-    const close = s[i + 1] === "(" ? "\\)" : "\\]";
+    const display = s[i + 1] === "[", close = display ? "\\]" : "\\)";
     const j = s.indexOf(close, i + 2);
-    return j > i + 2 ? { v: s.slice(i + 2, j).trim(), end: j + 2, display: s[i + 1] === "[" } : null;
+    return j > i + 2 && looksFormula(s.slice(i + 2, j), display) ? { v: s.slice(i + 2, j).trim(), end: j + 2, display } : null;
   }
   if (s[i + 1] === "$") {
     const j = s.indexOf("$$", i + 2);
@@ -250,8 +261,8 @@ export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean 
       let left = !wsA && (!pA || wsB || pB), right = !wsB && (!pB || wsA || pA);
       // "**Lưu ý:**tiếp" và "**"trích"**x": CommonMark không đóng được, model viết thế khá nhiều, bản cũ vẫn in đậm đúng.
       if (c === "*" && n >= 2) { left = !wsA; right = !wsB; }
-      // Phép nhân, lũy thừa viết thẳng ("2*3*4", "a**2 + b**2") không phải dấu nhấn.
-      const arith = c === "*" && WORD.test(before) && DIGIT.test(after) && !starOpen(ts);
+      // Phép nhân, lũy thừa viết thẳng ("2*3*4", "a**2 + b**2", "2*x + 3*y", "(a+b)*c*d") không phải dấu nhấn. Một sao kẹp giữa hai ký tự chỉ là nhấn khi đã có dấu mở ở đầu từ trước đó ("*x*y").
+      const arith = c === "*" && !starOpen(ts) && ((WORD.test(before) && DIGIT.test(after)) || (n === 1 && (WORD.test(before) || before === ")" || before === "]") && WORD.test(after)));
       if (arith || (c === "~" && n !== 2)) { buf += s.slice(i, i + n); i += n; continue; }
       const open = c === "_" ? left && (!right || pB) : left, close = c === "_" ? right && (!left || pA) : right;
       flush();
@@ -295,6 +306,9 @@ export function imageKind(src: string): "inline" | "link" | "text" {
   return /^https?:\/\//i.test(src) ? "link" : "text";
 }
 
+// Khối code có xuống dòng không: chỉ nhật ký, đầu ra có nhãn rõ và không căn cột. Khối không nhãn thường là cây thư mục, bảng ASCII, sơ đồ: xuống dòng là hỏng hàng, phải cuộn ngang.
+export const codeWraps = (lang: string, code: string) => /^(text|txt|plain|plaintext|output|log|stdout|stderr)$/i.test(lang) && !/[\u2500-\u259f]|\S {2,}\S|^\s*[+|]|[+|]\s*$/m.test(code);
+
 // ---------------------------------------------------------------- khối
 type Line = { s: string; n: number };
 const blank = (s: string) => !s.trim();
@@ -324,6 +338,11 @@ const SEP = /^\s*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?\s*$/;
 const FNDEF = /^\s{0,3}\[\^(\d{1,4})\]:[ \t]*(.*)$/;
 // Mở khối code giữa dòng ("Mã: ```python"): bản cũ cắt theo ``` ở bất cứ đâu nên câu trả lời cũ vẫn hiện đúng khối code.
 const MIDFENCE = /^(.*?\S)[ \t]*(`{3,})([\w+#.-]*)[ \t]*$/;
+// Dòng này có mở khối code giữa dòng không. Không có tên ngôn ngữ thì phải thấy ``` ở sau, kẻo câu kết thúc bằng ``` nuốt cả phần còn lại.
+const midFence = (s: string, L: Line[], at: number) => {
+  const m = MIDFENCE.exec(s);
+  return m && !m[1].includes("```") && (m[3] || L.slice(at + 1).some((x) => x.s.includes("```"))) ? m : null;
+};
 
 type Marker = { ind: number; ordered: boolean; num: number; col: number; rest: string };
 function markerOf(s: string): Marker | null {
@@ -356,12 +375,13 @@ function mathBlockAt(L: Line[], i: number): { v: string; next: number } | null {
   const [o, c] = t.startsWith("$$") ? ["$$", "$$"] : t.startsWith("\\[") ? ["\\[", "\\]"] : ["", ""];
   if (!o) return null;
   const rest = t.slice(2);
-  if (rest.endsWith(c) && rest.length > 2) return { v: rest.slice(0, -2).trim(), next: i + 1 };
+  const ok = (v: string) => o === "$$" || looksFormula(v, false); // \[Tên khách hàng\] đứng riêng một dòng vẫn là chữ
+  if (rest.endsWith(c) && rest.length > 2) return ok(rest.slice(0, -2)) ? { v: rest.slice(0, -2).trim(), next: i + 1 } : null;
   if (rest.includes(c)) return null; // $$a$$ rồi còn chữ: để nội dòng xử lý
   const body = [rest];
   for (let j = i + 1; j < L.length && j < i + 200; j++) {
     const x = L[j].s.trim();
-    if (x.endsWith(c)) { body.push(x.slice(0, -2)); return { v: body.join("\n").trim(), next: j + 1 }; }
+    if (x.endsWith(c)) { body.push(x.slice(0, -2)); return ok(body.join("\n")) ? { v: body.join("\n").trim(), next: j + 1 } : null; }
     if (x.includes(c)) return null;
     body.push(L[j].s);
   }
@@ -374,6 +394,15 @@ const startsBlock = (L: Line[], i: number) => {
   const m = markerOf(s);
   if (m && !blank(m.rest)) return true;
   return isTableAt(L, i) || !!mathBlockAt(L, i);
+};
+
+// Dòng sát lề ngay sau mục: chỉ là dòng tiếp của mục khi mục sau còn nối tiếp ("- A\ntiếp\n- B") hoặc câu đang viết dở (bắt đầu bằng chữ thường, văn bị ngắt dòng cứng).
+// Còn lại là câu mới sau danh sách ("- b\nTiếp theo…"): dính vào gạch đầu dòng cuối thì câu kết bị thụt vào.
+const lazyLine = (L: Line[], j: number) => {
+  if (/:\s*$/.test(L[j].s)) return false; // "Kết luận:" mở một danh sách mới
+  if (/^\s*\p{Ll}/u.test(L[j].s)) return true;
+  for (let k = j + 1; k < L.length && !blank(L[k].s); k++) { if (markerOf(L[k].s)) return true; if (startsBlock(L, k)) return false; }
+  return false;
 };
 
 class Parser {
@@ -412,8 +441,8 @@ class Parser {
       const para: string[] = [];
       while (i < L.length && !blank(L[i].s)) {
         if (para.length && (startsBlock(L, i) || SETEXT.test(L[i].s))) break;
-        const mid = MIDFENCE.exec(L[i].s);
-        if (mid && !mid[1].includes("```") && (mid[3] || L.slice(i + 1).some((x) => x.s.includes("```")))) {
+        const mid = midFence(L[i].s, L, i);
+        if (mid) {
           para.push(mid[1].trim());
           L.splice(i, 1, { s: mid[1], n: L[i].n }, { s: mid[2] + mid[3], n: L[i].n });
           i++;
@@ -481,7 +510,9 @@ class Parser {
     for (;;) {
       const m = markerOf(L[i].s)!;
       const body: Line[] = [{ s: m.rest, n: L[i].n }];
-      let j = i + 1, pending: Line[] = [], fence: Fence | null = fenceOpen(m.rest), strip: number | null = null;
+      // Mở khối code giữa dòng cũng giữ các dòng sau trong mục tới ``` đóng ("1. Chạy: ```bash"): không thì dòng code thành chữ và ``` đóng mở một khối mới nuốt hết phần sau.
+      const openIn = (y: string, at: number) => { const f = fenceOpen(y); if (f) return f; const md = midFence(y, L, at); return md ? { ind: 0, ch: "`", len: md[2].length, info: md[3] } : null; };
+      let j = i + 1, pending: Line[] = [], fence: Fence | null = openIn(m.rest, i), strip: number | null = null;
       for (; j < L.length; j++) {
         const x = L[j];
         if (blank(x.s)) { if (fence) body.push({ s: "", n: x.n }); else pending.push({ s: "", n: x.n }); continue; }
@@ -497,8 +528,9 @@ class Parser {
           // Con khi thụt từ 2 cột trở lên. Gạch đầu dòng sát lề ngay sau một bước đánh số là chi tiết của bước đó (1. / - chi tiết / 2. / - chi tiết).
           inside = mk.ind >= m.ind + 2 || (m.ordered && !mk.ordered && !pending.length);
         } else inside = ind >= Math.min(m.col, m.ind + 2);
-        if (!inside && !mk && !pending.length && !startsBlock(L, j)) {
+        if (!inside && !mk && !pending.length && !startsBlock(L, j) && lazyLine(L, j)) {
           body.push({ s: x.s.trim(), n: x.n }); // dòng tiếp của đoạn văn, không thụt
+          fence = openIn(x.s.trim(), j);
           continue;
         }
         if (!inside) break;
@@ -507,7 +539,7 @@ class Parser {
         pending = [];
         const y = stripIndent(x.s, Math.min(ind, strip));
         body.push({ s: y, n: x.n });
-        const op = fenceOpen(y);
+        const op = openIn(y, j);
         if (op) fence = op;
       }
       const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body[0].s);
