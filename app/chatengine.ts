@@ -8,7 +8,7 @@ import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, typ
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
+import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen, turnSignal } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
@@ -1349,7 +1349,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   // làm gì. Gói subscription chỉ chuyển sang gói khác, không tự sang khóa API (luôn hỏi người dùng trước khi dùng khóa API).
   // Không bao giờ chạy lại khi lượt đã làm việc không đọc được kết quả (gửi thư, chạy code…): trả phần đã có để người dùng quyết.
   const out = new Set<string>();
-  while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !runSignal()?.aborted && tried.length < 5) {
+  while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !turnSignal()?.aborted && tried.length < 5) {
     const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
     // Treo, lỗi phía hãng: nhớ vài phút. Mỗi tin nhắn tiếp theo từng chọn lại đúng model đang treo, chờ thêm 60-90 giây rồi mới chuyển.
     if ((j0.stalled || res.status === 504 || res.status >= 500) && !j0.busy && !j0.usageLimit && subCli(used)) noteStall(c.user.id, subCli(used)!);
@@ -1522,7 +1522,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-        ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: runSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
+        ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
         older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark } : undefined, web: !fast && body.web === true, fresh,
         total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
         onStatus: am ? undefined : (t) => { progress("step", t); },
@@ -1540,11 +1540,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       };
       // Lỗi tạm thời của CLI (không phải đăng nhập, hạn mức, quá giờ hay người dùng bấm Dừng) khi chưa kịp dùng công cụ nào: thử lại một
       // lần ở phiên mới kèm toàn bộ lịch sử (nối tiếp phiên ngay sau lượt trước có lúc hỏng) — tin nhắn nào cũng phải chạy được.
-      const pause = (ms: number) => new Promise<void>((ok) => { const sig = runSignal(), t = setTimeout(ok, ms); sig?.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
+      const pause = (ms: number) => new Promise<void>((ok) => { const sig = turnSignal(), t = setTimeout(ok, ms); sig?.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
       const tryOnce = async (msgs: unknown) => {
         const before = bridged;
         let res = await once(msgs);
-        if (bridged !== before || runSignal()?.aborted) return res;
+        if (bridged !== before || turnSignal()?.aborted) return res;
         const j = res.json as { rate?: boolean; retryAfterMs?: number | null; noRetry?: boolean };
         // Giới hạn tốc độ: chờ đúng thời gian hãng bảo rồi thử lại một lần. Chờ lâu quá (hoặc Tự động còn model khác) thì trả về luôn.
         if (j.rate) {
@@ -1552,7 +1552,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
           if (wait > (o.auto ? 8000 : 30_000)) return res;
           progress("step", `Đang chờ ${Math.ceil(wait / 1000)} giây rồi thử lại`);
           await pause(wait);
-          if (runSignal()?.aborted) return res;
+          if (turnSignal()?.aborted) return res;
           deltaStep();
           return once(msgs);
         }
@@ -1561,7 +1561,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
           // Đường nhanh lỗi: lượt đầy đủ bên dưới tự thử lại, không thử thêm ở đây.
           if (fast) return res;
           await pause(1500);
-          if (runSignal()?.aborted) return res;
+          if (turnSignal()?.aborted) return res;
           // Chữ của lần thử trước (nếu có) không nối vào chữ của lần này.
           deltaStep();
           res = await once(msgs, true);
@@ -1572,7 +1572,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       let hist = turnMsgs as unknown[];
       let r = await tryOnce(hist);
       // Đường nhanh không đủ: model báo cần công cụ, hoặc CLI lỗi (kể cả phiên cũ không nhận lượt không công cụ). Chưa có chữ nào tới người dùng: chạy lượt đầy đủ.
-      const needFull = () => fast && !runSignal()?.aborted && ((r.status === 200 && String((r.json as J).text ?? "").trim().startsWith(NEED_TOOLS)) || (r.status >= 500 && r.status !== 504 && !(r.json as { noRetry?: boolean }).noRetry));
+      const needFull = () => fast && !turnSignal()?.aborted && ((r.status === 200 && String((r.json as J).text ?? "").trim().startsWith(NEED_TOOLS)) || (r.status >= 500 && r.status !== 504 && !(r.json as { noRetry?: boolean }).noRetry));
       if (needFull()) { deltaStep(); return chatTurn({ ...body, noFast: true }, c, scope, o); }
       // good: câu trả lời tốt gần nhất — lượt nhắc / tin nhắn thêm sau đó có lỗi thì vẫn giữ phần đã trả lời.
       let good: typeof r | null = null;
@@ -1705,7 +1705,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (t.kind === "mock") return Response.json({ model, text: "[mock] Không có skill nào đang bật." });
     let text: string, cancelled = false;
     const sys0 = [capSys ? `${system || "Bạn là một trợ lý AI hữu ích."}\n\n${capSys}` : system, pinned].filter(Boolean).join("\n\n");
-    try { text = await chatOnce(t, sys0, prep.messages, max_tokens, runSignal(), effort, live()); }
+    try { text = await chatOnce(t, sys0, prep.messages, max_tokens, turnSignal(), effort, live()); }
     catch (e) { if (!isAbort(e)) throw e; text = liveNow(); cancelled = true; }
     return Response.json({ model, text, effort, ...(cancelled ? { cancelled: true } : {}) });
   } catch (e) {

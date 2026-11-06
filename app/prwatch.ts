@@ -7,6 +7,9 @@ import { getLink, gh, gitAuthEnv } from "./github";
 import { appendNode, getPrefs, getSession, openPrs, patchPr, patchSession, updateNode, type PrRow } from "./codestore";
 import { pickAgentModel, runAgentTurn, sessionMeta } from "./agentturn";
 import { AUTO } from "./router";
+import { turnsTotal } from "./runs";
+import { MAX_LIVE_RUNS } from "./agentruns";
+import { acquire, withSlot } from "./turngate";
 import { exec, sdir, wsAllowed } from "./workspace";
 import { withUsage } from "./usage";
 import { STYLE_SYS, isStyle } from "./codestyle";
@@ -153,8 +156,11 @@ Bạn đang ở nhánh ${branch} của pull request ${info.html_url}. Hãy:
     flush();
   };
   const ac = new AbortController();
-  const out = await withUsage(user.id, "code", () => runAgentTurn({ user, sid: pr.sid, pick, system: `Bạn đang tự sửa pull request khi người dùng vắng mặt: không hỏi lại người dùng, tự quyết theo hướng an toàn nhất.${style ? `\n\n${style}` : ""}`,
-    messages: [...historyOf(sess?.data ?? null), { role: "user", content: prompt }], skills: true, emit, signal: ac.signal, perm: { mode: "auto", allow: [] } }));
+  // Việc nền cũng là một CLI: tính vào mức của tài khoản và của cả máy như lượt Code người dùng gửi. Chờ quá lâu thì lần kiểm tra PR sau làm lại.
+  const slot = await acquire({ uid: user.id, lane: "code", limit: MAX_LIVE_RUNS, total: turnsTotal(user), signal: ac.signal, maxWaitMs: 10 * 60_000 });
+  if (typeof slot === "string") throw new Error("máy chủ đang bận");
+  const out = await withSlot(slot, () => withUsage(user.id, "code", () => runAgentTurn({ user, sid: pr.sid, pick, system: `Bạn đang tự sửa pull request khi người dùng vắng mặt: không hỏi lại người dùng, tự quyết theo hướng an toàn nhất.${style ? `\n\n${style}` : ""}`,
+    messages: [...historyOf(sess?.data ?? null), { role: "user", content: prompt }], skills: true, emit, signal: ac.signal, perm: { mode: "auto", allow: [] } })));
   flush(true);
   // Có commit mới: đẩy lên nhánh của PR và trả lời trên PR.
   const ahead = Number((await exec(user.id, d, { cmd: "git rev-list --count @{u}..HEAD 2>/dev/null || echo 0", timeout: 20 })).out.trim()) || 0;

@@ -6,6 +6,8 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { db, type UserRow } from "../authstore";
+import { quickLimit, turnsTotal } from "../runs";
+import { acquire, holdsSlot, noteRefused, queuedOf, queueLimit, withSlot } from "../turngate";
 import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../catalog";
 import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
@@ -688,8 +690,22 @@ export function linksIn(text: string): WebSource[] {
   return [...out.values()];
 }
 
+// Việc phụ chờ chỗ tối đa chừng này (bằng lời gọi chạy thẳng ở /api/llm): hơn nữa thì báo máy chủ bận, không giữ yêu cầu mãi.
+const SIDE_WAIT_MS = 120_000;
+const BUSY = "Máy chủ đang bận. Hãy thử lại sau ít phút.";
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
+  // Mỗi lượt là một CLI. Lượt chat, lượt Code đã giữ chỗ từ trước. Việc phụ (phản biện, quét skill, đặt tên, chưng cất) gọi thẳng tới đây từng không qua cổng nào:
+  // 40 yêu cầu phản biện cùng lúc là tới 80 CLI, không tính vào mức của tài khoản hay của cả máy, đủ để hết RAM và sập trang của mọi người.
+  if (holdsSlot()) return subTurnWatched(o);
+  const uid = o.user.id;
+  if (queuedOf(uid, "quick") >= queueLimit()) { noteRefused(); return { status: 503, json: { error: BUSY } }; }
+  const slot = await acquire({ uid, lane: "quick", limit: quickLimit(o.user), total: turnsTotal(o.user), signal: o.signal, maxWaitMs: SIDE_WAIT_MS });
+  if (slot === "cancelled") return { status: 200, json: { model: o.model, text: "", cancelled: true } };
+  if (slot === "timeout") return { status: 503, json: { error: BUSY } };
+  return withSlot(slot, () => subTurnWatched(o));
+}
+async function subTurnWatched(o: SubTurn): Promise<SubResult> {
   // Antigravity, Grok chỉ báo mã phiên khi xong lượt: bấm Dừng, quá giờ hay CLI chết thì câu lệnh nằm lại trong thư mục đăng nhập mà xóa đoạn chat cũng không tìm thấy.
   // Mã mới xuất hiện mà không lượt nào báo về thì không ai nối tiếp được: dọn ở nền sau lượt. Lượt xong bình thường đã báo mã (sessionSeen) nên được giữ.
   const c0 = subCli(o.model);

@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getSetting, getUser, isAdmin, verifyLocked, type UserRow } from "./authstore";
 import { noteRun, recordOps } from "./ops";
-import { accountLimit, acquire, noteRefused, queuedOf, queueLimit, type WaitWhy } from "./turngate";
+import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit, withSlot, type WaitWhy } from "./turngate";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
 // plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
@@ -88,6 +88,12 @@ export const liveRunOf = (uid: string, conv: string) => { for (const [id, l] of 
 export const liveNow = () => { const s = scope.getStore(); return s ? live.get(s.id)?.text ?? "" : ""; };
 /** Tín hiệu hủy của lượt đang chạy: truyền vào mọi lời gọi model, connector, chạy code. */
 export const runSignal = (): AbortSignal | undefined => { const s = scope.getStore(); return s ? live.get(s.id)?.ctl.signal : undefined; };
+// Lời gọi chạy thẳng ở /api/llm không có lượt bền nào: tín hiệu là của chính kết nối. Không gộp vào runSignal vì nơi khác dùng nó để biết có lượt bền (ghi tiến trình, hiện chữ dần).
+const gst = globalThis as unknown as { __synchroSyncStop?: AsyncLocalStorage<AbortSignal> };
+const syncStop = (gst.__synchroSyncStop ??= new AsyncLocalStorage<AbortSignal>());
+export const withStop = <T>(signal: AbortSignal, f: () => T): T => syncStop.run(signal, f);
+/** Tín hiệu dừng lời gọi model: của lượt bền, hoặc của kết nối khi chạy thẳng. */
+export const turnSignal = (): AbortSignal | undefined => runSignal() ?? syncStop.getStore();
 /** Tín hiệu của một lần gọi model trong lượt: hủy khi lượt bị dừng, hoặc khi người dùng nhắn thêm (model đang viết dở thì dừng bước
  *  đó để đọc tin mới ngay, không phải chờ hết câu trả lời). */
 export function stepSignal(): AbortSignal | undefined {
@@ -251,12 +257,17 @@ function dropEphemeral(id: string, uid: string, conv: string | null) {
 
 // Chờ quá lâu nghĩa là các lượt trước đang kẹt: báo để người dùng quyết, không treo mãi.
 const QUEUE_WAIT_MS = 30 * 60_000;
-const WAIT_NOTE: Record<WaitWhy, string> = {
+export const WAIT_NOTE: Record<WaitWhy, string> = {
   account: "Tài khoản của bạn đang chạy nhiều lượt cùng lúc. Lượt này đang xếp hàng và sẽ tự chạy khi có lượt xong.",
   server: "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ.",
 };
 /** Quản trị viên chỉnh riêng cho một tài khoản qua cài đặt turns_limit:<id> (không có giao diện, dùng khi cần nới cho một người). Tài khoản chưa xác minh email: một nửa, để đăng ký hàng loạt tốn nhiều hơn. */
 export const turnsLimit = (user: UserRow) => Number(getSetting(`turns_limit:${user.id}`, "")) || (verifyLocked(user) ? Math.max(1, Math.ceil(accountLimit() / 2)) : accountLimit() * (isAdmin(user) ? 3 : 1));
+// Việc phụ chạy thẳng (đặt tên, gợi ý, phản biện…): một tài khoản không cần nhiều hơn chừng này cùng lúc. Tài khoản chưa xác minh giữ đúng mức một nửa: bỏ async:true từng lấy lại đủ 6 chỗ.
+const QUICK_MAX = 6;
+export const quickLimit = (user: UserRow) => (verifyLocked(user) ? turnsLimit(user) : Math.max(QUICK_MAX, turnsLimit(user)));
+/** Tổng số lượt của tài khoản trên mọi làn. Có mức riêng hoặc chưa xác minh thì theo turnsLimit; quản trị viên giữ mức gấp ba của mình. */
+export const turnsTotal = (user: UserRow) => (getSetting(`turns_limit:${user.id}`, "") || verifyLocked(user) ? turnsLimit(user) : Math.max(turnsLimit(user), accountTotal()));
 /** Tài khoản đã xếp đầy hàng chờ: /api/llm từ chối ngay. Lượt của việc tự động và lượt khôi phục sau khởi động lại không qua đây, chúng luôn được xếp hàng. */
 export function queueFull(uid: string) {
   const own = Number(getSetting(`turns_limit:${uid}`, ""));
@@ -270,10 +281,10 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
   live.set(id, { s: 0, text: "", ctl, conv, uid: user.id, inbox: [] });
   scope.run({ id }, () => {
     (async () => {
-      const slot = await acquire({ uid: user.id, lane: "run", limit: turnsLimit(user), signal: ctl.signal, maxWaitMs: QUEUE_WAIT_MS, onWait: (w) => progress("note", WAIT_NOTE[w]) });
+      const slot = await acquire({ uid: user.id, lane: "run", limit: turnsLimit(user), total: turnsTotal(user), signal: ctl.signal, maxWaitMs: QUEUE_WAIT_MS, onWait: (w) => progress("note", WAIT_NOTE[w]) });
       if (slot === "cancelled") return { http: 200, json: { text: "", cancelled: true } };
       if (slot === "timeout") return { http: 503, json: { error: "Lượt này đã xếp hàng quá lâu nên Synchro dừng lại. Hãy dừng bớt lượt đang chạy rồi gửi lại." } };
-      try {
+      return await withSlot(slot, async () => {
       // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.
       if (!executors.has(kind) && kind === "chat") await import("./chatengine");
       // Việc tự động chạy bằng Synchro Code (tasks.ts): bộ chạy nằm ở taskagent.ts.
@@ -281,7 +292,7 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
       const f = executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return await f(body, user);
-      } finally { slot(); }
+      });
     })().then((r) => { noteRun(kind, body.model, r.http, r.json); finish(id, r.http, r.json); }, (e) => { recordOps("server", `run ${kind}: ${String((e as Error)?.message ?? e)}`); finish(id, 502, { error: String((e as Error)?.message ?? e) }); });
   });
 }

@@ -4,7 +4,8 @@ import { effectivePerm, pickAgentModel, runAgentTurn, sessionMeta } from "../../
 import { getPrefs, patchSession, type TurnNode } from "../../codestore";
 import { activeRun, latestRun, liveCount, MAX_LIVE_RUNS, runStream, startAgentRun, stopAgentRun } from "../../agentruns";
 import { sdir, wsAllowed } from "../../workspace";
-import { acquire } from "../../turngate";
+import { turnsTotal, WAIT_NOTE } from "../../runs";
+import { acquire, withSlot } from "../../turngate";
 import { withUsage } from "../../usage";
 import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
 import type { Upload } from "../../uploads";
@@ -51,12 +52,12 @@ export async function POST(req: Request) {
       agentInbox.set(ibox, box);
       const ask = String(msgs.filter((m) => m.role === "user").at(-1)?.content ?? "");
       let text = "", d: string | undefined, error = "";
-      // Số phiên Code của một tài khoản đã có chặn ở trên (MAX_LIVE_RUNS); ở đây chỉ để cả máy không quá tải.
-      const slot = await acquire({ uid: c.user.id, lane: "code", limit: MAX_LIVE_RUNS, signal, onWait: () => emit({ t: "think", text: "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ." }) });
+      // Số phiên Code của một tài khoản đã có chặn ở trên (MAX_LIVE_RUNS); ở đây tính chung với lượt chat của tài khoản, và để cả máy không quá tải.
+      const slot = await acquire({ uid: c.user.id, lane: "code", limit: MAX_LIVE_RUNS, total: turnsTotal(c.user), signal, onWait: (w) => emit({ t: "think", text: WAIT_NOTE[w] }) });
       if (typeof slot === "string") { agentInbox.delete(ibox); return; }
       try {
-        const out = await runAgentTurn({ user: c.user, sid, pick, system: String(system), messages: msgs, project, skills: !!wantSkills, emit, signal,
-          inbox: () => box.splice(0), perm: p, files: ups });
+        const out = await withSlot(slot, () => runAgentTurn({ user: c.user, sid, pick, system: String(system), messages: msgs, project, skills: !!wantSkills, emit, signal,
+          inbox: () => box.splice(0), perm: p, files: ups }));
         text = out.text; d = out.d;
         const left = box.splice(0);
         emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });
@@ -64,7 +65,6 @@ export async function POST(req: Request) {
         error = e instanceof ModelError ? `Model báo lỗi (${e.status}): ${e.message.slice(0, 300)}` : (e as Error).message || "Lỗi máy chủ";
         if (!signal.aborted) emit({ t: "error", error });
       } finally {
-        slot();
         // Lượt mới của phiên có thể đã mở hộp thư riêng (bấm Dừng rồi gửi tiếp): chỉ xóa hộp của lượt này.
         if (agentInbox.get(ibox) === box) agentInbox.delete(ibox);
       }
