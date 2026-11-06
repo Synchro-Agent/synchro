@@ -24,6 +24,8 @@ Giới hạn lượt model (đặt trong `.env.production`): `SYNCHRO_TURNS_PER_
 
 Quyền sở hữu: `scripts/server-build.sh` để thư mục app, `scripts/`, `workspace/` thuộc root; dịch vụ workspace chạy từ `/opt/synchro-ws` (bản sao, chỉ root ghi). Web user ghi được `data/`, `.cache/`, `.next/`, `node_modules/`, `.mkvenv/`, `.env.production` và mã ứng dụng của chính nó, nên script chạy bằng root không được tin các tệp này (`backup.sh` đã làm vậy). Tiến trình đọc tệp tải lên (`scripts/extract-worker.mjs`) chạy ưu tiên thấp, giới hạn bộ nhớ (`SYNCHRO_PARSE_HEAP_MB`, 1024), thời gian (`SYNCHRO_PARSE_MS`), số việc cùng lúc (`SYNCHRO_PARSE_MAX`, 2), không có biến môi trường bí mật, và theo mô hình quyền của Node chỉ đọc được mã của chính nó.
 
+Người dùng mất cả ứng dụng tạo mã lẫn mã dự phòng (xác minh hai bước): sau khi xác nhận đúng chủ tài khoản, chạy trên máy chủ `sqlite3 data/synchro.db "DELETE FROM user_mfa WHERE user_id = '<id>'"`.
+
 ## Deploy và trả lại bản trước
 
 `scripts/server-build.sh` dựng bản mới ở thư mục riêng, tráo bản, khởi động lại, rồi gọi `/api/health` tối đa khoảng 90 giây.

@@ -277,6 +277,30 @@ export function updateProfile(req: Request, u: UserRow, p: ProfileIn) {
 export type PublicUser = ReturnType<typeof publicUser>;
 
 // ---- phiên ----
+// ---- xác minh hai bước: mật khẩu hoặc Google đúng rồi mà tài khoản đã bật thì chưa tạo phiên, chỉ cấp vé 10 phút để nhập mã (mfa.ts). Vé ở bộ nhớ: khởi động lại thì đăng nhập lại. ----
+const MFA_COOKIE = "synchro_mfa";
+const mfaTickets = ((globalThis as { __synchroMfaTickets?: Map<string, { uid: string; method: string; exp: number }> }).__synchroMfaTickets ??= new Map());
+const mfaOn = (uid: string) => { try { return !!db().prepare("SELECT 1 FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL").get(uid); } catch { return false; } };
+/** Tạo phiên, hoặc vé bước hai nếu tài khoản đã bật. */
+function signIn(u: UserRow, req: Request, method: string): { cookie: string; mfa: boolean } {
+  if (!mfaOn(u.id)) return { cookie: createSession(u, req, method), mfa: false };
+  const now = Date.now();
+  for (const [k, v] of mfaTickets) if (v.exp < now) mfaTickets.delete(k);
+  const token = crypto.randomBytes(32).toString("base64url");
+  mfaTickets.set(sha256(token), { uid: u.id, method, exp: now + 10 * MIN });
+  return { cookie: cookie(req, MFA_COOKIE, token, 600), mfa: true };
+}
+/** Vé bước hai của yêu cầu này còn hiệu lực, cùng tài khoản còn hoạt động. */
+export function mfaTicketUser(req: Request): { user: UserRow; method: string } | null {
+  const raw = readCookie(req, MFA_COOKIE);
+  const t = raw ? mfaTickets.get(sha256(raw)) : undefined;
+  if (!raw || !t || t.exp < Date.now()) return null;
+  const user = getUser(t.uid);
+  if (!user || user.status !== "active") return null;
+  return { user, method: t.method };
+}
+export const clearMfaCookie = (req: Request) => { const raw = readCookie(req, MFA_COOKIE); if (raw) mfaTickets.delete(sha256(raw)); return cookie(req, MFA_COOKIE, "", 0); };
+
 export function createSession(u: UserRow, req: Request, method: string) {
   const token = crypto.randomBytes(32).toString("base64url");
   const now = Date.now();
@@ -343,8 +367,10 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   const ok = typeof pw === "string" && pw.length <= PW_MAX && (await verifyPassword(pw, u?.password_hash ?? null));
   if (!u || !ok) { audit("login_failed", { target: u, targetEmail: email, ip }); throw new AuthError("Email hoặc mật khẩu không đúng. Nếu bạn đăng ký bằng Google, GitHub hoặc Apple, hãy dùng nút đó.", 401); }
   if (u.status !== "active") { audit("login_blocked", { target: u, ip }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
-  audit("login", { actor: u, ip, detail: "password" });
-  return { user: u, cookie: createSession(u, req, "password") };
+  const s = signIn(u, req, "password");
+  // Chưa xong bước hai thì chưa phải đăng nhập: /api/auth/mfa ghi nhật ký khi xong.
+  if (!s.mfa) audit("login", { actor: u, ip, detail: "password" });
+  return { user: u, ...s };
 }
 
 /** pending: email này không tạo mới được (đã có tài khoản hoặc được dành riêng). Không báo trùng: chủ email nhận thư hướng dẫn, người khác không biết thêm gì. */
@@ -471,8 +497,9 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
   // nên ảnh Google (ảnh thật hoặc chữ cái đầu) được ưu tiên thay cho ảnh GitHub.
   const fromGithub = !!u.avatar?.includes("avatars.githubusercontent.com");
   if (p.avatar && (u.avatar === null || (p.provider === "google" && fromGithub))) db().prepare("UPDATE users SET avatar = ? WHERE id = ?").run(p.avatar, u.id);
-  audit("login", { actor: u, ip, detail: p.provider });
-  return { user: u, claimed, fresh, cookie: createSession(u, req, p.provider) };
+  const s = signIn(u, req, p.provider);
+  if (!s.mfa) audit("login", { actor: u, ip, detail: p.provider });
+  return { user: u, claimed, fresh, ...s };
 }
 
 /** Thêm một cách đăng nhập vào tài khoản đang đăng nhập. Danh tính đã thuộc tài khoản khác thì từ chối: không gộp, không chuyển. */

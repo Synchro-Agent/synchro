@@ -1,0 +1,61 @@
+// Xác minh hai bước: chưa bật thì đăng nhập như cũ; bật rồi thì mật khẩu đúng chưa tạo phiên, phải qua mã; mã không dùng lại được; mã dự phòng dùng một lần; tắt cần mã. Tự chạy được, không cần dev:mock.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { loadTs } from "../lib/ts.mjs";
+
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-mfa-"));
+process.env.DATA_DIR = tmp; process.env.DATA_KEY = "mfa-test"; process.env.SYNCHRO_RELAX_LIMITS = "1";
+const { authstore: AS, mfa: M, "api/auth/mfa/route": R, "api/auth/login/route": L } = await loadTs(["authstore", "mfa", "api/auth/mfa/route", "api/auth/login/route"]);
+const B = "http://localhost:3200";
+const req = (p, cookie, body) => new Request(B + p, { method: body ? "POST" : "GET", headers: { origin: B, host: "localhost:3200", "content-type": "application/json", cookie: cookie ?? "", "user-agent": "t", "x-forwarded-for": "5.5.5.5" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+const cookies = (r) => (r.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]);
+const u = AS.createUser({ email: "m@synchro.test", name: "M", verified: true, passwordHash: await AS.hashPassword("Mat-khau-dung-123") });
+const login = () => L.POST(req("/api/auth/login", "", { email: "m@synchro.test", password: "Mat-khau-dung-123" }));
+const nowCode = (secret, off = 0) => M.totpAt(secret, Math.floor(Date.now() / 30_000) + off);
+try {
+  ok(M.totpAt("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1) === "287082", "đúng véc-tơ thử của RFC 6238 (59 giây)", M.totpAt("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1));
+  let r = await login();
+  let j = await r.json();
+  const session = cookies(r).find((c) => c.startsWith("synchro_session") || !c.startsWith("synchro_mfa"));
+  ok(r.status === 200 && j.user?.email === u.email, "chưa bật: đăng nhập như cũ", j);
+  const start = await R.POST(req("/api/auth/mfa", session, { op: "start" }));
+  const s = await start.json();
+  ok(start.status === 200 && /^[A-Z2-7]{32}$/.test(s.secret) && s.uri.startsWith("otpauth://totp/"), "bắt đầu bật: có khóa và liên kết", s);
+  ok(M.mfaStatus(u.id).enabled === false, "chưa xác nhận thì chưa có hiệu lực");
+  r = await login();
+  ok((await r.json()).user?.email === u.email, "khóa chưa xác nhận không chặn đăng nhập");
+  r = await R.POST(req("/api/auth/mfa", session, { op: "confirm", code: "000000" }));
+  ok(r.status === 400, "mã sai: không bật", r.status);
+  r = await R.POST(req("/api/auth/mfa", session, { op: "confirm", code: nowCode(s.secret) }));
+  const { recovery } = await r.json();
+  ok(r.status === 200 && recovery?.length === 8 && M.mfaStatus(u.id).enabled, "mã đúng: bật, có 8 mã dự phòng", recovery);
+  // Đã dùng bước hiện tại để xác nhận: lần đăng nhập đầu dùng bước kế tiếp (chấp nhận lệch một bước).
+  r = await login();
+  j = await r.json();
+  const ck = cookies(r);
+  ok(r.status === 200 && j.mfa === true && !j.user && ck.length === 1 && ck[0].startsWith("synchro_mfa="), "mật khẩu đúng: chưa có phiên, chưa lộ thông tin tài khoản", { j, ck });
+  ok(AS.current(req("/", ck[0])) === null, "vé bước hai không phải phiên đăng nhập");
+  ok((await R.POST(req("/api/auth/mfa", "", { op: "verify", code: "123456" }))).status === 401, "không có vé: từ chối");
+  ok((await R.POST(req("/api/auth/mfa", ck[0], { op: "verify", code: "000000" }))).status === 400, "mã sai: từ chối");
+  const code2 = nowCode(s.secret, 1);
+  r = await R.POST(req("/api/auth/mfa", ck[0], { op: "verify", code: code2 }));
+  j = await r.json();
+  const sess2 = cookies(r).find((c) => !c.startsWith("synchro_mfa"));
+  ok(r.status === 200 && j.user?.email === u.email && AS.current(req("/", sess2))?.user?.id === u.id, "mã đúng: có phiên", j);
+  r = await login();
+  const ck2 = cookies(r)[0];
+  ok((await R.POST(req("/api/auth/mfa", ck2, { op: "verify", code: code2 }))).status === 400, "mã đã dùng không dùng lại được");
+  r = await R.POST(req("/api/auth/mfa", ck2, { op: "verify", code: recovery[0].toLowerCase() }));
+  ok(r.status === 200 && M.mfaStatus(u.id).recoveryLeft === 7, "mã dự phòng dùng được", M.mfaStatus(u.id));
+  r = await login();
+  ok((await R.POST(req("/api/auth/mfa", cookies(r)[0], { op: "verify", code: recovery[0] }))).status === 400, "mã dự phòng chỉ dùng một lần");
+  ok((await R.POST(req("/api/auth/mfa", sess2, { op: "disable", code: "000000" }))).status === 400 && M.mfaStatus(u.id).enabled, "tắt cần mã đúng");
+  ok((await R.POST(req("/api/auth/mfa", sess2, { op: "disable", code: recovery[1] }))).status === 200 && !M.mfaStatus(u.id).enabled, "tắt bằng mã dự phòng được");
+  j = await (await login()).json();
+  ok(j.user?.email === u.email, "tắt rồi: đăng nhập như cũ", j);
+} finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+console.log(`\n${pass} đạt, ${fail} lỗi`);
+process.exit(fail ? 1 : 0);

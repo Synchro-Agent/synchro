@@ -265,6 +265,9 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [authStep, setAuthStep] = useState(mode === "profile" ? "profile" : "email");
+  const [mfaCode, setMfaCode] = useState("");
+  // Đăng nhập bằng Google, GitHub, Apple đúng rồi và tài khoản đã bật xác minh hai bước: máy chủ chuyển về đây để nhập mã.
+  useEffect(() => { const u = new URL(window.location.href); if (u.searchParams.get("mfa") === "1") { u.searchParams.delete("mfa"); window.history.replaceState(null, "", u.pathname + u.search + u.hash); setAuthStep("mfa"); } }, []);
   const [stage, setStage] = useState<Stage>("form");
   const [kind, setKind] = useState<Kind>("login");
   const [errorMsg, setErrorMsg] = useState("");
@@ -298,8 +301,10 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     setStage("loading");
     const t0 = Date.now();
     try {
-      const { user: u, pending } = await post<{ user: AuthUser; pending?: boolean }>(url, body);
+      const { user: u, pending, mfa } = await post<{ user: AuthUser; pending?: boolean; mfa?: boolean }>(url, body);
       await wait(minMs - (Date.now() - t0));
+      // Tài khoản đã bật xác minh hai bước: hỏi mã rồi mới đăng nhập.
+      if (mfa) { busy.current = false; setAuthStep("mfa"); setMfaCode(""); setPassword(""); setStage("form"); return; }
       // Email này không tạo mới được: không nói lý do (ai cũng gõ được email của người khác), thư hướng dẫn đã gửi tới chính hộp thư đó.
       if (pending) { busy.current = false; setAuthStep("pending"); setPassword(""); setConfirmPassword(""); setStage("form"); return; }
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
@@ -326,6 +331,10 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (stage !== "form") return;
+    if (authStep === "mfa") {
+      if (mfaCode.trim()) await run("login", "/api/auth/mfa", { op: "verify", code: mfaCode }, 400);
+      return;
+    }
     if (authStep === "password" && isLogin) {
       if (isPasswordValid) await run("login", "/api/auth/login", { email, password }, 900);
       return;
@@ -364,7 +373,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     if (authStep === "profile") setAuthStep("confirmPassword");
     else if (authStep === "confirmPassword") { setAuthStep("password"); setConfirmPassword(""); }
     else if (authStep === "password") { setAuthStep("email"); setPassword(""); }
-    else if (authStep === "pending") { setAuthStep("email"); setIsLogin(true); }
+    else if (authStep === "pending" || authStep === "mfa") { setAuthStep("email"); setIsLogin(true); setMfaCode(""); }
   };
 
   // Trang cha đổi mode: vào bước hồ sơ (đã đăng nhập nhưng thiếu hồ sơ) hoặc quay về từ đầu (đăng xuất).
@@ -405,6 +414,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     email: [again ? "Sign in again" : "Get started", "Continue with"],
     // Không lộ email đã có tài khoản hay chưa: cùng một bước cho cả hai, nói rõ cả hai đường đi.
     password: [isLogin ? (signupOpen ? "Sign in or create an account" : "Enter your password") : "Create your password", isLogin ? (signupOpen ? "Have an account? Enter your password. New here? Create one below." : "Enter your password to sign in.") : "Your password must be at least 8 characters long."],
+    mfa: ["Two-step verification", "Enter the 6-digit code from your authenticator app, or a recovery code."],
     pending: ["Check your email", "We sent the next step to this address. If you already have an account, sign in or reset your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
@@ -526,6 +536,14 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                             </AnimatePresence>
                         </motion.div>}
                     </AnimatePresence>
+                    {authStep === "mfa" && <BlurFade delay={OUT + STEP * 2} className="w-full">
+                        <div className="glass-input-wrap w-full"><div className="glass-input">
+                            <span className="glass-input-text-area"></span>
+                            <input autoFocus type="text" inputMode="text" autoComplete="one-time-code" aria-label="Verification code" placeholder="Verification code" aria-invalid={!!notice || undefined} aria-describedby={notice ? "auth-notice" : undefined} value={mfaCode} onChange={(e) => setMfaCode(e.target.value.slice(0, 20))} className="relative z-10 h-full w-0 flex-grow bg-transparent px-4 text-foreground placeholder:text-foreground/60 focus:outline-none" />
+                            <div className={cn("relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", mfaCode.trim() ? "w-10 pr-1" : "w-0")}><GlassButton type="submit" size="icon" aria-label="Submit code" contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
+                        </div></div>
+                        <button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button>
+                    </BlurFade>}
                     {authStep === "pending" && <BlurFade delay={OUT + STEP * 2} className="w-full">
                         <p className="auth-signed-as" data-notr><b>{email}</b></p>
                         <button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button>
