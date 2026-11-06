@@ -218,6 +218,9 @@ const NOUN_PLAN = W("^(?:(?:lập|làm|lên|xây dựng|soạn|tạo)(?: (?:giú
 const NOUN_PLAN_FOLD = W("^(?:(?:lap|lam|len|xay dung|soan|tao)(?: (?:giup|ho|cho|minh|toi|em|mot|1))* )?(?:ke hoach|quy trinh|ngan sach|thuc don|lich trinh|de an|chien dich)");
 const NOUN_DOC = W("^(?:(?:lập|làm|soạn|viết|tạo)(?: (?:giúp|hộ|cho|mình|tôi|em|một|1))* )?(?:thông cáo(?: báo chí)?|bản mô tả|mô tả công việc|nội dung (?:fanpage|facebook|tiktok|website|marketing|quảng cáo)|bản đề xuất|press release|job description)");
 const NOUN_DOC_FOLD = W("^(?:(?:lap|lam|soan|viet|tao)(?: (?:giup|ho|cho|minh|toi|em|mot|1))* )?(?:thong cao(?: bao chi)?|ban mo ta|mo ta cong viec|noi dung (?:fanpage|facebook|tiktok|website|marketing|quang cao)|ban de xuat)");
+// Tệp văn phòng nêu bằng danh từ ("Bảng lương tháng 10 cho 5 nhân viên"): phải có công cụ mới ra tệp.
+const NOUN_SHEET = W("^(?:bảng (?:lương|chấm công|báo giá|kê|theo dõi|dự toán)|sổ (?:theo dõi|thu chi|quỹ)|báo giá|dự toán)");
+const NOUN_SHEET_FOLD = W("^(?:bang (?:luong|cham cong|bao gia|ke|theo doi|du toan)|so (?:theo doi|thu chi|quy)|bao gia|du toan)");
 const HOWTO = W("làm sao|làm thế nào|thế nào|như thế nào|cách|là gì|có nên|tại sao|vì sao|how (?:to|do|can|should)|what is|why|should i");
 // Sức khỏe, pháp lý, tài chính: trả lời sai có hại thật, không dùng model và nỗ lực thấp nhất dù câu hỏi ngắn.
 // Cả cách nói gián tiếp: "sống làm gì nữa", "em muốn biến mất", "bị bạn trai đánh", "bé bỏ bú". Những câu đó từng tới model rẻ nhất ở đường nhanh, không có quy tắc an toàn nào.
@@ -261,6 +264,7 @@ const PLAIN_CHAT = /^(?:(?:ok|oke|okay|okie|vang|da|u|um|yes|yeah)[\s,.!~]+)*(?:
 const BARE_ACK = /^(?:(?:ok|oke|okay|okie|okela|vang|da|u|um|uh|yes|yeah|yep|yup|sure|no|nope|duoc|roi|dong y|chot|dung|vay|co|lam di|lam luon|lam nhe|lam nha|lam thoi|tien hanh|bat dau|go|go ahead|do it|please|proceed|start|luon|di|nhe|nha|a|thoi|nao)(?:\s+|$))+$/;
 // Câu khép lại, tạm rời đi hay khen một tiếng: không phải câu trả lời, không phải việc. Sau một việc lớn, "mình đi ngủ đây", "lol", "thôi khỏi" từng thành làm tiếp, model mạnh nhất, nỗ lực cao.
 const CLOSING = /(?<![a-z0-9])(?:di ngu|ngu day|ngu thoi|ngu nhe|di day|di nhe|(?:di (?:an|lam|hoc|choi)|an com) (?:day|thoi|nhe|da)|ve day|cho (?:chut|ti|xiu|lat)|doi (?:chut|ti|xiu|lat)|de sau|de mai|mai (?:tinh|lam|noi|nhe)|hom khac|luc khac|thoi khoi|thoi bo|thoi nhe|khoi can|khong can (?:dau|nua)|lol|lmao|see you|see ya|gotta go|got to go|brb|(?:dep|hay|on|duoc|tot) (?:day|do))(?![a-z0-9])/;
+const ACT_REPLY = W("trả lời|phản hồi|reply|respond|answer|tra loi|phan hoi");
 const looseFold = (ins: string) => fold(ins).replace(/[.,!~]+/g, " ").replace(/\s+/g, " ").trim();
 // Lời chào, "dạ", "ok", lời cảm ơn đứng đầu câu không phải là việc: "Chào bạn, mình bị đau ngực…", "Dạ em muốn hỏi…" được chấm theo phần còn lại.
 const HEAD = /^(?:(?:xin chào|kính chào|chào(?: buổi \p{L}+)?|hi|hello|hey|alo|a lô|dạ(?! dày| con| hội| quang| cỏ)|vâng|ừ|ừm|ok|oke|okay|okie|cảm ơn|cám ơn|thank you|thanks?|tks|good (?:morning|afternoon|evening))(?![\p{L}\p{N}])(?:\s+(?:bạn|em|anh|chị|cô|chú|bác|ad|admin|synchro|cả nhà|mọi người|nhé|nha|nhiều|ạ|so much|a lot|there|everyone))*[\s,.!~:;-]*)+/iu;
@@ -274,8 +278,12 @@ const POINTER = W("đó|ấy|này|kia|trên|vừa rồi|lúc nãy|nó|thế|vậ
 const POINTER_FOLD = W("do|ay|nay|tren|vua roi|luc nay|no");
 const ASK_MORE = W("(?:vậy )?còn(?: \\p{L}+){1,5} (?:thì )?sao|what about|how about");
 const ASK_MORE_FOLD = W("(?:vay )?con(?: \\p{L}+){1,5} (?:thi )?sao");
-const CONT = W("tiếp|nữa|thêm|giải thích|cụ thể|chi tiết|ví dụ|đổi|sửa|bỏ|xóa|xoá|thay|chỉnh|giảm|tăng|rút gọn|ngắn hơn|dài hơn|to hơn|nhỏ hơn|đẹp hơn|rõ hơn|kỹ hơn|hay hơn|màu|font|continue|go on|keep going|more|change|add|remove|delete|replace|shorter|longer|bigger|smaller|update|instead|again|elaborate|expand|next|another|example");
-const CONT_FOLD = W("tiep|nua|them|giai thich|cu the|chi tiet|vi du|doi|sua|xoa|thay|chinh|rut gon|ngan hon|dai hon|to hon|nho hon|dep hon|ro hon|mau");
+// Chê kích thước, bố cục ("chữ to quá", "lề hẹp quá") và đòi so sánh ở cuối câu ("cho nó sang hơn", "giọng trang trọng hơn đi"): từng thành câu hỏi mới, model rẻ nhất, không công cụ, ngay giữa lúc đang dựng trang web.
+// Không gồm "mệt quá", "đói quá", "khá hơn rồi": đó không phải lời chỉnh sản phẩm, đừng kéo theo model mạnh.
+const TWEAK = "(?:to|nhỏ|bé|dài|ngắn|rộng|hẹp|cao|thấp|tối|sáng|nhạt|đậm|sát|thưa|dày|mỏng|lệch|chật|rối|trống)(?: \\p{L}+)? (?:quá|lắm)|\\p{L}+ hơn(?: (?:đi|nhé|nha|chút|một chút|tí|xíu|nữa))?$|too (?:big|small|long|short|wide|narrow|tall|dark|light|bright|busy|plain|tight|cramped)";
+const TWEAK_FOLD = "(?:to|nho|be|dai|ngan|rong|hep|cao|thap|toi|sang|nhat|dam|sat|thua|day|mong|lech|chat|roi|trong)(?: \\p{L}+)? (?:qua|lam)|\\p{L}+ hon(?: (?:di|nhe|nha|chut|mot chut|ti|xiu|nua))?$";
+const CONT = W(`${TWEAK}|tiếp|nữa|thêm|giải thích|cụ thể|chi tiết|ví dụ|đổi|sửa|bỏ|xóa|xoá|thay|chỉnh|giảm|tăng|rút gọn|ngắn hơn|dài hơn|to hơn|nhỏ hơn|đẹp hơn|rõ hơn|kỹ hơn|hay hơn|màu|font|continue|go on|keep going|more|change|add|remove|delete|replace|shorter|longer|bigger|smaller|update|instead|again|elaborate|expand|next|another|example`);
+const CONT_FOLD = W(`${TWEAK_FOLD}|tiep|nua|them|giai thich|cu the|chi tiet|vi du|doi|sua|xoa|thay|chinh|rut gon|ngan hon|dai hon|to hon|nho hon|dep hon|ro hon|mau`);
 function followsUp(t: string): boolean {
   const bare = noMarks(t);
   if (ASK_MORE.test(t) || (bare && ASK_MORE_FOLD.test(t))) return true;
@@ -327,6 +335,7 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   // Danh từ đầu câu là việc cần làm, trừ khi đang hỏi về nó ("app là gì", "quy trình tuyển dụng ra sao").
   if (!HOWTO.test(ins) && !QUESTION.test(ins) && !/\?\s*$/.test(ins) && !SIG.debug![0][0].test(ins) && !(bare && (HOWTO_FOLD.test(ins) || QUESTION_FOLD.test(ins)))) {
     if (NOUN_BUILD.test(ins) || (bare && NOUN_BUILD_FOLD.test(ins))) out.set("build", Math.max(out.get("build") ?? 0, 5));
+    if (NOUN_SHEET.test(ins) || (bare && NOUN_SHEET_FOLD.test(ins))) out.set("act", Math.max(out.get("act") ?? 0, 5));
     if (NOUN_PLAN.test(ins) || (bare && NOUN_PLAN_FOLD.test(ins))) out.set("analyze", Math.max(out.get("analyze") ?? 0, 3));
     if (NOUN_DOC.test(ins) || (bare && NOUN_DOC_FOLD.test(ins))) out.set("write", Math.max(out.get("write") ?? 0, 3));
   }
@@ -388,7 +397,9 @@ function read(q: RouteInput, depth = 0): Read {
   const answered = !!q.answeredAsk && ins.length < 800;
   const closing = CLOSING.test(looseFold(whole)) && !CONT.test(ins) && !(bareIns && CONT_FOLD.test(ins));
   const shortReply = !!q.asked && q.turns >= 2 && strength < 2 && ins.length < 100 && !PLAIN_CHAT.test(looseFold(whole)) && !/\?\s*$/.test(ins) && !((QUESTION.test(ins) || (bareIns && QUESTION_FOLD.test(ins))) && !followsUp(ins)) && !stakes && heavyPrev();
-  if (crisis ? false : answered ? can : !closing && !stakes && (shortReply || (((strength < 2 && (retry || followsUp(ins))) || ack) && ins.length < 100 && can))) {
+  // Vừa đọc hộp thư, lịch ở connector mà nhờ "trả lời email đầu tiên": vẫn là việc trong connector, không phải viết một bức thư rời. Từng đi đường nhanh, không công cụ, không biết email đó là gì.
+  const actReply = can && task === "write" && ins.length < 100 && ACT_REPLY.test(ins) && prevRead().task === "act";
+  if (crisis ? false : answered ? can : !closing && !stakes && (shortReply || actReply || (((strength < 2 && (retry || followsUp(ins))) || ack) && ins.length < 100 && can))) {
     const p = prevRead();
     if (p.task !== "chat") {
       s = p.score; why.push(...p.why.filter((w) => w !== "bạn chưa hài lòng với câu trả lời trước"));
@@ -459,10 +470,45 @@ export function isAck(text: string): boolean {
   // Câu hỏi mới ("thủ đô của Pháp là gì?") và câu về sức khỏe, pháp lý là lời nhờ thật: "giải thích thêm" sau đó nói về chúng, không về việc lớn ở trước.
   return !hasStakes(typedPart(text)) && !((QUESTION.test(ins) || (noMarks(ins) && QUESTION_FOLD.test(ins))) && !followsUp(ins));
 }
+// Thông tin của yêu cầu mới nhất từ danh sách tin của đoạn chat: chữ, tệp / ảnh đính kèm, độ dài tài liệu, lời nhờ trước đó. Chỉ chữ người dùng gõ mới quyết định loại việc; nội dung tệp đính kèm
+// (ghi chú "Các khối <file>…", nhãn [File: …], <file>…</file>) chỉ tính số tệp và độ dài, để từ khóa nằm trong tệp không đẩy độ khó lên. Hàm thuần: bài đánh giá nhiều lượt chạy đúng đường này.
+const FILE_TEXT = /^(?:Các khối <file>|\[File: )/;
+type ChatMsg = { role?: string; content?: unknown };
+export function typedText(m: ChatMsg | undefined): string {
+  if (!m) return "";
+  if (typeof m.content === "string") return m.content.slice(0, 8000);
+  const b = Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).find((x) => x?.type === "text" && typeof x.text === "string" && !FILE_TEXT.test(x.text)) : undefined;
+  return (b?.text ?? "").slice(0, 8000);
+}
+export function inputOfChat(messages: unknown, o: { studio?: boolean; prev?: string | null } = {}): RouteInput {
+  const msgs = Array.isArray(messages) ? (messages as ChatMsg[]) : [];
+  const users = msgs.filter((m) => m?.role === "user");
+  const lastUser = users[users.length - 1];
+  const blocks = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string; text?: string; fallbackText?: string }[]) : [];
+  const attachments = blocks.filter((b) => b?.type && b.type !== "text").length;
+  const images = blocks.filter((b) => b?.type === "image" || b?.type === "image_url").length;
+  const files = blocks.filter((b) => b?.type === "text" && typeof b.text === "string" && b.text.startsWith("[File: ")).length;
+  // Độ dài nội dung tệp: chữ trích ra trong <file>, PDF gửi nguyên dạng thì theo chữ dự phòng (không có thì ước chừng một tài liệu vừa).
+  const docChars = blocks.reduce((n, b) => n + (b?.type === "text" && typeof b.text === "string" && b.text.includes("<file") ? b.text.length : b?.type === "document" ? (b.fallbackText?.length ?? 8000) : 0), 0);
+  // Lời nhờ gần nhất: bỏ qua các câu chỉ xác nhận, trả lời ngắn ở giữa ("Làm trang web" → "ok" → "màu xanh nhé").
+  let prevAsk: string | undefined;
+  for (let i = users.length - 2; i >= 0 && i >= users.length - 8; i--) {
+    const t = typedText(users[i]);
+    if (!t) continue;
+    prevAsk ??= t;
+    if (!isAck(t)) { prevAsk = t; break; }
+  }
+  // Tin ngay trước là thẻ hỏi lại: thẻ một câu chỉ gửi đúng chữ của lựa chọn ("Phương án 2"), nên phải nhìn tin của model mới biết đó là câu trả lời.
+  const lastAi = [...msgs].reverse().find((m) => m?.role === "assistant");
+  const aiText = typeof lastAi?.content === "string" ? lastAi.content : Array.isArray(lastAi?.content) ? (lastAi!.content as { text?: string }[]).map((x) => x?.text ?? "").join("\n") : "";
+  return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!o.studio, images, files, docChars, prev: o.prev ?? null, prevAsk, answeredAsk: /```ask\b/.test(aiText), asked: askedBack(aiText) };
+}
 const memo = new WeakMap<RouteInput, Read>();
 const readOf = (q: RouteInput) => { let r = memo.get(q); if (!r) { r = read(q); memo.set(q, r); } return r; };
 /** Yêu cầu này có rơi vào sức khỏe, pháp lý, tài chính hay nguy hiểm không (không đi model rẻ nhất, không đi đường nhanh). */
 export const hasHighStakes = (q: RouteInput) => !!readOf(q).stakes;
+/** Câu nối tiếp theo việc của yêu cầu trước. */
+export const isFollowUp = (q: RouteInput) => !!readOf(q).follow;
 
 export const taskOf = (q: RouteInput): Task => readOf(q).task;
 /** Điểm độ khó: ≤ 0 dễ, 1-2 vừa, 3-4 khó, ≥ 5 rất khó. */

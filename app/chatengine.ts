@@ -17,7 +17,7 @@ import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "./mcp";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
-import { askedBack, AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
+import { AUTO, autoEffort, effortLabel, inputOfChat, isAck, needsNoTools, typedText, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { rank } from "./skillroute";
@@ -1412,39 +1412,9 @@ function nowBlock(body: Record<string, any>): string { // eslint-disable-line @t
   try { return `<current_time>${at(tz || undefined)}${tz ? ` (${tz})` : ""}</current_time>`; }
   catch { return `<current_time>${at()}</current_time>`; }
 }
-// Thông tin của yêu cầu mới nhất cho bộ định tuyến: chữ, tệp / ảnh đính kèm, độ dài tài liệu, model của câu trả lời trước.
-// Chỉ chữ người dùng gõ mới quyết định loại việc; nội dung tệp đính kèm (ghi chú "Các khối <file>…", nhãn [File: …], <file>…</file>)
-// chỉ tính số tệp và độ dài, để từ khóa nằm trong tệp không đẩy độ khó lên.
-const FILE_TEXT = /^(?:Các khối <file>|\[File: )/;
-function typedText(m: { content?: unknown } | undefined): string {
-  if (!m) return "";
-  if (typeof m.content === "string") return m.content.slice(0, 8000);
-  const b = Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).find((x) => x?.type === "text" && typeof x.text === "string" && !FILE_TEXT.test(x.text)) : undefined;
-  return (b?.text ?? "").slice(0, 8000);
-}
+// Thông tin của yêu cầu mới nhất cho bộ định tuyến (router.inputOfChat).
 function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const msgs = Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : [];
-  const users = msgs.filter((m) => m?.role === "user");
-  const lastUser = users[users.length - 1];
-  const blocks = Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string; text?: string; fallbackText?: string }[]) : [];
-  const attachments = blocks.filter((b) => b?.type && b.type !== "text").length;
-  const images = blocks.filter((b) => b?.type === "image" || b?.type === "image_url").length;
-  const files = blocks.filter((b) => b?.type === "text" && typeof b.text === "string" && b.text.startsWith("[File: ")).length;
-  // Độ dài nội dung tệp: chữ trích ra trong <file>, PDF gửi nguyên dạng thì theo chữ dự phòng (không có thì ước chừng một tài liệu vừa).
-  const docChars = blocks.reduce((n, b) => n + (b?.type === "text" && typeof b.text === "string" && b.text.includes("<file") ? b.text.length : b?.type === "document" ? (b.fallbackText?.length ?? 8000) : 0), 0);
-  // Lời nhờ gần nhất: bỏ qua các câu chỉ xác nhận, trả lời ngắn ở giữa ("Làm trang web" → "ok" → "màu xanh nhé").
-  let prevAsk: string | undefined;
-  for (let i = users.length - 2; i >= 0 && i >= users.length - 8; i--) {
-    const t = typedText(users[i]);
-    if (!t) continue;
-    prevAsk ??= t;
-    if (!isAck(t)) { prevAsk = t; break; }
-  }
-  // Tin ngay trước là thẻ hỏi lại: thẻ một câu chỉ gửi đúng chữ của lựa chọn ("Phương án 2"), nên phải nhìn tin của model mới biết đó là câu trả lời.
-  const lastAi = [...msgs].reverse().find((m) => m?.role === "assistant");
-  const aiText = typeof lastAi?.content === "string" ? lastAi.content : Array.isArray(lastAi?.content) ? (lastAi!.content as { text?: string }[]).map((x) => x?.text ?? "").join("\n") : "";
-  return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, files, docChars,
-    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk, answeredAsk: /```ask\b/.test(aiText), asked: askedBack(aiText) };
+  return inputOfChat(body.messages, { studio: !!studioOf(body.studio), prev: typeof body.prevModel === "string" ? body.prevModel : null });
 }
 
 /** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
