@@ -20,7 +20,9 @@ const readAll = async (r) => (await r.text()).split("\n").filter(Boolean).map((l
 const attach = (sid, after = 0) => fetch(`${B}/api/agent?sid=${sid}&after=${after}`, { headers: { cookie } });
 const info = async (sid) => (await api("GET", `/api/agent?sid=${sid}&json=1`));
 const until = async (f, ms = 30000) => { const t = Date.now(); for (;;) { const v = await f(); if (v || Date.now() - t > ms) return v; await sleep(250); } };
-const SLOW = seq([{ tool: "bash", args: { command: "sleep 2 && echo xong-cham > cham.txt", description: "Chờ rồi ghi" } }]);
+const SLOW = seq([{ tool: "bash", args: { command: "sleep 4 && echo xong-cham > cham.txt", description: "Chờ rồi ghi" } }]);
+// Chế độ dev biên dịch route lần đầu mất vài giây: làm nóng trước để không đo nhầm thời gian biên dịch.
+await info("0"); await api("DELETE", "/api/agent?sid=0"); await api("GET", "/api/code/sessions?id=1");
 
 console.log("1. Ngắt kết nối không dừng lượt");
 {
