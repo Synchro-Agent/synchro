@@ -95,6 +95,8 @@ export const OPS_EN2VI: Record<string, string> = {
   "Uploads": "Tệp tải lên",
   "Generated files": "Tệp đã tạo",
   "Server errors (24h)": "Lỗi máy chủ (24 giờ)",
+  "Browser errors (24h)": "Lỗi trình duyệt (24 giờ)", "Replies running now": "Lượt đang chạy", "Replies waiting now": "Lượt đang chờ", "Refused, queue full (since restart)": "Bị từ chối vì hàng đầy (từ lần khởi động)", "CLI isolation": "Cách ly CLI",
+  "Recent server errors": "Lỗi máy chủ gần đây", "Browser reports": "Báo cáo từ trình duyệt", "Sent by browsers, and anyone can send one, so these are a hint and do not count as server errors.": "Do trình duyệt gửi, và ai cũng gửi được, nên chỉ để tham khảo và không tính là lỗi máy chủ.",
   "Replies failed (24h)": "Câu trả lời lỗi (24 giờ)",
   "Emails failed (24h)": "Email lỗi (24 giờ)",
   "Web restarts (24h)": "Lần khởi động lại web (24 giờ)",
