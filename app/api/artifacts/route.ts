@@ -1,5 +1,5 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { artifactTitles, listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../artifactstore";
+import { handle, limit, requireUser, sameOrigin, verifyLocked } from "../../authstore";
+import { ART_LIMITS, artifactTitles, listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../artifactstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export const POST = handle(async (req: Request) => {
   const body = await req.json().catch(() => ({}));
   const conv = typeof body.conv === "string" && /^[\w-]{1,64}$/.test(body.conv) ? body.conv : null;
   if (!conv || !Array.isArray(body.items)) return Response.json({ error: "Dữ liệu không hợp lệ." }, { status: 400 });
-  const ids = (body.items as unknown[]).slice(0, 10).map(validArt).map((a) => (a ? saveArtifact(user.id, conv, a) : null));
+  const ids = (body.items as unknown[]).slice(0, 10).map(validArt).map((a) => (a ? saveArtifact(user.id, conv, a, verifyLocked(user) ? { maxBytes: ART_LIMITS.lockedBytes } : undefined) : null));
   return Response.json({ ids });
 });
 

@@ -1,6 +1,7 @@
 // Tài khoản, mật khẩu, phiên đăng nhập, nhật ký (chỉ chạy ở server).
 // Dữ liệu nằm trong data/synchro.db (SQLite); thư mục data/ không vào git và không bị rsync ghi đè khi deploy.
 import { sendMail } from "./mailer";
+import { DISK_FULL, diskLow } from "./diskfloor";
 import { emailChangeMail, emailChangeNoticeMail, changedMail, resetMail, signupTakenMail, verifyMail, type MailLang } from "./mailtpl";
 import Database from "better-sqlite3";
 import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./catalog";
@@ -387,6 +388,8 @@ export async function signup(req: Request, email0: unknown, pw0: unknown, profil
 // ---- xác minh email: mềm, không chặn đăng nhập hay chat ----
 // Mã nằm sau dấu # của đường dẫn (không vào nhật ký máy chủ) và phải bấm nút trên trang /verify (trình quét liên kết của hộp thư không xác minh hộ được).
 const VERIFY_TTL = 7 * DAY;
+/** Mọi đường ghi dữ liệu người dùng vào cơ sở dữ liệu đều qua đây: đĩa đầy thì SQLite ngừng ghi và cả trang hỏng cho mọi người. Đọc và xóa không bị chặn. */
+export const needDisk = () => { if (diskLow(DATA_DIR)) throw new AuthError(DISK_FULL, 507); };
 export const VERIFY_FIRST = "Hãy xác minh email để dùng tính năng này. Mở thư Synchro đã gửi, hoặc gửi lại từ dải thông báo trên cùng.";
 const verifySince = () => Number(getSetting("verify_since", "0")) || Infinity;
 export const verifyGateOn = () => getSetting("verify_gate", process.env.SYNCHRO_VERIFY_GATE_DEFAULT === "0" ? "0" : "1") === "1";

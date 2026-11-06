@@ -1,6 +1,6 @@
 // Artifact của từng tài khoản (chỉ chạy ở máy chủ): mỗi artifact (theo cuộc trò chuyện + identifier) giữ mọi phiên bản
 // model đã viết, để trang Artifacts liệt kê và mở lại được trên mọi thiết bị. Chỉ chủ tài khoản xem được.
-import { db } from "./authstore";
+import { AuthError, db, needDisk } from "./authstore";
 import { randomToken } from "./mcpauth";
 import { ART_TYPES, type ArtType } from "./artifacts";
 
@@ -8,7 +8,8 @@ export type ArtVersion = { content: string; at: number };
 export type ArtRow = { id: string; conv: string; ident: string; title: string; type: ArtType; lang: string | null; versions: ArtVersion[]; created_at: number; updated_at: number };
 // preview: phần đầu của bản mới nhất (cho danh sách nhẹ); full = false: bị cắt, ảnh thu nhỏ của trang web tự tải bản đầy đủ (?latest=1).
 export type ArtSummary = Omit<ArtRow, "versions"> & { count: number; preview: string; full: boolean };
-export const ART_LIMITS = { content: 400_000, versions: 50, perUser: 500 };
+// totalBytes / lockedBytes: tổng dung lượng một tài khoản (chưa xác minh email thì ít hơn): 500 artifact x 50 bản x 400 KB là tới 10 GB mỗi tài khoản.
+export const ART_LIMITS = { content: 400_000, versions: 50, perUser: 500, totalBytes: 500_000_000, lockedBytes: 100_000_000 };
 
 let ready = false;
 function init() {
@@ -61,10 +62,24 @@ export function validArt(x: unknown): ArtInput | null {
   return { ident: o.ident, title: o.title.trim(), type: o.type as ArtType, lang, content: o.content };
 }
 
+// Đọc tổng dung lượng phải giải nén cả cột: chỉ đo lại mỗi phút, giữa các lần cộng dồn phần vừa ghi (ghi đè bản cũ thì đếm dư một chút, không sao).
+const usedCache = new Map<string, { b: number; at: number }>();
+function artBytes(uid: string): { b: number; at: number } {
+  const c = usedCache.get(uid), now = Date.now();
+  if (c && now - c.at < 60_000) return c;
+  if (usedCache.size > 5000) usedCache.clear();
+  const n = { b: (init().prepare("SELECT COALESCE(SUM(length(CAST(versions AS BLOB))), 0) AS b FROM artifacts WHERE user_id = ?").get(uid) as { b: number }).b, at: now };
+  usedCache.set(uid, n);
+  return n;
+}
 // Thêm phiên bản mới (bỏ qua nếu giống hệt phiên bản cuối). Trả về id artifact.
-export function saveArtifact(uid: string, conv: string, a: ArtInput): string {
+export function saveArtifact(uid: string, conv: string, a: ArtInput, opts?: { maxBytes?: number }): string {
   const d = init();
   const now = Date.now();
+  needDisk();
+  const used = artBytes(uid);
+  if (used.b + a.content.length > (opts?.maxBytes ?? ART_LIMITS.totalBytes)) throw new AuthError("Artifact của bạn đã dùng hết dung lượng. Hãy xóa bớt ở trang Artifacts rồi thử lại.", 413);
+  used.b += a.content.length;
   const r = d.prepare("SELECT * FROM artifacts WHERE user_id = ? AND conv = ? AND ident = ?").get(uid, conv, a.ident) as Raw | undefined;
   if (r) {
     const cur = parse(r);

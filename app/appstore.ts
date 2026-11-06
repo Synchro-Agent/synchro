@@ -1,7 +1,7 @@
 // Ứng dụng nội bộ (chỉ chạy ở máy chủ): artifact được xuất bản thành ứng dụng có địa chỉ riêng /apps/<id>,
 // dùng được cho riêng mình hoặc cả tổ chức, có kho dữ liệu: phần dùng chung (mọi người dùng ứng dụng thấy) và phần riêng từng người.
 // Artifact chưa xuất bản (đang xem trong chat) cũng có kho dữ liệu riêng của chủ, để thử ứng dụng trước khi xuất bản.
-import { db, getUser, type UserRow } from "./authstore";
+import { db, getUser, needDisk, type UserRow } from "./authstore";
 import { randomToken } from "./mcpauth";
 import { ART_TYPES, type ArtType } from "./artifacts";
 import { publish } from "./live";
@@ -133,6 +133,7 @@ export function storeOp(u: UserRow, body: { ref?: StoreRef; op?: unknown; key?: 
       return r ? { key, value: r.value, shared: owner === "", updatedAt: r.updated_at } : null;
     }
     case "set": {
+      needDisk();
       const key = keyOk(body.key);
       const value = typeof body.value === "string" ? body.value : fail("Giá trị phải là chuỗi (dùng JSON.stringify cho dữ liệu có cấu trúc).");
       const size = Buffer.byteLength(value) + key.length;

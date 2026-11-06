@@ -41,7 +41,9 @@ export function ArtifactCard({ art, version, total, active, onOpen, fix, onRedo 
 export async function saveArtifacts(conv: string, items: ArtBlock[]) {
   const list = items.filter((a) => a.complete).map((a) => ({ ident: a.ident, title: a.title, type: a.type, lang: a.lang, content: a.content }));
   if (!list.length) return;
-  await fetch("/api/artifacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conv, items: list }) }).catch(() => {});
+  await fetch("/api/artifacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conv, items: list }) })
+    // Hết dung lượng thì artifact vẫn ở trong đoạn chat nhưng không vào trang Artifacts: phải nói cho người dùng biết.
+    .then(async (r) => { if ((r.status === 413 || r.status === 507) && typeof window !== "undefined") { const j = await r.json().catch(() => null); if (j?.error) window.dispatchEvent(new CustomEvent("synchro:notice", { detail: j.error })); } }).catch(() => {});
 }
 
 // ---------------------------------------------------------------- tệp code đã tạo (run_code → outputs/)

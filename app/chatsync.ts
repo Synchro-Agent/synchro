@@ -191,7 +191,8 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
               // Trong lúc gửi có sửa mới thì mục vẫn chờ đợt sau.
               if (m.dirty[p.key] === p.upd) delete m.dirty[p.key];
             }
-          } else if (res.error) { if (p.data) s.tooBig.set(p.key, hashOf(p.data)); else delete m.gone[p.key]; }
+          } else if (res.error === "disk") { again = true; wait = MAX_WAIT; } // Máy chủ tạm thời hết chỗ: giữ nguyên để gửi lại, không coi là quá lớn.
+          else if (res.error) { if (p.data) s.tooBig.set(p.key, hashOf(p.data)); else delete m.gone[p.key]; }
           else {
             // Máy chủ có bản mới hơn: lấy về (mới nhất thắng). Đã bị xóa ở nơi khác thì xóa luôn ở đây.
             delete m.gone[p.key];

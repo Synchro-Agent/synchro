@@ -1,4 +1,4 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
+import { handle, limit, needDisk, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../authstore";
 import { AppError, listApps, publishApp } from "../../appstore";
 
 export const runtime = "nodejs";
@@ -12,6 +12,10 @@ export const POST = handle(async (req: Request) => {
   sameOrigin(req);
   const { user } = requireUser(req);
   limit("app-pub:" + user.id, 60, 10 * 60_000);
-  try { return Response.json(publishApp(user.id, await req.json().catch(() => ({})))); }
+  needDisk();
+  const b = await req.json().catch(() => ({}));
+  // Ứng dụng cho cả tổ chức: mọi tài khoản mở được, nên tài khoản ảo chưa xác minh không được đăng. Ứng dụng riêng thì vẫn được.
+  if (b?.visibility === "org" && verifyLocked(user)) return Response.json({ error: VERIFY_FIRST, verify: true }, { status: 403 });
+  try { return Response.json(publishApp(user.id, b)); }
   catch (e) { if (e instanceof AppError) return Response.json({ error: e.message }, { status: e.status }); throw e; }
 });

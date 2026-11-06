@@ -1,4 +1,4 @@
-import { handle, requireUser, sameOrigin } from "../../../authstore";
+import { handle, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../../authstore";
 import { AppError, getApp, removeApp, updateApp } from "../../../appstore";
 
 export const runtime = "nodejs";
@@ -17,7 +17,9 @@ export const GET = handle(async (req: Request, ctx: Ctx) => {
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  try { updateApp(user.id, (await ctx.params).id, await req.json().catch(() => ({}))); return Response.json({ ok: true }); }
+  const b = await req.json().catch(() => ({}));
+  if (b?.visibility === "org" && verifyLocked(user)) return Response.json({ error: VERIFY_FIRST, verify: true }, { status: 403 });
+  try { updateApp(user.id, (await ctx.params).id, b); return Response.json({ ok: true }); }
   catch (e) { return err(e) ?? (() => { throw e; })(); }
 });
 

@@ -8,3 +8,4 @@ export function freeMB(p: string): number | null {
 }
 /** Đĩa chứa p đã xuống dưới sàn. Không đọc được thì không kết luận: không được chặn người dùng vì lỗi đo. */
 export const diskLow = (p: string) => { const f = freeMB(p); return f !== null && f < MIN_FREE_MB(); };
+export const DISK_FULL = "Máy chủ sắp hết dung lượng nên tạm thời chưa lưu được dữ liệu mới. Hãy thử lại sau.";
