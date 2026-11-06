@@ -28,7 +28,15 @@ try {
   const G = await grok(), C = await claude();
   const { usable } = await AM.usableModels(G);
   ok(usable.length > 0 && usable.every((k) => k.startsWith("sub-grok/")), "tài khoản chỉ có gói Grok", usable);
-  await AM.quickCall(G, "x", "dùng hết phần việc nền của giờ này", { job: "brain", bg: true }).catch(() => {});
+  // Không có model rẻ nào: bộ nhớ và bộ não vẫn chạy trên model rẻ nhất của họ, ở nỗ lực thấp, nhưng thưa hơn.
+  lines.length = 0;
+  const first = await AM.quickCall(G, "x", "dùng hết phần việc nền của giờ này", { job: "brain", bg: true }).catch((e) => e);
+  ok(first.model === "sub-grok/grok-4.6" || first.model === "sub-grok/grok-4.7", `chỉ có gói Grok: việc nền vẫn chạy (${first.model ?? first.message})`, first.message);
+  ok(lines.some((l) => /grok \S+ low .*job=brain/.test(l)), "ở nỗ lực thấp", lines);
+  const again = await AM.quickCall(G, "x", "lần thứ hai trong giờ", { job: "brain", bg: true }).catch((e) => e);
+  ok(again.message === AM.NO_CHEAP, "quá phần của giờ này: để lần sau, không gọi thêm", again.message ?? again.model);
+  const fg = await AM.quickCall(G, "x", "đặt tên", { job: "title" }).catch((e) => e);
+  ok(!!fg.text, "việc người dùng đang chờ (đặt tên) không bị giới hạn này chặn", fg.message);
   for (const id of ["g1", "g2", "g3", "g4"]) chat(G, id);
   await new Promise((r) => setTimeout(r, 30));
   chat(C, "c1");

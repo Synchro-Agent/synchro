@@ -544,6 +544,10 @@ const LAG_COST = 0.6;
 const CREDIT = /^sub-claude\/.*fable/i;
 // Grok Build là model viết code: chỉ tính cho việc code; từng thắng cả câu hỏi sức khỏe, thuế, toán vì tên lạ được coi là hạng vừa và có thế mạnh của xAI.
 const CODE_ONLY = /grok-build/i;
+/** Model tính vào tiền thật ngoài gói: việc không ai bấm thì không được chạy trên nó. */
+export const billsCredit = (k: string) => CREDIT.test(k);
+/** Danh sách có model rẻ hơn hạng mạnh nhất dùng được cho việc phụ không (kể cả đang tạm hết hạn mức). */
+export const hasCheapSide = (list: string[]) => list.some((k) => !CREDIT.test(k) && !CODE_ONLY.test(k) && tierOf(k) !== "strong");
 const CODE_TASKS = new Set<Task>(["code", "debug", "build"]);
 const TOOL_HEAVY = new Set<Task>(["code", "debug", "build", "act"]);
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */

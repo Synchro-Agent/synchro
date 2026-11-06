@@ -4,7 +4,7 @@
 import { canModel, type UserRow } from "../authstore";
 import { ALL } from "../catalog";
 import { catalog, mainModels, resolveModel } from "../providers";
-import { routeModel, sideModel, tierOf, type RouteInput } from "../router";
+import { billsCredit, hasCheapSide, routeModel, sideModel, tierOf, type RouteInput } from "../router";
 import { chatOnce, HttpErr } from "../llmcall";
 import { overLimit, withUsage } from "../usage";
 import { agyOtherBlock, isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
@@ -49,8 +49,18 @@ const stalls: Map<string, number> = ((globalThis as { __synchroStalls?: Map<stri
 export const noteStall = (uid: string, cli: string) => { if (stalls.size > 5000) stalls.clear(); stalls.set(`${uid}:${cli}`, Date.now() + STALL_MS); };
 export const clearStall = (uid: string, cli: string) => { stalls.delete(`${uid}:${cli}`); };
 export const stalledModels = (uid: string, models: string[]) => models.filter((k) => { const cli = subCli(k); return !!cli && (stalls.get(`${uid}:${cli}`) ?? 0) > Date.now(); });
-/** Việc nền bị bỏ qua vì chỉ còn model mạnh (hạn mức đắt của người dùng): không phải lỗi, lần sau làm lại. */
+/** Việc nền chưa chạy được lúc này (model rẻ đang tạm hết hạn mức, hết phần việc nền của giờ này): không phải lỗi, lần sau làm lại. */
 export const NO_CHEAP = "no cheap model";
+// Tài khoản không hề có model rẻ (chỉ gói Grok, gói chỉ còn hạng mạnh): chờ model rẻ thì không bao giờ tới, bộ nhớ và bộ não ngừng hẳn mà không ai biết.
+// Vẫn chạy trên model rẻ nhất của họ ở nỗ lực thấp, nhưng thưa hơn: mỗi giờ tối đa chừng này lời gọi, vì đây là hạn mức đắt của chính họ. Toàn cục vì mỗi route của Next được đóng gói riêng.
+const strongBg: Map<string, { n: number; until: number }> = ((globalThis as { __synchroStrongBg?: Map<string, { n: number; until: number }> }).__synchroStrongBg ??= new Map());
+const strongBudget = (uid: string) => {
+  const now = Date.now(), max = Number(process.env.SYNCHRO_BG_STRONG_PER_HOUR) || 6;
+  if (strongBg.size > 5000) strongBg.clear();
+  const h = strongBg.get(uid);
+  if (!h || h.until < now) { strongBg.set(uid, { n: 1, until: now + 3600_000 }); return true; }
+  return h.n < max && !!++h.n;
+};
 
 /** Một lời gọi không công cụ bằng model key (gói hoặc khóa API). Hạn mức chi phí API chỉ áp cho model khóa API. */
 export async function oneShot(user: UserRow, key: string, system: string, messages: { role: "user" | "assistant"; content: string }[], o: { maxTokens?: number; signal?: AbortSignal; feature?: string; job?: string; bg?: boolean } = {}): Promise<string> {
@@ -75,14 +85,14 @@ export async function oneShot(user: UserRow, key: string, system: string, messag
 
 /**
  * Việc phụ: model rẻ nhất dùng được, gọi một lần ở mức nỗ lực thấp. job: tên việc, ghi vào dòng [timing] để phân biệt với lượt chat.
- * bg: việc người dùng không chờ (rút bộ nhớ, chưng cất, đánh giá phiên): xếp hàng sau các việc khác, và không chạy khi chỉ còn model mạnh.
+ * bg: việc người dùng không chờ (rút bộ nhớ, chưng cất, đánh giá phiên): xếp hàng sau các việc khác. Còn model rẻ mà đang tạm hết hạn mức thì để lần sau; tài khoản không có model rẻ nào thì chạy thưa hơn.
  */
 export async function quickCall(user: UserRow, system: string, content: string, o: { maxTokens?: number; signal?: AbortSignal; job?: string; bg?: boolean } = {}) {
   const { allowed, usable } = await usableModels(user);
   const list = usable.length ? usable : allowed;
   const model = sideModel(list, { avoid: stalledModels(user.id, list) });
   if (!model) throw new OneShotErr("Synchro chưa được kết nối với model nào (chưa đăng nhập gói hoặc chưa có khóa API).", 503);
-  if (o.bg && tierOf(model) === "strong") throw new OneShotErr(NO_CHEAP, 503);
+  if (o.bg && (billsCredit(model) || (tierOf(model) === "strong" && (hasCheapSide(allowed) || !strongBudget(user.id))))) throw new OneShotErr(NO_CHEAP, 503);
   const text = await oneShot(user, model, system, [{ role: "user", content }], o);
   return { text, model };
 }
