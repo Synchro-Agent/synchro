@@ -146,3 +146,4 @@ Object.assign(FX_EN2VI, {
   "If that address can be used, we sent it a confirmation link. Your email stays": "Nếu địa chỉ đó dùng được, Synchro đã gửi đường dẫn xác nhận tới đó. Email của bạn vẫn là",
   "until you press the link. It works for 24 hours.": "cho tới khi bạn bấm đường dẫn. Đường dẫn có hiệu lực 24 giờ.",
 });
+Object.assign(FX_VI2EN, { "Bỏ khỏi mục này": "Remove from this section", "Thêm vào mục này": "Add to this section", "Có trong thư viện đã cài, chưa ở mục này": "In your installed libraries, not in this section" });

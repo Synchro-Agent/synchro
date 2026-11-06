@@ -32,6 +32,8 @@ function useReducedMotion() {
 
 // Danh sách skill của một mục: tìm kiếm và tải theo trang ở máy chủ, không dựng hàng nghìn dòng trong trình duyệt.
 type Row = { name: string; description: string };
+// Sửa cho riêng mình: máy chủ lưu theo từng người, không đổi nhãn chung của thư viện.
+const setOverride = (studio: string, name: string, on: boolean | null) => fetch("/api/plugins/studio", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ studio, name, on }) }).then((r) => r.ok);
 function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
@@ -39,12 +41,17 @@ function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
   const [busy, setBusy] = useState(true);
   const seq = useRef(0);
   const [failed, setFailed] = useState(false);
+  const [more, setMore] = useState<Row[]>([]);
+  // Hoàn tác được ngay tại chỗ: dòng vừa bỏ hay vừa thêm vẫn ở đó cho tới lần tải sau.
+  const [changed, setChanged] = useState<Record<string, boolean>>({});
+  const flip = (name: string, on: boolean, undo: boolean) => { void setOverride(API_KEY[item.k], name, undo ? null : on).then((ok) => { if (ok) setChanged((c) => { const n = { ...c }; if (undo) delete n[name]; else n[name] = on; return n; }); else setFailed(true); }); };
   const load = (query: string, offset: number) => {
     const id = ++seq.current;
     setBusy(true);
     setFailed(false);
-    fetch(`/api/plugins?view=studio&studio=${API_KEY[item.k]}&q=${encodeURIComponent(query)}&offset=${offset}`).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); }).then((j: { matched: number; skills: Row[] }) => {
+    fetch(`/api/plugins?view=studio&studio=${API_KEY[item.k]}&q=${encodeURIComponent(query)}&offset=${offset}`).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); }).then((j: { matched: number; skills: Row[]; more?: Row[] }) => {
       if (id !== seq.current) return;
+      if (!offset) setMore(j.more ?? []);
       setMatched(j.matched ?? 0);
       setRows((old) => (offset ? [...old, ...(j.skills ?? [])] : j.skills ?? []));
     }).catch(() => { if (id === seq.current) { if (!offset) setRows([]); setFailed(true); } }).finally(() => { if (id === seq.current) setBusy(false); });
@@ -59,10 +66,14 @@ function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
         <p className="d">Số này gồm cả skill Synchro tự nhận diện trong các thư viện đã cài: skill của bạn, thư viện chọn lọc và danh mục skill của Claude.</p>
         <input className="field st-shelf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm skill" aria-label="Tìm skill" autoFocus />
         <div className="st-shelf-list">
-          {rows.map((r) => <div key={r.name} className="st-shelf-row"><b data-notr>{r.name}</b><span data-notr>{r.description}</span></div>)}
+          {rows.map((r) => <div key={r.name} className={`st-shelf-row${changed[r.name] === false ? " off" : ""}`}><div className="st-shelf-t"><b data-notr>{r.name}</b><span data-notr>{r.description}</span></div>
+            {changed[r.name] === false ? <button className="lnk" onClick={() => flip(r.name, false, true)}>Hoàn tác</button> : <button className="lnk" onClick={() => flip(r.name, false, false)}>Bỏ khỏi mục này</button>}</div>)}
+          {more.length > 0 && <div className="st-shelf-sub">Có trong thư viện đã cài, chưa ở mục này</div>}
+          {more.map((r) => <div key={r.name} className="st-shelf-row"><div className="st-shelf-t"><b data-notr>{r.name}</b><span data-notr>{r.description}</span></div>
+            {changed[r.name] === true ? <button className="lnk" onClick={() => flip(r.name, true, true)}>Hoàn tác</button> : <button className="lnk" onClick={() => flip(r.name, true, false)}>Thêm vào mục này</button>}</div>)}
           {/* Lỗi tải không được trông như mục này không có skill nào. */}
           {!busy && failed && <div className="st-shelf-empty">Chưa tải được danh sách. <button className="lnk" onClick={() => load(q.trim(), rows.length)}>Thử lại</button></div>}
-          {!busy && !failed && !rows.length && <div className="st-shelf-empty">Không có skill nào khớp</div>}
+          {!busy && !failed && !rows.length && !more.length && <div className="st-shelf-empty">Không có skill nào khớp</div>}
           {rows.length < matched && <button className="btn st-shelf-more" disabled={busy} onClick={() => load(q.trim(), rows.length)}>{busy ? <span className="art-spin sm" /> : null}Xem thêm</button>}
         </div>
       </div>
