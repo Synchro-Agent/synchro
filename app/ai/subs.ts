@@ -12,7 +12,7 @@ import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
 import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
-import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, writeEngineFile } from "./cli_runtime";
+import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
@@ -690,6 +690,14 @@ export function linksIn(text: string): WebSource[] {
 
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
+  // Antigravity, Grok chỉ báo mã phiên khi xong lượt: bấm Dừng, quá giờ hay CLI chết thì câu lệnh nằm lại trong thư mục đăng nhập mà xóa đoạn chat cũng không tìm thấy.
+  // Mã mới xuất hiện mà không lượt nào báo về thì không ai nối tiếp được: dọn ở nền sau lượt. Lượt xong bình thường đã báo mã (sessionSeen) nên được giữ.
+  const c0 = subCli(o.model);
+  if (c0 !== "agy" && c0 !== "grok") return subTurnInner(o);
+  const watch = await watchSessions(scopeDir(c0, o.user.id));
+  try { return await subTurnInner(o); } finally { void watch.sweep(); }
+}
+async function subTurnInner(o: SubTurn): Promise<SubResult> {
   // Lượt không thuộc đoạn chat nào (đặt tên, chưng cất…) cũng không có gì nối tiếp: để lại lịch sử phiên thì không có đường nào xóa được khi người dùng xóa đoạn chat.
   if (o.conv && !o.ephemeral) return runTurn(o);
   const cli = subCli(o.model), seen = new Set<string>(), dirs: string[] = [];
