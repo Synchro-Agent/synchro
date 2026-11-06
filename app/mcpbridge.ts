@@ -9,7 +9,7 @@ import { currentRun, inRun } from "./runs";
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code (JPEG) hay ảnh connector trả về (mime cho biết loại ảnh).
 // live: lời gọi đang chạy theo id JSON-RPC, để CLI hủy được (notifications/cancelled). cancel: tín hiệu CLI hủy lời gọi hay đã ngắt kết nối.
-type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>, cancel?: AbortSignal) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[] }>; exp: number; busy: number; last: number; live: Map<string, AbortController>; hold?: number; jobs: Map<string, Job> };
+type Bridge = { uid: string; run: string | null; tools: BridgeTool[]; call: (name: string, input: Record<string, unknown>, cancel?: AbortSignal) => Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[] }>; exp: number; busy: number; last: number; live: Map<string, AbortController>; hold?: number; jobs: Map<string, Job>; route?: (name: string, input: Record<string, unknown>) => { name: string; input: Record<string, unknown> } | null };
 type Reply = Awaited<ReturnType<Bridge["call"]>>;
 // hold: CLI tự cắt mỗi lần chờ công cụ sau một khoảng cố định, nên trả lời trước hạn đó bằng mã việc; công cụ vẫn chạy, model gọi wait_for_result để chờ tiếp.
 type Job = { name: string; done: Promise<Reply>; ctl: AbortController };
@@ -44,7 +44,8 @@ export const internalUrl = () => (process.env.SYNCHRO_INTERNAL_URL ?? `http://12
 /** Mở cầu nối cho lượt hiện tại; close() khi lượt xong (tự hết hạn sau 35 phút nếu quên). */
 /** park / onPark: lượt đang chờ người dùng duyệt (xem khóa lượt của Antigravity, Grok ở cli_engines.ts): CLI đã kết nối xong với cầu nối này nên không cần giữ chỗ trong cấu hình chung nữa. */
 /** hold: xem BRIDGE_HOLD (chỉ Antigravity); CLI khác không có, hành vi không đổi. */
-export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["call"]; hold?: number }) {
+/** route: tên ngoài danh sách mà vẫn gọi được (connector qua proxy: model gọi thẳng tên connector_tools vừa in ra). */
+export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["call"]; hold?: number; route?: Bridge["route"] }) {
   const now = Date.now();
   for (const [k, b] of bridges) if (b.exp < now) bridges.delete(k);
   const token = crypto.randomBytes(24).toString("base64url");
@@ -121,10 +122,14 @@ async function handle(b: Bridge, m: Rpc, gone?: AbortSignal): Promise<unknown | 
       // antigravity/alwaysLoad: Antigravity nạp sẵn công cụ (gọi thẳng mcp_synchro_…) thay vì để model tự tìm rồi gọi qua CallMcpTool.
       return ok(m.id, { tools: [...b.tools, ...(b.hold ? [WAIT_TOOL] : [])].map((t) => ({ name: t.name, description: t.description, inputSchema: t.input_schema ?? { type: "object", properties: {} }, _meta: { "antigravity/alwaysLoad": true } })) });
     case "tools/call": {
-      const name = String(m.params?.name ?? "");
-      const args = (m.params?.arguments && typeof m.params.arguments === "object" ? m.params.arguments : {}) as Record<string, unknown>;
+      let name = String(m.params?.name ?? "");
+      let args = (m.params?.arguments && typeof m.params.arguments === "object" ? m.params.arguments : {}) as Record<string, unknown>;
       if (b.hold && name === WAIT_TOOL.name) return waitJob(b, m.id, String(args.job_id ?? ""), gone);
-      if (!b.tools.some((t) => t.name === name)) return fail(m.id, -32602, `Không có công cụ ${name}`);
+      if (!b.tools.some((t) => t.name === name)) {
+        const to = b.route?.(name, args);
+        if (!to) return fail(m.id, -32602, `Không có công cụ ${name}`);
+        name = to.name; args = to.input;
+      }
       if (b.hold) return heldCall(b, m.id, name, args, gone);
       const ctl = new AbortController(), key = String(m.id);
       const cancel = gone ? AbortSignal.any([ctl.signal, gone]) : ctl.signal;

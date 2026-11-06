@@ -14,6 +14,9 @@ const trace = "TypeError: Cannot read properties of undefined (reading 'map')\n 
 
 // [câu, loại việc mong đợi (một hoặc nhiều), nỗ lực tối đa, nỗ lực tối thiểu?, tùy chọn?]
 const CASES = [
+  // tạo, sửa trong ứng dụng đã nối: cần công cụ, không phải câu hỏi nhỏ
+  ["tạo trang mới trong Notion tên Kế hoạch", "act", "high", "medium"], ["Create a Notion page called Roadmap", "act", "high", "medium"], ["xóa thẻ này trên Trello", "act", "high", "medium"],
+  ["thêm một dòng vào Google Sheets", "act", "high", "medium"],
   // trò chuyện
   ["Xin chào", "chat", "low"], ["hello", "chat", "low"], ["cảm ơn bạn nhiều", "chat", "low"], ["ok", "chat", "low"],
   ["Chào buổi sáng Synchro", "chat", "low"], ["thanks!", "chat", "low"],

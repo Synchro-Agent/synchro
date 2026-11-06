@@ -972,6 +972,61 @@ try {
     wipe();
   }
 
+  console.log("43. Proxy: bản gọn nói thật, phân trang, tên, lớp bọc");
+  {
+    const notion = { type: "object", required: ["page_id", "rich_text"], properties: {
+      page_id: { type: "string", description: "ID", pattern: "^[0-9a-f]{32}$" },
+      note: { type: "string", description: `${"x".repeat(210)} IMPORTANT: use markdown only` },
+      meta: { type: "object", additionalProperties: { type: "string" } },
+      rich_text: { type: "array", minItems: 1, maxItems: 100, items: { type: "object", required: ["text"], properties: { text: { type: "object", required: ["content"], properties: { content: { type: "string", description: "Nội dung" } } } } } },
+    } };
+    const c = P.compactSchema(notion);
+    ok(c.trimmed === true, "mô tả bị cắt, mô tả lồng bị bỏ: báo là bản gọn", JSON.stringify(c).slice(0, 300));
+    ok(c.schema.properties.page_id.pattern === "^[0-9a-f]{32}$" && c.schema.properties.rich_text.minItems === 1 && c.schema.properties.rich_text.maxItems === 100 && c.schema.properties.meta.additionalProperties?.type === "string", "giữ pattern, minItems, maxItems, additionalProperties", JSON.stringify(c.schema).slice(0, 400));
+    ok(c.schema.properties.rich_text.items.properties.text.properties.content?.type === "string", "tham số bắt buộc ở mức sâu không bị mất", JSON.stringify(c.schema.properties.rich_text));
+    const plain = P.compactSchema({ type: "object", title: "x", required: ["id"], properties: { id: { type: "string", description: "ID", title: "Id" }, tags: { type: "array", items: { type: "string" } } } });
+    ok(plain.trimmed === false, "không mất gì: không báo là bản gọn", JSON.stringify(plain));
+    ok(P.compactSchema({ type: "object", properties: { a: { $ref: "#/$defs/A" } }, $defs: { A: { type: "string" } } }).trimmed === true, "có $ref, $defs: báo là bản gọn");
+    ok(P.compactSchema({ type: "object", properties: { a: { enum: Array.from({ length: 30 }, (_, i) => `v${i}`) } } }).trimmed === true, "enum bị cắt: báo là bản gọn");
+    ok(P.compactSchema({ type: "object", additionalProperties: false, properties: { a: { type: "string" } } }).schema.additionalProperties === false, "additionalProperties cấp trên cùng còn nguyên");
+
+    const mk = (cname, name) => ({ fq: `${cname.toLowerCase()}__${name}`, cname, tool: { name } });
+    const list = Array.from({ length: 13 }, (_, i) => mk("Vercel", `list_thing_${i}`));
+    const p1 = P.rankTools(list, "list", "", 8, 0), p2 = P.rankTools(list, "list", "", 8, 8);
+    ok(p1.hits.length === 8 && p1.more === 5, "tìm theo từ khóa: báo còn bao nhiêu", JSON.stringify(p1.more));
+    ok(p2.hits.length === 5 && p2.more === 0 && !p2.hits.some((h) => p1.hits.includes(h)), "offset cho trang tiếp theo, không lặp lại", JSON.stringify(p2.hits.map((h) => h.tool.name)));
+
+    const sd = [mk("synchro_docs", "search"), mk("Docs", "search"), mk("Docs", "get")];
+    ok(P.resolveTool(sd, "synchro_docs__search")?.cname === "synchro_docs", "connector tên Synchro… gọi được đúng tên connector_tools in ra");
+    ok(P.resolveTool(sd, "mcp_synchro_docs__search")?.cname === "Docs" && P.resolveTool(sd, "synchro__docs__get")?.tool.name === "get", "tiền tố của CLI vẫn được bỏ");
+
+    ok(JSON.stringify(P.callArgs({ tool: "x", parameters: { a: 1 } }).args) === '{"a":1}', "gỡ lớp bọc parameters");
+    ok(JSON.stringify(P.callArgs({ tool: "x", parameters: { a: 1 } }, { properties: { parameters: { type: "object" } } }).args) === '{"parameters":{"a":1}}', "công cụ thật sự có tham số tên parameters: giữ nguyên");
+  }
+
+  console.log("44. Lời gọi công cụ đoán là đọc, đóng cầu nối");
+  {
+    const { mcpbridge: Br } = await loadTs(["mcpbridge"]);
+    let seen = null, aborted = false;
+    const b = Br.openBridge({ uid, tools: [{ name: "connector_call", description: "", input_schema: {} }], route: (n, input) => (n === "vercel__list" ? { name: "connector_call", input: { tool: n, input } } : null), call: async (name, input, cancel) => {
+      if (input.tool === "vercel__list") { seen = { name, input }; return { content: "ok", is_error: false }; }
+      await new Promise((r) => cancel.addEventListener("abort", r, { once: true }));
+      aborted = true;
+      return { content: "hủy", is_error: true };
+    } });
+    const tok = b.url.split("/").pop();
+    const rpc = (id, name, args) => Br.bridgeRoute(new Request(`http://127.0.0.1/api/mcp/bridge/${tok}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } }) }), tok).then((r) => r.json());
+    const direct = await rpc(1, "vercel__list", { a: 1 });
+    ok(!direct.error && seen?.name === "connector_call" && seen.input.input.a === 1, "proxy: gọi thẳng tên đầy đủ chạy qua connector_call", JSON.stringify(direct));
+    const none = await rpc(2, "khong_co", {});
+    ok(none.error?.code === -32602, "tên không có thật vẫn báo lỗi");
+    const waiting = rpc(3, "connector_call", { tool: "x" });
+    await sleep(50);
+    b.close();
+    await waiting;
+    ok(aborted, "đóng cầu nối: lời gọi đang chờ duyệt thôi chờ, duyệt muộn không chạy");
+  }
+
 } finally {
   server.closeAllConnections?.(); server.close(); other.close();
   fs.rmSync(tmp, { recursive: true, force: true });

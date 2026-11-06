@@ -725,12 +725,13 @@ const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || !!runSign
 const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|authorization|cookie|credential/i;
 const argLine = (input: unknown) => { try { return JSON.stringify(input ?? {}, (k, v) => (k && SECRET_KEY.test(k) ? "***" : v)).slice(0, 200); } catch { return ""; } };
 // Công cụ chỉ đọc, chạy lại lượt không gây hại gì. Còn lại (connector ghi, chạy code, thao tác trình duyệt, ghi bộ não) có thể đã làm thay đổi
-// gì đó: lỗi giữa chừng thì không tự chạy lại lượt, kể cả bằng model khác.
-const READ_TOOLS = new Set(["update_plan", "load_skill", "read_skill_file", "search_skills", "read_ref", "read_artifact", "check_artifact", "brain_search", "brain_read", "web_search", "connector_tools", "browser_navigate", "browser_read", "browser_text", "browser_find", "browser_screenshot", "browser_scroll", "browser_wait", "browser_tabs", "browser_console", "browser_downloads"]);
+// gì đó: lỗi giữa chừng thì không tự chạy lại lượt, kể cả bằng model khác. connector_call ở đây là lời gọi không tìm ra công cụ hay tham số hỏng (gọi được thì đã đổi thành tên công cụ thật): chưa chạy gì.
+const READ_TOOLS = new Set(["update_plan", "load_skill", "read_skill_file", "search_skills", "read_ref", "read_artifact", "check_artifact", "brain_search", "brain_read", "web_search", "connector_tools", "connector_reconnect", "connector_call", "browser_navigate", "browser_read", "browser_text", "browser_find", "browser_screenshot", "browser_scroll", "browser_wait", "browser_tabs", "browser_console", "browser_downloads"]);
 function noteEffects(x: Exec, calls: Call[], d: Record<string, Decision>) {
   for (const c of calls) {
     const ct = x.sess?.get(c.name);
-    if (d[c.id] === "deny" || (ct ? ct.tool.annotations?.readOnlyHint === true : READ_TOOLS.has(c.name))) continue;
+    // Công cụ đoán là đọc (get_, list_ không khai báo) cũng chạy không cần duyệt như công cụ đọc: đọc xong gặp lỗi CLI thì Auto vẫn đổi được model.
+    if (d[c.id] === "deny" || (ct ? x.sess!.isRead(c.name) : READ_TOOLS.has(c.name))) continue;
     (x.effects ??= []).push(c.name);
     // Connector ghi, thao tác trên trang thật: máy chủ khởi động lại giữa chừng cũng không được làm lại. Chạy code nằm trong hộp cát của đoạn chat, không tính ở đây.
     if (ct || isBrowserTool(c.name)) markEffect(label(x, c));
@@ -892,7 +893,7 @@ function unwrapConn(x: Exec, c: Call): Call {
   const ct = resolveTool(x.sess.tools, String(c.input?.tool ?? ""));
   if (!ct) return c;
   // Tham số hỏng thì giữ nguyên lời gọi connector_call: runCall báo lỗi cho model, không chạy công cụ với tham số rỗng.
-  const a = callArgs(c.input);
+  const a = callArgs(c.input, ct.tool.inputSchema);
   return "error" in a ? c : { id: c.id, name: ct.fq, input: a.args };
 }
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
@@ -1508,7 +1509,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
-        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); } });
+        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
         xx.park = bridge.park;
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
