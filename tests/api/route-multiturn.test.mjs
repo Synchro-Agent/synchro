@@ -47,7 +47,11 @@ const CONVS = [
   ]],
   ["Làm web rồi chỉnh bằng \"hơn\", có dấu và không dấu: vẫn là làm tiếp", [
     ["Làm trang web cho studio ảnh cưới", { t: "build", min: "strong" }, ART],
-    ...["chữ tiêu đề to hơn", "nút bấm nổi hơn đi", "sang hơn đi", "làm nó gọn hơn", "giọng trang trọng hơn", "chu tieu de to hon", "cho no sang hon", "chu to qua"].map((x) => [x, { t: "build", f: true, keep: true, fast: false }, ART]),
+    ...["chữ tiêu đề to hơn", "nút bấm nổi hơn đi", "sang hơn đi", "làm nó gọn hơn", "giọng trang trọng hơn"].map((x) => [x, { t: "build", f: true, keep: true, fast: false }, ART]),
+  ]],
+  ["Gõ không dấu rồi chỉnh", [
+    ["lam giup minh trang web ban hoa", { t: "build", min: "strong" }, ART],
+    ...["chu tieu de to hon", "cho no sang hon", "chu to qua"].map((x) => [x, { t: "build", f: true, keep: true, fast: false }, ART]),
   ]],
   ["Làm web rồi nói chuyện nguy hiểm: không bao giờ là làm tiếp", [
     ["Làm web bán hàng", { t: "build", min: "strong" }, ART],
