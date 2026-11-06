@@ -238,7 +238,7 @@ export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: nu
   return (
     <div className="ag-status">
       <span className="ag-load" aria-hidden><Loader size={15} /></span>
-      <span className="ag-shimmer">{label}</span>
+      <span className="ag-shimmer">{tr(label)}</span>
       <span className="ag-meta" data-notr>{sec >= 1 ? `${fmtTime(sec)} · ` : ""}{fmtTok(tokens)} tokens</span>
     </div>
   );

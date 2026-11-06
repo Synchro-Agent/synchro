@@ -55,6 +55,8 @@ const sendMsg = async (text) => {
 };
 const steps = (a) => `Làm theo các bước #seq=${JSON.stringify(a)}`;
 try {
+  // Không phụ thuộc cài đặt còn sót của bài kiểm thử khác: chế độ Tự động, không hỏi duyệt.
+  await api("PATCH", "/api/code/prefs", { allowBypass: true, permMode: "auto" });
   // Model giả lập có công cụ, không phụ thuộc model đang chọn của tài khoản thử; nhớ mã phiên để hỏi máy chủ.
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { const f = window.fetch; window.fetch = (u, o) => { if (u === "/api/agent" && o?.method === "POST") { const b = JSON.parse(o.body); b.model = "anthropic/claude-haiku-5-5"; window.__sid = b.sid; o = { ...o, body: JSON.stringify(b) }; } return f(u, o); }; })()` });
   await P("Page.navigate", { url: B + "/" });
@@ -122,6 +124,34 @@ try {
   await until(`document.querySelectorAll(".cv-nows").length >= 2`, 8000, "second label");
   ok(true, "cùng phiên không hỏi lại, vẫn có nhãn");
   await until(`!document.querySelector(".ai-streaming")`, 30000, "reply 2");
+
+  console.log("5. Tìm phiên Code ở bảng lệnh");
+  await P("Page.reload"); await sleep(1000);
+  await openCode();
+  await until(`!!document.querySelector(".code-item")`, 15000, "code list");
+  await click(`document.querySelector(".side-search")`, "search");
+  await until(`!!document.querySelector(".overlay input, [role=dialog] input")`, 8000, "palette");
+  await sleep(300);
+  await P("Input.insertText", { text: "sửa bug trong repo" });
+  await sleep(800);
+  ok(await ev(`document.body.innerText.includes("Phiên Code")`), "gõ tên phiên: có nhóm Phiên Code", await ev(`document.querySelector(".overlay")?.innerText.slice(0, 300)`));
+  await shot("palette");
+  await click(`[...document.querySelectorAll(".overlay [data-i]")].find((e) => /sửa bug trong repo/.test(e.textContent))`, "code row");
+  await until(`/sửa bug trong repo/.test(document.querySelector(".cv-title")?.textContent ?? "")`, 8000, "open session");
+  ok(true, "chọn kết quả thì mở đúng phiên");
+
+  console.log("6. Tiếng Anh");
+  await ev(`localStorage.setItem("p:uilang", '"en"'), localStorage.setItem("__wsOn", "1"), 1`);
+  await P("Page.navigate", { url: B + "/" }); await sleep(1500);
+  await openCode();
+  await until(`fetch("/api/ws").then((r) => r.json()).then((j) => j.available)`, 15000, "workspace on");
+  await sleep(1200);
+  await sendMsg("write the greet helper");
+  await until(`!!document.querySelector(".codeblock")`, 20000, "code block");
+  await until(`!document.querySelector(".ai-streaming")`, 20000, "reply end");
+  const cb = await ev(`document.querySelector(".codeblock").innerText`);
+  ok(!/Mở|Sao chép/.test(cb), "nút khối mã không còn tiếng Việt", cb);
+  await shot("english");
 } catch (e) { fail++; console.log("  ✗", e.message); await shot("fail").catch(() => {}); }
 chrome.kill();
 console.log(`\n${pass} đạt, ${fail} lỗi`);

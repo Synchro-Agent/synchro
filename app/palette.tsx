@@ -14,6 +14,9 @@ export type PaletteGo = {
   app: (id: string) => void;
   skillHub: (q?: string) => void;
   project: (id: number) => void;
+  code?: (id: number) => void;
+  brain?: (title: string) => void;
+  inbox?: () => void;
 };
 export type PaletteProject = { id: number; name: string; desc?: string; archived?: boolean; ctx?: { name: string; kind: string; text?: string }[] };
 type Row = { key: string; group: string; label: string; sub?: string; icon: ReactNode; keys?: string; hay: string; run: () => void; more?: boolean };
@@ -56,10 +59,11 @@ type Remote = {
   apps: { id: string; title: string; visibility?: string }[];
   skills: { name: string; description: string }[];
   libs: { name: string; skillCount: number }[];
+  inbox: { run: string; title: string; text?: string }[];
 };
 
 const MAX_SHOWN = 500;
-export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: { id: number; title: string; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
+export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
   const [q, setQ] = useState("");
   // Ô nhập luôn nhận chữ ngay; danh sách lọc lại sau, không chặn phím gõ.
   const dq = useDeferredValue(q);
@@ -73,19 +77,25 @@ export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: 
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<any>("/api/skills"), cachedJson<any>("/api/plugins?view=lite")]).then(([a, ap, sk, pl]) => {
-      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [] });
+    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<any>("/api/skills"), cachedJson<any>("/api/plugins?view=lite"), get("/api/inbox?limit=100")]).then(([a, ap, sk, pl, ib]) => {
+      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [], inbox: ib.items ?? [] });
     });
     return () => { live = false; };
   }, []);
 
   // Thư viện từ danh mục Claude (hàng nghìn tên) không tải sẵn: gõ từ 2 chữ thì hỏi máy chủ, chậm lại một nhịp để gõ mượt.
   const [catLibs, setCatLibs] = useState<Remote["libs"]>([]);
+  // Ghi chú của Bộ não: cùng nhịp, máy chủ tìm cả trong nội dung.
+  const [notes, setNotes] = useState<{ title: string; kind: string; snippet?: string }[]>([]);
   useEffect(() => {
     const k = q.trim();
-    if (k.length < 2) { setCatLibs([]); return; }
+    if (k.length < 2) { setCatLibs([]); setNotes([]); return; }
     let live = true;
-    const t = setTimeout(() => { get(`/api/plugins?view=lite&q=${encodeURIComponent(k)}`).then((j) => { if (live) setCatLibs(j.plugins ?? []); }); }, 200);
+    const t = setTimeout(() => {
+      get(`/api/plugins?view=lite&q=${encodeURIComponent(k)}`).then((j) => { if (live) setCatLibs(j.plugins ?? []); });
+      // Chữ người dùng gõ ở đây là từ khóa, không phải toán tử: bọc lại để dấu ":" hay "-" không đổi nghĩa câu tìm.
+      if (go.brain) get(`/api/brain?q=${encodeURIComponent(`"${k.replace(/"/g, " ")}"`)}`).then((j) => { if (live) setNotes(j.results ?? []); });
+    }, 200);
     return () => { live = false; clearTimeout(t); };
   }, [q]);
 
@@ -96,6 +106,8 @@ export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: 
     // Một ký tự khớp gần như mọi tin: chỉ tìm trong tiêu đề.
     const deep = words.join("").length >= 2;
     const add = (r: Omit<Row, "hay"> & { hay?: string }) => out.push({ ...r, hay: fold(`${r.label} ${r.sub ?? ""} ${r.hay ?? ""}`) });
+    for (const c of codes ?? []) if (go.code) add({ key: "code:" + c.id, group: "Phiên Code", label: c.title || "Phiên code", sub: c.archived ? tr("Đã lưu trữ") : undefined, icon: <I.Code size={16} />, run: () => go.code!(c.id) });
+    for (const n of notes) if (go.brain) add({ key: "note:" + n.title, group: "Bộ não", label: n.title, sub: n.snippet?.replace(/\s+/g, " ").slice(0, 80), hay: words.join(" "), icon: <I.Brain size={16} />, run: () => go.brain!(n.title) });
     for (const c of cmds) add({ key: "cmd:" + c.id, group: "Lệnh", label: c.label, icon: c.icon, keys: c.keys, hay: c.hay, run: c.run });
     for (const c of chats) {
       const any = deep && words.every((w) => foldAll(c.msgs).includes(w));
@@ -112,6 +124,7 @@ export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: 
       add({ key: "proj:" + p.id, group: "Dự án", label: p.name, sub: doc?.name ?? p.desc?.slice(0, 80), icon: doc ? <I.Clip size={16} /> : <I.Folder size={16} />, hay: doc ? words.join(" ") : undefined, run: () => go.project(p.id) });
     }
     if (rem) {
+      for (const a of rem.inbox) if (a.title) add({ key: "inbox:" + a.run, group: "Hộp thư", label: a.title, hay: a.text?.slice(0, 500), icon: <I.Inbox size={16} />, run: () => go.inbox?.() });
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
       for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng dùng chung" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
       for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: () => go.skillHub(s.name) });
@@ -119,7 +132,7 @@ export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: 
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm trước tiên hiện 6 kết quả kèm dòng "Xem tất cả N kết quả", nhóm theo thứ tự cố định.
     if (!words.length) return { cuts, rows: [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, PER_GROUP)] };
-    const order = ["Lệnh", "Đoạn chat", "Dự án", "Artifact và ứng dụng", "Skill và thư viện"];
+    const order = ["Lệnh", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Hộp thư", "Artifact và ứng dụng", "Skill và thư viện"];
     const scored = out.map((r) => ({ r, s: score(r.hay, words, r.label) })).filter((x) => x.s > 0);
     const rows = order.flatMap((g): Row[] => {
       const l = scored.filter((x) => x.r.group === g).sort((a, b) => b.s - a.s).map((x) => x.r);
@@ -127,7 +140,7 @@ export function CommandPalette({ chats, projects, cmds, go, onClose }: { chats: 
       return [...l.slice(0, PER_GROUP), { key: "more:" + g, group: g, label: `${tr("Xem tất cả")} ${l.length} ${tr("kết quả")}`, icon: <I.Search size={16} />, hay: "", more: true, run: () => setOpen((o) => [...o, g]) }];
     });
     return { rows, cuts };
-  }, [dq, chats, projects, cmds, rem, catLibs, go, open]);
+  }, [dq, chats, projects, codes, notes, cmds, rem, catLibs, go, open]);
 
   useEffect(() => { setSel(0); setOpen([]); }, [dq]);
   useEffect(() => { list.current?.querySelector<HTMLElement>(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);

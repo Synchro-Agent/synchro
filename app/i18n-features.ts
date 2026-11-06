@@ -125,3 +125,8 @@ Object.assign(FX_VI2EN, {
   "Synchro tự ghi nhớ thông tin bền vững từ các đoạn chat trong dự án này. Bạn có thể xóa bất kỳ mục nào. Tắt bằng mục Tạo bộ nhớ từ đoạn chat trong Cài đặt.": "Synchro remembers lasting details from chats in this project. You can delete any item. Turn it off with Generate memory from chats in Settings.",
   "Bộ nhớ dự án sẽ hiển thị ở đây sau vài đoạn chat. Tắt bằng mục Tạo bộ nhớ từ đoạn chat trong Cài đặt.": "Project memory appears here after a few chats. Turn it off with Generate memory from chats in Settings.",
 });
+Object.assign(FX_VI2EN, {
+  "Phiên Code": "Code sessions", "Đã lưu trữ": "Archived", "Sắp ra mắt": "Coming soon", "Sắp có trên": "Coming to",
+  "macOS: sắp có": "macOS: coming soon", "Windows: sắp có": "Windows: coming soon",
+  "Chưa có bản tải về; hiện bạn dùng Synchro ngay trên trình duyệt. Khi ra mắt, ứng dụng luôn sẵn sàng khi bạn cần: mở Synchro bằng một phím tắt từ bất kỳ đâu, kéo tệp trên máy vào cuộc trò chuyện, không phải chuyển qua lại giữa các tab.": "There's nothing to download yet; use Synchro in your browser for now. Once it's out, the app is always ready: open Synchro with a shortcut from anywhere, drag files from your computer into a chat, and skip the tab switching.",
+});

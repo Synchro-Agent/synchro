@@ -333,7 +333,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     if (sid === null || !cp?.sync) return;
     let stop = false;
     const tick = async () => {
-      if (stop || busyRef.current || document.hidden || loadedSid.current !== sid) return;
+      // Phiên chưa có tin nhắn nào (mới mở terminal) chưa từng lên máy chủ: hỏi chỉ nhận 404.
+      if (stop || busyRef.current || document.hidden || loadedSid.current !== sid || !nodesRef.current.length) return;
       const r = await getServerSession(sid, sessionBase(sid));
       if (!r || stop || busyRef.current || loadedSid.current !== sid || r.same || !r.data) return;
       setSessionBase(sid, r.updated);
@@ -1005,6 +1006,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   };
 
   const lastId = path.length ? path[path.length - 1].id : -1;
+  // Tên mặc định lưu bằng tiếng Việt; tên người dùng hay model đặt thì giữ nguyên.
+  const shownTitle = title === "Phiên code mới" || title === "Phiên code" ? tr(title) : title;
   const m = MODES.find((x) => x.k === mode) ?? MODES[0];
   const modeIcon = (k: string, s = 16) => (k === "auto" ? <I.Sparkle size={s} /> : k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.M icon="Alert" size={s} /> : <I.M icon="Code" size={s} />);
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
@@ -1063,11 +1066,11 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     <div className="cv" style={{ "--cv-font": cf ? `${cf}, ui-monospace, Menlo, monospace` : undefined, "--cv-fs": `${csz}px` } as React.CSSProperties} onDragOver={(e) => { e.preventDefault(); setDragOn(true); }} onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOn(false); }} onDrop={onDrop}>
       <div className={`cv-body ${pane && paneMax ? "pane-max" : ""}`}>
       <div className="cv-col" ref={colRef}>
-      <h1 className="sr-only" data-notr>{title}</h1>
+      <h1 className="sr-only" data-notr>{shownTitle}</h1>
       <div className="cv-bar">
         <div className="cv-bar-l">
           {!sideOpen && <SideToggle onClick={onSide} />}
-          <div className="cv-title" title={title}><I.Code size={16} /><span className="cv-ell" data-notr>{title}</span></div>
+          <div className="cv-title" title={shownTitle}><I.Code size={16} /><span className="cv-ell" data-notr>{shownTitle}</span></div>
         </div>
         <div className="cv-bar-r">
           <button className={`icon-btn cv-tb ${rail ? "on" : ""}`} onClick={() => setRail(!rail)} aria-label="Ẩn/hiện bảng phiên" data-tip="Bảng phiên"><I.PanelR /></button>
