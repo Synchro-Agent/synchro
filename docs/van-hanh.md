@@ -18,9 +18,11 @@ systemctl status synchro-watchdog.timer
 cat /var/lib/synchro-ops/watchdog-state.json; tail /var/lib/synchro-ops/watchdog.jsonl
 ```
 
-Cấu hình ở `/etc/synchro-ops.env` (chỉ root đọc): `APP`, `PM2`, `PORT`, `WEB_USER`, `SYNCHRO_BACKUP_HOOK`.
+Cấu hình ở `/etc/synchro-ops.env` (chỉ root đọc): `APP`, `PM2`, `PORT`, `WEB_USER`, `DATA_DIR`, `SYNCHRO_ENGINE_HOME`, `SYNCHRO_BACKUP_HOOK`. Nên đặt `DATA_DIR` ở đây nếu khác `<app>/data`; thiếu thì `backup.sh` đọc từ `.env.production` (của web user) nhưng từ chối nếu thư mục không thuộc `WEB_USER` (mặc định `synchro`) hoặc nằm trong nơi sao lưu.
 
-Quyền sở hữu: `scripts/server-build.sh` để thư mục app, `scripts/`, `workspace/` thuộc root; dịch vụ workspace chạy từ `/opt/synchro-ws` (bản sao, chỉ root ghi). Web user chỉ ghi được `data/`, `.cache/`, `.next/`, `node_modules/`, `.mkvenv/` và mã ứng dụng của chính nó. Tiến trình đọc tệp tải lên (`scripts/extract-worker.mjs`) chạy ưu tiên thấp, giới hạn bộ nhớ (`SYNCHRO_PARSE_HEAP_MB`, 1024), thời gian (`SYNCHRO_PARSE_MS`), số việc cùng lúc (`SYNCHRO_PARSE_MAX`, 2), không có biến môi trường bí mật, và theo mô hình quyền của Node chỉ đọc được mã của chính nó.
+Giới hạn lượt model (đặt trong `.env.production`): `SYNCHRO_TURNS_PER_ACCOUNT` (mặc định 4, quản trị viên gấp 3), `SYNCHRO_TURN_QUEUE` (8), `SYNCHRO_TURNS_GLOBAL` (mặc định theo RAM: 70% RAM chia 400 MB mỗi CLI, chưa đo RSS thật), `SYNCHRO_MIN_FREE_RAM_MB` (300). Nới riêng một tài khoản bằng cài đặt `turns_limit:<id người dùng>`. Trang Sức khỏe hiện số lượt đang chạy, đang chờ, bị từ chối.
+
+Quyền sở hữu: `scripts/server-build.sh` để thư mục app, `scripts/`, `workspace/` thuộc root; dịch vụ workspace chạy từ `/opt/synchro-ws` (bản sao, chỉ root ghi). Web user ghi được `data/`, `.cache/`, `.next/`, `node_modules/`, `.mkvenv/`, `.env.production` và mã ứng dụng của chính nó, nên script chạy bằng root không được tin các tệp này (`backup.sh` đã làm vậy). Tiến trình đọc tệp tải lên (`scripts/extract-worker.mjs`) chạy ưu tiên thấp, giới hạn bộ nhớ (`SYNCHRO_PARSE_HEAP_MB`, 1024), thời gian (`SYNCHRO_PARSE_MS`), số việc cùng lúc (`SYNCHRO_PARSE_MAX`, 2), không có biến môi trường bí mật, và theo mô hình quyền của Node chỉ đọc được mã của chính nó.
 
 ## Deploy và trả lại bản trước
 
