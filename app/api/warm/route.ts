@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);
   const { user } = requireUser(req);
-  void import("../../chatengine").then((m) => m.prewarmChat(user)).catch(() => {});
+  // Model, nỗ lực, nút Bộ nhớ đang chọn: tiến trình đợi sẵn phải khớp đúng các lựa chọn đó thì lượt sau mới dùng được.
+  const b = (await req.json().catch(() => ({}))) as { model?: unknown; effort?: unknown; memory?: unknown };
+  void import("../../chatengine").then((m) => m.prewarmChat(user, { model: b.model, effort: b.effort, memory: b.memory })).catch(() => {});
   return new Response(null, { status: 204 });
 });

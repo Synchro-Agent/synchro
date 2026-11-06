@@ -25,8 +25,8 @@ for (const f of ["claude", "mock-cli-common.cjs"]) fs.copyFileSync(path.join(SRC
 fs.chmodSync(path.join(BIN, "claude"), 0o755);
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
 
-const { router: R, "ai/anymodel": AM, "ai/cli_pool": PO, chatengine: CH, authstore: AU, "ai/cli_auth": A, skillstudio: ST, turngate: TG, "ai/subs": SUBS } =
-  await loadTs(["router", "ai/anymodel", "ai/cli_pool", "chatengine", "authstore", "ai/cli_auth", "skillstudio", "turngate", "ai/subs"]);
+const { memory: MEM, router: R, "ai/anymodel": AM, "ai/cli_pool": PO, chatengine: CH, authstore: AU, "ai/cli_auth": A, skillstudio: ST, turngate: TG, "ai/subs": SUBS } =
+  await loadTs(["memory", "router", "ai/anymodel", "ai/cli_pool", "chatengine", "authstore", "ai/cli_auth", "skillstudio", "turngate", "ai/subs"]);
 
 // Giữ lại dòng [timing] để kiểm tra các trường mà người vận hành sẽ đọc trên máy chủ thật.
 const lines = [], log0 = console.log;
@@ -82,6 +82,49 @@ try {
     const done = await Promise.all(jobs);
     ok(done.every((x) => x.text), "cả 5 việc nền cuối cùng đều xong", JSON.stringify(done.map((x) => x.message ?? "ok")));
     fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
+  }
+
+  console.log("4. Tiến trình khởi động sẵn khớp đúng lượt thật");
+  {
+    const SYS = "Bạn là một trợ lý AI hữu ích.";
+    const turn = async (text, o = {}) => {
+      const res = await CH.chatPost({ system: SYS, skills: true, feature: "chat", model: "auto", effort: "auto", memory: true, conv: `w-${Math.random().toString(36).slice(2)}`, messages: [{ role: "user", content: text }], ...o }, { user }, { feature: "chat" });
+      const j = await res.json();
+      return { s: res.status, j, line: lastTurn() };
+    };
+    const warmUp = async (o) => { PO.dropAll(); await CH.prewarmChat(user, { ...o, force: true }); await until(() => PO.poolSize() > 0); await sleep(400); };
+    await warmUp({});
+    let r = await turn("Xin chào");
+    ok(r.s === 200 && /pool=hit/.test(r.line) && /haiku low/.test(r.line), "Tự động, câu chào: dùng đúng tiến trình đã khởi động sẵn", r.line);
+    await warmUp({});
+    r = await turn("Viết email xin nghỉ phép ngày mai");
+    ok(/pool=hit/.test(r.line) && /haiku medium/.test(r.line), "Tự động, nhờ viết ngắn: cũng có sẵn tiến trình đúng nỗ lực", r.line);
+    await warmUp({ model: "sub-claude/sonnet", effort: "high" });
+    r = await turn("Xin chào", { model: "sub-claude/sonnet", effort: "high" });
+    ok(/pool=hit/.test(r.line) && /sonnet high/.test(r.line), "chọn tay Sonnet nỗ lực cao: khởi động sẵn đúng model đó", r.line);
+    await warmUp({ model: "sub-claude/sonnet", effort: "auto" });
+    r = await turn("Xin chào", { model: "sub-claude/sonnet", effort: "auto" });
+    ok(/pool=hit/.test(r.line) && /sonnet low/.test(r.line), "chọn tay model, nỗ lực Tự động: đúng mức của câu chào", r.line);
+    await warmUp({ model: "auto", effort: "high" });
+    r = await turn("Xin chào", { effort: "high" });
+    ok(/pool=hit/.test(r.line) && / high /.test(r.line), "Tự động, chọn tay nỗ lực cao: đúng mức đó", r.line);
+    MEM.addMemory(user.id, ["Thích câu trả lời ngắn gọn, đi thẳng vào ý chính."], "manual");
+    await warmUp({});
+    r = await turn("Xin chào", { memory: false });
+    ok(/pool=cold/.test(r.line), "tắt Bộ nhớ mà hệ thống khởi động sẵn có bộ nhớ: không dùng nhầm tiến trình đó", r.line);
+    await warmUp({ memory: false });
+    r = await turn("Xin chào", { memory: false });
+    ok(/pool=hit/.test(r.line), "báo trước đang tắt Bộ nhớ: khởi động sẵn đúng hướng dẫn", r.line);
+    // Bộ nhớ đổi sau một lượt thì hướng dẫn hệ thống đổi: tiến trình cũ không còn khớp, phải có tiến trình mới cho đoạn chat sau.
+    await warmUp({ memory: true });
+    MEM.addMemory(user.id, ["Đang làm dự án thử nghiệm tốc độ."], "manual");
+    await CH.rewarmAfterMemory(user);
+    await sleep(600);
+    r = await turn("Xin chào");
+    ok(/pool=hit/.test(r.line), "vừa học thêm bộ nhớ: khởi động lại đúng hướng dẫn mới", r.line);
+    r = await turn("Xin chào", { model: "sub-claude/haiku", effort: "low", incognito: true });
+    ok(r.s === 200, "đoạn chat ẩn danh vẫn chạy", JSON.stringify(r.j).slice(0, 200));
+    PO.dropAll();
   }
 
   console.log("\n" + (fail ? `${pass}/${pass + fail} đạt` : `${pass}/${pass} đạt`));

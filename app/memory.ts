@@ -83,13 +83,13 @@ Trả về DUY NHẤT một mảng JSON các chuỗi (tối đa 3 mục), hoặc
  *  hoặc khóa API như nhau (gói thì chạy một lượt ngắn của CLI chính chủ). */
 export async function learnFromTurn(user: UserRow, question: string, answer: string) {
   const cfg = memCfg(user.id);
-  if (!cfg.gen || question.trim().length < 8) return;
+  if (!cfg.gen || question.trim().length < 8) return 0;
   const existing = listMemory(user.id).map((m) => `- ${m.content}`).join("\n") || "(trống)";
   const text = await quickCall(user, EXTRACT(cfg.sens), `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}`, { maxTokens: 400, job: "memory", bg: true }).then((r) => r.text).catch(() => "");
   const json = /\[[\s\S]*\]/.exec(text)?.[0];
-  if (!json) return;
+  if (!json) return 0;
   try {
     const items = (JSON.parse(json) as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 3);
-    if (items.length) addMemory(user.id, items, "chat");
-  } catch {}
+    return items.length ? addMemory(user.id, items, "chat").length : 0;
+  } catch { return 0; }
 }

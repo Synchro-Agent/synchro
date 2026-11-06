@@ -94,6 +94,7 @@ export const steerRun = (id: string, text: string) => fetch(`/api/runs/${encodeU
 // Model đang chọn trong giao diện; máy chủ kiểm tra tài khoản có được phép dùng model này không.
 let activeModel = "";
 export const setActiveModel = (m: string) => { activeModel = m; };
+export const getActiveModel = () => activeModel;
 // Mức nỗ lực đang dùng (đã hạ theo giới hạn của quản trị viên); máy chủ vẫn kiểm tra lại.
 // "auto": máy chủ chọn mức nỗ lực theo độ khó của từng yêu cầu.
 let activeEffort: Effort | "auto" | undefined;

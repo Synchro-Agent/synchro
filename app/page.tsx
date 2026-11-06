@@ -84,7 +84,7 @@ import type { DirEntry } from "./connectordir";
 type CxData = { connectors: Conn[]; directory: DirEntry[] };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
-import { startWarmPing } from "./warmping";
+import { startWarmPing, warmChoice } from "./warmping";
 type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
@@ -249,7 +249,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const eff = clampEffort(isEffort(effort) ? effort : "medium", cap, kind);
   const capped = cap !== "max";
   const levelName = (k: string) => EFFORTS.find((e) => e[0] === k)?.[1] ?? k;
-  useEffect(() => { setActiveEffort(autoEff ? "auto" : eff); }, [eff, autoEff]);
+  useEffect(() => { setActiveEffort(autoEff ? "auto" : eff); warmChoice(); }, [eff, autoEff]);
   // Danh sách model mở ngang hàng với tên hãng; không đủ chỗ phía dưới thì neo vào đáy menu và mọc lên trên, dài quá thì cuộn.
   // Đo chiều cao thật của khung lúc nó gắn vào trang (MsubBody): ước lượng theo số dòng từng bỏ sót ghi chú gói, nên danh sách Gemini
   // bị đặt ngang hàng rồi phải cuộn trong một khung thấp dù phía trên còn nhiều chỗ.
@@ -1191,6 +1191,7 @@ export default function Home() {
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
   useEffect(() => { setActiveModel(model); }, [model]);
+  useEffect(() => { if (model) warmChoice(); }, [model]);
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
   useEffect(() => { if (me) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps

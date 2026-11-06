@@ -1297,29 +1297,44 @@ function holdNeedTools(out?: (t: string) => void) {
   };
 }
 export { clearStall, noteStall, stalledModels };
-const prewarmed = new Map<string, number>();
-/** Mở trang: khởi động sẵn tiến trình cho câu chào đầu tiên của người dùng, đúng model và hướng dẫn đường nhanh sẽ dùng. Mỗi người tối đa một lần mỗi phút; không tốn lượt nào của gói. */
-export async function prewarmChat(user: UserRow) {
+// Lựa chọn của người dùng ở bộ chọn: model, nỗ lực, nút Bộ nhớ. Từng chỉ khởi động sẵn theo Tự động và bộ nhớ bật, nên ai chọn tay Sonnet, đổi nỗ lực hay tắt Bộ nhớ thì tiến trình đợi sẵn không bao giờ khớp (khóa của hồ gồm cả model, nỗ lực, hướng dẫn).
+export type WarmPick = { model?: unknown; effort?: unknown; memory?: unknown };
+const prewarmed = new Map<string, { at: number; sig: string; pick: WarmPick }>();
+const QUICK_ASKS = ["xin chào", "viết email xin nghỉ phép"];
+/** Mở trang, quay lại tab, đổi model: khởi động sẵn tiến trình cho câu kế tiếp, đúng model, nỗ lực và hướng dẫn đường nhanh sẽ dùng. Mỗi lựa chọn tối đa một lần mỗi phút; không tốn lượt nào của gói. */
+export async function prewarmChat(user: UserRow, o: WarmPick & { force?: boolean } = {}) {
   if (process.env.SYNCHRO_FAST_CHAT === "0") return;
-  const now = Date.now();
-  if (now - (prewarmed.get(user.id) ?? 0) < 60_000) return;
+  const now = Date.now(), had = prewarmed.get(user.id);
+  // Lời gọi không nói gì (mở bộ chọn model, /api/models): giữ lựa chọn đã biết thay vì quay về Tự động.
+  const pick: WarmPick = o.model === undefined && o.effort === undefined && o.memory === undefined ? had?.pick ?? {} : { model: o.model, effort: o.effort, memory: o.memory };
+  const sig = JSON.stringify([pick.model, pick.effort, pick.memory]);
+  if (!o.force && had?.sig === sig && now - had.at < 60_000) return;
   if (prewarmed.size > 2000) prewarmed.clear();
-  prewarmed.set(user.id, now);
+  prewarmed.set(user.id, { at: now, sig, pick });
   try { warmRecall(user.id); } catch {}
   const { usable } = await usableModels(user);
-  const body = { skills: true, feature: "chat" };
+  const body = { skills: true, feature: "chat", memory: pick.memory === false ? false : undefined };
   const pc = capsState(user).caps;
   if (!pc) return;
   const system = [`${topRule(user.id)}\n\n${DEFAULT_SYSTEM}`, FAST_RULES, contextOf(body, user)].filter(Boolean).join("\n\n");
+  const chosen = typeof pick.model === "string" && pick.model !== AUTO ? legacyModel(pick.model) : null;
+  // Chọn tay model mà model đó chưa dùng được thì lượt thật cũng không chạy trên đó: không khởi động gì.
+  if (chosen && !usable.includes(chosen)) return;
   // Hai kiểu câu mở đầu hay gặp nhất: câu chào, câu hỏi (nỗ lực thấp) và nhờ viết ngắn (nỗ lực vừa). Tiến trình gắn chặt với model và nỗ lực nên mỗi kiểu một tiến trình; cùng model và mức thì chỉ một.
   const seen = new Set<string>();
-  for (const text of ["xin chào", "viết email xin nghỉ phép"]) {
-    const r = routeModel({ text, attachments: 0, turns: 1, studio: false }, usable);
-    if (!r || subCli(r.model) !== "claude" || seen.has(`${r.model}|${r.effort}`)) continue;
-    seen.add(`${r.model}|${r.effort}`);
-    prewarmClaude({ user, model: r.model, effort: r.effort, system });
+  for (const text of QUICK_ASKS) {
+    const q: RouteInput = { text, attachments: 0, turns: 1, studio: false };
+    const r = routeModel(q, usable);
+    const model = chosen ?? r?.model;
+    // Nỗ lực đúng như lượt thật sẽ tính: chọn tay thì giữ, "Tự động" thì theo câu; Tự động còn chọn cả model thì chưa chọn tay nỗ lực cũng theo câu.
+    const effort = isEffort(pick.effort) ? pick.effort : chosen && pick.effort !== "auto" ? undefined : autoEffort(q);
+    if (!model || subCli(model) !== "claude" || seen.has(`${model}|${effort}`)) continue;
+    seen.add(`${model}|${effort}`);
+    prewarmClaude({ user, model, effort, system });
   }
 }
+/** Bộ nhớ vừa đổi thì hướng dẫn hệ thống đổi: tiến trình đợi sẵn không còn khớp với lượt sau. Khởi động lại đúng lựa chọn đã biết của người dùng. */
+export const rewarmAfterMemory = (user: UserRow) => prewarmChat(user, { force: true });
 const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
@@ -1727,7 +1742,7 @@ registerExec("chat", async (body, user) => {
   // Việc tự động chạy theo lịch không phải đoạn chat: không rút bộ nhớ hay chưng cất vào bộ não (kết quả các lần trước đã đi cùng lần chạy sau).
   if (taskOf(body)) return { http: res.status, json };
   // Rút bộ nhớ từ lượt vừa xong ở nền (không làm chậm câu trả lời).
-  if (res.status === 200 && useMemory(body, user) && typeof json?.text === "string") void learnFromTurn(user, lastUserText(body.messages), json.text).catch(() => {});
+  if (res.status === 200 && useMemory(body, user) && typeof json?.text === "string") void learnFromTurn(user, lastUserText(body.messages), json.text).then((n) => (n ? rewarmAfterMemory(user) : undefined)).catch(() => {});
   // Bộ não tổng hợp: ghi nhận đoạn chat để chưng cất thành một nhánh (chạy nền, không làm chậm câu trả lời).
   if (res.status === 200 && json && typeof json === "object") try { afterTurn(user, body, json); } catch (e) { console.error("[brain]", e); }
   return { http: res.status, json };
