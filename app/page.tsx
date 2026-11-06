@@ -2337,7 +2337,7 @@ export default function Home() {
             {models.loaded && !models.providers.length && (!model || modelsSettled()) && (
               <section className="ob-card" aria-labelledby="ob-t">
                 <b id="ob-t">Kết nối gói AI của bạn để bắt đầu</b>
-                <p>Synchro chạy bằng gói bạn đang trả tiền. Đăng nhập một gói là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.</p>
+                <p>Synchro chạy bằng chính tài khoản AI của bạn. ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí, Claude cần gói Pro hoặc Max. Đăng nhập một tài khoản là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.</p>
                 <div className="ob-row">
                   {([["anthropic", "Claude"], ["openai", "ChatGPT"], ["google", "Gemini"], ["xai", "Grok"]] as const).map(([id, n]) => <button key={id} className="btn" data-notr onClick={() => { try { sessionStorage.setItem("pv-open", id); } catch {} setSettingsTab("Providers"); setModal("settings"); }}><BrandLogo id={id} size={16} />{n}</button>)}
                 </div>

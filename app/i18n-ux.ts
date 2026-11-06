@@ -22,7 +22,7 @@ export const UX_VI2EN: Record<string, string> = {
   // Phiên hết hạn, làm quen tài khoản mới, trợ năng
   "Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.": "Your session has expired. Sign in again to continue. Your work is still here.",
   "Kết nối gói AI của bạn để bắt đầu": "Connect your AI plan to get started",
-  "Synchro chạy bằng gói bạn đang trả tiền. Đăng nhập một gói là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on the plan you already pay for. Sign in to one and you can chat right away. What you've typed below stays here.",
+  "Synchro chạy bằng chính tài khoản AI của bạn. ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí, Claude cần gói Pro hoặc Max. Đăng nhập một tài khoản là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free account; Claude needs a Pro or Max plan. Sign in to one and you can chat right away. What you've typed below stays here.",
   "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
   "Đang tải": "Loading", "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
   "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Hộp thư": "Couldn't load your Inbox",

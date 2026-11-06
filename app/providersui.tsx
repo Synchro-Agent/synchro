@@ -258,7 +258,7 @@ export function ProvidersPanel() {
         <div className="adm-badge"><I.SetChip size={22} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="s-title">Providers</div>
-          <div className="d">{admin && shared ? "Connect Claude, ChatGPT, Gemini, Grok and DeepSeek with your own plan or with an API key shared by everyone." : admin ? "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan." : "Use the AI plans you already pay for. Sign in once and every model your plan allows shows up in the model picker, only for your account."}</div>
+          <div className="d">{admin && shared ? "Connect Claude, ChatGPT, Gemini, Grok and DeepSeek with your own plan or with an API key shared by everyone." : admin ? "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan." : "Use your own AI accounts. ChatGPT, Gemini and Grok work on a free account; Claude needs a Pro or Max plan. Sign in once and every model your account allows shows up in the model picker, only for you."}</div>
         </div>
       </div>
       {apiErr && <div className="api-err" role="alert"><I.Alert size={14} /><span>{apiErr}</span></div>}
@@ -279,7 +279,7 @@ export function ProvidersPanel() {
       )}
       <h3 className="sec">How it works</h3>
       <ol className="api-steps pv-how">
-        <li><b>Pick a provider, then how to connect it</b><span>{admin && shared ? "Sign in with your own plan, or link an API key that everyone on this Synchro can use." : "Sign in with your own plan. Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro."}</span></li>
+        <li><b>Pick a provider, then how to connect it</b><span>{admin && shared ? "Sign in with your own plan, or link an API key that everyone on this Synchro can use." : "Sign in with your own account. Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro."}</span></li>
         <li><b>Chat with it</b><span>{shared ? "The model picker keeps one group per provider. A group shows your plan's models while you are signed in, otherwise the shared API models." : "The model picker keeps one group per provider and shows your plan's models while you are signed in."}</span></li>
         <li><b>When your plan runs out</b><span>{shared ? "Synchro asks before switching to the shared API key. You switch back to your plan automatically when it resets." : "Synchro shows when the plan resets. Until then you can keep going with another provider's plan if you signed in to one."}</span></li>
       </ol>

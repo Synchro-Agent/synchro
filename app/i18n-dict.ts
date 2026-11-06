@@ -892,8 +892,8 @@ Object.assign(VI2EN, {
   // Mức dùng
   "Phiên hiện tại": "Current session", "Hằng tuần · Opus": "Weekly · Opus", "Hằng tuần · Sonnet": "Weekly · Sonnet", "Hằng tuần · giới hạn theo model": "Weekly · model limit", "Tín dụng sử dụng": "Usage credits", "model Claude và GPT": "Claude and GPT models", "Hằng tuần": "Weekly",
   "Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.": "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week.",
-  "Gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần; gói Pro chỉ có hạn mức tuần.": "Plus has a rolling 5-hour window and a weekly limit; Pro plans only have a weekly limit.",
-  "Google AI Pro và Ultra hồi quota mỗi 5 giờ cho tới khi chạm hạn mức tuần. Model Gemini và model Claude/GPT tính riêng.": "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models have separate quotas.",
+  "Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.": "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit.",
+  "Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.": "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models are counted separately.",
   "Đã chạm giới hạn ·": "Limit reached ·", "Mức dùng": "Usage", "Giới hạn gói": "Plan limits", "Giới hạn sử dụng": "Usage limits",
   "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.": "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.",
   "Synchro chưa đọc được hạn mức của gói.": "Synchro could not read the plan's quota yet.", "Gửi một tin nhắn bằng gói này để xem hạn mức.": "Send a message with this plan to see its limits.", "Xem chi tiết mức dùng": "View usage details",

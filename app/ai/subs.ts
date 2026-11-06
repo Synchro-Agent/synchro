@@ -463,9 +463,9 @@ const turnsToday = (uid: string, cli: Cli) => {
 const label = (w: RateWindow) => WINDOW_NAME[w.window] ?? w.window.replace(/_/g, " ");
 const NOTE: Record<Cli, string> = {
   claude: "The session starts with your first message and lasts 5 hours. Weekly limits reset at a fixed time each week.",
-  codex: "Plus has a rolling 5-hour window and a weekly limit. Pro plans only have a weekly limit.",
-  agy: "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models have separate quotas.",
-  grok: "SuperGrok and X Premium+ have rolling usage limits. The Grok CLI doesn't report how much is left, so Synchro counts your messages and tells you when Grok says the limit is reached.",
+  codex: "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit.",
+  agy: "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models have separate quotas.",
+  grok: "Limits depend on your Grok plan and refresh over time. The Grok CLI doesn't report how much is left, so Synchro counts your messages and tells you when Grok says the limit is reached.",
 };
 
 /** Antigravity đang chờ người dùng hoàn tất bước làm quen (đã thấy ở lần đọc hạn mức gần nhất). */

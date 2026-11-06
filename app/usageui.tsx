@@ -132,9 +132,9 @@ function winLabel(w: PlanWindow) {
 // Cách hãng đặt lại hạn mức (ghi chú dưới các thanh).
 const PLAN_NOTE: Record<SubUsage["cli"], [string, string]> = {
   claude: ["Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.", "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week."],
-  codex: ["Gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần; gói Pro chỉ có hạn mức tuần.", "Plus has a rolling 5-hour window and a weekly limit. Pro plans only have a weekly limit."],
-  agy: ["Google AI Pro và Ultra hồi quota mỗi 5 giờ cho tới khi chạm hạn mức tuần. Model Gemini và model Claude/GPT tính riêng.", "Google AI Pro and Ultra refresh every 5 hours until the weekly limit is reached. Gemini and Claude/GPT models are counted separately."],
-  grok: ["SuperGrok và X Premium+ có hạn mức cuốn chiếu; hết hạn mức thì Synchro hỏi bạn trước khi dùng khóa API.", "SuperGrok and X Premium+ have rolling limits. When you hit one, Synchro asks before using an API key."],
+  codex: ["Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.", "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit."],
+  agy: ["Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.", "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models are counted separately."],
+  grok: ["Hạn mức tùy gói của tài khoản Grok và hồi dần theo thời gian; hết hạn mức thì Synchro hỏi bạn trước khi dùng khóa API.", "Limits depend on your Grok plan and refresh over time. When you hit one, Synchro asks before using an API key."],
 };
 /** Ghi chú khi gói chưa có thanh hạn mức nào: Antigravity chưa đọc được bảng hạn mức, Grok CLI không báo hạn mức, gói khác chờ lượt chat đầu. */
 const noWindows = (cli: SubUsage["cli"] | null | undefined, tail: [string, string]) =>

@@ -645,7 +645,7 @@ RULES_VI.push([/^Fixed automatically after (\d+) tr(?:y|ies)(?: · used (\d+) mo
 
 // Cài đặt → Providers: đăng nhập gói subscription (Claude, ChatGPT, Gemini), khóa API dùng chung, số dư API đã nạp.
 Object.assign(EN2VI, {
-  "Use the AI plans you already pay for. Sign in once and every model your plan allows shows up in the model picker, only for your account.": "Dùng gói AI bạn đang trả tiền. Đăng nhập một lần là mọi model gói cho phép hiện trong bộ chọn model, chỉ cho tài khoản của bạn.",
+  "Use your own AI accounts. ChatGPT, Gemini and Grok work on a free account; Claude needs a Pro or Max plan. Sign in once and every model your account allows shows up in the model picker, only for you.": "Dùng chính tài khoản AI của bạn. ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí, Claude cần gói Pro hoặc Max. Đăng nhập một lần là mọi model tài khoản cho phép hiện trong bộ chọn model, chỉ cho bạn.",
   "Your plans": "Gói của bạn", "Shared API keys": "Khóa API dùng chung",
   "Only administrators see this. Keys here are shared with everyone on this Synchro. Voice (ElevenLabs) works with an API key only.": "Chỉ quản trị viên thấy phần này. Khóa ở đây dùng chung cho mọi người trên Synchro này. Giọng nói (ElevenLabs) chỉ dùng khóa API.",
   "Shared API keys are managed by an administrator.": "Khóa API dùng chung do quản trị viên quản lý.",
@@ -670,7 +670,9 @@ Object.assign(EN2VI, {
   "API key only": "Chỉ khóa API", "No plan sign-in for this provider.": "Hãng này không có đăng nhập bằng gói.", "Check this code": "Kiểm tra mã này",
   "Sign in with the account that has your SuperGrok or X Premium+ plan, then confirm the code below.": "Đăng nhập bằng tài khoản có gói SuperGrok hoặc X Premium+, rồi xác nhận mã bên dưới.",
   "The sign-in page should show the same code. It expires in 10 minutes. Never share it with anyone.": "Trang đăng nhập phải hiện đúng mã này. Mã hết hạn sau 10 phút. Đừng chia sẻ mã cho bất kỳ ai.",
-  "SuperGrok and X Premium+ have rolling usage limits. The Grok CLI doesn't report how much is left, so Synchro counts your messages and tells you when Grok says the limit is reached.": "SuperGrok và X Premium+ có hạn mức cuốn chiếu. Grok CLI không báo còn bao nhiêu, nên Synchro đếm số tin nhắn và báo khi Grok nói đã chạm giới hạn.",
+  "Limits depend on your Grok plan and refresh over time. The Grok CLI doesn't report how much is left, so Synchro counts your messages and tells you when Grok says the limit is reached.": "Hạn mức tùy gói của tài khoản Grok và hồi dần theo thời gian. Grok CLI không báo còn bao nhiêu, nên Synchro đếm số tin nhắn và báo khi Grok nói đã chạm giới hạn.",
+  "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit.": "Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.",
+  "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models have separate quotas.": "Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.",
   "ChatGPT (plan default)": "ChatGPT (mặc định của gói)", "Gemini (plan default)": "Gemini (mặc định của gói)",
   "Prepaid balance": "Số dư đã nạp", "Not tracked. Enter what you loaded into this key to get a warning before it runs out.": "Chưa theo dõi. Nhập số tiền đã nạp cho khóa này để được báo trước khi hết.",
   "Top up": "Nạp thêm", "Set balance": "Đặt số dư", "Track balance": "Theo dõi số dư", "Stop tracking balance": "Ngừng theo dõi số dư",
@@ -709,7 +711,7 @@ Object.assign(EN2VI, {
   "Other providers": "Nhà cung cấp khác", "API key only. Voice (ElevenLabs) works with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) chỉ dùng khóa API.",
   "Pick a provider, then how to connect it": "Chọn hãng, rồi chọn cách kết nối",
   "Sign in with your own plan, or link an API key that everyone on this Synchro can use.": "Đăng nhập gói của chính bạn, hoặc liên kết khóa API để mọi người trên Synchro này cùng dùng.",
-  "Sign in with your own plan. Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro.": "Đăng nhập gói của chính bạn. Synchro chạy ứng dụng chính chủ của hãng trên máy chủ và hiện link đăng nhập của nó. Mật khẩu của bạn không bao giờ đi qua Synchro.",
+  "Sign in with your own account. Synchro runs the provider's official app on the server and shows you its sign-in link. Your password never passes through Synchro.": "Đăng nhập tài khoản của chính bạn. Synchro chạy ứng dụng chính chủ của hãng trên máy chủ và hiện link đăng nhập của nó. Mật khẩu của bạn không bao giờ đi qua Synchro.",
   "Chat with it": "Chat với model",
   "The model picker keeps one group per provider. A group shows your plan's models while you are signed in, otherwise the shared API models.": "Bộ chọn model có một nhóm cho mỗi hãng. Khi bạn đã đăng nhập gói, nhóm hiện model của gói; nếu không thì hiện model của khóa API dùng chung.",
   "When your plan runs out": "Khi gói hết hạn mức",

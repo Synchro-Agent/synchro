@@ -366,7 +366,7 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
   }
   const kinds = new Set(tried.map((f) => f.kind));
   const refused = q.reference && tried.every((f) => f.kind === "noref");
-  const next = refused ? "Hãy đăng nhập gói Google AI (Antigravity) ở Cài đặt → Providers để sửa ảnh có sẵn, hoặc tạo ảnh mới chỉ từ mô tả (bỏ tham số reference)."
+  const next = refused ? "Hãy đăng nhập tài khoản Google (Antigravity, tài khoản miễn phí cũng được) ở Cài đặt → Providers để sửa ảnh có sẵn, hoặc tạo ảnh mới chỉ từ mô tả (bỏ tham số reference)."
     : kinds.has("refused") ? "Hãy đổi mô tả rồi thử lại, gửi lại nguyên văn nhiều khả năng vẫn bị từ chối."
     // Chỉ nói chờ khi thật sự có gói hết hạn mức: gói Free hay gói không có công cụ thì chờ bao lâu cũng vậy.
     : [...kinds].every((k) => k === "quota" || k === "free" || k === "notool" || k === "auth" || k === "noref") ? (kinds.has("quota") ? "Hãy chờ gói hồi hạn mức, hoặc đăng nhập gói khác ở Cài đặt → Providers rồi thử lại."
