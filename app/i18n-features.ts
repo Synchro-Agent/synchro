@@ -157,3 +157,10 @@ Object.assign(FX_EN2VI, {
   "Add another way to sign in, even with a different email address.": "Thêm cách đăng nhập khác, kể cả khi email khác.",
   "Sign-in method added": "Đã thêm cách đăng nhập", "That account is already linked to another Synchro account": "Tài khoản đó đã gắn với một tài khoản Synchro khác", "Couldn't add the sign-in method": "Chưa thêm được cách đăng nhập",
 });
+Object.assign(FX_VI2EN, {
+  ". Tài khoản đăng nhập bằng Google, GitHub hoặc Apple có thể đăng nhập bằng các nút đó mà không cần mật khẩu. Vẫn không có thư sau 10 phút?": "Accounts that sign in with Google, GitHub or Apple can use those buttons without a password. Still no email after 10 minutes?",
+  "Bạn cần đăng nhập trước khi thêm cách đăng nhập.": "Sign in before adding a sign-in method.",
+  "Thiếu cách đăng nhập.": "No sign-in method was given.",
+  "Hoàn tác": "Undo",
+});
+Object.assign(FX_EN2VI, { "Change": "Đổi" });

@@ -68,7 +68,8 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     run.ended = Date.now();
     if (run.node) { run.node = closeFolded({ ...run.node, done: true, ...(run.ac.signal.aborted ? { stopped: true } : {}) }); dirty = true; }
     save();
-    if (sync()) try { patchSession(o.uid, numSid, { running: false }); } catch {}
+    // Bấm Dừng rồi gửi tiếp ngay: lượt mới đã chạy, lượt cũ thoát muộn không được báo phiên đã xong.
+    if (sync() && runs.get(keyOf(o.uid, o.sid)) === run) try { patchSession(o.uid, numSid, { running: false }); } catch {}
     for (const l of run.listeners) l.end();
     run.listeners.clear();
   });

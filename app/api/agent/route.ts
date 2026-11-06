@@ -46,20 +46,22 @@ export async function POST(req: Request) {
       const emit = (e: AgentEvent) => { if (e.t === "result" && e.ok && e.diff?.path) edited.add(e.diff.path); emit0(e); };
       // Hộp thư nhắn thêm của lượt này: tin tới sau bước cuối thì trả về trong "done" để trình duyệt gửi thành lượt mới.
       const ibox = `${c.user.id}:${sid}`;
-      agentInbox.set(ibox, []);
+      const box: string[] = [];
+      agentInbox.set(ibox, box);
       const ask = String(msgs.filter((m) => m.role === "user").at(-1)?.content ?? "");
       let text = "", d: string | undefined, error = "";
       try {
         const out = await runAgentTurn({ user: c.user, sid, pick, system: String(system), messages: msgs, project, skills: !!wantSkills, emit, signal,
-          inbox: () => agentInbox.get(ibox)?.splice(0) ?? [], perm: p, files: ups });
+          inbox: () => box.splice(0), perm: p, files: ups });
         text = out.text; d = out.d;
-        const left = agentInbox.get(ibox)?.splice(0) ?? [];
+        const left = box.splice(0);
         emit({ t: "done", text: out.text, skills: out.skills, ...(left.length ? { steer: left } : {}) });
       } catch (e) {
         error = e instanceof ModelError ? `Model báo lỗi (${e.status}): ${e.message.slice(0, 300)}` : (e as Error).message || "Lỗi máy chủ";
         if (!signal.aborted) emit({ t: "error", error });
       } finally {
-        agentInbox.delete(ibox);
+        // Lượt mới của phiên có thể đã mở hộp thư riêng (bấm Dừng rồi gửi tiếp): chỉ xóa hộp của lượt này.
+        if (agentInbox.get(ibox) === box) agentInbox.delete(ibox);
       }
       // Xếp phiên (cần bạn / chờ xem lại / xong) và gợi ý câu nhắn tiếp: người dùng thấy ngay ở danh sách phiên và khung soạn tin.
       try {
