@@ -1743,3 +1743,4 @@ Object.assign(VI2EN, { "Xóa giọng?": "Delete voice?", "Lưu trữ từ điể
 // Xác minh email, thư cảnh báo cho quản trị viên (thư ghi cả hai thứ tiếng), lỗi đọc tệp.
 Object.assign(VI2EN, { "Đã xóa tài khoản đó": "That account was removed", "Mở Synchro / Open Synchro": "Open Synchro", "Xem chi tiết ở Cài đặt → Sức khỏe hệ thống. Mỗi loại cảnh báo gửi tối đa một lần mỗi ngày. / See Settings → System health. Each kind of alert is sent at most once a day.": "See Settings → System health. Each kind of alert is sent at most once a day." });
 RULES_EN.push([/^Không xử lý được "(.+)"\. Hãy thử lại\.$/, (m) => `Couldn't process "${m[1]}". Please try again.`]);
+RULES_EN.push([/^Đang đọc tệp dự án ?(.*)$/, (m) => `Reading project file ${m[1]}`.trim()]);

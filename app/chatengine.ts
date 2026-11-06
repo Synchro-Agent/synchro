@@ -34,6 +34,7 @@ import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
+import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME, requestSlug } from "./ai/imagegen";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
@@ -184,7 +185,7 @@ type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-type Exec = { image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[] };
+type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[] };
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -625,6 +626,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""));
   if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
   if (c.name === IMAGE_TOOL.name && x.image && !x.sess?.get(c.name)) return runImage(x, c);
+  if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
@@ -687,6 +689,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "search_skills") return "Đang tìm skill phù hợp";
   if (c.name === "run_skill_script") return `Đang chạy script của skill ${n}`;
   if (c.name === "run_code") return `Đang chạy code ${String(c.input?.language ?? "python")}`;
+  if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined) return `Đang đọc tệp dự án ${String(c.input?.file ?? "")}`.trim();
   if (c.name === IMAGE_TOOL.name && x.image) return `Đang tạo ảnh: ${String(c.input?.prompt ?? "").replace(/\s+/g, " ").slice(0, 100)}`;
   if (c.name === "web_search" && x.search) return `Đang tìm trên web: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
@@ -700,7 +703,7 @@ function describe(x: Exec, c: Call) {
 }
 // Công cụ lấy dữ liệu (connector, chạy code, script của skill): kết quả lớn lưu theo tham chiếu và có trong dấu vết của lượt.
 // Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
-const isData = (x: Exec, c: Call) => !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL.name;
+const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL.name;
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
@@ -1493,13 +1496,14 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const arts = !!pc.art, check = arts && runner() === "workspace";
         // Tạo ảnh: lượt chat thường của mọi model, gói nào đăng nhập thì công cụ tự chọn (Synchro Code có cách làm việc riêng).
         const image = feature !== "code";
-        const tools = [...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [IMAGE_TOOL] : []), PLAN_TOOL];
-        const xx: Exec = { image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
+        const pdocs = feature !== "code" && !!project && projectDocsLong(c.user.id, project);
+        const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [IMAGE_TOOL] : []), PLAN_TOOL];
+        const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); } });
         xx.park = bridge.park;
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
@@ -1635,7 +1639,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const studio = skills && can(c.user, "skills") ? studioOf(body.studio) : null;
   const st = studio ? studioSkills(c.user.id, studio) : null;
   const image = !!skills && t.kind !== "mock" && feature !== "code";
-  const capSys = cs ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net, cs.caps.web) : "", image ? IMAGE_RULES : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
+  const pdocs = !!skills && t.kind !== "mock" && feature !== "code" && !!project && projectDocsLong(c.user.id, project);
+  const capSys = cs ? [QUALITY_RULES, feature !== "code" ? ASK_RULES : "", cs.caps.art ? ARTIFACT_RULES(cs.caps.ai) : "", cs.caps.inl ? VIZ_RULES : "", cs.caps.code ? CODE_RULES(cs.caps.net, cs.caps.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : ""].filter(Boolean).join("\n\n") : "";
   // Bàn trộn ngữ cảnh (trình duyệt gửi): tắt khối tầng động, chỉ gửi N tin gần nhất, tóm tắt các lượt cũ đã nén.
   const mixer = (body.mixer && typeof body.mixer === "object" ? body.mixer : {}) as { artifacts?: unknown; tools?: unknown; recent?: unknown };
   const base = cleanBase(body.artBase);
@@ -1670,11 +1675,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [IMAGE_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
+      const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [IMAGE_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: /(opus|sonnet)-(5|4-[6-9])|fable/.test(t.model) ? "web_search_20260209" : "web_search_20250305", name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       if (sess) announceOffline(x, messages);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
