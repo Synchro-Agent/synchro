@@ -1,7 +1,7 @@
 // Xác minh hai bước bằng ứng dụng tạo mã (TOTP, RFC 6238; chỉ chạy ở máy chủ), tự bật trong Cài đặt → Tài khoản. Không dùng dịch vụ ngoài, không thêm thư viện.
 // Khóa được mã hóa như token connector. Bảng có cột user_id nên xóa tài khoản tự xóa theo (purge.ts). Đăng nhập: authstore.ts chưa tạo phiên khi tài khoản đã bật, chỉ cấp vé ngắn hạn.
 import crypto from "node:crypto";
-import { AuthError, audit, db, limit, type UserRow } from "./authstore";
+import { AuthError, audit, db, dropEmailChange, limit, needsVerify, VERIFY_FIRST, type UserRow } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
 
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -61,17 +61,22 @@ export function verifyMfa(uid: string, code: unknown) {
 }
 /** Bắt đầu bật: tạo khóa chờ xác nhận. Chưa có hiệu lực cho tới khi người dùng nhập đúng một mã (không thì khóa quét lỗi là mất tài khoản). */
 export function startMfa(u: UserRow) {
+  // Email chưa xác minh có thể là của người khác: mã do người đăng ký trước đặt sẽ khóa chủ thật khi họ giành lại tài khoản.
+  if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
   if (row(u.id)?.enabled_at) throw new AuthError("Xác minh hai bước đang bật.", 409);
   const secret = base32(crypto.randomBytes(20));
   t().prepare("INSERT INTO user_mfa (user_id, secret) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET secret = excluded.secret, last_step = 0, recovery = '[]'").run(u.id, sealSecret(secret));
   return { secret, uri: `otpauth://totp/${encodeURIComponent(`Synchro:${u.email}`)}?secret=${secret}&issuer=Synchro&digits=6&period=30` };
 }
 export function confirmMfa(u: UserRow, code: unknown) {
+  if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
   const r = row(u.id);
   if (!r || r.enabled_at) throw new AuthError("Hãy bắt đầu lại từ đầu.", 409);
   if (!check(r, code)) throw new AuthError("Mã không đúng. Hãy nhập mã đang hiện trong ứng dụng.", 400);
   const codes = Array.from({ length: 8 }, () => base32(crypto.randomBytes(7)).slice(0, 10));
   t().prepare("UPDATE user_mfa SET enabled_at = ?, recovery = ? WHERE user_id = ?").run(Date.now(), JSON.stringify(codes.map(sha)), u.id);
+  // Bật vì lo bị lộ: đường dẫn đổi email ai đó đã xin bằng mật khẩu cũng phải mất hiệu lực.
+  dropEmailChange(u.id);
   audit("mfa_on", { actor: u, target: u });
   return { recovery: codes };
 }

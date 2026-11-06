@@ -1,6 +1,6 @@
 import { authErrorCode } from "../../../../../autherrors";
 import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
-import { afterClaim } from "../../../../../claim";
+import { afterClaim, noticeDropped } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
 import { clearState, finish, isProvider, purposeOf } from "../../../../../oauth";
 
@@ -33,12 +33,13 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       h.set("Location", `${appUrl(req)}/?settings=Account&msg=${encodeURIComponent("Sign-in method added")}`);
       return new Response(null, { status: 303, headers: h });
     }
-    const { cookie, user, claimed, fresh, mfa } = oauthLogin(req, r);
+    const { cookie, user, claimed, fresh, dropped, mfa } = oauthLogin(req, r);
     h.append("Set-Cookie", cookie);
     if (mfa) to = `${appUrl(req)}/?mfa=1`;
     if (claimed) {
       // Nhận lại tài khoản chưa xác minh: thứ người đăng ký trước có thể đã gắn vào phải tắt, và người dùng phải được báo (không âm thầm mất mật khẩu).
       await afterClaim(user.id, fresh, "oauth", claimed === "password");
+      if (dropped) noticeDropped(user.id);
     }
   } catch (e) {
     if (!(e instanceof AuthError)) console.error("[oauth]", e);

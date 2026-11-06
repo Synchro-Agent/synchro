@@ -161,6 +161,10 @@ console.log("Đổi email: xác nhận ở địa chỉ mới, báo địa chỉ
   let x = await c("POST", "/api/auth/signup", { email: oldE, password: pass0, profile: prof });
   ok(x.s === 200, "đăng ký", x.j);
   await c("POST", "/api/auth/login", { email: oldE, password: pass0 });
+  x = await c("POST", "/api/auth/email", { email: newE, password: pass0 });
+  ok(x.s === 403 && !mails(newE).length, "chưa xác minh email: chưa xin đổi được, không gửi gì", x);
+  await sleep(400);
+  ok((await anon("POST", "/api/auth/verify", { token: tokenOf(mails(oldE).at(-1)), action: "confirm" })).s === 200, "xác minh email hiện tại");
   x = await c("POST", "/api/auth/email", { email: newE, password: "sai-mat-khau" });
   ok(x.s === 401 && !mails(newE).length, "sai mật khẩu: không gửi gì", x);
   x = await c("POST", "/api/auth/email", { email: oldE, password: pass0 });

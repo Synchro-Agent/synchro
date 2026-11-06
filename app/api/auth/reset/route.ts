@@ -1,6 +1,6 @@
 import { checkResetLink, handle, sameOrigin, redeemResetLink } from "../../../authstore";
 import { removeUserDevices } from "../../../browserext";
-import { afterClaim } from "../../../claim";
+import { afterClaim, noticeDropped } from "../../../claim";
 
 export const runtime = "nodejs";
 
@@ -10,9 +10,10 @@ export const POST = handle(async (req) => {
   sameOrigin(req);
   const { token, password, check, lang } = await req.json();
   if (check === true) { checkResetLink(req, token); return Response.json({ ok: true }); }
-  const { user: u, fresh } = await redeemResetLink(req, token, password, lang);
+  const { user: u, fresh, dropped } = await redeemResetLink(req, token, password, lang);
   await removeUserDevices(u.id).catch((e) => console.error("[reset]", e));
   // Chủ thật của email vừa giành lại tài khoản chưa từng được xác minh.
   if (fresh) await afterClaim(u.id, true, "reset").catch((e) => console.error("[reset]", e));
+  if (dropped) try { noticeDropped(u.id); } catch (e) { console.error("[reset]", e); }
   return Response.json({ ok: true });
 });

@@ -22,3 +22,7 @@ export async function afterClaim(uid: string, fresh: boolean, via: "oauth" | "re
   ];
   addNotice(uid, "Đã xác minh email của bạn", parts.filter(Boolean).join(" "), "settings:Account");
 }
+/** Giành lại tài khoản mà có gỡ xác minh hai bước hoặc cách đăng nhập khác: phải báo, đó có thể là của chính họ (tài khoản cũ chưa từng xác minh email). */
+export function noticeDropped(uid: string) {
+  addNotice(uid, "Đã gỡ cách đăng nhập cũ", "Email này chưa từng được xác minh nên xác minh hai bước và các cách đăng nhập khác trên tài khoản có thể do người khác đặt. Chúng đã được gỡ. Nếu đúng là của bạn, hãy bật lại trong Cài đặt → Tài khoản.", "settings:Account");
+}

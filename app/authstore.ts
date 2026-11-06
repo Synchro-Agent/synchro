@@ -51,7 +51,14 @@ export function db() {
   if (!sk.has("source")) d.exec("ALTER TABLE skills ADD COLUMN source TEXT");
   // Mốc bật xác minh email: tài khoản tạo trước mốc này giữ nguyên quyền như cũ, không phải làm gì thêm.
   d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('verify_since', ?)").run(String(Date.now()));
+  healAdminEmails(d);
   return (g.__synchroDb = d);
+}
+/** Bản cũ đánh dấu chưa xác minh khi quản trị viên đổi email hộ, nên tài khoản lâu năm bị coi như vừa đăng ký. Sửa một lần: chỉ đúng tài khoản còn giữ địa chỉ quản trị viên đã đặt. */
+export function healAdminEmails(d: Database.Database) {
+  if (d.prepare("SELECT 1 FROM settings WHERE key = 'admin_email_healed'").get()) return;
+  d.prepare("UPDATE users SET email_verified = 1 WHERE email_verified = 0 AND EXISTS (SELECT 1 FROM audit a WHERE a.action = 'admin_set_email' AND a.target_id = users.id AND lower(a.detail) = lower(users.email))").run();
+  d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_email_healed', ?)").run(String(Date.now()));
 }
 
 // ---- mật khẩu: scrypt, muối ngẫu nhiên, so sánh thời gian hằng ----
@@ -467,7 +474,7 @@ export function denyVerify(req: Request, token: unknown) {
 export type OAuthProfile = { provider: string; subject: string; email: string | null; emailVerified: boolean; name: string; avatar: string | null };
 export function oauthLogin(req: Request, p: OAuthProfile) {
   const ip = clientIp(req);
-  let claimed: "" | "password" | "nopassword" = "", fresh = false;
+  let claimed: "" | "password" | "nopassword" = "", fresh = false, dropped = false;
   const ident = db().prepare("SELECT user_id FROM identities WHERE provider = ? AND subject = ?").get(p.provider, p.subject) as { user_id: string } | undefined;
   let u = ident ? getUser(ident.user_id) : undefined;
   if (!u) {
@@ -482,6 +489,7 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
         fresh = needsVerify(u);
         db().prepare("UPDATE users SET email_verified = 1, password_hash = NULL WHERE id = ?").run(u.id);
         db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
+        dropped = dropSquatter(u.id);
       }
       audit("oauth_link", { actor: u, ip, detail: p.provider });
     } else {
@@ -499,7 +507,7 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
   if (p.avatar && (u.avatar === null || (p.provider === "google" && fromGithub))) db().prepare("UPDATE users SET avatar = ? WHERE id = ?").run(p.avatar, u.id);
   const s = signIn(u, req, p.provider);
   if (!s.mfa) audit("login", { actor: u, ip, detail: p.provider });
-  return { user: u, claimed, fresh, ...s };
+  return { user: u, claimed, fresh, dropped, ...s };
 }
 
 /** Thêm một cách đăng nhập vào tài khoản đang đăng nhập. Danh tính đã thuộc tài khoản khác thì từ chối: không gộp, không chuyển. */
@@ -526,6 +534,7 @@ export async function changePassword(req: Request, u: UserRow, cur: unknown, nex
   const pw = checkPassword(next, u.email);
   db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), u.id);
   const signedOut = db().prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?").run(u.id, keepSession).changes;
+  dropEmailChange(u.id);
   audit("password_changed", { actor: u, ip: clientIp(req), detail: signedOut ? String(signedOut) : undefined });
   notifyChanged(req, u);
   return { signedOut };
@@ -556,11 +565,22 @@ export function requestPasswordReset(req: Request, email0: unknown, lang?: unkno
 const EMAIL_CHANGE_HOURS = 24;
 const emailChanges = () => { const d = db(); d.exec("CREATE TABLE IF NOT EXISTS email_changes (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, new_email TEXT NOT NULL, expires_at INTEGER NOT NULL)"); return d; };
 const BAD_EMAIL_CHANGE = "Đường dẫn đổi email không hợp lệ hoặc đã hết hạn. Hãy yêu cầu lại trong Cài đặt.";
+/** Đường dẫn đổi email đang chờ chỉ có mật khẩu lúc xin làm bằng chứng: mật khẩu, chủ tài khoản hay trạng thái tài khoản đổi thì nó phải mất hiệu lực, không kẻ đã lấy được mật khẩu vẫn chiếm được tài khoản sau khi nạn nhân đặt lại mật khẩu. */
+export const dropEmailChange = (uid: string) => { emailChanges().prepare("DELETE FROM email_changes WHERE user_id = ?").run(uid); };
+/** Chủ thật của email vừa giành lại tài khoản chưa từng xác minh: mọi đường quay lại người đăng ký trước có thể đã gắn đều phải gỡ, không chủ thật bị đòi mã trong ứng dụng của kẻ khác, còn kẻ đó vẫn vào được bằng Google của họ. Trả về có gỡ gì không, để báo cho người dùng. */
+function dropSquatter(uid: string) {
+  dropEmailChange(uid);
+  const had = mfaOn(uid), n = db().prepare("DELETE FROM identities WHERE user_id = ?").run(uid).changes;
+  try { db().prepare("DELETE FROM user_mfa WHERE user_id = ?").run(uid); } catch { /* chưa có bảng */ }
+  return had || n > 0;
+}
 /** Xin đổi email: cần mật khẩu, gửi đường dẫn xác nhận tới địa chỉ mới và báo cho địa chỉ cũ. Email đã có người dùng thì trả lời như thường, chỉ không gửi gì (không lộ email nào đã đăng ký). */
 export async function requestEmailChange(req: Request, u: UserRow, password: unknown, email0: unknown, lang?: unknown) {
   limit("email-change:" + u.id, 5, 60 * MIN);
   // Quản trị viên được nhận diện bằng email: đổi là mất quyền, phải đổi ở cấu hình máy chủ.
   if (ADMIN_EMAILS.has(u.email.toLowerCase())) throw new AuthError("Email của quản trị viên được đặt trong cấu hình máy chủ.", 403);
+  // Email chưa xác minh có thể là của người khác: người đăng ký trước không được giữ sẵn đường chuyển tài khoản sang hộp thư của họ.
+  if (needsVerify(u)) throw new AuthError("Hãy xác minh email hiện tại trước khi đổi. Nếu gõ nhầm địa chỉ lúc đăng ký, hãy đăng ký lại bằng địa chỉ đúng.", 403);
   if (!u.password_hash) throw new AuthError("Tài khoản này chưa có mật khẩu. Hãy đặt mật khẩu trước rồi đổi email.", 400);
   if (!(typeof password === "string" && (await verifyPassword(password, u.password_hash)))) throw new AuthError("Mật khẩu hiện tại không đúng.", 401);
   const email = normEmail(email0);
@@ -578,7 +598,8 @@ function emailChangeRow(req: Request, token: unknown) {
   limit("verify:" + clientIp(req), 30, 15 * MIN);
   const r = typeof token === "string" && token.length <= 100 ? emailChanges().prepare("SELECT * FROM email_changes WHERE token_hash = ?").get(sha256(token)) as { user_id: string; new_email: string; expires_at: number } | undefined : undefined;
   const u = r && r.expires_at > Date.now() ? getUser(r.user_id) : undefined;
-  if (!u || u.status !== "active") throw new AuthError(BAD_EMAIL_CHANGE, 400);
+  // needsVerify: dòng tạo từ trước khi có cổng ở requestEmailChange.
+  if (!u || u.status !== "active" || needsVerify(u)) throw new AuthError(BAD_EMAIL_CHANGE, 400);
   return { u, email: r!.new_email };
 }
 export const checkEmailChange = (req: Request, token: unknown) => ({ email: emailChangeRow(req, token).email });
@@ -626,17 +647,20 @@ export async function redeemResetLink(req: Request, token: unknown, next: unknow
   const pw = checkPassword(next, u.email);
   const hash = await hashPassword(pw);
   // Đường dẫn gửi tới hộp thư là bằng chứng sở hữu email; đường dẫn quản trị viên tạo thì không. Không đánh dấu thì lần đăng nhập Google sau sẽ xóa mất mật khẩu vừa đặt.
-  const proved = r!.created_by === u.id, fresh = proved && needsVerify(u);
+  const proved = r!.created_by === u.id, fresh = proved && needsVerify(u), claim = proved && !u.email_verified;
+  let dropped = false;
   db().transaction(() => {
     db().prepare(`UPDATE users SET password_hash = ?${proved ? ", email_verified = 1" : ""} WHERE id = ?`).run(hash, u.id);
     db().prepare("UPDATE password_resets SET used_at = ? WHERE token_hash = ?").run(Date.now(), sha256(token));
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
+    dropEmailChange(u.id);
+    if (claim) dropped = dropSquatter(u.id);
     if (proved) db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
   })();
   audit("password_reset", { actor: u, target: u, ip });
   if (fresh) audit("account_claimed", { target: u, ip, detail: "reset" });
   notifyChanged(req, u, lang);
-  return { user: u, fresh };
+  return { user: u, fresh, dropped };
 }
 
 export async function deleteOwnAccount(req: Request, u: UserRow, pw: unknown) {
@@ -684,13 +708,16 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
   const t = target(admin, id);
   const ip = clientIp(req);
   if (action === "reset_link") return { resetUrl: createResetLink(req, admin, t) };
-  // Người dùng mất hộp thư cũ: quản trị viên đổi hộ sau khi đã xác minh danh tính ngoài hệ thống. Phiên cũ bị đăng xuất, email mới phải tự xác minh.
+  // Người dùng mất hộp thư cũ: quản trị viên đổi hộ sau khi đã xác minh danh tính ngoài hệ thống, nên email mới coi như đã xác minh.
+  // Đánh dấu chưa xác minh thì lần đặt lại mật khẩu hay đăng nhập Google kế tiếp bị coi là chủ email giành lại tài khoản: mất bộ não, ký ức, và "Không phải tôi" xóa luôn cả tài khoản. Phiên cũ vẫn bị đăng xuất.
   if (action === "set_email") {
     const email = normEmail(body.email);
     if (ADMIN_EMAILS.has(email) || findByEmail(email)) throw new AuthError("Email này đã có tài khoản.", 409);
-    db().prepare("UPDATE users SET email = ?, email_verified = 0 WHERE id = ?").run(email, t.id);
+    db().prepare("UPDATE users SET email = ?, email_verified = 1 WHERE id = ?").run(email, t.id);
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
     db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(t.id);
+    db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(t.id);
+    dropEmailChange(t.id);
     audit("admin_set_email", { actor: admin, target: t, ip, detail: email });
     return;
   }
@@ -699,6 +726,7 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
     const pw = checkPassword(body.password, t.email);
     db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), t.id);
     if (body.signOut !== false) db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
+    dropEmailChange(t.id);
     audit("admin_set_password", { actor: admin, target: t, ip });
     return;
   }
@@ -706,6 +734,7 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
     // Quản trị viên đã đối chiếu người này bằng cách khác, hoặc thư không tới được họ.
     db().prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(t.id);
     db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(t.id);
+    dropEmailChange(t.id);
     audit("admin_mark_verified", { actor: admin, target: t, ip });
     return;
   }
@@ -719,6 +748,7 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
   if (action === "suspend") {
     db().prepare("UPDATE users SET status = 'suspended' WHERE id = ?").run(t.id);
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
+    dropEmailChange(t.id);
     audit("admin_suspend", { actor: admin, target: t, ip });
   } else if (action === "restore") {
     db().prepare("UPDATE users SET status = 'active' WHERE id = ?").run(t.id);
