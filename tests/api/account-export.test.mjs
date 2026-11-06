@@ -9,8 +9,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-export-"));
 process.env.DATA_DIR = tmp; process.env.DATA_KEY = "export-key"; process.env.ADMIN_EMAILS = "boss@export.test";
 const CACHE = path.join(process.cwd(), ".cache", "files");
 fs.mkdirSync(CACHE, { recursive: true });
-const m = await loadTs(["authstore", "chatstore", "artifactstore", "speechapi", "ops", "fileproc/owners", "api/auth/account/export/route", "api/auth/avatar/route", "api/csp-report/route", "api/files/mine/route"]);
-const { authstore: AS, chatstore: CS, artifactstore: ART, speechapi: SP, ops: OPS, "fileproc/owners": OWN, "api/auth/account/export/route": EX, "api/auth/avatar/route": AV, "api/csp-report/route": CSP, "api/files/mine/route": FR } = m;
+const m = await loadTs(["authstore", "chatstore", "artifactstore", "memory", "codestore", "speechapi", "ops", "fileproc/owners", "api/auth/account/export/route", "api/auth/avatar/route", "api/csp-report/route", "api/files/mine/route"]);
+const { authstore: AS, chatstore: CS, artifactstore: ART, memory: MEM, codestore: CODE, speechapi: SP, ops: OPS, "fileproc/owners": OWN, "api/auth/account/export/route": EX, "api/auth/avatar/route": AV, "api/csp-report/route": CSP, "api/files/mine/route": FR } = m;
 const B = "http://localhost:3200";
 const u = AS.createUser({ email: "a@export.test", name: "A", verified: true, passwordHash: "bí-mật-băm" }), v = AS.createUser({ email: "b@export.test", name: "B", verified: true }), boss = AS.createUser({ email: "boss@export.test", name: "Boss", verified: true });
 const req = (p, cookie, init = {}) => new Request(B + p, { headers: { origin: B, host: "localhost:3200", cookie, "user-agent": "t", "x-forwarded-for": "9.9.9.9" }, ...init });
@@ -23,6 +23,8 @@ try {
   CS.pushItems(u.id, [{ kind: "chat", id: "3", upd: Date.now() + 1, deleted: true }]);
   CS.pushItems(v.id, [{ kind: "chat", id: "9", upd: Date.now(), data: JSON.stringify({ id: 9, title: "Của người khác", msgs: [] }) }]);
   ART.saveArtifact(u.id, "1", { ident: "a", title: "Bài", type: "html", content: "<p>bản đầy đủ</p>" });
+  MEM.addMemory(u.id, ["Thích trà gừng"]);
+  CODE.putSession(u.id, 7, { title: "Phiên Code riêng", data: { nodes: [] } });
   let r = await EX.GET(req("/api/auth/account/export", ca));
   ok(r.status === 200 && /attachment/.test(r.headers.get("content-disposition")), "tải về thành tệp đính kèm", r.status);
   const text = await r.text();
@@ -30,6 +32,8 @@ try {
   ok(j?.profile?.email === u.email && j.chats.length === 1 && j.chats[0].title === "Chat một" && j.projects.length === 1, "có hồ sơ, đoạn chat, dự án; không có đoạn chat đã xóa", j);
   ok(j?.artifacts?.[0]?.versions?.[0]?.content === "<p>bản đầy đủ</p>", "artifact đủ nội dung", j?.artifacts);
   ok(!text.includes("Của người khác"), "không lẫn dữ liệu người khác");
+  ok(j?.memory?.some((x) => x.content === "Thích trà gừng") && j?.codeSessions?.some((s) => s.title === "Phiên Code riêng"), "có bộ nhớ và phiên Code đã lưu", j?.codeSessions);
+  for (const k of ["memory", "codeSessions", "apps", "appData", "appComments", "skills", "plugins", "inbox", "generatedFiles", "speechItems", "instructionsHistory", "notIncluded"]) ok(Array.isArray(j?.[k]), `có mục ${k}`, j?.[k]);
   ok(!text.includes("bí-mật-băm") && !/password_hash|enc_auth/.test(text), "không có mật khẩu băm hay token");
   ok((await EX.GET(req("/api/auth/account/export", ""))).status === 401, "cần đăng nhập");
 

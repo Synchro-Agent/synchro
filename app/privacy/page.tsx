@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Chính sách quyền riêng tư – 
 // Phải khớp với những gì máy chủ thật sự lưu: thêm loại dữ liệu mới thì thêm vào đây, và vào app/purge.ts nếu lưu ngoài bảng có cột user_id / owner.
 export default function Privacy() {
   return (
-    <LegalDoc title="Chính sách quyền riêng tư" updated="04/11/2026">
+    <LegalDoc title="Chính sách quyền riêng tư" updated="06/11/2026">
       <p>Trang này mô tả những dữ liệu Synchro (synchro.net.nz) lưu khi bạn dùng dịch vụ, lưu ở đâu, trong bao lâu, gửi cho ai và cách bạn kiểm soát chúng.</p>
       <h2>Dữ liệu lưu trên máy chủ của Synchro</h2>
       <ul>
@@ -17,11 +17,11 @@ export default function Privacy() {
         <li><b>Phiên của ứng dụng AI bạn đã đăng nhập:</b> Claude Code, Codex, Antigravity, Grok chạy trên máy chủ bằng chính gói của bạn. Thông tin đăng nhập của các gói này (được mã hóa hoặc nằm trong thư mục riêng của tài khoản) giữ tới khi bạn đăng xuất gói hoặc xóa tài khoản. Lịch sử phiên do chúng ghi giữ tới khi bạn xóa đoạn chat đó, đăng xuất gói hoặc xóa tài khoản.</li>
         <li><b>Bộ não và bộ nhớ:</b> ghi chú được chắt lọc từ đoạn chat, ký ức, lịch sử hướng dẫn. Giữ tới khi bạn xóa hoặc tắt trong Cài đặt → Bộ não.</li>
         <li><b>Tệp tải lên:</b> tệp gốc và phần chữ trích ra. Chỉ tài khoản đã tải tệp lên đọc được. Giữ tới khi bạn xóa tệp ở Cài đặt → Quyền riêng tư, xóa đoạn chat duy nhất dùng tệp đó, hoặc xóa tài khoản; tệp nhiều người cùng tải lên được xóa khi người cuối cùng bỏ tệp.</li>
-        <li><b>Sản phẩm và tệp tạo ra:</b> tệp do model tạo (giữ 30 ngày hoặc tới khi xóa đoạn chat; mỗi tài khoản tối đa 5 GB, vượt thì mất tệp cũ nhất), giọng nói đã tạo, artifact, ứng dụng đã xuất bản và dữ liệu của chúng, kết quả công cụ (giữ 30 ngày hoặc tới khi xóa đoạn chat).</li>
+        <li><b>Sản phẩm và tệp tạo ra:</b> tệp do model tạo (giữ 30 ngày hoặc tới khi xóa đoạn chat; mỗi tài khoản tối đa 5 GB, đầy thì tệp mới không được lưu cho tới khi bạn xóa bớt hoặc tệp cũ hết hạn), giọng nói đã tạo, artifact, ứng dụng đã xuất bản và dữ liệu của chúng, kết quả công cụ (giữ 30 ngày hoặc tới khi xóa đoạn chat).</li>
         <li><b>Skill, plugin, connector, tác vụ tự động và thông báo:</b> của riêng tài khoản bạn. Token kết nối được mã hóa trước khi lưu.</li>
         <li><b>Synchro Code:</b> phiên làm việc khi bật đồng bộ và tệp trong workspace (container riêng của bạn). Workspace không nằm trong bản sao lưu của máy chủ: hãy đẩy phần quan trọng lên GitHub hoặc tải về. Thư mục làm việc của code chạy trong chat tự xóa sau 24 giờ không dùng.</li>
         <li><b>Mức dùng:</b> số token, model, thời điểm từng lượt, để tính hạn mức.</li>
-        <li><b>Nhật ký lỗi:</b> thông báo lỗi kỹ thuật của trang và máy chủ, đã bỏ email và mã bí mật, không gắn với tài khoản, không chứa tin nhắn. Chỉ quản trị viên xem, giữ 500 dòng gần nhất, để sửa lỗi.</li>
+        <li><b>Nhật ký lỗi:</b> thông báo lỗi kỹ thuật của trang và máy chủ, đã bỏ email và mã bí mật, không chứa tin nhắn. Lỗi đăng nhập gói AI gắn với tài khoản để quản trị viên giúp đăng nhập lại; các lỗi khác không gắn với tài khoản. Chỉ quản trị viên xem, giữ tối đa 30 ngày và 20.000 dòng, để sửa lỗi.</li>
         <li><b>Nhật ký bảo mật:</b> đăng ký, đăng nhập, thao tác quản trị, kèm email và IP, để phát hiện truy cập trái phép. Giữ 50.000 sự kiện gần nhất.</li>
       </ul>
       <h2>Đoạn chat và dự án</h2>
@@ -41,7 +41,7 @@ export default function Privacy() {
         <li>Không dùng cookie quảng cáo hay theo dõi. Cookie chỉ dùng để giữ phiên đăng nhập và hoàn tất đăng nhập.</li>
       </ul>
       <h2>Xóa dữ liệu</h2>
-      <p>Bạn có thể tải về mọi dữ liệu máy chủ giữ của mình, xóa từng tệp đã tải lên ở Cài đặt → Quyền riêng tư.</p>
+      <p>Ở Cài đặt → Quyền riêng tư, bạn có thể tải về một tệp gồm hồ sơ, đoạn chat, dự án, artifact, bộ não và bộ nhớ, tác vụ và Hộp thư, liên kết chia sẻ, connector, phiên Synchro Code, ứng dụng và dữ liệu của chúng, bình luận, skill và plugin, cùng danh sách tệp. Nội dung tệp tải lên và tệp tạo ra tải riêng từng tệp, ngay ở đó; tệp trong workspace tải ở Synchro Code. Tệp không gồm mật khẩu băm, khóa và token, mức dùng chi tiết, nhật ký bảo mật. Bạn cũng xóa được từng tệp đã tải lên ở đó.</p>
       <p>Bạn có thể xóa tài khoản bất cứ lúc nào trong Cài đặt → Tài khoản → Xóa tài khoản. Synchro xóa mọi dữ liệu nêu trên của bạn, đăng xuất các gói AI và xóa workspace. Nhật ký bảo mật giữ lại sự kiện nhưng bỏ email và IP, trừ dòng ghi nhận việc xóa tài khoản. Dữ liệu còn trong bản sao lưu của máy chủ (nếu có) mất đi theo vòng xoay, tối đa khoảng 5 tuần. Dữ liệu đã gửi cho nhà cung cấp AI hoặc dịch vụ bạn kết nối do họ giữ theo chính sách của họ.</p>
       <h2>Liên hệ</h2>
       <p>Nếu có câu hỏi về quyền riêng tư, hãy liên hệ quản trị viên Synchro qua email hỗ trợ hiển thị trên màn hình đăng nhập.</p>

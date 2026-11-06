@@ -1,5 +1,5 @@
 // Tệp do code của model tạo ra (outputs/ của mỗi lần run_code): lưu trên đĩa máy chủ theo tài khoản, tải về qua
-// /api/outputs/<id>. Chỉ chủ tài khoản tải được; tệp tự xóa sau 30 ngày, tài khoản vượt hạn mức thì mất tệp cũ nhất trước.
+// /api/outputs/<id>. Chỉ chủ tài khoản tải được; tệp tự xóa sau 30 ngày; tài khoản đầy hạn mức thì tệp mới không được lưu (outputRoom), không xóa tệp cũ.
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db } from "./authstore";

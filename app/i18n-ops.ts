@@ -52,7 +52,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "Bản sao lưu có tệp hỏng": "The backup contains damaged files",
   "Bản sao lưu không giải mã được": "The backup can't be decrypted",
   "Tải về": "Download",
-  "Bạn có thể tải về mọi dữ liệu máy chủ giữ của mình, xóa từng tệp đã tải lên ở Cài đặt → Quyền riêng tư.": "You can download everything the server keeps about you, and delete individual uploaded files, in Settings → Privacy.",
+  "Ở Cài đặt → Quyền riêng tư, bạn có thể tải về một tệp gồm hồ sơ, đoạn chat, dự án, artifact, bộ não và bộ nhớ, tác vụ và Hộp thư, liên kết chia sẻ, connector, phiên Synchro Code, ứng dụng và dữ liệu của chúng, bình luận, skill và plugin, cùng danh sách tệp. Nội dung tệp tải lên và tệp tạo ra tải riêng từng tệp, ngay ở đó; tệp trong workspace tải ở Synchro Code. Tệp không gồm mật khẩu băm, khóa và token, mức dùng chi tiết, nhật ký bảo mật. Bạn cũng xóa được từng tệp đã tải lên ở đó.": "In Settings → Privacy you can download one file with your profile, chats, projects, artifacts, brain and memory, tasks and Inbox, share links, connectors, Synchro Code sessions, apps and their data, comments, skills and plugins, and lists of your files. The contents of uploaded and generated files download one by one from there; workspace files download in Synchro Code. The file leaves out password hashes, keys and tokens, detailed usage, and the security log. You can also delete individual uploaded files there.",
   "Máy chủ sắp hết dung lượng nên tạm thời chưa nhận tệp mới. Hãy thử lại sau.": "The server is nearly out of disk space, so it can't take new files right now. Try again later.",
 };
 export const OPS_EN2VI: Record<string, string> = {
