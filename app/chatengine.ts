@@ -8,7 +8,7 @@ import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, typ
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
-import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
+import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
@@ -354,7 +354,9 @@ async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>,
 // Thẻ duyệt công cụ connector trong lượt chạy qua CLI (cùng cơ chế với hỏi dùng trình duyệt): CLI giữ lời gọi công cụ trong lúc chờ.
 // Chờ tối đa 10 phút rồi coi như chưa được phép; bấm Dừng thì thôi chờ ngay.
 const ASK_WAIT = 10 * 60_000;
-const ASK_LATE = "__late__";
+const ASK_LATE = "__late__", ASK_TYPED = "__typed__";
+// Người dùng nhắn thêm khi thẻ đang chờ: công cụ không chạy, model đọc tin nhắn (ghép ngay sau kết quả này) rồi quyết định lại.
+const TYPED = "Người dùng vừa nhắn thêm thay vì trả lời thẻ duyệt nên công cụ này chưa chạy. Đọc tin nhắn của họ ngay sau đây rồi làm theo; nếu vẫn cần công cụ thì gọi lại với tham số đúng theo tin nhắn đó.";
 // Sau khi được duyệt phải còn ít nhất chừng này để công cụ chạy.
 const TOOL_MIN = 60_000;
 const CALL_CANCELLED = "CLI đã hủy lời gọi này nên công cụ chưa chạy.";
@@ -384,6 +386,8 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const meta = x.calls?.get(c.id);
     if (meta?.cancel?.aborted) return deny(CALL_CANCELLED);
     if (!needsAsk(x, c)) return "allow";
+    // Tin nhắn thêm chưa tới model (vừa gửi, hay thẻ trước vừa khép vì nó): model chưa biết người dùng muốn gì thì chưa hỏi duyệt tiếp.
+    if (inboxWaiting()) return deny(TYPED);
     if (!currentRun()) return deny("Công cụ này cần người dùng duyệt nhưng lượt này không có khung chat để hỏi nên chưa chạy. Hãy báo người dùng nhắc lại yêu cầu trong khung chat để Synchro hỏi, hoặc đổi quyền công cụ thành \"Luôn cho phép\" trong Cài đặt → Connectors.");
     // Lời gọi của CLI gồm cả lúc chờ duyệt: chừa đủ thời gian để công cụ còn chạy được trước khi CLI tự cắt (nhiều thẻ song song thì thẻ sau còn ít thời gian hơn).
     const room = meta ? BRIDGE_CALL_MAX - (Date.now() - meta.at) - TOOL_MIN : ASK_WAIT;
@@ -393,6 +397,7 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const stops = [run, meta?.cancel].filter((v): v is AbortSignal => !!v);
     const wait = waitAnswer(x.uid, id, stops.length > 1 ? AbortSignal.any(stops) : stops[0]);
     const late = setTimeout(() => answerAsk(x.uid, id, { ok: false, note: ASK_LATE }), Math.min(ASK_WAIT, room));
+    const offMsg = onInbox(() => answerAsk(x.uid, id, { ok: false, note: ASK_TYPED }));
     progress("ask", JSON.stringify(askOf(x, c, id)));
     progress("step", "Đang chờ bạn duyệt");
     // Antigravity, Grok: lượt đang chờ người dùng thì nhả chỗ để đoạn chat khác của tài khoản này không phải xếp hàng sau nó.
@@ -401,11 +406,13 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     const a = await wait;
     x.awaiting = (x.awaiting ?? 1) - 1;
     clearTimeout(late);
+    offMsg();
     const dropped = !!meta?.cancel?.aborted;
-    const timedOut = a.note === ASK_LATE;
-    progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always, chat: !!a.chat, ...(timedOut || dropped ? { gone: true } : {}) }));
+    const timedOut = a.note === ASK_LATE, typed = a.note === ASK_TYPED;
+    progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always, chat: !!a.chat, ...(timedOut || dropped ? { gone: true } : {}), ...(typed ? { typed: true } : {}) }));
     // CLI đã hủy lời gọi trong lúc chờ: không chạy dù người dùng có bấm cho phép, kết quả không còn ai nhận.
     if (dropped) return deny(CALL_CANCELLED);
+    if (typed) return deny(TYPED);
     if (timedOut) return deny("Người dùng chưa trả lời yêu cầu duyệt sau 10 phút nên công cụ chưa chạy. Hãy báo họ biết; nếu vẫn cần thì nhắc lại yêu cầu để Synchro hỏi lại.");
     if (!a.ok) return deny(a.note && a.note !== "Người dùng đã dừng." ? `Người dùng từ chối công cụ này. Lời nhắn của họ: ${a.note}. Làm theo lời nhắn nếu được; đừng tìm cách khác để lách.` : REFUSED);
     if (a.always) { x.sess!.allowAlways(c.name); return "always"; }

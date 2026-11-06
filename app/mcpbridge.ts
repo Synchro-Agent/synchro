@@ -56,7 +56,8 @@ export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["
   return {
     url: `${internalUrl()}/api/mcp/bridge/${token}`,
     // Lượt xong mà còn việc chưa ai lấy kết quả: không còn ai nhận, thôi chạy.
-    close: () => { bridges.delete(token); for (const j of b.jobs.values()) j.ctl.abort(); b.jobs.clear(); },
+    // Lời gọi đang chờ duyệt cũng thôi: lượt đã xong thì bấm Cho phép muộn (tab cũ) không được chạy công cụ nữa.
+    close: () => { bridges.delete(token); for (const j of b.jobs.values()) j.ctl.abort(); b.jobs.clear(); for (const c of b.live.values()) c.abort(); },
     /** Việc đã nhận job_id mà model chưa lấy kết quả: model kết thúc lượt sớm thì nhắc nó quay lại. */
     pendingJobs: () => [...b.jobs].map(([id, j]) => ({ id, name: j.name })),
     alive: () => (b.busy ? Date.now() : b.last),

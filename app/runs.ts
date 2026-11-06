@@ -51,7 +51,7 @@ export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_
 // delta: chữ model đang viết ở bước hiện tại (s = số thứ tự bước; reset = bước mới bắt đầu, xóa chữ của bước trước).
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
-type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; step?: AbortController;
+type Live = { s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; onMsg?: Set<() => void>; step?: AbortController;
   tools?: number; toolsTaken?: number; toolWaiters?: (() => void)[] };
 const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
@@ -187,9 +187,18 @@ export function pushInbox(id: string, uid: string, text: string): boolean {
   const l = live.get(id);
   if (!l || l.uid !== uid || l.ctl.signal.aborted) return false;
   l.inbox.push(text.slice(0, 20_000));
+  // Thẻ duyệt đang chờ: người dùng trả lời bằng lời thì thẻ phải thôi chờ, không thì tin nhắn nằm im tới khi có người bấm.
+  for (const f of l.onMsg ?? []) f();
   // Model đang viết: dừng bước đó để đọc tin mới ngay (vòng lặp ghép tin rồi gọi lại model); đang chạy công cụ thì ghép sau công cụ.
   l.step?.abort();
   return true;
+}
+/** Báo khi lượt hiện tại có tin nhắn thêm; trả về hàm hủy. */
+export function onInbox(f: () => void): () => void {
+  const s = scope.getStore(), l = s && live.get(s.id);
+  if (!l) return () => {};
+  (l.onMsg ??= new Set()).add(f);
+  return () => { l.onMsg?.delete(f); };
 }
 /** Lượt hiện tại còn tin nhắn thêm chưa đọc. */
 export function inboxWaiting(): boolean {

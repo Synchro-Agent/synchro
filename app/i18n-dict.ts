@@ -1657,7 +1657,7 @@ Object.assign(VI2EN, {
   "Máy chủ từ chối token hoặc API key này. Hãy kiểm tra lại rồi nhập lại.": "The server rejected this token or API key. Check it and enter it again.",
   "Tham số phải là một đối tượng JSON. Công cụ chưa chạy; hãy gửi lại.": "Arguments must be a JSON object. The tool didn't run; send them again.",
   "Máy chủ này đòi đăng nhập nhưng không hỗ trợ đăng nhập OAuth tự động. Hãy kết nối bằng token hoặc API key.": "This server requires sign-in but doesn't support automatic OAuth sign-in. Connect with a token or API key.",
-  "Đang hiện nút kết nối lại": "Showing the reconnect button", "Đang chờ bạn duyệt": "Waiting for your approval",
+  "Đang hiện nút kết nối lại": "Showing the reconnect button", "Bạn đã nhắn thêm nên công cụ chưa chạy": "You sent a message, so the tool didn't run", "Đang chờ bạn duyệt": "Waiting for your approval",
   "Bạn có thể đóng cửa sổ này.": "You can close this window.", "Chưa kết nối được": "Couldn't connect", "Máy chủ im lặng quá lâu khi đang chạy công cụ.": "The server went silent for too long while running the tool.",
 });
 RULES_EN.unshift(
