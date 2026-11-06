@@ -7,6 +7,7 @@
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import os from "node:os";
+import { registerIdle, warmRoom } from "../turngate";
 import { spawnCli, type Exit, type Proc } from "./cli_runtime";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -28,6 +29,7 @@ const poolKey = (s: PoolSpec) => crypto.createHash("sha256").update(JSON.stringi
 const lowMem = () => process.platform === "linux" && os.freemem() < MIN_FREE;
 export const poolOn = () => maxTotal() > 0 && Date.now() >= g.pausedUntil;
 const usable = (e: Entry) => !e.gone && !e.dropped && !e.stale && Date.now() - e.born < LIFE_MS;
+const idlest = () => [...g.entries].filter((e) => !e.busy).sort((a, b) => a.used - b.used);
 
 function drop(e: Entry) {
   if (e.dropped) return;
@@ -35,6 +37,8 @@ function drop(e: Entry) {
   g.entries.delete(e);
   e.proc.kill();
 }
+// Cổng lượt tính tiến trình rảnh vào mức của cả máy: lượt thật cần chỗ thì tiến trình rảnh lâu nhất nhường.
+registerIdle({ count: () => idlest().length, evict: () => { const v = idlest()[0]; if (v) drop(v); return !!v; } });
 /** Tiến trình hỏng hoặc CLI không làm đúng như kỳ vọng: đếm; nhiều lần liên tiếp thì tạm tắt hồ, mọi lượt quay về cách mỗi lượt một tiến trình. */
 export function poolStrike(why: string) {
   const now = Date.now();
@@ -76,8 +80,8 @@ function makeRoom(account: string, evict: boolean) {
 function sweep() {
   const now = Date.now();
   for (const e of [...g.entries]) if (!e.busy && (now - e.used > IDLE_MS || now - e.born > LIFE_MS)) drop(e);
-  // Thiếu bộ nhớ: bớt dần từ tiến trình lâu chưa dùng.
-  if (lowMem()) { const v = [...g.entries].filter((e) => !e.busy).sort((a, b) => a.used - b.used)[0]; if (v) drop(v); }
+  // Thiếu bộ nhớ: bỏ một nửa số tiến trình rảnh, từ tiến trình lâu chưa dùng. Mỗi lần một tiến trình, 30 giây một lần thì không kịp khi các lượt đang chạy lớn dần.
+  if (lowMem()) { const v = idlest(); for (const e of v.slice(0, Math.ceil(v.length / 2))) drop(e); }
   if (!g.entries.size) return;
   // Bộ nhớ từng tiến trình (cả cây con: sudo, bwrap, node): đọc ở nền để không chặn các lượt khác.
   execFile("ps", ["-A", "-o", "pid=,ppid=,rss="], { timeout: 5000, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
@@ -168,7 +172,7 @@ export function prestart(spec: PoolSpec) {
   // Đã có sẵn: người dùng còn ở trang thì giữ nó khỏi bị dọn vì rảnh (mở tab mười phút rồi mới gõ câu đầu không phải khởi động lại).
   const have = [...g.entries].find((x) => x.key === key && !x.busy && usable(x) && x.session === null);
   if (have) { have.used = Date.now(); return; }
-  if (makeRoom(spec.account, false)) launch(spec);
+  if (warmRoom() && makeRoom(spec.account, false)) launch(spec);
 }
 /** Có lượt chạy kiểu khác nối tiếp phiên này (lượt có công cụ): tiến trình đang giữ phiên đó không còn biết hết hội thoại, không được dùng lại. */
 export function forgetSession(account: string, session: string) {

@@ -25,12 +25,23 @@ const QUICK_EXTRA = 2;
 // Sàn RAM trống. os.freemem trên macOS không tính bộ nhớ đệm nên quá thấp: chỉ tin trên Linux (MemAvailable).
 const memOk = () => process.platform !== "linux" || os.freemem() / 1048576 >= num("SYNCHRO_MIN_FREE_RAM_MB", 300);
 
-const g = globalThis as unknown as { __synchroTurnGate?: State; __synchroTurnHeld?: AsyncLocalStorage<{ open: boolean }> };
+type Idle = { count: () => number; evict: () => boolean };
+const g = globalThis as unknown as { __synchroTurnGate?: State; __synchroTurnHeld?: AsyncLocalStorage<{ open: boolean }>; __synchroTurnIdle?: Idle };
 const st: State = (g.__synchroTurnGate ??= { busy: new Map(), total: 0, waiting: [], timer: null, peak: 0, waited: 0, refused: 0 });
 const held = (g.__synchroTurnHeld ??= new AsyncLocalStorage());
 const key = (lane: Lane, uid: string) => `${lane}:${uid}`;
 const count = (k: string) => st.busy.get(k) ?? 0;
 const userTotal = (uid: string) => (["run", "quick", "code"] as Lane[]).reduce((n, l) => n + count(key(l, uid)), 0);
+
+// Tiến trình khởi động sẵn đang rảnh (cli_pool.ts) cũng ăn RAM mà ngoài cổng: 14 lượt cộng 6 tiến trình rảnh là 8 GB trên máy 7,9 GB, chưa kể Next.js. Tính chung vào mức của máy; chúng chỉ để chạy nhanh hơn nên lượt thật cần chỗ thì chúng nhường.
+/** Hồ tiến trình đăng ký cách đếm và cách bỏ tiến trình rảnh. */
+export const registerIdle = (i: Idle) => { g.__synchroTurnIdle = i; };
+const idleCount = () => g.__synchroTurnIdle?.count() ?? 0;
+/** Còn chỗ khởi động sẵn thêm một tiến trình không (không đuổi ai, không chiếm chỗ của lượt thật). */
+export const warmRoom = () => st.total + idleCount() < globalLimit() && memOk();
+function yieldIdle() {
+  while (idleCount() > 0 && ((st.total < globalLimit() && st.total + idleCount() >= globalLimit()) || (st.total > 0 && !memOk()))) if (!g.__synchroTurnIdle?.evict()) return;
+}
 
 function take(w: Pick<Waiter, "uid" | "lane">): Slot {
   const k = key(w.lane, w.uid);
@@ -51,6 +62,7 @@ function take(w: Pick<Waiter, "uid" | "lane">): Slot {
 function pump() {
   for (;;) {
     if (!st.waiting.length) { if (st.timer) { clearTimeout(st.timer); st.timer = null; } return; }
+    yieldIdle();
     // Không còn lượt nào chạy thì luôn cho đi: đo RAM sai không được làm kẹt cả hàng.
     if (st.total >= globalLimit() || (st.total > 0 && !memOk())) break;
     let best: Waiter | null = null;
@@ -87,6 +99,7 @@ export function acquire(o: { uid: string; lane: Lane; limit?: number; total?: nu
   const limit = o.limit ?? accountLimit();
   const total = (o.total ?? accountTotal()) + (o.lane === "quick" ? QUICK_EXTRA : 0);
   if (o.signal?.aborted) return Promise.resolve("cancelled");
+  yieldIdle();
   // Có người đang chờ cùng tài khoản thì không chen lên trước; hàng của tài khoản khác không làm chậm tài khoản này khi cả máy còn chỗ.
   const ahead = st.waiting.some((w) => w.uid === o.uid && w.lane === o.lane);
   if (!ahead && count(key(o.lane, o.uid)) < limit && userTotal(o.uid) < total && st.total < globalLimit() && (st.total === 0 || memOk())) return Promise.resolve(take(o));

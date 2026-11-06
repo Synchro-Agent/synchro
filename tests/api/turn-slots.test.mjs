@@ -121,6 +121,25 @@ console.log("4. Tài khoản chưa xác minh không lấy lại đủ chỗ qua 
   } else ok(false, "tài khoản thử phải đang bị khóa xác minh");
 }
 
+console.log("4b. Tiến trình khởi động sẵn đang rảnh tính vào mức của cả máy");
+{
+  let idle = 3, evicted = 0;
+  G.registerIdle({ count: () => idle, evict: () => { if (!idle) return false; idle--; evicted++; return true; } });
+  const held = [];
+  for (let i = 0; i < 11; i++) held.push(await G.acquire({ uid: `m${i}`, lane: "run", limit: 4 }));
+  ok(G.gateStats().running === 11 && idle === 3 && evicted === 0, "11 lượt + 3 tiến trình rảnh = đúng mức 14: chưa ai phải nhường", `${G.gateStats().running} ${idle}`);
+  ok(G.warmRoom() === false, "hết mức: không khởi động sẵn thêm");
+  held.push(await G.acquire({ uid: "m12", lane: "run", limit: 4 }));
+  ok(evicted === 1 && idle === 2 && G.gateStats().running === 12, "lượt thật cần chỗ: tiến trình rảnh nhường, lượt không phải chờ", `${evicted} ${idle}`);
+  ok(G.gateStats().running + idle <= 14, "lượt đang chạy cộng tiến trình rảnh không vượt mức", G.gateStats().running + idle);
+  held.push(await G.acquire({ uid: "m13", lane: "run", limit: 4 }), await G.acquire({ uid: "m14", lane: "run", limit: 4 }));
+  ok(idle === 0 && G.gateStats().running === 14, "đủ 14 lượt thật: hết tiến trình rảnh", `${idle} ${G.gateStats().running}`);
+  ok((await G.acquire({ uid: "m15", lane: "run", limit: 4, maxWaitMs: 20 })) === "timeout", "đủ lượt thật thì lượt sau mới phải chờ");
+  for (const s of held) s();
+  ok(G.warmRoom() === true, "máy rảnh: khởi động sẵn lại được");
+  G.registerIdle({ count: () => 0, evict: () => false });
+}
+
 console.log("5. Ngắt kết nối dừng lời gọi chạy thẳng");
 {
   ok(Rn.turnSignal() === undefined, "ngoài lượt, ngoài kết nối: không có tín hiệu");
