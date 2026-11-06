@@ -80,8 +80,12 @@ try {
   ok(r.s === 200, "bấm xác minh", r);
   const after = await a("GET", "/api/auth/me");
   ok(after.j?.user?.verifyPending === false && after.j.user.perms.features.files === true, "đã xác minh: mở lại tính năng ngay trong phiên đang mở", after.j?.user);
+  r = await anon("POST", "/api/auth/verify", { token, action: "check" });
+  ok(r.s === 200 && r.j?.already === true, "mở lại thư đã bấm: báo đã xác minh, không báo hết hạn", r);
   r = await anon("POST", "/api/auth/verify", { token, action: "confirm" });
-  ok(r.s === 400, "đường dẫn chỉ dùng một lần", r);
+  ok(r.s === 200, "bấm lại không đổi gì và không lỗi", r);
+  r = await anon("POST", "/api/auth/verify", { token, action: "deny" });
+  ok(r.s === 400 && (await a("GET", "/api/auth/me")).j?.user, "thư cũ không xóa được tài khoản đã xác minh", r);
 
   console.log("4. Không phải tôi: chủ email xóa được tài khoản người khác lập");
   const victim = `victim-${tag}@synchro.test`, atk = client();

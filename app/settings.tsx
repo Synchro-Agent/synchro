@@ -224,12 +224,12 @@ function Account() {
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
   // Quên mật khẩu hiện tại ngay trong hộp đổi mật khẩu: gửi thư đặt lại tới email của tài khoản, không phải đăng xuất rồi tìm lại trang đăng nhập.
-  const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState(false);
-  useEffect(() => { if (!pw) setResetSent(false); }, [pw]);
+  const [resetBusy, setResetBusy] = useState(false), [resetSent, setResetSent] = useState<"" | "sent" | "limited">("");
+  useEffect(() => { if (!pw) setResetSent(""); }, [pw]);
   const sendReset = async () => {
     if (!me?.email || resetBusy) return;
     setResetBusy(true);
-    try { await api("POST", "/api/auth/forgot", { email: me.email, lang: getLang() }); setResetSent(true); }
+    try { const j = await api<{ limited?: boolean }>("POST", "/api/auth/forgot", { email: me.email, lang: getLang() }); setResetSent(j?.limited ? "limited" : "sent"); }
     catch (e) { app.say((e as Error).message); }
     finally { setResetBusy(false); }
   };
@@ -304,7 +304,9 @@ function Account() {
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
             {me?.hasPassword && <input className="field" type="password" autoComplete="current-password" placeholder="Current password" value={pw?.cur ?? ""} onChange={(e) => setPw((o) => o && { ...o, cur: e.target.value })} />}
-            {me?.hasPassword && (resetSent
+            {me?.hasPassword && (resetSent === "limited"
+              ? <p className="d pw-forgot" role="status">No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.</p>
+              : resetSent
               ? <p className="d pw-forgot" role="status">We sent a reset link to <span data-notr>{me.email}</span>. It works for 60 minutes. Check Spam if you don&apos;t see it.</p>
               : <p className="d pw-forgot"><button type="button" className="lnk" disabled={resetBusy} onClick={sendReset}>{resetBusy ? "Sending…" : "Forgot your current password?"}</button></p>)}
             <input className="field" type="password" autoComplete="new-password" placeholder="New password (at least 8 characters)" value={pw?.next ?? ""} onChange={(e) => setPw((o) => o && { ...o, next: e.target.value })} />

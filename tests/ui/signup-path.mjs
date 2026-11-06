@@ -62,6 +62,20 @@ try {
   await until(`/Create your password|Tạo mật khẩu/.test(${text})`, 8000, "create step");
   ok(true, "bấm vào thì sang bước tạo mật khẩu");
   await shot("create");
+
+  console.log("Đường dẫn trong thư khi mạng hay máy chủ lỗi");
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { const f = window.fetch; window.__down = true; window.fetch = (u, o) => { const s = String(u); if (window.__down && (s === "/api/auth/reset" || s === "/api/auth/verify")) return Promise.resolve(new Response("<html>502</html>", { status: 502 })); return f(u, o); }; })()` });
+  for (const page of ["reset", "verify"]) {
+    await P("Page.navigate", { url: `${B}/${page}#ma-thu-khong-co-that` });
+    await until(`/kiểm tra được đường dẫn|check the link/.test(${text})`, 20000, page + " retry");
+    ok(await ev(`location.hash === "#ma-thu-khong-co-that"`), `${page}: lỗi 502 không bỏ mã khỏi địa chỉ`);
+    ok(!(await ev(`/hết hiệu lực|Lỗi 502|expired/.test(${text})`)), `${page}: không báo hết hạn, không hiện mã lỗi thô`, await ev(text));
+    await shot(page + "-retry");
+    await ev(`window.__down = false, 1`);
+    await click(btn(/^(Thử lại|Try again)$/i), "retry");
+    await until(`/hết hiệu lực|expired/i.test(${text})`, 15000, page + " bad");
+    ok(true, `${page}: mã sai thật (400) mới báo hết hiệu lực`);
+  }
 } catch (e) { fail++; console.log("  ✗", e.message); await shot("fail").catch(() => {}); }
 chrome.kill();
 console.log(`\n${pass} đạt, ${fail} lỗi`);

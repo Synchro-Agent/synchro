@@ -102,3 +102,17 @@ Object.assign(FX_VI2EN, {
   "Cách đăng nhập này chưa được cấu hình trên máy chủ.": "This sign-in method isn't set up on the server yet.",
   "Phản hồi từ Apple không hợp lệ.": "Apple's response wasn't valid.",
 });
+// Đặt lại mật khẩu, xác minh email: lỗi mạng khác với đường dẫn hết hạn.
+Object.assign(FX_VI2EN, {
+  "Chưa kết nối được máy chủ. Hãy kiểm tra mạng rồi thử lại.": "Couldn't reach the server. Check your connection and try again.",
+  "Chưa kiểm tra được đường dẫn": "Couldn't check the link yet",
+  "Đường dẫn của bạn vẫn còn nguyên.": "Your link is still fine.",
+  "Email này đã được xác minh": "This email is already verified",
+  "Bạn không cần làm gì thêm. Tài khoản của bạn đã dùng được đủ tính năng.": "Nothing more to do. Your account can use every feature.",
+  "Hãy viết cho": "Write to",
+  "Nếu tài khoản do tổ chức của bạn cấp, hãy nhờ quản trị viên tạo đường dẫn đặt lại.": "If your organization gave you this account, ask your administrator for a reset link.",
+});
+Object.assign(FX_EN2VI, {
+  "Please confirm your email.": "Hãy xác minh email của bạn.",
+  "No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.": "Chưa gửi thêm thư: trong giờ này bạn đã yêu cầu vài lần. Hãy dùng thư mới nhất, hoặc thử lại sau một giờ.",
+});

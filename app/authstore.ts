@@ -415,11 +415,13 @@ function verifyRow(req: Request, token: unknown) {
   if (!u || u.email !== r!.email || u.status !== "active") throw new AuthError(BAD_VERIFY, 400);
   return u;
 }
-export const checkVerifyLink = (req: Request, token: unknown) => { verifyRow(req, token); };
+/** already: email đã xác minh (người dùng mở lại thư cũ): nói đúng như vậy, không báo đường dẫn hết hạn rồi chỉ tới dải thông báo không còn nữa. */
+export const checkVerifyLink = (req: Request, token: unknown) => ({ already: verifyRow(req, token).email_verified === 1 });
 export function confirmVerify(req: Request, token: unknown) {
   const u = verifyRow(req, token);
+  // Giữ dòng tới khi hết hạn để mở lại thư còn nhận ra. "Không phải tôi" đã tự chặn với tài khoản đã xác minh, xác nhận lần nữa không đổi gì.
+  if (u.email_verified === 1) return u;
   db().prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(u.id);
-  db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
   audit("email_verified", { actor: u, target: u, ip: clientIp(req) });
   return u;
 }
@@ -496,7 +498,7 @@ export function requestPasswordReset(req: Request, email0: unknown, lang?: unkno
   const u = findByEmail(email);
   if (!u || u.status !== "active") return;
   // Mỗi tài khoản tối đa 3 thư mỗi giờ: không để biến Synchro thành công cụ gửi thư rác tới hộp thư của người khác.
-  try { limit("forgot-mail:" + u.id, 3, 60 * MIN); } catch { return; }
+  try { limit("forgot-mail:" + u.id, 3, 60 * MIN); } catch { return "limited" as const; }
   const token = crypto.randomBytes(32).toString("base64url");
   db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(u.id);
   db().prepare("INSERT INTO password_resets (token_hash, user_id, expires_at, created_by) VALUES (?, ?, ?, ?)").run(sha256(token), u.id, Date.now() + RESET_MIN * MIN, u.id);
@@ -510,7 +512,8 @@ const notifyChanged = (req: Request, u: UserRow, lang?: unknown) => {
 };
 /** Đường dẫn còn dùng được không: trang đặt lại báo hết hạn ngay, trước khi người dùng gõ mật khẩu. */
 export function checkResetLink(req: Request, token: unknown) {
-  limit("reset:" + clientIp(req), 30, 15 * MIN);
+  // Khóa riêng với lần đổi mật khẩu thật: nhiều người chung IP mở thư không làm hỏng lần đặt mật khẩu của nhau.
+  limit("reset-check:" + clientIp(req), 60, 15 * MIN);
   const r = typeof token === "string" && token.length <= 100 ? db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null } | undefined : undefined;
   if (!r || r.used_at || r.expires_at <= Date.now() || getUser(r.user_id)?.status !== "active") throw new AuthError(BAD_RESET, 400);
 }
