@@ -1,7 +1,7 @@
 // Đăng nhập bằng Google / GitHub / Apple (OAuth 2.0 authorization code, chỉ chạy ở server).
 // Mỗi nhà cung cấp chỉ bật khi biến môi trường tương ứng đã được đặt trong .env.production.
 import crypto from "node:crypto";
-import { appUrl, AuthError, cookie, db, readCookie, type OAuthProfile } from "./authstore";
+import { appUrl, AuthError, cookie, db, readCookie, sessionUser, type OAuthProfile, type UserRow } from "./authstore";
 import { GH_API, GH_WEB } from "./github";
 
 export const PROVIDERS = ["google", "github", "apple"] as const;
@@ -38,7 +38,17 @@ const sameSite = (p: Provider) => (p === "apple" ? "None" : "Lax") as "None" | "
 // purpose "link": người đã đăng nhập kết nối GitHub (quyền repo) cho Synchro Code, không phải đăng nhập.
 // purpose "connect": người đã đăng nhập thêm một cách đăng nhập vào tài khoản của mình (Cài đặt → Tài khoản), kể cả khi email khác (Apple Ẩn email).
 export type Purpose = "login" | "link" | "connect";
-export function start(req: Request, p: Provider, purpose: Purpose = "login") {
+// Apple trả kết quả bằng POST từ trang khác nên trình duyệt không gửi cookie phiên (Lax), chỉ gửi cookie trạng thái (None). Lúc bấm thêm nên nhớ phiên nào bấm, tra theo mã trạng thái không ai đoán được.
+// Vé ở bộ nhớ, 10 phút như cookie trạng thái: khởi động lại thì bấm lại. Đăng xuất giữa chừng thì phiên hết hiệu lực, vé vô dụng.
+const connectTickets = ((globalThis as { __synchroConnectTickets?: Map<string, { sid: string; exp: number }> }).__synchroConnectTickets ??= new Map());
+const stateKey = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+/** Tài khoản đã bắt đầu thêm cách đăng nhập này. Gọi sau finish(): finish đã đối chiếu mã trạng thái với cookie. */
+export function connectUser(req: Request, p: Provider): UserRow | null {
+  const key = stateKey((readCookie(req, stateCookie(p)) ?? "").split(".")[0]), t = connectTickets.get(key);
+  connectTickets.delete(key);
+  return t && t.exp > Date.now() ? sessionUser(t.sid) : null;
+}
+export function start(req: Request, p: Provider, purpose: Purpose = "login", sid?: string) {
   if (!configured(p)) throw new AuthError(`Đăng nhập bằng ${NAMES[p]} chưa được cấu hình trên máy chủ.`, 503);
   const state = rand(), verifier = rand() + rand(), nonce = rand();
   const q = new URLSearchParams({ client_id: env(`${p.toUpperCase()}_CLIENT_ID`), redirect_uri: redirectUri(req, p), state });
@@ -59,6 +69,11 @@ export function start(req: Request, p: Provider, purpose: Purpose = "login") {
     q.set("scope", "name email");
     q.set("nonce", nonce);
     url = "https://appleid.apple.com/auth/authorize?" + q;
+  }
+  if (purpose === "connect" && sid) {
+    const now = Date.now();
+    for (const [k, v] of connectTickets) if (v.exp < now) connectTickets.delete(k);
+    connectTickets.set(stateKey(state), { sid, exp: now + 600_000 });
   }
   return { url, cookie: cookie(req, stateCookie(p), `${state}.${verifier}.${nonce}.${purpose}`, 600, { sameSite: sameSite(p), path: COOKIE_PATH }) };
 }

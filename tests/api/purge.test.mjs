@@ -57,6 +57,9 @@ AS.setSetting(`mem:${A.id}`, "{}"); AS.setSetting(`mem:${B.id}`, "{}");
 d.prepare("INSERT INTO app_data (ref, owner, key, value, size, updated_by, updated_at) VALUES ('app:khac', '', 'k', 'v', 1, ?, 0)").run(A.id);
 AS.audit("login", { actor: A, ip: "1.2.3.4" });
 AS.audit("login", { actor: B, ip: "5.6.7.8" });
+AS.audit("email_changed", { actor: A, target: A, ip: "1.2.3.4", detail: "moi-cua-a@purge.test" });
+AS.audit("admin_set_email", { actor: B, target: A, ip: "1.2.3.4", detail: "moi-cua-a@purge.test" });
+AS.audit("email_changed", { actor: B, target: B, ip: "5.6.7.8", detail: "moi-cua-b@purge.test" });
 AS.audit("account_deleted", { actor: A, target: A, ip: "1.2.3.4" });
 
 console.log("2. Tệp trên đĩa và đăng nhập CLI");
@@ -90,6 +93,8 @@ for (const { t, col } of withUser) {
 ok(AS.getSetting(`mem:${A.id}`, "") === "" && AS.getSetting(`mem:${B.id}`, "") !== "", "cài đặt bộ nhớ của A đã xóa, của B còn");
 ok(d.prepare("SELECT updated_by v FROM app_data WHERE ref = 'app:khac'").get().v === "", "dữ liệu chung trong ứng dụng người khác: bỏ dấu người ghi");
 ok(!d.prepare("SELECT 1 FROM audit WHERE action = 'login' AND (actor_email = ? OR ip = '1.2.3.4')").get(A.email), "nhật ký: bỏ email, IP của A");
+ok(d.prepare("SELECT COUNT(*) n FROM audit WHERE action IN ('email_changed', 'admin_set_email') AND detail IS NULL AND target_id = ?").get(A.id).n === 2 && !d.prepare("SELECT 1 FROM audit WHERE detail LIKE '%moi-cua-a@purge.test%'").get(), "nhật ký: địa chỉ email mới của A không còn");
+ok(!!d.prepare("SELECT 1 FROM audit WHERE action = 'email_changed' AND target_id = ? AND detail = 'moi-cua-b@purge.test'").get(B.id), "nhật ký: địa chỉ của B giữ nguyên");
 ok(!!d.prepare("SELECT 1 FROM audit WHERE action = 'login' AND actor_email = ? AND ip = '5.6.7.8'").get(B.email), "nhật ký: của B giữ nguyên");
 ok(!!d.prepare("SELECT 1 FROM audit WHERE action = 'account_deleted' AND actor_email = ?").get(A.email), "nhật ký: dòng đã xóa tài khoản vẫn giữ email");
 for (const [name, a, b] of [["outputs", path.join(DATA, "outputs", A.id), path.join(DATA, "outputs", B.id)], ["âm thanh", path.join(DATA, "speech", A.id), path.join(DATA, "speech", B.id)], ["skill", path.join(DATA, "skills", A.id), path.join(DATA, "skills", B.id)], ["thư mục làm việc CLI", path.join(HOME, "work", A.id), path.join(HOME, "work", B.id)]])

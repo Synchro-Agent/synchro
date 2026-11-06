@@ -335,6 +335,12 @@ export function current(req: Request): { user: UserRow; session: SessionRow } | 
   }
   return { user, session: s };
 }
+/** Tài khoản của một phiên còn hiệu lực, khi không có cookie phiên trong yêu cầu (oauth.ts: Apple gửi kết quả bằng POST từ trang khác). */
+export function sessionUser(sid: string) {
+  const s = db().prepare("SELECT * FROM sessions WHERE id = ?").get(sid) as SessionRow | undefined;
+  const user = s && s.expires_at >= Date.now() ? getUser(s.user_id) : undefined;
+  return user?.status === "active" ? user : null;
+}
 export function requireUser(req: Request) {
   const c = current(req);
   if (!c) throw new AuthError("Bạn cần đăng nhập.", 401);

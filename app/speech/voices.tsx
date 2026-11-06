@@ -2,6 +2,7 @@
 // Giọng nói (giọng của tài khoản ElevenLabs, thư viện cộng đồng) và Tạo giọng (thiết kế, remix, nhân bản nhanh, nhân bản chuyên sâu).
 // Nhân bản chỉ hiện khi gói cho phép (cờ của chính gói ElevenLabs); thư viện ở gói Free chỉ có giọng cho phép người dùng miễn phí.
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useApp } from "../store";
 import * as I from "../icons";
 import { CAT_LABEL, LANGS, api, del, fmtNum, hueOf, on, post, postForm, reloadVoices, useMyVoices, usePlan, type Voice } from "./client";
@@ -66,9 +67,12 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
     });
   };
   // Quản trị viên gán chủ cho giọng không rõ của ai (có từ trước khi Synchro ghi chủ), hoặc đánh dấu dùng chung.
-  const assign = (v: Voice) => {
-    const who = window.prompt(tr("Email của chủ giọng này. Nhập shared nếu mọi thành viên được dùng."), v.holder?.includes("@") ? v.holder : "")?.trim();
-    if (who) post("voices/owner", { id: v.id, owner: who }).then(() => reloadVoices(true)).then(() => say("Đã gán chủ giọng")).catch((e: Error) => say(e.message));
+  const [ownerOf, setOwnerOf] = useState<Voice | null>(null);
+  const [who, setWho] = useState("");
+  const assign = (v: Voice) => { setWho(v.holder?.includes("@") ? v.holder : ""); setOwnerOf(v); };
+  const saveOwner = () => {
+    if (!ownerOf || !who.trim()) return;
+    post("voices/owner", { id: ownerOf.id, owner: who.trim() }).then(() => { setOwnerOf(null); return reloadVoices(true); }).then(() => say("Đã gán chủ giọng")).catch((e: Error) => say(e.message));
   };
   const card = (v: Voice, extra?: React.ReactNode) => (
     <div key={v.id} className={`sp-vcard${bkV.on && !delOk(v) ? " bk-dim" : ""}`} {...(delOk(v) ? bulkRow(bkV, v) : {})}>
@@ -128,6 +132,14 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
       {tab === "mine" && <PageBar pg={pgV} />}
       {tab === "mine" && <BulkBar b={bkV} acts={voiceActs} noun="giọng" />}
       {tab === "library" && <LibraryGrid say={say} card={card} onUse={(v) => { setVoice(v); go("tts", "single"); }} />}
+      {ownerOf && createPortal(<div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setOwnerOf(null)}>
+        <div className="modal sm" style={{ width: 420 }}>
+          <h2 style={{ fontSize: 16 }}>Chủ giọng</h2>
+          <p className="d">Email của chủ giọng này. Nhập shared nếu mọi thành viên được dùng.</p>
+          <input className="field" autoFocus aria-label="Chủ giọng" value={who} onChange={(e) => setWho(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveOwner(); }} />
+          <div className="modal-foot"><button className="btn" onClick={() => setOwnerOf(null)}>Hủy</button><button className="btn dark" disabled={!who.trim()} onClick={saveOwner}>Gán chủ</button></div>
+        </div>
+      </div>, document.body)}
     </Wide>
   );
 

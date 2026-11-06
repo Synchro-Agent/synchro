@@ -36,6 +36,8 @@ export function purgeRows(uid: string) {
   try { d.prepare("UPDATE app_data SET updated_by = '' WHERE updated_by = ?").run(uid); } catch { /* chưa có bảng */ }
   // Nhật ký bảo mật giữ lại sự kiện nhưng bỏ email, IP; riêng dòng "đã xóa tài khoản" giữ email để quản trị viên đối chiếu khi có khiếu nại.
   d.prepare("UPDATE audit SET actor_email = NULL, target_email = NULL, ip = NULL WHERE (actor_id = ? OR target_id = ?) AND action NOT IN ('account_deleted', 'admin_delete')").run(uid, uid);
+  // Hai sự kiện đổi email ghi địa chỉ mới ở detail.
+  d.prepare("UPDATE audit SET detail = NULL WHERE (actor_id = ? OR target_id = ?) AND action IN ('email_changed', 'admin_set_email')").run(uid, uid);
   return out;
 }
 

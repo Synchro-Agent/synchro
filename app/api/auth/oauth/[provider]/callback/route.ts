@@ -2,7 +2,7 @@ import { authErrorCode } from "../../../../../autherrors";
 import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
 import { afterClaim, noticeDropped } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
-import { clearState, finish, isProvider, purposeOf } from "../../../../../oauth";
+import { clearState, connectUser, finish, isProvider, purposeOf } from "../../../../../oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,9 +27,10 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
       return new Response(null, { status: 303, headers: h });
     }
     if (purpose === "connect") {
-      const c = current(req);
-      if (!c) throw new AuthError("Bạn cần đăng nhập trước khi thêm cách đăng nhập.", 401);
-      connectIdentity(req, c.user, r);
+      // Đúng tài khoản đã bấm thêm, kể cả khi yêu cầu không có cookie phiên (Apple) hay tab khác vừa đổi tài khoản. Không có vé (bắt đầu trước khi khởi động lại): theo phiên hiện tại.
+      const who = connectUser(req, provider) ?? current(req)?.user;
+      if (!who) throw new AuthError("Bạn cần đăng nhập trước khi thêm cách đăng nhập.", 401);
+      connectIdentity(req, who, r);
       h.set("Location", `${appUrl(req)}/?settings=Account&msg=${encodeURIComponent("Sign-in method added")}`);
       return new Response(null, { status: 303, headers: h });
     }
