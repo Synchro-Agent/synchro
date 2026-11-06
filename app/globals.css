@@ -690,12 +690,14 @@ html[data-chat-font="System"] .ai-msg{font-family:system-ui,-apple-system,sans-s
 .pj-info{display:flex;cursor:help}
 .pj-info[data-tip]:hover::after{left:auto;right:0;transform:none;white-space:normal;width:200px}
 .pj-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
-.pj-file{position:relative;display:flex;flex-direction:column;gap:2px;min-height:120px;padding:11px 12px;border-radius:var(--r-card);border:1px solid var(--border-strong);background:color-mix(in srgb,currentColor 5%,transparent);cursor:default;animation:pjin .35s cubic-bezier(.2,.8,.2,1) both;transition:border-color .15s,background .15s}
+.pj-file{cursor:pointer;position:relative;display:flex;flex-direction:column;gap:2px;min-height:120px;padding:11px 12px;border-radius:var(--r-card);border:1px solid var(--border-strong);background:color-mix(in srgb,currentColor 5%,transparent);cursor:default;animation:pjin .35s cubic-bezier(.2,.8,.2,1) both;transition:border-color .15s,background .15s}
 @keyframes pjin{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
 .pj-file b{font-weight:460;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pj-file>span{font-size:11.5px;opacity:.55}
 .pj-file-f{margin-top:auto;display:flex;align-items:center;justify-content:space-between}
 .pj-file-f em{font-style:normal;font-size:10.5px;padding:1px 6px;border-radius:5px;border:1px solid var(--border-strong);background:color-mix(in srgb,currentColor 6%,transparent)}
+.pj-file-more{margin-left:auto;margin-right:4px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text-3)}
+.pj-file-more:hover{background:var(--hover);color:var(--text)}
 .pj-cb{width:18px;height:18px;border-radius:5px;border:1.5px solid color-mix(in srgb,currentColor 40%,transparent);display:inline-flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s;background:none;padding:0;color:#fff}
 .pj-cb.on{background:var(--accent);border-color:var(--accent);opacity:1}
 .pj-file:hover .pj-cb,.pj-file.selmode .pj-cb{opacity:1}
@@ -3538,6 +3540,7 @@ button.bn-box:disabled{cursor:default}
 .bw-find-it small{font-size:12px;line-height:1.45;color:var(--text-3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .bw-find-it em{flex:none;padding-top:2px;font-style:normal;font-size:11px;color:var(--text-3)}
 /* trạng thái học */
+.bw-failed{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);white-space:nowrap}
 .bw-status{flex:none;display:inline-flex;align-items:center;gap:7px;height:26px;font-size:12px;color:var(--text-3);white-space:nowrap;cursor:default}
 .bw-pulse{width:7px;height:7px;border-radius:50%;flex:none;background:var(--bn-accent);animation:bwPulse 1.4s ease-in-out infinite}
 @keyframes bwPulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}

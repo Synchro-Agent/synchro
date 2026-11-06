@@ -397,9 +397,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
   const t = (k: keyof Caps, disabled = false) => <Toggle on={v[k]} set={(x) => set(k, x)} disabled={disabled || !!locks[k]} />;
   return (
     <>
-      <H first>General</H>
-      <Row t="Switch models when a message is flagged" d="When safeguards flag a message, automatically switch to a different model to keep chatting. When off, your session will pause instead.">{t("sw")}</Row>
-      <H>Visuals</H>
+      <H first>Visuals</H>
       <Row t="Artifacts" d="Build code, documents, and designs in a dedicated window alongside your conversation." top>{t("art")}</Row>
       <Row t="AI-powered artifacts" d={<>Build apps and interactive documents that use Synchro inside the artifact.{!v.art && <span className="cap-note">Turn on Artifacts first.</span>}</>}>{t("ai", !v.art)}</Row>
       <Row t="Inline visualizations" d="Allow Synchro to create interactive visuals, charts, and diagrams within the conversation.">{t("inl")}</Row>

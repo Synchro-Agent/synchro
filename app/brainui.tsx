@@ -19,7 +19,7 @@ import { getLang } from "./i18n";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
 type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
-type Stats = { notes: number; links: number; chats: number; topics: number; entities: number; maps: number; pending: number; memories: number; learnedAt: number | null; gardenAt: number | null };
+type Stats = { notes: number; links: number; chats: number; topics: number; entities: number; maps: number; pending: number; failed?: number; learnError?: string | null; memories: number; learnedAt: number | null; gardenAt: number | null };
 type Graph = { nodes: GNode[]; edges: { s: string; t: string }[]; stats: Stats; cfg: { gen: boolean; sens: boolean; autoIns: boolean } };
 type Fact = { t: string; src?: string; at: number };
 type NoteData = {
@@ -856,6 +856,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
   }, [findOpen]);
   // Lỗi mạng hay lỗi máy chủ: báo rõ kèm nút thử lại, không quay mãi. Đã có dữ liệu thì giữ dữ liệu cũ và thôi báo khi đọc lại được.
   const [loadErr, setLoadErr] = useState(false);
+  const [relearning, setRelearning] = useState(false);
   const load = useCallback(() => fetch("/api/brain", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.nodes) { setG(j); setVer((v) => v + 1); setLoadErr(false); } else setLoadErr(true); }).catch(() => setLoadErr(true)), []);
   // Chọn hàng loạt ở cột trái: ghim / bỏ ghim / xóa nhiều ghi chú (quy tắc hàng đầu và trang hệ thống không chọn được).
   const pickable = (g?.nodes ?? []).filter((n) => ["map", "topic", "entity", "note", "chat", "code", "daily"].includes(n.kind));
@@ -927,6 +928,8 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
       </div>}
     </section>
   );
+  const failed = s?.failed ?? 0;
+  const relearn = () => { setRelearning(true); void fetch("/api/brain/distill", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ retry: true }) }).then(() => load()).catch(() => {}).finally(() => setRelearning(false)); };
   const status = !s ? "" : s.pending ? L(`Đang học ${s.pending} đoạn chat`, `Learning ${s.pending} chats`) : s.learnedAt ? L(`Đã học lúc ${timeStr(s.learnedAt)}`, `Learned at ${timeStr(s.learnedAt)}`) : L("Chưa học đoạn chat nào", "Nothing learned yet");
   const statusTip = s?.learnedAt ? L(`Lần học gần nhất: ${timeStr(s.learnedAt)}, ${dateStr(s.learnedAt)}. Synchro tự học sau mỗi đoạn chat.`, `Last learned ${timeStr(s.learnedAt)}, ${dateStr(s.learnedAt)}. Synchro learns after every chat.`) : L("Synchro tự học sau mỗi đoạn chat.", "Synchro learns after every chat.");
   const byLinks = (a: GNode, b: GNode) => b.links - a.links || a.title.localeCompare(b.title, "vi");
@@ -980,6 +983,8 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
             )}
           </div>
           <span className={`bw-status ${s?.pending ? "busy" : ""}`} data-tip={statusTip}>{s?.pending ? <span className="bw-pulse" /> : <span className="bw-dot" />}<span className="bw-status-t">{status}</span></span>
+          {/* Học lỗi (gói hết hạn, hết hạn mức): nói ra thay vì để "Đã học lúc…" trông như đã cập nhật đủ. */}
+          {failed > 0 && <span className="bw-failed" data-tip={s?.learnError ? L(`Lỗi gần nhất: ${s.learnError}`, `Last error: ${s.learnError}`) : undefined}><I.Alert size={13} /><span>{L(`Chưa học được ${failed} đoạn chat`, `Couldn't learn ${failed} ${failed === 1 ? "chat" : "chats"}`)}</span><button className="lnk" disabled={relearning} onClick={relearn}>{relearning ? L("Đang học…", "Learning…") : L("Học lại", "Learn again")}</button></span>}
           {tab === "note" && <button className={`icon-btn bw-rt ${narrow() ? (side === "right" ? "on" : "") : rightOff ? "" : "on"}`} aria-label={L("Liên kết của ghi chú", "Note links")} data-tip={narrow() ? undefined : rightOff ? L("Hiện liên kết của ghi chú", "Show note links") : L("Ẩn liên kết của ghi chú", "Hide note links")}
             aria-pressed={narrow() ? side === "right" : !rightOff} onClick={() => narrow() ? setSide(side === "right" ? "" : "right") : setRight(!rightOff)}><I.PanelR size={16} /></button>}
         </div>

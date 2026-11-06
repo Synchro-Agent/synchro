@@ -43,12 +43,12 @@ export function useFileMenu(say: (m: string) => void) {
     setT({ name, text: tx, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 140) });
   };
   /** Bấm vào thẻ tệp như Claude: ảnh mở khung xem lớn, tệp khác mở bản xem trước nội dung. */
-  const show = (name: string, fid?: string) => {
+  const show = (name: string, fid?: string, text?: string) => {
     const st = getStatus(name), b = getBlob(name);
     if (st?.thumb && !st.pdf && !st.folder) { setImg(st.thumb); return; }
     if (b && b.type.startsWith("image/")) { setImg(URL.createObjectURL(b)); return; }
     if (fid && /\.(png|jpe?g|gif|webp)$/i.test(name)) { setImg(`/api/files/thumb?id=${fid}`); return; }
-    setView({ name, text: docText(name) ?? "" }); setRaw(false);
+    setView({ name, text: docText(name) ?? text ?? "" }); setRaw(false);
   };
   const download = (n: string, tx: string) => { const u = URL.createObjectURL(getBlob(n) ?? new Blob([tx], { type: "text/plain" })); const a = document.createElement("a"); a.href = u; a.download = n; a.click(); URL.revokeObjectURL(u); };
   const node = typeof document === "undefined" ? null : createPortal(
