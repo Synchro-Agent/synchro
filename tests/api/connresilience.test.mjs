@@ -4,6 +4,8 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import v8 from "node:v8";
+import vm from "node:vm";
 import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
@@ -815,6 +817,23 @@ try {
     const sum = R.summarize(text, "ref_x");
     ok(/outputs\/a\.xlsx/.test(sum) && sum.length < 6000, "kết quả chạy code lớn vẫn giữ danh sách tệp đã tạo", sum.slice(-300));
   }
+  console.log("35. Hạn giờ không mất sau khi GC");
+  {
+    v8.setFlagsFromString("--expose-gc");
+    const gc = vm.runInNewContext("gc");
+    S.reset(); S.hangPost = true;
+    const pump = setInterval(() => gc(), 30);
+    const t0 = Date.now();
+    const e = await F.safeFetch(url, { method: "POST", body: "{}", timeout: 600, signal: new AbortController().signal }).catch((x) => x);
+    const took = Date.now() - t0;
+    ok(e instanceof F.TempFail && e.timedOut && took < 3000, "safeFetch kèm tín hiệu ngoài vẫn hết hạn đúng giờ dù GC chạy liên tục", `${e?.message} ${took}ms`);
+    const held = F.timeLimit(400, new AbortController().signal);
+    const fired = await new Promise((r) => { held.addEventListener("abort", () => r(true)); setTimeout(() => r(false), 2500); });
+    clearInterval(pump);
+    ok(fired, "timeLimit nổ đúng hạn khi GC chạy liên tục");
+    S.reset();
+  }
+
 } finally {
   server.closeAllConnections?.(); server.close(); other.close();
   fs.rmSync(tmp, { recursive: true, force: true });

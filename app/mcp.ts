@@ -3,7 +3,7 @@
 //  - modern (2026-07-28): không có phiên, mỗi request mang phiên bản + khả năng trong _meta và header MCP-Protocol-Version / Mcp-Method / Mcp-Name.
 //  - legacy (2025-03-26 … 2025-11-25): Streamable HTTP, bắt tay initialize rồi gửi kèm Mcp-Session-Id.
 //  - sse (2024-11-05, đã ngừng khuyến nghị): mở luồng GET, nhận sự kiện "endpoint", gửi POST tới endpoint đó, kết quả về qua luồng.
-import { downText, retryAfterMs, safeFetch, TempFail } from "./safefetch";
+import { downText, retryAfterMs, safeFetch, TempFail, timeLimit } from "./safefetch";
 import type { ServerIcon } from "./connicons";
 
 export const MODERN = "2026-07-28";
@@ -375,7 +375,7 @@ export class McpClient {
   // down: có bước gặp lỗi tạm thời (429, 5xx, mất mạng): máy chủ đang gặp sự cố chứ chưa thể kết luận "không phải MCP".
   // denied: có bước bị từ chối hẳn (403); bước khác vẫn có thể được (máy chủ chỉ chặn một kiểu gọi), không bước nào được thì mới báo đúng lý do này.
   private async detect(signal?: AbortSignal) {
-    const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(DETECT_MS)]) : AbortSignal.timeout(DETECT_MS);
+    const stop = timeLimit(DETECT_MS, signal);
     const probe: PostOpts = { timeout: PROBE_MS, retry: true, lateNoRetry: true, signal: stop };
     let down: TempFail | null = null, denied: McpError | null = null;
     const note = (e: unknown) => {

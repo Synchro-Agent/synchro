@@ -29,6 +29,13 @@ function longDispatcher(): unknown {
   return longAgent;
 }
 export const allowPrivate = () => process.env.MCP_ALLOW_PRIVATE === "1";
+// Hạn giờ gộp với tín hiệu bên ngoài. AbortSignal.any chỉ giữ tín hiệu nguồn bằng tham chiếu yếu: GC thu tín hiệu hạn giờ thì hạn không bao giờ nổ (đo được trên Node 22.11).
+// Có người nghe thì Node giữ nó sống tới lúc nổ.
+export function timeLimit(ms: number, outer?: AbortSignal | null): AbortSignal {
+  const lim = AbortSignal.timeout(ms);
+  lim.addEventListener("abort", () => {}, { once: true });
+  return outer ? AbortSignal.any([outer, lim]) : lim;
+}
 
 function v4Private(ip: string) {
   const [a, b] = ip.split(".").map(Number);
@@ -74,7 +81,7 @@ export async function checkUrl(raw: string): Promise<URL> {
 // Chuyển sang nguồn khác thì bỏ authorization, cookie và các header bí mật, để máy chủ không dùng 307 đẩy token sang tên miền lạ.
 export async function safeFetch(raw: string, init: RequestInit & { timeout?: number; noFollow?: boolean; secret?: string[] } = {}): Promise<Response> {
   const { timeout = 20_000, noFollow, secret = [], ...rest } = init;
-  const signal = rest.signal ? AbortSignal.any([rest.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
+  const signal = timeLimit(timeout, rest.signal);
   let url = raw, method = rest.method ?? "GET", body = rest.body, headers = rest.headers;
   // Lời gọi dài hơn 5 phút: bỏ giới hạn ngầm của fetch (xem longDispatcher), hạn thật là timeout / signal ở trên.
   const long = timeout > 290_000 ? longDispatcher() : null;

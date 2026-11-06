@@ -3,7 +3,7 @@
 // đăng ký Synchro (Client ID Metadata Document → Client ID nhập tay → đăng ký động RFC 7591), PKCE S256,
 // tham số resource (RFC 8707), kiểm tra iss khi quay về (RFC 9207), đổi mã lấy token và làm mới token.
 import crypto from "node:crypto";
-import { allowPrivate, downText, retryAfterMs, safeFetch, TempFail } from "./safefetch";
+import { allowPrivate, downText, retryAfterMs, safeFetch, TempFail, timeLimit } from "./safefetch";
 
 export type AsMeta = {
   issuer: string; authorization_endpoint: string; token_endpoint: string; registration_endpoint?: string;
@@ -72,7 +72,7 @@ const sameIssuer = (a: string, b: string) => a.replace(/\/$/, "") === b.replace(
 export type Discovery = { resource: string; as: AsMeta; scope?: string; guessed?: boolean };
 
 export async function discover(mcpUrl: string, www = "", signal?: AbortSignal): Promise<Discovery> {
-  const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(DISCOVER_MS)]) : AbortSignal.timeout(DISCOVER_MS);
+  const stop = timeLimit(DISCOVER_MS, signal);
   const u = new URL(mcpUrl);
   const w = parseWww(www);
   const path = u.pathname.replace(/\/$/, "");
