@@ -719,7 +719,7 @@ Object.assign(EN2VI, {
 RULES_VI.push(
   [/^Plan: (.+)$/, (m) => `Gói: ${viOf(m[1])}`],
   [/^API: (.+)$/, (m) => `API: ${viOf(m[1])}`],
-  [/^Use your own (.+)\. Only your account uses it\.$/, (m) => `Dùng ${viOf(m[1]).replace(/^Gói/, "gói")} của chính bạn. Chỉ tài khoản của bạn dùng.`],
+  [/^Use your own (.+)\. Only your account uses it\.$/, (m) => (/^Tài khoản/.test(viOf(m[1])) ? `Dùng ${viOf(m[1]).replace(/^Tài/, "tài")}. Chỉ tài khoản của bạn dùng.` : `Dùng ${viOf(m[1]).replace(/^Gói/, "gói")} của chính bạn. Chỉ tài khoản của bạn dùng.`)],
   [/^How to use (.+)$/, (m) => `Cách dùng ${m[1]}`],
   [/^Balance (.+?)( \(top up needed\))?$/, (m) => `Số dư ${m[1]}${m[2] ? " (cần nạp thêm)" : ""}`],
   [/^(.+) has no plan sign-in for other apps, so it connects with an API key only\.$/, (m) => `${m[1]} không cho ứng dụng khác đăng nhập bằng gói, nên chỉ kết nối bằng khóa API.`],

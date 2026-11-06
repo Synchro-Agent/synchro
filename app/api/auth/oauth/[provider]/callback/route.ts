@@ -1,3 +1,4 @@
+import { authErrorCode } from "../../../../../autherrors";
 import { appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
 import { afterClaim } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
@@ -37,8 +38,8 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
     if (purpose === "login" && isProvider(provider) && !/hủy đăng nhập|Phiên đăng nhập đã hết hạn/.test((e as Error).message)) {
       try { limit("oauth-fail:" + clientIp(req), 20, 900_000); audit("oauth_failed", { ip: clientIp(req), detail: `${provider}: ${(e as Error).message}`.slice(0, 300) }); } catch { /* quá nhiều: bỏ qua, không ghi đầy nhật ký */ }
     }
-    const msg = encodeURIComponent(e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.");
-    to = purpose === "link" ? `${appUrl(req)}/api/github/done?error=${msg}` : `${to}?auth_error=${msg}`;
+    const text = e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.";
+    to = purpose === "link" ? `${appUrl(req)}/api/github/done?error=${encodeURIComponent(text)}` : `${to}?auth_error=${authErrorCode(text)}`;
   }
   h.set("Location", to);
   return new Response(null, { status: 303, headers: h });

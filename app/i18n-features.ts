@@ -63,7 +63,7 @@ export const FX_EN2VI: Record<string, string> = {
   "Not available right now: it could not be installed from its source.": "Hiện chưa dùng được: không cài được từ nguồn của nó.",
   "Similar open libraries:": "Thư viện mở tương tự:",
   "Set limits for later": "Đặt sẵn hạn mức cho sau này",
-  "Synchro runs on your own paid AI plan: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.": "Synchro chạy bằng gói AI trả phí của chính bạn: Claude, ChatGPT, Gemini hoặc Grok. Bạn kết nối gói sau khi đăng ký.",
+  "Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free plan; Claude needs Pro or Max. You connect it after signing up.": "Synchro chạy bằng tài khoản AI của chính bạn. ChatGPT, Gemini và Grok dùng được gói miễn phí; Claude cần gói Pro hoặc Max. Bạn kết nối sau khi đăng ký.",
   "See other libraries in": "Xem thư viện khác trong mục",
   "Could not install": "Không cài được",
   "Connect Claude, ChatGPT, Gemini and Grok with your own plan. No shared API key is linked right now, so each person signs in with their own plan.": "Kết nối Claude, ChatGPT, Gemini và Grok bằng gói của chính bạn. Hiện chưa liên kết khóa API dùng chung, nên mỗi người đăng nhập bằng gói của mình.",
@@ -84,4 +84,21 @@ Object.assign(FX_VI2EN, {
   "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.": "The server restarted or the connection was down too long, so this turn can't be followed any more. Work already done is still in the workspace.",
   "Phiên này đang có một lượt chạy.": "This session already has a turn running.",
   "Không có ai duyệt sau 30 phút nên lượt này đã dừng.": "Nobody approved within 30 minutes, so this turn stopped.",
+});
+Object.assign(FX_EN2VI, {
+  "ChatGPT account, free or paid": "Tài khoản ChatGPT, miễn phí hay trả phí đều được",
+  "Google account, free or paid": "Tài khoản Google, miễn phí hay trả phí đều được",
+  "Grok account, free or paid": "Tài khoản Grok, miễn phí hay trả phí đều được",
+  "Creates images in chat. Tested on ChatGPT Plus; the Free plan has no image tool.": "Tạo ảnh ngay trong khung chat. Đã thử trên ChatGPT Plus; gói Free không có công cụ tạo ảnh.",
+  "Creates images in chat when you ask for a photo, illustration, logo or poster. Tested on a free account.": "Tạo ảnh ngay trong khung chat khi bạn xin ảnh chụp, hình minh họa, logo hay poster. Đã thử trên tài khoản miễn phí.",
+  "Creates images in chat. Tested on Grok Pro; limits depend on your xAI account.": "Tạo ảnh ngay trong khung chat. Đã thử trên Grok Pro; hạn mức tùy tài khoản xAI của bạn.",
+  "Sign in to Grok, then confirm the code below.": "Đăng nhập Grok, rồi xác nhận mã bên dưới.",
+  "Sign in with your Google account, then copy the code the page shows you.": "Đăng nhập bằng tài khoản Google, rồi chép mã trang đó hiện ra.",
+  "Sign in or create an account": "Đăng nhập hoặc tạo tài khoản",
+  "Have an account? Enter your password. New here? Create one below.": "Đã có tài khoản? Nhập mật khẩu. Mới dùng? Tạo tài khoản bên dưới.",
+  "Create an account": "Tạo tài khoản",
+});
+Object.assign(FX_VI2EN, {
+  "Cách đăng nhập này chưa được cấu hình trên máy chủ.": "This sign-in method isn't set up on the server yet.",
+  "Phản hồi từ Apple không hợp lệ.": "Apple's response wasn't valid.",
 });

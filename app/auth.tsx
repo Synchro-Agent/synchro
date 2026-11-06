@@ -1,4 +1,5 @@
 "use client";
+import { authErrorText } from "./autherrors";
 import { cn } from "./cn";
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 // Importing class-variance-authority for the built-in button component
@@ -183,7 +184,7 @@ function Welcome({ kind, name }: { kind: Kind; name: string }) {
 
 // Báo lỗi: đưa tiêu điểm tới nút Thử lại, không để rơi về đầu trang (người dùng bàn phím, trình đọc màn hình).
 const focusOnMount = (el: HTMLButtonElement | null) => { el?.focus({ preventScroll: true }); };
-function AuthStage({ stage, kind, user, fallbackName, error, onRetry }: { stage: Stage; kind: Kind; user: AuthUser | null; fallbackName: string; error: string; onRetry: () => void }) {
+function AuthStage({ stage, kind, user, fallbackName, error, onRetry, onCreate }: { stage: Stage; kind: Kind; user: AuthUser | null; fallbackName: string; error: string; onRetry: () => void; onCreate?: () => void }) {
   return (
     <motion.div key="stage" className="auth-stage" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)", transition: { duration: 0.25 } }}>
       <Orb stage={stage} />
@@ -194,7 +195,10 @@ function AuthStage({ stage, kind, user, fallbackName, error, onRetry }: { stage:
           {stage === "error" && (
             <motion.div key="e" className="auth-error" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE }}>
               <p className="auth-error-msg" role="alert">{error}</p>
-              <GlassButton type="button" onClick={onRetry} size="sm" ref={focusOnMount}>Try Again</GlassButton>
+              <div className="auth-error-actions">
+                <GlassButton type="button" onClick={onRetry} size="sm" ref={focusOnMount}>Try Again</GlassButton>
+                {onCreate && <GlassButton type="button" onClick={onCreate} size="sm">Create an account</GlassButton>}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -246,11 +250,11 @@ interface AuthComponentProps {
   signupOpen?: boolean;
 }
 
-// Máy chủ không có khóa API dùng chung: nói trước khi đăng ký rằng cần gói AI của chính mình, không để người mới đăng ký xong mới biết. Không hỏi được thì thôi.
+// Máy chủ không có khóa API dùng chung: nói trước khi đăng ký rằng cần tài khoản AI của chính mình (tài khoản miễn phí cũng được, trừ Claude Code), không để người mới đăng ký xong mới biết. Không hỏi được thì thôi.
 function PlanNote() {
   const [need, setNeed] = useState(false);
   useEffect(() => { let dead = false; void fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)).then((j) => { if (!dead) setNeed(!!j?.plansOnly); }).catch(() => {}); return () => { dead = true; }; }, []);
-  return need ? <p className="auth-note">Synchro runs on your own paid AI plan: Claude, ChatGPT, Gemini or Grok. You connect it after signing up.</p> : null;
+  return need ? <p className="auth-note">Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free plan; Claude needs Pro or Max. You connect it after signing up.</p> : null;
 }
 
 export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, again, signupOpen = true }: AuthComponentProps) => {
@@ -383,7 +387,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     const u = new URL(window.location.href);
     const err = u.searchParams.get("auth_error");
     if (!err) return;
-    fail(err);
+    fail(authErrorText(err));
     u.searchParams.delete("auth_error");
     window.history.replaceState(null, "", u.pathname + u.search + u.hash);
   }, []);
@@ -399,7 +403,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
 
   const titles: Record<string, [string, string]> = {
     email: [again ? "Sign in again" : "Get started", "Continue with"],
-    password: [isLogin ? "Enter your password" : "Create your password", isLogin ? "Enter your password to sign in." : "Your password must be at least 8 characters long."],
+    // Không lộ email đã có tài khoản hay chưa: cùng một bước cho cả hai, nói rõ cả hai đường đi.
+    password: [isLogin ? (signupOpen ? "Sign in or create an account" : "Enter your password") : "Create your password", isLogin ? (signupOpen ? "Have an account? Enter your password. New here? Create one below." : "Enter your password to sign in.") : "Your password must be at least 8 characters long."],
     pending: ["Check your email", "We sent the next step to this address. If you already have an account, sign in or reset your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
@@ -515,7 +520,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <BlurFade delay={OUT + STEP * 3}><button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button></BlurFade>
                                     {isLogin && <BlurFade delay={OUT + STEP * 3}><a className="auth-forgot" href="/reset" onClick={() => { try { sessionStorage.setItem("forgot-email", email); } catch {} }}>Forgot your password?</a></BlurFade>}
                                     <BlurFade delay={OUT + STEP * 3}>{isLogin
-                                      ? signupOpen && <button type="button" className="auth-forgot" onClick={() => { setIsLogin(false); setPassword(""); }}>New to Synchro? Create an account</button>
+                                      ? signupOpen && <GlassButton type="button" className="w-full mt-4 [&>button]:w-full" contentClassName="flex items-center justify-center w-full" onClick={() => { setIsLogin(false); setPassword(""); }}><span className="font-semibold text-foreground">Create an account</span></GlassButton>
                                       : <button type="button" className="auth-forgot" onClick={() => { setIsLogin(true); setPassword(""); }}>Already have an account? Sign in</button>}</BlurFade>
                                 </BlurFade>}
                             </AnimatePresence>
@@ -580,7 +585,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                 </motion.form>
             </motion.fieldset>
             ) : (
-              <AuthStage key="stage" stage={stage} kind={kind} user={doneUser} fallbackName={email.split("@")[0]} error={errorMsg} onRetry={() => setStage("form")} />
+              <AuthStage key="stage" stage={stage} kind={kind} user={doneUser} fallbackName={email.split("@")[0]} error={errorMsg} onRetry={() => setStage("form")}
+                onCreate={kind === "login" && signupOpen && authStep === "password" ? () => { setIsLogin(false); setPassword(""); setStage("form"); } : undefined} />
             )}
             </AnimatePresence>
             </div>

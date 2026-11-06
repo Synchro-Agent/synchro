@@ -4111,6 +4111,7 @@ main#main:focus{outline:0}
 .rp-foot{display:flex;gap:16px;font-size:12.5px}
 .rp-foot a{color:var(--text-3);text-decoration:none}
 .rp-foot a:hover{color:var(--text-2)}
+.auth-error-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .auth-forgot{display:inline-block;margin-top:10px;font-size:13px;color:var(--text-2);text-decoration:underline;text-underline-offset:2px}
 .auth-forgot:hover{color:var(--text)}
 
