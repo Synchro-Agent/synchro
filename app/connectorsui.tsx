@@ -21,7 +21,7 @@ type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
-  settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null;
+  settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null; tokenHeader?: string; ownClient?: boolean;
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
 type Data = { connectors: Conn[]; directory: DirEntry[]; policy: Policy };
@@ -312,6 +312,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
                 {c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onRefresh(); }}><I.Retry size={15} />Refresh tools</button>}
                 {c.auth === "oauth" && c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onReauth(); }}><I.Key size={15} />Reconnect account</button>}
                 {c.auth === "token" && <button role="menuitem" onClick={() => { setMenu(false); onCreds("token"); }}><I.Key size={15} />Update token</button>}
+                {c.ownClient && <button role="menuitem" onClick={() => { setMenu(false); onCreds("client"); }}><I.Key size={15} />Update OAuth client</button>}
                 <button role="menuitem" className="danger" onClick={() => { setMenu(false); onRemove(); }}><I.Trash size={15} />Disconnect</button>
               </div>
             )}
@@ -400,7 +401,7 @@ function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCred
 
 // Cách đăng nhập khi thêm connector: tự động (không cần đăng nhập, hoặc OAuth), token / API key tự nhập, hay OAuth client riêng.
 type CredMode = "auto" | "token" | "client";
-type CustomInit = { name?: string; url?: string; mode?: CredMode; id?: string; locked?: boolean };
+type CustomInit = { name?: string; url?: string; mode?: CredMode; id?: string; locked?: boolean; header?: string };
 type CustomValues = { name: string; url: string; clientId: string; clientSecret: string; token: string; header: string };
 function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => void; onAdd: (v: CustomValues, done: (err?: string) => void) => void }) {
   const [name, setName] = useState(init.name ?? "");
@@ -409,7 +410,8 @@ function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => voi
   const [cid, setCid] = useState("");
   const [sec, setSec] = useState("");
   const [token, setToken] = useState("");
-  const [header, setHeader] = useState("");
+  // Đổi token: hiện sẵn tên header đang dùng (không bí mật) để khỏi gửi nhầm chỗ.
+  const [header, setHeader] = useState(init.header ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const urlOk = /^https?:\/\/[^\s/]+/i.test(url.trim());
@@ -570,7 +572,7 @@ export function ConnectorsPanel() {
           {pgC.items.map((c) => (
             <ConnectorCard key={c.id} c={c} policy={data.policy} open={open === c.id} busy={busy.has(c.id)} waiting={login.pending === c.id} stale={login.stale} onDismissScope={() => patch(c, { dismissScope: true }, (x) => ({ ...x, needsScope: false }))} onToggleOpen={() => setOpen(open === c.id ? null : c.id)}
               onEnable={(v) => patch(c, { enabled: v }, (x) => ({ ...x, enabled: v }))}
-              onConnect={() => reconnect(c)} onReauth={() => reconnect(c, true)} onCreds={(mode) => setCustom({ name: c.name, url: c.url, mode, id: c.id, locked: true })} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
+              onConnect={() => reconnect(c)} onReauth={() => reconnect(c, true)} onCreds={(mode) => setCustom({ name: c.name, url: c.url, mode, id: c.id, locked: true, header: c.tokenHeader })} onRefresh={() => refresh(c)} onRemove={() => remove(c)}
               onPerm={(t, p) => patch(c, { perms: { [t.name]: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) }))}
               onGroup={(k, p) => patch(c, { group: { kind: k, perm: p } }, (x) => ({ ...x, tools: x.tools.map((y) => (y.readOnly === (k === "read") ? { ...y, perm: p } : y)) }))}
               onSettings={(st) => patch(c, { settings: st }, (x) => ({ ...x, settings: { ...x.settings, ...st } }))} bk={bk} />

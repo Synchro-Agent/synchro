@@ -1661,6 +1661,8 @@ Object.assign(VI2EN, {
   "Bạn có thể đóng cửa sổ này.": "You can close this window.", "Chưa kết nối được": "Couldn't connect", "Máy chủ im lặng quá lâu khi đang chạy công cụ.": "The server went silent for too long while running the tool.",
 });
 RULES_EN.unshift(
+  [/^Trang đăng nhập của (\S+) từ chối OAuth client này \((.+)\)\. Hãy kiểm tra lại Client ID và địa chỉ quay về đã khai báo với nhà cung cấp: (\S+)$/, (m) => `The sign-in page at ${m[1]} refused this OAuth client (${m[2]}). Check the Client ID and the return address registered with the vendor: ${m[3]}`],
+  [/^Không kết nối được tới (\S+)\. Hãy thử lại sau ít phút\.$/, (m) => `Couldn't reach ${m[1]}. Try again in a few minutes.`],
   [/^(.+) đang tạm thời không phản hồi(?: \(lỗi (\d+)\))?\. Đây là sự cố phía nhà cung cấp; hãy thử lại sau ít phút\.$/, (m) => `${m[1]} isn't responding right now${m[2] ? ` (error ${m[2]})` : ""}. This is a problem on the vendor's side; try again in a few minutes.`],
   [/^Trang đăng nhập của (\S+) từ chối Synchro \((.+)\)\. Hãng cần chấp nhận địa chỉ quay về của Synchro; nếu hãng cấp cho bạn OAuth Client ID hoặc token, hãy dùng chúng thay thế\.$/, (m) => `${m[1]}'s sign-in page rejected Synchro (${m[2]}). The vendor has to accept Synchro's return address. If the vendor gave you an OAuth Client ID or token, use that instead.`],
   [/^(.+) Bạn có thể thử bằng token hoặc API key, hoặc OAuth Client ID riêng trong Cài đặt nâng cao\.$/, (m) => `${VI2EN[m[1]] ?? m[1]} You can try a token or API key, or your own OAuth Client ID in the advanced settings.`],

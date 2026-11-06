@@ -11,7 +11,7 @@ import crypto from "node:crypto";
 import { destructiveLike, guessedRead, McpClient, McpError, oldGuessedRead, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
-import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
+import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
@@ -38,6 +38,8 @@ type Auth = {
   mode: "none" | "oauth" | "token"; preset?: { clientId?: string; clientSecret?: string }; client?: OAuthClient; redirect?: string;
   as?: Pick<AsMeta, "issuer" | "token_endpoint" | "authorization_response_iss_parameter_supported">; resource?: string; scope?: string; tokens?: Tokens;
   key?: { header: string; value: string }; scopeNeeded?: { scope: string; tool?: string };
+  /** Địa chỉ resource_metadata máy chủ khai báo trong header 401: lần đăng nhập lại không có 401 nào trong tay vẫn tìm đúng máy chủ đăng nhập. */
+  prm?: string;
 };
 type Row = {
   id: string; user_id: string; name: string; url: string; dir: string | null; enabled: number; era: string | null; status: string; error: string | null;
@@ -59,6 +61,10 @@ export type PublicConnector = {
   needsScope: boolean;
   /** Máy chủ có nhiều công cụ hơn số Synchro lưu. */
   toolsTotal: number | null;
+  /** Tên header của token tự nhập (không bí mật): đổi token không phải nhớ lại. */
+  tokenHeader?: string;
+  /** Đang dùng OAuth client người dùng tự nhập. */
+  ownClient?: boolean;
 };
 export class ConnectorError extends Error { constructor(m: string, public status = 400) { super(m); } }
 
@@ -122,7 +128,8 @@ async function findIcon(id: string, serverIcons?: Parameters<typeof detectIcon>[
 // Hãng chưa mở cho Synchro (cờ access trong danh mục) và người dùng chưa kết nối được bằng cách khác. Token bị từ chối thì vẫn là chưa kết nối được: nói thật lý do của hãng.
 const vendorBlock = (r: Row, a: Auth) => {
   const access = r.status !== "ok" ? DIRECTORY.find((x) => x.id === r.dir)?.access : undefined;
-  return access && !a.preset?.clientId && (a.mode !== "token" || r.status === "needs_auth") ? access : null;
+  // Client riêng chỉ tính khi đã đăng nhập được: client bị hãng từ chối thì lý do của hãng và các đường thay thế vẫn phải còn đó.
+  return access && !(a.preset?.clientId && a.tokens) && (a.mode !== "token" || r.status === "needs_auth") ? access : null;
 };
 
 function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
@@ -141,6 +148,7 @@ function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
     status: r.status as PublicConnector["status"], error: r.error, serverName: r.server_name, auth: a.mode, tools, checkedAt: r.checked_at, settings: st, adminBlocked: !allowsDir(pol, r.dir),
     lastError: r.status === "ok" ? r.last_error : null, vendorBlocked: vendorBlock(r, a),
     needsScope: !!a.scopeNeeded, toolsTotal: r.tools_total,
+    ...(a.mode === "token" && a.key ? { tokenHeader: a.key.header } : {}), ...(a.preset?.clientId ? { ownClient: true } : {}),
   };
 }
 
@@ -148,10 +156,19 @@ export const listConnectors = (uid: string, pol: ConnPolicy = FULL_CONN) => (tab
 
 // ---- token: làm mới khi sắp hết hạn; mỗi connector chỉ làm mới một lần cùng lúc (refresh token có thể chỉ dùng được một lần) ----
 const refreshing = new Map<string, Promise<Auth>>();
-const REFRESH_WAIT = [1000, 3000];
+const REFRESH_WAIT = [1000, 3000], ROTATE_WAIT = 1500;
 // Máy chủ đăng nhập từ chối chính client Synchro đã đăng ký (hãng xóa đăng ký): quên client để lần kết nối sau đăng ký lại. Client người dùng tự nhập thì giữ.
 const clientGone = (code: string) => code === "invalid_client" || code === "unauthorized_client";
 const forgetClient = (id: string, a: Auth) => { if (!a.preset?.clientId && a.client) { const { client: _c, ...rest } = a; saveAuth(id, rest); } };
+// Tiến trình kia có thể chưa kịp ghi: đọc lại ngay, rồi đọc lại một lần nữa sau một nhịp ngắn.
+async function rotated(id: string, used?: string): Promise<Auth | null> {
+  for (let i = 0; i < 2; i++) {
+    if (i) await new Promise((ok) => setTimeout(ok, ROTATE_WAIT));
+    const cur = rowById(id), b = cur && getAuth(cur);
+    if (b?.tokens?.refresh_token && b.tokens.refresh_token !== used) return b;
+  }
+  return null;
+}
 async function freshAuth(id: string, force = false): Promise<Auth> {
   const r = rowById(id);
   if (!r) throw new ConnectorError("Connector đã bị gỡ.", 404);
@@ -180,6 +197,11 @@ async function freshAuth(id: string, force = false): Promise<Auth> {
   try { return await p; }
   catch (e) {
     if (e instanceof TokenRejected) {
+      // Refresh token xoay vòng: lúc triển khai không gián đoạn, tiến trình kia có thể vừa đổi trước nên lần này bị từ chối. Trong cơ sở dữ liệu đã có token mới thì đăng nhập vẫn còn nguyên.
+      if (e.oauth === "invalid_grant") {
+        const newer = await rotated(id, a.tokens.refresh_token);
+        if (newer) return newer;
+      }
       // Hãng nói rõ đăng nhập không còn dùng được: phải đăng nhập lại.
       if (clientGone(e.oauth)) forgetClient(id, a);
       const m = new McpError("Phiên đăng nhập của connector đã hết hạn. Hãy kết nối lại.", "auth", 401);
@@ -203,6 +225,7 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
     const r = rowById(id);
     if (!r) throw new ConnectorError("Connector đã bị gỡ.", 404);
     const c = cache?.get(id) ?? newClient(r, a);
+    c.onToolsChanged ??= () => nudgeSync(id, NUDGE_GAP);
     cache?.set(id, c);
     try {
       const out = await fn(c);
@@ -258,6 +281,16 @@ async function syncTools(id: string, signal?: AbortSignal) {
   if (needsIcon(r)) await findIcon(id, icons);
 }
 
+// Lấy lại danh sách công cụ ở nền, không chờ: hãng vừa báo danh sách đổi, hoặc lượt chat mở mà danh sách đã cũ. Mỗi connector không quá một lần trong gap, kể cả khi lần trước lỗi.
+const nudged = new Map<string, number>();
+const NUDGE_GAP = 60_000, STALE_TOOLS = 3600_000;
+function nudgeSync(id: string, gap: number) {
+  const now = Date.now();
+  if (now - (nudged.get(id) ?? 0) < gap) return;
+  nudged.set(id, now);
+  syncTools(id, AbortSignal.timeout(CONNECT_MS)).catch((e) => { if (!isAuthErr(e)) syncFailed(id, e); });
+}
+
 // Kiểm tra lại không thành công vì lý do không phải đăng nhập. Connector đã từng chạy (đã có danh sách công cụ, token còn nguyên) thì không tắt: vẫn dùng được
 // trong chat, lỗi chỉ ghi lại để hiện trên thẻ. Trạng thái "error" chỉ dành cho lần kết nối đầu tiên.
 function syncFailed(id: string, e: unknown) {
@@ -272,7 +305,9 @@ function syncFailed(id: string, e: unknown) {
 async function startAuth(req: Request, id: string, www: string, keep = false, signal?: AbortSignal): Promise<string> {
   const r = rowById(id)!;
   const a = getAuth(r);
-  const d = await discover(r.url, www, signal);
+  // Không có 401 trong tay (bấm Kết nối lại, làm mới token bị từ chối): dùng địa chỉ đã lưu; connector cũ chưa lưu thì hỏi máy chủ một lần.
+  const prm = parseWww(www).resource_metadata ?? a.prm ?? await metadataHint(r.url, signal);
+  const d = await discover(r.url, !prm || parseWww(www).resource_metadata ? www : `${www ? `${www}, ` : "Bearer "}resource_metadata="${prm}"`, signal);
   const base = appUrl(req);
   const redirect = `${base}/api/connectors/oauth/callback`;
   const cimd = base.startsWith("https://") ? `${base}/oauth/client-metadata.json` : null;
@@ -301,7 +336,7 @@ async function startAuth(req: Request, id: string, www: string, keep = false, si
     state, r.user_id, id,
     sealSecret(JSON.stringify({ verifier, client, redirect, resource: d.resource, scope, issuer: d.as.issuer, iss: !!d.as.authorization_response_iss_parameter_supported, token_endpoint: d.as.token_endpoint })),
     Date.now());
-  saveAuth(id, { ...a, mode: "oauth", client, redirect, resource: d.resource, scope, as: { issuer: d.as.issuer, token_endpoint: d.as.token_endpoint, authorization_response_iss_parameter_supported: d.as.authorization_response_iss_parameter_supported } });
+  saveAuth(id, { ...a, ...(prm ? { prm } : {}), mode: "oauth", client, redirect, resource: d.resource, scope, as: { issuer: d.as.issuer, token_endpoint: d.as.token_endpoint, authorization_response_iss_parameter_supported: d.as.authorization_response_iss_parameter_supported } });
   if (!keep) markStatus(id, "needs_auth", null);
   return authorizeUrl(d.as, client, { redirectUri: redirect, state, verifier, resource: d.resource, scope });
 }
@@ -310,7 +345,11 @@ const NO_OAUTH = "Máy chủ này đòi đăng nhập nhưng không hỗ trợ �
 // Connector trong danh mục đổi địa chỉ (hãng chuyển máy chủ): cập nhật theo danh mục khi kết nối lại, khỏi phải gỡ rồi thêm lại (mất quyền đã đặt).
 function followDirectory(r: Row) {
   const dir = r.dir ? DIRECTORY.find((x) => x.id === r.dir) : undefined;
-  if (dir && dir.url !== r.url) table().prepare("UPDATE connectors SET url = ?, era = NULL, updated_at = ? WHERE id = ?").run(dir.url, Date.now(), r.id);
+  if (dir && dir.url !== r.url) {
+    table().prepare("UPDATE connectors SET url = ?, era = NULL, updated_at = ? WHERE id = ?").run(dir.url, Date.now(), r.id);
+    const { prm: _p, ...rest } = getAuth(r);
+    if (_p) saveAuth(r.id, rest);
+  }
 }
 
 // Token / API key người dùng tự nhập. Mặc định gửi Authorization: Bearer …; header khác thì gửi nguyên giá trị.
@@ -327,21 +366,37 @@ function keyOf(o: { token?: unknown; header?: unknown }): NonNullable<Auth["key"
 }
 // Thông tin đăng nhập người dùng tự nhập cho một connector: token, hoặc OAuth Client ID.
 type Creds = { token?: unknown; header?: unknown; clientId?: unknown; clientSecret?: unknown };
-async function applyCreds(id: string, o: Creds, signal?: AbortSignal) {
+async function applyCreds(req: Request, id: string, o: Creds, signal?: AbortSignal) {
   const r = rowById(id)!;
   const a = getAuth(r);
   const clientId = String(o.clientId ?? "").trim(), clientSecret = String(o.clientSecret ?? "").trim();
   if (clientId.length > 300 || clientSecret.length > 500) throw new ConnectorError("Client ID hoặc Client Secret quá dài.");
   if (String(o.token ?? "").trim()) {
-    const key = keyOf(o);
+    // Đổi token mà không nêu header (thẻ trong khung chat, hộp Cập nhật token): giữ header đang dùng, không thì khóa đúng cũng bị từ chối vì gửi sai chỗ.
+    const key = keyOf({ ...o, header: String(o.header ?? "").trim() || a.key?.header });
     // Thử token mới trước khi lưu: gõ nhầm thì token đang chạy tốt và trạng thái connector vẫn nguyên (máy chủ từ chối hay đang lỗi đều chưa kết luận được là token mới dùng được).
     const c = new McpClient(r.url, undefined, (r.era as Era) || undefined, key);
     try { await c.listTools(signal); }
     catch (e) { throw new ConnectorError(errText(e), e instanceof TempFail ? 503 : 400); }
     finally { await c.close(); }
     saveAuth(id, { mode: "token", key });
+    // Đã biết thế hệ máy chủ qua lần thử: bước lấy công cụ ngay sau đó khỏi phải dò lại (máy chủ SSE treo khi nhận POST mất hàng chục giây mỗi lần dò).
+    if (c.era && c.era !== r.era) table().prepare("UPDATE connectors SET era = ? WHERE id = ?").run(c.era, id);
   }
-  else if (clientId) { const { client: _c, tokens: _t, key: _k, ...rest } = a; saveAuth(id, { ...rest, mode: rest.mode === "token" ? "none" : rest.mode, preset: { clientId, clientSecret: clientSecret || undefined } }); }
+  else if (clientId) {
+    await clientRejected(req, r, a, { clientId, clientSecret: clientSecret || undefined }, signal);
+    const { client: _c, tokens: _t, key: _k, ...rest } = a; saveAuth(id, { ...rest, mode: rest.mode === "token" ? "none" : rest.mode, preset: { clientId, clientSecret: clientSecret || undefined } });
+  }
+}
+// Thử OAuth client mới trước khi lưu, như token: hãng từ chối thì đăng nhập đang có không mất và thẻ vẫn giữ nguyên. Chỉ từ chối khi hãng nói rõ; không dò được thì cho qua như trước.
+async function clientRejected(req: Request, r: Row, a: Auth, preset: NonNullable<Auth["preset"]>, signal?: AbortSignal) {
+  if (process.env.CONNECTOR_PREFLIGHT === "0") return;
+  const d = await discover(r.url, a.prm ? `Bearer resource_metadata="${a.prm}"` : "", signal).catch(() => null);
+  if (!d) return;
+  const redirect = `${appUrl(req)}/api/connectors/oauth/callback`;
+  const client = await registerClient(d.as, redirect, null, preset, signal);
+  const no = await authorizeRejected(d.as, client, { redirectUri: redirect, resource: d.resource, scope: d.scope, signal });
+  if (no) throw new ConnectorError(`Trang đăng nhập của ${new URL(d.as.authorization_endpoint).hostname} từ chối OAuth client này (${no}). Hãy kiểm tra lại Client ID và địa chỉ quay về đã khai báo với nhà cung cấp: ${redirect}`, 400);
 }
 
 // Kết nối (hoặc kết nối lại): thử lấy danh sách công cụ; máy chủ đòi đăng nhập thì trả về địa chỉ đăng nhập.
@@ -357,7 +412,7 @@ async function connectNow(req: Request, uid: string, id: string, pol: ConnPolicy
   const row = rowOf(uid, id);
   if (!allowsDir(pol, row.dir)) throw new ConnectorError(row.dir ? "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này." : "Quản trị viên chưa cho phép tài khoản của bạn dùng connector tùy chỉnh.", 403);
   followDirectory(row);
-  await applyCreds(id, o, stop);
+  await applyCreds(req, id, o, stop);
   const a = getAuth(rowById(id)!);
   const fail = (e: unknown, status: number) => {
     // Hãng đang lỗi tạm thời: giữ nguyên trạng thái (đăng nhập vẫn còn), chỉ ghi lại lý do.
@@ -405,7 +460,12 @@ export async function addConnector(req: Request, uid: string, o: { name?: string
   if (name.length > 60) throw new ConnectorError("Tên connector tối đa 60 ký tự.");
   if (!url) throw new ConnectorError("Hãy nhập địa chỉ máy chủ MCP.");
   if (url.length > 500) throw new ConnectorError("Địa chỉ quá dài.");
-  try { await checkUrl(url); } catch (e) { throw new ConnectorError(e instanceof FetchBlocked ? e.message : "Địa chỉ không hợp lệ."); }
+  try { await checkUrl(url); }
+  catch (e) {
+    // Máy chủ tên miền trả lời chậm: địa chỉ không sai, chỉ cần thử lại.
+    if (e instanceof TempFail) throw new ConnectorError(`${e.message} Hãy thử lại sau ít phút.`, 503);
+    throw new ConnectorError(e instanceof FetchBlocked ? e.message : "Địa chỉ không hợp lệ.");
+  }
   const clientId = String(o.clientId ?? "").trim(), clientSecret = String(o.clientSecret ?? "").trim();
   if (clientId.length > 300 || clientSecret.length > 500) throw new ConnectorError("Client ID hoặc Client Secret quá dài.");
   const hasToken = !!String(o.token ?? "").trim();
@@ -589,6 +649,8 @@ export class ConnectorSession {
         this.offline.push({ id: r.id, name: cname, base: r.name, logo: dir?.logo, color: dir?.color, why: vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" || r.status === "forbidden" ? "auth" : "error", auth: a.mode });
         continue;
       }
+      // Lượt này dùng danh sách đang có; lượt sau thấy công cụ hãng vừa thêm, khỏi chờ tới lần kiểm tra lại 12 giờ.
+      if (r.checked_at && Date.now() - r.checked_at > STALE_TOOLS) nudgeSync(r.id, STALE_TOOLS);
       const perms = json<Record<string, Perm>>(r.perms, {});
       for (const tool of json<McpTool[]>(r.tools, [])) {
         if ((perms[tool.name] ?? defaultPerm(tool)) === "block" || lockOf(tool, st, ctx.pol)) continue;

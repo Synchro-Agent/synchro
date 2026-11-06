@@ -23,7 +23,7 @@ const { connectors: C, mcp: M, connproxy: P, refs: R, safefetch: F, mcpauth: A, 
 // ---- máy chủ MCP giả lập điều khiển được ----
 const S = {
   calls: {}, seen: [], down: 0, downOnly: null, downStatus: 503, era: "legacy", auth: null, token: null, tools: null, oauth: null, redirect: null, scopeTool: null, authorize: null, register: null, register403: false,
-  tokenFail: null, count(n) { return this.calls[n] ?? 0; }, reset() { Object.assign(this, { calls: {}, seen: [], down: 0, downOnly: null, downStatus: 503, era: "legacy", auth: null, tools: null, oauth: null, redirect: null, scopeTool: null, authorize: null, register: null, register403: false, tokenFail: null, forbid: null, forbidTool: null, hangPost: false, hangWk: false, sse: null, sseStream: null, list: undefined }); },
+  tokenFail: null, count(n) { return this.calls[n] ?? 0; }, reset() { Object.assign(this, { calls: {}, seen: [], down: 0, downOnly: null, downStatus: 503, era: "legacy", auth: null, tools: null, oauth: null, redirect: null, scopeTool: null, authorize: null, register: null, register403: false, tokenFail: null, forbid: null, forbidTool: null, hangPost: false, hangWk: false, sse: null, sseStream: null, list: undefined, onToken: null }); },
 };
 const TOOLS = [
   { name: "get_doc", description: "Read a doc", inputSchema: { type: "object", properties: { id: { type: "string" } } } },
@@ -57,6 +57,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (p === "/moved") { res.writeHead(307, { location: `${OTHER}/sink` }); return res.end(); }
+  // Máy chủ chỉ khai báo metadata trong header 401: đường dẫn chuẩn không có, máy chủ đăng nhập nằm ở /as.
+  if (S.oauth?.prmOnly) {
+    if (p === "/meta/prm") return send(res, 200, { resource: `${BASE}/mcp`, authorization_servers: [`${BASE}/as`] });
+    if (p === "/.well-known/oauth-authorization-server/as") return send(res, 200, { issuer: `${BASE}/as`, authorization_endpoint: `${BASE}/as/authorize`, token_endpoint: `${BASE}/token`, registration_endpoint: `${BASE}/register`, code_challenge_methods_supported: ["S256"] });
+    if (p.startsWith("/.well-known/")) return send(res, 404, {});
+  }
   if (p === "/.well-known/oauth-protected-resource" || p === "/.well-known/oauth-protected-resource/mcp") return S.oauth ? send(res, 200, { resource: `${BASE}/mcp`, authorization_servers: [BASE] }) : send(res, 404, {});
   if (p === "/.well-known/oauth-authorization-server") return S.oauth ? send(res, 200, { issuer: BASE, authorization_endpoint: S.oauth.authorize ?? `${BASE}/authorize`, token_endpoint: `${BASE}/token`, registration_endpoint: `${BASE}/register`, code_challenge_methods_supported: ["S256"], ...(S.oauth.cimd ? { client_id_metadata_document_supported: true } : {}) }) : send(res, 404, {});
   if (p === "/.well-known/openid-configuration") return send(res, 404, {});
@@ -65,6 +71,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/authorize") { S.calls.authorize = (S.calls.authorize ?? 0) + 1; const r = S.authorize?.(u.searchParams.get("client_id")); if (r) { res.writeHead(r.status, { "content-type": "text/html", ...(r.headers ?? {}) }); return res.end(r.body ?? ""); } res.writeHead(200, { "content-type": "text/html" }); return res.end("<html>Sign in</html>"); }
   if (p === "/token") {
     S.calls.token = (S.calls.token ?? 0) + 1;
+    S.onToken?.();
     if (S.tokenFail) { const f = S.tokenFail; return send(res, f.status, f.json ?? {}); }
     return send(res, 200, { access_token: `at_${S.calls.token}`, refresh_token: `rt_${S.calls.token}`, expires_in: 3600 });
   }
@@ -80,7 +87,7 @@ const server = http.createServer(async (req, res) => {
   if (S.oauth?.need || S.auth) {
     const got = S.auth ? req.headers[S.auth.header] : req.headers.authorization;
     const want = S.auth ? S.auth.value : S.oauth.valid;
-    if (got !== want) return send(res, 401, { error: "invalid_token" }, { "www-authenticate": 'Bearer error="invalid_token"' });
+    if (got !== want) return send(res, 401, { error: "invalid_token" }, { "www-authenticate": S.oauth?.prmOnly ? `Bearer error="invalid_token", resource_metadata="${BASE}/meta/prm"` : 'Bearer error="invalid_token"' });
   }
   if (S.forbid && (S.forbid === true || S.forbid(m))) return send(res, 403, { error: "forbidden" });
   if (m.method === "server/discover") return S.era === "modern" ? send(res, 200, { jsonrpc: "2.0", id: m.id, result: { serverInfo: { name: "m" }, capabilities: {} } }) : send(res, 404, {});
@@ -832,6 +839,137 @@ try {
     clearInterval(pump);
     ok(fired, "timeLimit nổ đúng hạn khi GC chạy liên tục");
     S.reset();
+  }
+
+  console.log("36. Công cụ đọc quá giờ không gọi lại");
+  {
+    S.reset();
+    const c = new M.McpClient(url, undefined, "legacy");
+    const t0 = Date.now();
+    const e = await c.callTool({ name: "hang", annotations: { readOnlyHint: true } }, {}, { timeout: 400 }).catch((x) => x);
+    ok(e instanceof F.TempFail && e.timedOut && S.count("call:hang") === 1 && Date.now() - t0 < 2500, "quá giờ: báo lỗi ngay, một lần gọi", `${e} ${JSON.stringify(S.calls)} ${Date.now() - t0}`);
+    await c.close();
+    S.sse = {}; S.era = "sse"; S.calls = {};
+    const c2 = new M.McpClient(url, undefined, "sse");
+    await c2.listTools();
+    S.sse.silent = true; S.calls = {};
+    const e2 = await c2.callTool({ name: "search_docs", annotations: { readOnlyHint: true } }, {}, { timeout: 300 }).catch((x) => x);
+    ok(e2 instanceof F.TempFail && e2.timedOut && S.count("call:search_docs") === 1, "SSE quá giờ: cũng không gọi lại", `${e2} ${JSON.stringify(S.calls)}`);
+    await c2.close();
+    S.sseStream?.end();
+    wipe();
+  }
+
+  console.log("37. Đổi token giữ header đang dùng");
+  {
+    S.auth = { header: "x-api-key", value: "k1" };
+    const { connector } = await add({ token: "k1", header: "X-API-Key" });
+    ok(connector.status === "ok" && connector.tokenHeader === "X-API-Key", "header (không bí mật) có trong dữ liệu thẻ", JSON.stringify(connector).slice(0, 200));
+    S.auth.value = "k2";
+    const r = await C.connect(req, uid, connector.id, pol, { token: "k2" });
+    ok(r.connector.status === "ok" && r.connector.tokenHeader === "X-API-Key", "chỉ gửi token mới (thẻ trong khung chat): vẫn đúng header");
+    S.auth = { header: "authorization", value: "Bearer k3" };
+    const r2 = await C.connect(req, uid, connector.id, pol, { token: "k3", header: "Authorization" });
+    ok(r2.connector.status === "ok" && r2.connector.tokenHeader === "Authorization", "nêu header khác thì theo header mới");
+    wipe();
+  }
+
+  console.log("38. Kết nối lại giữ địa chỉ metadata trong header 401");
+  {
+    S.oauth = { need: true, valid: "Bearer at_ok", prmOnly: true };
+    const first = await add();
+    ok(first.authorizeUrl?.startsWith(`${BASE}/as/authorize`), "lần đầu: đúng trang đăng nhập của máy chủ khai báo", first.authorizeUrl);
+    const again = await C.connect(req, uid, first.connector.id, pol, { force: true });
+    ok(again.authorizeUrl?.startsWith(`${BASE}/as/authorize`), "Kết nối lại (không có 401 trong tay): vẫn đúng trang", again.authorizeUrl);
+    const cur = JSON.parse(PR.openSecret(AS.db().prepare("SELECT enc_auth FROM connectors WHERE id = ?").get(first.connector.id).enc_auth));
+    ok(cur.prm === `${BASE}/meta/prm`, "địa chỉ metadata đã được lưu", JSON.stringify(cur.prm));
+    const { prm: _p, ...old } = cur;
+    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(PR.sealSecret(JSON.stringify(old)), first.connector.id);
+    const legacy = await C.connect(req, uid, first.connector.id, pol, { force: true });
+    ok(legacy.authorizeUrl?.startsWith(`${BASE}/as/authorize`), "connector cũ chưa lưu: hỏi máy chủ một lần rồi vẫn đúng trang", legacy.authorizeUrl);
+    wipe();
+  }
+
+  console.log("39. Luồng SSE đứt khi đang chạy công cụ");
+  {
+    S.sse = {}; S.era = "sse";
+    const { connector } = await add();
+    AS.db().prepare("UPDATE connectors SET era = 'sse', perms = ? WHERE id = ?").run(JSON.stringify({ create_page: "allow", search_docs: "allow" }), connector.id);
+    const s = session("sse-drop");
+    const fq = (n) => s.tools.find((t) => t.tool.name === n).fq;
+    await s.call(fq("search_docs"), {});
+    S.sse.silent = true; S.calls = {};
+    let call = s.call(fq("create_page"), { title: "x" });
+    await sleep(200);
+    S.sseStream.destroy();
+    let out = await call;
+    ok(out.is_error && /Không rõ kết quả/.test(out.content) && S.count("call:create_page") === 1, "công cụ ghi: nói rõ không biết kết quả, không gọi lại", `${out.content} ${JSON.stringify(S.calls)}`);
+    S.sse.silent = false;
+    out = await s.call(fq("search_docs"), {});
+    ok(!out.is_error && /ok search_docs/.test(out.content), "lời gọi sau mở kết nối mới, không bị kẹt client đã chết", out.content);
+    const c = new M.McpClient(url, undefined, "sse");
+    await c.listTools();
+    S.sse.silent = true; S.calls = {};
+    const pending = c.callTool({ name: "search_docs", annotations: { readOnlyHint: true } }, {});
+    await sleep(200);
+    S.sse.silent = false;
+    S.sseStream.destroy();
+    const again = await pending.catch((x) => x);
+    ok(again?.content?.[0]?.text === "ok search_docs" && S.count("call:search_docs") === 2, "công cụ đọc: tự mở lại luồng và thử lại một lần", `${JSON.stringify(again)} ${String(again)} ${JSON.stringify(S.calls)}`);
+    await c.close();
+    await s.close();
+    S.sseStream?.end();
+    wipe();
+  }
+
+  console.log("40. invalid_grant khi tiến trình khác vừa đổi token");
+  {
+    const r = await add();
+    const id = r.connector.id;
+    const seal = (tokens) => PR.sealSecret(JSON.stringify({ mode: "oauth", client: { client_id: "c1", auth_method: "none" }, redirect: "http://localhost:3200/api/connectors/oauth/callback", resource: url, as: { issuer: BASE, token_endpoint: `${BASE}/token` }, tokens }));
+    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "cu", refresh_token: "rt_cu", expires_at: Date.now() - 1000 }), id);
+    S.oauth = { valid: "Bearer at_khac", need: true };
+    S.tokenFail = { status: 400, json: { error: "invalid_grant" } };
+    // Tiến trình kia ghi token mới đúng lúc hãng từ chối tiến trình này.
+    S.onToken = () => AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "at_khac", refresh_token: "rt_khac", expires_at: Date.now() + 3600_000 }), id);
+    await C.refreshConnector(uid, id, pol);
+    ok(row(id).status === "ok" && !row(id).error, "dùng token mới trong cơ sở dữ liệu, không bắt đăng nhập lại", JSON.stringify(row(id)).slice(0, 200));
+    wipe();
+  }
+
+  console.log("41. OAuth client bị hãng từ chối");
+  {
+    S.oauth = { need: true, valid: "Bearer at_ok" };
+    S.authorize = (cid) => (cid === "sai" ? { status: 400, body: "invalid_client" } : null);
+    const first = await add();
+    const before = JSON.parse(PR.openSecret(AS.db().prepare("SELECT enc_auth FROM connectors WHERE id = ?").get(first.connector.id).enc_auth));
+    const msg = await thrown(C.connect(req, uid, first.connector.id, pol, { clientId: "sai" }));
+    ok(/từ chối OAuth client này/.test(msg), "báo ngay lý do", msg);
+    const after = JSON.parse(PR.openSecret(AS.db().prepare("SELECT enc_auth FROM connectors WHERE id = ?").get(first.connector.id).enc_auth));
+    ok(!after.preset && JSON.stringify(after.client) === JSON.stringify(before.client) && !row(first.connector.id).ownClient, "client bị từ chối không được lưu, đăng nhập đang có còn nguyên");
+    const good = await C.connect(req, uid, first.connector.id, pol, { clientId: "dung" });
+    ok(row(first.connector.id).ownClient && good.authorizeUrl?.includes("client_id=dung"), "client đúng: lưu và mở đăng nhập, thẻ có Đổi OAuth client", good.authorizeUrl);
+    wipe();
+    const now = Date.now();
+    AS.db().prepare("INSERT INTO connectors (id, user_id, name, url, dir, enabled, status, enc_auth, created_at, updated_at, settings) VALUES ('cn_v', ?, 'Canva', ?, 'canva', 1, 'error', ?, ?, ?, '{}')").run(uid, url, PR.sealSecret(JSON.stringify({ mode: "none", preset: { clientId: "cu" } })), now, now);
+    ok(!!row("cn_v").vendorBlocked, "hàng đã lưu client cũ chưa từng đăng nhập được: vẫn thấy lý do của hãng và đường thay thế");
+    wipe();
+  }
+
+  console.log("42. Hãng báo danh sách công cụ đổi");
+  {
+    S.sse = {}; S.era = "sse";
+    const { connector } = await add();
+    AS.db().prepare("UPDATE connectors SET era = 'sse' WHERE id = ?").run(connector.id);
+    const s = session("list-changed");
+    await s.call(s.tools.find((t) => t.tool.name === "search_docs").fq, {});
+    S.tools = [...TOOLS, { name: "get_new", description: "New", inputSchema: { type: "object", properties: {} } }];
+    S.sseStream.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", method: "notifications/tools/list_changed" })}\n\n`);
+    for (let i = 0; i < 40 && row(connector.id).tools.length === TOOLS.length; i++) await sleep(100);
+    ok(row(connector.id).tools.some((t) => t.name === "get_new"), "lấy lại danh sách ở nền, lượt sau thấy công cụ mới", String(row(connector.id).tools.length));
+    await s.close();
+    S.sseStream?.end();
+    wipe();
   }
 
 } finally {
