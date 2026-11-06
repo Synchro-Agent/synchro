@@ -3,11 +3,12 @@
 // Máy chủ tự lưu lượt vào phiên (khi bật đồng bộ) nên kết quả vẫn còn khi trình duyệt không quay lại.
 import type { AgentEvent } from "./agentcore";
 import { closeFolded, foldAgentEvent } from "./agentfold";
+import { getUser } from "./authstore";
 import { getPrefs, patchSession, saveTurn, type TurnNode } from "./codestore";
 
 type Line = { s: number; e: AgentEvent };
 type Listener = { line: (l: Line) => void; end: () => void };
-export type AgentRun = { uid: string; sid: string; node: TurnNode | null; ac: AbortController; lines: Line[]; bytes: number; listeners: Set<Listener>; started: number; ended: number };
+export type AgentRun = { uid: string; sid: string; node: TurnNode | null; ac: AbortController; lines: Line[]; bytes: number; listeners: Set<Listener>; started: number; ended: number; purged?: boolean };
 
 const g = globalThis as unknown as { __synchroAgentRuns?: Map<string, AgentRun> };
 const runs = (g.__synchroAgentRuns ??= new Map());
@@ -29,13 +30,19 @@ export const MAX_LIVE_RUNS = MAX_LIVE;
 /** Nút Dừng (hoặc xóa phiên). */
 export function stopAgentRun(uid: string, sid: string) { const r = activeRun(uid, sid); if (!r) return false; r.ac.abort(); return true; }
 
+/** Xóa tài khoản: dừng mọi lượt và quên ngay nội dung trong bộ nhớ, đừng đợi một giờ. CLI đang chạy thoát sau đó nên phần lưu cuối lượt phải biết là không được ghi (cờ purged). */
+export function stopUserAgentRuns(uid: string) {
+  for (const [k, r] of runs) if (r.uid === uid) { r.purged = true; r.ac.abort(); runs.delete(k); }
+}
+
 /** Bắt đầu lượt. work chạy tới khi xong, không phụ thuộc kết nối nào. */
 export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | null; title?: string }, work: (emit: (e: AgentEvent) => void, signal: AbortSignal) => Promise<void>): AgentRun {
   sweep();
   const run: AgentRun = { uid: o.uid, sid: o.sid, node: o.node ?? null, ac: new AbortController(), lines: [], bytes: 0, listeners: new Set(), started: Date.now(), ended: 0 };
   runs.set(keyOf(o.uid, o.sid), run);
   const numSid = Number(o.sid);
-  const sync = () => Number.isSafeInteger(numSid) && getPrefs(o.uid).sync;
+  // Tài khoản đã xóa: getPrefs trả mặc định (đồng bộ bật) và bảng phiên không có khóa ngoại tới users, nên nếu không chặn thì lượt ghi lại prompt và kết quả sau khi đã xóa.
+  const sync = () => !run.purged && Number.isSafeInteger(numSid) && !!getUser(o.uid) && getPrefs(o.uid).sync;
   // Sự kiện nào cũng có thể làm đổi trạng thái lưu, nên chỉ ghi định kỳ; ghi lỗi không được làm hỏng lượt.
   let dirty = false;
   const save = () => { if (!dirty || !run.node || !sync()) return; dirty = false; try { saveTurn(o.uid, numSid, run.node, o.title); } catch (e) { console.warn("[agent] lưu lượt", (e as Error).message); } };

@@ -80,7 +80,7 @@ ok((await S.speakAI("Câu ngắn.")) === null, "hết credit: lần này giọng
 reset();
 ok(!!(await S.speakAI("Câu ngắn.")), "hết credit: lần sau thử lại giọng AI");
 
-console.log("9. Giọng đã lưu không còn dùng được");
+console.log("5. Giọng đã lưu không còn dùng được");
 {
   reset();
   const { speak: Sv } = await load();

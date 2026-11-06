@@ -1,4 +1,4 @@
-import { current, limit, sameOrigin } from "../../authstore";
+import { current, getUser, limit, sameOrigin } from "../../authstore";
 import { agentInbox, ModelError, type AgentEvent } from "../../agentcore";
 import { effectivePerm, pickAgentModel, runAgentTurn, sessionMeta } from "../../agentturn";
 import { getPrefs, patchSession, type TurnNode } from "../../codestore";
@@ -68,6 +68,8 @@ export async function POST(req: Request) {
         // Lượt mới của phiên có thể đã mở hộp thư riêng (bấm Dừng rồi gửi tiếp): chỉ xóa hộp của lượt này.
         if (agentInbox.get(ibox) === box) agentInbox.delete(ibox);
       }
+      // Tài khoản vừa xóa khi lượt đang chạy: không gọi model để đánh giá phiên nữa.
+      if (!getUser(c.user.id)) return;
       // Xếp phiên (cần bạn / chờ xem lại / xong) và gợi ý câu nhắn tiếp: người dùng thấy ngay ở danh sách phiên và khung soạn tin.
       try {
         const m = await sessionMeta(c.user, { d: d ?? sdir(sid), ask, reply: text, stopped: signal.aborted, error, edited: [...edited] });

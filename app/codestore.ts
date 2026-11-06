@@ -1,6 +1,6 @@
 // Synchro Code ở máy chủ: cài đặt của từng người (dùng được ở mọi thiết bị và cho việc chạy nền), phiên Code đồng bộ giữa các thiết bị,
 // và pull request Synchro theo dõi để tự sửa (CI lỗi, góp ý review) và tự lưu trữ phiên khi PR được gộp / đóng.
-import { db, needDisk } from "./authstore";
+import { db, getUser, needDisk } from "./authstore";
 import type { CodeStyle } from "./codestyle";
 import { mergeData, type CodeNode } from "./codemerge";
 
@@ -155,6 +155,7 @@ export function putSession(uid: string, id: number, o: { title?: string; data?: 
   return { updated: now, merged, data: merged ? data : undefined };
 }
 export function patchSession(uid: string, id: number, p: Partial<{ state: string | null; reason: string | null; suggest: string | null; running: boolean; archived: boolean; pinned: boolean; title: string }>) {
+  if (!getUser(uid)) return;
   const d = init();
   const cur = d.prepare("SELECT * FROM code_sessions WHERE user_id = ? AND id = ?").get(uid, id) as SRow | undefined;
   const now = Date.now();
@@ -212,6 +213,8 @@ export function updateNode(uid: string, sid: number, id: number, fn: (n: Node) =
 /** Ghi bản mới nhất của lượt đang chạy ở máy chủ (agentruns): trình duyệt có thể đã đi chỗ khác nên không còn ai đẩy lên. Phiên đã xóa thì thôi. */
 export function saveTurn(uid: string, sid: number, node: Node, title?: string) {
   needDisk();
+  // Việc nền của tài khoản vừa xóa: không tạo lại phiên.
+  if (!getUser(uid)) return;
   const row = init().prepare("SELECT deleted FROM code_sessions WHERE user_id = ? AND id = ?").get(uid, sid) as { deleted: number } | undefined;
   if (row?.deleted) return;
   const s = getSession(uid, sid);

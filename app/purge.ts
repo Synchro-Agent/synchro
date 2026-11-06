@@ -10,6 +10,7 @@ import { removeUserApps } from "./appstore";
 import { removeUserPlugins } from "./plugins";
 import { dropTag, userKey } from "./skillstudio";
 import { cancelUserRuns } from "./runs";
+import { stopUserAgentRuns } from "./agentruns";
 import { purgeUserVoices, removeUserSpeech } from "./speechapi";
 import { destroyWorkspace } from "./workspace";
 import { releaseUserFiles } from "./fileproc/owners";
@@ -51,6 +52,7 @@ export async function purgeUser(uid: string) {
   const step = async (name: string, f: () => unknown) => { try { await f(); } catch (e) { console.error(`[purge] ${name}`, e); } };
   // Lượt đang chạy phải dừng trước, nếu không nó ghi tiếp sau khi đã xóa. Một bước lỗi không được làm sót các bước sau.
   await step("runs", () => cancelUserRuns(uid));
+  await step("agent runs", () => stopUserAgentRuns(uid));
   await step("skills", async () => {
     const ids = db().prepare("SELECT id FROM skills WHERE user_id = ?").all(uid) as { id: string }[];
     for (const s of ids) dropTag(userKey(s.id));
