@@ -75,7 +75,7 @@ async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSign
   }
   return signal.aborted;
 }
-const GONE = "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.";
+export const GONE = "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.";
 
 // Chạy agent: đọc NDJSON từ /api/agent. Lượt chạy ở máy chủ độc lập với kết nối: signal chỉ ngừng nghe, muốn dừng lượt thì gọi stopAgent.
 export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLine) => void, signal: AbortSignal) {
@@ -90,9 +90,9 @@ export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLi
   }
   if (!st.ended && !signal.aborted && !(await follow(String(body.sid), seen, signal, st))) on({ t: "error", error: GONE });
 }
-/** Mở lại phiên: lượt của phiên còn ở máy chủ không. */
-export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null } | null> {
-  try { const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" }); return r.status === 200 ? await r.json() : null; } catch { return null; }
+/** Mở lại phiên: lượt của phiên còn ở máy chủ không. gone: máy chủ trả lời chắc chắn là không có lượt nào; null: chưa biết (mất mạng, hết phiên đăng nhập). */
+export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null; gone?: boolean } | null> {
+  try { const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" }); return r.status === 204 ? { running: false, node: null, gone: true } : r.status === 200 ? await r.json() : null; } catch { return null; }
 }
 /** Nối vào lượt đang có của phiên từ đầu: nhận lại mọi sự kiện rồi theo dõi tiếp. */
 export async function attachAgent(sid: number | string, on: (e: AgentLine) => void, signal: AbortSignal) {

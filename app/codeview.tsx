@@ -28,8 +28,8 @@ import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "./c
 import type { PermMode } from "./codestore";
 import { refreshUsage, UsageRing } from "./usageui";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
-import { foldAgentEvent, closeFolded } from "./agentfold";
-import { agentRunInfo, attachAgent, gitOp, stopAgent, streamAgent, useCodeUi, watchAgentEnd, wsStatus, type AgentLine, type PaneKind, type PlanItem } from "./wsclient";
+import { foldAgentEvent, closeFolded, interruptFolded } from "./agentfold";
+import { agentRunInfo, attachAgent, GONE, gitOp, stopAgent, streamAgent, useCodeUi, watchAgentEnd, wsStatus, type AgentLine, type PaneKind, type PlanItem } from "./wsclient";
 import { QueueChips, type Queued } from "./worklog";
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 
@@ -484,9 +484,25 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     refreshGit(s);
     wsStatus().then(setStatus).catch(() => {});
   };
+  // Máy chủ không còn lượt nào mà phiên vẫn có lượt dở: lượt đã chết khi khởi động lại hoặc đã xong từ lâu mà thiết bị này giữ bản cũ. applyData đã coi nó là xong,
+  // người dùng từng thấy câu trả lời cụt như đã làm xong, không có dấu "Đã dừng", trong khi workspace mới sửa nửa chừng. Hỏi bản ở máy chủ trước để không báo nhầm lượt đã xong.
+  const interrupted = async (s: number, undone: Set<number>) => {
+    const r = codePrefsNow()?.sync !== false ? await getServerSession(s) : null;
+    if (loadedSid.current !== s || activeRef.current !== null) return;
+    const saved = new Map(((r?.data?.nodes as Node[] | undefined) ?? []).map((n) => [n.id, n]));
+    setNodes((ns) => ns.map((n) => {
+      // Lượt tự sửa PR không nằm trong danh sách lượt nền; lượt không dùng workspace chạy theo kết nối của trình duyệt.
+      if (!undone.has(n.id) || n.auto || n.noWs) return n;
+      const o = saved.get(n.id);
+      if (o?.done) return o;
+      const best = o && (o.ai?.length ?? 0) > (n.ai?.length ?? 0) ? o : n;
+      return interruptFolded({ ...best, ai: closeFences(best.ai) }, GONE);
+    }));
+  };
   // Mở phiên: lượt còn ở máy chủ (đang chạy, hoặc đã xong khi không có ai xem) thì nhận lại từ đầu và theo dõi tiếp.
   const resumeAgent = async (s: number, undone: Set<number>) => {
     const info = await agentRunInfo(s);
+    if (info?.gone && undone.size) return interrupted(s, undone);
     if (!info?.node || loadedSid.current !== s || activeRef.current !== null) return;
     if (!info.running && !undone.has(info.node)) return;
     const id = info.node, gen = ++genRef.current, ac = new AbortController();

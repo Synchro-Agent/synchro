@@ -25,5 +25,8 @@ export function foldAgentEvent<T extends FoldNode>(n: T, e: AgentEvent): T {
   }
 }
 
+/** Lượt chết cùng máy chủ (khởi động lại giữa chừng), không ai báo kết thúc: phải hiện là đã dừng kèm lý do, không được trông như đã xong. */
+export const interruptFolded = <T extends FoldNode>(n: T, why: string): T & { done: true; stopped: true } => ({ ...closeFolded(foldAgentEvent(n, { t: "error", error: why })), done: true, stopped: true });
+
 /** Lượt đã kết thúc: công cụ dở coi như xong, câu hỏi duyệt không còn chờ. */
 export const closeFolded = <T extends FoldNode>(n: T): T => ({ ...n, steps: ((n.steps ?? []) as Step[]).map((x) => (x.k === "tool" && !x.done ? { ...x, done: true } : x.k === "ask" && x.state === "wait" ? { ...x, state: "gone" } : x)) });
