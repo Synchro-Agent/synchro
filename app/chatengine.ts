@@ -17,7 +17,7 @@ import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "./mcp";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
-import { AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
+import { askedBack, AUTO, autoEffort, effortLabel, isAck, needsNoTools, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
 import { ALL } from "./catalog";
 import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { rank } from "./skillroute";
@@ -1426,7 +1426,7 @@ function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-l
   const lastAi = [...msgs].reverse().find((m) => m?.role === "assistant");
   const aiText = typeof lastAi?.content === "string" ? lastAi.content : Array.isArray(lastAi?.content) ? (lastAi!.content as { text?: string }[]).map((x) => x?.text ?? "").join("\n") : "";
   return { text: typedText(lastUser), attachments, turns: msgs.length, studio: !!studioOf(body.studio), images, files, docChars,
-    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk, answeredAsk: /```ask\b/.test(aiText) };
+    prev: typeof body.prevModel === "string" ? body.prevModel : null, prevAsk, answeredAsk: /```ask\b/.test(aiText), asked: askedBack(aiText) };
 }
 
 /** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */

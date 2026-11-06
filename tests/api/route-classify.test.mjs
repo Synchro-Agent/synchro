@@ -350,8 +350,8 @@ console.log("11. Hội thoại nhiều lượt: trả lời câu hỏi lại, l�
   const build = "Làm trang web bán giày";
   const after = (text, o = {}) => q(text, { turns: 3, prevAsk: build, prev: "sub-claude/opus", ...o });
   for (const t of ["Hiện đại, tối giản", "Bán hàng online", "Học sinh cấp 3", "10 slide", "Phương án 2", "hien dai toi gian"]) {
-    const r = R.routeModel(after(t), list);
-    ok(r.task === "build" && r.model === "sub-claude/opus" && !R.needsNoTools(after(t)), `trả lời câu hỏi lại “${t}” giữ việc tạo sản phẩm, giữ model, không đi đường nhanh`, JSON.stringify(r));
+    const r = R.routeModel(after(t, { asked: true }), list);
+    ok(r.task === "build" && r.model === "sub-claude/opus" && !R.needsNoTools(after(t, { asked: true })), `trả lời câu hỏi lại “${t}” giữ việc tạo sản phẩm, giữ model, không đi đường nhanh`, JSON.stringify(r));
   }
   // Thẻ hỏi lại: chắc chắn là câu trả lời, dù có từ khóa của việc khác.
   ok(R.taskOf(after("Email và số điện thoại", { answeredAsk: true })) === "build", "câu trả lời thẻ hỏi lại có từ “email” vẫn theo việc tạo sản phẩm");
@@ -403,5 +403,53 @@ for (const [t, want, o] of [["Viết email xin nghỉ phép", true], ["viet emai
   ["Viết báo cáo tài chính quý 3", false], ["viết CV xin việc", false], ["Viết bài luận 2000 từ về môi trường", false], ["viết hợp đồng thuê nhà", false], ["Viết đơn gửi lên file word", false], ["viết email trả lời khách theo https://a.vn", false], ["viet bao cao thang", false],
   ["ngắn hơn đi", true, { turns: 3, prevAsk: "Viết email xin nghỉ phép" }], ["ngắn hơn đi", false, { turns: 3, prevAsk: "Làm trang web bán giày" }], ["tiếp đi", false, { turns: 3, prevAsk: "Làm trang web bán giày" }]])
   ok(R.needsNoTools(q(t, o)) === want, `“${t}” ${want ? "đi đường nhanh" : "giữ lượt đầy đủ"}`, JSON.stringify([R.taskOf(q(t, o)), R.difficulty(q(t, o))]));
+console.log("13. Câu ngắn sau việc lớn: chỉ theo việc đó khi model vừa hỏi lại thật");
+{
+  const WEB = "Làm cho mình một trang web bán cà phê có giỏ hàng";
+  const opus = { turns: 3, prevAsk: WEB, prev: "sub-claude/claude-opus-4-5" };
+  const paid = ["sub-claude/claude-haiku-4-5", "sub-claude/claude-sonnet-4-5", "sub-claude/claude-opus-4-5"];
+  const free = ["sub-agy/gemini-3-flash", "sub-agy/gemini-3-pro"];
+  for (const t of ["mình đi ngủ đây", "lol", "thôi khỏi", "đẹp đấy", "chờ chút", "see you tomorrow", "Hà Nội", "giá vàng"]) {
+    for (const asked of [false, undefined]) {
+      const x = q(t, { ...opus, asked }), r = R.routeModel(x, paid);
+      ok(r.task !== "build" && !/opus/.test(r.model) && r.effort !== "high", `“${t}” sau việc lớn, model không hỏi lại: không dựng tiếp, không Opus nỗ lực cao`, JSON.stringify(r));
+    }
+    const y = R.routeModel(q(t, { turns: 3, prevAsk: WEB }), free);
+    ok(y.task !== "build" && y.effort !== "high" && !/gemini-3-pro/.test(y.model), `“${t}” trên gói miễn phí: không dùng model mạnh nhất`, JSON.stringify(y));
+  }
+  // Model hỏi lại thật: câu trả lời ngắn theo việc đang bàn; câu khép lại thì vẫn không.
+  ok(R.routeModel(q("Hà Nội", { ...opus, asked: true }), paid).task === "build", "model vừa hỏi lại: “Hà Nội” là câu trả lời");
+  for (const t of ["mình đi ngủ đây", "lol", "thôi khỏi", "chờ chút", "see you tomorrow"]) ok(R.taskOf(q(t, { ...opus, asked: true })) !== "build", `model vừa hỏi lại nhưng “${t}” là câu khép lại`, R.taskOf(q(t, { ...opus, asked: true })));
+  ok(R.taskOf(q("đẹp đấy, đổi màu xanh đi", opus)) === "build", "khen rồi nhờ sửa tiếp vẫn là làm tiếp", R.taskOf(q("đẹp đấy, đổi màu xanh đi", opus)));
+  ok(R.taskOf(q("Phương án 2", { ...opus, answeredAsk: true })) === "build", "thẻ hỏi lại vẫn chắc chắn là câu trả lời");
+  ok(R.taskOf(q("Người đi làm văn phòng", { ...opus, asked: true })) === "build", "“đi làm” trong câu trả lời không bị coi là rời đi", R.taskOf(q("Người đi làm văn phòng", { ...opus, asked: true })));
+  for (const [ai, want] of [["Bạn muốn phong cách nào?", true], ["Mình cần hỏi thêm:\n\nĐối tượng khách hàng là ai?\n- Sinh viên\n- Văn phòng", true], ["Bạn thích màu gì? Mình sẽ dựng ngay khi có câu trả lời.", true],
+    ["Xong rồi. Bạn có muốn mình chỉnh gì thêm không?", false], ["Done. Anything else?", false], ["Đã xong trang web.", false], ["```html\n<p>a</p>\n```\nBạn thấy sao?", false], ["x".repeat(2000) + "?", false], ["", false]])
+    ok(R.askedBack(ai) === want, `askedBack(“${ai.slice(0, 40)}”) = ${want}`);
+}
+console.log("14. Câu khủng hoảng: luôn được trả lời cẩn thận, kể cả sau việc lớn và sau dấu hai chấm");
+{
+  const paid = ["sub-claude/haiku", "sub-claude/sonnet", "sub-claude/opus"];
+  const WEB = "Làm trang web bán giày";
+  const crisis = ["i wanna die", "sống chẳng còn ý nghĩa gì", "song chang con y nghia gi", "tôi muốn ngủ mãi không dậy", "chồng em hay đánh em", "chong em hay danh em", "con em nuốt pin rồi", "con em nuot pin roi", "can't go on anymore", "I can’t go on", "viết thư tuyệt mệnh", "Câu hỏi: mình muốn tự tử thì có đau không", "câu hỏi: có nên uống 20 viên paracetamol", "my husband beats me", "my son swallowed a battery"];
+  for (const t of crisis) {
+    const x = q(t), r = R.routeModel(x, paid);
+    ok(!R.needsNoTools(x), `“${t}”: không đi đường nhanh`, JSON.stringify(R.difficulty(x)));
+    ok(!/haiku/.test(r.model) && r.effort !== "low", `“${t}”: không model rẻ nhất, không nỗ lực thấp`, JSON.stringify(r));
+  }
+  for (const t of ["i wanna die", "sống chẳng còn ý nghĩa gì", "chồng em hay đánh em", "con em nuốt pin rồi", "can't go on anymore", "em muốn chết"]) {
+    for (const o of [{}, { asked: true }, { answeredAsk: true }]) {
+      const x = q(t, { turns: 3, prevAsk: WEB, prev: "sub-claude/opus", ...o });
+      ok(R.taskOf(x) !== "build" && !R.needsNoTools(x), `“${t}” sau việc lớn ${JSON.stringify(o)}: không làm tiếp trang web`, R.taskOf(x));
+    }
+    ok(R.isCrisis(t), `“${t}” được nhận là khủng hoảng`);
+  }
+  ok(R.taskOf(q("ok cảm ơn, mình muốn tự tử")) === "qa" && R.difficulty(q("ok cảm ơn, mình muốn tự tử")).score >= 2, "có lời cảm ơn cũng không thành trò chuyện", JSON.stringify(R.difficulty(q("ok cảm ơn, mình muốn tự tử"))));
+  // Không báo nhầm câu thường.
+  for (const t of ["anh đánh giá phim này thế nào", "chị đánh máy giúp em", "go on please", "ngủ mấy tiếng là đủ", "câu này có ý nghĩa gì", "bạn trai em tặng em quà", "nuốt nước bọt là gì"]) ok(!R.isCrisis(t), `“${t}” không bị coi là khủng hoảng`);
+  // Khối code không phải lời người dùng nói.
+  ok(!R.isCrisis("sửa code này ```\nconsole.log('want to die')\n```"), "chữ trong khối code không tính");
+  ok(R.isCrisis("x".repeat(40000) + " mình muốn tự tử"), "tài liệu dài: câu ở cuối vẫn được xét");
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

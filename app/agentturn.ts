@@ -1,6 +1,6 @@
 // Một lượt của agent Synchro Code (lượt người dùng gửi qua /api/agent, hay lượt chạy nền như tự sửa pull request):
 // chọn model, dựng lời nhắc hệ thống, chạy vòng lặp công cụ qua chốt chặn (chế độ quyền, trang web được phép), rồi đánh giá phiên.
-import { AUTO, autoEffort, routeModel } from "./router";
+import { askedBack, AUTO, autoEffort, routeModel } from "./router";
 import { can, canModel, permsOf, type UserRow } from "./authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent, type ExtraTool } from "./agentcore";
 import { clampEffort, effortCap, isEffort, legacyModel } from "./catalog";
@@ -31,7 +31,8 @@ export async function pickAgentModel(user: UserRow, picked: unknown, messages: M
   let chosen = typeof picked === "string" && picked ? legacyModel(picked) : null;
   const asks = messages.filter((m) => m?.role !== "assistant").map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "")).slice(0, 8000));
   // Lời nhờ mới nhất (kèm lời nhờ trước để câu nối tiếp như "làm lại", "tiếp đi" giữ loại việc) cho bộ chọn model và mức nỗ lực.
-  const ask = { text: asks[asks.length - 1] ?? "", attachments, turns: messages.length, studio: false, prevAsk: asks[asks.length - 2] };
+  const lastAi = [...messages].reverse().find((m) => m?.role === "assistant")?.content;
+  const ask = { text: asks[asks.length - 1] ?? "", attachments, turns: messages.length, studio: false, prevAsk: asks[asks.length - 2], asked: typeof lastAi === "string" && askedBack(lastAi) };
   if (chosen === AUTO) {
     const { allowed, usable } = await usableModels(user);
     chosen = routeModel(ask, usable.length ? usable : allowed)?.model ?? null;

@@ -242,7 +242,16 @@ const FOLDED: [Task, RegExp, number][] = [
 ];
 const HOWTO_FOLD = W("lam sao|lam the nao|the nao|cach|la gi|co nen|tai sao|vi sao");
 const STAKES_FOLD = W("khong con ly do(?: gi)? de song|ly do de song|song (?:de )?lam gi|het muon song|khong thiet song|muon bien mat|ket thuc cuoc doi|cham dut cuoc doi|cuoc (?:song|doi)(?: \\p{L}+){0,3} (?:vo nghia|be tac)|(?:khong|chang)(?: con)? ai can|xam hai|bi bao hanh|bao luc gia dinh|cuong hiep|hiep dam|quay roi|bi(?: \\p{L}+){0,3} danh(?! (?:gia|dau|may|thuc|lua|bai|bong|cap|roi|mat|thue))|danh dap|bi bong|bong (?:nang|nuoc|lua|hoa chat)|bo bu|tre so sinh|lua dao|sa thai|duoi viec|dau nguc|tuc nguc|kho tho|dot quy|tai bien|co giat|ho ra mau|chay mau|ngo doc|tu tu|tu sat|tu hai|tu lam dau|rach tay|muon chet|khong muon song|chan song|tram cam|qua lieu|lieu thuoc|trieu chung|chan doan|mang thai|co thai|co bau|mang bau|say thai|ung thu|tieu duong|huyet ap|bi sot|sot cao|sot \\d+|sot xuat huyet|bi (?:\\p{L}+ ){1,2}(?:can|dot)|dau(?: \\p{L}+){0,2} (?:du doi|quan quai|kinh khung)|khoi kien|ly hon|tranh chap|thua ke|hop dong|phap ly|thue|dau tu|chung khoan|bao hiem|pha san|mua vang|ban vang|gui tiet kiem|lai suat|tien ao");
-const hasStakes = (s: string) => STAKES.test(s) || (noMarks(s) && STAKES_FOLD.test(s));
+// Người đang gặp nguy ngay lúc này (tự hại, bị đánh, trẻ nuốt dị vật), nói theo những cách STAKES chưa có. Không bao giờ coi là câu trả lời cho việc đang làm, không đi model rẻ nhất.
+// Từng lọt: "i wanna die", "sống chẳng còn ý nghĩa gì", "chồng em hay đánh em", "con em nuốt pin rồi" đều là hỏi đáp, model rẻ nhất, đường nhanh; sau một yêu cầu làm web thì thành làm tiếp trang web.
+const CRISIS = W("tự tử|tự sát|tự hại|tự làm đau|rạch tay|muốn chết|không muốn sống|hết muốn sống|chán sống|không thiết sống|muốn biến mất|sống (?:để )?làm gì|không còn lý do(?: gì)? để sống|kết thúc cuộc đời|chấm dứt cuộc đời|thư tuyệt mệnh|tuyệt mệnh|thà chết|chết (?:đi )?cho xong|ước gì (?:mình|em|tôi|tớ|con) (?:chết|không tồn tại)|không muốn tồn tại|tìm đến cái chết|(?:sống|đời|cuộc đời|cuộc sống)(?: \\p{L}+){0,2} (?:chẳng|không)(?: còn)?(?: \\p{L}+)? ý nghĩa|(?:muốn )?ngủ (?:mãi|luôn)(?: mãi)? không (?:dậy|tỉnh)|muốn ngủ mãi|không muốn (?:thức dậy|tỉnh dậy|dậy nữa)|(?:chồng|vợ|bạn trai|bạn gái|người yêu|bố dượng|mẹ kế|dượng|bố|ba|cha|mẹ|anh|chị)(?: \\p{L}+){0,3} (?:đánh|bóp cổ|tát|đá|dọa giết|doạ giết) (?:em|tôi|con|mình|chị|cháu|tớ)|bạo hành|xâm hại|cưỡng hiếp|hiếp dâm|nuốt (?:phải |nhầm )?(?:pin|đồng xu|xu|nam châm|thuốc|dị vật|hóa chất|hoá chất|thuốc tẩy|xăng)|uống (?:nhầm|phải) (?:thuốc|hóa chất|hoá chất|thuốc tẩy|xăng)|uống \\d+ viên|\\d+ viên thuốc|quá liều|wanna die|want to die|kill myself|end my life|end it all|suicid\\p{L}*|self[- ]harm|hurt myself|better off dead|wish i (?:was|were) dead|can[\'’]?t go on|cannot go on|can[\'’]?t do this anymore|no point (?:in )?living|life is (?:meaningless|pointless)|don[\'’]?t want to (?:live|be alive|be here|wake up)|no reason to live|(?:husband|boyfriend|wife|girlfriend|partner|dad|father|stepfather|mom|mother)(?: \\p{L}+){0,2} (?:hits?|beats?|chokes?) me|swallow\\p{L}* (?:a |an |the |some )?(?:batter\\p{L}*|coins?|magnets?|bleach|pills?)|overdose|too many pills|how many pills");
+const CRISIS_FOLD = W("tu tu|tu sat|tu hai|tu lam dau|rach tay|muon chet|khong muon song|het muon song|chan song|khong thiet song|muon bien mat|song (?:de )?lam gi|khong con ly do(?: gi)? de song|ket thuc cuoc doi|cham dut cuoc doi|thu tuyet menh|tuyet menh|tha chet|chet (?:di )?cho xong|uoc gi (?:minh|em|toi|to|con) (?:chet|khong ton tai)|khong muon ton tai|(?:song|doi|cuoc doi|cuoc song)(?: \\p{L}+){0,2} (?:chang|khong)(?: con)?(?: \\p{L}+)? y nghia|(?:muon )?ngu (?:mai|luon)(?: mai)? khong (?:day|tinh)|muon ngu mai|khong muon (?:thuc day|tinh day|day nua)|(?:chong|vo|ban trai|ban gai|nguoi yeu|bo duong|me ke|duong|bo|ba|cha|me|anh|chi)(?: \\p{L}+){0,3} (?:danh|bop co|tat|da|doa giet) (?:em|toi|con|minh|chi|chau|to)|bao hanh|xam hai|cuong hiep|hiep dam|nuot (?:phai |nham )?(?:pin|dong xu|xu|nam cham|thuoc|di vat|hoa chat|thuoc tay|xang)|uong (?:nham|phai) (?:thuoc|hoa chat|thuoc tay|xang)|uong \\d+ vien|\\d+ vien thuoc|qua lieu");
+// Đoạn người dùng tự viết (bỏ khối code, khối tệp): lời nhờ có thể nằm sau dấu ":" ("Câu hỏi: mình muốn tự tử thì có đau không") nên không chỉ xét phần chỉ thị. Tài liệu rất dài chỉ xét đầu và cuối.
+const typedPart = (text: string) => { const s = text.normalize("NFC").replace(FILE_NOTE, " ").replace(/```[\s\S]*?(?:```|$)/g, " "); return s.length > 16_000 ? `${s.slice(0, 8000)}\n${s.slice(-8000)}` : s; };
+const crisisIn = (s: string) => CRISIS.test(s) || (noMarks(s) && CRISIS_FOLD.test(s));
+/** Người dùng đang nói về nguy hiểm tức thời tới bản thân hoặc người thân. */
+export const isCrisis = (text: string) => crisisIn(typedPart(text));
+const hasStakes = (s: string) => crisisIn(s) || STAKES.test(s) || (noMarks(s) && STAKES_FOLD.test(s));
 const COMPLAINT_FOLD = W("loi roi|bi loi|fix di|fix lai|sua di|sua lai|khong chay|chay khong duoc|khong hoat dong|khong bam duoc|hong roi|bi hong|bi trang|trang trang|trang man hinh|re tien|que mua|que qua|xau|chua dep|khong dep");
 const RETRY_FOLD = /^\s*(?:(?:khong|ko|no)[,.!]?\s*)?(?:sai roi|sai bet|chua dung|khong dung|khong phai|lam lai|viet lai di|thu lai|chua on|te qua|kem qua|chua hay|chua duoc|van sai|van loi|van chua|van khong)(?![\p{L}\p{N}])/iu;
 // Câu chỉ để chào, cảm ơn, khen: trò chuyện thật. "ok", "vâng", "yes"… có thể là xác nhận cho việc đang bàn nên không nằm ở đây.
@@ -250,6 +259,8 @@ const RETRY_FOLD = /^\s*(?:(?:khong|ko|no)[,.!]?\s*)?(?:sai roi|sai bet|chua dun
 const PLAIN_CHAT = /^(?:(?:ok|oke|okay|okie|vang|da|u|um|yes|yeah)[\s,.!~]+)*(?:(?:xin chao|chao|hi|hello|hey|alo|cam on|thanks?|thank you|tks|tam biet|bye|chuc ngu ngon|good (?:morning|night|evening)|ban khoe khong|how are you|ban la ai|who are you|haha|hihi|hehe|tuyet|great|nice|hay|tot|gioi|dep)(?:\s+(?:ban|em|anh|chi|nhe|nha|nhieu|a|synchro|buoi sang|so much|a lot|lam|qua|voi|voi nhe))*[\s,.!~]*)+$/i;
 // Câu chỉ đồng ý, xác nhận: không tự nói việc gì nên theo việc đang bàn ("ok làm đi", "yes please", "oke luôn").
 const BARE_ACK = /^(?:(?:ok|oke|okay|okie|okela|vang|da|u|um|uh|yes|yeah|yep|yup|sure|no|nope|duoc|roi|dong y|chot|dung|vay|co|lam di|lam luon|lam nhe|lam nha|lam thoi|tien hanh|bat dau|go|go ahead|do it|please|proceed|start|luon|di|nhe|nha|a|thoi|nao)(?:\s+|$))+$/;
+// Câu khép lại, tạm rời đi hay khen một tiếng: không phải câu trả lời, không phải việc. Sau một việc lớn, "mình đi ngủ đây", "lol", "thôi khỏi" từng thành làm tiếp, model mạnh nhất, nỗ lực cao.
+const CLOSING = /(?<![a-z0-9])(?:di ngu|ngu day|ngu thoi|ngu nhe|di day|di nhe|(?:di (?:an|lam|hoc|choi)|an com) (?:day|thoi|nhe|da)|ve day|cho (?:chut|ti|xiu|lat)|doi (?:chut|ti|xiu|lat)|de sau|de mai|mai (?:tinh|lam|noi|nhe)|hom khac|luc khac|thoi khoi|thoi bo|thoi nhe|khoi can|khong can (?:dau|nua)|lol|lmao|see you|see ya|gotta go|got to go|brb|(?:dep|hay|on|duoc|tot) (?:day|do))(?![a-z0-9])/;
 const looseFold = (ins: string) => fold(ins).replace(/[.,!~]+/g, " ").replace(/\s+/g, " ").trim();
 // Lời chào, "dạ", "ok", lời cảm ơn đứng đầu câu không phải là việc: "Chào bạn, mình bị đau ngực…", "Dạ em muốn hỏi…" được chấm theo phần còn lại.
 const HEAD = /^(?:(?:xin chào|kính chào|chào(?: buổi \p{L}+)?|hi|hello|hey|alo|a lô|dạ(?! dày| con| hội| quang| cỏ)|vâng|ừ|ừm|ok|oke|okay|okie|cảm ơn|cám ơn|thank you|thanks?|tks|good (?:morning|afternoon|evening))(?![\p{L}\p{N}])(?:\s+(?:bạn|em|anh|chị|cô|chú|bác|ad|admin|synchro|cả nhà|mọi người|nhé|nha|nhiều|ạ|so much|a lot|there|everyone))*[\s,.!~:;-]*)+/iu;
@@ -279,6 +290,8 @@ export type RouteInput = {
   prev?: string | null; prevText?: string;
   /** Tin vừa rồi của model là thẻ hỏi lại (khối ```ask): câu này là câu trả lời cho nó, không phải việc mới. */
   answeredAsk?: boolean;
+  /** Tin vừa rồi của model là câu hỏi lại bằng chữ thường (askedBack): câu trả lời ngắn mới có cơ sở để theo việc đang bàn. */
+  asked?: boolean;
   /** Lời nhờ trước đó của người dùng: câu nối tiếp ngắn ("giải thích thêm", "làm lại") giữ loại việc của nó. */
   prevAsk?: string;
 };
@@ -352,7 +365,9 @@ function read(q: RouteInput, depth = 0): Read {
   const sc = scores(ins, a);
   let [task, strength] = pick(sc);
   const images = q.images ?? 0, docChars = q.docChars ?? 0, files = q.files ?? 0;
-  const stakes = hasStakes(ins);
+  // Xét cả phần sau dấu ":" (splitAsk coi là nội dung): "Câu hỏi: có nên uống 20 viên paracetamol" từng là hỏi đáp, nỗ lực thấp, đường nhanh.
+  const typed = typedPart(q.text);
+  const stakes = hasStakes(typed), crisis = crisisIn(typed);
   // Việc trước đó (nếu có), đọc một lần: lời chê và câu trả lời ngắn chỉ theo nó khi đó là việc nặng.
   const can = !!q.prevAsk && depth === 0 && !images && !docChars;
   let pr: Read | undefined;
@@ -368,9 +383,11 @@ function read(q: RouteInput, depth = 0): Read {
   const ack = q.turns >= 2 && !PLAIN_CHAT.test(looseFold(whole)) && BARE_ACK.test(looseFold(whole));
   // Trả lời câu hỏi lại trước việc nặng ("Hiện đại, tối giản", "Học sinh cấp 3", "Phương án 2"): không tự nói việc gì, không phải câu hỏi mới, không phải lời cảm ơn.
   // Từng thành hỏi đáp, nỗ lực thấp: lượt dựng cả trang web bị giao cho model rẻ nhất. Thẻ hỏi lại thì chắc chắn là câu trả lời, dù dài hay có từ khóa của việc khác.
+  // Câu ngắn chỉ là câu trả lời khi model vừa hỏi lại thật: không có dấu hiệu đó mà cứ theo việc trước thì "giá vàng", "Hà Nội", "chờ chút" đều thành dựng tiếp trang web bằng model mạnh nhất, tốn hạn mức tuần của gói.
   const answered = !!q.answeredAsk && ins.length < 800;
-  const shortReply = q.turns >= 2 && strength < 2 && ins.length < 100 && !PLAIN_CHAT.test(looseFold(whole)) && !/\?\s*$/.test(ins) && !((QUESTION.test(ins) || (bareIns && QUESTION_FOLD.test(ins))) && !followsUp(ins)) && !stakes && heavyPrev();
-  if (answered ? can : !stakes && (shortReply || (((strength < 2 && (retry || followsUp(ins))) || ack) && ins.length < 100 && can))) {
+  const closing = CLOSING.test(looseFold(whole)) && !CONT.test(ins) && !(bareIns && CONT_FOLD.test(ins));
+  const shortReply = !!q.asked && q.turns >= 2 && strength < 2 && ins.length < 100 && !PLAIN_CHAT.test(looseFold(whole)) && !/\?\s*$/.test(ins) && !((QUESTION.test(ins) || (bareIns && QUESTION_FOLD.test(ins))) && !followsUp(ins)) && !stakes && heavyPrev();
+  if (crisis ? false : answered ? can : !closing && !stakes && (shortReply || (((strength < 2 && (retry || followsUp(ins))) || ack) && ins.length < 100 && can))) {
     const p = prevRead();
     if (p.task !== "chat") {
       s = p.score; why.push(...p.why.filter((w) => w !== "bạn chưa hài lòng với câu trả lời trước"));
@@ -380,6 +397,8 @@ function read(q: RouteInput, depth = 0): Read {
     }
   }
   // Studio (Tài liệu, Slide, Thiết kế): luôn là tạo ra cả một sản phẩm.
+  // Có chữ cảm ơn, chào trong câu nói về sức khỏe, an toàn: không phải trò chuyện (trò chuyện luôn là model rẻ nhất, nỗ lực thấp).
+  if (stakes && task === "chat") task = "qa";
   if (q.studio && task !== "chat") task = "build";
   else if (images && strength < 3) task = "vision";
   else if (docChars > 60_000 && !["translate", "summarize", "code", "debug"].includes(task)) task = "longdoc";
@@ -412,11 +431,23 @@ function read(q: RouteInput, depth = 0): Read {
   if (retry) add(2, "bạn chưa hài lòng với câu trả lời trước");
   if (task === "chat") why.push("trò chuyện ngắn");
   if (stakes && ["qa", "analyze", "chat", "write", "summarize"].includes(task) && s < 2) { s = 2; why.push("liên quan sức khỏe, pháp lý hoặc tài chính"); }
+  if (crisis && ["qa", "write", "analyze"].includes(task) && s < 3) s = 3;
   const cap = CAP_D[task];
   if (cap !== undefined && s > cap) s = cap;
   const think = (task === "reason" && PROOF.test(ins)) || task === "debug";
   if (task === "reason" && PROOF.test(ins)) why.push("cần chứng minh từng bước");
   return { task, score: s, why, retry, think, long: body > 20_000, stakes };
+}
+// Câu hỏi xã giao cuối một việc đã xong ("Bạn muốn mình chỉnh gì thêm không?", "Anything else?") không phải là hỏi lại để làm tiếp.
+const POLITE_CLOSE = W("(?:muốn|cần)(?: \\p{L}+){0,4} (?:thêm|khác|nữa|chỉnh|sửa|đổi)|gì (?:thêm|khác|nữa)|muốn (?:mình|tôi|em) |anything else|need anything|want me to|would you like me to|shall i|let me know");
+/** Tin của model là câu hỏi lại, chưa làm gì: ngắn, không có code hay artifact, câu hỏi nằm ở đoạn cuối (có thể ngay trước danh sách lựa chọn). */
+export function askedBack(ai: string): boolean {
+  const t = ai.trim();
+  if (!t || t.length > 1500 || /```|<artifact\b/.test(t)) return false;
+  const lines = t.split("\n").map((l) => l.trim()).filter(Boolean);
+  while (lines.length > 1 && /^(?:[-*•]|\d+[.)]|\p{L}[.)])\s/u.test(lines[lines.length - 1])) lines.pop();
+  const last = lines[lines.length - 1];
+  return /[?？]/.test(last) && !POLITE_CLOSE.test(last.toLowerCase());
 }
 /** Câu chỉ xác nhận, trả lời ngắn, không tự nói việc gì: khi tìm lời nhờ trước đó thì bỏ qua câu này ("Làm web" → "ok" → "màu xanh nhé" vẫn là làm web). */
 export function isAck(text: string): boolean {
@@ -425,7 +456,7 @@ export function isAck(text: string): boolean {
   const [t, n] = pick(scores(ins, a));
   if (n >= 2 && t !== "chat") return false;
   // Câu hỏi mới ("thủ đô của Pháp là gì?") và câu về sức khỏe, pháp lý là lời nhờ thật: "giải thích thêm" sau đó nói về chúng, không về việc lớn ở trước.
-  return !hasStakes(ins) && !((QUESTION.test(ins) || (noMarks(ins) && QUESTION_FOLD.test(ins))) && !followsUp(ins));
+  return !hasStakes(typedPart(text)) && !((QUESTION.test(ins) || (noMarks(ins) && QUESTION_FOLD.test(ins))) && !followsUp(ins));
 }
 const memo = new WeakMap<RouteInput, Read>();
 const readOf = (q: RouteInput) => { let r = memo.get(q); if (!r) { r = read(q); memo.set(q, r); } return r; };
