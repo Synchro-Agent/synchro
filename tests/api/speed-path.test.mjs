@@ -172,7 +172,14 @@ try {
     const LIST = ["sub-codex/gpt-6.1-astra", "sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "sub-agy/gemini-3.8-pro", "sub-agy/gemini-3.8-flash", "sub-claude/opus", "sub-claude/sonnet", "sub-claude/haiku"];
     ok(R.pickCritics(LIST, "anthropic", "sub-claude/opus", true).join() === "sub-codex/gpt-6-luna", "tự chạy: một model rẻ nhất của hãng khác, không phải Sol", R.pickCritics(LIST, "anthropic", "sub-claude/opus", true));
     ok(R.pickCritics(LIST, "anthropic", "sub-claude/opus").join() === "sub-codex/gpt-6.1-sol,sub-agy/gemini-3.8-pro", "người dùng bấm: vẫn đủ hội đồng hạng cân bằng", R.pickCritics(LIST, "anthropic", "sub-claude/opus"));
-    ok(R.pickCritics(["sub-claude/sonnet", "sub-claude/haiku"], "anthropic", "sub-claude/haiku", true).join() === "sub-claude/sonnet", "chỉ một gói: không tự chấm bằng đúng model vừa viết");
+    const auto = (list, gen) => R.pickCritics(list, R.vendorOf(gen), gen, true).join();
+    ok(auto(["sub-claude/sonnet", "sub-claude/haiku"], "sub-claude/haiku") === "sub-claude/haiku", "chỉ một gói mà vừa viết bằng model rẻ nhất: chấm lại bằng chính nó, không lên Sonnet");
+    ok(auto(["sub-claude/opus", "sub-claude/sonnet", "sub-claude/haiku", "sub-grok/grok-build", "sub-grok/grok-4.7"], "sub-claude/sonnet") === "sub-claude/haiku", "Claude và Grok: Haiku, không phải Grok 4.7 hạng mạnh hay Grok Build chỉ viết code");
+    ok(auto(["sub-claude/fable", "sub-claude/opus", "sub-codex/gpt-6.1-sol"], "sub-codex/gpt-6.1-sol") === "sub-codex/gpt-6.1-sol", "Claude chỉ còn Fable, Opus: không chạy trên tiền thật hay hạn mức đắt");
+    ok(auto(["sub-claude/fable", "sub-claude/opus"], "sub-claude/opus") === "", "chỉ còn model mạnh: tự chạy bỏ qua");
+    ok(auto(["sub-grok/grok-build", "sub-grok/grok-4.7"], "sub-grok/grok-4.7") === "", "chỉ có Grok: tự chạy bỏ qua");
+    ok(auto(["sub-claude/sonnet", "sub-codex/gpt-6-luna", "sub-agy/gemini-3.8-flash"], "sub-codex/gpt-6-luna") === "sub-agy/gemini-3.8-flash", "trong cùng hạng rẻ nhất thì ưu tiên hãng khác");
+    ok(R.pickCritics(["sub-claude/opus", "sub-grok/grok-4.7"], "anthropic", "sub-claude/opus").join() === "sub-grok/grok-4.7", "người dùng bấm: vẫn được chạy trên model mạnh");
     user = await fresh();
     const cookie = AU.createSession(user, new Request("http://x/"), "test").split(";")[0];
     const post = (mod, url, body) => mod.POST(new Request(`http://x${url}`, { method: "POST", headers: { cookie, origin: "http://x", host: "x", "content-type": "application/json" }, body: JSON.stringify(body) }));
@@ -193,6 +200,19 @@ try {
     lines.length = 0;
     r = await post(CR, "/api/critic", { title: "x", type: "code", content: code, model: "sub-claude/opus" });
     ok(/sonnet low .*job=critic/.test(lastTurn()), "người dùng bấm phản biện: hạng cân bằng", lines.join(" | "));
+    // Đóng tab khi đang chờ: rời hàng, không tốn lượt nào.
+    fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 700 }));
+    const held = Array.from({ length: 2 }, () => AM.quickCall(user, "Giữ chỗ.", "x", { job: "brain", bg: true }).catch((e) => e));
+    await until(() => TG.runningOf(user.id, "quick") === 2);
+    const ac = new AbortController();
+    lines.length = 0;
+    const left = CR.POST(new Request("http://x/api/critic", { method: "POST", signal: ac.signal, headers: { cookie, origin: "http://x", host: "x", "content-type": "application/json" }, body: JSON.stringify({ title: "x", type: "code", content: code, model: "sub-claude/opus", auto: true }) }));
+    await until(() => TG.queuedOf(user.id, "quick", true) === 1);
+    ac.abort();
+    await left;
+    ok(TG.queuedOf(user.id, "quick", true) === 0, "phản biện đang chờ mà người dùng đóng tab: rời hàng ngay");
+    await Promise.all(held);
+    ok(!lines.some((l) => /job=critic-auto/.test(l)), "và không chạy lượt nào của gói", lines.join(" | "));
     // Hàng việc nền đang đầy: phản biện tự chạy bỏ qua lần này, không hiện lỗi; bấm tay thì không qua hàng đó.
     fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 900 }));
     const busy = Array.from({ length: 6 }, () => AM.quickCall(user, "Giữ chỗ.", "x", { job: "brain", bg: true }).catch((e) => e));

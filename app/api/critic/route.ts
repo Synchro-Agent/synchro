@@ -35,14 +35,19 @@ export const POST = handle(async (req: Request) => {
   const { allowed, usable } = await usableModels(user);
   const auto = b.auto === true, list = usable.length ? usable : allowed, calm = list.filter((k) => !stalledModels(user.id, list).includes(k));
   const picks = pickCritics(calm.length ? calm : list, gen ? vendorOf(gen) : "", gen, auto);
-  if (!picks.length) return Response.json({ error: "Synchro chưa được kết nối với model nào." }, { status: 503 });
+  if (!picks.length) {
+    // Tự chạy mà chỉ còn model mạnh hoặc tính tiền thật: không tiêu hạn mức đắt khi không ai bấm. Có model thì bỏ qua êm, chưa có model nào thì mới là lỗi.
+    if (auto && list.length) return Response.json({ skipped: true, findings: [], by: [] });
+    return Response.json({ error: "Synchro chưa được kết nối với model nào." }, { status: 503 });
+  }
   // Bộ slide (HTML có các <section class="slide">) được trình chiếu ở khung 16:9 thu nhỏ đúng tỉ lệ như PowerPoint: không xếp lại theo màn hình
   // điện thoại. Phản biện như trang web thì luôn báo nhầm "chữ quá nhỏ trên điện thoại" (badge đỏ trên bộ slide không lỗi).
   const deck = String(b.type) === "html" && isDeck({ type: "html", content });
   const kind = deck ? "bộ slide HTML trình chiếu 16:9" : LABEL[String(b.type)] ?? "code";
   const ask = `Sản phẩm: “${String(b.title ?? "").slice(0, 200)}” (${kind}${b.lang ? `, ${String(b.lang).slice(0, 30)}` : ""}).${typeof b.question === "string" && b.question.trim() ? `\nYêu cầu gốc của người dùng: ${b.question.trim().slice(0, 1500)}` : ""}\n\n<code>\n${numbered(content)}\n</code>`;
+  // signal: kết quả chỉ về qua phản hồi này. Người dùng đóng tab thì không ai nhận nữa: rời hàng chờ (có thể tới 5 phút), không tốn lượt của gói và không giữ 200 KB trong bộ nhớ.
   const runs = await Promise.allSettled(picks.map(async (key) => {
-    const text = await oneShot(user, key, deck ? CRITIC.replace("</critic_review>", `${DECK_NOTE}\n</critic_review>`) : CRITIC, [{ role: "user", content: ask }], { maxTokens: 1800, job: auto ? "critic-auto" : "critic", bg: auto });
+    const text = await oneShot(user, key, deck ? CRITIC.replace("</critic_review>", `${DECK_NOTE}\n</critic_review>`) : CRITIC, [{ role: "user", content: ask }], { maxTokens: 1800, job: auto ? "critic-auto" : "critic", bg: auto, signal: req.signal });
     const findings = parseFindings(text, lines);
     if (!findings) throw new Error("Model phản biện trả lời không đọc được");
     return { by: key, findings };

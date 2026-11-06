@@ -606,16 +606,21 @@ export function sideModel(allowed: string[], o: { avoid?: string[] } = {}): stri
 }
 /**
  * Model cho hội đồng phản biện: mỗi hãng một model, khác hãng với model vừa viết. Người dùng bấm "Phản biện": tối đa hai model, ưu tiên hạng cân bằng (đủ giỏi, rẻ hơn hạng mạnh nhất).
- * Tự chạy sau mỗi artifact quan trọng mà không ai bấm: từng cũng là hai CLI hạng cân bằng, tức GPT-6.1 Sol đọc cả artifact (20-22 giây mỗi lần, tính vào hạn mức của gói). Giờ một model rẻ nhất.
+ * Tự chạy sau mỗi artifact quan trọng mà không ai bấm: từng cũng là hai CLI hạng cân bằng, tức GPT-6.1 Sol đọc cả artifact (20-22 giây mỗi lần, tính vào hạn mức của gói).
+ * Giờ một model rẻ nhất, cùng bộ lọc với sideModel: ưu tiên hãng khác chỉ trong cùng hạng rẻ nhất (từng chọn Grok 4.7 hạng mạnh dù có Haiku, chọn Fable tính tiền thật). Chỉ còn model mạnh thì bỏ qua, người dùng vẫn bấm tay được.
  */
 export function pickCritics(allowed: string[], exclude: string, avoid: string, auto = false): string[] {
-  const order: Tier[] = auto ? ["fast", "balanced", "strong"] : ["balanced", "strong", "fast"], max = auto ? 1 : 2;
+  if (auto) {
+    const rank = (k: string) => [tierOf(k) === "fast" ? 0 : 1, vendorOf(k) === exclude ? 1 : 0, k === avoid ? 1 : 0, profileOf(k).cost];
+    const fits = allowed.filter((k) => !CREDIT.test(k) && !CODE_ONLY.test(k) && tierOf(k) !== "strong").map((k) => ({ k, r: rank(k) }));
+    return fits.sort((a, b) => a.r.reduce((d, v, i) => d || v - b.r[i], 0)).slice(0, 1).map((x) => x.k);
+  }
+  const order: Tier[] = ["balanced", "strong", "fast"], max = 2;
   const byProv = new Map<string, string[]>();
   for (const k of allowed) { const p = vendorOf(k); byProv.set(p, [...(byProv.get(p) ?? []), k]); }
   const best = (ks: string[]) => order.map((t) => ks.find((k) => tierOf(k) === t && k !== avoid)).find(Boolean) ?? ks.find((k) => k !== avoid) ?? ks[0];
   const others = [...byProv.entries()].filter(([p]) => p !== exclude).map(([, ks]) => best(ks));
-  // Tự chạy: chọn đúng hãng có model rẻ nhất, không phải hãng đứng đầu danh sách.
-  if (others.length) return (auto ? [...others].sort((a, b) => order.indexOf(tierOf(a)) - order.indexOf(tierOf(b))) : others).slice(0, max);
+  if (others.length) return others.slice(0, max);
   // Chỉ có một hãng: dùng model khác model vừa viết nếu có.
   const own = byProv.get(exclude) ?? [...byProv.values()][0] ?? [];
   return own.length ? [best(own)] : [];
