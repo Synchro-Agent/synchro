@@ -726,7 +726,7 @@ async function subTurnWatched(o: SubTurn): Promise<SubResult> {
     try { return await subTurnInner(o); } finally { void watch.sweep(); }
   })();
   // Vừa đổi sang bản CLI mới (cập nhật hằng tuần): các lượt thật đầu tiên lỗi thì tự trả về bản trước (app/ai/cliupdate.ts).
-  if (c0) { const ok = classifyTurn(r); if (ok !== null) noteCliOutcome(c0, ok, ok ? "" : String(r.json.detail ?? r.json.error ?? "")); }
+  if (c0) { const ok = classifyTurn(r); if (ok !== null) noteCliOutcome(c0, ok, ok ? "" : String(r.json.detail ?? r.json.error ?? ""), { uid: o.user.id, auth: r.status === 409 }); }
   return r;
 }
 async function subTurnInner(o: SubTurn): Promise<SubResult> {

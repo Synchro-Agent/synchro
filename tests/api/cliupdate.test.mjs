@@ -173,9 +173,31 @@ try {
   console.log("6. Hẹn giờ");
   {
     process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-cliu-"));
-    const { "ai/cliupdate": CU } = await loadTs(["ai/cliupdate"]);
-    const due = Date.parse("2026-11-19T10:00:00"), at = new Date(CU.nextSlot(due));
+    const { "ai/cliupdate": CU, authstore: AS } = await loadTs(["ai/cliupdate", "authstore"]);
+    const due = Date.parse("2026-11-19T10:00:00"), at = new Date(CU.nextSlot(due, due - 7 * 86_400_000));
     ok(at.getHours() === 4 && at.getMinutes() < 40 && at.getTime() >= due - 12 * 3_600_000, "mốc chạy rơi vào 04:00–04:40 giờ máy chủ quanh ngày đến hạn", at.toString());
+    // Lần đầu khởi động (hạn = bây giờ + 1 giờ) lúc 05:00…15:00: 04:xx cùng ngày đã qua nên phải là 04:xx hôm sau, không cập nhật giữa ban ngày.
+    const day = (h) => Date.parse(`2026-11-19T${String(h).padStart(2, "0")}:00:00`);
+    const slots = [5, 9, 12, 14, 15, 16, 20, 23].map((h) => { const now = day(h), t = CU.nextSlot(now + 3_600_000, now), d = new Date(t); return { h, ok: t > now && d.getHours() === 4 && t - now < 24 * 3_600_000, at: d.toString() }; });
+    ok(slots.every((x) => x.ok), "khởi động hay bật lại lúc nào cũng hẹn 04:xx sắp tới (không bao giờ là mốc đã qua)", slots.filter((x) => !x.ok));
+    // Bản npm: chỉ nhận bản chính thức đã phát hành đủ lâu, không vượt thẻ latest.
+    const now = Date.parse("2026-11-20T00:00:00Z"), ago = (h) => new Date(now - h * 3_600_000).toISOString();
+    const time = { created: ago(9999), modified: ago(1), "2.1.300": ago(400), "2.1.310": ago(200), "2.1.311": ago(80), "2.1.312": ago(20), "2.1.313-beta.1": ago(100), "2.2.0-rc.1": ago(90), "9.0.0": ago(500) };
+    ok(CU.pickRelease(time, "2.1.312", now, 72 * 3_600_000) === "2.1.311" && CU.pickRelease(time, "2.1.312", now, 10 * 3_600_000) === "2.1.312" && CU.pickRelease({ "1.0.0": ago(1) }, "1.0.0", now, 72 * 3_600_000) === null,
+      "npm: bản mới nhất đã ra đủ 72 giờ (bỏ bản vừa ra, bản -beta / -rc, bản lạ vượt thẻ latest)", CU.pickRelease(time, "2.1.312", now, 72 * 3_600_000));
+    // Lượt lỗi đăng nhập của một thành viên (đăng nhập gói của riêng họ hết hạn) không làm cả máy chủ trả về bản trước.
+    const probe = (loginOk) => { if (globalThis.__synchroCliUpdate) globalThis.__synchroCliUpdate.st = null; AS.setSetting("cli_update", JSON.stringify({ on: true, clis: { claude: { active: null, prev: null, probation: { since: Date.now(), ok: 0, fail: 0, errors: [], loginOk, authUsers: [] }, bad: [], last: null } } })); };
+    const fails = () => JSON.parse(AS.getSetting("cli_update", "{}")).clis?.claude?.probation?.fail;
+    probe(false);
+    for (let i = 0; i < 4; i++) CU.noteCliOutcome("claude", false, "auth expired", { uid: "u-het-han", auth: true });
+    ok(fails() === 1, "một tài khoản đăng nhập hết hạn gửi 4 lượt: chỉ tính 1 lượt lỗi", fails());
+    ok(CU.classifyTurn({ status: 409, json: { detail: "x", relogin: "claude" } }) === false, "lỗi đăng nhập vẫn là lượt lỗi khi chưa xác nhận được đăng nhập");
+    probe(true);
+    for (const uid of ["a", "b", "c"]) CU.noteCliOutcome("claude", false, "auth expired", { uid, auth: true });
+    ok(fails() === 0, "bản mới đã đọc được đăng nhập sẵn có khi kiểm tra: lỗi đăng nhập của từng người không tính", fails());
+    CU.noteCliOutcome("claude", false, "CLI chết", { uid: "a" });
+    ok(fails() === 1, "lỗi do chính CLI (chết, không phản hồi) vẫn tính", fails());
+
     ok(CU.versionNum("2.1.310 (Claude Code)") === "2.1.310" && CU.versionNum("codex-cli 0.164.0") === "0.164.0" && CU.versionNum("grok 0.1.42-beta.1 [x]") === "0.1.42-beta.1", "đọc số phiên bản từ dòng --version của từng CLI");
     ok(CU.classifyTurn({ status: 200, json: {} }) === true && CU.classifyTurn({ status: 502, json: {} }) === false && CU.classifyTurn({ status: 429, json: { quota: "plan" } }) === null && CU.classifyTurn({ status: 200, json: { cancelled: true } }) === null && CU.classifyTurn({ status: 503, json: { stalled: true } }) === false, "chỉ lỗi do CLI tính là lượt lỗi (hết hạn mức, người dùng dừng thì không)");
     fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });

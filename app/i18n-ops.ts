@@ -112,7 +112,7 @@ export const OPS_EN2VI: Record<string, string> = {
   "Outside the heap (external / buffers)": "Ngoài heap (external / buffer)", "Heap change": "Heap thay đổi",
   "Measured every 30 minutes and written to the server log as a [timing] mem line, so slow growth shows up before the server runs out.": "Đo mỗi 30 phút và ghi vào nhật ký máy chủ thành dòng [timing] mem, để thấy bộ nhớ lớn dần trước khi máy chủ hết chỗ.",
   "Skill index": "Chỉ mục skill", "Brain recall index": "Chỉ mục gọi lại của bộ não", "Semantic search vectors": "Vector tìm kiếm theo nghĩa", "Synchro Code runs kept": "Lượt Synchro Code đang giữ", "Downloaded plugin packages": "Gói plugin vừa tải",
-  "Artifact images": "Ảnh của artifact", "Replies waiting for approval": "Lượt chờ duyệt công cụ",
+  "Artifact images": "Ảnh của artifact", "D2 diagrams": "Sơ đồ D2", "Replies waiting for approval": "Lượt chờ duyệt công cụ",
   "Runs code and Synchro Code workspaces.": "Chạy code và các workspace của Synchro Code.",
   "Running": "Đang chạy",
   "Not answering": "Không trả lời",
@@ -190,6 +190,7 @@ const CLIU_RULES: Rule[] = [
   [/^Bản mới không đọc được đăng nhập sẵn có của quản trị viên: ([\s\S]*)$/, (m) => `The new version couldn't read the administrator's existing sign-in: ${m[1]}`],
   [/^Không trả lại được: ([\s\S]*)$/, (m) => `Couldn't roll back: ${m[1]}`],
   [/^Không cài được: ([\s\S]*)$/, (m) => `Couldn't install: ${m[1]}`],
+  [/^npm (\S+): chưa có bản nào phát hành đủ (\d+) giờ; chờ lần sau\.$/, (m) => `npm ${m[1]}: no release has been out for ${m[2]} hours yet; waiting for the next run.`],
   [/^Không đổi được sang bản mới: ([\s\S]*)$/, (m) => `Couldn't switch to the new version: ${m[1]}`],
   [/^Các lượt chat đầu tiên với bản mới bị lỗi \((\d+) lỗi, (\d+) chạy được\)(?:: ([\s\S]*))?\.$/, (m) => `The first chats on the new version failed (${m[1]} failed, ${m[2]} worked)${m[3] ? `: ${m[3]}` : ""}.`],
 ];

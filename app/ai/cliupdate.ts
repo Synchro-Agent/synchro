@@ -28,7 +28,8 @@ export const envOff = () => process.env.SYNCHRO_CLI_AUTOUPDATE === "0";
 export type Outcome = "updated" | "same" | "failed" | "smoke_failed" | "skipped" | "rolled_back" | "not_installed";
 export type CliResult = { cli: Cli; outcome: Outcome; from: string | null; to: string | null; detail: string; at: number };
 type Rel = { target: string; version: string | null; at: number };
-type Probation = { since: number; ok: number; fail: number; errors: string[] };
+// loginOk: lần kiểm tra trước khi đổi bản đã thấy bản mới đọc được đăng nhập sẵn có. authUsers: tài khoản đã bị tính một lượt lỗi đăng nhập.
+type Probation = { since: number; ok: number; fail: number; errors: string[]; loginOk?: boolean; authUsers?: string[] };
 type CliState = { active: Rel | null; prev: Rel | null; probation: Probation | null; bad: string[]; last: CliResult | null };
 type State = { on: boolean; lastRun: number | null; nextAt: number | null; running: boolean; clis: Partial<Record<Cli, CliState>> };
 
@@ -98,9 +99,29 @@ async function latestKnown(cli: Cli): Promise<{ v: string | null; error?: string
   const pkg = NPM_PKG[cli];
   if (!pkg) return { v: null };
   const npm = path.join(path.dirname(process.execPath), "npm");
-  const r = await runCli(fs.existsSync(npm) ? npm : "npm", ["view", pkg, "version"], { env: env(), timeoutMs: 60_000 });
-  const v = versionNum(r.stdout);
-  return r.code === 0 && v ? { v } : { v: null, error: `npm view ${pkg}: ${redact(stripAnsi(r.stderr || r.stdout)).slice(0, 200) || "không đọc được bản mới nhất"}` };
+  const r = await runCli(fs.existsSync(npm) ? npm : "npm", ["view", pkg, "time", "dist-tags", "--json", `--registry=${REGISTRY()}`], { env: env(), timeoutMs: 60_000 });
+  let j: { time?: Record<string, string>; "dist-tags"?: { latest?: string } } = {};
+  try { j = JSON.parse(r.stdout); } catch {}
+  const v = r.code === 0 ? pickRelease(j.time ?? {}, j["dist-tags"]?.latest) : null;
+  if (v) return { v };
+  if (r.code === 0 && versionNum(j["dist-tags"]?.latest)) return { v: null, error: `npm ${pkg}: chưa có bản nào phát hành đủ ${Math.round(COOLDOWN_MS() / 3_600_000)} giờ; chờ lần sau.` };
+  return { v: null, error: `npm view ${pkg}: ${redact(stripAnsi(r.stderr || r.stdout)).slice(0, 200) || "không đọc được bản mới nhất"}` };
+}
+// Kho npm chính thức ghi rõ (không theo .npmrc trong nhà engine). Chỉ nhận bản đã phát hành đủ lâu: bản bị chiếm quyền phát hành thường bị gỡ trong vài giờ / ngày,
+// cài ngay khi vừa ra thì máy chủ chạy nó cả tuần với đăng nhập gói của mọi người.
+const REGISTRY = () => process.env.SYNCHRO_NPM_REGISTRY || "https://registry.npmjs.org/";
+const COOLDOWN_MS = () => (Number(process.env.SYNCHRO_CLI_UPDATE_COOLDOWN_H) || 72) * 3_600_000;
+const semver = (v: string) => v.split(".").map(Number);
+const newer = (a: string, b: string) => { const x = semver(a), y = semver(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+/** Bản chính thức (x.y.z, không -beta…) mới nhất đã phát hành đủ COOLDOWN_MS và không mới hơn thẻ latest; time: trường "time" của npm view. */
+export function pickRelease(time: Record<string, string>, latest: string | undefined, now = Date.now(), cooldown = COOLDOWN_MS()): string | null {
+  let best: string | null = null;
+  for (const [v, t] of Object.entries(time)) {
+    if (!/^\d+\.\d+\.\d+$/.test(v) || !(Date.parse(t) <= now - cooldown)) continue;
+    if (latest && /^\d+\.\d+\.\d+$/.test(latest) && newer(v, latest)) continue;
+    if (!best || newer(v, best)) best = v;
+  }
+  return best;
 }
 /** Cài một bản vào thư mục riêng; trả đường dẫn lệnh trong thư mục đó. */
 async function installTo(cli: Cli, dir: string, want: string | null): Promise<{ bin: string | null; output: string }> {
@@ -115,7 +136,8 @@ async function installTo(cli: Cli, dir: string, want: string | null): Promise<{ 
     out = r.out;
   } else if (cli === "claude" || cli === "codex") {
     const npm = path.join(path.dirname(process.execPath), "npm");
-    const r = await runCli(fs.existsSync(npm) ? npm : "npm", ["install", "-g", "--prefix", dir, "--no-audit", "--no-fund", `${NPM_PKG[cli]}@${want ?? "latest"}`], { env: env(), timeoutMs: 10 * 60_000 });
+    // Codex không cần script cài (tệp chạy nằm trong gói theo nền tảng) nên không chạy script nào của gói; Claude Code cần postinstall để đặt tệp chạy gốc.
+    const r = await runCli(fs.existsSync(npm) ? npm : "npm", ["install", "-g", "--prefix", dir, "--no-audit", "--no-fund", `--registry=${REGISTRY()}`, ...(cli === "codex" ? ["--ignore-scripts"] : []), `${NPM_PKG[cli]}@${want ?? "latest"}`], { env: env(), timeoutMs: 10 * 60_000 });
     out = `${r.stdout}${r.stderr}`;
   } else {
     const res = await fetch(cli === "agy" ? AGY_INSTALLER : GROK_INSTALLER, { signal: AbortSignal.timeout(60_000) }).catch((e) => ({ ok: false, status: String((e as Error).message) }) as const);
@@ -159,7 +181,7 @@ async function loginCheck(cli: Cli, bin: string, u: UserRow): Promise<Login> {
   return { sane: r.code === 0 || signIn, loggedIn: r.code === 0 && !signIn, detail };
 }
 /** Đạt khi: --version chạy, lệnh xem đăng nhập trả lời bình thường, và tài khoản đang đăng nhập được bằng bản cũ thì bản mới cũng vậy. */
-async function smoke(cli: Cli, bin: string): Promise<{ ok: boolean; version: string | null; detail: string }> {
+async function smoke(cli: Cli, bin: string): Promise<{ ok: boolean; version: string | null; detail: string; loginOk?: boolean }> {
   const v = await versionOf(bin);
   if (!v.ok) return { ok: false, version: null, detail: `--version lỗi: ${redact(v.line).slice(0, 200)}` };
   const u = checkScope(cli);
@@ -169,7 +191,7 @@ async function smoke(cli: Cli, bin: string): Promise<{ ok: boolean; version: str
   const next = await loginCheck(cli, bin, u);
   if (!next.sane) return { ok: false, version: v.line, detail: `Bản mới không trả lời được lệnh xem đăng nhập: ${next.detail || "không có đầu ra"}` };
   if (now?.loggedIn && !next.loggedIn) return { ok: false, version: v.line, detail: `Bản mới không đọc được đăng nhập sẵn có của quản trị viên: ${next.detail}` };
-  return { ok: true, version: v.line, detail: next.loggedIn ? "Đăng nhập sẵn có của quản trị viên vẫn dùng được." : "Tài khoản kiểm tra chưa đăng nhập: đã kiểm tra lệnh chạy được." };
+  return { ok: true, version: v.line, loginOk: next.loggedIn, detail: next.loggedIn ? "Đăng nhập sẵn có của quản trị viên vẫn dùng được." : "Tài khoản kiểm tra chưa đăng nhập: đã kiểm tra lệnh chạy được." };
 }
 
 // ---------------------------------------------------------------- đổi bản, trả lại, dọn
@@ -232,11 +254,20 @@ export async function rollback(cli: Cli, why: string, by: "auto" | "owner" = "au
 
 // ---------------------------------------------------------------- theo dõi lượt thật đầu tiên sau khi đổi bản
 const PROBATION_MAX = 5, PROBATION_MS = 3 * 86_400_000;
-/** Kết quả một lượt chat thật bằng CLI này (subs.ts gọi sau mỗi lượt). Chỉ tính trong thời gian thử bản mới. */
-export function noteCliOutcome(cli: Cli, ok: boolean, detail = "") {
+/**
+ * Kết quả một lượt chat thật bằng CLI này (subs.ts gọi sau mỗi lượt). Chỉ tính trong thời gian thử bản mới.
+ * auth: lượt lỗi vì đăng nhập gói không còn hợp lệ. Đăng nhập của một người hết hạn hay bị thu hồi là chuyện của riêng người đó, không phải lỗi của bản CLI:
+ * chỉ tính khi lần kiểm tra trước khi đổi bản chưa xác nhận được bản mới đọc đăng nhập sẵn có, và mỗi tài khoản tính tối đa một lần (một thành viên
+ * có đăng nhập hết hạn gửi vài lượt không làm cả máy chủ trả về bản trước, rồi chặn luôn bản đó).
+ */
+export function noteCliOutcome(cli: Cli, ok: boolean, detail = "", o: { uid?: string; auth?: boolean } = {}) {
   const p = state().clis[cli]?.probation;
   if (!p) return;
   if (Date.now() - p.since > PROBATION_MS) { cliState(cli).probation = null; save(); return; }
+  if (!ok && o.auth) {
+    if (p.loginOk || !o.uid || (p.authUsers ?? []).includes(o.uid)) return;
+    p.authUsers = [...(p.authUsers ?? []), o.uid].slice(-20);
+  }
   if (ok) p.ok++; else { p.fail++; if (detail) p.errors = [...p.errors, redact(detail).slice(0, 200)].slice(-3); }
   // Hai lượt đầu đều lỗi, hoặc lỗi nhiều hơn chạy được sau 3 lượt: bản mới hỏng với lượt thật.
   if ((p.fail >= 2 && p.ok === 0) || (p.fail >= 3 && p.fail > p.ok)) {
@@ -264,6 +295,8 @@ async function updateOne(cli: Cli): Promise<CliResult> {
   if (latest.error && !latest.v) return { cli, outcome: SOURCE() ? "skipped" : "failed", from: fromLine, to: null, detail: latest.error, at };
   const want = latest.v;
   if (want && from && versionNum(want) === from) return { cli, outcome: "same", from: fromLine, to: fromLine, detail: "Đã là bản mới nhất.", at };
+  // Bản đủ lâu mới nhất cũ hơn bản đang chạy (bản đang chạy cài tay ở Providers khi vừa ra): không bao giờ hạ cấp.
+  if (want && from && /^\d+\.\d+\.\d+$/.test(want) && /^\d+\.\d+\.\d+$/.test(from) && !newer(want, from)) return { cli, outcome: "same", from: fromLine, to: fromLine, detail: "Đã là bản mới nhất.", at };
   if (want && s.bad.includes(versionNum(want) ?? want)) return { cli, outcome: "skipped", from: fromLine, to: want, detail: "Bản này đã bị trả lại trước đây vì lỗi; chờ bản sau.", at };
   const dir = path.join(versionsDir(cli), `${(want ?? "latest").replace(/[^\w.-]/g, "_")}-${at.toString(36)}`);
   const drop = () => sh('rm -rf -- "$1"', [dir]);
@@ -279,7 +312,7 @@ async function updateOne(cli: Cli): Promise<CliResult> {
   const st = cliState(cli);
   st.prev = { target: p.prev ?? st.active?.target ?? "", version: fromLine, at: st.active?.at ?? at };
   st.active = { target: ins.bin, version: sm.version, at };
-  st.probation = { since: at, ok: 0, fail: 0, errors: [] };
+  st.probation = { since: at, ok: 0, fail: 0, errors: [], loginOk: !!sm.loginOk, authUsers: [] };
   if (!st.prev.target) st.prev = null;
   save();
   await afterSwitch(cli);
@@ -336,10 +369,12 @@ async function notify(rs: CliResult[], reason: "timer" | "owner" | "auto") {
 
 // ---------------------------------------------------------------- hẹn giờ
 /** Mốc chạy: 04:00 giờ máy chủ của ngày đến hạn (ít người dùng), lệch ngẫu nhiên tới 40 phút. */
-export function nextSlot(due: number) {
+export function nextSlot(due: number, now = Date.now()) {
   const d = new Date(due);
   d.setHours(4, Math.floor(Math.random() * 40), 0, 0);
   if (d.getTime() < due - 12 * 3_600_000) d.setDate(d.getDate() + 1);
+  // 04:xx của ngày đến hạn đã qua (khởi động hay bật lại lúc 09:00 thì hạn là 10:00 cùng ngày): sang 04:xx hôm sau, không cài lúc ban ngày.
+  while (d.getTime() <= now) d.setDate(d.getDate() + 1);
   return d.getTime();
 }
 /** Bộ hẹn giờ (unref: không giữ tiến trình sống): xem mỗi 15 phút đã tới hạn chưa. */
