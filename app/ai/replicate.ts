@@ -212,8 +212,13 @@ async function uploadRef(base: string, key: string, f: ImgFile, signal?: AbortSi
 // ---------------------------------------------------------------- tham số từng model
 const has = (s: Schema | undefined, k: string) => !s || s.props.includes(k);
 const first = (s: Schema | undefined, ...names: string[]) => (s ? names.find((n) => s.props.includes(n)) : names[0]);
-/** Prompt cuối cùng: ảnh sản phẩm thì nối hậu tố nhiếp ảnh của chủ dự án. */
-export const finalPrompt = (prompt: string, product: boolean) => (product ? `${prompt.trim().replace(/[\s,.;]+$/, "")}, ${MASTER_IMAGE_GEN_CONFIG.masterStyleSuffix}` : prompt.trim());
+// Logo, biểu tượng, tranh minh họa, hình vẽ, hoạt hình, vector: không bao giờ nối hậu tố nhiếp ảnh (chủ dự án chốt), kể cả khi model lỡ đánh dấu
+// product_shot (ví dụ "logo cho thương hiệu mỹ phẩm"): "Hasselblad, bục studio" biến logo phẳng thành ảnh chụp vật thể.
+const NOT_PHOTO = /\b(logo|logos|logotype|wordmark|monogram|emblem|icon|icons|favicon|illustration|illustrated|drawing|drawn|sketch|cartoon|anime|manga|comic|clip ?art|vector|flat design|line art|doodle|mascot|sticker|watercolou?r painting|oil painting|pixel art)\b|biểu tượng|minh họa|minh hoạ|hình vẽ|tranh vẽ|bức vẽ|vẽ tay|phác thảo|hoạt hình|truyện tranh|nhãn dán|linh vật|tranh màu nước|tranh sơn dầu|(?:hãy|giúp|cho tôi|cho mình) vẽ/iu;
+/** Yêu cầu là logo / tranh / hình vẽ chứ không phải ảnh chụp. */
+export const notPhoto = (prompt: string) => NOT_PHOTO.test(prompt.normalize("NFC"));
+/** Prompt cuối cùng: ảnh sản phẩm (ảnh chụp) thì nối nguyên văn hậu tố nhiếp ảnh của chủ dự án; logo, tranh, hình vẽ thì không. */
+export const finalPrompt = (prompt: string, product: boolean) => (product && !notPhoto(prompt) ? `${prompt.trim().replace(/[\s,.;]+$/, "")}, ${MASTER_IMAGE_GEN_CONFIG.masterStyleSuffix}` : prompt.trim());
 export function fluxInput(s: Schema | undefined, q: { prompt: string; aspect?: string; product: boolean; ref?: string }): Record<string, unknown> {
   const out: Record<string, unknown> = { prompt: finalPrompt(q.prompt, q.product) };
   if (q.aspect && has(s, "aspect_ratio") && (!s?.enums.aspect_ratio || s.enums.aspect_ratio.includes(q.aspect))) out.aspect_ratio = q.aspect;
