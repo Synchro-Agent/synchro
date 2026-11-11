@@ -68,6 +68,7 @@ export const UX_VI2EN: Record<string, string> = {
   "Máy chủ chưa có nơi chạy code nên chưa vẽ được sơ đồ D2.": "The server has nowhere to run code yet, so it can't draw D2 diagrams.",
   "Vẽ sơ đồ quá 20 giây.": "Drawing the diagram took longer than 20 seconds.", "Sandbox chưa có D2 (cần image workspace mới).": "The sandbox doesn't have D2 yet (it needs the new workspace image).",
   "Không vẽ được sơ đồ D2.": "Couldn't draw the D2 diagram.", "Sơ đồ quá lớn.": "The diagram is too large.", "Kết quả không phải SVG.": "The result isn't an SVG.",
+  "Đang dựng poster 3600×1890": "Rendering the poster at 3600×1890",
   // Tạo ảnh bằng khóa Replicate của máy chủ
   "hạn mức ảnh Replicate hôm nay": "today's Replicate image limit", "Replicate trả về dữ liệu không đọc được.": "Replicate returned data Synchro couldn't read.",
   "quá thời gian chờ mà Replicate chưa xong": "Replicate didn't finish in time", "Replicate đã hủy lượt chạy.": "Replicate canceled the run.",
@@ -75,6 +76,7 @@ export const UX_VI2EN: Record<string, string> = {
   "Không tải được ảnh từ Replicate (ảnh chỉ giữ 1 giờ).": "Couldn't download the image from Replicate (images are kept for 1 hour).",
   "tệp Replicate trả về không phải ảnh PNG, JPEG hay WebP": "the file Replicate returned isn't a PNG, JPEG or WebP image", "Replicate không nhận ảnh gốc.": "Replicate didn't accept the source image.",
   "Chưa có khóa Replicate.": "There's no Replicate key yet.",
+  "FLUX trên Replicate không nhận được ảnh gốc lúc này.": "FLUX on Replicate isn't accepting a reference image right now.",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Khóa Replicate không hợp lệ hoặc không có quyền \((\d+)\)\.$/, (m) => `The Replicate key is invalid or lacks permission (${m[1]}).`],
@@ -107,6 +109,7 @@ export const UX_EN2VI: Record<string, string> = {
   "Waiting for a key. Until one is added, images are made with each person's own plan (Antigravity, ChatGPT, Grok), exactly as now.": "Đang chờ khóa. Tới khi có khóa, ảnh vẫn tạo bằng gói của từng người (Antigravity, ChatGPT, Grok), y như hiện nay.",
   "Account": "Tài khoản", ". FLUX 1.1 Pro Ultra makes new images; IC-Light puts a product photo into a studio scene. Accounts past their daily image limit go back to their own plan.": ". FLUX 1.1 Pro Ultra tạo ảnh mới; IC-Light đưa ảnh sản phẩm vào bối cảnh studio. Tài khoản quá hạn mức ảnh trong ngày quay về gói của mình.",
   "Images": "Ảnh", "API key only. Voice (ElevenLabs) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
+  "API key only. Voice (ElevenLabs), Connectors (Composio) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs), Connectors (Composio) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
   "Choose": "Chọn", "Default": "Mặc định", "Server runtime": "Máy chủ chạy code",
   "Code runs on the Synchro server.": "Code chạy trên máy chủ Synchro.",
   "Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts.": "Tệp đính kèm và lịch sử hội thoại tính vào giới hạn của model bạn chọn. Tệp lớn được rút gọn còn phần liên quan nhất.",
