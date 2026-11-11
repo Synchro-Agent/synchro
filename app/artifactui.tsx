@@ -46,7 +46,7 @@ ${PPTX_FRAME_JS}
 addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.__synchro!==ch)return;
 if(d.t==="pptx")lib(0,function(ok){if(!ok)return post({t:"pptx",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxPptx(d.id,d.fontCss)});
 else if(d.t==="print"){if(window.__sxPrint)window.__sxPrint();else setTimeout(function(){print()},30)}
-else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxCapture(d.id,d.fontCss)});
+else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,error:"Không tải được thư viện chụp ảnh"});sxCapture(d.id,d.fontCss,d.scale)});
 else if(d.t==="pick"){pk=!!d.on;document.documentElement.style.cursor=pk?"crosshair":"";if(!pk&&hl)hl.style.display="none"}
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
 else if(d.t==="changed"){var ev={key:d.key,shared:true};subs.slice().forEach(function(f){try{f(ev)}catch(x){}});try{dispatchEvent(new CustomEvent("synchro:storage",{detail:ev}))}catch(x){}}
@@ -511,7 +511,10 @@ Yêu cầu: ${req.trim()}`);
     setPicked(null); setReq("");
   };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
-  const pngFrame = () => withPreview(async () => { const d = await frameCall({ t: "capture", fontCss: await fontEmbedCss(withKitFontLink(art.content)) }); saveBlob(dataUrlBlob(String(d.data)), `${name}.png`); done(`${name}.png`); }, 1500);
+  const pngFrame = (scale?: number) => withPreview(async () => { const n = `${name}${scale ? `@${scale}x` : ""}.png`; const d = await frameCall({ t: "capture", scale, fontCss: await fontEmbedCss(withKitFontLink(art.content)) }); saveBlob(dataUrlBlob(String(d.data)), n); done(n); }, 1500);
+  // Poster 3:4 và ảnh chia sẻ 1200×630 của bộ thiết kế: thêm bản 3x đúng cỡ in / mạng xã hội (3240×4320, 3600×1890).
+  const frame = deck ? null : /class=["'][^"']*\bsx-og\b/.test(art.content) ? "og" : /class=["'][^"']*\bsx-poster\b/.test(art.content) ? "poster" : null;
+  const png3x: DlItem[] = frame ? [{ label: "PNG 3x", sub: frame === "og" ? "3600×1890, chữ nét" : "3240×4320, chữ nét", run: () => pngFrame(3) }] : [];
   // PowerPoint: Synchro tự dựng ngay trong khung xem (deckpptx.ts), không nhờ model; chữ sửa được, hình giữ nguyên.
   const pptxFrame = () => withPreview(async () => {
     say(tr("Đang dựng tệp PowerPoint…"));
@@ -526,10 +529,10 @@ Yêu cầu: ${req.trim()}`);
   if (deck) {
     items.push({ label: "PDF", sub: "Mỗi slide một trang (chọn Lưu thành PDF)", run: pdfFrame });
     items.push({ label: "PowerPoint (.pptx)", sub: "Chữ sửa được, hình giữ nguyên", run: pptxFrame });
-    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: async () => { const n = artFileName(art); saveBlob(new Blob([deckExport(await embedGenerated(art.content))], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: pngFrame });
-  } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: "Ảnh toàn trang", run: pngFrame });
+    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: async () => { const n = artFileName(art); saveBlob(new Blob([deckExport(await embedGenerated(art.content))], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: () => pngFrame() });
+  } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: frame ? "Ảnh đúng khung" : "Ảnh toàn trang", run: () => pngFrame() }, ...png3x);
   else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: async () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", await embedGenerated(art.content), location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
-    { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: pngFrame }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
+    { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: () => pngFrame() }, ...png3x, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
   else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(await embedGenerated(art.content)), `${name}.png`); done(`${name}.png`); } });
   else if (art.type === "markdown") items.push({ label: "Word (.docx)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(async () => { const n = `${name}.docx`; saveBlob(await docxFile(shown(".art-md"), art.title, art.content), n); done(n); }) },
     { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md"), art.content))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });

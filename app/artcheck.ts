@@ -117,10 +117,10 @@ const PROBE = String.raw`(root, deck) => {
     if ((el.scrollHeight > el.clientHeight + 4 || el.scrollWidth > el.clientWidth + 4) && el.innerText && el.innerText.trim() && el.clientHeight > 0) add("chữ bị khung cắt mất", "“" + say(el) + "”");
   }
   for (const img of root.querySelectorAll("img")) if (vis(img) && img.complete && !img.naturalWidth) add("ảnh không tải được", (img.getAttribute("src") || "").slice(0, 120) + " (khung artifact chỉ hiện ảnh nhúng sẵn hoặc ảnh từ URL https công khai)");
-  // Slide, poster của bộ thiết kế là hình co theo khung: đo ở cỡ thật (rộng 1280, 1080), ở khung điện thoại chữ co theo là đúng.
+  // Slide, poster, ảnh chia sẻ của bộ thiết kế là hình co theo khung: đo ở cỡ thật (rộng 1280, 1080, 1200), ở khung điện thoại chữ co theo là đúng.
   for (const { el, r } of boxes) {
-    const fs = parseFloat(getComputedStyle(el).fontSize), art = el.closest(".sx-poster,.sx-slide");
-    if (art) { const full = art.matches(".sx-poster") ? 1080 : 1280, px = fs * full / art.getBoundingClientRect().width; if (px < 12 * (full === 1080 ? 4 / 3 : 1) && r.width > 8) add("chữ quá nhỏ", Math.round(px) + "px ở cỡ thật rộng " + full + ": “" + say(el) + "”"); continue; }
+    const fs = parseFloat(getComputedStyle(el).fontSize), art = el.closest(".sx-poster,.sx-og,.sx-slide");
+    if (art) { const full = art.matches(".sx-poster") ? 1080 : art.matches(".sx-og") ? 1200 : 1280, px = fs * full / art.getBoundingClientRect().width; if (px < 12 * (full === 1080 ? 4 / 3 : 1) && r.width > 8) add("chữ quá nhỏ", Math.round(px) + "px ở cỡ thật rộng " + full + ": “" + say(el) + "”"); continue; }
     if (fs < (deck ? 12 : 10) && r.width > 8) add("chữ quá nhỏ", Math.round(fs) + "px: “" + say(el) + "”");
   }
   if (deck && !boxes.length && !root.querySelector("img,svg,canvas,video")) add("slide trống", "không có chữ hay hình");
