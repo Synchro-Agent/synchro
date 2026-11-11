@@ -3,6 +3,7 @@
 //   <artifact identifier="todo-app" type="application/vnd.react" title="Danh sách việc cần làm"> ... </artifact>
 // Cùng identifier trong một cuộc trò chuyện là các phiên bản của cùng một artifact.
 // Tệp này dùng chung cho trình duyệt (tách artifact khỏi câu trả lời) và máy chủ (hướng dẫn cho model).
+import { expandTemplates } from "./designtemplates";
 
 export const ART_TYPES = ["html", "react", "svg", "markdown", "code", "mermaid", "vbhc"] as const;
 export type ArtType = (typeof ART_TYPES)[number];
@@ -50,7 +51,9 @@ export function splitArtifacts(text: string): Seg[] {
     if (!type || !ident) continue;
     if (m.index > pos) out.push({ kind: "text", text: text.slice(pos, m.index) });
     const body = text.slice(m.index + tag.length, close === -1 ? undefined : close);
-    out.push({ kind: "art", art: { ident, title: (attr(tag, "title") ?? (patch ? "" : ident)).trim().slice(0, 200) || (patch ? "" : ident), type, lang: attr(tag, "language"), content: unfence(body), complete: close !== -1, ...(patch ? { patch } : {}) } });
+    // Trang dùng mẫu điền sẵn (khối JSON data-sx-template): dựng thành HTML ngay đây, mọi nơi sau đó (khung xem, xuất tệp, kiểm tra, bản hiện tại gửi model) thấy cùng một trang.
+    const content = !patch && type === "html" ? expandTemplates(unfence(body)) : unfence(body);
+    out.push({ kind: "art", art: { ident, title: (attr(tag, "title") ?? (patch ? "" : ident)).trim().slice(0, 200) || (patch ? "" : ident), type, lang: attr(tag, "language"), content, complete: close !== -1, ...(patch ? { patch } : {}) } });
     pos = close === -1 ? text.length : close + "</artifact>".length;
     re.lastIndex = pos;
   }

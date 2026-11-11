@@ -5,6 +5,7 @@
 // Mọi cỡ tính theo --sx-u: 1px ở trang thường; trong slide, poster là phần nhỏ hơn của chiều rộng và chiều cao, vì khung xem trước, trình chiếu, ảnh thu nhỏ, tệp tải về mở ở cửa sổ bất kỳ có cỡ khác nhau: khung giữ đúng tỉ lệ, không bị cắt đáy, không sinh thanh cuộn. Canh giữa bằng translate (phần trăm theo chính khung), không bằng margin: model tự đặt lại width:100vw thì khung vẫn đúng chỗ.
 // Màu chữ luôn là mã màu thuần, chỉ nền và viền dùng color-mix: bộ xuất PowerPoint đọc màu chữ từ getComputedStyle.
 import { DEFAULT_PRESET, FONT_SPEC, PRESETS, presetIds, presetOf, type Preset, type PresetColors } from "./designpresets";
+import { SLIDE_TPL_CSS } from "./designtemplates";
 
 // Không đụng data-sx-loc, data-sx-on… của Synchro (đứng sau dấu "-"), chỉ nhận lớp thật, biến thật, và thuộc tính preset.
 // Tên lớp trong master-microcraft.css / visual-fx.css của chủ dự án (typo-…, fx-…, anim-stagger-card) cũng nhận: đều là tên riêng, trang cũ không tình cờ dùng.
@@ -80,6 +81,7 @@ ${GAPS.map((g) => `.sx-gap-${g}{gap:${u(g)}}.sx-p-${g}{padding:${u(g)}}`).join("
 .sx-total td{font-weight:700;border-top:${u(1)} solid var(--sx-ink);border-bottom:${u(3)} double var(--sx-ink)}
 .sx-bar{background-image:linear-gradient(90deg,var(--sx-raised) var(--sx-v,0%),transparent 0);background-image:linear-gradient(90deg,color-mix(in oklab,var(--sx-accent) 18%,var(--sx-surface)) var(--sx-v,0%),transparent 0)}
 .sx-heat{background:var(--sx-raised);background:color-mix(in oklab,var(--sx-vivid) calc(var(--sx-v,0%)*.9),var(--sx-surface))}
+${SLIDE_TPL_CSS}
 .sx-gradient-text,.fx-gradient-text{color:var(--sx-ink);background:linear-gradient(135deg,var(--sx-ink) 20%,var(--sx-accent) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .sx-shadow,.fx-ambient-shadow{box-shadow:0 1px 2px -1px rgba(15,23,42,.04),0 8px 16px -4px rgba(15,23,42,.06),0 24px 48px -12px rgba(15,23,42,.08)}
 .sx-rim,.fx-specular-rim{border:${u(1)} solid rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 32px -8px rgba(0,0,0,.5)}
@@ -124,12 +126,18 @@ function ink(el){var cs=getComputedStyle(el);if(cs.webkitBackgroundClip==="text"
 if(ratio(c,b)>=4.5)return;var l=ratio(L,b),d=ratio(D,b);if(Math.max(l,d)<=ratio(c,b))return;el.style.color=l>d?"#F8FAFC":"#0F172A";el.setAttribute("data-sx-inked","")}
 function unit(el){var p=document.createElement("i");p.style.cssText="position:absolute;visibility:hidden;width:calc(1000*var(--sx-u));height:0";(el.parentElement||el).appendChild(p);var w=p.getBoundingClientRect().width/1000;p.remove();return w||1}
 function over(e){return!!e&&(e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1)}
-function fit(el){if(!el.getClientRects().length)return;var box=el.closest("[data-sx-box],.sx-card,.sx-slide,section.slide,[data-slide],.sx-poster");
-var hard=el.clientHeight>0&&getComputedStyle(el).overflow!=="visible";if(!over(box)&&!(hard&&over(el)))return;
-var u=unit(el),n=Math.round(parseFloat(getComputedStyle(el).fontSize)/u),k=0;
-while(n>11&&k++<90&&(over(box)||(hard&&over(el)))){n-=1;el.style.fontSize="calc("+n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(n))}
-function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]");for(var i=0;i<a.length;i++)try{fit(a[i])}catch(e){}
-var b=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<b.length;j++)try{if(b[j].getClientRects().length)ink(b[j])}catch(e){}}
+var BOX="[data-sx-box],.sx-card,.sx-slide,section.slide,[data-slide],.sx-poster,.sx-tpl-box";
+function size(el,u){if(el.__n==null)el.__n=Math.round(parseFloat(getComputedStyle(el).fontSize)/u);return el.__n}
+// Khung tràn: giảm 1 đơn vị cho ô chữ đang lớn nhất trong khung (thường là tiêu đề dài), lặp tới khi vừa hoặc mọi ô đã 11.
+function fitBox(box){if(!box.getClientRects().length||!over(box))return;var ns=[].slice.call(box.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(function(e){return e.getClientRects().length});if(!ns.length)return;
+var uu=unit(box),k=0;while(over(box)&&k++<300){var m=null;for(var i=0;i<ns.length;i++){var n=size(ns[i],uu);if(n>11&&(!m||n>m.__n))m=ns[i]}if(!m)break;m.__n-=1;m.style.fontSize="calc("+m.__n+"*var(--sx-u))";m.setAttribute("data-sx-fitted",String(m.__n))}}
+// Ô tự có khung cố định (overflow khác visible): co chính nó.
+function fitSelf(el){var cs=getComputedStyle(el);if(!el.getClientRects().length||cs.overflow==="visible"||!over(el))return;var uu=unit(el),k=0;size(el,uu);while(el.__n>11&&k++<120&&over(el)){el.__n-=1;el.style.fontSize="calc("+el.__n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(el.__n))}
+function depth(e){var d=0;while(e){d++;e=e.parentElement}return d}
+function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]"),boxes=[];for(var i=0;i<a.length;i++){try{fitSelf(a[i])}catch(e){}
+for(var b=a[i].parentElement&&a[i].parentElement.closest(BOX);b;b=b.parentElement&&b.parentElement.closest(BOX))if(boxes.indexOf(b)<0)boxes.push(b)}
+boxes.sort(function(x,y){return depth(y)-depth(x)});boxes.forEach(function(b){try{fitBox(b)}catch(e){}});
+var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(c[j].getClientRects().length)ink(c[j])}catch(e){}}
 window.__sxFit=run;
 function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.then(function(){run()});document.fonts.addEventListener("loadingdone",function(){run()})}catch(e){}
 try{new MutationObserver(function(ms){ms.forEach(function(m){if(m.target.hasAttribute&&m.target.hasAttribute("data-sx-on"))requestAnimationFrame(function(){run(m.target)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}

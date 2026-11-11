@@ -1,5 +1,7 @@
 "use client";
 // Xuất bản trình bày HTML thành PowerPoint (.pptx) chỉnh sửa được, không cần model: chạy ngay trong khung xem của Synchro.
+// Lớp ghép (hybrid layering): hiệu ứng CSS mà Office không có (backdrop-filter, radial-gradient, ảnh tách nền) chỉ nằm trong ảnh nền, chữ là hộp chữ gốc ở trên.
+// Chữ phải nằm DƯỚI một vật thể (chữ khổng lồ sau ảnh tách nền, data-pptx-flat) cũng ở lại trong ảnh nền, không thì hộp chữ nổi đè lên vật thể.
 // Mỗi slide: (1) đo từng khối chữ đang hiện (vị trí, phông, cỡ, đậm / nghiêng, màu, giãn chữ, canh lề, khoảng cách dòng) → hộp chữ PowerPoint
 // sửa được; (2) ẩn riêng phần chữ rồi chụp phần còn lại (nền, hình minh họa SVG, biểu đồ, đường kẻ, ảnh) thành ảnh nền nét cao đặt dưới hộp chữ.
 // Chuyển động CSS dừng ở trạng thái cuối khi chụp (PowerPoint không đọc được CSS / JS). Tệp không nhúng được phông: phông web (Google Fonts, bộ thiết kế) đổi sang phông
@@ -9,7 +11,8 @@ import { FONT_SPEC } from "./designpresets";
 /** Một đoạn chữ cùng kiểu trong khối. br: xuống dòng sau đoạn này. */
 export type DeckRun = { t: string; br?: boolean; f: string; s: number; b: boolean; i: boolean; u: boolean; c: string; a: number; ls: number };
 /** Khối chữ (tọa độ px trong slide). one: chữ nằm trên một dòng trong trình duyệt (PowerPoint không tự xuống dòng). */
-export type DeckBox = { x: number; y: number; w: number; h: number; al: "left" | "center" | "right" | "justify"; lh: number; one: boolean; runs: DeckRun[] }; // lh: bước dòng, px
+// n: tên đối tượng khi khối nằm trong phần tử data-pptx-object-name (morphId "!!ten" của mẫu điền sẵn): PowerPoint Morph ghép các đối tượng cùng tên "!!…" ở hai slide liền nhau.
+export type DeckBox = { x: number; y: number; w: number; h: number; al: "left" | "center" | "right" | "justify"; lh: number; one: boolean; runs: DeckRun[]; n?: string }; // lh: bước dòng, px
 export type DeckSlide = { bg: string; boxes: DeckBox[] };
 
 /**
@@ -57,7 +60,7 @@ var R=el.getBoundingClientRect();W=R.width;H=R.height;
 var tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT),groups=[],map=new Map(),n;
 while((n=tw.nextNode())){
 if(!n.nodeValue.trim())continue;var p=n.parentElement;
-if(!p||p.closest("svg,script,style,noscript,template,[data-sx-noprint]"))continue;
+if(!p||p.closest("svg,script,style,noscript,template,[data-sx-noprint],[data-pptx-flat]"))continue;
 if(p.checkVisibility&&!p.checkVisibility({opacityProperty:true,visibilityProperty:true}))continue;
 var b=blockOf(n,el),g=map.get(b);if(!g){g={b:b,nodes:[]};map.set(b,g);groups.push(g)}g.nodes.push(n)}
 var boxes=[],wraps=[],clears=[];
@@ -85,7 +88,8 @@ if(seg)runs.push(Object.assign({t:tf(seg,cs)},st))});
 if(!runs.length)return;
 var fs=parseFloat(bcs.fontSize)||runs[0].s,lh=parseFloat(bcs.lineHeight);if(isNaN(lh))lh=fs*1.2;
 var al=bcs.textAlign;al=al==="center"?"center":al==="right"||al==="end"?"right":al==="justify"?"justify":"left";
-boxes.push({x:r.left-R.left,y:r.top-R.top,w:r.width,h:r.height,al:al,lh:lh,one:r.height<lh*1.6,runs:runs});
+var on=g.b.closest("[data-pptx-object-name]"),nm=on&&el.contains(on)?on.getAttribute("data-pptx-object-name"):"";
+boxes.push({x:r.left-R.left,y:r.top-R.top,w:r.width,h:r.height,al:al,lh:lh,one:r.height<lh*1.6,runs:runs,n:nm||undefined});
 g.nodes.forEach(function(t){var s=document.createElement("span");s.setAttribute("data-sx-t","");s.style.cssText="color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important;text-decoration-color:transparent!important";t.parentNode.insertBefore(s,t);s.appendChild(t);wraps.push(s)})});
 var saved=clears.map(function(e){var v=e.style.getPropertyValue("background-image"),pr=e.style.getPropertyPriority("background-image");e.style.setProperty("background-image","none","important");return[e,v,pr]});
 function restore(){wraps.forEach(function(s){var t=s.firstChild;if(t&&s.parentNode)s.parentNode.insertBefore(t,s);s.remove()});saved.forEach(function(x){x[0].style.removeProperty("background-image");if(x[1])x[0].style.setProperty("background-image",x[1],x[2])})}
@@ -146,14 +150,19 @@ export async function buildPptx(slides: DeckSlide[], w: number, h: number, title
   for (const s of slides) {
     const slide = pptx.addSlide();
     slide.background = { data: s.bg };
+    const names = new Map<string, number>();
     for (const b of s.boxes) {
+      // Tên trong một slide phải khác nhau: khối thứ hai cùng vật thể thành "!!ten 2" (slide sau cũng đánh số theo cùng thứ tự nên vẫn ghép được).
+      const k = b.n ? (names.get(b.n) ?? 0) + 1 : 0;
+      if (b.n) names.set(b.n, k);
+      const objectName = b.n ? (k > 1 ? `${b.n} ${k}` : b.n).slice(0, 120) : undefined;
       slide.addText(b.runs.map((r) => ({
         text: r.t,
         options: {
           fontFace: r.f, fontSize: pt(r.s), bold: r.b, italic: r.i, underline: r.u ? { style: "sng" as const } : undefined,
           color: r.c, transparency: r.a < 1 ? Math.round((1 - r.a) * 100) : undefined, charSpacing: r.ls ? pt(r.ls) : undefined, breakLine: r.br || undefined,
         },
-      })), boxOptions(b, w, h));
+      })), { ...boxOptions(b, w, h), ...(objectName ? { objectName } : {}) });
     }
   }
   return (await pptx.write({ outputType: "blob" })) as Blob;

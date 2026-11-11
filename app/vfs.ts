@@ -3,6 +3,7 @@
 // để ra phiên bản mới. Lịch sử gửi cho model chỉ giữ MỘT bản hiện tại của mỗi artifact (<current_artifacts>), các bản cũ
 // thay bằng một dòng tham chiếu, nên sửa 10 lần cũng không phình token.
 import { ART_TYPES, splitArtifacts, type ArtBlock } from "./artifacts";
+import { expandTemplates } from "./designtemplates";
 
 export const PATCH_RE = /<<<<<<< SEARCH\n([\s\S]*?)\n?=======\n([\s\S]*?)\n?>>>>>>> REPLACE/g;
 export type Patch = { search: string; replace: string };
@@ -57,7 +58,8 @@ export function resolveArt(prev: ArtVersion | undefined, a: ArtBlock): ArtVersio
   if (!prev) return { ...a, v, fix: { applied: 0, failed: ["(chưa có bản trước để sửa)"] } };
   // Đang viết dở: áp các khối đã đóng, phần còn lại chờ.
   const r = applyPatches(prev.content, parsePatches(a.content));
-  return { ...prev, title: a.title || prev.title, content: r.content, complete: a.complete, patch: true, fix: { applied: r.applied, failed: a.complete ? r.failed : [] }, v, patchText: a.content };
+  // Bản sửa thêm trang theo mẫu điền sẵn (khối JSON) thì dựng luôn như bản đầy đủ.
+  return { ...prev, title: a.title || prev.title, content: prev.type === "html" ? expandTemplates(r.content) : r.content, complete: a.complete, patch: true, fix: { applied: r.applied, failed: a.complete ? r.failed : [] }, v, patchText: a.content };
 }
 
 /** Duyệt các câu trả lời theo thứ tự, trả về trạng thái hiện tại của mọi artifact.
