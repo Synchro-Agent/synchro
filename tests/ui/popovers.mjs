@@ -7,7 +7,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
-const B = "http://localhost:3200";
+const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/popovers/";
 mkdirSync(SCR, { recursive: true });
 const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-popovers";
@@ -25,7 +25,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const COVERED = `(() => {
   const name = (el) => el ? el.tagName.toLowerCase() + (typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\\s+/).slice(0, 2).join(".") : "") : "?";
   const out = [];
-  for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.model-sub,.usermenu,.cx-pop,.modal,[role=dialog]")) {
+  for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.model-sub,.usermenu,.cx-pop,.at-menu,.modal,[role=dialog]")) {
     const cs = getComputedStyle(m); if (cs.display === "none" || cs.visibility === "hidden" || cs.pointerEvents === "none") continue;
     const q = m.getBoundingClientRect(); if (q.width < 40 || q.height < 30) continue;
     let n = 0, hit = null, pts = 0;
@@ -261,6 +261,13 @@ const runSize = async (size) => {
       await tryOpen("Dự án · menu +", () => click(plus, "pj plus"));
       await tryOpen("Dự án · menu + › Kho kỹ năng", async () => { await click(plus, "pj plus"); await sleep(400); await click(item("Kho kỹ năng"), "skills"); });
       await tryOpen("Dự án · menu + › Connectors", async () => { await click(plus, "pj plus"); await sleep(400); await click(item("Connectors"), "conn"); });
+      // Gõ @ trong ô soạn của dự án: menu chọn connector mở ngay dưới ô (trước đây neo vào .main, nằm ngoài màn hình mà Enter vẫn bị chặn).
+      await tryOpen("Dự án · menu @ connector", async () => {
+        await click(`document.querySelector(".pj-compose textarea")`, "pj textarea"); await P("Input.insertText", { text: "@" }); await sleep(600);
+        const r = await ev(`(() => { const m = document.querySelector(".pj-compose .at-menu"), c = document.querySelector(".pj-compose .composer"); if (!m) return null; const a = m.getBoundingClientRect(); return { top: a.top, bottom: a.bottom, cb: c.getBoundingClientRect().bottom, vh: innerHeight }; })()`);
+        if (!r || r.top < r.cb - 1 || r.bottom > r.vh + 1) throw new Error("menu @ không nằm ngay dưới ô soạn, trong màn hình: " + JSON.stringify(r));
+      });
+      await ev(`(() => { const t = document.querySelector(".pj-compose textarea"); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(t, ""); t.dispatchEvent(new Event("input", { bubbles: true })); })()`);
     } else { console.log("  ✗ không mở được trang dự án để kiểm"); fails++; }
   } else {
     await chatBoxes("điện thoại ·");
