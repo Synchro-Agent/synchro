@@ -106,7 +106,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{toolLabel(x.label)}</b>{x.at && (x.end || (live && x.ok === undefined)) ? <span className="wl-tsec" data-notr>{secs((x.end ?? now) - x.at)}</span> : null}{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
+              <div><b data-notr>{toolLabel(x.label)}</b>{x.at && ((x.end && x.end - x.at >= 1000) || (live && x.ok === undefined)) ? <span className="wl-tsec" data-notr>{secs((x.end ?? now) - x.at)}</span> : null}{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
             </div>
           ))}
         </div>
