@@ -4,6 +4,7 @@ import { chatPost } from "../../chatengine";
 import { quickLimit, queueFull, startRun, turnsTotal, withStop } from "../../runs";
 import { acquire, noteRefused, runningOf, withSlot } from "../../turngate";
 import { subCli } from "../../ai/subs";
+import { AUTO } from "../../router";
 import { afterTurn } from "../../brain";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
@@ -19,8 +20,12 @@ export async function POST(req: Request) {
   if (body && typeof body === "object") delete body.task;
   // Mọi lời gọi model trong yêu cầu này được tính vào mức dùng của tài khoản; hết hạn mức thì dừng trước khi gọi.
   // Model của gói subscription (chạy bằng gói của chính người dùng) không tính vào hạn mức chi phí API.
+  // Hết hạn mức chi phí API mà đang để Tự động: không khóa, chỉ chọn trong gói subscription đã kết nối (không tốn hạn mức API);
+  // chatPost báo rõ trên thanh thông báo, không có gói nào dùng được thì mới báo hết hạn mức như cũ.
+  if (body && typeof body === "object") delete body.plansOnly;
   const over = subCli(body?.model) ? null : overLimit(c.user);
-  if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
+  if (over && body?.model === AUTO) body.plansOnly = over;
+  else if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
   if (body.async === true) {
     const { async: _, ...rest } = body;
     // Lượt tiếp sau khi duyệt công cụ thuộc lượt đã nhận: từ chối ở đây là mất lượt giữa chừng, nên chỉ xếp hàng.

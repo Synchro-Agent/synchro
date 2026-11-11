@@ -55,6 +55,32 @@ ok(r.s === 200 && r.j.auto?.task === "code" && r.j.model !== first, `chạy lạ
 r = await ask(member, "Viết code Python đọc file CSV và in tổng từng cột", { avoidModel: "khong-co/model-nay" });
 ok(r.s === 200 && r.j.model === first, `avoidModel không có trong danh sách thì bỏ qua: ${r.j?.model}`, JSON.stringify(r.j?.auto));
 
+console.log("1c. Hết hạn mức chi phí API: Tự động hạ xuống gói đã kết nối thay vì khóa, chọn tay model API vẫn bị chặn");
+{
+  const { createRequire } = await import("node:module");
+  const R = createRequire(process.cwd() + "/package.json");
+  const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
+  const uid = db.prepare("SELECT id FROM users WHERE email = ?").get("route-member@synchro.test").id;
+  const now = Date.now();
+  const before = db.prepare("SELECT session_start, week_anchor, override FROM usage_users WHERE user_id = ?").get(uid);
+  db.prepare("INSERT INTO usage_users (user_id, session_start, week_anchor, override) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET session_start = excluded.session_start, week_anchor = excluded.week_anchor, override = excluded.override").run(uid, now, now, JSON.stringify({ session: 0.01, weekly: 0.01 }));
+  db.prepare("INSERT INTO usage_events (user_id, at, model, feature, input, output, cache_read, cache_write, cost) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 1)").run(uid, now, "anthropic/claude-haiku-5-5", "chat");
+  try {
+    r = await ask(member, "Xin chào");
+    // Tài khoản có gói subscription dùng được: trả lời bằng gói và báo rõ; không có gói nào: báo hết hạn mức như trước.
+    ok((r.s === 200 && /^sub-/.test(r.j.model) && /hết hạn mức API/.test(r.j.notice ?? "")) || (r.s === 429 && r.j.usageLimit), `Tự động khi hết hạn mức API: ${r.s} ${r.j?.model ?? r.j?.error}`, JSON.stringify(r.j).slice(0, 300));
+    r = await member("POST", "/api/llm", { system: "", model: "anthropic/claude-haiku-5-5", skills: true, messages: [{ role: "user", content: "Xin chào" }] });
+    ok(r.s === 429 && r.j.usageLimit, "chọn tay model API khi hết hạn mức: vẫn chặn", JSON.stringify(r.j).slice(0, 200));
+    r = await member("POST", "/api/llm", { system: "", model: "anthropic/claude-haiku-5-5", plansOnly: "x", skills: true, messages: [{ role: "user", content: "Xin chào" }] });
+    ok(r.s === 429, "trình duyệt tự gửi plansOnly cũng không lách được hạn mức", JSON.stringify(r.j).slice(0, 200));
+  } finally {
+    if (before) db.prepare("UPDATE usage_users SET session_start = ?, week_anchor = ?, override = ? WHERE user_id = ?").run(before.session_start, before.week_anchor, before.override, uid);
+    else db.prepare("DELETE FROM usage_users WHERE user_id = ?").run(uid);
+    db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(uid);
+    db.close();
+  }
+}
+
 console.log("2. Chỉ chọn trong model được phép");
 // Danh sách được phép chỉ có model nhanh và model cân bằng: việc khó dùng model mạnh nhất có trong danh sách.
 await setPerms(["anthropic/claude-haiku-5-5", "openai/gpt-6.1-sol"]);

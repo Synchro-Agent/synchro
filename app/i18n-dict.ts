@@ -844,6 +844,7 @@ Object.assign(VI2EN, {
   "Chế độ Tự động đã chọn model này": "Auto mode picked this model",
   "Chạy lại bằng model khác": "Run again with another model",
   "Đang tạo tiếp…": "Still writing…",
+  "Đã hết hạn mức API của bạn trên Synchro, nên Tự động đang dùng gói đã kết nối (Claude, ChatGPT, Gemini, Grok) thay vì khóa chat.": "You've used up your API allowance on Synchro, so Auto is using your connected plans (Claude, ChatGPT, Gemini, Grok) instead of locking chat.",
   "Thử lại ngay": "Try again now",
   "Công cụ đang xử lý lượng dữ liệu lớn, vui lòng đợi thêm…": "The tool is working through a lot of data, please wait a little longer…",
   "Cuộn xuống phần đang tạo": "Scroll down to the reply being written",
