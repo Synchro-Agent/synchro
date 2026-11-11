@@ -4,16 +4,21 @@
 // Một lớp đơn (0,1,0) thắng "*" và preflight của Tailwind; chèn đầu <head> nên CSS của model cùng độ đặc hiệu viết sau vẫn thắng.
 // Mọi cỡ tính theo --sx-u: 1px ở trang thường; trong slide, poster là phần nhỏ hơn của chiều rộng và chiều cao, vì khung xem trước, trình chiếu, ảnh thu nhỏ, tệp tải về mở ở cửa sổ bất kỳ có cỡ khác nhau: khung giữ đúng tỉ lệ, không bị cắt đáy, không sinh thanh cuộn. Canh giữa bằng translate (phần trăm theo chính khung), không bằng margin: model tự đặt lại width:100vw thì khung vẫn đúng chỗ.
 // Màu chữ luôn là mã màu thuần, chỉ nền và viền dùng color-mix: bộ xuất PowerPoint đọc màu chữ từ getComputedStyle.
-import { DEFAULT_PRESET, FONT_SPEC, PRESETS, presetOf, type PresetColors } from "./designpresets";
+import { DEFAULT_PRESET, FONT_SPEC, PRESETS, presetIds, presetOf, type Preset, type PresetColors } from "./designpresets";
 
 // Không đụng data-sx-loc, data-sx-on… của Synchro (đứng sau dấu "-"), chỉ nhận lớp thật, biến thật, và thuộc tính preset.
 export const usesKit = (content: string) => /["'`\s.]sx-[a-z]|var\(--sx-|data-sx-preset=/.test(content);
 
-const colorVars = (c: PresetColors) => `--sx-bg:${c.bg};--sx-surface:${c.surface};--sx-raised:${c.raised};--sx-ink:${c.ink};--sx-muted:${c.muted};--sx-accent:${c.accent};--sx-accent2:${c.accent2};--sx-line:${c.line};--sx-neutral:${c.neutral};--sx-pos:${c.pos};--sx-neg:${c.neg};`;
+// --sx-vivid / --sx-vivid2: màu nhấn gốc của bảng phong cách cho phần không phải chữ (cột được nhấn, quầng cực quang); bảng tối dùng luôn màu nhấn của nó.
+const colorVars = (c: PresetColors, p?: Preset) => `--sx-bg:${c.bg};--sx-surface:${c.surface};--sx-raised:${c.raised};--sx-ink:${c.ink};--sx-muted:${c.muted};--sx-accent:${c.accent};--sx-accent2:${c.accent2};--sx-line:${c.line};--sx-neutral:${c.neutral};--sx-pos:${c.pos};--sx-neg:${c.neg};--sx-vivid:${p?.vivid ?? c.accent};--sx-vivid2:${p?.vivid2 ?? c.accent2};`;
+// Bộ chọn của một phong cách gồm cả mã theo bảng của chủ dự án (PRESET_ALIASES): trang viết data-sx-preset="linear-dark" vẫn đúng màu.
+const sel = (id: string, f: (x: string) => string) => presetIds(id).map(f).join(",");
 const presetCss = PRESETS.map((p) => {
-  const vars = `${colorVars(p)}--sx-bw:${p.bw};--sx-r:${p.r};--sx-ri:${p.ri};--sx-shadow:${p.shadow};--sx-blur:${p.blur}px;${p.lh ? `--sx-lh:${p.lh};` : ""}--sx-head:${FONT_SPEC[p.head].stack};--sx-body:${FONT_SPEC[p.body].stack};--sx-mono:${FONT_SPEC[p.mono].stack};`;
+  const vars = `${colorVars(p, p)}--sx-bw:${p.bw};--sx-r:${p.r};--sx-ri:${p.ri};--sx-shadow:${p.shadow};--sx-blur:${p.blur}px;${p.lh ? `--sx-lh:${p.lh};` : ""}--sx-head:${FONT_SPEC[p.head].stack};--sx-body:${FONT_SPEC[p.body].stack};--sx-mono:${FONT_SPEC[p.mono].stack};`;
   // Chỉ màn hình: in ra luôn dùng bảng sáng, dù máy đang ở chế độ tối.
-  return `[data-sx-preset=${p.id}]{${vars}}${p.dark ? `@media screen and (prefers-color-scheme:dark){[data-sx-preset=${p.id}][data-sx-theme=auto],[data-sx-theme=auto] [data-sx-preset=${p.id}]{${colorVars(p.dark)}}}` : ""}`;
+  return `${sel(p.id, (x) => `[data-sx-preset=${x}]`)}{${vars}}${p.dark ? `@media screen and (prefers-color-scheme:dark){${sel(p.id, (x) => `[data-sx-preset=${x}][data-sx-theme=auto],[data-sx-theme=auto] [data-sx-preset=${x}]`)}{${colorVars(p.dark)}}}` : ""}`
+    // Phong cách kính: thẻ là kính trắng trong mờ trên nền cực quang (chỉ màn hình; in và xuất PowerPoint giữ nền đặc của thẻ).
+    + (p.glass ? `@media screen{${sel(p.id, (x) => `[data-sx-preset=${x}] .sx-card`)}{background:color-mix(in oklab,var(--sx-surface) 65%,transparent);backdrop-filter:blur(var(--sx-blur)) saturate(160%);-webkit-backdrop-filter:blur(var(--sx-blur)) saturate(160%)}}` : "");
 }).join("");
 const base = presetOf(DEFAULT_PRESET)!;
 
@@ -23,7 +28,7 @@ const fs = (t: string) => `font-size:${u(`var(--sx-fs-${t})`)}`;
 const GAPS = [8, 16, 24, 32, 48, 64];
 const NOT_FIXED = `html:not(:has(.sx-slide,.slide,[data-slide],.sx-poster))`; // trang đọc, in được, co lại trên điện thoại; slide và poster là hình cố định
 
-const CSS = `:root{--sx-u:1px;--sx-fs-xs:12;--sx-fs-sm:14;--sx-fs-md:16;--sx-fs-lg:21;--sx-fs-xl:28;--sx-fs-2xl:38;--sx-fs-3xl:56;--sx-fs-kpi:56;--sx-ease:cubic-bezier(.16,1,.3,1);--sx-spring:cubic-bezier(.34,1.56,.64,1);${colorVars(base)}--sx-bw:${base.bw};--sx-r:${base.r};--sx-ri:${base.ri};--sx-shadow:${base.shadow};--sx-blur:${base.blur}px;--sx-head:${FONT_SPEC[base.head].stack};--sx-body:${FONT_SPEC[base.body].stack};--sx-mono:${FONT_SPEC[base.mono].stack}}
+const CSS = `:root{--sx-u:1px;--sx-fs-xs:12;--sx-fs-sm:14;--sx-fs-md:16;--sx-fs-lg:21;--sx-fs-xl:28;--sx-fs-2xl:38;--sx-fs-3xl:56;--sx-fs-kpi:56;--sx-ease:cubic-bezier(.16,1,.3,1);--sx-spring:cubic-bezier(.34,1.56,.64,1);${colorVars(base, base)}--sx-bw:${base.bw};--sx-r:${base.r};--sx-ri:${base.ri};--sx-shadow:${base.shadow};--sx-blur:${base.blur}px;--sx-head:${FONT_SPEC[base.head].stack};--sx-body:${FONT_SPEC[base.body].stack};--sx-mono:${FONT_SPEC[base.mono].stack}}
 ${presetCss}
 html,body{margin:0}
 *,*::before,*::after{box-sizing:border-box}
@@ -85,7 +90,7 @@ ${GAPS.map((g) => `.sx-gap-${g}{gap:${u(g)}}.sx-p-${g}{padding:${u(g)}}`).join("
 @page sx-poster{margin:0}
 @media print{.sx-rise,.sx-fade,.sx-pop,.sx-draw{animation:none!important}
 ${NOT_FIXED},${NOT_FIXED} [data-sx-preset]{--sx-bg:#fff;--sx-surface:#fff;--sx-raised:#f5f5f4;--sx-ink:#111827;--sx-muted:#475569;--sx-line:#d4d4d8}
-${PRESETS.filter((p) => p.print).map((p) => `${NOT_FIXED}[data-sx-preset=${p.id}],${NOT_FIXED} [data-sx-preset=${p.id}]{${Object.entries(p.print!).map(([k, v]) => `--sx-${k}:${v}`).join(";")}}`).join("")}
+${PRESETS.filter((p) => p.print).map((p) => `${sel(p.id, (x) => `${NOT_FIXED}[data-sx-preset=${x}],${NOT_FIXED} [data-sx-preset=${x}]`)}{${Object.entries(p.print!).map(([k, v]) => `--sx-${k}:${v}`).join(";")};--sx-vivid:${p.print!.accent};--sx-vivid2:${p.print!.accent2}}`).join("")}
 ${NOT_FIXED} :is(.sx-shadow,.sx-rim,.sx-card){box-shadow:none}${NOT_FIXED} .sx-glass{backdrop-filter:none;-webkit-backdrop-filter:none}${NOT_FIXED} .sx-noise::after{display:none}${NOT_FIXED} .sx-aurora{background-image:none}
 .sx-page{--sx-fs-xs:11;--sx-fs-sm:12.5;--sx-fs-md:14.67;--sx-fs-lg:18.67;--sx-fs-xl:25;--sx-fs-2xl:32;--sx-fs-3xl:38;--sx-fs-kpi:34;page:sx-a4;max-width:none;padding:0;gap:${u(16)};${fs("md")}}
 .sx-poster{page:sx-poster;width:100vw;height:100vh;aspect-ratio:auto;margin:0;translate:none}
@@ -95,7 +100,7 @@ h1,h2,h3,h4,.sx-title,.sx-h2,.sx-h3,.sx-eyebrow{break-after:avoid-page}p,li{orph
 
 /** Đường dẫn Google Fonts chỉ gồm các phông trang dùng: khung cho phép fonts.googleapis.com và fonts.gstatic.com (csp ở artdoc.ts). */
 export function kitFontUrl(content: string): string {
-  const ids = [...content.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => m[1]).filter((i) => presetOf(i));
+  const ids = [...content.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => m[1]).filter((i) => presetOf(i)).map((i) => presetOf(i)!.id);
   const used = ids.length ? ids : [DEFAULT_PRESET];
   const names = new Set(used.flatMap((i) => { const p = presetOf(i)!; return [p.head, p.body, p.mono]; }));
   return `https://fonts.googleapis.com/css2?${[...names].map((n) => `family=${FONT_SPEC[n].css}`).join("&")}&display=swap`;

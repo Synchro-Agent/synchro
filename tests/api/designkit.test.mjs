@@ -102,10 +102,18 @@ const badPrint = [];
 for (const p of PRESETS.filter((x) => cr(x.bg, "#FFFFFF") > 8)) {
   if (!p.print) { badPrint.push(`${p.id}: không có bảng in`); continue; }
   for (const k of ["accent", "accent2", "pos", "neg"]) for (const on of ["#FFFFFF", "#F5F5F4"]) if (cr(p.print[k], on) < 4.5) badPrint.push(`${p.id} ${k} trên ${on}: ${cr(p.print[k], on).toFixed(2)}`);
-  ok(A.KIT_CSS.includes(`[data-sx-preset=${p.id}]{--sx-accent:${p.print.accent}`), `${p.id}: bộ CSS có bảng in`);
+  const printRule = new RegExp(`[^{}]*\\{--sx-accent:${p.print.accent}`).exec(A.KIT_CSS)?.[0] ?? "";
+  ok(printRule.includes(`[data-sx-preset=${p.id}]`), `${p.id}: bộ CSS có bảng in`, printRule.slice(0, 200));
 }
 ok(!badPrint.length, "in trên giấy trắng: màu nhấn của phong cách tối đạt 4.5:1", badPrint.join(" | "));
-ok(!PRESETS.some((p) => [p.bg, p.ink, p.accent].filter((c) => ["#F5F5F7", "#1D1D1F", "#0066CC"].includes(c)).length >= 2), "soft-bento không giữ bộ màu của bảng gốc mang tên hãng");
+// Chủ dự án chốt màu của từng phong cách (nền #F5F5F7, nhấn #0066CC cho soft-bento): giữ đúng mã màu, nhưng tên và mô tả trung tính, chữ không dùng #1D1D1F của bảng gốc.
+ok(!PRESETS.some((p) => [p.bg, p.ink, p.accent].filter((c) => ["#F5F5F7", "#1D1D1F", "#0066CC"].includes(c)).length >= 3), "soft-bento không chép trọn bộ màu của bảng gốc mang tên hãng");
+const OWNER = { "swiss-grid": ["#F4F4F0", "#FFFFFF", 0, 0, "#FF3B00"], "midnight-tech": ["#08090E", "#0F1015", 16, 8, "#6366F1"], "soft-bento": ["#F5F5F7", "#FFFFFF", 24, 12, "#0066CC"], "editorial-serif": ["#FAF7F2", "#FFFFFF", 2, 0, "#9A3412"], "exec-navy": ["#FFFFFF", "#F8FAFC", 4, 2, "#0052CC"], "neo-brutalist": ["#FFFDF5", "#FFFFFF", 8, 4, "#7C3AED"], "aurora-glass": ["#EEF2FF", "#FFFFFF", 20, 12, "#4F46E5"], "data-terminal": ["#0B0E14", "#111622", 4, 2, "#10B981"] };
+const off = Object.entries(OWNER).filter(([id, [bg, sf, r, ri, ac]]) => { const p = DP.presetOf(id); return !p || p.bg !== bg || p.surface !== sf || p.r !== r || p.ri !== ri || (p.vivid ?? p.accent) !== ac; }).map(([id]) => id);
+ok(!off.length, "8 phong cách theo đúng bảng của chủ dự án: nền, bề mặt, bo ngoài / trong, màu nhấn gốc", off.join());
+for (const [alias, id] of Object.entries(DP.PRESET_ALIASES)) ok(DP.presetOf(alias)?.id === id && A.KIT_CSS.includes(`[data-sx-preset=${alias}]`) && turn(`Làm slide phong cách ${alias}`).preset === id, `mã ${alias} của chủ dự án nhận như ${id}`);
+ok(A.kitFontUrl(`<html data-sx-preset="linear-dark">`).includes("Plus+Jakarta+Sans"), "mã cũ vẫn tải đúng phông");
+ok(PRESETS.every((p) => p.name && p.best && !BRANDS.test(p.name + p.best)), "tên hiện trên giao diện và \"dùng cho gì\" trung tính");
 const seen = new Set(["a", "b", "c", "d", "e", "f", "g", "h"].map((s) => designTurn({ typed: "làm bộ slide giới thiệu", ...full, seed: s }).preset));
 ok(seen.size >= 2, `cùng yêu cầu, đoạn chat khác nhau không cùng một kiểu (${[...seen].join(", ")})`);
 ok(designTurn({ typed: "làm bộ slide giới thiệu", ...full, seed: "x" }).preset === designTurn({ typed: "bộ slide khác hẳn", ...full, seed: "x", studio: "slides" }).preset, "cùng đoạn chat giữ một kiểu");

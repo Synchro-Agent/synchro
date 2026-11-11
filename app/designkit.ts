@@ -2,7 +2,7 @@
 // Không vào system prompt: khối đổi theo yêu cầu nên đi cạnh tin nhắn mới nhất như skill_routing, phần đầu prompt giữ nguyên từng chữ để đọc từ bộ đệm (xem chatengine.ts).
 // Trò chuyện thường, câu hỏi kiến thức, đường nhanh: không thêm gì. Lượt tiếp theo trên cùng sản phẩm: bản rút gọn, vì mỗi dòng ở đây còn lại trong lịch sử đoạn chat.
 // Tệp thuần (không DB, không mạng), kiểm thử bằng tests/api/designkit.test.mjs. #nodesign trong tin nhắn hoặc SYNCHRO_DESIGNKIT=0 thì tắt, để so sánh trước / sau với model thật.
-import { presetOf, PRESETS } from "./designpresets";
+import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "./designpresets";
 
 export type DesignFormat = "slide" | "doc" | "sheet" | "graphic";
 export type DesignDomain = "finance" | "data" | "tech" | "editorial" | "marketing" | "event" | "product" | "general";
@@ -119,7 +119,7 @@ export function formatOf(typed: string): DesignFormat | null {
 }
 export function presetFor(format: DesignFormat, domain: DesignDomain, typed: string, seed = ""): string {
   const t = clean(typed);
-  const asked = PRESETS.find((p) => t.includes(p.id))?.id ?? STYLE_WORDS.find(([re]) => re.test(t))?.[1];
+  const asked = PRESETS.find((p) => t.includes(p.id))?.id ?? Object.entries(PRESET_ALIASES).find(([k]) => t.includes(k))?.[1] ?? STYLE_WORDS.find(([re]) => re.test(t))?.[1];
   if (asked) return asked;
   const list = PICK[domain][format];
   return list[hash(seed || typed) % list.length];
@@ -170,7 +170,7 @@ const WS_FONTS = `Phông có sẵn trong sandbox: Be Vietnam Pro, Inter, Plus Ja
 function presetLine(id: string, own: boolean) {
   if (own) return `Người dùng đã có bản sắc riêng (thương hiệu, bảng màu, mẫu): theo đúng bản sắc đó, chỉ giữ các số đo; không áp preset màu.`;
   const p = presetOf(id)!;
-  return `Phong cách gợi ý: ${p.id} (${p.looks}; phông ${p.head}${p.body !== p.head ? ` + ${p.body}` : ""}; nền ${p.bg}, chữ ${p.ink}, nhấn ${p.accent}). Người dùng hoặc nội dung nói khác thì theo họ. Preset khác: ${PRESETS.filter((x) => x.id !== id).map((x) => x.id).join(", ")}. Không bắt chước thương hiệu có thật.`;
+  return `Phong cách gợi ý: ${p.id} (${p.looks}; phông ${p.head}${p.body !== p.head ? ` + ${p.body}` : ""}; nền ${p.bg}, chữ ${p.ink}, nhấn ${p.accent}; bo ${p.r}/${p.ri}px; hợp ${p.best}). Người dùng hoặc nội dung nói khác thì theo họ. Preset khác: ${PRESETS.filter((x) => x.id !== id).map((x) => x.id).join(", ")}. Không bắt chước thương hiệu có thật.`;
 }
 
 export type DesignPick = { format: DesignFormat; domain: DesignDomain; preset: string; own: boolean };
@@ -210,7 +210,7 @@ export function priorDesign(texts: string[]): { format: DesignFormat; preset: st
       const id = attrOf(open, "identifier");
       if (ident && id && id !== ident) continue;
       if (/\/>$/.test(open)) { ident ||= id; continue; }
-      const sets = [...part.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => m[1]);
+      const sets = [...part.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => presetId(m[1]));
       if (attrOf(open, "mode").toLowerCase() === "patch") { ident ||= id; newer ||= sets[sets.length - 1] ?? ""; continue; }
       const preset = newer || sets[0] || "", type = attrOf(open, "type");
       if (/<section\b[^>]*(?:class(?:Name)?=["'][^"']*\bslide\b|data-slide)/.test(part)) return { format: "slide", preset };

@@ -1,9 +1,16 @@
 // 8 phong cách có sẵn của bộ thiết kế, ở dạng dữ liệu: bộ CSS trong khung artifact (artkit.ts) và khối quy tắc gửi model (designkit.ts) cùng đọc.
 // Tên trung tính, tả cách trông: không mượn tên công ty, không bắt chước thương hiệu nào.
 // Mọi cặp chữ / nền đạt WCAG 4.5:1 (tests/api/designkit.test.mjs kiểm từng cặp): bảng màu của cẩm nang gốc có vài cặp chỉ 3:1 (chữ phụ xám nhạt, nhãn cam trên nền giấy).
+// Thông số theo bảng 8 phong cách của chủ dự án (nền, bề mặt, nhấn, bo ngoài / trong, viền, bóng, cặp phông, dùng cho gì). Màu nhấn nào của bảng đó làm chữ
+// không đạt 4.5:1 thì chữ dùng màu sẫm / sáng hơn gần nhất (accent, accent2), màu gốc giữ ở vivid / vivid2 cho phần không phải chữ đọc: cột biểu đồ được nhấn,
+// quầng cực quang, mảng màu lớn. Các cặp lệch: chàm #6366F1 trên #08090E 4.45, đỏ cam #FF3B00 trên giấy 3.24, lục #10B981 trên trắng 2.54, cam #FF5722 3.11, hồng #EC4899 3.15.
 export type PresetColors = { bg: string; surface: string; raised: string; ink: string; muted: string; accent: string; accent2: string; line: string; neutral: string; pos: string; neg: string };
 export type Preset = PresetColors & {
   id: string;
+  name: string; // tên hiện trên giao diện (tiếng Việt, có bản dịch trong i18n-dict.ts): trung tính, không mang tên hãng
+  best: string; // dùng tốt cho gì (gửi model, hiện trong menu đổi phong cách)
+  vivid?: string; vivid2?: string; // màu nhấn gốc của bảng phong cách khi accent / accent2 phải đổi để chữ đạt tương phản
+  glass?: boolean; // bề mặt thẻ là kính mờ trên nền cực quang (backdrop-filter), chỉ trên màn hình
   print?: Partial<PresetColors>; // phong cách vốn tối: trang đọc in trên giấy trắng thì màu nhấn sáng không đọc được (artkit.ts, luật in)
   looks: string; // tả cho model, không phải chữ giao diện
   dark?: PresetColors; // bảng tối khi trang đặt data-sx-theme="auto"; phong cách vốn tối thì không cần
@@ -26,38 +33,51 @@ export const FONT_SPEC: Record<string, { css: string; stack: string }> = {
 
 const POS = "#0F7B4F", NEG = "#B42318", POS_D = "#34D399", NEG_D = "#FB7185";
 export const PRESETS: Preset[] = [
-  { id: "swiss-grid", looks: "Lưới Thụy Sĩ: nền giấy xám, chữ đen, một nhấn đỏ cam, không bo góc",
+  { id: "swiss-grid", name: "Lưới Thụy Sĩ", best: "báo cáo chiến lược, tài liệu kỹ thuật, bản trình bày kiến trúc và công nghiệp", vivid: "#FF3B00",
+    looks: "Lưới Thụy Sĩ: nền giấy xám, đường lưới rõ, chữ đen, một nhấn đỏ cam, không bo góc",
     bg: "#F4F4F0", surface: "#FFFFFF", raised: "#EBEBE6", ink: "#0F172A", muted: "#475569", accent: "#BF3100", accent2: "#0F172A", line: "#CBD5E1", neutral: "#94A3B8", pos: POS, neg: NEG,
     dark: { bg: "#121212", surface: "#1B1B1B", raised: "#262626", ink: "#F4F4F0", muted: "#A8A8A0", accent: "#FF6A3D", accent2: "#F4F4F0", line: "#3A3A3A", neutral: "#5C5C5C", pos: POS_D, neg: NEG_D },
     bw: 1, r: 0, ri: 0, shadow: "none", blur: 0, head: "Inter", body: "Inter", mono: "JetBrains Mono" },
-  { id: "midnight-tech", looks: "Công nghệ nền tối: đen sâu, viền mảnh sáng, nhấn chàm",
-    bg: "#08090E", surface: "#12141C", raised: "#1B1E29", ink: "#F8FAFC", muted: "#A3AEBF", accent: "#818CF8", accent2: "#38BDF8", line: "#262A36", neutral: "#475569", pos: POS_D, neg: NEG_D,
+  { id: "midnight-tech", name: "Công nghệ đêm", best: "ra mắt sản phẩm công nghệ, AI, giao diện SaaS, bảng điều khiển dữ liệu", vivid: "#6366F1",
+    looks: "Công nghệ nền tối: đen sâu, thẻ kính mờ, viền phản quang mảnh, nhấn chàm và xanh trời",
+    bg: "#08090E", surface: "#0F1015", raised: "#16171C", ink: "#F8FAFC", muted: "#A3AEBF", accent: "#818CF8", accent2: "#38BDF8", line: "#262A36", neutral: "#475569", pos: POS_D, neg: NEG_D,
     print: { accent: "#4338CA", accent2: "#0369A1", pos: POS, neg: NEG },
-    bw: 1, r: 16, ri: 8, shadow: "0 20px 40px -15px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.12)", blur: 16, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
-  { id: "soft-bento", looks: "Ô bento mềm: nền xám rất nhạt, thẻ trắng bo lớn, nhấn xanh dương",
-    bg: "#F3F5F9", surface: "#FFFFFF", raised: "#F9FAFD", ink: "#1B1F2A", muted: "#5A5F6E", accent: "#1F5FD0", accent2: "#0F7B4F", line: "#E4E4E9", neutral: "#B6B6BE", pos: POS, neg: NEG,
+    bw: 1, r: 16, ri: 8, shadow: "inset 0 1px 0 0 rgba(255,255,255,.16),0 20px 40px -15px rgba(0,0,0,.65)", blur: 16, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
+  { id: "soft-bento", name: "Bento mềm", best: "tổng kết tính năng sản phẩm, hồ sơ năng lực, infographic", vivid2: "#10B981",
+    looks: "Ô bento mềm: nền xám rất nhạt, thẻ trắng bo lớn tách bằng bóng mịn (không viền đậm), nhấn xanh dương và lục",
+    bg: "#F5F5F7", surface: "#FFFFFF", raised: "#FAFAFC", ink: "#1B1F2A", muted: "#5A5F6E", accent: "#0066CC", accent2: "#0F7B4F", line: "#E4E4E9", neutral: "#B6B6BE", pos: POS, neg: NEG,
     dark: { bg: "#10121A", surface: "#1A1D27", raised: "#242733", ink: "#F2F4F9", muted: "#A6AAB8", accent: "#6BA3F5", accent2: "#34D399", line: "#34343A", neutral: "#5A5A62", pos: POS_D, neg: NEG_D },
-    bw: 1, r: 24, ri: 12, shadow: "0 4px 12px rgba(0,0,0,.03),0 16px 32px -8px rgba(0,0,0,.05)", blur: 20, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
-  { id: "editorial-serif", looks: "Tạp chí: giấy ấm, chữ than, tiêu đề có chân, nhấn nâu đồng",
+    bw: 0, r: 24, ri: 12, shadow: "0 1px 2px -1px rgba(15,23,42,.04),0 8px 16px -4px rgba(15,23,42,.06),0 24px 48px -12px rgba(15,23,42,.08)", blur: 20, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
+  { id: "editorial-serif", name: "Tạp chí", best: "nghiên cứu chuyên sâu, tạp chí, bất động sản nghỉ dưỡng, thời trang",
+    looks: "Tạp chí: giấy ấm, chữ than, tiêu đề có chân tương phản cao, nhấn nâu đất nung",
     bg: "#FAF7F2", surface: "#FFFFFF", raised: "#F3EFE6", ink: "#1C1917", muted: "#6B645E", accent: "#9A3412", accent2: "#44403C", line: "#E7E5E4", neutral: "#BDB6AD", pos: POS, neg: NEG,
     dark: { bg: "#17140F", surface: "#211D17", raised: "#2B261F", ink: "#F5F0E8", muted: "#B5AC9F", accent: "#F0936A", accent2: "#D6CFC4", line: "#3A342B", neutral: "#6B6358", pos: POS_D, neg: NEG_D },
     bw: 1, r: 2, ri: 0, shadow: "0 2px 8px rgba(28,25,23,.04)", blur: 0, lh: 1.25, head: "Playfair Display", body: "Be Vietnam Pro", mono: "JetBrains Mono" },
-  { id: "exec-navy", looks: "Điều hành: nền trắng, chữ navy, nhấn xanh coban, gọn và nhiều số",
+  { id: "exec-navy", name: "Điều hành", best: "báo cáo tư vấn quản trị, phân tích M&A, mô hình tài chính, đề xuất B2B",
+    looks: "Điều hành: nền trắng, thẻ xám lạnh, tiêu đề navy đậm, nhấn xanh coban, gọn và nhiều số",
     bg: "#FFFFFF", surface: "#F8FAFC", raised: "#F1F5F9", ink: "#0A192F", muted: "#475569", accent: "#0052CC", accent2: "#0369A1", line: "#E2E8F0", neutral: "#CBD5E1", pos: POS, neg: NEG,
     dark: { bg: "#0B1220", surface: "#131C2E", raised: "#1B263B", ink: "#F1F5F9", muted: "#A6B3C6", accent: "#6EA8FE", accent2: "#38BDF8", line: "#2A3650", neutral: "#475569", pos: POS_D, neg: NEG_D },
     bw: 1, r: 4, ri: 2, shadow: "0 1px 3px rgba(10,25,47,.05)", blur: 0, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
-  { id: "neo-brutalist", looks: "Tân thô mộc: nền kem, viền đen dày, bóng cứng, nhấn tím và cam",
-    bg: "#FFFDF5", surface: "#FFFFFF", raised: "#FEF08A", ink: "#000000", muted: "#27272A", accent: "#6D28D9", accent2: "#C2410C", line: "#000000", neutral: "#A1A1AA", pos: POS, neg: NEG,
+  { id: "neo-brutalist", name: "Tân thô mộc", best: "chiến dịch marketing trẻ, poster mạng xã hội, thương hiệu sáng tạo, F&B", vivid2: "#FF5722",
+    looks: "Tân thô mộc: nền kem, thẻ trắng hoặc vàng nhạt, viền đen dày, bóng cứng, nhấn tím và cam",
+    bg: "#FFFDF5", surface: "#FFFFFF", raised: "#FEF08A", ink: "#000000", muted: "#27272A", accent: "#7C3AED", accent2: "#C2410C", line: "#000000", neutral: "#A1A1AA", pos: POS, neg: NEG,
     dark: { bg: "#141414", surface: "#1E1E1E", raised: "#3A3200", ink: "#FFFDF5", muted: "#D4D4D8", accent: "#C4B5FD", accent2: "#FB923C", line: "#FFFDF5", neutral: "#71717A", pos: POS_D, neg: NEG_D },
     bw: 2, r: 8, ri: 4, shadow: "5px 5px 0 0 var(--sx-line)", blur: 0, head: "Space Grotesk", body: "Be Vietnam Pro", mono: "JetBrains Mono" },
-  { id: "aurora-glass", looks: "Kính mờ trên nền cực quang: trắng trong, chàm, nhấn hồng, hợp bìa và sự kiện",
+  { id: "aurora-glass", name: "Kính cực quang", best: "bài thuyết trình truyền cảm hứng, poster sự kiện, trang đích", vivid2: "#EC4899", glass: true,
+    looks: "Kính mờ trên nền cực quang: thẻ kính trắng trong mờ 24px, chàm, nhấn hồng, hợp bìa và sự kiện",
     bg: "#EEF2FF", surface: "#FFFFFF", raised: "#F7F8FF", ink: "#1E1B4B", muted: "#4338CA", accent: "#4F46E5", accent2: "#BE185D", line: "#D9DDF7", neutral: "#B4BAE8", pos: POS, neg: NEG,
     dark: { bg: "#0D0B24", surface: "#17143A", raised: "#211D4D", ink: "#EEF2FF", muted: "#B9B8EC", accent: "#A5B4FC", accent2: "#F9A8D4", line: "#332E6B", neutral: "#5552A0", pos: POS_D, neg: NEG_D },
     bw: 1, r: 20, ri: 12, shadow: "0 12px 32px -4px rgba(79,70,229,.1),inset 0 1px 0 rgba(255,255,255,.9)", blur: 24, head: "Plus Jakarta Sans", body: "Inter", mono: "JetBrains Mono" },
-  { id: "data-terminal", looks: "Bảng số dày: nền than, chữ sáng, số đơn cách, nhấn xanh lục",
-    bg: "#0B0E14", surface: "#111622", raised: "#1A2130", ink: "#E2E8F0", muted: "#9AA8BC", accent: "#34D399", accent2: "#F59E0B", line: "#1E293B", neutral: "#475569", pos: POS_D, neg: NEG_D,
+  { id: "data-terminal", name: "Bảng số", best: "bảng tính dữ liệu lớn, báo cáo giao dịch định lượng, bảng đối soát",
+    looks: "Bảng số dày: nền than, bảng xám than, viền mảnh, chữ sáng, mọi số đơn cách, nhấn xanh lục và vàng cảnh báo",
+    bg: "#0B0E14", surface: "#111622", raised: "#1A2130", ink: "#E2E8F0", muted: "#9AA8BC", accent: "#10B981", accent2: "#F59E0B", line: "#1E293B", neutral: "#475569", pos: POS_D, neg: NEG_D,
     print: { accent: "#047857", accent2: "#B45309", pos: POS, neg: NEG },
     bw: 1, r: 4, ri: 2, shadow: "none", blur: 0, head: "Inter", body: "Inter", mono: "JetBrains Mono" },
 ];
 export const DEFAULT_PRESET = "swiss-grid";
-export const presetOf = (id: string) => PRESETS.find((p) => p.id === id);
+// Mã phong cách theo bảng của chủ dự án: nhận ở mọi chỗ đọc mã phong cách (data-sx-preset, styleArchetype của mẫu, lời người dùng), không hiện ra giao diện vì mang tên hãng.
+export const PRESET_ALIASES: Record<string, string> = { "linear-dark": "midnight-tech", "apple-bento": "soft-bento", "mckinsey-exec": "exec-navy", "atmospheric-glass": "aurora-glass", "quant-terminal": "data-terminal" };
+export const presetId = (id: string) => PRESET_ALIASES[id] ?? id;
+export const presetOf = (id: string) => PRESETS.find((p) => p.id === presetId(id));
+/** Mọi mã trỏ tới phong cách này (mã chính trước), để bộ CSS nhận cả mã cũ. */
+export const presetIds = (id: string) => [id, ...Object.keys(PRESET_ALIASES).filter((k) => PRESET_ALIASES[k] === id)];
