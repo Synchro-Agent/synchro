@@ -48,10 +48,14 @@ export type OutFile = { id: string; name: string; size: number; mime: string; sk
 export type ApprovalCall = {
   id: string; connector: { id: string; name: string; logo?: string; color?: string; icon?: string };
   tool: { name: string; title: string; description: string; destructive: boolean }; input: unknown;
+  // editable: tham số gửi đủ, người dùng sửa được trước khi cho phép; schema: để thẻ kiểm tra ngay khi gõ (máy chủ kiểm tra lại).
+  editable?: boolean; schema?: unknown;
 };
 export type Decision = "allow" | "chat" | "always" | "deny";
+/** Câu trả lời của thẻ duyệt: quyết định theo id lời gọi, và tham số người dùng đã sửa (chỉ lời gọi được cho phép). */
+export type ApprovalAnswer = { decisions: Record<string, Decision>; inputs?: Record<string, Record<string, unknown>> };
 // conv: đoạn chat của lượt đang hỏi (người dùng có thể đang xem đoạn chat khác: thẻ duyệt hiện đúng đoạn chat đó).
-let approver: ((calls: ApprovalCall[], conv?: number | string) => Promise<Record<string, Decision>>) | null = null;
+let approver: ((calls: ApprovalCall[], conv?: number | string) => Promise<ApprovalAnswer>) | null = null;
 /** Giao diện đăng ký hàm hỏi người dùng; chưa đăng ký thì mọi yêu cầu đều bị từ chối. */
 export const setApprover = (f: typeof approver) => { approver = f; };
 let lastSkills: SkillUse[] = [];
@@ -175,8 +179,8 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
   // Phần chạy tiếp cũng là lượt chạy nền: vẫn truyền chữ và dừng được.
   for (let n = 0; j.approval && n < 20; n++) {
     const calls = (j.approval.calls ?? []) as ApprovalCall[];
-    const decisions = approver ? await approver(calls, cb.conv).catch(() => ({})) : {};
-    const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions, async: true }) });
+    const ans: ApprovalAnswer = approver ? await approver(calls, cb.conv).catch(() => ({ decisions: {} })) : { decisions: {} };
+    const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions: ans.decisions, ...(ans.inputs && Object.keys(ans.inputs).length ? { inputs: ans.inputs } : {}), async: true }) });
     if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new LLMError(e.error || `LLM ${r2.status}`, r2.status, e); }
     j = await r2.json();
     if (typeof j.run === "string") {

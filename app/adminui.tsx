@@ -55,6 +55,7 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   admin_signup_closed: ["Closed sign-ups", "adm"], admin_set_password: ["Set user password", "adm"], admin_set_perms: ["Changed user access", "adm"], admin_default_perms: ["Changed default access", "adm"], profile_updated: ["Updated profile", ""], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
 };
 Object.assign(ACTIONS, {
+  tool_args_edited: ["Edited tool inputs before approving", ""],
   oauth_unlink: ["Removed sign-in method", ""], email_change_request: ["Requested email change", ""], email_changed: ["Changed email", ""], admin_set_email: ["Changed user email", "adm"],
   mfa_on: ["Turned on two-step verification", ""], mfa_off: ["Turned off two-step verification", ""], speech_voice_owner: ["Assigned voice owner", "adm"],
   speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"],

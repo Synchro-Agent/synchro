@@ -8,6 +8,7 @@ import { apiFetch, NO_SERVER } from "./apierr";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { ConnLogo } from "./connlogo";
+import { ArgsEditor, readArgs } from "./argsedit";
 export { ConnLogo };
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
@@ -599,20 +600,27 @@ export function ConnectorsPanel() {
 }
 
 // Thẻ hỏi người dùng có cho model dùng công cụ connector hay không (hiện ngay trong cuộc trò chuyện).
-export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone: (d: Record<string, Decision>) => void }) {
+export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone: (d: Record<string, Decision>, inputs?: Record<string, Record<string, unknown>>) => void }) {
   const [i, setI] = useState(0);
   const [show, setShow] = useState(false);
   const acc = useRef<Record<string, Decision>>({});
+  // Tham số người dùng sửa trước khi cho phép, theo id lời gọi; edit: chữ JSON đang sửa của lời gọi hiện tại.
+  const inputs = useRef<Record<string, Record<string, unknown>>>({});
+  const [edit, setEdit] = useState<string | null>(null);
   const c = calls[i];
   const input = useMemo(() => { try { return JSON.stringify(c?.input ?? {}, null, 2); } catch { return "{}"; } }, [c]);
   if (!c) return null;
+  const es = edit !== null ? readArgs(edit, input, c.schema) : null;
+  const blocked = !!es && (es.errors.length > 0 || !es.value);
   const pick = (d: Decision) => {
+    if (d !== "deny" && blocked) return;
+    if (d !== "deny" && es?.changed && es.value) inputs.current[c.id] = es.value;
     acc.current[c.id] = d;
     // "Luôn cho phép" áp dụng luôn cho các lượt gọi cùng công cụ ở bước này.
     if (d === "always" || d === "chat") for (const x of calls) if (x.connector.id === c.connector.id && x.tool.name === c.tool.name) acc.current[x.id] ??= "allow";
     let n = i + 1;
     while (n < calls.length && acc.current[calls[n].id]) n++;
-    if (n >= calls.length) onDone(acc.current); else { setI(n); setShow(false); }
+    if (n >= calls.length) onDone(acc.current, inputs.current); else { setI(n); setShow(false); setEdit(null); }
   };
   const empty = input === "{}";
   return (
@@ -626,13 +634,17 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
       </div>
       {c.tool.description && <p className="ap-d" data-notr>{c.tool.description}</p>}
       {c.tool.destructive && <div className="ap-warn"><I.Alert size={14} /><span>Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.</span></div>}
-      {!empty && <button className="api-adv ap-more" aria-expanded={show} onClick={() => setShow(!show)}><I.ChevronR size={13} />Xem dữ liệu gửi đi</button>}
-      {show && !empty && <pre className="ap-in" data-notr>{input}</pre>}
+      {edit === null && !empty && <button className="api-adv ap-more" aria-expanded={show} onClick={() => setShow(!show)}><I.ChevronR size={13} />Xem dữ liệu gửi đi</button>}
+      {edit === null && show && !empty && <pre className="ap-in" data-notr>{input}</pre>}
+      {edit !== null && es && <ArgsEditor text={edit} onText={setEdit} state={es} />}
       <div className="ap-a">
+        {c.editable && (edit === null
+          ? <button className="btn ap-edit" onClick={() => setEdit(input)} aria-label="Sửa tham số trước khi cho phép"><I.Icon name="BracesCode" size={14} />Sửa</button>
+          : <button className="btn ap-edit" onClick={() => setEdit(null)}>Hủy sửa</button>)}
         <button className="btn" onClick={() => pick("deny")}>Từ chối</button>
-        <button className="btn" onClick={() => pick("allow")}>Cho phép một lần</button>
-        <button className="btn" onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>
-        <button className="btn dark" onClick={() => pick("always")} autoFocus>Luôn cho phép</button>
+        <button className="btn" disabled={blocked} onClick={() => pick("allow")}>{es?.changed ? "Cho phép với tham số đã sửa" : "Cho phép một lần"}</button>
+        <button className="btn" disabled={blocked} onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>
+        <button className="btn dark" disabled={blocked} onClick={() => pick("always")} autoFocus={edit === null}>Luôn cho phép</button>
       </div>
     </div>
   );

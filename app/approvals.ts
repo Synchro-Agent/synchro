@@ -5,29 +5,44 @@ import { allowSite, getPrefs, siteHost, siteIn, type PermMode } from "./codestor
 
 export type AskKind = "edit" | "bash" | "site" | "connector";
 // conn, about, destructive: chỉ với công cụ connector (hiện logo, mô tả công cụ, cảnh báo xóa dữ liệu trên thẻ).
-export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean };
-// chat: "Cho phép trong đoạn chat này" (công cụ connector).
-export type Answer = { ok: boolean; always?: boolean; chat?: boolean; note?: string };
+// schema: schema tham số của công cụ connector (khi đủ nhỏ) để thẻ duyệt kiểm tra ngay lúc người dùng sửa tham số.
+export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown };
+// chat: "Cho phép trong đoạn chat này" (công cụ connector). input: tham số người dùng đã sửa trên thẻ duyệt (chỉ dùng cho đúng lời gọi đang chờ).
+export type Answer = { ok: boolean; always?: boolean; chat?: boolean; note?: string; input?: Record<string, unknown> };
 
-type Wait = { uid: string; done: (a: Answer) => void };
+// check: kiểm tra câu trả lời trước khi nhận (tham số đã sửa sai schema): trả câu lỗi thì câu hỏi vẫn chờ, người dùng sửa lại.
+type Wait = { uid: string; done: (a: Answer) => void; check?: (a: Answer) => string | null };
 const g = globalThis as unknown as { __synchroAsks?: Map<string, Wait> };
 const waits = (g.__synchroAsks ??= new Map());
 
 /** Chờ người dùng trả lời câu hỏi id (hoặc tới khi lượt bị dừng: coi như từ chối). */
-export function waitAnswer(uid: string, id: string, signal?: AbortSignal): Promise<Answer> {
+export function waitAnswer(uid: string, id: string, signal?: AbortSignal, check?: (a: Answer) => string | null): Promise<Answer> {
   return new Promise((ok) => {
     const done = (a: Answer) => { waits.delete(id); signal?.removeEventListener("abort", stop); ok(a); };
     const stop = () => done({ ok: false, note: "Người dùng đã dừng." });
     if (signal?.aborted) return stop();
     signal?.addEventListener("abort", stop);
-    waits.set(id, { uid, done });
+    waits.set(id, { uid, done, check });
   });
 }
-/** Câu trả lời từ giao diện. false: không có câu hỏi đang chờ (đã trả lời ở thiết bị khác, hay lượt đã dừng). */
-export function answer(uid: string, id: string, a: Answer) {
+// Tham số sửa tay: đối tượng JSON, tối đa 100 KB.
+const MAX_INPUT = 100_000;
+/** Câu trả lời từ giao diện. false: không có câu hỏi đang chờ (đã trả lời ở thiết bị khác, hay lượt đã dừng).
+ *  Chuỗi: câu trả lời không nhận được (tham số đã sửa không hợp lệ), câu hỏi vẫn chờ. */
+export function answer(uid: string, id: string, a: Answer): boolean | string {
   const w = waits.get(id);
   if (!w || w.uid !== uid) return false;
-  w.done({ ok: !!a.ok, always: !!a.always, chat: !!a.chat, note: String(a.note ?? "").slice(0, 2000) });
+  let input: Record<string, unknown> | undefined;
+  if (a.ok && a.input !== undefined) {
+    if (!a.input || typeof a.input !== "object" || Array.isArray(a.input)) return "Tham số phải là một đối tượng JSON ({ … }).";
+    if (JSON.stringify(a.input).length > MAX_INPUT) return "Tham số quá dài (tối đa 100 KB).";
+    if (!w.check) return "Câu hỏi này không cho sửa tham số.";
+    input = a.input;
+  }
+  const ans: Answer = { ok: !!a.ok, always: !!a.always, chat: !!a.chat, note: String(a.note ?? "").slice(0, 2000), ...(input ? { input } : {}) };
+  const bad = input ? w.check!(ans) : null;
+  if (bad) return bad;
+  w.done(ans);
   return true;
 }
 

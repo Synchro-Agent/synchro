@@ -39,7 +39,7 @@ import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
-import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
@@ -996,7 +996,7 @@ export default function Home() {
   const curRef = useRef(cur);
   curRef.current = cur;
   // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.
-  const [approval, setApproval] = useState<{ chat: number | null; calls: ApprovalCall[]; resolve: (d: Record<string, Decision>) => void } | null>(null);
+  const [approval, setApproval] = useState<{ chat: number | null; calls: ApprovalCall[]; resolve: (d: ApprovalAnswer) => void } | null>(null);
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
   // Gợi ý khi rê chuột tự lật xuống dưới / canh theo mép khi sát mép màn hình hay mép khung (tips.ts).
@@ -1558,7 +1558,7 @@ export default function Home() {
   // (lượt sau model biết câu trả lời này chưa hoàn chỉnh). Chuyển mục hay đổi đoạn chat không gọi hàm này.
   const stop = (user: unknown = true, id: number | null = curRef.current) => {
     if (id === null) return;
-    if (approvalRef.current && approvalRef.current.chat === id) { approvalRef.current.resolve({}); setApproval(null); }
+    if (approvalRef.current && approvalRef.current.chat === id) { approvalRef.current.resolve({ decisions: {} }); setApproval(null); }
     gens.current.delete(id);
     setBusyOf(id, false);
     const run = runs.current.get(id);
@@ -2209,7 +2209,7 @@ export default function Home() {
     setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
     gens.current.clear(); runs.current.clear(); setRunning(new Set());
-    approvalRef.current?.resolve({}); setApproval(null);
+    approvalRef.current?.resolve({ decisions: {} }); setApproval(null);
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
   const api = {
@@ -2527,7 +2527,7 @@ export default function Home() {
                 {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
                   fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
                 {undoTurn?.chat === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={undoLost}>{tr("Khôi phục bản cũ")}</button></div></div>}
-                {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
+                {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d, inputs) => { approval.resolve({ decisions: d, inputs }); setApproval(null); }} />}
                 {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
                 {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
                   <div key={q.id} className="user-wrap steer-pending">

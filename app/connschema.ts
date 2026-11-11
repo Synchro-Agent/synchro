@@ -190,3 +190,67 @@ function coerce(v: unknown, s: unknown, depth: number): unknown {
 }
 /** Tham số model đưa → tham số gửi cho máy chủ MCP, theo schema gốc của công cụ. */
 export const coerceArgs = (schema: unknown, args: Record<string, unknown>) => coerce(args, resolveRefs(schema ?? {}), 0) as Record<string, unknown>;
+
+// ---- kiểm tra tham số theo schema (người dùng sửa tham số trên thẻ duyệt: trình duyệt kiểm tra khi gõ, máy chủ kiểm tra lại trước khi chạy) ----
+// Tập con JSON Schema thường gặp ở công cụ MCP: type, required, properties, additionalProperties, items, enum, const, minLength / maxLength,
+// minimum / maximum, minItems / maxItems, pattern, anyOf / oneOf (một nhánh đúng là được), allOf (mọi nhánh), $ref (đã thay bằng nội dung).
+// Không chắc thì cho qua: máy chủ MCP vẫn tự kiểm tra lần cuối. Trả về danh sách lỗi (rỗng: hợp lệ), mỗi lỗi kèm đường dẫn tham số.
+const typeOf = (v: unknown) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v === "number" ? (Number.isInteger(v) ? "integer" : "number") : typeof v);
+const fits = (t: string, v: unknown) => { const k = typeOf(v); return t === k || (t === "number" && k === "integer"); };
+const TYPE_VI: Record<string, string> = { object: "đối tượng", array: "danh sách", string: "chuỗi", number: "số", integer: "số nguyên", boolean: "true / false", null: "null" };
+const TYPE_EN: Record<string, string> = { object: "an object", array: "a list", string: "a string", number: "a number", integer: "a whole number", boolean: "true / false", null: "null" };
+// Câu lỗi theo ngôn ngữ giao diện (trình duyệt hiện cho người dùng; máy chủ dùng tiếng Việt như các lỗi khác).
+const MSG = {
+  vi: { any: "không khớp kiểu nào được phép", type: (t: string[]) => `phải là ${t.map((x) => TYPE_VI[x] ?? x).join(" hoặc ")}`, enum: (l: string) => `chỉ nhận ${l}`, cnst: (v: string) => `phải là ${v}`,
+    minLen: (n: number) => `cần ít nhất ${n} ký tự`, maxLen: (n: number) => `tối đa ${n} ký tự`, pattern: "không đúng định dạng", min: (n: number) => `nhỏ nhất là ${n}`, max: (n: number) => `lớn nhất là ${n}`,
+    minItems: (n: number) => `cần ít nhất ${n} mục`, maxItems: (n: number) => `tối đa ${n} mục`, required: "thiếu (bắt buộc)", extra: "công cụ không nhận tham số này", top: "Tham số phải là một đối tượng JSON ({ … }).", root: "tham số" },
+  en: { any: "doesn't match any allowed type", type: (t: string[]) => `must be ${t.map((x) => TYPE_EN[x] ?? x).join(" or ")}`, enum: (l: string) => `must be one of ${l}`, cnst: (v: string) => `must be ${v}`,
+    minLen: (n: number) => `needs at least ${n} characters`, maxLen: (n: number) => `at most ${n} characters`, pattern: "has the wrong format", min: (n: number) => `must be at least ${n}`, max: (n: number) => `must be at most ${n}`,
+    minItems: (n: number) => `needs at least ${n} items`, maxItems: (n: number) => `at most ${n} items`, required: "missing (required)", extra: "this tool doesn't take this input", top: "Inputs must be a JSON object ({ … }).", root: "inputs" },
+};
+type Msg = typeof MSG.vi;
+function check(v: unknown, s: unknown, path: string, out: string[], depth: number, M: Msg) {
+  if (!isObj(s) || depth > 30 || out.length >= 20) return;
+  const at = path || M.root;
+  for (const k of ["anyOf", "oneOf"] as const) if (Array.isArray(s[k]) && (s[k] as unknown[]).length) {
+    const ok = (s[k] as unknown[]).some((b) => { const e: string[] = []; check(v, b, path, e, depth + 1, M); return !e.length; });
+    if (!ok) { out.push(`${at}: ${M.any}`); return; }
+  }
+  if (Array.isArray(s.allOf)) for (const b of s.allOf) check(v, b, path, out, depth + 1, M);
+  const types = Array.isArray(s.type) ? (s.type as unknown[]).filter((x): x is string => typeof x === "string") : typeof s.type === "string" ? [s.type] : [];
+  if (types.length && !types.some((t) => fits(t, v))) { out.push(`${at}: ${M.type(types)}`); return; }
+  if (Array.isArray(s.enum) && !s.enum.some((x) => JSON.stringify(x) === JSON.stringify(v))) out.push(`${at}: ${M.enum(s.enum.slice(0, 8).map((x) => JSON.stringify(x)).join(", "))}`);
+  if ("const" in s && JSON.stringify(s.const) !== JSON.stringify(v)) out.push(`${at}: ${M.cnst(JSON.stringify(s.const))}`);
+  if (typeof v === "string") {
+    if (typeof s.minLength === "number" && v.length < s.minLength) out.push(`${at}: ${M.minLen(s.minLength)}`);
+    if (typeof s.maxLength === "number" && v.length > s.maxLength) out.push(`${at}: ${M.maxLen(s.maxLength)}`);
+    if (typeof s.pattern === "string") { try { if (!new RegExp(s.pattern, "u").test(v)) out.push(`${at}: ${M.pattern}`); } catch {} }
+  }
+  if (typeof v === "number") {
+    if (typeof s.minimum === "number" && v < s.minimum) out.push(`${at}: ${M.min(s.minimum)}`);
+    if (typeof s.maximum === "number" && v > s.maximum) out.push(`${at}: ${M.max(s.maximum)}`);
+  }
+  if (Array.isArray(v)) {
+    if (typeof s.minItems === "number" && v.length < s.minItems) out.push(`${at}: ${M.minItems(s.minItems)}`);
+    if (typeof s.maxItems === "number" && v.length > s.maxItems) out.push(`${at}: ${M.maxItems(s.maxItems)}`);
+    if (isObj(s.items)) v.forEach((x, i) => check(x, s.items, `${path}[${i}]`, out, depth + 1, M));
+  }
+  if (isObj(v)) {
+    const props = isObj(s.properties) ? s.properties : {};
+    if (Array.isArray(s.required)) for (const r of s.required) if (typeof r === "string" && !(r in v)) out.push(`${path ? `${path}.` : ""}${r}: ${M.required}`);
+    for (const [k, x] of Object.entries(v)) {
+      const p = `${path ? `${path}.` : ""}${k}`;
+      if (k in props) check(x, props[k], p, out, depth + 1, M);
+      else if (s.additionalProperties === false) out.push(`${p}: ${M.extra}`);
+      else if (isObj(s.additionalProperties)) check(x, s.additionalProperties, p, out, depth + 1, M);
+    }
+  }
+}
+/** Lỗi của tham số theo schema công cụ; [] là hợp lệ. Tham số cấp cao nhất luôn phải là đối tượng. lang: ngôn ngữ câu lỗi. */
+export function validateArgs(schema: unknown, args: unknown, lang: "vi" | "en" = "vi"): string[] {
+  const M = MSG[lang];
+  if (!isObj(args)) return [M.top];
+  const out: string[] = [];
+  check(args, resolveRefs(schema ?? {}), "", out, 0, M);
+  return out;
+}

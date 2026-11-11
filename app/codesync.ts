@@ -92,8 +92,8 @@ export const mergeSession = (local: Record<string, unknown> | null, remote: Reco
 
 // ------------------------------------------------------------------ duyệt
 export const ASK_GONE = "Câu hỏi này không còn chờ trả lời.";
-export async function answerAsk(id: string, ok: boolean, o: { always?: boolean; chat?: boolean; note?: string } = {}): Promise<string | null> {
-  const r = await fetch("/api/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ok, always: !!o.always, chat: !!o.chat, note: o.note ?? "" }) }).catch(() => null);
+export async function answerAsk(id: string, ok: boolean, o: { always?: boolean; chat?: boolean; note?: string; input?: Record<string, unknown> } = {}): Promise<string | null> {
+  const r = await fetch("/api/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ok, always: !!o.always, chat: !!o.chat, note: o.note ?? "", ...(o.input ? { input: o.input } : {}) }) }).catch(() => null);
   if (r?.ok) return null;
   if (r?.status === 409) return ASK_GONE;
   return ((await r?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Không gửi được câu trả lời.";

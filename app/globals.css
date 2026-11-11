@@ -4214,3 +4214,14 @@ main#main:focus{outline:0}
 @media (max-width:640px){.tb-tags .tag-chip.full{display:none}.tb-tags .tag-chip.compact{display:inline-flex}}
 /* Hàng có menu đang mở nằm trên các hàng sau: hàng mới hiện (gRowIn có transform) tạo lớp xếp chồng riêng và từng vẽ đè lên menu. */
 .chat-wrap:has(.menu:not(.out)){z-index:30}
+
+/* Sửa tham số công cụ trước khi cho phép (app/argsedit.tsx): thẻ duyệt trong chat (AskCard) và thẻ duyệt của lượt chạy bằng khóa API (ApprovalCard). */
+.args-ed{margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
+.args-ed textarea{width:100%;min-height:96px;max-height:340px;resize:vertical;padding:10px 12px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--text);font:12px/1.55 var(--font-mono,ui-monospace,Menlo,monospace);white-space:pre;overflow:auto;tab-size:2;box-sizing:border-box}
+.args-ed textarea:focus{outline:2px solid color-mix(in srgb,var(--text) 35%,transparent);outline-offset:1px}
+.args-ed textarea[aria-invalid="true"]{border-color:#c2410c}
+.args-err{margin:0;padding:6px 10px 6px 26px;border-radius:8px;background:color-mix(in srgb,#c2410c 10%,var(--card));color:#9a3412;font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
+[data-theme="dark"] .args-err{color:#fdba74;background:color-mix(in srgb,#c2410c 18%,var(--card))}
+.args-ok{margin:0;font-size:12.5px;color:var(--text-3)}
+.ag-asked-ed{font-style:normal;color:var(--text-3)}
+.ap-a .ap-edit{margin-right:auto}

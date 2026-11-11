@@ -48,6 +48,19 @@ export const UX_VI2EN: Record<string, string> = {
   "Mỗi đoạn chat có tối đa 8 thẻ.": "Each chat can have up to 8 tags.",
   "Lọc đoạn chat có thẻ": "Show chats tagged",
   "Lọc theo thẻ": "Filter by tag",
+  // Sửa tham số công cụ trước khi cho phép
+  "đã sửa tham số": "inputs edited",
+  "Cho phép với tham số đã sửa": "Allow with edited inputs",
+  "Sửa tham số trước khi cho phép": "Edit inputs before allowing",
+  "Hủy sửa": "Cancel edit",
+  "JSON chưa đúng cú pháp": "Invalid JSON",
+  "Tham số phải là một đối tượng JSON ({ … }).": "Inputs must be a JSON object ({ … }).",
+  "Tham số (JSON)": "Inputs (JSON)",
+  "Tham số hợp lệ. Cho phép sẽ chạy công cụ với tham số đã sửa.": "Inputs are valid. Allowing runs the tool with your edited inputs.",
+  "Chưa sửa gì.": "No changes yet.",
+  "Tham số quá dài (tối đa 100 KB).": "Inputs are too long (100 KB max).",
+  "Câu hỏi này không cho sửa tham số.": "This request can't take edited inputs.",
+  "Tham số chưa hợp lệ:": "Inputs aren't valid:",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Câu trả lời trong “(.+)” gặp lỗi$/, (m) => `The reply in “${m[1]}” hit an error`],
@@ -64,6 +77,7 @@ export const UX_EN2VI: Record<string, string> = {
   "Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them.": "Tải về đoạn chat, dự án và hồ sơ lưu trong trình duyệt này. Ghi chú của bộ não tải ở Cài đặt → Bộ não; artifact và phiên Code tải ngay nơi bạn dùng chúng.",
   "Every Synchro Code conversation will be deleted from this browser and from the Synchro server, including on your other devices. This can't be undone.": "Mọi cuộc trò chuyện Synchro Code sẽ bị xóa khỏi trình duyệt này và máy chủ Synchro, kể cả trên các thiết bị khác của bạn. Không hoàn tác được.",
   "Turned on": "Đang bật", "List every skill directly": "Liệt kê trực tiếp mọi skill", "Custom connectors": "Connector tùy chỉnh", "Tools that delete data": "Công cụ xóa dữ liệu", "All directory connectors": "Mọi connector trong danh mục", "New sign-ups": "Đăng ký mới", "Apply to administrators": "Áp dụng cho quản trị viên",
+  "Edited tool inputs before approving": "Sửa tham số công cụ trước khi duyệt",
 };
 export const UX_RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(\d+) sessions? in this browser, kept in sync with the Synchro server\.$/, (m) => `${m[1]} phiên trong trình duyệt này, đồng bộ với máy chủ Synchro.`],
