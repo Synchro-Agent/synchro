@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
-import { clipSink, collectOutputs, createRunQueue, QueueFull, safeWrite } from "./safefs.mjs";
+import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeWrite } from "./safefs.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const PORT = Number(env("WS_AGENT_PORT", 3555));
@@ -41,6 +41,9 @@ const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
 const RUN_FILES = 20, RUN_PREVIEWS = 12, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
 // Hết chỗ chạy thì xếp hàng (có giới hạn) thay vì báo lỗi ngay: một chỗ luôn dành cho lần chạy ngắn, người đang chạy ít nhất được chọn trước.
 const RUN_QUEUE = Number(env("WS_RUN_QUEUE", 20)), RUN_QUEUE_USER = Number(env("WS_RUN_QUEUE_USER", 4)), RUN_WAIT_SEC = Number(env("WS_RUN_WAIT_SEC", 240));
+// Dựng video bằng synchro-video (Remotion: Chromium nhiều tab + x264, whisper ~1 GB): mỗi máy chỉ WS_MEDIA_MAX lần cùng lúc (máy 2 vCPU, 8 GB không swap:
+// hai lần dựng song song chỉ chậm gấp đôi mà còn dễ làm máy chủ web thiếu bộ nhớ). Lần sau xếp hàng tối đa WS_MEDIA_WAIT_SEC giây.
+const MEDIA_MAX = Number(env("WS_MEDIA_MAX", 1)), MEDIA_WAIT_SEC = Number(env("WS_MEDIA_WAIT_SEC", 300));
 // Bảo vệ đĩa: một lần chạy không dùng quá RUN_DISK_MB (cả thư mục làm việc lẫn lớp ghi của container); dưới MIN_FREE_MB trống thì không
 // nhận việc mới và dừng việc tốn đĩa nhất, để SQLite và nhật ký của mọi người không chết vì đầy đĩa.
 const RUN_DISK_MB = Number(env("WS_RUN_DISK_MB", 6000)), MIN_FREE_MB = Number(env("WS_MIN_FREE_MB", 3000));
@@ -338,6 +341,7 @@ async function exec(u, { d, cmd, argv, timeout = 120, stdin, env: ev = {} }) {
 // ------------------------------------------------------------------ chạy code một lần (chat)
 const runDir = (id) => `${ROOT}/_runs/${id}`;
 const runQ = createRunQueue({ max: RUN_MAX, queue: RUN_QUEUE, perUser: RUN_QUEUE_USER, waitMs: RUN_WAIT_SEC * 1000 });
+const mediaQ = createRunQueue({ max: MEDIA_MAX, queue: RUN_QUEUE, perUser: RUN_QUEUE_USER, waitMs: MEDIA_WAIT_SEC * 1000, shortSec: 0 });
 const safeRel = (p) => typeof p === "string" && p.length > 0 && p.length < 300 && !p.startsWith("/") && !p.split(/[\\/]/).some((x) => x === ".." || x === "");
 
 const keepRoot = (u) => `${ROOT}/_keep/${u}`;
@@ -391,13 +395,18 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   let release = () => {};
   if (keep) keepBusy.set(dir, new Promise((ok) => { release = () => { keepBusy.delete(dir); ok(); }; }));
   const queuedAt = Date.now();
-  let freeSlot;
+  // Lần dựng video lấy chỗ dựng trước (không giữ chỗ chạy chung trong lúc chờ), rồi mới tới chỗ chạy chung.
+  let freeSlot, freeMedia = () => {};
+  if (isMediaRun({ files, argv, stdin })) {
+    try { freeMedia = await mediaQ.acquire(u, sec, signal); }
+    catch (e) { release(); throw e instanceof QueueFull ? new E(503, !e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message : "Máy chủ đang dựng một video khác (mỗi lần một video). Hãy chạy lại sau ít phút; các đoạn đã dựng xong vẫn được giữ.") : e; }
+  }
   try { freeSlot = await runQ.acquire(u, sec, signal); }
-  catch (e) { release(); throw e instanceof QueueFull ? new E(503, e.message) : e; }
+  catch (e) { freeMedia(); release(); throw e instanceof QueueFull ? new E(503, e.message) : e; }
   const waited = Math.round((Date.now() - queuedAt) / 1000);
   if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
   const ip = wantNet ? pickIp() : null;
-  if (wantNet && !ip) { freeSlot(); release(); throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây."); }
+  if (wantNet && !ip) { freeSlot(); freeMedia(); release(); throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây."); }
   if (ip && web) webIps.add(ip);
   let watcher = null, overDisk = "";
   try {
@@ -470,6 +479,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   } finally {
     if (watcher) clearInterval(watcher);
     freeSlot();
+    freeMedia();
     if (ip) { usedIps.delete(ip); webIps.delete(ip); }
     await run("docker", ["rm", "-f", name], { timeout: 20_000 });
     if (keep) { rotateOutputs(dir); release(); }
@@ -685,6 +695,7 @@ process.on("SIGTERM", async () => {
   if (draining) return;
   draining = true;
   runQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
+  mediaQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
   log(`đang tắt: chờ ${runQ.running} lần chạy`);
   const end = Date.now() + DRAIN_SEC * 1000;
   while ((runQ.running > 0 || replying > 0) && Date.now() < end) await new Promise((r) => setTimeout(r, 500));

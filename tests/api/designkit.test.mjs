@@ -198,7 +198,8 @@ ok(A.withKitFontLink(kitPage).includes("fonts.googleapis.com") && A.withKitFontL
 const dock = readFileSync("workspace/Dockerfile", "utf8");
 for (const n of Object.keys(FONT_SPEC)) ok(dock.includes(`'${n}'`), `sandbox có phông ${n}`);
 const shas = [...dock.matchAll(/'([0-9a-f]{64}) ofl\//g)].map((m) => m[1]);
-ok(shas.length === 9 && /google\/fonts\/[0-9a-f]{40}\//.test(dock) && /sha256sum -c/.test(dock) && /fc-cache/.test(dock), `phông ghim commit và mã băm (${shas.length} tệp)`);
+// 9 phông của bộ thiết kế + Be Vietnam Pro ExtraBold / Black cho phụ đề video (Remotion).
+ok(shas.length === 11 && /google\/fonts\/[0-9a-f]{40}\//.test(dock) && /sha256sum -c/.test(dock) && /fc-cache/.test(dock), `phông ghim commit và mã băm (${shas.length} tệp)`);
 ok(/DM Mono/.test(JSON.stringify(FONT_SPEC)) === false, "không dùng phông thiếu dấu tiếng Việt (DM Mono)");
 const probe = readFileSync("app/artcheck.ts", "utf8");
 ok(probe.includes("${DESIGN_PROBE}") && !/tự thu nhỏ/.test(probe), "check_artifact có phép đo mới, chỉ báo chứ không tự sửa");

@@ -16,7 +16,10 @@ fi
 mkdir -p /srv/synchro-ws && chmod 711 /srv/synchro-ws
 
 # 2. Build lại image khi Dockerfile hoặc file đi kèm thay đổi.
-HASH=$(cat "$APP/workspace/Dockerfile" "$APP/workspace/fsop.js" "$APP/workspace/browser.sh" "$APP/workspace/subfit.py" "$APP/workspace/xlsx_recalc.py" | sha256sum | cut -c1-16)
+# Dự án video Remotion (workspace/remotion, chép vào image ở /opt/remotion): mọi tệp trừ thư mục sinh ra (giống .dockerignore).
+REMOTION_FILES=$(cd "$APP/workspace" && find remotion -type f -not -path 'remotion/node_modules/*' -not -path 'remotion/bundle/*' -not -path 'remotion/public/fonts/*' -not -path 'remotion/out/*' -not -path 'remotion/.synchro-video/*' | LC_ALL=C sort)
+HASH=$( { cat "$APP/workspace/Dockerfile" "$APP/workspace/.dockerignore" "$APP/workspace/fsop.js" "$APP/workspace/browser.sh" "$APP/workspace/subfit.py" "$APP/workspace/xlsx_recalc.py"; \
+  for f in $REMOTION_FILES; do printf '%s\n' "$f"; cat "$APP/workspace/$f"; done; } | sha256sum | cut -c1-16)
 CUR=$(docker image inspect -f '{{index .Config.Labels "synchro.hash"}}' "$IMAGE" 2>/dev/null || true)
 if [ "$HASH" != "$CUR" ]; then
   echo "Đang build image $IMAGE…"

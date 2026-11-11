@@ -41,6 +41,7 @@
     "node_modules",
     "data",
     "data-mock",
-    "public"
+    "public",
+    "workspace/remotion"
   ]
 }

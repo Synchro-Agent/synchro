@@ -154,3 +154,18 @@ export function createRunQueue({ max = 3, queue = 20, perUser = 4, waitMs = 240_
   };
 }
 export class QueueFull extends Error {}
+
+// ---------------------------------------------------------------- lần chạy dựng video (Remotion)
+// Lệnh tốn CPU / bộ nhớ của synchro-video: dựng hình (Chromium + x264), ảnh xem trước, nhận dạng giọng nói (whisper ~1 GB).
+// Gọi bằng shell ("synchro-video render …") hoặc danh sách tham số của Python / Node (["synchro-video", "render", …]).
+const MEDIA_CMD = /\bsynchro-video["']?(?:\s*,\s*|\s+)["']?(?:render|still|captions|selftest|bench)\b/;
+const SCRIPT_EXT = /\.(?:py|sh|bash|js|mjs|cjs|ts)$/i;
+/** Lần chạy có gọi synchro-video để dựng không (đọc lệnh, stdin và tệp script nhỏ của lần chạy). Dùng để xếp hàng riêng: mỗi máy một lần dựng. */
+export function isMediaRun({ files = [], argv = [], stdin = null } = {}) {
+  if (argv.some((a) => MEDIA_CMD.test(String(a))) || (typeof stdin === "string" && MEDIA_CMD.test(stdin))) return true;
+  for (const f of files) {
+    if (!SCRIPT_EXT.test(String(f?.path ?? "")) || typeof f.b64 !== "string" || f.b64.length > 1_400_000) continue;
+    if (MEDIA_CMD.test(Buffer.from(f.b64, "base64").toString("utf8"))) return true;
+  }
+  return false;
+}
