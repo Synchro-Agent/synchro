@@ -1,11 +1,13 @@
 // Composio giả lập (gắn vào API giả lập ở /composio/…): đủ để chạy thử Composio của Synchro không cần khóa thật, không ra Internet.
 //  POST /composio/api/v3.1/tool_router/session            tạo phiên Tool Router cho một user_id, trả mcp.url trỏ về máy chủ MCP bên dưới
 //  GET  /composio/api/v3.1/connected_accounts?user_ids=…   ứng dụng đã kết nối của người dùng
+//  GET  /composio/api/v3.1/toolkits/{slug}                 thông tin ứng dụng, meta.logo trỏ về /composio/logos/{slug}.png
 //  DELETE /composio/api/v3.1/connected_accounts/{id}       ngắt một ứng dụng
 //  POST /composio/mcp/{session}                            máy chủ MCP của phiên (Streamable HTTP, không phiên MCP): 3 công cụ meta
 //  GET  /composio/link/{id}                                Connect Link: mở là coi như người dùng đã đăng nhập ứng dụng (ACTIVE)
 //  GET/POST /composio/_debug                               xem lời gọi, số phiên; { reset } xóa hết, { dropSessions } giả lập Composio xóa phiên
 // Mọi đường dẫn (trừ Connect Link và _debug) đòi header x-api-key đúng; khóa không bao giờ được ghi lại.
+import { solidPng } from "./mock-png.mjs";
 export const COMPOSIO_KEY = "ak_mock_composio_0001";
 
 export const CX = { sessions: new Map(), accounts: [], calls: [], seq: 0 };
@@ -42,6 +44,9 @@ export async function composioHandler(req, res, p, b) {
     res.end(`<!doctype html><title>Connected</title><p id="done">Connected ${a.toolkit.slug}. You can close this tab.</p>`);
     return true;
   }
+  // Logo ứng dụng (địa chỉ meta.logo trả về ở /toolkits/{slug}); không cần khóa, như ảnh công khai của Composio.
+  const logo = /^\/composio\/logos\/([\w-]+)\.png$/.exec(p);
+  if (logo && req.method === "GET") { const png = solidPng(`kit-${logo[1]}`); res.writeHead(200, { "content-type": "image/png", "content-length": png.length }); res.end(png); return true; }
   CX.calls.push(`${req.method} ${p}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`);
   if (req.headers["x-api-key"] !== COMPOSIO_KEY) return fail(res, 401, "Invalid API key");
 
@@ -52,6 +57,9 @@ export async function composioHandler(req, res, p, b) {
     CX.sessions.set(id, { user_id: String(b.user_id), manage: !!b?.manage_connections?.enable });
     return send(res, 201, { session_id: id, mcp: { type: "http", url: `${origin}/composio/mcp/${id}` }, tool_router_tools: TOOLS.map((t) => t.name), config: { user_id: String(b.user_id) }, config_version: 1 });
   }
+  // Thông tin một ứng dụng (toolkit): meta.logo như API v3.1 thật. "nologo" giả lập ứng dụng không có logo.
+  const kit = /^\/toolkits\/([\w-]+)$/.exec(api);
+  if (kit && req.method === "GET") return send(res, 200, { slug: kit[1], name: kit[1], meta: kit[1] === "nologo" ? { description: "" } : { logo: `${origin}/composio/logos/${kit[1]}.png`, description: "" } });
   if (api === "/connected_accounts" && req.method === "GET") {
     const q = new URL(req.url, origin).searchParams;
     const users = q.getAll("user_ids").flatMap((x) => x.split(",")).filter(Boolean);

@@ -26,7 +26,7 @@ export type Conn = {
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
 // Composio của tài khoản: active (đang chạy), no_key (quản trị viên chưa thêm khóa), blocked (quản trị viên không cho tài khoản này), error.
 export type ComposioInfo = { state: "active" | "no_key" | "blocked" | "error"; admin: boolean; connector: Conn | null; apps: number | null };
-export type ComposioApp = { id: string; app: string; name: string; logo?: string; status: string; alias?: string; createdAt: string | null };
+export type ComposioApp = { id: string; app: string; name: string; logo?: string; img?: string; status: string; alias?: string; createdAt: string | null };
 type Data = { connectors: Conn[]; composio?: ComposioInfo; policy: Policy };
 type Res = { connectors: Conn[]; connector?: Conn; authorizeUrl?: string; error?: string };
 
@@ -469,7 +469,7 @@ function ComposioSection({ info, onInfo }: { info: ComposioInfo; onInfo: (i: Com
             : !live.length && !other.length ? <div className="cpo-row d">No apps connected yet.</div>
             : [...live, ...other].map((a) => (
               <div key={a.id} className="cpo-row">
-                <ConnLogo logo={a.logo} name={a.name} size={28} />
+                <ConnLogo logo={a.logo} icon={a.img} name={a.name} size={28} />
                 <span className="cpo-app"><b data-notr>{a.name}</b>{a.alias && <span className="d" data-notr>{a.alias}</span>}{a.status && a.status !== "ACTIVE" && <span className="cn-tag">{a.status === "EXPIRED" ? "Expired" : a.status === "FAILED" ? "Failed" : "Inactive"}</span>}</span>
                 <button className="btn cpo-drop" disabled={busy === a.id} onClick={() => drop(a)}>{busy === a.id ? <span className="api-spin" /> : null}Disconnect</button>
               </div>
