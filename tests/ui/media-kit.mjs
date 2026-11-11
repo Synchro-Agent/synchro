@@ -13,7 +13,7 @@ import { loadTs } from "../lib/ts.mjs";
 
 const R = createRequire(path.join(process.cwd(), "package.json"));
 const ts = R("typescript"), JSZip = R("jszip");
-const { artdoc, deckpptx, designpresets } = await loadTs(["artdoc", "deckpptx", "designpresets"]);
+const { artdoc, deckpptx, designpresets, designtemplates } = await loadTs(["artdoc", "deckpptx", "designpresets", "designtemplates"]);
 const { buildDocCore } = artdoc;
 const SHOTS = process.env.SHOTS ?? "";
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
@@ -111,6 +111,16 @@ await ev(`sxCapture("p3", "", 3)`);
 const p3 = await waitPost(`(p) => p.id === "p3"`), p3i = p3?.data ? await pngInfo(p3.data) : null;
 check("PNG 3x poster: đúng 3240×4320, có chữ", p3i?.w === 3240 && p3i?.h === 4320 && p3i.edges > 50, JSON.stringify(p3i ?? p3?.error));
 if (SHOTS && p3?.data) writeFileSync(path.join(SHOTS, "poster-3x.png"), Buffer.from(p3.data.split(",")[1], "base64"));
+// Mẫu poster điền sẵn (poster-og, dựng lại theo MasterPosterTemplate): lưới nền mà mô tả của chủ dự án nhắc tới, màu theo chữ của phong cách (sáng / tối),
+// mờ dần ra mép, nằm dưới chữ. Bản Satori ở máy chủ kiểm ở tests/api/poster.test.mjs.
+for (const style of ["midnight-tech", "soft-bento"]) {
+  const tpl = designtemplates.expandTemplates(`<!doctype html><html><body><script type="application/json" data-sx-template>${JSON.stringify({ styleArchetype: style, pages: [{ templateId: "poster-og", props: { tag: "Báo cáo quý 3", title: "Tự động hóa đưa biên ròng lên mức kỷ lục", metricValue: "+14,2%", metricLabel: "Biên lợi nhuận ròng", author: "Synchro Research" } }] })}</script></body></html>`);
+  await view(1280, 720); await open(tpl);
+  const gr = await ev(`(() => { const g = document.querySelector(".sx-tpl-poster-grid"), t = document.querySelector(".sx-tpl-poster-title"); if (!g || !t) return null; const cs = getComputedStyle(g), ps = getComputedStyle(document.querySelector(".sx-tpl-poster")), b = g.getBoundingClientRect(), p = document.querySelector(".sx-tpl-poster").getBoundingClientRect();
+    return { bg: cs.backgroundImage, mask: cs.maskImage || cs.webkitMaskImage, z: cs.zIndex, cover: Math.abs(b.width - p.width) < 1 && Math.abs(b.height - p.height) < 1, ink: ps.color, top: document.elementFromPoint(t.getBoundingClientRect().left + 10, t.getBoundingClientRect().top + 10) === t || t.contains(document.elementFromPoint(t.getBoundingClientRect().left + 10, t.getBoundingClientRect().top + 10)) }; })()`);
+  check(`poster-og (${style}): có lớp lưới nền phủ khung, đường kẻ theo màu chữ, mờ dần ra mép, nằm dưới chữ`, !!gr && /linear-gradient/.test(gr.bg) && /radial-gradient/.test(gr.mask) && gr.z === "-1" && gr.cover && gr.top, JSON.stringify(gr));
+  await shot(`poster-og-grid-${style}.png`);
+}
 // In: ảnh chia sẻ in ra một trang đúng khổ.
 await view(1000, 700); await open(OG);
 const pdf = await P("Page.printToPDF", { preferCSSPageSize: true, printBackground: true });

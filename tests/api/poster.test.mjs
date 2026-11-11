@@ -49,6 +49,16 @@ console.log("2. /api/poster");
   ok(bright > 5000 && green > 1000, "tiêu đề trắng và con số KPI xanh lục được vẽ ra", { bright, green });
   const r1 = await api("POST", "/api/poster", { props, scale: 1 }), m1 = r1.ok ? await sharp(Buffer.from(await r1.arrayBuffer())).metadata() : {};
   ok(m1.width === 1200 && m1.height === 630, "scale 1: 1200×630", m1);
+  // Lưới nền (mô tả poster của chủ dự án, giống .sx-tpl-poster-grid bản HTML): đường kẻ ô 56px sáng hơn hẳn trong ô ở vùng trống giữa trên, mờ dần ra mép
+  // (góc dưới trái gần như không còn), không đổi vùng chữ.
+  {
+    const { data: d1, info: i1 } = r1.ok ? await sharp(Buffer.from(await (await api("POST", "/api/poster", { props, scale: 1 })).arrayBuffer())).removeAlpha().raw().toBuffer({ resolveWithObject: true }) : { data: Buffer.alloc(0), info: { width: 0 } };
+    const lum = (x, y) => { const i = (y * i1.width + x) * 3; return (d1[i] + d1[i + 1] + d1[i + 2]) / 3; };
+    const avg = (f, n) => { let t = 0; for (let k = 0; k < n; k++) t += f(k); return t / n; };
+    const vLine = avg((k) => lum(728, 150 + k) - lum(742, 150 + k), 180), hLine = avg((k) => lum(500 + k, 224) - lum(500 + k, 238), 320);
+    const edge = avg((k) => lum(56, 590 + (k % 30)) - lum(70, 590 + (k % 30)), 30);
+    ok(vLine > 6 && hLine > 6 && vLine < 30 && Math.abs(edge) < 3, "lưới nền mờ: đường kẻ ô 56px thấy rõ ở giữa, nhạt dần ra mép", { vLine: vLine.toFixed(1), hLine: hLine.toFixed(1), edge: edge.toFixed(1) });
+  }
   // Dấu tiếng Việt: chữ có dấu khác chữ bỏ dấu ở đúng chỗ (phông dự phòng thiếu chữ thì ra ô vuông giống nhau hoặc mất chữ).
   const a = Buffer.from(await (await api("POST", "/api/poster", { props: { ...props, title: "Đường ưu tiên ệ ữ ặ ỡ" }, scale: 1 })).arrayBuffer());
   const b2 = Buffer.from(await (await api("POST", "/api/poster", { props: { ...props, title: "Duong uu tien e u a o" }, scale: 1 })).arrayBuffer());

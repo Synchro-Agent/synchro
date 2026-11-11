@@ -1,5 +1,7 @@
 // Mẫu poster / ảnh chia sẻ 1200×630 của chủ dự án (mục 6.2 "master-poster-template.tsx"), giữ nguyên từng dòng: chỉ dùng flex, radial-gradient,
 // letterSpacing theo em, textTransform — đúng phần CSS Satori hỗ trợ. Model chỉ điền 5 trường (generate_image với template "poster-master-og"), không viết JSX.
+// Thêm duy nhất lớp lưới nền mà mô tả poster của chủ dự án nhắc tới ("lưới nền"), giống bản HTML (.sx-tpl-poster-grid của designtemplates.ts): đường kẻ màu chữ
+// (#F8FAFC) 7%, ô 56px, mờ dần ra mép theo quầng ellipse nên không nằm dưới chữ đậm đặc; lớp tuyệt đối, không đổi bố cục của mẫu.
 export function MasterPosterTemplate({ tag, title, metricValue, metricLabel, author }: {
   tag: string;
   title: string;
@@ -19,9 +21,21 @@ export function MasterPosterTemplate({ tag, title, metricValue, metricLabel, aut
         backgroundImage: "radial-gradient(circle at 85% 15%, rgba(99, 102, 241, 0.35), transparent 45%), radial-gradient(circle at 15% 85%, rgba(16, 185, 129, 0.2), transparent 50%)",
         padding: "64px",
         color: "#F8FAFC",
-        fontFamily: "Plus Jakarta Sans"
+        fontFamily: "Plus Jakarta Sans",
+        position: "relative"
       }}
     >
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        backgroundImage: "linear-gradient(rgba(248, 250, 252, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(248, 250, 252, 0.07) 1px, transparent 1px)",
+        backgroundSize: "56px 56px",
+        maskImage: "radial-gradient(ellipse at 60% 35%, #000 20%, transparent 72%)"
+      }} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{
           padding: "8px 18px",
