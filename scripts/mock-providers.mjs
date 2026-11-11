@@ -9,6 +9,7 @@ import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
 import { COMPOSIO_KEY, composioHandler } from "./mock-composio.mjs";
+import { solidPng } from "./mock-png.mjs";
 const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
@@ -621,6 +622,8 @@ async function compatVendor(prov, rest, req, res, b, auth) {
   return send(res, 200, msg({ content: text }));
 }
 
+// Số lần mỗi favicon bị hỏi: kiểm thử xem bộ đệm của Synchro có giữ ảnh không (GET /favicon-hits).
+const favHits = new Map();
 async function handler(req, res) {
   const u = new URL(req.url, "http://x");
   const p = u.pathname;
@@ -629,6 +632,15 @@ async function handler(req, res) {
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : p.startsWith("/xai/") ? "xai" : p.startsWith("/deepseek/") ? "deepseek" : null;
 
+  // Favicon của trang web (Synchro tải hộ cho chip nguồn trích dẫn, FAVICON_BASE): "noicon.example" giả lập trang không có icon.
+  const fav = /^\/favicon\/([\w.-]+)$/.exec(p);
+  if (fav && req.method === "GET") {
+    favHits.set(fav[1], (favHits.get(fav[1]) ?? 0) + 1);
+    if (fav[1].startsWith("noicon.")) { res.writeHead(404); res.end(); return; }
+    const png = solidPng(fav[1]);
+    res.writeHead(200, { "content-type": "image/png", "content-length": png.length }); res.end(png); return;
+  }
+  if (p === "/favicon-hits" && req.method === "GET") return send(res, 200, Object.fromEntries(favHits));
   // Composio (connector chính): /composio/… nằm ở mock-composio.mjs.
   if (await composioHandler(req, res, p, b)) return;
   // ElevenLabs (Speech): mọi đường dẫn trừ Realtime nằm ở mock-eleven.mjs.

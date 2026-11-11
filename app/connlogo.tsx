@@ -25,18 +25,20 @@ function tileColor(img: HTMLImageElement): string | null {
 export function ConnLogo({ logo, color, icon, name, size = 36 }: { logo?: string; color?: string; icon?: string; name: string; size?: number }) {
   // undefined: chưa đo (ẩn ảnh một nhịp cho khỏi nhảy cỡ); string: ảnh là một ô, màu nền của nó; null: logo nét.
   const [tile, setTile] = useState<string | null | undefined>(() => (icon ? tiles.get(icon) : undefined));
-  useEffect(() => { setTile(icon ? tiles.get(icon) : undefined); }, [icon]);
+  // Ảnh không tải được (logo Composio chưa có, mất mạng): quay về chữ cái đầu, không để ô ảnh vỡ.
+  const [bad, setBad] = useState(false);
+  useEffect(() => { setTile(icon ? tiles.get(icon) : undefined); setBad(false); }, [icon]);
   const measure = (e: React.SyntheticEvent<HTMLImageElement>) => {
     if (!icon) return;
     if (!tiles.has(icon)) tiles.set(icon, tileColor(e.currentTarget));
     setTile(tiles.get(icon));
   };
-  const fill = !logo && !!icon && typeof tile === "string";
+  const fill = !logo && !!icon && !bad && typeof tile === "string";
   const px = fill ? size : Math.round(size * 0.62);
   return (
     <span className={`cn-logo${fill ? " tile" : ""}`} style={{ width: size, height: size, borderRadius: "25%", background: fill ? tile! : undefined }} aria-hidden>
       {logo ? <img src={`/connectors/${logo}.svg`} alt="" width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} />
-        : icon ? <img src={icon} alt="" width={px} height={px} onLoad={measure} onError={() => setTile(null)} style={{ objectFit: fill ? "cover" : "contain", visibility: tile === undefined ? "hidden" : undefined }} />
+        : icon && !bad ? <img src={icon} alt="" width={px} height={px} onLoad={measure} onError={() => { setTile(null); setBad(true); }} style={{ objectFit: fill ? "cover" : "contain", visibility: tile === undefined ? "hidden" : undefined }} />
         : <span className={`cn-mono ${color ? "" : "plain"}`} style={color ? { background: color } : undefined} data-notr>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}
     </span>
   );

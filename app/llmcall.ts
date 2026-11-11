@@ -75,14 +75,28 @@ const parse = (s: string) => { try { return JSON.parse(s); } catch { return null
 const midErr = (e: { type?: string; message?: string; code?: string } | undefined) => new HttpErr(e?.type === "overloaded_error" ? 529 : 502, e?.message ?? "Kết nối tới model bị ngắt giữa chừng.");
 
 export type ABlock = { type: string; text?: string; id?: string; name?: string; input?: unknown; thinking?: string; signature?: string; data?: string; _json?: string; [k: string]: unknown };
-/** Chữ của lượt trả lời: các khối chữ liền nhau (bị cắt bởi trích dẫn) nối thẳng, khối chữ sau một bước khác (tìm web…) sang đoạn mới. */
-export function blocksText(blocks: ABlock[]): string {
+/** Đánh số một nguồn web của lượt (trùng địa chỉ thì cùng số), trả số thứ tự bắt đầu từ 1; 0: không nhận thêm nguồn. */
+export type Citer = (url: string, title?: string) => number;
+// Số trích dẫn [n] chèn ngay sau đoạn chữ có dẫn nguồn (không chèn giữa từ: dấu cách cuối đoạn đặt sau số).
+const marks = (ns: number[]) => [...new Set(ns.filter((n) => n > 0))].map((n) => `[${n}]`).join("");
+export const withMarks = (t: string, ns: number[]) => { const m = marks(ns); if (!m) return t; const k = t.search(/\s*$/); return t.slice(0, k) + m + t.slice(k); };
+/** Chữ của lượt trả lời: các khối chữ liền nhau (bị cắt bởi trích dẫn) nối thẳng, khối chữ sau một bước khác (tìm web…) sang đoạn mới.
+ *  cite: khối chữ có trích dẫn nguồn web (citations của Anthropic) được thêm số [n] trỏ tới nguồn trong danh sách của lượt. */
+export function blocksText(blocks: ABlock[], cite?: Citer): string {
   let out = "", prev = "";
   for (const b of blocks) {
-    if (b.type === "text" && b.text) out += (prev && prev !== "text" && out ? "\n\n" : "") + b.text;
+    if (b.type === "text" && b.text) {
+      const cs = cite && Array.isArray(b.citations) ? (b.citations as { url?: unknown; title?: unknown }[]).filter((c) => typeof c?.url === "string" && /^https?:\/\//.test(c.url)) : [];
+      out += (prev && prev !== "text" && out ? "\n\n" : "") + (cs.length ? withMarks(b.text, cs.map((c) => cite!(String(c.url), typeof c.title === "string" ? c.title : ""))) : b.text);
+    }
     if (b.type !== "thinking" && b.type !== "redacted_thinking") prev = b.type;
   }
   return out;
+}
+/** Nguồn trong kết quả tìm web phía máy chủ của Anthropic (khối web_search_tool_result). */
+export function searchResults(blocks: ABlock[], cite: Citer) {
+  for (const b of blocks) if (b.type === "web_search_tool_result" && Array.isArray(b.content))
+    for (const r of b.content as { url?: unknown; title?: unknown }[]) if (typeof r?.url === "string" && /^https?:\/\//.test(r.url)) cite(r.url, typeof r.title === "string" ? r.title : "");
 }
 // onBlock: báo từng khối khi đã nhận đủ (ví dụ công cụ phía máy chủ bắt đầu tìm web) để nhật ký làm việc hiện đúng lúc.
 async function anthropicStream(r: Response, onDelta: OnDelta, signal?: AbortSignal, onBlock?: (b: ABlock) => void) {
@@ -232,9 +246,20 @@ export function respInput(msgs: unknown[]): Item[] {
   });
 }
 type RespOut = { type: string; content?: { type: string; text?: string }[]; call_id?: string; name?: string; arguments?: string };
-export function respParse(j: { output?: RespOut[]; status?: string; incomplete_details?: { reason?: string } }) {
+// cite: chú thích url_citation của OpenAI (vị trí end_index trong đoạn chữ) thành số [n] ngay sau phần được dẫn.
+export function respParse(j: { output?: RespOut[]; status?: string; incomplete_details?: { reason?: string } }, cite?: Citer) {
   const out = j.output ?? [];
-  let text = out.filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text").map((c) => c.text ?? "").join("");
+  const cited = (c: { text?: string; annotations?: unknown }) => {
+    const t = c.text ?? "";
+    const an = cite && Array.isArray(c.annotations) ? (c.annotations as { type?: string; url?: unknown; title?: unknown; end_index?: unknown }[]).filter((a) => a?.type === "url_citation" && typeof a.url === "string" && /^https?:\/\//.test(a.url)) : [];
+    if (!an.length) return t;
+    const at = new Map<number, number[]>();
+    for (const a of an) { const e = Math.min(t.length, Math.max(0, Number(a.end_index) || t.length)); at.set(e, [...(at.get(e) ?? []), cite!(String(a.url), typeof a.title === "string" ? a.title : "")]); }
+    let r = t;
+    for (const e of [...at.keys()].sort((a, b) => b - a)) r = withMarks(r.slice(0, e), at.get(e)!) + r.slice(e);
+    return r;
+  };
+  let text = out.filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text").map((c) => cited(c as { text?: string; annotations?: unknown })).join("");
   if (!text && j.status === "incomplete" && j.incomplete_details?.reason === "max_output_tokens") text = "Model đã dùng hết giới hạn token khi đang suy nghĩ nên chưa kịp trả lời. Hãy hỏi lại ngắn gọn hơn.";
   const calls = out.filter((o) => o.type === "function_call").map((o) => {
     let input: Record<string, unknown> = {};

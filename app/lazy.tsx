@@ -12,12 +12,13 @@ function reloadOnce(e: unknown): never {
   throw e;
 }
 
-/** Thành phần tải chậm. fallback: hiện trong lúc tải (null: không hiện gì, dùng cho hộp thoại và phần phụ). preload: tải trước khi rê chuột vào nút mở. */
-export function lazyView<P extends object>(load: () => Promise<ComponentType<P>>, fallback: React.ReactNode = <ViewLoading />) {
+/** Thành phần tải chậm. fallback: hiện trong lúc tải (null: không hiện gì, dùng cho hộp thoại và phần phụ; hàm: khung chờ dựng theo props,
+ *  như khung artifact đã biết tên). preload: tải trước khi rê chuột vào nút mở. */
+export function lazyView<P extends object>(load: () => Promise<ComponentType<P>>, fallback: React.ReactNode | ((p: P) => React.ReactNode) = <ViewLoading />) {
   let p: Promise<{ default: ComponentType<P> }> | null = null;
   const get = () => (p ??= load().then((c) => ({ default: c })).catch((e) => { p = null; return reloadOnce(e); }));
   const L = lazy(get) as unknown as ComponentType<P>;
-  const C = (props: P) => <Suspense fallback={fallback}><L {...props} /></Suspense>;
+  const C = (props: P) => <Suspense fallback={typeof fallback === "function" ? fallback(props) : fallback}><L {...props} /></Suspense>;
   C.preload = () => { void get().catch(() => {}); };
   return C;
 }

@@ -40,14 +40,19 @@ function sniff(b: Buffer): string | null {
   return null;
 }
 
-async function fetchImage(url: string): Promise<string | null> {
+/** Tải một ảnh (không kèm thông tin đăng nhập, qua safeFetch): trả byte + loại ảnh nhận diện từ đầu tệp, hoặc null. */
+export async function fetchIconBytes(url: string, max = MAX_ICON): Promise<{ mime: string; buf: Buffer } | null> {
   try {
     const r = await safeFetch(url, { headers: { accept: "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5", "user-agent": UA }, timeout: 6_000 });
     if (!r.ok) { await r.body?.cancel(); return null; }
-    const buf = await readLimited(r, MAX_ICON);
+    const buf = await readLimited(r, max);
     const mime = buf && sniff(buf);
-    return buf && mime ? `data:${mime};base64,${buf.toString("base64")}` : null;
+    return buf && mime ? { mime, buf } : null;
   } catch { return null; }
+}
+async function fetchImage(url: string): Promise<string | null> {
+  const b = await fetchIconBytes(url);
+  return b ? `data:${b.mime};base64,${b.buf.toString("base64")}` : null;
 }
 
 function fromDataUri(src: string): string | null {
@@ -127,4 +132,26 @@ export async function detectIcon(mcpUrl: string, serverIcons: ServerIcon[] = [])
     return null;
   })();
   return Promise.race([work, new Promise<null>((r) => setTimeout(() => r(null), 12_000))]).catch(() => null);
+}
+
+/** Biểu tượng của một trang web công khai (nguồn trích dẫn): icon khai báo trong <head> của trang chủ, /favicon.ico, rồi dịch vụ favicon
+ *  của DuckDuckGo (chỉ gửi tên miền). Chạy ở máy chủ, trình duyệt của người dùng không gọi thẳng trang lạ. FAVICON_BASE (chỉ bản giả lập):
+ *  lấy ở máy chủ giả lập thay vì Internet. */
+export async function siteIcon(host: string): Promise<{ mime: string; buf: Buffer } | null> {
+  const test = process.env.FAVICON_BASE;
+  if (test) return fetchIconBytes(`${test.replace(/\/$/, "")}/favicon/${encodeURIComponent(host)}`);
+  const work = (async () => {
+    const site = `https://${host}/`;
+    try {
+      const r = await safeFetch(site, { headers: { accept: "text/html,application/xhtml+xml", "user-agent": UA }, timeout: 5_000 });
+      if (r.ok && (r.headers.get("content-type") ?? "").includes("html")) {
+        const buf = await readLimited(r, MAX_HTML);
+        const html = buf?.toString("utf8") ?? "";
+        const end = html.search(/<\/head>/i);
+        for (const c of pageIcons(end > 0 ? html.slice(0, end) : html, r.url || site).slice(0, 3)) { const img = await fetchIconBytes(c.href); if (img) return img; }
+      } else await r.body?.cancel();
+    } catch {}
+    return (await fetchIconBytes(new URL("/favicon.ico", site).toString())) ?? fetchIconBytes(`https://icons.duckduckgo.com/ip3/${host}.ico`);
+  })();
+  return Promise.race([work, new Promise<null>((r) => setTimeout(() => r(null), 10_000))]).catch(() => null);
 }

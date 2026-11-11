@@ -64,7 +64,8 @@ export async function createSession(uid: string): Promise<{ session: string; url
 }
 
 // ---- ứng dụng người dùng đã kết nối qua Composio ----
-export type ComposioApp = { id: string; app: string; name: string; logo?: string; status: string; alias?: string; createdAt: string | null };
+// logo: tệp có sẵn trong public/connectors; img: logo Composio trả về (meta.logo), tải hộ qua /api/favicon?app=… khi không có tệp sẵn.
+export type ComposioApp = { id: string; app: string; name: string; logo?: string; img?: string; status: string; alias?: string; createdAt: string | null };
 type Item = { id?: string; user_id?: string; status?: string; alias?: string; created_at?: string; toolkit?: { slug?: string } };
 const NAMES: Record<string, string> = {
   github: "GitHub", gitlab: "GitLab", googledrive: "Google Drive", googlesheets: "Google Sheets", googledocs: "Google Docs", googlecalendar: "Google Calendar",
@@ -122,11 +123,29 @@ async function fetchApps(uid: string): Promise<ComposioApp[]> {
     .filter((x) => x && typeof x.id === "string" && (!x.user_id || x.user_id === uid) && !PENDING.has(String(x.status ?? "")))
     .map((x): ComposioApp => {
       const slug = String(x.toolkit?.slug ?? "").toLowerCase().slice(0, 60);
-      return { id: x.id!, app: slug, name: appName(slug) || "?", logo: logoOf(slug), status: String(x.status ?? ""), ...(x.alias ? { alias: String(x.alias).slice(0, 60) } : {}), createdAt: x.created_at ?? null };
+      const logo = logoOf(slug);
+      return { id: x.id!, app: slug, name: appName(slug) || "?", logo, ...(!logo && /^[a-z0-9_-]+$/.test(slug) ? { img: `/api/favicon?app=${slug}` } : {}), status: String(x.status ?? ""), ...(x.alias ? { alias: String(x.alias).slice(0, 60) } : {}), createdAt: x.created_at ?? null };
     });
   const k = composioKey();
   apps.set(uid, { at: Date.now(), list, fp: k ? keyPrint(k.key) : "" });
   return list;
+}
+// Logo của từng ứng dụng (toolkit) theo API v3.1: GET /toolkits/{slug} → meta.logo. Nhớ 1 ngày; ảnh tải qua app/iconproxy.ts.
+const kitLogos = new Map<string, { at: number; url: string | null }>();
+const LOGO_TTL = 86_400_000;
+export async function toolkitLogoUrl(slug: string): Promise<string | null> {
+  if (!/^[a-z0-9_-]{1,60}$/.test(slug)) return null;
+  const hit = kitLogos.get(slug);
+  if (hit && Date.now() - hit.at < LOGO_TTL) return hit.url;
+  let url: string | null = null;
+  try {
+    const j = await call<{ meta?: { logo?: unknown }; logo?: unknown }>(`/toolkits/${encodeURIComponent(slug)}`, { timeout: 8_000 });
+    const raw = typeof j?.meta?.logo === "string" ? j.meta.logo : typeof j?.logo === "string" ? j.logo : "";
+    // Chỉ địa chỉ https (API giả lập chạy http cục bộ thì nhận http như chính API, giống okMcpUrl).
+    if (raw && raw.length < 2000 && okMcpUrl(raw)) url = raw;
+  } catch (e) { if (e instanceof ComposioError && e.status >= 500) return null; }
+  kitLogos.set(slug, { at: Date.now(), url });
+  return url;
 }
 /** Số ứng dụng đang kết nối (từ bộ đệm nếu còn mới), lỗi thì null: trang không chờ Composio quá lâu. */
 export async function appCount(uid: string): Promise<number | null> {

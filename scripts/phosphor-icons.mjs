@@ -33,6 +33,8 @@ export const NAMES = {
   ChevronL: "caret-left",
   // Chọn hàng loạt: nút vào chế độ chọn, các thao tác trên thanh hàng loạt.
   ListChecks: "list-checks", Power: "power", Restore: "arrow-counter-clockwise", FolderPlus: "folder-simple-plus",
+  // Thẻ (tag) của đoạn chat; nút Sửa tham số trên thẻ duyệt công cụ.
+  Tag: "tag", BracesCode: "brackets-curly",
 };
 
 // Icon chỉ dùng theo tên Phosphor (bộ công cụ Speech: app/speech/toolicons.tsx, cặp icon biến hình khi rê chuột).

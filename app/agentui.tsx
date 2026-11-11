@@ -10,19 +10,20 @@ import { tr, useLangReady } from "./i18n";
 import { localizeNote } from "./agentfold";
 import { ConnLogo } from "./connlogo";
 import { ASK_GONE } from "./codesync";
+import { ArgsEditor, readArgs } from "./argsedit";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
 // connector: công cụ connector (conn: hiện logo; about: mô tả công cụ; destructive: cảnh báo xóa dữ liệu); chat = cho phép trong đoạn chat này.
-export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" | "typed" };
+export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown; edited?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" | "typed" };
 // steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được); think: suy nghĩ của model.
 export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | ToolStep;
 /** Kiểu xem lượt của agent: bình thường (gọn), kèm suy nghĩ, chi tiết (mọi công cụ mở sẵn, kèm đầu vào / đầu ra). */
 export type TView = "normal" | "thinking" | "verbose";
 export const TVIEW_LABEL: Record<TView, string> = { normal: "Bình thường", thinking: "Suy nghĩ", verbose: "Chi tiết" };
 // Trả về lời báo lỗi (nếu có) để thẻ mở lại các nút: gửi hỏng mà nút vẫn khóa thì chỉ còn cách tải lại trang.
-export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => void | Promise<string | null | void>;
+export type OnAnswer = (id: string, ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string; input?: Record<string, unknown> }) => void | Promise<string | null | void>;
 type Say = (m: string) => void;
 
 const base = (p: string) => p.split("/").pop() || p;
@@ -134,8 +135,16 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [gone, setGone] = useState(false);
-  const go = (ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string }) => {
+  // Sửa tham số trước khi cho phép (công cụ connector, tham số hiện đủ): chữ JSON đang sửa; null là không sửa.
+  const [edit, setEdit] = useState<string | null>(null);
+  const editable = a.kind === "connector" && !!onAnswer && (() => { try { const v = JSON.parse(a.detail || "{}"); return !!v && typeof v === "object" && !Array.isArray(v); } catch { return false; } })();
+  const es = edit !== null ? readArgs(edit, a.detail, a.schema) : null;
+  const blocked = !!es && (es.errors.length > 0 || !es.value);
+  const go = (ok: boolean, o?: { always?: boolean; chat?: boolean; note?: string; input?: Record<string, unknown> }) => {
     if (!onAnswer || sending) return;
+    if (ok && blocked) return;
+    // Cho phép khi đang sửa và tham số khác bản đầu: gửi tham số đã sửa (máy chủ kiểm tra lại theo schema).
+    if (ok && es?.changed && es.value) o = { ...o, input: es.value };
     setSending(true); setErr("");
     Promise.resolve().then(() => onAnswer(a.id, ok, o)).then((e) => {
       if (!e) return;
@@ -149,7 +158,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
   if (state !== "wait") return (
     <div className={`ag-asked ${state === "no" || state === "gone" || state === "typed" ? "no" : ""}`}>
       {state === "no" || state === "gone" || state === "typed" ? <I.X size={13} /> : <I.Check size={13} />}
-      <span>{tr(state === "typed" ? "Bạn đã nhắn thêm nên công cụ chưa chạy" : state === "no" ? "Đã từ chối" : state === "gone" ? "Không còn chờ" : state === "chat" ? "Cho phép trong đoạn chat này" : state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : conn ? "Luôn cho phép" : "Luôn cho phép trong phiên") : "Đã cho phép")}: <b data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</b></span>
+      <span>{tr(state === "typed" ? "Bạn đã nhắn thêm nên công cụ chưa chạy" : state === "no" ? "Đã từ chối" : state === "gone" ? "Không còn chờ" : state === "chat" ? "Cho phép trong đoạn chat này" : state === "always" ? (a.kind === "site" ? "Luôn cho phép trang này" : conn ? "Luôn cho phép" : "Luôn cho phép trong phiên") : "Đã cho phép")}: <b data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</b>{a.edited && state !== "no" ? <em className="ag-asked-ed"> · {tr("đã sửa tham số")}</em> : null}</span>
     </div>
   );
   const always = a.kind === "site" ? `${tr("Luôn cho phép")} ${a.host ?? tr("trang này")}` : tr(a.kind === "connector" ? "Luôn cho phép" : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này");
@@ -159,7 +168,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
         <div><b>{tr(a.kind === "connector" ? "Cho Synchro dùng công cụ này?" : a.kind === "site" ? "Cho Synchro dùng trình duyệt trên trang này?" : a.kind === "edit" ? "Cho Synchro sửa tệp này?" : "Cho Synchro chạy lệnh này?")}</b><span data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</span></div></div>
       {a.about && <p className="ag-ask-about" data-notr>{a.about}</p>}
       {a.destructive && <div className="ap-warn"><I.Alert size={14} /><span>{tr("Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.")}</span></div>}
-      {a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
+      {edit !== null && es ? <ArgsEditor text={edit} onText={setEdit} state={es} disabled={sending} /> : a.detail && <pre className="ag-ask-d" data-notr>{a.detail}</pre>}
       {conn && a.until ? <p className="ag-ask-about">{tr(`Chờ bạn trả lời tới ${new Date(a.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "\u00a0")}. Quá giờ công cụ không chạy. Nhắn trong khung chat cũng được: công cụ không chạy và Synchro đọc tin nhắn.`)}</p> : null}
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{tr(err)}</span></div>}
       {note !== null ? (
@@ -170,9 +179,12 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
         </div>
       ) : (
         <div className="ag-ask-a">
-          <button className="btn dark" disabled={sending || !onAnswer} onClick={() => go(true)}>{tr(a.kind === "connector" ? "Cho phép một lần" : "Cho phép")}</button>
-          {a.kind === "connector" && <button className="btn" disabled={sending || !onAnswer} onClick={() => go(true, { chat: true })}>{tr("Cho phép trong đoạn chat này")}</button>}
-          <button className="btn" disabled={sending || !onAnswer} onClick={() => go(true, { always: true })} data-notr={a.kind === "site" ? true : undefined}>{always}</button>
+          <button className="btn dark" disabled={sending || !onAnswer || blocked} onClick={() => go(true)}>{tr(a.kind === "connector" ? (es?.changed ? "Cho phép với tham số đã sửa" : "Cho phép một lần") : "Cho phép")}</button>
+          {a.kind === "connector" && <button className="btn" disabled={sending || !onAnswer || blocked} onClick={() => go(true, { chat: true })}>{tr("Cho phép trong đoạn chat này")}</button>}
+          <button className="btn" disabled={sending || !onAnswer || blocked} onClick={() => go(true, { always: true })} data-notr={a.kind === "site" ? true : undefined}>{always}</button>
+          {editable && (edit === null
+            ? <button className="btn" disabled={sending} onClick={() => setEdit(a.detail || "{}")} aria-label={tr("Sửa tham số trước khi cho phép")}><I.Icon name="BracesCode" size={14} />{tr("Sửa")}</button>
+            : <button className="btn" disabled={sending} onClick={() => setEdit(null)}>{tr("Hủy sửa")}</button>)}
           <button className="btn" disabled={sending || !onAnswer} onClick={() => go(false)}>{tr("Từ chối")}</button>
           <button className="ag-ask-other" disabled={sending || !onAnswer} onClick={() => setNote("")}>{tr("Bảo làm khác…")}</button>
         </div>

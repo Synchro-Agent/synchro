@@ -19,6 +19,7 @@ import { refreshModels } from "./models";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
 import { BotProtection, type TurnstileState } from "./botadmin";
+import { SettingsSkeleton } from "./skeleton";
 
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
@@ -56,6 +57,7 @@ const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   admin_signup_closed: ["Closed sign-ups", "adm"], admin_set_password: ["Set user password", "adm"], admin_set_perms: ["Changed user access", "adm"], admin_default_perms: ["Changed default access", "adm"], profile_updated: ["Updated profile", ""], admin_created: ["Admin account created", "adm"], admin_password_reset: ["Admin password reset", "adm"],
 };
 Object.assign(ACTIONS, {
+  tool_args_edited: ["Edited tool inputs before approving", ""],
   oauth_unlink: ["Removed sign-in method", ""], email_change_request: ["Requested email change", ""], email_changed: ["Changed email", ""], admin_set_email: ["Changed user email", "adm"],
   mfa_on: ["Turned on two-step verification", ""], mfa_off: ["Turned off two-step verification", ""], speech_voice_owner: ["Assigned voice owner", "adm"],
   speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"],
@@ -303,7 +305,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   ];
 
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
-  if (!d) return <div className="empty" style={{ marginTop: 80 }}><span className="muted">Loading…</span></div>;
+  if (!d) return <SettingsSkeleton />;
 
   const s = d.stats;
   const ql = q.trim().toLowerCase();

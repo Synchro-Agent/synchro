@@ -8,6 +8,7 @@ import { call, ago } from "./adminui";
 import { refreshModels } from "./models";
 import type { ProviderInfo } from "./catalog";
 import { BrandLogo, hasLogo } from "./brands";
+import { SettingsSkeleton } from "./skeleton";
 
 export type ApiProvider = {
   id: string; kind: string; name: string; vendor: string; builtin: boolean; configured: boolean; source: "db" | "env" | null;
@@ -220,7 +221,7 @@ export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
   const load = () => call<ApiState>("GET", "/api/admin/apikeys").then((x) => { setS(x); setErr(""); }).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
-  if (!s) return <div className="empty" style={{ marginTop: 80 }}><span className="muted">Loading…</span></div>;
+  if (!s) return <SettingsSkeleton />;
   const chat = s.providers.filter((p) => !SERVICE.has(p.id));
   const voice = s.providers.filter((p) => p.id === "elevenlabs");
   const conn = s.providers.filter((p) => p.id === "composio");

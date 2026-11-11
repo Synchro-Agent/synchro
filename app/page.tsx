@@ -29,6 +29,9 @@ import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkSt
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
 import { VerifyBanner } from "./verifybanner";
+import { CiteCtx, SourceChips } from "./cites";
+import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
+import { TagChips, TagFilter, TagPicker } from "./tagsui";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
@@ -36,7 +39,7 @@ import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
-import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
@@ -66,7 +69,8 @@ import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
 import { shortName } from "./names";
 import { loadCaps, useCaps } from "./capsclient";
-import { artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
+import { ART_LABEL, artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
+import { ArtPanelSkeleton, BootSkeleton, ChatListSkeleton, ThreadSkeleton } from "./skeleton";
 import { restylePatch } from "./artkit";
 import { presetOf } from "./designpresets";
 import { resolveArt, type ArtVersion } from "./vfs";
@@ -102,8 +106,9 @@ const AppsGallery = lazyView(() => import("./appsui").then((m) => m.AppsGallery)
 const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), null);
 const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
-const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel));
-const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel));
+// Khung xem tệp / artifact đang tải phần mã: khung chờ cùng chỗ, cùng bề rộng, có sẵn tên (cột chat không co giãn hai lần).
+const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel), (p) => <ArtPanelSkeleton title={p.file.name} expanded={p.expanded} acts={3} />);
+const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => { const a = p.versions[p.index] ?? p.versions.at(-1); return <ArtPanelSkeleton title={a?.title} sub={a ? tr(ART_LABEL[a.type]) : undefined} tabs={!!a && a.type !== "code"} expanded={p.expanded} acts={6} />; });
 const ArtifactsGallery = lazyView(() => import("./artifactui").then((m) => m.ArtifactsGallery));
 const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
 const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
@@ -877,6 +882,9 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
   const c = cx.current!;
   const { say, fm, arts } = c;
   const key = `${chatId}-${i}`;
+  // Nguồn tìm web: số [n] trong câu trả lời trỏ tới chip thứ n (cites.tsx). Chỉ khi câu trả lời đã xong và có nguồn.
+  const citeId = key;
+  const cites = useMemo(() => (m.done && m.webs?.length ? { webs: m.webs, id: citeId } : null), [m.done, m.webs, citeId]);
   const est = useMemo<React.CSSProperties>(() => ({ containIntrinsicSize: `auto ${rowHeight(m)}px` }), [m.text, m.files?.length, m.outs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (<>
     {mark && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}
@@ -902,16 +910,16 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
       </div>
     ) : (
       <div style={est}>
-        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
-        {m.done && m.webs?.length ? <div className="msg-sources"><span>{tr("Nguồn")}</span>{m.webs.filter((w) => /^https?:\/\//.test(w.url)).map((w) => <a key={w.url} href={w.url} target="_blank" rel="noopener noreferrer" title={w.url} data-notr>{w.title || w.url.replace(/^https?:\/\/(?:www\.)?/, "").split("/")[0]}</a>)}</div> : null}
+        {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
         {m.done && m.notice && ((m.notice.text && !m.failed) || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (
           <div className="msg-notice" role="status">
             {m.notice.text && !m.failed && <p>{tr(m.notice.text)}</p>}
@@ -990,7 +998,7 @@ export default function Home() {
   const curRef = useRef(cur);
   curRef.current = cur;
   // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.
-  const [approval, setApproval] = useState<{ chat: number | null; calls: ApprovalCall[]; resolve: (d: Record<string, Decision>) => void } | null>(null);
+  const [approval, setApproval] = useState<{ chat: number | null; calls: ApprovalCall[]; resolve: (d: ApprovalAnswer) => void } | null>(null);
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
   // Gợi ý khi rê chuột tự lật xuống dưới / canh theo mép khi sát mép màn hình hay mép khung (tips.ts).
@@ -1058,6 +1066,9 @@ export default function Home() {
   const [codeRen, setCodeRen] = useState<number | null>(null);
   const [codeMenu, setCodeMenu] = useState<number | null>(null);
   const [pickProj, setPickProj] = useState(false);
+  // Thẻ: khung "Gắn thẻ" đang mở trong menu ⋮ / menu tiêu đề; thẻ đang lọc ở thanh bên (null: tất cả).
+  const [pickTag, setPickTag] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [pjClosed, setPjClosed] = usePref<Record<number, boolean>>("pjClosed", {});
   const [titleMenu, setTitleMenu] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
@@ -1081,6 +1092,9 @@ export default function Home() {
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
+  // Màn chờ lúc mở app: mở thẳng một đoạn chat (#c=…) thì vùng chính chờ dạng tin nhắn thay vì lời chào (đặt sau khi gắn để khớp bản dựng ở máy chủ).
+  const [bootChat, setBootChat] = useState(false);
+  useEffect(() => { if (/^#c=/.test(location.hash)) setBootChat(true); }, []);
   // Đồng bộ danh sách phiên Code với máy chủ (Cài đặt → Synchro Code → Đồng bộ phiên): phiên mở ở thiết bị khác, trạng thái mới,
   // phiên đã xóa / lưu trữ ở nơi khác. Lần đầu đẩy các phiên chỉ có ở thiết bị này lên.
   useEffect(() => {
@@ -1547,7 +1561,7 @@ export default function Home() {
   // (lượt sau model biết câu trả lời này chưa hoàn chỉnh). Chuyển mục hay đổi đoạn chat không gọi hàm này.
   const stop = (user: unknown = true, id: number | null = curRef.current) => {
     if (id === null) return;
-    if (approvalRef.current && approvalRef.current.chat === id) { approvalRef.current.resolve({}); setApproval(null); }
+    if (approvalRef.current && approvalRef.current.chat === id) { approvalRef.current.resolve({ decisions: {} }); setApproval(null); }
     gens.current.delete(id);
     setBusyOf(id, false);
     const run = runs.current.get(id);
@@ -1985,12 +1999,14 @@ export default function Home() {
   // Đoạn chat đang mở vừa bị xóa ở thiết bị khác.
   useEffect(() => { if (loaded && view === "chat" && cur !== null && !chats.some((c) => c.id === cur)) { setCur(null); setView("new"); } }, [chats]); // eslint-disable-line react-hooks/exhaustive-deps
   const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
+  const setChatTags = (id: number, tags: string[]) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, tags: tags.length ? tags : undefined } : x)));
+  const filterTag = (t: string | null) => { setTagFilter(t); if (t) setOpen(true); };
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (userRef.current && !userRef.current.contains(t)) setUserMenu(false);
-      if (!t.closest(".chat-wrap")) { setChatMenu(null); setCodeMenu(null); setPickProj(false); }
+      if (!t.closest(".chat-wrap")) { setChatMenu(null); setCodeMenu(null); setPickProj(false); if (!t.closest(".title-wrap")) setPickTag(false); }
       if (!t.closest(".title-wrap")) setTitleMenu(false);
     };
     document.addEventListener("mousedown", h);
@@ -2080,6 +2096,7 @@ export default function Home() {
     code: (id) => { setCodeCur(id); setView("code"); if (codeList.find((c) => c.id === id)?.archived) codePatch(id, { archived: false }); },
     brain: (title) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title } })),
     inbox: () => setView("inbox"),
+    tag: (t) => filterTag(t),
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -2121,6 +2138,9 @@ export default function Home() {
     else { setChats((cs) => [{ id: now, title: (u || a).slice(0, 40), msgs }, ...cs]); setCur(now); setView("chat"); }
   };
   const visible = chats.filter((c) => !c.inc);
+  const tagsAll = allTags(visible);
+  // Thẻ đang lọc không còn đoạn chat nào (vừa gỡ thẻ cuối): thôi lọc.
+  const tagOn = tagFilter && tagsAll.some((x) => tagKey(x.tag) === tagKey(tagFilter)) ? tagFilter : null;
   // Chọn hàng loạt ở thanh bên: đoạn chat và phiên code (ghim, đưa vào dự án, lưu trữ, xóa nhiều mục cùng lúc).
   type SideItem = { k: "chat"; c: Chat } | { k: "code"; c: CodeItem };
   const sideItems: SideItem[] = [...codeList.map((c) => ({ k: "code" as const, c })), ...visible.map((c) => ({ k: "chat" as const, c }))];
@@ -2193,7 +2213,7 @@ export default function Home() {
     setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
     gens.current.clear(); runs.current.clear(); setRunning(new Set());
-    approvalRef.current?.resolve({}); setApproval(null);
+    approvalRef.current?.resolve({ decisions: {} }); setApproval(null);
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
   const api = {
@@ -2214,7 +2234,7 @@ export default function Home() {
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
   // Chưa biết đã đăng nhập chưa: người đã đăng nhập lần trước thấy ngay khung app (html[data-sess], layout.tsx), người mới thấy nền trống rồi tới màn hình đăng nhập.
-  if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><div className="boot-rail" /><div className="boot-side" /><div className="boot-main"><div className="boot-greet" /><div className="boot-box" /></div>
+  if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><BootSkeleton chat={bootChat} />
     {bootErr && <div className="boot-err" role="alert"><Mark size={26} /><b>{tr("Chưa kết nối được tới Synchro")}</b><p>{tr("Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.")}</p><button className="btn dark" onClick={() => bootRetry.current()}>{tr("Thử lại")}</button></div>}</div>;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
@@ -2305,12 +2325,15 @@ export default function Home() {
               ) : (
                 <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{needYou.has(c.id) ? <span className="ct-need" data-tip={tr("Đang chờ bạn duyệt")}>{tr("Cần bạn")}</span> : running.has(c.id) && <span className="ct-run" role="img" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
               )}
-              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
-                <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
-                  {!pickProj ? (
+              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); setPickTag(false); setTitleMenu(false); }}>⋮</button>}
+                <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: pickTag ? 240 : 220 }}>
+                  {pickTag ? (
+                    <TagPicker tags={cleanTags(c.tags)} all={tagsAll} onChange={(t) => setChatTags(c.id, t)} onBack={() => setPickTag(false)} />
+                  ) : !pickProj ? (
                     <>
                       <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                       <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên</button>
+                      <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{c.tags?.length ? <span className="sc tag-n">{c.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
                       <button className="menu-item" onClick={() => (projects.length ? setPickProj(true) : (say("Hãy tạo dự án trước ở mục Dự án"), setChatMenu(null)))}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
                       {c.project !== undefined && <button className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: undefined } : x))); setChatMenu(null); say("Đã gỡ khỏi dự án"); }}><I.Layers />Gỡ khỏi dự án</button>}
                       <hr />
@@ -2376,8 +2399,19 @@ export default function Home() {
           const codePinned = codeList.filter((c) => c.pinned && !c.archived);
           const codeRest = codeList.filter((c) => !c.pinned && !c.archived);
           const codeArch = codeList.filter((c) => c.archived);
+          if (tagOn) {
+            const hit = visible.filter((c) => hasTag(c.tags, tagOn));
+            return (
+              <div className="chat-scroll">
+                <TagFilter all={tagsAll} cur={tagOn} onPick={setTagFilter} />
+                <div className="section-label tag-sec"><span><span aria-hidden>#</span><span data-notr>{tagOn}</span> · {hit.length}</span><button className="icon-btn" onClick={() => setTagFilter(null)} aria-label="Bỏ lọc theo thẻ" data-tip="Bỏ lọc theo thẻ"><I.X size={14} /></button></div>
+                <div className="chat-list">{hit.map(row)}</div>
+              </div>
+            );
+          }
           return (
             <div className="chat-scroll">
+              <TagFilter all={tagsAll} cur={null} onPick={setTagFilter} />
               {(pinned.length > 0 || pinProjs.length > 0 || codePinned.length > 0) && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setPinOpen(!pinOpen)}><span>Đã ghim</span><span className={`sec-chev ${pinOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
@@ -2399,7 +2433,8 @@ export default function Home() {
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>
               <div className={`fold ${recentOpen ? "open" : ""}`}>
                 <div className="chat-list">
-                  {visible.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>}
+                  {/* Thiết bị mới: danh sách đang về từ máy chủ thì hiện dòng chờ đúng cỡ, chưa nói "chưa có" khi chưa biết. */}
+                  {visible.length === 0 && (!chats.length && !syncSt.at && !syncSt.offline ? <ChatListSkeleton /> : <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>)}
                   {pgRest.items.map(row)}
                 </div>
                 {sidePager(pgRest)}
@@ -2421,16 +2456,20 @@ export default function Home() {
             {!open && <SideToggle onClick={() => setOpen(true)} />}
             {view === "chat" && chat && (
               <div className="title-wrap" style={{ position: "relative" }}>
-                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
-                  <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
+                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => { setTitleMenu(!titleMenu); setPickTag(false); setChatMenu(null); }}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
+                  <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: pickTag ? 240 : 200 }}>
+                    {pickTag && titleMenu ? <TagPicker tags={cleanTags(chat.tags)} all={tagsAll} onChange={(t) => setChatTags(chat.id, t)} onBack={() => setPickTag(false)} /> : <>
                     <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
+                    <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{chat.tags?.length ? <span className="sc tag-n">{chat.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
                     <button className="menu-item" onClick={() => { setTitleMenu(false); autoTitle(chat.id, true); }}><I.Sparkle />Đặt tên tự động</button>
                     <hr />
                     <button className="menu-item del" onClick={() => { setDelId(chat.id); setTitleMenu(false); }}><I.Trash />Xóa</button>
+                    </>}
                   </Menu>
               </div>
             )}
+            {view === "chat" && chat ? <TagChips tags={cleanTags(chat.tags)} onPick={filterTag} onOpen={() => { setChatMenu(null); setTitleMenu(true); setPickTag(true); }} /> : null}
           </div>
           {(view === "new" || view === "chat") && pill}
           <div className="right">
@@ -2489,11 +2528,11 @@ export default function Home() {
               onTouchStart={(e) => { touchY.current = e.touches[0]?.clientY ?? 0; }} onTouchMove={(e) => { if ((e.touches[0]?.clientY ?? 0) - touchY.current > 5) userUp(); }}
               onKeyDown={(e) => { if (["PageUp", "ArrowUp", "Home"].includes(e.key)) userUp(); }}>
               <div className="thread-in">
-                {chat.stub && <div className="muted sync-stub" role="status"><span className="art-spin sm" />{tr("Đang tải đoạn chat từ máy chủ…")}</div>}
+                {chat.stub && <><span className="sr-only" role="status">{tr("Đang tải đoạn chat từ máy chủ…")}</span><ThreadSkeleton /></>}
                 {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
                   fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
                 {undoTurn?.chat === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={undoLost}>{tr("Khôi phục bản cũ")}</button></div></div>}
-                {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d) => { approval.resolve(d); setApproval(null); }} />}
+                {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d, inputs) => { approval.resolve({ decisions: d, inputs }); setApproval(null); }} />}
                 {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
                 {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
                   <div key={q.id} className="user-wrap steer-pending">

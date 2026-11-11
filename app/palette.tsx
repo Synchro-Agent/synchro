@@ -17,6 +17,8 @@ export type PaletteGo = {
   code?: (id: number) => void;
   brain?: (title: string) => void;
   inbox?: () => void;
+  /** Lọc thanh bên theo thẻ. */
+  tag?: (t: string) => void;
 };
 export type PaletteProject = { id: number; name: string; desc?: string; archived?: boolean; ctx?: { name: string; kind: string; text?: string }[] };
 type Row = { key: string; group: string; label: string; sub?: string; icon: ReactNode; keys?: string; hay: string; run: () => void; more?: boolean };
@@ -63,7 +65,7 @@ type Remote = {
 };
 
 const MAX_SHOWN = 500;
-export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
+export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; tags?: string[]; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
   const [q, setQ] = useState("");
   // Ô nhập luôn nhận chữ ngay; danh sách lọc lại sau, không chặn phím gõ.
   const dq = useDeferredValue(q);
@@ -109,14 +111,20 @@ export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { 
     for (const c of codes ?? []) if (go.code) add({ key: "code:" + c.id, group: "Phiên Code", label: c.title || "Phiên code", sub: c.archived ? tr("Đã lưu trữ") : undefined, icon: <I.Code size={16} />, run: () => go.code!(c.id) });
     for (const n of notes) if (go.brain) add({ key: "note:" + n.title, group: "Bộ não", label: n.title, sub: n.snippet?.replace(/\s+/g, " ").slice(0, 80), hay: words.join(" "), icon: <I.Brain size={16} />, run: () => go.brain!(n.title) });
     for (const c of cmds) add({ key: "cmd:" + c.id, group: "Lệnh", label: c.label, icon: c.icon, keys: c.keys, hay: c.hay, run: c.run });
+    const tagN = new Map<string, { tag: string; n: number }>();
     for (const c of chats) {
       const any = deep && words.every((w) => foldAll(c.msgs).includes(w));
       const hit = any ? c.msgs.find((m) => words.every((w) => foldOf(m).includes(w)))?.text : undefined;
       // Tìm cả tên tệp đã đính kèm trong đoạn chat.
       const tl = deep ? fold(c.title) : "";
       const file = deep && !hit && (any || words.some((w) => tl.includes(w))) ? c.msgs.flatMap((m) => m.files ?? []).find((f) => words.every((w) => `${tl} ${fold(f)}`.includes(w))) : undefined;
-      add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: hit ? hit.replace(/\s+/g, " ").slice(0, 80) : file, icon: file ? <I.Clip size={16} /> : <I.History size={16} />, hay: hit ?? file, run: () => go.chat(c.id) });
+      // Thẻ: gõ "#tên" (hay tên thẻ) tìm được đoạn chat mang thẻ đó; thẻ hiện ở dòng phụ khi không có đoạn trích.
+      const tg = (Array.isArray(c.tags) ? c.tags : []).map((x) => `#${x}`).join(" ");
+      add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: hit ? hit.replace(/\s+/g, " ").slice(0, 80) : file ?? (tg || undefined), icon: file ? <I.Clip size={16} /> : <I.History size={16} />, hay: [hit ?? file ?? "", tg].join(" "), run: () => go.chat(c.id) });
+      for (const x of Array.isArray(c.tags) ? c.tags : []) if (typeof x === "string") tagN.set(fold(x), { tag: tagN.get(fold(x))?.tag ?? x, n: (tagN.get(fold(x))?.n ?? 0) + 1 });
     }
+    // Mỗi thẻ một dòng: chọn để lọc thanh bên theo thẻ đó.
+    if (go.tag) for (const { tag, n } of tagN.values()) add({ key: "tag:" + fold(tag), group: "Thẻ", label: `#${tag}`, sub: `${n} ${tr("đoạn chat")}`, icon: <I.Icon name="Tag" size={16} />, hay: `${tag} tag the`, run: () => go.tag!(tag) });
     // Dự án và tài liệu trong dự án (tên tệp, nội dung văn bản): mở trang dự án.
     if (deep) for (const p of projects ?? []) {
       if (p.archived) continue;
@@ -132,7 +140,7 @@ export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { 
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm trước tiên hiện 6 kết quả kèm dòng "Xem tất cả N kết quả", nhóm theo thứ tự cố định.
     if (!words.length) return { cuts, rows: [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, PER_GROUP)] };
-    const order = ["Lệnh", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Hộp thư", "Artifact và ứng dụng", "Skill và thư viện"];
+    const order = ["Lệnh", "Thẻ", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Hộp thư", "Artifact và ứng dụng", "Skill và thư viện"];
     const scored = out.map((r) => ({ r, s: score(r.hay, words, r.label) })).filter((x) => x.s > 0);
     const rows = order.flatMap((g): Row[] => {
       const l = scored.filter((x) => x.r.group === g).sort((a, b) => b.s - a.s).map((x) => x.r);

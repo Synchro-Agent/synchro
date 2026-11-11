@@ -8,6 +8,8 @@ import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, streamSaf
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
+import { CiteText, hasCite } from "./cites";
+import { TokLine, useHighlight } from "./highlight";
 
 // Khung artifact và sơ đồ chỉ cần khi câu trả lời có hình minh họa: không nằm trong phần tải đầu của trang chat.
 const ArtifactFrame = lazyView(() => import("./artifactui").then((m) => m.ArtifactFrame), null);
@@ -24,6 +26,8 @@ function MdImage({ src, alt }: { src: string; alt: string }) {
 }
 function inl(ns: Inl[], w?: boolean): React.ReactNode[] {
   return ns.map((n, i) => {
+    // Số trích dẫn [n] của câu trả lời có tìm web: thành nút trỏ tới nguồn (chỉ khi câu trả lời có danh sách nguồn, xem cites.tsx).
+    if (typeof n === "string" && hasCite(n)) return <CiteText key={i} s={n} plain={(t) => words(t, w)} />;
     if (typeof n === "string") return w ? <Fragment key={i}>{words(n, w)}</Fragment> : n;
     switch (n.t) {
       case "br": return <br key={i} />;
@@ -71,7 +75,7 @@ export function diffLines(a: string, b: string): { t: "+" | "-" | " "; s: string
 
 const RUNNABLE = /^(html|js|javascript|py|python)$/i;
 
-function Code({ lang, code, say, dev, idx }: { lang: string; code: string; say: (m: string) => void; dev?: DevCtx; idx: number }) {
+function Code({ lang, code, say, dev, idx, closed = true }: { lang: string; code: string; say: (m: string) => void; dev?: DevCtx; idx: number; closed?: boolean }) {
   useLangReady(); // đổi ngôn ngữ thì vẽ lại: bộ dịch trang bỏ qua .ai-msg nên nút ở đây phải tự dịch bằng tr()
   const [ok, setOk] = useState(false);
   const [diff, setDiff] = useState(false);
@@ -87,6 +91,8 @@ function Code({ lang, code, say, dev, idx }: { lang: string; code: string; say: 
   const prev = dev?.prev?.[idx]?.lang.toLowerCase() === lang.toLowerCase() ? dev.prev[idx] : prevAll[prevAll.length - 1];
   const rows = diff && prev && !verdict ? diffLines(prev.code, code) : null;
   const add = rows?.filter((r) => r.t === "+").length ?? 0, del = rows?.filter((r) => r.t === "-").length ?? 0;
+  // Tô màu cú pháp chỉ khi khối đã đóng (chữ đang chảy giữ đơn sắc, không tô lại mỗi khung hình); chưa tô xong thì như cũ.
+  const toks = useHighlight(code, lang, closed && !rows);
   const download = () => {
     const url = URL.createObjectURL(new Blob([code], { type: "text/plain" }));
     const a = document.createElement("a"); a.href = url; a.download = name.split("/").pop() || name; a.click();
@@ -110,7 +116,7 @@ function Code({ lang, code, say, dev, idx }: { lang: string; code: string; say: 
       {hidden && <div className="cb-note warn">{tr("Một số đoạn code đã được ẩn.")}<button onClick={() => dev?.onExpand?.(name, code)}>{tr("⚡ Bung đoạn code bị ẩn")}</button></div>}
       {rows && <div className="cb-note"><button className="ok" onClick={() => { setVerdict("ok"); dev?.onAccept?.(name, code); say(tr("Đã chấp nhận thay đổi") + " " + name); }}>{tr("✓ Chấp nhận")}</button><button onClick={() => { setVerdict("no"); setDiff(false); }}>{tr("✕ Từ chối")}</button></div>}
       {verdict && <div className="cb-note">{tr(verdict === "ok" ? "Đã chấp nhận thay đổi" : "Đã từ chối thay đổi")}</div>}
-      {rows ? <pre className="cb-diff">{rows.map((r, i) => <div key={i} className={r.t === "+" ? "ad" : r.t === "-" ? "dl" : ""}><span>{r.t === " " ? "" : r.t}</span>{r.s || " "}</div>)}</pre> : <pre className={!dev && codeWraps(lang, code) ? "cb-wrap" : undefined}>{code}</pre>}
+      {rows ? <pre className="cb-diff">{rows.map((r, i) => <div key={i} className={r.t === "+" ? "ad" : r.t === "-" ? "dl" : ""}><span>{r.t === " " ? "" : r.t}</span>{r.s || " "}</div>)}</pre> : <pre className={[!dev && codeWraps(lang, code) ? "cb-wrap" : "", toks ? "shiki" : ""].filter(Boolean).join(" ") || undefined}>{toks ? toks.map((l, i) => <Fragment key={i}>{i ? "\n" : ""}<TokLine toks={l} /></Fragment>) : code}</pre>}
       {dev && <Widgets lang={lang} code={code} />}
     </div>
   );
@@ -279,7 +285,7 @@ function BlockView({ b, x }: { b: Block; x: Ctx }): React.ReactNode {
       if (x.viz && (l === "chart" || l === "mermaid" || l === "widget")) return <Visual lang={l} code={b.code} closed={b.closed} say={x.say} />;
       // Câu trả lời đã xong mà còn dấu mở trơ trọi: không vẽ khung code rỗng.
       if (!b.closed && !b.code && x.tail === Infinity) return null;
-      return <Code lang={b.lang} code={b.code} say={x.say} dev={x.dev} idx={b.idx} />;
+      return <Code lang={b.lang} code={b.code} say={x.say} dev={x.dev} idx={b.idx} closed={b.closed} />;
     }
   }
 }

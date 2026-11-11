@@ -51,12 +51,13 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
   } else if (ev.kind === "ask") {
-    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, conn: a.conn, about: a.about, destructive: a.destructive, state: "wait" }); } catch {}
+    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, conn: a.conn, about: a.about, destructive: a.destructive, ...(a.schema !== undefined ? { schema: a.schema } : {}), state: "wait" }); } catch {}
   } else if (ev.kind === "asked") {
     try {
-      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean; chat?: boolean; gone?: boolean; typed?: boolean };
+      const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean; chat?: boolean; gone?: boolean; typed?: boolean; edited?: boolean };
       const i = parts.findIndex((p) => p.k === "ask" && p.id === a.id);
-      if (i >= 0) parts[i] = { ...(parts[i] as AskStep), state: a.typed ? "typed" : a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" };
+      // Đã trả lời: bỏ schema (không cần lưu vào lịch sử đoạn chat), ghi lại việc người dùng đã sửa tham số.
+      if (i >= 0) { const { schema: _s, ...rest } = parts[i] as AskStep; parts[i] = { ...rest, ...(a.edited ? { edited: true } : {}), state: a.typed ? "typed" : a.gone ? "gone" : a.ok ? (a.always ? "always" : a.chat ? "chat" : "ok") : "no" }; }
     } catch {}
   } else if (ev.kind === "plans") {
     try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}

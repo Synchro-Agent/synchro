@@ -10,6 +10,7 @@ import { parseVbhc, vbhcHtml } from "./vbhc";
 import { ArtIcon } from "./artifactcard";
 import { Menu } from "./ui";
 import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "./artifacts";
+import { TokLine, useHighlight } from "./highlight";
 import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "./srcloc";
 import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "./critic";
 import { CriticNote, CriticPill } from "./criticui";
@@ -495,6 +496,8 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const runnable = art.type !== "code";
   const showCode = tab === "code" || !runnable || !art.complete;
   const deck = art.complete && isDeck(art);
+  // Tab Mã: tô màu cú pháp (Shiki, tải chậm) khi artifact đã viết xong; đang viết thì chữ đơn sắc như cũ.
+  const toks = useHighlight(art.content, art.type === "code" ? art.lang ?? "" : art.type === "react" ? "tsx" : art.type === "svg" ? "xml" : art.type === "html" ? "html" : "", art.complete && showCode && !compare);
   useEffect(() => { setErr(""); }, [art.content, reload]);
   useEffect(() => { setPicking(false); setPicked(null); setReq(""); }, [art.content]);
   useEffect(() => { if (index <= 0) setCompare(false); }, [index]);
@@ -630,7 +633,7 @@ Yêu cầu: ${req.trim()}`);
           <pre className="art-code">{lines.map((l, i) => {
             const n = i + 1, on = findings.filter((f) => n >= f.line_start && n <= f.line_end), end = findings.filter((f) => f.line_end === n);
             const cls = [hlLoc && n >= hlLoc.start && n <= hlLoc.end ? "hl" : "", on.length ? `cr cr-${on[0].severity}` : ""].filter(Boolean).join(" ");
-            return <Fragment key={i}><div className={cls || undefined}><span>{n}</span>{l || " "}</div>{end.map((f) => <CriticNote key={f.title} f={f} canFix={!!onApplyFix && !!fixPatch(art.content, f)}
+            return <Fragment key={i}><div className={cls || undefined}><span>{n}</span>{toks?.[i] ? (toks[i].length ? <code className="art-tl"><TokLine toks={toks[i]} /></code> : " ") : l || " "}</div>{end.map((f) => <CriticNote key={f.title} f={f} canFix={!!onApplyFix && !!fixPatch(art.content, f)}
               onFix={() => onApplyFix?.(art, f)} onSkip={() => setSkip((x) => new Set(x).add(`${ver}:${f.line_start}:${f.title}`))} />)}</Fragment>;
           })}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
         ) : deck ? (
