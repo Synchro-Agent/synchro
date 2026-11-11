@@ -298,7 +298,7 @@ type Details = {
   byFeature: { feature: string; calls: number; cost: number }[];
   days: { day: number; cost: number; input: number; output: number; calls: Partial<Record<VendorUsage["vendor"] | "other", number>> }[];
 };
-const FEATURE: Record<string, [string, string]> = { chat: ["Chat", "Chat"], code: ["Synchro Code", "Synchro Code"], artifact: ["Artifact có AI", "AI-powered artifacts"], internal: ["Bộ nhớ và đặt tên đoạn chat", "Memory and chat titles"], test: ["Thử khóa API", "API key tests"] };
+const FEATURE: Record<string, [string, string]> = { chat: ["Chat", "Chat"], code: ["Synchro Code", "Synchro Code"], artifact: ["Artifact có AI", "AI-powered artifacts"], internal: ["Bộ nhớ và đặt tên đoạn chat", "Memory and chat titles"], test: ["Thử khóa API", "API key tests"], embed: ["Tìm kiếm theo nghĩa (bộ não, tài liệu)", "Semantic search (brain, documents)"], "brain-rerank": ["Xếp lại kết quả gọi lại", "Recall reranking"] };
 // "anthropic/claude-sonnet-5-5" → "Claude Sonnet 5.5", "openai/gpt-6-astra" → "GPT-6 Astra", "google/gemini-3.8-flash" → "Gemini 3.8 Flash",
 // "xai/grok-4.7" → "Grok 4.7", "deepseek/deepseek-v4-pro" → "DeepSeek V4 Pro".
 const modelName = (k: string) => {

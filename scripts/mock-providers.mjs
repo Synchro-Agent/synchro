@@ -8,6 +8,7 @@ import { createRequire } from "node:module";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
+import { EMBED_LOG, embedHandler } from "./mock-embed.mjs";
 const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
@@ -627,6 +628,9 @@ async function handler(req, res) {
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : p.startsWith("/xai/") ? "xai" : p.startsWith("/deepseek/") ? "deepseek" : null;
 
+  // Embedding (tìm kiếm theo nghĩa): xử lý trước phần ghi "yêu cầu gần nhất", để lời embed chạy nền không đè lên lượt chat mà kiểm thử đọc.
+  if (p === "/_debug/embeds") return send(res, 200, EMBED_LOG);
+  if (req.method === "POST" && await embedHandler(p, b, auth, valid, (code, obj) => send(res, code, obj))) return;
   // ElevenLabs (Speech): mọi đường dẫn trừ Realtime nằm ở mock-eleven.mjs.
   if (await elevenHandler(req, res, p, b, req.__raw ?? Buffer.alloc(0), valid, elevenNo)) return;
   // Chép lời OpenAI Whisper (văn bản).

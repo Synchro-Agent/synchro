@@ -45,7 +45,7 @@ import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { crisisHelp } from "./crisishelp";
-import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
+import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
@@ -1291,10 +1291,12 @@ const useProfile = (body: Record<string, any>) => !!body.skills && body.feature 
 const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
 // Bộ não tổng hợp: kéo vài ghi chú liên quan nhất tới câu hỏi vào tầng động (chat lẫn Synchro Code; không trong đoạn chat ẩn danh / khi tắt Bộ nhớ).
 // Câu chào, cảm ơn không có gì để nhớ lại. Đo riêng để biết phần chuẩn bị của lượt nằm ở đâu.
-const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+// Kết hợp từ khóa và nghĩa (embedding bằng khóa OpenAI / Gemini sẵn có), có ngân sách thời gian; không có khóa thì như trước, chỉ từ khóa.
+const recallOf = async (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!useProfile(body) || body.memory === false || body.incognito || routeTask(routeInput(body)) === "chat") return "";
-  const t0 = Date.now(), out = brainRecall(u.id, lastUserText(body.messages), conv);
-  if (Date.now() - t0 > 20) console.log(`[timing] chat recall=${Date.now() - t0}ms`);
+  const t0 = Date.now();
+  const out = await brainRecallHybrid(u, lastUserText(body.messages), conv, { trace: (tr) => { if (tr.ms > 20 || tr.mode === "hybrid") console.log(`[timing] chat recall=${tr.ms}ms mode=${tr.mode}${tr.vecMs !== undefined ? ` vec=${tr.vecMs}ms` : ""}${tr.reranked ? ` rerank=${tr.reranked}` : ""} hits=${tr.ids.length}`); } }).catch(() => "");
+  if (Date.now() - t0 > 20) console.log(`[timing] chat recall total=${Date.now() - t0}ms`);
   return out;
 };
 /** Model tự tra, đọc theo liên kết và ghi vào bộ não (công cụ brain_*), cùng điều kiện với phần ghi chú liên quan. */
@@ -1561,7 +1563,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
-      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
+      const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
@@ -1703,7 +1705,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)], mix);
+    const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";

@@ -24,7 +24,7 @@ type Health = {
   mem?: { now: MemSample; history: MemSample[]; caches: Record<string, Record<string, number>>; heapLimit: number };
 };
 // Bộ đệm lớn trong bộ nhớ máy chủ (app/memstat.ts): tên dễ hiểu cho quản trị viên.
-const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", approvals: "Replies waiting for approval" };
+const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", approvals: "Replies waiting for approval", vectors: "Semantic search vectors" };
 const UNIT: Record<string, [string, string]> = { skills: ["skill", "skills"], words: ["từ", "words"], vocab: ["từ", "words"], building: ["đang dựng", "building"], n: ["mục", "items"], users: ["người", "users"], docs: ["ghi chú", "notes"], pending: ["đang chờ", "waiting"], runs: ["lượt", "runs"], MB: ["MB", "MB"] };
 const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => `${b.toLocaleString(locale())} ${UNIT[a] ? L(...UNIT[a]) : a}`).join(" · ");
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };

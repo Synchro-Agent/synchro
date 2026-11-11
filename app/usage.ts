@@ -39,6 +39,11 @@ const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"]][] = [
   [/^deepseek\/deepseek-(v[\d.]+-)?flash/, { in: 0.3, out: 1.2, cache: 0.006 }, "official"],
   [/^deepseek\/deepseek-v[\d.]+-pro/, { in: 1.32, out: 3.96, cache: 0.044 }, "official"],
   [/^deepseek\//, { in: 1.32, out: 3.96, cache: 0.044 }, "estimate"],
+  // Embedding (tìm kiếm ngữ nghĩa của bộ não và tài liệu dự án): chỉ tính token đầu vào.
+  [/\/text-embedding-3-small$/, { in: 0.02, out: 0, cache: 0 }, "official"],
+  [/\/text-embedding-3-large$/, { in: 0.13, out: 0, cache: 0 }, "official"],
+  [/\/gemini-embedding-001$/, { in: 0.15, out: 0, cache: 0 }, "official"],
+  [/\/[\w.-]*embedding[\w.-]*$/, { in: 0.15, out: 0, cache: 0 }, "estimate"],
   [/./, { in: 3, out: 15, cache: 0.3 }, "estimate"],
 ];
 
@@ -149,6 +154,10 @@ export function recordUsage(model: string, usage: unknown) {
   d.prepare("INSERT INTO usage_events (user_id, at, model, feature, input, output, cache_read, cache_write, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .run(s.uid, now, model, s.feature, t.input, t.output, t.cacheRead, t.cacheWrite, costOf(t, priceOf(model)));
 }
+
+/** Tổng chi phí (USD) một tính năng đã dùng của một người từ mốc since (hạn mức riêng cho việc nền như embedding). */
+export const featureCost = (uid: string, feature: string, since: number) =>
+  (init().prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE user_id = ? AND feature = ? AND at >= ?").get(uid, feature, since) as { c: number }).c;
 
 // ---------------------------------------------------------------- hạn mức gọi API của nhà cung cấp (từ header)
 export type RateInfo = { provider: string; limit: number; remaining: number; resetAt: number; at: number };

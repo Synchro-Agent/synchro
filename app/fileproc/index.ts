@@ -4,8 +4,11 @@ import path from "node:path";
 import { type ContentBlock, FileError, LARGE_TOKENS, MAX_FILE_BYTES, estTokens } from "./types";
 import { detectKind } from "./detect";
 import { pickExtractor } from "./extractors";
-import { chunkForRag, rank } from "./rag";
+import { chunkForRag, rank, scored } from "./rag";
 import { checkQuota, claimFile, mayUse } from "./owners";
+import { minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecQuery } from "../vecstore";
+import { onTick } from "../tasks";
+import { db } from "../authstore";
 
 const DIR = path.join(process.cwd(), ".cache", "files");
 
@@ -79,6 +82,38 @@ export async function storedFile(id: string, uid: string): Promise<{ rec: Stored
   try { return { rec: JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")), buf: await readFile(path.join(DIR, id + ".bin")) }; } catch { return null; }
 }
 
+// Tài liệu lớn: các đoạn được embed ở nền (lần đầu tệp được hỏi tới), các lần sau chọn đoạn bằng BM25 + nghĩa (RRF). Tệp lưu theo nội dung
+// (id = sha1) nên vector dùng chung cho mọi người có tệp; người hỏi đầu tiên chịu chi phí embed (trong hạn mức embed mỗi ngày của họ).
+const fileUser: Map<string, string> = ((globalThis as { __vecFileUser?: Map<string, string> }).__vecFileUser ??= new Map());
+const textOf = (rec: Stored) => rec.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join("\n\n");
+registerVecSource("file", {
+  maxChars: 4000,
+  userOf: (id) => fileUser.get(id) ?? null,
+  pending: async (id, model, limit) => {
+    if (!safeId(id)) return [];
+    let rec: Stored;
+    try { rec = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")); } catch { return []; }
+    const have = new Set((db().prepare("SELECT item FROM vec_items WHERE scope = 'file' AND owner = ? AND model = ?").all(id, model) as { item: string }[]).map((r) => r.item));
+    return chunkForRag(textOf(rec)).map((text, i) => ({ item: `${id}#${i}`, text, srcAt: 0 })).filter((x) => !have.has(x.item)).slice(0, limit);
+  },
+});
+let fileSweptAt = 0;
+onTick("file-vec-sweep", (now) => { if (now - fileSweptAt < 6 * 3_600_000) return; fileSweptAt = now; try { sweepVecs("file", "SELECT file_id FROM file_owners", "owner"); } catch { /* bảng chưa có */ } });
+/** Chọn k đoạn liên quan nhất (theo thứ tự trong tệp): BM25, cộng tìm theo nghĩa khi tệp đã có vector. */
+export async function pickChunks(id: string, uid: string, chunks: string[], query: string, k: number, budgetMs = 500): Promise<number[]> {
+  if (!query.trim() || chunks.length <= k) return rank(chunks, query, k);
+  if (fileUser.size > 2000) fileUser.clear();
+  if (!fileUser.has(id)) fileUser.set(id, uid);
+  const vq = await vecQuery("file", id, uid, query, 30, budgetMs).catch(() => null);
+  queueEmbed("file", id);
+  if (!vq) return rank(chunks, query, k);
+  const min = minCos(vq.model);
+  const fused = rrf([scored(chunks, query).slice(0, 30).map((x) => String(x.i)), vq.hits.filter((h) => h.cos >= min).map((h) => h.item.slice(h.item.lastIndexOf("#") + 1))]);
+  const top = [...fused].sort((a, b) => b[1] - a[1]).map(([i]) => Number(i)).filter((i) => i < chunks.length).slice(0, k);
+  for (let i = 0; top.length < k && i < chunks.length; i++) if (!top.includes(i)) top.push(i);
+  return top.sort((a, b) => a - b);
+}
+
 // Ghép các file thành block cho messages[].content. Nội dung trích ra là DỮ LIỆU, bọc trong <file name="...">.
 export async function buildContext(ids: string[], names: Record<string, string>, query: string, uid: string): Promise<ContentBlock[]> {
   const out: ContentBlock[] = [];
@@ -91,9 +126,8 @@ export async function buildContext(ids: string[], names: Record<string, string>,
     const label = `[File: ${name}]`;
     if (rec.large) {
       // File lớn: chỉ đưa các đoạn liên quan nhất tới câu hỏi (RAG).
-      const text = rec.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join("\n\n");
-      const chunks = chunkForRag(text);
-      const picked = rank(chunks, query, 12).map((i) => `(đoạn ${i + 1}/${chunks.length})\n${chunks[i]}`);
+      const chunks = chunkForRag(textOf(rec));
+      const picked = (await pickChunks(id, uid, chunks, query, 12)).map((i) => `(đoạn ${i + 1}/${chunks.length})\n${chunks[i]}`);
       out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}" note="tệp lớn, chỉ hiện các đoạn liên quan nhất">\n${esc(picked.join("\n\n…\n\n"))}\n</file>` });
       continue;
     }
