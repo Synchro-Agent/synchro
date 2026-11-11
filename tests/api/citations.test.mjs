@@ -73,6 +73,23 @@ try {
   ok(fake === null, "nội dung không phải ảnh (HTML có script) bị bỏ dù Content-Type nói là ảnh");
   const resp = IP.iconResponse(disk);
   ok(/sandbox/.test(resp.headers.get("content-security-policy") ?? "") && resp.headers.get("x-content-type-options") === "nosniff", "phản hồi ảnh có CSP sandbox + nosniff (SVG mở thẳng cũng không chạy script)");
+  // Bộ đệm trên đĩa có giới hạn: vòng lặp hỏi tên miền ngẫu nhiên không làm đầy đĩa; tải mới đi qua cổng giới hạn, ảnh đã có thì không.
+  {
+    process.env.SYNCHRO_ICON_DISK_MAX = "30";
+    const tiny = { mime: "image/png", buf: Buffer.from([0x89, 0x50, 0x4e, 0x47]) };
+    for (let i = 0; i < 160; i++) await IP.cachedIcon(`site:rand${i}.test`, async () => (i % 2 ? tiny : null));
+    const n = fs.readdirSync(dir).filter((f) => f.endsWith(".json")).length;
+    ok(n <= 30 + 50, "160 tên miền lạ: thư mục bộ đệm dọn về tối đa SYNCHRO_ICON_DISK_MAX mục (cộng tối đa 50 mục ghi sau lần dọn gần nhất)", n);
+    IP.pruneDisk(Date.now() + 8 * 86_400_000);
+    ok(!fs.readdirSync(dir).some((f) => f.endsWith(".json")), "mục hết hạn bị xóa khỏi đĩa (không chỉ bị bỏ qua khi đọc)", fs.readdirSync(dir).length);
+    delete process.env.SYNCHRO_ICON_DISK_MAX;
+    let gated = 0;
+    const gate = () => { gated++; if (gated > 1) throw Object.assign(new Error("429"), { status: 429 }); };
+    await IP.cachedIcon("site:gate1.test", async () => tiny, gate);
+    await IP.cachedIcon("site:gate1.test", async () => tiny, gate);
+    const denied = await IP.cachedIcon("site:gate2.test", async () => tiny, gate).then(() => "ok", (e) => e.message);
+    ok(gated === 2 && denied === "429", "ảnh đã có không qua cổng giới hạn; tải mới quá giới hạn thì bị từ chối", { gated, denied });
+  }
   let blocked = null;
   delete process.env.FAVICON_BASE;
   process.env.MCP_ALLOW_PRIVATE = "0";

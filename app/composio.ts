@@ -144,7 +144,9 @@ export async function toolkitLogoUrl(slug: string): Promise<string | null> {
     // Chỉ địa chỉ https (API giả lập chạy http cục bộ thì nhận http như chính API, giống okMcpUrl).
     if (raw && raw.length < 2000 && okMcpUrl(raw)) url = raw;
   } catch (e) { if (e instanceof ComposioError && e.status >= 500) return null; }
-  kitLogos.set(slug, { at: Date.now(), url });
+  kitLogos.delete(slug); kitLogos.set(slug, { at: Date.now(), url });
+  // Tối đa 500 ứng dụng trong bộ nhớ (bỏ mục cũ nhất): slug lạ ngẫu nhiên không làm bảng lớn mãi.
+  while (kitLogos.size > 500) kitLogos.delete(kitLogos.keys().next().value!);
   return url;
 }
 /** Số ứng dụng đang kết nối (từ bộ đệm nếu còn mới), lỗi thì null: trang không chờ Composio quá lâu. */
