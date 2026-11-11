@@ -25,6 +25,8 @@ type Health = {
 };
 // Bộ đệm lớn trong bộ nhớ máy chủ (app/memstat.ts): tên dễ hiểu cho quản trị viên.
 const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", approvals: "Replies waiting for approval" };
+const UNIT: Record<string, [string, string]> = { skills: ["skill", "skills"], words: ["từ", "words"], vocab: ["từ", "words"], building: ["đang dựng", "building"], n: ["mục", "items"], users: ["người", "users"], docs: ["ghi chú", "notes"], pending: ["đang chờ", "waiting"], runs: ["lượt", "runs"], MB: ["MB", "MB"] };
+const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => `${b.toLocaleString(locale())} ${UNIT[a] ? L(...UNIT[a]) : a}`).join(" · ");
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
 const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 const gb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} GB` : `${mb.toLocaleString(locale())} MB`);
@@ -53,8 +55,8 @@ function problemText(p: Problem) {
   }
 }
 
-function Kv({ k, v, bad }: { k: string; v: React.ReactNode; bad?: boolean }) {
-  return <div className="adm-kv"><span>{k}</span><b data-notr style={bad ? { color: "#c6422f" } : undefined}>{v}</b></div>;
+function Kv({ k, v, bad, wrap }: { k: string; v: React.ReactNode; bad?: boolean; wrap?: boolean }) {
+  return <div className={`adm-kv${wrap ? " wrap" : ""}`}><span>{k}</span><b data-notr style={bad ? { color: "#c6422f" } : undefined}>{v}</b></div>;
 }
 
 export function HealthPanel() {
@@ -125,11 +127,11 @@ export function HealthPanel() {
           <h3 className="sec">Server memory</h3>
           <p className="d adm-privacy"><I.Alert size={14} />Measured every 30 minutes and written to the server log as a [timing] mem line, so slow growth shows up before the server runs out.</p>
           <div className="adm-card">
-            <Kv k="Heap used / limit" v={`${gb(m.now.heapUsed)} / ${gb(m.heapLimit)}`} bad={m.now.heapUsed > m.heapLimit * 0.75} />
-            <Kv k="Process memory (RSS)" v={gb(m.now.rss)} />
-            <Kv k="Outside the heap (external / buffers)" v={`${gb(m.now.external)} / ${gb(m.now.arrayBuffers)}`} />
-            {hours >= 1 && <Kv k="Heap change" v={`${grew >= 0 ? "+" : ""}${gb(grew)} ${L(`trong ${Math.round(hours)} giờ`, `in ${Math.round(hours)} h`)}`} bad={grew > 300} />}
-            {Object.entries(m.caches).map(([k, v]) => <Kv key={k} k={CACHE[k] ?? k} v={Object.entries(v).map(([a, b]) => `${a} ${b.toLocaleString(locale())}`).join(" · ")} />)}
+            <Kv wrap k="Heap used / limit" v={`${gb(m.now.heapUsed)} / ${gb(m.heapLimit)}`} bad={m.now.heapUsed > m.heapLimit * 0.75} />
+            <Kv wrap k="Process memory (RSS)" v={gb(m.now.rss)} />
+            <Kv wrap k="Outside the heap (external / buffers)" v={`${gb(m.now.external)} / ${gb(m.now.arrayBuffers)}`} />
+            {hours >= 1 && <Kv wrap k="Heap change" v={`${grew >= 0 ? "+" : ""}${gb(grew)} ${L(`trong ${Math.round(hours)} giờ`, `in ${Math.round(hours)} h`)}`} bad={grew > 300} />}
+            {Object.entries(m.caches).map(([k, v]) => <Kv wrap key={k} k={CACHE[k] ?? k} v={cacheText(v)} />)}
           </div>
         </>;
       })()}

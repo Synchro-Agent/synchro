@@ -1146,6 +1146,9 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .adm-kv{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:5px 0;border-top:.5px solid var(--border)}
 .adm-kv span{color:var(--text-3)}
 .adm-kv b{font-weight:360;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Số liệu nhiều phần (bộ nhớ máy chủ): xuống dòng trên điện thoại thay vì bị cắt "…". */
+.adm-kv.wrap span{flex:0 1 auto;min-width:0}
+.adm-kv.wrap b{white-space:normal;text-align:right;flex:0 1 auto}
 .adm-sess{display:flex;align-items:center;gap:10px;font-size:12px;line-height:1.5;padding:6px 0;border-top:.5px solid var(--border)}
 .adm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .adm-log{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:9px 0;border-top:.5px solid var(--border);font-size:12px;line-height:1.5}
