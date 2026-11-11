@@ -37,7 +37,8 @@ import { docTurn } from "./dockit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME, requestSlug } from "./ai/imagegen";
+import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { POSTER_TEMPLATES, posterProps, renderPoster, type PosterTemplate } from "./design-engine/posters/render";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
@@ -531,30 +532,48 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   const used = { kind: "search" as const, name: IMAGE_TOOL.name };
   const fail = (content: string): Run => ({ content, is_error: true, used });
   const prompt = typeof c.input?.prompt === "string" ? c.input.prompt.trim() : "";
-  if (!prompt) return fail("Thiếu mô tả ảnh (prompt).");
+  const template = String(c.input?.template ?? "").trim();
+  if (!prompt && !template) return fail("Thiếu mô tả ảnh (prompt).");
   if (prompt.length > 4000) return fail("Mô tả ảnh quá dài (tối đa 4.000 ký tự).");
   const aspect = (ASPECTS as readonly string[]).includes(String(c.input?.aspect_ratio)) ? String(c.input.aspect_ratio) : undefined;
   const count = Math.min(4, Math.max(1, Math.floor(Number(c.input?.count)) || 1));
   if (outputsFull()) return fail("Máy chủ sắp hết dung lượng đĩa nên chưa tạo ảnh được. Hãy nói rõ với người dùng và đề nghị thử lại sau.");
   if (outputRoom(x.uid) < 2 * 1048576) return fail(`Tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo nên chưa lưu thêm được ảnh (tệp cũ tự xóa sau 30 ngày).`);
-  let reference: ImgFile | undefined;
-  // Model hay điền "" vào tham số không bắt buộc: đó là không có ảnh gốc, không phải "ảnh gần nhất".
-  const refIn = String(c.input?.reference ?? "").trim();
-  if (refIn) {
-    const r = await refImage(x, refIn);
-    if (typeof r === "string") return fail(r);
-    reference = r;
-  }
-  const wait = imageBudget(x.uid, count);
-  if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
-  // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
-  x.park?.();
-  const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
-  const r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
-    onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
-  if (!r.ok) {
-    if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
-    return fail(r.text);
+  // Mẫu poster dựng ở máy chủ (Satori): không cần gói tạo ảnh nào, model chỉ điền trường, chữ tiếng Việt chính xác tuyệt đối.
+  let r: ImgOk | ImgErr, by: string;
+  if (template) {
+    if (!(POSTER_TEMPLATES as readonly string[]).includes(template)) return fail(`Không có mẫu "${template}". Mẫu có sẵn: ${POSTER_TEMPLATES.join(", ")}.`);
+    const props = posterProps(c.input?.poster);
+    if (typeof props === "string") return fail(props);
+    const wait = imageBudget(x.uid, 1);
+    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    progress("step", "Đang dựng poster 3600×1890");
+    try {
+      const png = await renderPoster(template as PosterTemplate, props, 3);
+      r = { ok: true, files: [{ name: imageName(props.title, 0, 1, "png"), mime: "image/png", data: png }], cli: "agy", notes: ["Poster 3600×1890 (gấp 3 lần 1200×630), chữ dựng dạng vector nên nét khi in và đăng mạng xã hội."], tried: [] };
+    } catch (e) { return fail(`Chưa dựng được poster: ${String((e as Error).message).slice(0, 200)}`); }
+    by = "mẫu poster của Synchro";
+  } else {
+    let reference: ImgFile | undefined;
+    // Model hay điền "" vào tham số không bắt buộc: đó là không có ảnh gốc, không phải "ảnh gần nhất".
+    const refIn = String(c.input?.reference ?? "").trim();
+    if (refIn) {
+      const r = await refImage(x, refIn);
+      if (typeof r === "string") return fail(r);
+      reference = r;
+    }
+    const wait = imageBudget(x.uid, count);
+    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
+    x.park?.();
+    const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
+    r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
+      onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
+    if (!r.ok) {
+      if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
+      return fail(r.text);
+    }
+    by = IMG_NAME[r.cli];
   }
   // Tên theo lời người dùng; nhiều ảnh trong một lượt (thiết kế nhiều ảnh) không được trùng tên: inputs/ và tham chiếu đều đi theo tên.
   const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
@@ -568,14 +587,14 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   });
   const { saved, left } = keepImages(x.uid, named, x.outs);
   (x.madeImgs ??= []).push(...saved.map((f) => f.id));
-  if (!saved.length) return fail(`${IMG_NAME[r.cli]} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
+  if (!saved.length) return fail(`${by} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
   const lines = saved.map((f) => `${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`);
   const send = imagesForModel(named.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
   // CLI không phải lúc nào cũng theo đúng tỉ lệ xin: nói cho model biết để không báo sai với người dùng, nhất là ảnh sẽ đặt vào khung có sẵn của thiết kế.
   const [aw, ah] = (aspect ?? "").split(":").map(Number);
   const offRatio = aw && ah ? saved.filter((f) => f.w && f.h && Math.abs(f.w / f.h - aw / ah) / (aw / ah) > 0.08) : [];
   const notes = [...r.notes, ...(offRatio.length ? [`Xin tỉ lệ ${aspect} nhưng nhận được: ${offRatio.map((f) => `${f.name} ${f.w}×${f.h}`).join(", ")}. Nói rõ với người dùng nếu tỉ lệ quan trọng; đưa vào thiết kế thì cắt bằng object-fit, đừng kéo méo.`] : []), ...(left.length ? [`${left.length} ảnh không lưu được vì hết dung lượng: ${left.map((f) => f.name).join(", ")}.`] : []), ...(send.length < saved.length ? [`${saved.length - send.length} ảnh quá lớn nên không kèm ở đây để bạn xem (tối đa ${IMAGE_MAX_MB()} MB mỗi ảnh vẫn giao được cho người dùng); đừng mô tả các ảnh đó như đã xem.`] : [])];
-  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): trong câu trả lời đừng chèn đường dẫn hay liên kết.\nĐưa ảnh vào sản phẩm khi người dùng cần: artifact HTML, React, SVG, slide dùng đúng địa chỉ ${saved.map((f) => genImageUrl(f.id)).join(", ")} trong src hay url(...), Synchro tự nhúng ảnh; run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc inputs/${saved.map((f) => f.name).join(", inputs/")}.`;
+  const content = `Đã tạo ${saved.length} ảnh bằng ${by}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): trong câu trả lời đừng chèn đường dẫn hay liên kết.\nĐưa ảnh vào sản phẩm khi người dùng cần: artifact HTML, React, SVG, slide dùng đúng địa chỉ ${saved.map((f) => genImageUrl(f.id)).join(", ")} trong src hay url(...), Synchro tự nhúng ảnh; run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc inputs/${saved.map((f) => f.name).join(", inputs/")}.`;
   if (!send.length) return { content, is_error: false, used };
   (x.heavy ??= []).push(c.id);
   const [first, ...more] = send;
