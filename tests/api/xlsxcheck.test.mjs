@@ -41,5 +41,31 @@ ok((await C.totalsNote([{ path: "outputs/ok.xlsx", data: good }])) === "", "tệ
 ok((await C.hardTotals(Buffer.from("không phải zip"))).length === 0, "tệp hỏng: bỏ qua im lặng");
 const en = book([["Item", "Q1", "Q2"], ["Revenue", 1, 2], ["Subtotal", 3, "=SUM(C2:C2)"], ["Net margin", 0.2, 0.3]]);
 ok(JSON.stringify((await C.hardTotals(en)).map((g) => g.ref)) === JSON.stringify(["B3", "B4", "C4"]), "nhãn tiếng Anh: Subtotal, Net margin", JSON.stringify(await C.hardTotals(en)));
+
+console.log("2. Tệp do code người dùng viết: không chặn tiến trình chung, không nở bộ nhớ");
+const JSZip = createRequire(path.join(process.cwd(), "package.json"))("jszip");
+const swap = async (parts) => { const z = await JSZip.loadAsync(bad); for (const [k, v] of Object.entries(parts)) z.file(k, v); return z.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }); };
+const timed = async (buf) => { const t = performance.now(); const r = await C.hardTotals(buf); return { r, ms: performance.now() - t }; };
+// 2 MB "<c r="A1">" không có </c>: regex lười cũ tốn hàng chục giây (bậc hai) trong tiến trình phục vụ mọi người dùng.
+let t = await timed(await swap({ "xl/worksheets/sheet1.xml": `<worksheet><sheetData><row r="1">${'<c r="A1">'.repeat(200_000)}</row></sheetData></worksheet>` }));
+ok(t.ms < 1500 && Array.isArray(t.r), `sheet 2 MB toàn <c> không đóng: xong sau ${Math.round(t.ms)} ms`);
+t = await timed(await swap({ "xl/sharedStrings.xml": `<sst>${"<si><t>".repeat(300_000)}</sst>` }));
+ok(t.ms < 1500, `sharedStrings 2 MB toàn <si> không đóng: xong sau ${Math.round(t.ms)} ms`);
+t = await timed(await swap({ "xl/_rels/workbook.xml.rels": `<Relationships>${'<Relationship Id="rId1" '.repeat(100_000)}` }));
+ok(t.ms < 1500, `workbook.xml.rels toàn thẻ không đóng: xong sau ${Math.round(t.ms)} ms`);
+// Ô rất nhiều <v> không đóng bên trong một ô.
+t = await timed(await swap({ "xl/worksheets/sheet1.xml": `<worksheet><sheetData><row r="1"><c r="A1">${"<v>".repeat(500_000)}</c></row></sheetData></worksheet>` }));
+ok(t.ms < 1500, `một ô chứa 1.5 MB <v> không đóng: xong sau ${Math.round(t.ms)} ms`);
+// Zip bomb: 200 MB chữ lặp nén còn vài trăm KB. Dừng ở trần 8 MB mỗi phần, không đọc cả 200 MB vào bộ nhớ.
+const bomb = await swap({ "xl/worksheets/sheet1.xml": Buffer.alloc(200 * 1048576, 0x20) });
+const heap0 = process.memoryUsage().rss;
+t = await timed(bomb);
+ok(bomb.length < 1048576 && t.r.length === 0 && t.ms < 3000, `zip bomb ${Math.round(bomb.length / 1024)} KB → 200 MB: bỏ qua sau ${Math.round(t.ms)} ms`);
+ok(process.memoryUsage().rss - heap0 < 120 * 1048576, `bộ nhớ tăng ${Math.round((process.memoryUsage().rss - heap0) / 1048576)} MB (dưới 120 MB)`);
+// Sheet hợp lệ cỡ vừa (20.000 ô) vẫn được kiểm và vẫn báo đúng ô.
+const rows = [["Chỉ tiêu", "Giá trị"], ...Array.from({ length: 10_000 }, (_, i) => [`Dòng ${i}`, i]), ["Tổng cộng", 123]];
+const big = book(rows);
+t = await timed(big);
+ok(t.r.length === 1 && t.r[0].ref === "B10002" && t.ms < 1500, `sheet 20.000 ô: báo đúng B10002 sau ${Math.round(t.ms)} ms`, JSON.stringify(t.r));
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
