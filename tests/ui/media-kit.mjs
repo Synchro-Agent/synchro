@@ -216,6 +216,15 @@ if (!cd.error) {
   check("chữ tiêu đề slide vẫn là hộp chữ", /Doanh thu 2026 vượt 2025/.test(cd.slides[0]));
   if (SHOTS) writeFileSync(path.join(SHOTS, "charts.pptx"), cd.buf);
 }
+// Thẻ có tên (Morph) chứa biểu đồ: ảnh của thẻ không được mang sẵn biểu đồ ECharts nằm dưới biểu đồ gốc (hai lớp).
+const KPI_DECK = `<html data-sx-preset="soft-bento"><body><section class="slide sx-slide"><h2 class="sx-title">Thẻ KPI có biểu đồ</h2><div class="sx-card" data-sx-morph="!!kpi" style="width:calc(560*var(--sx-u))"><p class="sx-kpi">+18%</p>${CH(SPECS.bar, 200)}</div></section><section class="slide sx-slide"><h2 class="sx-title">Kết</h2></section></body></html>`;
+await view(1280, 720); await open(KPI_DECK, { deck: true }); await until(`document.querySelectorAll("[data-sx-chart-ready]").length === 1`); await sleep(900);
+const kd = await buildDeck();
+const kpiPic = kd.m?.slides?.[0]?.pics?.find((p) => p.name === "!!kpi");
+// Điểm ảnh có màu đậm (cột biểu đồ màu nhấn / trung tính đậm); nền thẻ và chữ đã trong suốt thì gần như không có.
+const inked = kpiPic ? await ev(`new Promise((ok) => { const im = new Image(); im.onload = () => { const c = document.createElement("canvas"); c.width = 200; c.height = Math.round(200 * im.height / im.width); const x = c.getContext("2d"); x.drawImage(im, 0, 0, c.width, c.height); const d = x.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) { const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]); if (d[i + 3] > 200 && (mx - mn > 60 || mx < 150)) n++; } ok(n / (d.length / 4)); }; im.src = ${JSON.stringify(kpiPic?.data ?? "")}; })`) : null;
+check("thẻ có tên chứa biểu đồ: ảnh thẻ không mang biểu đồ (chỉ biểu đồ gốc PowerPoint)", !kd.error && kd.charts.length === 1 && inked !== null && inked < 0.01, kd.error ?? `${kd.charts?.length} biểu đồ gốc, điểm màu đậm trong ảnh thẻ ${((inked ?? 1) * 100).toFixed(1)}%`);
+
 // React: import echarts dùng được, thư viện chỉ nạp khi import.
 const REACT = `import React, { useEffect, useRef } from "react";\nimport * as echarts from "echarts";\nexport default function App(){ const r = useRef(null); useEffect(() => { const c = echarts.init(r.current, null, { renderer: "svg" }); c.setOption(window.sxChartOption ? window.sxChartOption(${JSON.stringify(SPECS.radar)}, {}) : { series: [] }); }, []); return <div ref={r} id="rc" style={{ width: 480, height: 320 }} />; }`;
 vendorLoads.length = 0;
@@ -227,6 +236,19 @@ vendorLoads.length = 0;
 await open(`import React from "react";\nexport default function App(){ return <p id="x">Không biểu đồ</p>; }`, { type: "react" });
 await until(`!!document.getElementById("x")`, 30000);
 check("React không import echarts: không tải ECharts", !vendorLoads.some((f) => f.startsWith("echarts")), vendorLoads.join(", "));
+
+// ---------------------------------------------------------------- 3b. canvas 2D không bị ẩn khi xuất
+console.log("3b. Canvas 2D (biểu đồ nét mảnh trên màn Retina) giữ nguyên trong PNG / PowerPoint; chỉ canvas WebGL trống mới ẩn tạm");
+const C2D = `<html data-sx-preset="exec-navy"><body><div class="sx-page"><h2 class="sx-title">Biểu đồ canvas</h2><canvas id="c2" width="1600" height="800" style="width:800px;height:400px"></canvas><canvas id="gl" data-sx-gl width="400" height="200" style="width:400px;height:200px"></canvas></div>
+<script>(() => { const c = document.getElementById("c2"), x = c.getContext("2d"); x.scale(2, 2); x.strokeStyle = "#999"; x.lineWidth = 0.5; for (let i = 0; i <= 8; i++) { x.beginPath(); x.moveTo(40, 20 + i * 45); x.lineTo(780, 20 + i * 45); x.stroke(); } x.strokeStyle = "#2563eb"; x.lineWidth = 1; x.beginPath(); [0, 60, 40, 120, 90, 200, 170, 260].forEach((v, i) => x.lineTo(40 + i * 100, 380 - v)); x.stroke(); x.font = "10px sans-serif"; x.fillStyle = "#333"; x.fillText("Q1 Q2 Q3 Q4", 40, 395);
+  document.getElementById("gl").getContext("webgl", { preserveDrawingBuffer: false }); })()</script></body></html>`;
+await view(1280, 900); await open(C2D);
+const vis = await ev(`(() => { const thaw = sxGlFreeze(); const v = { c2: getComputedStyle(document.getElementById("c2")).visibility, gl: getComputedStyle(document.getElementById("gl")).visibility }; thaw(); v.after = getComputedStyle(document.getElementById("gl")).visibility; return v; })()`);
+check("canvas 2D nét mảnh 1600×800 (Retina) không bị coi là trống; canvas WebGL trống vẫn ẩn tạm rồi trả lại", vis.c2 === "visible" && vis.gl === "hidden" && vis.after === "visible", JSON.stringify(vis));
+await ev(`window.__posts = []; sxCapture("c2", "")`);
+const c2p = await waitPost(`(p) => p.id === "c2"`);
+const c2blue = c2p?.data ? await ev(`new Promise((ok) => { const im = new Image(); im.onload = () => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d"); x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 2] > 180 && d[i] < 120) n++; ok(n); }; im.src = ${JSON.stringify(c2p?.data ?? "")}; })`) : 0;
+check("PNG có đường biểu đồ của canvas 2D", c2blue > 50, `${c2blue} điểm xanh`);
 
 // ---------------------------------------------------------------- 4. nền shader 3D, kính khúc xạ
 console.log("4. Nền shader 3D (bộ thông số của chủ dự án) và kính khúc xạ: tải lười, dự phòng, giảm chuyển động, xuất không trắng");
