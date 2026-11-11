@@ -78,11 +78,18 @@ var red=window.__sxStatic||(window.matchMedia&&matchMedia("(prefers-reduced-moti
 return{ink:v("--sx-ink")||c.color,muted:v("--sx-muted"),accent:v("--sx-accent"),accent2:v("--sx-accent2"),neutral:v("--sx-neutral"),line:v("--sx-line"),pos:v("--sx-pos"),neg:v("--sx-neg"),bg:bgc,font:v("--sx-body")||c.fontFamily,motion:!red}}
 // Khung đang ẩn (slide chưa tới lượt, display:none) có cỡ 0: chưa vẽ, chờ khung hiện ra (ResizeObserver) rồi mới vẽ, vì sankey, tròn tính bố cục theo cỡ khung;
 // khung bị ẩn đi (chuyển slide) thì giữ nguyên, không co về 0 (ma trận khung nhìn của sankey không nghịch đảo được ở cỡ 0).
+// Cỡ theo đơn vị thiết kế: trong slide / poster, --sx-u là số px của một đơn vị (1px ở trang thường). Biểu đồ vẽ ở cỡ thiết kế (khung chia cho u) rồi thu phóng
+// bằng transform: khung xem trước hẹp 520px hay trình chiếu 1920px đều giữ đúng tỉ lệ chữ, cột, nhãn như slide 1280, nhãn không đè nhau khi khung nhỏ.
+function unit(el){var p=document.createElement("i");p.style.cssText="position:absolute;visibility:hidden;width:calc(1000*var(--sx-u,1px));height:0;padding:0;border:0";el.appendChild(p);var u=p.getBoundingClientRect().width/1000;p.remove();return u>0?u:1}
+function host(el){var h=el.__sxHost;if(!h||!h.isConnected){h=document.createElement("div");h.setAttribute("data-sx-chart-host","");el.appendChild(h);el.__sxHost=h;if(getComputedStyle(el).position==="static")el.style.position="relative"}
+var u=unit(el),w=el.clientWidth/u,ht=el.clientHeight/u;h.style.cssText="position:absolute;left:0;top:0;width:"+w+"px;height:"+ht+"px;transform:scale("+u+");transform-origin:0 0";return h}
 function draw(el){var spec;try{spec=JSON.parse(el.getAttribute("data-sx-chart"))}catch(e){el.setAttribute("data-sx-chart-error","JSON");return}
-if(!el.__sxRo&&window.ResizeObserver){el.__sxRo=new ResizeObserver(function(){if(!el.clientWidth||!el.clientHeight)return;var c=echarts.getInstanceByDom(el);if(c)c.resize();else draw(el)});el.__sxRo.observe(el)}
+if(!el.__sxRo&&window.ResizeObserver){el.__sxRo=new ResizeObserver(function(){if(!el.clientWidth||!el.clientHeight)return;var c=el.__sxHost&&echarts.getInstanceByDom(el.__sxHost);if(c){host(el);c.resize()}else draw(el)});el.__sxRo.observe(el)}
 if(!el.clientWidth||!el.clientHeight)return;
 var o=sxChartOption(spec,tokens(el));if(!o){el.setAttribute("data-sx-chart-error","type");return}
-var ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"svg"});ch.setOption(o,true);el.removeAttribute("data-sx-chart-error");el.setAttribute("data-sx-chart-ready","")}
+var h=host(el),ch=echarts.getInstanceByDom(h)||echarts.init(h,null,{renderer:"svg"});ch.setOption(o,true);ch.resize();el.removeAttribute("data-sx-chart-error");el.setAttribute("data-sx-chart-ready","")}
+/** Đối tượng ECharts của một khung biểu đồ (kiểm thử, mã của trang). */
+window.sxChartOf=function(el){return el&&el.__sxHost?echarts.getInstanceByDom(el.__sxHost):null};
 function scan(){var els=[].slice.call(document.querySelectorAll("[data-sx-chart]")).filter(function(e){return e.__sxSpec!==e.getAttribute("data-sx-chart")});if(!els.length)return;
 load(function(){els.forEach(function(e){e.__sxSpec=e.getAttribute("data-sx-chart");try{draw(e)}catch(x){e.setAttribute("data-sx-chart-error",String(x&&x.message||x).slice(0,80))}})})}
 function start(){scan();if(window.MutationObserver)new MutationObserver(function(){scan()}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["data-sx-chart"]})}

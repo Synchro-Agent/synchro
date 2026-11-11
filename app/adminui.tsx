@@ -394,7 +394,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       )}
 
       {d.settings.replicateBudget && (
-        <div className="adm-card">
+        <div className="adm-card" style={{ marginTop: 12 }}>
           <div className="adm-card-h"><b>Replicate images per day</b><span className="d">{d.settings.replicateKey
             ? <>Images made with the shared Replicate key are billed to its account, about $0.06 each. Past a cap, people make images with their own plan until the next day (UTC). Made today: <span data-notr>{`${(d.settings.replicateToday?.images ?? 0).toLocaleString(locale())} (≈ $${(d.settings.replicateToday?.usd ?? 0).toFixed(2)})`}</span>.</>
             : <>Waiting for a Replicate key in Providers. Until then images use each person&apos;s own plan and these caps have no effect.</>}</span></div>

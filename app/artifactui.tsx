@@ -214,7 +214,9 @@ export function D2Svg({ code, onError, onSvg }: { code: string; onError?: (m: st
     return () => { on = false; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <div className="art-err-inline">{tr("Không vẽ được sơ đồ")}: {err}</div>;
-  return svg ? <div className="art-d2"><img alt={tr("Sơ đồ D2")} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /></div> : <div className="art-loading"><span className="art-spin" /></div>;
+  // SVG của D2 chỉ có viewBox: không đặt cỡ thì ảnh giãn hết bề ngang, sơ đồ bốn khối thành chữ 30px. Hiện đúng cỡ thật, chỉ co lại khi khung hẹp hơn.
+  const vb = /viewBox="[-\d.]+[ ,]+[-\d.]+[ ,]+([\d.]+)[ ,]+([\d.]+)"/.exec(svg);
+  return svg ? <div className="art-d2"><img alt={tr("Sơ đồ D2")} width={vb ? Math.round(Number(vb[1])) : undefined} height={vb ? Math.round(Number(vb[2])) : undefined} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /></div> : <div className="art-loading"><span className="art-spin" /></div>;
 }
 export const d2Drawn = (code: string) => d2Cache.get(`${isDark() ? 1 : 0}:${code}`) ?? "";
 

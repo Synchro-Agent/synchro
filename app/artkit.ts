@@ -13,7 +13,7 @@ const VENDOR = "/vendor/";
 /** Apache ECharts 6.1.0 (Apache-2.0), bản dist nguyên vẹn từ npm: [tệp trong public/vendor, đường dẫn jsDelivr, SRI]. Chỉ nạp khi trang có biểu đồ (data-sx-chart) hoặc import "echarts". */
 export const ECHARTS: [string, string, string] = ["echarts-6.1.0.min.js", "echarts@6.1.0/dist/echarts.min.js", "sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD"];
 /** Gói 3D tự dựng (scripts/build-vendor-3d.mjs: three 0.169.0, @react-three/fiber 8.18.0, drei 9.122.0, @shadergradient/react 2.4.20): chỉ có ở /vendor của Synchro, không có bản CDN. */
-export const SYNCHRO_3D: [string, string, string] = ["synchro-3d-1.0.0.js", "", "sha384-K0OTFEHMdc71PvI/zKOGqNbO6x1zZENXqTpyI3U/uUJm5Tp9TXd9sv+H1/OZBU6O"];
+export const SYNCHRO_3D: [string, string, string] = ["synchro-3d-1.0.0.js", "", "sha384-HmyfO5IR9ZCEqYGNwKGFjko0PIXroYlObNS9VE8cyS8cMOUXQ25uiSvJHEzMeVmJ"];
 const REACT_UMD: [string, string, string][] = [
   ["react-18.3.1.min.js", "react@18.3.1/umd/react.production.min.js", "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"],
   ["react-dom-18.3.1.min.js", "react-dom@18.3.1/umd/react-dom.production.min.js", "sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"],

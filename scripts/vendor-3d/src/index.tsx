@@ -39,6 +39,24 @@ function useStill() {
   }, []);
   return still;
 }
+/** Phần tử đang nằm trong khung nhìn (slide đang ẩn, cuộn khuất thì không): canvas khuất thôi vẽ, khung hình cuối vẫn giữ (preserveDrawingBuffer). */
+function useVisible(box: React.RefObject<HTMLElement | null>) {
+  const [vis, setVis] = useState(true);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof IntersectionObserver !== "function") return;
+    const io = new IntersectionObserver((es) => setVis(es.some((e) => e.isIntersecting)));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return vis;
+}
+/** Dừng vòng vẽ của R3F khi khuất: slide ẩn của bản trình bày không đốt GPU, máy yếu và WebGL phần mềm không bị kéo chậm. */
+function Pause({ on }: { on: boolean }) {
+  const set = useThree((s) => s.setFrameloop);
+  useEffect(() => { set(on ? "never" : "always"); }, [on, set]);
+  return null;
+}
 /** Canvas mất ngữ cảnh WebGL (trình duyệt giới hạn số ngữ cảnh, thẻ nền) thì bỏ canvas, lớp CSS hiện ra. */
 function useContextLoss(box: React.RefObject<HTMLElement | null>, onLost: () => void) {
   useEffect(() => {
@@ -56,13 +74,14 @@ type ShaderProps = Partial<Record<keyof typeof MASTER_SHADER, string | number>> 
 export function Master3DBackground({ style, className, ...over }: ShaderProps) {
   const p = { ...MASTER_SHADER, ...over } as typeof MASTER_SHADER;
   const [gl, setGl] = useState(hasWebGL);
-  const still = useStill(), box = useRef<HTMLDivElement>(null);
+  const still = useStill(), box = useRef<HTMLDivElement>(null), visible = useVisible(box);
   useContextLoss(box, () => setGl(false));
   const dpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, 1.5);
   return (
     <div ref={box} className={className} data-sx-3d="shader" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden", background: fallbackCss(p), ...style }}>
       {gl && (
         <ShaderGradientCanvas style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }} pixelDensity={dpr} preserveDrawingBuffer lazyLoad={false}>
+          <Pause on={!visible} />
           {/* @ts-expect-error: kiểu của gói khai báo hẹp hơn các giá trị gói nhận */}
           <ShaderGradient control="props" {...p} animate={still ? "off" : p.animate} />
         </ShaderGradientCanvas>
@@ -92,7 +111,7 @@ type GlassProps = { shape?: "torusKnot" | "sphere" | "icosahedron" | "torus"; co
 /** Khối kính khúc xạ (drei MeshTransmissionMaterial) lơ lửng, ánh sáng từ các tấm Lightformer: vật thể hero cho bìa slide, trang đích. */
 export function GlassHero({ shape = "torusKnot", color = "#ffffff", accent = "#4F46E5", accent2 = "#10B981", style, className }: GlassProps) {
   const [gl, setGl] = useState(hasWebGL);
-  const still = useStill(), box = useRef<HTMLDivElement>(null);
+  const still = useStill(), box = useRef<HTMLDivElement>(null), visible = useVisible(box);
   useContextLoss(box, () => setGl(false));
   const mobile = typeof innerWidth === "number" && innerWidth < 768;
   const geo = shape === "sphere" ? <sphereGeometry args={[1.25, 96, 96]} /> : shape === "icosahedron" ? <icosahedronGeometry args={[1.3, 1]} /> : shape === "torus" ? <torusGeometry args={[1, 0.42, 96, 192]} /> : <torusKnotGeometry args={[0.95, 0.32, 260, 36]} />;
@@ -101,7 +120,7 @@ export function GlassHero({ shape = "torusKnot", color = "#ffffff", accent = "#4
   return (
     <div ref={box} className={className} data-sx-3d="glass" style={{ position: "relative", width: "100%", height: "100%", minHeight: 160, background: fb, ...style }}>
       {gl && (
-        <Canvas dpr={[1, 1.5]} frameloop={still ? "demand" : "always"} gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }} camera={{ position: [0, 0, 5], fov: 40 }} style={{ position: "absolute", inset: 0 }}>
+        <Canvas dpr={[1, 1.5]} frameloop={!visible ? "never" : still ? "demand" : "always"} gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }} camera={{ position: [0, 0, 5], fov: 40 }} style={{ position: "absolute", inset: 0 }}>
           <Invalidate still={still} />
           <Float speed={still ? 0 : 1.4} rotationIntensity={still ? 0 : 0.7} floatIntensity={still ? 0 : 0.9}>
             <mesh rotation={[0.35, 0.5, 0]}>

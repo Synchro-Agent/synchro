@@ -184,6 +184,15 @@ const col = await ev(`(() => { const e = document.querySelector("[data-sx-chart]
 const sb = designpresets.PRESETS.find((p) => p.id === "soft-bento");
 check("màu theo phong cách: chuỗi được nhắc tới màu nhấn, chuỗi khác màu trung tính", col.some((c) => c.toLowerCase() === sb.accent.toLowerCase()) && col.some((c) => c.toLowerCase() === sb.neutral.toLowerCase()), col.join(", "));
 await shot("charts-slide1.png");
+// Nhãn chữ trong mỗi biểu đồ không đè nhau: ở cỡ 1280 và ở khung xem trước hẹp (524×295, cỡ panel artifact) nơi biểu đồ vẽ theo đơn vị thiết kế rồi thu nhỏ.
+const overlaps = `[...document.querySelectorAll("[data-sx-chart]")].filter((e) => e.offsetWidth).map((e) => { const r = [...e.querySelectorAll("svg text")].map((t) => t.getBoundingClientRect()).filter((b) => b.width > 0); let n = 0; for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) { const a = r[i], b = r[j]; const w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top); if (w > 1 && h > 1) n++; } return n; })`;
+const ov1280 = await ev(overlaps);
+await view(524, 295); await sleep(900);
+const ovSmall = await ev(overlaps);
+const fsSmall = await ev(`(() => { const t = document.querySelector("[data-sx-chart] svg text"); return t ? t.getBoundingClientRect().height : 0; })()`);
+check("nhãn biểu đồ không đè nhau ở 1280 và ở khung hẹp 524 (thu theo đơn vị thiết kế)", ov1280.every((n) => n === 0) && ovSmall.every((n) => n === 0) && fsSmall > 0 && fsSmall < 9, JSON.stringify({ ov1280, ovSmall, fsSmall }));
+await shot("charts-slide1-small.png");
+await view(1280, 720); await sleep(900);
 await ev(`window.__sxGo(1)`); await sleep(600); await shot("charts-slide2.png");
 const wf = await ev(`(() => { window.__sxGo(1); const e = [...document.querySelectorAll("[data-sx-chart]")].find((x) => JSON.parse(x.dataset.sxChart).type === "waterfall"); return [...e.querySelectorAll("svg text")].map((t) => t.textContent).join("|"); })()`);
 check("waterfall: nhãn tăng / giảm có dấu, cột tổng không dấu", /\+320/.test(wf) && /−180/.test(wf) && /\b500\b/.test(wf), wf);
@@ -191,7 +200,7 @@ check("waterfall: nhãn tăng / giảm có dấu, cột tổng không dấu", /\
 await media([{ name: "prefers-reduced-motion", value: "reduce" }]);
 await open(`<html data-sx-preset="soft-bento"><body><div class="sx-page">${CH(SPECS.bar)}</div></body></html>`);
 await until(`!!document.querySelector("[data-sx-chart-ready]")`);
-const anim = await ev(`echarts.getInstanceByDom(document.querySelector("[data-sx-chart]")).getOption().animation`);
+const anim = await ev(`sxChartOf(document.querySelector("[data-sx-chart]")).getOption().animation`);
 check("giảm chuyển động: biểu đồ không hoạt ảnh", anim === false, String(anim));
 await media();
 // PowerPoint: 5 biểu đồ gốc, sankey ở lại ảnh nền.
