@@ -87,6 +87,7 @@ const server = http.createServer(async (req, res) => {
   if (S.oauth?.need || S.auth) {
     const got = S.auth ? req.headers[S.auth.header] : req.headers.authorization;
     const want = S.auth ? S.auth.value : S.oauth.valid;
+    if (got !== want) S.calls.unauth = (S.calls.unauth ?? 0) + 1;
     if (got !== want) return send(res, 401, { error: "invalid_token" }, { "www-authenticate": S.oauth?.prmOnly ? `Bearer error="invalid_token", resource_metadata="${BASE}/meta/prm"` : 'Bearer error="invalid_token"' });
   }
   if (S.forbid && (S.forbid === true || S.forbid(m))) return send(res, 403, { error: "forbidden" });
@@ -1076,6 +1077,23 @@ try {
     out = await s.call(fq("search_docs"), {}, undefined, 400);
     ok(out.is_error && /^\[timeout\]/.test(out.content) && /phân trang/.test(out.content) && Date.now() - t1 < 5000, "công cụ đọc quá hạn: lỗi [timeout] gợi ý cách gọi nhẹ hơn, không treo lượt", `${Date.now() - t1}ms ${out.content}`);
     S.hangPost = false;
+    await s.close();
+    wipe();
+  }
+
+  console.log("48. Token còn dưới 5 phút: làm mới trước khi gọi, ba lời gọi song song chỉ làm mới một lần");
+  {
+    S.reset();
+    const r = await add();
+    const id = r.connector.id;
+    AS.db().prepare("UPDATE connectors SET perms = ? WHERE id = ?").run(JSON.stringify({ search_docs: "allow" }), id);
+    const seal = (tokens) => PR.sealSecret(JSON.stringify({ mode: "oauth", client: { client_id: "c1", auth_method: "none" }, redirect: "http://localhost:3200/api/connectors/oauth/callback", resource: url, as: { issuer: BASE, token_endpoint: `${BASE}/token` }, tokens }));
+    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "cu", refresh_token: "rt_cu", expires_at: Date.now() + 3 * 60_000 }), id);
+    S.oauth = { need: true, valid: "Bearer at_1" }; S.calls = {};
+    const s = session("refresh-ahead");
+    const fq = s.tools.find((t) => t.tool.name === "search_docs").fq;
+    const outs = await Promise.all([s.call(fq, {}), s.call(fq, {}), s.call(fq, {})]);
+    ok(outs.every((o) => !o.is_error) && S.count("token") === 1 && !S.count("unauth"), "làm mới trước, một lần, không lời gọi nào bị 401", `${JSON.stringify(S.calls)} ${outs.map((o) => o.content).join(" | ").slice(0, 300)}`);
     await s.close();
     wipe();
   }

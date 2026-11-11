@@ -215,6 +215,7 @@ export async function ensureComposio(uid: string, pol: ConnPolicy = FULL_CONN, f
 
 // ---- token: làm mới khi sắp hết hạn; mỗi connector chỉ làm mới một lần cùng lúc (refresh token có thể chỉ dùng được một lần) ----
 const refreshing = new Map<string, Promise<Auth>>();
+const REFRESH_AHEAD_MS = 5 * 60_000;
 const REFRESH_WAIT = [1000, 3000], ROTATE_WAIT = 1500;
 // Máy chủ đăng nhập từ chối chính client Synchro đã đăng ký (hãng xóa đăng ký): quên client để lần kết nối sau đăng ký lại. Client người dùng tự nhập thì giữ.
 const clientGone = (code: string) => code === "invalid_client" || code === "unauthorized_client";
@@ -233,7 +234,9 @@ async function freshAuth(id: string, force = false): Promise<Auth> {
   if (!r) throw new ConnectorError("Connector đã bị gỡ.", 404);
   const a = getAuth(r);
   if (a.mode !== "oauth" || !a.tokens) return a;
-  const expiring = !!a.tokens.expires_at && a.tokens.expires_at - Date.now() < 60_000;
+  // Làm mới chủ động khi token còn dưới 5 phút: lời gọi công cụ dài (vài phút) không hết hạn giữa chừng. Mỗi connector chỉ một lần làm mới
+  // cùng lúc (refreshing): ba lời gọi song song dùng chung một lần, không đốt refresh token xoay vòng.
+  const expiring = !!a.tokens.expires_at && a.tokens.expires_at - Date.now() < REFRESH_AHEAD_MS;
   if ((!force && !expiring) || !a.tokens.refresh_token || !a.client || !a.as) return a;
   let p = refreshing.get(id);
   if (!p) {
