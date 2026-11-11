@@ -555,6 +555,35 @@ class Parser {
   }
 }
 
+/**
+ * Chữ của câu trả lời đang viết, cắt bớt phần cấu trúc còn dở để khung không nháy từ chữ thô sang định dạng:
+ * - khối công thức $$ … (hoặc \[ …) chưa có dòng đóng: ẩn tới khi đóng (trước đây hiện "$$ x^2 +" thô rồi mới thành công thức);
+ * - bảng mới có dòng tiêu đề (chưa có dòng |---|): ẩn dòng đó tới khi có dòng phân cách.
+ * Khối code chưa đóng không cần cắt: parser đã hiện thành khung code đang mở (closed: false).
+ */
+export function streamSafe(text: string): string {
+  const lines = text.split("\n");
+  let open = -1, fence = "";
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    const f = /^(`{3,}|~{3,})/.exec(t);
+    if (f) { if (!fence) fence = f[1]; else if (t === fence || (t.startsWith(fence) && !t.slice(fence.length).trim())) fence = ""; continue; }
+    if (fence) continue;
+    if (open < 0) {
+      const o = t.startsWith("$$") ? "$$" : t.startsWith("\\[") ? "\\]" : "";
+      if (o && !(t.length > 4 && t.endsWith(o === "$$" ? "$$" : "\\]"))) open = i;
+    } else if (t.endsWith(lines[open].trim().startsWith("$$") ? "$$" : "\\]")) open = -1;
+  }
+  let keep = open >= 0 ? lines.slice(0, open) : lines;
+  // Bảng đang viết: các dòng cuối bắt đầu bằng "|" mà chưa có dòng phân cách hoàn chỉnh.
+  let k = keep.length;
+  while (k > 0 && !keep[k - 1].trim()) k--;
+  let a = k;
+  while (a > 0 && keep[a - 1].trim().startsWith("|")) a--;
+  if (!fence && k > a && k - a <= 2 && !keep.slice(a, k).some((l, j) => j > 0 && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(l))) keep = keep.slice(0, a);
+  return keep === lines ? text : keep.join("\n");
+}
+
 export function parseMarkdown(text: string): { tops: Top[]; lines: number } {
   const raw = text.replace(/\r\n?/g, "\n").split("\n");
   const L: Line[] = raw.map((s, n) => ({ s, n }));

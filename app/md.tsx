@@ -4,7 +4,7 @@ import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { locale, tr, useLangReady } from "./i18n";
-import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, type Align, type Block, type Inl, type Top } from "./mdparse";
+import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "./mdparse";
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
@@ -290,7 +290,8 @@ const TopView = memo(function TopView({ top, x }: { top: Top; x: Ctx }) { return
 
 // live: thẻ hỏi lại còn bấm được. streaming: câu trả lời đang viết (chữ hiện dần ở đoạn cuối).
 export const Markdown = memo(function Markdown({ text: text0, say, dev, viz, live, streaming }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean; streaming?: boolean }) {
-  const { text, meta } = useMemo(() => (dev ? splitMeta(text0) : { text: text0, meta: null }), [text0, !!dev]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Đang viết: ẩn tạm khối công thức / bảng còn dở (streamSafe) để không nháy chữ thô.
+  const { text, meta } = useMemo(() => { const t = streaming ? streamSafe(text0) : text0; return dev ? splitMeta(t) : { text: t, meta: null }; }, [text0, !!dev, !!streaming]); // eslint-disable-line react-hooks/exhaustive-deps
   const { tops, lines } = useMemo(() => parseMarkdown(text), [text]);
   const x: Ctx = { say, dev, viz, live, tail: streaming ? lines - 3 : Infinity, last: streaming ? lines - 1 : Infinity };
   return (

@@ -285,5 +285,18 @@ console.log("14. Khối code xuống dòng hay cuộn ngang");
   ok(M.codeWraps("log", "Error: something failed " + "x".repeat(200)) && M.codeWraps("stdout", "done") && M.codeWraps("Text", "câu dài"), "nhật ký, đầu ra thường xuống dòng");
 }
 
+console.log("Đang viết: ẩn tạm công thức / bảng còn dở (streamSafe)");
+{
+  const S = M.streamSafe;
+  eq(S("Công thức:\n\n$$\nx^2 +"), "Công thức:\n", "$$ chưa đóng: ẩn tới khi đóng");
+  eq(S("Công thức:\n\n$$\nx^2\n$$\nXong"), "Công thức:\n\n$$\nx^2\n$$\nXong", "$$ đã đóng: giữ nguyên");
+  eq(S("A\n$$x^2$$\nB"), "A\n$$x^2$$\nB", "$$ một dòng: giữ nguyên");
+  eq(S("Bảng:\n\n| Tên | Tuổi |"), "Bảng:\n", "bảng mới có tiêu đề: ẩn dòng tiêu đề");
+  eq(S("Bảng:\n| Tên | Tuổi |\n|---|--"), "Bảng:", "dòng phân cách chưa xong: vẫn ẩn");
+  eq(S("| Tên | Tuổi |\n|---|---|\n| An | 3"), "| Tên | Tuổi |\n|---|---|\n| An | 3", "bảng đã có dòng phân cách: hiện từng dòng");
+  eq(S("```js\nconst a = '$$'\n$$"), "```js\nconst a = '$$'\n$$", "trong khối code đang mở: không cắt");
+  eq(S("Chào bạn"), "Chào bạn", "chữ thường: giữ nguyên");
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 if (fail) process.exit(1);
